@@ -58,6 +58,19 @@ fn parse_workspace_directory(raw: &str) -> Result<PathBuf, String> {
     name = "vtcode",
     version,
     about = "VT Code - AI coding assistant",
+    long_about = "VT Code - AI coding assistant\n\n\
+An AI-powered coding agent that can read, write, and execute code in your workspace.\n\n\
+Quick start:\n\
+  vtcode                  Launch interactive chat\n\
+  vtcode ask \"question\"   Single prompt, no tools\n\
+  vtcode exec \"task\"      Headless execution with tools\n\
+  vtcode init             Bootstrap workspace\n\n\
+Configuration:\n\
+  Settings are read from vtcode.toml in the workspace root.\n\
+  Run `vtcode config` to generate a starter config file.\n\n\
+Authentication:\n\
+  Run `vtcode login <provider>` to store API credentials.\n\
+  Supported providers: openai, openrouter, copilot, codex.",
     color = ColorChoice::Auto
 )]
 pub struct Cli {
@@ -484,36 +497,82 @@ pub enum Commands {
     Chat,
 
     /// Single prompt mode - prints model reply without tools
+    ///
+    /// Send a single prompt to the model and print the response. No tools are
+    /// invoked, no session is created, and the process exits after replying.
+    ///
+    /// Examples:
+    ///   vtcode ask "what is a monad?"
+    ///   echo "summarize this" | vtcode ask
+    ///   vtcode ask --output-format json "explain ownership in Rust"
     Ask {
         /// Prompt to ask. Use `-` to force reading from stdin.
-        #[arg(value_name = "PROMPT")]
+        #[arg(
+            value_name = "PROMPT",
+            long_help = "The prompt to send to the model.\n\nOmit to read from stdin (piped input).\nUse '-' to explicitly force reading from stdin."
+        )]
         prompt: Option<String>,
         /// Format the response using a structured representation.
-        #[arg(long = "output-format", value_enum, value_name = "FORMAT")]
+        #[arg(
+            long = "output-format",
+            value_enum,
+            value_name = "FORMAT",
+            long_help = "Output format for the response.\n\nCurrently supports:\n  json - Emit the response as a structured JSON document."
+        )]
         output_format: Option<AskOutputFormat>,
     },
     /// Headless execution mode
+    ///
+    /// Run the agent in non-interactive mode. The agent executes the prompt,
+    /// runs tools, and exits when done. Ideal for CI/CD, scripting, and
+    /// agent-to-agent workflows.
+    ///
+    /// Examples:
+    ///   vtcode exec "explain this codebase"
+    ///   vtcode exec --json "fix the failing test"
+    ///   vtcode exec --dry-run "refactor auth module"
+    ///   cat file.rs | vtcode exec "review this code"
+    ///   vtcode exec resume --last
     Exec {
         /// Emit structured JSON events to stdout (one per line)
-        #[arg(long)]
+        #[arg(
+            long,
+            long_help = "Stream newline-delimited JSON events to stdout.\nEach line is a JSON object representing an agent event (tool call, message, etc.).\nUseful for programmatic consumption and CI integration."
+        )]
         json: bool,
         /// Run in read-only dry-run mode (blocks mutating tool calls)
-        #[arg(long)]
+        #[arg(
+            long,
+            long_help = "Simulate execution without making changes.\nThe agent plans tool calls but does not execute mutating operations (file writes, shell commands).\nUseful for previewing what the agent would do."
+        )]
         dry_run: bool,
         /// Optional path to write the JSONL transcript
-        #[arg(long, value_name = "PATH", value_hint = ValueHint::FilePath)]
+        #[arg(long, value_name = "PATH", value_hint = ValueHint::FilePath, long_help = "Write the full JSONL event transcript to this file.\nIncludes all agent events: tool calls, messages, errors, and metadata.")]
         events: Option<PathBuf>,
         /// Write the last agent message to this file
-        #[arg(long, value_name = "PATH", value_hint = ValueHint::FilePath)]
+        #[arg(long, value_name = "PATH", value_hint = ValueHint::FilePath, long_help = "Write only the final agent message to this file.\nUseful for piping the agent's response into other tools.")]
         last_message_file: Option<PathBuf>,
         /// Optional exec subcommand
         #[command(subcommand)]
         command: Option<ExecSubcommand>,
         /// Prompt to execute. Use `-` to force reading from stdin.
-        #[arg(value_name = "PROMPT")]
+        #[arg(
+            value_name = "PROMPT",
+            long_help = "The prompt to execute.\n\nOmit to read from stdin (piped input).\nUse '-' to explicitly force reading from stdin.\nQuote multi-word prompts: vtcode exec \"fix the bug in auth.rs\""
+        )]
         prompt: Option<String>,
     },
     /// Manage durable scheduled tasks
+    ///
+    /// Create, list, and delete scheduled tasks that run on a recurring or
+    /// one-shot basis. Tasks are stored persistently and survive restarts
+    /// when paired with `vtcode schedule install-service`.
+    ///
+    /// Examples:
+    ///   vtcode schedule create --name "daily-review" --cron "0 9 * * 1-5" --prompt "review recent changes"
+    ///   vtcode schedule create --name "reminder" --reminder "standup in 10 minutes" --at "09:50"
+    ///   vtcode schedule list
+    ///   vtcode schedule delete <task-id>
     Schedule {
         #[command(subcommand)]
         command: ScheduleSubcommand,
@@ -623,54 +682,132 @@ pub enum Commands {
     },
 
     /// Initialize project guidance and workspace scaffolding
+    ///
+    /// Bootstrap a workspace for use with VT Code. Creates vtcode.toml,
+    /// AGENTS.md, and other scaffolding. Run this once per project.
+    ///
+    /// Examples:
+    ///   vtcode init
+    ///   vtcode init --force
     Init {
         /// Overwrite an existing AGENTS.md without prompting
-        #[arg(long, short = 'f')]
+        #[arg(
+            long,
+            short = 'f',
+            long_help = "Overwrite AGENTS.md without confirmation.\nUse this in CI/CD or scripts where interactive prompts are not possible."
+        )]
         force: bool,
     },
 
     /// Initialize project in ~/.vtcode/projects/
+    ///
+    /// Create a new project entry in the VT Code projects directory.
+    /// This is separate from `vtcode init` which bootstraps a workspace.
+    ///
+    /// Examples:
+    ///   vtcode init-project
+    ///   vtcode init-project --name my-project
+    ///   vtcode init-project --force --migrate
     #[command(name = "init-project")]
     InitProject {
         /// Project name - defaults to current directory name
-        #[arg(long)]
+        #[arg(
+            long,
+            long_help = "Name for the project.\nDefaults to the current directory name if not specified."
+        )]
         name: Option<String>,
         /// Force initialization - overwrite existing project structure
-        #[arg(long)]
+        #[arg(
+            long,
+            long_help = "Overwrite existing project structure without confirmation."
+        )]
         force: bool,
         /// Migrate existing files - move existing config/cache files to new structure
-        #[arg(long)]
+        #[arg(
+            long,
+            long_help = "Move existing config and cache files into the new project structure."
+        )]
         migrate: bool,
     },
 
     /// Generate configuration file
+    ///
+    /// Create a vtcode.toml configuration file with default settings.
+    /// Use --global to create in ~/.vtcode/ or specify an output path.
+    ///
+    /// Examples:
+    ///   vtcode config
+    ///   vtcode config --global
+    ///   vtcode config --output ./my-vtcode.toml
     Config {
         /// Output file path
-        #[arg(long)]
+        #[arg(
+            long,
+            long_help = "Write the configuration to this path.\nDefaults to ./vtcode.toml in the current directory."
+        )]
         output: Option<PathBuf>,
         /// Create in user home directory (~/.vtcode/vtcode.toml)
-        #[arg(long)]
+        #[arg(
+            long,
+            long_help = "Write the configuration to ~/.vtcode/vtcode.toml.\nThis sets global defaults for all workspaces."
+        )]
         global: bool,
     },
 
     /// Authenticate with a supported provider
+    ///
+    /// Start an OAuth or API-key login flow for the given provider.
+    /// Credentials are stored securely in the OS keychain.
+    ///
+    /// Examples:
+    ///   vtcode login openai
+    ///   vtcode login openrouter
+    ///   vtcode login codex
+    ///   vtcode login codex --device-code
     Login {
         /// Provider name (`openai`, `openrouter`, `copilot`, or `codex`)
+        #[arg(
+            long_help = "The provider to authenticate with.\nSupported: openai, openrouter, copilot, codex"
+        )]
         provider: String,
         /// Use device-code login when the provider supports it (currently `codex` only)
-        #[arg(long, default_value_t = false)]
+        #[arg(
+            long,
+            default_value_t = false,
+            long_help = "Use the device-code OAuth flow.\nCurrently supported only for the `codex` provider.\nOpens a browser URL and asks you to enter a code."
+        )]
         device_code: bool,
     },
 
     /// Clear stored authentication credentials for a provider
+    ///
+    /// Remove stored OAuth tokens or API keys for the given provider.
+    ///
+    /// Examples:
+    ///   vtcode logout openai
+    ///   vtcode logout openrouter
     Logout {
         /// Provider name (`openai`, `openrouter`, `copilot`, or `codex`)
+        #[arg(
+            long_help = "The provider to deauthenticate.\nSupported: openai, openrouter, copilot, codex"
+        )]
         provider: String,
     },
 
     /// Show authentication status for one provider or all supported providers
+    ///
+    /// Display whether each provider is authenticated, which credential type
+    /// is in use, and token/session metadata when available.
+    ///
+    /// Examples:
+    ///   vtcode auth
+    ///   vtcode auth openai
+    ///   vtcode auth openrouter
     Auth {
         /// Optional provider name (`openai`, `openrouter`, `copilot`, or `codex`)
+        #[arg(
+            long_help = "Show status for a single provider.\nOmit to show status for all supported providers."
+        )]
         provider: Option<String>,
     },
 
@@ -726,6 +863,16 @@ pub enum Commands {
     },
 
     /// Manage Agent Skills
+    ///
+    /// Skills are reusable instruction sets that extend the agent's capabilities.
+    /// Each skill is a directory containing a SKILL.md manifest and optional scripts.
+    ///
+    /// Examples:
+    ///   vtcode skills list
+    ///   vtcode skills create my-skill
+    ///   vtcode skills load my-skill
+    ///   vtcode skills info my-skill
+    ///   vtcode skills validate ./path/to/skill
     #[command(subcommand)]
     Skills(SkillsSubcommand),
 
@@ -734,41 +881,93 @@ pub enum Commands {
     ListSkills {},
 
     /// Manage optional VT Code dependencies
+    ///
+    /// Install, update, or check the status of optional tools that VT Code
+    /// can use (ripgrep, ast-grep, search-tools bundle).
+    ///
+    /// Examples:
+    ///   vtcode dependencies status
+    ///   vtcode dependencies install search-tools
+    ///   vtcode deps install ripgrep
     #[command(name = "dependencies", visible_alias = "deps", subcommand)]
     Dependencies(DependenciesSubcommand),
 
     /// Run built-in repository checks
+    ///
+    /// Execute repository-level checks such as ast-grep rule tests and scans.
+    ///
+    /// Examples:
+    ///   vtcode check ast-grep
     Check {
         #[command(subcommand)]
         command: CheckSubcommand,
     },
 
     /// Check for and install binary updates from GitHub Releases
+    ///
+    /// Manage VT Code binary updates. By default checks for a new version
+    /// and offers to install it. Use flags to customize behavior.
+    ///
+    /// Examples:
+    ///   vtcode update
+    ///   vtcode update --check
+    ///   vtcode update --force
+    ///   vtcode update --list
+    ///   vtcode update --pin 0.120.0
+    ///   vtcode update --unpin
+    ///   vtcode update --channel beta
     #[command(name = "update")]
     Update {
         /// Check for updates without installing
-        #[arg(long)]
+        #[arg(
+            long,
+            long_help = "Check whether a newer version is available without installing it."
+        )]
         check: bool,
         /// Force update even if on latest version
-        #[arg(long)]
+        #[arg(
+            long,
+            long_help = "Reinstall or downgrade even if the current version is already the latest."
+        )]
         force: bool,
         /// List available versions
-        #[arg(long)]
+        #[arg(
+            long,
+            long_help = "Print available release versions from GitHub and exit."
+        )]
         list: bool,
         /// Number of versions to list (default: 10)
-        #[arg(long, default_value_t = 10)]
+        #[arg(
+            long,
+            default_value_t = 10,
+            long_help = "Maximum number of versions to display with --list."
+        )]
         limit: usize,
         /// Pin to a specific version
-        #[arg(long, value_name = "VERSION")]
+        #[arg(
+            long,
+            value_name = "VERSION",
+            long_help = "Pin the binary to a specific version.\nAuto-updates are disabled until --unpin is used."
+        )]
         pin: Option<String>,
         /// Unpin version
-        #[arg(long)]
+        #[arg(
+            long,
+            long_help = "Remove a previously set version pin and resume auto-updates."
+        )]
         unpin: bool,
         /// Set release channel (stable, beta, nightly)
-        #[arg(long, value_name = "CHANNEL")]
+        #[arg(
+            long,
+            value_name = "CHANNEL",
+            long_help = "Switch the release channel.\nAccepted values: stable, beta, nightly."
+        )]
         channel: Option<String>,
         /// Show current update configuration
-        #[arg(long)]
+        #[arg(
+            long,
+            long_help = "Display the current update configuration (channel, pin, intervals) and exit."
+        )]
         show_config: bool,
     },
 

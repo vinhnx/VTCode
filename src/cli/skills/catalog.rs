@@ -7,6 +7,7 @@ use vtcode_core::skills::manifest::parse_skill_file;
 use vtcode_core::skills::types::Skill;
 
 use crate::cli::SkillsCommandOptions;
+use crate::cli::messages;
 
 use super::render::{
     BuiltInSkillRow, CliToolRow, LoadedSkillSummary, TraditionalSkillRow, print_built_in_skills,
@@ -244,10 +245,14 @@ async fn resolve_skill_load(
         let skill = load_skill_from_path(path)?;
         if skill.name() != requested_name {
             bail!(
-                "Skill name '{}' does not match manifest name '{}' at {}",
-                requested_name,
-                skill.name(),
-                path.display()
+                "{}\n{}",
+                messages::error(&format!(
+                    "Skill name '{}' does not match manifest name '{}' at {}.",
+                    requested_name,
+                    skill.name(),
+                    path.display()
+                )),
+                messages::hint("Update the skill name or path to match the manifest.")
             );
         }
         return Ok(EnhancedSkill::Traditional(Box::new(skill)));
@@ -257,13 +262,19 @@ async fn resolve_skill_load(
     let skill = loader
         .get_skill(requested_name)
         .await
-        .with_context(|| format!("Failed to load skill '{}'", requested_name))?;
+        .with_context(|| messages::error(&format!("Failed to load skill '{}'.", requested_name)))?;
 
     if matches!(skill, EnhancedSkill::BuiltInCommand(_)) {
         bail!(
-            "Skill '{}' is a built-in command skill and cannot be loaded. Use `/skills use {}` in chat instead.",
-            requested_name,
-            requested_name
+            "{}\n{}",
+            messages::error(&format!(
+                "Skill '{}' is a built-in command skill and cannot be loaded.",
+                requested_name
+            )),
+            messages::hint(&format!(
+                "Use `/skills use {}` in chat mode instead.",
+                requested_name
+            ))
         );
     }
 
@@ -281,10 +292,21 @@ fn load_skill_from_path(path: &Path) -> Result<Skill> {
 
 fn validate_skill_path(path: &Path) -> Result<()> {
     if !path.exists() {
-        bail!("Skill path does not exist: {}", path.display());
+        bail!(
+            "{}\n{}",
+            messages::error(&format!("Skill path does not exist: {}", path.display())),
+            messages::hint("Check the path and try again.")
+        );
     }
     if !path.is_dir() {
-        bail!("Skill path is not a directory: {}", path.display());
+        bail!(
+            "{}\n{}",
+            messages::error(&format!(
+                "Skill path is not a directory: {}",
+                path.display()
+            )),
+            messages::hint("Skills must be directories containing a manifest file.")
+        );
     }
     Ok(())
 }

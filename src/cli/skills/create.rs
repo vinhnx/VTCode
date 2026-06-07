@@ -1,12 +1,22 @@
 use anyhow::{Context, Result, bail};
 use std::path::Path;
 use vtcode_core::skills::manifest::generate_skill_template;
+use vtcode_core::utils::colors::style;
 use vtcode_core::utils::file_utils::{ensure_dir_exists_sync, write_file_with_context_sync};
+
+use crate::cli::messages;
 
 /// Create skill template.
 pub async fn handle_skills_create(skill_path: &Path) -> Result<()> {
     if skill_path.exists() {
-        bail!("Skill path already exists: {}", skill_path.display());
+        bail!(
+            "{}\n{}",
+            messages::error(&format!(
+                "Skill path already exists: {}",
+                skill_path.display()
+            )),
+            messages::hint("Choose a different name or remove the existing skill first.")
+        );
     }
 
     let skill_name = skill_path
@@ -22,13 +32,34 @@ pub async fn handle_skills_create(skill_path: &Path) -> Result<()> {
 
     let _ = tokio::fs::create_dir(skill_path.join("scripts")).await;
 
-    println!("Created skill template at: {}", skill_path.display());
-    println!("  • SKILL.md - Skill metadata and instructions");
-    println!("  • scripts/ - Optional: executable scripts");
-    println!("\nNext steps:");
-    println!("  1. Edit SKILL.md with your skill details");
-    println!("  2. Add scripts to scripts/ if needed");
-    println!("  3. Load with: vtcode skills load {}", skill_name);
+    println!(
+        "{}",
+        messages::ok(&format!(
+            "Created skill template at {}",
+            skill_path.display()
+        ))
+    );
+    println!(
+        "  {} {}",
+        style("SKILL.md").bold(),
+        "Skill metadata and instructions"
+    );
+    println!(
+        "  {} {}",
+        style("scripts/").bold(),
+        "Optional: executable scripts"
+    );
+    println!();
+    println!("{}", style("Next steps:").bold());
+    println!(
+        "{}",
+        messages::hint("Edit SKILL.md with your skill details.")
+    );
+    println!("{}", messages::hint("Add scripts to scripts/ if needed."));
+    println!(
+        "{}",
+        messages::hint(&format!("Load with: vtcode skills load {}", skill_name))
+    );
 
     Ok(())
 }

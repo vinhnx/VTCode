@@ -27,7 +27,7 @@ pub async fn handle_exec_command(
     tokio::select! {
         res = run::handle_exec_command_impl(config, vt_cfg, options) => res,
         _ = vtcode_core::shutdown::shutdown_signal() => {
-            eprintln!("{}", vtcode_core::utils::colors::style("\nCancelled by user.").red());
+            eprintln!("{}", crate::cli::messages::warn("Cancelled by user."));
             bail!("Operation cancelled");
         }
     }

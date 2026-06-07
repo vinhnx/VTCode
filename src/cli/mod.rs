@@ -19,6 +19,7 @@ mod dispatch;
 mod init;
 mod init_project;
 mod man;
+mod messages;
 mod notify;
 mod sessions;
 pub(crate) mod skills_index;

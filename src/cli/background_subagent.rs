@@ -9,6 +9,7 @@ use vtcode_core::subagents::{SpawnAgentRequest, SubagentController, SubagentCont
 use vtcode_core::tools::exec_session::ExecSessionManager;
 use vtcode_core::tools::registry::PtySessionManager;
 
+use crate::cli::messages;
 use crate::startup::StartupContext;
 
 const BACKGROUND_DEMO_AGENT: &str = "background-demo";
@@ -18,7 +19,11 @@ pub(crate) async fn handle_background_subagent_command(
     args: BackgroundSubagentArgs,
 ) -> Result<()> {
     if args.prompt.trim().is_empty() {
-        bail!("background subagent prompt cannot be empty");
+        bail!(
+            "{}\n{}",
+            messages::error("Background subagent prompt cannot be empty."),
+            messages::hint("Pass instructions after the agent name.")
+        );
     }
 
     if args.agent_name == BACKGROUND_DEMO_AGENT {
