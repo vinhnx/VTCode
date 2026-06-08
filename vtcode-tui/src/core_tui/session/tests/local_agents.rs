@@ -187,6 +187,123 @@ fn alt_s_remains_subprocesses_entrypoint() {
 }
 
 #[test]
+fn tab_cycles_primary_agent_when_composer_is_empty() {
+    let mut session = app_session_with_input("", 0);
+
+    let event = session.process_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+
+    assert!(matches!(
+        event,
+        Some(app_types::InlineEvent::CyclePrimaryAgent)
+    ));
+}
+
+#[test]
+fn tab_character_cycles_primary_agent_when_composer_is_empty() {
+    let mut session = app_session_with_input("", 0);
+
+    let event = session.process_key(KeyEvent::new(KeyCode::Char('\t'), KeyModifiers::NONE));
+
+    assert!(matches!(
+        event,
+        Some(app_types::InlineEvent::CyclePrimaryAgent)
+    ));
+}
+
+#[test]
+fn core_tab_cycles_primary_agent_when_composer_is_empty() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+
+    let event = session.process_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+
+    assert!(matches!(event, Some(InlineEvent::CyclePrimaryAgent)));
+}
+
+#[test]
+fn tab_does_not_cycle_primary_agent_while_running() {
+    let mut session = app_session_with_input("", 0);
+    load_primary_agent_palette(&mut session);
+    set_app_session_busy_status(&mut session);
+
+    let event = session.process_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+
+    assert!(event.is_none());
+    assert_eq!(session.core.input_manager.content(), "");
+}
+
+#[test]
+fn tab_queues_draft_while_running_instead_of_switching_primary_agent() {
+    let mut session = app_session_with_input("Review this", "Review this".len());
+    load_primary_agent_palette(&mut session);
+    set_app_session_busy_status(&mut session);
+
+    let event = session.process_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+
+    assert!(matches!(
+        event,
+        Some(app_types::InlineEvent::QueueSubmit(value)) if value == "Review this"
+    ));
+}
+
+#[test]
+fn tab_cycles_primary_agent_back_to_default_after_last_agent() {
+    let mut session = app_session_with_input("", 0);
+    session.handle_command(app_types::InlineCommand::SetPrimaryAgent {
+        name: Some("beta".to_string()),
+    });
+
+    let event = session.process_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+
+    assert!(matches!(
+        event,
+        Some(app_types::InlineEvent::CyclePrimaryAgent)
+    ));
+}
+
+#[test]
+fn tab_accepts_inline_prompt_suggestion_before_primary_agent_cycle() {
+    let mut session = app_session_with_input("Review the current", "Review the current".len());
+    load_primary_agent_palette(&mut session);
+    session
+        .core
+        .set_inline_prompt_suggestion("Review the current diff".to_string(), true);
+
+    let event = session.process_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+
+    assert!(event.is_none());
+    assert_eq!(
+        session.core.input_manager.content(),
+        "Review the current diff"
+    );
+    assert!(session.core.inline_prompt_suggestion.suggestion.is_none());
+}
+
+#[test]
+fn tab_queues_draft_instead_of_switching_primary_agent() {
+    let mut session = app_session_with_input("Review this", "Review this".len());
+    load_primary_agent_palette(&mut session);
+
+    let event = session.process_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+
+    assert!(matches!(
+        event,
+        Some(app_types::InlineEvent::QueueSubmit(value)) if value == "Review this"
+    ));
+}
+
+#[test]
+fn tab_does_not_switch_primary_agent_when_queued_input_exists() {
+    let mut session = app_session_with_input("", 0);
+    load_primary_agent_palette(&mut session);
+    set_app_session_queued_inputs(&mut session, vec!["queued follow-up".to_string()]);
+
+    let event = session.process_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+
+    assert!(event.is_none());
+    assert_eq!(session.core.queued_inputs, vec!["queued follow-up"]);
+}
+
+#[test]
 fn header_suggestions_include_subagent_shortcuts() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
     session.local_agents = vec![sample_local_agent_entry(
@@ -383,4 +500,25 @@ fn header_suggestions_do_not_show_memory_shortcut_when_enabled() {
     let summary = line_text(&line);
 
     assert!(!summary.contains("/memory"));
+}
+
+fn load_primary_agent_palette(session: &mut AppSession) {
+    session.handle_command(app_types::InlineCommand::ShowTransient {
+        request: Box::new(app_types::TransientRequest::AgentPalette(
+            app_types::AgentPaletteTransientRequest {
+                agents: vec![
+                    app_types::AgentPaletteItem {
+                        name: "beta".to_string(),
+                        description: None,
+                    },
+                    app_types::AgentPaletteItem {
+                        name: "alpha".to_string(),
+                        description: None,
+                    },
+                ],
+                visible: None,
+            },
+        )),
+    });
+    session.close_transient();
 }

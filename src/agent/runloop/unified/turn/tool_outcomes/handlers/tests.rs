@@ -35,6 +35,7 @@ use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::{Notify, RwLock};
 use vtcode_config::core::PromptCachingConfig;
+use vtcode_config::{PermissionMode, SubagentSource, SubagentSpec};
 use vtcode_core::acp::{PermissionGrant, ToolPermissionCache};
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::config::types::{
@@ -44,6 +45,7 @@ use vtcode_core::core::agent::runtime::RuntimeSteering;
 use vtcode_core::core::decision_tracker::DecisionTracker;
 use vtcode_core::core::trajectory::TrajectoryLogger;
 use vtcode_core::llm::provider as uni;
+use vtcode_core::primary_agent::ActivePrimaryAgentState;
 use vtcode_core::tools::adaptive_rate_limiter::AdaptiveRateLimiter;
 use vtcode_core::tools::circuit_breaker::CircuitBreaker;
 use vtcode_core::tools::health::ToolHealthTracker;
@@ -129,6 +131,7 @@ struct TestContextBacking {
     working_history: Vec<uni::Message>,
     tool_catalog: Arc<ToolCatalogState>,
     default_placeholder: Option<String>,
+    active_primary_agent: ActivePrimaryAgentState,
     runtime_steering: RuntimeSteering,
     config: AgentConfig,
     provider_client: Box<dyn uni::LLMProvider>,
@@ -247,6 +250,7 @@ impl TestContextBacking {
             working_history,
             tool_catalog,
             default_placeholder,
+            active_primary_agent: ActivePrimaryAgentState::default(),
             runtime_steering: RuntimeSteering::default(),
             config,
             provider_client,
@@ -277,6 +281,7 @@ impl TestContextBacking {
             config: &mut self.config,
             vt_cfg: None,
             context_manager: &mut self.context_manager,
+            active_primary_agent: &self.active_primary_agent,
             decision_ledger: &self.decision_ledger,
             traj: &self.traj,
         };
@@ -311,6 +316,40 @@ impl TestContextBacking {
             ui,
             state,
         })
+    }
+
+    fn select_primary_agent_from_specs(&mut self, specs: &[SubagentSpec], requested: &str) {
+        self.active_primary_agent
+            .select_from_specs(specs, requested)
+            .expect("test primary agent should resolve");
+    }
+}
+
+fn test_primary_agent_spec(name: &str) -> SubagentSpec {
+    SubagentSpec {
+        name: name.to_string(),
+        description: format!("{name} description"),
+        prompt: format!("{name} instructions"),
+        tools: Some(vec![tool_names::READ_FILE.to_string()]),
+        disallowed_tools: Vec::new(),
+        model: None,
+        color: None,
+        reasoning_effort: None,
+        permission_mode: Some(PermissionMode::Plan),
+        skills: Vec::new(),
+        mcp_servers: Vec::new(),
+        hooks: None,
+        background: false,
+        mode: vtcode_config::AgentMode::Primary,
+        max_turns: None,
+        nickname_candidates: Vec::new(),
+        initial_prompt: None,
+        memory: None,
+        isolation: None,
+        aliases: Vec::new(),
+        source: SubagentSource::ProjectVtcode,
+        file_path: None,
+        warnings: Vec::new(),
     }
 }
 

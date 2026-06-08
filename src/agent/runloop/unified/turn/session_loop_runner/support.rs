@@ -373,6 +373,7 @@ pub(super) fn build_exit_header_context_fast(
             ui::HEADER_MCP_PREFIX,
             ui::HEADER_UNKNOWN_PLACEHOLDER
         ),
+        primary_agent: None,
         highlights: Vec::new(),
         subagent_badges: Vec::new(),
         editing_mode: display.editing_mode,

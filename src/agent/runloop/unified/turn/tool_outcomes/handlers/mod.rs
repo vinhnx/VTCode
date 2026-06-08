@@ -4,6 +4,7 @@ use anyhow::Result;
 
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::exec_policy::AskForApproval;
+use vtcode_core::primary_agent::primary_agent_allows_tool;
 use vtcode_core::tools::registry::ToolExecutionError;
 use vtcode_core::tools::registry::labels::tool_action_label;
 use vtcode_core::utils::ansi::MessageStyle;
@@ -185,6 +186,7 @@ fn build_tool_permissions_context<'ctx, 'a>(
         decision_ledger: Some(ctx.decision_ledger),
         tool_permission_cache: Some(ctx.tool_permission_cache),
         permissions_state: Some(ctx.permissions_state),
+        permission_mode_override: ctx.active_primary_agent.active().permission_mode,
         hitl_notification_bell: ctx
             .vt_cfg
             .map(|cfg| cfg.security.hitl_notification_bell)
@@ -350,6 +352,24 @@ pub(crate) async fn validate_tool_call<'a>(
     };
 
     let canonical_tool_name = prepared.canonical_name.clone();
+    if !primary_agent_allows_tool(ctx.active_primary_agent.active(), &canonical_tool_name) {
+        ctx.push_tool_response(
+            tool_call_id,
+            serde_json::to_string(
+                &ToolExecutionError::policy_violation(
+                    canonical_tool_name.clone(),
+                    format!(
+                        "Tool '{}' execution denied by active primary agent policy",
+                        canonical_tool_name
+                    ),
+                )
+                .to_json_value(),
+            )
+            .unwrap_or_else(|_| "{}".to_string()),
+        );
+        return Ok(ValidationResult::Blocked);
+    }
+
     prepared.effective_args = maybe_apply_spool_read_offset_hint(
         ctx.tool_registry,
         &canonical_tool_name,

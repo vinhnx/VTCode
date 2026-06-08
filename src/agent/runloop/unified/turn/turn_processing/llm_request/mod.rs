@@ -124,6 +124,7 @@ pub(crate) async fn execute_llm_request(
     parallel_cfg_opt: Option<Box<ParallelToolConfig>>,
 ) -> Result<(uni::LLMResponse, bool)> {
     let turn_snapshot = capture_turn_request_snapshot(ctx, active_model, tool_free_recovery);
+    let active_model = turn_snapshot.active_model.clone();
     let request_timeout_secs = llm_attempt_timeout_secs(
         turn_snapshot.turn_timeout_secs,
         turn_snapshot.plan_mode,
@@ -139,7 +140,7 @@ pub(crate) async fn execute_llm_request(
     let initial_request = build_turn_request(
         ctx,
         step_count,
-        active_model,
+        &active_model,
         &turn_snapshot,
         max_tokens_opt,
         parallel_cfg_opt,
@@ -157,7 +158,7 @@ pub(crate) async fn execute_llm_request(
     let action_suggestion = extract_action_from_messages(ctx.working_history);
 
     let max_retries = llm_retry_attempts(ctx.vt_cfg.map(|cfg| cfg.agent.max_task_retries));
-    let supports_non_streaming = ctx.provider_client.supports_non_streaming(active_model);
+    let supports_non_streaming = ctx.provider_client.supports_non_streaming(&active_model);
     let mut llm_result = Err(anyhow::anyhow!("LLM request failed to execute"));
     let mut attempts_made = 0usize;
     let mut stream_fallback_used = false;
@@ -295,6 +296,7 @@ pub(crate) async fn execute_llm_request(
                         ctx.decision_ledger,
                         ctx.tool_permission_cache,
                         ctx.permissions_state,
+                        turn_snapshot.active_primary_agent.permission_mode,
                         ctx.safety_validator,
                         ctx.lifecycle_hooks,
                         ctx.vt_cfg,
@@ -434,14 +436,14 @@ pub(crate) async fn execute_llm_request(
         match &step_result {
             Ok((response, _)) => {
                 ctx.telemetry.record_llm_request(
-                    active_model,
+                    &active_model,
                     attempt_elapsed,
                     response.usage.as_ref(),
                 );
             }
             Err(_) => {
                 ctx.telemetry
-                    .record_llm_request(active_model, attempt_elapsed, None);
+                    .record_llm_request(&active_model, attempt_elapsed, None);
             }
         }
 
@@ -465,7 +467,7 @@ pub(crate) async fn execute_llm_request(
                     ctx.session_stats,
                     &turn_snapshot.provider_name,
                     turn_snapshot.capabilities.responses_compaction,
-                    active_model,
+                    &active_model,
                     response.request_id.as_deref(),
                     &continuation_messages,
                 );
@@ -641,7 +643,7 @@ pub(crate) async fn execute_llm_request(
     emit_llm_retry_metrics(
         ctx,
         step_count,
-        active_model,
+        &active_model,
         turn_snapshot.plan_mode,
         attempts_made,
         max_retries,
@@ -680,7 +682,7 @@ pub(crate) async fn execute_llm_request(
         let record = PromptCacheMetricsRecord {
             kind: "prompt_cache_metrics",
             turn: step_count,
-            model: active_model,
+            model: &active_model,
             prompt_tokens: usage.prompt_tokens,
             completion_tokens: usage.completion_tokens,
             total_tokens: usage.total_tokens,

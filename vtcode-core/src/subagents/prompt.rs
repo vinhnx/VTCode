@@ -28,16 +28,26 @@ pub fn delegated_task_requires_clarification(prompt: &str) -> bool {
 pub fn extract_explicit_agent_mentions(input: &str, specs: &[SubagentSpec]) -> Vec<String> {
     let mut mentions = Vec::new();
     for direct in extract_direct_agent_mentions(input) {
-        let canonical = specs
+        if let Some(matching_child) = specs
             .iter()
-            .find(|spec| spec.matches_name(direct.as_str()))
-            .map(|spec| spec.name.clone())
-            .unwrap_or(direct);
-        push_unique_agent_mention(&mut mentions, &canonical);
+            .find(|spec| spec.is_subagent() && spec.matches_name(direct.as_str()))
+        {
+            push_unique_agent_mention(&mut mentions, &matching_child.name);
+            continue;
+        }
+
+        if specs
+            .iter()
+            .any(|spec| spec.is_primary() && spec.matches_name(direct.as_str()))
+        {
+            continue;
+        }
+
+        push_unique_agent_mention(&mut mentions, &direct);
     }
 
     let lower = input.to_ascii_lowercase();
-    for spec in specs {
+    for spec in specs.iter().filter(|spec| spec.is_subagent()) {
         if !matches_explicit_named_agent_selection(lower.as_str(), spec) {
             continue;
         }
@@ -269,4 +279,70 @@ fn item_prompt_segment(item: &SubagentInputItem) -> Option<String> {
         return Some(format!("Image: {}", image_url.trim()));
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use vtcode_config::{AgentMode, SubagentSource, SubagentSpec};
+
+    use super::extract_explicit_agent_mentions;
+
+    fn test_spec(name: &str, mode: AgentMode) -> SubagentSpec {
+        SubagentSpec {
+            name: name.to_string(),
+            description: "test".to_string(),
+            prompt: String::new(),
+            tools: None,
+            disallowed_tools: Vec::new(),
+            model: None,
+            color: None,
+            reasoning_effort: None,
+            permission_mode: None,
+            skills: Vec::new(),
+            mcp_servers: Vec::new(),
+            hooks: None,
+            background: false,
+            mode,
+            max_turns: None,
+            nickname_candidates: Vec::new(),
+            initial_prompt: None,
+            memory: None,
+            isolation: None,
+            aliases: Vec::new(),
+            source: SubagentSource::Builtin,
+            file_path: None,
+            warnings: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn explicit_mentions_use_delegated_agent_namespace() {
+        let primary_plan = test_spec("plan", AgentMode::Primary);
+        let child_plan = test_spec("plan", AgentMode::Subagent);
+
+        let mentions = extract_explicit_agent_mentions(
+            "@agent-plan inspect this",
+            &[primary_plan, child_plan],
+        );
+
+        assert_eq!(mentions, vec!["plan".to_string()]);
+    }
+
+    #[test]
+    fn explicit_mentions_ignore_primary_only_agents() {
+        let primary_plan = test_spec("plan", AgentMode::Primary);
+
+        let mentions = extract_explicit_agent_mentions("@agent-plan inspect this", &[primary_plan]);
+
+        assert!(mentions.is_empty());
+    }
+
+    #[test]
+    fn explicit_mentions_allow_all_mode_agents() {
+        let plan = test_spec("plan", AgentMode::All);
+
+        let mentions = extract_explicit_agent_mentions("@agent-plan inspect this", &[plan]);
+
+        assert_eq!(mentions, vec!["plan".to_string()]);
+    }
 }

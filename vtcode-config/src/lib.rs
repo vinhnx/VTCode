@@ -119,8 +119,9 @@ pub use root::{
 pub use schema::{vtcode_config_schema, vtcode_config_schema_json, vtcode_config_schema_pretty};
 pub use status_line::{StatusLineConfig, StatusLineMode};
 pub use subagents::{
-    DiscoveredSubagents, SubagentDiscoveryInput, SubagentMcpServer, SubagentMemoryScope,
-    SubagentRuntimeLimits, SubagentSource, SubagentSpec, builtin_subagents, discover_subagents,
+    AgentMode, DiscoveredSubagents, SubagentDiscoveryInput, SubagentMcpServer, SubagentMemoryScope,
+    SubagentRuntimeLimits, SubagentSource, SubagentSpec, builtin_plan_agent,
+    builtin_primary_build_agent, builtin_primary_duck_agent, builtin_subagents, discover_subagents,
     load_subagent_from_file,
 };
 pub use telemetry::TelemetryConfig;

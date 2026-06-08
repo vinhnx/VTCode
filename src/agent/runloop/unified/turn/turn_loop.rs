@@ -64,6 +64,7 @@ use usage_accounting::{
 };
 use vtcode_core::config::types::AgentConfig;
 use vtcode_core::core::agent::error_recovery::ErrorType;
+use vtcode_core::primary_agent::ActivePrimaryAgentState;
 
 const RECOVERY_SYNTHESIS_MAX_TOKENS: u32 = 1024;
 /// Maximum number of times the recovery pass is retried when the model
@@ -122,6 +123,7 @@ pub(crate) struct TurnLoopContext<'a> {
     pub turn_metadata_cache: &'a mut Option<Option<serde_json::Value>>,
     pub provider_client: &'a mut Box<dyn uni::LLMProvider>,
     pub traj: &'a TrajectoryLogger,
+    pub active_primary_agent: &'a ActivePrimaryAgentState,
     pub skip_confirmations: bool,
     pub full_auto: bool,
     pub runtime_steering: &'a mut RuntimeSteering,
@@ -167,6 +169,7 @@ impl<'a> TurnLoopContext<'a> {
         turn_metadata_cache: &'a mut Option<Option<serde_json::Value>>,
         provider_client: &'a mut Box<dyn uni::LLMProvider>,
         traj: &'a TrajectoryLogger,
+        active_primary_agent: &'a ActivePrimaryAgentState,
         skip_confirmations: bool,
         full_auto: bool,
         runtime_steering: &'a mut RuntimeSteering,
@@ -207,6 +210,7 @@ impl<'a> TurnLoopContext<'a> {
             turn_metadata_cache,
             provider_client,
             traj,
+            active_primary_agent,
             skip_confirmations,
             full_auto,
             runtime_steering,
@@ -271,6 +275,7 @@ impl<'a> TurnLoopContext<'a> {
             config: self.config,
             vt_cfg: self.vt_cfg,
             context_manager: self.context_manager,
+            active_primary_agent: self.active_primary_agent,
             decision_ledger: self.decision_ledger,
             traj: self.traj,
         };

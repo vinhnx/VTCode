@@ -729,6 +729,14 @@ pub(super) async fn resolve_inline_loop_action(
     let resolution = match inline_action {
         InlineLoopAction::Continue => InlineLoopActionResolution::ContinueLoop,
         InlineLoopAction::Submit(text) => InlineLoopActionResolution::Submit(text),
+        InlineLoopAction::CyclePrimaryAgent => {
+            handle_cycle_primary_agent(ctx).await?;
+            InlineLoopActionResolution::ContinueLoop
+        }
+        InlineLoopAction::SelectPrimaryAgent { name } => {
+            handle_select_primary_agent(ctx, name).await?;
+            InlineLoopActionResolution::ContinueLoop
+        }
         InlineLoopAction::RequestInlinePromptSuggestion(draft) => {
             handle_inline_prompt_suggestion_request(ctx, state, &draft).await?;
             InlineLoopActionResolution::ContinueLoop
@@ -809,6 +817,135 @@ pub(super) async fn resolve_inline_loop_action(
     Ok(resolution)
 }
 
+async fn handle_cycle_primary_agent(ctx: &mut InteractionLoopContext<'_>) -> Result<()> {
+    let Some(specs) = load_primary_agent_specs_or_report(ctx).await? else {
+        return Ok(());
+    };
+    match next_primary_agent_name(ctx.active_primary_agent.active(), &specs) {
+        Some(name) => handle_select_primary_agent(ctx, Some(name)).await,
+        None => {
+            ctx.renderer
+                .line(MessageStyle::Error, "No primary agents are available.")?;
+            Ok(())
+        }
+    }
+}
+
+async fn handle_select_primary_agent(
+    ctx: &mut InteractionLoopContext<'_>,
+    name: Option<String>,
+) -> Result<()> {
+    let Some(name) = name else {
+        let Some(specs) = load_primary_agent_specs_or_report(ctx).await? else {
+            return Ok(());
+        };
+        let display_name = ctx
+            .active_primary_agent
+            .reset_to_default_from_specs(&specs)
+            .display_name
+            .clone();
+        set_primary_agent_display(ctx, display_name);
+        return Ok(());
+    };
+
+    let Some(specs) = load_primary_agent_specs_or_report(ctx).await? else {
+        return Ok(());
+    };
+    match ctx.active_primary_agent.select_from_specs(&specs, &name) {
+        Ok(active) => {
+            let display_name = active.display_name.clone();
+            set_primary_agent_display(ctx, display_name);
+        }
+        Err(vtcode_core::primary_agent::PrimaryAgentResolutionError::UnknownAgent {
+            requested,
+        }) => {
+            ctx.renderer.line(
+                MessageStyle::Error,
+                &format!("Unknown primary agent '{requested}'."),
+            )?;
+        }
+    }
+
+    Ok(())
+}
+
+async fn load_primary_agent_specs_or_report(
+    ctx: &mut InteractionLoopContext<'_>,
+) -> Result<Option<Vec<vtcode_config::SubagentSpec>>> {
+    match load_primary_agent_specs(ctx).await {
+        Ok(specs) => Ok(Some(specs)),
+        Err(err) => {
+            ctx.renderer.line(
+                MessageStyle::Error,
+                &format!("Failed to discover primary agents: {err}"),
+            )?;
+            Ok(None)
+        }
+    }
+}
+
+async fn load_primary_agent_specs(
+    ctx: &InteractionLoopContext<'_>,
+) -> Result<Vec<vtcode_config::SubagentSpec>> {
+    if let Some(controller) = ctx.tool_registry.subagent_controller() {
+        let specs = controller
+            .effective_specs()
+            .await
+            .into_iter()
+            .filter(|spec| spec.is_primary())
+            .collect::<Vec<_>>();
+        if !specs.is_empty() {
+            return Ok(specs);
+        }
+    }
+
+    let discovered = vtcode_config::discover_subagents(
+        &vtcode_config::SubagentDiscoveryInput::new(ctx.config.workspace.clone()),
+    )
+    .with_context(|| {
+        format!(
+            "Failed to discover primary agents in {}",
+            ctx.config.workspace.display()
+        )
+    })?;
+    Ok(discovered
+        .effective
+        .into_iter()
+        .filter(|spec| spec.is_primary())
+        .collect())
+}
+
+fn set_primary_agent_display(ctx: &mut InteractionLoopContext<'_>, name: String) {
+    ctx.header_context.primary_agent = Some(name.clone());
+    ctx.handle.set_primary_agent(Some(name));
+}
+
+fn next_primary_agent_name(
+    active: &vtcode_core::primary_agent::ActivePrimaryAgent,
+    specs: &[vtcode_config::SubagentSpec],
+) -> Option<String> {
+    let mut names = specs
+        .iter()
+        .filter(|spec| spec.is_primary())
+        .map(|spec| spec.name.trim())
+        .filter(|name| !name.is_empty())
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    names.sort_by_key(|name| name.to_ascii_lowercase());
+    names.dedup_by(|left, right| left.eq_ignore_ascii_case(right));
+
+    if names.is_empty() {
+        return None;
+    }
+
+    Some(
+        match names.iter().position(|name| name == &active.identity.name) {
+            Some(index) if index + 1 < names.len() => names[index + 1].clone(),
+            Some(_) | None => names[0].clone(),
+        },
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -820,6 +957,85 @@ mod tests {
     use std::sync::Arc;
     use tempfile::TempDir;
     use tokio::sync::RwLock;
+    use vtcode_config::{SubagentSource, SubagentSpec};
+
+    #[test]
+    fn next_primary_agent_name_starts_with_first_sorted_agent() {
+        let specs = vec![test_subagent_spec("beta"), test_subagent_spec("alpha")];
+
+        assert_eq!(
+            next_primary_agent_name(&default_active_primary_agent(), &specs),
+            Some("alpha".to_string())
+        );
+    }
+
+    #[test]
+    fn next_primary_agent_name_cycles_to_next_sorted_agent() {
+        let specs = vec![test_subagent_spec("beta"), test_subagent_spec("alpha")];
+        let active = vtcode_core::primary_agent::ActivePrimaryAgent::from_spec(&specs[1]);
+
+        assert_eq!(
+            next_primary_agent_name(&active, &specs),
+            Some("beta".to_string())
+        );
+    }
+
+    #[test]
+    fn next_primary_agent_name_cycles_last_agent_to_first() {
+        let specs = vec![test_subagent_spec("build"), test_subagent_spec("duck")];
+        let active = vtcode_core::primary_agent::ActivePrimaryAgent::from_spec(&specs[1]);
+
+        assert_eq!(
+            next_primary_agent_name(&active, &specs),
+            Some("build".to_string())
+        );
+    }
+
+    #[test]
+    fn next_primary_agent_name_skips_non_primary_subagents() {
+        let mut worker = test_subagent_spec("worker");
+        worker.mode = vtcode_config::AgentMode::Subagent;
+        let specs = vec![worker, test_subagent_spec("duck")];
+
+        assert_eq!(
+            next_primary_agent_name(&default_active_primary_agent(), &specs),
+            Some("duck".to_string())
+        );
+    }
+
+    fn default_active_primary_agent() -> vtcode_core::primary_agent::ActivePrimaryAgent {
+        vtcode_core::primary_agent::ActivePrimaryAgentState::default()
+            .active()
+            .clone()
+    }
+
+    fn test_subagent_spec(name: &str) -> SubagentSpec {
+        SubagentSpec {
+            name: name.to_string(),
+            description: String::new(),
+            prompt: String::new(),
+            tools: None,
+            disallowed_tools: Vec::new(),
+            model: None,
+            color: None,
+            reasoning_effort: None,
+            permission_mode: None,
+            skills: Vec::new(),
+            mcp_servers: Vec::new(),
+            hooks: None,
+            background: false,
+            mode: vtcode_config::AgentMode::Primary,
+            max_turns: None,
+            nickname_candidates: Vec::new(),
+            initial_prompt: None,
+            memory: None,
+            isolation: None,
+            aliases: Vec::new(),
+            source: SubagentSource::ProjectVtcode,
+            file_path: None,
+            warnings: Vec::new(),
+        }
+    }
 
     #[test]
     fn extract_recent_follow_up_hint_reads_latest_recoverable_tool_payload() {

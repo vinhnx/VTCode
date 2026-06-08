@@ -636,8 +636,9 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 return None;
             }
 
-            if handle_running_slash_command_block(session) {
-                return None;
+            if can_cycle_primary_agent(session, &key) {
+                session.mark_dirty();
+                return Some(InlineEvent::CyclePrimaryAgent);
             }
 
             let Some(submitted) = take_submitted_input(session) else {
@@ -792,6 +793,10 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 if session.accept_inline_prompt_suggestion() {
                     session.update_input_triggers();
                     return None;
+                }
+                if can_cycle_primary_agent(session, &key) {
+                    session.mark_dirty();
+                    return Some(InlineEvent::CyclePrimaryAgent);
                 }
                 let Some(submitted) = take_submitted_input(session) else {
                     session.mark_dirty();
@@ -1155,6 +1160,15 @@ fn handle_transcript_review_key(
     }
 }
 
+fn can_cycle_primary_agent(session: &Session, key: &KeyEvent) -> bool {
+    key.modifiers == KeyModifiers::NONE
+        && !session.is_running_activity()
+        && session.core.input_manager.content().is_empty()
+        && session.core.queued_inputs.is_empty()
+        && session.visible_transient_surface().is_none()
+        && !session.has_active_overlay()
+}
+
 fn take_submitted_input(session: &mut Session) -> Option<String> {
     let submitted = session.core.input_manager.content().to_owned();
     let submitted_entry = session.core.input_manager.current_history_entry();
@@ -1178,12 +1192,16 @@ fn clear_submitted_input(session: &mut Session) {
 }
 
 fn handle_running_slash_command_block(session: &mut Session) -> bool {
+    let input = session.core.input_manager.content().to_owned();
+    handle_running_slash_command_block_for_input(session, &input)
+}
+
+fn handle_running_slash_command_block_for_input(session: &mut Session, input: &str) -> bool {
     if !session.is_running_activity() {
         return false;
     }
 
-    let Some(command_name) = extract_slash_command_name(session.core.input_manager.content())
-    else {
+    let Some(command_name) = extract_slash_command_name(input) else {
         return false;
     };
 

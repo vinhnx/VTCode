@@ -17,6 +17,7 @@ use vtcode_core::core::decision_tracker::DecisionTracker;
 use vtcode_core::core::trajectory::TrajectoryLogger;
 use vtcode_core::hooks::{LifecycleHookEngine, SessionEndReason};
 use vtcode_core::llm::provider as uni;
+use vtcode_core::primary_agent::ActivePrimaryAgentState;
 use vtcode_core::tools::ApprovalRecorder;
 use vtcode_core::tools::{ToolRegistry, ToolResultCache};
 use vtcode_core::utils::ansi::AnsiRenderer;
@@ -81,6 +82,7 @@ pub(crate) struct SessionState {
     pub async_mcp_manager: Option<Arc<AsyncMcpManager>>,
     pub mcp_panel_state: mcp_events::McpPanelState,
     pub loaded_skills: Arc<RwLock<HashMap<String, vtcode_core::skills::types::Skill>>>,
+    pub active_primary_agent: ActivePrimaryAgentState,
 }
 
 pub(crate) struct SessionUISetup {

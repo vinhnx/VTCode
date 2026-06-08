@@ -863,6 +863,7 @@ fn other_name(command: &InlineCommand) -> &'static str {
         InlineCommand::SetSubprocessEntries { .. } => "SetSubprocessEntries",
         InlineCommand::SetSubagentPreview { .. } => "SetSubagentPreview",
         InlineCommand::SetLocalAgents { .. } => "SetLocalAgents",
+        InlineCommand::SetPrimaryAgent { .. } => "SetPrimaryAgent",
         InlineCommand::SetCursorVisible(_) => "SetCursorVisible",
         InlineCommand::SetInputEnabled(_) => "SetInputEnabled",
         InlineCommand::SetInput(_) => "SetInput",

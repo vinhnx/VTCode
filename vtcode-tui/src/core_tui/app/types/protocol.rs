@@ -81,6 +81,9 @@ pub enum InlineCommand {
     SetLocalAgents {
         entries: Vec<LocalAgentEntry>,
     },
+    SetPrimaryAgent {
+        name: Option<String>,
+    },
     SetCursorVisible(bool),
     SetInputEnabled(bool),
     SetInput(String),
@@ -141,6 +144,10 @@ pub enum InlineEvent {
     OpenTranscriptReviewScrollback(String),
     ForceCancelPtySession,
     RequestInlinePromptSuggestion(String),
+    CyclePrimaryAgent,
+    SelectPrimaryAgent {
+        name: Option<String>,
+    },
     /// Toggle editing mode (Shift+Tab cycles through Edit -> Auto -> Plan -> Edit).
     ToggleMode,
     HistoryPrevious,
@@ -180,6 +187,10 @@ impl From<crate::core_tui::types::InlineEvent> for InlineEvent {
             }
             crate::core_tui::types::InlineEvent::RequestInlinePromptSuggestion(draft) => {
                 Self::RequestInlinePromptSuggestion(draft)
+            }
+            crate::core_tui::types::InlineEvent::CyclePrimaryAgent => Self::CyclePrimaryAgent,
+            crate::core_tui::types::InlineEvent::SelectPrimaryAgent { name } => {
+                Self::SelectPrimaryAgent { name }
             }
             crate::core_tui::types::InlineEvent::ToggleMode => Self::ToggleMode,
             crate::core_tui::types::InlineEvent::HistoryPrevious => Self::HistoryPrevious,
@@ -334,6 +345,10 @@ impl InlineHandle {
 
     pub fn set_local_agents(&self, entries: Vec<LocalAgentEntry>) {
         self.send_command(InlineCommand::SetLocalAgents { entries });
+    }
+
+    pub fn set_primary_agent(&self, name: Option<String>) {
+        self.send_command(InlineCommand::SetPrimaryAgent { name });
     }
 
     pub fn set_cursor_visible(&self, visible: bool) {

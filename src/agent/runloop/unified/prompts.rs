@@ -49,6 +49,10 @@ pub(crate) async fn read_system_prompt(
         }
     }
 
+    prompt.push_str(
+        "\n\nEffective runtime controller, tool, permission, model, reasoning, and temporal state is supplied in request runtime state.",
+    );
+
     if !available_subagents.is_empty() {
         let mut section = String::from("## Subagents\n");
         section.push_str(
