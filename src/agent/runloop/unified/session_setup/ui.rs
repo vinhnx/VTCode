@@ -301,6 +301,7 @@ pub(crate) async fn initialize_session_ui(
             handle_for_agents.configure_agent_palette(
                 specs
                     .into_iter()
+                    .filter(|spec| spec.is_subagent())
                     .map(|spec| AgentPaletteItem {
                         name: spec.name,
                         description: Some(spec.description),

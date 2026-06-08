@@ -179,6 +179,7 @@ pub mod permissions;
 pub mod persistent_memory;
 pub mod plugins;
 pub mod pods;
+pub mod primary_agent;
 pub mod project_doc;
 pub mod prompts;
 pub mod retry;
@@ -238,6 +239,11 @@ pub use core::threads::{
 pub use ide_context::{
     EditorContextSnapshot, EditorFileContext, EditorLineRange, EditorSelectionContext,
     EditorSelectionRange,
+};
+pub use primary_agent::{
+    ActivePrimaryAgent, ActivePrimaryAgentSpecIdentity, ActivePrimaryAgentState,
+    PrimaryAgentResolutionError, apply_primary_agent_tool_policy, clamp_primary_permission_mode,
+    resolve_discovered_primary_agent, resolve_primary_agent,
 };
 pub use subagents::{
     SendInputRequest as SubagentSendInputRequest, SpawnAgentRequest as SubagentSpawnRequest,

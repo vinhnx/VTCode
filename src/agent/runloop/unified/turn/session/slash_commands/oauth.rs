@@ -734,6 +734,9 @@ mod tests {
         let checkpoint_manager = None;
         let lifecycle_hooks = None;
         let harness_emitter = None;
+        let active_primary_agent = Box::leak(Box::new(
+            vtcode_core::primary_agent::ActivePrimaryAgentState::default(),
+        ));
         let thread_handle = Box::leak(Box::new(
             vtcode_core::core::threads::ThreadManager::new().start_thread_with_identifier(
                 "test-thread",
@@ -760,6 +763,7 @@ mod tests {
             conversation_history,
             decision_ledger: turn.decision_ledger,
             context_manager: turn.context_manager,
+            active_primary_agent,
             session_stats: turn.session_stats,
             input_status_state: turn.input_status_state,
             tools: turn.tools,

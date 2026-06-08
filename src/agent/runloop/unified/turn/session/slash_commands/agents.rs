@@ -66,7 +66,7 @@ pub(crate) async fn handle_manage_agents(
         AgentManagerAction::Threads => {
             if ctx.renderer.supports_inline_ui() {
                 let mut ctx = ctx;
-                if !ensure_selection_ui_available(&mut ctx, "browsing delegated child threads")? {
+                if !ensure_selection_ui_available(&mut ctx, "browsing subagent threads")? {
                     return Ok(SlashCommandControl::Continue);
                 }
                 show_threads_modal(ctx).await
@@ -186,15 +186,15 @@ fn render_missing_subagent_controller(
 
 async fn show_agents_manager(mut ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     ctx.handle.show_list_modal(
-        "Subagents".to_string(),
+        "Agents".to_string(),
         vec![
-            "Manage effective subagents, active agents, and custom definitions.".to_string(),
+            "Manage agent definitions, subagent runs, and custom definitions.".to_string(),
             "Use Enter to inspect, create, edit, or delete definitions.".to_string(),
         ],
         vec![
             action_item(
                 "Browse agents",
-                "List effective and shadowed definitions with source badges",
+                "List primary and subagent definitions with source badges",
                 Some("Recommended"),
                 "browse effective shadowed agents",
                 "browse",
@@ -330,7 +330,7 @@ async fn show_agent_catalog(mut ctx: SlashCommandContext<'_>) -> Result<SlashCom
 
     let selected = items.iter().find_map(|item| item.selection.clone());
     ctx.handle.show_list_modal(
-        "Loaded subagents".to_string(),
+        "Loaded agents".to_string(),
         vec![
             format!(
                 "{} effective definition(s), {} shadowed definition(s).",
@@ -342,7 +342,7 @@ async fn show_agent_catalog(mut ctx: SlashCommandContext<'_>) -> Result<SlashCom
         items,
         selected,
         Some(InlineListSearchConfig {
-            label: "Search subagents".to_string(),
+            label: "Search agents".to_string(),
             placeholder: Some("name, source, description".to_string()),
         }),
     );
@@ -384,7 +384,7 @@ async fn handle_list_agents_text(ctx: &mut SlashCommandContext<'_>) -> Result<Sl
     ctx.renderer.line(
         MessageStyle::Info,
         &format!(
-            "Loaded {} effective subagents ({} shadowed definitions).",
+            "Loaded {} effective agent definitions ({} shadowed definitions).",
             specs.len(),
             shadowed.len()
         ),
@@ -398,11 +398,11 @@ async fn handle_list_agents_text(ctx: &mut SlashCommandContext<'_>) -> Result<Sl
 
     if threads.is_empty() {
         ctx.renderer
-            .line(MessageStyle::Info, "No delegated child threads yet.")?;
+            .line(MessageStyle::Info, "No subagent threads yet.")?;
     } else {
         ctx.renderer.line(
             MessageStyle::Info,
-            &format!("{} delegated child thread(s):", threads.len()),
+            &format!("{} subagent thread(s):", threads.len()),
         )?;
         for entry in threads {
             ctx.renderer.line(
@@ -701,14 +701,21 @@ fn action_item(
 }
 
 fn agent_badge(spec: &vtcode_config::SubagentSpec) -> String {
-    match spec.file_path {
-        Some(_) => spec.source.label().to_string(),
-        None => "Built-in".to_string(),
+    match spec.mode {
+        vtcode_config::AgentMode::Primary => "Primary".to_string(),
+        vtcode_config::AgentMode::Subagent => "Subagent".to_string(),
+        vtcode_config::AgentMode::All => "All".to_string(),
     }
 }
 
 fn agent_subtitle(spec: &vtcode_config::SubagentSpec, shadowed: bool) -> String {
     let mut parts = vec![spec.source.label().to_string(), spec.description.clone()];
+    let kind = match spec.mode {
+        vtcode_config::AgentMode::Primary => "primary",
+        vtcode_config::AgentMode::Subagent => "subagent",
+        vtcode_config::AgentMode::All => "all",
+    };
+    parts.push(kind.to_string());
     if spec.is_read_only() {
         parts.push("read-only".to_string());
     }
@@ -737,6 +744,7 @@ async fn refresh_agent_palette(
     handle.configure_agent_palette(
         specs
             .into_iter()
+            .filter(|spec| spec.is_subagent())
             .map(|spec| AgentPaletteItem {
                 name: spec.name,
                 description: Some(spec.description),

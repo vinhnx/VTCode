@@ -548,6 +548,11 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 return None;
             }
 
+            if can_cycle_primary_agent(session, &key) {
+                session.mark_dirty();
+                return Some(InlineEvent::CyclePrimaryAgent);
+            }
+
             let Some(submitted) = take_submitted_input(session) else {
                 session.mark_dirty();
                 return None;
@@ -680,6 +685,10 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 if session.accept_inline_prompt_suggestion() {
                     return None;
                 }
+                if can_cycle_primary_agent(session, &key) {
+                    session.mark_dirty();
+                    return Some(InlineEvent::CyclePrimaryAgent);
+                }
                 let Some(submitted) = take_submitted_input(session) else {
                     session.mark_dirty();
                     return None;
@@ -728,6 +737,14 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         }
         _ => None,
     }
+}
+
+fn can_cycle_primary_agent(session: &Session, key: &KeyEvent) -> bool {
+    key.modifiers == KeyModifiers::NONE
+        && !session.is_running_activity()
+        && session.input_manager.content().is_empty()
+        && session.queued_inputs.is_empty()
+        && !session.has_active_overlay()
 }
 
 fn take_submitted_input(session: &mut Session) -> Option<String> {

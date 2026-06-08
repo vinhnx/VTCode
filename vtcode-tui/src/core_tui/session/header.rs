@@ -41,6 +41,13 @@ fn format_model_summary_label(model: &str) -> String {
         .join("-")
 }
 
+fn primary_agent_header_label(name: Option<&str>) -> String {
+    let Some(name) = name.map(str::trim).filter(|name| !name.is_empty()) else {
+        return "Build".to_string();
+    };
+    format_model_summary_label(name)
+}
+
 fn compact_context_window_label(context_window_size: usize) -> String {
     if context_window_size >= 1_000_000 {
         format!("{}M", context_window_size / 1_000_000)
@@ -205,17 +212,33 @@ impl Session {
 
     fn header_compact_right_spans(&self) -> Vec<Span<'static>> {
         let mut spans = Vec::new();
+        let agent_label = primary_agent_header_label(self.header_context.primary_agent.as_deref());
         let model_summary_spans = self.header_compact_model_summary_spans();
+        if !agent_label.trim().is_empty() {
+            spans.push(Span::styled(
+                agent_label,
+                Style::default()
+                    .fg(Color::Magenta)
+                    .add_modifier(Modifier::BOLD),
+            ));
+        }
+
         if let Some((mode_text, mode_style)) = self.header_active_mode_summary() {
-            spans.push(Span::styled(mode_text, mode_style));
-            if !model_summary_spans.is_empty() {
+            if !spans.is_empty() {
                 spans.push(Span::styled(
                     " · ".to_owned(),
                     self.header_secondary_style(),
                 ));
             }
+            spans.push(Span::styled(mode_text, mode_style));
         }
 
+        if !spans.is_empty() && !model_summary_spans.is_empty() {
+            spans.push(Span::styled(
+                " · ".to_owned(),
+                self.header_secondary_style(),
+            ));
+        }
         spans.extend(model_summary_spans);
 
         spans
@@ -551,6 +574,16 @@ impl Session {
                 spans.push(Span::styled(text, style));
                 *first = false;
             };
+
+        let agent_style = Style::default()
+            .fg(Color::Magenta)
+            .add_modifier(Modifier::BOLD);
+        push_badge(
+            &mut spans,
+            primary_agent_header_label(self.header_context.primary_agent.as_deref()),
+            agent_style,
+            &mut first_section,
+        );
 
         // Show editing mode badge
         if self.header_context.editing_mode == EditingMode::Plan {

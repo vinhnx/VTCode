@@ -104,8 +104,10 @@ pub const HEADER_INPUT_LABEL: &str = "Input";
 pub const HEADER_INPUT_ENABLED: &str = "Enabled";
 pub const HEADER_INPUT_DISABLED: &str = "Disabled";
 pub const INLINE_USER_PREFIX: &str = " ";
-pub const CHAT_INPUT_PLACEHOLDER_BOOTSTRAP: &str = "Type a request… @files /commands • Ctrl+M model • Alt+P suggest • Shift+Tab mode • Enter queue • Ctrl+Enter run now • /stop stop task";
-pub const CHAT_INPUT_PLACEHOLDER_FOLLOW_UP: &str = "Continue… @files /commands • Ctrl+M model • Alt+P suggest • Shift+Tab mode • Enter queue • Ctrl+Enter run now • /stop stop task";
+pub const CHAT_INPUT_PLACEHOLDER_BOOTSTRAP: &str =
+    vtcode_config::constants::ui::CHAT_INPUT_PLACEHOLDER_BOOTSTRAP;
+pub const CHAT_INPUT_PLACEHOLDER_FOLLOW_UP: &str =
+    vtcode_config::constants::ui::CHAT_INPUT_PLACEHOLDER_FOLLOW_UP;
 pub const HEADER_SHORTCUT_HINT: &str = "Shortcuts: Alt+P suggest • Shift+Tab mode • Enter queue • Tab accept/queue • Ctrl+Enter run • Shift+Enter newline • Esc cancel • Ctrl+C interrupt";
 pub const HEADER_META_SEPARATOR: &str = "   ";
 pub const WELCOME_TEXT_WIDTH: usize = vtcode_config::constants::ui::WELCOME_TEXT_WIDTH;

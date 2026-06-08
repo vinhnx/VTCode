@@ -251,7 +251,10 @@ pub(super) async fn render_help(
             MessageStyle::Info,
             "  Enter – Submit now (or queue if a turn is active)",
         )?;
-        renderer.line(MessageStyle::Info, "  Tab – Queue the current input")?;
+        renderer.line(
+            MessageStyle::Info,
+            "  Tab – Accept suggestion, cycle primary agent when empty, or queue input",
+        )?;
         renderer.line(
             MessageStyle::Info,
             "  Ctrl+Enter – Run now / steer the active turn",

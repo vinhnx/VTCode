@@ -197,6 +197,66 @@ fn permission_overlay_surfaces_action_required_status() {
 }
 
 #[test]
+fn header_meta_line_renders_active_primary_agent() {
+    let mut session = fresh_session();
+    session.header_context.primary_agent = Some("planner".to_string());
+
+    assert_header_contains_badge(&mut session, "Planner");
+}
+
+#[test]
+fn set_primary_agent_command_updates_header_badge() {
+    let mut session = fresh_session();
+
+    session.handle_command(InlineCommand::SetPrimaryAgent {
+        name: Some("reviewer".to_string()),
+    });
+    assert_header_contains_badge(&mut session, "Reviewer");
+
+    session.handle_command(InlineCommand::SetPrimaryAgent { name: None });
+    let text = header_line_text(&mut session);
+    assert!(text.contains("Build"));
+    assert!(!text.contains("Reviewer"));
+}
+
+#[test]
+fn bottom_status_excludes_primary_agent() {
+    let mut session = fresh_session();
+
+    assert_eq!(session.status_right_text(), None);
+
+    session.handle_command(InlineCommand::SetInputStatus {
+        left: None,
+        right: Some("gpt-5.5 | 98% context left".to_string()),
+    });
+    session.handle_command(InlineCommand::SetPrimaryAgent {
+        name: Some("reviewer".to_string()),
+    });
+
+    assert_eq!(
+        session.status_right_text(),
+        Some("gpt-5.5 | 98% context left")
+    );
+}
+
+#[test]
+fn header_context_updates_preserve_active_primary_agent() {
+    let mut session = fresh_session();
+    session.handle_command(InlineCommand::SetPrimaryAgent {
+        name: Some("planner".to_string()),
+    });
+
+    let mut replacement = session.header_context.clone();
+    replacement.primary_agent = None;
+    replacement.model = "Model: replacement".to_string();
+    session.handle_command(InlineCommand::SetHeaderContext {
+        context: Box::new(replacement),
+    });
+
+    assert_header_contains_badge(&mut session, "Planner");
+}
+
+#[test]
 fn non_permission_overlay_surfaces_generic_action_required_status() {
     let mut session = fresh_session();
     session.show_overlay(OverlayRequest::List(ListOverlayRequest {
@@ -485,6 +545,19 @@ fn hidden_header_summary_live_reloads_model_changes() {
     assert!(updated.contains("Moonshot Kimi-K2"));
     assert!(updated.contains("effort: high"));
     assert!(!updated.contains("Mimo Mimo-V2-Flash"));
+}
+
+#[test]
+fn hidden_header_summary_renders_active_primary_agent() {
+    let mut session = fresh_session();
+    session.appearance.hide_header = true;
+    session.apply_transcript_width(VIEW_WIDTH);
+    session.header_context.primary_agent = Some("duck".to_string());
+
+    let line = header_line_text(&mut session);
+
+    assert!(line.contains("Duck"));
+    assert!(line.contains("Edit"));
 }
 
 #[test]

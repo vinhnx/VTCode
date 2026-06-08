@@ -789,6 +789,13 @@ impl SubagentController {
         spec: SubagentSpec,
         request: SpawnAgentRequest,
     ) -> Result<SubagentStatusEntry> {
+        if !spec.is_subagent() {
+            bail!(
+                "custom subagent spawn only supports subagent-capable specs; '{}' is primary-only",
+                spec.name
+            );
+        }
+
         if !spec.is_read_only() {
             bail!(
                 "custom subagent spawn only supports read-only specs; '{}' exposes write-capable behavior",
@@ -1264,7 +1271,7 @@ impl SubagentController {
             .discovered
             .effective
             .iter()
-            .find(|spec| spec.matches_name(candidate))
+            .find(|spec| spec.is_subagent() && spec.matches_name(candidate))
             .cloned()
     }
 
@@ -1967,6 +1974,43 @@ Run the managed background demo.
         .expect("write background agent");
     }
 
+    fn write_test_primary_agent(workspace_root: &std::path::Path) {
+        let agent_dir = workspace_root.join(".vtcode/agents");
+        std::fs::create_dir_all(&agent_dir).expect("agent dir");
+        std::fs::write(
+            agent_dir.join("duck.md"),
+            r#"---
+name: duck
+description: Discussion controller.
+mode: primary
+permissionMode: plan
+---
+
+Discuss before implementation.
+"#,
+        )
+        .expect("write primary agent");
+    }
+
+    fn write_test_read_only_subagent(workspace_root: &std::path::Path) {
+        let agent_dir = workspace_root.join(".vtcode/agents");
+        std::fs::create_dir_all(&agent_dir).expect("agent dir");
+        std::fs::write(
+            agent_dir.join("readonly-demo.md"),
+            r#"---
+name: readonly-demo
+description: Read-only test child agent.
+tools:
+  - read_file
+permissionMode: plan
+---
+
+Inspect the repository.
+"#,
+        )
+        .expect("write read-only agent");
+    }
+
     #[test]
     fn request_prompt_prefers_message() {
         let request = SpawnAgentRequest {
@@ -2206,6 +2250,7 @@ Run the managed background demo.
             mcp_servers: Vec::new(),
             hooks: None,
             background: false,
+            mode: vtcode_config::AgentMode::Subagent,
             max_turns: None,
             nickname_candidates: Vec::new(),
             initial_prompt: None,
@@ -2282,6 +2327,7 @@ Run the managed background demo.
             mcp_servers: Vec::new(),
             hooks: None,
             background: false,
+            mode: vtcode_config::AgentMode::Subagent,
             max_turns: None,
             nickname_candidates: Vec::new(),
             initial_prompt: None,
@@ -2509,6 +2555,21 @@ Run the managed background demo.
     }
 
     #[test]
+    fn explicit_agent_mentions_ignore_primary_only_agents() {
+        let mut duck = read_only_test_spec("duck");
+        duck.mode = vtcode_config::AgentMode::Primary;
+
+        assert_eq!(
+            extract_explicit_agent_mentions("@agent-duck discuss the task", &[duck.clone()]),
+            Vec::<String>::new()
+        );
+        assert_eq!(
+            extract_explicit_agent_mentions("run duck agent and discuss the task", &[duck]),
+            Vec::<String>::new()
+        );
+    }
+
+    #[test]
     fn explicit_model_request_detects_aliases_and_full_ids() {
         assert!(contains_explicit_model_request(
             "delegate this using gpt-5.4-mini",
@@ -2721,6 +2782,34 @@ Run the managed background demo.
     }
 
     #[tokio::test]
+    async fn spawn_rejects_primary_only_agent_as_child() {
+        let temp = TempDir::new().expect("tempdir");
+        write_test_primary_agent(temp.path());
+        let controller = SubagentController::new(test_controller_config(
+            temp.path().to_path_buf(),
+            VTCodeConfig::default(),
+        ))
+        .await
+        .expect("controller");
+
+        let mentions = controller
+            .set_turn_delegation_hints_from_input("@agent-duck discuss the task")
+            .await;
+        assert!(mentions.is_empty());
+
+        let err = controller
+            .spawn(SpawnAgentRequest {
+                agent_type: Some("duck".to_string()),
+                message: Some("Discuss the task.".to_string()),
+                ..SpawnAgentRequest::default()
+            })
+            .await
+            .expect_err("primary-only agent should not spawn as child");
+
+        assert!(err.to_string().contains("Unknown subagent type duck"));
+    }
+
+    #[tokio::test]
     async fn spawn_accepts_background_flag_outside_managed_background_runtime() {
         let temp = TempDir::new().expect("tempdir");
         let controller = SubagentController::new(test_controller_config(
@@ -2834,6 +2923,7 @@ Run the managed background demo.
     #[tokio::test]
     async fn spawn_rejects_read_only_agent_when_auto_delegate_is_disabled() {
         let temp = TempDir::new().expect("tempdir");
+        write_test_read_only_subagent(temp.path());
         let mut cfg = VTCodeConfig::default();
         cfg.subagents.auto_delegate_read_only = false;
         let controller =
@@ -2843,7 +2933,7 @@ Run the managed background demo.
 
         let err = controller
             .spawn(SpawnAgentRequest {
-                agent_type: Some("explorer".to_string()),
+                agent_type: Some("readonly-demo".to_string()),
                 message: Some("Inspect the repository.".to_string()),
                 ..SpawnAgentRequest::default()
             })
@@ -2852,7 +2942,7 @@ Run the managed background demo.
 
         assert!(
             err.to_string()
-                .contains("cannot proactively launch read-only agent 'explorer'")
+                .contains("cannot proactively launch read-only agent 'readonly-demo'")
         );
     }
 
@@ -3265,6 +3355,41 @@ Run the managed background demo.
         assert!(
             err.to_string()
                 .contains("custom subagent spawn only supports read-only specs")
+        );
+    }
+
+    #[tokio::test]
+    async fn spawn_custom_rejects_primary_only_spec() {
+        let temp = TempDir::new().expect("tempdir");
+        write_test_primary_agent(temp.path());
+        let controller = SubagentController::new(test_controller_config(
+            temp.path().to_path_buf(),
+            VTCodeConfig::default(),
+        ))
+        .await
+        .expect("controller");
+
+        let spec = controller
+            .effective_specs()
+            .await
+            .into_iter()
+            .find(|spec| spec.name == "duck")
+            .expect("duck primary agent");
+
+        let err = controller
+            .spawn_custom(
+                spec,
+                SpawnAgentRequest {
+                    message: Some("Discuss the task.".to_string()),
+                    ..SpawnAgentRequest::default()
+                },
+            )
+            .await
+            .expect_err("primary-only custom spec should be rejected");
+
+        assert!(
+            err.to_string()
+                .contains("custom subagent spawn only supports subagent-capable specs")
         );
     }
 

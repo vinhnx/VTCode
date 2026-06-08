@@ -8,11 +8,24 @@ Subagents help you:
 - constrain tools for focused reviewers, planners, or debuggers
 - reuse project or user agent definitions across repositories
 - preload skills, MCP servers, memory, and hooks for specialized work
-- switch between the main thread and delegated child threads with `/agent`
+- inspect delegated child threads with `/agent`
+- switch the main session's active primary agent with `Tab`
 
-VT Code ships with built-in subagents and can also load custom agents from `.vtcode`, `.claude`, `.codex`, and enabled plugins.
+VT Code ships with built-in primary agents and subagents, and can also load custom agents from `.vtcode`, `.claude`, `.codex`, and enabled plugins.
+
+The same agent specification format can describe delegated child agents and primary agents. A subagent is delegated child work with its own thread. A primary agent controls the main session and changes the request-time instructions, tools, permission notes, model, and reasoning effort that VT Code applies for subsequent turns.
 
 For new `.vtcode/agents/*.md` files, use VT Code tool ids in frontmatter. Claude-style names such as `Read`, `Grep`, `Glob`, `Edit`, `Write`, and `Bash` are compatibility imports for `.claude` files, not the recommended VT Code-native format.
+
+## Built-in primary agents
+
+| Agent | Default model | Mutates files? | Purpose |
+| --- | --- | --- | --- |
+| `build` | `inherit` | yes | Default implementation agent for the main session |
+| `duck` | `inherit` | no | Discussion-first agent for scope, constraints, and trade-offs |
+| `plan` | `inherit` | no | Read-only planning agent available as both primary and delegated child |
+
+Custom project or user specs with the same name override these built-ins using the normal discovery precedence. Use `mode: primary` for main-session agents, `mode: subagent` for delegated-only definitions, and `mode: all` for definitions that should support both.
 
 ## Built-in subagents
 
@@ -27,7 +40,7 @@ Notes:
 
 - `explorer` also matches `explore`
 - `worker` also matches `general` and `general-purpose`
-- child threads cannot spawn more subagents in the current VT Code build
+- child threads do not spawn more subagents
 
 Completed child threads are expected to return a fixed Markdown handoff that VT Code can merge back into the parent session memory:
 
@@ -82,7 +95,7 @@ Use the code-reviewer agent on the auth changes
 Spawn a code-reviewer subagent and summarize only the important findings
 ```
 
-6. Use `/agent` to switch between the main thread and delegated child threads. Use `/agents threads` to inspect child runs and open completed transcripts.
+6. Use `/agent` or `/agents threads` to inspect delegated child runs and open completed transcripts. Use `Tab` on an empty idle composer when you want to switch the main session to another primary agent.
 
 ## Discovery And Precedence
 
@@ -188,12 +201,13 @@ Only `name` and `description` are required.
 | --- | --- | --- |
 | `name` | unique agent identifier | use lowercase letters, digits, and hyphens |
 | `description` | delegation hint for VT Code and the model | include phrases like "use proactively" when you want read-only delegation to be attractive |
+| `mode` | agent availability | `primary`, `subagent`, or `all`; omitted mode defaults to `subagent` |
 | `tools` | allowlist of tool names | use VT Code tool ids from `vtcode schema tools`, such as `read_file`, `list_files`, `unified_search`, `unified_exec`, `edit_file`, `write_file`, `apply_patch`, or `unified_file` |
 | `disallowedTools` | denylist removed from inherited or allowed tools | use the same VT Code tool ids as `tools`; applied before the runtime child-tool filter |
 | `model` | model override | defaults to `inherit`; also accepts `small`, `haiku`, `sonnet`, `opus`, or a full model id |
 | `color` | TUI badge color for active subagent indicators | optional; accepts simple color names such as `blue`, hex like `#4f8fd8`, or Git-style fg/bg strings such as `white #4f8fd8` |
 | `reasoning_effort` | per-agent reasoning override | `effort` and `model_reasoning_effort` are also accepted |
-| `permissionMode` | child permission mode | `default`, `acceptEdits`, `dontAsk`, `bypassPermissions`, `plan`, `auto` |
+| `permissionMode` | permission mode override | `default`, `acceptEdits`, `dontAsk`, `bypassPermissions`, `plan`, `auto`; can only narrow the current session mode for primary agents or the parent mode for child agents |
 | `skills` | skills to preload into the child context | uses the same skill loader as the main session |
 | `mcpServers` | named or inline MCP servers | inline servers are scoped to the child config overlay |
 | `hooks` | child-local lifecycle hooks | use this for `PreToolUse`, `PostToolUse`, and `Stop` behavior inside the child thread |
@@ -203,6 +217,31 @@ Only `name` and `description` are required.
 | `initialPrompt` | default task prompt when the spawn request omits one | useful for compatibility imports |
 | `memory` | persistent memory scope | `user`, `project`, or `local` |
 | `isolation` | compatibility field for future isolation modes | `worktree` is parsed but currently rejected at runtime in VT Code |
+
+### Field Availability
+
+| Field | Primary agents | Subagents |
+| --- | --- | --- |
+| `name` | yes | yes |
+| `description` | yes | yes |
+| Markdown body / instructions | yes | yes |
+| `mode` | yes | yes |
+| `tools` | yes | yes |
+| `disallowedTools` | yes | yes |
+| `permissionMode` | yes | yes |
+| `model` | yes | yes |
+| `reasoning_effort` | yes | yes |
+| `color` | no | yes |
+| `skills` | no | yes |
+| `mcpServers` | no | yes |
+| `hooks` | no | yes |
+| `background` | no | yes |
+| `maxTurns` | no | yes |
+| `nickname_candidates` | no | yes |
+| `initialPrompt` | no | yes |
+| `memory` | no | yes |
+| `isolation` | no | yes |
+| `aliases` | lookup only | lookup and delegation matching |
 
 ## Model Resolution
 
@@ -247,6 +286,8 @@ Subagents inherit the parent approval context and can only stay at or below the 
 
 - If the parent is in `auto` or `bypassPermissions`, the parent mode wins.
 - Otherwise the child can request a stricter mode such as `plan` or `dontAsk`.
+
+Primary agents use the same conservative rule: `permissionMode` can narrow the current session mode but cannot broaden it.
 
 ### MCP Servers
 
@@ -357,7 +398,35 @@ An explicit mention guarantees the selection for that turn:
 
 VT Code treats a single explicit mention as the selected agent for the turn. If the model later tries to spawn a different agent, the call is rejected instead of silently switching.
 
-VT Code does not currently expose Claude-style session-wide `--agent <name>` or `--agents <json>` flows. In VT Code, `--agent` is already used for model override. Use agent files, natural-language delegation, explicit mentions, or `/agents` instead.
+`/agent` and `/agents` can inspect agent definitions and delegated child runs. `@agent-name` is only for subagent-capable definitions; primary-only agents cannot be invoked with `@`.
+
+### Use A Primary Agent
+
+Press `Tab` on an empty idle composer to cycle the active primary agent. The cycle includes discovered agent specs marked with `mode: primary` or `mode: all`. Project definitions still take precedence over user definitions, imported definitions, plugin definitions, and built-ins according to the discovery order above.
+
+When you select a primary agent, VT Code keeps you in the main session rather than spawning a child thread. The active primary agent is shown in the header next to the current mode.
+
+Primary agents use the same agent definition format:
+
+```markdown
+---
+name: duck
+description: Discussion-first agent for scope, constraints, and trade-offs.
+mode: primary
+tools: [read_file, list_files, unified_search]
+permissionMode: plan
+model: inherit
+---
+
+Help the user clarify goals and trade-offs before implementation.
+Do not edit files.
+```
+
+Use `mode: primary` for agents that should control the main session, `mode: subagent` for delegated child agents, and `mode: all` for agents that should be available in both places.
+
+Cycling past the last available primary agent wraps back to the first agent.
+
+`@agent-name` remains delegated-child syntax. It does not select a primary agent.
 
 ### Inspect Active Agents In Place
 

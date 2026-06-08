@@ -756,6 +756,9 @@ fn to_core_command(command: &InlineCommand) -> Option<crate::core_tui::types::In
             CoreCommand::SetSubagentPreview { text: text.clone() }
         }
         InlineCommand::SetLocalAgents { .. } => return None,
+        InlineCommand::SetPrimaryAgent { name } => {
+            CoreCommand::SetPrimaryAgent { name: name.clone() }
+        }
         InlineCommand::SetCursorVisible(value) => CoreCommand::SetCursorVisible(*value),
         InlineCommand::SetInputEnabled(value) => CoreCommand::SetInputEnabled(*value),
         InlineCommand::SetInput(value) => CoreCommand::SetInput(value.clone()),
