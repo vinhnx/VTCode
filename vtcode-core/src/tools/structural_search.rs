@@ -1006,7 +1006,7 @@ impl StructuralSearchRequest {
             || self.constraints.is_some()
         {
             bail!(
-                "action='structural' workflow='{}' does not accept relational rules                  (`has`, `inside`, `follows`, `precedes`) or `constraints`.",
+                "action='structural' workflow='{}' does not accept relational rules (`has`, `inside`, `follows`, `precedes`) or `constraints`.",
                 self.workflow.as_str()
             );
         }
@@ -3501,12 +3501,12 @@ fn validate_metavariable_syntax(pattern: &str) -> Result<()> {
                         .is_some_and(|c| c.is_ascii_uppercase() || c == '_')
                 {
                     bail!(
-                        "invalid metavariable `{token}`: multi-metavariable `$$$` must be followed by                          an uppercase name (e.g. `$$$ARGS`); got `{rest}`"
+                        "invalid metavariable `{token}`: multi-metavariable `$$$` must be followed by an uppercase name (e.g. `$$$ARGS`); got `{rest}`"
                     );
                 }
             } else if token == "$" || token == "$$" {
                 bail!(
-                    "bare `{token}` is not a valid metavariable; use `$NAME` (named node),                      `$$NAME` (unnamed node), or `$$$NAME` (zero or more nodes)"
+                    "bare `{token}` is not a valid metavariable; use `$NAME` (named node), `$$NAME` (unnamed node), or `$$$NAME` (zero or more nodes)"
                 );
             } else {
                 let prefix = if token.starts_with("$$") { "$$" } else { "$" };
@@ -3518,7 +3518,7 @@ fn validate_metavariable_syntax(pattern: &str) -> Result<()> {
                     );
                 }
                 bail!(
-                    "invalid metavariable `{token}`: names must match `[A-Z_][A-Z0-9_]*`                      after the `$` or `$$` prefix"
+                    "invalid metavariable `{token}`: names must match `[A-Z_][A-Z0-9_]*` after the `$` or `$$` prefix"
                 );
             }
         }

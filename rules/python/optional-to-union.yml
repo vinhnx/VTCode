@@ -10,7 +10,7 @@ note: |
   to disambiguate from other subscript expressions.
 rule:
   pattern:
-    context: 'a: Optional[$T]'
+    context: '$VAR: Optional[$T]'
     selector: generic_type
 fix: $T | None
 metadata:

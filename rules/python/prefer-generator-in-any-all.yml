@@ -22,17 +22,18 @@ rewriters:
           endChar: -1
     fix: $INNER
 rule:
-  pattern: $FUNC($$$ARGS)
+  pattern: $FUNC($ARG)
 constraints:
   FUNC:
     regex: ^(any|all)$
+  ARG:
+    kind: list_comprehension
 transform:
-  NEW_ARGS:
+  NEW_ARG:
     rewrite:
       rewriters: [strip-brackets]
-      source: $$$ARGS
-      joinBy: ", "
-fix: $FUNC($NEW_ARGS)
+      source: $ARG
+fix: $FUNC($NEW_ARG)
 files:
   - "**/*.py"
   - "!tests/**"

@@ -8,7 +8,12 @@ note: |
   access: `receiver.method()`. Keep `let` for null-safe chaining (`?.let { }`)
   or when renaming `it` improves readability.
 rule:
-  pattern: $RECEIVER.let { $PARAM -> $BODY }
+  all:
+    - any:
+        - pattern: $RECEIVER.let { $PARAM -> $BODY }
+        - pattern: $RECEIVER.let { $BODY }
+    - not:
+        pattern: $RECEIVER?.let { $$$ }
 files:
   - src/**/*.kt
   - src/**/*.kts

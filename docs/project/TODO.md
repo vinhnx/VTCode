@@ -28,7 +28,7 @@ Prefer 'ast-grep' over grep/ripgrep for any code-shape question; keep text grep 
 sg •
 ```
 
-enhaced vtcode's support for ast-grep. also update this note in agents.md and in relavant subagents.
+enhanced vtcode's support for ast-grep. also update this note in agents.md and in relevant subagents.
 
 https://ast-grep.github.io/catalog/rust/
 

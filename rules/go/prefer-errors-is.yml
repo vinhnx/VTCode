@@ -1,13 +1,16 @@
 id: prefer-errors-is
 language: Go
 severity: hint
-message: Use `errors.Is(err, target)` instead of `err == target` for error comparison.
+message: Use `errors.Is(err, target)` instead of direct comparison for error checking.
 note: |
-  Direct comparison `err == target` fails for wrapped errors. `errors.Is`
-  unwraps the error chain and compares each layer. This is the idiomatic
-  way to check for specific error values in Go 1.13+.
+  Direct comparison `err == target` and `err != target` fails for wrapped
+  errors. `errors.Is` unwraps the error chain and compares each layer.
+  This is the idiomatic way to check for specific error values in Go 1.13+.
+  For `!=` comparisons, use `!errors.Is(err, target)`.
 rule:
-  pattern: $ERR == $TARGET
+  any:
+    - pattern: $ERR == $TARGET
+    - pattern: $ERR != $TARGET
 constraints:
   TARGET:
     regex: "^(Err|err|[A-Z].*Error)"

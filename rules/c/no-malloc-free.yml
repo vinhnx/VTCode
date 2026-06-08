@@ -6,8 +6,7 @@ note: |
   Manual memory management with `malloc` and `free` is a common source of
   memory leaks, double-frees, and use-after-free bugs. Consider using
   arena allocators, ownership-tracking patterns, or compiler sanitizers
-  to reduce risk. In C++, prefer smart pointers (`std::unique_ptr`,
-  `std::shared_ptr`) over raw `malloc`/`free`.
+  to reduce risk.
 rule:
   any:
     - pattern: malloc($$$)

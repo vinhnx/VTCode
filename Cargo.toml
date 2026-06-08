@@ -78,7 +78,6 @@ serde-saphyr = "0.0.27"
 serial_test = "3.5"
 dotenvy = "0.15"
 dirs = "6.0"
-anstyle-crossterm = "4.0"
 path-clean = "1.0"
 shell-words = "1.1"
 dialoguer = "0.12.0"
@@ -373,7 +372,7 @@ serial_test = { workspace = true }
 agent-client-protocol = { workspace = true }
 
 [package.metadata.cargo-machete]
-ignored = ["anstyle-crossterm"]
+ignored = []
 
 [package.metadata.unmaintained]
 # Ignore known unmaintained packages (add packages as needed)

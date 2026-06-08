@@ -9,7 +9,9 @@ note: |
   allocation. This rule detects patterns like `$A + $B` where the result
   is assigned to a string variable.
 rule:
-  pattern: $VAR = $VAR + $OTHER
+  any:
+    - pattern: $VAR = $VAR + $OTHER
+    - pattern: $VAR += $OTHER
 constraints:
   VAR:
     kind: identifier

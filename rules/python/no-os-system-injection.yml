@@ -6,11 +6,15 @@ note: |
   `os.system(cmd)` passes the string to a shell, enabling command injection
   when the string contains user-controlled input. Use `subprocess.run([cmd, arg1, ...])`
   which bypasses the shell entirely. This rule flags `os.system` calls that
-  contain string concatenation, which is a common injection vector.
+  contain string concatenation, f-string interpolation, `.format()`, or
+  `%` formatting, which are common injection vectors.
 rule:
   any:
     - pattern: os.system($A + $B)
     - pattern: os.system($A + $B + $C)
+    - pattern: os.system(f"...{$A}...")
+    - pattern: os.system("...{}...".format($A))
+    - pattern: os.system("...%s..." % $A)
 files:
   - "**/*.py"
   - "!tests/**"

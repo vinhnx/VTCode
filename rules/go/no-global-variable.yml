@@ -6,7 +6,8 @@ note: |
   Package-level `var` declarations create global mutable state that makes code
   harder to test and reason about. Prefer passing dependencies as function
   parameters, using constants for immutable values, or encapsulating state in
-  structs. This rule excludes test files and init-only variables.
+  structs. This rule excludes test files but will flag all package-level
+  variables, including those used only in `init()` functions.
 rule:
   kind: var_declaration
   inside:

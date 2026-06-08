@@ -8,7 +8,10 @@ note: |
   intermediate allocation. This is equivalent when the mapping function
   returns arrays that should be flattened one level.
 rule:
-  pattern: $ARR.map($FN).flat()
+  all:
+    - pattern: $ARR.map($FN).flat()
+    - not:
+        pattern: $ARR.map($FN).flat($DEPTH)
 fix: $ARR.flatMap($FN)
 files:
   - "**/*.ts"

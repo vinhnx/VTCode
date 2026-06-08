@@ -40,6 +40,12 @@ pub const DEFAULT_IGNORE_GLOBS: &[&str] = &[
     "**/node_modules/**",
     "**/target/**",
     "**/.cursor/**",
+    "**/dist/**",
+    "**/.next/**",
+    "**/vendor/**",
+    "**/.vtcode/**",
+    "**/.vscode/**",
+    "**/.idea/**",
 ];
 
 /// Returns `true` if `name` matches any entry in [`SENSITIVE_FILES`] or

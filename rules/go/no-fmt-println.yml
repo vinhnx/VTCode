@@ -12,6 +12,8 @@ rule:
     - pattern: fmt.Println($$$)
     - pattern: fmt.Printf($$$)
     - pattern: fmt.Fprintln(os.Stdout, $$$)
+    - pattern: fmt.Fprint(os.Stdout, $$$)
+    - pattern: fmt.Fprintf(os.Stdout, $$$)
 files:
   - "**/*.go"
   - "!**/*_test.go"

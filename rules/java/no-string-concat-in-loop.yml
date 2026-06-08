@@ -7,17 +7,31 @@ note: |
   on each iteration, resulting in O(n^2) time complexity. Use `StringBuilder`
   for efficient string building in loops.
 rule:
-  pattern: $VAR = $VAR + $EXPR
   any:
-    - inside:
-        kind: for_statement
-        stopBy: end
-    - inside:
-        kind: enhanced_for_statement
-        stopBy: end
-    - inside:
-        kind: while_statement
-        stopBy: end
+    - all:
+        - pattern: $VAR = $VAR + $EXPR
+        - any:
+            - inside:
+                kind: for_statement
+                stopBy: end
+            - inside:
+                kind: enhanced_for_statement
+                stopBy: end
+            - inside:
+                kind: while_statement
+                stopBy: end
+    - all:
+        - pattern: $VAR += $EXPR
+        - any:
+            - inside:
+                kind: for_statement
+                stopBy: end
+            - inside:
+                kind: enhanced_for_statement
+                stopBy: end
+            - inside:
+                kind: while_statement
+                stopBy: end
 files:
   - "**/*.java"
   - "!**/test/**"

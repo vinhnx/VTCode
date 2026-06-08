@@ -1,6 +1,6 @@
 id: no-chars-enumerate
 language: Rust
-severity: warning
+severity: hint
 message: Use `.char_indices()` instead of `.chars().enumerate()` when byte offsets are needed.
 note: |
   `.chars().enumerate()` yields character indices (0, 1, 2, ...), not byte

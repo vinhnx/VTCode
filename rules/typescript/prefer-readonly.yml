@@ -1,7 +1,7 @@
 id: prefer-readonly
-language: TypeScript
+language: typescript
 severity: hint
-message: Use `readonly` arrays for return types and parameters that should not be mutated.
+message: Use `readonly` arrays for return types that should not be mutated.
 note: |
   Returning mutable arrays allows callers to modify internal state
   accidentally. Use `readonly $T[]` or `ReadonlyArray<T>` to signal

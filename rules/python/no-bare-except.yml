@@ -1,5 +1,5 @@
 id: no-bare-except
-language: Python
+language: python
 severity: warning
 message: Avoid bare `except:` clauses; catch specific exceptions.
 note: |

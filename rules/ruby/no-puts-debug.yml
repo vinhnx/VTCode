@@ -10,7 +10,9 @@ note: |
 rule:
   any:
     - pattern: puts $VAR
+    - pattern: puts
     - pattern: p $VAR
+    - pattern: p
 files:
   - "**/*.rb"
   - "!**/Rakefile"

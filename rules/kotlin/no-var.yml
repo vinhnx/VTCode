@@ -8,7 +8,9 @@ note: |
   to reason about.
 rule:
   kind: property_declaration
-  pattern: "var $NAME: $TYPE"
+  any:
+    - pattern: "var $NAME: $TYPE"
+    - pattern: "var $NAME = $VALUE"
 files:
   - src/**/*.kt
   - src/**/*.kts
