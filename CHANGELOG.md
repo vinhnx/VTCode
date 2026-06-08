@@ -2,6 +2,35 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.123.6 - 2026-06-08
+
+### Highlights
+#### Bug Fixes
+
+- Resolve docs.rs build failure for vtcode-config (5f722204) 
+#### Features
+
+- Enrich ast-grep structural search with metaVariables, byteOffset, and url fields (5dcbc31f) 
+### Other Changes
+#### Other
+
+- Feat/top level agents  (533af16b) (@kernitus)
+- Refactor file exclusion logic and enhance directory walking utilities (21119580) 
+- Enhance documentation and configuration for GhosttyCore integration; update related tests and clean up lint settings (0d210b1e) 
+- Update tree-sitter grammar handling and enhance unified search parameters for rewrite workflows (4eaa8c22) 
+- Add linting rules for Kotlin, Python, Ruby, and Rust to enforce best practices (f44d5691) 
+- Add linting rules for Python, Rust, TypeScript, and TSX to enforce best practices (e049bc14) 
+- Refactor and enhance linting rules for Python and Kotlin; add new rules for identity checks and update metadata for existing rules (acb69e45) 
+- Add rule snapshots for various code quality improvements (4ba0b8dd) 
+- Add tests for relational rule YAML generation and validation (85c1f44f) 
+- Add support for C and C++ in local parser checks; update tests accordingly (e51eceee) 
+- Refactor StructuralSearchRequest to use serde_json types directly; remove unused validation functions (cbb3d734) 
+- Add new rules and updates for various languages; enhance JSON schema for unified search parameters (db75ccf4) 
+- Remove unused dependencies, enhance documentation, and update various rules for improved code quality and consistency across languages. (3cd68c2a) 
+- Remove stale lint expectations that are now fulfilled (9aa04c7d) 
+#### Refactors
+
+- Remove vt100 legacy PTY backend, keep GhosttyCore only (4bd68ffe) 
 ## 0.123.5 - 2026-06-07
 
 ### Highlights
