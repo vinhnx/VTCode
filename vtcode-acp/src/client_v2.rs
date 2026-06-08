@@ -564,7 +564,7 @@ impl AcpClientV2 {
         }
 
         let mut stream = response.bytes_stream();
-        use futures_util::StreamExt;
+        use futures::StreamExt;
 
         let mut buffer = String::new();
 

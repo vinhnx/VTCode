@@ -19,7 +19,6 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 chrono = { workspace = true }
 futures = { workspace = true }
-futures-util = "0.3"
 hashbrown = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true, features = ["derive"] }

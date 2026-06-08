@@ -92,6 +92,7 @@ pretty_assertions = "1.4"
 proc-macro2 = "1"
 quote = "1"
 syn = "2"
+linkme = "0.3"
 
 [workspace.package]
 version = "0.123.7"
@@ -239,7 +240,6 @@ clap = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 webbrowser = "1.0"
-notify = "6.1.1" # For file watching functionality
 tokio-util = { workspace = true, features = ["compat"] }
 serde = { workspace = true }
 toml = { workspace = true }

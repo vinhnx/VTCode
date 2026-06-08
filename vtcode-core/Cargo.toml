@@ -50,7 +50,6 @@ tokio = { workspace = true, features = [
 tokio-util = { workspace = true, features = ["codec"] }
 async-process = "2.2"
 futures = { workspace = true }
-futures-lite = "2.3"
 async-stream = "0.3"
 base64 = { workspace = true }
 glob = "0.3"
@@ -154,6 +153,7 @@ which = "8.0.2"
 textwrap = "0.16"
 rustc-hash = { workspace = true }
 arc-swap = "1.9"
+linkme = { workspace = true }
 libloading = { workspace = true }
 webbrowser = "1.2"
 

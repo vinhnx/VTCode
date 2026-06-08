@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result, anyhow};
 use async_process::{Child, Command as AsyncCommand, ExitStatus, Stdio};
 
-use futures_lite::AsyncReadExt;
+use futures::io::AsyncReadExt;
 use tokio::sync::Mutex;
 use tokio::time::{Sleep, sleep};
 use tokio_util::sync::{CancellationToken, WaitForCancellationFutureOwned};
@@ -196,7 +196,7 @@ impl AsyncProcessRunner {
 
 async fn read_stream<R>(reader: Option<R>, config: StreamCaptureConfig) -> Result<Vec<u8>>
 where
-    R: futures_lite::AsyncRead + Unpin,
+    R: futures::io::AsyncRead + Unpin,
 {
     if !config.capture {
         return Ok(Vec::new());
