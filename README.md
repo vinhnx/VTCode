@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./resources/logo/vt_code_adaptive.svg" alt="VT Code"/>
+  <img src="./resources/logo/vt_code_light.png" alt="VT Code" style="border-radius: 12px" />
 </p>
 
 <p align="center">
@@ -24,13 +24,16 @@ VT Code is a local-first coding agent built in Rust, the only one with defense-i
 ## Features
 
 <table style="border: none; border-collapse: collapse;">
-  <tr><td style="border: none;"><strong>Area</strong></td><td style="border: none;"><strong>What VT Code provides</strong></td></tr>
-  <tr><td style="border: none;">Agent runtime</td><td style="border: none;">Interactive TUI with slash commands, streaming, session management; <code>ask</code>/<code>exec</code> CLI modes; session resume</td></tr>
-  <tr><td style="border: none;">Model providers</td><td style="border: none;">Anthropic, OpenAI, Gemini, DeepSeek, GitHub Copilot, OpenRouter, Ollama, LM Studio. 21+ providers supported</td></tr>
-  <tr><td style="border: none;">Coding tools</td><td style="border: none;">Safe file operations, ripgrep search, fuzzy file discovery, code intelligence, project indexing, terminal execution</td></tr>
-  <tr><td style="border: none;">Extensibility</td><td style="border: none;">Agent Skills, MCP client/server, lifecycle hooks, subagents, custom providers, Zed ACP, VS Code, Claude Code</td></tr>
-  <tr><td style="border: none;">Safety</td><td style="border: none;">Restricted shell sandbox, tool guardrails, subprocess isolation, full audit logging</td></tr>
-  <tr><td style="border: none;">Protocols</td><td style="border: none;">Open Responses, Agent2Agent (A2A), ATIF trajectory export, Anthropic Messages API compatibility</td></tr>
+  <tr>
+    <td style="border: none; vertical-align: top; padding-right: 20px;"><strong>Agent runtime</strong><br><strong>Interactive TUI</strong>, slash commands, streaming, <code>ask</code>/<code>exec</code> CLI, session resume</td>
+    <td style="border: none; vertical-align: top; padding-right: 20px;"><strong>Coding tools</strong><br>Safe file ops, ripgrep search, fuzzy discovery, code intelligence, project indexing, <strong>terminal execution</strong></td>
+    <td style="border: none; vertical-align: top; padding-right: 20px;"><strong>Extensibility</strong><br><strong>Agent Skills</strong>, <strong>MCP</strong> client/server, lifecycle hooks, subagents, custom providers, Zed ACP, VS Code, Claude Code</td>
+  </tr>
+  <tr>
+    <td style="border: none; vertical-align: top; padding-right: 20px; padding-top: 8px;"><strong>Model providers</strong><br>21+ LLM providers: <strong>Anthropic</strong>, <strong>OpenAI</strong>, <strong>Gemini</strong>, OpenRouter, Ollama, LM Studio, and more</td>
+    <td style="border: none; vertical-align: top; padding-right: 20px; padding-top: 8px;"><strong>Safety</strong><br>Restricted shell sandbox, tool guardrails, subprocess isolation, <strong>full audit logging</strong></td>
+    <td style="border: none; vertical-align: top; padding-top: 8px;"><strong>Protocols</strong><br><strong>Open Responses</strong>, <strong>Agent2Agent (A2A)</strong>, <strong>ATIF</strong>, Anthropic Messages API</td>
+  </tr>
 </table>
 
 ## Quick start
@@ -64,60 +67,64 @@ vtcode --resume                # pick up the last session
 ## Documentation
 
 <table style="border: none; border-collapse: collapse;">
-  <tr><td style="border: none;"><strong>Topic</strong></td><td style="border: none;"><strong>Covers</strong></td></tr>
-  <tr><td style="border: none;"><a href="./README.md#quick-start">Interactive TUI</a></td><td style="border: none;">Session modes, slash commands (<code>/model</code>, <code>/review</code>, <code>/mcp</code>, <code>/skills</code>, <code>/theme</code>, <code>/compact</code>, <code>/schedule</code>)</td></tr>
-  <tr><td style="border: none;"><a href="./docs/guides/full_auto_mode.md">Autonomous agent</a></td><td style="border: none;">Full-auto CLI, plan-build-evaluate harness, subagents, scheduled tasks</td></tr>
-  <tr><td style="border: none;"><a href="./docs/providers/PROVIDER_GUIDES.md">Providers</a></td><td style="border: none;">Setup guides for all 21 providers</td></tr>
-  <tr><td style="border: none;"><a href="./docs/config/CONFIG_FIELD_REFERENCE.md">Configuration</a></td><td style="border: none;"><code>vtcode.toml</code>, tool config, lifecycle hooks</td></tr>
-  <tr><td style="border: none;"><a href="./docs/skills/SKILLS_GUIDE.md">Agent Skills</a></td><td style="border: none;">Creating, loading, and sharing skills</td></tr>
-  <tr><td style="border: none;"><a href="./docs/guides/mcp-integration.md">MCP Integration</a></td><td style="border: none;">Client and server modes</td></tr>
-  <tr><td style="border: none;"><a href="./docs/guides/zed-acp.md">Editor guides</a></td><td style="border: none;">Zed ACP, VS Code, Claude Code</td></tr>
-  <tr><td style="border: none;"><a href="./docs/safety/SAFETY_ARCHITECTURE.md">Safety</a></td><td style="border: none;">Shell sandbox, security hardening, threat model</td></tr>
-  <tr><td style="border: none;"><a href="./docs/protocols/OPEN_RESPONSES.md">Protocols</a></td><td style="border: none;">Open Responses, ATIF, A2A, Anthropic Messages API</td></tr>
+  <tr>
+    <td style="border: none; vertical-align: top; padding-right: 20px;"><a href="./README.md#quick-start"><strong>Interactive TUI</strong></a><br>Session modes, slash commands (<code>/model</code>, <code>/review</code>, <code>/mcp</code>, <code>/skills</code>, <code>/theme</code>, <code>/compact</code>, <code>/schedule</code>)</td>
+    <td style="border: none; vertical-align: top; padding-right: 20px;"><a href="./docs/guides/full_auto_mode.md"><strong>Autonomous agent</strong></a><br>Full-auto CLI, plan-build-evaluate harness, subagents, scheduled tasks</td>
+    <td style="border: none; vertical-align: top; padding-right: 20px;"><a href="./docs/providers/PROVIDER_GUIDES.md"><strong>Providers</strong></a><br>Setup guides for all 21 providers</td>
+  </tr>
+  <tr>
+    <td style="border: none; vertical-align: top; padding-right: 20px; padding-top: 8px;"><a href="./docs/config/CONFIG_FIELD_REFERENCE.md"><strong>Configuration</strong></a><br><code>vtcode.toml</code>, tool config, lifecycle hooks</td>
+    <td style="border: none; vertical-align: top; padding-right: 20px; padding-top: 8px;"><a href="./docs/skills/SKILLS_GUIDE.md"><strong>Agent Skills</strong></a><br>Creating, loading, and sharing skills</td>
+    <td style="border: none; vertical-align: top; padding-right: 20px; padding-top: 8px;"><a href="./docs/guides/mcp-integration.md"><strong>MCP Integration</strong></a><br>Client and server modes</td>
+  </tr>
+  <tr>
+    <td style="border: none; vertical-align: top; padding-right: 20px; padding-top: 8px;"><a href="./docs/guides/zed-acp.md"><strong>Editor guides</strong></a><br>Zed ACP, VS Code, Claude Code</td>
+    <td style="border: none; vertical-align: top; padding-right: 20px; padding-top: 8px;"><a href="./docs/safety/SAFETY_ARCHITECTURE.md"><strong>Safety</strong></a><br>Shell sandbox, security hardening, threat model</td>
+    <td style="border: none; vertical-align: top; padding-top: 8px;"><a href="./docs/protocols/OPEN_RESPONSES.md"><strong>Protocols</strong></a><br>Open Responses, ATIF, A2A, Anthropic Messages API</td>
+  </tr>
 </table>
 
 ## Providers
 
 VT Code supports 21 LLM providers out of the box, plus any OpenAI-compatible API via `[[custom_providers]]`.
 
+### All providers
+
+<table style="border: none; border-collapse: collapse;">
+  <tr>
+    <td style="border: none; vertical-align: top; padding-right: 20px;"><strong>Cloud LLMs</strong><br><a href="./docs/providers/PROVIDER_GUIDES.md#anthropic-claude"><strong>Anthropic Claude</strong></a> · <a href="./docs/providers/PROVIDER_GUIDES.md#openai-gpt"><strong>OpenAI</strong></a> · <a href="./docs/providers/PROVIDER_GUIDES.md#google-gemini">Gemini</a></td>
+    <td style="border: none; vertical-align: top; padding-right: 20px;"><strong>Gateways</strong><br><a href="./docs/providers/PROVIDER_GUIDES.md#openrouter-marketplace">OpenRouter</a> · <a href="./docs/providers/PROVIDER_GUIDES.md#atlas-cloud">Atlas Cloud</a> · <a href="./docs/providers/PROVIDER_GUIDES.md#evolink-multi-model-gateway">Evolink</a></td>
+    <td style="border: none; vertical-align: top; padding-right: 20px;"><strong>Local inference</strong><br><a href="./docs/providers/PROVIDER_GUIDES.md#ollama-local--cloud-models">Ollama</a> · <a href="./docs/providers/PROVIDER_GUIDES.md#lm-studio-local-server">LM Studio</a> · <a href="./docs/providers/PROVIDER_GUIDES.md#llamacpp-local-server">llama.cpp</a></td>
+    <td style="border: none; vertical-align: top;"><strong>Other</strong><br><a href="./docs/providers/PROVIDER_GUIDES.md#github-copilot">GitHub Copilot</a> · <a href="./docs/providers/PROVIDER_GUIDES.md#anthropic-api-compatibility-server">Anthropic API Compat</a></td>
+  </tr>
+</table>
+
+Read: [Provider Guides](./docs/providers/PROVIDER_GUIDES.md).
+
 ### Xiaomi MiMo V2.5 Series
 
 <p align="center">
-  <a href="https://platform.xiaomimimo.com"><img src="./resources/screenshots/xiaomi_mi_promo.png" alt="Xiaomi MiMo V2.5" width="400" /></a>
+  <a href="https://platform.xiaomimimo.com"><img src="./resources/screenshots/xiaomi_mi_promo.png" alt="Xiaomi MiMo V2.5" width="300" style="border-radius: 12px" /></a>
+</p>
+
+<p align="center">
+  <a href="https://openrouter.ai/xiaomi/mimo-v2.5-pro">
+    <img src="./resources/screenshots/xiaomi-mimo.png" alt="Xiaomi MiMo V2.5 Pro on OpenRouter" />
+  </a>
 </p>
 
 <p align="center"><em>Proud partner of the <a href="https://platform.xiaomimimo.com">Xiaomi MiMo Orbit Program</a></em></p>
 
 Xiaomi MiMo V2.5 Pro ships as the default model in VT Code, available both natively and through OpenRouter. It brings a 1M-token context window, deep reasoning, and strong agentic performance to every session.
 
-<p align="center">
-  <a href="https://openrouter.ai/xiaomi/mimo-v2.5-pro">
-    <img src="./resources/screenshots/xiaomi-mimo.png" alt="Xiaomi MiMo V2.5 Pro on OpenRouter" width="300" />
-  </a>
-</p>
-
 <table style="border: none; border-collapse: collapse;">
-  <tr><td style="border: none;"><strong>Provider</strong></td><td style="border: none;"><strong>Model ID</strong></td><td style="border: none;"><strong>Context</strong></td></tr>
-  <tr><td style="border: none;"><a href="https://openrouter.ai/xiaomi/mimo-v2.5-pro">OpenRouter</a></td><td style="border: none;"><code>xiaomi/mimo-v2.5-pro</code></td><td style="border: none;">1M tokens</td></tr>
-  <tr><td style="border: none;">OpenRouter</td><td style="border: none;"><code>xiaomi/mimo-v2.5</code></td><td style="border: none;">1M tokens</td></tr>
-  <tr><td style="border: none;"><a href="https://platform.xiaomimimo.com/docs/en-US/welcome">Xiaomi MiMo</a></td><td style="border: none;"><code>mimo-v2.5-pro</code></td><td style="border: none;">1M tokens</td></tr>
-  <tr><td style="border: none;">Xiaomi MiMo</td><td style="border: none;"><code>mimo-v2.5</code></td><td style="border: none;">1M tokens</td></tr>
+  <tr>
+    <td style="border: none; vertical-align: top; padding-right: 20px;"><strong>Xiaomi MiMo</strong><br><code>mimo-v2.5-pro</code><br><code>mimo-v2.5</code><br><em>1M context</em></td>
+    <td style="border: none; vertical-align: top;"><strong>OpenRouter</strong><br><code>xiaomi/mimo-v2.5-pro</code><br><code>xiaomi/mimo-v2.5</code><br><em>1M context</em></td>
+  </tr>
 </table>
 
 Pricing: [Pay-as-you-go](https://platform.xiaomimimo.com/docs/en-US/price/pay-as-you-go) · [Subscription](https://platform.xiaomimimo.com/docs/en-US/price/tokenplan/subscription) · [Quick Access](https://platform.xiaomimimo.com/docs/en-US/price/tokenplan/quick-access) · [Docs](https://platform.xiaomimimo.com/docs/en-US/welcome) · [OpenRouter](https://openrouter.ai/xiaomi/mimo-v2.5-pro)
-
-### Custom providers
-
-```toml
-[[custom_providers]]
-name = "atlascloud"
-display_name = "Atlas Cloud"
-base_url = "https://api.atlascloud.ai/v1"
-api_key_env = "ATLASCLOUD_API_KEY"
-model = "deepseek-ai/DeepSeek-V3-0324"
-```
-
-Read: [Provider Guides](./docs/providers/PROVIDER_GUIDES.md).
 
 ## Development
 
@@ -163,6 +170,10 @@ VT Code is a labor of love built in my spare time. If it's helped you ship somet
   <a href="https://github.com/codemod"><img src="https://avatars.githubusercontent.com/u/78830094" width="60" height="60" alt="@codemod" style="border-radius: 50%" /></a>
   <a href="https://github.com/coderabbitai"><img src="https://avatars.githubusercontent.com/u/132028505" width="60" height="60" alt="@coderabbitai" style="border-radius: 50%" /></a>
   <a href="https://github.com/KhaiRyth"><img src="https://avatars.githubusercontent.com/u/273723951" width="60" height="60" alt="@KhaiRyth" style="border-radius: 50%" /></a>
+</p>
+
+<p align="center">
+  <a href="https://buymeacoffee.com/vinhnx"><img src="./resources/screenshots/qr_donate.png" alt="Buy Me a Coffee" width="160" style="border-radius: 12px" /></a>
 </p>
 
 ## License
