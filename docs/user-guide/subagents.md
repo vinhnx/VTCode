@@ -428,6 +428,34 @@ Cycling past the last available primary agent wraps back to the first agent.
 
 `@agent-name` remains delegated-child syntax. It does not select a primary agent.
 
+### Create A Custom Primary Agent
+
+To create a custom primary agent:
+
+1. Create a markdown file in `.vtcode/agents/` (project scope) or `~/.vtcode/agents/` (user scope):
+
+```markdown
+---
+name: reviewer
+description: Code review agent that enforces project conventions.
+mode: primary
+tools: [read_file, list_files, unified_search]
+permissionMode: plan
+model: inherit
+---
+
+You are a code review specialist.
+Focus on correctness, readability, and adherence to project conventions.
+Do not edit files directly; provide actionable feedback instead.
+```
+
+2. Set `mode: primary` to make it available as a primary agent (or `mode: all` for both primary and subagent use).
+3. Use `tools` to restrict which tools the agent can access.
+4. Use `permissionMode` to narrow the session's permission mode when this agent is active (`plan`, `edit`, or `auto`).
+5. Press `Tab` on an empty idle composer to cycle to the new agent.
+
+The agent definition body (below the frontmatter) becomes the agent's runtime instructions when selected.
+
 ### Inspect Active Agents In Place
 
 - `/agent` opens the active-agent inspector for delegated child runs in the current session

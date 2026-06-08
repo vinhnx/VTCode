@@ -145,6 +145,7 @@ Launch `vtcode` with no arguments to enter the interactive terminal UI. Type `/`
 /skills load <name>           # load a skill into the session
 /agents list                  # list configured subagents
 /agents create                # create a new agent definition
+/agent                        # inspect delegated child threads
 ```
 
 ### Automation
@@ -220,6 +221,14 @@ vtcode exec --full-auto "implement the payment service with tests and docs"
 ### Subagents and background workers
 
 VT Code delegates bounded work to child agent threads with isolated context and tool restrictions. Built-in agents include `explorer` (read-only search), `plan` (read-only planning), and `worker` (bounded implementation). Background subagents can run as managed child processes for long-running or parallel tasks.
+
+### Primary agents
+
+Agent definitions can also act as **primary agents** that control the main session directly. Set `mode: primary` (or `mode: all`) in the agent frontmatter to make it available as a primary agent. Built-in primary agents: `build` (implementation), `duck` (discussion-first), `plan` (read-only planning).
+
+Press **Tab** on an empty idle composer to cycle through available primary agents. The active primary agent is shown in the session header badge. Primary agents affect the session's instructions, model, permission mode, and tool access.
+
+Use `@agent-name` to delegate to subagents. Primary-only agents are not available via `@agent-name`; only subagent-capable definitions (`mode: subagent` or `mode: all`) can be spawned as child threads.
 
 ### Scheduled automation
 

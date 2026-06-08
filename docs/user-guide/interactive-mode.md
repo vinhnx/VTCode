@@ -112,6 +112,7 @@ Press `Alt+O` to open the fullscreen transcript review surface. It builds a plai
 - `/agents` opens the subagent manager for creating, inspecting, editing, deleting, and browsing active delegated agents. New scaffolds use VT Code tool ids in frontmatter.
 - `/agent` opens the active-agent inspector. Selecting a child agent opens a modal over the current session instead of switching threads.
 - On an empty idle composer, `Tab` cycles primary agents and wraps back to the first agent.
+- The active primary agent is displayed in the session header badge and influences the session's instructions, model, permission mode, and tool access. Permission overrides from primary agents narrow but never broaden the existing session permissions.
 - `/subprocesses` opens the Local Agents drawer for delegated agents and managed background subprocesses.
 
 ## Scheduled Prompts And Reminders
