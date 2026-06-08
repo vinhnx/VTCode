@@ -258,6 +258,8 @@ impl AstGrepLanguage {
                 | Self::Go
                 | Self::Java
                 | Self::Bash
+                | Self::C
+                | Self::Cpp
         )
     }
 
@@ -724,8 +726,6 @@ mod tests {
 
     #[test]
     fn new_languages_have_no_local_parser() {
-        assert!(!AstGrepLanguage::C.has_local_parser());
-        assert!(!AstGrepLanguage::Cpp.has_local_parser());
         assert!(!AstGrepLanguage::Csharp.has_local_parser());
         assert!(!AstGrepLanguage::Css.has_local_parser());
         assert!(!AstGrepLanguage::Html.has_local_parser());
@@ -736,7 +736,6 @@ mod tests {
         assert!(!AstGrepLanguage::Kotlin.has_local_parser());
         assert!(!AstGrepLanguage::Swift.has_local_parser());
         assert!(!AstGrepLanguage::Lua.has_local_parser());
-        assert!(!AstGrepLanguage::Bash.has_local_parser());
         assert!(!AstGrepLanguage::Sql.has_local_parser());
         assert!(!AstGrepLanguage::Scala.has_local_parser());
         assert!(!AstGrepLanguage::Elixir.has_local_parser());
@@ -751,6 +750,9 @@ mod tests {
         assert!(AstGrepLanguage::Tsx.has_local_parser());
         assert!(AstGrepLanguage::Go.has_local_parser());
         assert!(AstGrepLanguage::Java.has_local_parser());
+        assert!(AstGrepLanguage::Bash.has_local_parser());
+        assert!(AstGrepLanguage::C.has_local_parser());
+        assert!(AstGrepLanguage::Cpp.has_local_parser());
         assert!(!AstGrepLanguage::Markdown.has_local_parser());
     }
 

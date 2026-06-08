@@ -1544,10 +1544,22 @@ fn build_atomic_rule_yaml(request: &StructuralSearchRequest, lang: &str) -> Stri
 }
 
 /// Emit a relational rule field from a JSON value into YAML.
+///
+/// When the value is a bare string, it is emitted as `pattern: <value>` under
+/// the field name (matching ast-grep's shorthand semantics where a string
+/// relational rule means `{pattern: "..."}`).
 fn emit_value_yaml_field(yaml: &mut String, pad: &str, name: &str, value: Option<&Value>) {
     if let Some(val) = value {
         yaml.push_str(&format!("{pad}{name}:\n"));
-        value_to_yaml(yaml, val, pad.len() + 2);
+        match val {
+            Value::String(s) => {
+                let child_pad = " ".repeat(pad.len() + 2);
+                yaml.push_str(&format!("{child_pad}pattern: {}\n", yaml_escape_scalar(s)));
+            }
+            _ => {
+                value_to_yaml(yaml, val, pad.len() + 2);
+            }
+        }
     }
 }
 

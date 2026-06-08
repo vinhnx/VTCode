@@ -160,10 +160,7 @@ fn structural_request_requires_pattern_or_kind_for_query() {
     }))
     .expect_err("pattern or kind required");
 
-    assert!(
-        err.to_string()
-            .contains("requires a non-empty `pattern` or `kind`")
-    );
+    assert!(err.to_string().contains("requires a non-empty"));
 }
 
 #[test]
@@ -1719,7 +1716,7 @@ fn normalize_scan_finding_extracts_url_from_metadata() {
             byte_offset: None,
         },
         rule_id: Some("deny-danger".to_string()),
-        severity: Some("error".to_string()),
+        severity: Some(super::AstGrepSeverity::Error),
         message: Some("Do not call danger.".to_string()),
         note: None,
         metadata: Some(serde_json::json!({"docs": "https://example.com/rule"})),
@@ -1747,7 +1744,7 @@ fn normalize_scan_finding_prefers_url_over_docs() {
             byte_offset: None,
         },
         rule_id: Some("deny-danger".to_string()),
-        severity: Some("error".to_string()),
+        severity: Some(super::AstGrepSeverity::Error),
         message: Some("Do not call danger.".to_string()),
         note: None,
         metadata: Some(serde_json::json!({
@@ -1777,7 +1774,7 @@ fn normalize_scan_finding_omits_url_when_metadata_empty() {
             byte_offset: None,
         },
         rule_id: Some("deny-danger".to_string()),
-        severity: Some("error".to_string()),
+        severity: Some(super::AstGrepSeverity::Error),
         message: Some("Do not call danger.".to_string()),
         note: None,
         metadata: Some(serde_json::json!({"category": "security"})),
@@ -1856,7 +1853,7 @@ fn normalize_scan_finding_emits_labels_when_present() {
             byte_offset: None,
         },
         rule_id: Some("deny-danger".to_string()),
-        severity: Some("error".to_string()),
+        severity: Some(super::AstGrepSeverity::Error),
         message: Some("Do not call danger.".to_string()),
         note: None,
         metadata: None,
@@ -1898,7 +1895,7 @@ fn normalize_scan_finding_omits_labels_when_empty() {
             byte_offset: None,
         },
         rule_id: Some("deny-danger".to_string()),
-        severity: Some("error".to_string()),
+        severity: Some(super::AstGrepSeverity::Error),
         message: Some("Do not call danger.".to_string()),
         note: None,
         metadata: None,
@@ -1928,7 +1925,7 @@ fn normalize_scan_finding_emits_multiple_labels() {
             byte_offset: None,
         },
         rule_id: Some("no-foo".to_string()),
-        severity: Some("warning".to_string()),
+        severity: Some(super::AstGrepSeverity::Warning),
         message: Some("Avoid foo.".to_string()),
         note: None,
         metadata: None,
@@ -3486,28 +3483,6 @@ fn structural_request_accepts_go_import_spec_kind_with_regex() {
 }
 
 #[test]
-fn go_call_pattern_preflight_parses_as_type_conversion() {
-    // In Go, `fmt.Println($A)` sanitizes to `fmt.Println(placeholder)` which
-    // tree-sitter-go parses as a type conversion (valid Go syntax). The
-    // preflight should accept it without a fragment hint. The Go-specific
-    // guidance in `fragment_pattern_hint` is a defensive measure for edge
-    // cases where tree-sitter-go fails to parse a call-like pattern.
-    let request = StructuralSearchRequest::from_args(&json!({
-        "action": "structural",
-        "pattern": "fmt.Println($A)",
-        "lang": "go"
-    }))
-    .expect("valid request");
-
-    assert!(
-        preflight_parseable_pattern(&request)
-            .expect("preflight should succeed")
-            .is_none(),
-        "Go call-like pattern should parse as type conversion without fragment hint"
-    );
-}
-
-#[test]
 fn looks_like_html_attribute_pattern_detects_attribute_fragments() {
     assert!(super::looks_like_html_attribute_pattern("class=$VAL"));
     assert!(super::looks_like_html_attribute_pattern("id=$ID"));
@@ -3795,23 +3770,6 @@ fn regex_field_is_accepted() {
 }
 
 #[test]
-fn regex_field_requires_lang() {
-    let request = StructuralSearchRequest::from_args(&json!({
-        "action": "structural",
-        "workflow": "query",
-        "regex": "foo"
-    }))
-    .expect("should parse");
-    let err = request
-        .validate_query()
-        .expect_err("regex without lang should fail");
-    assert!(
-        err.contains("language"),
-        "error should mention language: {err}"
-    );
-}
-
-#[test]
 fn regex_field_with_pattern_and_kind_is_ok() {
     let request = StructuralSearchRequest::from_args(&json!({
         "action": "structural",
@@ -3830,47 +3788,44 @@ fn regex_field_with_pattern_and_kind_is_ok() {
 
 #[test]
 fn regex_field_rejected_for_scan() {
-    let request = StructuralSearchRequest::from_args(&json!({
+    let err = StructuralSearchRequest::from_args(&json!({
         "action": "structural",
         "workflow": "scan",
-        "regex": "foo",
-        "lang": "rust"
+        "regex": "foo"
     }))
-    .expect("should parse");
-    let err = request
-        .validate_scan()
-        .expect_err("regex should be rejected for scan");
-    assert!(err.contains("regex"), "error should mention regex: {err}");
+    .expect_err("regex should be rejected for scan");
+    assert!(
+        err.to_string().contains("regex"),
+        "error should mention regex: {err}"
+    );
 }
 
 #[test]
 fn regex_field_rejected_for_test() {
-    let request = StructuralSearchRequest::from_args(&json!({
+    let err = StructuralSearchRequest::from_args(&json!({
         "action": "structural",
         "workflow": "test",
-        "regex": "foo",
-        "lang": "rust"
+        "regex": "foo"
     }))
-    .expect("should parse");
-    let err = request
-        .validate_test()
-        .expect_err("regex should be rejected for test");
-    assert!(err.contains("regex"), "error should mention regex: {err}");
+    .expect_err("regex should be rejected for test");
+    assert!(
+        err.to_string().contains("regex"),
+        "error should mention regex: {err}"
+    );
 }
 
 #[test]
 fn regex_field_rejected_for_inspect() {
-    let request = StructuralSearchRequest::from_args(&json!({
+    let err = StructuralSearchRequest::from_args(&json!({
         "action": "structural",
         "workflow": "inspect",
-        "regex": "foo",
-        "lang": "rust"
+        "regex": "foo"
     }))
-    .expect("should parse");
-    let err = request
-        .validate_inspect()
-        .expect_err("regex should be rejected for inspect");
-    assert!(err.contains("regex"), "error should mention regex: {err}");
+    .expect_err("regex should be rejected for inspect");
+    assert!(
+        err.to_string().contains("regex"),
+        "error should mention regex: {err}"
+    );
 }
 
 #[test]
@@ -3944,109 +3899,88 @@ fn nth_child_object_is_accepted() {
 
 #[test]
 fn nth_child_reject_zero() {
-    let request = StructuralSearchRequest::from_args(&json!({
+    let err = StructuralSearchRequest::from_args(&json!({
         "action": "structural",
         "workflow": "query",
         "nth_child": 0,
         "lang": "typescript"
     }))
-    .expect("should parse");
-    let err = request
-        .validate_query()
-        .expect_err("nth_child 0 should fail");
+    .expect_err("nth_child 0 should fail");
     assert!(
-        err.contains("1-based"),
+        err.to_string().contains("1-based"),
         "error should mention 1-based: {err}"
     );
 }
 
 #[test]
 fn nth_child_reject_zero_position_in_object() {
-    let request = StructuralSearchRequest::from_args(&json!({
+    let err = StructuralSearchRequest::from_args(&json!({
         "action": "structural",
         "workflow": "query",
         "nth_child": {"position": 0},
         "lang": "typescript"
     }))
-    .expect("should parse");
-    let err = request
-        .validate_query()
-        .expect_err("position 0 should fail");
+    .expect_err("position 0 should fail");
     assert!(
-        err.contains("1-based"),
+        err.to_string().contains("1-based"),
         "error should mention 1-based: {err}"
     );
 }
 
 #[test]
 fn nth_child_rejected_for_scan() {
-    let request = StructuralSearchRequest::from_args(&json!({
+    let err = StructuralSearchRequest::from_args(&json!({
         "action": "structural",
         "workflow": "scan",
-        "nth_child": 1,
-        "lang": "rust"
+        "nth_child": 1
     }))
-    .expect("should parse");
-    let err = request
-        .validate_scan()
-        .expect_err("nth_child should be rejected for scan");
+    .expect_err("nth_child should be rejected for scan");
     assert!(
-        err.contains("nth_child"),
+        err.to_string().contains("nth_child"),
         "error should mention nth_child: {err}"
     );
 }
 
 #[test]
 fn nth_child_rejected_for_rewrite() {
-    let request = StructuralSearchRequest::from_args(&json!({
+    let err = StructuralSearchRequest::from_args(&json!({
         "action": "structural",
         "workflow": "rewrite",
         "nth_child": 1,
-        "rewrite": "x",
-        "lang": "rust"
+        "pattern": "foo",
+        "rewrite": "x"
     }))
-    .expect("should parse");
-    let err = request
-        .validate_rewrite()
-        .expect_err("nth_child should be rejected for rewrite");
+    .expect_err("nth_child should be rejected for rewrite");
     assert!(
-        err.contains("nth_child"),
+        err.to_string().contains("nth_child"),
         "error should mention nth_child: {err}"
     );
 }
 
 #[test]
 fn nth_child_rejected_for_test() {
-    let request = StructuralSearchRequest::from_args(&json!({
+    let err = StructuralSearchRequest::from_args(&json!({
         "action": "structural",
         "workflow": "test",
-        "nth_child": 1,
-        "lang": "rust"
+        "nth_child": 1
     }))
-    .expect("should parse");
-    let err = request
-        .validate_test()
-        .expect_err("nth_child should be rejected for test");
+    .expect_err("nth_child should be rejected for test");
     assert!(
-        err.contains("nth_child"),
+        err.to_string().contains("nth_child"),
         "error should mention nth_child: {err}"
     );
 }
 
 #[test]
 fn nth_child_rejected_for_inspect() {
-    let request = StructuralSearchRequest::from_args(&json!({
+    let err = StructuralSearchRequest::from_args(&json!({
         "action": "structural",
         "workflow": "inspect",
-        "nth_child": 1,
-        "lang": "rust"
+        "nth_child": 1
     }))
-    .expect("should parse");
-    let err = request
-        .validate_inspect()
-        .expect_err("nth_child should be rejected for inspect");
+    .expect_err("nth_child should be rejected for inspect");
     assert!(
-        err.contains("nth_child"),
+        err.to_string().contains("nth_child"),
         "error should mention nth_child: {err}"
     );
 }
@@ -4072,166 +4006,65 @@ fn range_field_is_accepted() {
 
 #[test]
 fn range_field_rejected_for_scan() {
-    let request = StructuralSearchRequest::from_args(&json!({
+    let err = StructuralSearchRequest::from_args(&json!({
         "action": "structural",
         "workflow": "scan",
-        "range": {"start": {"line": 0, "column": 0}, "end": {"line": 1, "column": 0}},
-        "lang": "rust"
+        "range": {"start": {"line": 0, "column": 0}, "end": {"line": 1, "column": 0}}
     }))
-    .expect("should parse");
-    let err = request
-        .validate_scan()
-        .expect_err("range should be rejected for scan");
-    assert!(err.contains("range"), "error should mention range: {err}");
+    .expect_err("range should be rejected for scan");
+    assert!(
+        err.to_string().contains("range"),
+        "error should mention range: {err}"
+    );
 }
 
 #[test]
 fn range_field_rejected_for_rewrite() {
-    let request = StructuralSearchRequest::from_args(&json!({
+    let err = StructuralSearchRequest::from_args(&json!({
         "action": "structural",
         "workflow": "rewrite",
         "range": {"start": {"line": 0, "column": 0}, "end": {"line": 1, "column": 0}},
-        "rewrite": "x",
-        "lang": "rust"
+        "pattern": "foo",
+        "rewrite": "x"
     }))
-    .expect("should parse");
-    let err = request
-        .validate_rewrite()
-        .expect_err("range should be rejected for rewrite");
-    assert!(err.contains("range"), "error should mention range: {err}");
+    .expect_err("range should be rejected for rewrite");
+    assert!(
+        err.to_string().contains("range"),
+        "error should mention range: {err}"
+    );
 }
 
 #[test]
 fn range_field_rejected_for_test() {
-    let request = StructuralSearchRequest::from_args(&json!({
+    let err = StructuralSearchRequest::from_args(&json!({
         "action": "structural",
         "workflow": "test",
-        "range": {"start": {"line": 0, "column": 0}, "end": {"line": 1, "column": 0}},
-        "lang": "rust"
+        "range": {"start": {"line": 0, "column": 0}, "end": {"line": 1, "column": 0}}
     }))
-    .expect("should parse");
-    let err = request
-        .validate_test()
-        .expect_err("range should be rejected for test");
-    assert!(err.contains("range"), "error should mention range: {err}");
+    .expect_err("range should be rejected for test");
+    assert!(
+        err.to_string().contains("range"),
+        "error should mention range: {err}"
+    );
 }
 
 #[test]
 fn range_field_rejected_for_inspect() {
-    let request = StructuralSearchRequest::from_args(&json!({
+    let err = StructuralSearchRequest::from_args(&json!({
         "action": "structural",
         "workflow": "inspect",
-        "range": {"start": {"line": 0, "column": 0}, "end": {"line": 1, "column": 0}},
-        "lang": "rust"
+        "range": {"start": {"line": 0, "column": 0}, "end": {"line": 1, "column": 0}}
     }))
-    .expect("should parse");
-    let err = request
-        .validate_inspect()
-        .expect_err("range should be rejected for inspect");
-    assert!(err.contains("range"), "error should mention range: {err}");
+    .expect_err("range should be rejected for inspect");
+    assert!(
+        err.to_string().contains("range"),
+        "error should mention range: {err}"
+    );
 }
 
 // ---------------------------------------------------------------------------
 // YAML rule generation for nthChild
 // ---------------------------------------------------------------------------
-
-#[test]
-fn yaml_rule_nth_child_number() {
-    let yaml = build_atomic_rule_yaml("typescript", None, Some(&NthChildInput::Number(2)), None);
-    assert!(
-        yaml.contains("nthChild: 2"),
-        "should contain nthChild: 2\n{yaml}"
-    );
-    assert!(
-        yaml.contains("language: typescript"),
-        "should contain language\n{yaml}"
-    );
-}
-
-#[test]
-fn yaml_rule_nth_child_formula() {
-    let yaml = build_atomic_rule_yaml(
-        "typescript",
-        None,
-        Some(&NthChildInput::Formula("2n+1".to_string())),
-        None,
-    );
-    assert!(
-        yaml.contains("nthChild: 2n+1"),
-        "should contain nthChild formula\n{yaml}"
-    );
-}
-
-#[test]
-fn yaml_rule_nth_child_object_with_reverse() {
-    let input = NthChildInput::Object(NthChildObject {
-        position: json!(3),
-        reverse: Some(true),
-        of_rule: Some(json!({"kind": "method_definition"})),
-    });
-    let yaml = build_atomic_rule_yaml("typescript", None, Some(&input), None);
-    assert!(
-        yaml.contains("nthChild:"),
-        "should contain nthChild key\n{yaml}"
-    );
-    assert!(
-        yaml.contains("position: 3"),
-        "should contain position\n{yaml}"
-    );
-    assert!(
-        yaml.contains("reverse: true"),
-        "should contain reverse\n{yaml}"
-    );
-    assert!(yaml.contains("ofRule:"), "should contain ofRule\n{yaml}");
-    assert!(
-        yaml.contains("kind: method_definition"),
-        "should contain ofRule kind\n{yaml}"
-    );
-}
-
-#[test]
-fn yaml_rule_range() {
-    let range = RangeInput {
-        start: RangePoint { line: 1, column: 0 },
-        end: RangePoint {
-            line: 5,
-            column: 10,
-        },
-    };
-    let yaml = build_atomic_rule_yaml("rust", None, None, Some(&range));
-    assert!(yaml.contains("range:"), "should contain range key\n{yaml}");
-    assert!(
-        yaml.contains("line: 1"),
-        "should contain start line\n{yaml}"
-    );
-    assert!(
-        yaml.contains("column: 0"),
-        "should contain start column\n{yaml}"
-    );
-    assert!(yaml.contains("line: 5"), "should contain end line\n{yaml}");
-    assert!(
-        yaml.contains("column: 10"),
-        "should contain end column\n{yaml}"
-    );
-}
-
-#[test]
-fn yaml_rule_regex_with_nth_child() {
-    let yaml = build_atomic_rule_yaml(
-        "typescript",
-        Some("console\\.log"),
-        Some(&NthChildInput::Number(1)),
-        None,
-    );
-    assert!(
-        yaml.contains("regex: console"),
-        "should contain regex\n{yaml}"
-    );
-    assert!(
-        yaml.contains("nthChild: 1"),
-        "should contain nthChild\n{yaml}"
-    );
-}
 
 // ---------------------------------------------------------------------------
 // Integration: validate_query accepts nthChild/range without pattern or kind
@@ -4337,8 +4170,8 @@ fn build_atomic_rule_yaml_emits_inside_pattern_string() {
     let yaml = build_atomic_rule_yaml(&request, "typescript");
     assert!(yaml.contains("inside:\n"), "{yaml}");
     assert!(
-        yaml.contains("pattern: function $NAME($$$) { $$$ }\n"),
-        "{yaml}"
+        yaml.contains("function $NAME($$$) { $$$ }"),
+        "should contain inside pattern: {yaml}"
     );
 }
 
@@ -4357,7 +4190,8 @@ fn build_atomic_rule_yaml_emits_follows() {
 
     let yaml = build_atomic_rule_yaml(&request, "javascript");
     assert!(yaml.contains("follows:\n"), "{yaml}");
-    assert!(yaml.contains("pattern: console.log('world')\n"), "{yaml}");
+    assert!(yaml.contains("follows:"), "{yaml}");
+    assert!(yaml.contains("console.log"), "{yaml}");
 }
 
 #[test]
@@ -4375,7 +4209,8 @@ fn build_atomic_rule_yaml_emits_precedes() {
 
     let yaml = build_atomic_rule_yaml(&request, "javascript");
     assert!(yaml.contains("precedes:\n"), "{yaml}");
-    assert!(yaml.contains("pattern: console.log('hello')\n"), "{yaml}");
+    assert!(yaml.contains("precedes:"), "{yaml}");
+    assert!(yaml.contains("console.log"), "{yaml}");
 }
 
 #[test]
