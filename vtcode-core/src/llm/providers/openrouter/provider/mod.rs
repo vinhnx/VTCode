@@ -36,7 +36,6 @@ pub struct OpenRouterProvider {
     model_behavior: Option<ModelConfig>,
 }
 
-#[expect(dead_code)]
 impl OpenRouterProvider {
     pub fn new(api_key: String) -> Self {
         Self::with_model_internal(

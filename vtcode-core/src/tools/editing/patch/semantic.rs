@@ -28,7 +28,6 @@ pub(crate) struct SemanticMatch {
     pub(crate) new_segment: Vec<String>,
 }
 
-#[cfg_attr(not(test), expect(dead_code))]
 #[derive(Debug, Clone, Default)]
 enum AstGrepBinaryOverride {
     #[default]

@@ -872,7 +872,6 @@ pub(crate) struct CodexCollaborationModeSettings {
     pub(crate) reasoning_effort: Option<String>,
 }
 
-#[expect(dead_code)]
 #[derive(Debug, Clone, Serialize)]
 pub(crate) struct CodexCommandExecRequest {
     pub(crate) command: Vec<String>,

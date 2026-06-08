@@ -34,7 +34,6 @@ impl SafetyDecisionCache {
     }
 
     /// Creates a default cache (1000 entries)
-    #[expect(dead_code)]
     pub fn default_cache() -> Self {
         Self::new(1000)
     }

@@ -174,7 +174,6 @@ macro_rules! model_family {
     (
         $slug:expr, $family:expr, $provider:expr $(, $key:ident : $value:expr )* $(,)?
     ) => {{
-        #[expect(unused_mut)]
         let mut mf = $crate::models_manager::ModelFamily::new($slug, $family, $provider);
         $(
             mf.$key = $value;

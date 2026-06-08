@@ -33,7 +33,6 @@ pub(crate) fn prewarm_language(language: AstGrepLanguage) -> Result<(), String> 
     with_parser(language, |_| Ok(()))
 }
 
-#[cfg_attr(not(test), expect(dead_code))]
 pub(crate) fn parse_source(
     language: AstGrepLanguage,
     source: &str,

@@ -87,7 +87,6 @@ pub struct SkillDiscovery {
 
 #[derive(Debug, Clone)]
 struct DiscoveryCacheEntry {
-    #[expect(dead_code)]
     timestamp: std::time::SystemTime,
     skills: Vec<SkillContext>,
     tools: Vec<CliToolConfig>,

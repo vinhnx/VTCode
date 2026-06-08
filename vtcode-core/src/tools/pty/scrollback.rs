@@ -332,12 +332,10 @@ impl PtyScrollback {
         self.current_bytes
     }
 
-    #[expect(dead_code)]
     fn usage_percent(&self) -> f64 {
         (self.current_bytes as f64 / self.max_bytes as f64) * 100.0
     }
 
-    #[expect(dead_code)]
     pub(super) fn metrics(&self) -> ScrollbackMetrics {
         ScrollbackMetrics {
             current_bytes: self.current_bytes,

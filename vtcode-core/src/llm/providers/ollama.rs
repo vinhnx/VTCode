@@ -983,7 +983,6 @@ struct OllamaResponseMessage {
 struct OllamaResponseToolCall {
     #[serde(default)]
     #[serde(rename = "type")]
-    #[expect(dead_code)]
     call_type: Option<String>,
     #[serde(default)]
     function: Option<OllamaResponseFunctionCall>,

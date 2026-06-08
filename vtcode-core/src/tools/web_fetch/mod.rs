@@ -247,7 +247,6 @@ impl WebFetchTool {
     }
 
     /// Expand ~ to home directory
-    #[expect(dead_code)]
     fn expand_home_path(path: &str) -> String {
         if path.starts_with("~/")
             && let Ok(home) = std::env::var("HOME")

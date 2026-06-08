@@ -189,7 +189,6 @@ pub(crate) struct CommandInvocation {
     pub(crate) display: String,
 }
 
-#[expect(dead_code)]
 fn format_command(command: &[String]) -> String {
     command
         .iter()
@@ -198,7 +197,6 @@ fn format_command(command: &[String]) -> String {
         .join(" ")
 }
 
-#[expect(dead_code)]
 fn is_risky_command(command: &[String]) -> bool {
     if command.is_empty() {
         return false;
@@ -228,12 +226,10 @@ fn is_risky_command(command: &[String]) -> bool {
     program == "kubectl" // kubectl operations can be destructive; require confirmation
 }
 
-#[expect(dead_code)]
 fn log_audit_for_command(_command: &str, _reason: &str) {
     // Audit logging removed - kept as no-op for backwards compatibility
 }
 
-#[expect(dead_code)]
 fn quote_argument_posix(arg: &str) -> String {
     if arg.is_empty() {
         return "''".to_owned();

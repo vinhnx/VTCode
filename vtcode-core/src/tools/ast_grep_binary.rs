@@ -9,7 +9,6 @@ pub const AST_GREP_INSTALL_COMMAND: &str = "vtcode dependencies install ast-grep
 static AST_GREP_OVERRIDE: Lazy<Mutex<AstGrepBinaryOverride>> =
     Lazy::new(|| Mutex::new(AstGrepBinaryOverride::System));
 
-#[cfg_attr(not(test), expect(dead_code))]
 #[derive(Debug, Clone, Default)]
 enum AstGrepBinaryOverride {
     #[default]

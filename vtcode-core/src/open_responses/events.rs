@@ -404,7 +404,6 @@ impl StreamEventEmitter for VecStreamEmitter {
 
 /// Wrapper for streaming events with sequence number for ordering.
 /// Used when serializing events for SSE transport.
-#[expect(dead_code)]
 #[derive(Debug, Clone, Serialize)]
 pub struct SequencedEvent<'a> {
     /// Monotonically increasing sequence number within the stream.
@@ -416,7 +415,6 @@ pub struct SequencedEvent<'a> {
 
 impl<'a> SequencedEvent<'a> {
     /// Creates a new sequenced event.
-    #[expect(dead_code)]
     pub fn new(sequence_number: u64, event: &'a ResponseStreamEvent) -> Self {
         Self {
             sequence_number,

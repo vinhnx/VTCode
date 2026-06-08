@@ -401,7 +401,6 @@ impl ModelsManager {
     }
 
     /// Persist cache to disk
-    #[expect(dead_code)] // Will be used when remote model fetching is implemented
     async fn persist_cache(&self, models: &[ModelInfo], etag: Option<String>) {
         let provider = *self.current_provider.read().await;
         let cache = ModelsCache {

@@ -42,25 +42,21 @@ pub trait StreamTelemetry: Send + Sync {
 }
 
 #[derive(Default)]
-#[expect(dead_code)]
 pub struct NoopStreamTelemetry;
 
 impl StreamTelemetry for NoopStreamTelemetry {}
 
-#[expect(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StreamFragment {
     Content(String),
     Reasoning(String),
 }
 
-#[expect(dead_code)]
 #[derive(Default, Debug)]
 pub struct StreamDelta {
     fragments: Vec<StreamFragment>,
 }
 
-#[expect(dead_code)]
 impl StreamDelta {
     pub fn push_content(&mut self, text: &str) {
         if text.is_empty() {
@@ -935,7 +931,6 @@ pub(crate) fn collect_tool_references_from_tool_search_output(
     }
 }
 
-#[expect(dead_code)]
 pub fn append_text_with_reasoning(
     text: &str,
     aggregated_content: &mut String,
@@ -1013,7 +1008,6 @@ pub fn find_sse_boundary(buffer: &str) -> Option<(usize, usize)> {
     }
 }
 
-#[expect(dead_code)]
 pub fn apply_tool_call_delta_from_content(
     builders: &mut Vec<ToolCallBuilder>,
     container: &Map<String, Value>,
@@ -1022,7 +1016,6 @@ pub fn apply_tool_call_delta_from_content(
     apply_tool_call_delta_with_index(builders, container, telemetry, None, None);
 }
 
-#[expect(dead_code)]
 fn apply_tool_call_delta_with_index(
     builders: &mut Vec<ToolCallBuilder>,
     container: &Map<String, Value>,

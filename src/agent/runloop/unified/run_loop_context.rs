@@ -530,7 +530,6 @@ pub(crate) struct RunLoopContext<'a> {
     pub mcp_panel_state: &'a mut McpPanelState,
     pub approval_recorder: &'a ApprovalRecorder,
     pub session: &'a mut InlineSession,
-    #[expect(dead_code)]
     pub safety_validator: Option<&'a Arc<ToolCallSafetyValidator>>,
     pub traj: &'a TrajectoryLogger,
     pub harness_state: &'a mut HarnessTurnState,
