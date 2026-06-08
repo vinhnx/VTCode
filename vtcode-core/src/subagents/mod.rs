@@ -922,6 +922,7 @@ impl SubagentController {
         let deadline = tokio::time::Instant::now() + timeout;
 
         loop {
+            // Collect notify handles from child records.
             let notifies = {
                 let state = self.state.read().await;
                 targets
@@ -938,6 +939,23 @@ impl SubagentController {
                 return Ok(None);
             }
 
+            // Register notified() futures BEFORE checking terminal status.
+            // This prevents a Tokio Notify race condition: if apply_result()
+            // calls notify_waiters() between a status check and future
+            // creation, the notification is permanently lost. By registering
+            // futures first, any concurrent notification either:
+            //   (a) arrives before we poll the future → stored as a permit,
+            //       select! returns immediately, loop re-checks status, or
+            //   (b) arrives after we start waiting → wakes the future normally.
+            let wait_any = select_all(
+                notifies
+                    .into_iter()
+                    .map(|notify| Box::pin(async move { notify.notified().await }))
+                    .collect::<Vec<_>>(),
+            );
+            tokio::pin!(wait_any);
+
+            // Now check if any target is already terminal.
             for target in targets {
                 if let Ok(entry) = self.status_for(target).await
                     && entry.status.is_terminal()
@@ -948,13 +966,6 @@ impl SubagentController {
 
             let sleep = tokio::time::sleep_until(deadline);
             tokio::pin!(sleep);
-            let wait_any = select_all(
-                notifies
-                    .into_iter()
-                    .map(|notify| Box::pin(async move { notify.notified().await }))
-                    .collect::<Vec<_>>(),
-            );
-            tokio::pin!(wait_any);
 
             tokio::select! {
                 _ = &mut sleep => return Ok(None),

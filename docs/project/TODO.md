@@ -1,6 +1,28 @@
+fix the agent sop and can't work /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/checkpoints/turn_379.json
+
+---
+
 implement control+r to search all prompts with actual logic, reference.
 
 /Users/vinhnguyenxuan/Documents/vtcode-resources/idea/search_prompts.png
+
+---
+
+critical: check and fix screenshot path
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+udpate readme to showcase screesnshot
+Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/resources/screenshots/vtcode-01237.png
+////////////////////////////////////////////////////// Error //////////////////////////////////////////////////////
+LLM request failed: No endpoints found that support image input
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+────────────────────────────────────────────────────── Info ───────────────────────────────────────────────────────
+Hint: Review error details for specific issues; Check tool documentation for known limitations
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+==> no need to read the screenshot -> if the prompt is asking to update with image path. also refine and make sure image mention file is robust.
+
+logs:
 
 ---
 
