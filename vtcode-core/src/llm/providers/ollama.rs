@@ -29,7 +29,7 @@ pub use pull::{
 };
 pub use url::{base_url_to_host_root, is_openai_compatible_base_url};
 
-use semver::Version;
+use semver::{Version, VersionReq};
 
 use super::common::{
     assistant_interleaved_history_text, collect_history_system_directives,
@@ -59,16 +59,19 @@ pub struct WireApiDetection {
     pub version: Option<Version>,
 }
 
-/// Minimum Ollama version that supports the Responses API.
-/// Ollama versions >= 0.13.3 support the Responses API.
-fn min_responses_version() -> Version {
-    Version::new(0, 13, 3)
-}
+/// Version requirement for Ollama servers that support the Responses API.
+/// Release versions >= 0.13.3 support the Responses API.
+static RESPONSES_API_VERSION_REQ: std::sync::LazyLock<VersionReq> =
+    std::sync::LazyLock::new(|| {
+        VersionReq::parse(">=0.13.3").expect("valid version requirement literal")
+    });
 
 /// Determine which wire API to use based on the Ollama server version.
+///
+/// Version 0.0.0 is used for development builds, which typically support the
+/// latest features.
 fn wire_api_for_version(version: &Version) -> OllamaWireApi {
-    // Version 0.0.0 is used for development builds, which typically support latest features
-    if *version == Version::new(0, 0, 0) || *version >= min_responses_version() {
+    if *version == Version::new(0, 0, 0) || RESPONSES_API_VERSION_REQ.matches(version) {
         OllamaWireApi::Responses
     } else {
         OllamaWireApi::Chat
@@ -1659,5 +1662,49 @@ mod tests {
             .filter_map(|model| model.name.or(model.model))
             .collect();
         assert_eq!(names, vec!["qwen3:8b".to_string()]);
+    }
+
+    #[test]
+    fn wire_api_responses_for_dev_build() {
+        assert_eq!(
+            wire_api_for_version(&Version::new(0, 0, 0)),
+            OllamaWireApi::Responses,
+        );
+    }
+
+    #[test]
+    fn wire_api_responses_for_exact_threshold() {
+        assert_eq!(
+            wire_api_for_version(&Version::new(0, 13, 3)),
+            OllamaWireApi::Responses,
+        );
+    }
+
+    #[test]
+    fn wire_api_responses_for_above_threshold() {
+        assert_eq!(
+            wire_api_for_version(&Version::new(0, 14, 0)),
+            OllamaWireApi::Responses,
+        );
+        assert_eq!(
+            wire_api_for_version(&Version::new(1, 0, 0)),
+            OllamaWireApi::Responses,
+        );
+    }
+
+    #[test]
+    fn wire_api_chat_for_below_threshold() {
+        assert_eq!(
+            wire_api_for_version(&Version::new(0, 13, 2)),
+            OllamaWireApi::Chat,
+        );
+        assert_eq!(
+            wire_api_for_version(&Version::new(0, 12, 0)),
+            OllamaWireApi::Chat,
+        );
+        assert_eq!(
+            wire_api_for_version(&Version::new(0, 1, 0)),
+            OllamaWireApi::Chat,
+        );
     }
 }

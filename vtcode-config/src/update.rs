@@ -4,7 +4,6 @@
 //! Configuration stored in `~/.vtcode/update.toml`.
 
 use crate::defaults::get_config_dir;
-use crate::env_helpers::default_true;
 use anyhow::{Context, Result};
 use semver::Version;
 use serde::{Deserialize, Serialize};
@@ -34,19 +33,6 @@ impl std::fmt::Display for ReleaseChannel {
     }
 }
 
-/// Mirror configuration for download fallback
-#[derive(Debug, Clone, Deserialize, Serialize, Default)]
-pub struct MirrorConfig {
-    /// Primary mirror URL (GitHub Releases by default)
-    pub primary: Option<String>,
-    /// Fallback mirrors in order of preference
-    #[serde(default)]
-    pub fallbacks: Vec<String>,
-    /// Enable geographic mirror selection
-    #[serde(default = "default_true")]
-    pub geo_select: bool,
-}
-
 /// Version pinning configuration
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct VersionPin {
@@ -70,10 +56,6 @@ pub struct UpdateConfig {
     #[serde(default)]
     pub pin: Option<VersionPin>,
 
-    /// Mirror configuration
-    #[serde(default)]
-    pub mirrors: MirrorConfig,
-
     /// Auto-update check interval in hours (0 = disable)
     #[serde(default = "default_check_interval")]
     pub check_interval_hours: u64,
@@ -81,14 +63,6 @@ pub struct UpdateConfig {
     /// Download timeout in seconds
     #[serde(default = "default_download_timeout")]
     pub download_timeout_secs: u64,
-
-    /// Keep backup of previous version after update
-    #[serde(default = "default_true")]
-    pub keep_backup: bool,
-
-    /// Auto-rollback on startup if new version fails
-    #[serde(default)]
-    pub auto_rollback: bool,
 }
 
 impl Default for UpdateConfig {
@@ -96,11 +70,8 @@ impl Default for UpdateConfig {
         Self {
             channel: ReleaseChannel::Stable,
             pin: None,
-            mirrors: MirrorConfig::default(),
             check_interval_hours: default_check_interval(),
             download_timeout_secs: default_download_timeout(),
-            keep_backup: true,
-            auto_rollback: false,
         }
     }
 }
@@ -181,6 +152,15 @@ impl UpdateConfig {
         self.pin = None;
     }
 
+    /// Whether the current pin should be automatically removed when a newer
+    /// release is available. Returns `false` when not pinned or when
+    /// `auto_unpin` was not set.
+    pub fn should_auto_unpin(&self) -> bool {
+        self.pin
+            .as_ref()
+            .is_some_and(|p| p.auto_unpin && p.version.is_some())
+    }
+
     /// Check if update check is due based on interval
     pub fn is_check_due(&self, last_check: Option<std::time::SystemTime>) -> bool {
         if self.check_interval_hours == 0 {
@@ -215,25 +195,11 @@ channel = "stable"
 # reason = "Waiting for bug fix in next release"
 # auto_unpin = false
 
-# Download mirrors (optional)
-# [mirrors]
-# primary = "https://github.com/vinhnx/vtcode/releases"
-# fallbacks = [
-#     "https://mirror.example.com/vtcode",
-# ]
-# geo_select = true
-
 # Auto-update check interval in hours (0 = disable)
 check_interval_hours = 24
 
 # Download timeout in seconds
 download_timeout_secs = 300
-
-# Keep backup of previous version after update
-keep_backup = true
-
-# Auto-rollback on startup if new version fails
-auto_rollback = false
 "#
     .to_string()
 }
@@ -248,8 +214,6 @@ mod tests {
         assert_eq!(config.channel, ReleaseChannel::Stable);
         assert_eq!(config.check_interval_hours, 24);
         assert_eq!(config.download_timeout_secs, 300);
-        assert!(config.keep_backup);
-        assert!(!config.auto_rollback);
     }
 
     #[test]
@@ -267,8 +231,35 @@ mod tests {
 
         assert!(config.is_pinned());
         assert_eq!(config.pinned_version(), Some(&version));
+        assert!(!config.should_auto_unpin());
 
         config.clear_pin();
         assert!(!config.is_pinned());
+    }
+
+    #[test]
+    fn test_auto_unpin() {
+        let mut config = UpdateConfig::default();
+        let version = Version::parse("0.85.3").unwrap();
+        config.set_pin(version, Some("Temporary".to_string()), true);
+
+        assert!(config.is_pinned());
+        assert!(config.should_auto_unpin());
+    }
+
+    #[test]
+    fn test_deserialize_with_unknown_fields() {
+        // Configs from older versions may contain removed fields like
+        // keep_backup, auto_rollback, or mirrors. serde(ignore) via
+        // deny_unknown_fields=false (the default) silently skips them.
+        let toml = r#"
+channel = "stable"
+check_interval_hours = 12
+download_timeout_secs = 60
+keep_backup = true
+auto_rollback = false
+"#;
+        let config: UpdateConfig = toml::from_str(toml).unwrap();
+        assert_eq!(config.check_interval_hours, 12);
     }
 }

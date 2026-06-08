@@ -57,7 +57,7 @@ pub async fn handle_update_command(options: UpdateCommandOptions) -> Result<()> 
         current_version
     );
 
-    let updater = Updater::new(current_version).context("Failed to initialize updater")?;
+    let mut updater = Updater::new(current_version).context("Failed to initialize updater")?;
 
     // Show pin status
     if let Some(pinned) = updater.pinned_version() {
@@ -111,7 +111,12 @@ fn handle_show_config() -> Result<()> {
         "{} Pinned: {}",
         "→".cyan(),
         if let Some(pin) = config.pinned_version() {
-            format!("{} ({}", pin.to_string().cyan(), pin)
+            let reason = config
+                .pin
+                .as_ref()
+                .and_then(|p| p.reason.as_deref())
+                .unwrap_or("no reason specified");
+            format!("{} ({})", pin.to_string().cyan(), reason)
         } else {
             "No".to_string()
         }
@@ -125,24 +130,6 @@ fn handle_show_config() -> Result<()> {
         "{} Download timeout: {} seconds",
         "→".cyan(),
         config.download_timeout_secs
-    );
-    println!(
-        "{} Keep backup: {}",
-        "→".cyan(),
-        if config.keep_backup {
-            "Yes".to_string().green()
-        } else {
-            "No".to_string().yellow()
-        }
-    );
-    println!(
-        "{} Auto-rollback: {}",
-        "→".cyan(),
-        if config.auto_rollback {
-            "Yes".to_string().green()
-        } else {
-            "No".to_string().yellow()
-        }
     );
 
     Ok(())
@@ -220,7 +207,7 @@ async fn handle_list_versions(limit: usize) -> Result<()> {
     println!("{}", "─".repeat(60));
 
     for (i, version_info) in versions.iter().enumerate() {
-        let is_current = version_info.version.to_string() == current_version;
+        let is_current = version_info.version == *updater.current_version();
         let marker = if is_current {
             "●".green()
         } else if version_info.is_prerelease {

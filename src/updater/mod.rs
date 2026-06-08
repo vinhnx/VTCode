@@ -53,13 +53,42 @@ impl Updater {
         github::release_url(version)
     }
 
-    pub(crate) async fn check_for_updates(&self) -> Result<Option<UpdateInfo>> {
+    pub(crate) async fn check_for_updates(&mut self) -> Result<Option<UpdateInfo>> {
         debug!(
             "Checking for VT Code updates (channel: {})...",
             self.config.channel
         );
 
         if let Some(pinned_version) = self.config.pinned_version() {
+            if self.config.should_auto_unpin() {
+                // Auto-unpin: fetch the latest release and, if it is newer
+                // than the pinned version, clear the pin so the update proceeds.
+                debug!(
+                    "Version pinned to {} with auto-unpin enabled, checking for newer release",
+                    pinned_version
+                );
+                let latest = github::fetch_latest_release(
+                    self,
+                    self.config.download_timeout_secs,
+                    &self.config.channel,
+                )
+                .await?;
+                if latest
+                    .as_ref()
+                    .is_some_and(|info| info.version > *pinned_version)
+                {
+                    info!(
+                        "Auto-unpinning: newer version {} available (pinned: {})",
+                        latest.as_ref().unwrap().version,
+                        pinned_version
+                    );
+                    self.config.clear_pin();
+                    let _ = self.config.save();
+                    return Ok(latest);
+                }
+                debug!("Pinned version is still latest, keeping pin");
+                return Ok(None);
+            }
             debug!(
                 "Version pinned to {}, skipping update check",
                 pinned_version
@@ -67,7 +96,12 @@ impl Updater {
             return Ok(None);
         }
 
-        let latest = github::fetch_latest_release(self).await?;
+        let latest = github::fetch_latest_release(
+            self,
+            self.config.download_timeout_secs,
+            &self.config.channel,
+        )
+        .await?;
 
         if latest
             .as_ref()
@@ -120,13 +154,14 @@ impl Updater {
             return Ok(None);
         }
 
-        let latest = match github::fetch_latest_release_info().await {
-            Ok(info) => info,
-            Err(err) => {
-                let _ = cache::record_failed_check();
-                return Err(err);
-            }
-        };
+        let latest =
+            match github::fetch_latest_release_info(self.config.download_timeout_secs).await {
+                Ok(info) => info,
+                Err(err) => {
+                    let _ = cache::record_failed_check();
+                    return Err(err);
+                }
+            };
 
         let latest_is_newer = latest.version > self.current_version;
         cache::record_successful_check(Some(&latest.version), latest_is_newer)?;
@@ -195,7 +230,7 @@ impl Updater {
 
     pub(crate) async fn list_versions(&self, limit: usize) -> Result<Vec<VersionInfo>> {
         debug!("Fetching available versions (limit: {})...", limit);
-        github::list_versions(limit).await
+        github::list_versions(limit, self.config.download_timeout_secs).await
     }
 
     pub(crate) fn pin_version(

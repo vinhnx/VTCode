@@ -158,7 +158,6 @@ I'd love to have you, bug reports, docs, features, ideas, all welcome. Start wit
   <a href="https://github.com/kernitus"><img src="https://avatars.githubusercontent.com/u/2789734?s=60" width="40" height="40" alt="@kernitus" title="@kernitus" style="border-radius: 50%" /></a>&nbsp;
   <a href="https://github.com/morler"><img src="https://avatars.githubusercontent.com/u/478444?s=60" width="40" height="40" alt="@morler" title="@morler" style="border-radius: 50%" /></a>&nbsp;
   <a href="https://github.com/uiYzzi"><img src="https://avatars.githubusercontent.com/u/40852301?s=60" width="40" height="40" alt="@uiYzzi" title="@uiYzzi" style="border-radius: 50%" /></a>
-  <br><a href="https://github.com/vinhnx/vtcode/graphs/contributors"><img src="https://img.shields.io/github/contributors/vinhnx/vtcode?style=flat-square&logo=github&label=Total%20contributors&color=171C26" alt="Total contributors" /></a>
 </p>
 
 ## Support

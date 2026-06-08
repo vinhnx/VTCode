@@ -24,7 +24,7 @@ pub(crate) async fn handle_update(
     force: bool,
 ) -> Result<SlashCommandControl> {
     let current_version = env!("CARGO_PKG_VERSION");
-    let updater = Updater::new(current_version)?;
+    let mut updater = Updater::new(current_version)?;
 
     ctx.renderer.line(
         MessageStyle::Info,

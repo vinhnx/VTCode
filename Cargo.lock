@@ -8454,6 +8454,8 @@ version = "0.8.7"
 dependencies = [
  "clap",
  "clap_complete",
+ "semver",
+ "toml_edit",
  "vtcode-core",
 ]
 

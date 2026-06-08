@@ -61,11 +61,10 @@ pub(super) fn read_snapshot() -> Result<UpdateCacheSnapshot> {
     };
 
     Ok(UpdateCacheSnapshot {
-        last_checked: payload
-            .last_checked_unix_secs
-            .checked_add(0)
-            .map(|secs| UNIX_EPOCH + std::time::Duration::from_secs(secs))
-            .or(modified),
+        last_checked: Some(
+            UNIX_EPOCH + std::time::Duration::from_secs(payload.last_checked_unix_secs),
+        )
+        .or(modified),
         latest_version: payload
             .latest_version
             .as_deref()

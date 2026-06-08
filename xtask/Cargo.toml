@@ -8,3 +8,5 @@ publish = false
 vtcode-core = { path = "../vtcode-core" }
 clap = { workspace = true, features = ["derive"] }
 clap_complete = { workspace = true }
+semver = { workspace = true }
+toml_edit = "0.25"

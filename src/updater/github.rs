@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use semver::Version;
 use std::time::Duration;
+use vtcode_config::update::ReleaseChannel;
 
 use super::Updater;
 use super::types::{UpdateInfo, VersionInfo};
@@ -10,18 +11,44 @@ pub(super) const REPO_NAME: &str = "vtcode";
 const REPO_SLUG: &str = "vinhnx/vtcode";
 
 fn github_client() -> Result<reqwest::Client> {
-    reqwest::Client::builder()
-        .user_agent("vtcode-updater")
-        .build()
-        .context("Failed to create HTTP client")
+    let mut builder = reqwest::Client::builder().user_agent("vtcode-updater");
+
+    // Authenticate with GitHub API when a token is available.
+    // Unauthenticated requests are limited to 60/hour per IP; authenticated
+    // requests get 5,000/hour. Check the two conventional env var names.
+    if let Ok(token) = std::env::var("GITHUB_TOKEN").or_else(|_| std::env::var("GH_TOKEN")) {
+        let mut headers = reqwest::header::HeaderMap::new();
+        let mut value = reqwest::header::HeaderValue::from_str(&format!("Bearer {token}"))
+            .context("Invalid GITHUB_TOKEN value")?;
+        value.set_sensitive(true);
+        headers.insert(reqwest::header::AUTHORIZATION, value);
+        builder = builder.default_headers(headers);
+    }
+
+    builder.build().context("Failed to create HTTP client")
+}
+
+/// Clamp the timeout to at least 1 second to prevent a zero-duration timeout
+/// from immediately failing every request.
+fn effective_timeout(timeout_secs: u64) -> Duration {
+    Duration::from_secs(timeout_secs.max(1))
 }
 
 pub(super) fn release_url(version: &Version) -> String {
     format!("https://github.com/{REPO_SLUG}/releases/tag/v{version}")
 }
 
-pub(super) async fn fetch_latest_release(updater: &Updater) -> Result<Option<UpdateInfo>> {
-    let latest = fetch_latest_release_info().await?;
+pub(super) async fn fetch_latest_release(
+    updater: &Updater,
+    timeout_secs: u64,
+    channel: &ReleaseChannel,
+) -> Result<Option<UpdateInfo>> {
+    let latest = match channel {
+        ReleaseChannel::Stable => fetch_latest_release_info(timeout_secs).await?,
+        ReleaseChannel::Beta | ReleaseChannel::Nightly => {
+            fetch_latest_prerelease_info(timeout_secs, channel).await?
+        }
+    };
     if latest.version > updater.current_version {
         Ok(Some(latest))
     } else {
@@ -29,14 +56,14 @@ pub(super) async fn fetch_latest_release(updater: &Updater) -> Result<Option<Upd
     }
 }
 
-pub(super) async fn fetch_latest_release_info() -> Result<UpdateInfo> {
+pub(super) async fn fetch_latest_release_info(timeout_secs: u64) -> Result<UpdateInfo> {
     let url = format!("https://api.github.com/repos/{REPO_SLUG}/releases/latest");
 
     let client = github_client()?;
 
     let response = client
         .get(&url)
-        .timeout(Duration::from_secs(8))
+        .timeout(effective_timeout(timeout_secs))
         .send()
         .await
         .context("Failed to fetch latest release from GitHub")?
@@ -67,7 +94,90 @@ pub(super) async fn fetch_latest_release_info() -> Result<UpdateInfo> {
     })
 }
 
-pub(super) async fn list_versions(limit: usize) -> Result<Vec<VersionInfo>> {
+/// Fetch the latest pre-release from GitHub for beta/nightly channels.
+///
+/// Uses `/releases?per_page=20` and filters by channel:
+/// - **Beta**: any release where `prerelease == true`
+/// - **Nightly**: releases whose tag contains "nightly" or whose semver
+///   pre-release identifier starts with "nightly"
+///
+/// Returns the highest-versioned match.
+async fn fetch_latest_prerelease_info(
+    timeout_secs: u64,
+    channel: &ReleaseChannel,
+) -> Result<UpdateInfo> {
+    let url = format!("https://api.github.com/repos/{REPO_SLUG}/releases?per_page=20");
+
+    let client = github_client()?;
+
+    let response = client
+        .get(&url)
+        .timeout(effective_timeout(timeout_secs))
+        .send()
+        .await
+        .context("Failed to fetch releases from GitHub")?
+        .error_for_status()
+        .context("GitHub API returned non-success status")?;
+
+    let json = response
+        .json::<serde_json::Value>()
+        .await
+        .context("Failed to parse GitHub API response")?;
+
+    let releases = json.as_array().context("Expected array of releases")?;
+
+    let mut best: Option<(Version, String)> = None;
+
+    for release in releases {
+        let tag_name = match release.get("tag_name").and_then(|v| v.as_str()) {
+            Some(t) => t,
+            None => continue,
+        };
+        let version_str = tag_name.trim_start_matches('v');
+        let version = match Version::parse(version_str) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+
+        let is_prerelease = release
+            .get("prerelease")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+
+        let matches_channel = match channel {
+            ReleaseChannel::Stable => !is_prerelease,
+            ReleaseChannel::Beta => is_prerelease,
+            ReleaseChannel::Nightly => {
+                let tag_lower = tag_name.to_ascii_lowercase();
+                tag_lower.contains("nightly") || version.pre.as_str().starts_with("nightly")
+            }
+        };
+
+        if !matches_channel {
+            continue;
+        }
+
+        if best.as_ref().is_none_or(|(v, _)| version > *v) {
+            let notes = release
+                .get("body")
+                .and_then(|v| v.as_str())
+                .unwrap_or("See release notes on GitHub")
+                .to_string();
+            best = Some((version, notes));
+        }
+    }
+
+    let (version, release_notes) = best.context(format!(
+        "No {channel} releases found on GitHub for {REPO_SLUG}"
+    ))?;
+
+    Ok(UpdateInfo {
+        version,
+        release_notes,
+    })
+}
+
+pub(super) async fn list_versions(limit: usize, timeout_secs: u64) -> Result<Vec<VersionInfo>> {
     let url = format!(
         "https://api.github.com/repos/{REPO_SLUG}/releases?per_page={}",
         limit
@@ -77,7 +187,7 @@ pub(super) async fn list_versions(limit: usize) -> Result<Vec<VersionInfo>> {
 
     let response = client
         .get(&url)
-        .timeout(Duration::from_secs(8))
+        .timeout(effective_timeout(timeout_secs))
         .send()
         .await
         .context("Failed to fetch releases from GitHub")?

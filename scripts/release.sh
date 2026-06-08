@@ -898,7 +898,10 @@ main() {
     current_version=$(get_current_version)
     print_info "Current version: $current_version"
 
-    # Calculate next version
+    # Calculate next version.
+    # Prefer `cargo xtask bump-version --bump <major|minor|patch>` for reliable
+    # semver arithmetic. The bash arithmetic below is kept for backward
+    # compatibility with existing CI workflows that source this script directly.
     local next_version
     if [[ "$release_argument" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
         next_version="$release_argument"
