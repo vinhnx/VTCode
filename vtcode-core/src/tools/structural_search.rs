@@ -345,19 +345,19 @@ struct StructuralSearchRequest {
     // -- Relational rule fields ------------------------------------------------
     /// Relational: match if a descendant matches this rule.
     #[serde(default)]
-    has: Option<Box<serde_json::Value>>,
+    has: Option<Box<Value>>,
     /// Relational: match if an ancestor matches this rule.
     #[serde(default)]
-    inside: Option<Box<serde_json::Value>>,
+    inside: Option<Box<Value>>,
     /// Relational: match if a preceding sibling matches this rule.
     #[serde(default)]
-    follows: Option<Box<serde_json::Value>>,
+    follows: Option<Box<Value>>,
     /// Relational: match if a following sibling matches this rule.
     #[serde(default)]
-    precedes: Option<Box<serde_json::Value>>,
+    precedes: Option<Box<Value>>,
     /// Narrow meta-variable matches by additional constraints.
     #[serde(default)]
-    constraints: Option<serde_json::Map<String, serde_json::Value>>,
+    constraints: Option<Map<String, Value>>,
 }
 
 impl StructuralSearchRequest {
@@ -614,86 +614,6 @@ impl StructuralSearchRequest {
         Ok(())
     }
 
-    fn validate_count(&self) -> Result<()> {
-        let has_relational = self.has.is_some()
-            || self.inside.is_some()
-            || self.follows.is_some()
-            || self.precedes.is_some();
-
-        if self.pattern().is_none()
-            && self.kind().is_none()
-            && self.regex_pattern().is_none()
-            && !has_relational
-            && self.constraints.is_none()
-        {
-            bail!(
-                "action='structural' workflow='count' requires a non-empty `pattern`, `kind`, \
-                 `regex`, `has`, `inside`, `follows`, or `precedes`"
-            );
-        }
-
-        self.reject_present("config_path", self.config_path.as_deref())?;
-        self.reject_present("filter", self.filter.as_deref())?;
-        self.reject_flag("skip_snapshot_tests", self.skip_snapshot_tests)?;
-        self.reject_severities()?;
-        self.reject_nth_child()?;
-        self.reject_range()?;
-
-        if self.debug_query.is_some() && self.lang.as_deref().is_none_or(str::is_empty) {
-            bail!(DEBUG_QUERY_LANG_HINT);
-        }
-
-        if self.regex_pattern().is_some() && self.lang.as_deref().is_none_or(str::is_empty) {
-            bail!("action='structural' with `regex` requires `lang` to be set");
-        }
-
-        if has_relational && self.lang.as_deref().is_none_or(str::is_empty) {
-            bail!(
-                "action='structural' with relational rules (`has`/`inside`/`follows`/`precedes`) requires `lang` to be set"
-            );
-        }
-
-        Ok(())
-    }
-
-    fn validate_rules(&self) -> Result<()> {
-        self.reject_present("pattern", self.pattern.as_deref())?;
-        self.reject_present("kind", self.kind.as_deref())?;
-        self.reject_present("lang", self.lang.as_deref())?;
-        self.reject_present("selector", self.selector.as_deref())?;
-        self.reject_present(
-            "strictness",
-            self.strictness.as_ref().map(StructuralStrictness::as_str),
-        )?;
-        self.reject_present(
-            "debug_query",
-            self.debug_query.as_ref().map(DebugQueryFormat::as_str),
-        )?;
-        self.reject_present("filter", self.filter.as_deref())?;
-        self.reject_present("regex", self.regex.as_deref())?;
-        self.reject_flag("skip_snapshot_tests", self.skip_snapshot_tests)?;
-        self.reject_severities()?;
-        self.reject_nth_child()?;
-        self.reject_range()?;
-        self.reject_relational_rules()?;
-        if self.globs.is_some() {
-            bail!(
-                "action='structural' workflow='rules' does not accept `globs`; use `config_path` and `path`."
-            );
-        }
-        if self.context_lines.is_some() {
-            bail!(
-                "action='structural' workflow='rules' does not accept `context_lines`; use `config_path` and `path`."
-            );
-        }
-        if self.max_results.is_some() {
-            bail!(
-                "action='structural' workflow='rules' does not accept `max_results`; use `config_path` and `path`."
-            );
-        }
-        Ok(())
-    }
-
     fn reject_present(&self, field: &str, value: Option<&str>) -> Result<()> {
         if value.is_some_and(|value| !value.trim().is_empty()) {
             bail!(
@@ -746,13 +666,6 @@ impl StructuralSearchRequest {
                 self.workflow.as_str()
             );
         }
-        Ok(())
-    }
-
-    fn reject_severities(&self) -> Result<()> {
-        // Severity fields are not yet supported as top-level request fields.
-        // This method exists as a placeholder for future expansion and to
-        // keep validation call sites consistent.
         Ok(())
     }
 
@@ -1795,7 +1708,7 @@ async fn execute_atomic_rule_query(
         .into_iter()
         .take(max_results)
         .map(|finding| {
-            let mut match_object = serde_json::Map::new();
+            let mut match_object = Map::new();
             match_object.insert("file".to_string(), Value::String(finding.file));
             match_object.insert("line_number".to_string(), json!(finding.range.start.line));
             match_object.insert("text".to_string(), Value::String(finding.text.clone()));
@@ -2028,64 +1941,6 @@ fn append_expand_rule_yaml(yaml: &mut String, rule: &FixExpandRule) {
                 yaml.push_str(&format!("    stopBy: {}\n", stop_by));
             }
         }
-    }
-}
-
-/// Append a JSON value as YAML at the given indentation level. Handles
-/// strings (via `yaml_escape_scalar`), numbers, bools, objects (recursive),
-/// arrays (YAML list items), and null (skipped).
-fn append_value_yaml(yaml: &mut String, value: &Value, indent: usize) {
-    let pad = " ".repeat(indent);
-    match value {
-        Value::String(s) => {
-            yaml.push_str(&yaml_escape_scalar(s));
-            yaml.push('\n');
-        }
-        Value::Number(n) => {
-            yaml.push_str(&n.to_string());
-            yaml.push('\n');
-        }
-        Value::Bool(b) => {
-            yaml.push_str(if *b { "true" } else { "false" });
-            yaml.push('\n');
-        }
-        Value::Null => {
-            yaml.push_str("null\n");
-        }
-        Value::Object(obj) => {
-            yaml.push('\n');
-            for (key, val) in obj {
-                yaml.push_str(&format!("{pad}{key}: "));
-                append_value_yaml(yaml, val, indent + 2);
-            }
-        }
-        Value::Array(arr) => {
-            yaml.push('\n');
-            for item in arr {
-                yaml.push_str(&format!("{pad}- "));
-                append_value_yaml(yaml, item, indent + 2);
-            }
-        }
-    }
-}
-
-/// Append a relational rule (`has`, `inside`, `follows`, `precedes`) to the
-/// YAML string. The `key` is the relational operator name and `value` is
-/// the sub-rule object.
-fn append_relational_yaml(yaml: &mut String, key: &str, value: &Value, indent: usize) {
-    let pad = " ".repeat(indent);
-    yaml.push_str(&format!("{pad}{key}: "));
-    append_value_yaml(yaml, value, indent + 2);
-}
-
-/// Append a `constraints` block to the YAML string. Each key is a
-/// metavariable name (e.g. `$TARGET`) and each value is a rule object.
-fn append_constraints_yaml(yaml: &mut String, constraints: &Map<String, Value>, indent: usize) {
-    let pad = " ".repeat(indent);
-    yaml.push_str(&format!("{pad}constraints:\n"));
-    for (var_name, rule) in constraints {
-        yaml.push_str(&format!("{pad}  {var_name}: "));
-        append_value_yaml(yaml, rule, indent + 4);
     }
 }
 
