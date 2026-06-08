@@ -12,7 +12,15 @@
     <a href="https://deepwiki.com/vinhnx/VTCode"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki" /></a>
   </p>
 
-  <img src="./resources/gif/vtcode.gif" alt="VT Code demo" style="border-radius: 10px" />
+</div>
+
+<div align="center">
+
+|                                                                                                     |                                                                                                                         |
+| :-------------------------------------------------------------------------------------------------: | :---------------------------------------------------------------------------------------------------------------------: |
+| <img src="./resources/gif/vtcode.gif" alt="VT Code demo" width="500" style="border-radius: 10px" /> | <img src="./resources/screenshots/vtcode-01237.png" alt="VT Code screenshot" width="900" style="border-radius: 10px" /> |
+|                                         **Interactive TUI**                                         |                                                   **Agent in action**                                                   |
+
 </div>
 
 ## Quick start
@@ -252,7 +260,7 @@ Inside the TUI, `/loop` repeats a prompt on an interval within the current sessi
 | Model providers  | GitHub Copilot, OpenAI, Anthropic, Gemini, DeepSeek, OpenRouter, Z.AI, Moonshot AI, MiniMax, Xiaomi MiMo, HuggingFace, Ollama, LM Studio, llama.cpp, custom OpenAI-compatible APIs |
 | Extensibility    | Agent Skills, MCP clients and server mode, lifecycle hooks, subagents, background subprocess agents, custom providers, editor integrations                                         |
 | Interoperability | Open Responses, Agent2Agent, Anthropic Messages API compatibility, ATIF trajectory export                                                                                          |
-| Terminal UX      | Rich TUI, mouse support, text selection, live command output                                                                                                                      |
+| Terminal UX      | Rich TUI, mouse support, text selection, live command output                                                                                                                       |
 
 ## Installation
 
