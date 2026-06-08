@@ -1,25 +1,37 @@
+<table width="100%" style="border: none; border-collapse: collapse;">
+  <tr>
+    <td rowspan="2" style="border: none; vertical-align: middle;">
+      <img src="./resources/logo/vt_code_adaptive.svg" alt="VT Code" width="400" style="border-radius: 10px;" /><br>
+      <sub><em>Safe tools, multi-provider LLMs, open protocols.</em></sub>
+    </td>
+    <td style="border: none;">
+      <a href="./docs/skills/SKILLS_GUIDE.md"><img src="https://img.shields.io/badge/Agent%20Skills-BFB38F?style=flat-square" alt="Skills" /></a>&nbsp;
+      <a href="./docs/guides/zed-acp.md"><img src="https://img.shields.io/badge/ACP-Zed-383B73?style=flat-square&logo=zedindustries" alt="Zed ACP" /></a>&nbsp;
+      <a href="./docs/guides/mcp-integration.md"><img src="https://img.shields.io/badge/MCP-A63333?style=flat-square&logo=modelcontextprotocol" alt="MCP" /></a>&nbsp;
+      <a href="https://github.com/vinhnx/vtcode/releases"><img src="https://img.shields.io/github/v/release/vinhnx/vtcode?style=flat-square&color=171C26&label=Release" alt="GitHub Release" /></a>
+    </td>
+  </tr>
+  <tr>
+    <td style="border: none;">
+      <a href="https://github.com/vinhnx/vtcode/graphs/contributors"><img src="https://img.shields.io/github/contributors/vinhnx/vtcode?style=flat-square&logo=github&label=Contributors&color=171C26" alt="Contributors" /></a>&nbsp;
+      <a href="https://github.com/sponsors/vinhnx"><img src="https://img.shields.io/github/sponsors/vinhnx?style=flat-square&logo=github&label=Sponsors&color=EA4AAA" alt="Sponsors" /></a>&nbsp;
+      <a href="https://deepwiki.com/vinhnx/VTCode"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki" /></a>
+    </td>
+  </tr>
+</table>
+
 <div align="center">
-  <img src="./resources/logo/vt_code_adaptive.svg" alt="VT Code" width="520" style="border-radius: 10px" />
 
-  <p><strong>A Rust terminal coding agent with safe workspace tools, multi-provider LLM support, and open protocol integrations.</strong></p>
-
-  <p>
-    <a href="https://crates.io/crates/vtcode"><img src="https://img.shields.io/crates/v/vtcode?style=flat-square&color=171C26&label=crates.io" alt="Crates.io Version" /></a>&nbsp;
-    <a href="https://github.com/vinhnx/vtcode/releases"><img src="https://img.shields.io/github/v/release/vinhnx/vtcode?style=flat-square&color=171C26&label=Release" alt="GitHub Release" /></a>&nbsp;
-    <a href="./docs/skills/SKILLS_GUIDE.md"><img src="https://img.shields.io/badge/Agent%20Skills-BFB38F?style=flat-square" alt="Skills" /></a>&nbsp;
-    <a href="./docs/guides/zed-acp.md"><img src="https://img.shields.io/badge/ACP-Zed-383B73?style=flat-square&logo=zedindustries" alt="Zed ACP" /></a>&nbsp;
-    <a href="./docs/guides/mcp-integration.md"><img src="https://img.shields.io/badge/MCP-A63333?style=flat-square&logo=modelcontextprotocol" alt="MCP" /></a>&nbsp;
-    <a href="https://deepwiki.com/vinhnx/VTCode"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki" /></a>
-  </p>
-
-</div>
-
-<div align="center">
-
-|                                                                                                     |                                                                                                                         |
-| :-------------------------------------------------------------------------------------------------: | :---------------------------------------------------------------------------------------------------------------------: |
-| <img src="./resources/gif/vtcode.gif" alt="VT Code demo" width="500" style="border-radius: 10px" /> | <img src="./resources/screenshots/vtcode-01237.png" alt="VT Code screenshot" width="900" style="border-radius: 10px" /> |
-|                                         **Interactive TUI**                                         |                                                   **Agent in action**                                                   |
+<table style="border: none; border-collapse: collapse;">
+  <tr>
+    <td style="border: none;"><img src="./resources/gif/vtcode.gif" alt="VT Code demo" width="500" style="border-radius: 10px" /></td>
+    <td style="border: none;"><img src="./resources/screenshots/vtcode-01237.png" alt="VT Code screenshot" width="900" style="border-radius: 10px" /></td>
+  </tr>
+  <tr>
+    <td style="border: none; text-align: center;"><strong>Interactive TUI</strong></td>
+    <td style="border: none; text-align: center;"><strong>Agent in action</strong></td>
+  </tr>
+</table>
 
 </div>
 
@@ -253,14 +265,36 @@ Inside the TUI, `/loop` repeats a prompt on an interval within the current sessi
 
 ## Features
 
-| Area             | What VT Code provides                                                                                                                                                              |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Agent runtime    | Interactive TUI, slash commands, streaming responses, non-interactive `ask` and `exec`, resume and continue, dynamic context curation                                              |
-| Coding tools     | Safe file operations, patching, ripgrep search, fuzzy file discovery, syntax-aware code intelligence, project indexing, terminal execution                                         |
-| Model providers  | GitHub Copilot, OpenAI, Anthropic, Gemini, DeepSeek, OpenRouter, Z.AI, Moonshot AI, MiniMax, Xiaomi MiMo, HuggingFace, Ollama, LM Studio, llama.cpp, custom OpenAI-compatible APIs |
-| Extensibility    | Agent Skills, MCP clients and server mode, lifecycle hooks, subagents, background subprocess agents, custom providers, editor integrations                                         |
-| Interoperability | Open Responses, Agent2Agent, Anthropic Messages API compatibility, ATIF trajectory export                                                                                          |
-| Terminal UX      | Rich TUI, mouse support, text selection, live command output                                                                                                                       |
+<table style="border: none; border-collapse: collapse;">
+  <tr>
+    <td style="border: none;"><strong>Area</strong></td>
+    <td style="border: none;"><strong>What VT Code provides</strong></td>
+  </tr>
+  <tr>
+    <td style="border: none;">Agent runtime</td>
+    <td style="border: none;">Interactive TUI, slash commands, streaming responses, non-interactive <code>ask</code> and <code>exec</code>, resume and continue, dynamic context curation</td>
+  </tr>
+  <tr>
+    <td style="border: none;">Coding tools</td>
+    <td style="border: none;">Safe file operations, patching, ripgrep search, fuzzy file discovery, syntax-aware code intelligence, project indexing, terminal execution</td>
+  </tr>
+  <tr>
+    <td style="border: none;">Model providers</td>
+    <td style="border: none;">GitHub Copilot, OpenAI, Anthropic, Gemini, DeepSeek, OpenRouter, Z.AI, Moonshot AI, MiniMax, Xiaomi MiMo, HuggingFace, Ollama, LM Studio, llama.cpp, custom OpenAI-compatible APIs</td>
+  </tr>
+  <tr>
+    <td style="border: none;">Extensibility</td>
+    <td style="border: none;">Agent Skills, MCP clients and server mode, lifecycle hooks, subagents, background subprocess agents, custom providers, editor integrations</td>
+  </tr>
+  <tr>
+    <td style="border: none;">Interoperability</td>
+    <td style="border: none;">Open Responses, Agent2Agent, Anthropic Messages API compatibility, ATIF trajectory export</td>
+  </tr>
+  <tr>
+    <td style="border: none;">Terminal UX</td>
+    <td style="border: none;">Rich TUI, mouse support, text selection, live command output</td>
+  </tr>
+</table>
 
 ## Installation
 
@@ -320,12 +354,33 @@ Xiaomi's MiMo V2.5 Pro is the default model in VT Code — available as the nati
   </a>
 </div>
 
-| Provider                                                          | Model ID               | Context   |
-| ----------------------------------------------------------------- | ---------------------- | --------- |
-| [OpenRouter](https://openrouter.ai/xiaomi/mimo-v2.5-pro)          | `xiaomi/mimo-v2.5-pro` | 1M tokens |
-| OpenRouter                                                        | `xiaomi/mimo-v2.5`     | 1M tokens |
-| [Xiaomi MiMo](https://platform.xiaomimimo.com/docs/en-US/welcome) | `mimo-v2.5-pro`        | 1M tokens |
-| Xiaomi MiMo                                                       | `mimo-v2.5`            | 1M tokens |
+<table style="border: none; border-collapse: collapse;">
+  <tr>
+    <td style="border: none;"><strong>Provider</strong></td>
+    <td style="border: none;"><strong>Model ID</strong></td>
+    <td style="border: none;"><strong>Context</strong></td>
+  </tr>
+  <tr>
+    <td style="border: none;"><a href="https://openrouter.ai/xiaomi/mimo-v2.5-pro">OpenRouter</a></td>
+    <td style="border: none;"><code>xiaomi/mimo-v2.5-pro</code></td>
+    <td style="border: none;">1M tokens</td>
+  </tr>
+  <tr>
+    <td style="border: none;">OpenRouter</td>
+    <td style="border: none;"><code>xiaomi/mimo-v2.5</code></td>
+    <td style="border: none;">1M tokens</td>
+  </tr>
+  <tr>
+    <td style="border: none;"><a href="https://platform.xiaomimimo.com/docs/en-US/welcome">Xiaomi MiMo</a></td>
+    <td style="border: none;"><code>mimo-v2.5-pro</code></td>
+    <td style="border: none;">1M tokens</td>
+  </tr>
+  <tr>
+    <td style="border: none;">Xiaomi MiMo</td>
+    <td style="border: none;"><code>mimo-v2.5</code></td>
+    <td style="border: none;">1M tokens</td>
+  </tr>
+</table>
 
 Pricing: [Pay-as-you-go](https://platform.xiaomimimo.com/docs/en-US/price/pay-as-you-go) · [Subscription](https://platform.xiaomimimo.com/docs/en-US/price/tokenplan/subscription) · [Quick Access](https://platform.xiaomimimo.com/docs/en-US/price/tokenplan/quick-access)
 
