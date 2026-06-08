@@ -176,9 +176,11 @@ During chat you can lead with `/` to trigger built-in actions without leaving th
 -   `/agents` — create, inspect, edit, or delete subagent definitions with VT Code-native frontmatter
 -   `/agent` — inspect delegated child threads in the current session
 
+Press **Tab** on an empty idle composer to cycle primary agents. The active primary agent appears in the session header badge and controls the session's instructions, model, permission mode, and tool access.
+
 Slash commands execute immediately and respect the same tool policies configured in `vtcode.toml`.
 
-For delegated child-agent workflows and primary agents, see the dedicated [Subagents guide](./subagents.md). New `.vtcode/agents/*.md` files should use VT Code tool ids such as `read_file`, `list_files`, `unified_search`, and `unified_exec`, not Claude-style names like `Read` or `Bash`.
+For delegated child-agent workflows and primary agents, see the dedicated [Subagents guide](./subagents.md). Primary agents (`mode: primary` or `mode: all`) control the main session directly; subagents (`mode: subagent` or `mode: all`) are spawned as child threads via `@agent-name`. New `.vtcode/agents/*.md` files should use VT Code tool ids such as `read_file`, `list_files`, `unified_search`, and `unified_exec`, not Claude-style names like `Read` or `Bash`.
 
 VT Code uses a comprehensive TOML configuration system. The `init` command creates a `vtcode.toml` file with sensible defaults.
 
