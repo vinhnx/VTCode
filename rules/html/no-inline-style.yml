@@ -1,0 +1,18 @@
+id: no-inline-style
+language: Html
+severity: hint
+message: Avoid inline `style` attributes; use CSS classes instead.
+note: |
+  Inline styles mix presentation with markup and cannot be overridden by
+  external stylesheets without `!important`. Use CSS classes for
+  maintainability and consistency. Inline styles are acceptable for
+  dynamic values set by JavaScript.
+rule:
+  kind: attribute
+  has:
+    field: name
+    pattern: style
+files:
+  - "**/*.html"
+  - "**/*.htm"
+  - "**/*.xhtml"

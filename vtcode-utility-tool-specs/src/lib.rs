@@ -1,5 +1,7 @@
 //! Passive JSON schemas for utility, file, and scheduling tool surfaces.
 
+#![recursion_limit = "256"]
+
 use serde_json::{Value, json};
 
 mod json_schema;
@@ -261,8 +263,8 @@ pub fn unified_search_parameters() -> Value {
             },
             "workflow": {
                 "type": "string",
-                "enum": ["query", "scan", "test", "rewrite"],
-                "description": "Structural workflow. `query` is the default parseable-pattern search and maps to read-only ast-grep `run`; `scan` maps to read-only ast-grep `scan` from config; `test` runs ast-grep rule tests; `rewrite` previews pattern-to-pattern replacements without applying them, supporting both simple string fixes via `rewrite` and advanced FixConfig rewrites via `fix_config` with `expand_start`/`expand_end` for range expansion (e.g. removing surrounding commas from list items).",
+                "enum": ["query", "scan", "test", "rewrite", "new", "apply"],
+                "description": "Structural workflow. `query` is the default parseable-pattern search and maps to read-only ast-grep `run`; `scan` maps to read-only ast-grep `scan` from config; `test` runs ast-grep rule tests; `rewrite` previews pattern-to-pattern replacements without applying them, supporting both simple string fixes via `rewrite` and advanced FixConfig rewrites via `fix_config` with `expand_start`/`expand_end` for range expansion; `apply` writes rewrites to disk (same parameters as `rewrite`); `new` scaffolds ast-grep projects, rules, tests, and utilities via `new_subcommand` and `new_name`.",
                 "default": "query"
             },
             "pattern": {"type": "string", "description": "For `grep` or `errors`, regex or literal text. For `list`, a glob filter for returned paths or names; nested globs such as `**/*.rs` promote `list` to recursive discovery. For `structural` `workflow=\"query\"`, valid parseable code for the selected language using ast-grep pattern syntax, not a raw code fragment; `$VAR` matches one named node, `$$$ARGS` matches zero or more nodes, `$$VAR` includes unnamed nodes, and `$_` suppresses capture. If a fragment fails, retry `action='structural'` with a larger parseable pattern such as a full function signature. At least one of `pattern` or `kind` is required for `workflow=\"query\"`. For `structural` `workflow=\"rewrite\"`, the pattern to match for replacement; required."},
@@ -319,6 +321,8 @@ pub fn unified_search_parameters() -> Value {
                 },
                 "required": ["template"]
             },
+            "new_subcommand": {"type": "string", "enum": ["project", "rule", "test", "util"], "description": "Subcommand for structural `workflow=\"new\"`. `project` scaffolds sgconfig.yml and directories; `rule` creates a new rule YAML; `test` creates a new test YAML; `util` creates a new utility rule."},
+            "new_name": {"type": "string", "description": "Name for the new rule, test, or utility. Required for `new` subcommands `rule`, `test`, and `util`."},
             "keyword": {"type": "string", "description": "Keyword for 'tools' search."},
             "url": {"type": "string", "format": "uri", "description": "The URL to fetch content from (for 'web' action)."},
             "prompt": {"type": "string", "description": "The prompt to run on the fetched content (for 'web' action)."},
@@ -337,6 +341,27 @@ pub fn unified_search_parameters() -> Value {
             "max_results": {"type": "integer", "description": "Max results to return.", "default": 100},
             "case_sensitive": {"type": "boolean", "description": "Case-sensitive search.", "default": false},
             "context_lines": {"type": "integer", "description": "Context lines for `grep` or structural `workflow=\"query\"|\"scan\"` results. Structural maps this to ast-grep `--context`; raw `--before` and `--after` are not exposed separately.", "default": 0},
+            "severities": {
+                "type": "array",
+                "items": {"type": "string", "enum": ["error", "warning", "info", "hint"]},
+                "description": "Post-run severity filter for structural `workflow=\"scan\"`. When present, only findings matching one of the listed severities are returned. Does not override rule severities at the CLI level."
+            },
+            "no_ignore": {
+                "type": "array",
+                "items": {"type": "string", "enum": ["hidden", "dot", "exclude", "global", "parent", "vcs"]},
+                "description": "Control which ignore files ast-grep respects for structural workflows. `hidden` searches hidden files/dirs; `dot` skips .ignore files; `exclude` skips manually configured excludes; `global` skips global ignore files; `parent` skips parent directory ignores; `vcs` skips VCS ignore files."
+            },
+            "follow": {"type": "boolean", "description": "Follow symbolic links while traversing directories for structural workflows.", "default": false},
+            "threads": {"type": "integer", "description": "Number of threads for ast-grep scan parallelism. 0 means auto. Only for `workflow=\"scan\"`.", "minimum": 0, "maximum": 256, "default": 0},
+            "format": {"type": "string", "enum": ["github", "sarif"], "description": "Output format for CI pipelines for structural `workflow=\"scan\"`. When set, returns raw formatted output instead of normalized JSON."},
+            "report_style": {"type": "string", "enum": ["rich", "medium", "short"], "description": "Diagnostic report style for structural `workflow=\"scan\"`. Controls verbosity of diagnostic output."},
+            "before_lines": {"type": "integer", "description": "Context lines before each match for structural workflows. Mutually exclusive with `context_lines`.", "minimum": 0, "maximum": 20},
+            "after_lines": {"type": "integer", "description": "Context lines after each match for structural workflows. Mutually exclusive with `context_lines`.", "minimum": 0, "maximum": 20},
+            "builtin_rules": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Built-in ast-grep rules to activate for `workflow=\"scan\"`. Valid values: `unused-suppression` (reports stale ignore directives), `no-suppress-all` (reports suppress-all comments). Use `\"rule:severity\"` format to set severity (e.g. `\"unused-suppression:error\"`). Default severity is hint."
+            },
             "scope": {"type": "string", "description": "Scope for 'errors' action (archive|all).", "default": "archive"},
             "max_bytes": {"type": "integer", "description": "Maximum bytes to fetch for 'web' action.", "default": 500000},
             "timeout_secs": {"type": "integer", "description": "Timeout in seconds.", "default": 30}

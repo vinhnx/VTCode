@@ -1,0 +1,13 @@
+id: no-nullable-boolean
+language: Kotlin
+severity: hint
+message: Avoid `Boolean?`; use `Boolean` with a default value instead.
+note: |
+  Nullable `Boolean?` has three states (`true`, `false`, `null`) which
+  complicates control flow. Use `Boolean` with a default value of
+  `false` or `true`, or use an sealed class/enum for tri-state logic.
+rule:
+  pattern: ": Boolean?"
+files:
+  - "**/*.kt"
+  - "**/*.kts"

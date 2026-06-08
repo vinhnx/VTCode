@@ -1,0 +1,18 @@
+id: no-underscore-func-name
+valid:
+  - |
+      func handleRequest(w http.ResponseWriter, r *http.Request) {
+      }
+  - |
+      func getUserName(id int) string {
+          return ""
+      }
+invalid:
+  - |
+      func _helper() string {
+          return ""
+      }
+  - |
+      func get_user_name(id int) string {
+          return ""
+      }

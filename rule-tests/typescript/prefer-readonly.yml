@@ -1,0 +1,11 @@
+id: prefer-readonly
+valid:
+  - |
+      function getItems(): readonly string[] {
+          return ["a", "b"];
+      }
+invalid:
+  - |
+      function getItems(): string[] {
+          return ["a", "b"];
+      }

@@ -1,0 +1,17 @@
+id: no-any
+language: TypeScript
+severity: warning
+message: Avoid the `any` type; use `unknown` or specific types instead.
+note: |
+  The `any` type disables TypeScript's type checking and defeats the
+  purpose of using TypeScript. Use `unknown` for values with unknown
+  type, or define proper types/interfaces. `any` is acceptable during
+  migration or when interfacing with untyped third-party libraries.
+rule:
+  kind: type_annotation
+  pattern: ": any"
+files:
+  - "**/*.ts"
+  - "**/*.tsx"
+  - "!**/*.d.ts"
+  - "!**/examples/**"

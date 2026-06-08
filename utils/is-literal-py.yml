@@ -1,0 +1,11 @@
+id: is-literal
+language: Python
+severity: info
+rule:
+  any:
+    - kind: 'false'
+    - kind: 'true'
+    - kind: none
+    - kind: integer
+    - kind: float
+    - kind: string

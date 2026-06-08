@@ -1,0 +1,18 @@
+id: prefer-string-builder
+language: Go
+severity: hint
+message: Use `strings.Builder` instead of repeated string concatenation.
+note: |
+  Repeated string concatenation with `+` creates a new string on each
+  operation, resulting in O(n^2) memory allocation. `strings.Builder`
+  accumulates bytes in a buffer and produces the final string in one
+  allocation. This rule detects patterns like `$A + $B` where the result
+  is assigned to a string variable.
+rule:
+  pattern: $VAR = $VAR + $OTHER
+constraints:
+  VAR:
+    kind: identifier
+files:
+  - "**/*.go"
+  - "!**/*_test.go"

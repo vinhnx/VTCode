@@ -1,0 +1,9 @@
+id: no-puts-debug
+valid:
+  - |
+      Rails.logger.info("Processing request")
+invalid:
+  - |
+      puts "debug: #{value}"
+  - |
+      p user.inspect

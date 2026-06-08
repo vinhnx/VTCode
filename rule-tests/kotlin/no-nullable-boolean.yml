@@ -1,0 +1,7 @@
+id: no-nullable-boolean
+valid:
+  - |
+      val isEnabled: Boolean = true
+invalid:
+  - |
+      val isEnabled: Boolean? = null

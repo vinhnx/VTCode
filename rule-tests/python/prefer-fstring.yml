@@ -1,0 +1,10 @@
+id: prefer-fstring
+valid:
+  - |
+      name = "world"
+      msg = f"hello {name}"
+invalid:
+  - |
+      msg = "hello {}".format(name)
+  - |
+      msg = "hello %s" % name

@@ -1,0 +1,11 @@
+id: no-important
+valid:
+  - |
+      .header {
+          color: red;
+      }
+invalid:
+  - |
+      .header {
+          color: red !important;
+      }

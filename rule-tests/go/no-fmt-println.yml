@@ -1,0 +1,19 @@
+id: no-fmt-println
+valid:
+  - |
+      func main() {
+          slog.Info("hello", "key", "value")
+      }
+  - |
+      func main() {
+          log.Printf("started on port %d", port)
+      }
+invalid:
+  - |
+      func main() {
+          fmt.Println("hello")
+      }
+  - |
+      func main() {
+          fmt.Printf("value: %d\n", 42)
+      }

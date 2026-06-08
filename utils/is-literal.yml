@@ -1,0 +1,13 @@
+id: is-literal
+language: JavaScript
+severity: info
+rule:
+  any:
+    - kind: 'false'
+    - kind: undefined
+    - kind: 'null'
+    - kind: 'true'
+    - kind: regex
+    - kind: number
+    - kind: string
+    - kind: template_string

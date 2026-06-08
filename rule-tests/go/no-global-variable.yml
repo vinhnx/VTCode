@@ -1,0 +1,13 @@
+id: no-global-variable
+valid:
+  - |
+      const MaxRetries = 3
+  - |
+      func main() {
+          var count = 0
+      }
+invalid:
+  - |
+      var dbConnection *sql.DB
+  - |
+      var cache = make(map[string]string)

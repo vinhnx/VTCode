@@ -1,0 +1,19 @@
+id: no-malloc-free
+language: C
+severity: warning
+message: Manual `malloc`/`free` is error-prone; consider structured allocation patterns.
+note: |
+  Manual memory management with `malloc` and `free` is a common source of
+  memory leaks, double-frees, and use-after-free bugs. Consider using
+  arena allocators, ownership-tracking patterns, or compiler sanitizers
+  to reduce risk. In C++, prefer smart pointers (`std::unique_ptr`,
+  `std::shared_ptr`) over raw `malloc`/`free`.
+rule:
+  any:
+    - pattern: malloc($$$)
+    - pattern: calloc($$$)
+    - pattern: realloc($$$)
+    - pattern: free($$$)
+files:
+  - "**/*.c"
+  - "**/*.h"

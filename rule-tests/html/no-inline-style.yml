@@ -1,0 +1,7 @@
+id: no-inline-style
+valid:
+  - |
+      <div class="header">Hello</div>
+invalid:
+  - |
+      <div style="color: red;">Hello</div>

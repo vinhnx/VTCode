@@ -1,0 +1,18 @@
+id: no-puts-debug
+language: Ruby
+severity: warning
+message: Remove `puts`/`p` debug statements; use a logger instead.
+note: |
+  `puts` and `p` write directly to stdout and are not configurable for
+  log level, format, or destination. Use `Logger` or a structured logging
+  library for production code. Debug statements should be removed before
+  merging.
+rule:
+  any:
+    - pattern: puts $VAR
+    - pattern: p $VAR
+files:
+  - "**/*.rb"
+  - "!**/Rakefile"
+  - "!**/Gemfile"
+  - "!**/examples/**"

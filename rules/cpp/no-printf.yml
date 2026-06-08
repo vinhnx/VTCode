@@ -1,0 +1,19 @@
+id: no-printf
+language: Cpp
+severity: warning
+message: Use type-safe C++ I/O instead of `printf`/`fprintf`.
+note: |
+  `printf` and `fprintf` are not type-safe and can cause undefined behavior
+  with format string mismatches. In C++, use `std::cout`, `std::format`
+  (C++20), or a formatting library like `fmt` for type-safe output.
+rule:
+  any:
+    - pattern: printf($$$)
+    - pattern: fprintf($$$)
+    - pattern: sprintf($$$)
+    - pattern: snprintf($$$)
+files:
+  - "**/*.cpp"
+  - "**/*.cc"
+  - "**/*.cxx"
+  - "**/*.hpp"

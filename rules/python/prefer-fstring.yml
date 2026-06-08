@@ -1,0 +1,17 @@
+id: prefer-fstring
+language: Python
+severity: hint
+message: Prefer f-strings over `.format()` or `%` formatting.
+note: |
+  f-strings (Python 3.6+) are more readable and performant than
+  `.format()` or `%`-style formatting. They inline the expressions
+  directly in the string literal, making the output easier to read.
+rule:
+  any:
+    - pattern: '"{}" % $$$ARGS'
+    - pattern: "'{}' % $$$ARGS"
+    - pattern: '"$STR".format($$$ARGS)'
+    - pattern: "'$STR'.format($$$ARGS)"
+files:
+  - "**/*.py"
+  - "!**/examples/**"

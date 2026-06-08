@@ -1,0 +1,17 @@
+id: prefer-readonly
+language: TypeScript
+severity: hint
+message: Use `readonly` arrays for return types and parameters that should not be mutated.
+note: |
+  Returning mutable arrays allows callers to modify internal state
+  accidentally. Use `readonly $T[]` or `ReadonlyArray<T>` to signal
+  that the array should not be mutated. This improves API contracts
+  and prevents unintended side effects.
+rule:
+  any:
+    - pattern: "(): $T[]"
+    - pattern: "(): Array<$T>"
+files:
+  - "**/*.ts"
+  - "**/*.tsx"
+  - "!**/*.d.ts"

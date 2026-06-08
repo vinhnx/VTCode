@@ -1,0 +1,13 @@
+id: no-bare-except
+valid:
+  - |
+      try:
+          result = int(value)
+      except ValueError:
+          result = 0
+invalid:
+  - |
+      try:
+          result = int(value)
+      except:
+          result = 0

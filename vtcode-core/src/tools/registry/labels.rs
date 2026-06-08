@@ -62,6 +62,8 @@ pub fn tool_action_label(tool_name: &str, args: &Value) -> Cow<'static, str> {
                 "structural" => match workflow {
                     "scan" => Cow::Borrowed("Structural scan"),
                     "test" => Cow::Borrowed("Structural test"),
+                    "new" => Cow::Borrowed("Structural new"),
+                    "apply" => Cow::Borrowed("Structural apply"),
                     _ => Cow::Borrowed("Structural search"),
                 },
                 "tools" => Cow::Borrowed("List tools"),

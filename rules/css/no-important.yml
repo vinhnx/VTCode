@@ -1,0 +1,13 @@
+id: no-important
+language: Css
+severity: warning
+message: Avoid `!important` declarations; use specificity instead.
+note: |
+  `!important` overrides normal specificity rules and makes CSS harder to
+  maintain. Instead, increase selector specificity or restructure your CSS
+  to avoid conflicts. `!important` should only be used as a last resort
+  for utility classes that must override inline styles.
+rule:
+  pattern: $PROP: $VALUE !important
+files:
+  - "**/*.css"

@@ -1,0 +1,11 @@
+id: no-any
+valid:
+  - |
+      function process(input: unknown): string {
+          return String(input);
+      }
+invalid:
+  - |
+      function process(input: any): string {
+          return String(input);
+      }

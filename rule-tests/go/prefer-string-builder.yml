@@ -1,0 +1,16 @@
+id: prefer-string-builder
+valid:
+  - |
+      func build(parts []string) string {
+          var b strings.Builder
+          for _, p := range parts {
+              b.WriteString(p)
+          }
+          return b.String()
+      }
+invalid:
+  - |
+      func concat(a string, b string) string {
+          a = a + b
+          return a
+      }

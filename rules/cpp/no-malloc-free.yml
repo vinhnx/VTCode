@@ -1,0 +1,21 @@
+id: no-malloc-free
+language: Cpp
+severity: warning
+message: Use RAII and smart pointers instead of `malloc`/`free`.
+note: |
+  In C++, manual `malloc`/`free` bypasses constructors and destructors.
+  Use `std::make_unique` or `std::make_shared` for heap allocation, and
+  `std::vector` for dynamic arrays. Raw `malloc`/`free` should only
+  appear in low-level interoperability code.
+rule:
+  any:
+    - pattern: malloc($$$)
+    - pattern: calloc($$$)
+    - pattern: realloc($$$)
+    - pattern: free($$$)
+files:
+  - "**/*.cpp"
+  - "**/*.cc"
+  - "**/*.cxx"
+  - "**/*.hpp"
+  - "**/*.h"

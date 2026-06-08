@@ -1,0 +1,17 @@
+id: no-global-variable
+language: Go
+severity: warning
+message: Avoid package-level mutable variables; prefer dependency injection or constants.
+note: |
+  Package-level `var` declarations create global mutable state that makes code
+  harder to test and reason about. Prefer passing dependencies as function
+  parameters, using constants for immutable values, or encapsulating state in
+  structs. This rule excludes test files and init-only variables.
+rule:
+  kind: var_declaration
+  inside:
+    kind: source_file
+files:
+  - "**/*.go"
+  - "!**/*_test.go"
+  - "!**/examples/**"

@@ -8,7 +8,7 @@ use tokio::io::{AsyncWriteExt, BufWriter};
 
 use super::PatchError;
 
-pub(super) struct AtomicWriter {
+pub(crate) struct AtomicWriter {
     path: PathBuf,
     temp_path: PathBuf,
     writer: BufWriter<fs::File>,
@@ -16,7 +16,7 @@ pub(super) struct AtomicWriter {
 }
 
 impl AtomicWriter {
-    pub(super) async fn create(
+    pub(crate) async fn create(
         path: &Path,
         permissions: Option<Permissions>,
     ) -> Result<Self, PatchError> {
@@ -47,7 +47,7 @@ impl AtomicWriter {
         })
     }
 
-    pub(super) async fn write_all(&mut self, bytes: &[u8]) -> Result<(), PatchError> {
+    pub(crate) async fn write_all(&mut self, bytes: &[u8]) -> Result<(), PatchError> {
         self.writer
             .write_all(bytes)
             .await
@@ -58,7 +58,7 @@ impl AtomicWriter {
             })
     }
 
-    pub(super) async fn commit(mut self) -> Result<(), PatchError> {
+    pub(crate) async fn commit(mut self) -> Result<(), PatchError> {
         self.writer.flush().await.map_err(|err| PatchError::Io {
             action: "flush",
             path: self.temp_path.clone(),
@@ -89,7 +89,7 @@ impl AtomicWriter {
         }
     }
 
-    pub(super) async fn rollback(self) -> Result<(), PatchError> {
+    pub(crate) async fn rollback(self) -> Result<(), PatchError> {
         drop(self.writer);
         match fs::remove_file(&self.temp_path).await {
             Ok(()) => Ok(()),

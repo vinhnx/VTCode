@@ -1,0 +1,11 @@
+id: prefer-errors-is
+valid:
+  - |
+      if errors.Is(err, os.ErrNotExist) {
+          return nil
+      }
+invalid:
+  - |
+      if err == os.ErrNotExist {
+          return nil
+      }

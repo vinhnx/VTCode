@@ -1,0 +1,15 @@
+id: no-bare-except
+language: Python
+severity: warning
+message: Avoid bare `except:` clauses; catch specific exceptions.
+note: |
+  Bare `except:` catches all exceptions including `SystemExit`,
+  `KeyboardInterrupt`, and `GeneratorExit`, making it hard to interrupt
+  programs and hiding bugs. Catch specific exceptions like
+  `except ValueError:` or use `except Exception:` as a last resort.
+rule:
+  kind: except_clause
+  pattern: "except:"
+files:
+  - "**/*.py"
+  - "!**/examples/**"

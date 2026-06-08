@@ -1,0 +1,9 @@
+id: no-printf
+valid:
+  - |
+      std::cout << "hello" << std::endl;
+invalid:
+  - |
+      printf("value: %d\n", 42);
+  - |
+      fprintf(stderr, "error: %s\n", msg);

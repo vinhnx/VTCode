@@ -1,0 +1,11 @@
+id: no-malloc-free
+valid:
+  - |
+      auto p = std::make_unique<int>(42);
+  - |
+      std::vector<int> v(10);
+invalid:
+  - |
+      int *p = (int *)malloc(sizeof(int) * 10);
+  - |
+      free(ptr);

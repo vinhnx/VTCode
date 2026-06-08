@@ -1,11 +1,13 @@
 use super::{
     AstGrepByteOffset, AstGrepLabel, AstGrepMatch, AstGrepMetaVar, AstGrepMetaVariables,
-    AstGrepPoint, AstGrepRange, AstGrepRewriteMatch, AstGrepScanFinding, FixConfig, FixExpandRule,
-    StructuralSearchRequest, StructuralWorkflow, build_atomic_rule_yaml, build_fixconfig_rule_yaml,
-    build_query_result, execute_structural_search, extract_custom_languages,
-    extract_language_globs, extract_language_injections, format_ast_grep_failure, normalize_match,
+    AstGrepPoint, AstGrepRange, AstGrepRewriteMatch, AstGrepScanFinding, AstGrepSeverity,
+    FixConfig, FixExpandRule, StructuralSearchRequest, StructuralWorkflow, build_atomic_rule_yaml,
+    build_fixconfig_rule_yaml, build_query_result, build_scan_result, build_scan_summary,
+    execute_structural_search, extract_custom_languages, extract_language_globs,
+    extract_language_injections, extract_rule_summary, format_ast_grep_failure, normalize_match,
     normalize_rewrite_match, normalize_scan_finding, parse_compact_matches,
-    preflight_parseable_pattern, sanitize_pattern_for_tree_sitter, yaml_escape_scalar,
+    parse_test_failure_details, parse_test_rule_results, preflight_parseable_pattern,
+    sanitize_pattern_for_tree_sitter, yaml_escape_scalar,
 };
 use crate::tools::ast_grep_binary::AST_GREP_INSTALL_COMMAND;
 use crate::tools::editing::patch::set_ast_grep_binary_override_for_tests;
@@ -576,27 +578,30 @@ fn structural_request_rejects_raw_run_only_flags() {
 }
 
 #[test]
-fn structural_request_rejects_hyphenated_raw_run_only_flags() {
-    let err = StructuralSearchRequest::from_args(&json!({
+fn structural_request_accepts_no_ignore_flag() {
+    let request = StructuralSearchRequest::from_args(&json!({
         "action": "structural",
         "pattern": "fn $NAME() {}",
-        "no-ignore": "hidden"
+        "no-ignore": ["hidden", "dot"]
     }))
-    .expect_err("hyphenated raw run-only flags should be rejected");
+    .expect("no_ignore should be accepted");
 
-    assert!(err.to_string().contains("remove `no_ignore`"));
+    assert_eq!(
+        request.no_ignore.as_ref().unwrap(),
+        &vec!["hidden".to_string(), "dot".to_string()]
+    );
 }
 
 #[test]
-fn structural_request_rejects_scan_output_format_flags() {
-    let err = StructuralSearchRequest::from_args(&json!({
+fn structural_request_accepts_format_for_scan() {
+    let request = StructuralSearchRequest::from_args(&json!({
         "action": "structural",
         "workflow": "scan",
         "format": "sarif"
     }))
-    .expect_err("scan-only output flags should be rejected");
+    .expect("format should be accepted for scan");
 
-    assert!(err.to_string().contains("remove `format`"));
+    assert_eq!(request.format.as_deref(), Some("sarif"));
 }
 
 #[test]
@@ -612,27 +617,39 @@ fn structural_request_rejects_scan_severity_override_flags() {
 }
 
 #[test]
-fn structural_request_rejects_test_only_snapshot_flags() {
-    let err = StructuralSearchRequest::from_args(&json!({
+fn structural_request_accepts_snapshot_dir_for_test() {
+    let request = StructuralSearchRequest::from_args(&json!({
         "action": "structural",
         "workflow": "test",
         "snapshot_dir": "__snapshots__"
     }))
-    .expect_err("test-only snapshot flags should be rejected");
+    .expect("test should accept snapshot_dir");
 
-    assert!(err.to_string().contains("remove `snapshot_dir`"));
+    assert_eq!(request.snapshot_dir.as_deref(), Some("__snapshots__"));
 }
 
 #[test]
-fn structural_request_rejects_test_only_include_off_flag() {
-    let err = StructuralSearchRequest::from_args(&json!({
+fn structural_request_accepts_include_off_for_test() {
+    let request = StructuralSearchRequest::from_args(&json!({
         "action": "structural",
         "workflow": "test",
         "include_off": true
     }))
-    .expect_err("test include-off flag should be rejected");
+    .expect("test should accept include_off");
 
-    assert!(err.to_string().contains("remove `include_off`"));
+    assert_eq!(request.include_off, Some(true));
+}
+
+#[test]
+fn structural_request_accepts_test_dir_for_test() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "test",
+        "test_dir": "custom-tests"
+    }))
+    .expect("test should accept test_dir");
+
+    assert_eq!(request.test_dir.as_deref(), Some("custom-tests"));
 }
 
 #[test]
@@ -1532,6 +1549,14 @@ async fn structural_test_returns_stdout_stderr_and_summary() {
     assert_eq!(result["summary"]["passed_cases"], 1);
     assert_eq!(result["summary"]["failed_cases"], 1);
     assert_eq!(result["summary"]["total_cases"], 2);
+
+    // Verify per-rule results are parsed.
+    let rules = result["summary"]["rules"].as_array().expect("rules array");
+    assert_eq!(rules.len(), 2);
+    assert_eq!(rules[0]["rule_id"], "rust/no-iterator-for-each");
+    assert_eq!(rules[0]["passed"], true);
+    assert_eq!(rules[1]["rule_id"], "rust/for-each-snapshot");
+    assert_eq!(rules[1]["passed"], false);
 
     let args = fs::read_to_string(args_path).expect("read sg args");
     assert!(args.lines().any(|line| line == "test"));
@@ -3257,7 +3282,7 @@ fn build_fixconfig_rule_yaml_generates_correct_structure() {
         }),
     };
 
-    let yaml = build_fixconfig_rule_yaml("$KEY: $VAL", "javascript", &fix_config, None);
+    let yaml = build_fixconfig_rule_yaml("$KEY: $VAL", "javascript", &fix_config, None, None);
 
     assert!(yaml.contains("id: fixconfig-rewrite"), "yaml: {yaml}");
     assert!(yaml.contains("language: javascript"), "yaml: {yaml}");
@@ -3291,6 +3316,7 @@ fn build_fixconfig_rule_yaml_includes_selector() {
         "javascript",
         &fix_config,
         Some("call_expression"),
+        None,
     );
 
     assert!(yaml.contains("pattern: foo($ARG)"), "yaml: {yaml}");
@@ -3649,7 +3675,7 @@ fn build_fixconfig_rule_yaml_renders_stop_by_object() {
             stop_by: Some(json!({ "kind": "," })),
         }),
     };
-    let yaml = build_fixconfig_rule_yaml("$ITEM", "javascript", &fix_config, None);
+    let yaml = build_fixconfig_rule_yaml("$ITEM", "javascript", &fix_config, None, None);
 
     assert!(yaml.contains("expandEnd:"), "yaml: {yaml}");
     assert!(yaml.contains("regex: ','"), "yaml: {yaml}");
@@ -3669,7 +3695,7 @@ fn build_fixconfig_rule_yaml_renders_stop_by_string() {
         }),
         expand_end: None,
     };
-    let yaml = build_fixconfig_rule_yaml("$ITEM", "javascript", &fix_config, None);
+    let yaml = build_fixconfig_rule_yaml("$ITEM", "javascript", &fix_config, None, None);
 
     assert!(yaml.contains("expandStart:"), "yaml: {yaml}");
     assert!(yaml.contains("stopBy: line"), "yaml: {yaml}");
@@ -4483,4 +4509,2133 @@ fn relational_rule_input_deserializes_follows_and_precedes() {
     .expect("should deserialize");
     assert!(request.follows.is_some());
     assert!(request.precedes.is_some());
+}
+
+// --- interactive / update_all flag tests ---
+
+#[test]
+fn structural_request_accepts_interactive_for_test() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "test",
+        "interactive": true
+    }))
+    .expect("interactive should be accepted for test workflow");
+
+    assert_eq!(request.workflow, StructuralWorkflow::Test);
+}
+
+#[test]
+fn structural_request_accepts_update_all_for_test() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "test",
+        "update_all": true
+    }))
+    .expect("update_all should be accepted for test workflow");
+
+    assert_eq!(request.workflow, StructuralWorkflow::Test);
+}
+
+#[test]
+fn structural_request_rejects_interactive_for_query() {
+    let err = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "pattern": "fn $NAME() {}",
+        "interactive": true
+    }))
+    .expect_err("interactive should be rejected for query workflow");
+
+    assert!(err.to_string().contains("does not accept `interactive`"));
+}
+
+#[test]
+fn structural_request_rejects_update_all_for_query() {
+    let err = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "pattern": "fn $NAME() {}",
+        "update_all": true
+    }))
+    .expect_err("update_all should be rejected for query workflow");
+
+    assert!(err.to_string().contains("does not accept `update_all`"));
+}
+
+#[test]
+fn structural_request_rejects_interactive_for_scan() {
+    let err = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "scan",
+        "interactive": true
+    }))
+    .expect_err("interactive should be rejected for scan workflow");
+
+    assert!(err.to_string().contains("does not accept `interactive`"));
+}
+
+#[test]
+fn structural_request_rejects_update_all_for_scan() {
+    let err = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "scan",
+        "update_all": true
+    }))
+    .expect_err("update_all should be rejected for scan workflow");
+
+    assert!(err.to_string().contains("does not accept `update_all`"));
+}
+
+#[test]
+fn structural_request_rejects_interactive_for_rewrite() {
+    let err = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "pattern": "let a = 1",
+        "rewrite": "const a = 1",
+        "lang": "javascript",
+        "interactive": true
+    }))
+    .expect_err("interactive should be rejected for rewrite workflow");
+
+    assert!(err.to_string().contains("does not accept `interactive`"));
+}
+
+#[test]
+fn structural_request_rejects_update_all_for_rewrite() {
+    let err = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "pattern": "let a = 1",
+        "rewrite": "const a = 1",
+        "lang": "javascript",
+        "update_all": true
+    }))
+    .expect_err("update_all should be rejected for rewrite workflow");
+
+    assert!(err.to_string().contains("does not accept `update_all`"));
+}
+
+#[test]
+fn structural_request_rejects_interactive_for_inspect() {
+    let err = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "inspect",
+        "interactive": true
+    }))
+    .expect_err("interactive should be rejected for inspect workflow");
+
+    assert!(err.to_string().contains("does not accept `interactive`"));
+}
+
+#[test]
+fn structural_request_rejects_update_all_for_inspect() {
+    let err = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "inspect",
+        "update_all": true
+    }))
+    .expect_err("update_all should be rejected for inspect workflow");
+
+    assert!(err.to_string().contains("does not accept `update_all`"));
+}
+
+#[test]
+fn structural_request_rejects_snapshot_dir_for_query() {
+    let err = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "pattern": "fn $NAME() {}",
+        "snapshot_dir": "__snapshots__"
+    }))
+    .expect_err("snapshot_dir should be rejected for query workflow");
+
+    assert!(err.to_string().contains("does not accept `snapshot_dir`"));
+}
+
+#[test]
+fn structural_request_rejects_snapshot_dir_for_scan() {
+    let err = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "scan",
+        "snapshot_dir": "__snapshots__"
+    }))
+    .expect_err("snapshot_dir should be rejected for scan workflow");
+
+    assert!(err.to_string().contains("does not accept `snapshot_dir`"));
+}
+
+#[test]
+fn structural_request_rejects_snapshot_dir_for_inspect() {
+    let err = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "inspect",
+        "snapshot_dir": "__snapshots__"
+    }))
+    .expect_err("snapshot_dir should be rejected for inspect workflow");
+
+    assert!(err.to_string().contains("does not accept `snapshot_dir`"));
+}
+
+#[test]
+fn structural_request_rejects_test_dir_for_query() {
+    let err = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "pattern": "fn $NAME() {}",
+        "test_dir": "my-tests"
+    }))
+    .expect_err("test_dir should be rejected for query workflow");
+
+    assert!(err.to_string().contains("does not accept `test_dir`"));
+}
+
+#[test]
+fn structural_request_rejects_test_dir_for_scan() {
+    let err = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "scan",
+        "test_dir": "my-tests"
+    }))
+    .expect_err("test_dir should be rejected for scan workflow");
+
+    assert!(err.to_string().contains("does not accept `test_dir`"));
+}
+
+#[test]
+fn structural_request_rejects_test_dir_for_rewrite() {
+    let err = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "pattern": "let a = 1",
+        "rewrite": "const a = 1",
+        "lang": "javascript",
+        "test_dir": "my-tests"
+    }))
+    .expect_err("test_dir should be rejected for rewrite workflow");
+
+    assert!(err.to_string().contains("does not accept `test_dir`"));
+}
+
+#[test]
+fn structural_request_rejects_include_off_for_query() {
+    let err = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "pattern": "fn $NAME() {}",
+        "include_off": true
+    }))
+    .expect_err("include_off should be rejected for query workflow");
+
+    assert!(err.to_string().contains("does not accept `include_off`"));
+}
+
+#[test]
+fn structural_request_rejects_include_off_for_scan() {
+    let err = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "scan",
+        "include_off": true
+    }))
+    .expect_err("include_off should be rejected for scan workflow");
+
+    assert!(err.to_string().contains("does not accept `include_off`"));
+}
+
+#[test]
+fn structural_request_rejects_include_off_for_inspect() {
+    let err = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "inspect",
+        "include_off": true
+    }))
+    .expect_err("include_off should be rejected for inspect workflow");
+
+    assert!(err.to_string().contains("does not accept `include_off`"));
+}
+
+// --- per-rule result parsing tests ---
+
+#[test]
+fn parse_test_rule_results_parses_pass_and_fail() {
+    let stdout = "\
+Running 3 tests
+PASS rust/no-iterator-for-each .....
+PASS rust/prefer-retain ............
+FAIL rust/for-each-snapshot ...N..M
+test result: failed. 2 passed; 1 failed;";
+
+    let results = parse_test_rule_results(stdout);
+    assert_eq!(results.len(), 3);
+
+    assert_eq!(results[0].rule_id, "rust/no-iterator-for-each");
+    assert!(results[0].passed);
+    assert!(results[0].markers.is_empty());
+
+    assert_eq!(results[1].rule_id, "rust/prefer-retain");
+    assert!(results[1].passed);
+    assert!(results[1].markers.is_empty());
+
+    assert_eq!(results[2].rule_id, "rust/for-each-snapshot");
+    assert!(!results[2].passed);
+    assert_eq!(results[2].markers, vec!["noisy", "missing"]);
+}
+
+#[test]
+fn parse_test_rule_results_handles_empty_output() {
+    let results = parse_test_rule_results("");
+    assert!(results.is_empty());
+}
+
+#[test]
+fn parse_test_rule_results_ignores_non_rule_lines() {
+    let stdout = "\
+Running 2 tests
+some random output
+PASS rust/foo ..
+test result: ok. 1 passed; 0 failed;";
+
+    let results = parse_test_rule_results(stdout);
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].rule_id, "rust/foo");
+}
+
+#[test]
+fn parse_test_rule_results_handles_noisy_only() {
+    let stdout = "FAIL python/no-print .N";
+
+    let results = parse_test_rule_results(stdout);
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].rule_id, "python/no-print");
+    assert!(!results[0].passed);
+    assert_eq!(results[0].markers, vec!["noisy"]);
+}
+
+#[test]
+fn parse_test_rule_results_handles_missing_only() {
+    let stdout = "FAIL python/no-print .M";
+
+    let results = parse_test_rule_results(stdout);
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].rule_id, "python/no-print");
+    assert!(!results[0].passed);
+    assert_eq!(results[0].markers, vec!["missing"]);
+}
+
+// --- failure detail parsing tests ---
+
+#[test]
+fn parse_test_failure_details_parses_noisy_and_missing() {
+    let stdout = "\
+----------- Failure Details -----------
+[Noisy] Expect no-await-in-loop to report no issue, but some issues found in:
+
+  async function foo() { for (var bar of baz) await bar; }
+
+[Missing] Expect rule no-await-in-loop to report issues, but none found in:
+
+  for (let a of b) { console.log(a) }";
+
+    let details = parse_test_failure_details(stdout, "");
+    assert_eq!(details.len(), 2);
+
+    assert_eq!(details[0]["type"], "noisy");
+    assert_eq!(details[0]["rule_id"], "no-await-in-loop");
+    assert!(
+        details[0]["code_snippet"]
+            .as_str()
+            .unwrap()
+            .contains("await bar")
+    );
+
+    assert_eq!(details[1]["type"], "missing");
+    assert_eq!(details[1]["rule_id"], "no-await-in-loop");
+    assert!(
+        details[1]["code_snippet"]
+            .as_str()
+            .unwrap()
+            .contains("console.log")
+    );
+}
+
+#[test]
+fn parse_test_failure_details_handles_empty_input() {
+    let details = parse_test_failure_details("", "");
+    assert!(details.is_empty());
+}
+
+#[test]
+fn parse_test_failure_details_parses_from_stderr() {
+    let stderr = "\
+[Noisy] Expect no-print to report no issue, but some issues found in:
+
+  print(\"debug output\")";
+
+    let details = parse_test_failure_details("", stderr);
+    assert_eq!(details.len(), 1);
+    assert_eq!(details[0]["type"], "noisy");
+    assert_eq!(details[0]["rule_id"], "no-print");
+    assert!(
+        details[0]["code_snippet"]
+            .as_str()
+            .unwrap()
+            .contains("print")
+    );
+}
+
+// --- command flag passing tests ---
+
+#[tokio::test]
+#[serial]
+async fn structural_test_passes_interactive_flag() {
+    let temp = TempDir::new().expect("workspace tempdir");
+    fs::write(temp.path().join("sgconfig.yml"), "ruleDirs: []\n").expect("write config");
+    let args_path = temp.path().join("sg_args.txt");
+    let script = format!(
+        "#!/bin/sh\nprintf '%s\n' \"$@\" > \"{}\"\nprintf 'Running 0 tests\\ntest result: ok. 0 passed; 0 failed;'\n",
+        args_path.display(),
+    );
+    let (_script_dir, script_path) = write_fake_sg(&script);
+
+    let _override = set_ast_grep_binary_override_for_tests(Some(script_path));
+    execute_structural_search(
+        temp.path(),
+        json!({
+            "action": "structural",
+            "workflow": "test",
+            "interactive": true
+        }),
+    )
+    .await
+    .expect("test workflow should succeed");
+
+    let args = fs::read_to_string(args_path).expect("read sg args");
+    assert!(
+        args.lines().any(|line| line == "--interactive"),
+        "expected --interactive in args: {args}"
+    );
+}
+
+#[tokio::test]
+#[serial]
+async fn structural_test_passes_update_all_flag() {
+    let temp = TempDir::new().expect("workspace tempdir");
+    fs::write(temp.path().join("sgconfig.yml"), "ruleDirs: []\n").expect("write config");
+    let args_path = temp.path().join("sg_args.txt");
+    let script = format!(
+        "#!/bin/sh\nprintf '%s\n' \"$@\" > \"{}\"\nprintf 'Running 0 tests\\ntest result: ok. 0 passed; 0 failed;'\n",
+        args_path.display(),
+    );
+    let (_script_dir, script_path) = write_fake_sg(&script);
+
+    let _override = set_ast_grep_binary_override_for_tests(Some(script_path));
+    execute_structural_search(
+        temp.path(),
+        json!({
+            "action": "structural",
+            "workflow": "test",
+            "update_all": true
+        }),
+    )
+    .await
+    .expect("test workflow should succeed");
+
+    let args = fs::read_to_string(args_path).expect("read sg args");
+    assert!(
+        args.lines().any(|line| line == "--update-all"),
+        "expected --update-all in args: {args}"
+    );
+}
+
+// --- enhanced test summary tests ---
+
+#[tokio::test]
+#[serial]
+async fn structural_test_enriched_summary_with_rules_and_failures() {
+    let temp = TempDir::new().expect("workspace tempdir");
+    fs::write(temp.path().join("sgconfig.yml"), "ruleDirs: []\n").expect("write config");
+    let args_path = temp.path().join("sg_args.txt");
+    let script = format!(
+        "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"{}\"\n\
+printf '\\033[32mRunning 3 tests\\033[0m\\nPASS rust/no-iterator-for-each .....\\nPASS rust/prefer-retain ............\\nFAIL rust/for-each-snapshot ...N..M\\ntest result: failed. 2 passed; 1 failed;\\n----------- Failure Details -----------\\n[Noisy] Expect rust/for-each-snapshot to report no issue, but some issues found in:\\n\\n  for (let x of arr) {{ await x; }}\\n\\n[Missing] Expect rule rust/for-each-snapshot to report issues, but none found in:\\n\\n  arr.forEach(x => console.log(x))\\n'\n\
+exit 1\n",
+        args_path.display(),
+    );
+    let (_script_dir, script_path) = write_fake_sg(&script);
+
+    let _override = set_ast_grep_binary_override_for_tests(Some(script_path));
+    let result = execute_structural_search(
+        temp.path(),
+        json!({
+            "action": "structural",
+            "workflow": "test",
+            "skip_snapshot_tests": true
+        }),
+    )
+    .await
+    .expect("test workflow should return structured result");
+
+    assert_eq!(result["passed"], false);
+    assert_eq!(result["summary"]["status"], "failed");
+    assert_eq!(result["summary"]["passed_cases"], 2);
+    assert_eq!(result["summary"]["failed_cases"], 1);
+
+    let rules = result["summary"]["rules"].as_array().expect("rules array");
+    assert_eq!(rules.len(), 3);
+    assert_eq!(rules[0]["rule_id"], "rust/no-iterator-for-each");
+    assert_eq!(rules[0]["passed"], true);
+    assert!(rules[0]["markers"].as_array().unwrap().is_empty());
+    assert_eq!(rules[2]["rule_id"], "rust/for-each-snapshot");
+    assert_eq!(rules[2]["passed"], false);
+    assert_eq!(rules[2]["markers"][0], "noisy");
+    assert_eq!(rules[2]["markers"][1], "missing");
+
+    let failures = result["summary"]["failure_details"]
+        .as_array()
+        .expect("failure_details array");
+    assert_eq!(failures.len(), 2);
+    assert_eq!(failures[0]["type"], "noisy");
+    assert_eq!(failures[0]["rule_id"], "rust/for-each-snapshot");
+    assert!(
+        failures[0]["code_snippet"]
+            .as_str()
+            .unwrap()
+            .contains("await x")
+    );
+    assert_eq!(failures[1]["type"], "missing");
+    assert_eq!(failures[1]["rule_id"], "rust/for-each-snapshot");
+    assert!(
+        failures[1]["code_snippet"]
+            .as_str()
+            .unwrap()
+            .contains("forEach")
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Composite rule validation tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn validate_query_accepts_matches_with_lang() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "query",
+        "lang": "javascript",
+        "matches": "is-literal"
+    }));
+    assert!(
+        request.is_ok(),
+        "query should accept `matches` with `lang`: {:?}",
+        request.err()
+    );
+}
+
+#[test]
+fn validate_query_accepts_all_composite() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "query",
+        "lang": "rust",
+        "all": [
+            { "kind": "function_item" },
+            { "has": { "kind": "unsafe_block" } }
+        ]
+    }));
+    assert!(
+        request.is_ok(),
+        "query should accept `all` composite: {:?}",
+        request.err()
+    );
+}
+
+#[test]
+fn validate_query_accepts_any_composite() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "query",
+        "lang": "python",
+        "any": [
+            { "pattern": "print($$$)" },
+            { "pattern": "pprint($$$)" }
+        ]
+    }));
+    assert!(
+        request.is_ok(),
+        "query should accept `any` composite: {:?}",
+        request.err()
+    );
+}
+
+#[test]
+fn validate_query_requires_lang_for_matches() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "query",
+        "matches": "is-literal"
+    }));
+    let err = request.expect_err("matches without lang should fail");
+    assert!(err.to_string().contains("requires `lang`"), "{err}");
+}
+
+#[test]
+fn validate_query_requires_lang_for_all() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "query",
+        "all": [{ "kind": "function_item" }]
+    }));
+    let err = request.expect_err("all without lang should fail");
+    assert!(err.to_string().contains("requires `lang`"), "{err}");
+}
+
+#[test]
+fn validate_query_requires_lang_for_any() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "query",
+        "any": [{ "pattern": "foo()" }]
+    }));
+    let err = request.expect_err("any without lang should fail");
+    assert!(err.to_string().contains("requires `lang`"), "{err}");
+}
+
+#[test]
+fn validate_query_accepts_utils_with_matches() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "query",
+        "lang": "javascript",
+        "matches": "is-literal",
+        "utils": {
+            "is-literal": {
+                "any": [
+                    { "kind": "number" },
+                    { "kind": "string" }
+                ]
+            }
+        }
+    }));
+    assert!(
+        request.is_ok(),
+        "query should accept `utils` with `matches`: {:?}",
+        request.err()
+    );
+}
+
+#[test]
+fn validate_scan_rejects_composite_rules() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "scan",
+        "matches": "is-literal"
+    }));
+    let err = request.expect_err("scan should reject composite rules");
+    assert!(
+        err.to_string().contains("does not accept composite"),
+        "{err}"
+    );
+}
+
+#[test]
+fn validate_scan_rejects_all_composite() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "scan",
+        "all": [{ "kind": "function_item" }]
+    }));
+    let err = request.expect_err("scan should reject all composite");
+    assert!(
+        err.to_string().contains("does not accept composite"),
+        "{err}"
+    );
+}
+
+#[test]
+fn validate_test_rejects_composite_rules() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "test",
+        "any": [{ "pattern": "foo()" }]
+    }));
+    let err = request.expect_err("test should reject composite rules");
+    assert!(
+        err.to_string().contains("does not accept composite"),
+        "{err}"
+    );
+}
+
+#[test]
+fn validate_inspect_rejects_composite_rules() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "inspect",
+        "utils": { "foo": { "kind": "identifier" } }
+    }));
+    let err = request.expect_err("inspect should reject composite rules");
+    assert!(
+        err.to_string().contains("does not accept composite"),
+        "{err}"
+    );
+}
+
+#[test]
+fn validate_rewrite_rejects_composite_rules() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "rewrite",
+        "pattern": "foo()",
+        "rewrite": "bar()",
+        "lang": "typescript",
+        "matches": "is-literal"
+    }));
+    let err = request.expect_err("rewrite should reject composite rules");
+    assert!(
+        err.to_string().contains("does not accept composite"),
+        "{err}"
+    );
+}
+
+#[test]
+fn validate_count_accepts_matches() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "count",
+        "lang": "javascript",
+        "matches": "is-literal"
+    }));
+    assert!(
+        request.is_ok(),
+        "count should accept `matches`: {:?}",
+        request.err()
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Composite rule YAML generation tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn build_atomic_rule_yaml_emits_matches() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "query",
+        "lang": "javascript",
+        "matches": "is-literal"
+    }))
+    .expect("valid request");
+
+    let yaml = build_atomic_rule_yaml(&request, "javascript");
+    assert!(
+        yaml.contains("matches:"),
+        "should contain matches key: {yaml}"
+    );
+    assert!(
+        yaml.contains("is-literal"),
+        "should contain utility name: {yaml}"
+    );
+}
+
+#[test]
+fn build_atomic_rule_yaml_emits_all_composite() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "query",
+        "lang": "rust",
+        "all": [
+            { "kind": "function_item" },
+            { "has": { "kind": "unsafe_block" } }
+        ]
+    }))
+    .expect("valid request");
+
+    let yaml = build_atomic_rule_yaml(&request, "rust");
+    assert!(yaml.contains("all:\n"), "{yaml}");
+    assert!(yaml.contains("kind: function_item\n"), "{yaml}");
+    assert!(yaml.contains("has:\n"), "{yaml}");
+    assert!(yaml.contains("kind: unsafe_block\n"), "{yaml}");
+}
+
+#[test]
+fn build_atomic_rule_yaml_emits_any_with_string_patterns() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "query",
+        "lang": "python",
+        "any": [
+            "print($$$)",
+            "pprint($$$)"
+        ]
+    }))
+    .expect("valid request");
+
+    let yaml = build_atomic_rule_yaml(&request, "python");
+    assert!(yaml.contains("any:\n"), "{yaml}");
+    assert!(yaml.contains("pattern: print($$$)\n"), "{yaml}");
+    assert!(yaml.contains("pattern: pprint($$$)\n"), "{yaml}");
+}
+
+#[test]
+fn build_atomic_rule_yaml_emits_not() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "query",
+        "lang": "typescript",
+        "kind": "call_expression",
+        "not": { "pattern": "console.log($$$)" }
+    }))
+    .expect("valid request");
+
+    let yaml = build_atomic_rule_yaml(&request, "typescript");
+    assert!(yaml.contains("not:\n"), "{yaml}");
+    assert!(yaml.contains("pattern: console.log($$$)\n"), "{yaml}");
+}
+
+#[test]
+fn build_atomic_rule_yaml_emits_not_string_pattern() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "query",
+        "lang": "typescript",
+        "kind": "call_expression",
+        "not": "console.log($$$)"
+    }))
+    .expect("valid request");
+
+    let yaml = build_atomic_rule_yaml(&request, "typescript");
+    assert!(yaml.contains("not:\n"), "{yaml}");
+    assert!(yaml.contains("pattern: console.log($$$)\n"), "{yaml}");
+}
+
+#[test]
+fn build_atomic_rule_yaml_emits_utils_section() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "query",
+        "lang": "javascript",
+        "matches": "is-literal",
+        "utils": {
+            "is-literal": {
+                "any": [
+                    { "kind": "number" },
+                    { "kind": "string" }
+                ]
+            }
+        }
+    }))
+    .expect("valid request");
+
+    let yaml = build_atomic_rule_yaml(&request, "javascript");
+    assert!(yaml.contains("utils:\n"), "{yaml}");
+    assert!(yaml.contains("is-literal:\n"), "{yaml}");
+    assert!(yaml.contains("any:\n"), "{yaml}");
+    assert!(yaml.contains("kind: number\n"), "{yaml}");
+    assert!(yaml.contains("kind: string\n"), "{yaml}");
+    // utils section should appear before rule section
+    let utils_pos = yaml.find("utils:").expect("utils section");
+    let rule_pos = yaml.find("rule:").expect("rule section");
+    assert!(
+        utils_pos < rule_pos,
+        "utils section should appear before rule section: {yaml}"
+    );
+}
+
+#[test]
+fn build_atomic_rule_yaml_emits_matches_with_relational() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "query",
+        "lang": "rust",
+        "matches": "if-no-else",
+        "has": {
+            "field": "consequence",
+            "kind": "block"
+        }
+    }))
+    .expect("valid request");
+
+    let yaml = build_atomic_rule_yaml(&request, "rust");
+    assert!(
+        yaml.contains("matches:"),
+        "should contain matches key: {yaml}"
+    );
+    assert!(
+        yaml.contains("if-no-else"),
+        "should contain utility name: {yaml}"
+    );
+    assert!(yaml.contains("has:\n"), "{yaml}");
+    assert!(yaml.contains("field: consequence\n"), "{yaml}");
+    assert!(yaml.contains("kind: block\n"), "{yaml}");
+}
+
+// ---------------------------------------------------------------------------
+// extract_rule_summary tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn extract_rule_summary_extracts_utils_keys() {
+    let content = r#"id: let-chain-candidate
+language: Rust
+severity: hint
+message: Nested if/if let can be collapsed.
+utils:
+  sole-child:
+    all:
+      - nthChild: 1
+      - nthChild:
+          position: 1
+          reverse: true
+  if-no-else:
+    kind: if_expression
+    not:
+      has:
+        field: alternative
+        kind: else_clause
+rule:
+  matches: if-no-else
+"#;
+    let path = Path::new("let-chain-candidate.yml");
+    let summary = extract_rule_summary(content, path).expect("should extract");
+    assert_eq!(summary["id"], "let-chain-candidate");
+    assert_eq!(summary["language"], "Rust");
+    let utils = summary["utils"].as_array().expect("utils array");
+    assert_eq!(utils.len(), 2);
+    assert!(utils.contains(&serde_json::Value::String("sole-child".to_string())));
+    assert!(utils.contains(&serde_json::Value::String("if-no-else".to_string())));
+}
+
+#[test]
+fn extract_rule_summary_no_utils_when_absent() {
+    let content = r#"id: no-eval
+language: JavaScript
+severity: error
+message: Do not use eval.
+rule:
+  pattern: eval($$$)
+"#;
+    let path = Path::new("no-eval.yml");
+    let summary = extract_rule_summary(content, path).expect("should extract");
+    assert_eq!(summary["id"], "no-eval");
+    assert!(
+        summary.get("utils").is_none(),
+        "should not have utils field when no utils section: {summary}"
+    );
+}
+
+#[test]
+fn extract_rule_summary_handles_utils_with_comments() {
+    let content = r#"id: example
+language: Python
+severity: warning
+utils:
+  # This is a comment
+  is-string:
+    kind: string
+  is-number:
+    kind: integer
+rule:
+  matches: is-string
+"#;
+    let path = Path::new("example.yml");
+    let summary = extract_rule_summary(content, path).expect("should extract");
+    let utils = summary["utils"].as_array().expect("utils array");
+    assert_eq!(utils.len(), 2);
+    assert!(utils.contains(&serde_json::Value::String("is-string".to_string())));
+    assert!(utils.contains(&serde_json::Value::String("is-number".to_string())));
+}
+
+// --- transform field tests ---
+
+#[test]
+fn structural_request_accepts_transform_for_query() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "pattern": "let $X = $Y",
+        "lang": "javascript",
+        "transform": {
+            "UPPER": {
+                "substring": { "source": "$Y", "startChar": 0, "endChar": 5 }
+            }
+        }
+    }))
+    .expect("transform should be accepted for query workflow");
+
+    assert_eq!(request.workflow, StructuralWorkflow::Query);
+    assert!(request.transform.is_some());
+}
+
+#[test]
+fn structural_request_accepts_transform_for_count() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "count",
+        "pattern": "let $X = $Y",
+        "lang": "javascript",
+        "transform": {
+            "CAMEL": {
+                "convert": { "source": "$X", "toCase": "camelCase" }
+            }
+        }
+    }))
+    .expect("transform should be accepted for count workflow");
+
+    assert_eq!(request.workflow, StructuralWorkflow::Count);
+    assert!(request.transform.is_some());
+}
+
+#[test]
+fn structural_request_rejects_transform_for_scan() {
+    let err = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "scan",
+        "transform": { "X": { "replace": { "source": "$A", "replace": "a", "by": "b" } } }
+    }))
+    .expect_err("transform should be rejected for scan workflow");
+
+    assert!(err.to_string().contains("does not accept `transform`"));
+}
+
+#[test]
+fn structural_request_rejects_transform_for_test() {
+    let err = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "test",
+        "transform": { "X": { "replace": { "source": "$A", "replace": "a", "by": "b" } } }
+    }))
+    .expect_err("transform should be rejected for test workflow");
+
+    assert!(err.to_string().contains("does not accept `transform`"));
+}
+
+#[test]
+fn structural_request_rejects_transform_for_inspect() {
+    let err = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "inspect",
+        "transform": { "X": { "replace": { "source": "$A", "replace": "a", "by": "b" } } }
+    }))
+    .expect_err("transform should be rejected for inspect workflow");
+
+    assert!(err.to_string().contains("does not accept `transform`"));
+}
+
+#[test]
+fn structural_request_requires_lang_for_transform() {
+    let err = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "pattern": "let $X = $Y",
+        "transform": {
+            "UPPER": { "substring": { "source": "$Y", "startChar": 0, "endChar": 5 } }
+        }
+    }))
+    .expect_err("transform without lang should be rejected");
+
+    assert!(err.to_string().contains("requires `lang` to be set"));
+}
+
+#[test]
+fn build_atomic_rule_yaml_emits_transform() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "pattern": "let $X = $Y",
+        "lang": "javascript",
+        "transform": {
+            "CAMEL": {
+                "convert": { "source": "$X", "toCase": "camelCase" }
+            }
+        }
+    }))
+    .expect("valid request");
+
+    let yaml = build_atomic_rule_yaml(&request, "javascript");
+    assert!(
+        yaml.contains("transform:"),
+        "YAML should contain transform section: {yaml}"
+    );
+    assert!(
+        yaml.contains("CAMEL:"),
+        "YAML should contain transform variable name: {yaml}"
+    );
+    assert!(
+        yaml.contains("convert:"),
+        "YAML should contain transform operation: {yaml}"
+    );
+}
+
+#[test]
+fn build_atomic_rule_yaml_emits_transform_with_replace() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "pattern": "console.log($MSG)",
+        "lang": "javascript",
+        "transform": {
+            "CLEAN_MSG": {
+                "replace": { "source": "$MSG", "replace": "'", "by": "\\'" }
+            }
+        }
+    }))
+    .expect("valid request");
+
+    let yaml = build_atomic_rule_yaml(&request, "javascript");
+    assert!(
+        yaml.contains("transform:"),
+        "YAML should contain transform: {yaml}"
+    );
+    assert!(
+        yaml.contains("CLEAN_MSG:"),
+        "YAML should contain var name: {yaml}"
+    );
+    assert!(
+        yaml.contains("replace:"),
+        "YAML should contain replace op: {yaml}"
+    );
+}
+
+#[test]
+fn build_fixconfig_rule_yaml_emits_transform() {
+    let fix_config = FixConfig {
+        template: "$CAMEL".to_string(),
+        expand_start: None,
+        expand_end: None,
+    };
+    let mut transform = serde_json::Map::new();
+    transform.insert(
+        "CAMEL".to_string(),
+        json!({ "convert": { "source": "$X", "toCase": "camelCase" } }),
+    );
+
+    let yaml = build_fixconfig_rule_yaml(
+        "let $X = $Y",
+        "javascript",
+        &fix_config,
+        None,
+        Some(&transform),
+    );
+    assert!(
+        yaml.contains("transform:"),
+        "YAML should contain transform: {yaml}"
+    );
+    assert!(
+        yaml.contains("CAMEL:"),
+        "YAML should contain var name: {yaml}"
+    );
+    assert!(
+        yaml.contains("template: $CAMEL"),
+        "YAML should contain fix template: {yaml}"
+    );
+}
+
+#[test]
+fn build_fixconfig_rule_yaml_omits_transform_when_none() {
+    let fix_config = FixConfig {
+        template: "$X".to_string(),
+        expand_start: None,
+        expand_end: None,
+    };
+
+    let yaml = build_fixconfig_rule_yaml("let $X = $Y", "javascript", &fix_config, None, None);
+    assert!(
+        !yaml.contains("transform:"),
+        "YAML should not contain transform when None: {yaml}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// New feature tests: severities, has_error_findings, no_ignore, follow,
+// threads, format, report_style, before/after lines, builtin_rules
+// ---------------------------------------------------------------------------
+
+#[test]
+fn structural_request_accepts_severities_for_scan() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "scan",
+        "severities": ["error", "warning"]
+    }))
+    .expect("severities should be accepted for scan");
+
+    assert_eq!(
+        request.severities.as_ref().unwrap(),
+        &vec!["error".to_string(), "warning".to_string()]
+    );
+}
+
+#[test]
+fn structural_request_accepts_follow_flag() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "pattern": "fn $NAME() {}",
+        "follow": true
+    }))
+    .expect("follow should be accepted");
+
+    assert!(request.effective_follow());
+}
+
+#[test]
+fn structural_request_accepts_threads_for_scan() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "scan",
+        "threads": 4
+    }))
+    .expect("threads should be accepted for scan");
+
+    assert_eq!(request.effective_threads(), Some(4));
+}
+
+#[test]
+fn structural_request_clamps_threads_to_max() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "scan",
+        "threads": 999
+    }))
+    .expect("threads should be accepted");
+
+    assert_eq!(request.effective_threads(), Some(256));
+}
+
+#[test]
+fn structural_request_accepts_report_style_for_scan() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "scan",
+        "report_style": "short"
+    }))
+    .expect("report_style should be accepted for scan");
+
+    assert_eq!(request.effective_report_style(), Some("short"));
+}
+
+#[test]
+fn structural_request_rejects_invalid_report_style() {
+    let err = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "scan",
+        "report_style": "verbose"
+    }))
+    .expect_err("invalid report_style should be rejected");
+
+    assert!(err.to_string().contains("invalid `report_style`"));
+}
+
+#[test]
+fn structural_request_rejects_invalid_format() {
+    let err = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "scan",
+        "format": "xml"
+    }))
+    .expect_err("invalid format should be rejected");
+
+    assert!(err.to_string().contains("invalid `format`"));
+}
+
+#[test]
+fn structural_request_accepts_before_after_lines() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "pattern": "fn $NAME() {}",
+        "before_lines": 3,
+        "after_lines": 5
+    }))
+    .expect("before_lines/after_lines should be accepted");
+
+    assert_eq!(request.effective_before_lines(), Some(3));
+    assert_eq!(request.effective_after_lines(), Some(5));
+}
+
+#[test]
+fn structural_request_rejects_context_with_before_after() {
+    let err = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "pattern": "fn $NAME() {}",
+        "context_lines": 2,
+        "before_lines": 3
+    }))
+    .expect_err("context_lines + before_lines should be rejected");
+
+    assert!(err.to_string().contains("mutually exclusive"));
+}
+
+#[test]
+fn structural_request_accepts_builtin_rules() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "scan",
+        "builtin_rules": ["unused-suppression:error", "no-suppress-all"]
+    }))
+    .expect("builtin_rules should be accepted");
+
+    assert_eq!(
+        request.effective_builtin_rules().unwrap(),
+        &[
+            "unused-suppression:error".to_string(),
+            "no-suppress-all".to_string()
+        ]
+    );
+}
+
+#[test]
+fn structural_request_rejects_invalid_builtin_rule() {
+    let err = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "scan",
+        "builtin_rules": ["fake-rule"]
+    }))
+    .expect_err("invalid builtin rule should be rejected");
+
+    assert!(err.to_string().contains("invalid builtin rule"));
+}
+
+#[test]
+fn structural_request_rejects_invalid_no_ignore_value() {
+    let err = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "pattern": "fn $NAME() {}",
+        "no-ignore": ["hidden", "bogus"]
+    }))
+    .expect_err("invalid no_ignore value should be rejected");
+
+    assert!(
+        err.to_string()
+            .contains("invalid `no_ignore` value `bogus`")
+    );
+}
+
+#[test]
+fn build_scan_summary_includes_has_error_findings() {
+    let findings = vec![AstGrepScanFinding {
+        file: "src/lib.rs".to_string(),
+        text: "danger();".to_string(),
+        lines: None,
+        language: None,
+        range: AstGrepRange {
+            start: AstGrepPoint { line: 1, column: 0 },
+            end: AstGrepPoint { line: 1, column: 9 },
+            byte_offset: None,
+        },
+        rule_id: Some("deny-danger".to_string()),
+        severity: Some(AstGrepSeverity::Error),
+        message: None,
+        note: None,
+        metadata: None,
+        labels: vec![],
+    }];
+
+    let summary = build_scan_summary(&findings, 1, false);
+    assert_eq!(summary["has_error_findings"], true);
+}
+
+#[test]
+fn build_scan_summary_has_error_findings_false_when_no_errors() {
+    let findings = vec![AstGrepScanFinding {
+        file: "src/lib.rs".to_string(),
+        text: "warn();".to_string(),
+        lines: None,
+        language: None,
+        range: AstGrepRange {
+            start: AstGrepPoint { line: 1, column: 0 },
+            end: AstGrepPoint { line: 1, column: 7 },
+            byte_offset: None,
+        },
+        rule_id: Some("some-rule".to_string()),
+        severity: Some(AstGrepSeverity::Warning),
+        message: None,
+        note: None,
+        metadata: None,
+        labels: vec![],
+    }];
+
+    let summary = build_scan_summary(&findings, 1, false);
+    assert_eq!(summary["has_error_findings"], false);
+}
+
+#[test]
+fn build_scan_result_filters_by_severities() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "scan",
+        "severities": ["error"]
+    }))
+    .expect("valid request");
+
+    let findings = vec![
+        AstGrepScanFinding {
+            file: "src/a.rs".to_string(),
+            text: "a".to_string(),
+            lines: None,
+            language: None,
+            range: AstGrepRange {
+                start: AstGrepPoint { line: 1, column: 0 },
+                end: AstGrepPoint { line: 1, column: 1 },
+                byte_offset: None,
+            },
+            rule_id: Some("rule-a".to_string()),
+            severity: Some(AstGrepSeverity::Error),
+            message: None,
+            note: None,
+            metadata: None,
+            labels: vec![],
+        },
+        AstGrepScanFinding {
+            file: "src/b.rs".to_string(),
+            text: "b".to_string(),
+            lines: None,
+            language: None,
+            range: AstGrepRange {
+                start: AstGrepPoint { line: 2, column: 0 },
+                end: AstGrepPoint { line: 2, column: 1 },
+                byte_offset: None,
+            },
+            rule_id: Some("rule-b".to_string()),
+            severity: Some(AstGrepSeverity::Warning),
+            message: None,
+            note: None,
+            metadata: None,
+            labels: vec![],
+        },
+    ];
+
+    let result = build_scan_result(&request, ".", "sgconfig.yml", findings);
+    let returned_findings = result["findings"].as_array().expect("findings array");
+    assert_eq!(returned_findings.len(), 1);
+    assert_eq!(returned_findings[0]["rule_id"], "rule-a");
+    assert_eq!(result["summary"]["total_findings"], 1);
+}
+
+#[tokio::test]
+#[serial]
+async fn structural_scan_passes_no_ignore_follow_threads_flags() {
+    let temp = TempDir::new().expect("workspace tempdir");
+    fs::create_dir_all(temp.path().join("src")).expect("create src");
+    fs::write(temp.path().join("sgconfig.yml"), "ruleDirs: []\n").expect("write config");
+    let args_path = temp.path().join("sg_args.txt");
+    let script = format!(
+        "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"{}\"\n",
+        args_path.display()
+    );
+    let (_script_dir, script_path) = write_fake_sg(&script);
+
+    let _override = set_ast_grep_binary_override_for_tests(Some(script_path));
+    let result = execute_structural_search(
+        temp.path(),
+        json!({
+            "action": "structural",
+            "workflow": "scan",
+            "path": "src",
+            "config_path": "sgconfig.yml",
+            "no-ignore": ["hidden", "vcs"],
+            "follow": true,
+            "threads": 8
+        }),
+    )
+    .await
+    .expect("scan should succeed");
+
+    assert_eq!(result["workflow"], "scan");
+
+    let args = fs::read_to_string(args_path).expect("read sg args");
+    let lines: Vec<&str> = args.lines().collect();
+    assert!(
+        lines.contains(&"--no-ignore"),
+        "should have --no-ignore flag: {lines:?}"
+    );
+    assert!(lines.contains(&"hidden"), "should pass hidden: {lines:?}");
+    assert!(lines.contains(&"vcs"), "should pass vcs: {lines:?}");
+    assert!(
+        lines.contains(&"--follow"),
+        "should have --follow flag: {lines:?}"
+    );
+    assert!(
+        lines.contains(&"--threads"),
+        "should have --threads flag: {lines:?}"
+    );
+    assert!(lines.contains(&"8"), "should pass thread count: {lines:?}");
+}
+
+#[tokio::test]
+#[serial]
+async fn structural_scan_passes_report_style_flag() {
+    let temp = TempDir::new().expect("workspace tempdir");
+    fs::create_dir_all(temp.path().join("src")).expect("create src");
+    fs::write(temp.path().join("sgconfig.yml"), "ruleDirs: []\n").expect("write config");
+    let args_path = temp.path().join("sg_args.txt");
+    let script = format!(
+        "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"{}\"\n",
+        args_path.display()
+    );
+    let (_script_dir, script_path) = write_fake_sg(&script);
+
+    let _override = set_ast_grep_binary_override_for_tests(Some(script_path));
+    let result = execute_structural_search(
+        temp.path(),
+        json!({
+            "action": "structural",
+            "workflow": "scan",
+            "path": "src",
+            "config_path": "sgconfig.yml",
+            "report_style": "medium"
+        }),
+    )
+    .await
+    .expect("scan should succeed");
+
+    assert_eq!(result["workflow"], "scan");
+
+    let args = fs::read_to_string(args_path).expect("read sg args");
+    assert!(
+        args.lines().any(|line| line == "--report-style=medium"),
+        "should have --report-style=medium: {args}"
+    );
+}
+
+#[tokio::test]
+#[serial]
+async fn structural_scan_passes_builtin_rules_flags() {
+    let temp = TempDir::new().expect("workspace tempdir");
+    fs::create_dir_all(temp.path().join("src")).expect("create src");
+    fs::write(temp.path().join("sgconfig.yml"), "ruleDirs: []\n").expect("write config");
+    let args_path = temp.path().join("sg_args.txt");
+    let script = format!(
+        "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"{}\"\n",
+        args_path.display()
+    );
+    let (_script_dir, script_path) = write_fake_sg(&script);
+
+    let _override = set_ast_grep_binary_override_for_tests(Some(script_path));
+    let result = execute_structural_search(
+        temp.path(),
+        json!({
+            "action": "structural",
+            "workflow": "scan",
+            "path": "src",
+            "config_path": "sgconfig.yml",
+            "builtin_rules": ["unused-suppression:error", "no-suppress-all"]
+        }),
+    )
+    .await
+    .expect("scan should succeed");
+
+    assert_eq!(result["workflow"], "scan");
+
+    let args = fs::read_to_string(args_path).expect("read sg args");
+    assert!(
+        args.lines()
+            .any(|line| line == "--error=unused-suppression"),
+        "should have --error=unused-suppression: {args}"
+    );
+    assert!(
+        args.lines().any(|line| line == "--hint=no-suppress-all"),
+        "should have --hint=no-suppress-all: {args}"
+    );
+}
+
+#[tokio::test]
+#[serial]
+async fn structural_query_passes_follow_and_no_ignore() {
+    let temp = TempDir::new().expect("workspace tempdir");
+    fs::create_dir_all(temp.path().join("src")).expect("create src");
+    let args_path = temp.path().join("sg_args.txt");
+    let script = format!(
+        "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"{}\"\nprintf '[]'\n",
+        args_path.display()
+    );
+    let (_script_dir, script_path) = write_fake_sg(&script);
+
+    let _override = set_ast_grep_binary_override_for_tests(Some(script_path));
+    let result = execute_structural_search(
+        temp.path(),
+        json!({
+            "action": "structural",
+            "workflow": "query",
+            "pattern": "fn $NAME() {}",
+            "lang": "rust",
+            "path": "src",
+            "follow": true,
+            "no-ignore": ["dot"]
+        }),
+    )
+    .await
+    .expect("query should succeed");
+
+    assert_eq!(result["backend"], "ast-grep");
+
+    let args = fs::read_to_string(args_path).expect("read sg args");
+    assert!(
+        args.lines().any(|line| line == "--follow"),
+        "should have --follow flag: {args}"
+    );
+    assert!(
+        args.lines().any(|line| line == "--no-ignore"),
+        "should have --no-ignore flag: {args}"
+    );
+    assert!(
+        args.lines().any(|line| line == "dot"),
+        "should pass dot value: {args}"
+    );
+}
+
+#[tokio::test]
+#[serial]
+async fn structural_query_passes_before_after_context() {
+    let temp = TempDir::new().expect("workspace tempdir");
+    fs::create_dir_all(temp.path().join("src")).expect("create src");
+    let args_path = temp.path().join("sg_args.txt");
+    let script = format!(
+        "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"{}\"\nprintf '[]'\n",
+        args_path.display()
+    );
+    let (_script_dir, script_path) = write_fake_sg(&script);
+
+    let _override = set_ast_grep_binary_override_for_tests(Some(script_path));
+    let result = execute_structural_search(
+        temp.path(),
+        json!({
+            "action": "structural",
+            "workflow": "query",
+            "pattern": "fn $NAME() {}",
+            "lang": "rust",
+            "path": "src",
+            "before_lines": 3,
+            "after_lines": 5
+        }),
+    )
+    .await
+    .expect("query should succeed");
+
+    assert_eq!(result["backend"], "ast-grep");
+
+    let args = fs::read_to_string(args_path).expect("read sg args");
+    assert!(
+        args.lines().any(|line| line == "--before"),
+        "should have --before flag: {args}"
+    );
+    assert!(
+        args.lines().any(|line| line == "3"),
+        "should pass before count: {args}"
+    );
+    assert!(
+        args.lines().any(|line| line == "--after"),
+        "should have --after flag: {args}"
+    );
+    assert!(
+        args.lines().any(|line| line == "5"),
+        "should pass after count: {args}"
+    );
+    assert!(
+        !args.lines().any(|line| line == "--context"),
+        "should NOT have --context when before/after set: {args}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// New workflow: validation tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn new_workflow_requires_subcommand() {
+    let err = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "new"
+    }))
+    .expect_err("should reject when new_subcommand is missing");
+
+    assert!(
+        err.to_string().contains("new_subcommand"),
+        "error should mention new_subcommand: {err}"
+    );
+}
+
+#[test]
+fn new_workflow_rejects_invalid_subcommand() {
+    let err = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "new",
+        "new_subcommand": "invalid"
+    }))
+    .expect_err("should reject invalid subcommand");
+
+    assert!(
+        err.to_string().contains("must be one of"),
+        "error should mention valid subcommands: {err}"
+    );
+}
+
+#[test]
+fn new_workflow_accepts_project_subcommand_without_name() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "new",
+        "new_subcommand": "project"
+    }))
+    .expect("project subcommand should not require new_name");
+
+    assert_eq!(request.workflow, StructuralWorkflow::New);
+}
+
+#[test]
+fn new_workflow_requires_name_for_rule() {
+    let err = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "new",
+        "new_subcommand": "rule",
+        "lang": "rust"
+    }))
+    .expect_err("rule subcommand should require new_name");
+
+    assert!(
+        err.to_string().contains("requires `new_name`"),
+        "error should mention new_name: {err}"
+    );
+}
+
+#[test]
+fn new_workflow_requires_name_for_test() {
+    let err = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "new",
+        "new_subcommand": "test"
+    }))
+    .expect_err("test subcommand should require new_name");
+
+    assert!(
+        err.to_string().contains("requires `new_name`"),
+        "error should mention new_name: {err}"
+    );
+}
+
+#[test]
+fn new_workflow_requires_name_for_util() {
+    let err = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "new",
+        "new_subcommand": "util",
+        "lang": "rust"
+    }))
+    .expect_err("util subcommand should require new_name");
+
+    assert!(
+        err.to_string().contains("requires `new_name`"),
+        "error should mention new_name: {err}"
+    );
+}
+
+#[test]
+fn new_workflow_requires_lang_for_rule() {
+    let err = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "new",
+        "new_subcommand": "rule",
+        "new_name": "no-console-log"
+    }))
+    .expect_err("rule subcommand should require lang");
+
+    assert!(
+        err.to_string().contains("requires `lang`"),
+        "error should mention lang: {err}"
+    );
+}
+
+#[test]
+fn new_workflow_requires_lang_for_util() {
+    let err = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "new",
+        "new_subcommand": "util",
+        "new_name": "is-literal"
+    }))
+    .expect_err("util subcommand should require lang");
+
+    assert!(
+        err.to_string().contains("requires `lang`"),
+        "error should mention lang: {err}"
+    );
+}
+
+#[test]
+fn new_workflow_does_not_require_lang_for_test() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "new",
+        "new_subcommand": "test",
+        "new_name": "no-console-log"
+    }))
+    .expect("test subcommand should not require lang");
+
+    assert_eq!(request.workflow, StructuralWorkflow::New);
+}
+
+#[test]
+fn new_workflow_rejects_pattern_field() {
+    let err = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "new",
+        "new_subcommand": "project",
+        "pattern": "fn $NAME() {}"
+    }))
+    .expect_err("new should reject pattern");
+
+    assert!(
+        err.to_string().contains("does not accept `pattern`"),
+        "error should mention pattern: {err}"
+    );
+}
+
+#[test]
+fn new_workflow_rejects_rewrite_field() {
+    let err = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "new",
+        "new_subcommand": "project",
+        "rewrite": "foo"
+    }))
+    .expect_err("new should reject rewrite");
+
+    assert!(
+        err.to_string().contains("does not accept `rewrite`"),
+        "error should mention rewrite: {err}"
+    );
+}
+
+#[test]
+fn new_workflow_rejects_regex_field() {
+    let err = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "new",
+        "new_subcommand": "project",
+        "regex": "foo"
+    }))
+    .expect_err("new should reject regex");
+
+    assert!(
+        err.to_string().contains("does not accept `regex`"),
+        "error should mention regex: {err}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Apply workflow: validation tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn apply_workflow_requires_pattern_or_regex() {
+    let err = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "apply",
+        "rewrite": "bar()"
+    }))
+    .expect_err("apply should require pattern or regex");
+
+    assert!(
+        err.to_string().contains("requires a non-empty `pattern`"),
+        "error should mention pattern: {err}"
+    );
+}
+
+#[test]
+fn apply_workflow_requires_rewrite_or_fix_config() {
+    let err = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "apply",
+        "pattern": "foo()",
+        "lang": "rust"
+    }))
+    .expect_err("apply should require rewrite or fix_config");
+
+    assert!(
+        err.to_string().contains("requires a non-empty `rewrite`"),
+        "error should mention rewrite: {err}"
+    );
+}
+
+#[test]
+fn apply_workflow_accepts_pattern_with_rewrite() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "apply",
+        "pattern": "foo()",
+        "rewrite": "bar()",
+        "lang": "rust"
+    }))
+    .expect("apply with pattern+rewrite should be accepted");
+
+    assert_eq!(request.workflow, StructuralWorkflow::Apply);
+}
+
+#[test]
+fn apply_workflow_accepts_regex_with_rewrite() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "apply",
+        "regex": "console\\.log",
+        "rewrite": "logger.debug",
+        "lang": "typescript"
+    }))
+    .expect("apply with regex+rewrite should be accepted");
+
+    assert_eq!(request.workflow, StructuralWorkflow::Apply);
+}
+
+#[test]
+fn apply_workflow_accepts_fix_config() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "apply",
+        "pattern": "console.log($$$ARGS)",
+        "lang": "javascript",
+        "fix_config": {
+            "template": "logger.log($$$ARGS)"
+        }
+    }))
+    .expect("apply with fix_config should be accepted");
+
+    assert_eq!(request.workflow, StructuralWorkflow::Apply);
+    assert!(request.fix_config.is_some());
+}
+
+#[test]
+fn apply_workflow_rejects_update_all() {
+    let err = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "apply",
+        "pattern": "foo()",
+        "rewrite": "bar()",
+        "lang": "rust",
+        "update_all": true
+    }))
+    .expect_err("apply should reject update_all");
+
+    assert!(
+        err.to_string().contains("does not accept `update_all`"),
+        "error should mention update_all: {err}"
+    );
+}
+
+#[test]
+fn apply_workflow_rejects_interactive() {
+    let err = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "apply",
+        "pattern": "foo()",
+        "rewrite": "bar()",
+        "lang": "rust",
+        "interactive": true
+    }))
+    .expect_err("apply should reject interactive");
+
+    assert!(
+        err.to_string().contains("does not accept `interactive`"),
+        "error should mention interactive: {err}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// New workflow: execution tests
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+#[serial]
+async fn new_workflow_passes_subcommand_name_and_yes_flag() {
+    let temp = TempDir::new().expect("workspace tempdir");
+    let args_path = temp.path().join("sg_args.txt");
+    let script = format!(
+        "#!/bin/sh\nprintf '%s\n' \"$@\" > \"{}\"\n",
+        args_path.display()
+    );
+    let (_script_dir, script_path) = write_fake_sg(&script);
+
+    let _override = set_ast_grep_binary_override_for_tests(Some(script_path));
+    let result = execute_structural_search(
+        temp.path(),
+        json!({
+            "action": "structural",
+            "workflow": "new",
+            "new_subcommand": "rule",
+            "new_name": "no-console-log",
+            "lang": "rust"
+        }),
+    )
+    .await
+    .expect("new workflow should succeed");
+
+    assert_eq!(result["workflow"], "new");
+    assert_eq!(result["subcommand"], "rule");
+    assert_eq!(result["name"], "no-console-log");
+
+    let args = fs::read_to_string(args_path).expect("read sg args");
+    let lines: Vec<&str> = args.lines().collect();
+    assert!(lines.contains(&"new"), "subcommand should be new: {args}");
+    assert!(lines.contains(&"rule"), "should pass rule: {args}");
+    assert!(lines.contains(&"--yes"), "should pass --yes flag: {args}");
+    assert!(
+        lines.contains(&"no-console-log"),
+        "should pass name: {args}"
+    );
+    assert!(lines.contains(&"--lang"), "should pass --lang flag: {args}");
+    assert!(lines.contains(&"rust"), "should pass lang: {args}");
+}
+
+#[tokio::test]
+#[serial]
+async fn new_workflow_project_does_not_require_name() {
+    let temp = TempDir::new().expect("workspace tempdir");
+    let args_path = temp.path().join("sg_args.txt");
+    let script = format!(
+        "#!/bin/sh\nprintf '%s\n' \"$@\" > \"{}\"\n",
+        args_path.display()
+    );
+    let (_script_dir, script_path) = write_fake_sg(&script);
+
+    let _override = set_ast_grep_binary_override_for_tests(Some(script_path));
+    let result = execute_structural_search(
+        temp.path(),
+        json!({
+            "action": "structural",
+            "workflow": "new",
+            "new_subcommand": "project"
+        }),
+    )
+    .await
+    .expect("new project should succeed");
+
+    assert_eq!(result["workflow"], "new");
+    assert_eq!(result["subcommand"], "project");
+
+    let args = fs::read_to_string(args_path).expect("read sg args");
+    assert!(
+        args.lines().any(|line| line == "project"),
+        "should pass project: {args}"
+    );
+    assert!(
+        args.lines().any(|line| line == "--yes"),
+        "should pass --yes: {args}"
+    );
+}
+
+#[tokio::test]
+#[serial]
+async fn new_workflow_passes_config_path() {
+    let temp = TempDir::new().expect("workspace tempdir");
+    let args_path = temp.path().join("sg_args.txt");
+    let script = format!(
+        "#!/bin/sh\nprintf '%s\n' \"$@\" > \"{}\"\n",
+        args_path.display()
+    );
+    let (_script_dir, script_path) = write_fake_sg(&script);
+
+    let _override = set_ast_grep_binary_override_for_tests(Some(script_path));
+    let result = execute_structural_search(
+        temp.path(),
+        json!({
+            "action": "structural",
+            "workflow": "new",
+            "new_subcommand": "test",
+            "new_name": "no-eval",
+            "config_path": "custom.yml"
+        }),
+    )
+    .await
+    .expect("new test with config_path should succeed");
+
+    assert_eq!(result["workflow"], "new");
+
+    let args = fs::read_to_string(args_path).expect("read sg args");
+    assert!(
+        args.lines().any(|line| line == "--config"),
+        "should pass --config flag: {args}"
+    );
+    assert!(
+        args.lines().any(|line| line == "custom.yml"),
+        "should pass config path: {args}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Apply workflow: execution tests
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+#[serial]
+async fn apply_workflow_rewrites_file_content() {
+    let temp = TempDir::new().expect("workspace tempdir");
+    let src_dir = temp.path().join("src");
+    fs::create_dir_all(&src_dir).expect("create src dir");
+    fs::write(src_dir.join("app.js"), "console.log('hello')\n").expect("write js file");
+
+    // Fake sg that returns a rewrite match with byte offsets
+    let args_path = temp.path().join("sg_args.txt");
+    let script = format!(
+        r##"#!/bin/sh
+printf '%s\n' "$@" > "{args}"
+cat <<'SGEOF'
+[{{"file":"src/app.js","range":{{"start":{{"line":0,"column":0}},"end":{{"line":0,"column":20}},"byteOffset":{{"start":0,"end":20}}}},"text":"console.log('hello')","replacement":"logger.debug('hello')","replacementOffsets":{{"start":0,"end":20}}}}]
+SGEOF
+"##,
+        args = args_path.display(),
+    );
+    let (_script_dir, script_path) = write_fake_sg(&script);
+
+    let _override = set_ast_grep_binary_override_for_tests(Some(script_path));
+    let result = execute_structural_search(
+        temp.path(),
+        json!({
+            "action": "structural",
+            "workflow": "apply",
+            "pattern": "console.log($MSG)",
+            "rewrite": "logger.debug($MSG)",
+            "lang": "javascript",
+            "path": "src"
+        }),
+    )
+    .await
+    .expect("apply workflow should succeed");
+
+    assert_eq!(result["workflow"], "apply");
+    assert_eq!(result["total_replacements"], 1);
+
+    let modified = result["files_modified"]
+        .as_array()
+        .expect("files_modified array");
+    assert_eq!(modified.len(), 1);
+
+    let content = fs::read_to_string(src_dir.join("app.js")).expect("read modified file");
+    assert_eq!(content, "logger.debug('hello')\n");
+}
+
+#[tokio::test]
+#[serial]
+async fn apply_workflow_returns_zero_replacements_for_empty_match() {
+    let temp = TempDir::new().expect("workspace tempdir");
+    let src_dir = temp.path().join("src");
+    fs::create_dir_all(&src_dir).expect("create src dir");
+    fs::write(src_dir.join("lib.rs"), "fn main() {}\n").expect("write rs file");
+
+    let args_path = temp.path().join("sg_args.txt");
+    let script = format!(
+        "#!/bin/sh\nprintf '%s\n' \"$@\" > \"{}\"\nprintf '[]'\n",
+        args_path.display()
+    );
+    let (_script_dir, script_path) = write_fake_sg(&script);
+
+    let _override = set_ast_grep_binary_override_for_tests(Some(script_path));
+    let result = execute_structural_search(
+        temp.path(),
+        json!({
+            "action": "structural",
+            "workflow": "apply",
+            "pattern": "console.log($$$)",
+            "rewrite": "logger.debug($$$)",
+            "lang": "javascript",
+            "path": "src"
+        }),
+    )
+    .await
+    .expect("apply with no matches should succeed");
+
+    assert_eq!(result["workflow"], "apply");
+    assert_eq!(result["total_replacements"], 0);
+
+    let modified = result["files_modified"]
+        .as_array()
+        .expect("files_modified array");
+    assert!(modified.is_empty());
+
+    // Original file should be unchanged
+    let content = fs::read_to_string(src_dir.join("lib.rs")).expect("read file");
+    assert_eq!(content, "fn main() {}\n");
 }

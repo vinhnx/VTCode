@@ -1,0 +1,17 @@
+id: no-panic-in-lib
+valid:
+  - |
+      func divide(a, b int) (int, error) {
+          if b == 0 {
+              return 0, errors.New("division by zero")
+          }
+          return a / b, nil
+      }
+invalid:
+  - |
+      func mustDivide(a, b int) int {
+          if b == 0 {
+              panic("division by zero")
+          }
+          return a / b
+      }

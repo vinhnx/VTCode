@@ -1,0 +1,10 @@
+id: no-malloc-free
+valid:
+  - |
+      int arr[10];
+      arr[0] = 1;
+invalid:
+  - |
+      int *p = malloc(sizeof(int) * 10);
+  - |
+      free(ptr);
