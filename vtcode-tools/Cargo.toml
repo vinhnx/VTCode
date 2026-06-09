@@ -19,11 +19,11 @@ policies = []
 examples = []
 
 [dependencies]
-vtcode-commons = { path = "../vtcode-commons", version = "0.123.8" }
-vtcode-core = { path = "../vtcode-core", version = "0.123.8", default-features = false }
-vtcode-acp = { path = "../vtcode-acp", version = "0.123.8" }
-vtcode-collaboration-tool-specs = { path = "../vtcode-collaboration-tool-specs", version = "0.123.8" }
-vtcode-utility-tool-specs = { path = "../vtcode-utility-tool-specs", version = "0.123.8" }
+vtcode-commons = { path = "../vtcode-commons", version = "0.123.9" }
+vtcode-core = { path = "../vtcode-core", version = "0.123.9", default-features = false }
+vtcode-acp = { path = "../vtcode-acp", version = "0.123.9" }
+vtcode-collaboration-tool-specs = { path = "../vtcode-collaboration-tool-specs", version = "0.123.9" }
+vtcode-utility-tool-specs = { path = "../vtcode-utility-tool-specs", version = "0.123.9" }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 hashbrown = { workspace = true }
