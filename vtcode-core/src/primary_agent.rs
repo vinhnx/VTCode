@@ -6,7 +6,8 @@ use std::sync::Arc;
 use vtcode_config::constants::defaults::DEFAULT_PRIMARY_AGENT_NAME;
 use vtcode_config::{
     DiscoveredSubagents, HookGroupConfig, HooksConfig, McpProviderConfig, PermissionMode,
-    SubagentMcpServer, SubagentSource, SubagentSpec, builtin_primary_build_agent,
+    SubagentMcpServer, SubagentMemoryScope, SubagentSource, SubagentSpec,
+    builtin_primary_build_agent,
 };
 
 use crate::config::{ReasoningEffortLevel, VTCodeConfig};
@@ -37,6 +38,7 @@ pub struct ActivePrimaryAgent {
     pub hooks: Option<HooksConfig>,
     pub skills: Vec<String>,
     pub mcp_servers: Vec<SubagentMcpServer>,
+    pub memory: Option<SubagentMemoryScope>,
 }
 
 impl ActivePrimaryAgent {
@@ -66,6 +68,7 @@ impl ActivePrimaryAgent {
             hooks: runtime.hooks.clone(),
             skills: runtime.skills.clone(),
             mcp_servers: runtime.mcp_servers.clone(),
+            memory: runtime.memory,
         }
     }
 }
@@ -479,6 +482,7 @@ mod tests {
             active.mcp_servers,
             vec![SubagentMcpServer::Named("filesystem".to_string())]
         );
+        assert_eq!(active.memory, Some(SubagentMemoryScope::Project));
     }
 
     #[test]
@@ -519,6 +523,7 @@ mod tests {
         assert_eq!(active.hooks, runtime.hooks);
         assert_eq!(active.skills, runtime.skills);
         assert_eq!(active.mcp_servers, runtime.mcp_servers);
+        assert_eq!(active.memory, runtime.memory);
     }
 
     #[test]

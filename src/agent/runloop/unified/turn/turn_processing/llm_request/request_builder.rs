@@ -21,6 +21,7 @@ use vtcode_core::prompts::{
     PromptContext, append_runtime_tool_prompt_sections, temporal::generate_temporal_context,
     upsert_harness_limits_section,
 };
+use vtcode_core::subagents::load_primary_memory_appendix;
 use vtcode_core::tools::handlers::anthropic_native_memory_enabled_for_runtime;
 use vtcode_core::{
     ActivePrimaryAgent, apply_primary_agent_prompt_context, apply_primary_agent_tool_policy,
@@ -284,8 +285,10 @@ fn active_primary_agent_prompt_context(
     ctx: &TurnProcessingContext<'_>,
     agent: &ActivePrimaryAgent,
 ) -> PromptContext {
-    let mut prompt_context =
-        PromptContext::from_workspace_tools(ctx.config.workspace.as_path(), std::iter::empty::<String>());
+    let mut prompt_context = PromptContext::from_workspace_tools(
+        ctx.config.workspace.as_path(),
+        std::iter::empty::<String>(),
+    );
     apply_primary_agent_prompt_context(&mut prompt_context, agent);
     prompt_context
 }
@@ -302,9 +305,7 @@ fn append_active_primary_agent_skills(
     let prompt_context = active_primary_agent_prompt_context(ctx, agent);
     let mut lines = Vec::new();
     lines.push("## Active Primary Agent Skills".to_string());
-    lines.push(
-        "These skills are scoped to the active primary agent for this request.".to_string(),
-    );
+    lines.push("These skills are scoped to the active primary agent for this request.".to_string());
 
     if prompt_context.available_skill_metadata.is_empty() {
         for skill in &agent.skills {
@@ -680,7 +681,10 @@ async fn render_primary_agent_runtime_context(
     if !agent.skills.is_empty() {
         let prompt_context = active_primary_agent_prompt_context(ctx, agent);
         if prompt_context.available_skill_metadata.is_empty() {
-            lines.push(format!("- Active primary skills: {}", agent.skills.join(", ")));
+            lines.push(format!(
+                "- Active primary skills: {}",
+                agent.skills.join(", ")
+            ));
         } else {
             let mut names = prompt_context
                 .available_skill_metadata
@@ -703,7 +707,32 @@ async fn render_primary_agent_runtime_context(
 
     lines.push("### Instructions".to_string());
     lines.push(agent.instructions.trim().to_string());
+    if let Some(memory_appendix) = active_primary_agent_memory_appendix(ctx, agent) {
+        lines.push("### Memory Appendix".to_string());
+        lines.push(memory_appendix);
+    }
     lines.join("\n")
+}
+
+fn active_primary_agent_memory_appendix(
+    ctx: &TurnProcessingContext<'_>,
+    agent: &ActivePrimaryAgent,
+) -> Option<String> {
+    match load_primary_memory_appendix(
+        ctx.config.workspace.as_path(),
+        agent.identity.name.as_str(),
+        agent.memory,
+    ) {
+        Ok(appendix) => appendix,
+        Err(err) => {
+            tracing::warn!(
+                agent_name = %agent.identity.name,
+                error = %err,
+                "Failed to load active primary-agent memory appendix"
+            );
+            None
+        }
+    }
 }
 
 fn render_tool_names(tool_snapshot: &SessionToolCatalogSnapshot) -> String {
@@ -882,7 +911,7 @@ mod tests {
     use std::sync::Arc;
 
     use serde_json::json;
-    use vtcode_config::{PermissionMode, SubagentSource, SubagentSpec};
+    use vtcode_config::{PermissionMode, SubagentMemoryScope, SubagentSource, SubagentSpec};
     use vtcode_core::config::loader::VTCodeConfig;
     use vtcode_core::config::types::ReasoningEffortLevel;
     use vtcode_core::core::agent::harness_kernel::SessionToolCatalogSnapshot;
@@ -1334,6 +1363,134 @@ mod tests {
             built.continuation_messages,
             vec![uni::Message::user("hello".to_string())]
         );
+    }
+
+    #[tokio::test]
+    async fn active_primary_agent_memory_appendix_uses_canonical_name_for_alias_selection() {
+        let mut backing = TestTurnProcessingBacking::new(4).await;
+        let workspace = backing.workspace_path().to_path_buf();
+        std::fs::create_dir_all(workspace.join(".vtcode/agent-memory/reviewer"))
+            .expect("canonical memory dir");
+        std::fs::write(
+            workspace.join(".vtcode/agent-memory/reviewer/MEMORY.md"),
+            "# Reviewer Memory\n\n- Canonical reviewer memory.\n",
+        )
+        .expect("canonical memory");
+        std::fs::create_dir_all(workspace.join(".vtcode/agent-memory/critic"))
+            .expect("alias memory dir");
+        std::fs::write(
+            workspace.join(".vtcode/agent-memory/critic/MEMORY.md"),
+            "# Critic Memory\n\n- Alias memory must not load.\n",
+        )
+        .expect("alias memory");
+
+        let mut spec = test_primary_agent_spec("reviewer", "Review carefully.");
+        spec.memory = Some(SubagentMemoryScope::Project);
+        spec.aliases = vec!["critic".to_string()];
+        backing.select_primary_agent_from_specs(&[spec], "critic");
+
+        let built = {
+            let mut ctx = backing.turn_processing_context();
+            ctx.working_history
+                .push(uni::Message::user("hello".to_string()));
+            let snapshot = capture_turn_request_snapshot(&mut ctx, "noop-model", false);
+            build_turn_request(&mut ctx, 1, "noop-model", &snapshot, Some(320), None, false)
+                .await
+                .expect("request should build")
+        };
+
+        let runtime_context = built.request.messages[1].content.as_text();
+        assert!(runtime_context.contains("### Memory Appendix"));
+        assert!(runtime_context.contains("Primary-agent memory file:"));
+        assert!(runtime_context.contains(".vtcode/agent-memory/reviewer/MEMORY.md"));
+        assert!(runtime_context.contains("Canonical reviewer memory."));
+        assert!(!runtime_context.contains("Alias memory must not load."));
+        assert!(!runtime_context.contains("Create or update `MEMORY.md`"));
+        assert!(!runtime_context.contains("Read and maintain `MEMORY.md`"));
+    }
+
+    #[tokio::test]
+    async fn active_primary_agent_missing_memory_is_noop_and_does_not_expand_tools() {
+        let mut backing = TestTurnProcessingBacking::new(4).await;
+        backing
+            .add_tool_definition(named_tool("unified_search"))
+            .await;
+        backing
+            .add_tool_definition(named_tool("unified_file"))
+            .await;
+        let workspace = backing.workspace_path().to_path_buf();
+        let memory_dir = workspace.join(".vtcode/agent-memory/planner");
+
+        let mut spec = test_primary_agent_spec("planner", "Plan carefully.");
+        spec.memory = Some(SubagentMemoryScope::Project);
+        spec.tools = Some(vec!["unified_search".to_string()]);
+        spec.disallowed_tools = Vec::new();
+        backing.select_primary_agent_from_specs(&[spec], "planner");
+
+        let built = {
+            let mut ctx = backing.turn_processing_context();
+            ctx.working_history
+                .push(uni::Message::user("hello".to_string()));
+            let snapshot = capture_turn_request_snapshot(&mut ctx, "noop-model", false);
+            build_turn_request(&mut ctx, 1, "noop-model", &snapshot, Some(320), None, false)
+                .await
+                .expect("request should build")
+        };
+
+        let runtime_context = built.request.messages[1].content.as_text();
+        assert!(!runtime_context.contains("### Memory Appendix"));
+        assert!(!runtime_context.contains("Create or update `MEMORY.md`"));
+        assert!(!memory_dir.exists());
+        assert_eq!(request_tool_names(&built.request), vec!["unified_search"]);
+    }
+
+    #[tokio::test]
+    async fn active_primary_agent_memory_appendix_is_replaced_on_switch() {
+        let mut backing = TestTurnProcessingBacking::new(4).await;
+        let workspace = backing.workspace_path().to_path_buf();
+        for (agent, memory) in [
+            ("planner", "Planner-only durable note."),
+            ("reviewer", "Reviewer-only durable note."),
+        ] {
+            let memory_dir = workspace.join(".vtcode/agent-memory").join(agent);
+            std::fs::create_dir_all(&memory_dir).expect("memory dir");
+            std::fs::write(memory_dir.join("MEMORY.md"), format!("- {memory}\n")).expect("memory");
+        }
+
+        let mut planner = test_primary_agent_spec("planner", "Planner instructions.");
+        planner.memory = Some(SubagentMemoryScope::Project);
+        let mut reviewer = test_primary_agent_spec("reviewer", "Reviewer instructions.");
+        reviewer.memory = Some(SubagentMemoryScope::Project);
+
+        backing.select_primary_agent_from_specs(std::slice::from_ref(&planner), "planner");
+        let first_built = {
+            let mut ctx = backing.turn_processing_context();
+            ctx.working_history
+                .push(uni::Message::user("hello".to_string()));
+            let snapshot = capture_turn_request_snapshot(&mut ctx, "noop-model", false);
+            build_turn_request(&mut ctx, 1, "noop-model", &snapshot, Some(320), None, false)
+                .await
+                .expect("first request should build")
+        };
+
+        backing.select_primary_agent_from_specs(std::slice::from_ref(&reviewer), "reviewer");
+        let second_built = {
+            let mut ctx = backing.turn_processing_context();
+            ctx.working_history.clear();
+            ctx.working_history
+                .push(uni::Message::user("hello".to_string()));
+            let snapshot = capture_turn_request_snapshot(&mut ctx, "noop-model", false);
+            build_turn_request(&mut ctx, 2, "noop-model", &snapshot, Some(320), None, false)
+                .await
+                .expect("second request should build")
+        };
+
+        let first_runtime = first_built.request.messages[1].content.as_text();
+        let second_runtime = second_built.request.messages[1].content.as_text();
+        assert!(first_runtime.contains("Planner-only durable note."));
+        assert!(!first_runtime.contains("Reviewer-only durable note."));
+        assert!(second_runtime.contains("Reviewer-only durable note."));
+        assert!(!second_runtime.contains("Planner-only durable note."));
     }
 
     #[tokio::test]

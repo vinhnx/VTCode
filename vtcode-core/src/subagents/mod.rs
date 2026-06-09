@@ -19,7 +19,7 @@ pub use config::{
     filter_child_tools, normalize_background_child_max_turns, normalize_child_max_turns,
     prepare_child_runtime_config,
 };
-pub use model::{agent_type_for_spec, load_memory_appendix};
+pub use model::{agent_type_for_spec, load_memory_appendix, load_primary_memory_appendix};
 pub use prompt::{
     contains_explicit_delegation_request, contains_explicit_model_request,
     delegated_task_requires_clarification, extract_explicit_agent_mentions,
@@ -3087,6 +3087,50 @@ Inspect the repository.
         assert!(appendix.contains("Open `MEMORY.md` when exact wording or more detail matters."));
         assert!(!appendix.contains("Current MEMORY.md excerpt"));
         assert!(!appendix.contains("## Preferences"));
+    }
+
+    #[test]
+    fn load_primary_memory_appendix_reads_existing_memory_without_write_guidance() {
+        let temp = TempDir::new().expect("tempdir");
+        let memory_dir = temp.path().join(".vtcode/agent-memory/reviewer");
+        std::fs::create_dir_all(&memory_dir).expect("memory dir");
+        std::fs::write(
+            memory_dir.join("MEMORY.md"),
+            "# Reviewer Memory\n\n## Preferences\n- Keep diffs surgical.\n- Run focused tests before broad checks.\n",
+        )
+        .expect("write memory");
+
+        let appendix = load_primary_memory_appendix(
+            temp.path(),
+            "reviewer",
+            Some(SubagentMemoryScope::Project),
+        )
+        .expect("appendix")
+        .expect("memory appendix");
+
+        assert!(appendix.contains("Primary-agent memory file:"));
+        assert!(appendix.contains("Loaded read-only for this request."));
+        assert!(appendix.contains("Key points:"));
+        assert!(appendix.contains("Keep diffs surgical."));
+        assert!(!appendix.contains("Read and maintain `MEMORY.md`"));
+        assert!(!appendix.contains("Create or update `MEMORY.md`"));
+        assert!(!appendix.contains("Open `MEMORY.md` when exact wording or more detail matters."));
+    }
+
+    #[test]
+    fn load_primary_memory_appendix_missing_memory_is_noop_without_directory_creation() {
+        let temp = TempDir::new().expect("tempdir");
+        let memory_dir = temp.path().join(".vtcode/agent-memory/reviewer");
+
+        let appendix = load_primary_memory_appendix(
+            temp.path(),
+            "reviewer",
+            Some(SubagentMemoryScope::Project),
+        )
+        .expect("appendix");
+
+        assert!(appendix.is_none());
+        assert!(!memory_dir.exists());
     }
 
     #[tokio::test]

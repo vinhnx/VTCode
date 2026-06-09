@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -234,6 +235,10 @@ impl TestTurnProcessingBacking {
 
     pub(crate) async fn add_tool_definition(&self, tool: ToolDefinition) {
         self.tools.write().await.push(tool);
+    }
+
+    pub(crate) fn workspace_path(&self) -> &Path {
+        self._temp.path()
     }
 
     pub(crate) fn select_primary_agent_from_specs(
