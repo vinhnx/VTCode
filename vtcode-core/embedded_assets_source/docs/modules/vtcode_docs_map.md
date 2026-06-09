@@ -186,11 +186,6 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 ### Getting Started & Overview
 
-- **File**: `docs/anthropic-compaction-improved.md`
-  - **Content**: Compaction
-  - **Topics**: Supported models, How compaction works, Basic usage, Parameters, Working with compaction blocks
-  - **User Questions**: "What can you tell me about Compaction?", "How does Supported models work?", "How does How compaction works work?"
-
 - **File**: `docs/user-guide/exec-mode.md`
   - **Content**: Exec Mode Automation
   - **Topics**: Launching exec mode, Dry-run mode, Continuation and verification, Structured event stream, Resuming sessions

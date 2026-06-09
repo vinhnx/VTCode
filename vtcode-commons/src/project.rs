@@ -84,11 +84,7 @@ pub async fn build_project_overview(root: &Path) -> Option<ProjectOverview> {
         overview.readme_excerpt = Some(extract_readme_excerpt(&readme, 1200));
     } else {
         // Fallback to alternatives
-        for alt in [
-            "QUICKSTART.md",
-            "user-context.md",
-            "docs/project/ROADMAP.md",
-        ] {
+        for alt in ["QUICKSTART.md", "user-context.md"] {
             let path = root.join(alt);
             if let Ok(txt) = fs::read_to_string(&path).await {
                 overview.readme_excerpt = Some(extract_readme_excerpt(&txt, 800));
