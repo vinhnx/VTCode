@@ -140,6 +140,17 @@ pub enum SubagentMcpServer {
 }
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentSpecFieldClass {
+    Shared,
+    PrimaryMetadata,
+    PrimaryRuntime,
+    SubagentOnly,
+    Availability,
+}
+
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct SubagentSpec {
     pub name: String,
@@ -236,6 +247,26 @@ impl SubagentSpec {
                 .aliases
                 .iter()
                 .any(|alias| alias.eq_ignore_ascii_case(candidate))
+    }
+}
+
+#[must_use]
+pub fn classify_agent_spec_field(field: &str) -> Option<AgentSpecFieldClass> {
+    match field.trim() {
+        "name" | "prompt" => Some(AgentSpecFieldClass::Shared),
+        "description" | "color" | "aliases" => Some(AgentSpecFieldClass::PrimaryMetadata),
+        "tools" | "disallowed_tools" | "disallowedTools" | "permission_mode" | "permissionMode"
+        | "model" | "reasoning_effort" | "skills" | "mcp_servers" | "mcpServers" | "hooks"
+        | "memory" => Some(AgentSpecFieldClass::PrimaryRuntime),
+        "background"
+        | "max_turns"
+        | "maxTurns"
+        | "initial_prompt"
+        | "initialPrompt"
+        | "nickname_candidates"
+        | "isolation" => Some(AgentSpecFieldClass::SubagentOnly),
+        "mode" => Some(AgentSpecFieldClass::Availability),
+        _ => None,
     }
 }
 
@@ -699,6 +730,8 @@ fn load_cli_agents(value: &JsonValue) -> Result<Vec<SubagentSpec>> {
             .get("isolation")
             .and_then(JsonValue::as_str)
             .map(ToString::to_string);
+        let aliases = optional_string_list(config.get("aliases"))?.unwrap_or_default();
+        let warnings = primary_agent_subagent_only_field_warnings(config, mode);
 
         specs.push(SubagentSpec {
             name: name.clone(),
@@ -720,10 +753,10 @@ fn load_cli_agents(value: &JsonValue) -> Result<Vec<SubagentSpec>> {
             initial_prompt,
             memory,
             isolation,
-            aliases: Vec::new(),
+            aliases,
             source: SubagentSource::Cli,
             file_path: None,
-            warnings: Vec::new(),
+            warnings,
         });
     }
 
@@ -739,11 +772,20 @@ fn parse_markdown_subagent(content: &str, source: SubagentSource) -> Result<Suba
         bail!("markdown subagent is missing closing frontmatter delimiter");
     };
     let frontmatter_text = rest[..end_idx].trim();
-    let prompt = rest[end_idx + 4..].trim().to_string();
+    let prompt_body = rest[end_idx + 4..].trim().to_string();
     let frontmatter = serde_saphyr::from_str::<JsonValue>(frontmatter_text)
         .context("failed to parse subagent YAML frontmatter")?;
     let Some(object) = frontmatter.as_object() else {
         bail!("subagent frontmatter must be a YAML mapping");
+    };
+    let prompt = if prompt_body.is_empty() {
+        object
+            .get("prompt")
+            .and_then(JsonValue::as_str)
+            .unwrap_or_default()
+            .to_string()
+    } else {
+        prompt_body
     };
 
     let mut spec = subagent_spec_from_json_map(object, prompt, source.clone())?;
@@ -760,7 +802,8 @@ fn parse_codex_toml_subagent(content: &str, source: SubagentSource) -> Result<Su
     };
     let object = toml_table_to_json_object(table)?;
     let prompt = object
-        .get("developer_instructions")
+        .get("prompt")
+        .or_else(|| object.get("developer_instructions"))
         .or_else(|| object.get("instructions"))
         .and_then(JsonValue::as_str)
         .unwrap_or_default()
@@ -858,6 +901,8 @@ fn subagent_spec_from_json_map(
         .get("isolation")
         .and_then(JsonValue::as_str)
         .map(ToString::to_string);
+    let aliases = optional_string_list(object.get("aliases"))?.unwrap_or_default();
+    let warnings = primary_agent_subagent_only_field_warnings(object, mode);
 
     Ok(SubagentSpec {
         name,
@@ -879,11 +924,34 @@ fn subagent_spec_from_json_map(
         initial_prompt,
         memory,
         isolation,
-        aliases: Vec::new(),
+        aliases,
         source,
         file_path: None,
-        warnings: Vec::new(),
+        warnings,
     })
+}
+
+fn primary_agent_subagent_only_field_warnings(
+    object: &JsonMap<String, JsonValue>,
+    mode: AgentMode,
+) -> Vec<String> {
+    if !matches!(mode, AgentMode::Primary | AgentMode::All) {
+        return Vec::new();
+    }
+
+    [
+        ("background", &["background"][..]),
+        ("max_turns", &["max_turns", "maxTurns"][..]),
+        ("initial_prompt", &["initial_prompt", "initialPrompt"][..]),
+        ("nickname_candidates", &["nickname_candidates"][..]),
+        ("isolation", &["isolation"][..]),
+    ]
+    .into_iter()
+    .filter(|(_, aliases)| aliases.iter().any(|field| object.contains_key(*field)))
+    .map(|(field, _)| {
+        format!("field '{field}' is for subagents only and is ignored by primary agents")
+    })
+    .collect()
 }
 
 fn normalize_subagent_tool_list(tools: Option<Vec<String>>) -> Option<Vec<String>> {
@@ -1201,13 +1269,223 @@ fn default_background_toggle_shortcut() -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        AgentMode, BackgroundSubagentConfig, SubagentDiscoveryInput, SubagentRuntimeLimits,
-        SubagentSource, builtin_subagents, discover_subagents, load_subagent_from_file,
+        AgentMode, AgentSpecFieldClass, BackgroundSubagentConfig, SubagentDiscoveryInput,
+        SubagentMcpServer, SubagentMemoryScope, SubagentRuntimeLimits, SubagentSource,
+        builtin_subagents, classify_agent_spec_field, discover_subagents, load_subagent_from_file,
     };
     use crate::constants::tools;
+    use crate::core::PermissionMode;
     use anyhow::Result;
     use std::fs;
     use tempfile::TempDir;
+
+    #[test]
+    fn classifies_agent_spec_fields_for_primary_and_subagent_roles() {
+        assert_eq!(
+            classify_agent_spec_field("name"),
+            Some(AgentSpecFieldClass::Shared)
+        );
+        assert_eq!(
+            classify_agent_spec_field("description"),
+            Some(AgentSpecFieldClass::PrimaryMetadata)
+        );
+        assert_eq!(
+            classify_agent_spec_field("aliases"),
+            Some(AgentSpecFieldClass::PrimaryMetadata)
+        );
+        assert_eq!(
+            classify_agent_spec_field("disallowedTools"),
+            Some(AgentSpecFieldClass::PrimaryRuntime)
+        );
+        assert_eq!(
+            classify_agent_spec_field("permission_mode"),
+            Some(AgentSpecFieldClass::PrimaryRuntime)
+        );
+        assert_eq!(
+            classify_agent_spec_field("mcpServers"),
+            Some(AgentSpecFieldClass::PrimaryRuntime)
+        );
+        assert_eq!(
+            classify_agent_spec_field("maxTurns"),
+            Some(AgentSpecFieldClass::SubagentOnly)
+        );
+        assert_eq!(
+            classify_agent_spec_field("initial_prompt"),
+            Some(AgentSpecFieldClass::SubagentOnly)
+        );
+        assert_eq!(
+            classify_agent_spec_field("mode"),
+            Some(AgentSpecFieldClass::Availability)
+        );
+        assert_eq!(classify_agent_spec_field("unknown"), None);
+    }
+
+    #[test]
+    fn primary_agent_parser_accepts_supported_fields() -> Result<()> {
+        let temp = TempDir::new()?;
+        let path = temp.path().join("build.md");
+        fs::write(
+            &path,
+            r#"---
+name: build
+description: Primary build agent
+tools: [Read, Bash]
+disallowedTools: [Write]
+model: gpt-5.4
+color: blue
+reasoning_effort: high
+permissionMode: plan
+skills: [rust, repo]
+mcpServers:
+  - filesystem
+  - demo:
+      command: demo-mcp
+hooks:
+  PreToolUse:
+    - matcher: Bash
+      hooks:
+        - command: echo pre
+memory: project
+aliases: [builder, implementer]
+mode: primary
+---
+Primary prompt."#,
+        )?;
+
+        let spec = load_subagent_from_file(&path, SubagentSource::ProjectVtcode)?;
+
+        assert_eq!(spec.name, "build");
+        assert_eq!(spec.description, "Primary build agent");
+        assert_eq!(spec.prompt, "Primary prompt.");
+        assert_eq!(
+            spec.tools,
+            Some(vec![
+                tools::READ_FILE.to_string(),
+                tools::UNIFIED_EXEC.to_string(),
+            ])
+        );
+        assert_eq!(spec.disallowed_tools, vec![tools::WRITE_FILE.to_string()]);
+        assert_eq!(spec.permission_mode, Some(PermissionMode::Plan));
+        assert_eq!(spec.model.as_deref(), Some("gpt-5.4"));
+        assert_eq!(spec.reasoning_effort.as_deref(), Some("high"));
+        assert_eq!(spec.skills, vec!["rust".to_string(), "repo".to_string()]);
+        assert_eq!(spec.mcp_servers.len(), 2);
+        assert!(matches!(spec.mcp_servers[0], SubagentMcpServer::Named(_)));
+        assert!(matches!(spec.mcp_servers[1], SubagentMcpServer::Inline(_)));
+        assert_eq!(spec.memory, Some(SubagentMemoryScope::Project));
+        assert_eq!(spec.color.as_deref(), Some("blue"));
+        assert_eq!(
+            spec.aliases,
+            vec!["builder".to_string(), "implementer".to_string()]
+        );
+        assert_eq!(spec.mode, AgentMode::Primary);
+        assert!(spec.hooks.is_some());
+        assert!(spec.warnings.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn primary_agent_specs_warn_for_subagent_only_fields() -> Result<()> {
+        let temp = TempDir::new()?;
+        let path = temp.path().join("primary.md");
+        fs::write(
+            &path,
+            r#"---
+name: primary
+description: Primary with child-only fields
+mode: primary
+background: true
+maxTurns: 4
+initialPrompt: Start here
+nickname_candidates: [helper]
+isolation: full
+---
+Prompt."#,
+        )?;
+
+        let spec = load_subagent_from_file(&path, SubagentSource::ProjectVtcode)?;
+
+        assert!(spec.background);
+        assert_eq!(spec.max_turns, Some(4));
+        assert_eq!(spec.initial_prompt.as_deref(), Some("Start here"));
+        assert_eq!(spec.nickname_candidates, vec!["helper".to_string()]);
+        assert_eq!(spec.isolation.as_deref(), Some("full"));
+        assert_eq!(
+            spec.warnings,
+            vec![
+                "field 'background' is for subagents only and is ignored by primary agents"
+                    .to_string(),
+                "field 'max_turns' is for subagents only and is ignored by primary agents"
+                    .to_string(),
+                "field 'initial_prompt' is for subagents only and is ignored by primary agents"
+                    .to_string(),
+                "field 'nickname_candidates' is for subagents only and is ignored by primary agents"
+                    .to_string(),
+                "field 'isolation' is for subagents only and is ignored by primary agents"
+                    .to_string(),
+            ]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn aliases_do_not_replace_canonical_agent_names() -> Result<()> {
+        let temp = TempDir::new()?;
+        let path = temp.path().join("canonical.md");
+        fs::write(
+            &path,
+            r#"---
+name: canonical
+description: Canonical primary
+mode: primary
+aliases: [alias]
+---
+Prompt."#,
+        )?;
+
+        let spec = load_subagent_from_file(&path, SubagentSource::ProjectVtcode)?;
+
+        assert_eq!(spec.name, "canonical");
+        assert!(spec.matches_name("alias"));
+        assert!(spec.matches_name("canonical"));
+        Ok(())
+    }
+
+    #[test]
+    fn primary_agent_parser_preserves_baseline_runtime_fields() -> Result<()> {
+        let temp = TempDir::new()?;
+        let path = temp.path().join("baseline.toml");
+        fs::write(
+            &path,
+            r#"name = "baseline"
+description = "Baseline primary"
+prompt = "Baseline prompt"
+mode = "primary"
+tools = ["unified_search", "unified_exec"]
+disallowed_tools = ["unified_exec"]
+permission_mode = "plan"
+model = "gpt-5.4"
+reasoning_effort = "medium"
+"#,
+        )?;
+
+        let spec = load_subagent_from_file(&path, SubagentSource::ProjectCodex)?;
+
+        assert_eq!(
+            spec.tools,
+            Some(vec![
+                tools::UNIFIED_SEARCH.to_string(),
+                tools::UNIFIED_EXEC.to_string(),
+            ])
+        );
+        assert_eq!(spec.disallowed_tools, vec![tools::UNIFIED_EXEC.to_string()]);
+        assert_eq!(spec.permission_mode, Some(PermissionMode::Plan));
+        assert_eq!(spec.model.as_deref(), Some("gpt-5.4"));
+        assert_eq!(spec.reasoning_effort.as_deref(), Some("medium"));
+        assert_eq!(spec.prompt, "Baseline prompt");
+        assert!(spec.warnings.is_empty());
+        Ok(())
+    }
 
     #[test]
     fn parses_claude_markdown_frontmatter() -> Result<()> {
