@@ -15,6 +15,11 @@ pub mod agent_execution {
     /// Canonical action-required line for loop detection blocks.
     pub const LOOP_RETRY_BLOCKED_LINE: &str = "ACTION REQUIRED: DO NOT retry this tool call. The tool execution has been prevented to avoid infinite loops.";
 
+    /// Hint appended to policy-denied tool errors to guide the agent toward resolution.
+    pub const POLICY_DENIED_HINT: &str = "Hint: If this command should be allowed, run `/mode auto` to enable \
+        classifier-backed auto-approval, or `/mode cycle` to cycle modes. \
+        You can also configure `[permissions]` rules in vtcode.toml to allow specific tools.";
+
     /// Build the canonical plan-mode denial message.
     pub fn plan_mode_denial_message(tool_name: &str) -> String {
         format!(
@@ -25,6 +30,14 @@ pub mod agent_execution {
              3. After approval, mutating tools will be enabled\n\n\
              Fallback if automatic Plan->Edit switching keeps failing: manually switch using `/plan off` or `/mode` (or `Shift+Tab`/`Alt+M` in interactive mode).",
             tool_name
+        )
+    }
+
+    /// Build a policy-denied message with actionable hints about mode switching.
+    pub fn policy_denied_hint_message(tool_name: &str) -> String {
+        format!(
+            "Tool '{}' execution denied by policy.\n\n{}",
+            tool_name, POLICY_DENIED_HINT
         )
     }
 
@@ -79,6 +92,7 @@ mod tests {
     fn test_error_messages_are_not_empty() {
         assert!(!agent_execution::PLAN_MODE_DENIED_CONTEXT.is_empty());
         assert!(!agent_execution::LOOP_RETRY_BLOCKED_LINE.is_empty());
+        assert!(!agent_execution::POLICY_DENIED_HINT.is_empty());
         assert!(!skill_ops::SKILL_NOT_FOUND.is_empty());
     }
 
@@ -97,5 +111,11 @@ mod tests {
         assert!(loop_msg.contains("LOOP DETECTION"));
         assert!(loop_msg.contains("DO NOT retry"));
         assert!(loop_msg.contains("Original error: base error"));
+
+        let policy_msg = agent_execution::policy_denied_hint_message("unified_exec");
+        assert!(policy_msg.contains("unified_exec"));
+        assert!(policy_msg.contains("/mode auto"));
+        assert!(policy_msg.contains("/mode cycle"));
+        assert!(policy_msg.contains("vtcode.toml"));
     }
 }

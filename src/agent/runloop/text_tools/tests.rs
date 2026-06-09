@@ -220,6 +220,46 @@ fn test_detect_tagged_tool_call_parses_minimax_xml_invocation_without_parameters
 }
 
 #[test]
+fn test_strip_textual_tool_call_regions_removes_minimax_markup() {
+    let message = r#"Done with the analysis.
+<minimax:tool_call>
+<invoke name="unified_file">
+<parameter name="action">read</parameter>
+<parameter name="path">README.md</parameter>
+</invoke>
+</minimax:tool_call>
+Please review the summary."#;
+
+    let stripped = strip_textual_tool_call_regions(message);
+
+    assert!(stripped.contains("Done with the analysis."));
+    assert!(stripped.contains("Please review the summary."));
+    assert!(!stripped.contains("<invoke"));
+    assert!(detect_textual_tool_call(&stripped).is_none());
+}
+
+#[test]
+fn test_strip_textual_tool_call_regions_removes_channel_and_function_markup() {
+    let message = concat!(
+        "Summary before.\n",
+        "<|start|>assistant<|channel|>commentary to=bash<|message|>{\"cmd\":\"pwd\"}<|call|>\n",
+        "Middle.\n",
+        "print(default_api.read_file(path='AGENTS.md'))\n",
+        "Summary after."
+    );
+
+    let stripped = strip_textual_tool_call_regions(message);
+
+    assert!(stripped.contains("Summary before."));
+    assert!(stripped.contains("Middle."));
+    assert!(stripped.contains("Summary after."));
+    assert!(!stripped.contains("<|start|>"));
+    assert!(!stripped.contains("print("));
+    assert!(!stripped.contains("default_api.read_file"));
+    assert!(detect_textual_tool_call(&stripped).is_none());
+}
+
+#[test]
 fn test_detect_rust_struct_tool_call_parses_command_block() {
     let message = "Here you go:\n```rust\nrun_pty_cmd {\n    command: \"ls -a\",\n    workdir: \"/tmp\",\n    timeout: 5.0\n}\n```";
     let (name, args) = detect_textual_tool_call(message).expect("should parse");

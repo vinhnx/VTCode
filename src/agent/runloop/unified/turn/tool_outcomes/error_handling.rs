@@ -114,7 +114,7 @@ fn failure_guidance(
         return (
             "policy_blocked",
             false,
-            "Switch to an allowed tool or mode.",
+            "Switch to an allowed tool, or run `/mode auto` to enable auto-approval.",
         );
     }
 
@@ -165,7 +165,7 @@ fn structured_failure_guidance(
         return (
             "policy_blocked",
             false,
-            "Switch to an allowed tool or mode.",
+            "Switch to an allowed tool, or run `/mode auto` to enable auto-approval.",
         );
     }
 

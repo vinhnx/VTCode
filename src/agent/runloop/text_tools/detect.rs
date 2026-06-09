@@ -208,6 +208,290 @@ pub(crate) fn detect_textual_tool_call(text: &str) -> Option<(String, Value)> {
     None
 }
 
+pub(crate) fn strip_textual_tool_call_regions(text: &str) -> String {
+    let mut regions = Vec::new();
+    collect_channel_regions(text, &mut regions);
+    collect_code_fence_regions(text, &mut regions);
+    collect_enclosed_regions(
+        text,
+        "<minimax:tool_call>",
+        "</minimax:tool_call>",
+        &mut regions,
+    );
+    collect_enclosed_regions(text, "<invoke name=\"", "</invoke>", &mut regions);
+    collect_enclosed_regions(text, "<tool_call>", "</tool_call>", &mut regions);
+    collect_bracketed_regions(text, &mut regions);
+    collect_function_call_regions(text, &mut regions);
+
+    if regions.is_empty() {
+        return text.to_string();
+    }
+
+    regions.sort_unstable_by_key(|(start, end)| (*start, *end));
+    let mut merged: Vec<(usize, usize)> = Vec::with_capacity(regions.len());
+    for (start, end) in regions {
+        if start >= end || end > text.len() {
+            continue;
+        }
+        if let Some((_, last_end)) = merged.last_mut()
+            && start <= *last_end
+        {
+            *last_end = (*last_end).max(end);
+            continue;
+        }
+        merged.push((start, end));
+    }
+
+    let mut stripped = String::with_capacity(text.len());
+    let mut cursor = 0usize;
+    for (start, end) in merged {
+        stripped.push_str(&text[cursor..start]);
+        cursor = end;
+    }
+    stripped.push_str(&text[cursor..]);
+    stripped
+}
+
+fn collect_channel_regions(text: &str, regions: &mut Vec<(usize, usize)>) {
+    let mut search_start = 0usize;
+    while let Some(relative_start) = text[search_start..].find("<|start|>") {
+        let start = search_start + relative_start;
+        let tail = &text[start..];
+        let end = tail
+            .find("<|call|>")
+            .map(|idx| start + idx + "<|call|>".len())
+            .or_else(|| {
+                tail.find("<|end|>")
+                    .map(|idx| start + idx + "<|end|>".len())
+            })
+            .or_else(|| {
+                tail.find("<|return|>")
+                    .map(|idx| start + idx + "<|return|>".len())
+            })
+            .unwrap_or(text.len());
+        add_valid_region(text, start, end, regions);
+        search_start = end.max(start + "<|start|>".len());
+    }
+}
+
+fn collect_code_fence_regions(text: &str, regions: &mut Vec<(usize, usize)>) {
+    let mut search_start = 0usize;
+    while let Some(relative_start) = text[search_start..].find("```") {
+        let start = search_start + relative_start;
+        let body_start = start + 3;
+        let Some(relative_end) = text[body_start..].find("```") else {
+            break;
+        };
+        let end = body_start + relative_end + 3;
+        add_valid_region(text, start, end, regions);
+        search_start = end;
+    }
+}
+
+fn collect_enclosed_regions(
+    text: &str,
+    open_marker: &str,
+    close_marker: &str,
+    regions: &mut Vec<(usize, usize)>,
+) {
+    let mut search_start = 0usize;
+    while let Some(relative_start) = text[search_start..].find(open_marker) {
+        let start = search_start + relative_start;
+        let content_start = start + open_marker.len();
+        let end = text[content_start..]
+            .find(close_marker)
+            .map(|idx| content_start + idx + close_marker.len())
+            .unwrap_or(text.len());
+        add_valid_region(text, start, end, regions);
+        search_start = end.max(content_start);
+    }
+}
+
+fn collect_bracketed_regions(text: &str, regions: &mut Vec<(usize, usize)>) {
+    let mut search_start = 0usize;
+    while let Some(relative_start) = text[search_start..].find("[tool: ") {
+        let start = search_start + relative_start;
+        let Some(header_end_relative) = text[start..].find(']') else {
+            break;
+        };
+        let after_header = start + header_end_relative + 1;
+        let args_start = after_header
+            + text[after_header..]
+                .chars()
+                .take_while(|ch| ch.is_whitespace())
+                .map(char::len_utf8)
+                .sum::<usize>();
+        let Some(open) = text[args_start..].chars().next() else {
+            break;
+        };
+        let close = match open {
+            '{' => '}',
+            '(' => ')',
+            _ => {
+                search_start = after_header;
+                continue;
+            }
+        };
+        let Some(args_end) = find_matching_delimiter_end(text, args_start, open, close) else {
+            search_start = after_header;
+            continue;
+        };
+        add_valid_region(text, start, args_end + 1, regions);
+        search_start = args_end + 1;
+    }
+}
+
+fn collect_function_call_regions(text: &str, regions: &mut Vec<(usize, usize)>) {
+    for prefix in TEXTUAL_TOOL_PREFIXES {
+        collect_prefixed_function_regions(text, prefix, regions);
+    }
+    for alias in DIRECT_FUNCTION_ALIASES {
+        collect_direct_function_regions(text, alias, regions);
+    }
+}
+
+fn collect_prefixed_function_regions(text: &str, prefix: &str, regions: &mut Vec<(usize, usize)>) {
+    let mut search_start = 0usize;
+    while let Some(relative_start) = text[search_start..].find(prefix) {
+        let start = search_start + relative_start;
+        let after_prefix = start + prefix.len();
+        let Some(paren_relative) = text[after_prefix..].find('(') else {
+            break;
+        };
+        let args_start = after_prefix + paren_relative + 1;
+        let Some(args_end) = find_matching_paren_end_with_depth_limit(text, args_start) else {
+            search_start = after_prefix;
+            continue;
+        };
+        let end = args_end + 1;
+        let (region_start, region_end) = expand_wrapping_function_region(text, start, end);
+        add_valid_region(text, region_start, region_end, regions);
+        search_start = end;
+    }
+}
+
+fn collect_direct_function_regions(text: &str, alias: &str, regions: &mut Vec<(usize, usize)>) {
+    let lowered = text.to_ascii_lowercase();
+    let alias_lower = alias.to_ascii_lowercase();
+    let mut search_start = 0usize;
+    while let Some(relative_start) = lowered[search_start..].find(&alias_lower) {
+        let start = search_start + relative_start;
+        let alias_end = start + alias_lower.len();
+        if start > 0
+            && let Some(prev) = lowered[..start].chars().next_back()
+            && (prev.is_ascii_alphanumeric() || prev == '_')
+        {
+            search_start = alias_end;
+            continue;
+        }
+        let mut paren_index = None;
+        for (relative, ch) in text[alias_end..].char_indices() {
+            if ch.is_whitespace() {
+                continue;
+            }
+            if ch == '(' {
+                paren_index = Some(alias_end + relative);
+            }
+            break;
+        }
+        let Some(paren_pos) = paren_index else {
+            search_start = alias_end;
+            continue;
+        };
+        let Some(args_end) = find_matching_paren_end_with_depth_limit(text, paren_pos + 1) else {
+            search_start = alias_end;
+            continue;
+        };
+        let end = args_end + 1;
+        let (region_start, region_end) = expand_wrapping_function_region(text, start, end);
+        add_valid_region(text, region_start, region_end, regions);
+        search_start = end;
+    }
+}
+
+fn expand_wrapping_function_region(text: &str, start: usize, end: usize) -> (usize, usize) {
+    let before = text[..start].trim_end();
+    if !before.ends_with('(') {
+        return (start, end);
+    }
+
+    let open_paren = before.len() - 1;
+    let mut wrapper_start = open_paren;
+    for (index, ch) in text[..open_paren].char_indices().rev() {
+        if ch.is_ascii_alphanumeric() || ch == '_' || ch == '.' {
+            wrapper_start = index;
+        } else {
+            break;
+        }
+    }
+    if wrapper_start == open_paren {
+        return (start, end);
+    }
+
+    let after_inner_whitespace = text[end..]
+        .chars()
+        .take_while(|ch| ch.is_whitespace())
+        .map(char::len_utf8)
+        .sum::<usize>();
+    let close_start = end + after_inner_whitespace;
+    if text[close_start..].starts_with(')') {
+        (wrapper_start, close_start + 1)
+    } else {
+        (start, end)
+    }
+}
+
+fn find_matching_delimiter_end(
+    text: &str,
+    open_index: usize,
+    open: char,
+    close: char,
+) -> Option<usize> {
+    let mut depth = 0usize;
+    let mut in_string: Option<char> = None;
+    let mut escaped = false;
+
+    for (relative, ch) in text[open_index..].char_indices() {
+        if let Some(delimiter) = in_string {
+            if escaped {
+                escaped = false;
+                continue;
+            }
+            if ch == '\\' {
+                escaped = true;
+                continue;
+            }
+            if ch == delimiter {
+                in_string = None;
+            }
+            continue;
+        }
+
+        if ch == '"' || ch == '\'' {
+            in_string = Some(ch);
+            continue;
+        }
+        if ch == open {
+            depth += 1;
+        } else if ch == close {
+            depth = depth.checked_sub(1)?;
+            if depth == 0 {
+                return Some(open_index + relative);
+            }
+        }
+    }
+    None
+}
+
+fn add_valid_region(text: &str, start: usize, end: usize, regions: &mut Vec<(usize, usize)>) {
+    if start >= end || end > text.len() {
+        return;
+    }
+    if detect_textual_tool_call(&text[start..end]).is_some() {
+        regions.push((start, end));
+    }
+}
+
 fn detect_direct_function_alias(text: &str) -> Option<(String, Value)> {
     let lowered = text.to_ascii_lowercase();
 
