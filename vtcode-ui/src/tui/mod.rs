@@ -4,7 +4,7 @@
     clippy::map_err_ignore,
     unfulfilled_lint_expectations
 )]
-//! `vtcode-tui` exposes inline terminal UI APIs as a reusable crate.
+//! `vtcode-ui::tui` exposes inline terminal UI APIs as a reusable module.
 //!
 //! The migrated implementation source lives in `src/core_tui/`.
 //! Public API is exported directly from this crate.

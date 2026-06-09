@@ -14,14 +14,13 @@
 
 ## Workspace
 
-Cargo workspace, ~26 crates. `default-members` = root, `vtcode-core`, `vtcode-tui` only.
+Cargo workspace, ~26 crates. `default-members` = root, `vtcode-core`, `vtcode-ui` only.
 
 | Crate | Role |
 |---|---|
 | `vtcode` (root `src/`) | Binary, CLI, session bootstrap |
 | `vtcode-core` | Agent loop, tools, prompts, LLM orchestration, UI |
-| `vtcode-tui` | Public TUI API surface |
-| `vtcode-design` | Centralized design system: color, style, layout, base widgets |
+| `vtcode-ui` | Unified UI: design system, theme registry, TUI framework |
 | `vtcode-llm` | LLM provider abstraction (publish=false) |
 | `vtcode-tools` | Tool registry and implementations (publish=false) |
 | `vtcode-config` | Config loading and schema |
@@ -36,7 +35,6 @@ Cargo workspace, ~26 crates. `default-members` = root, `vtcode-core`, `vtcode-tu
 | `vtcode-macros` | Procedural macros |
 | `vtcode-markdown-store` | Markdown storage and rendering |
 | `vtcode-terminal-detection` | Terminal detection primitives |
-| `vtcode-theme` | Theme definitions and constants |
 | `vtcode-utility-tool-specs` | JSON schemas for utility/file tools |
 | `vtcode-collaboration-tool-specs` | JSON schemas for collaboration/HITL tools |
 | `vtcode-file-search` | Parallel fuzzy file search |
@@ -54,8 +52,7 @@ Every crate has its own AGENTS.md with crate-specific conventions:
 |---|---|
 | `vtcode` (binary) | [src/AGENTS.md](src/AGENTS.md) |
 | `vtcode-core` | [vtcode-core/AGENTS.md](vtcode-core/AGENTS.md) |
-| `vtcode-tui` | [vtcode-tui/AGENTS.md](vtcode-tui/AGENTS.md) |
-| `vtcode-design` | [vtcode-design/AGENTS.md](vtcode-design/AGENTS.md) |
+| `vtcode-ui` | [vtcode-ui/AGENTS.md](vtcode-ui/AGENTS.md) |
 | `vtcode-config` | [vtcode-config/AGENTS.md](vtcode-config/AGENTS.md) |
 | `vtcode-llm` | [vtcode-llm/AGENTS.md](vtcode-llm/AGENTS.md) |
 | `vtcode-tools` | [vtcode-tools/AGENTS.md](vtcode-tools/AGENTS.md) |
@@ -70,7 +67,6 @@ Every crate has its own AGENTS.md with crate-specific conventions:
 | `vtcode-macros` | [vtcode-macros/AGENTS.md](vtcode-macros/AGENTS.md) |
 | `vtcode-markdown-store` | [vtcode-markdown-store/AGENTS.md](vtcode-markdown-store/AGENTS.md) |
 | `vtcode-terminal-detection` | [vtcode-terminal-detection/AGENTS.md](vtcode-terminal-detection/AGENTS.md) |
-| `vtcode-theme` | [vtcode-theme/AGENTS.md](vtcode-theme/AGENTS.md) |
 | `vtcode-utility-tool-specs` | [vtcode-utility-tool-specs/AGENTS.md](vtcode-utility-tool-specs/AGENTS.md) |
 | `vtcode-collaboration-tool-specs` | [vtcode-collaboration-tool-specs/AGENTS.md](vtcode-collaboration-tool-specs/AGENTS.md) |
 | `vtcode-file-search` | [vtcode-file-search/AGENTS.md](vtcode-file-search/AGENTS.md) |

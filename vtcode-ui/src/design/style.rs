@@ -1,7 +1,7 @@
 //! Unified style bridging between `anstyle` and `ratatui`.
 //!
 //! Converts `anstyle::Style` and `InlineTextStyle` to `ratatui::style::Style`,
-//! using the correct color mapping from [`crate::color`].
+//! using the correct color mapping from [`crate::design::color`].
 
 use anstyle::{Color as AnstyleColor, Effects, Style as AnstyleStyle};
 use ratatui::style::{Modifier, Style};

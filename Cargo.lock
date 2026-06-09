@@ -6958,10 +6958,9 @@ dependencies = [
  "vtcode-commons",
  "vtcode-config",
  "vtcode-core",
- "vtcode-design",
  "vtcode-process-hardening",
  "vtcode-terminal-detection",
- "vtcode-tui",
+ "vtcode-ui",
  "webbrowser",
 ]
 
@@ -7215,31 +7214,19 @@ dependencies = [
  "vtcode-collaboration-tool-specs",
  "vtcode-commons",
  "vtcode-config",
- "vtcode-design",
  "vtcode-exec-events",
  "vtcode-file-search",
  "vtcode-indexer",
  "vtcode-macros",
  "vtcode-markdown-store",
  "vtcode-terminal-detection",
- "vtcode-theme",
- "vtcode-tui",
+ "vtcode-ui",
  "vtcode-utility-tool-specs",
  "webbrowser",
  "which",
  "wiremock",
  "xattr",
  "zip",
-]
-
-[[package]]
-name = "vtcode-design"
-version = "0.123.10"
-dependencies = [
- "anstyle",
- "ratatui",
- "unicode-width",
- "vtcode-commons",
 ]
 
 [[package]]
@@ -7361,20 +7348,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "vtcode-theme"
-version = "0.123.10"
-dependencies = [
- "anstyle",
- "anyhow",
- "catppuccin",
- "hashbrown 0.17.1",
- "once_cell",
- "parking_lot",
- "vtcode-commons",
- "vtcode-config",
-]
-
-[[package]]
 name = "vtcode-tools"
 version = "0.123.10"
 dependencies = [
@@ -7394,7 +7367,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "vtcode-tui"
+name = "vtcode-ui"
 version = "0.123.10"
 dependencies = [
  "anstyle",
@@ -7402,6 +7375,7 @@ dependencies = [
  "anstyle-ls",
  "anyhow",
  "better-panic",
+ "catppuccin",
  "chrono",
  "color-eyre",
  "criterion",
@@ -7435,9 +7409,7 @@ dependencies = [
  "unicode-width",
  "vtcode-commons",
  "vtcode-config",
- "vtcode-design",
  "vtcode-terminal-detection",
- "vtcode-theme",
  "vtcode-vim",
 ]
 

@@ -4,7 +4,7 @@ use crate::theme::runtime::active_theme_id;
 ///
 /// For code blocks and syntax highlighting:
 /// ```rust
-/// use vtcode_theme::{active_theme_id, get_syntax_theme_for_ui_theme};
+/// use vtcode_ui::theme::{active_theme_id, get_syntax_theme_for_ui_theme};
 ///
 /// let ui_theme = active_theme_id();
 /// let syntax_theme = get_syntax_theme_for_ui_theme(&ui_theme);

@@ -23,7 +23,7 @@ absolute-paths-allowed-crates = [
     "vtcode-core",
     "vtcode-commons",
     "vtcode-config",
-    "vtcode-tui",
+    "vtcode-ui",
     "vtcode-llm",
     "vtcode-lmstudio",
     "vtcode-markdown-store",

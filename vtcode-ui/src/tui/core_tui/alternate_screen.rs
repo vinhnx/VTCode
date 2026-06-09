@@ -29,7 +29,7 @@ struct TerminalState {
 ///
 /// ```no_run
 /// # fn main() -> anyhow::Result<()> {
-/// use vtcode_tui::core_tui::alternate_screen::AlternateScreenSession;
+/// use vtcode_ui::tui::core_tui::alternate_screen::AlternateScreenSession;
 ///
 /// // Run a closure in alternate screen with automatic cleanup
 /// let result = AlternateScreenSession::run(|| {
