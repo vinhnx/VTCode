@@ -6,13 +6,15 @@ use std::sync::Arc;
 use vtcode_config::constants::defaults::DEFAULT_PRIMARY_AGENT_NAME;
 use vtcode_config::core::permissions::AgentPermissionsConfig;
 use vtcode_config::{
-    DiscoveredSubagents, HookGroupConfig, HooksConfig, McpProviderConfig, PermissionMode,
-    SubagentMcpServer, SubagentMemoryScope, SubagentSource, SubagentSpec,
-    builtin_primary_build_agent,
+    DiscoveredSubagents, HookGroupConfig, HooksConfig, McpProviderConfig, SubagentMcpServer,
+    SubagentMemoryScope, SubagentSource, SubagentSpec, builtin_primary_duck_agent,
 };
 
 use crate::config::{ReasoningEffortLevel, VTCodeConfig};
 use crate::llm::provider::ToolDefinition;
+use crate::permissions::{
+    PermissionRequest, ResolvedPermissionDecision, evaluate_effective_permissions,
+};
 use crate::prompts::PromptContext;
 use crate::subagents::ResolvedAgentRuntimeView;
 
@@ -82,7 +84,7 @@ pub struct ActivePrimaryAgentState {
 impl Default for ActivePrimaryAgentState {
     fn default() -> Self {
         Self {
-            active: ActivePrimaryAgent::from_spec(&builtin_primary_build_agent()),
+            active: ActivePrimaryAgent::from_spec(&builtin_primary_duck_agent()),
         }
     }
 }
@@ -101,7 +103,7 @@ impl ActivePrimaryAgentState {
     #[must_use]
     pub fn from_specs(specs: &[SubagentSpec]) -> Self {
         let active = resolve_primary_agent(specs, DEFAULT_PRIMARY_AGENT_NAME)
-            .unwrap_or_else(|_| ActivePrimaryAgent::from_spec(&builtin_primary_build_agent()));
+            .unwrap_or_else(|_| ActivePrimaryAgent::from_spec(&builtin_primary_duck_agent()));
         Self { active }
     }
 
@@ -169,22 +171,6 @@ pub fn resolve_primary_agent(
         .ok_or_else(|| PrimaryAgentResolutionError::UnknownAgent {
             requested: requested.to_string(),
         })
-}
-
-#[must_use]
-pub fn clamp_primary_permission_mode(
-    base: PermissionMode,
-    requested: Option<PermissionMode>,
-) -> PermissionMode {
-    let Some(requested) = requested else {
-        return base;
-    };
-
-    if permission_rank(requested) <= permission_rank(base) {
-        requested
-    } else {
-        base
-    }
 }
 
 /// Returns `true` when `tool_name` is a subagent lifecycle tool that must
@@ -278,15 +264,26 @@ pub fn apply_primary_agent_prompt_context(context: &mut PromptContext, agent: &A
     context.replace_available_skills_with_named(agent.skills.as_slice());
 }
 
-fn permission_rank(mode: PermissionMode) -> u8 {
-    match mode {
-        PermissionMode::DontAsk => 0,
-        PermissionMode::Plan => 1,
-        PermissionMode::Default => 2,
-        PermissionMode::AcceptEdits => 3,
-        PermissionMode::Auto => 4,
-        PermissionMode::BypassPermissions => 5,
-    }
+#[must_use]
+pub fn active_primary_agent_permissions(agent: &ActivePrimaryAgent) -> &AgentPermissionsConfig {
+    &agent.permissions
+}
+
+#[must_use]
+pub fn evaluate_active_primary_agent_permissions(
+    config: &VTCodeConfig,
+    agent: &ActivePrimaryAgent,
+    workspace_root: &std::path::Path,
+    current_dir: &std::path::Path,
+    request: &PermissionRequest,
+) -> ResolvedPermissionDecision {
+    evaluate_effective_permissions(
+        &config.permissions,
+        active_primary_agent_permissions(agent),
+        workspace_root,
+        current_dir,
+        request,
+    )
 }
 
 fn normalise_tool_name(tool_name: &str) -> String {
@@ -378,11 +375,14 @@ mod tests {
 
     use serde_json::json;
     use tempfile::TempDir;
-    use vtcode_config::core::permissions::PermissionDefault;
+    use vtcode_config::core::permissions::{AgentPermissionsConfig, PermissionDefault};
     use vtcode_config::{
         HookCommandConfig, HooksConfig, SubagentDiscoveryInput, SubagentMcpServer,
-        SubagentMemoryScope, SubagentSource, discover_subagents,
+        SubagentMemoryScope, SubagentSource, builtin_subagents, discover_subagents,
     };
+
+    use crate::config::constants::tools;
+    use crate::permissions::{ResolvedPermissionDecision, build_permission_request};
 
     use super::*;
 
@@ -525,10 +525,11 @@ mod tests {
     }
 
     #[test]
-    fn default_state_uses_builtin_build_agent() {
+    fn default_state_uses_builtin_duck_agent() {
         let mut state = ActivePrimaryAgentState::default();
 
         assert_eq!(state.active().identity.name, DEFAULT_PRIMARY_AGENT_NAME);
+        assert_eq!(state.active().identity.name, "duck");
         assert_eq!(state.active().identity.source, SubagentSource::Builtin);
 
         state
@@ -539,20 +540,30 @@ mod tests {
         state.reset_to_default_from_specs(&[]);
 
         assert_eq!(state.active().identity.name, DEFAULT_PRIMARY_AGENT_NAME);
+        assert_eq!(state.active().identity.name, "duck");
         assert_eq!(state.active().identity.source, SubagentSource::Builtin);
     }
 
     #[test]
-    fn discovery_precedence_overrides_builtin_build_agent() {
+    fn from_specs_falls_back_to_builtin_duck_agent() {
+        let active = ActivePrimaryAgentState::from_specs(&[]);
+
+        assert_eq!(active.active().identity.name, "duck");
+        assert_eq!(active.active().identity.source, SubagentSource::Builtin);
+    }
+
+    #[test]
+    fn discovery_precedence_overrides_builtin_duck_agent() {
         let temp = TempDir::new().expect("tempdir");
         let discovered = discover_subagents(&SubagentDiscoveryInput {
             workspace_root: temp.path().to_path_buf(),
             cli_agents: Some(json!({
-                "build": {
-                    "description": "CLI build",
-                    "prompt": "cli build instructions",
+                "duck": {
+                    "description": "CLI duck",
+                    "prompt": "cli duck instructions",
                     "model": "gpt-cli",
-                    "mode": "primary"
+                    "mode": "primary",
+                    "permissions": { "default": "deny" }
                 }
             })),
             plugin_agent_files: Vec::new(),
@@ -562,17 +573,18 @@ mod tests {
 
         let active = ActivePrimaryAgentState::from_discovery(&discovered);
 
-        assert_eq!(active.active().identity.name, "build");
+        assert_eq!(active.active().identity.name, "duck");
         assert_eq!(active.active().identity.source, SubagentSource::Cli);
-        assert_eq!(active.active().instructions, "cli build instructions");
+        assert_eq!(active.active().instructions, "cli duck instructions");
         assert_eq!(active.active().model.as_deref(), Some("gpt-cli"));
     }
 
     #[test]
-    fn default_build_agent_allows_baseline_tools() {
+    fn default_duck_agent_allows_baseline_read_tools() {
         let active = ActivePrimaryAgentState::default();
 
         assert!(primary_agent_allows_tool(active.active(), "unified_search"));
+        assert!(!primary_agent_allows_tool(active.active(), "unified_file"));
     }
 
     #[test]
@@ -632,26 +644,6 @@ mod tests {
     }
 
     #[test]
-    fn permission_policy_clamps_without_broadening() {
-        assert_eq!(
-            clamp_primary_permission_mode(PermissionMode::Default, Some(PermissionMode::Plan)),
-            PermissionMode::Plan
-        );
-        assert_eq!(
-            clamp_primary_permission_mode(PermissionMode::Default, Some(PermissionMode::Auto)),
-            PermissionMode::Default
-        );
-        assert_eq!(
-            clamp_primary_permission_mode(PermissionMode::Auto, Some(PermissionMode::Plan)),
-            PermissionMode::Plan
-        );
-        assert_eq!(
-            clamp_primary_permission_mode(PermissionMode::Plan, None),
-            PermissionMode::Plan
-        );
-    }
-
-    #[test]
     fn build_primary_agent_runtime_config_preserves_baseline_fields_and_merges_mcp() {
         let mut parent = VTCodeConfig::default();
         parent.agent.default_model = "parent-model".to_string();
@@ -693,6 +685,97 @@ mod tests {
         assert_eq!(runtime.mcp.providers.len(), 2);
         assert_eq!(runtime.mcp.providers[0].name, "global");
         assert_eq!(runtime.mcp.providers[1].name, "local");
+    }
+
+    #[test]
+    fn built_in_primary_agents_resolve_required_permission_policy() {
+        let builtins = builtin_subagents();
+
+        for name in ["build", "auto", "plan", "duck", "review"] {
+            let active = resolve_primary_agent(&builtins, name)
+                .unwrap_or_else(|_| panic!("missing built-in primary agent {name}"));
+            assert_eq!(active.identity.name, name);
+            let expected_default = match name {
+                "build" => PermissionDefault::Ask,
+                "auto" => PermissionDefault::Auto,
+                "plan" | "duck" | "review" => PermissionDefault::Deny,
+                _ => unreachable!("unexpected built-in primary agent"),
+            };
+            assert_eq!(active.permissions.default, expected_default);
+        }
+    }
+
+    #[test]
+    fn active_primary_permissions_overlay_runtime_decisions() {
+        let builtins = builtin_subagents();
+        let mut state = ActivePrimaryAgentState::from_specs(&builtins);
+        let config = VTCodeConfig::default();
+        let workspace = TempDir::new().expect("workspace");
+        let current_dir = workspace.path();
+
+        state
+            .select_from_specs(&builtins, "auto")
+            .expect("auto primary");
+        let exec = build_permission_request(
+            workspace.path(),
+            current_dir,
+            tools::UNIFIED_EXEC,
+            Some(&json!({"command": "cargo test"})),
+        );
+        assert_eq!(
+            evaluate_active_primary_agent_permissions(
+                &config,
+                state.active(),
+                workspace.path(),
+                current_dir,
+                &exec,
+            ),
+            ResolvedPermissionDecision::Auto
+        );
+
+        state
+            .select_from_specs(&builtins, "plan")
+            .expect("plan primary");
+        let edit = build_permission_request(
+            workspace.path(),
+            current_dir,
+            tools::UNIFIED_FILE,
+            Some(&json!({"action": "edit", "path": "src/lib.rs"})),
+        );
+        assert_eq!(
+            evaluate_active_primary_agent_permissions(
+                &config,
+                state.active(),
+                workspace.path(),
+                current_dir,
+                &edit,
+            ),
+            ResolvedPermissionDecision::Deny
+        );
+    }
+
+    #[test]
+    fn primary_agent_switching_changes_permission_policy_without_mutating_parent_config() {
+        let builtins = builtin_subagents();
+        let mut state = ActivePrimaryAgentState::from_specs(&builtins);
+        let initial_model = state.active().model.clone();
+        let initial_tools = state.active().tools.clone();
+
+        state
+            .select_from_specs(&builtins, "auto")
+            .expect("auto primary");
+        assert_eq!(state.active().identity.name, "auto");
+        assert_eq!(state.active().permissions.default, PermissionDefault::Auto);
+        assert_eq!(state.active().model, initial_model);
+        assert_ne!(state.active().tools, initial_tools);
+
+        state
+            .select_from_specs(&builtins, "duck")
+            .expect("duck primary");
+        assert_eq!(state.active().identity.name, "duck");
+        assert_eq!(state.active().permissions.default, PermissionDefault::Deny);
+        assert_eq!(state.active().model, initial_model);
+        assert_eq!(state.active().tools, initial_tools);
     }
 
     #[test]

@@ -121,8 +121,8 @@ pub use status_line::{StatusLineConfig, StatusLineMode};
 pub use subagents::{
     AgentMode, DiscoveredSubagents, SubagentDiscoveryInput, SubagentMcpServer, SubagentMemoryScope,
     SubagentRuntimeLimits, SubagentSource, SubagentSpec, builtin_plan_agent,
-    builtin_primary_build_agent, builtin_primary_duck_agent, builtin_subagents, discover_subagents,
-    load_subagent_from_file,
+    builtin_primary_auto_agent, builtin_primary_build_agent, builtin_primary_duck_agent,
+    builtin_primary_review_agent, builtin_subagents, discover_subagents, load_subagent_from_file,
 };
 pub use telemetry::TelemetryConfig;
 pub use terminal_title::{DEFAULT_TERMINAL_TITLE_ITEMS, TerminalTitleConfig};

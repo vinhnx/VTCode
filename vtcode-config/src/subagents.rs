@@ -46,6 +46,13 @@ When planning is needed, state the plan briefly before implementation. When the 
 discussion or review, do not edit files.
 Report changed files, validation, and remaining risks clearly."#;
 
+const BUILTIN_AUTO_PRIMARY_AGENT: &str = r#"You are the auto agent.
+
+Work autonomously within the active permission policy, taking direct action when the request is clear.
+Inspect the relevant repository context before editing, keep changes focused, and verify with the
+narrowest useful checks before reporting completion.
+Pause for user input when the scope is ambiguous, risky, or outside the requested work."#;
+
 const BUILTIN_PLAN_AGENT: &str = r#"You are a read-only planning agent.
 
 Gather the minimum repository context needed to support a plan or design decision.
@@ -59,6 +66,13 @@ const BUILTIN_DUCK_PRIMARY_AGENT: &str = r#"You are the duck agent.
 
 Be discussion-first. Help the user clarify scope, constraints, contradictions, and options before implementation.
 Do not edit files, you are for rubber-ducking only."#;
+
+const BUILTIN_REVIEW_PRIMARY_AGENT: &str = r#"You are the review agent.
+
+Review code and plans skeptically. Prioritise correctness bugs, behavioural regressions, missing
+tests, safety risks, and maintainability issues.
+Read the relevant files before making claims. Report findings first with specific file references,
+then note residual risk. Do not modify files."#;
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
@@ -451,8 +465,10 @@ pub fn discover_subagents(input: &SubagentDiscoveryInput) -> Result<DiscoveredSu
 pub fn builtin_subagents() -> Vec<SubagentSpec> {
     vec![
         builtin_primary_build_agent(),
+        builtin_primary_auto_agent(),
         builtin_primary_duck_agent(),
         builtin_plan_agent(),
+        builtin_primary_review_agent(),
         SubagentSpec {
             name: "default".to_string(),
             description: "Default inheriting subagent for general delegated work.".to_string(),
@@ -559,6 +575,34 @@ pub fn builtin_primary_build_agent() -> SubagentSpec {
     }
 }
 
+pub fn builtin_primary_auto_agent() -> SubagentSpec {
+    SubagentSpec {
+        name: "auto".to_string(),
+        description: "Built-in autonomous implementation agent for the main session.".to_string(),
+        prompt: BUILTIN_AUTO_PRIMARY_AGENT.to_string(),
+        tools: None,
+        disallowed_tools: Vec::new(),
+        model: Some("inherit".to_string()),
+        color: Some("green".to_string()),
+        reasoning_effort: None,
+        permissions: auto_agent_permissions(),
+        skills: Vec::new(),
+        mcp_servers: Vec::new(),
+        hooks: None,
+        background: false,
+        mode: AgentMode::Primary,
+        max_turns: None,
+        nickname_candidates: vec!["auto".to_string()],
+        initial_prompt: None,
+        memory: None,
+        isolation: None,
+        aliases: vec!["autonomous".to_string()],
+        source: SubagentSource::Builtin,
+        file_path: None,
+        warnings: Vec::new(),
+    }
+}
+
 pub fn builtin_plan_agent() -> SubagentSpec {
     SubagentSpec {
         name: "plan".to_string(),
@@ -615,6 +659,34 @@ pub fn builtin_primary_duck_agent() -> SubagentSpec {
     }
 }
 
+pub fn builtin_primary_review_agent() -> SubagentSpec {
+    SubagentSpec {
+        name: "review".to_string(),
+        description: "Built-in read-only review agent for the main session.".to_string(),
+        prompt: BUILTIN_REVIEW_PRIMARY_AGENT.to_string(),
+        tools: Some(builtin_readonly_tool_ids()),
+        disallowed_tools: builtin_readonly_disallowed_tool_ids(),
+        model: Some("inherit".to_string()),
+        color: Some("red".to_string()),
+        reasoning_effort: Some("medium".to_string()),
+        permissions: readonly_agent_permissions(),
+        skills: Vec::new(),
+        mcp_servers: Vec::new(),
+        hooks: None,
+        background: false,
+        mode: AgentMode::Primary,
+        max_turns: None,
+        nickname_candidates: vec!["review".to_string(), "reviewer".to_string()],
+        initial_prompt: None,
+        memory: None,
+        isolation: None,
+        aliases: vec!["reviewer".to_string(), "critic".to_string()],
+        source: SubagentSource::Builtin,
+        file_path: None,
+        warnings: Vec::new(),
+    }
+}
+
 fn builtin_readonly_tool_ids() -> Vec<String> {
     vec![
         tools::UNIFIED_SEARCH.to_string(),
@@ -629,6 +701,10 @@ fn builtin_readonly_disallowed_tool_ids() -> Vec<String> {
 
 fn mutating_agent_permissions() -> AgentPermissionsConfig {
     AgentPermissionsConfig::new(PermissionDefault::Ask)
+}
+
+fn auto_agent_permissions() -> AgentPermissionsConfig {
+    AgentPermissionsConfig::new(PermissionDefault::Auto)
 }
 
 fn readonly_agent_permissions() -> AgentPermissionsConfig {
@@ -1982,18 +2058,32 @@ Hook prompt"#,
                 .contains(&tools::READ_FILE.to_string())
         );
 
-        for name in ["build", "duck"] {
+        for name in ["build", "auto", "duck", "review"] {
             let spec = builtins
                 .iter()
                 .find(|spec| spec.name == name && spec.mode == AgentMode::Primary)
                 .unwrap_or_else(|| panic!("missing built-in primary agent {name}"));
             assert_eq!(spec.source, SubagentSource::Builtin);
+            let expected_default = match name {
+                "build" => PermissionDefault::Ask,
+                "auto" => PermissionDefault::Auto,
+                "duck" | "review" => PermissionDefault::Deny,
+                _ => unreachable!("unexpected built-in primary agent"),
+            };
+            assert_eq!(spec.permissions.default, expected_default);
         }
         let plan = builtins
             .iter()
             .find(|spec| spec.name == "plan" && spec.mode == AgentMode::All)
             .expect("missing built-in all-mode plan agent");
         assert_eq!(plan.source, SubagentSource::Builtin);
+        assert_eq!(plan.permissions.default, PermissionDefault::Deny);
+
+        let auto = builtins
+            .iter()
+            .find(|spec| spec.name == "auto" && spec.mode == AgentMode::Primary)
+            .expect("missing built-in auto primary agent");
+        assert_eq!(auto.permissions.default, PermissionDefault::Auto);
     }
 
     #[test]
@@ -2009,7 +2099,14 @@ Hook prompt"#,
             assert!(!spec.is_read_only());
         }
 
-        for name in ["duck", "explorer", "plan"] {
+        let auto = builtins
+            .iter()
+            .find(|spec| spec.name == "auto")
+            .expect("missing built-in auto agent");
+        assert_eq!(auto.permissions.default, PermissionDefault::Auto);
+        assert!(!auto.is_read_only());
+
+        for name in ["duck", "explorer", "plan", "review"] {
             let spec = builtins
                 .iter()
                 .find(|spec| spec.name == name)

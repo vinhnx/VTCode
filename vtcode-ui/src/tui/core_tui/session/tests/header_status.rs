@@ -215,7 +215,7 @@ fn set_primary_agent_command_updates_header_badge() {
 
     session.handle_command(InlineCommand::SetPrimaryAgent { name: None });
     let text = header_line_text(&mut session);
-    assert!(text.contains("Build"));
+    assert!(text.contains("Duck"));
     assert!(!text.contains("Reviewer"));
 }
 
