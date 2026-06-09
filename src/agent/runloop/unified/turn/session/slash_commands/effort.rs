@@ -6,7 +6,7 @@ use vtcode_core::config::models::Provider;
 use vtcode_core::config::types::ReasoningEffortLevel;
 use vtcode_core::models_manager::{ModelPreset, builtin_model_presets};
 use vtcode_core::utils::ansi::MessageStyle;
-use vtcode_tui::app::{InlineListItem, InlineListSelection};
+use vtcode_ui::tui::app::{InlineListItem, InlineListSelection};
 
 use crate::agent::runloop::ui::build_inline_header_context;
 

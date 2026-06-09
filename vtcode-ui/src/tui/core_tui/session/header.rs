@@ -1,0 +1,886 @@
+use std::fmt::Write;
+
+use ratatui::{
+    style::{Color, Modifier, Style},
+    text::{Line, Span},
+    widgets::{Block, Paragraph, Wrap},
+};
+use unicode_segmentation::UnicodeSegmentation;
+
+use crate::tui::config::constants::ui;
+
+use super::super::types::{
+    InlineHeaderBadge, InlineHeaderContext, InlineHeaderHighlight, InlineHeaderStatusBadge,
+    InlineHeaderStatusTone,
+};
+use super::terminal_capabilities;
+use super::utils::line_truncation::truncate_line_with_ellipsis_if_overflow;
+use super::{Session, ratatui_color_from_ansi, ratatui_style_from_inline};
+
+fn clean_reasoning_text(text: &str) -> String {
+    vtcode_commons::formatting::clean_reasoning_text(text)
+}
+
+fn capitalize_first_letter(s: &str) -> String {
+    let mut chars = s.chars();
+    match chars.next() {
+        None => String::new(),
+        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+    }
+}
+
+fn format_model_summary_label(model: &str) -> String {
+    model
+        .split('-')
+        .map(capitalize_first_letter)
+        .collect::<Vec<_>>()
+        .join("-")
+}
+
+fn primary_agent_header_label(name: Option<&str>) -> String {
+    let Some(name) = name.map(str::trim).filter(|name| !name.is_empty()) else {
+        return "Build".to_string();
+    };
+    format_model_summary_label(name)
+}
+
+fn compact_context_window_label(context_window_size: usize) -> String {
+    if context_window_size >= 1_000_000 {
+        format!("{}M", context_window_size / 1_000_000)
+    } else if context_window_size >= 1_000 {
+        format!("{}K", context_window_size / 1_000)
+    } else {
+        context_window_size.to_string()
+    }
+}
+
+fn line_is_empty(spans: &[Span<'static>]) -> bool {
+    spans.len() == 1 && spans.first().is_some_and(|span| span.content.is_empty())
+}
+
+fn header_status_badge_style(badge: &InlineHeaderStatusBadge, fallback: Style) -> Style {
+    let color = match badge.tone {
+        InlineHeaderStatusTone::Ready => Color::Green,
+        InlineHeaderStatusTone::Warning => Color::Yellow,
+        InlineHeaderStatusTone::Error => Color::Red,
+    };
+    fallback.fg(color).add_modifier(Modifier::BOLD)
+}
+
+fn header_context_badge_style(badge: &InlineHeaderBadge) -> Style {
+    let mut style = ratatui_style_from_inline(&badge.style, None);
+    if badge.full_background {
+        style = style.add_modifier(Modifier::BOLD);
+    }
+    style
+}
+
+impl Session {
+    pub(crate) fn header_lines(&mut self) -> Vec<Line<'static>> {
+        if let Some(cached) = &self.header_lines_cache {
+            return cached.clone();
+        }
+
+        let lines = if self.appearance.hide_header {
+            vec![self.header_block_title_for_width(self.transcript_width)]
+        } else {
+            vec![self.header_compact_line()]
+        };
+        self.header_lines_cache = Some(lines.clone());
+        lines
+    }
+
+    pub(crate) fn header_height_from_lines(&mut self, width: u16, lines: &[Line<'static>]) -> u16 {
+        if self.appearance.hide_header {
+            return 1;
+        }
+
+        if width == 0 {
+            return self.header_rows.max(ui::INLINE_HEADER_HEIGHT);
+        }
+
+        if let Some(&height) = self.header_height_cache.get(&width) {
+            return height;
+        }
+
+        let paragraph = self.build_header_paragraph(lines);
+        let measured = paragraph.line_count(width);
+        let resolved = u16::try_from(measured).unwrap_or(u16::MAX);
+        // Limit to max 3 lines to accommodate suggestions
+        let resolved = resolved.clamp(ui::INLINE_HEADER_HEIGHT, 3);
+        self.header_height_cache.insert(width, resolved);
+        resolved
+    }
+
+    pub(crate) fn build_header_paragraph(&self, lines: &[Line<'static>]) -> Paragraph<'static> {
+        let text_style = self.header_primary_style().add_modifier(Modifier::DIM);
+
+        if self.appearance.hide_header {
+            return Paragraph::new(lines.to_vec())
+                .style(text_style)
+                .wrap(Wrap { trim: true });
+        }
+
+        let mut border_style = Style::default();
+        if let Some(accent) = self
+            .theme
+            .tool_accent
+            .or(self.theme.primary)
+            .or(self.theme.foreground)
+        {
+            border_style = border_style.fg(ratatui_color_from_ansi(accent));
+        }
+        let text_style = self.header_primary_style().add_modifier(Modifier::DIM);
+        let block = Block::bordered()
+            .title(self.header_block_title())
+            .border_type(terminal_capabilities::get_border_type())
+            .border_style(border_style)
+            .style(self.styles.default_style());
+
+        Paragraph::new(lines.to_vec())
+            .style(text_style)
+            .wrap(Wrap { trim: true })
+            .block(block)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn header_height_for_width(&mut self, width: u16) -> u16 {
+        let lines = self.header_lines();
+        self.header_height_from_lines(width, &lines)
+    }
+
+    pub fn header_block_title(&self) -> Line<'static> {
+        self.header_block_title_for_width(0)
+    }
+
+    fn header_block_title_for_width(&self, width: u16) -> Line<'static> {
+        let fallback = InlineHeaderContext::default();
+        let version = if self.header_context.version.trim().is_empty() {
+            fallback.version
+        } else {
+            self.header_context.version.clone()
+        };
+
+        let app_name = if self.header_context.app_name.trim().is_empty() {
+            ui::HEADER_VERSION_PREFIX
+        } else {
+            self.header_context.app_name.trim()
+        };
+        let prompt = format!("{}{}", ui::HEADER_VERSION_PROMPT, app_name);
+        let version_text = format!(
+            " {}{}{}",
+            ui::HEADER_VERSION_LEFT_DELIMITER,
+            version.trim(),
+            ui::HEADER_VERSION_RIGHT_DELIMITER
+        );
+
+        let prompt_style = self.section_title_style();
+        let version_style = self.header_secondary_style().add_modifier(Modifier::DIM);
+
+        let mut spans = vec![
+            Span::styled(prompt, prompt_style),
+            Span::styled(version_text, version_style),
+        ];
+
+        if self.appearance.hide_header && width > 0 {
+            let right_spans = self.header_compact_right_spans();
+            if right_spans.is_empty() {
+                return Line::from(spans);
+            }
+
+            let left_width = spans.iter().map(Span::width).sum::<usize>();
+            let summary_width = right_spans.iter().map(Span::width).sum::<usize>();
+            let available_width = usize::from(width);
+            let spacer_width = available_width
+                .saturating_sub(left_width.saturating_add(summary_width))
+                .max(1);
+            spans.push(Span::raw(" ".repeat(spacer_width)));
+            spans.extend(right_spans);
+        }
+
+        let line = Line::from(spans);
+        if width > 0 {
+            truncate_line_with_ellipsis_if_overflow(line, usize::from(width))
+        } else {
+            line
+        }
+    }
+
+    fn header_compact_right_spans(&self) -> Vec<Span<'static>> {
+        let mut spans = Vec::new();
+        let agent_label = primary_agent_header_label(self.header_context.primary_agent.as_deref());
+        let model_summary_spans = self.header_compact_model_summary_spans();
+        if !agent_label.trim().is_empty() {
+            spans.push(Span::styled(
+                agent_label,
+                Style::default()
+                    .fg(Color::Magenta)
+                    .add_modifier(Modifier::BOLD),
+            ));
+        }
+
+        if let Some((mode_text, mode_style)) = self.header_active_mode_summary() {
+            if !spans.is_empty() {
+                spans.push(Span::styled(
+                    " · ".to_owned(),
+                    self.header_secondary_style(),
+                ));
+            }
+            spans.push(Span::styled(mode_text, mode_style));
+        }
+
+        if !spans.is_empty() && !model_summary_spans.is_empty() {
+            spans.push(Span::styled(
+                " · ".to_owned(),
+                self.header_secondary_style(),
+            ));
+        }
+        spans.extend(model_summary_spans);
+
+        spans
+    }
+
+    fn header_compact_model_summary_spans(&self) -> Vec<Span<'static>> {
+        let provider = self.header_provider_short_value();
+        let model = self.header_model_short_value();
+        let reasoning = self.header_reasoning_short_value();
+        let mut spans = Vec::new();
+        let mut provider_model_parts = Vec::new();
+
+        match (
+            !provider.is_empty() && !provider.eq_ignore_ascii_case(ui::HEADER_UNKNOWN_PLACEHOLDER),
+            !model.is_empty() && !model.eq_ignore_ascii_case(ui::HEADER_UNKNOWN_PLACEHOLDER),
+        ) {
+            (true, true) => provider_model_parts.push(format!(
+                "{} {}",
+                capitalize_first_letter(&provider),
+                format_model_summary_label(&model)
+            )),
+            (true, false) => provider_model_parts.push(capitalize_first_letter(&provider)),
+            (false, true) => provider_model_parts.push(format_model_summary_label(&model)),
+            (false, false) => {}
+        }
+
+        if let Some(summary) =
+            (!provider_model_parts.is_empty()).then(|| provider_model_parts.join(" "))
+        {
+            spans.push(Span::styled(
+                summary,
+                self.header_secondary_style().add_modifier(Modifier::DIM),
+            ));
+        }
+
+        if !reasoning.is_empty() && !reasoning.eq_ignore_ascii_case(ui::HEADER_UNKNOWN_PLACEHOLDER)
+        {
+            if !spans.is_empty() {
+                spans.push(Span::styled(
+                    " · ".to_owned(),
+                    self.header_secondary_style(),
+                ));
+            }
+            let label_style = self
+                .header_secondary_style()
+                .add_modifier(Modifier::ITALIC | Modifier::DIM);
+            let value_style = self.header_secondary_style().add_modifier(Modifier::ITALIC);
+            spans.push(Span::styled("effort:".to_owned(), label_style));
+            spans.push(Span::styled(" ".to_owned(), label_style));
+            spans.push(Span::styled(reasoning, value_style));
+        }
+
+        spans
+    }
+
+    fn header_active_mode_summary(&self) -> Option<(String, Style)> {
+        use super::super::types::EditingMode;
+
+        if self.header_context.autonomous_mode {
+            return Some((
+                "Auto".to_string(),
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
+            ));
+        }
+
+        match self.header_context.editing_mode {
+            EditingMode::Plan => Some((
+                "Plan".to_string(),
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            )),
+            EditingMode::Edit => Some((
+                "Edit".to_string(),
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            )),
+        }
+    }
+
+    pub fn header_title_line(&self) -> Line<'static> {
+        // First line: badge-style provider + model + reasoning summary
+        let mut spans = Vec::new();
+
+        let provider = self.header_provider_short_value();
+        let model = self.header_model_short_value();
+        let reasoning = self.header_reasoning_short_value();
+
+        if !provider.is_empty() {
+            let capitalized_provider = capitalize_first_letter(&provider);
+            let mut style = self.header_primary_style();
+            style = style.add_modifier(Modifier::BOLD);
+            spans.push(Span::styled(capitalized_provider, style));
+        }
+
+        if !model.is_empty() {
+            if !spans.is_empty() {
+                spans.push(Span::raw(" "));
+            }
+            let mut style = self.header_primary_style();
+            style = style.add_modifier(Modifier::ITALIC);
+            spans.push(Span::styled(model, style));
+        }
+
+        if !reasoning.is_empty() {
+            if !spans.is_empty() {
+                spans.push(Span::raw(" "));
+            }
+            let mut style = self.header_secondary_style();
+            style = style.add_modifier(Modifier::ITALIC | Modifier::DIM);
+
+            if let Some(stage) = &self.header_context.reasoning_stage {
+                let mut stage_style = style;
+                stage_style = stage_style
+                    .remove_modifier(Modifier::DIM)
+                    .add_modifier(Modifier::BOLD);
+                spans.push(Span::styled(format!("[{}]", stage), stage_style));
+                spans.push(Span::raw(" "));
+            }
+
+            spans.push(Span::styled(reasoning.to_string(), style));
+        }
+
+        if spans.is_empty() {
+            spans.push(Span::raw(String::new()));
+        }
+
+        Line::from(spans)
+    }
+
+    fn header_compact_line(&self) -> Line<'static> {
+        let mut spans = self.header_title_line().spans;
+        if line_is_empty(&spans) {
+            spans.clear();
+        }
+
+        let mut meta_spans = self.header_meta_line().spans;
+        if line_is_empty(&meta_spans) {
+            meta_spans.clear();
+        }
+
+        let mut tail_spans = if self.should_show_suggestions() {
+            self.header_suggestions_line()
+        } else {
+            self.header_highlights_line()
+        }
+        .map(|line| line.spans)
+        .unwrap_or_default();
+
+        if line_is_empty(&tail_spans) {
+            tail_spans.clear();
+        }
+
+        let separator_style = self.header_secondary_style();
+        let separator = Span::styled(
+            ui::HEADER_MODE_PRIMARY_SEPARATOR.to_owned(),
+            separator_style,
+        );
+
+        let mut append_section = |section: &mut Vec<Span<'static>>| {
+            if section.is_empty() {
+                return;
+            }
+            if !spans.is_empty() {
+                spans.push(separator.clone());
+            }
+            spans.append(section);
+        };
+
+        append_section(&mut meta_spans);
+        append_section(&mut tail_spans);
+
+        if spans.is_empty() {
+            spans.push(Span::raw(String::new()));
+        }
+
+        Line::from(spans)
+    }
+
+    fn header_provider_value(&self) -> String {
+        let trimmed = self.header_context.provider.trim();
+        if trimmed.is_empty() {
+            InlineHeaderContext::default().provider
+        } else {
+            self.header_context.provider.clone()
+        }
+    }
+
+    fn header_model_value(&self) -> String {
+        let trimmed = self.header_context.model.trim();
+        if trimmed.is_empty() {
+            InlineHeaderContext::default().model
+        } else {
+            self.header_context.model.clone()
+        }
+    }
+
+    fn header_mode_label(&self) -> String {
+        let trimmed = self.header_context.mode.trim();
+        if trimmed.is_empty() {
+            InlineHeaderContext::default().mode
+        } else {
+            self.header_context.mode.clone()
+        }
+    }
+
+    pub fn header_mode_short_label(&self) -> String {
+        let full = self.header_mode_label();
+        let value = full.trim();
+        if value.eq_ignore_ascii_case(ui::HEADER_MODE_AUTO) {
+            return "Auto".to_owned();
+        }
+        if value.eq_ignore_ascii_case(ui::HEADER_MODE_INLINE) {
+            return "Inline".to_owned();
+        }
+        if value.eq_ignore_ascii_case(ui::HEADER_MODE_ALTERNATE) {
+            return "Alternate".to_owned();
+        }
+
+        // Handle common abbreviations with more descriptive names
+        if value.to_lowercase() == "std" {
+            return "Session: Standard".to_owned();
+        }
+
+        let compact = value
+            .strip_suffix(ui::HEADER_MODE_FULL_AUTO_SUFFIX)
+            .unwrap_or(value)
+            .trim();
+        compact.to_owned()
+    }
+
+    fn header_reasoning_value(&self) -> Option<String> {
+        let raw_reasoning = &self.header_context.reasoning;
+        let cleaned = clean_reasoning_text(raw_reasoning);
+        let trimmed = cleaned.trim();
+        let value = if trimmed.is_empty() {
+            InlineHeaderContext::default().reasoning
+        } else {
+            cleaned
+        };
+        if value.trim().is_empty() {
+            None
+        } else {
+            Some(value)
+        }
+    }
+
+    pub fn header_provider_short_value(&self) -> String {
+        let value = self.header_provider_value();
+        Self::strip_prefix(&value, ui::HEADER_PROVIDER_PREFIX)
+            .trim()
+            .to_owned()
+    }
+
+    pub fn header_model_short_value(&self) -> String {
+        let value = self.header_model_value();
+        let model = Self::strip_prefix(&value, ui::HEADER_MODEL_PREFIX)
+            .trim()
+            .to_owned();
+
+        match self.header_context.context_window_size {
+            Some(context_window_size) if context_window_size > 0 => {
+                format!(
+                    "{} ({})",
+                    model,
+                    compact_context_window_label(context_window_size)
+                )
+            }
+            _ => model,
+        }
+    }
+
+    pub fn header_reasoning_short_value(&self) -> String {
+        let value = self.header_reasoning_value().unwrap_or_default();
+        Self::strip_prefix(&value, ui::HEADER_REASONING_PREFIX)
+            .trim()
+            .to_owned()
+    }
+
+    pub fn header_chain_values(&self) -> Vec<String> {
+        let mut values = Vec::new();
+
+        for value in [
+            &self.header_context.tools,
+            &self.header_context.git,
+            &self.header_context.mcp,
+        ] {
+            let trimmed = value.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+
+            if trimmed.starts_with(ui::HEADER_TOOLS_PREFIX)
+                || trimmed.starts_with(ui::HEADER_GIT_PREFIX)
+            {
+                continue;
+            }
+
+            if let Some(body) = trimmed.strip_prefix(ui::HEADER_MCP_PREFIX) {
+                let body = body.trim();
+                if body.is_empty() || body.eq_ignore_ascii_case(ui::HEADER_UNKNOWN_PLACEHOLDER) {
+                    continue;
+                }
+                values.push(format!("MCP: {}", body));
+                continue;
+            }
+
+            values.push(trimmed.to_owned());
+        }
+
+        values
+    }
+
+    pub fn header_meta_line(&self) -> Line<'static> {
+        use super::super::types::EditingMode;
+
+        let mut spans = Vec::new();
+
+        let mut first_section = true;
+        let separator_style = self.header_secondary_style();
+
+        let push_badge =
+            |spans: &mut Vec<Span<'static>>, text: String, style: Style, first: &mut bool| {
+                if !*first {
+                    spans.push(Span::styled(
+                        ui::HEADER_MODE_SECONDARY_SEPARATOR.to_owned(),
+                        separator_style,
+                    ));
+                }
+                spans.push(Span::styled(text, style));
+                *first = false;
+            };
+
+        let agent_style = Style::default()
+            .fg(Color::Magenta)
+            .add_modifier(Modifier::BOLD);
+        push_badge(
+            &mut spans,
+            primary_agent_header_label(self.header_context.primary_agent.as_deref()),
+            agent_style,
+            &mut first_section,
+        );
+
+        // Show editing mode badge
+        if self.header_context.editing_mode == EditingMode::Plan {
+            let badge_style = Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD);
+            push_badge(
+                &mut spans,
+                "Plan".to_string(),
+                badge_style,
+                &mut first_section,
+            );
+        }
+
+        // Show autonomous mode indicator
+        if self.header_context.autonomous_mode {
+            let badge_style = Style::default()
+                .fg(Color::Green)
+                .add_modifier(Modifier::BOLD);
+            push_badge(
+                &mut spans,
+                "Auto".to_string(),
+                badge_style,
+                &mut first_section,
+            );
+        }
+
+        // Show trust level badge
+        let trust_value = self.header_context.workspace_trust.to_lowercase();
+        if trust_value.contains("full auto") || trust_value.contains("full_auto") {
+            let badge_style = Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD);
+            push_badge(
+                &mut spans,
+                "Full-auto".to_string(),
+                badge_style,
+                &mut first_section,
+            );
+        } else if trust_value.contains("tools policy") || trust_value.contains("tools_policy") {
+            let badge_style = Style::default()
+                .fg(Color::Green)
+                .add_modifier(Modifier::BOLD);
+            push_badge(
+                &mut spans,
+                "Safe".to_string(),
+                badge_style,
+                &mut first_section,
+            );
+        }
+
+        if let Some(badge) = self
+            .header_context
+            .persistent_memory
+            .as_ref()
+            .filter(|badge| !badge.text.trim().is_empty())
+        {
+            if !first_section {
+                spans.push(Span::styled(
+                    ui::HEADER_MODE_SECONDARY_SEPARATOR.to_owned(),
+                    self.header_secondary_style(),
+                ));
+            }
+            let style = header_status_badge_style(badge, self.header_primary_style());
+            spans.push(Span::styled(badge.text.clone(), style));
+            first_section = false;
+        }
+
+        if let Some(badge) = self
+            .header_context
+            .pr_review
+            .as_ref()
+            .filter(|badge| !badge.text.trim().is_empty())
+        {
+            if !first_section {
+                spans.push(Span::styled(
+                    ui::HEADER_MODE_SECONDARY_SEPARATOR.to_owned(),
+                    self.header_secondary_style(),
+                ));
+            }
+            let style = header_status_badge_style(badge, self.header_primary_style());
+            spans.push(Span::styled(badge.text.clone(), style));
+            first_section = false;
+        }
+
+        for badge in self
+            .header_context
+            .subagent_badges
+            .iter()
+            .filter(|badge| !badge.text.trim().is_empty())
+        {
+            if !first_section {
+                spans.push(Span::styled(
+                    ui::HEADER_MODE_SECONDARY_SEPARATOR.to_owned(),
+                    self.header_secondary_style(),
+                ));
+            }
+            let text = if badge.full_background {
+                format!(" {} ", badge.text)
+            } else {
+                badge.text.clone()
+            };
+            spans.push(Span::styled(text, header_context_badge_style(badge)));
+            first_section = false;
+        }
+
+        for value in self.header_chain_values() {
+            if !first_section {
+                spans.push(Span::styled(
+                    ui::HEADER_MODE_SECONDARY_SEPARATOR.to_owned(),
+                    self.header_secondary_style(),
+                ));
+            }
+            spans.push(Span::styled(value, self.header_primary_style()));
+            first_section = false;
+        }
+
+        if spans.is_empty() {
+            spans.push(Span::raw(String::new()));
+        }
+
+        Line::from(spans)
+    }
+
+    fn header_highlights_line(&self) -> Option<Line<'static>> {
+        let mut spans = Vec::new();
+        let mut first_section = true;
+
+        for highlight in &self.header_context.highlights {
+            let title = highlight.title.trim();
+            let summary = self.header_highlight_summary(highlight);
+
+            if title.is_empty() && summary.is_none() {
+                continue;
+            }
+
+            if !first_section {
+                spans.push(Span::styled(
+                    ui::HEADER_META_SEPARATOR.to_owned(),
+                    self.header_secondary_style(),
+                ));
+            }
+
+            if !title.is_empty() {
+                let mut title_style = self.header_secondary_style();
+                title_style = title_style.add_modifier(Modifier::BOLD);
+                let mut title_text = title.to_owned();
+                if summary.is_some() {
+                    title_text.push(':');
+                }
+                spans.push(Span::styled(title_text, title_style));
+                if summary.is_some() {
+                    spans.push(Span::styled(" ".to_owned(), self.header_secondary_style()));
+                }
+            }
+
+            if let Some(body) = summary {
+                spans.push(Span::styled(body, self.header_primary_style()));
+            }
+
+            first_section = false;
+        }
+
+        if spans.is_empty() {
+            None
+        } else {
+            Some(Line::from(spans))
+        }
+    }
+
+    fn header_highlight_summary(&self, highlight: &InlineHeaderHighlight) -> Option<String> {
+        let entries: Vec<String> = highlight
+            .lines
+            .iter()
+            .map(|line| line.trim())
+            .filter(|line| !line.is_empty())
+            .map(|line| {
+                let stripped = line
+                    .strip_prefix("- ")
+                    .or_else(|| line.strip_prefix("• "))
+                    .unwrap_or(line);
+                stripped.trim().to_owned()
+            })
+            .collect();
+
+        if entries.is_empty() {
+            return None;
+        }
+
+        Some(self.compact_highlight_entries(&entries))
+    }
+
+    fn compact_highlight_entries(&self, entries: &[String]) -> String {
+        let mut summary =
+            self.truncate_highlight_preview(entries.first().map(String::as_str).unwrap_or(""));
+        if entries.len() > 1 {
+            let remaining = entries.len() - 1;
+            if !summary.is_empty() {
+                let _ = write!(summary, " (+{} more)", remaining);
+            } else {
+                summary = format!("(+{} more)", remaining);
+            }
+        }
+        summary
+    }
+
+    fn truncate_highlight_preview(&self, text: &str) -> String {
+        let max = ui::HEADER_HIGHLIGHT_PREVIEW_MAX_CHARS;
+        if max == 0 {
+            return String::new();
+        }
+
+        let grapheme_count = text.graphemes(true).count();
+        if grapheme_count <= max {
+            return text.to_owned();
+        }
+
+        // Optimization: return early if string is short (already checked above with grapheme count)
+        // This is safe because count() <= max means it doesn't need truncation.
+
+        let mut truncated = String::new();
+        // pre-allocate capacity
+        truncated.reserve(text.len().min(max * 4));
+        for grapheme in text.graphemes(true).take(max.saturating_sub(1)) {
+            truncated.push_str(grapheme);
+        }
+        truncated.push_str(ui::INLINE_PREVIEW_ELLIPSIS);
+        truncated
+    }
+
+    /// Determine if suggestions should be shown in the header
+    fn should_show_suggestions(&self) -> bool {
+        // Show suggestions when input is empty or starts with /
+        self.input_manager.content().is_empty() || self.input_manager.content().starts_with('/')
+    }
+
+    /// Generate header line with slash command and keyboard shortcut suggestions
+    pub(crate) fn header_suggestions_line(&self) -> Option<Line<'static>> {
+        let dim = self.header_secondary_style().add_modifier(Modifier::DIM);
+        let key = self.header_primary_style().add_modifier(Modifier::BOLD);
+        let label = self.header_secondary_style();
+        let dot = Span::styled(" · ", dim);
+
+        let mut spans = vec![
+            Span::styled("/help", key),
+            dot.clone(),
+            Span::styled("/model", key),
+            dot.clone(),
+            Span::styled("/effort", key),
+            dot.clone(),
+            Span::styled("/config", key),
+            dot.clone(),
+            Span::styled("/clear", key),
+            Span::styled("  │  ", dim),
+            Span::styled("↑↓", key),
+            Span::styled(" nav", label),
+            dot.clone(),
+            Span::styled("Tab", key),
+            Span::styled(" complete", label),
+        ];
+
+        if self.has_delegated_local_agents() {
+            spans.push(Span::styled("  │  ", dim));
+            spans.push(Span::styled("Alt+S", key));
+            spans.push(Span::styled(" agents", label));
+            spans.push(dot.clone());
+            spans.push(Span::styled("Ctrl+B", key));
+            spans.push(Span::styled(" background", label));
+        }
+
+        Some(Line::from(spans))
+    }
+
+    pub(crate) fn section_title_style(&self) -> Style {
+        let mut style = self
+            .styles
+            .default_style()
+            .add_modifier(Modifier::BOLD | Modifier::DIM);
+        if let Some(primary) = self.theme.primary.or(self.theme.foreground) {
+            style = style.fg(ratatui_color_from_ansi(primary));
+        }
+        style
+    }
+
+    fn header_primary_style(&self) -> Style {
+        let mut style = self.styles.default_style().add_modifier(Modifier::DIM);
+        if let Some(primary) = self.theme.primary.or(self.theme.foreground) {
+            style = style.fg(ratatui_color_from_ansi(primary));
+        }
+        style
+    }
+
+    pub(crate) fn header_secondary_style(&self) -> Style {
+        let mut style = self.styles.default_style().add_modifier(Modifier::DIM);
+        if let Some(secondary) = self.theme.secondary.or(self.theme.foreground) {
+            style = style.fg(ratatui_color_from_ansi(secondary));
+        }
+        style
+    }
+
+    fn strip_prefix<'a>(value: &'a str, prefix: &str) -> &'a str {
+        value.strip_prefix(prefix).unwrap_or(value)
+    }
+}

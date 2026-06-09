@@ -25,7 +25,7 @@ use vtcode_core::core::agent::snapshots::{
 };
 use vtcode_core::llm::provider::{self as uni, LLMRequest, LLMResponse};
 use vtcode_core::utils::ansi::AnsiRenderer;
-use vtcode_tui::app::{
+use vtcode_ui::tui::app::{
     InlineCommand, InlineEvent, InlineHandle, InlineListSelection, TransientEvent,
     TransientRequest, TransientSubmission,
 };
@@ -123,7 +123,7 @@ async fn launch_editor_event_submits_edit_command() {
     let mut vt_cfg = None;
     let mut provider_client: Box<dyn uni::LLMProvider> = Box::new(DummyProvider);
     let session_bootstrap = SessionBootstrap::default();
-    let mut header_context = vtcode_tui::app::InlineHeaderContext::default();
+    let mut header_context = vtcode_ui::tui::app::InlineHeaderContext::default();
     let mut context = InlineEventContext::new(
         &mut renderer,
         &handle,
@@ -172,7 +172,7 @@ async fn launch_editor_event_with_draft_returns_editor_with_draft_action() {
     let mut vt_cfg = None;
     let mut provider_client: Box<dyn uni::LLMProvider> = Box::new(DummyProvider);
     let session_bootstrap = SessionBootstrap::default();
-    let mut header_context = vtcode_tui::app::InlineHeaderContext::default();
+    let mut header_context = vtcode_ui::tui::app::InlineHeaderContext::default();
     let mut context = InlineEventContext::new(
         &mut renderer,
         &handle,
@@ -221,7 +221,7 @@ async fn open_file_in_editor_event_submits_edit_command_with_path() {
     let mut vt_cfg = None;
     let mut provider_client: Box<dyn uni::LLMProvider> = Box::new(DummyProvider);
     let session_bootstrap = SessionBootstrap::default();
-    let mut header_context = vtcode_tui::app::InlineHeaderContext::default();
+    let mut header_context = vtcode_ui::tui::app::InlineHeaderContext::default();
     let mut context = InlineEventContext::new(
         &mut renderer,
         &handle,
@@ -266,7 +266,7 @@ async fn open_url_event_shows_guard_modal_with_deny_selected_by_default() {
     let mut vt_cfg = None;
     let mut provider_client: Box<dyn uni::LLMProvider> = Box::new(DummyProvider);
     let session_bootstrap = SessionBootstrap::default();
-    let mut header_context = vtcode_tui::app::InlineHeaderContext::default();
+    let mut header_context = vtcode_ui::tui::app::InlineHeaderContext::default();
     let url = "https://example.com/docs".to_string();
     {
         let mut context = InlineEventContext::new(
@@ -338,7 +338,7 @@ async fn open_http_url_guard_modal_includes_insecure_transport_warning() {
     let mut vt_cfg = None;
     let mut provider_client: Box<dyn uni::LLMProvider> = Box::new(DummyProvider);
     let session_bootstrap = SessionBootstrap::default();
-    let mut header_context = vtcode_tui::app::InlineHeaderContext::default();
+    let mut header_context = vtcode_ui::tui::app::InlineHeaderContext::default();
     {
         let mut context = InlineEventContext::new(
             &mut renderer,
@@ -403,7 +403,7 @@ async fn cancelling_url_guard_restores_previous_palette() {
     let mut vt_cfg = None;
     let mut provider_client: Box<dyn uni::LLMProvider> = Box::new(DummyProvider);
     let session_bootstrap = SessionBootstrap::default();
-    let mut header_context = vtcode_tui::app::InlineHeaderContext::default();
+    let mut header_context = vtcode_ui::tui::app::InlineHeaderContext::default();
     {
         let mut context = InlineEventContext::new(
             &mut renderer,
@@ -484,7 +484,7 @@ async fn toggle_mode_event_submits_mode_command() {
     let mut vt_cfg = None;
     let mut provider_client: Box<dyn uni::LLMProvider> = Box::new(DummyProvider);
     let session_bootstrap = SessionBootstrap::default();
-    let mut header_context = vtcode_tui::app::InlineHeaderContext::default();
+    let mut header_context = vtcode_ui::tui::app::InlineHeaderContext::default();
     let mut context = InlineEventContext::new(
         &mut renderer,
         &handle,
@@ -537,7 +537,7 @@ async fn settings_editor_selection_submits_editor_config_command() {
     let mut vt_cfg = None;
     let mut provider_client: Box<dyn uni::LLMProvider> = Box::new(DummyProvider);
     let session_bootstrap = SessionBootstrap::default();
-    let mut header_context = vtcode_tui::app::InlineHeaderContext::default();
+    let mut header_context = vtcode_ui::tui::app::InlineHeaderContext::default();
     let mut context = InlineEventContext::new(
         &mut renderer,
         &handle,
@@ -588,7 +588,7 @@ async fn plan_confirmation_events_map_to_expected_actions() {
     let mut vt_cfg = None;
     let mut provider_client: Box<dyn uni::LLMProvider> = Box::new(DummyProvider);
     let session_bootstrap = SessionBootstrap::default();
-    let mut header_context = vtcode_tui::app::InlineHeaderContext::default();
+    let mut header_context = vtcode_ui::tui::app::InlineHeaderContext::default();
     let mut context = InlineEventContext::new(
         &mut renderer,
         &handle,
@@ -669,7 +669,7 @@ async fn interrupt_event_returns_exit_after_double_ctrl_c() {
     let mut vt_cfg = None;
     let mut provider_client: Box<dyn uni::LLMProvider> = Box::new(DummyProvider);
     let session_bootstrap = SessionBootstrap::default();
-    let mut header_context = vtcode_tui::app::InlineHeaderContext::default();
+    let mut header_context = vtcode_ui::tui::app::InlineHeaderContext::default();
     let mut context = InlineEventContext::new(
         &mut renderer,
         &handle,
@@ -714,7 +714,7 @@ async fn steering_events_are_passive_in_idle_loop() {
     let mut vt_cfg = None;
     let mut provider_client: Box<dyn uni::LLMProvider> = Box::new(DummyProvider);
     let session_bootstrap = SessionBootstrap::default();
-    let mut header_context = vtcode_tui::app::InlineHeaderContext::default();
+    let mut header_context = vtcode_ui::tui::app::InlineHeaderContext::default();
     let mut context = InlineEventContext::new(
         &mut renderer,
         &handle,
@@ -761,7 +761,7 @@ async fn process_latest_queued_event_primes_newest_queue_priority() {
     let mut vt_cfg = None;
     let mut provider_client: Box<dyn uni::LLMProvider> = Box::new(DummyProvider);
     let session_bootstrap = SessionBootstrap::default();
-    let mut header_context = vtcode_tui::app::InlineHeaderContext::default();
+    let mut header_context = vtcode_ui::tui::app::InlineHeaderContext::default();
     let mut context = InlineEventContext::new(
         &mut renderer,
         &handle,
@@ -804,7 +804,7 @@ async fn inline_prompt_suggestion_event_maps_to_inline_action() {
     let mut vt_cfg = None;
     let mut provider_client: Box<dyn uni::LLMProvider> = Box::new(DummyProvider);
     let session_bootstrap = SessionBootstrap::default();
-    let mut header_context = vtcode_tui::app::InlineHeaderContext::default();
+    let mut header_context = vtcode_ui::tui::app::InlineHeaderContext::default();
     let mut context = InlineEventContext::new(
         &mut renderer,
         &handle,

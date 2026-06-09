@@ -13,7 +13,7 @@ use vtcode_commons::color_policy;
 use vtcode_commons::env_lock;
 use vtcode_core::cli::args::Cli;
 use vtcode_core::config::api_keys::load_dotenv;
-use vtcode_tui::panic_hook;
+use vtcode_ui::tui::panic_hook;
 
 mod agent;
 mod cli; // local CLI handlers in src/cli // agent runloops (single-agent only)
@@ -145,7 +145,7 @@ fn bootstrap_main() -> Result<BootstrapOutcome> {
     let color_eyre_enabled = debug_runtime_flag_enabled(args.debug, "VTCODE_COLOR_EYRE");
     panic_hook::set_color_eyre_enabled(color_eyre_enabled);
     let tui_log_capture_enabled = debug_runtime_flag_enabled(args.debug, "VTCODE_TUI_LOGS");
-    vtcode_tui::log::set_tui_log_capture_enabled(tui_log_capture_enabled);
+    vtcode_ui::tui::log::set_tui_log_capture_enabled(tui_log_capture_enabled);
 
     // Load .env (non-fatal if missing)
     if let Err(_err) = load_dotenv()

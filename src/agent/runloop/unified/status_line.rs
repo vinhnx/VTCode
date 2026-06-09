@@ -8,7 +8,7 @@ use vtcode_core::config::constants::ui;
 use vtcode_core::config::{StatusLineConfig, StatusLineMode};
 use vtcode_core::llm::provider::LLMProvider;
 use vtcode_core::models::ModelId;
-use vtcode_tui::app::InlineHandle;
+use vtcode_ui::tui::app::InlineHandle;
 
 use super::status_line_command::run_status_line_command;
 use crate::agent::runloop::git::{GitStatusSummary, git_status_summary};

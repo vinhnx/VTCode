@@ -5,7 +5,7 @@ use std::time::Duration;
 use tokio::{sync::mpsc, task::JoinHandle};
 use vtcode_core::config::PtyConfig;
 use vtcode_core::tools::registry::ToolProgressCallback;
-use vtcode_tui::app::{InlineHandle, InlineMessageKind};
+use vtcode_ui::tui::app::{InlineHandle, InlineMessageKind};
 
 use crate::agent::runloop::unified::progress::ProgressReporter;
 

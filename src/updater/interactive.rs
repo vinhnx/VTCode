@@ -5,7 +5,7 @@ use anyhow::Result;
 use tokio::sync::Notify;
 use vtcode_core::tools::terminal_app::{TerminalAppLauncher, TerminalCommandStrategy};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
-use vtcode_tui::app::{
+use vtcode_ui::tui::app::{
     InlineHandle, InlineHeaderContext, InlineHeaderHighlight, InlineListItem, InlineListSelection,
     InlineMessageKind, InlineSession, ListOverlayRequest, TransientRequest, TransientSubmission,
 };
@@ -300,7 +300,7 @@ mod tests {
     use super::*;
     use semver::Version;
     use tokio::sync::mpsc;
-    use vtcode_tui::app::{InlineCommand, InlineHandle};
+    use vtcode_ui::tui::app::{InlineCommand, InlineHandle};
 
     fn sample_notice() -> StartupUpdateNotice {
         let updater = Updater::new("0.111.0").expect("updater");

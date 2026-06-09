@@ -9,7 +9,7 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::llm::provider::{self as uni};
 use vtcode_core::utils::ansi::AnsiRenderer;
-use vtcode_tui::app::{InlineHandle, InlineHeaderContext, InlineSession};
+use vtcode_ui::tui::app::{InlineHandle, InlineHeaderContext, InlineSession};
 
 use crate::agent::runloop::model_picker::ModelPickerState;
 use crate::agent::runloop::unified::palettes::ActivePalette;
@@ -292,7 +292,7 @@ mod tests {
         DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
     };
     use vtcode_core::llm::provider::{LLMError, LLMRequest, LLMResponse};
-    use vtcode_tui::app::InlineEvent;
+    use vtcode_ui::tui::app::InlineEvent;
 
     #[derive(Clone)]
     struct DummyProvider;

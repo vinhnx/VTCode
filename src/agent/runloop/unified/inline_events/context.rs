@@ -6,7 +6,7 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::llm::provider::{self as uni};
 use vtcode_core::utils::ansi::AnsiRenderer;
-use vtcode_tui::app::{
+use vtcode_ui::tui::app::{
     InlineEvent, InlineHandle, InlineHeaderContext, TransientEvent, TransientHotkeyAction,
     TransientSelectionChange, TransientSubmission,
 };

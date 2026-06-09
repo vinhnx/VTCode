@@ -39,7 +39,7 @@ use vtcode_core::llm::providers::ReasoningSegment;
 use vtcode_core::tools::handlers::plan_mode::{PlanLifecyclePhase, persist_plan_draft};
 use vtcode_core::tools::registry::ToolExecutionError;
 use vtcode_core::utils::ansi::AnsiRenderer;
-use vtcode_tui::app::InlineHandle;
+use vtcode_ui::tui::app::InlineHandle;
 
 use crate::agent::runloop::unified::run_loop_context::RecoveryMode;
 use crate::agent::runloop::unified::state::CtrlCState;

@@ -6,7 +6,7 @@ use vtcode_core::skills::loader::EnhancedSkillLoader;
 use vtcode_core::skills::types::SkillVariety;
 use vtcode_core::tools::handlers::ToolModelCapabilities;
 use vtcode_core::utils::ansi::MessageStyle;
-use vtcode_tui::app::{
+use vtcode_ui::tui::app::{
     InlineListItem, InlineListSearchConfig, InlineListSelection, WizardModalMode, WizardStep,
 };
 

@@ -10,7 +10,7 @@ use vtcode_config::core::CustomProviderConfig;
 use vtcode_config::loader::VTCodeConfig;
 use vtcode_core::config::models::ModelId;
 use vtcode_core::utils::ansi::AnsiRenderer;
-use vtcode_tui::app::{InlineHandle, InlineSession};
+use vtcode_ui::tui::app::{InlineHandle, InlineSession};
 
 use self::options::{find_option_index, option_indexes_for_provider};
 

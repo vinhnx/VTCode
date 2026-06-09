@@ -9,7 +9,7 @@ use vtcode_core::config::loader::ConfigManager;
 use vtcode_core::config::loader::layers::ConfigLayerSource;
 use vtcode_core::config::{StatusLineConfig, StatusLineMode};
 use vtcode_core::utils::ansi::MessageStyle;
-use vtcode_tui::app::{InlineListItem, InlineListSelection, WizardModalMode, WizardStep};
+use vtcode_ui::tui::app::{InlineListItem, InlineListSelection, WizardModalMode, WizardStep};
 
 use crate::agent::runloop::slash_commands::StatuslineTargetMode;
 use crate::agent::runloop::unified::palettes::refresh_runtime_config_from_manager;

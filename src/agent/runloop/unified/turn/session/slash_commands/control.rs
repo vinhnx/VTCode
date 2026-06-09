@@ -273,7 +273,7 @@ pub(crate) async fn handle_copy_latest_assistant_reply(
     });
 
     if let Some(reply) = latest_reply {
-        vtcode_tui::core::MouseSelectionState::copy_to_clipboard(&reply);
+        vtcode_ui::tui::core::MouseSelectionState::copy_to_clipboard(&reply);
         ctx.renderer.line(
             MessageStyle::Info,
             "Copied latest assistant reply to clipboard.",

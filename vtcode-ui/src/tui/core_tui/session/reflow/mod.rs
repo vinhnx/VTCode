@@ -1,0 +1,555 @@
+/// Transcript reflow and wrapping operations for Session
+///
+/// This module handles transcript line wrapping, reflowing, and formatting including:
+/// - Message line reflowing based on width
+/// - Text wrapping and justification
+/// - Tool and PTY output formatting with borders
+/// - Diff line padding
+/// - Block line wrapping with borders
+use std::path::Path;
+
+use ratatui::prelude::*;
+use unicode_width::UnicodeWidthStr;
+
+use super::super::style::ratatui_style_from_inline;
+use super::super::types::InlineMessageKind;
+use super::wrapping;
+use super::{
+    Session,
+    message::{MessageLine, TranscriptLine},
+    render, terminal_capabilities, text_utils, transcript_links,
+};
+use crate::tui::config::constants::ui;
+
+mod blocks;
+mod formatting;
+mod helpers;
+
+use helpers::{
+    agent_code_continuation_prefix, is_info_box_line, is_tool_summary_line, rule_fill,
+    truncate_line_to_width,
+};
+
+impl Session {
+    /// Reflow message lines for a given width (test-only method)
+    #[cfg(test)]
+    pub(super) fn reflow_transcript_lines(&self, width: u16) -> Vec<Line<'static>> {
+        if width == 0 {
+            let mut lines: Vec<Line<'static>> = Vec::new();
+            for (index, _) in self.lines.iter().enumerate() {
+                lines.extend(
+                    self.reflow_message_lines(index, 0)
+                        .into_iter()
+                        .map(|line| line.line),
+                );
+            }
+            if lines.is_empty() {
+                lines.push(Line::default());
+            }
+            return lines;
+        }
+
+        let mut wrapped_lines = Vec::new();
+        for (index, _) in self.lines.iter().enumerate() {
+            wrapped_lines.extend(
+                self.reflow_message_lines(index, width)
+                    .into_iter()
+                    .map(|line| line.line),
+            );
+        }
+
+        if wrapped_lines.is_empty() {
+            wrapped_lines.push(Line::default());
+        }
+
+        wrapped_lines
+    }
+
+    /// Reflow a specific message line based on its type and width
+    ///
+    /// This method creates visually grouped message blocks with:
+    /// - Role headers for User/Agent messages
+    /// - Subtle dividers between conversation turns
+    /// - Consistent spacing between message blocks
+    /// - Tool output grouped with headers
+    #[expect(dead_code)]
+    pub(super) fn reflow_message_lines(&self, index: usize, width: u16) -> Vec<TranscriptLine> {
+        let Some(message) = self.lines.get(index) else {
+            return vec![TranscriptLine::default()];
+        };
+
+        if message.kind == InlineMessageKind::Tool {
+            return into_transcript_lines(
+                self.reflow_tool_lines(index, width),
+                self.workspace_root.as_deref(),
+            );
+        }
+
+        if message.kind == InlineMessageKind::Pty {
+            return self.reflow_pty_lines(index, width);
+        }
+
+        if is_info_box_line(message) {
+            if index > 0
+                && self
+                    .lines
+                    .get(index - 1)
+                    .is_some_and(|prev| prev.kind == message.kind && is_info_box_line(prev))
+            {
+                return Vec::new();
+            }
+            return self.reflow_error_warning_lines(index, width);
+        }
+
+        let spans = render::render_message_spans(self, index);
+        let base_line = Line::from(spans);
+        if width == 0 {
+            return vec![transcript_line_with_detected_links(
+                base_line,
+                self.workspace_root.as_deref(),
+            )];
+        }
+
+        let mut wrapped: Vec<TranscriptLine> = Vec::new();
+        let max_width = width as usize;
+
+        // Check if this is the start of a new conversation turn
+        let prev_kind = if index > 0 {
+            self.lines.get(index - 1).map(|l| l.kind)
+        } else {
+            None
+        };
+        let is_new_turn = prev_kind.is_none()
+            || (message.kind == InlineMessageKind::User
+                && prev_kind != Some(InlineMessageKind::User))
+            || (message.kind == InlineMessageKind::Agent
+                && prev_kind != Some(InlineMessageKind::Agent));
+
+        let spacing = self.appearance.message_block_spacing.min(2) as usize;
+
+        // Add a subtle separator before User messages (single divider, not double)
+        if message.kind == InlineMessageKind::User && is_new_turn && max_width > 0 {
+            if prev_kind.is_some() {
+                for _ in 0..spacing {
+                    wrapped.push(TranscriptLine::default());
+                }
+            }
+            let divider = self.message_divider_line(max_width, message.kind);
+            wrapped.push(transcript_line_with_detected_links(
+                divider,
+                self.workspace_root.as_deref(),
+            ));
+        }
+
+        let lines = if message.kind == InlineMessageKind::Agent {
+            self.reflow_agent_message_lines(message, max_width, !is_new_turn)
+        } else {
+            let mut lines = self.wrap_line(base_line, max_width);
+            if !lines.is_empty() {
+                lines = self.justify_wrapped_lines(lines, max_width, message.kind);
+            }
+            if lines.is_empty() {
+                lines.push(Line::default());
+            }
+            into_transcript_lines(lines, self.workspace_root.as_deref())
+        };
+
+        wrapped.extend(lines);
+
+        if wrapped.is_empty() {
+            wrapped.push(TranscriptLine::default());
+        }
+
+        // Add spacing after messages for visual grouping (respects message_block_spacing config)
+        let next_line = self.lines.get(index + 1);
+        let next_kind = next_line.map(|l| l.kind);
+        match message.kind {
+            InlineMessageKind::Error | InlineMessageKind::Info | InlineMessageKind::Warning => {
+                let skip_spacing = is_tool_summary_line(message)
+                    && match next_line {
+                        Some(next) if next.kind == InlineMessageKind::Info => {
+                            is_tool_summary_line(next)
+                        }
+                        Some(next) if next.kind == InlineMessageKind::Tool => true,
+                        _ => false,
+                    };
+                if !skip_spacing {
+                    for _ in 0..spacing {
+                        wrapped.push(TranscriptLine::default());
+                    }
+                }
+            }
+            InlineMessageKind::Policy => {
+                // No spacing if followed by Agent (reasoning -> content flow)
+                if next_kind != Some(InlineMessageKind::Agent) {
+                    for _ in 0..spacing {
+                        wrapped.push(TranscriptLine::default());
+                    }
+                }
+            }
+            InlineMessageKind::User => {
+                // Blank lines after user message for clean separation
+                for _ in 0..spacing {
+                    wrapped.push(TranscriptLine::default());
+                }
+            }
+            InlineMessageKind::Agent => {
+                // Check if next message is a different type (end of agent turn)
+                if next_kind.is_some() && next_kind != Some(InlineMessageKind::Agent) {
+                    for _ in 0..spacing {
+                        wrapped.push(TranscriptLine::default());
+                    }
+                }
+            }
+            _ => {}
+        }
+
+        wrapped
+    }
+
+    pub(crate) fn reflow_message_lines_for_review(
+        &self,
+        index: usize,
+        width: u16,
+    ) -> Vec<TranscriptLine> {
+        let Some(collapsed) = self
+            .collapsed_pastes
+            .iter()
+            .find(|paste| paste.line_index == index)
+        else {
+            return self.reflow_message_lines(index, width);
+        };
+
+        let Some(line) = self.lines.get(index) else {
+            return vec![TranscriptLine::default()];
+        };
+
+        let mut expanded = line.clone();
+        expanded.segments = vec![crate::tui::core_tui::types::InlineSegment {
+            text: collapsed.full_text.clone(),
+            style: std::sync::Arc::new(crate::tui::core_tui::types::InlineTextStyle::default()),
+        }];
+        expanded.link_ranges.clear();
+
+        let rendered = Line::from(self.render_message_spans_for_line(&expanded));
+        if width == 0 {
+            return vec![transcript_line_with_detected_links(
+                rendered,
+                self.workspace_root.as_deref(),
+            )];
+        }
+
+        let mut wrapped = self.wrap_line(rendered, width as usize);
+        if wrapped.is_empty() {
+            wrapped.push(Line::default());
+        }
+        into_transcript_lines(wrapped, self.workspace_root.as_deref())
+    }
+
+    /// Reflow error, warning, and info messages with a bordered block.
+    #[expect(dead_code)]
+    pub(super) fn reflow_error_warning_lines(
+        &self,
+        index: usize,
+        width: u16,
+    ) -> Vec<TranscriptLine> {
+        let Some(line) = self.lines.get(index) else {
+            return vec![TranscriptLine::default()];
+        };
+
+        let max_width = if width == 0 {
+            usize::MAX
+        } else {
+            width as usize
+        };
+
+        let mut grouped_lines = Vec::new();
+        let mut cursor = index;
+        while let Some(current) = self.lines.get(cursor) {
+            if current.kind != line.kind || !is_info_box_line(current) {
+                break;
+            }
+            let mut spans = render::render_message_spans(self, cursor);
+            for span in &mut spans {
+                span.style = span.style.remove_modifier(Modifier::BOLD);
+            }
+            let line_text: String = spans.iter().map(|span| &*span.content).collect();
+            if !line_text.trim().is_empty() {
+                grouped_lines.push(Line::from(spans));
+            }
+            cursor = cursor.saturating_add(1);
+        }
+
+        if grouped_lines.is_empty() {
+            return Vec::new();
+        }
+
+        if max_width == usize::MAX {
+            return into_transcript_lines(grouped_lines, self.workspace_root.as_deref());
+        }
+
+        let border_style = self.styles.dimmed_border_style(true);
+
+        let border_type = terminal_capabilities::get_border_type();
+        let dash = rule_fill(line.kind, border_type);
+        let label = match line.kind {
+            InlineMessageKind::Error => "Error",
+            InlineMessageKind::Warning => "Warning",
+            InlineMessageKind::Info => "Info",
+            _ => "",
+        };
+
+        // Render as a ratatui-cheese Fieldset: a center-aligned label on a
+        // horizontal rule, content with no vertical sides, and a closing rule.
+        // The fill pattern is chosen per message kind (Error → Slash, Info →
+        // Dash, Warning → Thick) and respects terminal Unicode capabilities.
+        let rule_indent = "  ";
+        let rule_indent_width = rule_indent.chars().count();
+        let content_indent = "    ";
+        let content_indent_width = content_indent.chars().count();
+        let rule_width = max_width.saturating_sub(rule_indent_width);
+        let content_width = max_width.saturating_sub(content_indent_width);
+
+        if rule_width == 0 || content_width == 0 {
+            return into_transcript_lines(grouped_lines, self.workspace_root.as_deref());
+        }
+
+        // Top rule with a center-aligned label, e.g. `──── Info ─────`.
+        let top = if label.is_empty() {
+            format!("{}{}", rule_indent, dash.repeat(rule_width))
+        } else {
+            let label_segment = format!(" {} ", label);
+            let label_width = label_segment.chars().count();
+            if label_width + 2 >= rule_width {
+                format!("{}{}", rule_indent, dash.repeat(rule_width))
+            } else {
+                let side = rule_width.saturating_sub(label_width);
+                let left = side / 2;
+                let right = side - left;
+                format!(
+                    "{}{}{}{}",
+                    rule_indent,
+                    dash.repeat(left),
+                    label_segment,
+                    dash.repeat(right)
+                )
+            }
+        };
+        let bottom = format!("{}{}", rule_indent, dash.repeat(rule_width));
+
+        let mut lines = Vec::new();
+        lines.push(Line::styled(top, border_style));
+        let mut wrapped = Vec::new();
+        for line in grouped_lines {
+            let line_wrapped = self.wrap_line(line, content_width);
+            for wrapped_line in line_wrapped {
+                let text: String = wrapped_line
+                    .spans
+                    .iter()
+                    .map(|span| &*span.content)
+                    .collect();
+                if !text.trim().is_empty() {
+                    wrapped.push(wrapped_line);
+                }
+            }
+        }
+        if wrapped.is_empty() {
+            return Vec::new();
+        }
+        for line in &mut wrapped {
+            let mut new_spans = vec![Span::styled(content_indent.to_owned(), Style::default())];
+            new_spans.append(&mut line.spans);
+            line.spans = new_spans;
+        }
+        lines.extend(wrapped);
+        lines.push(Line::styled(bottom, border_style));
+
+        let spacing = self.appearance.message_block_spacing.min(2) as usize;
+        for _ in 0..spacing {
+            lines.push(Line::default());
+        }
+
+        if lines.is_empty() {
+            lines.push(Line::default());
+        }
+
+        into_transcript_lines(lines, self.workspace_root.as_deref())
+    }
+
+    /// Wrap a line of text to fit within a maximum width.
+    ///
+    /// Uses URL-aware wrapping to preserve URL clickability across all views.
+    /// URLs are treated as atomic units and never split across lines.
+    pub(super) fn wrap_line(&self, line: Line<'static>, max_width: usize) -> Vec<Line<'static>> {
+        wrapping::wrap_line_preserving_urls(line, max_width)
+    }
+
+    fn reflow_agent_message_lines(
+        &self,
+        message: &MessageLine,
+        max_width: usize,
+        suppress_prefix_bullet: bool,
+    ) -> Vec<TranscriptLine> {
+        if max_width == 0 {
+            return vec![TranscriptLine::default()];
+        }
+
+        let mut prefix_spans = render::agent_prefix_spans(self, message);
+        let left_padding = ui::INLINE_AGENT_MESSAGE_LEFT_PADDING;
+        let prefix_width = prefix_spans.iter().map(|span| span.width()).sum::<usize>()
+            + UnicodeWidthStr::width(left_padding);
+
+        let content_width = max_width.saturating_sub(prefix_width);
+        let fallback = self.text_fallback(message.kind).or(self.theme.foreground);
+        let mut content_spans = Vec::new();
+        for segment in &message.segments {
+            let style = ratatui_style_from_inline(&segment.style, fallback);
+            content_spans.push(Span::styled(segment.text.clone(), style));
+        }
+        let content_line = Line::from(content_spans);
+        let content_text: String = content_line
+            .spans
+            .iter()
+            .map(|span| span.content.as_ref())
+            .collect();
+
+        let is_table_line = message.segments.iter().any(|seg| {
+            let t = &seg.text;
+            t.contains('│') || t.contains('├') || t.contains('┤') || t.contains('┼')
+        });
+        let code_continuation_prefix = agent_code_continuation_prefix(message);
+
+        let (mut wrapped, mut explicit_links) = if content_width == 0 {
+            (vec![Line::default()], vec![Vec::new()])
+        } else if is_table_line {
+            // Table lines must not be word-wrapped - wrapping breaks box-drawing
+            // alignment. Truncate to the available width instead.
+            let wrapped = vec![truncate_line_to_width(content_line, content_width)];
+            let explicit_links = transcript_links::project_detected_links_onto_wrapped_lines(
+                &wrapped,
+                &content_text,
+                self.workspace_root.as_deref(),
+            );
+            (wrapped, explicit_links)
+        } else if let Some(prefix) = code_continuation_prefix.as_deref() {
+            let wrapped =
+                text_utils::wrap_line_with_hanging_prefix(content_line, content_width, prefix);
+            let explicit_links = transcript_links::project_detected_links_onto_wrapped_lines(
+                &wrapped,
+                &content_text,
+                self.workspace_root.as_deref(),
+            );
+            (wrapped, explicit_links)
+        } else {
+            let wrapped = self.wrap_line(content_line, content_width);
+            let explicit_links = transcript_links::project_detected_links_onto_wrapped_lines(
+                &wrapped,
+                &content_text,
+                self.workspace_root.as_deref(),
+            );
+            (wrapped, explicit_links)
+        };
+
+        if !wrapped.is_empty() {
+            wrapped = self.justify_wrapped_lines(wrapped, content_width, message.kind);
+        }
+        if wrapped.is_empty() {
+            wrapped.push(Line::default());
+        }
+        explicit_links.resize_with(wrapped.len(), Vec::new);
+
+        let suppress_prefix_bullet = suppress_prefix_bullet
+            || wrapped.first().is_some_and(|line| {
+                let line_text = line
+                    .spans
+                    .iter()
+                    .map(|span| AsRef::<str>::as_ref(&span.content))
+                    .collect::<String>();
+                let stripped = text_utils::strip_ansi_codes(&line_text);
+                text_utils::is_list_item(stripped.as_ref())
+            });
+        if suppress_prefix_bullet
+            && !ui::INLINE_AGENT_QUOTE_PREFIX.is_empty()
+            && let Some(prefix_span) = prefix_spans
+                .first_mut()
+                .filter(|span| AsRef::<str>::as_ref(&span.content) == ui::INLINE_AGENT_QUOTE_PREFIX)
+        {
+            let replacement = " ".repeat(UnicodeWidthStr::width(ui::INLINE_AGENT_QUOTE_PREFIX));
+            prefix_span.content = replacement.into();
+        }
+
+        let first_line_prefix_text = format!(
+            "{}{}",
+            prefix_spans
+                .iter()
+                .map(|span| span.content.as_ref())
+                .collect::<String>(),
+            left_padding
+        );
+        let first_line_prefix_width = UnicodeWidthStr::width(first_line_prefix_text.as_str());
+        let indent = " ".repeat(prefix_width);
+        let mut lines = Vec::with_capacity(wrapped.len());
+        for (index, (mut line, mut line_links)) in wrapped
+            .into_iter()
+            .zip(explicit_links.into_iter())
+            .enumerate()
+        {
+            let mut spans = Vec::new();
+            let (prefix_len, prefix_width) = if index == 0 {
+                (first_line_prefix_text.len(), first_line_prefix_width)
+            } else {
+                (indent.len(), prefix_width)
+            };
+            if index == 0 {
+                spans.append(&mut prefix_spans);
+                if !left_padding.is_empty() {
+                    spans.push(Span::raw(left_padding));
+                }
+            } else if !indent.is_empty() {
+                spans.push(Span::raw(indent.clone()));
+            }
+            spans.append(&mut line.spans);
+            if spans.is_empty() {
+                spans.push(Span::raw(String::new()));
+            }
+
+            for link in &mut line_links {
+                link.start += prefix_len;
+                link.end += prefix_len;
+                link.start_col += prefix_width;
+            }
+
+            lines.push(TranscriptLine {
+                line: Line::from(spans),
+                explicit_links: line_links,
+            });
+        }
+
+        if lines.is_empty() {
+            lines.push(TranscriptLine::default());
+        }
+
+        lines
+    }
+}
+
+fn transcript_line_with_detected_links(
+    line: Line<'static>,
+    workspace_root: Option<&Path>,
+) -> TranscriptLine {
+    let explicit_links = transcript_links::detect_rendered_transcript_links(&line, workspace_root);
+    TranscriptLine {
+        line,
+        explicit_links,
+    }
+}
+
+fn into_transcript_lines(
+    lines: Vec<Line<'static>>,
+    workspace_root: Option<&Path>,
+) -> Vec<TranscriptLine> {
+    lines
+        .into_iter()
+        .map(|line| transcript_line_with_detected_links(line, workspace_root))
+        .collect()
+}

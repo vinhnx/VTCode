@@ -6,7 +6,7 @@ use vtcode_core::scheduler::{
     DURABLE_SCHEDULER_RUNTIME_HINT, DurableTaskStore, ScheduleCreateInput, durable_task_is_overdue,
 };
 use vtcode_core::utils::ansi::MessageStyle;
-use vtcode_tui::app::{
+use vtcode_ui::tui::app::{
     InlineListItem, InlineListSearchConfig, InlineListSelection, WizardModalMode, WizardStep,
 };
 

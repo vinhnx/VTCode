@@ -3,7 +3,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use tokio::sync::Notify;
 
-use vtcode_tui::app::{
+use vtcode_ui::tui::app::{
     InlineHandle, InlineListSearchConfig, InlineListSelection, InlineSession, TransientRequest,
     TransientSubmission, WizardModalMode, WizardOverlayRequest, WizardStep,
 };

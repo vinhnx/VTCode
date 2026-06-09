@@ -4,7 +4,7 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::core::interfaces::session::PlanModeEntrySource;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::dot_config::load_workspace_trust_level;
-use vtcode_tui::app::{EditingMode, InlineListItem, InlineListSelection};
+use vtcode_ui::tui::app::{EditingMode, InlineListItem, InlineListSelection};
 
 use crate::agent::runloop::slash_commands::SessionModeCommand;
 use crate::agent::runloop::unified::state::{SessionMode, should_enforce_safe_mode_prompts};

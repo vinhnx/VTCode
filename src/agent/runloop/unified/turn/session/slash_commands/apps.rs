@@ -7,7 +7,7 @@ use vtcode_core::config::EditorToolConfig;
 use vtcode_core::config::loader::ConfigManager;
 use vtcode_core::tools::terminal_app::{EditorLaunchConfig, TerminalAppLauncher};
 use vtcode_core::utils::ansi::MessageStyle;
-use vtcode_tui::app::{
+use vtcode_ui::tui::app::{
     InlineHandle, InlineListItem, InlineListSelection, ListOverlayRequest, TransientRequest,
     TransientSubmission, WizardModalMode, WizardStep,
 };

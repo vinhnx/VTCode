@@ -9,7 +9,7 @@ use vtcode_core::exec::events::Usage as HarnessUsage;
 use vtcode_core::llm::provider::{
     Message, PromptCacheProfile, ResponsesContinuationState, responses_continuation_key,
 };
-use vtcode_tui::app::EditingMode;
+use vtcode_ui::tui::app::EditingMode;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) enum ModelPickerTarget {
@@ -776,7 +776,7 @@ mod tests {
     };
     use vtcode_core::config::WorkspaceTrustLevel;
     use vtcode_core::config::constants::tools;
-    use vtcode_tui::app::EditingMode;
+    use vtcode_ui::tui::app::EditingMode;
 
     #[test]
     fn record_tool_normalizes_exec_aliases() {

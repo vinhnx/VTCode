@@ -1,7 +1,7 @@
 use std::io::{self, Write};
 
 use anyhow::{Context, Result, anyhow};
-use vtcode_tui::ui::interactive_list::{
+use vtcode_ui::tui::ui::interactive_list::{
     SelectionEntry, SelectionInterrupted, run_interactive_selection,
 };
 

@@ -8,7 +8,7 @@ use vtcode_core::persistent_memory::{
 };
 use vtcode_core::session::SessionId;
 use vtcode_core::utils::ansi::MessageStyle;
-use vtcode_tui::app::{InlineListItem, InlineListSelection, WizardModalMode, WizardStep};
+use vtcode_ui::tui::app::{InlineListItem, InlineListSelection, WizardModalMode, WizardStep};
 
 use crate::agent::runloop::slash_commands::SlashCommandOutcome;
 use crate::agent::runloop::unified::display::{display_user_message, reset_inline_input};

@@ -2,7 +2,7 @@ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
 use anyhow::{Result, anyhow};
 use url::Url;
-use vtcode_tui::app::{InlineListItem, InlineListSelection, ListOverlayRequest, TransientRequest};
+use vtcode_ui::tui::app::{InlineListItem, InlineListSelection, ListOverlayRequest, TransientRequest};
 
 pub(crate) const URL_GUARD_TITLE: &str = "Open External Link";
 pub(crate) const URL_GUARD_APPROVE_ACTION: &str = "url_guard:approve";
@@ -232,7 +232,7 @@ mod tests {
         URL_GUARD_APPROVE_ACTION, URL_GUARD_DENY_ACTION, URL_GUARD_TITLE, UrlGuardDecision,
         UrlGuardPrompt, url_guard_decision,
     };
-    use vtcode_tui::app::{InlineListSelection, TransientRequest};
+    use vtcode_ui::tui::app::{InlineListSelection, TransientRequest};
 
     #[test]
     fn parse_http_url_marks_insecure_transport() {

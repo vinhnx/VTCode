@@ -11,11 +11,11 @@ use vtcode_core::ui::{
     InlineListSelection, OpenAIServiceTierChoice, reasoning_from_selection_string,
 };
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
-use vtcode_tui::app::{
+use vtcode_ui::tui::app::{
     InlineHandle, InlineListItem, InlineListSearchConfig, InlineSession, TransientSubmission,
     WizardModalMode, WizardStep,
 };
-use vtcode_tui::ui::interactive_list::SelectionInterrupted;
+use vtcode_ui::tui::ui::interactive_list::SelectionInterrupted;
 
 use crate::agent::runloop::unified::overlay_prompt::{
     OverlayWaitOutcome, wait_for_overlay_submission,

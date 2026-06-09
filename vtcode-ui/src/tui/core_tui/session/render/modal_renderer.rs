@@ -1,0 +1,600 @@
+use super::*;
+use crate::tui::config::constants::ui;
+use crate::tui::core_tui::session::list_panel::input_styles_from_theme;
+use crate::tui::core_tui::session::transcript_links::decorate_detected_link_lines;
+use crate::tui::core_tui::style::ratatui_color_from_ansi;
+use crate::tui::core_tui::types::InlineMessageKind;
+use crate::tui::ui::tui::session::modal::{
+    ModalBodyContext, ModalListState, ModalRenderStyles, render_modal_body,
+    render_wizard_modal_body,
+};
+use crate::tui::ui::tui::types::InlineListSelection;
+use anstyle::{Ansi256Color, Color as AnsiColorEnum};
+use ratatui::widgets::{Block, Clear, Paragraph, Wrap};
+
+const MAX_INLINE_MODAL_HEIGHT: u16 = 20;
+const MAX_INLINE_MODAL_HEIGHT_MULTILINE: u16 = 32;
+const MAX_INLINE_INSTRUCTION_ROWS: usize = 6;
+const MODAL_TITLE_CHROME_ROWS: usize = 2;
+
+fn modal_base_style(session: &Session) -> Style {
+    session.styles.default_style()
+}
+
+fn modal_heading_style(session: &Session) -> Style {
+    modal_base_style(session)
+        .fg(ratatui_color_from_ansi(resolve_modal_chrome_ansi_color(
+            session,
+        )))
+        .add_modifier(Modifier::BOLD)
+}
+
+fn list_has_two_line_items(list: &ModalListState) -> bool {
+    list.visible_indices.iter().any(|&index| {
+        list.items.get(index).is_some_and(|item| {
+            item.subtitle
+                .as_ref()
+                .is_some_and(|subtitle| !subtitle.trim().is_empty())
+        })
+    })
+}
+
+fn list_row_cap(list: &ModalListState) -> usize {
+    if list_has_two_line_items(list) {
+        ui::INLINE_LIST_MAX_ROWS_MULTILINE
+    } else {
+        ui::INLINE_LIST_MAX_ROWS
+    }
+}
+
+fn list_desired_rows(list: &ModalListState) -> usize {
+    list.visible_indices.len().clamp(1, list_row_cap(list))
+}
+
+fn modal_title_text(session: &Session) -> &str {
+    session
+        .wizard_overlay()
+        .map(|wizard| wizard.title.as_str())
+        .or_else(|| session.modal_state().map(|modal| modal.title.as_str()))
+        .unwrap_or("")
+}
+
+fn modal_has_title(session: &Session) -> bool {
+    !modal_title_text(session).trim().is_empty()
+}
+
+fn resolve_modal_chrome_ansi_color(session: &Session) -> AnsiColorEnum {
+    session
+        .theme
+        .tool_accent
+        .or(session.theme.primary)
+        .or(session.theme.secondary)
+        .unwrap_or(AnsiColorEnum::Ansi256(Ansi256Color(
+            ui::SAFE_ANSI_BRIGHT_CYAN,
+        )))
+}
+
+fn modal_chrome_style(session: &Session) -> Style {
+    modal_heading_style(session)
+}
+
+fn render_modal_background(frame: &mut Frame<'_>, area: Rect, style: Style) {
+    if area.width == 0 || area.height == 0 {
+        return;
+    }
+
+    frame.render_widget(Clear, area);
+    frame.render_widget(Block::default().style(style), area);
+}
+
+fn render_modal_divider(frame: &mut Frame<'_>, area: Rect, style: Style) {
+    if area.width == 0 || area.height == 0 {
+        return;
+    }
+
+    frame.render_widget(
+        Paragraph::new(Line::from(Span::styled(
+            ui::INLINE_BLOCK_HORIZONTAL.repeat(area.width as usize),
+            style,
+        )))
+        .wrap(Wrap { trim: false }),
+        area,
+    );
+}
+
+fn wizard_step_has_inline_custom_editor(
+    wizard: &crate::tui::ui::tui::session::modal::WizardModalState,
+) -> bool {
+    let Some(step) = wizard.steps.get(wizard.current_step) else {
+        return false;
+    };
+    let Some(selected_visible) = step.list.list_state.selected() else {
+        return false;
+    };
+    let Some(&item_index) = step.list.visible_indices.get(selected_visible) else {
+        return false;
+    };
+    let Some(item) = step.list.items.get(item_index) else {
+        return false;
+    };
+    matches!(
+        item.selection.as_ref(),
+        Some(InlineListSelection::RequestUserInputAnswer {
+            selected,
+            other,
+            ..
+        }) if selected.is_empty() && other.is_some()
+    )
+}
+
+pub fn split_inline_modal_area(session: &Session, area: Rect) -> (Rect, Option<Rect>) {
+    if area.width == 0 || area.height == 0 {
+        return (area, None);
+    }
+
+    let title_chrome_rows = if modal_has_title(session) {
+        MODAL_TITLE_CHROME_ROWS as u16
+    } else {
+        0
+    };
+    let multiline_list_present = if let Some(wizard) = session.wizard_overlay() {
+        wizard
+            .steps
+            .get(wizard.current_step)
+            .is_some_and(|step| list_has_two_line_items(&step.list))
+    } else if let Some(modal) = session.modal_state() {
+        modal.list.as_ref().is_some_and(list_has_two_line_items)
+    } else {
+        false
+    };
+
+    let desired_lines = if let Some(wizard) = session.wizard_overlay() {
+        let mut lines = 0usize;
+        lines = lines.saturating_add(1); // tabs/header
+        if wizard.search.is_some() {
+            lines = lines.saturating_add(1);
+        }
+        lines = lines.saturating_add(2); // question and spacing
+        if wizard.search.is_some() {
+            lines = lines.saturating_add(1); // divider before list
+        }
+        let (list_rows, summary_rows) = wizard
+            .steps
+            .get(wizard.current_step)
+            .map(|step| {
+                (
+                    list_desired_rows(&step.list),
+                    step.list.summary_line_rows(None),
+                )
+            })
+            .unwrap_or((1, 0));
+        lines = lines.saturating_add(list_rows);
+        lines = lines.saturating_add(summary_rows);
+        if wizard
+            .steps
+            .get(wizard.current_step)
+            .is_some_and(|step| step.notes_active || !step.notes.is_empty())
+            && !wizard_step_has_inline_custom_editor(wizard)
+        {
+            lines = lines.saturating_add(1);
+        }
+        lines = lines.saturating_add(
+            wizard
+                .instruction_lines()
+                .len()
+                .min(MAX_INLINE_INSTRUCTION_ROWS),
+        );
+        if title_chrome_rows > 0 {
+            lines = lines.saturating_add(1 + usize::from(title_chrome_rows)); // title row + dividers
+        }
+        lines
+    } else if let Some(modal) = session.modal_state() {
+        let mut lines = modal.lines.len().clamp(1, MAX_INLINE_INSTRUCTION_ROWS);
+        if modal.search.is_some() {
+            lines = lines.saturating_add(2);
+        }
+        if modal.secure_prompt.is_some() {
+            lines = lines.saturating_add(2);
+        }
+        if modal.list.is_some() && modal.search.is_some() {
+            lines = lines.saturating_add(1); // divider before list
+        }
+        if let Some(list) = modal.list.as_ref() {
+            lines = lines.saturating_add(list_desired_rows(list));
+            lines = lines.saturating_add(list.summary_line_rows(modal.footer_hint.as_deref()));
+        } else {
+            lines = lines.saturating_add(1);
+        }
+        if title_chrome_rows > 0 {
+            lines = lines.saturating_add(1 + usize::from(title_chrome_rows)); // title row + dividers
+        }
+        lines
+    } else {
+        return (area, None);
+    };
+
+    let max_panel_height = area.height.saturating_sub(1);
+    if max_panel_height == 0 {
+        return (area, None);
+    }
+
+    let min_height = ui::MODAL_MIN_HEIGHT.min(max_panel_height).max(1);
+    let modal_height_cap = if multiline_list_present {
+        MAX_INLINE_MODAL_HEIGHT_MULTILINE
+    } else {
+        MAX_INLINE_MODAL_HEIGHT
+    }
+    .saturating_add(title_chrome_rows);
+    let capped_max = modal_height_cap.min(max_panel_height).max(min_height);
+    let desired_height = (desired_lines.min(u16::MAX as usize) as u16)
+        .max(min_height)
+        .min(capped_max);
+
+    let chunks =
+        Layout::vertical([Constraint::Min(1), Constraint::Length(desired_height)]).split(area);
+    (chunks[0], Some(chunks[1]))
+}
+
+pub(crate) fn floating_modal_area(area: Rect) -> Rect {
+    if area.width == 0 || area.height == 0 {
+        return area;
+    }
+
+    let height = (area.height / 2).max(1);
+    let y = area.y.saturating_add(area.height.saturating_sub(height));
+    Rect::new(area.x, y, area.width, height)
+}
+
+pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
+    if area.width == 0 || area.height == 0 {
+        session.set_modal_list_area(None);
+        session.set_modal_text_areas(Vec::new());
+        session.set_modal_link_targets(Vec::new());
+        return;
+    }
+
+    // Auto-approve modals when skip_confirmations is set (for tests and headless mode)
+    if session.skip_confirmations
+        && let Some(mut modal) = session.take_modal_state()
+    {
+        if let Some(list) = &mut modal.list
+            && let Some(_selection) = list.current_selection()
+        {
+            // Note: We can't easily emit an event from here without access to the sender.
+            // Instead, we just clear the modal and assume the tool execution logic
+            // or whatever triggered the modal will check skip_confirmations as well.
+            // This is handled in ensure_tool_permission.
+        }
+        session.input_enabled = modal.restore_input;
+        session.cursor_visible = modal.restore_cursor;
+        session.needs_full_clear = true;
+        session.needs_redraw = true;
+        session.set_modal_list_area(None);
+        session.set_modal_text_areas(Vec::new());
+        session.set_modal_link_targets(Vec::new());
+        return;
+    }
+
+    let styles = modal_render_styles(session);
+    let input_styles = input_styles_from_theme(&session.theme);
+    render_modal_background(frame, area, styles.selectable);
+    let link_style = session
+        .styles
+        .transcript_link_style()
+        .add_modifier(Modifier::UNDERLINED);
+    let hovered_link_style = link_style.add_modifier(Modifier::BOLD);
+    let workspace_root = session.workspace_root.clone();
+    let last_mouse_position = session.last_mouse_position;
+    let title = modal_title_text(session).trim().to_owned();
+    let mut title_link_targets = Vec::new();
+    let (body_area, title_area) = if title.is_empty() {
+        (area, None)
+    } else {
+        let chunks = Layout::vertical([
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Min(0),
+            Constraint::Length(1),
+        ])
+        .split(area);
+        let title_area = chunks[0];
+        let top_divider_area = chunks[1];
+        let body_area = chunks[2];
+        let bottom_divider_area = chunks[3];
+        let title_line = Line::from(Span::styled(title, styles.title));
+        let (decorated_title, link_targets) = decorate_detected_link_lines(
+            vec![title_line],
+            title_area,
+            workspace_root.as_deref(),
+            last_mouse_position,
+            link_style,
+            hovered_link_style,
+        );
+        title_link_targets = link_targets;
+        render_modal_background(frame, title_area, styles.selectable);
+        frame.render_widget(
+            Paragraph::new(decorated_title)
+                .style(styles.title)
+                .wrap(Wrap { trim: true }),
+            title_area,
+        );
+        render_modal_divider(frame, top_divider_area, styles.border);
+        render_modal_divider(frame, bottom_divider_area, styles.border);
+        (body_area, Some(title_area))
+    };
+
+    if let Some(wizard) = session.wizard_overlay_mut() {
+        render_modal_background(frame, body_area, styles.selectable);
+        if body_area.width == 0 || body_area.height == 0 {
+            session.set_modal_list_area(None);
+            session.set_modal_text_areas(Vec::new());
+            session.set_modal_link_targets(Vec::new());
+            return;
+        }
+        let mut outcome = render_wizard_modal_body(
+            frame,
+            body_area,
+            wizard,
+            &styles,
+            &input_styles,
+            workspace_root.as_deref(),
+            last_mouse_position,
+            link_style,
+            hovered_link_style,
+        );
+        if let Some(title_area) = title_area {
+            outcome.text_areas.push(title_area);
+            outcome.link_targets.extend(title_link_targets.clone());
+        }
+        session.set_modal_list_area(outcome.list_area);
+        session.set_modal_text_areas(outcome.text_areas);
+        session.set_modal_link_targets(outcome.link_targets);
+        return;
+    }
+
+    let input = session.input_manager.content().to_owned();
+    let cursor = session.input_manager.cursor();
+    let Some(modal) = session.modal_state_mut() else {
+        session.set_modal_list_area(None);
+        session.set_modal_text_areas(Vec::new());
+        session.set_modal_link_targets(Vec::new());
+        return;
+    };
+
+    render_modal_background(frame, body_area, styles.selectable);
+    if body_area.width == 0 || body_area.height == 0 {
+        session.set_modal_list_area(None);
+        session.set_modal_text_areas(Vec::new());
+        session.set_modal_link_targets(Vec::new());
+        return;
+    }
+
+    if modal.is_help_modal {
+        use ratatui_cheese::help::{Binding, Help, HelpStyles};
+        let help = Help::default()
+            .show_all(true)
+            .styles(HelpStyles::from_palette(
+                &ratatui_cheese::theme::Palette::dark(),
+            ))
+            .bindings(vec![
+                Binding::new("?", "help"),
+                Binding::new("Enter", "submit"),
+                Binding::new("Ctrl+C", "interrupt"),
+                Binding::new("Esc", "clear/cancel"),
+                Binding::new("Tab", "accept/queue"),
+                Binding::new("Shift+Tab", "mode picker"),
+            ])
+            .binding_groups(vec![
+                vec![
+                    Binding::new("!cmd", "shell mode"),
+                    Binding::new("@path", "file reference"),
+                    Binding::new("Enter", "submit/queue"),
+                    Binding::new("Ctrl+Enter", "run/steer"),
+                    Binding::new("Shift+Enter", "new line"),
+                    Binding::new("Esc", "clear/cancel"),
+                    Binding::new("Ctrl+C", "interrupt/copy"),
+                    Binding::new("Ctrl+D", "exit"),
+                    Binding::new("PgUp/PgDn", "scroll"),
+                    Binding::new("Alt+S", "subprocesses"),
+                ],
+                vec![
+                    Binding::new("Ctrl+A/E", "line ends"),
+                    Binding::new("Ctrl+F/B", "char move"),
+                    Binding::new("Alt+F/B", "word move"),
+                    Binding::new("Alt+←/→", "word move"),
+                    Binding::new("Ctrl+P/N", "history"),
+                    Binding::new("Ctrl+R/S", "history search"),
+                    Binding::new("Ctrl+W", "delete prev word"),
+                    Binding::new("Alt+D", "delete next word"),
+                    Binding::new("Ctrl+U/K", "delete to edge"),
+                    Binding::new("Ctrl+T", "transpose"),
+                    Binding::new("Alt+U/L/C", "case change"),
+                ],
+                vec![
+                    Binding::new("/", "commands"),
+                    Binding::new("?", "shortcuts"),
+                    Binding::new("Shift+Tab", "mode picker"),
+                    Binding::new("Tab", "accept/queue"),
+                    Binding::new("Ctrl+L", "clear screen"),
+                    Binding::new("Ctrl+M", "model picker"),
+                    Binding::new("Ctrl+O", "copy response"),
+                    Binding::new("Alt+P", "prompt suggest"),
+                    Binding::new("Alt+O", "transcript review"),
+                    Binding::new("Ctrl+I", "lists"),
+                    Binding::new("Ctrl+G", "editor"),
+                    Binding::new("Ctrl+Z/Y", "undo/redo"),
+                ],
+            ]);
+        frame.render_widget(&help, body_area);
+        session.set_modal_list_area(None);
+        session.set_modal_text_areas(Vec::new());
+        session.set_modal_link_targets(Vec::new());
+        return;
+    }
+    let mut outcome = render_modal_body(
+        frame,
+        body_area,
+        ModalBodyContext {
+            instructions: &modal.lines,
+            footer_hint: modal.footer_hint.as_deref(),
+            list: modal.list.as_mut(),
+            styles: &styles,
+            secure_prompt: modal.secure_prompt.as_ref(),
+            search: modal.search.as_ref(),
+            input: &input,
+            cursor,
+            input_styles: &input_styles,
+        },
+        workspace_root.as_deref(),
+        last_mouse_position,
+        link_style,
+        hovered_link_style,
+    );
+    if let Some(title_area) = title_area {
+        outcome.text_areas.push(title_area);
+        outcome.link_targets.extend(title_link_targets);
+    }
+    session.set_modal_list_area(outcome.list_area);
+    session.set_modal_text_areas(outcome.text_areas);
+    session.set_modal_link_targets(outcome.link_targets);
+}
+
+pub(crate) fn modal_render_styles(session: &Session) -> ModalRenderStyles {
+    let default_style = modal_base_style(session);
+    let header_style = modal_heading_style(session);
+    let chrome_style = modal_chrome_style(session);
+    let chrome_border_style = session
+        .styles
+        .border_style()
+        .fg(ratatui_color_from_ansi(resolve_modal_chrome_ansi_color(
+            session,
+        )))
+        .remove_modifier(Modifier::DIM)
+        .add_modifier(Modifier::BOLD);
+    ModalRenderStyles {
+        border: chrome_border_style,
+        highlight: modal_list_highlight_style(session),
+        badge: default_style.add_modifier(Modifier::DIM | Modifier::BOLD),
+        header: header_style,
+        selectable: default_style.add_modifier(Modifier::DIM),
+        detail: default_style.add_modifier(Modifier::DIM),
+        search_match: header_style.add_modifier(Modifier::UNDERLINED),
+        title: chrome_style,
+        divider: default_style.add_modifier(Modifier::DIM),
+        instruction_border: chrome_border_style,
+        instruction_title: header_style,
+        instruction_bullet: header_style,
+        instruction_body: default_style,
+        hint: default_style.add_modifier(Modifier::DIM | Modifier::ITALIC),
+    }
+}
+
+#[expect(dead_code)]
+pub(super) fn handle_tool_code_fence_marker(session: &mut Session, text: &str) -> bool {
+    let trimmed = text.trim();
+    let stripped = trimmed
+        .strip_prefix("```")
+        .or_else(|| trimmed.strip_prefix("~~~"));
+
+    let Some(rest) = stripped else {
+        return false;
+    };
+
+    if rest.contains("```") || rest.contains("~~~") {
+        return false;
+    }
+
+    if session.in_tool_code_fence {
+        session.in_tool_code_fence = false;
+        remove_trailing_empty_tool_line(session);
+    } else {
+        session.in_tool_code_fence = true;
+    }
+
+    true
+}
+
+#[expect(dead_code)]
+fn remove_trailing_empty_tool_line(session: &mut Session) {
+    let should_remove = session
+        .lines
+        .last()
+        .map(|line| line.kind == InlineMessageKind::Tool && line.segments.is_empty())
+        .unwrap_or(false);
+    if should_remove {
+        session.lines.pop();
+        session.invalidate_scroll_metrics();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tui::ui::tui::InlineTheme;
+    use ratatui::style::Color;
+
+    #[test]
+    fn modal_title_text_uses_modal_title_and_empty_default() {
+        let mut session = Session::new(InlineTheme::default(), None, 20);
+        assert_eq!(modal_title_text(&session), "");
+
+        session.show_modal("Config".to_owned(), vec![], None);
+        assert_eq!(modal_title_text(&session), "Config");
+    }
+
+    #[test]
+    fn modal_title_style_uses_explicit_chrome_color() {
+        let session = Session::new(InlineTheme::default(), None, 20);
+        let styles = modal_render_styles(&session);
+
+        assert_eq!(
+            styles.title.fg,
+            Some(Color::Indexed(ui::SAFE_ANSI_BRIGHT_CYAN))
+        );
+        assert!(styles.title.bg.is_none());
+        assert_eq!(
+            styles.border.fg,
+            Some(Color::Indexed(ui::SAFE_ANSI_BRIGHT_CYAN))
+        );
+        assert!(styles.title.add_modifier.contains(Modifier::BOLD));
+    }
+
+    #[test]
+    fn modal_section_headers_use_chrome_color_on_base_background() {
+        let theme = InlineTheme {
+            foreground: Some(AnsiColorEnum::Ansi256(Ansi256Color(16))),
+            background: Some(AnsiColorEnum::Ansi256(Ansi256Color(231))),
+            primary: Some(AnsiColorEnum::Ansi256(Ansi256Color(117))),
+            ..InlineTheme::default()
+        };
+        let session = Session::new(theme, None, 20);
+        let styles = modal_render_styles(&session);
+
+        assert_eq!(styles.header.fg, Some(Color::Indexed(117)));
+        assert_eq!(styles.header.bg, Some(Color::Indexed(231)));
+        assert_eq!(styles.instruction_title.fg, Some(Color::Indexed(117)));
+        assert_eq!(styles.instruction_title.bg, Some(Color::Indexed(231)));
+        assert!(styles.header.add_modifier.contains(Modifier::BOLD));
+    }
+
+    #[test]
+    fn floating_modal_area_uses_bottom_half_of_viewport() {
+        let area = floating_modal_area(Rect::new(3, 5, 80, 31));
+
+        assert_eq!(area, Rect::new(3, 21, 80, 15));
+    }
+
+    #[test]
+    fn floating_modal_area_uses_exact_half_for_even_height() {
+        let area = floating_modal_area(Rect::new(0, 0, 80, 30));
+
+        assert_eq!(area, Rect::new(0, 15, 80, 15));
+    }
+
+    #[test]
+    fn floating_modal_area_preserves_single_row_viewport() {
+        let area = floating_modal_area(Rect::new(0, 0, 80, 1));
+
+        assert_eq!(area, Rect::new(0, 0, 80, 1));
+    }
+}

@@ -5,7 +5,7 @@ use vtcode_core::subagents::{
     SubagentController, SubagentStatus, SubagentStatusEntry, SubagentThreadSnapshot,
 };
 use vtcode_core::{CommandExecutionStatus, ThreadEvent, ThreadItemDetails, ToolCallStatus};
-use vtcode_tui::app::{InlineHandle, LocalAgentEntry, LocalAgentKind};
+use vtcode_ui::tui::app::{InlineHandle, LocalAgentEntry, LocalAgentKind};
 
 pub(crate) async fn refresh_local_agents(
     handle: &InlineHandle,

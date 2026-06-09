@@ -5,7 +5,7 @@ use vtcode_core::config::constants::{model_helpers, models};
 use vtcode_core::config::models::{ModelId, Provider};
 use vtcode_core::llm::lightweight_model_choices;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
-use vtcode_tui::ui::interactive_list::SelectionEntry;
+use vtcode_ui::tui::ui::interactive_list::SelectionEntry;
 
 use super::common::{prompt_with_placeholder, run_selection};
 

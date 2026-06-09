@@ -12,7 +12,7 @@ use vtcode_core::core::agent::runtime::RuntimeSteering;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::primary_agent::ActivePrimaryAgentState;
 use vtcode_core::utils::ansi::AnsiRenderer;
-use vtcode_tui::app::InlineHandle;
+use vtcode_ui::tui::app::InlineHandle;
 
 use crate::agent::runloop::ResumeSession;
 use crate::agent::runloop::model_picker::ModelPickerState;
@@ -34,9 +34,9 @@ pub(crate) struct InteractionLoopContext<'a> {
     pub active_thread_label: &'a str,
     pub thread_handle: &'a vtcode_core::core::threads::ThreadRuntimeHandle,
     pub renderer: &'a mut AnsiRenderer,
-    pub session: &'a mut vtcode_tui::app::InlineSession,
+    pub session: &'a mut vtcode_ui::tui::app::InlineSession,
     pub handle: &'a InlineHandle,
-    pub header_context: &'a mut vtcode_tui::app::InlineHeaderContext,
+    pub header_context: &'a mut vtcode_ui::tui::app::InlineHeaderContext,
     pub ide_context_bridge: &'a mut Option<IdeContextBridge>,
     pub ctrl_c_state: &'a Arc<CtrlCState>,
     pub ctrl_c_notify: &'a Arc<Notify>,

@@ -421,7 +421,7 @@ mod tests {
     use super::*;
     use tokio::sync::mpsc::unbounded_channel;
     use vtcode_core::utils::ansi::AnsiRenderer;
-    use vtcode_tui::app::InlineHandle;
+    use vtcode_ui::tui::app::InlineHandle;
 
     #[test]
     fn rewind_without_args_opens_picker_in_inline_ui() {

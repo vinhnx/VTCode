@@ -6,7 +6,7 @@ use crate::agent::runloop::git::{
 use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_overlay_and_wait};
 use crate::agent::runloop::welcome::SessionBootstrap;
 use std::sync::Arc;
-use vtcode_tui::app::{
+use vtcode_ui::tui::app::{
     InlineHandle, InlineListItem, InlineListSelection, InlineSession, ListOverlayRequest,
     TransientRequest, TransientSubmission,
 };
@@ -327,7 +327,7 @@ pub(super) struct ExitHeaderDisplay {
     pub(super) reasoning_label: String,
     pub(super) context_window_size: usize,
     pub(super) mode_label: String,
-    pub(super) editing_mode: vtcode_tui::app::EditingMode,
+    pub(super) editing_mode: vtcode_ui::tui::app::EditingMode,
     pub(super) autonomous_mode: bool,
     pub(super) full_auto: bool,
 }
@@ -336,7 +336,7 @@ pub(super) fn build_exit_header_context_fast(
     config: &CoreAgentConfig,
     session_bootstrap: &SessionBootstrap,
     display: ExitHeaderDisplay,
-) -> vtcode_tui::app::InlineHeaderContext {
+) -> vtcode_ui::tui::app::InlineHeaderContext {
     use vtcode_core::config::constants::ui;
 
     let trust_label = match session_bootstrap.acp_workspace_trust {
@@ -350,7 +350,7 @@ pub(super) fn build_exit_header_context_fast(
         None => "tools policy",
     };
 
-    vtcode_tui::app::InlineHeaderContext {
+    vtcode_ui::tui::app::InlineHeaderContext {
         app_name: vtcode_core::config::constants::app::DISPLAY_NAME.to_string(),
         provider: format!("{}{}", ui::HEADER_PROVIDER_PREFIX, display.provider_label),
         model: format!("{}{}", ui::HEADER_MODEL_PREFIX, config.model),

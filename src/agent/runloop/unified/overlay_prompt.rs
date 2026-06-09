@@ -4,7 +4,7 @@ use anyhow::Result;
 use tokio::sync::Notify;
 use tokio::task;
 use vtcode_core::core::interfaces::ui::UiSession;
-use vtcode_tui::app::{
+use vtcode_ui::tui::app::{
     InlineEvent, InlineHandle, TransientEvent, TransientRequest, TransientSubmission,
 };
 

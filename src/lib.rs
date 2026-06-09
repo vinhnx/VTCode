@@ -168,4 +168,4 @@ pub use vtcode_acp as acp;
 pub mod config_watcher {
     pub use vtcode_config::loader::watch::*;
 }
-pub use vtcode_tui::ui::interactive_list;
+pub use vtcode_ui::tui::ui::interactive_list;

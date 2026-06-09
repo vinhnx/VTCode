@@ -8,8 +8,8 @@ use vtcode_commons::preview::{
 use vtcode_core::config::PtyConfig;
 use vtcode_core::tools::pty::PtyPreviewRenderer;
 
-use vtcode_tui::app::InlineLinkRange;
-use vtcode_tui::app::InlineSegment;
+use vtcode_ui::tui::app::InlineLinkRange;
+use vtcode_ui::tui::app::InlineSegment;
 
 use super::segments::{PtyLineStyles, line_to_segments};
 

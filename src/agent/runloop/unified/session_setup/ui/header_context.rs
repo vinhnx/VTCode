@@ -10,7 +10,7 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
-use vtcode_tui::app::{InlineHandle, InlineHeaderContext};
+use vtcode_ui::tui::app::{InlineHandle, InlineHeaderContext};
 
 use super::persistent_memory::{
     apply_persistent_memory_header_guide, load_persistent_memory_status,

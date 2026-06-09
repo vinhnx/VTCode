@@ -10,7 +10,7 @@ use std::time::Duration;
 use tokio::sync::{Notify, mpsc};
 use vtcode_core::llm::provider as uni;
 use vtcode_core::utils::ansi::AnsiRenderer;
-use vtcode_tui::app::{InlineCommand, InlineHandle};
+use vtcode_ui::tui::app::{InlineCommand, InlineHandle};
 
 #[derive(Clone)]
 struct CompletedOnlyProvider {
@@ -862,7 +862,7 @@ async fn inline_streams_small_content_deltas_after_reasoning() {
     let mut replace_last_agent_updates = 0usize;
     while let Ok(command) = rx.try_recv() {
         if let InlineCommand::ReplaceLast {
-            kind: vtcode_tui::app::InlineMessageKind::Agent,
+            kind: vtcode_ui::tui::app::InlineMessageKind::Agent,
             ..
         } = command
         {
@@ -905,7 +905,7 @@ async fn inline_streams_reasoning_deltas_live() {
     let mut saw_reasoning_inline = false;
     while let Ok(command) = rx.try_recv() {
         if let InlineCommand::Inline {
-            kind: vtcode_tui::app::InlineMessageKind::Policy,
+            kind: vtcode_ui::tui::app::InlineMessageKind::Policy,
             segment,
         } = command
             && segment.text.contains("thinking")
@@ -1000,7 +1000,7 @@ async fn inline_batches_many_token_deltas_for_performance() {
     let mut replace_last_agent_updates = 0usize;
     while let Ok(command) = rx.try_recv() {
         if let InlineCommand::ReplaceLast {
-            kind: vtcode_tui::app::InlineMessageKind::Agent,
+            kind: vtcode_ui::tui::app::InlineMessageKind::Agent,
             ..
         } = command
         {
@@ -1043,7 +1043,7 @@ async fn inline_batches_many_reasoning_deltas_for_performance() {
     let mut policy_inline_updates = 0usize;
     while let Ok(command) = rx.try_recv() {
         if let InlineCommand::Inline {
-            kind: vtcode_tui::app::InlineMessageKind::Policy,
+            kind: vtcode_ui::tui::app::InlineMessageKind::Policy,
             ..
         } = command
         {

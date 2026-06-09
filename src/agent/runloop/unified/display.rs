@@ -9,7 +9,7 @@ use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::dot_config::update_theme_preference;
-use vtcode_tui::app::InlineHandle;
+use vtcode_ui::tui::app::InlineHandle;
 
 pub(crate) async fn persist_theme_preference(
     renderer: &mut AnsiRenderer,
