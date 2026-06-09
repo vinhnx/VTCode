@@ -2,6 +2,32 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.123.8 - 2026-06-09
+
+### Highlights
+#### Documentation
+
+- Enhance agent and subagent documentation with primary agent details (4cb84e23) 
+- Add screenshot spotlight section with GIF and image table (2b2252a0) 
+#### Features
+
+- Implement subagent lifecycle tool policy and enhance subagent controller notifications (017ca5bf) 
+- Add support for new package managers and improve version handling (9dda3341) 
+### Other Changes
+#### CI
+
+- Improve Rust toolchain management with MSRV check and nightly smoke test (9909ad4b) 
+#### Other
+
+- Update TODOs (c47dd4fb) 
+- Update TODO (d41ae5ed) 
+- Refactor tool registration to use distributed slices and update README contributors script (1f1c6978) 
+#### Refactors
+
+- Update README layout and improve visual presentation (4aa9ef77) 
+- Update README layout and improve feature descriptions (04cd5e54) 
+- Reorganize contributing section and update contributor images in README (10ec98b1) 
+- Move contributing section to the end of README and update contributor images (61b61d68) 
 ## 0.123.7 - 2026-06-08
 
 ### Highlights
