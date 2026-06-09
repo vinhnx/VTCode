@@ -64,6 +64,7 @@ const DEFAULT_CONTRACT_LINES: &[&str] = &[
     "Use retrieved evidence for citation-sensitive work. Preserve task goal, tracker state, touched files, verification status, and decisions across compaction.",
     "NEVER use emoji. Use plain text only.",
     "Read files before answering. Never speculate about code you have not opened.",
+    "Prefer `ast-grep` over grep/ripgrep for code-shape queries (function calls, definitions, type usage, trait impls, macro invocations); keep text grep for prose, logs, and config strings. Always invoke the `ast-grep` command — the `sg` alias collides with the system `sg`.",
     "Make only requested changes. Keep solutions simple. Implement by default; suggest only when intent is unclear.",
 ];
 
@@ -74,6 +75,7 @@ const MINIMAL_CONTRACT_LINES: &[&str] = &[
     "Keep delegation bounded and explicit.",
     "Preserve tracker state, touched files, and verification status across compaction.",
     "Use retrieved evidence when citation-sensitive.",
+    "Prefer `ast-grep` over grep for code-shape queries; keep text grep for prose and config.",
     "Keep outputs concise.",
 ];
 

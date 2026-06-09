@@ -149,6 +149,7 @@ These reference docs or workflows in this repo (not slash-command skills):
 | `adding-llm-providers` | Adding new LLM provider integrations |
 | `adding-workspace-crate` | Adding new crates to the workspace |
 | `audit-module-agents` | Checking if per-module AGENTS.md files need updating |
+| `ast-grep` | Structural code search, codemod, and lint via tree-sitter AST patterns |
 
 ### Subagents (`.claude/agents/`)
 
@@ -206,6 +207,7 @@ Prefer `./scripts/check-dev.sh` (10-30s) over `./scripts/check.sh` (2-5m) for it
 | Harness PTY/TUI | `./scripts/check.sh harness`         |
 | Release/PR      | `./scripts/check.sh`                 |
 | Ast-grep rules  | `vtcode check ast-grep`              |
+| Ast-grep scan   | `ast-grep scan` (requires `sgconfig.yml` + `rules/`) |
 
 Narrow commands: `cargo check`, `cargo nextest run`, `cargo fmt`, `cargo clippy`.
 
@@ -243,3 +245,33 @@ Use the `adding-workspace-crate` skill. Adding a crate touches more than just `C
 ## Output
 
 Cap large command output: `COMMAND 2>&1 | head -c 4000`
+
+## Structural Code Tools
+
+### ast-grep
+
+Reach for `ast-grep` whenever the work is structural — finding, matching, or rewriting code by its shape rather than its text. ast-grep matches the AST through tree-sitter, so it sees real call expressions, declarations, and JSX nodes where grep only sees characters, and it speaks TypeScript, Python, Rust, Go, and more — one tool across the whole stack.
+
+**Use it in two modes:**
+
+- **Search and codemod.** Before editing many files by hand, write one ast-grep pattern. `$A` matches a single node, `$$$ARGS` matches many. A migration becomes a deterministic, auditable, reversible pass instead of forty edits that drift and miss sites.
+  - find: `ast-grep -p 'foo($$$ARGS)' -l ts`
+  - rewrite: `ast-grep -p '$A && $A()' -l ts -r '$A?.()'` (inspect the diff, then add `-U` to apply)
+- **Lint gate.** When a repo carries `sgconfig.yml` + a `rules/` dir, run `ast-grep scan`; it enforces the project's banned patterns and exits non-zero on any error-severity match.
+
+**When to prefer ast-grep over text grep:**
+
+| Task | Tool |
+|---|---|
+| Find all calls to a function | `ast-grep -p 'function_name($$$)' -l rs` |
+| Find all impl blocks for a trait | `ast-grep -p 'impl $TRAIT for $TYPE { $$$ }' -l rs` |
+| Rename a function across call sites | `ast-grep -p 'old_name($$$)' -r 'new_name($$$)' -l rs` |
+| Find deprecated macro usage | `ast-grep -p 'deprecated_macro!($$$)' -l rs` |
+| Find all `unwrap()` calls | `ast-grep -p '$A.unwrap()' -l rs` |
+| Search log messages, comments, config | text `Grep` (prose, not code shape) |
+
+**Rust catalog**: https://ast-grep.github.io/catalog/rust/
+
+**Project rules**: `rules/` directory at workspace root. Run `ast-grep scan` to enforce. Run `vtcode check ast-grep` via the project's check script.
+
+Prefer `ast-grep` over grep/ripgrep for any code-shape question; keep text grep for prose, logs, and config strings. Always invoke the `ast-grep` command — the `sg` alias collides with the system `sg`.
