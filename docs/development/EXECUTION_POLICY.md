@@ -51,6 +51,20 @@ should prefer the canonical public names.
 | `request_user_input` | Allow | Interactive clarification surface |
 | `apply_patch` | **Prompt** | Complex diffs |
 
+### Recovery After Policy Denial
+
+When `unified_exec` is denied, treat that denial as a routing signal, not a retryable transient:
+
+1. Do not repeat the same shell inspection through `unified_exec`.
+2. Prefer `unified_search` or `unified_file` for read-only workspace discovery.
+3. If the task still requires shell access, state that the change was **not applied** and recommend a user-approved mode change such as `/mode auto`.
+
+Example pivot:
+
+- Denied: `unified_exec` running `grep -n "foo" README.md`
+- Recovery: `unified_search` `grep` for `foo` in `README.md`
+- Final fallback when shell access remains necessary: `Not applied; exec was denied by policy; next action: switch to /mode auto or approve the command.`
+
 ## Key Safety Features
 
 1. **Workspace Boundary**: All file operations are confined to `WORKSPACE_DIR`; cannot escape or touch system files

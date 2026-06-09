@@ -2,6 +2,94 @@ use super::*;
 use super::{parse_channel, parse_tagged};
 use vtcode_core::config::constants::tools;
 
+// ── contains_pseudo_tool_call_markers ─────────────────────────────────────────
+
+#[test]
+fn pseudo_markers_detect_bare_tool_call_tag() {
+    assert!(contains_pseudo_tool_call_markers(
+        "Let me apply:\n<tool_call>\n<function=apply_patch>...</function>\n</tool_call>"
+    ));
+}
+
+#[test]
+fn pseudo_markers_detect_function_eq_without_tool_call_wrapper() {
+    assert!(contains_pseudo_tool_call_markers(
+        "<function=write_file>content</function>"
+    ));
+}
+
+#[test]
+fn pseudo_markers_detect_parameter_eq() {
+    assert!(contains_pseudo_tool_call_markers(
+        "<parameter=patch>some diff</parameter>"
+    ));
+}
+
+#[test]
+fn pseudo_markers_detect_invoke_name() {
+    assert!(contains_pseudo_tool_call_markers(
+        r#"<invoke name="apply_patch"><parameter name="p">x</parameter></invoke>"#
+    ));
+}
+
+#[test]
+fn pseudo_markers_detect_minimax_tool_call() {
+    assert!(contains_pseudo_tool_call_markers(
+        "<minimax:tool_call>...</minimax:tool_call>"
+    ));
+}
+
+#[test]
+fn pseudo_markers_detect_closing_tool_call_tag_alone() {
+    assert!(contains_pseudo_tool_call_markers("</tool_call>"));
+}
+
+#[test]
+fn pseudo_markers_is_case_insensitive() {
+    assert!(contains_pseudo_tool_call_markers("<TOOL_CALL>...</TOOL_CALL>"));
+    assert!(contains_pseudo_tool_call_markers("<Function=foo>"));
+}
+
+#[test]
+fn pseudo_markers_returns_false_for_clean_prose() {
+    assert!(!contains_pseudo_tool_call_markers(
+        "I searched the codebase and found 3 matches. Here are the results."
+    ));
+}
+
+#[test]
+fn pseudo_markers_returns_false_for_ordinary_xml_attributes() {
+    // A plain XML attribute like `name="foo"` should not trigger the check.
+    assert!(!contains_pseudo_tool_call_markers(
+        r#"<config name="foo" value="bar"/>"#
+    ));
+}
+
+// ── strip_textual_tool_call_regions — function= / parameter= coverage ─────────
+
+#[test]
+fn strip_regions_removes_bare_function_eq_block() {
+    let text = "Here is what I would do:\n\
+                <function=apply_patch>--- a/f\n+++ b/f\n@@ -1 +1 @@\n-old\n+new</function>\n\
+                Ask me if you want me to actually run this.";
+    let stripped = strip_textual_tool_call_regions(text);
+    assert!(
+        !stripped.contains("<function="),
+        "function= block should be stripped"
+    );
+    assert!(
+        stripped.contains("Here is what I would do"),
+        "surrounding prose should be preserved"
+    );
+}
+
+#[test]
+fn strip_regions_removes_bare_parameter_eq_block() {
+    let text = "Patch content:\n<parameter=patch>diff goes here</parameter>";
+    let stripped = strip_textual_tool_call_regions(text);
+    assert!(!stripped.contains("<parameter="));
+}
+
 #[test]
 fn test_detect_textual_tool_call_parses_python_style_arguments() {
     let message = "call\nprint(default_api.read_file(path='AGENTS.md'))";

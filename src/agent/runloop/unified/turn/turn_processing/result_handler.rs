@@ -208,7 +208,8 @@ pub(crate) async fn handle_turn_processing_result<'a>(
             if params.ctx.is_recovery_active()
                 && params.ctx.recovery_pass_used()
                 && params.ctx.recovery_is_tool_free()
-                && crate::agent::runloop::text_tools::detect_textual_tool_call(&text).is_some()
+                && (crate::agent::runloop::text_tools::detect_textual_tool_call(&text).is_some()
+                    || crate::agent::runloop::text_tools::contains_pseudo_tool_call_markers(&text))
             {
                 let cleaned = crate::agent::runloop::text_tools::strip_dsml_markup(&text)
                     .trim()
@@ -219,6 +220,9 @@ pub(crate) async fn handle_turn_processing_result<'a>(
                 if !cleaned.is_empty()
                     && crate::agent::runloop::text_tools::detect_textual_tool_call(&cleaned)
                         .is_none()
+                    && !crate::agent::runloop::text_tools::contains_pseudo_tool_call_markers(
+                        &cleaned,
+                    )
                 {
                     let _ = params.ctx.renderer.line(
                         MessageStyle::Warning,
@@ -242,6 +246,9 @@ pub(crate) async fn handle_turn_processing_result<'a>(
                 if !cleaned.is_empty()
                     && crate::agent::runloop::text_tools::detect_textual_tool_call(&cleaned)
                         .is_none()
+                    && !crate::agent::runloop::text_tools::contains_pseudo_tool_call_markers(
+                        &cleaned,
+                    )
                 {
                     let _ = params.ctx.renderer.line(
                         MessageStyle::Warning,
@@ -783,5 +790,94 @@ Please re-run with tools enabled."#
 
         assert!(matches!(outcome, TurnHandlerOutcome::Continue));
         assert!(backing.recovery_is_tool_free());
+    }
+
+    /// Regression test for TD-015: text containing malformed `<tool_call>` tags
+    /// that `detect_textual_tool_call` cannot parse must still be caught by the
+    /// recovery guard via `contains_pseudo_tool_call_markers`.
+    #[tokio::test]
+    async fn recovery_non_parseable_tool_call_marker_breaks_turn() {
+        let mut backing = TestTurnProcessingBacking::new(4).await;
+        let mut ctx = backing.turn_processing_context();
+        ctx.activate_recovery("loop detector");
+        assert!(ctx.consume_recovery_pass());
+
+        // Malformed markup: <tool_call> wrapping <function=...> with <parameter=>
+        // tags that `detect_textual_tool_call` cannot fully parse, but which
+        // clearly represent tool-call intent.
+        let malformed = "Since tools are disabled in this recovery pass, here is what I would \
+                         apply:\n\
+                         <tool_call>\n\
+                         <function=apply_patch>\n\
+                         <parameter=patch>--- a/README.md\n+++ b/README.md\n@@ -1 +1 @@\n-old\n+new\n</parameter=patch>\n\
+                         </function=apply_patch>\n\
+                         </tool_call>";
+
+        let mut repeated_tool_attempts = LoopTracker::new();
+        let mut turn_modified_files = BTreeSet::new();
+
+        let outcome = handle_turn_processing_result(HandleTurnProcessingResultParams {
+            ctx: &mut ctx,
+            processing_result: TurnProcessingResult::TextResponse {
+                text: malformed.to_string(),
+                reasoning: Vec::new(),
+                reasoning_details: None,
+                proposed_plan: None,
+            },
+            response_streamed: false,
+            step_count: 1,
+            repeated_tool_attempts: &mut repeated_tool_attempts,
+            turn_modified_files: &mut turn_modified_files,
+            max_tool_loops: 4,
+            tool_repeat_limit: 4,
+        })
+        .await
+        .expect("malformed tool-call markup should not panic");
+
+        // The guard must fire (Break) even though detect_textual_tool_call
+        // cannot parse the payload. After stripping, either clean prose is
+        // returned (Completed) or the text was only markup (Blocked) — either
+        // way it must not fall through to showing raw markup as a final answer.
+        assert!(
+            matches!(outcome, TurnHandlerOutcome::Break(_)),
+            "recovery with non-parseable tool_call tag should break, not continue"
+        );
+    }
+
+    /// Regression test: recovery text that contains only prose (no markers)
+    /// must pass through unmodified — the guard must not fire on clean text.
+    #[tokio::test]
+    async fn recovery_clean_prose_is_not_intercepted_by_marker_guard() {
+        let mut backing = TestTurnProcessingBacking::new(4).await;
+        let mut ctx = backing.turn_processing_context();
+        ctx.activate_recovery("loop detector");
+        assert!(ctx.consume_recovery_pass());
+
+        let mut repeated_tool_attempts = LoopTracker::new();
+        let mut turn_modified_files = BTreeSet::new();
+
+        let outcome = handle_turn_processing_result(HandleTurnProcessingResultParams {
+            ctx: &mut ctx,
+            processing_result: TurnProcessingResult::TextResponse {
+                text: "The search found 3 matches. Next step: update the failing test.".to_string(),
+                reasoning: Vec::new(),
+                reasoning_details: None,
+                proposed_plan: None,
+            },
+            response_streamed: false,
+            step_count: 1,
+            repeated_tool_attempts: &mut repeated_tool_attempts,
+            turn_modified_files: &mut turn_modified_files,
+            max_tool_loops: 4,
+            tool_repeat_limit: 4,
+        })
+        .await
+        .expect("clean recovery prose should be handled");
+
+        assert!(
+            matches!(outcome, TurnHandlerOutcome::Break(TurnLoopResult::Completed)),
+            "clean prose in recovery should complete the turn normally"
+        );
+        assert!(backing.last_history_message_contains("3 matches"));
     }
 }

@@ -729,6 +729,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: For CLI Output, For TUI Widgets, Unified Theme, Color Reference, Common Patterns
   - **User Questions**: "What can you tell me about Styling Quick Start Guide?", "How does For CLI Output work?", "How does For TUI Widgets work?"
 
+- **File**: `docs/project/TODO.md`
+  - **Content**: TODO.md
+  - **Topics**: Structural Code: ast-grep
+  - **User Questions**: "What can you tell me about TODO.md?", "How does Structural Code: ast-grep work?"
+
 - **File**: `docs/harness/TECH_DEBT_TRACKER.md`
   - **Content**: Tech Debt Tracker
   - **Topics**: Priority Levels, Status Values, Debt Items, How to Add a New Item, How to Resolve an Item
@@ -738,11 +743,6 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Content**: VT Code
   - **Topics**: Overview, Configuration, Supported Models, Features with HF Integration, Common Use Cases
   - **User Questions**: "What can you tell me about VT Code?", "How does Overview work?", "How does Configuration work?"
-
-- **File**: `docs/project/TODO.md`
-  - **Content**: VT Code Agent Harness Robustness Plan
-  - **Topics**: Structural Code: ast-grep, Counting method, Corrected ranked findings, Turn-delta summary, Deep-dive root cause notes
-  - **User Questions**: "What can you tell me about VT Code Agent Harness Robustness Plan?", "How does Structural Code: ast-grep work?", "How does Counting method work?"
 
 - **File**: `docs/environment/ALLOWED_COMMANDS_REFERENCE.md`
   - **Content**: VT Code Allowed Commands Reference

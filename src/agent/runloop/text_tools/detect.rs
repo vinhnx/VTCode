@@ -208,6 +208,27 @@ pub(crate) fn detect_textual_tool_call(text: &str) -> Option<(String, Value)> {
     None
 }
 
+/// Check whether `text` contains raw pseudo-tool-call markup markers that
+/// indicate tool-call intent without requiring successful parsing.
+///
+/// `detect_textual_tool_call` only returns `Some` when it can fully parse and
+/// canonicalize a call. Malformed or partially-serialized markup (e.g. a bare
+/// `<tool_call>` tag whose payload fails to parse) slips past it. This
+/// function provides a lightweight pre-scan so the recovery guard can catch
+/// those cases too.
+pub(crate) fn contains_pseudo_tool_call_markers(text: &str) -> bool {
+    const MARKERS: &[&str] = &[
+        "<tool_call",
+        "</tool_call>",
+        "<function=",
+        "<parameter=",
+        "<invoke name=",
+        "<minimax:tool_call>",
+    ];
+    let lowered = text.to_ascii_lowercase();
+    MARKERS.iter().any(|marker| lowered.contains(marker))
+}
+
 pub(crate) fn strip_textual_tool_call_regions(text: &str) -> String {
     let mut regions = Vec::new();
     collect_channel_regions(text, &mut regions);
@@ -220,6 +241,15 @@ pub(crate) fn strip_textual_tool_call_regions(text: &str) -> String {
     );
     collect_enclosed_regions(text, "<invoke name=\"", "</invoke>", &mut regions);
     collect_enclosed_regions(text, "<tool_call>", "</tool_call>", &mut regions);
+    // Strip <function=name>...</function> and <parameter=name>...</parameter>
+    // blocks that models emit as pseudo-tool-call markup when tools are
+    // unavailable. These may appear inside a <tool_call> wrapper (already
+    // handled above) or bare when the wrapper is missing.
+    // Unlike `collect_enclosed_regions`, these use `collect_pseudo_marker_regions`
+    // because `detect_textual_tool_call` cannot parse them (they are intentionally
+    // non-parseable), but they are clearly tool-call intent by tag name alone.
+    collect_pseudo_marker_regions(text, "<function=", "</function>", &mut regions);
+    collect_pseudo_marker_regions(text, "<parameter=", "</parameter>", &mut regions);
     collect_bracketed_regions(text, &mut regions);
     collect_function_call_regions(text, &mut regions);
 
@@ -303,6 +333,34 @@ fn collect_enclosed_regions(
             .map(|idx| content_start + idx + close_marker.len())
             .unwrap_or(text.len());
         add_valid_region(text, start, end, regions);
+        search_start = end.max(content_start);
+    }
+}
+
+/// Like `collect_enclosed_regions` but accepts regions that contain
+/// pseudo-tool-call markers even when `detect_textual_tool_call` cannot
+/// parse them. Used for `<function=…>` and `<parameter=…>` blocks whose
+/// payload is intentionally not parseable by the full tool-call parser.
+fn collect_pseudo_marker_regions(
+    text: &str,
+    open_marker: &str,
+    close_marker: &str,
+    regions: &mut Vec<(usize, usize)>,
+) {
+    let lowered = text.to_ascii_lowercase();
+    let open_lower = open_marker.to_ascii_lowercase();
+    let close_lower = close_marker.to_ascii_lowercase();
+    let mut search_start = 0usize;
+    while let Some(relative_start) = lowered[search_start..].find(&open_lower) {
+        let start = search_start + relative_start;
+        let content_start = start + open_marker.len();
+        let end = lowered[content_start..]
+            .find(&close_lower)
+            .map(|idx| content_start + idx + close_marker.len())
+            .unwrap_or(text.len());
+        if start < end && end <= text.len() {
+            regions.push((start, end));
+        }
         search_start = end.max(content_start);
     }
 }

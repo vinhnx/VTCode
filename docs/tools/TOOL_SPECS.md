@@ -188,3 +188,103 @@ This document describes the canonical public tool surface exposed to VT Code mod
 - Prefer `load_skill` with the bundled `ast-grep` skill when the task needs `languageGlobs`, `languageInjections`, `hostLanguage`, `injected`, dynamic injected candidates through `$LANG`, `$CONTENT`-style embedded-region capture, styled-components CSS, GraphQL template literals, local/global utility rules, `transform`, `rewrite`, `joinBy`, or `rewriters`.
 - Prefer another analysis tool when the task depends on scope, type, control-flow, data-flow, taint, or constant-propagation facts; ast-grep’s structural surface does not provide that analysis.
 - `action="intelligence"` remains executor-compatible for legacy callers, but it is deprecated and not part of the public schema.
+
+## Common Recovery Patterns
+
+Use these patterns to avoid the tool-selection failures called out in TD-015.
+
+| Situation | Prefer | Avoid |
+| --- | --- | --- |
+| Need prose, regex, filenames, or symbol-name matching | `unified_search` with `action="grep"` | `action="structural"` with non-parseable text fragments |
+| Need syntax-aware code structure matching | `unified_search` with `action="structural"` and a valid parseable snippet | Treating structural search as a smarter grep |
+| Existing file needs a small literal replacement | `unified_file` `edit` with exact old/new text | Large block rewrites through a small literal-edit call |
+| Existing file needs a broad rewrite | `unified_file` `write` with `mode="overwrite"` or `apply_patch` with exact context | `write` without explicit overwrite intent |
+| Patch failed after the file changed | Re-read a narrow fresh range, then re-run `patch` with exact surrounding lines | Synthetic anchors or remembered context such as `@@ heading @@` |
+| Shell inspection was denied by policy | Switch to `unified_search`, `unified_file`, or `request_user_input`; if shell access is still required, tell the user it was **not applied** and suggest `/mode auto` | Retrying the same denied `unified_exec` call |
+| Recovery pass cannot apply a requested mutation | Finalize with explicit blocker text: `not applied; tools were disabled or denied; next action is ...` | Presenting generated prose or pseudo tool-call markup as if it ran |
+
+### Grep vs structural search
+
+Use `grep` when the target is plain text or regex:
+
+```json
+{
+  "tool": "unified_search",
+  "action": "grep",
+  "pattern": "TD-015|recovery-mode",
+  "path": "docs/"
+}
+```
+
+Use `structural` only when the pattern is valid code in the target language:
+
+```json
+{
+  "tool": "unified_search",
+  "action": "structural",
+  "workflow": "query",
+  "lang": "rust",
+  "pattern": "fn $NAME($$$ARGS) -> $RET { $$$BODY }",
+  "path": "src/"
+}
+```
+
+Do not send prose fragments such as `AgentLoop agent loop` or selector-heavy text blobs to structural mode; ast-grep expects parseable code, not free-form search terms.
+
+### `edit` vs `write`/`overwrite`
+
+Use `edit` when the old text is short, exact, and already present:
+
+```json
+{
+  "tool": "unified_file",
+  "action": "edit",
+  "path": "README.md",
+  "old_str": "Old heading",
+  "new_str": "New heading"
+}
+```
+
+Use `write` with `mode="overwrite"` when replacing most or all of an existing file:
+
+```json
+{
+  "tool": "unified_file",
+  "action": "write",
+  "path": "README.md",
+  "mode": "overwrite",
+  "content": "# New README\n..."
+}
+```
+
+If the rewrite is partial but larger than a safe literal edit, prefer `apply_patch` or `unified_file` `patch` with exact file context.
+
+### Patch context discipline
+
+Good patch flow:
+
+1. Read only the narrow range you will edit.
+2. Copy the exact surrounding lines into the patch.
+3. If the patch fails, re-read the file and regenerate the patch from fresh context.
+
+Bad patch flow:
+
+- inventing anchors from memory,
+- patching against stale content after another edit,
+- widening context until the patch becomes a full-file replacement.
+
+### Policy-denied exec recovery
+
+If `unified_exec` is denied for a read-only shell inspection:
+
+1. Do not retry the same shell command.
+2. Switch to `unified_search` or `unified_file` for workspace inspection.
+3. If shell execution is still necessary, say it was **not applied** and recommend `/mode auto` or a user-approved mode change.
+
+### Recovery-mode final wording
+
+When a mutating task could not be executed in recovery mode, prefer:
+
+> Not applied. Tools were disabled or denied during recovery, so no additional tool call ran. Latest verified evidence is above; next action: re-enable the needed tool or switch to `/mode auto`.
+
+Do not return pseudo tool-call markup, XML wrappers, or “done” language for changes that were never applied.
