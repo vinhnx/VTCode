@@ -921,7 +921,7 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 - **File**: `docs/tools/TOOL_SPECS.md`
   - **Content**: VT Code Tool Specifications
-  - **Topics**: Canonical Public Tools, `unified_search`, Guidance
+  - **Topics**: Canonical Public Tools, `unified_search`, Guidance, Common Recovery Patterns
   - **User Questions**: "What can you tell me about VT Code Tool Specifications?", "How does Canonical Public Tools work?", "How does `unified_search` work?"
 
 - **File**: `docs/tools/web_fetch_security.md`

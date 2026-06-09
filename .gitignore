@@ -828,3 +828,5 @@ plans/
 .vtcode/memory/
 .vtcode/history/vtcode-share-hf/
 .vtcode/history/
+
+.node-version
