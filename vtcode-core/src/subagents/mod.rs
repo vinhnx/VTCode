@@ -15,8 +15,9 @@ pub use background::{
     load_archive_preview, subagent_display_label,
 };
 pub use config::{
-    build_child_config, compose_subagent_instructions, filter_child_tools,
-    normalize_background_child_max_turns, normalize_child_max_turns, prepare_child_runtime_config,
+    ResolvedAgentRuntimeView, build_child_config, compose_subagent_instructions,
+    filter_child_tools, normalize_background_child_max_turns, normalize_child_max_turns,
+    prepare_child_runtime_config,
 };
 pub use model::{agent_type_for_spec, load_memory_appendix};
 pub use prompt::{
@@ -1903,7 +1904,10 @@ mod tests {
     use std::time::Duration;
     use tempfile::TempDir;
     use tokio::sync::Notify;
-    use vtcode_config::{SubagentMcpServer, SubagentMemoryScope, SubagentSource, SubagentSpec};
+    use vtcode_config::{
+        HookCommandConfig, HookGroupConfig, HooksConfig, SubagentMcpServer, SubagentMemoryScope,
+        SubagentSource, SubagentSpec,
+    };
 
     fn test_controller_config(
         workspace_root: PathBuf,
@@ -2397,6 +2401,110 @@ Inspect the repository.
                 .permissions
                 .deny
                 .contains(&tools::SPAWN_AGENT.to_string())
+        );
+    }
+
+    #[test]
+    fn build_child_config_preserves_subagent_lifecycle_stripping_and_hook_merging() {
+        let mut parent = VTCodeConfig::default();
+        parent.permissions.allow = vec![
+            tools::SPAWN_AGENT.to_string(),
+            tools::UNIFIED_SEARCH.to_string(),
+            tools::UNIFIED_EXEC.to_string(),
+        ];
+
+        let mut spec = vtcode_config::builtin_subagents()
+            .into_iter()
+            .find(|spec| spec.name == "worker")
+            .expect("worker");
+        spec.tools = Some(parent.permissions.allow.clone());
+        let mut hooks = HooksConfig::default();
+        hooks.lifecycle.pre_tool_use.push(HookGroupConfig {
+            matcher: Some("*".to_string()),
+            hooks: vec![HookCommandConfig {
+                command: "echo child".to_string(),
+                ..HookCommandConfig::default()
+            }],
+        });
+        spec.hooks = Some(hooks);
+
+        let child = build_child_config(&parent, &spec, models::openai::GPT_5_4, None);
+
+        assert_eq!(
+            child.permissions.allow,
+            vec![
+                tools::UNIFIED_SEARCH.to_string(),
+                tools::UNIFIED_EXEC.to_string()
+            ]
+        );
+        assert!(
+            child
+                .permissions
+                .deny
+                .contains(&tools::SPAWN_AGENT.to_string())
+        );
+        assert_eq!(child.hooks.lifecycle.pre_tool_use.len(), 1);
+        assert_eq!(
+            child.hooks.lifecycle.pre_tool_use[0].hooks[0].command,
+            "echo child"
+        );
+    }
+
+    #[test]
+    fn prepare_child_runtime_config_uses_shared_view_for_model_and_reasoning() {
+        let parent = VTCodeConfig::default();
+        let mut spec = vtcode_config::builtin_subagents()
+            .into_iter()
+            .find(|spec| spec.name == "worker")
+            .expect("worker");
+        spec.model = Some(models::openai::GPT_5_4_MINI.to_string());
+        spec.reasoning_effort = Some("high".to_string());
+
+        let (resolved_model, child_reasoning_effort, child_cfg) = prepare_child_runtime_config(
+            &parent,
+            &spec,
+            models::openai::GPT_5_4,
+            "openai",
+            ReasoningEffortLevel::Low,
+            None,
+            None,
+            None,
+            |_, parent_model, parent_provider, model_override, spec_model, agent_name| {
+                assert_eq!(parent_model, models::openai::GPT_5_4);
+                assert_eq!(parent_provider, "openai");
+                assert_eq!(model_override, None);
+                assert_eq!(spec_model, Some(models::openai::GPT_5_4_MINI));
+                assert_eq!(agent_name, "worker");
+                Ok(models::openai::GPT_5_4_MINI
+                    .parse::<ModelId>()
+                    .expect("valid model"))
+            },
+        )
+        .expect("prepared child runtime config");
+
+        assert_eq!(resolved_model.as_str(), models::openai::GPT_5_4_MINI);
+        assert_eq!(child_cfg.agent.default_model, models::openai::GPT_5_4_MINI);
+        assert_eq!(child_reasoning_effort, ReasoningEffortLevel::High);
+        assert_eq!(child_cfg.agent.reasoning_effort, ReasoningEffortLevel::High);
+    }
+
+    #[test]
+    fn subagent_instruction_composition_uses_shared_runtime_prompt_and_skill_appendix() {
+        let mut spec = vtcode_config::builtin_subagents()
+            .into_iter()
+            .find(|spec| spec.name == "worker")
+            .expect("worker");
+        spec.prompt = "Worker instructions".to_string();
+        spec.skills = vec!["rust".to_string(), "repo".to_string()];
+
+        let instructions =
+            compose_subagent_instructions(&spec, Some("Memory appendix".to_string()));
+
+        assert!(instructions.contains("Worker instructions"));
+        assert!(instructions.contains("Preloaded skill names: rust, repo."));
+        assert!(instructions.contains("Memory appendix"));
+        assert!(
+            instructions.contains("Return your final response using this exact Markdown contract")
         );
     }
 

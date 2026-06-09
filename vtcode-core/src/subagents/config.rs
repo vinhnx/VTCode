@@ -1,7 +1,9 @@
 use anyhow::Result;
 use std::path::Path;
+use std::path::PathBuf;
 use vtcode_config::{
-    HooksConfig, McpProviderConfig, PermissionMode, SubagentMcpServer, SubagentSpec,
+    HooksConfig, McpProviderConfig, PermissionMode, SubagentMcpServer, SubagentMemoryScope,
+    SubagentSource, SubagentSpec,
 };
 
 use super::constants::{
@@ -17,6 +19,50 @@ use crate::llm::provider::ToolDefinition;
 use crate::tools::mcp::MCP_QUALIFIED_TOOL_PREFIX;
 use crate::utils::session_archive::{SessionArchiveMetadata, SessionForkMode};
 
+#[derive(Debug, Clone)]
+pub struct ResolvedAgentRuntimeView {
+    pub canonical_name: String,
+    pub display_name: String,
+    pub description: String,
+    pub instructions: String,
+    pub tools: Option<Vec<String>>,
+    pub disallowed_tools: Vec<String>,
+    pub permission_mode: Option<PermissionMode>,
+    pub model: Option<String>,
+    pub reasoning_effort: Option<String>,
+    pub hooks: Option<HooksConfig>,
+    pub mcp_servers: Vec<SubagentMcpServer>,
+    pub skills: Vec<String>,
+    pub memory: Option<SubagentMemoryScope>,
+    pub read_only: bool,
+    pub source: SubagentSource,
+    pub file_path: Option<PathBuf>,
+}
+
+impl ResolvedAgentRuntimeView {
+    #[must_use]
+    pub fn from_spec(spec: &SubagentSpec) -> Self {
+        Self {
+            canonical_name: spec.name.clone(),
+            display_name: spec.name.clone(),
+            description: spec.description.clone(),
+            instructions: spec.prompt.clone(),
+            tools: spec.tools.clone(),
+            disallowed_tools: spec.disallowed_tools.clone(),
+            permission_mode: spec.permission_mode,
+            model: spec.model.clone(),
+            reasoning_effort: spec.reasoning_effort.clone(),
+            hooks: spec.hooks.clone(),
+            mcp_servers: spec.mcp_servers.clone(),
+            skills: spec.skills.clone(),
+            memory: spec.memory,
+            read_only: spec.is_read_only(),
+            source: spec.source.clone(),
+            file_path: spec.file_path.clone(),
+        }
+    }
+}
+
 // ─── Child Config Building ─────────────────────────────────────────────────
 
 pub fn build_child_config(
@@ -25,9 +71,23 @@ pub fn build_child_config(
     model: &str,
     max_turns: Option<usize>,
 ) -> VTCodeConfig {
+    build_child_config_from_runtime(
+        parent,
+        &ResolvedAgentRuntimeView::from_spec(spec),
+        model,
+        max_turns,
+    )
+}
+
+fn build_child_config_from_runtime(
+    parent: &VTCodeConfig,
+    runtime: &ResolvedAgentRuntimeView,
+    model: &str,
+    max_turns: Option<usize>,
+) -> VTCodeConfig {
     let mut child = parent.clone();
     child.agent.default_model = model.to_string();
-    if let Some(mode) = spec.permission_mode {
+    if let Some(mode) = runtime.permission_mode {
         child.permissions.default_mode =
             clamp_permission_mode(parent.permissions.default_mode, mode);
     }
@@ -35,7 +95,7 @@ pub fn build_child_config(
         child.automation.full_auto.max_turns = max_turns;
     }
 
-    let mut allowed_tools = spec.tools.clone().unwrap_or_default();
+    let mut allowed_tools = runtime.tools.clone().unwrap_or_default();
     if !allowed_tools.is_empty() {
         allowed_tools.retain(|tool| !SUBAGENT_TOOL_NAMES.iter().any(|blocked| blocked == tool));
         child.permissions.allow =
@@ -43,15 +103,15 @@ pub fn build_child_config(
     }
 
     let mut disallowed_tools = parent.permissions.deny.clone();
-    disallowed_tools.extend(spec.disallowed_tools.clone());
+    disallowed_tools.extend(runtime.disallowed_tools.clone());
     for tool in SUBAGENT_TOOL_NAMES {
         if !disallowed_tools.iter().any(|entry| entry == tool) {
             disallowed_tools.push((*tool).to_string());
         }
     }
     child.permissions.deny = disallowed_tools;
-    merge_child_hooks(&mut child, spec.hooks.as_ref());
-    merge_child_mcp_servers(&mut child, spec.mcp_servers.as_slice());
+    merge_child_hooks(&mut child, runtime.hooks.as_ref());
+    merge_child_mcp_servers(&mut child, runtime.mcp_servers.as_slice());
     child
 }
 
@@ -89,19 +149,22 @@ pub fn prepare_child_runtime_config(
         &str,
     ) -> Result<ModelId>,
 ) -> Result<(ModelId, ReasoningEffortLevel, VTCodeConfig)> {
+    let runtime = ResolvedAgentRuntimeView::from_spec(spec);
     let resolved_model = resolve_model(
         parent,
         parent_model,
         parent_provider,
         model_override,
-        spec.model.as_deref(),
-        spec.name.as_str(),
+        runtime.model.as_deref(),
+        runtime.canonical_name.as_str(),
     )?;
-    let mut child_cfg = build_child_config(parent, spec, resolved_model.as_str(), max_turns);
+    let mut child_cfg =
+        build_child_config_from_runtime(parent, &runtime, resolved_model.as_str(), max_turns);
     let child_reasoning_effort = reasoning_override
         .and_then(ReasoningEffortLevel::parse)
         .or_else(|| {
-            spec.reasoning_effort
+            runtime
+                .reasoning_effort
                 .as_deref()
                 .and_then(ReasoningEffortLevel::parse)
         })
@@ -402,23 +465,33 @@ pub fn compose_subagent_instructions(
     spec: &SubagentSpec,
     memory_appendix: Option<String>,
 ) -> String {
+    compose_subagent_runtime_instructions(
+        &ResolvedAgentRuntimeView::from_spec(spec),
+        memory_appendix,
+    )
+}
+
+fn compose_subagent_runtime_instructions(
+    runtime: &ResolvedAgentRuntimeView,
+    memory_appendix: Option<String>,
+) -> String {
     let mut sections = Vec::new();
-    if !spec.prompt.trim().is_empty() {
-        sections.push(spec.prompt.trim().to_string());
+    if !runtime.instructions.trim().is_empty() {
+        sections.push(runtime.instructions.trim().to_string());
     }
     sections.push(FINAL_RESPONSE_CONTRACT.to_string());
 
-    if spec.is_read_only() {
+    if is_runtime_read_only(runtime) {
         sections.push(READ_ONLY_TOOL_REMINDER.to_string());
         sections.push(READ_ONLY_PLAN_MODE_REMINDER.to_string());
     } else {
         sections.push(WRITE_TOOL_REMINDER.to_string());
     }
 
-    if !spec.skills.is_empty() {
+    if !runtime.skills.is_empty() {
         sections.push(format!(
             "Preloaded skill names: {}. Use their established repository conventions.",
-            spec.skills.join(", ")
+            runtime.skills.join(", ")
         ));
     }
     if let Some(memory_appendix) = memory_appendix
@@ -427,6 +500,10 @@ pub fn compose_subagent_instructions(
         sections.push(memory_appendix);
     }
     sections.join("\n\n")
+}
+
+fn is_runtime_read_only(runtime: &ResolvedAgentRuntimeView) -> bool {
+    runtime.read_only
 }
 
 pub fn build_subagent_archive_metadata(

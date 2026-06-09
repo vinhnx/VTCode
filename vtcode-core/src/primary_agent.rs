@@ -9,6 +9,7 @@ use vtcode_config::{
 };
 
 use crate::llm::provider::ToolDefinition;
+use crate::subagents::ResolvedAgentRuntimeView;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ActivePrimaryAgentSpecIdentity {
@@ -32,19 +33,24 @@ pub struct ActivePrimaryAgent {
 impl ActivePrimaryAgent {
     #[must_use]
     pub fn from_spec(spec: &SubagentSpec) -> Self {
+        Self::from_runtime_view(&ResolvedAgentRuntimeView::from_spec(spec))
+    }
+
+    #[must_use]
+    pub fn from_runtime_view(runtime: &ResolvedAgentRuntimeView) -> Self {
         Self {
             identity: ActivePrimaryAgentSpecIdentity {
-                name: spec.name.clone(),
-                source: spec.source.clone(),
-                file_path: spec.file_path.clone(),
+                name: runtime.canonical_name.clone(),
+                source: runtime.source.clone(),
+                file_path: runtime.file_path.clone(),
             },
-            display_name: spec.name.clone(),
-            instructions: spec.prompt.clone(),
-            tools: spec.tools.clone(),
-            disallowed_tools: spec.disallowed_tools.clone(),
-            permission_mode: spec.permission_mode,
-            model: spec.model.clone(),
-            reasoning_effort: spec.reasoning_effort.clone(),
+            display_name: runtime.display_name.clone(),
+            instructions: runtime.instructions.clone(),
+            tools: runtime.tools.clone(),
+            disallowed_tools: runtime.disallowed_tools.clone(),
+            permission_mode: runtime.permission_mode,
+            model: runtime.model.clone(),
+            reasoning_effort: runtime.reasoning_effort.clone(),
         }
     }
 }
@@ -239,8 +245,8 @@ mod tests {
     use serde_json::json;
     use tempfile::TempDir;
     use vtcode_config::{
-        SubagentDiscoveryInput, SubagentMcpServer, SubagentMemoryScope, SubagentSource,
-        discover_subagents,
+        HooksConfig, SubagentDiscoveryInput, SubagentMcpServer, SubagentMemoryScope,
+        SubagentSource, discover_subagents,
     };
 
     use super::*;
@@ -328,6 +334,36 @@ mod tests {
         assert_eq!(active.permission_mode, Some(PermissionMode::Plan));
         assert_eq!(active.model.as_deref(), Some("gpt-5.1"));
         assert_eq!(active.reasoning_effort.as_deref(), Some("high"));
+    }
+
+    #[test]
+    fn primary_runtime_adapter_uses_shared_resolved_view_for_overlapping_fields() {
+        let mut spec = test_spec("worker");
+        spec.description = "Worker display metadata".to_string();
+        spec.skills = vec!["rust".to_string(), "repo".to_string()];
+        spec.mcp_servers = vec![SubagentMcpServer::Named("filesystem".to_string())];
+        spec.hooks = Some(HooksConfig::default());
+        spec.memory = Some(SubagentMemoryScope::Project);
+
+        let runtime = ResolvedAgentRuntimeView::from_spec(&spec);
+        let active = ActivePrimaryAgent::from_runtime_view(&runtime);
+
+        assert_eq!(runtime.canonical_name, "worker");
+        assert_eq!(runtime.display_name, "worker");
+        assert_eq!(runtime.description, "Worker display metadata");
+        assert_eq!(runtime.skills, vec!["rust".to_string(), "repo".to_string()]);
+        assert_eq!(runtime.mcp_servers.len(), 1);
+        assert!(runtime.hooks.is_some());
+        assert_eq!(runtime.memory, Some(SubagentMemoryScope::Project));
+        assert!(runtime.read_only);
+        assert_eq!(active.identity.name, runtime.canonical_name);
+        assert_eq!(active.display_name, runtime.display_name);
+        assert_eq!(active.instructions, runtime.instructions);
+        assert_eq!(active.tools, runtime.tools);
+        assert_eq!(active.disallowed_tools, runtime.disallowed_tools);
+        assert_eq!(active.permission_mode, runtime.permission_mode);
+        assert_eq!(active.model, runtime.model);
+        assert_eq!(active.reasoning_effort, runtime.reasoning_effort);
     }
 
     #[test]
