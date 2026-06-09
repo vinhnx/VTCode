@@ -861,22 +861,14 @@ main() {
             local current_user=""
             current_user=$(gh api user --jq '.login' 2>/dev/null || true)
 
-            if [[ -n "$current_user" ]]; then
-                print_info "Currently logged in as: $current_user"
+            print_info "Switching to GitHub account vinhnx..."
+            if gh auth switch -u vinhnx >/dev/null 2>&1; then
+                print_success "Switched to GitHub account vinhnx"
+            elif [[ "$dry_run" == 'true' ]]; then
+                print_info "Dry run - continuing without switching GitHub account"
             else
-                print_info "GitHub CLI authentication is valid"
-            fi
-
-            if [[ -n "$current_user" && "$current_user" != "vinhnx" ]]; then
-                print_info "Switching to GitHub account vinhnx..."
-                if gh auth switch -u vinhnx >/dev/null 2>&1; then
-                    print_success "Switched to GitHub account vinhnx"
-                elif [[ "$dry_run" == 'true' ]]; then
-                    print_info "Dry run - continuing without switching GitHub account"
-                else
-                    print_error "Could not switch to GitHub account vinhnx. Run \`gh auth switch -u vinhnx\` or re-authenticate before releasing."
-                    exit 1
-                fi
+                print_error "Could not switch to GitHub account vinhnx. Run \`gh auth switch -u vinhnx\` or re-authenticate before releasing."
+                exit 1
             fi
         elif [[ "$dry_run" == 'true' ]]; then
             print_info "GitHub CLI is not authenticated; dry run will continue without GitHub publishing."
