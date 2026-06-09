@@ -33,7 +33,7 @@ pub use theme_manager::ThemeManager;
 pub use tui::*;
 pub use tui_compat::*;
 pub use tui_mode::*;
-pub use vtcode_tui::ui::FileColorizer;
+pub use vtcode_ui::tui::ui::FileColorizer;
 
 #[cfg(test)]
 mod tests {

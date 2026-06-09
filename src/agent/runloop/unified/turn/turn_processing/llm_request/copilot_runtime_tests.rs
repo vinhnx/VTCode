@@ -17,7 +17,7 @@ use vtcode_core::tools::registry::ToolRegistry;
 use vtcode_core::tools::{ApprovalRecorder, ToolResultCache};
 use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_core::utils::transcript;
-use vtcode_tui::app::{InlineCommand, InlineHandle, InlineSession};
+use vtcode_ui::tui::app::{InlineCommand, InlineHandle, InlineSession};
 
 use crate::agent::runloop::mcp_events::McpPanelState;
 use crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter;

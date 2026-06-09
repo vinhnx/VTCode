@@ -109,12 +109,10 @@ members = [
     "vtcode-acp",
     "vtcode-collaboration-tool-specs",
     "vtcode-core",
-    "vtcode-design",
+    "vtcode-ui",
     "vtcode-utility-tool-specs",
     "vtcode-terminal-detection",
     "vtcode-ghostty-core",
-    "vtcode-theme",
-    "vtcode-tui",
     "vtcode-vim",
     "vtcode-commons",
     "vtcode-config",
@@ -130,7 +128,7 @@ members = [
     "vtcode-macros",
     "xtask",
 ]
-default-members = [".", "vtcode-core", "vtcode-tui"]
+default-members = [".", "vtcode-core", "vtcode-ui"]
 exclude = ["zed-extension"]
 
 [patch.crates-io]
@@ -139,7 +137,7 @@ vtcode-acp = { path = "vtcode-acp" }
 vtcode-auth = { path = "vtcode-auth" }
 vtcode-config = { path = "vtcode-config" }
 vtcode-core = { path = "vtcode-core" }
-vtcode-tui = { path = "vtcode-tui" }
+vtcode-ui = { path = "vtcode-ui" }
 vtcode-process-hardening = { path = "vtcode-process-hardening" }
 vtcode-terminal-detection = { path = "vtcode-terminal-detection" }
 vtcode-markdown-store = { path = "vtcode-markdown-store" }
@@ -148,7 +146,6 @@ vtcode-bash-runner = { path = "vtcode-bash-runner" }
 vtcode-exec-events = { path = "vtcode-exec-events" }
 vtcode-file-search = { path = "vtcode-file-search" }
 vtcode-ghostty-core = { path = "vtcode-ghostty-core" }
-vtcode-design = { path = "vtcode-design" }
 
 [workspace.lints]
 # Rust compiler lints
@@ -228,13 +225,12 @@ allow_attributes_without_reason = "allow"  # TODO: Phase in after suppression au
 [dependencies]
 vtcode-acp = { path = "vtcode-acp", version = "0.123.10" }
 vtcode-commons = { path = "vtcode-commons", version = "0.123.10" }
-vtcode-design = { path = "vtcode-design", version = "0.123.10" }
+vtcode-ui = { path = "vtcode-ui", version = "0.123.10" }
 vtcode-config = { path = "vtcode-config", version = "0.123.10" }
 vtcode-auth = { path = "vtcode-auth", version = "0.123.10" }
 vtcode-core = { path = "vtcode-core", version = "0.123.10", default-features = false }
 vtcode-process-hardening = { path = "vtcode-process-hardening", version = "0.123.10" }
 vtcode-terminal-detection = { path = "vtcode-terminal-detection", version = "0.123.10" }
-vtcode-tui = { path = "vtcode-tui", version = "0.123.10" }
 anyhow = { workspace = true }
 clap = { workspace = true }
 serde_json = { workspace = true }

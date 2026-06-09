@@ -25,7 +25,7 @@ use vtcode_core::llm::provider as uni;
 use vtcode_core::tool_policy::ToolPolicy;
 use vtcode_core::tools::registry::ToolRegistry;
 use vtcode_core::utils::ansi::AnsiRenderer;
-use vtcode_tui::app::{InlineHandle, InlineSession};
+use vtcode_ui::tui::app::{InlineHandle, InlineSession};
 
 fn create_headless_session() -> InlineSession {
     let (command_tx, _command_rx) = tokio::sync::mpsc::unbounded_channel();
@@ -38,7 +38,7 @@ fn create_headless_session() -> InlineSession {
 
 fn create_session_with_receiver() -> (
     InlineSession,
-    tokio::sync::mpsc::UnboundedReceiver<vtcode_tui::app::InlineCommand>,
+    tokio::sync::mpsc::UnboundedReceiver<vtcode_ui::tui::app::InlineCommand>,
 ) {
     let (command_tx, command_rx) = tokio::sync::mpsc::unbounded_channel();
     let (_event_tx, event_rx) = tokio::sync::mpsc::unbounded_channel();
@@ -52,11 +52,11 @@ fn create_session_with_receiver() -> (
 }
 
 fn drain_appended_lines(
-    receiver: &mut tokio::sync::mpsc::UnboundedReceiver<vtcode_tui::app::InlineCommand>,
+    receiver: &mut tokio::sync::mpsc::UnboundedReceiver<vtcode_ui::tui::app::InlineCommand>,
 ) -> Vec<String> {
     let mut lines = Vec::new();
     while let Ok(command) = receiver.try_recv() {
-        if let vtcode_tui::app::InlineCommand::AppendLine { segments, .. } = command {
+        if let vtcode_ui::tui::app::InlineCommand::AppendLine { segments, .. } = command {
             let line = segments
                 .into_iter()
                 .map(|segment| segment.text)

@@ -170,7 +170,7 @@ fn build_tool_permissions_context<'ctx, 'a>(
     ctx: &'ctx mut TurnProcessingContext<'a>,
 ) -> crate::agent::runloop::unified::tool_routing::ToolPermissionsContext<
     'ctx,
-    vtcode_tui::app::InlineSession,
+    vtcode_ui::tui::app::InlineSession,
 > {
     crate::agent::runloop::unified::tool_routing::ToolPermissionsContext {
         tool_registry: ctx.tool_registry,

@@ -38,7 +38,7 @@ use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::ToolResultCache;
 use vtcode_core::tools::{ApprovalRecorder, ToolRegistry};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
-use vtcode_tui::app::{InlineHandle, InlineSession};
+use vtcode_ui::tui::app::{InlineHandle, InlineSession};
 
 #[path = "turn_loop/notifications.rs"]
 mod notifications;

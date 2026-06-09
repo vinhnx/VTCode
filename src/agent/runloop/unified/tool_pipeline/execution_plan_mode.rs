@@ -7,8 +7,8 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::core::interfaces::session::PlanModeEntrySource;
 use vtcode_core::tools::handlers::plan_mode::PlanLifecyclePhase;
 use vtcode_core::tools::registry::ExecSettlementMode;
-use vtcode_tui::app::PlanContent;
-use vtcode_tui::app::{
+use vtcode_ui::tui::app::PlanContent;
+use vtcode_ui::tui::app::{
     InlineListItem, InlineListSelection, ListOverlayRequest, TransientRequest, TransientSubmission,
 };
 

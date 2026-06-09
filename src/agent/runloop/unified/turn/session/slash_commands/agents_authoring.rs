@@ -10,7 +10,7 @@ use vtcode_config::{SubagentMemoryScope, SubagentSource, SubagentSpec};
 use vtcode_core::config::PermissionMode;
 use vtcode_core::constants::tools;
 use vtcode_core::utils::ansi::MessageStyle;
-use vtcode_tui::app::{
+use vtcode_ui::tui::app::{
     InlineListItem, InlineListSearchConfig, InlineListSelection, WizardModalMode, WizardStep,
 };
 

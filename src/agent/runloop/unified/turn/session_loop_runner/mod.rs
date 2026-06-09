@@ -1266,16 +1266,16 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 context_window_size: provider_client.effective_context_size(&config.model),
                 mode_label,
                 editing_mode: if session_stats.is_plan_mode() {
-                    vtcode_tui::app::EditingMode::Plan
+                    vtcode_ui::tui::app::EditingMode::Plan
                 } else {
-                    vtcode_tui::app::EditingMode::Edit
+                    vtcode_ui::tui::app::EditingMode::Edit
                 },
                 autonomous_mode: session_stats.is_autonomous_mode(),
                 full_auto,
             },
         ));
         if !finalization_succeeded {
-            let _ = vtcode_tui::panic_hook::restore_tui();
+            let _ = vtcode_ui::tui::panic_hook::restore_tui();
         }
         print_exit_summary(ExitSummaryData {
             total_session_time: session_started_at.elapsed(),

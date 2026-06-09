@@ -50,7 +50,7 @@ use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::dot_config::load_user_config;
 use vtcode_core::utils::session_archive::SessionArchive;
 use vtcode_core::utils::transcript;
-use vtcode_tui::app::{
+use vtcode_ui::tui::app::{
     AgentPaletteItem, FocusChangeCallback, InlineEvent, InlineEventCallback, SessionOptions,
     SlashCommandItem, spawn_session_with_options,
 };
@@ -82,9 +82,9 @@ use vtcode_core::persistent_memory::PersistentMemoryStatus;
 #[cfg(test)]
 use vtcode_core::subagents::SubagentStatusEntry;
 #[cfg(test)]
-use vtcode_tui::app::InlineHeaderContext;
+use vtcode_ui::tui::app::InlineHeaderContext;
 #[cfg(test)]
-use vtcode_tui::app::InlineHeaderStatusTone;
+use vtcode_ui::tui::app::InlineHeaderStatusTone;
 
 pub(crate) struct SessionUiLaunchOptions {
     pub session_archive: Option<SessionArchive>,
@@ -220,10 +220,10 @@ pub(crate) async fn initialize_session_ui(
                 .and_then(|cfg| cfg.tui.alternate_screen)
                 .map(|mode| match mode {
                     vtcode_core::config::TuiAlternateScreen::Always => {
-                        vtcode_tui::app::SessionSurface::Alternate
+                        vtcode_ui::tui::app::SessionSurface::Alternate
                     }
                     vtcode_core::config::TuiAlternateScreen::Never => {
-                        vtcode_tui::app::SessionSurface::Inline
+                        vtcode_ui::tui::app::SessionSurface::Inline
                     }
                 })
                 .unwrap_or_else(|| to_tui_surface(config.ui_surface)),

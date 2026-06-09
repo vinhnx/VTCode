@@ -6,7 +6,7 @@ use serde_json::{Value, json};
 use tokio::sync::Notify;
 
 use vtcode_core::core::agent::error_recovery::{ErrorType, RecoveryDiagnostics};
-use vtcode_tui::app::{
+use vtcode_ui::tui::app::{
     InlineHandle, InlineListItem, InlineListSearchConfig, InlineListSelection, InlineSession,
     ListOverlayRequest, TransientRequest, TransientSubmission,
 };

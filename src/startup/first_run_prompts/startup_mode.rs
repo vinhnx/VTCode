@@ -2,7 +2,7 @@ use anyhow::Result;
 use vtcode_core::config::PermissionMode;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
-use vtcode_tui::ui::interactive_list::SelectionEntry;
+use vtcode_ui::tui::ui::interactive_list::SelectionEntry;
 
 use super::common::{prompt_with_placeholder, run_selection};
 

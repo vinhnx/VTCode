@@ -1,7 +1,7 @@
 use anyhow::Result;
 use vtcode_core::llm::providers::local_server::{self, LocalProvider, LocalServerStatus};
 use vtcode_core::utils::ansi::MessageStyle;
-use vtcode_tui::app::{InlineListItem, InlineListSearchConfig, InlineListSelection};
+use vtcode_ui::tui::app::{InlineListItem, InlineListSearchConfig, InlineListSelection};
 
 use crate::agent::runloop::slash_commands::LocalServerAction;
 

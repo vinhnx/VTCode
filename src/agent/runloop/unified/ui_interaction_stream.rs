@@ -977,7 +977,7 @@ mod tests {
     };
     use vtcode_core::llm::provider::{self as uni, FinishReason, LLMResponse, LLMStreamEvent};
     use vtcode_core::utils::ansi::AnsiRenderer;
-    use vtcode_tui::app::{InlineCommand, InlineHandle};
+    use vtcode_ui::tui::app::{InlineCommand, InlineHandle};
 
     struct SleepingRuntimeHandler {
         sleep_for: Duration,

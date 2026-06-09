@@ -11,7 +11,7 @@ use vtcode_core::hooks::{LifecycleHookEngine, SessionEndReason};
 use vtcode_core::llm::provider as uni;
 use vtcode_core::primary_agent::ActivePrimaryAgentState;
 use vtcode_core::tools::ToolRegistry;
-use vtcode_tui::app::{InlineHandle, InlineHeaderContext, InlineSession};
+use vtcode_ui::tui::app::{InlineHandle, InlineHeaderContext, InlineSession};
 
 use crate::agent::runloop::mcp_events;
 use crate::agent::runloop::model_picker::ModelPickerState;

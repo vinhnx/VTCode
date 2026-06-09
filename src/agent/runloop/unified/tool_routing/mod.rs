@@ -33,7 +33,7 @@ use vtcode_core::tool_policy::ToolPolicy;
 use vtcode_core::tools::registry::{ToolPermissionDecision, ToolRegistry};
 use vtcode_core::tools::{JustificationExtractor, ToolRiskScorer};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
-use vtcode_tui::app::InlineHandle;
+use vtcode_ui::tui::app::InlineHandle;
 
 use crate::agent::runloop::unified::auto_mode::{AutoModeReviewDecision, review_tool_call};
 use crate::agent::runloop::unified::run_loop_context::AutoModeRuntimeContext;

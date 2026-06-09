@@ -2,7 +2,7 @@ use anyhow::{Result, anyhow, bail};
 use std::path::PathBuf;
 use vtcode_core::constants::tools;
 use vtcode_core::utils::ansi::MessageStyle;
-use vtcode_tui::app::{
+use vtcode_ui::tui::app::{
     AgentPaletteItem, InlineListItem, InlineListSearchConfig, InlineListSelection,
 };
 
@@ -737,7 +737,7 @@ fn status_label(status: vtcode_core::subagents::SubagentStatus) -> &'static str 
 }
 
 async fn refresh_agent_palette(
-    handle: &vtcode_tui::app::InlineHandle,
+    handle: &vtcode_ui::tui::app::InlineHandle,
     controller: &vtcode_core::subagents::SubagentController,
 ) {
     let specs = controller.effective_specs().await;

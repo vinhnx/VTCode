@@ -10,7 +10,7 @@ use vtcode_core::notifications::{NotificationEvent, send_global_notification};
 use vtcode_core::tools::edited_file_monitor::FILE_CONFLICT_OVERRIDE_ARG;
 use vtcode_core::tools::registry::{ExecSettlementMode, ToolRegistry};
 use vtcode_core::tools::result_cache::ToolResultCache;
-use vtcode_tui::app::{
+use vtcode_ui::tui::app::{
     DiffOverlayRequest, DiffPreviewMode, InlineHandle, InlineListItem, InlineListSelection,
     ListOverlayRequest, TransientRequest, TransientSubmission,
 };
@@ -354,7 +354,7 @@ mod tests {
     use vtcode_core::config::constants::tools;
     use vtcode_core::core::interfaces::ui::UiSession;
     use vtcode_core::tools::result_cache::ToolResultCache;
-    use vtcode_tui::app::{InlineCommand, InlineEvent, TransientEvent};
+    use vtcode_ui::tui::app::{InlineCommand, InlineEvent, TransientEvent};
 
     use crate::agent::runloop::unified::state::CtrlCState;
 

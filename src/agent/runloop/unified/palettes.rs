@@ -9,8 +9,8 @@ use vtcode_core::ui::theme;
 use vtcode_core::ui::{inline_theme_from_core_styles, to_tui_appearance};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::session_archive::SessionListing;
-use vtcode_tui::app::{InlineHandle, InlineListItem, InlineListSearchConfig, InlineListSelection};
-use vtcode_tui::core::convert_style;
+use vtcode_ui::tui::app::{InlineHandle, InlineListItem, InlineListSearchConfig, InlineListSelection};
+use vtcode_ui::tui::core::convert_style;
 
 use crate::agent::runloop::model_picker::{
     LightweightModelPaletteView, prepare_lightweight_model_palette_view,
@@ -411,7 +411,7 @@ pub(crate) async fn refresh_runtime_config_from_manager(
         config.reasoning_effort = runtime_config.agent.reasoning_effort;
         renderer
             .set_show_diagnostics_in_transcript(runtime_config.ui.show_diagnostics_in_transcript);
-        vtcode_tui::panic_hook::set_show_diagnostics(
+        vtcode_ui::tui::panic_hook::set_show_diagnostics(
             runtime_config.ui.show_diagnostics_in_transcript,
         );
 

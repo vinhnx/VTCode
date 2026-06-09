@@ -1,0 +1,264 @@
+use anstyle::Effects;
+use ratatui::prelude::*;
+use unicode_width::UnicodeWidthStr;
+
+use crate::tui::config::constants::ui;
+
+use super::super::message::MessageLine;
+use crate::tui::core_tui::types::InlineMessageKind;
+
+/// Rule fill pattern for Fieldset-style info/warning/error blocks.
+///
+/// Mirrors `ratatui_cheese::fieldset::FieldsetFill`, mapping each message kind
+/// to a distinct fill: Error → `Slash`, Info → `Dash`, Warning → `Thick`. The
+/// Unicode glyphs fall back to ASCII on terminals without Unicode support.
+pub(super) fn rule_fill(
+    kind: InlineMessageKind,
+    border_type: ratatui::widgets::BorderType,
+) -> &'static str {
+    let unicode = matches!(border_type, ratatui::widgets::BorderType::Rounded);
+    match kind {
+        // Slash fill (`/`) — already ASCII-safe.
+        InlineMessageKind::Error => "/",
+        // Thick fill (`━`) with an ASCII fallback.
+        InlineMessageKind::Warning => {
+            if unicode {
+                "━"
+            } else {
+                "="
+            }
+        }
+        // Dash fill (`─`) with an ASCII fallback.
+        _ => {
+            if unicode {
+                ui::INLINE_BLOCK_HORIZONTAL
+            } else {
+                "-"
+            }
+        }
+    }
+}
+
+/// Check if trimmed, ANSI-stripped text starts with a tool summary prefix.
+///
+/// Shared by both `is_tool_summary_line` and `reflow_tool_lines` to avoid
+/// duplicating the prefix list (DRY).
+pub(super) fn has_summary_prefix(text: &str) -> bool {
+    let stripped = super::super::text_utils::strip_ansi_codes(text);
+    stripped.starts_with("• ") || stripped.starts_with("  └ ") || stripped.starts_with("  │ ")
+}
+
+pub(super) fn is_tool_summary_line(message: &MessageLine) -> bool {
+    let text: String = message
+        .segments
+        .iter()
+        .map(|segment| segment.text.as_str())
+        .collect();
+    has_summary_prefix(&text)
+}
+
+pub(super) fn agent_code_continuation_prefix(message: &MessageLine) -> Option<String> {
+    let first_segment = message
+        .segments
+        .iter()
+        .find(|segment| !segment.text.is_empty())?;
+    if !first_segment.style.effects.contains(Effects::DIMMED) {
+        return None;
+    }
+
+    numbered_code_gutter_prefix(&first_segment.text)
+}
+
+fn numbered_code_gutter_prefix(text: &str) -> Option<String> {
+    let mut chars = text.char_indices().peekable();
+    let mut prefix_end = 0usize;
+
+    while let Some((idx, ch)) = chars.peek().copied() {
+        if ch == ' ' {
+            prefix_end = idx + ch.len_utf8();
+            chars.next();
+        } else {
+            break;
+        }
+    }
+
+    let mut saw_digits = false;
+    while let Some((idx, ch)) = chars.peek().copied() {
+        if ch.is_ascii_digit() {
+            saw_digits = true;
+            prefix_end = idx + ch.len_utf8();
+            chars.next();
+        } else {
+            break;
+        }
+    }
+    if !saw_digits {
+        return None;
+    }
+
+    if let Some((idx, '-')) = chars.peek().copied() {
+        prefix_end = idx + 1;
+        chars.next();
+
+        let mut saw_range_digits = false;
+        while let Some((idx, ch)) = chars.peek().copied() {
+            if ch.is_ascii_digit() {
+                saw_range_digits = true;
+                prefix_end = idx + ch.len_utf8();
+                chars.next();
+            } else {
+                break;
+            }
+        }
+        if !saw_range_digits {
+            return None;
+        }
+    }
+
+    let mut trailing_spaces = 0usize;
+    while let Some((idx, ch)) = chars.peek().copied() {
+        if ch == ' ' {
+            trailing_spaces += 1;
+            prefix_end = idx + ch.len_utf8();
+            chars.next();
+        } else {
+            break;
+        }
+    }
+    if trailing_spaces < 2 {
+        return None;
+    }
+
+    Some(" ".repeat(UnicodeWidthStr::width(&text[..prefix_end])))
+}
+
+pub(super) fn split_tool_spans(spans: Vec<Span<'static>>) -> Vec<Vec<Span<'static>>> {
+    let mut lines: Vec<Vec<Span<'static>>> = Vec::new();
+    let mut current: Vec<Span<'static>> = Vec::new();
+
+    for span in spans {
+        let style = span.style;
+        let text = span.content.into_owned();
+        let mut parts = text.split('\n').peekable();
+        while let Some(part) = parts.next() {
+            if !part.is_empty() {
+                current.push(Span::styled(part.to_string(), style));
+            }
+            if parts.peek().is_some() {
+                lines.push(std::mem::take(&mut current));
+            }
+        }
+    }
+
+    if !current.is_empty() || lines.is_empty() {
+        lines.push(current);
+    }
+
+    lines
+}
+
+pub(super) fn is_info_box_line(message: &MessageLine) -> bool {
+    matches!(
+        message.kind,
+        InlineMessageKind::Error | InlineMessageKind::Warning
+    ) || (message.kind == InlineMessageKind::Info && !is_tool_summary_line(message))
+}
+
+/// Collapse multiple consecutive newlines (3 or more) into at most 2 newlines.
+/// Returns Cow to avoid allocation when no changes are needed.
+#[expect(dead_code)]
+#[inline]
+pub(super) fn collapse_excess_newlines(text: &str) -> std::borrow::Cow<'_, str> {
+    // Quick check: if no triple newlines, return borrowed
+    if !text.contains("\n\n\n") {
+        return std::borrow::Cow::Borrowed(text);
+    }
+
+    let mut result = String::with_capacity(text.len());
+    let mut chars = text.chars().peekable();
+    let mut newline_count = 0;
+
+    while let Some(ch) = chars.next() {
+        if ch == '\n' {
+            newline_count += 1;
+            while let Some(&next_ch) = chars.peek() {
+                if next_ch == '\n' {
+                    chars.next();
+                    newline_count += 1;
+                } else {
+                    break;
+                }
+            }
+
+            let newlines_to_add = std::cmp::min(newline_count, 2);
+            for _ in 0..newlines_to_add {
+                result.push('\n');
+            }
+            newline_count = 0;
+        } else {
+            result.push(ch);
+            if ch != '\n' {
+                newline_count = 0;
+            }
+        }
+    }
+
+    std::borrow::Cow::Owned(result)
+}
+
+/// Truncate a `Line` to fit within `max_width` display columns.
+///
+/// Used for table lines where word-wrapping would break the box-drawing
+/// alignment. Line are trimmed at the character boundary that exceeds the
+/// width; any remaining spans are dropped.
+///
+/// This is a re-export from the centralized line_truncation module.
+pub(super) fn truncate_line_to_width(line: Line<'static>, max_width: usize) -> Line<'static> {
+    // Use the centralized version without ellipsis for backward compatibility
+    truncate_line_to_width_internal(line, max_width)
+}
+
+/// Internal implementation without ellipsis for backward compatibility
+fn truncate_line_to_width_internal(line: Line<'static>, max_width: usize) -> Line<'static> {
+    let total: usize = line.spans.iter().map(|s| s.width()).sum();
+    if total <= max_width {
+        return line;
+    }
+
+    let mut remaining = max_width;
+    let mut truncated_spans: Vec<Span<'static>> = Vec::with_capacity(line.spans.len());
+    for span in line.spans {
+        let span_width = span.width();
+        if span_width <= remaining {
+            remaining -= span_width;
+            truncated_spans.push(span);
+        } else {
+            // Truncate within this span at a char boundary
+            let mut chars_width = 0usize;
+            let mut byte_end = 0usize;
+            for ch in span.content.chars() {
+                let cw = UnicodeWidthStr::width(ch.encode_utf8(&mut [0u8; 4]) as &str);
+                if chars_width + cw > remaining {
+                    break;
+                }
+                chars_width += cw;
+                byte_end += ch.len_utf8();
+            }
+            if byte_end > 0 {
+                let fragment: String = span.content[..byte_end].to_string();
+                truncated_spans.push(Span::styled(fragment, span.style));
+            }
+            break;
+        }
+    }
+    Line::from(truncated_spans)
+}
+
+/// Truncate a line and append an ellipsis on overflow.
+///
+/// This is a re-export from the centralized line_truncation module for
+/// consistent ellipsis handling across the TUI.
+#[expect(dead_code)]
+pub(super) fn truncate_line_with_ellipsis(line: Line<'static>, max_width: usize) -> Line<'static> {
+    super::super::utils::line_truncation::truncate_line_with_ellipsis_if_overflow(line, max_width)
+}

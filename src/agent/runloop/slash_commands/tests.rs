@@ -7,7 +7,7 @@ use vtcode_core::config::types::ReasoningEffortLevel;
 use vtcode_core::llm::provider::ResponsesCompactionOptions;
 use vtcode_core::skills::command_skill_specs;
 use vtcode_core::utils::ansi::AnsiRenderer;
-use vtcode_tui::app::InlineHandle;
+use vtcode_ui::tui::app::InlineHandle;
 
 fn renderer_for_tests() -> AnsiRenderer {
     let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();

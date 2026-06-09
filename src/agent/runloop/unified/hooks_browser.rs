@@ -4,7 +4,7 @@ use anyhow::{Context, Result, bail};
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::{HookCommandConfig, HookGroupConfig, LifecycleHooksConfig};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
-use vtcode_tui::app::{InlineListItem, InlineListSearchConfig, InlineListSelection};
+use vtcode_ui::tui::app::{InlineListItem, InlineListSearchConfig, InlineListSelection};
 
 const HOOKS_TITLE: &str = "Lifecycle Hooks";
 const HOOKS_HINT: &str = "Enter open • Esc back";

@@ -10,7 +10,7 @@
 
 - Thin binary — all runtime logic in `vtcode-core`. This crate wires CLI args to `Agent::run()`.
 - Uses `mimalloc` as global allocator — do not change.
-- `vtcode_tui::panic_hook` installs custom panic handler — must run before any output.
+- `vtcode_ui::tui::panic_hook` installs custom panic handler — must run before any output.
 - `agent/runloop/` contains the single-agent runloop. Multi-agent is in `vtcode-core::subagents`.
 
 ## Gotchas

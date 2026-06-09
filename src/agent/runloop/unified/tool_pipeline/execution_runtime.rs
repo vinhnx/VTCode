@@ -141,7 +141,7 @@ fn should_show_loading_ui_for_tool_call(name: &str, args: &Value) -> bool {
     spool_chunk_read_path(name, args).is_none()
 }
 
-fn set_tool_execution_status(handle: &vtcode_tui::app::InlineHandle, tool_name: &str) {
+fn set_tool_execution_status(handle: &vtcode_ui::tui::app::InlineHandle, tool_name: &str) {
     let left = format!("Running {}...", tool_name);
     handle.set_input_status(Some(left), None);
 }
@@ -174,7 +174,7 @@ pub(super) async fn execute_with_cache_and_streaming(
     args_val: &Value,
     ctrl_c_state: &Arc<CtrlCState>,
     ctrl_c_notify: &Arc<Notify>,
-    handle: &vtcode_tui::app::InlineHandle,
+    handle: &vtcode_ui::tui::app::InlineHandle,
     harness_emitter: Option<HarnessEventEmitter>,
     vt_cfg: Option<&VTCodeConfig>,
     max_tool_retries: usize,
@@ -443,7 +443,7 @@ mod tests {
     use tokio::sync::mpsc;
     use vtcode_core::config::constants::tools;
     use vtcode_core::tools::registry::ToolRegistry;
-    use vtcode_tui::app::{InlineCommand, InlineHandle};
+    use vtcode_ui::tui::app::{InlineCommand, InlineHandle};
 
     use super::{
         ProgressCallbackGuard, StreamingOutputCoalescer, extract_pty_stream_command,

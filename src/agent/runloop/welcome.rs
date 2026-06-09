@@ -12,7 +12,7 @@ use vtcode_core::project_doc::{self, ProjectDocOptions};
 use vtcode_core::ui::slash::find_visible_command;
 use vtcode_core::utils::common::summarize_workspace_languages;
 use vtcode_terminal_detection::{TerminalFeature, TerminalType};
-use vtcode_tui::app::InlineHeaderHighlight;
+use vtcode_ui::tui::app::InlineHeaderHighlight;
 
 #[derive(Default, Clone)]
 pub(crate) struct SessionBootstrap {

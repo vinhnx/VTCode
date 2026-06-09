@@ -6,9 +6,9 @@ use vtcode_core::utils::session_debug::{
     prepare_debug_log_file, set_runtime_debug_log_path,
 };
 use vtcode_core::utils::trace_writer::FlushableWriter;
-use vtcode_tui::log::{is_tui_log_capture_enabled, make_tui_log_layer};
+use vtcode_ui::tui::log::{is_tui_log_capture_enabled, make_tui_log_layer};
 
-fn maybe_tui_log_layer() -> Option<vtcode_tui::log::TuiLogLayer> {
+fn maybe_tui_log_layer() -> Option<vtcode_ui::tui::log::TuiLogLayer> {
     if is_tui_log_capture_enabled() {
         Some(make_tui_log_layer())
     } else {

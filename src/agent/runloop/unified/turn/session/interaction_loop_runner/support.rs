@@ -591,7 +591,7 @@ pub(super) fn refresh_ide_context_before_user_turn(
 }
 
 pub(super) fn apply_live_theme_and_appearance(
-    handle: &vtcode_tui::app::InlineHandle,
+    handle: &vtcode_ui::tui::app::InlineHandle,
     cfg: &VTCodeConfig,
 ) {
     let color_config = theme::ColorAccessibilityConfig {

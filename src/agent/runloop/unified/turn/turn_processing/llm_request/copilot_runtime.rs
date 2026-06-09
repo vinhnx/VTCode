@@ -26,7 +26,7 @@ use vtcode_core::llm::provider::{self as uni, LLMStreamEvent, LLMStreamEvent::Co
 use vtcode_core::llm::provider::{LLMResponse, ToolDefinition};
 use vtcode_core::tools::registry::{ToolProgressCallback, ToolRegistry};
 use vtcode_core::utils::ansi::AnsiRenderer;
-use vtcode_tui::app::{InlineHandle, InlineSession};
+use vtcode_ui::tui::app::{InlineHandle, InlineSession};
 
 use crate::agent::runloop::mcp_events::McpPanelState;
 use crate::agent::runloop::tool_output::resolve_stdout_tail_limit;

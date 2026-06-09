@@ -1,0 +1,645 @@
+use ratatui::crossterm::event::{KeyCode, KeyEvent};
+use ratatui::{prelude::*, widgets::Clear};
+
+use crate::tui::config::constants::ui;
+use crate::tui::core_tui::app::session::transient::TransientSurface;
+use crate::tui::core_tui::session::inline_list::{InlineListRow, selection_padding};
+use crate::tui::core_tui::session::list_panel::{
+    ListPanelLayout, SharedListPanelSections, SharedListPanelStyles, SharedSearchField,
+    StaticRowsListPanelModel, fixed_section_rows_with_divider, input_styles_from_theme,
+    render_shared_list_panel, rows_to_u16,
+};
+use crate::tui::core_tui::style::{ratatui_color_from_ansi, ratatui_style_from_inline};
+
+use super::super::types::InlineTextStyle;
+use super::{
+    Session,
+    slash_palette::{self, SlashPaletteUpdate, command_prefix, command_range},
+};
+
+pub(crate) fn split_inline_slash_area(session: &mut Session, area: Rect) -> (Rect, Option<Rect>) {
+    if area.height == 0 || area.width == 0 {
+        session.slash_palette.clear_visible_rows();
+        return (area, None);
+    }
+
+    let Some(layout) = slash_panel_layout(session) else {
+        session.slash_palette.clear_visible_rows();
+        return (area, None);
+    };
+    let (transcript_area, panel_area) = layout.split(area);
+    if panel_area.is_none() {
+        session.slash_palette.clear_visible_rows();
+        return (transcript_area, None);
+    }
+    (transcript_area, panel_area)
+}
+
+pub fn render_slash_palette(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
+    if area.height == 0
+        || area.width == 0
+        || !session.slash_palette_visible()
+        || !session.inline_lists_visible()
+    {
+        session.slash_palette.clear_visible_rows();
+        return;
+    }
+    let suggestions = session.slash_palette.suggestions();
+    if suggestions.is_empty() {
+        session.slash_palette.clear_visible_rows();
+        return;
+    }
+
+    frame.render_widget(Clear, area);
+
+    let rows = slash_rows(session);
+    let item_count = rows.len();
+    let default_style = session.core.styles.default_style();
+    let dim_style = default_style.add_modifier(Modifier::DIM);
+    let highlight_style = slash_highlight_style(session);
+    let name_style = slash_name_style(session);
+    let description_style = slash_description_style(session);
+    let blank_gutter = selection_padding();
+
+    let selected = session
+        .slash_palette
+        .selected_index()
+        .filter(|index| *index < item_count);
+
+    let rendered_rows = rows
+        .into_iter()
+        .enumerate()
+        .map(|(idx, row)| {
+            let is_selected = selected == Some(idx);
+            let cursor = if is_selected {
+                format!("{} ", ui::MODAL_LIST_HIGHLIGHT_SYMBOL)
+            } else {
+                blank_gutter.clone()
+            };
+            let cursor_style = if is_selected {
+                highlight_style
+            } else {
+                dim_style
+            };
+            let row_name_style = if is_selected {
+                highlight_style
+            } else {
+                name_style.add_modifier(Modifier::DIM)
+            };
+            let row_desc_style = if is_selected {
+                highlight_style
+            } else {
+                description_style
+            };
+            (
+                InlineListRow::single(
+                    Line::from(vec![
+                        Span::styled(cursor, cursor_style),
+                        Span::styled(format!("/{}", row.name), row_name_style),
+                        Span::raw(" "),
+                        Span::styled(row.description, row_desc_style),
+                    ]),
+                    dim_style,
+                ),
+                1_u16,
+            )
+        })
+        .collect::<Vec<_>>();
+    let offset = session.slash_palette.scroll_offset();
+    let search_line = command_prefix(
+        session.core.input_manager.content(),
+        session.core.input_manager.cursor(),
+    )
+    .map(|prefix| {
+        let filter = prefix.trim_start_matches('/');
+        SharedSearchField {
+            label: "Search commands".to_owned(),
+            placeholder: Some("command name or description".to_owned()),
+            query: filter.to_owned(),
+        }
+    });
+    let sections = SharedListPanelSections {
+        header: vec![Line::from(Span::styled(
+            "Slash Commands".to_owned(),
+            session.core.section_title_style(),
+        ))],
+        info: slash_palette_instructions(session),
+        search: search_line,
+    };
+    let mut model = StaticRowsListPanelModel {
+        rows: rendered_rows,
+        selected,
+        offset,
+        visible_rows: 0,
+    };
+    render_shared_list_panel(
+        frame,
+        area,
+        sections,
+        SharedListPanelStyles {
+            base_style: dim_style,
+            selected_style: Some(highlight_style),
+            text_style: dim_style,
+            divider_style: Some(session.core.styles.border_style()),
+            input_styles: input_styles_from_theme(&session.core.theme),
+        },
+        &mut model,
+    );
+
+    session
+        .slash_palette
+        .set_visible_rows(model.visible_rows.min(ui::INLINE_LIST_MAX_ROWS));
+
+    session.slash_palette.set_selected(model.selected);
+    session.slash_palette.set_scroll_offset(model.offset);
+}
+
+fn slash_palette_instructions(session: &Session) -> Vec<Line<'static>> {
+    vec![Line::from(Span::styled(
+        "Navigation: ↑/↓ select • Enter apply • Esc dismiss".to_owned(),
+        session.core.styles.default_style(),
+    ))]
+}
+
+pub(crate) fn slash_panel_layout(session: &Session) -> Option<ListPanelLayout> {
+    if !session.slash_palette_visible()
+        || !session.inline_lists_visible()
+        || session.slash_palette.is_empty()
+    {
+        return None;
+    }
+
+    let info_rows = slash_palette_instructions(session).len();
+    let has_search_row = command_prefix(
+        session.core.input_manager.content(),
+        session.core.input_manager.cursor(),
+    )
+    .is_some();
+    let fixed_rows = fixed_section_rows_with_divider(1, info_rows, has_search_row, true);
+    let desired_list_rows = rows_to_u16(ui::INLINE_LIST_MAX_ROWS);
+    Some(ListPanelLayout::new(fixed_rows, desired_list_rows))
+}
+
+pub(super) fn handle_slash_palette_change(session: &mut Session) {
+    session.core.recalculate_transcript_rows();
+    session.core.enforce_scroll_bounds();
+    session.core.mark_dirty();
+}
+
+pub(super) fn clear_slash_suggestions(session: &mut Session) {
+    let changed = session.slash_palette.clear();
+    session.close_transient_surface(TransientSurface::SlashPalette);
+    if changed {
+        handle_slash_palette_change(session);
+    }
+}
+
+pub(super) fn update_slash_suggestions(session: &mut Session) {
+    if !session.core.input_enabled() {
+        return;
+    }
+
+    let Some(prefix) = command_prefix(
+        session.core.input_manager.content(),
+        session.core.input_manager.cursor(),
+    ) else {
+        clear_slash_suggestions(session);
+        return;
+    };
+    session.ensure_inline_lists_visible_for_trigger();
+
+    match session.slash_palette.update(Some(&prefix)) {
+        SlashPaletteUpdate::NoChange => {}
+        SlashPaletteUpdate::Cleared | SlashPaletteUpdate::Changed { .. } => {
+            if !session.slash_palette.is_empty() {
+                session.show_transient_surface(TransientSurface::SlashPalette);
+            } else {
+                session.close_transient_surface(TransientSurface::SlashPalette);
+            }
+            handle_slash_palette_change(session);
+        }
+    }
+}
+
+pub(crate) fn slash_navigation_available(session: &Session) -> bool {
+    let has_prefix = command_prefix(
+        session.core.input_manager.content(),
+        session.core.input_manager.cursor(),
+    )
+    .is_some();
+    session.core.input_enabled()
+        && session.inline_lists_visible()
+        && session.slash_palette_visible()
+        && has_prefix
+}
+
+pub(super) fn move_slash_selection_up(session: &mut Session) -> bool {
+    let changed = session.slash_palette.move_up();
+    handle_slash_selection_change(session, changed)
+}
+
+pub(super) fn move_slash_selection_down(session: &mut Session) -> bool {
+    let changed = session.slash_palette.move_down();
+    handle_slash_selection_change(session, changed)
+}
+
+pub(super) fn select_first_slash_suggestion(session: &mut Session) -> bool {
+    let changed = session.slash_palette.select_first();
+    handle_slash_selection_change(session, changed)
+}
+
+pub(super) fn select_last_slash_suggestion(session: &mut Session) -> bool {
+    let changed = session.slash_palette.select_last();
+    handle_slash_selection_change(session, changed)
+}
+
+pub(super) fn page_up_slash_suggestion(session: &mut Session) -> bool {
+    let changed = session.slash_palette.page_up();
+    handle_slash_selection_change(session, changed)
+}
+
+pub(super) fn page_down_slash_suggestion(session: &mut Session) -> bool {
+    let changed = session.slash_palette.page_down();
+    handle_slash_selection_change(session, changed)
+}
+
+pub(super) fn handle_slash_selection_change(session: &mut Session, changed: bool) -> bool {
+    if changed {
+        preview_selected_slash_suggestion(session);
+        session.core.recalculate_transcript_rows();
+        session.core.enforce_scroll_bounds();
+        session.core.mark_dirty();
+        true
+    } else {
+        false
+    }
+}
+
+pub(super) fn select_slash_suggestion_index(session: &mut Session, index: usize) -> bool {
+    let changed = session.slash_palette.select_index(index);
+    handle_slash_selection_change(session, changed)
+}
+
+fn preview_selected_slash_suggestion(session: &mut Session) {
+    let Some(command) = session.slash_palette.selected_command() else {
+        return;
+    };
+    let Some(range) = command_range(
+        session.core.input_manager.content(),
+        session.core.input_manager.cursor(),
+    ) else {
+        return;
+    };
+
+    let current_input = session.core.input_manager.content().to_owned();
+    let prefix = &current_input[..range.start];
+    let suffix = &current_input[range.end..];
+
+    let mut new_input = String::new();
+    new_input.push_str(prefix);
+    new_input.push('/');
+    new_input.push_str(command.name.as_str());
+    let cursor_position = new_input.len();
+
+    if !suffix.is_empty() {
+        if !suffix.chars().next().is_some_and(char::is_whitespace) {
+            new_input.push(' ');
+        }
+        new_input.push_str(suffix);
+    }
+
+    session.core.input_manager.set_content(new_input.clone());
+    session
+        .input_manager
+        .set_cursor(cursor_position.min(new_input.len()));
+    session.mark_dirty();
+}
+
+pub(super) fn apply_selected_slash_suggestion(session: &mut Session) -> bool {
+    let Some(command) = session.slash_palette.selected_command() else {
+        return false;
+    };
+
+    let command_name = command.name.to_owned();
+
+    let input_content = session.core.input_manager.content();
+    let cursor_pos = session.core.input_manager.cursor();
+    let Some(range) = command_range(input_content, cursor_pos) else {
+        return false;
+    };
+
+    let suffix = input_content[range.end..].to_owned();
+    let mut new_input = format!("/{}", command_name);
+
+    let cursor_position = if suffix.is_empty() {
+        new_input.push(' ');
+        new_input.len()
+    } else {
+        if !suffix.chars().next().is_some_and(char::is_whitespace) {
+            new_input.push(' ');
+        }
+        let position = new_input.len();
+        new_input.push_str(&suffix);
+        position
+    };
+
+    session.core.input_manager.set_content(new_input);
+    session.core.input_manager.set_cursor(cursor_position);
+
+    clear_slash_suggestions(session);
+    session.mark_dirty();
+
+    true
+}
+
+pub(super) fn autocomplete_slash_suggestion(session: &mut Session) -> bool {
+    let input_content = session.core.input_manager.content();
+    let cursor_pos = session.core.input_manager.cursor();
+
+    let Some(range) = command_range(input_content, cursor_pos) else {
+        return false;
+    };
+
+    let prefix_text = command_prefix(input_content, cursor_pos).unwrap_or_default();
+    if prefix_text.is_empty() {
+        return false;
+    }
+
+    let suggestions = session.slash_palette.suggestions();
+    if suggestions.is_empty() {
+        return false;
+    }
+
+    // suggestions() is already ranked by slash_palette fuzzy scoring.
+    let Some(best_command) = suggestions.first().map(|suggestion| match suggestion {
+        slash_palette::SlashPaletteSuggestion::Static(command) => command.name.as_str(),
+    }) else {
+        return false;
+    };
+
+    // Handle static command
+    let suffix = &input_content[range.end..];
+    let mut new_input = format!("/{}", best_command);
+
+    let cursor_position = if suffix.is_empty() {
+        new_input.push(' ');
+        new_input.len()
+    } else {
+        if !suffix.chars().next().is_some_and(char::is_whitespace) {
+            new_input.push(' ');
+        }
+        let position = new_input.len();
+        new_input.push_str(suffix);
+        position
+    };
+
+    session.core.input_manager.set_content(new_input);
+    session.core.input_manager.set_cursor(cursor_position);
+
+    clear_slash_suggestions(session);
+    session.mark_dirty();
+    true
+}
+
+pub(super) fn try_handle_slash_navigation(
+    session: &mut Session,
+    key: &KeyEvent,
+    has_control: bool,
+    has_alt: bool,
+    has_command: bool,
+) -> bool {
+    if !slash_navigation_available(session) {
+        return false;
+    }
+
+    // Block Control modifier
+    if has_control {
+        return false;
+    }
+
+    // Block Alt unless combined with Command for Up/Down navigation
+    if has_alt && !matches!(key.code, KeyCode::Up | KeyCode::Down) {
+        return false;
+    }
+
+    let handled = match key.code {
+        KeyCode::Up => {
+            if has_alt && !has_command {
+                return false;
+            }
+            if has_command {
+                select_first_slash_suggestion(session)
+            } else {
+                move_slash_selection_up(session)
+            }
+        }
+        KeyCode::Down => {
+            if has_alt && !has_command {
+                return false;
+            }
+            if has_command {
+                select_last_slash_suggestion(session)
+            } else {
+                move_slash_selection_down(session)
+            }
+        }
+        KeyCode::PageUp => page_up_slash_suggestion(session),
+        KeyCode::PageDown => page_down_slash_suggestion(session),
+        KeyCode::Tab => autocomplete_slash_suggestion(session),
+        KeyCode::BackTab => move_slash_selection_up(session),
+        KeyCode::Enter => {
+            let applied = apply_selected_slash_suggestion(session);
+            if !applied {
+                return false;
+            }
+
+            // Always let Enter fall through to the normal handler so the
+            // command is submitted in one press, regardless of whether it
+            // is in the "immediate submit" list.
+            false
+        }
+        KeyCode::Esc => {
+            clear_slash_suggestions(session);
+            session.mark_dirty();
+            true
+        }
+        _ => return false,
+    };
+
+    if handled {
+        session.mark_dirty();
+    }
+
+    handled
+}
+
+pub(crate) fn should_submit_immediately_from_palette(session: &Session) -> bool {
+    let Some(command) = session
+        .core
+        .input_manager
+        .content()
+        .split_whitespace()
+        .next()
+    else {
+        return false;
+    };
+
+    matches!(
+        command,
+        "/files"
+            | "/ide"
+            | "/mode"
+            | "/status"
+            | "/stop"
+            | "/pause"
+            | "/doctor"
+            | "/model"
+            | "/mcp"
+            | "/skills"
+            | "/new"
+            | "/review"
+            | "/git"
+            | "/docs"
+            | "/copy"
+            | "/help"
+            | "/clear"
+            | "/compact"
+            | "/login"
+            | "/logout"
+            | "/auth"
+            | "/refresh-oauth"
+            | "/resume"
+            | "/fork"
+            | "/history"
+            | "/exit"
+    )
+}
+
+#[derive(Clone)]
+struct SlashRow {
+    name: String,
+    description: String,
+}
+
+fn slash_rows(session: &Session) -> Vec<SlashRow> {
+    session
+        .slash_palette
+        .suggestions()
+        .iter()
+        .map(|suggestion| match suggestion {
+            slash_palette::SlashPaletteSuggestion::Static(command) => SlashRow {
+                name: command.name.to_owned(),
+                description: command.description.to_owned(),
+            },
+        })
+        .collect()
+}
+
+fn slash_highlight_style(session: &Session) -> Style {
+    let mut style = Style::default().add_modifier(Modifier::BOLD);
+    if let Some(primary) = session.core.theme.primary.or(session.core.theme.secondary) {
+        style = style.fg(ratatui_color_from_ansi(primary));
+    }
+    style
+}
+
+fn slash_name_style(session: &Session) -> Style {
+    let style = InlineTextStyle::default()
+        .bold()
+        .with_color(session.core.theme.primary.or(session.core.theme.foreground));
+    ratatui_style_from_inline(&style, session.core.theme.foreground)
+}
+
+fn slash_description_style(session: &Session) -> Style {
+    session
+        .core
+        .styles
+        .default_style()
+        .add_modifier(Modifier::DIM)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tui::ui::tui::InlineTheme;
+
+    #[test]
+    fn immediate_submit_matcher_accepts_immediate_commands() {
+        let mut session = Session::new(InlineTheme::default(), None, 20);
+        session.set_input("/files".to_string());
+        assert!(should_submit_immediately_from_palette(&session));
+
+        session.set_input("/ide".to_string());
+        assert!(should_submit_immediately_from_palette(&session));
+
+        session.set_input("   /status   ".to_string());
+        assert!(should_submit_immediately_from_palette(&session));
+
+        session.set_input("/mode".to_string());
+        assert!(should_submit_immediately_from_palette(&session));
+
+        session.set_input("/history".to_string());
+        assert!(should_submit_immediately_from_palette(&session));
+
+        session.set_input("/mcp".to_string());
+        assert!(should_submit_immediately_from_palette(&session));
+
+        session.set_input("/skills".to_string());
+        assert!(should_submit_immediately_from_palette(&session));
+
+        session.set_input("/review".to_string());
+        assert!(should_submit_immediately_from_palette(&session));
+
+        session.set_input("/resume".to_string());
+        assert!(should_submit_immediately_from_palette(&session));
+
+        session.set_input("/fork".to_string());
+        assert!(should_submit_immediately_from_palette(&session));
+
+        session.set_input("/stop".to_string());
+        assert!(should_submit_immediately_from_palette(&session));
+
+        session.set_input("/pause".to_string());
+        assert!(should_submit_immediately_from_palette(&session));
+
+        session.set_input("/login".to_string());
+        assert!(should_submit_immediately_from_palette(&session));
+
+        session.set_input("/logout".to_string());
+        assert!(should_submit_immediately_from_palette(&session));
+
+        session.set_input("/auth".to_string());
+        assert!(should_submit_immediately_from_palette(&session));
+
+        session.set_input("/refresh-oauth".to_string());
+        assert!(should_submit_immediately_from_palette(&session));
+
+        session.set_input("/compact".to_string());
+        assert!(should_submit_immediately_from_palette(&session));
+    }
+
+    #[test]
+    fn immediate_submit_matcher_rejects_argument_driven_commands() {
+        let mut session = Session::new(InlineTheme::default(), None, 20);
+        session.set_input("/command echo hello".to_string());
+        assert!(!should_submit_immediately_from_palette(&session));
+
+        session.set_input("/review-template src/lib.rs".to_string());
+        assert!(!should_submit_immediately_from_palette(&session));
+    }
+
+    #[test]
+    fn slash_palette_instructions_hide_filter_hint_row() {
+        let session = Session::new(InlineTheme::default(), None, 20);
+        let instructions = slash_palette_instructions(&session);
+
+        assert_eq!(instructions.len(), 1);
+        let text: String = instructions[0]
+            .spans
+            .iter()
+            .map(|span| span.content.clone().into_owned())
+            .collect();
+        assert!(text.contains("Navigation:"));
+        assert!(!text.contains("Type to filter slash commands"));
+    }
+}

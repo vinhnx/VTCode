@@ -8,7 +8,7 @@ use anyhow::Result;
 use serde_json::{Value, json};
 use tokio::sync::Notify;
 
-use vtcode_tui::app::{
+use vtcode_ui::tui::app::{
     InlineHandle, InlineListItem, InlineListSelection, InlineMessageKind, InlineSession,
     ListOverlayRequest, PlanContent, TransientHotkey, TransientHotkeyAction, TransientHotkeyKey,
     TransientRequest, TransientSubmission,

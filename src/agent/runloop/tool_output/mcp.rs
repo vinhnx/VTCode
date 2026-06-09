@@ -241,7 +241,7 @@ fn collect_formatted_json_lines(lines: &mut Vec<PanelContentLine>, json: &Value)
 }
 
 fn shorten(text: &str, max_len: usize) -> String {
-    use vtcode_design::constants::ELLIPSIS;
+    use vtcode_ui::design::constants::ELLIPSIS;
     // Reserve 1 display column for the ellipsis character (not byte length).
     const ELLIPSIS_WIDTH: usize = 1;
     if text.chars().count() <= max_len {

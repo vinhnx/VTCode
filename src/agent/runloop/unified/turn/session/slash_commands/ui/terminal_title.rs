@@ -5,7 +5,7 @@ use anyhow::{Context, anyhow};
 use vtcode_core::config::DEFAULT_TERMINAL_TITLE_ITEMS;
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::utils::ansi::MessageStyle;
-use vtcode_tui::app::{InlineListItem, InlineListSelection};
+use vtcode_ui::tui::app::{InlineListItem, InlineListSelection};
 
 use crate::agent::runloop::unified::turn::session::slash_commands::{
     SlashCommandContext, SlashCommandControl,

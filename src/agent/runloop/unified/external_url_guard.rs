@@ -3,7 +3,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use tokio::sync::Notify;
 use tokio::task;
-use vtcode_tui::app::{InlineHandle, InlineSession, TransientSubmission};
+use vtcode_ui::tui::app::{InlineHandle, InlineSession, TransientSubmission};
 
 use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_overlay_and_wait};
 use crate::agent::runloop::unified::state::CtrlCState;
@@ -120,7 +120,7 @@ mod tests {
     use std::sync::Arc;
     use tokio::sync::Notify;
     use tokio::sync::mpsc;
-    use vtcode_tui::app::{
+    use vtcode_ui::tui::app::{
         InlineCommand, InlineEvent, InlineHandle, InlineListSelection, InlineSession,
         TransientEvent, TransientRequest, TransientSubmission,
     };

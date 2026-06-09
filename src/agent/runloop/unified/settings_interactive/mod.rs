@@ -12,7 +12,7 @@ use anyhow::{Context, Result, anyhow, bail};
 use toml::Value as TomlValue;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::utils::ansi::AnsiRenderer;
-use vtcode_tui::app::{InlineListSearchConfig, InlineListSelection};
+use vtcode_ui::tui::app::{InlineListSearchConfig, InlineListSelection};
 
 #[cfg(test)]
 use docs::FIELD_DOCS;

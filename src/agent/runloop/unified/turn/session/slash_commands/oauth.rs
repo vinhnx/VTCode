@@ -11,7 +11,7 @@ use vtcode_core::hooks::SessionEndReason;
 use vtcode_core::llm::factory::{ProviderConfig, create_provider_with_config};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::ansi_codes::notify_attention;
-use vtcode_tui::app::{InlineListItem, InlineListSelection, WizardModalMode, WizardStep};
+use vtcode_ui::tui::app::{InlineListItem, InlineListSelection, WizardModalMode, WizardStep};
 
 use super::{SlashCommandContext, SlashCommandControl, ui};
 use crate::agent::runloop::slash_commands::OAuthProviderAction;
@@ -699,7 +699,7 @@ mod tests {
     use tokio::sync::RwLock;
     use vtcode_core::config::loader::VTCodeConfig;
     use vtcode_core::llm::provider as uni;
-    use vtcode_tui::app::InlineHeaderContext;
+    use vtcode_ui::tui::app::InlineHeaderContext;
 
     use crate::agent::runloop::model_picker::ModelPickerState;
     use crate::agent::runloop::unified::palettes::ActivePalette;

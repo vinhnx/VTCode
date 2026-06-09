@@ -13,7 +13,7 @@ use crate::ui::tui::{
     SessionSurface, SlashCommandItem, UiMode,
 };
 #[cfg(feature = "tui")]
-use vtcode_tui::ui::theme::ThemeStyles as TuiThemeStyles;
+use vtcode_ui::tui::ui::theme::ThemeStyles as TuiThemeStyles;
 
 #[cfg(feature = "tui")]
 use crate::ui::tui::{FullscreenInteractionSettings, SessionAppearanceConfig};

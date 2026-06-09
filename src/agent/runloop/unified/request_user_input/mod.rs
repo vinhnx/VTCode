@@ -16,7 +16,7 @@ mod tests {
     };
     use super::suggestions::generate_suggested_options;
     use serde_json::json;
-    use vtcode_tui::app::{InlineListSelection, WizardModalMode};
+    use vtcode_ui::tui::app::{InlineListSelection, WizardModalMode};
 
     fn prompt_question_with_hints() -> RequestUserInputQuestion {
         RequestUserInputQuestion {

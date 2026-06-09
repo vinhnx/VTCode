@@ -1,3 +1,3 @@
 //! Compatibility facade for shared theme APIs.
 
-pub use vtcode_theme::*;
+pub use vtcode_ui::theme::*;

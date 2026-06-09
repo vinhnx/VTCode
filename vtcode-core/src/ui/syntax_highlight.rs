@@ -1,5 +1,5 @@
 #[cfg(feature = "tui")]
-pub use vtcode_tui::ui::syntax_highlight::{
+pub use vtcode_ui::tui::ui::syntax_highlight::{
     available_themes, default_theme_name, find_syntax_by_extension, find_syntax_by_name,
     find_syntax_by_token, find_syntax_plain_text, highlight_code_to_ansi,
     highlight_code_to_anstyle_line_segments, highlight_code_to_line_segments,

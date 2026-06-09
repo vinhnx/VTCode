@@ -5,7 +5,7 @@ use vtcode_core::subagents::{BackgroundSubprocessEntry, SubagentStatusEntry};
 use vtcode_core::utils::ansi::MessageStyle;
 #[cfg(test)]
 use vtcode_core::{CommandExecutionStatus, ThreadEvent, ThreadItemDetails, ToolCallStatus};
-use vtcode_tui::app::{
+use vtcode_ui::tui::app::{
     InlineListItem, InlineListSearchConfig, InlineListSelection, ListOverlayRequest,
     TransientEvent, TransientHotkey, TransientHotkeyAction, TransientHotkeyKey, TransientRequest,
     TransientSelectionChange, TransientSubmission,
@@ -197,8 +197,8 @@ enum InspectorActionKind {
 }
 
 async fn wait_for_inspector_action(
-    handle: &vtcode_tui::app::InlineHandle,
-    session: &mut vtcode_tui::app::InlineSession,
+    handle: &vtcode_ui::tui::app::InlineHandle,
+    session: &mut vtcode_ui::tui::app::InlineSession,
     ctrl_c_state: &std::sync::Arc<crate::agent::runloop::unified::state::CtrlCState>,
     ctrl_c_notify: &std::sync::Arc<tokio::sync::Notify>,
     initial_selection: Option<InlineListSelection>,
@@ -237,12 +237,12 @@ async fn wait_for_inspector_action(
         };
 
         match event {
-            vtcode_tui::app::InlineEvent::Transient(TransientEvent::SelectionChanged(
+            vtcode_ui::tui::app::InlineEvent::Transient(TransientEvent::SelectionChanged(
                 TransientSelectionChange::List(selection),
             )) => {
                 current_selection = Some(selection);
             }
-            vtcode_tui::app::InlineEvent::Transient(TransientEvent::Submitted(
+            vtcode_ui::tui::app::InlineEvent::Transient(TransientEvent::Submitted(
                 TransientSubmission::Selection(selection),
             )) => {
                 ctrl_c_state.reset();
@@ -251,7 +251,7 @@ async fn wait_for_inspector_action(
                     selection: Some(selection),
                 });
             }
-            vtcode_tui::app::InlineEvent::Transient(TransientEvent::Submitted(
+            vtcode_ui::tui::app::InlineEvent::Transient(TransientEvent::Submitted(
                 TransientSubmission::Hotkey(action),
             )) => {
                 ctrl_c_state.reset();
@@ -268,13 +268,13 @@ async fn wait_for_inspector_action(
                     selection: current_selection.clone(),
                 });
             }
-            vtcode_tui::app::InlineEvent::Transient(TransientEvent::Cancelled)
-            | vtcode_tui::app::InlineEvent::Cancel
-            | vtcode_tui::app::InlineEvent::Exit => {
+            vtcode_ui::tui::app::InlineEvent::Transient(TransientEvent::Cancelled)
+            | vtcode_ui::tui::app::InlineEvent::Cancel
+            | vtcode_ui::tui::app::InlineEvent::Exit => {
                 ctrl_c_state.reset();
                 return None;
             }
-            vtcode_tui::app::InlineEvent::Interrupt => {
+            vtcode_ui::tui::app::InlineEvent::Interrupt => {
                 handle.close_transient();
                 handle.force_redraw();
                 return None;

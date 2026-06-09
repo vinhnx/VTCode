@@ -1,0 +1,169 @@
+use anyhow::Result;
+use std::sync::Arc;
+use tokio::sync::mpsc;
+
+use crate::tui::config::types::UiSurfacePreference;
+
+pub mod alternate_screen;
+pub mod app;
+pub(crate) mod language_badge;
+pub mod log;
+pub mod panic_hook;
+pub mod runner;
+pub mod session;
+pub mod style;
+pub mod theme_parser;
+pub mod types;
+pub mod widgets;
+
+pub use style::{convert_style, theme_from_styles};
+pub use theme_parser::ThemeConfigParser;
+pub use types::{
+    ContentPart, EditingMode, FocusChangeCallback, InlineCommand, InlineEvent, InlineEventCallback,
+    InlineHandle, InlineHeaderBadge, InlineHeaderContext, InlineHeaderHighlight,
+    InlineHeaderStatusBadge, InlineHeaderStatusTone, InlineLinkRange, InlineLinkTarget,
+    InlineListItem, InlineListSearchConfig, InlineListSelection, InlineMessageKind, InlineSegment,
+    InlineSession, InlineTextStyle, InlineTheme, ListOverlayRequest, ModalOverlayRequest,
+    OverlayEvent, OverlayHotkey, OverlayHotkeyAction, OverlayHotkeyKey, OverlayRequest,
+    OverlaySelectionChange, OverlaySubmission, RewindAction, SecurePromptConfig, WizardModalMode,
+    WizardOverlayRequest, WizardStep,
+};
+
+use runner::{TuiOptions, run_tui};
+
+pub fn spawn_session(
+    theme: InlineTheme,
+    placeholder: Option<String>,
+    surface_preference: UiSurfacePreference,
+    inline_rows: u16,
+    event_callback: Option<InlineEventCallback>,
+    active_pty_sessions: Option<Arc<std::sync::atomic::AtomicUsize>>,
+    workspace_root: Option<std::path::PathBuf>,
+) -> Result<InlineSession> {
+    spawn_session_with_prompts(
+        theme,
+        placeholder,
+        surface_preference,
+        inline_rows,
+        event_callback,
+        active_pty_sessions,
+        None,
+        crate::tui::config::KeyboardProtocolConfig::default(),
+        crate::tui::options::FullscreenInteractionSettings::default(),
+        workspace_root,
+    )
+}
+
+/// Spawn session with optional custom prompts pre-loaded
+#[expect(clippy::too_many_arguments)]
+pub fn spawn_session_with_prompts(
+    theme: InlineTheme,
+    placeholder: Option<String>,
+    surface_preference: UiSurfacePreference,
+    inline_rows: u16,
+    event_callback: Option<InlineEventCallback>,
+    active_pty_sessions: Option<Arc<std::sync::atomic::AtomicUsize>>,
+    input_activity_counter: Option<Arc<std::sync::atomic::AtomicU64>>,
+    keyboard_protocol: crate::tui::config::KeyboardProtocolConfig,
+    fullscreen: crate::tui::options::FullscreenInteractionSettings,
+    workspace_root: Option<std::path::PathBuf>,
+) -> Result<InlineSession> {
+    spawn_session_with_prompts_and_options(
+        theme,
+        placeholder,
+        surface_preference,
+        inline_rows,
+        event_callback,
+        None,
+        active_pty_sessions,
+        input_activity_counter,
+        keyboard_protocol,
+        fullscreen,
+        workspace_root,
+        None,
+        "Agent TUI".to_string(),
+        None,
+    )
+}
+
+/// Spawn session with host-injected UI options.
+#[expect(clippy::too_many_arguments)]
+pub fn spawn_session_with_prompts_and_options(
+    theme: InlineTheme,
+    placeholder: Option<String>,
+    surface_preference: UiSurfacePreference,
+    inline_rows: u16,
+    event_callback: Option<InlineEventCallback>,
+    focus_callback: Option<FocusChangeCallback>,
+    active_pty_sessions: Option<Arc<std::sync::atomic::AtomicUsize>>,
+    input_activity_counter: Option<Arc<std::sync::atomic::AtomicU64>>,
+    keyboard_protocol: crate::tui::config::KeyboardProtocolConfig,
+    fullscreen: crate::tui::options::FullscreenInteractionSettings,
+    workspace_root: Option<std::path::PathBuf>,
+    appearance: Option<session::config::AppearanceConfig>,
+    app_name: String,
+    non_interactive_hint: Option<String>,
+) -> Result<InlineSession> {
+    use crossterm::tty::IsTty;
+
+    // Check stdin is a terminal BEFORE spawning the task
+    if !std::io::stdin().is_tty() {
+        return Err(anyhow::anyhow!(
+            "cannot run interactive TUI: stdin is not a terminal (must be run in an interactive terminal)"
+        ));
+    }
+
+    let (command_tx, command_rx) = mpsc::unbounded_channel();
+    let (event_tx, event_rx) = mpsc::unbounded_channel();
+    let show_logs = log::is_tui_log_capture_enabled();
+
+    tokio::spawn(async move {
+        if let Err(error) = run_tui(
+            command_rx,
+            event_tx,
+            TuiOptions {
+                surface_preference,
+                inline_rows,
+                show_logs,
+                log_theme: None,
+                event_callback,
+                focus_callback,
+                active_pty_sessions,
+                input_activity_counter,
+                keyboard_protocol,
+                fullscreen,
+                workspace_root,
+            },
+            move |rows| {
+                session::Session::new_with_logs(
+                    theme,
+                    placeholder,
+                    rows,
+                    show_logs,
+                    appearance,
+                    app_name,
+                )
+            },
+        )
+        .await
+        {
+            let error_msg = error.to_string();
+            if error_msg.contains("stdin is not a terminal") {
+                eprintln!("Error: Interactive TUI requires a proper terminal.");
+                if let Some(hint) = non_interactive_hint.as_deref() {
+                    eprintln!("{}", hint);
+                } else {
+                    eprintln!("Use a non-interactive mode in your host app for piped input.");
+                }
+            } else {
+                eprintln!("Error: TUI startup failed: {:#}", error);
+            }
+            tracing::error!(%error, "inline session terminated unexpectedly");
+        }
+    });
+
+    Ok(InlineSession {
+        handle: InlineHandle { sender: command_tx },
+        events: event_rx,
+    })
+}

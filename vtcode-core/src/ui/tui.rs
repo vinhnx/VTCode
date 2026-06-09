@@ -22,7 +22,7 @@ pub use vtcode_commons::ui_protocol::KeyboardProtocolSettings;
 // ── Full TUI re-exports (feature = "tui") ───────────────────────────────────
 
 #[cfg(feature = "tui")]
-pub use vtcode_tui::app::*;
+pub use vtcode_ui::tui::app::*;
 
 // ── Headless stubs (feature = "tui" disabled) ───────────────────────────────
 

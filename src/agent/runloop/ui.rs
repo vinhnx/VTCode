@@ -10,11 +10,11 @@ use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::subagents::SubagentStatusEntry;
 use vtcode_core::tools::search_tool_bundle_status;
 use vtcode_core::utils::dot_config::load_workspace_trust_level;
-use vtcode_tui::app::{
+use vtcode_ui::tui::app::{
     InlineHandle, InlineHeaderBadge, InlineHeaderContext, InlineHeaderStatusBadge,
     InlineHeaderStatusTone, InlineTextStyle,
 };
-use vtcode_tui::core::ThemeConfigParser;
+use vtcode_ui::tui::core::ThemeConfigParser;
 
 use super::welcome::SessionBootstrap;
 use dirs::home_dir;
@@ -289,7 +289,7 @@ pub(crate) async fn build_inline_header_context(
     // Check if we're running in the home directory and add a warning if so
     let mut highlights = session_bootstrap.header_highlights.clone();
     if is_home_directory(&config.workspace) {
-        highlights.push(vtcode_tui::app::InlineHeaderHighlight {
+        highlights.push(vtcode_ui::tui::app::InlineHeaderHighlight {
             title: "Warning".to_string(),
             lines: vec![
                 "You are running VT Code in your home directory. It is recommended to run in a project-specific directory for better organization and safety."
@@ -421,7 +421,7 @@ pub(crate) async fn build_inline_header_context(
         primary_agent: None,
         highlights, // Use the modified highlights that may include the home directory warning
         subagent_badges: Vec::new(),
-        editing_mode: vtcode_tui::app::EditingMode::default(),
+        editing_mode: vtcode_ui::tui::app::EditingMode::default(),
         autonomous_mode: false,
         reasoning_stage: None,
     };

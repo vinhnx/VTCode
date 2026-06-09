@@ -3,7 +3,7 @@ use hashbrown::HashMap;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
-use vtcode_tui::app::WizardModalMode;
+use vtcode_ui::tui::app::WizardModalMode;
 
 #[derive(Debug, Deserialize)]
 pub(super) struct RequestUserInputArgs {

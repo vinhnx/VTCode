@@ -7,7 +7,7 @@ use vtcode_core::llm::{
     LightweightFeature, LightweightRouteSource, auto_lightweight_model, lightweight_model_choices,
     main_model_route, resolve_lightweight_route,
 };
-use vtcode_tui::app::{InlineListItem, InlineListSelection};
+use vtcode_ui::tui::app::{InlineListItem, InlineListSelection};
 
 use super::DynamicModelRegistry;
 use super::options::{MODEL_OPTIONS, option_indexes_for_provider};

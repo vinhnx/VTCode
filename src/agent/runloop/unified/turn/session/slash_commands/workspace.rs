@@ -11,7 +11,7 @@ use vtcode_core::subagents::SpawnAgentRequest;
 use vtcode_core::subagents::SubagentStatusEntry;
 use vtcode_core::utils::ansi::MessageStyle;
 use vtcode_core::{llm::provider::Message, persistent_memory::scaffold_persistent_memory};
-use vtcode_tui::app::{InlineListItem, InlineListSelection, WizardModalMode, WizardStep};
+use vtcode_ui::tui::app::{InlineListItem, InlineListSelection, WizardModalMode, WizardStep};
 
 use crate::agent::runloop::unified::turn::workspace::{
     bootstrap_config_files, build_workspace_index,

@@ -549,7 +549,7 @@ fn build_tool_permissions_context<'a>(
     vt_cfg: Option<&'a VTCodeConfig>,
 ) -> crate::agent::runloop::unified::tool_routing::ToolPermissionsContext<
     'a,
-    vtcode_tui::app::InlineSession,
+    vtcode_ui::tui::app::InlineSession,
 > {
     let auto_mode_runtime = ctx.auto_mode.as_mut().map(|auto_mode| {
         crate::agent::runloop::unified::run_loop_context::AutoModeRuntimeContext {

@@ -25,7 +25,7 @@ use vtcode_core::llm::provider as uni;
 use vtcode_core::project_doc::load_instruction_appendix;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_terminal_detection::TerminalType;
-use vtcode_tui::app::InlineHandle;
+use vtcode_ui::tui::app::InlineHandle;
 
 use super::async_mcp_manager::{AsyncMcpManager, McpInitStatus};
 use super::state::{CtrlCState, SessionStats};

@@ -13,7 +13,7 @@ mod tests {
     use tokio::sync::oneshot;
     use tokio::time::timeout;
     use vtcode_core::config::PtyConfig;
-    use vtcode_tui::app::InlineSegment;
+    use vtcode_ui::tui::app::InlineSegment;
 
     use super::runtime::PtyStreamRuntime;
     use super::segments::{PtyLineStyles, line_to_segments, tokenize_preserve_whitespace};

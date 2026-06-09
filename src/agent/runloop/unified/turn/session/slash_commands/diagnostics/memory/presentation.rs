@@ -4,7 +4,7 @@ use vtcode_core::llm::{
 };
 use vtcode_core::persistent_memory::PersistentMemoryStatus;
 use vtcode_core::utils::ansi::MessageStyle;
-use vtcode_tui::app::{InlineListItem, InlineListSelection};
+use vtcode_ui::tui::app::{InlineListItem, InlineListSelection};
 
 use super::{
     MEMORY_ACTION_BACK, MEMORY_ACTION_PREFIX, MEMORY_LIGHTWEIGHT_MODEL_PREFIX, SlashCommandContext,

@@ -11,7 +11,7 @@ use vtcode_core::ui::set_tui_mode;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::session_archive::{SessionArchive, SessionMessage};
 use vtcode_core::utils::transcript;
-use vtcode_tui::app::InlineHandle;
+use vtcode_ui::tui::app::InlineHandle;
 
 use crate::agent::runloop::unified::async_mcp_manager::AsyncMcpManager;
 use crate::agent::runloop::unified::state::SessionStats;
@@ -29,7 +29,7 @@ pub(super) struct FinalizationOutput {
 fn restore_terminal_on_exit() -> io::Result<()> {
     // Use the centralized TUI restoration logic from vtcode-core
     // This handles draining events, clearing the line, and proper restoration order
-    vtcode_tui::panic_hook::restore_tui()
+    vtcode_ui::tui::panic_hook::restore_tui()
 }
 
 pub(super) async fn finalize_session(

@@ -14,7 +14,7 @@ use serde_json::json;
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::utils::ansi::AnsiRenderer;
-use vtcode_tui::app::InlineHandle;
+use vtcode_ui::tui::app::InlineHandle;
 
 #[test]
 fn recovery_synthesis_fallback_says_no_tool_call_was_applied() {

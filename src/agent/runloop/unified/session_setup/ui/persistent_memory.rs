@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::persistent_memory::{PersistentMemoryStatus, persistent_memory_status};
-use vtcode_tui::app::{
+use vtcode_ui::tui::app::{
     InlineHeaderContext, InlineHeaderHighlight, InlineHeaderStatusBadge, InlineHeaderStatusTone,
 };
 
