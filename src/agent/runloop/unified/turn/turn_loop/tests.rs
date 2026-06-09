@@ -17,6 +17,13 @@ use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_tui::app::InlineHandle;
 
 #[test]
+fn recovery_synthesis_fallback_says_no_tool_call_was_applied() {
+    assert!(
+        RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER.contains("No additional tool call was applied")
+    );
+}
+
+#[test]
 fn has_tool_response_since_detects_new_tool_message() {
     let messages = vec![
         uni::Message::user("run script".to_string()),

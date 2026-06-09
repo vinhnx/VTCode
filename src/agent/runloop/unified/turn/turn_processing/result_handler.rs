@@ -214,8 +214,8 @@ pub(crate) async fn handle_turn_processing_result<'a>(
                     .trim()
                     .to_string();
                 // If DSML stripping produced a clean, markup-free text, use it.
-                // Otherwise fall back to the original Blocked behavior for
-                // non-DSML tool-call markup formats.
+                // Otherwise try stripping the entire detected non-DSML tool-call
+                // region while preserving surrounding prose.
                 if !cleaned.is_empty()
                     && crate::agent::runloop::text_tools::detect_textual_tool_call(&cleaned)
                         .is_none()
@@ -223,6 +223,29 @@ pub(crate) async fn handle_turn_processing_result<'a>(
                     let _ = params.ctx.renderer.line(
                         MessageStyle::Warning,
                         "[!] Stripped tool-call markup from recovery synthesis.",
+                    );
+                    return params
+                        .ctx
+                        .handle_text_response(
+                            cleaned,
+                            reasoning,
+                            reasoning_details,
+                            proposed_plan,
+                            params.response_streamed,
+                        )
+                        .await;
+                }
+                let cleaned =
+                    crate::agent::runloop::text_tools::strip_textual_tool_call_regions(&text)
+                        .trim()
+                        .to_string();
+                if !cleaned.is_empty()
+                    && crate::agent::runloop::text_tools::detect_textual_tool_call(&cleaned)
+                        .is_none()
+                {
+                    let _ = params.ctx.renderer.line(
+                        MessageStyle::Warning,
+                        "[!] Stripped textual tool-call region from recovery synthesis.",
                     );
                     return params
                         .ctx
@@ -646,6 +669,53 @@ mod tests {
             TurnHandlerOutcome::Break(TurnLoopResult::Blocked { reason: Some(reason) })
             if reason == RECOVERY_CONTRACT_VIOLATION_REASON
         ));
+    }
+
+    #[tokio::test]
+    async fn recovery_textual_tool_markup_with_prose_strips_region_and_completes() {
+        let mut backing = TestTurnProcessingBacking::new(4).await;
+        let mut ctx = backing.turn_processing_context();
+        ctx.activate_recovery("loop detector");
+        assert!(ctx.consume_recovery_pass());
+
+        let mut repeated_tool_attempts = LoopTracker::new();
+        let mut turn_modified_files = BTreeSet::new();
+
+        let outcome = handle_turn_processing_result(HandleTurnProcessingResultParams {
+            ctx: &mut ctx,
+            processing_result: TurnProcessingResult::TextResponse {
+                text: r#"The requested change was not applied because tools were disabled.
+<minimax:tool_call>
+<invoke name="unified_file">
+<parameter name="action">write</parameter>
+<parameter name="path">README.md</parameter>
+</invoke>
+</minimax:tool_call>
+Please re-run with tools enabled."#
+                    .to_string(),
+                reasoning: Vec::new(),
+                reasoning_details: None,
+                proposed_plan: None,
+            },
+            response_streamed: false,
+            step_count: 1,
+            repeated_tool_attempts: &mut repeated_tool_attempts,
+            turn_modified_files: &mut turn_modified_files,
+            max_tool_loops: 4,
+            tool_repeat_limit: 4,
+        })
+        .await
+        .expect("recovery textual tool markup should be stripped");
+
+        assert!(matches!(
+            outcome,
+            TurnHandlerOutcome::Break(TurnLoopResult::Completed)
+        ));
+        assert!(backing.last_history_message_contains(
+            "The requested change was not applied because tools were disabled."
+        ));
+        assert!(backing.last_history_message_contains("Please re-run with tools enabled."));
+        assert!(!backing.last_history_message_contains("<invoke"));
     }
 
     #[tokio::test]

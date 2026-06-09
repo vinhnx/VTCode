@@ -5,6 +5,7 @@ use anyhow::Result;
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::exec_policy::AskForApproval;
 use vtcode_core::primary_agent::primary_agent_allows_tool;
+use vtcode_core::tools::error_messages::agent_execution::policy_denied_hint_message;
 use vtcode_core::tools::registry::ToolExecutionError;
 use vtcode_core::tools::registry::labels::tool_action_label;
 use vtcode_core::utils::ansi::MessageStyle;
@@ -511,10 +512,7 @@ pub(crate) async fn validate_tool_call<'a>(
             } else {
                 ToolExecutionError::policy_violation(
                     canonical_tool_name,
-                    format!(
-                        "Tool '{}' execution denied by policy",
-                        prepared.canonical_name
-                    ),
+                    policy_denied_hint_message(&prepared.canonical_name),
                 )
                 .to_json_value()
             };

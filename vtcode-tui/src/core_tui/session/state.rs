@@ -27,7 +27,7 @@ use super::{
 use crate::config::constants::ui;
 use crate::options::FullscreenInteractionSettings;
 
-const COPY_NOTIFICATION_DURATION: Duration = Duration::from_secs(3);
+const COPY_NOTIFICATION_DURATION: Duration = Duration::from_secs(5);
 const COPY_NOTIFICATION_TEXT: &str = "Copied to clipboard";
 const ACTION_REQUIRED_STATUS_TEXT: &str = "Action required";
 const APPROVAL_REQUIRED_STATUS_TEXT: &str = "Approval required";

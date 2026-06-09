@@ -134,6 +134,8 @@ https://ast-grep.github.io/guide/tools/json.html
 
 ---
 
+plan plans/fix-vt-code-splendid-giraffe.md
+
 # VT Code Agent Harness Robustness Plan
 
 Source logs reviewed:
@@ -250,9 +252,5 @@ fix auto mode denied policy for running bash command. maybe suggest user to swit
 
 check vtcode can't run any commands?
 /Users/vinhnguyenxuan/.vtcode/sessions/atif-trajectory-session-vtcode-20260607T032926Z_556918-32490-20260607T032927Z.json /Users/vinhnguyenxuan/.vtcode/sessions/harness-session-vtcode-20260607T032926Z_556918-32490-20260607T032927Z.jsonl
-
-===
-
-| TD-015 | Harness | Checkpoint logs show recovery-mode completion and tool-selection failures: final prose/pseudo-tool output instead of applied mutations, structural-search misuse, large `unified_file` edits, brittle patch context, denied exec retries, overwrite-mode misses, legacy tool aliases, and repeated reads. | P1 | open | 2026-06-07 | Ref: `docs/project/TODO.md#vt-code-agent-harness-robustness-plan`. Counting note: checkpoints are cumulative; use `metadata.prompt_message_index` turn deltas plus unique error dedup, not raw totals across files. Root-cause target for later code pass: `src/agent/runloop/unified/turn/turn_processing/result_handler.rs` recovery `TextResponse` should reject embedded pseudo tool-call markup; `src/agent/runloop/unified/turn/turn_loop.rs` fallback should say no additional tool call was applied. Docs-first next step: update tool usage docs with examples for grep-vs-structural search, edit-vs-overwrite, patch context discipline, policy-denied exec recovery, and recovery-mode “not applied” final wording. Verify docs diff: `git diff -- docs/project/TODO.md docs/harness/TECH_DEBT_TRACKER.md`. |
 
 ==
