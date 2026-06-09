@@ -12,7 +12,7 @@
 //! # Usage
 //!
 //! ```rust
-//! use vtcode_tui::ui::syntax_highlight::{
+//! use vtcode_ui::tui::ui::syntax_highlight::{
 //!     get_active_syntax_theme, highlight_code_to_segments,
 //! };
 //!

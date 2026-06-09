@@ -6,7 +6,7 @@
 //! # Usage
 //!
 //! ```rust
-//! use vtcode_tui::utils::tty::TtyExt;
+//! use vtcode_ui::tui::utils::tty::TtyExt;
 //! use std::io;
 //!
 //! // Check if stdout is a TTY
