@@ -248,8 +248,11 @@ pub(crate) fn strip_textual_tool_call_regions(text: &str) -> String {
     // Unlike `collect_enclosed_regions`, these use `collect_pseudo_marker_regions`
     // because `detect_textual_tool_call` cannot parse them (they are intentionally
     // non-parseable), but they are clearly tool-call intent by tag name alone.
-    collect_pseudo_marker_regions(text, "<function=", "</function>", &mut regions);
-    collect_pseudo_marker_regions(text, "<parameter=", "</parameter>", &mut regions);
+    // Use close prefixes (without the trailing ">") so that both
+    // `</function>` and `</function=name>` (parameterised close tags) are
+    // consumed in full; the scanner advances past any suffix to the next ">".
+    collect_pseudo_marker_regions(text, "<function=", "</function", &mut regions);
+    collect_pseudo_marker_regions(text, "<parameter=", "</parameter", &mut regions);
     collect_bracketed_regions(text, &mut regions);
     collect_function_call_regions(text, &mut regions);
 
@@ -341,22 +344,34 @@ fn collect_enclosed_regions(
 /// pseudo-tool-call markers even when `detect_textual_tool_call` cannot
 /// parse them. Used for `<function=…>` and `<parameter=…>` blocks whose
 /// payload is intentionally not parseable by the full tool-call parser.
+///
+/// `close_prefix` is matched case-insensitively as a tag prefix (e.g.
+/// `"</function"`). After finding the prefix the scanner advances past any
+/// suffix bytes (e.g. `"=apply_patch"`) to the next `>`, so both
+/// `</function>` and `</function=name>` are handled correctly.
 fn collect_pseudo_marker_regions(
     text: &str,
     open_marker: &str,
-    close_marker: &str,
+    close_prefix: &str,
     regions: &mut Vec<(usize, usize)>,
 ) {
     let lowered = text.to_ascii_lowercase();
     let open_lower = open_marker.to_ascii_lowercase();
-    let close_lower = close_marker.to_ascii_lowercase();
+    let close_lower = close_prefix.to_ascii_lowercase();
     let mut search_start = 0usize;
     while let Some(relative_start) = lowered[search_start..].find(&open_lower) {
         let start = search_start + relative_start;
         let content_start = start + open_marker.len();
         let end = lowered[content_start..]
             .find(&close_lower)
-            .map(|idx| content_start + idx + close_marker.len())
+            .map(|idx| {
+                // Advance past the prefix bytes to the next '>' so that both
+                // `</function>` and `</function=name>` are consumed in full.
+                let prefix_end = content_start + idx + close_prefix.len();
+                lowered[prefix_end..]
+                    .find('>')
+                    .map_or(text.len(), |extra| prefix_end + extra + 1)
+            })
             .unwrap_or(text.len());
         if start < end && end <= text.len() {
             regions.push((start, end));
