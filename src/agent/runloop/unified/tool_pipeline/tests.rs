@@ -13,7 +13,9 @@ use vtcode_core::tools::registry::ToolTimeoutCategory;
 use vtcode_core::ui::inline_theme_from_core_styles;
 use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::AnsiRenderer;
-use vtcode_ui::tui::app::{InlineHandle, InlineSession, SessionOptions, spawn_session_with_options};
+use vtcode_ui::tui::app::{
+    InlineHandle, InlineSession, SessionOptions, spawn_session_with_options,
+};
 
 /// Helper function to create test registry with common setup
 async fn create_test_registry(workspace: &std::path::Path) -> ToolRegistry {

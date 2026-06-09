@@ -281,7 +281,9 @@ mod tests {
     use ratatui::text::Line;
     use std::sync::Arc;
 
-    use crate::tui::core_tui::types::{InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme};
+    use crate::tui::core_tui::types::{
+        InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme,
+    };
 
     fn line(text: impl Into<Line<'static>>) -> TranscriptLine {
         TranscriptLine {

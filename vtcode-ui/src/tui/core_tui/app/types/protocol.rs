@@ -162,15 +162,21 @@ impl From<crate::tui::core_tui::types::InlineEvent> for InlineEvent {
             crate::tui::core_tui::types::InlineEvent::Submit(text) => Self::Submit(text),
             crate::tui::core_tui::types::InlineEvent::QueueSubmit(text) => Self::QueueSubmit(text),
             crate::tui::core_tui::types::InlineEvent::Steer(text) => Self::Steer(text),
-            crate::tui::core_tui::types::InlineEvent::ProcessLatestQueued => Self::ProcessLatestQueued,
+            crate::tui::core_tui::types::InlineEvent::ProcessLatestQueued => {
+                Self::ProcessLatestQueued
+            }
             crate::tui::core_tui::types::InlineEvent::EditQueue => Self::EditQueue,
-            crate::tui::core_tui::types::InlineEvent::Overlay(event) => Self::Transient(event.into()),
+            crate::tui::core_tui::types::InlineEvent::Overlay(event) => {
+                Self::Transient(event.into())
+            }
             crate::tui::core_tui::types::InlineEvent::Cancel => Self::Cancel,
             crate::tui::core_tui::types::InlineEvent::Exit => Self::Exit,
             crate::tui::core_tui::types::InlineEvent::Interrupt => Self::Interrupt,
             crate::tui::core_tui::types::InlineEvent::Pause => Self::Pause,
             crate::tui::core_tui::types::InlineEvent::Resume => Self::Resume,
-            crate::tui::core_tui::types::InlineEvent::BackgroundOperation => Self::BackgroundOperation,
+            crate::tui::core_tui::types::InlineEvent::BackgroundOperation => {
+                Self::BackgroundOperation
+            }
             crate::tui::core_tui::types::InlineEvent::ScrollLineUp => Self::ScrollLineUp,
             crate::tui::core_tui::types::InlineEvent::ScrollLineDown => Self::ScrollLineDown,
             crate::tui::core_tui::types::InlineEvent::ScrollPageUp => Self::ScrollPageUp,

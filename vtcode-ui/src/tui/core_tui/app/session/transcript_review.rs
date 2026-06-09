@@ -492,7 +492,9 @@ pub(crate) fn review_content_width(area: Rect) -> u16 {
 mod tests {
     use super::*;
     use crate::tui::core_tui::app::session::AppSession;
-    use crate::tui::core_tui::types::{InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme};
+    use crate::tui::core_tui::types::{
+        InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme,
+    };
     use std::sync::Arc;
 
     fn test_session() -> AppSession {

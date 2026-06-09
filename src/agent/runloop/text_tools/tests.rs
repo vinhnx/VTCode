@@ -46,7 +46,9 @@ fn pseudo_markers_detect_closing_tool_call_tag_alone() {
 
 #[test]
 fn pseudo_markers_is_case_insensitive() {
-    assert!(contains_pseudo_tool_call_markers("<TOOL_CALL>...</TOOL_CALL>"));
+    assert!(contains_pseudo_tool_call_markers(
+        "<TOOL_CALL>...</TOOL_CALL>"
+    ));
     assert!(contains_pseudo_tool_call_markers("<Function=foo>"));
 }
 
@@ -100,8 +102,14 @@ fn strip_regions_parameterised_close_tags_do_not_eat_trailing_prose() {
                 <function=apply_patch>diff content</function=apply_patch>\n\
                 Prose after.";
     let stripped = strip_textual_tool_call_regions(bare);
-    assert!(!stripped.contains("<function="), "function= block should be stripped");
-    assert!(stripped.contains("Prose before."), "leading prose must survive");
+    assert!(
+        !stripped.contains("<function="),
+        "function= block should be stripped"
+    );
+    assert!(
+        stripped.contains("Prose before."),
+        "leading prose must survive"
+    );
     assert!(
         stripped.contains("Prose after."),
         "trailing prose must survive bare parameterised close tag"
@@ -117,8 +125,14 @@ fn strip_regions_parameterised_close_tags_do_not_eat_trailing_prose() {
                    </tool_call>\n\
                    Prose after.";
     let stripped2 = strip_textual_tool_call_regions(wrapped);
-    assert!(!stripped2.contains("<function=apply_patch>"), "function= content must be stripped");
-    assert!(stripped2.contains("Prose before."), "leading prose must survive");
+    assert!(
+        !stripped2.contains("<function=apply_patch>"),
+        "function= content must be stripped"
+    );
+    assert!(
+        stripped2.contains("Prose before."),
+        "leading prose must survive"
+    );
     assert!(
         stripped2.contains("Prose after."),
         "trailing prose must not be eaten by merged regions"
@@ -130,8 +144,14 @@ fn strip_regions_removes_function_eq_block_with_parameterised_close() {
     // `</function=name>` close tag (without a tool_call wrapper) must be consumed.
     let text = "<function=write_file>hello world</function=write_file>";
     let stripped = strip_textual_tool_call_regions(text);
-    assert!(!stripped.contains("<function="), "function= block should be fully stripped");
-    assert!(!stripped.contains("</function="), "parameterised close tag must be consumed");
+    assert!(
+        !stripped.contains("<function="),
+        "function= block should be fully stripped"
+    );
+    assert!(
+        !stripped.contains("</function="),
+        "parameterised close tag must be consumed"
+    );
 }
 
 #[test]

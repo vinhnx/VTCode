@@ -178,7 +178,9 @@ impl From<crate::tui::core_tui::types::OverlayHotkeyAction> for TransientHotkeyA
     fn from(value: crate::tui::core_tui::types::OverlayHotkeyAction) -> Self {
         match value {
             crate::tui::core_tui::types::OverlayHotkeyAction::LaunchEditor => Self::LaunchEditor,
-            crate::tui::core_tui::types::OverlayHotkeyAction::OpenSourceThread => Self::OpenSourceThread,
+            crate::tui::core_tui::types::OverlayHotkeyAction::OpenSourceThread => {
+                Self::OpenSourceThread
+            }
             crate::tui::core_tui::types::OverlayHotkeyAction::ReloadSubagentInspector => {
                 Self::ReloadSubagentInspector
             }
@@ -188,7 +190,9 @@ impl From<crate::tui::core_tui::types::OverlayHotkeyAction> for TransientHotkeyA
             crate::tui::core_tui::types::OverlayHotkeyAction::ForceCancelSubagent => {
                 Self::ForceCancelSubagent
             }
-            crate::tui::core_tui::types::OverlayHotkeyAction::FocusJobOutput => Self::FocusJobOutput,
+            crate::tui::core_tui::types::OverlayHotkeyAction::FocusJobOutput => {
+                Self::FocusJobOutput
+            }
             crate::tui::core_tui::types::OverlayHotkeyAction::InterruptJob => Self::InterruptJob,
             crate::tui::core_tui::types::OverlayHotkeyAction::PreviewJobSnapshot => {
                 Self::PreviewJobSnapshot

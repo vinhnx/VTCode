@@ -1387,7 +1387,9 @@ pub(super) fn handle_diff_preview_key(
 mod tests {
     use super::*;
     use crate::tui::config::constants::ui;
-    use crate::tui::core_tui::types::{InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme};
+    use crate::tui::core_tui::types::{
+        InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme,
+    };
     use std::sync::Arc;
 
     fn build_session() -> Session {

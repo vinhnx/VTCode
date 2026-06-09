@@ -541,6 +541,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     linked_directories: &mut linked_directories,
                     lifecycle_hooks: lifecycle_hooks.as_ref(),
                     full_auto,
+                    skip_confirmations,
                     approval_recorder: &approval_recorder,
                     tool_permission_cache: &tool_permission_cache,
                     permissions_state: &permissions_state,

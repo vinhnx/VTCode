@@ -408,7 +408,9 @@ fn has_input_status(session: &Session) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tui::core_tui::types::{InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme};
+    use crate::tui::core_tui::types::{
+        InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme,
+    };
     use std::sync::Arc;
 
     fn segment(text: &str) -> InlineSegment {

@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use crate::tui::config::UiSurfacePreference;
 use crate::tui::config::KeyboardProtocolConfig;
+use crate::tui::config::UiSurfacePreference;
 use hashbrown::HashMap;
 
 use crate::tui::core_tui::app::session::AppSession;
@@ -13,7 +13,9 @@ use crate::tui::core_tui::log;
 use crate::tui::core_tui::runner::{TuiOptions, run_tui};
 use crate::tui::core_tui::session::action::BindingStore;
 use crate::tui::core_tui::session::config::AppearanceConfig;
-use crate::tui::options::{FullscreenInteractionSettings, KeyboardProtocolSettings, SessionSurface};
+use crate::tui::options::{
+    FullscreenInteractionSettings, KeyboardProtocolSettings, SessionSurface,
+};
 
 /// Standalone session launch options for reusable integrations.
 #[derive(Clone)]

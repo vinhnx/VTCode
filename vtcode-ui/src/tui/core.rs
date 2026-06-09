@@ -18,7 +18,9 @@ pub use crate::tui::core_tui::types::{
     OverlayHotkeyKey, OverlayRequest, OverlaySelectionChange, OverlaySubmission, RewindAction,
     SecurePromptConfig, WizardModalMode, WizardOverlayRequest, WizardStep,
 };
-pub use crate::tui::options::{FullscreenInteractionSettings, KeyboardProtocolSettings, SessionSurface};
+pub use crate::tui::options::{
+    FullscreenInteractionSettings, KeyboardProtocolSettings, SessionSurface,
+};
 
 pub type CoreCommand = core_tui::types::InlineCommand;
 pub type CoreEvent = core_tui::types::InlineEvent;

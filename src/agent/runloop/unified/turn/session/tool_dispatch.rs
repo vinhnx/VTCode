@@ -111,6 +111,7 @@ pub(crate) async fn execute_direct_tool_call(
         &mut harness_state,
         &mut auto_exit_plan_mode_attempted,
         ctx.input_status_state,
+        direct_tool_skips_confirmations(tool_name),
     );
 
     let turn_modified_files = {
@@ -232,6 +233,10 @@ pub(crate) async fn execute_direct_tool_call(
     // Direct tool paths already executed and rendered output; skip creating an
     // immediate LLM turn for this interaction loop iteration.
     Ok(Some(InteractionOutcome::DirectToolHandled))
+}
+
+fn direct_tool_skips_confirmations(tool_name: &str) -> bool {
+    matches!(tool_name, tools::UNIFIED_EXEC)
 }
 
 async fn detect_direct_subagent_spawn_input(
@@ -647,7 +652,7 @@ mod tests {
     use super::normalize_direct_tool_mentions;
     use super::{
         DirectToolInput, direct_subagent_spawn_args, direct_subagent_tool_name,
-        direct_tool_fallback, parse_direct_tool_input,
+        direct_tool_fallback, direct_tool_skips_confirmations, parse_direct_tool_input,
     };
     use tempfile::TempDir;
     use vtcode_config::SubagentSource;
@@ -701,6 +706,12 @@ mod tests {
                 panic!("expected valid !-command to parse");
             }
         }
+    }
+
+    #[test]
+    fn direct_unified_exec_skips_confirmation_prompts() {
+        assert!(direct_tool_skips_confirmations(tools::UNIFIED_EXEC));
+        assert!(!direct_tool_skips_confirmations(tools::UNIFIED_FILE));
     }
 
     #[test]

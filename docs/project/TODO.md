@@ -137,5 +137,3 @@ should we merge vtcode-design, vtcode-themes, vtcode-tui => vtcode-ui? the centr
 ===
 
 fix auto mode denied policy for running bash command. maybe suggest user to switch to auto-accept mode??
-
-===

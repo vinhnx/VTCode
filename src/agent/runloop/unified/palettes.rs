@@ -9,7 +9,9 @@ use vtcode_core::ui::theme;
 use vtcode_core::ui::{inline_theme_from_core_styles, to_tui_appearance};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::session_archive::SessionListing;
-use vtcode_ui::tui::app::{InlineHandle, InlineListItem, InlineListSearchConfig, InlineListSelection};
+use vtcode_ui::tui::app::{
+    InlineHandle, InlineListItem, InlineListSearchConfig, InlineListSelection,
+};
 use vtcode_ui::tui::core::convert_style;
 
 use crate::agent::runloop::model_picker::{

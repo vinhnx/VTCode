@@ -60,7 +60,10 @@ pub trait TuiSessionDriver {
         sessions: Option<std::sync::Arc<std::sync::atomic::AtomicUsize>>,
     );
     fn set_workspace_root(&mut self, root: Option<std::path::PathBuf>);
-    fn set_log_receiver(&mut self, receiver: UnboundedReceiver<crate::tui::core_tui::log::LogEntry>);
+    fn set_log_receiver(
+        &mut self,
+        receiver: UnboundedReceiver<crate::tui::core_tui::log::LogEntry>,
+    );
     fn set_fullscreen_active(&mut self, active: bool);
     fn set_fullscreen_interaction(&mut self, config: FullscreenInteractionSettings);
 }
@@ -74,19 +77,31 @@ impl TuiCommand for crate::tui::core_tui::types::InlineCommand {
     }
 
     fn is_resume_event_loop(&self) -> bool {
-        matches!(self, crate::tui::core_tui::types::InlineCommand::ResumeEventLoop)
+        matches!(
+            self,
+            crate::tui::core_tui::types::InlineCommand::ResumeEventLoop
+        )
     }
 
     fn is_clear_input_queue(&self) -> bool {
-        matches!(self, crate::tui::core_tui::types::InlineCommand::ClearInputQueue)
+        matches!(
+            self,
+            crate::tui::core_tui::types::InlineCommand::ClearInputQueue
+        )
     }
 
     fn is_force_redraw(&self) -> bool {
-        matches!(self, crate::tui::core_tui::types::InlineCommand::ForceRedraw)
+        matches!(
+            self,
+            crate::tui::core_tui::types::InlineCommand::ForceRedraw
+        )
     }
 
     fn is_stop_event_stream(&self) -> bool {
-        matches!(self, crate::tui::core_tui::types::InlineCommand::StopEventStream)
+        matches!(
+            self,
+            crate::tui::core_tui::types::InlineCommand::StopEventStream
+        )
     }
 
     fn is_start_event_stream(&self) -> bool {

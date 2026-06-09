@@ -437,7 +437,9 @@ impl AppSession {
             }
             TransientRequest::List(request) => {
                 self.core
-                    .show_overlay(crate::tui::core_tui::types::OverlayRequest::List(request.into()));
+                    .show_overlay(crate::tui::core_tui::types::OverlayRequest::List(
+                        request.into(),
+                    ));
                 self.show_transient_surface(TransientSurface::FloatingOverlay);
             }
             TransientRequest::Wizard(request) => {
@@ -602,9 +604,9 @@ impl AppSession {
     pub fn handle_command(&mut self, command: InlineCommand) {
         match command {
             InlineCommand::SetLocalAgents { entries } => {
-                let has_delegated_entries = entries
-                    .iter()
-                    .any(|entry| entry.kind == crate::tui::core_tui::types::LocalAgentKind::Delegated);
+                let has_delegated_entries = entries.iter().any(|entry| {
+                    entry.kind == crate::tui::core_tui::types::LocalAgentKind::Delegated
+                });
                 let update = self.local_agents_state.set_entries(entries.clone());
                 self.core.set_local_agents(entries);
                 if update.has_new_delegated_entries && self.should_auto_open_local_agents() {
@@ -893,7 +895,10 @@ impl TuiSessionDriver for AppSession {
         self.core.set_workspace_root(root);
     }
 
-    fn set_log_receiver(&mut self, receiver: UnboundedReceiver<crate::tui::core_tui::log::LogEntry>) {
+    fn set_log_receiver(
+        &mut self,
+        receiver: UnboundedReceiver<crate::tui::core_tui::log::LogEntry>,
+    ) {
         self.core.set_log_receiver(receiver);
     }
 

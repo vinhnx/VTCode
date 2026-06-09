@@ -875,7 +875,10 @@ Please re-run with tools enabled."#
         .expect("clean recovery prose should be handled");
 
         assert!(
-            matches!(outcome, TurnHandlerOutcome::Break(TurnLoopResult::Completed)),
+            matches!(
+                outcome,
+                TurnHandlerOutcome::Break(TurnLoopResult::Completed)
+            ),
             "clean prose in recovery should complete the turn normally"
         );
         assert!(backing.last_history_message_contains("3 matches"));

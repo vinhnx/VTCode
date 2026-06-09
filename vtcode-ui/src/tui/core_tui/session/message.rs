@@ -1,6 +1,8 @@
 use ratatui::text::Line;
 
-use crate::tui::ui::tui::types::{InlineLinkRange, InlineLinkTarget, InlineMessageKind, InlineSegment};
+use crate::tui::ui::tui::types::{
+    InlineLinkRange, InlineLinkTarget, InlineMessageKind, InlineSegment,
+};
 
 #[derive(Clone)]
 pub struct MessageLine {

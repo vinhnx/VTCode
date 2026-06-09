@@ -3,7 +3,9 @@ use std::sync::Arc;
 use anyhow::Result;
 use tokio::sync::Notify;
 use vtcode_core::core::interfaces::ui::UiSession;
-use vtcode_ui::tui::app::{InlineHandle, ListOverlayRequest, TransientRequest, TransientSubmission};
+use vtcode_ui::tui::app::{
+    InlineHandle, ListOverlayRequest, TransientRequest, TransientSubmission,
+};
 
 use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_overlay_and_wait};
 use crate::agent::runloop::unified::state::CtrlCState;

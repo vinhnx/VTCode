@@ -61,6 +61,7 @@ pub(crate) struct InteractionLoopContext<'a> {
         &'a mut Vec<crate::agent::runloop::unified::workspace_links::LinkedDirectory>,
     pub lifecycle_hooks: Option<&'a LifecycleHookEngine>,
     pub full_auto: bool,
+    pub skip_confirmations: bool,
     pub approval_recorder: &'a Arc<vtcode_core::tools::ApprovalRecorder>,
     pub tool_permission_cache: &'a Arc<tokio::sync::RwLock<vtcode_core::acp::ToolPermissionCache>>,
     pub permissions_state: &'a Arc<tokio::sync::RwLock<vtcode_core::config::PermissionsConfig>>,
@@ -96,6 +97,7 @@ impl<'a> InteractionLoopContext<'a> {
         harness_state: &'b mut crate::agent::runloop::unified::run_loop_context::HarnessTurnState,
         auto_exit_plan_mode_attempted: &'b mut bool,
         input_status_state: &'b mut crate::agent::runloop::unified::status_line::InputStatusState,
+        direct_skip_confirmations: bool,
     ) -> crate::agent::runloop::unified::turn::context::TurnProcessingContext<'b> {
         let tool = crate::agent::runloop::unified::turn::context::ToolContext {
             tool_result_cache: self.tool_result_cache,
@@ -140,7 +142,7 @@ impl<'a> InteractionLoopContext<'a> {
             mcp_panel_state: self.mcp_panel_state,
             working_history: self.conversation_history,
             turn_metadata_cache: self.turn_metadata_cache,
-            skip_confirmations: false,
+            skip_confirmations: self.skip_confirmations || direct_skip_confirmations,
             full_auto: self.full_auto,
             harness_state,
             harness_emitter: self.harness_emitter,

@@ -9,7 +9,9 @@ use vtcode_core::core::agent::snapshots::{
 use vtcode_core::llm::provider as uni;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_ui::tui::app::RewindAction;
-use vtcode_ui::tui::app::{InlineHandle, InlineListItem, InlineListSearchConfig, InlineListSelection};
+use vtcode_ui::tui::app::{
+    InlineHandle, InlineListItem, InlineListSearchConfig, InlineListSelection,
+};
 
 use super::ui;
 

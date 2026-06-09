@@ -2,7 +2,9 @@ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
 use anyhow::{Result, anyhow};
 use url::Url;
-use vtcode_ui::tui::app::{InlineListItem, InlineListSelection, ListOverlayRequest, TransientRequest};
+use vtcode_ui::tui::app::{
+    InlineListItem, InlineListSelection, ListOverlayRequest, TransientRequest,
+};
 
 pub(crate) const URL_GUARD_TITLE: &str = "Open External Link";
 pub(crate) const URL_GUARD_APPROVE_ACTION: &str = "url_guard:approve";
