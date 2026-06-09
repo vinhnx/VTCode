@@ -27,6 +27,8 @@ For new `.vtcode/agents/*.md` files, use VT Code tool ids in frontmatter. Claude
 
 Custom project or user specs with the same name override these built-ins using the normal discovery precedence. Use `mode: primary` for main-session agents, `mode: subagent` for delegated-only definitions, and `mode: all` for definitions that should support both.
 
+Primary agents are the direction for build, plan, auto, review, and duck style behaviours: those behaviours can be represented as primary agents over time. Existing modes are not removed by this work.
+
 ## Built-in subagents
 
 | Agent | Default model | Mutates files? | Purpose |
@@ -203,19 +205,20 @@ Only `name` and `description` are required.
 | `description` | delegation hint for VT Code and the model | include phrases like "use proactively" when you want read-only delegation to be attractive |
 | `mode` | agent availability | `primary`, `subagent`, or `all`; omitted mode defaults to `subagent` |
 | `tools` | allowlist of tool names | use VT Code tool ids from `vtcode schema tools`, such as `read_file`, `list_files`, `unified_search`, `unified_exec`, `edit_file`, `write_file`, `apply_patch`, or `unified_file` |
-| `disallowedTools` | denylist removed from inherited or allowed tools | use the same VT Code tool ids as `tools`; applied before the runtime child-tool filter |
+| `disallowedTools` / `disallowed_tools` | denylist removed from inherited or allowed tools | use the same VT Code tool ids as `tools`; applied before runtime filtering |
 | `model` | model override | defaults to `inherit`; also accepts `small`, `haiku`, `sonnet`, `opus`, or a full model id |
-| `color` | TUI badge color for active subagent indicators | optional; accepts simple color names such as `blue`, hex like `#4f8fd8`, or Git-style fg/bg strings such as `white #4f8fd8` |
+| `color` | TUI color metadata | optional; accepts simple color names such as `blue`, hex like `#4f8fd8`, or Git-style fg/bg strings such as `white #4f8fd8` |
+| `aliases` | alternate names for lookup | exact `name` matches still win over aliases |
 | `reasoning_effort` | per-agent reasoning override | `effort` and `model_reasoning_effort` are also accepted |
-| `permissionMode` | permission mode override | `default`, `acceptEdits`, `dontAsk`, `bypassPermissions`, `plan`, `auto`; can only narrow the current session mode for primary agents or the parent mode for child agents |
-| `skills` | skills to preload into the child context | uses the same skill loader as the main session |
-| `mcpServers` | named or inline MCP servers | inline servers are scoped to the child config overlay |
-| `hooks` | child-local lifecycle hooks | use this for `PreToolUse`, `PostToolUse`, and `Stop` behavior inside the child thread |
+| `permissionMode` / `permission_mode` | permission mode override | `default`, `acceptEdits`, `dontAsk`, `bypassPermissions`, `plan`, `auto`; can only narrow the current session mode for primary agents or the parent mode for child agents |
+| `skills` | skills to preload | primary agents replace the active skill set while selected; subagents preload skills into the child context |
+| `mcpServers` / `mcp_servers` | MCP servers | primary agents can add inline providers while active; subagents can use named or inline providers in the child config overlay |
+| `hooks` | lifecycle hooks | primary agents support main-session events; subagents support child-thread events |
+| `memory` | persistent memory scope | `user`, `project`, or `local` |
 | `background` | marks an agent as eligible for the managed background subprocess flow | launch these agents with `spawn_background_subprocess`; `spawn_agent` stays foreground-only |
 | `maxTurns` | per-agent turn ceiling | can also be overridden per call |
 | `nickname_candidates` | preferred thread labels | shown in `/agent` and `/agents` thread lists |
 | `initialPrompt` | default task prompt when the spawn request omits one | useful for compatibility imports |
-| `memory` | persistent memory scope | `user`, `project`, or `local` |
 | `isolation` | compatibility field for future isolation modes | `worktree` is parsed but currently rejected at runtime in VT Code |
 
 ### Field Availability
@@ -227,21 +230,23 @@ Only `name` and `description` are required.
 | Markdown body / instructions | yes | yes |
 | `mode` | yes | yes |
 | `tools` | yes | yes |
-| `disallowedTools` | yes | yes |
-| `permissionMode` | yes | yes |
+| `disallowedTools` / `disallowed_tools` | yes | yes |
+| `permissionMode` / `permission_mode` | yes | yes |
 | `model` | yes | yes |
 | `reasoning_effort` | yes | yes |
-| `color` | no | yes |
-| `skills` | no | yes |
-| `mcpServers` | no | yes |
-| `hooks` | no | yes |
+| `color` | yes | yes |
+| `aliases` | yes | yes |
+| `skills` | yes | yes |
+| `mcpServers` / `mcp_servers` | yes | yes |
+| `hooks` | yes | yes |
+| `memory` | yes | yes |
 | `background` | no | yes |
 | `maxTurns` | no | yes |
 | `nickname_candidates` | no | yes |
 | `initialPrompt` | no | yes |
-| `memory` | no | yes |
 | `isolation` | no | yes |
-| `aliases` | lookup only | lookup and delegation matching |
+
+Subagent-only fields describe child-thread launch behaviour. `background` selects the managed background subprocess flow, `maxTurns` limits a delegated run, `nickname_candidates` label child threads, `initialPrompt` fills in a missing delegated task, and `isolation` is reserved for delegated isolation modes. Primary agents run in the main session, so they do not need child launch defaults, child labels, or a separate background or isolation boundary.
 
 ## Model Resolution
 
@@ -273,7 +278,7 @@ When one or more child threads are active, VT Code shows each active agent name 
 
 ### Tool Allowlists And Denylists
 
-- Use `tools` for an allowlist and `disallowedTools` for a denylist.
+- Use `tools` for an allowlist and `disallowedTools` or `disallowed_tools` for a denylist.
 - Prefer the exact VT Code tool ids returned by `vtcode schema tools`.
 - For new VT Code-native agent files, do not use Claude-style tool names such as `Read`, `Grep`, `Glob`, `Write`, `Edit`, or `Bash`.
 - Use the narrowest VT Code tool set that fits the job instead of granting broad umbrella access by default.
@@ -287,18 +292,18 @@ Subagents inherit the parent approval context and can only stay at or below the 
 - If the parent is in `auto` or `bypassPermissions`, the parent mode wins.
 - Otherwise the child can request a stricter mode such as `plan` or `dontAsk`.
 
-Primary agents use the same conservative rule: `permissionMode` can narrow the current session mode but cannot broaden it.
+Primary agents use the same conservative rule: `permissionMode` or `permission_mode` can narrow the current session mode but cannot broaden it.
 
 ### MCP Servers
 
-Use `mcpServers` to attach named or inline MCP providers to a subagent:
+Use `mcpServers` to attach MCP providers to an agent. Subagents can use named providers from the active configuration or inline providers scoped to the child config overlay. Primary agents can add inline providers while they are active:
 
 ```yaml
 ---
-name: browser-tester
-description: Browser-based verification agent for UI regressions.
+name: browser-reviewer
+description: Browser-based primary agent for UI verification.
+mode: primary
 mcpServers:
-  - github
   - playwright:
       type: stdio
       command: npx
@@ -310,7 +315,7 @@ Plugin-provided agents are safer by default: VT Code ignores `hooks`, `mcpServer
 
 ### Persistent Memory
 
-When `memory` is enabled, VT Code injects a memory appendix into the child prompt and uses these directories:
+When `memory` is enabled, VT Code uses the same directory scheme for primary agents and subagents:
 
 | Scope | Directory |
 | --- | --- |
@@ -318,9 +323,27 @@ When `memory` is enabled, VT Code injects a memory appendix into the child promp
 | `local` | `.vtcode/agent-memory-local/<agent-name>/` |
 | `user` | `~/.vtcode/agent-memory/<agent-name>/` |
 
-VT Code also includes an excerpt of `MEMORY.md` when it exists. Memory does not automatically add file-write tools, so if the agent should update memory files you must let it inherit write-capable file tools or explicitly allow them.
+The directory key is the canonical `name`, not an alias.
+
+For subagents, VT Code creates the memory directory when needed and injects a compact appendix for `MEMORY.md`. Memory does not automatically add file-write tools, so if the subagent should update memory files you must let it inherit write-capable file tools or explicitly allow them.
+
+For primary agents, memory is read-only. VT Code looks for the existing `MEMORY.md`, does not create the directory or file, and appends memory context only when that file is present. Primary-agent memory does not grant extra tools or permissions.
 
 ### Hooks
+
+Agent files can include lifecycle hooks.
+
+Primary agents support these main-session events while selected:
+
+- `UserPromptSubmit`
+- `PreToolUse`
+- `PostToolUse`
+- `PermissionRequest`
+- `PreCompact`
+- `Stop`
+- `Notification`
+
+Primary-agent hooks do not run lifecycle events that belong to the whole session or subagent controller: `SessionStart`, `SessionEnd`, `SubagentStart`, `SubagentStop`, `task_completion`, and `task_completed`. Put those hooks in `vtcode.toml`.
 
 Subagent files are best for child-local hooks such as:
 
@@ -410,16 +433,31 @@ Primary agents use the same agent definition format:
 
 ```markdown
 ---
-name: duck
-description: Discussion-first agent for scope, constraints, and trade-offs.
+name: reviewer
+description: Main-session code reviewer for correctness, regressions, and test gaps.
 mode: primary
+aliases: [review, critic]
+color: cyan
 tools: [read_file, list_files, unified_search]
+disallowedTools: [unified_exec, unified_file]
 permissionMode: plan
 model: inherit
+reasoning_effort: medium
+skills: [code-review]
+memory: project
+mcpServers:
+  - docs-search:
+      type: stdio
+      command: vtcode-docs-mcp
+hooks:
+  lifecycle:
+    user_prompt_submit:
+      - hooks:
+          - command: "$VT_PROJECT_DIR/.vtcode/hooks/review-prompt.sh"
 ---
 
-Help the user clarify goals and trade-offs before implementation.
-Do not edit files.
+Review code in the main session. Focus on correctness, risky assumptions,
+missing tests, and project conventions. Do not edit files directly.
 ```
 
 Use `mode: primary` for agents that should control the main session, `mode: subagent` for delegated child agents, and `mode: all` for agents that should be available in both places.
@@ -439,9 +477,20 @@ To create a custom primary agent:
 name: reviewer
 description: Code review agent that enforces project conventions.
 mode: primary
+aliases: [review, critic]
+color: cyan
 tools: [read_file, list_files, unified_search]
 permissionMode: plan
 model: inherit
+reasoning_effort: medium
+skills: [code-review]
+memory: project
+hooks:
+  lifecycle:
+    pre_tool_use:
+      - matcher: unified_search
+        hooks:
+          - command: "$VT_PROJECT_DIR/.vtcode/hooks/log-review-search.sh"
 ---
 
 You are a code review specialist.
@@ -451,7 +500,7 @@ Do not edit files directly; provide actionable feedback instead.
 
 2. Set `mode: primary` to make it available as a primary agent (or `mode: all` for both primary and subagent use).
 3. Use `tools` to restrict which tools the agent can access.
-4. Use `permissionMode` to narrow the session's permission mode when this agent is active (`plan`, `edit`, or `auto`).
+4. Use `permissionMode` to narrow the session's permission mode when this agent is active (`plan`, `dontAsk`, `default`, `acceptEdits`, `auto`, or `bypassPermissions`).
 5. Press `Tab` on an empty idle composer to cycle to the new agent.
 
 The agent definition body (below the frontmatter) becomes the agent's runtime instructions when selected.
