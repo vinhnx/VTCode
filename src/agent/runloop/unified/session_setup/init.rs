@@ -39,7 +39,10 @@ use vtcode_core::tools::handlers::{
 };
 use vtcode_core::tools::{ApprovalRecorder, ToolRegistry, ToolResultCache};
 use vtcode_core::utils::dot_config::load_workspace_trust_level;
-use vtcode_core::{apply_global_notification_config_from_vtcode, init_global_notification_manager};
+use vtcode_core::{
+    ActivePrimaryAgent, apply_global_notification_config_from_vtcode,
+    build_primary_agent_runtime_config, init_global_notification_manager,
+};
 
 use crate::startup::take_search_tools_bundle_notice;
 use crate::updater::{Updater, append_notice_highlight};
@@ -118,7 +121,7 @@ pub(crate) async fn initialize_session(
     let tool_documentation_mode = vt_cfg
         .map(|cfg| cfg.agent.tool_documentation_mode)
         .unwrap_or_default();
-    let async_mcp_manager = create_async_mcp_manager(vt_cfg);
+    let async_mcp_manager = create_async_mcp_manager(vt_cfg, None);
     let mcp_error = determine_mcp_bootstrap_error(async_mcp_manager.as_ref()).await;
 
     let mut session_bootstrap = prepare_session_bootstrap(config, vt_cfg, mcp_error).await;
@@ -316,6 +319,14 @@ pub(crate) async fn initialize_session(
         })?;
         vtcode_core::primary_agent::ActivePrimaryAgentState::from_discovery(&discovered)
     };
+    if let (Some(manager), Some(cfg)) = (async_mcp_manager.as_ref(), vt_cfg) {
+        manager
+            .reconfigure(primary_agent_mcp_config(
+                cfg,
+                active_primary_agent.active(),
+            ))
+            .await?;
+    }
 
     let tool_result_cache = Arc::new(RwLock::new(ToolResultCache::new(128)));
     let tool_permission_cache = Arc::new(RwLock::new(ToolPermissionCache::new()));
@@ -422,25 +433,38 @@ fn load_startup_update_check() -> crate::updater::StartupUpdateCheck {
     }
 }
 
-fn create_async_mcp_manager(vt_cfg: Option<&VTCodeConfig>) -> Option<Arc<AsyncMcpManager>> {
+fn create_async_mcp_manager(
+    vt_cfg: Option<&VTCodeConfig>,
+    active_primary_agent: Option<&ActivePrimaryAgent>,
+) -> Option<Arc<AsyncMcpManager>> {
     let cfg = vt_cfg?;
     if !cfg.mcp.enabled {
         debug!("MCP is disabled in configuration");
         return None;
     }
+    let mcp_config = active_primary_agent
+        .map(|agent| primary_agent_mcp_config(cfg, agent))
+        .unwrap_or_else(|| cfg.mcp.clone());
 
     info!(
         "Setting up async MCP client with {} providers",
-        cfg.mcp.providers.len()
+        mcp_config.providers.len()
     );
     let approval_policy = approval_policy_from_human_in_the_loop(cfg.security.human_in_the_loop);
     let manager = AsyncMcpManager::new(
-        cfg.mcp.clone(),
+        mcp_config,
         cfg.security.hitl_notification_bell,
         approval_policy,
         Arc::new(|_event: mcp_events::McpEvent| {}),
     );
     Some(Arc::new(manager))
+}
+
+fn primary_agent_mcp_config(
+    cfg: &VTCodeConfig,
+    active_primary_agent: &ActivePrimaryAgent,
+) -> vtcode_core::config::mcp::McpClientConfig {
+    build_primary_agent_runtime_config(cfg, active_primary_agent).mcp
 }
 
 async fn determine_mcp_bootstrap_error(manager: Option<&Arc<AsyncMcpManager>>) -> Option<String> {
@@ -572,4 +596,86 @@ async fn apply_workspace_trust_prompt_policy(
     tool_registry
         .set_enforce_safe_mode_prompts(enforce_safe_mode_prompts)
         .await;
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+
+    use serde_json::json;
+    use vtcode_config::{AgentMode, PermissionMode, SubagentMcpServer, SubagentSource, SubagentSpec};
+
+    use super::*;
+
+    #[test]
+    fn async_mcp_manager_uses_primary_agent_merged_mcp_config() {
+        let mut cfg = VTCodeConfig::default();
+        cfg.mcp.enabled = true;
+        cfg.mcp.providers.push(
+            serde_json::from_value(json!({
+                "name": "global",
+                "command": "global-mcp",
+                "args": []
+            }))
+            .expect("global provider"),
+        );
+
+        let mut spec = test_primary_agent_spec("mcp-primary");
+        spec.mcp_servers = vec![SubagentMcpServer::Inline(BTreeMap::from([
+            (
+                "global".to_string(),
+                json!({
+                    "type": "stdio",
+                    "command": "duplicate-mcp"
+                }),
+            ),
+            (
+                "local".to_string(),
+                json!({
+                    "type": "stdio",
+                    "command": "local-mcp"
+                }),
+            ),
+        ]))];
+        let active = ActivePrimaryAgent::from_spec(&spec);
+
+        let manager =
+            create_async_mcp_manager(Some(&cfg), Some(&active)).expect("manager should exist");
+        let manager_config = manager.config();
+        let provider_names = manager_config
+            .providers
+            .iter()
+            .map(|provider| provider.name.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(provider_names, vec!["global", "local"]);
+    }
+
+    fn test_primary_agent_spec(name: &str) -> SubagentSpec {
+        SubagentSpec {
+            name: name.to_string(),
+            description: format!("{name} description"),
+            prompt: format!("{name} instructions"),
+            tools: None,
+            disallowed_tools: Vec::new(),
+            model: None,
+            color: None,
+            reasoning_effort: None,
+            permission_mode: Some(PermissionMode::Plan),
+            skills: Vec::new(),
+            mcp_servers: Vec::new(),
+            hooks: None,
+            background: false,
+            mode: AgentMode::Primary,
+            max_turns: None,
+            nickname_candidates: Vec::new(),
+            initial_prompt: None,
+            memory: None,
+            isolation: None,
+            aliases: Vec::new(),
+            source: SubagentSource::ProjectVtcode,
+            file_path: None,
+            warnings: Vec::new(),
+        }
+    }
 }

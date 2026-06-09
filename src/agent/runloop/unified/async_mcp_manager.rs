@@ -89,7 +89,7 @@ impl Display for McpInitStatus {
 /// Async manager for MCP client initialization and lifecycle
 pub(crate) struct AsyncMcpManager {
     /// Configuration for MCP client
-    config: McpClientConfig,
+    config: Arc<StdRwLock<McpClientConfig>>,
     /// Whether to ring terminal bell for HITL prompts
     hitl_notification_bell: bool,
     /// Approval policy used by MCP elicitation handling.
@@ -120,7 +120,7 @@ impl AsyncMcpManager {
         };
 
         Self {
-            config,
+            config: Arc::new(StdRwLock::new(config)),
             hitl_notification_bell,
             approval_policy: Arc::new(StdRwLock::new(approval_policy)),
             status: Arc::new(RwLock::new(init_status)),
@@ -132,7 +132,8 @@ impl AsyncMcpManager {
 
     /// Start async initialization of MCP client
     pub(crate) fn start_initialization(&self) -> Result<()> {
-        if !self.config.enabled {
+        let config = self.config();
+        if !config.enabled {
             // If MCP is disabled, set status immediately
             let mut status_guard = self.status.blocking_write();
             *status_guard = McpInitStatus::Disabled;
@@ -147,7 +148,6 @@ impl AsyncMcpManager {
         }
 
         // Clone what we need for the async task
-        let config = self.config.clone();
         let status = Arc::clone(&self.status);
         let mutex = Arc::clone(&self.initialization_mutex);
         let event_callback = Arc::clone(&self.event_callback);
@@ -217,6 +217,72 @@ impl AsyncMcpManager {
         }
 
         Ok(())
+    }
+
+    pub(crate) fn config(&self) -> McpClientConfig {
+        match self.config.read() {
+            Ok(config) => config.clone(),
+            Err(poisoned) => {
+                warn!("MCP config lock was poisoned; continuing with last known value");
+                poisoned.into_inner().clone()
+            }
+        }
+    }
+
+    pub(crate) async fn reconfigure(&self, config: McpClientConfig) -> Result<()> {
+        if let Ok(mut guard) = self.init_task.lock()
+            && let Some(task) = guard.take()
+        {
+            task.abort();
+        }
+
+        if let McpInitStatus::Ready { client } = self.get_status().await {
+            client.shutdown().await?;
+        }
+
+        {
+            let mut guard = match self.config.write() {
+                Ok(config_guard) => config_guard,
+                Err(poisoned) => {
+                    warn!("MCP config lock was poisoned during reconfigure; recovering");
+                    poisoned.into_inner()
+                }
+            };
+            *guard = config.clone();
+        }
+
+        let mut status_guard = self.status.write().await;
+        *status_guard = if config.enabled {
+            McpInitStatus::Initializing {
+                progress: "MCP runtime reconfigured; activation pending".to_string(),
+            }
+        } else {
+            McpInitStatus::Disabled
+        };
+        Ok(())
+    }
+
+    pub(crate) async fn reconfigure_active_runtime(&self, config: McpClientConfig) -> Result<bool> {
+        let should_restart = self.has_running_initialization_task()
+            || matches!(self.get_status().await, McpInitStatus::Ready { .. });
+
+        self.reconfigure(config).await?;
+
+        if should_restart {
+            self.start_initialization()?;
+        }
+
+        Ok(should_restart)
+    }
+
+    fn has_running_initialization_task(&self) -> bool {
+        if let Ok(guard) = self.init_task.lock()
+            && let Some(task) = guard.as_ref()
+        {
+            !task.is_finished()
+        } else {
+            false
+        }
     }
 
     async fn initialize_mcp_client(
@@ -422,6 +488,112 @@ mod tests {
         } else {
             panic!("failed to lock init_task");
         }
+    }
+
+    #[tokio::test]
+    async fn reconfigure_active_runtime_restarts_running_initialization() {
+        let config = McpClientConfig {
+            enabled: true,
+            ..McpClientConfig::default()
+        };
+        let event_callback: Arc<dyn Fn(McpEvent) + Send + Sync> = Arc::new(|_event| {});
+        let manager = AsyncMcpManager::new(
+            config.clone(),
+            true,
+            AskForApproval::OnRequest,
+            event_callback,
+        );
+        let initialization_guard = manager.initialization_mutex.lock().await;
+
+        let blocker = tokio::spawn(async {
+            tokio::time::sleep(Duration::from_secs(60)).await;
+        });
+        let blocker_id = blocker.id();
+        if let Ok(mut guard) = manager.init_task.lock() {
+            *guard = Some(blocker);
+        }
+
+        let restarted = manager
+            .reconfigure_active_runtime(config)
+            .await
+            .expect("reconfigure should succeed");
+
+        assert!(restarted);
+        if let Ok(mut guard) = manager.init_task.lock() {
+            let task = guard
+                .as_ref()
+                .expect("active initialization should be restarted");
+            assert_ne!(task.id(), blocker_id);
+            assert!(!task.is_finished());
+            if let Some(task) = guard.take() {
+                task.abort();
+            }
+        } else {
+            panic!("failed to lock init_task");
+        }
+        drop(initialization_guard);
+    }
+
+    #[tokio::test]
+    async fn reconfigure_active_runtime_restarts_ready_client_without_registry_attachment() {
+        let config = McpClientConfig {
+            enabled: true,
+            ..McpClientConfig::default()
+        };
+        let event_callback: Arc<dyn Fn(McpEvent) + Send + Sync> = Arc::new(|_event| {});
+        let manager = AsyncMcpManager::new(
+            config.clone(),
+            true,
+            AskForApproval::OnRequest,
+            event_callback,
+        );
+        *manager.status.write().await = McpInitStatus::Ready {
+            client: Arc::new(McpClient::new(config.clone())),
+        };
+        let initialization_guard = manager.initialization_mutex.lock().await;
+
+        let restarted = manager
+            .reconfigure_active_runtime(config)
+            .await
+            .expect("reconfigure should succeed");
+
+        assert!(restarted);
+        if let Ok(mut guard) = manager.init_task.lock() {
+            let task = guard
+                .as_ref()
+                .expect("ready client should restart initialization after reconfigure");
+            assert!(!task.is_finished());
+            if let Some(task) = guard.take() {
+                task.abort();
+            }
+        } else {
+            panic!("failed to lock init_task");
+        }
+        drop(initialization_guard);
+    }
+
+    #[tokio::test]
+    async fn reconfigure_active_runtime_preserves_manual_activation_pending() {
+        let config = McpClientConfig {
+            enabled: true,
+            ..McpClientConfig::default()
+        };
+        let event_callback: Arc<dyn Fn(McpEvent) + Send + Sync> = Arc::new(|_event| {});
+        let manager = AsyncMcpManager::new(
+            config.clone(),
+            true,
+            AskForApproval::OnRequest,
+            event_callback,
+        );
+
+        let restarted = manager
+            .reconfigure_active_runtime(config)
+            .await
+            .expect("reconfigure should succeed");
+
+        assert!(!restarted);
+        assert!(manager.init_task.lock().is_ok_and(|guard| guard.is_none()));
+        assert!(manager.get_status().await.is_initializing());
     }
 
     #[tokio::test]

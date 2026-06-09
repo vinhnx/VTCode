@@ -18,6 +18,7 @@ use vtcode_core::tools::terminal_app::{EditorLaunchConfig, TerminalAppLauncher};
 use vtcode_core::ui::theme;
 use vtcode_core::ui::{inline_theme_from_core_styles, to_tui_appearance};
 use vtcode_core::utils::ansi::MessageStyle;
+use vtcode_core::build_primary_agent_runtime_config;
 
 use crate::agent::runloop::prompt::refine_and_enrich_prompt;
 use crate::agent::runloop::unified::async_mcp_manager::{
@@ -28,7 +29,8 @@ use crate::agent::runloop::unified::interactive_features::{
     PromptSuggestionSource, generate_inline_prompt_suggestion,
 };
 use crate::agent::runloop::unified::session_setup::{
-    apply_ide_context_snapshot, ide_context_status_label_from_bridge,
+    active_deferred_tool_policy, apply_ide_context_snapshot, ide_context_status_label_from_bridge,
+    refresh_tool_snapshot,
 };
 use crate::agent::runloop::unified::status_line::InputStatusState;
 use crate::agent::runloop::unified::turn::session::slash_commands::run_with_event_loop_suspended;
@@ -730,11 +732,11 @@ pub(super) async fn resolve_inline_loop_action(
         InlineLoopAction::Continue => InlineLoopActionResolution::ContinueLoop,
         InlineLoopAction::Submit(text) => InlineLoopActionResolution::Submit(text),
         InlineLoopAction::CyclePrimaryAgent => {
-            handle_cycle_primary_agent(ctx).await?;
+            handle_cycle_primary_agent(ctx, state).await?;
             InlineLoopActionResolution::ContinueLoop
         }
         InlineLoopAction::SelectPrimaryAgent { name } => {
-            handle_select_primary_agent(ctx, name).await?;
+            handle_select_primary_agent(ctx, state, name).await?;
             InlineLoopActionResolution::ContinueLoop
         }
         InlineLoopAction::RequestInlinePromptSuggestion(draft) => {
@@ -817,12 +819,15 @@ pub(super) async fn resolve_inline_loop_action(
     Ok(resolution)
 }
 
-async fn handle_cycle_primary_agent(ctx: &mut InteractionLoopContext<'_>) -> Result<()> {
+async fn handle_cycle_primary_agent(
+    ctx: &mut InteractionLoopContext<'_>,
+    state: &mut InteractionState<'_>,
+) -> Result<()> {
     let Some(specs) = load_primary_agent_specs_or_report(ctx).await? else {
         return Ok(());
     };
     match next_primary_agent_name(ctx.active_primary_agent.active(), &specs) {
-        Some(name) => handle_select_primary_agent(ctx, Some(name)).await,
+        Some(name) => handle_select_primary_agent(ctx, state, Some(name)).await,
         None => {
             ctx.renderer
                 .line(MessageStyle::Error, "No primary agents are available.")?;
@@ -833,6 +838,7 @@ async fn handle_cycle_primary_agent(ctx: &mut InteractionLoopContext<'_>) -> Res
 
 async fn handle_select_primary_agent(
     ctx: &mut InteractionLoopContext<'_>,
+    state: &mut InteractionState<'_>,
     name: Option<String>,
 ) -> Result<()> {
     let Some(name) = name else {
@@ -844,6 +850,7 @@ async fn handle_select_primary_agent(
             .reset_to_default_from_specs(&specs)
             .display_name
             .clone();
+        sync_primary_agent_mcp_runtime(ctx, state).await?;
         set_primary_agent_display(ctx, display_name);
         return Ok(());
     };
@@ -854,6 +861,7 @@ async fn handle_select_primary_agent(
     match ctx.active_primary_agent.select_from_specs(&specs, &name) {
         Ok(active) => {
             let display_name = active.display_name.clone();
+            sync_primary_agent_mcp_runtime(ctx, state).await?;
             set_primary_agent_display(ctx, display_name);
         }
         Err(vtcode_core::primary_agent::PrimaryAgentResolutionError::UnknownAgent {
@@ -864,6 +872,48 @@ async fn handle_select_primary_agent(
                 &format!("Unknown primary agent '{requested}'."),
             )?;
         }
+    }
+
+    Ok(())
+}
+
+async fn sync_primary_agent_mcp_runtime(
+    ctx: &mut InteractionLoopContext<'_>,
+    state: &mut InteractionState<'_>,
+) -> Result<()> {
+    let (Some(manager), Some(cfg)) = (ctx.async_mcp_manager.as_ref(), ctx.vt_cfg.as_ref()) else {
+        return Ok(());
+    };
+    if !cfg.mcp.enabled {
+        return Ok(());
+    }
+
+    let merged_mcp = build_primary_agent_runtime_config(cfg, ctx.active_primary_agent.active()).mcp;
+    let restarted_mcp_runtime = manager.reconfigure_active_runtime(merged_mcp).await?;
+    ctx.tool_registry.clear_mcp_client().await;
+    *state.mcp_catalog_initialized = false;
+    *state.pending_mcp_refresh = true;
+
+    let tool_documentation_mode = cfg.agent.tool_documentation_mode;
+    let deferred_tool_policy = active_deferred_tool_policy(
+        ctx.config,
+        ctx.vt_cfg.as_ref(),
+        &**ctx.provider_client,
+    );
+    refresh_tool_snapshot(
+        ctx.tool_registry,
+        ctx.tools,
+        ctx.tool_catalog,
+        ctx.config,
+        ctx.vt_cfg.as_ref(),
+        tool_documentation_mode,
+        &deferred_tool_policy,
+    )
+    .await;
+    ctx.tool_catalog.mark_pending_refresh("primary_agent_mcp_reconfigure");
+
+    if restarted_mcp_runtime {
+        tracing::debug!("Restarted active MCP runtime after primary agent switch");
     }
 
     Ok(())

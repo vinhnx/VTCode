@@ -24,6 +24,8 @@ pub struct ResolvedAgentRuntimeView {
     pub canonical_name: String,
     pub display_name: String,
     pub description: String,
+    pub color: Option<String>,
+    pub aliases: Vec<String>,
     pub instructions: String,
     pub tools: Option<Vec<String>>,
     pub disallowed_tools: Vec<String>,
@@ -46,6 +48,8 @@ impl ResolvedAgentRuntimeView {
             canonical_name: spec.name.clone(),
             display_name: spec.name.clone(),
             description: spec.description.clone(),
+            color: spec.color.clone(),
+            aliases: spec.aliases.clone(),
             instructions: spec.prompt.clone(),
             tools: spec.tools.clone(),
             disallowed_tools: spec.disallowed_tools.clone(),
@@ -427,7 +431,13 @@ fn inline_mcp_provider(name: &str, value: &serde_json::Value) -> Option<McpProvi
         serde_json::Value::String(name.to_string()),
     );
     for (key, value) in object {
+        if key == "type" {
+            continue;
+        }
         payload.insert(key.clone(), value.clone());
+    }
+    if payload.contains_key("command") && !payload.contains_key("args") {
+        payload.insert("args".to_string(), serde_json::Value::Array(Vec::new()));
     }
     serde_json::from_value(serde_json::Value::Object(payload)).ok()
 }

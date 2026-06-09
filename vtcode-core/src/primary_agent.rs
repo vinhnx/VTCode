@@ -5,10 +5,13 @@ use std::sync::Arc;
 
 use vtcode_config::constants::defaults::DEFAULT_PRIMARY_AGENT_NAME;
 use vtcode_config::{
-    DiscoveredSubagents, PermissionMode, SubagentSource, SubagentSpec, builtin_primary_build_agent,
+    DiscoveredSubagents, McpProviderConfig, PermissionMode, SubagentMcpServer, SubagentSource,
+    SubagentSpec, builtin_primary_build_agent,
 };
 
+use crate::config::{ReasoningEffortLevel, VTCodeConfig};
 use crate::llm::provider::ToolDefinition;
+use crate::prompts::PromptContext;
 use crate::subagents::ResolvedAgentRuntimeView;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -18,16 +21,21 @@ pub struct ActivePrimaryAgentSpecIdentity {
     pub file_path: Option<PathBuf>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ActivePrimaryAgent {
     pub identity: ActivePrimaryAgentSpecIdentity,
     pub display_name: String,
+    pub description: String,
+    pub color: Option<String>,
+    pub aliases: Vec<String>,
     pub instructions: String,
     pub tools: Option<Vec<String>>,
     pub disallowed_tools: Vec<String>,
     pub permission_mode: Option<PermissionMode>,
     pub model: Option<String>,
     pub reasoning_effort: Option<String>,
+    pub skills: Vec<String>,
+    pub mcp_servers: Vec<SubagentMcpServer>,
 }
 
 impl ActivePrimaryAgent {
@@ -45,17 +53,22 @@ impl ActivePrimaryAgent {
                 file_path: runtime.file_path.clone(),
             },
             display_name: runtime.display_name.clone(),
+            description: runtime.description.clone(),
+            color: runtime.color.clone(),
+            aliases: runtime.aliases.clone(),
             instructions: runtime.instructions.clone(),
             tools: runtime.tools.clone(),
             disallowed_tools: runtime.disallowed_tools.clone(),
             permission_mode: runtime.permission_mode,
             model: runtime.model.clone(),
             reasoning_effort: runtime.reasoning_effort.clone(),
+            skills: runtime.skills.clone(),
+            mcp_servers: runtime.mcp_servers.clone(),
         }
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ActivePrimaryAgentState {
     active: ActivePrimaryAgent,
 }
@@ -225,6 +238,34 @@ pub fn apply_primary_agent_tool_policy(
     (!filtered.is_empty()).then(|| Arc::new(filtered))
 }
 
+#[must_use]
+pub fn build_primary_agent_runtime_config(
+    parent: &VTCodeConfig,
+    agent: &ActivePrimaryAgent,
+) -> VTCodeConfig {
+    let mut config = parent.clone();
+    if let Some(mode) = agent.permission_mode {
+        config.permissions.default_mode =
+            clamp_primary_permission_mode(parent.permissions.default_mode, Some(mode));
+    }
+    if let Some(model) = agent.model.as_ref() {
+        config.agent.default_model = model.clone();
+    }
+    if let Some(reasoning_effort) = agent
+        .reasoning_effort
+        .as_deref()
+        .and_then(ReasoningEffortLevel::parse)
+    {
+        config.agent.reasoning_effort = reasoning_effort;
+    }
+    merge_primary_mcp_servers(&mut config, agent.mcp_servers.as_slice());
+    config
+}
+
+pub fn apply_primary_agent_prompt_context(context: &mut PromptContext, agent: &ActivePrimaryAgent) {
+    context.replace_available_skills_with_named(agent.skills.as_slice());
+}
+
 fn permission_rank(mode: PermissionMode) -> u8 {
     match mode {
         PermissionMode::DontAsk => 0,
@@ -240,8 +281,52 @@ fn normalise_tool_name(tool_name: &str) -> String {
     tool_name.trim().to_ascii_lowercase()
 }
 
+fn merge_primary_mcp_servers(config: &mut VTCodeConfig, servers: &[SubagentMcpServer]) {
+    for server in servers {
+        match server {
+            SubagentMcpServer::Named(_) => {}
+            SubagentMcpServer::Inline(definition) => {
+                for (name, value) in definition {
+                    if config
+                        .mcp
+                        .providers
+                        .iter()
+                        .any(|provider| provider.name == *name)
+                    {
+                        continue;
+                    }
+                    if let Some(provider) = inline_mcp_provider(name, value) {
+                        config.mcp.providers.push(provider);
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn inline_mcp_provider(name: &str, value: &serde_json::Value) -> Option<McpProviderConfig> {
+    let object = value.as_object()?;
+    let mut payload = serde_json::Map::with_capacity(object.len().saturating_add(1));
+    payload.insert(
+        "name".to_string(),
+        serde_json::Value::String(name.to_string()),
+    );
+    for (key, value) in object {
+        if key == "type" {
+            continue;
+        }
+        payload.insert(key.clone(), value.clone());
+    }
+    if payload.contains_key("command") && !payload.contains_key("args") {
+        payload.insert("args".to_string(), serde_json::Value::Array(Vec::new()));
+    }
+    serde_json::from_value(serde_json::Value::Object(payload)).ok()
+}
+
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+
     use serde_json::json;
     use tempfile::TempDir;
     use vtcode_config::{
@@ -258,6 +343,8 @@ mod tests {
 
         assert_eq!(active.identity.name, "planner");
         assert_eq!(active.display_name, "planner");
+        assert_eq!(active.description, "planner description");
+        assert_eq!(active.color.as_deref(), Some("blue"));
         assert_eq!(active.instructions, "planner instructions");
         assert_eq!(active.tools, Some(vec!["unified_search".to_string()]));
         assert_eq!(active.disallowed_tools, vec!["unified_file".to_string()]);
@@ -328,18 +415,28 @@ mod tests {
 
         assert_eq!(active.identity.name, "worker");
         assert_eq!(active.display_name, "worker");
+        assert_eq!(active.description, "worker description");
+        assert_eq!(active.color.as_deref(), Some("blue"));
+        assert_eq!(active.aliases, vec!["builder".to_string()]);
         assert_eq!(active.instructions, "worker instructions");
         assert_eq!(active.tools, Some(vec!["unified_search".to_string()]));
         assert_eq!(active.disallowed_tools, vec!["unified_file".to_string()]);
         assert_eq!(active.permission_mode, Some(PermissionMode::Plan));
         assert_eq!(active.model.as_deref(), Some("gpt-5.1"));
         assert_eq!(active.reasoning_effort.as_deref(), Some("high"));
+        assert_eq!(active.skills, vec!["rust".to_string()]);
+        assert_eq!(
+            active.mcp_servers,
+            vec![SubagentMcpServer::Named("filesystem".to_string())]
+        );
     }
 
     #[test]
     fn primary_runtime_adapter_uses_shared_resolved_view_for_overlapping_fields() {
         let mut spec = test_spec("worker");
         spec.description = "Worker display metadata".to_string();
+        spec.color = Some("green".to_string());
+        spec.aliases = vec!["builder".to_string()];
         spec.skills = vec!["rust".to_string(), "repo".to_string()];
         spec.mcp_servers = vec![SubagentMcpServer::Named("filesystem".to_string())];
         spec.hooks = Some(HooksConfig::default());
@@ -351,6 +448,8 @@ mod tests {
         assert_eq!(runtime.canonical_name, "worker");
         assert_eq!(runtime.display_name, "worker");
         assert_eq!(runtime.description, "Worker display metadata");
+        assert_eq!(runtime.color.as_deref(), Some("green"));
+        assert_eq!(runtime.aliases, vec!["builder".to_string()]);
         assert_eq!(runtime.skills, vec!["rust".to_string(), "repo".to_string()]);
         assert_eq!(runtime.mcp_servers.len(), 1);
         assert!(runtime.hooks.is_some());
@@ -358,12 +457,17 @@ mod tests {
         assert!(runtime.read_only);
         assert_eq!(active.identity.name, runtime.canonical_name);
         assert_eq!(active.display_name, runtime.display_name);
+        assert_eq!(active.description, runtime.description);
+        assert_eq!(active.color, runtime.color);
+        assert_eq!(active.aliases, runtime.aliases);
         assert_eq!(active.instructions, runtime.instructions);
         assert_eq!(active.tools, runtime.tools);
         assert_eq!(active.disallowed_tools, runtime.disallowed_tools);
         assert_eq!(active.permission_mode, runtime.permission_mode);
         assert_eq!(active.model, runtime.model);
         assert_eq!(active.reasoning_effort, runtime.reasoning_effort);
+        assert_eq!(active.skills, runtime.skills);
+        assert_eq!(active.mcp_servers, runtime.mcp_servers);
     }
 
     #[test]
@@ -490,6 +594,91 @@ mod tests {
             clamp_primary_permission_mode(PermissionMode::Plan, None),
             PermissionMode::Plan
         );
+    }
+
+    #[test]
+    fn build_primary_agent_runtime_config_preserves_baseline_fields_and_merges_mcp() {
+        let mut parent = VTCodeConfig::default();
+        parent.permissions.default_mode = PermissionMode::Default;
+        parent.agent.default_model = "parent-model".to_string();
+        parent.mcp.providers.push(
+            serde_json::from_value(json!({
+                "name": "global",
+                "command": "global-mcp",
+                "args": []
+            }))
+            .expect("global provider"),
+        );
+
+        let mut spec = test_spec("worker");
+        spec.permission_mode = Some(PermissionMode::Auto);
+        spec.model = Some("agent-model".to_string());
+        spec.reasoning_effort = Some("low".to_string());
+        spec.mcp_servers = vec![SubagentMcpServer::Inline(BTreeMap::from([
+            (
+                "global".to_string(),
+                json!({
+                    "type": "stdio",
+                    "command": "duplicate-mcp"
+                }),
+            ),
+            (
+                "local".to_string(),
+                json!({
+                    "type": "stdio",
+                    "command": "local-mcp"
+                }),
+            ),
+        ]))];
+        let active = ActivePrimaryAgent::from_spec(&spec);
+
+        let runtime = build_primary_agent_runtime_config(&parent, &active);
+
+        assert_eq!(runtime.permissions.default_mode, PermissionMode::Default);
+        assert_eq!(runtime.agent.default_model, "agent-model");
+        assert_eq!(runtime.agent.reasoning_effort, ReasoningEffortLevel::Low);
+        assert_eq!(runtime.mcp.providers.len(), 2);
+        assert_eq!(runtime.mcp.providers[0].name, "global");
+        assert_eq!(runtime.mcp.providers[1].name, "local");
+    }
+
+    #[test]
+    fn active_primary_state_recomputes_skills_mcp_and_metadata_on_switch() {
+        let mut first = test_spec("first");
+        first.description = "First metadata".to_string();
+        first.color = Some("red".to_string());
+        first.aliases = vec!["one".to_string()];
+        first.skills = vec!["rust".to_string()];
+        first.mcp_servers = vec![SubagentMcpServer::Inline(BTreeMap::from([(
+            "first-mcp".to_string(),
+            json!({
+                "type": "stdio",
+                "command": "first-mcp"
+            }),
+        )]))];
+        let second = test_spec("second");
+        let specs = vec![first, second];
+        let mut state = ActivePrimaryAgentState::default();
+
+        state
+            .select_from_specs(&specs, "one")
+            .expect("selected first by alias");
+        assert_eq!(state.active().identity.name, "first");
+        assert_eq!(state.active().description, "First metadata");
+        assert_eq!(state.active().color.as_deref(), Some("red"));
+        assert_eq!(state.active().aliases, vec!["one".to_string()]);
+        assert_eq!(state.active().skills, vec!["rust".to_string()]);
+        assert_eq!(state.active().mcp_servers.len(), 1);
+
+        state
+            .select_from_specs(&specs, "second")
+            .expect("selected second");
+        assert_eq!(state.active().identity.name, "second");
+        assert_eq!(state.active().description, "second description");
+        assert_eq!(state.active().color.as_deref(), Some("blue"));
+        assert!(state.active().aliases.is_empty());
+        assert!(state.active().skills.is_empty());
+        assert!(state.active().mcp_servers.is_empty());
     }
 
     fn test_spec(name: &str) -> SubagentSpec {

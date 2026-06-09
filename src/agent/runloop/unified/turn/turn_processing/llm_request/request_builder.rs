@@ -18,12 +18,13 @@ use vtcode_core::llm::provider::{
     supports_responses_chaining,
 };
 use vtcode_core::prompts::{
-    append_runtime_tool_prompt_sections, temporal::generate_temporal_context,
+    PromptContext, append_runtime_tool_prompt_sections, temporal::generate_temporal_context,
     upsert_harness_limits_section,
 };
 use vtcode_core::tools::handlers::anthropic_native_memory_enabled_for_runtime;
 use vtcode_core::{
-    ActivePrimaryAgent, apply_primary_agent_tool_policy, clamp_primary_permission_mode,
+    ActivePrimaryAgent, apply_primary_agent_prompt_context, apply_primary_agent_tool_policy,
+    clamp_primary_permission_mode,
 };
 
 use super::metrics::{ToolCatalogCacheMetrics, emit_tool_catalog_cache_metrics};
@@ -202,6 +203,8 @@ async fn build_prompt_output(
         )
         .await?;
 
+    append_active_primary_agent_skills(&mut system_prompt, ctx, &input.turn.active_primary_agent);
+
     upsert_harness_limits_section(
         &mut system_prompt,
         input.turn.execution.max_tool_calls,
@@ -275,6 +278,47 @@ fn apply_primary_agent_policy_to_tool_snapshot(
         filtered,
         snapshot.cache_hit,
     )
+}
+
+fn active_primary_agent_prompt_context(
+    ctx: &TurnProcessingContext<'_>,
+    agent: &ActivePrimaryAgent,
+) -> PromptContext {
+    let mut prompt_context =
+        PromptContext::from_workspace_tools(ctx.config.workspace.as_path(), std::iter::empty::<String>());
+    apply_primary_agent_prompt_context(&mut prompt_context, agent);
+    prompt_context
+}
+
+fn append_active_primary_agent_skills(
+    system_prompt: &mut String,
+    ctx: &TurnProcessingContext<'_>,
+    agent: &ActivePrimaryAgent,
+) {
+    if agent.skills.is_empty() {
+        return;
+    }
+
+    let prompt_context = active_primary_agent_prompt_context(ctx, agent);
+    let mut lines = Vec::new();
+    lines.push("## Active Primary Agent Skills".to_string());
+    lines.push(
+        "These skills are scoped to the active primary agent for this request.".to_string(),
+    );
+
+    if prompt_context.available_skill_metadata.is_empty() {
+        for skill in &agent.skills {
+            lines.push(format!("- {skill}"));
+        }
+    } else {
+        let mut skills = prompt_context.available_skill_metadata;
+        skills.sort_by(|left, right| left.name.cmp(&right.name));
+        for skill in skills {
+            lines.push(format!("- {}: {}", skill.name, skill.description));
+        }
+    }
+
+    let _ = writeln!(system_prompt, "\n{}", lines.join("\n"));
 }
 
 fn validate_prompt_output_alignment(
@@ -632,6 +676,20 @@ async fn render_primary_agent_runtime_context(
             "- Primary-agent disallowed tools: {}",
             agent.disallowed_tools.join(", ")
         ));
+    }
+    if !agent.skills.is_empty() {
+        let prompt_context = active_primary_agent_prompt_context(ctx, agent);
+        if prompt_context.available_skill_metadata.is_empty() {
+            lines.push(format!("- Active primary skills: {}", agent.skills.join(", ")));
+        } else {
+            let mut names = prompt_context
+                .available_skill_metadata
+                .iter()
+                .map(|skill| skill.name.as_str())
+                .collect::<Vec<_>>();
+            names.sort_unstable();
+            lines.push(format!("- Active primary skills: {}", names.join(", ")));
+        }
     }
     if let Some(cfg) = ctx.vt_cfg
         && cfg.agent.include_temporal_context
@@ -1478,6 +1536,52 @@ mod tests {
         assert!(second_runtime.contains("Reviewer instructions."));
         assert!(first_runtime.contains("Current date and time"));
         assert!(second_runtime.contains("Current date and time"));
+    }
+
+    #[tokio::test]
+    async fn active_primary_agent_skills_are_request_scoped_on_switch() {
+        let mut backing = TestTurnProcessingBacking::new(4).await;
+        let mut first = test_primary_agent_spec("planner", "Planner instructions.");
+        first.skills = vec!["alpha".to_string()];
+        let mut second = test_primary_agent_spec("reviewer", "Reviewer instructions.");
+        second.skills = vec!["beta".to_string()];
+
+        backing.select_primary_agent_from_specs(std::slice::from_ref(&first), "planner");
+        let first_built = {
+            let mut ctx = backing.turn_processing_context();
+            ctx.working_history
+                .push(uni::Message::user("hello".to_string()));
+            let snapshot = capture_turn_request_snapshot(&mut ctx, "noop-model", false);
+            build_turn_request(&mut ctx, 1, "noop-model", &snapshot, Some(320), None, false)
+                .await
+                .expect("first request should build")
+        };
+
+        backing.select_primary_agent_from_specs(std::slice::from_ref(&second), "reviewer");
+        let second_built = {
+            let mut ctx = backing.turn_processing_context();
+            ctx.working_history.clear();
+            ctx.working_history
+                .push(uni::Message::user("hello".to_string()));
+            let snapshot = capture_turn_request_snapshot(&mut ctx, "noop-model", false);
+            build_turn_request(&mut ctx, 2, "noop-model", &snapshot, Some(320), None, false)
+                .await
+                .expect("second request should build")
+        };
+
+        let first_system = first_built.request.system_prompt.as_ref().expect("system");
+        let second_system = second_built.request.system_prompt.as_ref().expect("system");
+        assert!(first_system.contains("## Active Primary Agent Skills"));
+        assert!(first_system.contains("- alpha"));
+        assert!(!first_system.contains("- beta"));
+        assert!(second_system.contains("## Active Primary Agent Skills"));
+        assert!(second_system.contains("- beta"));
+        assert!(!second_system.contains("- alpha"));
+
+        let first_runtime = first_built.request.messages[1].content.as_text();
+        let second_runtime = second_built.request.messages[1].content.as_text();
+        assert!(first_runtime.contains("- Active primary skills: alpha"));
+        assert!(second_runtime.contains("- Active primary skills: beta"));
     }
 
     #[tokio::test]
