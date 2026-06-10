@@ -12,6 +12,9 @@ use std::sync::LazyLock;
 use crate::llm::provider::{ContentPart, MessageContent};
 use crate::utils::file_input::read_input_file_any_path;
 use crate::utils::image_processing::{read_image_file_any_path, read_image_from_url};
+use vtcode_commons::fs::{
+    is_windows_absolute_path, trim_trailing_image_path_str, unescape_whitespace,
+};
 use vtcode_commons::paths::is_safe_relative_path;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -447,7 +450,7 @@ fn add_spacey_absolute_path_matches(
         // The regex may greedily consume trailing text after the image extension.
         // Try progressively shorter suffixes to find the actual image path.
         let raw = path_match.as_str();
-        let trimmed = trim_trailing_image_path_text(raw);
+        let trimmed = trim_trailing_image_path_str(raw);
         let end = start + trimmed.len();
 
         matches.push(RawPathMatch {
@@ -456,34 +459,6 @@ fn add_spacey_absolute_path_matches(
             raw: trimmed.to_string(),
         });
     }
-}
-
-/// Trim trailing text from a raw image path match.
-///
-/// The regex may match trailing words after the image extension (e.g., the
-/// "can you see" in "/path/to/image.png can you see").  This function
-/// tries progressively shorter suffixes to find the longest valid image path.
-fn trim_trailing_image_path_text(raw: &str) -> &str {
-    // Fast path: the entire match ends with the extension and nothing after.
-    if looks_like_image_path(raw) {
-        return raw;
-    }
-
-    // Walk backwards through whitespace-delimited tokens, trying each prefix.
-    // For "/path/to/Screenshot 2026-02-06 at 3.39.48 PM.png can you see":
-    //   Try: "/path/to/Screenshot 2026-02-06 at 3.39.48 PM.png can you" → no
-    //   Try: "/path/to/Screenshot 2026-02-06 at 3.39.48 PM.png can"    → no
-    //   Try: "/path/to/Screenshot 2026-02-06 at 3.39.48 PM.png"        → yes
-    let mut candidate = raw.trim_end();
-    while let Some(last_space) = candidate.rfind(' ') {
-        candidate = &candidate[..last_space];
-        if looks_like_image_path(candidate) {
-            return candidate;
-        }
-    }
-
-    // Nothing worked; return the original match and let the caller handle it.
-    raw
 }
 
 fn ranges_overlap(start: usize, end: usize, other_start: usize, other_end: usize) -> bool {
@@ -626,28 +601,6 @@ fn resolve_image_path(token: &str, base_dir: &Path) -> Option<PathBuf> {
     }
 
     Some(base_dir.join(candidate))
-}
-
-fn is_windows_absolute_path(path: &str) -> bool {
-    let bytes = path.as_bytes();
-    bytes.len() > 2 && bytes[1] == b':' && (bytes[2] == b'\\' || bytes[2] == b'/')
-}
-
-fn unescape_whitespace(token: &str) -> String {
-    let mut result = String::with_capacity(token.len());
-    let mut chars = token.chars().peekable();
-    while let Some(ch) = chars.next() {
-        if ch == '\\'
-            && let Some(next) = chars.peek()
-            && next.is_ascii_whitespace()
-        {
-            result.push(*next);
-            chars.next();
-            continue;
-        }
-        result.push(ch);
-    }
-    result
 }
 
 fn overlaps_range(start: usize, end: usize, ranges: &[(usize, usize)]) -> bool {
@@ -1142,7 +1095,7 @@ mod tests {
         // The regex matches; the caller trims "2 more text" and validates the path.
         assert_eq!(captures.len(), 1);
         let matched = captures[0].get(1).unwrap().as_str();
-        let trimmed = trim_trailing_image_path_text(matched);
+        let trimmed = trim_trailing_image_path_str(matched);
         assert!(
             trimmed.ends_with(".png"),
             "Trimmed path should end with .png, got: {trimmed}"

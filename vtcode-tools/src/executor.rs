@@ -186,7 +186,7 @@ impl CachedToolExecutor {
         let owned_args = Arc::clone(&args);
         let req = ToolRequest {
             id: next_request_id(),
-            tool_name: tool_name.to_string(),
+            tool_name: tool_name.into(),
             args: (*owned_args).clone(),
             metadata: Some(Default::default()),
         };
