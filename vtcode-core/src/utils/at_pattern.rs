@@ -158,6 +158,10 @@ pub async fn parse_at_patterns_with_options(
             }
             PathMatch::Raw { raw, .. } => {
                 if let Some(image_path) = resolve_image_path(&raw, base_dir) {
+                    if !image_path.exists() {
+                        parts.push(ContentPart::text(raw));
+                        continue;
+                    }
                     match read_image_file_any_path(&image_path).await {
                         Ok(image_data) => {
                             parts.push(ContentPart::Image {
@@ -406,7 +410,7 @@ static ABSOLUTE_IMAGE_PATH_REGEX: LazyLock<Regex> = LazyLock::new(|| {
         (?:^|[\s\(\[\{<\"'`])
         (
             (?:file://)?(?:~/|[A-Za-z]:[\\/]|/)
-            [^\n]*?
+            [^\n]+?
             \.(?:png|jpe?g|gif|bmp|webp|tiff?|svg)
         )"#,
     ) {
@@ -426,25 +430,60 @@ fn add_spacey_absolute_path_matches(
             continue;
         };
         let start = path_match.start();
-        let end = path_match.end();
-        if overlaps_range(start, end, protected_ranges) {
+        let full_end = path_match.end();
+        if overlaps_range(start, full_end, protected_ranges) {
             continue;
         }
-        if overlaps_range(start, end, quote_ranges) {
+        if overlaps_range(start, full_end, quote_ranges) {
             continue;
         }
         if matches
             .iter()
-            .any(|existing| ranges_overlap(start, end, existing.start, existing.end))
+            .any(|existing| ranges_overlap(start, full_end, existing.start, existing.end))
         {
             continue;
         }
+
+        // The regex may greedily consume trailing text after the image extension.
+        // Try progressively shorter suffixes to find the actual image path.
+        let raw = path_match.as_str();
+        let trimmed = trim_trailing_image_path_text(raw);
+        let end = start + trimmed.len();
+
         matches.push(RawPathMatch {
             start,
             end,
-            raw: path_match.as_str().to_string(),
+            raw: trimmed.to_string(),
         });
     }
+}
+
+/// Trim trailing text from a raw image path match.
+///
+/// The regex may match trailing words after the image extension (e.g., the
+/// "can you see" in "/path/to/image.png can you see").  This function
+/// tries progressively shorter suffixes to find the longest valid image path.
+fn trim_trailing_image_path_text(raw: &str) -> &str {
+    // Fast path: the entire match ends with the extension and nothing after.
+    if looks_like_image_path(raw) {
+        return raw;
+    }
+
+    // Walk backwards through whitespace-delimited tokens, trying each prefix.
+    // For "/path/to/Screenshot 2026-02-06 at 3.39.48 PM.png can you see":
+    //   Try: "/path/to/Screenshot 2026-02-06 at 3.39.48 PM.png can you" → no
+    //   Try: "/path/to/Screenshot 2026-02-06 at 3.39.48 PM.png can"    → no
+    //   Try: "/path/to/Screenshot 2026-02-06 at 3.39.48 PM.png"        → yes
+    let mut candidate = raw.trim_end();
+    while let Some(last_space) = candidate.rfind(' ') {
+        candidate = &candidate[..last_space];
+        if looks_like_image_path(candidate) {
+            return candidate;
+        }
+    }
+
+    // Nothing worked; return the original match and let the caller handle it.
+    raw
 }
 
 fn ranges_overlap(start: usize, end: usize, other_start: usize, other_end: usize) -> bool {
@@ -1065,6 +1104,85 @@ mod tests {
         match result {
             MessageContent::Text(text) => assert_eq!(text, input),
             other => panic!("Expected plain text content, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn regex_does_not_match_trailing_text_after_extension() {
+        let input = "/Users/foo/Desktop/Screenshot 2026-02-06 at 3.39.48 PM.png can you see";
+        let captures: Vec<_> = ABSOLUTE_IMAGE_PATH_REGEX.captures_iter(input).collect();
+        assert_eq!(captures.len(), 1, "Should match exactly one image path");
+        let matched = captures[0].get(1).unwrap().as_str();
+        assert!(
+            !matched.contains("can you"),
+            "Match should not include trailing text, got: {matched}"
+        );
+        assert!(
+            matched.ends_with(".png"),
+            "Match should end with the image extension, got: {matched}"
+        );
+    }
+
+    #[test]
+    fn regex_matches_image_path_without_trailing_text() {
+        let input = "/Users/foo/Desktop/Screenshot 2026-02-06 at 3.39.48 PM.png";
+        let captures: Vec<_> = ABSOLUTE_IMAGE_PATH_REGEX.captures_iter(input).collect();
+        assert_eq!(captures.len(), 1);
+        let matched = captures[0].get(1).unwrap().as_str();
+        assert!(matched.ends_with(".png"));
+    }
+
+    #[test]
+    fn regex_does_not_match_extension_followed_by_word_char() {
+        // Without lookaheads, the regex cannot distinguish "image.png" + "2"
+        // from "image.png2". The trim-trailing-text post-processing handles
+        // the realistic case (space-separated trailing words).
+        let input = "/path/to/image.png2 more text";
+        let captures: Vec<_> = ABSOLUTE_IMAGE_PATH_REGEX.captures_iter(input).collect();
+        // The regex matches; the caller trims "2 more text" and validates the path.
+        assert_eq!(captures.len(), 1);
+        let matched = captures[0].get(1).unwrap().as_str();
+        let trimmed = trim_trailing_image_path_text(matched);
+        assert!(
+            trimmed.ends_with(".png"),
+            "Trimmed path should end with .png, got: {trimmed}"
+        );
+    }
+
+    #[test]
+    fn regex_matches_image_path_with_file_prefix() {
+        let input = "file:///Users/foo/image.png";
+        let captures: Vec<_> = ABSOLUTE_IMAGE_PATH_REGEX.captures_iter(input).collect();
+        assert_eq!(captures.len(), 1);
+        assert!(captures[0].get(1).unwrap().as_str().contains("image.png"));
+    }
+
+    #[tokio::test]
+    async fn test_raw_image_path_with_trailing_text_resolves_only_path() {
+        let temp_dir = TempDir::new().unwrap();
+        let image_path = temp_dir.path().join("screenshot.png");
+
+        let mut temp_file = std::io::BufWriter::new(std::fs::File::create(&image_path).unwrap());
+        temp_file
+            .write_all(&[
+                0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48,
+                0x44, 0x52,
+            ])
+            .unwrap();
+        temp_file.flush().unwrap();
+
+        let input = format!("see {} now", image_path.display());
+        let result = parse_at_patterns(&input, temp_dir.path()).await.unwrap();
+
+        match result {
+            MessageContent::Parts(parts) => {
+                let image_count = parts
+                    .iter()
+                    .filter(|p| matches!(p, ContentPart::Image { .. }))
+                    .count();
+                assert_eq!(image_count, 1, "Should detect exactly one image");
+            }
+            other => panic!("Expected multi-part content, got {other:?}"),
         }
     }
 }

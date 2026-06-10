@@ -1127,7 +1127,7 @@ static IMAGE_PATH_INLINE_REGEX: LazyLock<Regex> = LazyLock::new(|| {
               | /(?:[^\n/]+/)+
               | [A-Za-z]:[\\/](?:[^\n\\\/]+[\\/])+
             )
-            [^\n]*?
+            [^\n]+?
             \.(?:png|jpe?g|gif|bmp|webp|tiff?|svg)
         )"#,
     ) {
@@ -1143,10 +1143,14 @@ fn compact_image_placeholders(content: &str) -> Option<String> {
             continue;
         };
         let raw = path_match.as_str();
-        let Some(label) = image_label_for_path(raw) else {
+        // The regex may consume trailing text after the image extension.
+        // Try progressively shorter suffixes to find the actual image path.
+        let trimmed_raw = trim_trailing_image_text(raw);
+        let Some(label) = image_label_for_path(trimmed_raw) else {
             continue;
         };
-        matches.push((path_match.start(), path_match.end(), label));
+        let end = path_match.start() + trimmed_raw.len();
+        matches.push((path_match.start(), end, label));
     }
 
     if matches.is_empty() {
@@ -1189,6 +1193,25 @@ fn image_label_for_path(raw: &str) -> Option<String> {
         .and_then(|name| name.to_str())
         .unwrap_or(unescaped.as_str());
     Some(label.to_string())
+}
+
+/// Trim trailing text from a raw image path match.
+///
+/// The regex may greedily consume trailing words after the image extension.
+/// Try progressively shorter suffixes to find the longest valid image path.
+fn trim_trailing_image_text<'a>(raw: &'a str) -> &'a str {
+    let trimmed = raw.trim_end();
+    if is_image_path(Path::new(trimmed)) {
+        return trimmed;
+    }
+    let mut candidate = trimmed;
+    while let Some(last_space) = candidate.rfind(' ') {
+        candidate = &candidate[..last_space];
+        if is_image_path(Path::new(candidate)) {
+            return candidate;
+        }
+    }
+    raw
 }
 
 fn unescape_whitespace(token: &str) -> String {
