@@ -251,6 +251,36 @@ impl MessageContent {
         }
     }
 
+    /// Returns content with images stripped, preserving text and file parts.
+    /// Returns `None` if the content already contains no images.
+    pub fn without_images(&self) -> Option<MessageContent> {
+        match self {
+            MessageContent::Text(_) => None,
+            MessageContent::Parts(parts) => {
+                let has_image = parts.iter().any(|part| part.is_image());
+                if !has_image {
+                    return None;
+                }
+                let text_parts: Vec<ContentPart> = parts
+                    .iter()
+                    .filter(|part| !part.is_image())
+                    .cloned()
+                    .collect();
+                if text_parts.is_empty() {
+                    Some(MessageContent::Text(String::new()))
+                } else if text_parts.len() == 1 {
+                    if let ContentPart::Text { text } = &text_parts[0] {
+                        Some(MessageContent::Text(text.clone()))
+                    } else {
+                        Some(MessageContent::Parts(text_parts))
+                    }
+                } else {
+                    Some(MessageContent::Parts(text_parts))
+                }
+            }
+        }
+    }
+
     pub fn get_images(&self) -> Vec<&ContentPart> {
         match self {
             MessageContent::Text(_) => vec![],

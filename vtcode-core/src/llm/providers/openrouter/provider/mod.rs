@@ -1,5 +1,7 @@
 #![allow(clippy::collapsible_if)]
 
+use tracing::warn;
+
 use crate::config::TimeoutsConfig;
 use crate::config::constants::{env_vars, models, urls};
 use crate::config::core::{
@@ -196,6 +198,97 @@ impl OpenRouterProvider {
         sanitized
     }
 
+    fn request_includes_images(request: &LLMRequest) -> bool {
+        request.messages.iter().any(|msg| msg.content.has_images())
+    }
+
+    fn image_free_request(original: &LLMRequest) -> LLMRequest {
+        let mut sanitized = original.clone();
+        for message in &mut sanitized.messages {
+            if let Some(text_only) = message.content.without_images() {
+                message.content = text_only;
+            }
+        }
+        sanitized
+    }
+
+    /// Retry a request with a fallback payload. Returns `Ok(Some(response))` on
+    /// success, `Err` on rate-limit, and `Ok(None)` when the fallback also fails
+    /// (caller assembles the combined error).
+    async fn retry_with_fallback(
+        &self,
+        original_status: StatusCode,
+        original_error: &str,
+        fallback_request: &LLMRequest,
+        stream_override: Option<bool>,
+        label: &str,
+    ) -> Result<Option<Response>, LLMError> {
+        let (mut fallback_payload, fallback_url) = self.build_provider_payload(fallback_request)?;
+        if let Some(stream_flag) = stream_override {
+            fallback_payload["stream"] = Value::Bool(stream_flag);
+        }
+
+        let fallback_response = self
+            .dispatch_request(&fallback_url, &fallback_payload)
+            .await?;
+        if fallback_response.status().is_success() {
+            return Ok(Some(fallback_response));
+        }
+
+        let fallback_status = fallback_response.status();
+        let fallback_text = fallback_response.text().await.unwrap_or_default();
+
+        if fallback_status.as_u16() == 429 || fallback_text.contains("quota") {
+            return Err(LLMError::RateLimit { metadata: None });
+        }
+
+        let combined_error = format!(
+            "HTTP {}: {} | {} fallback failed with HTTP {}: {}",
+            original_status, original_error, label, fallback_status, fallback_text
+        );
+        let formatted_error = error_display::format_llm_error("OpenRouter", &combined_error);
+        Err(LLMError::Provider {
+            message: formatted_error,
+            metadata: None,
+        })
+    }
+
+    /// Attempt a feature-specific fallback when the provider rejects a request.
+    ///
+    /// Returns `Ok(Some(response))` if the fallback succeeds, `Ok(None)` if the
+    /// condition doesn't match (caller should try the next fallback), and `Err`
+    /// for rate-limit or combined error failures.
+    async fn try_feature_fallback(
+        &self,
+        request: &LLMRequest,
+        status: StatusCode,
+        error_text: &str,
+        stream_override: Option<bool>,
+        has_feature: fn(&LLMRequest) -> bool,
+        error_match: &str,
+        warn_message: &str,
+        strip_feature: fn(&LLMRequest) -> LLMRequest,
+        label: &str,
+    ) -> Result<Option<Response>, LLMError> {
+        if has_feature(request)
+            && status == StatusCode::NOT_FOUND
+            && error_text.contains(error_match)
+        {
+            warn!("{}", warn_message);
+            let fallback_request = strip_feature(request);
+            return self
+                .retry_with_fallback(
+                    status,
+                    error_text,
+                    &fallback_request,
+                    stream_override,
+                    label,
+                )
+                .await;
+        }
+        Ok(None)
+    }
+
     fn build_provider_payload(&self, request: &LLMRequest) -> Result<(Value, String), LLMError> {
         Ok((
             self.convert_to_openrouter_format(request)?,
@@ -223,14 +316,13 @@ impl OpenRouterProvider {
             })
     }
 
-    async fn send_with_tool_fallback(
+    async fn send_with_fallback(
         &self,
         request: &LLMRequest,
         stream_override: Option<bool>,
     ) -> Result<Response, LLMError> {
         let adjusted_request = self.enforce_tool_capabilities(request);
         let request_ref = adjusted_request.as_ref();
-        let request_with_tools = Self::request_includes_tools(request_ref);
 
         let (mut payload, url) = self.build_provider_payload(request_ref)?;
         if let Some(stream_flag) = stream_override {
@@ -249,40 +341,38 @@ impl OpenRouterProvider {
             return Err(LLMError::RateLimit { metadata: None });
         }
 
-        if request_with_tools
-            && status == StatusCode::NOT_FOUND
-            && error_text.contains("No endpoints found that support tool use")
+        if let Some(resp) = self
+            .try_feature_fallback(
+                request_ref,
+                status,
+                &error_text,
+                stream_override,
+                Self::request_includes_tools,
+                "No endpoints found that support tool use",
+                "OpenRouter endpoint does not support tool use; retrying without tools",
+                Self::tool_free_request,
+                "Tool",
+            )
+            .await?
         {
-            let fallback_request = Self::tool_free_request(request_ref);
-            let (mut fallback_payload, fallback_url) =
-                self.build_provider_payload(&fallback_request)?;
-            if let Some(stream_flag) = stream_override {
-                fallback_payload["stream"] = Value::Bool(stream_flag);
-            }
+            return Ok(resp);
+        }
 
-            let fallback_response = self
-                .dispatch_request(&fallback_url, &fallback_payload)
-                .await?;
-            if fallback_response.status().is_success() {
-                return Ok(fallback_response);
-            }
-
-            let fallback_status = fallback_response.status();
-            let fallback_text = fallback_response.text().await.unwrap_or_default();
-
-            if fallback_status.as_u16() == 429 || fallback_text.contains("quota") {
-                return Err(LLMError::RateLimit { metadata: None });
-            }
-
-            let combined_error = format!(
-                "HTTP {}: {} | Tool fallback failed with HTTP {}: {}",
-                status, error_text, fallback_status, fallback_text
-            );
-            let formatted_error = error_display::format_llm_error("OpenRouter", &combined_error);
-            return Err(LLMError::Provider {
-                message: formatted_error,
-                metadata: None,
-            });
+        if let Some(resp) = self
+            .try_feature_fallback(
+                request_ref,
+                status,
+                &error_text,
+                stream_override,
+                Self::request_includes_images,
+                "No endpoints found that support image input",
+                "OpenRouter endpoint does not support image input; retrying without images",
+                Self::image_free_request,
+                "Image",
+            )
+            .await?
+        {
+            return Ok(resp);
         }
 
         // Use unified error parsing for consistent error categorization

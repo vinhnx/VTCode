@@ -44,7 +44,7 @@ impl LLMProvider for OpenRouterProvider {
 
     async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
         let model = self.resolve_model(&request).to_string();
-        let response = self.send_with_tool_fallback(&request, Some(false)).await?;
+        let response = self.send_with_fallback(&request, Some(false)).await?;
 
         let response_json: Value = response
             .json()
@@ -58,7 +58,7 @@ impl LLMProvider for OpenRouterProvider {
 
     async fn stream(&self, request: LLMRequest) -> Result<LLMStream, LLMError> {
         let model = self.resolve_model(&request).to_string();
-        let response = self.send_with_tool_fallback(&request, Some(true)).await?;
+        let response = self.send_with_fallback(&request, Some(true)).await?;
 
         let stream = try_stream! {
             let mut body_stream = response.bytes_stream();
@@ -152,7 +152,7 @@ impl LLMProvider for OpenRouterProvider {
         request: LLMRequest,
     ) -> Result<LLMNormalizedStream, LLMError> {
         let resolved_model = self.resolve_model(&request).to_string();
-        let response = self.send_with_tool_fallback(&request, Some(true)).await?;
+        let response = self.send_with_fallback(&request, Some(true)).await?;
 
         let stream = try_stream! {
             let mut body_stream = response.bytes_stream();
