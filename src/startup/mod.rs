@@ -150,7 +150,7 @@ impl StartupContext {
         );
         agent_config.openai_chatgpt_auth = openai_chatgpt_auth;
 
-        let skip_confirmations = args.skip_confirmations || loaded.full_auto_requested;
+        let skip_confirmations = args.dangerously_skip_permissions || args.skip_confirmations;
 
         // CLI validation: warn if prompt_cache_retention is set but model does not use Responses API
         if agent_config.provider.eq_ignore_ascii_case("openai")
@@ -197,7 +197,7 @@ impl StartupContext {
             workspace: loaded.workspace,
             config,
             agent_config,
-            skip_confirmations: args.dangerously_skip_permissions || skip_confirmations,
+            skip_confirmations,
             full_auto_requested: loaded.full_auto_requested,
             automation_prompt: loaded.automation_prompt,
             session_resume,
@@ -802,6 +802,35 @@ mod validation_tests {
         );
 
         assert!(maybe_warning.is_none());
+    }
+
+    #[tokio::test]
+    async fn full_auto_preserves_separate_state_without_skip_confirmations() {
+        let env_guard = env_lock::lock();
+        let temp = TempDir::new().expect("temp dir");
+        let workspace = temp.path().to_path_buf();
+        let mut config = VTCodeConfig::default();
+        config.agent.provider = "openai".to_string();
+        config.agent.default_model =
+            vtcode_core::config::constants::models::openai::GPT_5.to_string();
+        config.automation.full_auto.enabled = true;
+        config.automation.full_auto.require_profile_ack = false;
+        save_workspace_config(&workspace, &config);
+
+        env_guard.set_var("OPENAI_API_KEY", "test");
+        let args = Cli::parse_from([
+            "vtcode",
+            "--workspace",
+            workspace.to_str().expect("workspace path"),
+            "--full-auto",
+        ]);
+
+        let ctx = StartupContext::from_cli_args(&args)
+            .await
+            .expect("startup success");
+
+        assert!(ctx.full_auto_requested);
+        assert!(!ctx.skip_confirmations);
     }
 
     #[test]

@@ -1088,7 +1088,7 @@ pub(crate) async fn ensure_tool_permission_with_call_id<S: UiSession + ?Sized>(
         return Ok(approve_tool_permission_no_cache(tool_registry, tool_name).await);
     }
 
-    if skip_confirmations && active_agent_permissions.is_none() {
+    if skip_confirmations {
         return Ok(approve_tool_permission_no_cache(tool_registry, tool_name).await);
     }
 

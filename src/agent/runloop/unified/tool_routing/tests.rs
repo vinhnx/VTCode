@@ -707,7 +707,7 @@ async fn subagent_local_permissions_restrict_global_direct_allow() {
 }
 
 #[tokio::test]
-async fn active_agent_ask_disables_skip_confirmations_auto_approval() {
+async fn active_agent_ask_allows_skip_confirmations_auto_approval() {
     let temp_dir = tempfile::TempDir::new().expect("temp dir");
     let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
     let mut session = create_headless_session();
@@ -754,7 +754,7 @@ async fn active_agent_ask_disables_skip_confirmations_auto_approval() {
     .await
     .expect("permission flow");
 
-    assert_eq!(flow, ToolPermissionFlow::Denied);
+    assert_eq!(flow, ToolPermissionFlow::Approved { updated_args: None });
 }
 
 #[tokio::test]
@@ -805,7 +805,54 @@ async fn skip_confirmations_auto_approves_without_active_agent_policy() {
 }
 
 #[tokio::test]
-async fn skip_confirmations_does_not_bypass_active_agent_ask_default() {
+async fn full_auto_without_skip_confirmations_does_not_take_dangerous_skip_path() {
+    let temp_dir = tempfile::TempDir::new().expect("temp dir");
+    let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+    let mut session = create_headless_session();
+    let handle = session.clone_inline_handle();
+    let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
+    let ctrl_c_state = Arc::new(crate::agent::runloop::unified::state::CtrlCState::new());
+    let ctrl_c_notify = Arc::new(Notify::new());
+    let permissions = PermissionsConfig {
+        ask: vec!["Write(/docs/**)".to_string()],
+        ..PermissionsConfig::default()
+    };
+
+    let flow = ensure_tool_permission(
+        ToolPermissionsContext {
+            tool_registry: &registry,
+            renderer: &mut renderer,
+            handle: &handle,
+            session: &mut session,
+            default_placeholder: None,
+            ctrl_c_state: &ctrl_c_state,
+            ctrl_c_notify: &ctrl_c_notify,
+            hooks: None,
+            justification: None,
+            approval_recorder: None,
+            decision_ledger: None,
+            tool_permission_cache: None,
+            permissions_state: None,
+            active_agent_permissions: None,
+            hitl_notification_bell: false,
+            approval_policy: reject_all_approvals(),
+            skip_confirmations: false,
+            permissions_config: Some(&permissions),
+            auto_permission_runtime: None,
+            active_thread_label: None,
+            session_stats: None,
+        },
+        tools::UNIFIED_FILE,
+        Some(&json!({"action": "write", "path": "docs/guide.md", "content": "hello"})),
+    )
+    .await
+    .expect("permission flow");
+
+    assert_eq!(flow, ToolPermissionFlow::Denied);
+}
+
+#[tokio::test]
+async fn skip_confirmations_bypasses_active_agent_ask_default() {
     let temp_dir = tempfile::TempDir::new().expect("temp dir");
     let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
     let mut session = create_headless_session();
@@ -836,6 +883,104 @@ async fn skip_confirmations_does_not_bypass_active_agent_ask_default() {
             active_agent_permissions: Some(&agent_permissions),
             hitl_notification_bell: false,
             approval_policy: reject_all_approvals(),
+            skip_confirmations: true,
+            permissions_config: Some(&permissions),
+            auto_permission_runtime: None,
+            active_thread_label: None,
+            session_stats: None,
+        },
+        tools::UNIFIED_FILE,
+        Some(&json!({"action": "write", "path": "docs/guide.md", "content": "hello"})),
+    )
+    .await
+    .expect("permission flow");
+
+    assert_eq!(flow, ToolPermissionFlow::Approved { updated_args: None });
+}
+
+#[tokio::test]
+async fn skip_confirmations_does_not_bypass_explicit_deny_rule() {
+    let temp_dir = tempfile::TempDir::new().expect("temp dir");
+    let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+    let mut session = create_headless_session();
+    let handle = session.clone_inline_handle();
+    let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
+    let ctrl_c_state = Arc::new(crate::agent::runloop::unified::state::CtrlCState::new());
+    let ctrl_c_notify = Arc::new(Notify::new());
+    let permissions = PermissionsConfig {
+        deny: vec!["Write(/docs/**)".to_string()],
+        ..PermissionsConfig::default()
+    };
+    let agent_permissions = AgentPermissionsConfig::new(PermissionDefault::Allow);
+
+    let flow = ensure_tool_permission(
+        ToolPermissionsContext {
+            tool_registry: &registry,
+            renderer: &mut renderer,
+            handle: &handle,
+            session: &mut session,
+            default_placeholder: None,
+            ctrl_c_state: &ctrl_c_state,
+            ctrl_c_notify: &ctrl_c_notify,
+            hooks: None,
+            justification: None,
+            approval_recorder: None,
+            decision_ledger: None,
+            tool_permission_cache: None,
+            permissions_state: None,
+            active_agent_permissions: Some(&agent_permissions),
+            hitl_notification_bell: false,
+            approval_policy: AskForApproval::OnRequest,
+            skip_confirmations: true,
+            permissions_config: Some(&permissions),
+            auto_permission_runtime: None,
+            active_thread_label: None,
+            session_stats: None,
+        },
+        tools::UNIFIED_FILE,
+        Some(&json!({"action": "write", "path": "docs/guide.md", "content": "hello"})),
+    )
+    .await
+    .expect("permission flow");
+
+    assert_eq!(flow, ToolPermissionFlow::Denied);
+}
+
+#[tokio::test]
+async fn skip_confirmations_does_not_bypass_tool_policy_deny() {
+    let temp_dir = tempfile::TempDir::new().expect("temp dir");
+    let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+    registry
+        .set_tool_policy(tools::UNIFIED_FILE, ToolPolicy::Deny)
+        .await
+        .expect("persist deny policy");
+
+    let mut session = create_headless_session();
+    let handle = session.clone_inline_handle();
+    let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
+    let ctrl_c_state = Arc::new(crate::agent::runloop::unified::state::CtrlCState::new());
+    let ctrl_c_notify = Arc::new(Notify::new());
+    let permissions = PermissionsConfig::default();
+    let agent_permissions = AgentPermissionsConfig::new(PermissionDefault::Ask);
+
+    let flow = ensure_tool_permission(
+        ToolPermissionsContext {
+            tool_registry: &registry,
+            renderer: &mut renderer,
+            handle: &handle,
+            session: &mut session,
+            default_placeholder: None,
+            ctrl_c_state: &ctrl_c_state,
+            ctrl_c_notify: &ctrl_c_notify,
+            hooks: None,
+            justification: None,
+            approval_recorder: None,
+            decision_ledger: None,
+            tool_permission_cache: None,
+            permissions_state: None,
+            active_agent_permissions: Some(&agent_permissions),
+            hitl_notification_bell: false,
+            approval_policy: AskForApproval::OnRequest,
             skip_confirmations: true,
             permissions_config: Some(&permissions),
             auto_permission_runtime: None,
