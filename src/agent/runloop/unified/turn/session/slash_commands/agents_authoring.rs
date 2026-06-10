@@ -8,7 +8,6 @@ use vtcode_config::core::permissions::{AgentPermissionsConfig, PermissionDefault
 #[cfg(test)]
 use vtcode_config::load_subagent_from_file;
 use vtcode_config::{SubagentMemoryScope, SubagentSource, SubagentSpec};
-use vtcode_core::config::PermissionMode;
 use vtcode_core::constants::tools;
 use vtcode_core::utils::ansi::MessageStyle;
 use vtcode_ui::tui::app::{
@@ -157,7 +156,7 @@ struct NativeAgentDraft {
     model: String,
     color: Option<String>,
     reasoning_effort: Option<String>,
-    permission_mode: Option<PermissionMode>,
+    permissions: AgentPermissionsConfig,
     background: bool,
     max_turns: Option<usize>,
     memory: Option<SubagentMemoryScope>,
@@ -193,7 +192,7 @@ impl NativeAgentDraft {
             model: "inherit".to_string(),
             color: Some("blue".to_string()),
             reasoning_effort: Some("medium".to_string()),
-            permission_mode: None,
+            permissions: AgentPermissionsConfig::new(PermissionDefault::Deny),
             background: false,
             max_turns: None,
             memory: None,
@@ -221,7 +220,7 @@ impl NativeAgentDraft {
             model: spec.model.clone().unwrap_or_else(|| "inherit".to_string()),
             color: spec.color.clone(),
             reasoning_effort: spec.reasoning_effort.clone(),
-            permission_mode: permission_mode_from_agent_permissions(&spec.permissions),
+            permissions: spec.permissions.clone(),
             background: spec.background,
             max_turns: spec.max_turns,
             memory: spec.memory,
@@ -275,9 +274,7 @@ impl NativeAgentDraft {
         {
             insert_yaml_string(&mut frontmatter, "reasoning_effort", reasoning_effort);
         }
-        if let Some(permission_mode) = self.permission_mode {
-            insert_yaml_permissions_default(&mut frontmatter, permission_mode);
-        }
+        insert_yaml_permissions(&mut frontmatter, &self.permissions);
         insert_yaml_bool(&mut frontmatter, "background", self.background);
         if let Some(max_turns) = self.max_turns {
             insert_yaml_u64(&mut frontmatter, "maxTurns", max_turns as u64);
@@ -487,13 +484,6 @@ async fn edit_native_agent_draft(
                     draft.reasoning_effort = reasoning_effort;
                 }
             }
-            "agents:author:permission" => {
-                if let Some(permission_mode) =
-                    prompt_permission_mode(ctx, draft.permission_mode).await?
-                {
-                    draft.permission_mode = permission_mode;
-                }
-            }
             "agents:author:color" => {
                 let current = draft.color.as_deref().unwrap_or_default();
                 if let Some(result) = prompt_text_value(
@@ -560,6 +550,11 @@ fn show_authoring_menu(
             format!("File: {}", path.display())
         });
     }
+    lines.push(format!(
+        "Agent availability: {}; permission rules default decision: {}.",
+        availability_summary(draft),
+        permission_default_label(draft.permissions.default)
+    ));
 
     let mut items = Vec::new();
     if creating {
@@ -593,12 +588,6 @@ fn show_authoring_menu(
         model_summary(draft).as_str(),
         Some("Picker"),
         "model",
-    ));
-    items.push(author_action_item(
-        "Permission Mode",
-        permission_summary(draft.permission_mode).as_str(),
-        None,
-        "permission",
     ));
     items.push(author_action_item(
         "Color",
@@ -757,63 +746,6 @@ async fn prompt_scope(
         InlineListSelection::ConfigAction(action) if action == "agents:author:scope:user" => {
             Some(AgentDefinitionScope::User)
         }
-        _ => None,
-    })
-}
-
-async fn prompt_permission_mode(
-    ctx: &mut SlashCommandContext<'_>,
-    current: Option<PermissionMode>,
-) -> Result<Option<Option<PermissionMode>>> {
-    let items = vec![
-        permission_item("No override", "Inherit the parent session mode.", None),
-        permission_item(
-            "Default",
-            "Prompt when policy requires it.",
-            Some(PermissionMode::Default),
-        ),
-        permission_item(
-            "Plan",
-            "Read-only planning mode.",
-            Some(PermissionMode::Plan),
-        ),
-        permission_item(
-            "Accept edits",
-            "Auto-allow built-in file mutations for the child.",
-            Some(PermissionMode::AcceptEdits),
-        ),
-        permission_item(
-            "Don't ask",
-            "Deny actions that are not explicitly allowed.",
-            Some(PermissionMode::DontAsk),
-        ),
-        permission_item(
-            "Auto",
-            "Classifier-backed autonomous mode.",
-            Some(PermissionMode::Auto),
-        ),
-        permission_item(
-            "Bypass permissions",
-            "Skip prompts except protected writes and sandbox escalation.",
-            Some(PermissionMode::BypassPermissions),
-        ),
-    ];
-    let selected = Some(InlineListSelection::ConfigAction(permission_action_key(
-        current,
-    )));
-    ctx.handle.show_list_modal(
-        "Permission mode".to_string(),
-        vec!["Choose the permission mode override for this subagent.".to_string()],
-        items,
-        selected,
-        None,
-    );
-
-    let Some(selection) = wait_for_list_modal_selection(ctx).await else {
-        return Ok(None);
-    };
-    Ok(match selection {
-        InlineListSelection::ConfigAction(action) => permission_mode_from_action(&action),
         _ => None,
     })
 }
@@ -1405,10 +1337,24 @@ fn insert_yaml_string_list(mapping: &mut YamlMapping, key: &str, values: &[Strin
     );
 }
 
-fn insert_yaml_permissions_default(mapping: &mut YamlMapping, mode: PermissionMode) {
+fn insert_yaml_permissions(mapping: &mut YamlMapping, permissions_config: &AgentPermissionsConfig) {
     let mut permissions = YamlMapping::new();
-    insert_yaml_string(&mut permissions, "default", permission_default_label(mode));
+    insert_yaml_string(
+        &mut permissions,
+        "default",
+        permission_default_label(permissions_config.default),
+    );
+    insert_yaml_string_list_if_non_empty(&mut permissions, "allow", &permissions_config.allow);
+    insert_yaml_string_list_if_non_empty(&mut permissions, "ask", &permissions_config.ask);
+    insert_yaml_string_list_if_non_empty(&mut permissions, "auto", &permissions_config.auto);
+    insert_yaml_string_list_if_non_empty(&mut permissions, "deny", &permissions_config.deny);
     mapping.insert("permissions".to_string(), YamlValue::Object(permissions));
+}
+
+fn insert_yaml_string_list_if_non_empty(mapping: &mut YamlMapping, key: &str, values: &[String]) {
+    if !values.is_empty() {
+        insert_yaml_string_list(mapping, key, values);
+    }
 }
 
 fn scope_label(scope: AgentDefinitionScope) -> &'static str {
@@ -1418,73 +1364,24 @@ fn scope_label(scope: AgentDefinitionScope) -> &'static str {
     }
 }
 
-fn permission_default_label(mode: PermissionMode) -> &'static str {
-    match mode {
-        PermissionMode::Default => "ask",
-        PermissionMode::AcceptEdits | PermissionMode::BypassPermissions => "allow",
-        PermissionMode::Auto => "auto",
-        PermissionMode::Plan | PermissionMode::DontAsk => "deny",
+fn permission_default_label(default: PermissionDefault) -> &'static str {
+    match default {
+        PermissionDefault::Ask => "ask",
+        PermissionDefault::Allow => "allow",
+        PermissionDefault::Auto => "auto",
+        PermissionDefault::Deny => "deny",
     }
 }
 
-fn permission_mode_label(mode: PermissionMode) -> &'static str {
-    match mode {
-        PermissionMode::Default => "default",
-        PermissionMode::AcceptEdits => "acceptEdits",
-        PermissionMode::Auto => "auto",
-        PermissionMode::Plan => "plan",
-        PermissionMode::DontAsk => "dontAsk",
-        PermissionMode::BypassPermissions => "bypassPermissions",
-    }
-}
-
-fn permission_summary(mode: Option<PermissionMode>) -> String {
-    mode.map(permission_mode_label)
-        .unwrap_or("inherit")
-        .to_string()
-}
-
-fn permission_item(title: &str, subtitle: &str, mode: Option<PermissionMode>) -> InlineListItem {
-    InlineListItem {
-        title: title.to_string(),
-        subtitle: Some(subtitle.to_string()),
-        badge: None,
-        indent: 0,
-        selection: Some(InlineListSelection::ConfigAction(permission_action_key(
-            mode,
-        ))),
-        search_value: Some(format!("{} {}", title, subtitle)),
-    }
-}
-
-fn permission_action_key(mode: Option<PermissionMode>) -> String {
-    match mode {
-        None => "agents:author:permission:unset".to_string(),
-        Some(mode) => format!("agents:author:permission:{}", permission_mode_label(mode)),
-    }
-}
-
-fn permission_mode_from_action(action: &str) -> Option<Option<PermissionMode>> {
-    match action.strip_prefix("agents:author:permission:") {
-        Some("unset") => Some(None),
-        Some("default") => Some(Some(PermissionMode::Default)),
-        Some("acceptEdits") => Some(Some(PermissionMode::AcceptEdits)),
-        Some("auto") => Some(Some(PermissionMode::Auto)),
-        Some("plan") => Some(Some(PermissionMode::Plan)),
-        Some("dontAsk") => Some(Some(PermissionMode::DontAsk)),
-        Some("bypassPermissions") => Some(Some(PermissionMode::BypassPermissions)),
-        _ => None,
-    }
-}
-
-fn permission_mode_from_agent_permissions(
-    permissions: &AgentPermissionsConfig,
-) -> Option<PermissionMode> {
-    match permissions.default {
-        PermissionDefault::Ask => Some(PermissionMode::Default),
-        PermissionDefault::Allow => Some(PermissionMode::BypassPermissions),
-        PermissionDefault::Auto => Some(PermissionMode::Auto),
-        PermissionDefault::Deny => Some(PermissionMode::Plan),
+fn availability_summary(draft: &NativeAgentDraft) -> &'static str {
+    match draft
+        .extra_frontmatter
+        .get("mode")
+        .and_then(YamlValue::as_str)
+    {
+        Some("primary") => "primary",
+        Some("all") => "primary and subagent",
+        _ => "subagent",
     }
 }
 
@@ -1601,6 +1498,10 @@ color: blue
 reasoning_effort: medium
 permissions:
   default: deny
+  allow:
+    - read_file
+  ask:
+    - unified_exec
 background: true
 maxTurns: 7
 memory: project
@@ -1624,10 +1525,27 @@ Review the target changes."#,
 
         assert!(rendered.contains("description: Updated description"));
         assert!(rendered.contains("permissions:\n  default: deny\n"));
+        assert!(rendered.contains("allow:"));
+        assert!(rendered.contains("- read_file"));
+        assert!(rendered.contains("ask:"));
+        assert!(rendered.contains("- unified_exec"));
         assert!(!rendered.contains("permissionMode:"));
+        assert!(!rendered.contains("permission_mode:"));
         assert!(rendered.contains("skills:"));
         assert!(rendered.contains("nickname_candidates:"));
         assert!(rendered.ends_with("\nReview the target changes."));
+
+        fs::write(&path, rendered).expect("write rendered file");
+        let rendered_spec =
+            load_subagent_from_file(&path, SubagentSource::ProjectVtcode).expect("reload rendered");
+        assert_eq!(
+            rendered_spec.permissions.allow,
+            vec!["read_file".to_string()]
+        );
+        assert_eq!(
+            rendered_spec.permissions.ask,
+            vec!["unified_exec".to_string()]
+        );
     }
 
     #[test]
@@ -1662,6 +1580,7 @@ Review the target changes."#,
         assert_eq!(draft.model, "inherit");
         assert_eq!(draft.color.as_deref(), Some("blue"));
         assert_eq!(draft.reasoning_effort.as_deref(), Some("medium"));
+        assert_eq!(draft.permissions.default, PermissionDefault::Deny);
         assert!(!draft.background);
         assert_eq!(draft.tools, default_agent_tools());
         assert_eq!(
@@ -1671,8 +1590,22 @@ Review the target changes."#,
 
         let rendered = draft.render_markdown().expect("render");
         assert!(rendered.contains("name: reviewer\n"));
+        assert!(rendered.contains("permissions:\n  default: deny\n"));
         assert!(rendered.contains("background: false\n"));
+        assert!(!rendered.contains("permissionMode"));
+        assert!(!rendered.contains("permission_mode"));
         assert!(rendered.contains("\nYou are a focused VT Code subagent.\n"));
+
+        let path = workspace.path().join("reviewer.md");
+        fs::write(&path, rendered).expect("write rendered agent");
+        let spec =
+            load_subagent_from_file(&path, SubagentSource::ProjectVtcode).expect("load subagent");
+        assert_eq!(spec.permissions.default, PermissionDefault::Deny);
+        assert!(spec.permissions.allow.is_empty());
+        assert!(spec.permissions.ask.is_empty());
+        assert!(spec.permissions.auto.is_empty());
+        assert!(spec.permissions.deny.is_empty());
+        assert_eq!(spec.mode, vtcode_config::AgentMode::Subagent);
     }
 
     #[test]
@@ -1716,7 +1649,7 @@ Review the target changes."#,
         ];
         draft.color = Some("teal".to_string());
         draft.reasoning_effort = Some("high".to_string());
-        draft.permission_mode = Some(PermissionMode::Plan);
+        draft.permissions = AgentPermissionsConfig::new(PermissionDefault::Deny);
         draft.background = true;
         draft.max_turns = Some(5);
         draft.memory = Some(SubagentMemoryScope::Project);
@@ -1747,8 +1680,37 @@ Review the target changes."#,
         assert!(background_index < max_turns_index);
         assert!(max_turns_index < memory_index);
         assert!(memory_index < skills_index);
-        assert!(!rendered.contains("permissionMode:"));
+        assert!(!rendered.contains("permissionMode"));
+        assert!(!rendered.contains("permission_mode"));
         assert!(rendered.ends_with("\nPrompt body\n  with indentation\n"));
+    }
+
+    #[test]
+    fn render_markdown_preserves_primary_availability_and_default_decision() {
+        let mut draft = NativeAgentDraft::new(
+            PathBuf::from("/tmp/workspace"),
+            Some(AgentDefinitionScope::Project),
+            Some("planner"),
+        );
+        draft.description = "Plan changes before editing".to_string();
+        draft.permissions = AgentPermissionsConfig::new(PermissionDefault::Ask);
+        draft
+            .extra_frontmatter
+            .insert("mode".to_string(), YamlValue::String("primary".to_string()));
+
+        let rendered = draft.render_markdown().expect("render");
+        assert!(rendered.contains("mode: primary\n"));
+        assert!(rendered.contains("permissions:\n  default: ask\n"));
+        assert!(!rendered.contains("permissionMode"));
+        assert!(!rendered.contains("permission_mode"));
+
+        let temp = TempDir::new().expect("temp dir");
+        let path = temp.path().join("planner.md");
+        fs::write(&path, rendered).expect("write rendered agent");
+        let spec =
+            load_subagent_from_file(&path, SubagentSource::ProjectVtcode).expect("load primary");
+        assert_eq!(spec.permissions.default, PermissionDefault::Ask);
+        assert_eq!(spec.mode, vtcode_config::AgentMode::Primary);
     }
 
     #[test]
