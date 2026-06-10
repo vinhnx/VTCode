@@ -510,11 +510,8 @@ fn close_incomplete_json_prefix(prefix: &str) -> Option<String> {
             '"' => in_string = true,
             '{' => expected_closers.push('}'),
             '[' => expected_closers.push(']'),
-            '}' | ']' => {
-                if expected_closers.pop() != Some(ch) {
-                    return None;
-                }
-            }
+            '}' | ']' if expected_closers.pop() != Some(ch) => return None,
+            '}' | ']' => {}
             _ => {}
         }
     }
