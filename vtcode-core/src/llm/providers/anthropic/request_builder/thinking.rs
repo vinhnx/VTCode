@@ -247,5 +247,4 @@ mod tests {
             other => panic!("expected Adaptive with no display, got {other:?}"),
         }
     }
-
 }

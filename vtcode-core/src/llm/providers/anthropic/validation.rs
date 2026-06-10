@@ -483,7 +483,7 @@ fn validate_effort_setting(effort: &str, model: &str, default_model: &str) -> Re
         let formatted_error = error_display::format_llm_error(
             "Anthropic",
             &format!(
-                "effort is not supported for model '{}'. VT Code currently enables effort on Claude Opus 4.8, Claude Opus 4.7, Claude Opus 4.6, and Claude Sonnet 4.6 on the Anthropic provider.",
+                "effort is not supported for model '{}'.",
                 if model.trim().is_empty() {
                     default_model
                 } else {

@@ -459,6 +459,60 @@ impl AnthropicProvider {
             &beta_config,
         )
     }
+
+    async fn send_request(
+        &self,
+        request: &LLMRequest,
+        anthropic_request: &Value,
+    ) -> Result<AnthropicHttpResponse, LLMError> {
+        let include_advanced_tool_use = self.requires_advanced_tool_use_beta(request);
+        let betas = self.effective_betas(request);
+        let url = format!("{}/messages", self.base_url);
+
+        let mut request_builder = self
+            .http_client
+            .post(&url)
+            .header("x-api-key", &self.api_key)
+            .header("anthropic-version", urls::ANTHROPIC_API_VERSION);
+
+        if let Some(beta_header) = self.beta_header_for_request(
+            request,
+            anthropic_request,
+            include_advanced_tool_use,
+            betas.as_deref(),
+        ) {
+            request_builder = request_builder.header("anthropic-beta", beta_header);
+        }
+
+        if let Some(metadata) = &request.metadata
+            && let Ok(metadata_str) = serde_json::to_string(metadata)
+        {
+            request_builder = request_builder.header("X-Turn-Metadata", metadata_str);
+        }
+
+        let response = request_builder
+            .json(anthropic_request)
+            .send()
+            .await
+            .map_err(|e| format_network_error("Anthropic", &e))?;
+
+        let response = handle_anthropic_http_error(response).await?;
+
+        let request_id = response
+            .headers()
+            .get("request-id")
+            .and_then(|h| h.to_str().ok().map(|s| s.to_string()));
+        let organization_id = response
+            .headers()
+            .get("anthropic-organization-id")
+            .and_then(|h| h.to_str().ok().map(|s| s.to_string()));
+
+        Ok(AnthropicHttpResponse {
+            response,
+            request_id,
+            organization_id,
+        })
+    }
 }
 
 fn code_execution_beta_name(tool_type: &str) -> Option<String> {
@@ -508,6 +562,12 @@ fn is_context_edit_item(item: &Value) -> bool {
         .is_some_and(|edit_type| {
             edit_type.starts_with("clear_tool_uses_") || edit_type.starts_with("clear_thinking_")
         })
+}
+
+struct AnthropicHttpResponse {
+    response: reqwest::Response,
+    request_id: Option<String>,
+    organization_id: Option<String>,
 }
 
 #[async_trait]
@@ -569,49 +629,13 @@ impl LLMProvider for AnthropicProvider {
 
     async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
         let resolved_model = self.resolved_request_model(&request).to_string();
-        let include_advanced_tool_use = self.requires_advanced_tool_use_beta(&request);
         let anthropic_request = self.convert_to_anthropic_format(&request)?;
-        let url = format!("{}/messages", self.base_url);
-        let betas = self.effective_betas(&request);
 
-        let mut request_builder = self
-            .http_client
-            .post(&url)
-            .header("x-api-key", &self.api_key)
-            .header("anthropic-version", urls::ANTHROPIC_API_VERSION);
-
-        if let Some(beta_header) = self.beta_header_for_request(
-            &request,
-            &anthropic_request,
-            include_advanced_tool_use,
-            betas.as_deref(),
-        ) {
-            request_builder = request_builder.header("anthropic-beta", beta_header);
-        }
-
-        // Add turn metadata header if present in request
-        if let Some(metadata) = &request.metadata
-            && let Ok(metadata_str) = serde_json::to_string(metadata)
-        {
-            request_builder = request_builder.header("X-Turn-Metadata", metadata_str);
-        }
-
-        let response = request_builder
-            .json(&anthropic_request)
-            .send()
-            .await
-            .map_err(|e| format_network_error("Anthropic", &e))?;
-
-        let response = handle_anthropic_http_error(response).await?;
-
-        let request_id = response
-            .headers()
-            .get("request-id")
-            .and_then(|h| h.to_str().ok().map(|s| s.to_string()));
-        let organization_id = response
-            .headers()
-            .get("anthropic-organization-id")
-            .and_then(|h| h.to_str().ok().map(|s| s.to_string()));
+        let AnthropicHttpResponse {
+            response,
+            request_id,
+            organization_id,
+        } = self.send_request(&request, &anthropic_request).await?;
 
         let anthropic_response: Value = response
             .json()
@@ -626,55 +650,17 @@ impl LLMProvider for AnthropicProvider {
 
     async fn stream(&self, request: LLMRequest) -> Result<LLMStream, LLMError> {
         let resolved_model = self.resolved_request_model(&request).to_string();
-        let include_advanced_tool_use = self.requires_advanced_tool_use_beta(&request);
         let mut anthropic_request = self.convert_to_anthropic_format(&request)?;
-        let betas = self.effective_betas(&request);
 
         if let Some(obj) = anthropic_request.as_object_mut() {
             obj.insert("stream".to_string(), Value::Bool(true));
         }
 
-        let url = format!("{}/messages", self.base_url);
-
-        let mut request_builder = self
-            .http_client
-            .post(&url)
-            .header("x-api-key", &self.api_key)
-            .header("anthropic-version", urls::ANTHROPIC_API_VERSION)
-            .header("content-type", "application/json");
-
-        if let Some(beta_header) = self.beta_header_for_request(
-            &request,
-            &anthropic_request,
-            include_advanced_tool_use,
-            betas.as_deref(),
-        ) {
-            request_builder = request_builder.header("anthropic-beta", beta_header);
-        }
-
-        // Add turn metadata header if present in request
-        if let Some(metadata) = &request.metadata
-            && let Ok(metadata_str) = serde_json::to_string(metadata)
-        {
-            request_builder = request_builder.header("X-Turn-Metadata", metadata_str);
-        }
-
-        let response = request_builder
-            .json(&anthropic_request)
-            .send()
-            .await
-            .map_err(|e| format_network_error("Anthropic", &e))?;
-
-        let response = handle_anthropic_http_error(response).await?;
-
-        let request_id = response
-            .headers()
-            .get("request-id")
-            .and_then(|h| h.to_str().ok().map(|s| s.to_string()));
-        let organization_id = response
-            .headers()
-            .get("anthropic-organization-id")
-            .and_then(|h| h.to_str().ok().map(|s| s.to_string()));
+        let AnthropicHttpResponse {
+            response,
+            request_id,
+            organization_id,
+        } = self.send_request(&request, &anthropic_request).await?;
 
         Ok(stream_decoder::create_stream(
             response,
@@ -1028,10 +1014,7 @@ mod tests {
 
     #[test]
     fn beta_header_omits_context_1m_for_native_1m_models() {
-        for model in [
-            models::CLAUDE_FABLE_5,
-            models::CLAUDE_SONNET_4_6,
-        ] {
+        for model in [models::CLAUDE_FABLE_5, models::CLAUDE_SONNET_4_6] {
             let provider = AnthropicProvider::with_model("test-key".to_string(), model.to_string());
             let request = LLMRequest {
                 model: model.to_string(),

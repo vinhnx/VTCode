@@ -141,7 +141,11 @@ pub fn convert_to_anthropic_format(
         system_value,
         breakpoints_used,
         has_uncached_runtime_context,
-    } = build_system_prompt(system_prompt_request, &system_cache_control, breakpoints_remaining);
+    } = build_system_prompt(
+        system_prompt_request,
+        &system_cache_control,
+        breakpoints_remaining,
+    );
     breakpoints_remaining = breakpoints_remaining.saturating_sub(breakpoints_used);
 
     let messages_cache_control =
@@ -305,16 +309,17 @@ pub fn convert_to_anthropic_format(
                     max_tokens: fb.max_tokens,
                     thinking: fb.thinking.as_ref().map(|t| match t {
                         AnthropicThinkingConfig::Disabled => ThinkingConfig::Disabled,
-                        AnthropicThinkingConfig::Enabled { budget_tokens, display } => {
-                            ThinkingConfig::Enabled {
-                                budget_tokens: *budget_tokens,
-                                display: display.as_ref().and_then(|d| match d.as_str() {
-                                    "summarized" => Some(ThinkingDisplay::Summarized),
-                                    "omitted" => Some(ThinkingDisplay::Omitted),
-                                    _ => None,
-                                }),
-                            }
-                        }
+                        AnthropicThinkingConfig::Enabled {
+                            budget_tokens,
+                            display,
+                        } => ThinkingConfig::Enabled {
+                            budget_tokens: *budget_tokens,
+                            display: display.as_ref().and_then(|d| match d.as_str() {
+                                "summarized" => Some(ThinkingDisplay::Summarized),
+                                "omitted" => Some(ThinkingDisplay::Omitted),
+                                _ => None,
+                            }),
+                        },
                         AnthropicThinkingConfig::Adaptive { display } => ThinkingConfig::Adaptive {
                             display: display.as_ref().and_then(|d| match d.as_str() {
                                 "summarized" => Some(ThinkingDisplay::Summarized),

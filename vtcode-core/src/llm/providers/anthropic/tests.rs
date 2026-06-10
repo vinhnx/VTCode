@@ -988,7 +988,6 @@ mod request_builder_tests {
     }
 
     #[test]
-    #[test]
     fn test_convert_to_anthropic_format_falls_back_to_high_for_sonnet_4_6_default_effort() {
         let request = LLMRequest {
             model: models::CLAUDE_SONNET_4_6.to_string(),
@@ -1010,9 +1009,6 @@ mod request_builder_tests {
         assert_eq!(payload["output_config"]["effort"], "high");
     }
 
-    #[test]
-    #[test]
-    #[test]
     #[test]
     fn test_convert_to_anthropic_format_includes_native_memory_tool() {
         let request = LLMRequest {

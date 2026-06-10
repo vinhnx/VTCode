@@ -166,9 +166,17 @@ pub(crate) fn supports_manual_interleaved_beta(model: &str, default_model: &str)
 pub(crate) fn supports_assistant_prefill(model: &str, default_model: &str) -> bool {
     let requested = resolve_model_name(model, default_model);
 
-    !(matches_model(requested, models::anthropic::CLAUDE_FABLE_5)
-        || matches_model(requested, models::anthropic::CLAUDE_OPUS_4_8)
-        || matches_model(requested, models::anthropic::CLAUDE_SONNET_4_6))
+    // Models with thinking profiles are newer and generally do not support prefill,
+    // except Haiku 4.5 which explicitly does. For models without a thinking profile
+    // (legacy models), prefill is supported.
+    match claude_thinking_profile(requested, default_model) {
+        Some(profile) => {
+            // Haiku 4.5 is the only thinking-profile model that supports prefill.
+            // All others (Fable 5, Opus 4.8, Sonnet 4.6) do not.
+            !profile.adaptive_only && matches_model(requested, models::anthropic::CLAUDE_HAIKU_4_5)
+        }
+        None => true,
+    }
 }
 
 pub(crate) fn supports_mid_conversation_system_messages(model: &str, default_model: &str) -> bool {
@@ -232,26 +240,27 @@ pub fn effective_context_size(model: &str) -> usize {
 pub fn supports_structured_output(model: &str, default_model: &str) -> bool {
     let requested = resolve_model_name(model, default_model);
 
+    // All models with a thinking profile support structured outputs.
     if claude_thinking_profile(requested, default_model).is_some() {
         return true;
     }
 
-    requested.contains("claude-sonnet-4-5")
-        || requested.contains("claude-opus-4-5")
-        || requested.contains("claude-haiku-4-5")
+    // Legacy models without thinking profiles that support structured outputs.
+    matches_model(requested, "claude-sonnet-4-5")
+        || matches_model(requested, "claude-opus-4-5")
+        || matches_model(requested, "claude-haiku-4-5")
 }
 
 pub fn supports_vision(model: &str, default_model: &str) -> bool {
     let requested = resolve_model_name(model, default_model);
 
+    // All models with a thinking profile support vision.
     if claude_thinking_profile(requested, default_model).is_some() {
         return true;
     }
 
-    requested.contains("claude-3")
-        || requested.contains("claude-4-sonnet")
-        || requested == models::anthropic::CLAUDE_HAIKU_4_5
-        || requested == models::anthropic::CLAUDE_HAIKU_4_5_20251001
+    // Legacy Claude 3 and Claude 4 Sonnet families support vision.
+    requested.starts_with("claude-3") || requested.starts_with("claude-4-sonnet")
 }
 
 #[expect(dead_code)]

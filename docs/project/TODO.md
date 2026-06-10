@@ -86,8 +86,18 @@ implement double escape to rewind, reference.
 1/ Yank vtcode-tui, vtcode-design, vtcode-theme 0.123.x from crates.io (now merged into vtcode-ui)
 2/ Update release scripts to remove stale crate references
 3/ File upstream issue on ratatui to add Send + Sync bounds to CellEffect trait
---
-
-idea: build a new version release note TUI (use Info tui). showing only when user first update to a new version, and can be accessed later in the help menu.
 
 --
+
+idea: build a new version release note TUI (use Info tui component). showing only when user first update to a new version, and can be accessed later in the help menu.
+
+example
+
+```
+
+> VT Code  v2.1.170
+
+ ▎ Meet Fable 5, our newest model for complex, long-running work. Try anytime with /model.
+ ▎ Included in your plan limits for a limited time, then switch to usage credits to continue.
+
+```
