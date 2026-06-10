@@ -13,7 +13,7 @@ use std::path::Path;
 use std::sync::LazyLock;
 use tui_shimmer::shimmer_spans_with_style_at_phase;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
-use vtcode_commons::fs::is_image_path;
+use vtcode_commons::fs::{is_image_path, trim_trailing_image_path_str, unescape_whitespace};
 
 use super::utils::line_truncation::truncate_line_with_ellipsis_if_overflow;
 
@@ -1145,7 +1145,7 @@ fn compact_image_placeholders(content: &str) -> Option<String> {
         let raw = path_match.as_str();
         // The regex may consume trailing text after the image extension.
         // Try progressively shorter suffixes to find the actual image path.
-        let trimmed_raw = trim_trailing_image_text(raw);
+        let trimmed_raw = trim_trailing_image_path_str(raw);
         let Some(label) = image_label_for_path(trimmed_raw) else {
             continue;
         };
@@ -1193,42 +1193,6 @@ fn image_label_for_path(raw: &str) -> Option<String> {
         .and_then(|name| name.to_str())
         .unwrap_or(unescaped.as_str());
     Some(label.to_string())
-}
-
-/// Trim trailing text from a raw image path match.
-///
-/// The regex may greedily consume trailing words after the image extension.
-/// Try progressively shorter suffixes to find the longest valid image path.
-fn trim_trailing_image_text<'a>(raw: &'a str) -> &'a str {
-    let trimmed = raw.trim_end();
-    if is_image_path(Path::new(trimmed)) {
-        return trimmed;
-    }
-    let mut candidate = trimmed;
-    while let Some(last_space) = candidate.rfind(' ') {
-        candidate = &candidate[..last_space];
-        if is_image_path(Path::new(candidate)) {
-            return candidate;
-        }
-    }
-    raw
-}
-
-fn unescape_whitespace(token: &str) -> String {
-    let mut result = String::with_capacity(token.len());
-    let mut chars = token.chars().peekable();
-    while let Some(ch) = chars.next() {
-        if ch == '\\'
-            && let Some(next) = chars.peek()
-            && next.is_ascii_whitespace()
-        {
-            result.push(*next);
-            chars.next();
-            continue;
-        }
-        result.push(ch);
-    }
-    result
 }
 
 fn is_spinner_frame(indicator: &str) -> bool {

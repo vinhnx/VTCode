@@ -244,7 +244,7 @@ mod tests {
 
         let req = ToolRequest {
             id: "req-1".to_string(),
-            tool_name: "test_tool".to_string(),
+            tool_name: "test_tool".into(),
             args: Value::Null,
             metadata: Some(Default::default()),
         };
@@ -270,7 +270,7 @@ mod tests {
 
         let req = ToolRequest {
             id: "req-2".to_string(),
-            tool_name: "test".to_string(),
+            tool_name: "test".into(),
             args: Value::Null,
             metadata: Some(Default::default()),
         };
