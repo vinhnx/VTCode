@@ -75,7 +75,7 @@ fn turn_timeout_expands_buffer_for_large_configs() {
 }
 
 #[test]
-fn plan_mode_applies_tool_call_floor() {
+fn planning_workflow_applies_tool_call_floor() {
     assert_eq!(effective_max_tool_calls_for_turn(32, true), 48);
     assert_eq!(effective_max_tool_calls_for_turn(64, true), 64);
 }

@@ -1182,7 +1182,7 @@ mod tests {
 
     #[test]
     #[serial]
-    fn resolve_openai_auth_prefers_chatgpt_in_auto_mode() {
+    fn resolve_openai_auth_prefers_chatgpt_in_auto_permission() {
         let _guard = TestAuthDirGuard::new();
         let session = sample_session();
         save_openai_chatgpt_session_with_mode(&session, AuthCredentialsStoreMode::File)

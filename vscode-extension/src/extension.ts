@@ -1390,7 +1390,7 @@ function handleConfigUpdate(summary: VtcodeConfigSummary) {
         if (enabled && lastAutomationFullAutoEnabled !== true) {
             const channel = getOutputChannel();
             channel.appendLine(
-                "[warn] VT Code extension: Full-auto mode is blocked inside VS Code. Human-in-the-loop approval remains required."
+                "[warn] VT Code extension: Full-auto permission review is blocked inside VS Code. Human-in-the-loop approval remains required."
             );
             void maybeWarnAboutFullAuto(summary);
         } else if (!enabled && lastAutomationFullAutoEnabled !== false) {
@@ -1873,7 +1873,7 @@ async function maybeWarnAboutFullAuto(
 
     await activationContext.globalState.update(storageKey, true);
     const selection = await vscode.window.showWarningMessage(
-        "VT Code full-auto mode is blocked in VS Code. The extension will continue to require manual oversight before executing tools.",
+        "VT Code full-auto permission review is blocked in VS Code. The extension will continue to require manual oversight before executing tools.",
         "Open vtcode.toml",
         "Dismiss"
     );

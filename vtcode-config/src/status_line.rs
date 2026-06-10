@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Default)]
 pub enum StatusLineMode {
-    /// Auto mode: displays git branch, model name, and context remaining (default)
+    /// Automatic status line: displays git branch, model name, and context remaining (default)
     #[default]
     Auto,
     /// Command mode: executes custom shell command to render status line
@@ -44,7 +44,7 @@ impl StatusLineConfig {
     ///
     /// Following Codex PR #12015's pattern for default configuration fallback,
     /// this method ensures that when a status line config is not explicitly set,
-    /// sensible defaults are applied (Auto mode by default).
+    /// sensible defaults are applied (automatic status line by default).
     pub fn effective_mode(&self) -> StatusLineMode {
         self.mode.clone()
     }

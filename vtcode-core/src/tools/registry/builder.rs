@@ -11,7 +11,7 @@ use parking_lot::Mutex;
 use crate::config::PtyConfig;
 use crate::core::memory_pool::MemoryPool;
 use crate::tool_policy::ToolPolicyManager;
-use crate::tools::handlers::PlanModeState;
+use crate::tools::handlers::PlanningWorkflowState;
 use crate::tools::output_spooler::{SpoolerConfig, ToolOutputSpooler};
 use crate::tools::safety_gateway::SafetyGateway;
 use vtcode_config::DynamicContextConfig;
@@ -94,9 +94,9 @@ impl ToolRegistry {
             Arc::new(crate::tools::edited_file_monitor::EditedFileMonitor::new());
         let inventory =
             ToolInventory::new(workspace_root.clone(), Arc::clone(&edited_file_monitor));
-        let plan_mode_state = PlanModeState::new(workspace_root.clone());
+        let planning_workflow_state = PlanningWorkflowState::new(workspace_root.clone());
 
-        register_builtin_tools(&inventory, &plan_mode_state);
+        register_builtin_tools(&inventory, &planning_workflow_state);
 
         let pty_sessions = pty::PtySessionManager::new(workspace_root.clone(), pty_config);
         let exec_sessions = crate::tools::exec_session::ExecSessionManager::new(
@@ -155,7 +155,7 @@ impl ToolRegistry {
 
             output_spooler,
 
-            plan_mode_state,
+            planning_workflow_state,
             safety_gateway: Arc::new(SafetyGateway::default()),
             cgp_runtime_mode: Arc::new(RwLock::new(None)),
             tool_assembly: Arc::new(RwLock::new(ToolAssembly::empty())),

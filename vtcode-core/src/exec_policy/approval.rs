@@ -40,7 +40,7 @@ impl RejectConfig {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AskForApproval {
-    /// Never ask for approval (autonomous mode).
+    /// Never ask for approval during autonomous execution.
     Never,
 
     /// Ask only when explicitly requested by policy.

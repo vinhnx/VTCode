@@ -27,10 +27,10 @@ use crate::codex_app_server::{
 const EXEC_TASK_ID: &str = "exec-task";
 const EXEC_TASK_TITLE: &str = "Exec Task";
 const EXEC_TASK_INSTRUCTIONS: &str = "You are running vtcode in non-interactive exec mode. Complete the task autonomously using the configured full-auto tool allowlist. Do not request additional user input, confirmations, or allowances—operate solely with the provided information and available tools. Provide a concise summary of the outcome when finished.";
-const EXEC_TASK_INSTRUCTIONS_DRY_RUN: &str = "You are running vtcode in non-interactive exec dry-run mode. Plan and validate the approach in read-only mode without mutating files, running mutating commands, or requesting additional user input. If the task requires mutations, explain what would be changed and why.";
+const EXEC_TASK_INSTRUCTIONS_DRY_RUN: &str = "You are running vtcode as a non-interactive dry-run execution. Plan and validate the approach with read-only permissions, without mutating files, running mutating commands, or requesting additional user input. If the task requires mutations, explain what would be changed and why.";
 pub(super) const REVIEW_TASK_ID: &str = "review-task";
 const REVIEW_TASK_TITLE: &str = "Review Task";
-const REVIEW_TASK_INSTRUCTIONS: &str = "You are running vtcode in non-interactive review mode. Review the requested target in read-only mode. Do not modify files, do not run mutating commands, and do not request user input. Return findings first, ordered by severity, with concrete file and line references when possible. If there are no findings, state that explicitly.";
+const REVIEW_TASK_INSTRUCTIONS: &str = "You are running vtcode through the non-interactive review command. Review the requested target with read-only permissions. Do not modify files, do not run mutating commands, and do not request user input. Return findings first, ordered by severity, with concrete file and line references when possible. If there are no findings, state that explicitly.";
 
 pub(super) struct TaskSpec {
     pub(super) id: &'static str,
@@ -164,7 +164,7 @@ pub(super) async fn handle_exec_command_impl(
     };
     runner.enable_full_auto(&allowed_tools).await;
     if options.dry_run {
-        runner.enable_plan_mode();
+        runner.enable_planning();
     }
     runner.set_quiet(true);
     let events_path = effective_exec_events_path(
@@ -272,7 +272,6 @@ async fn handle_codex_exec_command_impl(
         CodexNonInteractiveRun {
             prompt,
             read_only: options.dry_run || matches!(options.command, ExecCommandKind::Review { .. }),
-            plan_mode: options.dry_run,
             skip_confirmations: true,
             ephemeral: archive.is_none(),
             resume_thread_id: external_thread_id_from_bootstrap(&thread_bootstrap),

@@ -389,7 +389,11 @@ mod tests {
             TomlValue::try_from(VTCodeConfig::default()).expect("default config should serialize");
 
         let items = build_settings_items(&state, &draft).expect("settings items");
-        assert!(!items.iter().any(|item| item.title == "Autonomous Mode"));
+        assert!(
+            !items
+                .iter()
+                .any(|item| item.title == "Autonomous Execution")
+        );
     }
 
     #[test]

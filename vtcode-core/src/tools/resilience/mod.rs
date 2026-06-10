@@ -40,7 +40,7 @@ use self::circuit_breaker::CircuitBreaker;
 pub enum CallOutcome {
     /// The call succeeded. Resets the failure counter for the tool.
     Success,
-    /// The call failed due to a non-retryable error (invalid arguments, plan-mode
+    /// The call failed due to a non-retryable error (invalid arguments, planning workflow
     /// denial, permission denial). Does not trip the circuit breaker.
     InvalidArgument,
     /// The call failed due to a retryable execution error. May trip the circuit

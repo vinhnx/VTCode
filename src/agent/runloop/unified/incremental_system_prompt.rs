@@ -12,7 +12,7 @@ fn append_auto_permission_notice(prompt: &mut String) {
         return;
     }
     prompt.push('\n');
-    prompt.push_str(crate::agent::runloop::unified::auto_mode::system_prompt_addendum());
+    prompt.push_str(crate::agent::runloop::unified::auto_permission::system_prompt_addendum());
     prompt.push('\n');
 }
 
@@ -174,12 +174,12 @@ impl IncrementalSystemPrompt {
             &mut prompt,
             vtcode_core::prompts::RuntimePromptContract {
                 full_auto: context.full_auto,
-                plan_mode: context.plan_mode,
+                planning_active: context.planning_active,
                 request_user_input_enabled: context.request_user_input_enabled,
             },
         );
 
-        if context.auto_mode && !context.plan_mode {
+        if context.auto_permission && !context.planning_active {
             append_auto_permission_notice(&mut prompt);
         }
 
@@ -204,9 +204,9 @@ impl Default for IncrementalSystemPrompt {
 #[derive(Debug, Clone)]
 pub(crate) struct SystemPromptContext {
     pub(crate) full_auto: bool,
-    pub(crate) auto_mode: bool,
-    /// Plan mode: read-only mode for exploration and planning.
-    pub(crate) plan_mode: bool,
+    pub(crate) auto_permission: bool,
+    /// Planning workflow with read-only permissions for exploration and planning.
+    pub(crate) planning_active: bool,
     /// Whether `request_user_input` can be called in the current runtime.
     pub(crate) request_user_input_enabled: bool,
     /// Discovered skills for immediate awareness
@@ -224,8 +224,8 @@ impl SystemPromptContext {
 
         let mut hasher = DefaultHasher::new();
         self.full_auto.hash(&mut hasher);
-        self.auto_mode.hash(&mut hasher);
-        self.plan_mode.hash(&mut hasher);
+        self.auto_permission.hash(&mut hasher);
+        self.planning_active.hash(&mut hasher);
         self.request_user_input_enabled.hash(&mut hasher);
         self.active_instruction_directory.hash(&mut hasher);
         for path in &self.instruction_context_paths {

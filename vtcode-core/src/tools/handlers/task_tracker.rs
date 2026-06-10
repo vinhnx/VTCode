@@ -12,8 +12,10 @@
 //! - `list`: Show the current task checklist and its status
 //! - `add`: Add a new item to an existing checklist
 
-use super::plan_mode::{PlanModeState, plan_file_for_tracker_file, sync_tracker_into_plan_file};
-use super::plan_task_tracker::{PlanTaskTrackerArgs, PlanTaskTrackerTool};
+use super::planning_task_tracker::{PlanningTaskTrackerArgs, PlanningTaskTrackerTool};
+use super::planning_workflow::{
+    PlanningWorkflowState, plan_file_for_tracker_file, sync_tracker_into_plan_file,
+};
 use std::str::FromStr;
 
 use crate::config::constants::tools;
@@ -218,7 +220,7 @@ fn parse_single_index_from_path(index_path: &str) -> Result<usize> {
     let first = parts.next().context("index_path cannot be empty")?;
     if parts.next().is_some() {
         bail!(
-            "Hierarchical index_path '{}' requires Plan Mode support. Use 'index' in Edit mode or switch to Plan Mode.",
+            "Hierarchical index_path '{}' requires Planning workflow support. Use 'index' for standard task-tracker updates or switch to Planning workflow.",
             index_path
         );
     }
@@ -365,9 +367,9 @@ fn parse_plan_mirror_markdown(content: &str) -> Option<TaskChecklist> {
 fn newer_source(
     global_modified: Option<std::time::SystemTime>,
     plan_modified: Option<std::time::SystemTime>,
-    plan_mode: bool,
+    planning_active: bool,
 ) -> TrackerSource {
-    if plan_mode {
+    if planning_active {
         return if plan_modified.is_some() {
             TrackerSource::Plan
         } else {
@@ -388,7 +390,7 @@ fn newer_source(
         (Some(_), None) => TrackerSource::Global,
         (None, Some(_)) => TrackerSource::Plan,
         (None, None) => {
-            if plan_mode {
+            if planning_active {
                 TrackerSource::Plan
             } else {
                 TrackerSource::Global
@@ -421,7 +423,7 @@ pub struct TaskTrackerArgs {
     #[serde(default)]
     pub index: Option<usize>,
 
-    /// Hierarchical index path for update (Plan Mode, optional)
+    /// Hierarchical index path for update (Planning workflow, optional)
     #[serde(default)]
     pub index_path: Option<String>,
 
@@ -448,7 +450,7 @@ pub struct TaskTrackerArgs {
     )]
     pub verify: Option<Vec<String>>,
 
-    /// Optional parent path for add in Plan Mode (example: "2")
+    /// Optional parent path for add in Planning workflow (example: "2")
     #[serde(default)]
     pub parent_index_path: Option<String>,
 
@@ -460,15 +462,15 @@ pub struct TaskTrackerArgs {
 /// Task Tracker tool state
 pub struct TaskTrackerTool {
     workspace_root: PathBuf,
-    plan_mode_state: PlanModeState,
+    planning_workflow_state: PlanningWorkflowState,
     checklist: Arc<RwLock<Option<TaskChecklist>>>,
 }
 
 impl TaskTrackerTool {
-    pub fn new(workspace_root: PathBuf, plan_mode_state: PlanModeState) -> Self {
+    pub fn new(workspace_root: PathBuf, planning_workflow_state: PlanningWorkflowState) -> Self {
         Self {
             workspace_root,
-            plan_mode_state,
+            planning_workflow_state,
             checklist: Arc::new(RwLock::new(None)),
         }
     }
@@ -482,7 +484,7 @@ impl TaskTrackerTool {
     }
 
     async fn plan_task_file(&self) -> Option<PathBuf> {
-        let plan_file = self.plan_mode_state.get_plan_file().await?;
+        let plan_file = self.planning_workflow_state.get_plan_file().await?;
         let stem = plan_file.file_stem()?.to_str()?;
         Some(plan_file.with_file_name(format!("{stem}.tasks.md")))
     }
@@ -641,7 +643,7 @@ impl TaskTrackerTool {
             newer_source(
                 global_modified,
                 plan_modified,
-                self.plan_mode_state.is_active(),
+                self.planning_workflow_state.is_active(),
             )
         } else if plan_exists {
             TrackerSource::Plan
@@ -694,8 +696,8 @@ impl TaskTrackerTool {
         Ok((checklist.summary(), checklist.view()))
     }
 
-    fn to_plan_args(args: &TaskTrackerArgs) -> PlanTaskTrackerArgs {
-        PlanTaskTrackerArgs {
+    fn to_plan_args(args: &TaskTrackerArgs) -> PlanningTaskTrackerArgs {
+        PlanningTaskTrackerArgs {
             action: args.action.clone(),
             title: args.title.clone(),
             items: args.items.clone(),
@@ -714,8 +716,8 @@ impl TaskTrackerTool {
         }
     }
 
-    async fn execute_in_plan_mode(&self, args: &TaskTrackerArgs) -> Result<Value> {
-        let plan_tool = PlanTaskTrackerTool::new(self.plan_mode_state.clone());
+    async fn execute_in_planning_workflow(&self, args: &TaskTrackerArgs) -> Result<Value> {
+        let plan_tool = PlanningTaskTrackerTool::new(self.planning_workflow_state.clone());
         let mapped = Self::to_plan_args(args);
         let output = plan_tool.execute(serde_json::to_value(mapped)?).await?;
         self.ensure_checklist_loaded().await?;
@@ -855,7 +857,7 @@ impl TaskTrackerTool {
             (None, Some(path)) => parse_single_index_from_path(path)?,
             (None, None) => {
                 bail!(
-                    "'index' is required for 'update' (1-indexed), or provide 'index_path' for adaptive mode, or 'items' for bulk sync"
+                    "'index' is required for 'update' (1-indexed), or provide 'index_path' for Planning workflow updates, or 'items' for bulk sync"
                 )
             }
         };
@@ -951,7 +953,7 @@ impl TaskTrackerTool {
             && !parent_path.trim().is_empty()
         {
             bail!(
-                "'parent_index_path' is only supported for hierarchical Plan Mode updates. Use Plan Mode or omit parent_index_path in Edit mode."
+                "'parent_index_path' is only supported for hierarchical Planning workflow updates. Use Planning workflow or omit parent_index_path for standard task-tracker updates."
             );
         }
 
@@ -1002,8 +1004,8 @@ impl Tool for TaskTrackerTool {
     async fn execute(&self, args: Value) -> Result<Value> {
         let args: TaskTrackerArgs = deserialize_tool_args(&args, "task_tracker")?;
 
-        if self.plan_mode_state.is_active() {
-            return self.execute_in_plan_mode(&args).await;
+        if self.planning_workflow_state.is_active() {
+            return self.execute_in_planning_workflow(&args).await;
         }
 
         match args.action.as_str() {
@@ -1023,7 +1025,7 @@ impl Tool for TaskTrackerTool {
     }
 
     fn description(&self) -> &str {
-        "Adaptive task tracker for both Plan and Edit modes. Uses one checklist API (`create|update|list|add`) and mirrors tracker state between `.vtcode/tasks/current_task.md` and active plan sidecar files when available."
+        "Task tracker for standard sessions and the Planning workflow. Uses one checklist API (`create|update|list|add`) and mirrors tracker state between `.vtcode/tasks/current_task.md` and active plan sidecar files when available."
     }
 
     fn parameter_schema(&self) -> Option<Value> {
@@ -1071,15 +1073,15 @@ impl Tool for TaskTrackerTool {
                             }
                         ]
                     },
-                    "description": "List of task descriptions or structured task items (used with 'create'; also supports bulk 'update' sync with optional [x]/[~]/[!]/[ ] prefixes and indentation for hierarchy in Plan Mode)."
+                    "description": "List of task descriptions or structured task items (used with 'create'; also supports bulk 'update' sync with optional [x]/[~]/[!]/[ ] prefixes and indentation for hierarchy in Planning workflow)."
                 },
                 "index": {
                     "type": "integer",
-                    "description": "1-indexed item number to update (flat mode)."
+                    "description": "1-indexed item number to update in the standard flat checklist."
                 },
                 "index_path": {
                     "type": "string",
-                    "description": "Hierarchical index path for update in Plan Mode (example: '2.1'). Single value (e.g. '2') also works in Edit mode."
+                    "description": "Hierarchical index path for update in Planning workflow (example: '2.1'). A single value such as '2' is equivalent to the flat index."
                 },
                 "status": {
                     "type": "string",
@@ -1111,7 +1113,7 @@ impl Tool for TaskTrackerTool {
                 },
                 "parent_index_path": {
                     "type": "string",
-                    "description": "Optional parent path for add in Plan Mode (example: '2')."
+                    "description": "Optional parent path for add in Planning workflow (example: '2')."
                 },
                 "notes": {
                     "type": "string",
@@ -1169,8 +1171,8 @@ mod tests {
     use super::*;
     use tempfile::TempDir;
 
-    fn setup_tool(temp: &TempDir) -> (PlanModeState, TaskTrackerTool) {
-        let state = PlanModeState::new(temp.path().to_path_buf());
+    fn setup_tool(temp: &TempDir) -> (PlanningWorkflowState, TaskTrackerTool) {
+        let state = PlanningWorkflowState::new(temp.path().to_path_buf());
         let tool = TaskTrackerTool::new(temp.path().to_path_buf(), state.clone());
         (state, tool)
     }
@@ -1432,7 +1434,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_plan_mode_task_tracker_delegates_and_mirrors_global() {
+    async fn test_planning_workflow_task_tracker_delegates_and_mirrors_global() {
         let temp = TempDir::new().unwrap();
         let (state, tool) = setup_tool(&temp);
 
@@ -1462,7 +1464,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_plan_mode_mirror_preserves_notes() {
+    async fn test_planning_workflow_mirror_preserves_notes() {
         let temp = TempDir::new().unwrap();
         let (state, tool) = setup_tool(&temp);
 
@@ -1521,7 +1523,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_plan_mode_prefers_plan_sidecar_even_if_global_is_newer() {
+    async fn test_planning_workflow_prefers_plan_sidecar_even_if_global_is_newer() {
         let temp = TempDir::new().unwrap();
         let (state, tool) = setup_tool(&temp);
 

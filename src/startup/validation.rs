@@ -86,14 +86,14 @@ pub(super) fn validate_full_auto_configuration(
     let automation_cfg = &config.automation.full_auto;
     if !automation_cfg.enabled {
         bail!(
-            "Full-auto mode is disabled in configuration. Enable it under [automation.full_auto]."
+            "Full-auto permission review is disabled in configuration. Enable it under [automation.full_auto]."
         );
     }
 
     if automation_cfg.require_profile_ack {
         let profile_path = automation_cfg.profile_path.clone().ok_or_else(|| {
             anyhow!(
-                "Full-auto mode requires 'profile_path' in [automation.full_auto] when require_profile_ack = true."
+                "Full-auto permission review requires 'profile_path' in [automation.full_auto] when require_profile_ack = true."
             )
         })?;
         let resolved_profile = if profile_path.is_absolute() {

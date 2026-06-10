@@ -35,7 +35,7 @@ use vtcode_core::core::agent::config::{
     RuntimeModelSelection, api_key_env_var, build_runtime_agent_config, provider_label,
     resolve_runtime_model_selection,
 };
-use vtcode_core::core::interfaces::session::PlanModeEntrySource;
+use vtcode_core::core::interfaces::session::PlanningEntrySource;
 use vtcode_core::{initialize_dot_folder, update_model_preference, update_theme_preference};
 pub(crate) use workspace_trust::{
     ensure_full_auto_workspace_trust, require_full_auto_workspace_trust,
@@ -54,7 +54,7 @@ pub(crate) struct StartupContext {
     pub(crate) resume_show_all: bool,
     pub(crate) custom_session_id: Option<String>,
     pub(crate) summarize_fork: bool,
-    pub(crate) plan_mode_entry_source: PlanModeEntrySource,
+    pub(crate) planning_entry_source: PlanningEntrySource,
 }
 
 #[derive(Debug, Clone)]
@@ -78,7 +78,7 @@ impl StartupContext {
         let mut config = loaded.config;
         apply_codex_experimental_override(&mut config, args.codex_experimental_override());
 
-        let plan_mode_entry_source = PlanModeEntrySource::None;
+        let planning_entry_source = PlanningEntrySource::None;
         apply_cli_permission_overrides(&mut config, &args.allowed_tools, &args.disallowed_tools);
 
         // Validate configuration against models database
@@ -204,7 +204,7 @@ impl StartupContext {
             resume_show_all: args.all,
             custom_session_id,
             summarize_fork: args.summarize,
-            plan_mode_entry_source,
+            planning_entry_source,
         })
     }
 }

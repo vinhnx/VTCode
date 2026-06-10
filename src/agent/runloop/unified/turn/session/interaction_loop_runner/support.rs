@@ -925,7 +925,6 @@ async fn sync_primary_agent_hook_runtime(ctx: &mut InteractionLoopContext<'_>) -
         &hooks_config,
         SessionStartTrigger::Startup,
         ctx.thread_id,
-        vtcode_core::config::PermissionMode::Default,
     )?;
     if let (Some(hooks), Some(path)) = (next.as_ref(), transcript_path) {
         hooks.update_transcript_path(Some(path)).await;

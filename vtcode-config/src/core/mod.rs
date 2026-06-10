@@ -27,7 +27,7 @@ pub use custom_provider::{CustomProviderCommandAuthConfig, CustomProviderConfig}
 pub use dotfile_protection::DotfileProtectionConfig;
 pub use model::ModelConfig;
 pub use permissions::{
-    AgentPermissionsConfig, AutoModeConfig, AutoModeEnvironmentConfig, PermissionMode,
+    AgentPermissionsConfig, AutoPermissionConfig, AutoPermissionEnvironmentConfig,
     PermissionsConfig,
 };
 pub use plugins::{PluginRuntimeConfig, PluginTrustLevel};

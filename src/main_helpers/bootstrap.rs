@@ -69,7 +69,7 @@ pub(crate) fn build_augmented_cli_command() -> clap::Command {
     let version_leak: &'static str = Box::leak(version_info.into_boxed_str());
     cmd = cmd.long_version(version_leak);
 
-    let after_help = "\nSlash commands (type / in chat):\n  /init     - Guided AGENTS.md + workspace setup\n  /config   - Browse settings sections\n  /status   - Show current configuration\n  /doctor   - Diagnose setup issues (inline picker, or use --quick/--full)\n  /update   - Check for VT Code updates (use --list, --pin, --channel)\n  /plan     - Toggle read-only planning mode\n  /loop     - Schedule a recurring prompt in this session\n  /schedule - Open the durable scheduled-task manager\n  /theme    - Switch UI theme\n  /title    - Configure terminal title items\n  /history  - Open command history picker\n  /help     - Show all slash commands";
+    let after_help = "\nSlash commands (type / in chat):\n  /init     - Guided AGENTS.md + workspace setup\n  /config   - Browse settings sections\n  /status   - Show current configuration\n  /doctor   - Diagnose setup issues (inline picker, or use --quick/--full)\n  /update   - Check for VT Code updates (use --list, --pin, --channel)\n  /plan     - Start or finish the Planning workflow\n  /loop     - Schedule a recurring prompt in this session\n  /schedule - Open the durable scheduled-task manager\n  /theme    - Switch UI theme\n  /title    - Configure terminal title items\n  /history  - Open command history picker\n  /help     - Show all slash commands";
     cmd.after_help(after_help)
 }
 

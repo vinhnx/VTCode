@@ -4,7 +4,7 @@
 
 ## Modules
 
-`loader/` ConfigManager + ConfigBuilder + layers | `constants/` models, env vars, URLs, tools | `core/` AgentConfig + all nested config structs | `models/` ModelId + Provider enums | `types/` EditingMode, ReasoningEffortLevel, etc. | `schema/` JSON Schema export (feature-gated) | `defaults/` ConfigDefaultsProvider | `auth/` auth config re-exports | `mcp/` MCP config | `acp/` ACP config | `hooks/` lifecycle hooks | `subagents/` subagent discovery
+`loader/` ConfigManager + ConfigBuilder + layers | `constants/` models, env vars, URLs, tools | `core/` AgentConfig + all nested config structs | `models/` ModelId + Provider enums | `types/` ReasoningEffortLevel and related enums | `schema/` JSON Schema export (feature-gated) | `defaults/` ConfigDefaultsProvider | `auth/` auth config re-exports | `mcp/` MCP config | `acp/` ACP config | `hooks/` lifecycle hooks | `subagents/` subagent discovery
 
 ## Rules
 

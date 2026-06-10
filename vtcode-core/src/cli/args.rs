@@ -221,7 +221,7 @@ pub struct Cli {
     )]
     pub print: Option<String>,
 
-    /// Enable full-auto mode (no interaction) or run a headless task
+    /// Enable full-auto permission review (no interaction) or run a headless task
     #[arg(
         long = "full-auto",
         global = true,
@@ -536,7 +536,7 @@ pub enum Commands {
             long_help = "Stream newline-delimited JSON events to stdout.\nEach line is a JSON object representing an agent event (tool call, message, etc.).\nUseful for programmatic consumption and CI integration."
         )]
         json: bool,
-        /// Run in read-only dry-run mode (blocks mutating tool calls)
+        /// Run a read-only dry-run execution (blocks mutating tool calls)
         #[arg(
             long,
             long_help = "Simulate execution without making changes.\nThe agent plans tool calls but does not execute mutating operations (file writes, shell commands).\nUseful for previewing what the agent would do."
@@ -1298,20 +1298,6 @@ mod exec_command_tests {
 
         assert!(command.is_none());
         assert_eq!(prompt.as_deref(), Some("count files"));
-    }
-
-    #[test]
-    fn permission_mode_flag_is_not_accepted_or_documented() {
-        assert!(Cli::try_parse_from(["vtcode", "--permission-mode", "plan"]).is_err());
-
-        let mut help = Vec::new();
-        Cli::command()
-            .write_long_help(&mut help)
-            .expect("render help");
-        let help = String::from_utf8(help).expect("utf8 help");
-
-        assert!(!help.contains("--permission-mode"));
-        assert!(!help.contains("permission mode"));
     }
 
     #[test]

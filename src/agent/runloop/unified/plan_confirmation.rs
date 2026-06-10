@@ -111,7 +111,7 @@ fn build_plan_confirmation_request(plan: &PlanContent, draft_incomplete: bool) -
         },
         InlineListItem {
             title: "Type feedback to revise the plan".to_string(),
-            subtitle: Some("Return to plan mode and refine the plan.".to_string()),
+            subtitle: Some("Return to planning workflow and refine the plan.".to_string()),
             badge: None,
             indent: 0,
             selection: Some(InlineListSelection::PlanApprovalEditPlan),
@@ -139,7 +139,7 @@ fn build_plan_confirmation_request(plan: &PlanContent, draft_incomplete: bool) -
     })
 }
 
-/// Execute the plan confirmation HITL flow after exit_plan_mode tool.
+/// Execute the plan confirmation HITL flow after finish_planning tool.
 ///
 /// The plan is rendered as static transcript markdown plus an inline confirmation list.
 pub(crate) async fn execute_plan_confirmation(
@@ -201,8 +201,8 @@ pub(crate) fn plan_confirmation_outcome_to_json(outcome: &PlanConfirmationOutcom
         }),
         PlanConfirmationOutcome::EditPlan => json!({
             "status": "edit_requested",
-            "action": "stay_in_plan_mode",
-            "message": "User wants to edit the plan. Remain in plan mode and await further instructions."
+            "action": "stay_in_planning_workflow",
+            "message": "User wants to edit the plan. Remain in planning workflow and await further instructions."
         }),
         PlanConfirmationOutcome::Cancel => json!({
             "status": "cancelled",

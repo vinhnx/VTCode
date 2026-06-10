@@ -9,7 +9,7 @@ use crate::core::agent::session::AgentSessionState;
 use crate::core::agent::task::Task;
 use crate::tools::Tool;
 use crate::tools::handlers::TaskTrackerTool;
-use crate::tools::handlers::plan_mode::PlanModeState;
+use crate::tools::handlers::planning_workflow::PlanningWorkflowState;
 
 const INTERNAL_SCAFFOLD_MARKER: &str = "<!-- vtcode:internal_scaffold -->";
 
@@ -60,7 +60,7 @@ pub(super) struct ContinuationController {
     tracker_tool: TaskTrackerTool,
     continuation_policy: ContinuationPolicy,
     full_auto_active: bool,
-    plan_mode: bool,
+    planning_active: bool,
     review_like: bool,
     inferred_verify_commands: Vec<String>,
     manages_internal_scaffold: bool,
@@ -69,18 +69,18 @@ pub(super) struct ContinuationController {
 impl ContinuationController {
     pub(super) fn new(
         workspace_root: PathBuf,
-        plan_mode_state: PlanModeState,
+        planning_workflow_state: PlanningWorkflowState,
         continuation_policy: ContinuationPolicy,
         full_auto_active: bool,
-        plan_mode: bool,
+        planning_active: bool,
         review_like: bool,
     ) -> Self {
         let inferred_verify_commands = infer_default_verify_commands(workspace_root.as_path());
         Self {
-            tracker_tool: TaskTrackerTool::new(workspace_root, plan_mode_state),
+            tracker_tool: TaskTrackerTool::new(workspace_root, planning_workflow_state),
             continuation_policy,
             full_auto_active,
-            plan_mode,
+            planning_active,
             review_like,
             inferred_verify_commands,
             manages_internal_scaffold: false,
@@ -112,7 +112,7 @@ impl ContinuationController {
                 reason: continuation_skip_reason(
                     &self.continuation_policy,
                     self.full_auto_active,
-                    self.plan_mode,
+                    self.planning_active,
                     self.review_like,
                 ),
             });
@@ -233,7 +233,7 @@ impl ContinuationController {
     }
 
     fn continuation_enabled(&self) -> bool {
-        if self.plan_mode || self.review_like {
+        if self.planning_active || self.review_like {
             return false;
         }
 
@@ -364,11 +364,11 @@ impl ContinuationController {
 fn continuation_skip_reason(
     policy: &ContinuationPolicy,
     full_auto_active: bool,
-    plan_mode: bool,
+    planning_active: bool,
     review_like: bool,
 ) -> String {
-    if plan_mode {
-        return "Continuation disabled in Plan Mode.".to_string();
+    if planning_active {
+        return "Continuation disabled in Planning workflow.".to_string();
     }
     if review_like {
         return "Continuation disabled for read-only review runs.".to_string();
@@ -439,7 +439,7 @@ pub(super) fn is_review_like_task(task: &Task) -> bool {
 
     task.instructions.as_deref().is_some_and(|instructions| {
         let lower = instructions.to_ascii_lowercase();
-        lower.contains("review mode") && lower.contains("read-only")
+        lower.contains("review command") && lower.contains("read-only")
     })
 }
 
@@ -460,15 +460,15 @@ mod tests {
         temp: &TempDir,
         continuation_policy: ContinuationPolicy,
         full_auto_enabled: bool,
-        plan_mode: bool,
+        planning_active: bool,
         review_like: bool,
     ) -> ContinuationController {
         ContinuationController::new(
             temp.path().to_path_buf(),
-            PlanModeState::new(temp.path().to_path_buf()),
+            PlanningWorkflowState::new(temp.path().to_path_buf()),
             continuation_policy,
             full_auto_enabled,
-            plan_mode,
+            planning_active,
             review_like,
         )
     }

@@ -400,7 +400,7 @@ pub(crate) fn update_repetition_tracker(
             loop_tracker.reset_low_signal_attempts();
         }
     } else if is_plan_artifact_write(canonical_name, args) {
-        // Plan artifact writes in dedicated plan storage are allowed in Plan Mode and
+        // Plan artifact writes in dedicated plan storage are allowed in Planning workflow and
         // should not trigger anti-blind-editing verification pressure.
         loop_tracker.consecutive_navigations = 0;
         loop_tracker.nav_signatures.clear();

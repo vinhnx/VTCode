@@ -56,7 +56,7 @@ pub(crate) async fn dispatch_command(
                 startup.config.clone(),
                 skip_confirmations,
                 full_auto_requested,
-                startup.plan_mode_entry_source,
+                startup.planning_entry_source,
             )
             .await?;
         }

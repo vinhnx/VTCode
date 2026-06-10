@@ -1,19 +1,17 @@
 use anyhow::Result;
-use vtcode_core::config::PermissionMode;
-use vtcode_core::config::loader::VTCodeConfig;
-use vtcode_core::core::interfaces::session::PlanModeEntrySource;
-use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_core::core::interfaces::session::PlanningEntrySource;
+use vtcode_core::utils::ansi::MessageStyle;
 use vtcode_core::utils::dot_config::load_workspace_trust_level;
 
 use crate::agent::runloop::unified::state::should_enforce_safe_mode_prompts;
 
 use super::{SlashCommandContext, SlashCommandControl};
 
-pub(crate) async fn handle_toggle_plan_mode(
+pub(crate) async fn handle_toggle_planning_workflow(
     mut ctx: SlashCommandContext<'_>,
     enable: Option<bool>,
 ) -> Result<SlashCommandControl> {
-    let current = ctx.tool_registry.is_plan_mode();
+    let current = ctx.tool_registry.is_planning_active();
     let new_state = match enable {
         Some(value) => value,
         None => !current,
@@ -33,12 +31,12 @@ pub(crate) async fn handle_toggle_plan_mode(
     }
 
     if new_state {
-        crate::agent::runloop::unified::plan_mode_state::transition_to_plan_mode(
+        crate::agent::runloop::unified::planning_workflow_state::transition_to_planning_workflow(
             ctx.tool_registry,
             ctx.session_stats,
             ctx.plan_session,
             ctx.handle,
-            PlanModeEntrySource::UserRequest,
+            PlanningEntrySource::UserRequest,
             true,
             true,
         )
@@ -59,11 +57,11 @@ pub(crate) async fn handle_toggle_plan_mode(
             MessageStyle::Info,
             "Allowed tools: read_file, list_files, grep_file, unified_search, request_user_input",
         )?;
-        crate::agent::runloop::unified::plan_mode_state::render_plan_mode_next_step_hint(
+        crate::agent::runloop::unified::planning_workflow_state::render_planning_workflow_next_step_hint(
             ctx.renderer,
         )?;
     } else {
-        crate::agent::runloop::unified::plan_mode_state::transition_to_edit_mode(
+        crate::agent::runloop::unified::planning_workflow_state::finish_planning_workflow(
             ctx.tool_registry,
             ctx.plan_session,
             ctx.handle,
@@ -79,36 +77,7 @@ pub(crate) async fn handle_toggle_plan_mode(
         )?;
     }
 
-    persist_mode_preference(
-        ctx.renderer,
-        ctx.config.workspace.as_path(),
-        ctx.vt_cfg,
-        Some(if new_state {
-            PermissionMode::Plan
-        } else {
-            PermissionMode::Default
-        }),
-        "planning workflow preference",
-    )?;
-
     Ok(SlashCommandControl::Continue)
-}
-
-fn persist_mode_preference(
-    renderer: &mut AnsiRenderer,
-    workspace: &std::path::Path,
-    vt_cfg: &mut Option<VTCodeConfig>,
-    permission_mode: Option<PermissionMode>,
-    preference_label: &str,
-) -> Result<()> {
-    if let Err(err) = super::persist_mode_settings(workspace, vt_cfg, permission_mode) {
-        renderer.line(
-            MessageStyle::Error,
-            &format!("Failed to persist {preference_label}: {}", err),
-        )?;
-    }
-
-    Ok(())
 }
 
 async fn sync_workspace_trust_prompt_policy(

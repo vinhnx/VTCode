@@ -12,7 +12,6 @@ impl LifecycleHookEngine {
     async fn base_payload(&self, hook_event_name: &str) -> Result<serde_json::Map<String, Value>> {
         let cwd = self.inner.workspace.to_string_lossy().into_owned();
         let transcript_path = self.current_transcript_path().await;
-        let permission_mode = *self.inner.permission_mode.read().await;
         Ok(serde_json::Map::from_iter([
             (
                 "session_id".to_string(),
@@ -22,10 +21,6 @@ impl LifecycleHookEngine {
             (
                 "hook_event_name".to_string(),
                 Value::String(hook_event_name.to_string()),
-            ),
-            (
-                "permission_mode".to_string(),
-                serde_json::to_value(permission_mode)?,
             ),
             (
                 "transcript_path".to_string(),

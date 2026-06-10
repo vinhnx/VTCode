@@ -44,8 +44,6 @@ const EDITABLE_FRONTMATTER_KEYS: &[&str] = &[
     "reasoning_effort",
     "model_reasoning_effort",
     "effort",
-    "permissionMode",
-    "permission_mode",
     "background",
     "maxTurns",
     "max_turns",
@@ -1529,8 +1527,6 @@ Review the target changes."#,
         assert!(rendered.contains("- read_file"));
         assert!(rendered.contains("ask:"));
         assert!(rendered.contains("- unified_exec"));
-        assert!(!rendered.contains("permissionMode:"));
-        assert!(!rendered.contains("permission_mode:"));
         assert!(rendered.contains("skills:"));
         assert!(rendered.contains("nickname_candidates:"));
         assert!(rendered.ends_with("\nReview the target changes."));
@@ -1592,8 +1588,6 @@ Review the target changes."#,
         assert!(rendered.contains("name: reviewer\n"));
         assert!(rendered.contains("permissions:\n  default: deny\n"));
         assert!(rendered.contains("background: false\n"));
-        assert!(!rendered.contains("permissionMode"));
-        assert!(!rendered.contains("permission_mode"));
         assert!(rendered.contains("\nYou are a focused VT Code subagent.\n"));
 
         let path = workspace.path().join("reviewer.md");
@@ -1680,8 +1674,6 @@ Review the target changes."#,
         assert!(background_index < max_turns_index);
         assert!(max_turns_index < memory_index);
         assert!(memory_index < skills_index);
-        assert!(!rendered.contains("permissionMode"));
-        assert!(!rendered.contains("permission_mode"));
         assert!(rendered.ends_with("\nPrompt body\n  with indentation\n"));
     }
 
@@ -1701,8 +1693,6 @@ Review the target changes."#,
         let rendered = draft.render_markdown().expect("render");
         assert!(rendered.contains("mode: primary\n"));
         assert!(rendered.contains("permissions:\n  default: ask\n"));
-        assert!(!rendered.contains("permissionMode"));
-        assert!(!rendered.contains("permission_mode"));
 
         let temp = TempDir::new().expect("temp dir");
         let path = temp.path().join("planner.md");

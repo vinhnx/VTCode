@@ -226,7 +226,7 @@ async fn validate_tool_call_blocks_when_wall_clock_budget_exhausted() {
 }
 
 #[tokio::test]
-async fn enter_plan_mode_clears_task_tracker_create_signatures() {
+async fn start_planning_clears_task_tracker_create_signatures() {
     let mut backing = TestContextBacking::new(4).await;
     let enter_args = json!({});
     cache_tool_permission(
@@ -258,7 +258,7 @@ async fn enter_plan_mode_clears_task_tracker_create_signatures() {
         &enter_args,
     )
     .await
-    .expect("validate enter_plan_mode");
+    .expect("validate start_planning");
     assert!(matches!(result, ValidationResult::Proceed(_)));
 
     let second = enforce_duplicate_task_tracker_create_guard(

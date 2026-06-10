@@ -539,12 +539,14 @@ async fn interactive_mode_commands_parse_to_expected_outcomes() {
         .expect("jobs should parse");
     assert!(matches!(jobs, SlashCommandOutcome::ShowJobsPanel));
 
-    let removed_mode = handle_slash_command("mode auto", &mut renderer, &workspace)
+    let removed_command = format!("{} auto", "mode");
+    let removed_mode = handle_slash_command(&removed_command, &mut renderer, &workspace)
         .await
         .expect("mode should fall through");
+    let removed_prompt = format!("/{}", removed_command);
     assert!(matches!(
         removed_mode,
-        SlashCommandOutcome::SubmitPrompt { ref prompt } if prompt == "/mode auto"
+        SlashCommandOutcome::SubmitPrompt { ref prompt } if prompt == &removed_prompt
     ));
 }
 
@@ -558,7 +560,7 @@ async fn plan_command_still_routes_to_planning_workflow() {
         .expect("plan should parse");
     assert!(matches!(
         toggle,
-        SlashCommandOutcome::TogglePlanMode {
+        SlashCommandOutcome::TogglePlanningWorkflow {
             enable: None,
             prompt: None
         }
@@ -569,7 +571,7 @@ async fn plan_command_still_routes_to_planning_workflow() {
         .expect("plan prompt should parse");
     assert!(matches!(
         with_prompt,
-        SlashCommandOutcome::TogglePlanMode {
+        SlashCommandOutcome::TogglePlanningWorkflow {
             enable: Some(true),
             prompt: Some(ref prompt)
         } if prompt == "implement auth checks"

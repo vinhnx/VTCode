@@ -16,7 +16,7 @@ pub(crate) fn process_llm_response(
     response: &vtcode_core::llm::provider::LLMResponse,
     renderer: &mut AnsiRenderer,
     conversation_len: usize,
-    plan_mode_active: bool,
+    planning_active: bool,
     allow_plan_interview: bool,
     request_user_input_enabled: bool,
     allow_tool_calls: bool,
@@ -55,7 +55,7 @@ pub(crate) fn process_llm_response(
         }
     }
 
-    if plan_mode_active
+    if planning_active
         && tool_calls.is_empty()
         && let Some(ref text) = final_text
     {
@@ -160,7 +160,7 @@ pub(crate) fn process_llm_response(
             reasoning_details = reasoning_details_count,
             content_len = final_text.as_ref().map_or(0, |text| text.len()),
             is_harmony,
-            plan_mode_active,
+            planning_active,
             allow_plan_interview,
             request_user_input_enabled,
             proposed_plan = proposed_plan.is_some(),
@@ -191,7 +191,7 @@ pub(crate) fn process_llm_response(
             reasoning_details = reasoning_details_count,
             content_len = text.len(),
             is_harmony,
-            plan_mode_active,
+            planning_active,
             allow_plan_interview,
             request_user_input_enabled,
             proposed_plan = proposed_plan.is_some(),
@@ -215,7 +215,7 @@ pub(crate) fn process_llm_response(
         reasoning_details = reasoning_details_count,
         content_len = 0,
         is_harmony,
-        plan_mode_active,
+        planning_active,
         allow_plan_interview,
         request_user_input_enabled,
         proposed_plan = proposed_plan.is_some(),
@@ -411,8 +411,10 @@ fn synthesize_alignment_question(text: &str) -> Option<String> {
         );
     }
 
-    if lower.contains("plan mode") {
-        return Some("Which plan mode improvement area should we prioritize first?".to_string());
+    if lower.contains("planning workflow") {
+        return Some(
+            "Which planning workflow improvement area should we prioritize first?".to_string(),
+        );
     }
 
     Some("Which improvement area should we prioritize first?".to_string())
@@ -426,8 +428,8 @@ fn infer_focus_area(text: &str) -> Option<&'static str> {
     ) {
         return Some("system_prompt");
     }
-    if lower.contains("plan mode") {
-        return Some("plan_mode");
+    if lower.contains("planning workflow") {
+        return Some("planning_workflow");
     }
     if contains_any(&lower, &["verification", "test coverage", "validation"]) {
         return Some("verification");
@@ -751,7 +753,7 @@ mod tests {
     }
 
     #[test]
-    fn process_llm_response_keeps_plan_visible_in_plan_mode() {
+    fn process_llm_response_keeps_plan_visible_in_planning_workflow() {
         let response = LLMResponse {
             content: Some("Intro\n<proposed_plan>\n- Step 1\n</proposed_plan>\nOutro".to_string()),
             tool_calls: None,
@@ -795,7 +797,7 @@ mod tests {
     }
 
     #[test]
-    fn process_llm_response_extracts_plan_block_in_plan_mode() {
+    fn process_llm_response_extracts_plan_block_in_planning_workflow() {
         let response = LLMResponse {
             content: Some("Intro\n<plan>\n- Step 1\n</plan>\nOutro".to_string()),
             tool_calls: None,
@@ -848,17 +850,17 @@ Next open decision: none.
 # Apply Slate-Style Prompting
 
 ## Summary
-Keep the default runtime prompt sparse and consistent with Plan Mode.
+Keep the default runtime prompt sparse and consistent with Planning workflow.
 
 ## Implementation Steps
 1. Update prompt constants -> files: [vtcode-core/src/prompts/system.rs] -> verify: [cargo check]
-2. Update plan scaffold -> files: [vtcode-core/src/tools/handlers/plan_mode.rs] -> verify: [cargo test -p vtcode-core test_enter_plan_mode -- --nocapture]
+2. Update plan scaffold -> files: [vtcode-core/src/tools/handlers/planning_workflow.rs] -> verify: [cargo test -p vtcode-core test_start_planning -- --nocapture]
 3. Update parser tests -> files: [src/agent/runloop/unified/turn/turn_processing/response_processing.rs] -> verify: [cargo test -p vtcode process_llm_response_extracts_sparse_proposed_plan_blocks -- --nocapture]
 
 ## Test Cases and Validation
 1. Build and lint: [project build and lint command(s) based on detected toolchain]
 2. Tests: [project test command(s) based on detected toolchain]
-3. Targeted behavior checks: plan-mode transcript extraction
+3. Targeted behavior checks: planning workflow transcript extraction
 
 ## Assumptions and Defaults
 1. `Next open decision` remains the only explicit reopen marker.

@@ -363,7 +363,7 @@ fn build_prompt_addendum(
 
     if todo_planning_enabled {
         lines.push("### Workflow Hint".to_string());
-        lines.push("- Start with the goal, use `@file` or IDE context to focus, switch to Plan Mode for research/spec work, and use `task_tracker` for multi-step execution.".to_string());
+        lines.push("- Start with the goal, use `@file` or IDE context to focus, switch to Planning workflow for research/spec work, and use `task_tracker` for multi-step execution.".to_string());
     }
 
     push_prompt_usage_tips(&mut lines, &onboarding_cfg.usage_tips);

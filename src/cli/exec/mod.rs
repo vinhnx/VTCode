@@ -64,7 +64,7 @@ mod tests {
     #[test]
     fn normal_exec_instructions_do_not_use_dry_run_wording() {
         let instructions = task_instructions(false);
-        assert!(!instructions.contains("dry-run mode"));
+        assert!(!instructions.contains("dry-run execution"));
     }
 
     #[test]
@@ -74,7 +74,7 @@ mod tests {
         let task = task_spec(&ExecCommandKind::Review { spec }, false);
 
         assert_eq!(task.id, REVIEW_TASK_ID);
-        assert!(task.instructions.contains("read-only mode"));
+        assert!(task.instructions.contains("read-only permissions"));
     }
 
     #[test]

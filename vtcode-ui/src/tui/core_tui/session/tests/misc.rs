@@ -111,7 +111,7 @@ fn plan_confirmation_modal_matches_four_way_gate_copy() {
     assert_eq!(list.items[2].title, "Type feedback to revise the plan");
     assert_eq!(
         list.items[2].subtitle.as_deref(),
-        Some("Return to plan mode and refine the plan.")
+        Some("Return to planning workflow and refine the plan.")
     );
 }
 

@@ -404,7 +404,7 @@ fn header_shows_full_auto_trust_badge_for_full_auto_trust() {
 }
 
 #[test]
-fn header_omits_auto_mode_badge() {
+fn header_omits_auto_permission_badge() {
     let mut session = fresh_session();
     session.header_context.workspace_trust = format!("{}tools policy", ui::HEADER_TRUST_PREFIX);
     session.input_manager.set_content("test".to_string());

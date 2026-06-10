@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use vtcode_core::config::ReasoningEffortLevel;
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, ModelSelectionSource};
-use vtcode_core::core::interfaces::session::PlanModeEntrySource;
+use vtcode_core::core::interfaces::session::PlanningEntrySource;
 use vtcode_core::core::interfaces::{SessionRuntime, SessionRuntimeParams};
 use vtcode_core::core::threads::{
     ArchivedSessionIntent, ThreadBootstrap, loaded_skills_from_session_listing,
@@ -132,7 +132,7 @@ pub(crate) async fn run_single_agent_loop(
     initial_vt_cfg: Option<VTCodeConfig>,
     skip_confirmations: bool,
     full_auto: bool,
-    plan_mode_entry_source: PlanModeEntrySource,
+    planning_entry_source: PlanningEntrySource,
     resume: Option<SessionContinuation>,
 ) -> Result<()> {
     // Probe terminal palette only for real interactive sessions so one-shot CLI
@@ -159,7 +159,7 @@ pub(crate) async fn run_single_agent_loop(
         vt_cfg,
         skip_confirmations,
         full_auto,
-        plan_mode_entry_source,
+        planning_entry_source,
         resume,
         &mut steering_receiver,
     );

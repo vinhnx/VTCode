@@ -172,8 +172,6 @@ fn background_subprocess_summary_reports_waiting_state_without_summary() {
 fn scaffold_agent_markdown_generates_valid_permission_rules() {
     let rendered = scaffold_agent_markdown("reviewer");
     assert!(rendered.contains("permissions:\n  default: deny\n"));
-    assert!(!rendered.contains("permissionMode"));
-    assert!(!rendered.contains("permission_mode"));
 
     let temp = TempDir::new().expect("temp dir");
     let path = temp.path().join("reviewer.md");

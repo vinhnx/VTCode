@@ -368,7 +368,7 @@ fn build_statusline_setup_items(
     for (mode, label, subtitle) in [
         (
             StatusLineMode::Auto,
-            "Use auto mode",
+            "Use auto permission review",
             "Show VT Code-built status components.",
         ),
         (
@@ -563,16 +563,16 @@ fn build_statusline_preview(
             }
 
             if left_parts.is_empty() && right_parts.is_empty() {
-                return "auto mode: waiting for runtime context".to_string();
+                return "auto permission review: waiting for runtime context".to_string();
             }
             if left_parts.is_empty() {
-                return format!("auto mode: {}", right_parts.join(" | "));
+                return format!("auto permission review: {}", right_parts.join(" | "));
             }
             if right_parts.is_empty() {
-                return format!("auto mode: {}", left_parts.join(" | "));
+                return format!("auto permission review: {}", left_parts.join(" | "));
             }
             format!(
-                "auto mode: {} | {}",
+                "auto permission review: {} | {}",
                 left_parts.join(" | "),
                 right_parts.join(" | ")
             )

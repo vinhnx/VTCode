@@ -66,7 +66,7 @@ pub(super) async fn route_outcome(
         | SlashCommandOutcome::RewindLatest { .. }
         | SlashCommandOutcome::ShareLog { .. }
         | SlashCommandOutcome::Exit) => route_navigation_outcome(outcome, ctx).await,
-        outcome @ (SlashCommandOutcome::TogglePlanMode { .. }
+        outcome @ (SlashCommandOutcome::TogglePlanningWorkflow { .. }
         | SlashCommandOutcome::OAuthLogin { .. }
         | SlashCommandOutcome::StartOAuthProviderPicker { .. }
         | SlashCommandOutcome::OAuthLogout { .. }
@@ -209,8 +209,8 @@ async fn route_mode_and_auth_outcome(
     ctx: SlashCommandContext<'_>,
 ) -> Result<SlashCommandControl> {
     match outcome {
-        SlashCommandOutcome::TogglePlanMode { enable, prompt } => {
-            let control = handlers::handle_toggle_plan_mode(ctx, enable).await?;
+        SlashCommandOutcome::TogglePlanningWorkflow { enable, prompt } => {
+            let control = handlers::handle_toggle_planning_workflow(ctx, enable).await?;
             if matches!(control, SlashCommandControl::Continue)
                 && let Some(prompt) = prompt
             {

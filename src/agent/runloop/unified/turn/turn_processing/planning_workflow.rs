@@ -1,8 +1,8 @@
 //! Agent Legibility:
-//! - Entrypoint: `InterviewResearchContext` and the plan-mode helpers in this root drive interview synthesis, draft validation, and tracker shaping.
+//! - Entrypoint: `InterviewResearchContext` and the planning helpers in this root drive interview synthesis, draft validation, and tracker shaping.
 //! - Common changes:
 //!   - Interview and research orchestration starts here.
-//!   - Plan draft extraction, tracker snippets, and question synthesis flow through this root and its `plan_mode/` support directory.
+//!   - Plan draft extraction, tracker snippets, and question synthesis flow through this root and its `planning_workflow/` support directory.
 //! - Constraints: This file remains an active TD-005 hotspot; keep new helpers in support modules when possible.
 //! - Verify: `cargo check -p vtcode && cargo test -p vtcode --bin vtcode inline_events::tests`
 
@@ -11,15 +11,17 @@ use std::time::Duration;
 use serde_json::Value;
 use vtcode_core::config::constants::tools;
 use vtcode_core::llm::provider as uni;
-use vtcode_core::tools::handlers::plan_mode::{PlanModeState, validate_plan_content};
+use vtcode_core::tools::handlers::planning_workflow::{
+    PlanningWorkflowState, validate_plan_content,
+};
 
-use crate::agent::runloop::unified::plan_mode_state::PlanModeSessionState;
+use crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState;
 
-#[path = "plan_mode/interview_context.rs"]
+#[path = "planning_workflow/interview_context.rs"]
 mod interview_context;
-#[path = "plan_mode/interview_forcing.rs"]
+#[path = "planning_workflow/interview_forcing.rs"]
 mod interview_forcing;
-#[path = "plan_mode/interview_payload.rs"]
+#[path = "planning_workflow/interview_payload.rs"]
 mod interview_payload;
 
 use crate::agent::runloop::unified::plan_blocks::extract_any_plan;
@@ -30,8 +32,9 @@ use interview_context::{
     collect_interview_research_context, has_open_decision_markers, select_best_plan_validation,
 };
 use interview_forcing::{
-    filter_interview_tool_calls, inject_plan_mode_interview, maybe_append_plan_mode_reminder,
-    strip_assistant_text, turn_result_has_interview_tool_call,
+    filter_interview_tool_calls, inject_planning_workflow_interview,
+    maybe_append_planning_workflow_reminder, strip_assistant_text,
+    turn_result_has_interview_tool_call,
 };
 use interview_payload::{build_adaptive_fallback_interview_args, single_line};
 use interview_payload::{parse_interview_payload_from_text, sanitize_generated_interview_payload};
@@ -42,8 +45,9 @@ use interview_context::InterviewResearchContext;
 #[cfg(test)]
 use super::response_processing::prepare_tool_calls;
 
-const MIN_PLAN_MODE_TURNS_BEFORE_INTERVIEW: usize = 1;
-const PLAN_MODE_REMINDER: &str = vtcode_core::prompts::system::PLAN_MODE_IMPLEMENT_REMINDER;
+const MIN_PLANNING_WORKFLOW_TURNS_BEFORE_INTERVIEW: usize = 1;
+const PLANNING_WORKFLOW_REMINDER: &str =
+    vtcode_core::prompts::system::PLANNING_WORKFLOW_IMPLEMENT_REMINDER;
 const INTERVIEW_SYNTHESIS_TIMEOUT_SECS: u64 = 20;
 const MAX_RESEARCH_SNIPPETS_PER_BUCKET: usize = 6;
 const CUSTOM_NOTE_POLICY: &str =
@@ -70,24 +74,24 @@ fn has_discovery_tool(session_stats: &crate::agent::runloop::unified::state::Ses
     .any(|tool| session_stats.has_tool(tool))
 }
 
-pub(crate) fn plan_mode_interview_ready(
+pub(crate) fn planning_workflow_interview_ready(
     session_stats: &crate::agent::runloop::unified::state::SessionStats,
-    plan_session: &PlanModeSessionState,
+    plan_session: &PlanningWorkflowSessionState,
 ) -> bool {
     has_discovery_tool(session_stats)
-        && plan_session.turns() >= MIN_PLAN_MODE_TURNS_BEFORE_INTERVIEW
+        && plan_session.turns() >= MIN_PLANNING_WORKFLOW_TURNS_BEFORE_INTERVIEW
 }
 
 pub(crate) fn should_attempt_dynamic_interview_generation(
     processing_result: &TurnProcessingResult,
     response_text: Option<&str>,
     session_stats: &crate::agent::runloop::unified::state::SessionStats,
-    plan_session: &PlanModeSessionState,
+    plan_session: &PlanningWorkflowSessionState,
 ) -> bool {
     let response_has_plan = response_text
         .map(|text| text.contains("<proposed_plan>"))
         .unwrap_or(false);
-    if !plan_mode_interview_ready(session_stats, plan_session) && !response_has_plan {
+    if !planning_workflow_interview_ready(session_stats, plan_session) && !response_has_plan {
         return false;
     }
 
@@ -110,7 +114,7 @@ pub(crate) fn should_attempt_dynamic_interview_generation(
 
 fn interview_need_state(
     response_text: Option<&str>,
-    plan_session: &PlanModeSessionState,
+    plan_session: &PlanningWorkflowSessionState,
 ) -> InterviewNeedState {
     let response_has_plan = response_text
         .map(|text| text.contains("<proposed_plan>"))
@@ -127,14 +131,14 @@ fn interview_need_state(
     }
 }
 
-pub(crate) async fn synthesize_plan_mode_interview_args(
+pub(crate) async fn synthesize_planning_workflow_interview_args(
     provider_client: &mut Box<dyn uni::LLMProvider>,
     active_model: &str,
     working_history: &[uni::Message],
     response_text: Option<&str>,
     session_stats: &crate::agent::runloop::unified::state::SessionStats,
-    _plan_session: &PlanModeSessionState,
-    plan_state: Option<PlanModeState>,
+    _plan_session: &PlanningWorkflowSessionState,
+    plan_state: Option<PlanningWorkflowState>,
 ) -> Option<Value> {
     let plan_context = load_plan_draft_context(plan_state).await;
     let context = collect_interview_research_context(
@@ -151,7 +155,7 @@ pub(crate) async fn synthesize_plan_mode_interview_args(
         .filter(|text| !text.is_empty())
         .unwrap_or_else(|| "(none)".to_string());
     let system_prompt = format!(
-        "You generate Plan Mode interview payloads for request_user_input.\n\
+        "You generate Planning workflow interview payloads for request_user_input.\n\
 Return strict JSON only (no markdown/prose): {{\"questions\": [...]}}\n\
 Constraints:\n\
 - 1 to 3 questions\n\
@@ -220,15 +224,15 @@ Return JSON only.",
     })
 }
 
-pub(crate) fn maybe_force_plan_mode_interview(
+pub(crate) fn maybe_force_planning_workflow_interview(
     processing_result: TurnProcessingResult,
     response_text: Option<&str>,
     session_stats: &mut crate::agent::runloop::unified::state::SessionStats,
-    plan_session: &mut PlanModeSessionState,
+    plan_session: &mut PlanningWorkflowSessionState,
     conversation_len: usize,
     synthesized_interview_args: Option<Value>,
 ) -> TurnProcessingResult {
-    let allow_interview = plan_mode_interview_ready(session_stats, plan_session);
+    let allow_interview = planning_workflow_interview_ready(session_stats, plan_session);
     let need_state = interview_need_state(response_text, plan_session);
     let response_has_plan = need_state.response_has_plan;
 
@@ -244,7 +248,7 @@ pub(crate) fn maybe_force_plan_mode_interview(
 
         if allow_interview && need_state.needs_interview {
             let stripped = strip_assistant_text(processing_result);
-            return inject_plan_mode_interview(
+            return inject_planning_workflow_interview(
                 stripped,
                 plan_session,
                 conversation_len,
@@ -253,7 +257,7 @@ pub(crate) fn maybe_force_plan_mode_interview(
             );
         }
 
-        return maybe_append_plan_mode_reminder(processing_result);
+        return maybe_append_planning_workflow_reminder(processing_result);
     }
 
     let filter_outcome = filter_interview_tool_calls(
@@ -286,7 +290,7 @@ pub(crate) fn maybe_force_plan_mode_interview(
             return processing_result;
         }
 
-        return inject_plan_mode_interview(
+        return inject_planning_workflow_interview(
             processing_result,
             plan_session,
             conversation_len,
@@ -325,7 +329,7 @@ pub(crate) fn maybe_force_plan_mode_interview(
         return processing_result;
     }
 
-    inject_plan_mode_interview(
+    inject_planning_workflow_interview(
         processing_result,
         plan_session,
         conversation_len,

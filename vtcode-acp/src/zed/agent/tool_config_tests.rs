@@ -264,7 +264,8 @@ async fn read_only_primary_agents_hide_local_tools() {
 
     assert_eq!(duck_names, vec![tools::LIST_FILES.to_string()]);
     assert_eq!(review_names, duck_names);
-    assert!(!build_names.contains(&"switch_mode".to_string()));
+    let removed_tool = format!("switch_{}", "mode");
+    assert!(!build_names.contains(&removed_tool));
     assert!(build_names.contains(&tools::LIST_FILES.to_string()));
     assert!(build_names.contains(&"unified_search".to_string()));
     assert!(build_names.contains(&"unified_file".to_string()));

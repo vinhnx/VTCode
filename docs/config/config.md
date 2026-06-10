@@ -137,7 +137,7 @@ experimental_features = false
 
 - `command = "codex"` means the local `codex` CLI must be installed and available on `$PATH`.
 - If your Codex binary lives elsewhere, set `command` to that executable path instead.
-- `experimental_features = false` keeps collaboration-mode discovery and native `review/start` routing disabled unless you explicitly opt in.
+- `experimental_features = false` keeps experimental Codex app-server discovery and native `review/start` routing disabled unless you explicitly opt in.
 - If the sidecar command is missing, VT Code disables the Codex runtime path early and falls back to another authenticated provider when available.
 - In the interactive UI you can open this section directly with `/config codex` or `/config agent.codex_app_server`.
 

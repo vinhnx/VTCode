@@ -104,12 +104,12 @@ pub(crate) async fn execute_direct_tool_call(
         ctx.interaction_ctx.harness_config.max_tool_retries,
     );
 
-    let mut auto_exit_plan_mode_attempted = false;
+    let mut auto_finish_planning_attempted = false;
 
     // Construct TurnProcessingContext to leverage unified execution handlers
     let mut tp_ctx = ctx.interaction_ctx.as_turn_processing_context(
         &mut harness_state,
-        &mut auto_exit_plan_mode_attempted,
+        &mut auto_finish_planning_attempted,
         ctx.input_status_state,
         direct_tool_skips_confirmations(tool_name),
     );

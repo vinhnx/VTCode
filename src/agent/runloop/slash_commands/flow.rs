@@ -218,7 +218,7 @@ pub(super) fn handle_plan_command(
 ) -> Result<SlashCommandOutcome> {
     let trimmed = args.trim();
     if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("toggle") {
-        return Ok(SlashCommandOutcome::TogglePlanMode {
+        return Ok(SlashCommandOutcome::TogglePlanningWorkflow {
             enable: None,
             prompt: None,
         });
@@ -229,7 +229,7 @@ pub(super) fn handle_plan_command(
     let rest = parts.next().unwrap_or("").trim();
 
     match first.to_ascii_lowercase().as_str() {
-        "on" | "enable" => Ok(SlashCommandOutcome::TogglePlanMode {
+        "on" | "enable" => Ok(SlashCommandOutcome::TogglePlanningWorkflow {
             enable: Some(true),
             prompt: if rest.is_empty() {
                 None
@@ -254,12 +254,12 @@ pub(super) fn handle_plan_command(
                 renderer.line(MessageStyle::Info, "  /plan off - Finish planning")?;
                 return Ok(SlashCommandOutcome::Handled);
             }
-            Ok(SlashCommandOutcome::TogglePlanMode {
+            Ok(SlashCommandOutcome::TogglePlanningWorkflow {
                 enable: Some(false),
                 prompt: None,
             })
         }
-        _ => Ok(SlashCommandOutcome::TogglePlanMode {
+        _ => Ok(SlashCommandOutcome::TogglePlanningWorkflow {
             enable: Some(true),
             prompt: Some(trimmed.to_string()),
         }),

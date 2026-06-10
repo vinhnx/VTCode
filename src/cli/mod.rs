@@ -99,7 +99,7 @@ pub async fn dispatch(
                 startup.config.clone(),
                 startup.skip_confirmations,
                 startup.full_auto_requested,
-                startup.plan_mode_entry_source,
+                startup.planning_entry_source,
             )
             .await?;
         }
@@ -170,8 +170,8 @@ mod tests {
             resume_show_all: false,
             custom_session_id: None,
             summarize_fork: false,
-            plan_mode_entry_source:
-                vtcode_core::core::interfaces::session::PlanModeEntrySource::None,
+            planning_entry_source:
+                vtcode_core::core::interfaces::session::PlanningEntrySource::None,
         }
     }
 

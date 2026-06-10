@@ -19,7 +19,7 @@ use crate::llm::provider::{
 };
 use crate::tools::Tool;
 use crate::tools::circuit_breaker::{CircuitBreaker, CircuitBreakerConfig};
-use crate::tools::handlers::{PlanModeState, TaskTrackerTool};
+use crate::tools::handlers::{PlanningWorkflowState, TaskTrackerTool};
 use crate::tools::handlers::{SessionSurface, SessionToolsConfig, ToolModelCapabilities};
 use async_trait::async_trait;
 use parking_lot::Mutex;
@@ -212,7 +212,7 @@ async fn build_universal_tools_matches_registry_agent_runner_snapshot() {
             surface: SessionSurface::AgentRunner,
             capability_level: CapabilityLevel::CodeSearch,
             documentation_mode: runner.config().agent.tool_documentation_mode,
-            plan_mode: runner.tool_registry.is_plan_mode(),
+            planning_active: runner.tool_registry.is_planning_active(),
             request_user_input_enabled: false,
             model_capabilities: ToolModelCapabilities::for_model_name(&runner.model),
             deferred_tool_policy: crate::tools::handlers::deferred_tool_policy_for_runtime(
@@ -699,7 +699,7 @@ async fn make_runner(temp: &TempDir, vt_cfg: VTCodeConfig, session_id: &str) -> 
 async fn seed_tracker(workspace_root: &Path, items: serde_json::Value) {
     let tool = TaskTrackerTool::new(
         workspace_root.to_path_buf(),
-        PlanModeState::new(workspace_root.to_path_buf()),
+        PlanningWorkflowState::new(workspace_root.to_path_buf()),
     );
     tool.execute(json!({
         "action": "create",
@@ -978,17 +978,22 @@ async fn review_runs_skip_continuation_and_finish_single_pass() {
 }
 
 #[tokio::test]
-async fn plan_mode_runs_skip_continuation_and_finish_single_pass() {
+async fn planning_workflow_runs_skip_continuation_and_finish_single_pass() {
     let temp = TempDir::new().expect("tempdir");
-    let mut runner = make_runner(&temp, VTCodeConfig::default(), "thread-plan-mode-skip").await;
+    let mut runner = make_runner(
+        &temp,
+        VTCodeConfig::default(),
+        "thread-planning-workflow-skip",
+    )
+    .await;
     runner.enable_full_auto(&[]).await;
-    runner.enable_plan_mode();
+    runner.enable_planning();
     runner.provider_client = Box::new(QueuedProvider::new(vec![text_response(
         "The task is complete.",
     )]));
 
     let result = runner
-        .execute_task(&task("Plan mode task", "exec-task"), &[])
+        .execute_task(&task("Planning workflow task", "exec-task"), &[])
         .await
         .expect("task result");
 

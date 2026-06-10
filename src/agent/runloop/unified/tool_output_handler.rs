@@ -798,7 +798,7 @@ mod tests {
         let decision_ledger = Arc::new(RwLock::new(DecisionTracker::new()));
         let mut session_stats = SessionStats::default();
         let mut plan_session =
-            crate::agent::runloop::unified::plan_mode_state::PlanModeSessionState::default();
+            crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState::default();
         let mut mcp_panel = McpPanelState::new(10, true);
         let approval_recorder = ApprovalRecorder::new(workspace.clone());
         let traj = TrajectoryLogger::new(&workspace);
@@ -993,7 +993,7 @@ mod tests {
         let decision_ledger = Arc::new(RwLock::new(DecisionTracker::new()));
         let mut session_stats = SessionStats::default();
         let mut plan_session =
-            crate::agent::runloop::unified::plan_mode_state::PlanModeSessionState::default();
+            crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState::default();
         let mut mcp_panel = McpPanelState::new(10, true);
         let approval_recorder = ApprovalRecorder::new(workspace.clone());
         let traj = TrajectoryLogger::new(&workspace);

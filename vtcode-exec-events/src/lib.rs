@@ -266,7 +266,7 @@ pub enum ThreadEvent {
     /// Indicates that an item reached a terminal state.
     #[serde(rename = "item.completed")]
     ItemCompleted(ItemCompletedEvent),
-    /// Streaming delta for a plan item in Plan Mode.
+    /// Streaming delta for a plan item in Planning workflow.
     #[serde(rename = "plan.delta")]
     PlanDelta(PlanDeltaEvent),
     /// Represents a fatal error.
@@ -479,7 +479,7 @@ pub struct ThreadItem {
 pub enum ThreadItemDetails {
     /// Message authored by the agent.
     AgentMessage(AgentMessageItem),
-    /// Structured plan content authored by the agent in Plan Mode.
+    /// Structured plan content authored by the agent in Planning workflow.
     Plan(PlanItem),
     /// Free-form reasoning text produced during a turn.
     Reasoning(ReasoningItem),

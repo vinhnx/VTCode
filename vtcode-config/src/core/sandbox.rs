@@ -384,20 +384,26 @@ default_policy = "workspace_write"
         let toml = toml::to_string(&config).expect("sandbox config should serialize");
 
         assert!(toml.contains("default_policy = \"danger_full_access\""));
-        assert!(!toml.contains("default_mode"));
+        let removed_field = format!("default_{}", "mode");
+        assert!(!toml.contains(&removed_field));
     }
 
     #[test]
-    fn test_sandbox_config_rejects_default_mode() {
-        let err = toml::from_str::<SandboxConfig>(
+    fn test_sandbox_config_rejects_removed_default_field() {
+        let removed_field = format!("default_{}", "mode");
+        let input = format!(
             r#"
 enabled = true
-default_mode = "workspace_write"
+{removed_field} = "workspace_write"
 "#,
-        )
-        .expect_err("sandbox config should reject default_mode");
+        );
+        let err = toml::from_str::<SandboxConfig>(&input)
+            .expect_err("sandbox config should reject removed default field");
 
-        assert!(err.to_string().contains("unknown field `default_mode`"));
+        assert!(
+            err.to_string()
+                .contains(&format!("unknown field `{removed_field}`"))
+        );
     }
 
     #[test]

@@ -888,7 +888,7 @@ mod tests {
     fn unified_exec_run_allowlisted_is_read_only() {
         let intent = classify_tool_intent(
             tools::UNIFIED_EXEC,
-            &json!({"action": "run", "command": "rg plan_mode src"}),
+            &json!({"action": "run", "command": "rg planning_active src"}),
         );
         assert!(!intent.mutating);
         assert!(intent.readonly_unified_action);

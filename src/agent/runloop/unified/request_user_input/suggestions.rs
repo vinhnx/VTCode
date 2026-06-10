@@ -259,7 +259,7 @@ fn append_domain_priority_options(options: &mut Vec<RequestUserInputOption>, con
             "system prompt",
             "prompt",
             "harness",
-            "plan mode",
+            "planning workflow",
             "agent",
             "planning",
         ],

@@ -16,7 +16,7 @@ use crate::tools::validation::commands;
 pub struct SessionToolCatalogSnapshot {
     pub version: u64,
     pub epoch: u64,
-    pub plan_mode: bool,
+    pub planning_active: bool,
     pub request_user_input_enabled: bool,
     pub snapshot: Option<Arc<Vec<ToolDefinition>>>,
     pub cache_hit: bool,
@@ -27,7 +27,7 @@ impl SessionToolCatalogSnapshot {
     pub fn new(
         version: u64,
         epoch: u64,
-        plan_mode: bool,
+        planning_active: bool,
         request_user_input_enabled: bool,
         snapshot: Option<Arc<Vec<ToolDefinition>>>,
         cache_hit: bool,
@@ -36,7 +36,7 @@ impl SessionToolCatalogSnapshot {
         Self {
             version,
             epoch,
-            plan_mode,
+            planning_active,
             request_user_input_enabled,
             snapshot,
             cache_hit,
@@ -361,32 +361,34 @@ pub fn hash_tool_definitions(tools: Option<&[ToolDefinition]>) -> Option<u64> {
 
 pub fn should_expose_tool_in_mode(
     tool: &ToolDefinition,
-    plan_mode: bool,
+    planning_active: bool,
     request_user_input_enabled: bool,
 ) -> bool {
     let Some(name) = tool.function.as_ref().map(|func| func.name.as_str()) else {
         return true;
     };
 
-    FeatureSet::tool_enabled_for_mode(name, plan_mode, request_user_input_enabled)
+    FeatureSet::tool_enabled_for_mode(name, planning_active, request_user_input_enabled)
 }
 
 pub fn filter_tool_definitions_for_mode(
     tools: Option<Arc<Vec<ToolDefinition>>>,
-    plan_mode: bool,
+    planning_active: bool,
     request_user_input_enabled: bool,
 ) -> Option<Arc<Vec<ToolDefinition>>> {
     let tools = tools?;
     if tools
         .iter()
-        .all(|tool| should_expose_tool_in_mode(tool, plan_mode, request_user_input_enabled))
+        .all(|tool| should_expose_tool_in_mode(tool, planning_active, request_user_input_enabled))
     {
         return Some(tools);
     }
 
     let filtered: Vec<ToolDefinition> = tools
         .iter()
-        .filter(|tool| should_expose_tool_in_mode(tool, plan_mode, request_user_input_enabled))
+        .filter(|tool| {
+            should_expose_tool_in_mode(tool, planning_active, request_user_input_enabled)
+        })
         .cloned()
         .collect();
     if filtered.is_empty() {
@@ -821,7 +823,7 @@ mod tests {
     }
 
     #[test]
-    fn filter_tool_definitions_hides_mutating_only_tools_in_plan_mode() {
+    fn filter_tool_definitions_hides_mutating_only_tools_in_planning_workflow() {
         let tools = Arc::new(vec![
             function_tool(tools::UNIFIED_SEARCH),
             function_tool(tools::UNIFIED_FILE),
@@ -843,7 +845,7 @@ mod tests {
     fn stable_prefix_hash_ignores_runtime_tool_sections() {
         let base = "Base prompt\n[Harness Limits]\n- max_tool_calls_per_turn: 5";
         let with_runtime_sections = format!(
-            "{base}\n\n## Active Tools\n- Mode: read-only.\n[Runtime Tool Catalog]\n- version: 1\n- epoch: 2\n- available_tools: 3\n- request_user_input_enabled: false"
+            "{base}\n\n## Active Tools\n- Capabilities: read-only.\n[Runtime Tool Catalog]\n- version: 1\n- epoch: 2\n- available_tools: 3\n- request_user_input_enabled: false"
         );
 
         assert_eq!(

@@ -1,7 +1,9 @@
-//! Plan Mode interview payload parsing, sanitization, and fallback shaping.
+//! Planning workflow interview payload parsing, sanitization, and fallback shaping.
 
 use serde_json::{Value, json};
-use vtcode_core::tools::handlers::plan_mode::{PlanValidationReport, validate_plan_content};
+use vtcode_core::tools::handlers::planning_workflow::{
+    PlanValidationReport, validate_plan_content,
+};
 
 use super::MAX_RESEARCH_SNIPPETS_PER_BUCKET;
 use super::interview_context::{

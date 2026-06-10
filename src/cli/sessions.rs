@@ -3,7 +3,7 @@ use chrono::Local;
 use dialoguer::{Select, theme::ColorfulTheme};
 use std::path::PathBuf;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
-use vtcode_core::core::interfaces::session::PlanModeEntrySource;
+use vtcode_core::core::interfaces::session::PlanningEntrySource;
 use vtcode_core::core::threads::{
     ArchivedSessionIntent, SessionQueryScope, list_recent_sessions_in_scope,
 };
@@ -99,7 +99,7 @@ pub async fn handle_resume_session_command(
                 None,
                 skip_confirmations,
                 false,
-                PlanModeEntrySource::None,
+                PlanningEntrySource::None,
                 None,
             )
             .await;
@@ -433,7 +433,7 @@ async fn run_single_agent_loop(
         None,
         skip_confirmations,
         false,
-        PlanModeEntrySource::None,
+        PlanningEntrySource::None,
         Some(resume),
     )
     .await

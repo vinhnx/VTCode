@@ -18,12 +18,12 @@ pub(crate) enum InlineLoopAction {
         session_id: String,
         summarize: bool,
     },
-    /// Plan approved (Claude Code style HITL) - transition from Plan to Edit mode
+    /// Plan approved (Claude Code style HITL) - continue with implementation
     PlanApproved {
         /// If true, auto-accept file edits without prompting
         auto_accept: bool,
     },
-    /// User wants to return to plan mode to edit the plan
+    /// User wants to return to planning workflow to edit the plan
     PlanEditRequested,
     /// Diff preview approved - apply the edit changes
     DiffApproved,

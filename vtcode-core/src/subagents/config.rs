@@ -433,8 +433,8 @@ Do not guess hidden or legacy helpers such as `list_files`, `read_file`, `unifie
 are not visible. For workspace discovery here, prefer `unified_search`; if that is insufficient, report the blocker \
 instead of retrying denied calls.";
 
-const READ_ONLY_PLAN_MODE_REMINDER: &str = "This delegated agent already runs with a read-only tool surface. \
-Do not try to enter or exit plan mode, do not call hidden mutating tools, and do not retry the same denied tool \
+const READ_ONLY_PLANNING_WORKFLOW_REMINDER: &str = "This delegated agent already runs with a read-only tool surface. \
+Do not try to enter or exit planning workflow, do not call hidden mutating tools, and do not retry the same denied tool \
 call; adjust strategy or report the blocker instead.";
 
 const WRITE_TOOL_REMINDER: &str = "Tool reminder: `list_files` on the workspace root (`.`) is blocked, and \
@@ -464,7 +464,7 @@ fn compose_subagent_runtime_instructions(
 
     if is_runtime_read_only(runtime) {
         sections.push(READ_ONLY_TOOL_REMINDER.to_string());
-        sections.push(READ_ONLY_PLAN_MODE_REMINDER.to_string());
+        sections.push(READ_ONLY_PLANNING_WORKFLOW_REMINDER.to_string());
     } else {
         sections.push(WRITE_TOOL_REMINDER.to_string());
     }

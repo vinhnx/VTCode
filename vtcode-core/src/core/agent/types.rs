@@ -35,7 +35,7 @@ pub enum AgentType {
     Orchestrator,
     /// Fast, read-only codebase exploration (haiku-equivalent)
     Explore,
-    /// Research specialist for planning mode
+    /// Research specialist for the Planning workflow.
     Plan,
     /// General-purpose profile for complex multi-step tasks.
     General,
@@ -52,7 +52,7 @@ impl AgentType {
         )
     }
 
-    /// Check if this agent operates in read-only mode
+    /// Check if this agent has read-only capabilities.
     pub fn is_read_only(&self) -> bool {
         matches!(self, Self::Explore | Self::Plan)
     }

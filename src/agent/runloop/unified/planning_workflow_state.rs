@@ -1,23 +1,23 @@
 use crate::agent::runloop::unified::state::SessionStats;
 use anyhow::Result;
-use vtcode_core::core::interfaces::session::PlanModeEntrySource;
-use vtcode_core::tools::handlers::plan_mode::PlanLifecyclePhase;
+use vtcode_core::core::interfaces::session::PlanningEntrySource;
+use vtcode_core::tools::handlers::planning_workflow::PlanLifecyclePhase;
 use vtcode_core::tools::registry::ToolRegistry;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_ui::tui::app::InlineHandle;
 
 #[derive(Default)]
-pub(crate) struct PlanModeSessionState {
+pub(crate) struct PlanningWorkflowSessionState {
     interview_shown: bool,
     interview_pending: bool,
     turns: usize,
     interview_cycles_completed: usize,
     last_interview_cancelled: bool,
-    entry_source: Option<PlanModeEntrySource>,
+    entry_source: Option<PlanningEntrySource>,
 }
 
-impl PlanModeSessionState {
-    pub(crate) fn enter(&mut self, entry_source: PlanModeEntrySource) {
+impl PlanningWorkflowSessionState {
+    pub(crate) fn enter(&mut self, entry_source: PlanningEntrySource) {
         self.interview_shown = false;
         self.interview_pending = false;
         self.turns = 0;
@@ -82,47 +82,52 @@ impl PlanModeSessionState {
     }
 }
 
-pub(crate) const PLAN_MODE_REVIEW_AND_EXECUTE_HINT: &str = "Planning workflow: review the plan, then type `implement` (or `yes`/`continue`/`go`/`start`) to execute.";
-pub(crate) const PLAN_MODE_SHORT_CONFIRMATION_HINT: &str = "Planning workflow: type `implement` (or `yes`/`continue`/`go`/`start`) to execute, or say `keep planning` to revise.";
-pub(crate) const PLAN_MODE_KEEP_PLANNING_HINT: &str =
+pub(crate) const PLANNING_WORKFLOW_REVIEW_AND_EXECUTE_HINT: &str = "Planning workflow: review the plan, then type `implement` (or `yes`/`continue`/`go`/`start`) to execute.";
+pub(crate) const PLANNING_WORKFLOW_SHORT_CONFIRMATION_HINT: &str = "Planning workflow: type `implement` (or `yes`/`continue`/`go`/`start`) to execute, or say `keep planning` to revise.";
+pub(crate) const PLANNING_WORKFLOW_KEEP_PLANNING_HINT: &str =
     "To keep planning, say `keep planning` and describe what to revise.";
-pub(crate) const PLAN_MODE_MANUAL_SWITCH_FALLBACK_HINT: &str =
-    "If automatic planning handoff fails, manually finish planning with `/plan off`.";
-pub(crate) const PLAN_MODE_STILL_ACTIVE_PREFIX: &str =
-    "Planning is still active. Call `finish_planning` to review/refine the plan before retrying.";
+pub(crate) const PLANNING_WORKFLOW_MANUAL_SWITCH_FALLBACK_HINT: &str =
+    "If automatic planning handoff fails, call `finish_planning` to present the plan again.";
+pub(crate) const PLANNING_WORKFLOW_STILL_ACTIVE_PREFIX: &str = "Planning workflow is still active. Call `finish_planning` to review/refine the plan before retrying.";
 
 pub(crate) fn short_confirmation_hint_with_fallback() -> String {
     format!(
         "{} {}",
-        PLAN_MODE_SHORT_CONFIRMATION_HINT, PLAN_MODE_MANUAL_SWITCH_FALLBACK_HINT
+        PLANNING_WORKFLOW_SHORT_CONFIRMATION_HINT, PLANNING_WORKFLOW_MANUAL_SWITCH_FALLBACK_HINT
     )
 }
 
-pub(crate) fn plan_mode_still_active_hint_with_fallback() -> String {
+pub(crate) fn planning_still_active_hint_with_fallback() -> String {
     format!(
         "{} {}",
-        PLAN_MODE_STILL_ACTIVE_PREFIX, PLAN_MODE_MANUAL_SWITCH_FALLBACK_HINT
+        PLANNING_WORKFLOW_STILL_ACTIVE_PREFIX, PLANNING_WORKFLOW_MANUAL_SWITCH_FALLBACK_HINT
     )
 }
 
-pub(crate) fn render_plan_mode_next_step_hint(renderer: &mut AnsiRenderer) -> Result<()> {
-    renderer.line(MessageStyle::Info, PLAN_MODE_REVIEW_AND_EXECUTE_HINT)?;
-    renderer.line(MessageStyle::Info, PLAN_MODE_KEEP_PLANNING_HINT)?;
-    renderer.line(MessageStyle::Info, PLAN_MODE_MANUAL_SWITCH_FALLBACK_HINT)?;
+pub(crate) fn render_planning_workflow_next_step_hint(renderer: &mut AnsiRenderer) -> Result<()> {
+    renderer.line(
+        MessageStyle::Info,
+        PLANNING_WORKFLOW_REVIEW_AND_EXECUTE_HINT,
+    )?;
+    renderer.line(MessageStyle::Info, PLANNING_WORKFLOW_KEEP_PLANNING_HINT)?;
+    renderer.line(
+        MessageStyle::Info,
+        PLANNING_WORKFLOW_MANUAL_SWITCH_FALLBACK_HINT,
+    )?;
     Ok(())
 }
 
-pub(crate) async fn transition_to_plan_mode(
+pub(crate) async fn transition_to_planning_workflow(
     tool_registry: &ToolRegistry,
     session_stats: &mut SessionStats,
-    plan_session: &mut PlanModeSessionState,
+    plan_session: &mut PlanningWorkflowSessionState,
     handle: &InlineHandle,
-    entry_source: PlanModeEntrySource,
+    entry_source: PlanningEntrySource,
     reset_plan_file: bool,
     reset_plan_baseline: bool,
 ) {
-    tool_registry.enable_plan_mode();
-    let plan_state = tool_registry.plan_mode_state();
+    tool_registry.enable_planning();
+    let plan_state = tool_registry.planning_workflow_state();
     plan_state.enable();
     plan_state.set_phase(PlanLifecyclePhase::ActiveDrafting);
     if reset_plan_file {
@@ -137,14 +142,14 @@ pub(crate) async fn transition_to_plan_mode(
     handle.force_redraw();
 }
 
-pub(crate) async fn transition_to_edit_mode(
+pub(crate) async fn finish_planning_workflow(
     tool_registry: &ToolRegistry,
-    plan_session: &mut PlanModeSessionState,
+    plan_session: &mut PlanningWorkflowSessionState,
     handle: &InlineHandle,
     clear_plan_file: bool,
 ) {
-    tool_registry.disable_plan_mode();
-    let plan_state = tool_registry.plan_mode_state();
+    tool_registry.disable_planning();
+    let plan_state = tool_registry.planning_workflow_state();
     plan_state.disable();
     if clear_plan_file {
         plan_state.set_plan_file(None).await;
@@ -156,13 +161,13 @@ pub(crate) async fn transition_to_edit_mode(
 
 #[cfg(test)]
 mod tests {
-    use super::PlanModeSessionState;
-    use vtcode_core::core::interfaces::session::PlanModeEntrySource;
+    use super::PlanningWorkflowSessionState;
+    use vtcode_core::core::interfaces::session::PlanningEntrySource;
 
     #[test]
     fn interview_result_updates_cycle_metrics() {
-        let mut state = PlanModeSessionState::default();
-        state.enter(PlanModeEntrySource::UserRequest);
+        let mut state = PlanningWorkflowSessionState::default();
+        state.enter(PlanningEntrySource::UserRequest);
 
         state.record_interview_result(2, false);
         assert_eq!(state.interview_cycles_completed(), 1);
@@ -175,13 +180,13 @@ mod tests {
 
     #[test]
     fn entering_resets_interview_cycle_metrics() {
-        let mut state = PlanModeSessionState::default();
-        state.enter(PlanModeEntrySource::UserRequest);
+        let mut state = PlanningWorkflowSessionState::default();
+        state.enter(PlanningEntrySource::UserRequest);
         state.record_interview_result(1, false);
         assert_eq!(state.interview_cycles_completed(), 1);
 
         state.exit();
-        state.enter(PlanModeEntrySource::UserRequest);
+        state.enter(PlanningEntrySource::UserRequest);
         assert_eq!(state.interview_cycles_completed(), 0);
         assert!(!state.last_interview_cancelled());
     }

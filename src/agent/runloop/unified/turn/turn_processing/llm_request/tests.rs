@@ -335,17 +335,17 @@ fn llm_attempt_timeout_defaults_to_fifth_of_turn_budget() {
 }
 
 #[test]
-fn llm_attempt_timeout_expands_for_plan_mode() {
+fn llm_attempt_timeout_expands_for_planning_workflow() {
     assert_eq!(llm_attempt_timeout_secs(300, true, "openai"), 120);
 }
 
 #[test]
-fn llm_attempt_timeout_plan_mode_respects_smaller_turn_budget() {
+fn llm_attempt_timeout_planning_workflow_respects_smaller_turn_budget() {
     assert_eq!(llm_attempt_timeout_secs(180, true, "openai"), 90);
 }
 
 #[test]
-fn llm_attempt_timeout_plan_mode_huggingface_uses_higher_floor() {
+fn llm_attempt_timeout_planning_workflow_huggingface_uses_higher_floor() {
     assert_eq!(llm_attempt_timeout_secs(150, true, "huggingface"), 90);
 }
 
@@ -358,7 +358,7 @@ fn llm_timeout_warning_delay_targets_three_quarters_of_budget() {
 }
 
 #[test]
-fn llm_attempt_timeout_respects_plan_mode_cap() {
+fn llm_attempt_timeout_respects_planning_workflow_cap() {
     assert_eq!(llm_attempt_timeout_secs(1_200, true, "huggingface"), 120);
 }
 

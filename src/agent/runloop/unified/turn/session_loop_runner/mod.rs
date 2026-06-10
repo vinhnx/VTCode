@@ -6,7 +6,7 @@ mod support;
 
 use super::*;
 use crate::agent::runloop::git::{compute_session_code_change_delta, normalize_workspace_path};
-use crate::agent::runloop::unified::plan_mode_state::render_plan_mode_next_step_hint;
+use crate::agent::runloop::unified::planning_workflow_state::render_planning_workflow_next_step_hint;
 use crate::agent::runloop::unified::postamble::{ExitSummaryData, print_exit_summary};
 use crate::agent::runloop::unified::run_loop_context::RecoveryMode;
 use crate::agent::runloop::unified::turn::turn_loop::TurnLoopOutcome;
@@ -18,7 +18,7 @@ use vtcode_config::loader::SimpleConfigWatcher;
 use vtcode_core::core::agent::features::FeatureSet;
 use vtcode_core::core::agent::runtime::AgentRuntime;
 use vtcode_core::core::agent::session::AgentSessionState;
-use vtcode_core::core::interfaces::session::PlanModeEntrySource;
+use vtcode_core::core::interfaces::session::PlanningEntrySource;
 
 const PLAN_APPROVED_EXECUTION_DIRECTIVE: &str = "Plan was approved. Start implementation immediately: execute the plan step by step beginning with the first pending step. Do not ask for another implementation confirmation.";
 const PLAN_APPROVED_EXECUTION_INPUT: &str = "Implement the approved plan now.";
@@ -40,7 +40,8 @@ use support::{
     build_exit_header_context_fast, checkpoint_session_archive_start,
     force_reload_workspace_config_for_execution, latest_assistant_result_text,
     live_reload_preserves_session_config, prepare_resume_bootstrap_without_archive,
-    prompt_startup_plan_mode, remove_transient_system_notes, take_pending_resumed_user_prompt,
+    prompt_startup_planning_workflow, remove_transient_system_notes,
+    take_pending_resumed_user_prompt,
 };
 use tokio::sync::{Notify, mpsc};
 use vtcode_core::llm::provider::MessageRole;
@@ -53,7 +54,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
     initial_vt_cfg: Option<VTCodeConfig>,
     skip_confirmations: bool,
     full_auto: bool,
-    plan_mode_entry_source: PlanModeEntrySource,
+    planning_entry_source: PlanningEntrySource,
     resume: Option<ResumeSession>,
     steering_receiver: &mut Option<mpsc::UnboundedReceiver<SteeringMessage>>,
 ) -> Result<()> {
@@ -417,35 +418,39 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         );
         session_stats.vim_mode_enabled = vt_cfg.as_ref().is_some_and(|cfg| cfg.ui.vim_mode);
         let mut plan_session =
-            crate::agent::runloop::unified::plan_mode_state::PlanModeSessionState::default();
-        if plan_mode_entry_source.should_auto_enter() {
-            transition_to_plan_mode(
+            crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState::default();
+        if planning_entry_source.should_auto_enter() {
+            transition_to_planning_workflow(
                 &tool_registry,
                 &mut session_stats,
                 &mut plan_session,
                 &handle,
-                plan_mode_entry_source,
+                planning_entry_source,
                 true,
                 true,
             )
             .await;
-            render_plan_mode_next_step_hint(&mut renderer)?;
-        } else if plan_mode_entry_source.requires_startup_prompt() && resume_ref.is_none() {
-            let should_enter =
-                prompt_startup_plan_mode(&handle, &mut session, &ctrl_c_state, &ctrl_c_notify)
-                    .await?;
+            render_planning_workflow_next_step_hint(&mut renderer)?;
+        } else if planning_entry_source.requires_startup_prompt() && resume_ref.is_none() {
+            let should_enter = prompt_startup_planning_workflow(
+                &handle,
+                &mut session,
+                &ctrl_c_state,
+                &ctrl_c_notify,
+            )
+            .await?;
             if should_enter {
-                transition_to_plan_mode(
+                transition_to_planning_workflow(
                     &tool_registry,
                     &mut session_stats,
                     &mut plan_session,
                     &handle,
-                    plan_mode_entry_source,
+                    planning_entry_source,
                     true,
                     true,
                 )
                 .await;
-                render_plan_mode_next_step_hint(&mut renderer)?;
+                render_planning_workflow_next_step_hint(&mut renderer)?;
             }
         }
         let mut linked_directories: Vec<LinkedDirectory> = Vec::with_capacity(4);
@@ -627,7 +632,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                         }
                         InteractionOutcome::PlanApproved { auto_accept } => {
                             let plan_seed = load_active_plan_seed(&tool_registry).await;
-                            crate::agent::runloop::unified::plan_mode_state::transition_to_edit_mode(
+                            crate::agent::runloop::unified::planning_workflow_state::finish_planning_workflow(
                             &tool_registry,
                             &mut plan_session,
                             &handle,
@@ -695,11 +700,11 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 let turn_history_checkpoint = TurnHistoryCheckpoint::capture(&working_history);
                 let mut turn_metadata_cache = None;
                 let outcome = match loop {
-                    let mut auto_exit_plan_mode_attempted = false;
-                    let plan_mode_active = tool_registry.is_plan_mode();
+                    let mut auto_finish_planning_attempted = false;
+                    let planning_active = tool_registry.is_planning_active();
                     let max_tool_calls_per_turn = effective_max_tool_calls_for_turn(
                         harness_config.max_tool_calls_per_turn,
-                        plan_mode_active,
+                        planning_active,
                     );
                     let mut harness_state = HarnessTurnState::new(
                         TurnRunId(turn_run_id.0.clone()),
@@ -721,7 +726,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                         &mut session,
                         &mut session_stats,
                         &mut plan_session,
-                        &mut auto_exit_plan_mode_attempted,
+                        &mut auto_finish_planning_attempted,
                         &mut mcp_panel_state,
                         &tool_result_cache,
                         &approval_recorder,
@@ -1059,8 +1064,8 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                             }),
                         );
                         if !renderer.supports_inline_ui()
-                            && session_stats.auto_mode_prompt_fallback_active()
-                            && session_stats.last_auto_mode_denial().is_some()
+                            && session_stats.auto_permission_prompt_fallback_active()
+                            && session_stats.last_auto_permission_denial().is_some()
                         {
                             session_end_reason = SessionEndReason::Error;
                             break;

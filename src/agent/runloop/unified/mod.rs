@@ -1,5 +1,5 @@
 pub(crate) mod async_mcp_manager;
-pub(crate) mod auto_mode;
+pub(crate) mod auto_permission;
 
 mod config_section_headings;
 pub(crate) mod context_manager;
@@ -21,7 +21,7 @@ mod model_selection;
 pub(crate) mod palettes;
 pub(crate) mod plan_blocks;
 mod plan_confirmation;
-mod plan_mode_state;
+mod planning_workflow_state;
 mod postamble;
 mod progress;
 mod prompts;

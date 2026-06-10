@@ -183,7 +183,7 @@ pub struct SessionToolsConfig {
     pub surface: SessionSurface,
     pub capability_level: CapabilityLevel,
     pub documentation_mode: ToolDocumentationMode,
-    pub plan_mode: bool,
+    pub planning_active: bool,
     pub request_user_input_enabled: bool,
     pub model_capabilities: ToolModelCapabilities,
     pub deferred_tool_policy: DeferredToolPolicy,
@@ -201,7 +201,7 @@ impl SessionToolsConfig {
             surface,
             capability_level,
             documentation_mode,
-            plan_mode: true,
+            planning_active: true,
             request_user_input_enabled: true,
             model_capabilities,
             deferred_tool_policy: DeferredToolPolicy::default(),
@@ -757,7 +757,7 @@ mod tests {
             surface: SessionSurface::Interactive,
             capability_level: CapabilityLevel::CodeSearch,
             documentation_mode: ToolDocumentationMode::Full,
-            plan_mode: true,
+            planning_active: true,
             request_user_input_enabled: false,
             model_capabilities: ToolModelCapabilities::default(),
             deferred_tool_policy: DeferredToolPolicy::default(),
@@ -768,7 +768,7 @@ mod tests {
     }
 
     #[test]
-    fn task_tracker_stays_visible_outside_plan_mode() {
+    fn task_tracker_stays_visible_outside_planning_workflow() {
         let registration = registration(tools::TASK_TRACKER)
             .with_description("Track plan tasks")
             .with_parameter_schema(empty_object_schema());
@@ -778,7 +778,7 @@ mod tests {
             surface: SessionSurface::Interactive,
             capability_level: CapabilityLevel::CodeSearch,
             documentation_mode: ToolDocumentationMode::Full,
-            plan_mode: false,
+            planning_active: false,
             request_user_input_enabled: true,
             model_capabilities: ToolModelCapabilities::default(),
             deferred_tool_policy: DeferredToolPolicy::default(),

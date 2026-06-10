@@ -230,7 +230,7 @@ fn render_prompt(workspace: &Path, require_full_auto_upgrade: bool) {
     println!();
 
     let requirement_line = if require_full_auto_upgrade {
-        "Full-auto mode requires upgrading this workspace to full auto."
+        "Full-auto permission review requires upgrading this workspace to full auto."
     } else {
         "Trust this workspace with full auto capabilities to continue:"
     };

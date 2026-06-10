@@ -587,7 +587,6 @@ async fn test_permission_request_hook_parses_decision_and_updates() {
         &config,
         SessionStartTrigger::Startup,
         "session-123",
-        vtcode_config::PermissionMode::Default,
     )
     .expect("Failed to create hook engine")
     .unwrap();
@@ -648,7 +647,6 @@ async fn test_stop_hook_blocks_completion() {
         &config,
         SessionStartTrigger::Startup,
         "session-123",
-        vtcode_config::PermissionMode::Default,
     )
     .expect("Failed to create hook engine")
     .unwrap();
@@ -688,7 +686,6 @@ async fn test_hook_env_exposes_claude_aliases() {
         &config,
         SessionStartTrigger::Startup,
         "session-abc",
-        vtcode_config::PermissionMode::AcceptEdits,
     )
     .expect("Failed to create hook engine")
     .unwrap();

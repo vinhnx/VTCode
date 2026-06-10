@@ -169,7 +169,7 @@ pub(crate) async fn initialize_session(
         if full_auto {
             let automation_cfg = cfg.automation.full_auto.clone();
             tool_registry
-                .enable_full_auto_mode(&automation_cfg.allowed_tools)
+                .enable_full_auto_permission(&automation_cfg.allowed_tools)
                 .await;
             full_auto_allowlist = Some(
                 tool_registry

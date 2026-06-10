@@ -803,7 +803,6 @@ fn load_cli_agents(value: &JsonValue) -> Result<Vec<SubagentSpec>> {
             .or_else(|| config.get("effort"))
             .and_then(JsonValue::as_str)
             .map(ToString::to_string);
-        reject_legacy_permission_mode(config)?;
         let permissions = parse_required_permissions(config)?;
         let skills = optional_string_list(config.get("skills"))?.unwrap_or_default();
         let mcp_servers = optional_mcp_servers(
@@ -970,7 +969,6 @@ fn subagent_spec_from_json_map(
         .or_else(|| object.get("effort"))
         .and_then(JsonValue::as_str)
         .map(ToString::to_string);
-    reject_legacy_permission_mode(object)?;
     let permissions = parse_required_permissions(object)?;
     let skills = optional_string_list(object.get("skills"))?.unwrap_or_default();
     let mcp_servers = optional_mcp_servers(
@@ -1136,29 +1134,28 @@ fn apply_plugin_restrictions(spec: &mut SubagentSpec) {
     }
 }
 
-fn reject_legacy_permission_mode(object: &JsonMap<String, JsonValue>) -> Result<()> {
-    if object.contains_key("permissionMode") {
-        bail!(
-            "legacy subagent field 'permissionMode' is no longer supported; use permissions.default"
-        );
-    }
-    if object.contains_key("permission_mode") {
-        bail!(
-            "legacy subagent field 'permission_mode' is no longer supported; use permissions.default"
-        );
-    }
-    Ok(())
-}
-
 fn parse_required_permissions(
     object: &JsonMap<String, JsonValue>,
 ) -> Result<AgentPermissionsConfig> {
+    for legacy_field in object
+        .keys()
+        .filter(|field| is_legacy_permission_field(field))
+    {
+        bail!("unsupported legacy subagent field '{legacy_field}'; use 'permissions.default'");
+    }
+
     let value = object
         .get("permissions")
         .ok_or_else(|| anyhow!("missing required subagent field 'permissions.default'"))?;
 
     serde_json::from_value::<AgentPermissionsConfig>(value.clone())
         .context("failed to parse subagent permissions")
+}
+
+fn is_legacy_permission_field(field: &str) -> bool {
+    field
+        .strip_prefix("permission")
+        .is_some_and(|suffix| matches!(suffix, "Mode" | "_mode"))
 }
 
 fn required_string(object: &JsonMap<String, JsonValue>, key: &str) -> Result<String> {
@@ -1387,11 +1384,13 @@ mod tests {
     use super::{
         AgentMode, AgentSpecFieldClass, BackgroundSubagentConfig, SubagentDiscoveryInput,
         SubagentMcpServer, SubagentMemoryScope, SubagentRuntimeLimits, SubagentSource,
-        builtin_subagents, classify_agent_spec_field, discover_subagents, load_subagent_from_file,
+        builtin_subagents, classify_agent_spec_field, discover_subagents, load_cli_agents,
+        load_subagent_from_file,
     };
     use crate::constants::tools;
     use crate::core::permissions::PermissionDefault;
     use anyhow::Result;
+    use serde_json::json;
     use std::fs;
     use tempfile::TempDir;
 
@@ -1417,8 +1416,6 @@ mod tests {
             classify_agent_spec_field("permissions"),
             Some(AgentSpecFieldClass::PrimaryRuntime)
         );
-        assert_eq!(classify_agent_spec_field("permission_mode"), None);
-        assert_eq!(classify_agent_spec_field("permissionMode"), None);
         assert_eq!(
             classify_agent_spec_field("mcpServers"),
             Some(AgentSpecFieldClass::PrimaryRuntime)
@@ -1510,29 +1507,56 @@ Prompt."#,
     }
 
     #[test]
-    fn rejects_legacy_permission_mode_fields() -> Result<()> {
+    fn rejects_legacy_top_level_permission_fields() -> Result<()> {
         let temp = TempDir::new()?;
-        for (file, field) in [
-            ("camel.md", "permissionMode: plan"),
-            ("snake.md", "permission_mode: plan"),
-        ] {
-            let path = temp.path().join(file);
+
+        for legacy_field in ["permissionMode", "permission_mode"] {
+            let markdown_path = temp.path().join(format!("{legacy_field}.md"));
             fs::write(
-                &path,
+                &markdown_path,
                 format!(
                     r#"---
-name: legacy
-description: Legacy permissions
+name: {legacy_field}
+description: Legacy frontmatter permissions
 permissions:
   default: ask
-{field}
+{legacy_field}: allow
 ---
 Prompt."#
                 ),
             )?;
 
-            let err = load_subagent_from_file(&path, SubagentSource::ProjectVtcode).unwrap_err();
-            assert!(err.to_string().contains("legacy subagent field"));
+            let markdown_err =
+                load_subagent_from_file(&markdown_path, SubagentSource::ProjectVtcode).unwrap_err();
+            assert!(markdown_err.to_string().contains(legacy_field));
+
+            let toml_path = temp.path().join(format!("{legacy_field}.toml"));
+            fs::write(
+                &toml_path,
+                format!(
+                    r#"name = "{legacy_field}"
+description = "Legacy TOML permissions"
+prompt = "Prompt."
+permissions = {{ default = "ask" }}
+{legacy_field} = "allow"
+"#
+                ),
+            )?;
+
+            let toml_err =
+                load_subagent_from_file(&toml_path, SubagentSource::ProjectCodex).unwrap_err();
+            assert!(toml_err.to_string().contains(legacy_field));
+
+            let cli_payload = json!({
+                legacy_field: {
+                    "description": "Legacy CLI permissions",
+                    "permissions": { "default": "ask" },
+                    legacy_field: "allow"
+                }
+            });
+
+            let cli_err = load_cli_agents(&cli_payload).unwrap_err();
+            assert!(cli_err.to_string().contains(legacy_field));
         }
 
         Ok(())

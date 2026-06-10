@@ -34,7 +34,7 @@ impl InterimTextContinuationDecision {
 
 pub(super) fn evaluate_interim_text_continuation(
     full_auto: bool,
-    plan_mode: bool,
+    planning_active: bool,
     history: &[uni::Message],
     text: &str,
 ) -> InterimTextContinuationDecision {
@@ -55,8 +55,8 @@ pub(super) fn evaluate_interim_text_continuation(
         )
     };
 
-    if plan_mode {
-        return d(false, "plan_mode");
+    if planning_active {
+        return d(false, "planning_active");
     }
 
     if !is_interim_progress {

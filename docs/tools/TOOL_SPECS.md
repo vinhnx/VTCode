@@ -40,7 +40,7 @@ This document describes the canonical public tool surface exposed to VT Code mod
   - `code`
 
 - `request_user_input`
-  Purpose: Collect short structured user decisions when the current mode allows it.
+  Purpose: Collect short structured user decisions when runtime permissions allow it.
 
 - `apply_patch`
   Purpose: First-class patch application for models that support the freeform patch surface.

@@ -22,7 +22,8 @@ mod tests {
         RequestUserInputQuestion {
             id: "system_prompt_plan".to_string(),
             header: "Direction".to_string(),
-            question: "Which area should we prioritize to improve plan mode behavior?".to_string(),
+            question: "Which area should we prioritize to improve planning workflow behavior?"
+                .to_string(),
             options: None,
             focus_area: Some("system prompt".to_string()),
             analysis_hints: vec!["navigation loop".to_string(), "stream timeout".to_string()],

@@ -47,7 +47,6 @@ pub async fn handle_auto_task_command(
             crate::codex_app_server::CodexNonInteractiveRun {
                 prompt: trimmed.to_string(),
                 read_only: false,
-                plan_mode: false,
                 skip_confirmations: true,
                 ephemeral: true,
                 resume_thread_id: None,

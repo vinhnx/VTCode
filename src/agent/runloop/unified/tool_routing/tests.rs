@@ -1,5 +1,5 @@
 use super::{
-    AutoModeRuntimeContext, SessionStats, ToolPermissionFlow, ToolPermissionsContext,
+    AutoPermissionRuntimeContext, SessionStats, ToolPermissionFlow, ToolPermissionsContext,
     approval_learning_target, approval_persistence::shell_command_has_persisted_approval_prefix,
     approval_policy_rejects_prompt, ensure_tool_permission, persist_segment_approval_cache_keys,
     persist_shell_approval_prefix_rule, tool_display_labels,
@@ -387,7 +387,7 @@ async fn skip_confirmations_does_not_bypass_cached_tool_denial() {
             approval_policy: AskForApproval::OnRequest,
             skip_confirmations: true,
             permissions_config: None,
-            auto_mode_runtime: None,
+            auto_permission_runtime: None,
             active_thread_label: None,
             session_stats: None,
         },
@@ -440,7 +440,7 @@ async fn tool_policy_deny_overrides_cached_session_approval() {
             approval_policy: AskForApproval::OnRequest,
             skip_confirmations: false,
             permissions_config: None,
-            auto_mode_runtime: None,
+            auto_permission_runtime: None,
             active_thread_label: None,
             session_stats: None,
         },
@@ -485,7 +485,7 @@ async fn active_agent_deny_default_denies_non_allowed_requests() {
             approval_policy: AskForApproval::OnRequest,
             skip_confirmations: false,
             permissions_config: Some(&permissions),
-            auto_mode_runtime: None,
+            auto_permission_runtime: None,
             active_thread_label: None,
             session_stats: None,
         },
@@ -532,7 +532,7 @@ async fn matching_allow_rule_allows_tool_call() {
             approval_policy: AskForApproval::OnRequest,
             skip_confirmations: false,
             permissions_config: Some(&permissions),
-            auto_mode_runtime: None,
+            auto_permission_runtime: None,
             active_thread_label: None,
             session_stats: None,
         },
@@ -587,7 +587,7 @@ async fn active_agent_auto_rule_enters_classifier_review() {
             approval_policy: AskForApproval::OnRequest,
             skip_confirmations: false,
             permissions_config: Some(&permissions),
-            auto_mode_runtime: Some(AutoModeRuntimeContext {
+            auto_permission_runtime: Some(AutoPermissionRuntimeContext {
                 config: &config,
                 vt_cfg: None,
                 provider_client: &mut provider,
@@ -645,7 +645,7 @@ async fn active_agent_permissions_restrict_global_direct_allow() {
             approval_policy: AskForApproval::OnRequest,
             skip_confirmations: false,
             permissions_config: Some(&permissions),
-            auto_mode_runtime: None,
+            auto_permission_runtime: None,
             active_thread_label: None,
             session_stats: None,
         },
@@ -693,7 +693,7 @@ async fn subagent_local_permissions_restrict_global_direct_allow() {
             approval_policy: AskForApproval::OnRequest,
             skip_confirmations: false,
             permissions_config: Some(&permissions),
-            auto_mode_runtime: None,
+            auto_permission_runtime: None,
             active_thread_label: None,
             session_stats: None,
         },
@@ -744,7 +744,7 @@ async fn active_agent_ask_disables_skip_confirmations_auto_approval() {
             approval_policy: reject_all_approvals(),
             skip_confirmations: true,
             permissions_config: Some(&permissions),
-            auto_mode_runtime: None,
+            auto_permission_runtime: None,
             active_thread_label: None,
             session_stats: None,
         },
@@ -791,7 +791,7 @@ async fn skip_confirmations_auto_approves_without_active_agent_policy() {
             approval_policy: reject_all_approvals(),
             skip_confirmations: true,
             permissions_config: Some(&permissions),
-            auto_mode_runtime: None,
+            auto_permission_runtime: None,
             active_thread_label: None,
             session_stats: None,
         },
@@ -838,7 +838,7 @@ async fn skip_confirmations_does_not_bypass_active_agent_ask_default() {
             approval_policy: reject_all_approvals(),
             skip_confirmations: true,
             permissions_config: Some(&permissions),
-            auto_mode_runtime: None,
+            auto_permission_runtime: None,
             active_thread_label: None,
             session_stats: None,
         },
@@ -888,7 +888,7 @@ async fn active_agent_allow_default_allows_builtin_file_mutations() {
             }),
             skip_confirmations: false,
             permissions_config: Some(&permissions),
-            auto_mode_runtime: None,
+            auto_permission_runtime: None,
             active_thread_label: None,
             session_stats: None,
         },
@@ -938,7 +938,7 @@ async fn active_agent_allow_default_keeps_protected_write_prompts() {
             }),
             skip_confirmations: false,
             permissions_config: Some(&permissions),
-            auto_mode_runtime: None,
+            auto_permission_runtime: None,
             active_thread_label: None,
             session_stats: None,
         },
@@ -989,7 +989,7 @@ async fn protected_write_prompts_without_matching_allow() {
             }),
             skip_confirmations: false,
             permissions_config: Some(&permissions),
-            auto_mode_runtime: None,
+            auto_permission_runtime: None,
             active_thread_label: None,
             session_stats: None,
         },
@@ -1041,7 +1041,7 @@ async fn matching_ask_rule_prompts_user() {
             }),
             skip_confirmations: false,
             permissions_config: Some(&permissions),
-            auto_mode_runtime: None,
+            auto_permission_runtime: None,
             active_thread_label: None,
             session_stats: None,
         },
@@ -1096,7 +1096,7 @@ async fn matching_deny_rule_denies_without_classifier_review() {
             approval_policy: AskForApproval::OnRequest,
             skip_confirmations: false,
             permissions_config: Some(&permissions),
-            auto_mode_runtime: Some(AutoModeRuntimeContext {
+            auto_permission_runtime: Some(AutoPermissionRuntimeContext {
                 config: &config,
                 vt_cfg: None,
                 provider_client: &mut provider,
@@ -1148,7 +1148,7 @@ async fn permanent_shell_approval_persists_segmented_commands() {
 }
 
 #[tokio::test]
-async fn auto_mode_headless_fallback_returns_blocked_summary() {
+async fn auto_permission_headless_fallback_returns_blocked_summary() {
     let temp_dir = tempfile::TempDir::new().expect("temp dir");
     let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
     let mut session = create_headless_session();
@@ -1164,7 +1164,7 @@ async fn auto_mode_headless_fallback_returns_blocked_summary() {
     };
     let config = runtime_config();
     let permissions = PermissionsConfig {
-        auto_mode: vtcode_core::config::AutoModeConfig {
+        auto_permission: vtcode_core::config::AutoPermissionConfig {
             max_consecutive_denials: 1,
             max_total_denials: 20,
             ..Default::default()
@@ -1195,7 +1195,7 @@ async fn auto_mode_headless_fallback_returns_blocked_summary() {
             approval_policy: AskForApproval::OnRequest,
             skip_confirmations: false,
             permissions_config: Some(&permissions),
-            auto_mode_runtime: Some(AutoModeRuntimeContext {
+            auto_permission_runtime: Some(AutoPermissionRuntimeContext {
                 config: &config,
                 vt_cfg: None,
                 provider_client: &mut provider,
@@ -1221,7 +1221,7 @@ async fn auto_mode_headless_fallback_returns_blocked_summary() {
 }
 
 #[tokio::test]
-async fn auto_mode_interactive_fallback_notice_is_emitted_once() {
+async fn auto_permission_interactive_fallback_notice_is_emitted_once() {
     let temp_dir = tempfile::TempDir::new().expect("temp dir");
     let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
     let (mut session, mut receiver) = create_session_with_receiver();
@@ -1237,7 +1237,7 @@ async fn auto_mode_interactive_fallback_notice_is_emitted_once() {
     };
     let config = runtime_config();
     let permissions = PermissionsConfig {
-        auto_mode: vtcode_core::config::AutoModeConfig {
+        auto_permission: vtcode_core::config::AutoPermissionConfig {
             max_consecutive_denials: 1,
             max_total_denials: 20,
             ..Default::default()
@@ -1273,7 +1273,7 @@ async fn auto_mode_interactive_fallback_notice_is_emitted_once() {
             }),
             skip_confirmations: false,
             permissions_config: Some(&permissions),
-            auto_mode_runtime: Some(AutoModeRuntimeContext {
+            auto_permission_runtime: Some(AutoPermissionRuntimeContext {
                 config: &config,
                 vt_cfg: None,
                 provider_client: &mut provider,
@@ -1292,7 +1292,9 @@ async fn auto_mode_interactive_fallback_notice_is_emitted_once() {
 
     let first_lines = drain_appended_lines(&mut receiver);
     assert!(first_lines.iter().any(|line| {
-        line.contains("Auto mode fell back to manual prompts after repeated classifier denials.")
+        line.contains(
+            "Auto permission review fell back to manual prompts after repeated classifier denials.",
+        )
     }));
 
     let second_flow = ensure_tool_permission(
@@ -1320,7 +1322,7 @@ async fn auto_mode_interactive_fallback_notice_is_emitted_once() {
             }),
             skip_confirmations: false,
             permissions_config: Some(&permissions),
-            auto_mode_runtime: Some(AutoModeRuntimeContext {
+            auto_permission_runtime: Some(AutoPermissionRuntimeContext {
                 config: &config,
                 vt_cfg: None,
                 provider_client: &mut provider,

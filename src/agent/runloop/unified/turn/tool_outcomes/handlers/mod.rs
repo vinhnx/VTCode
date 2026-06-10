@@ -5,7 +5,6 @@ use anyhow::Result;
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::exec_policy::AskForApproval;
 use vtcode_core::primary_agent::primary_agent_allows_tool;
-use vtcode_core::tools::error_messages::agent_execution::policy_denied_hint_message;
 use vtcode_core::tools::registry::ToolExecutionError;
 use vtcode_core::tools::registry::labels::tool_action_label;
 use vtcode_core::utils::ansi::MessageStyle;
@@ -202,8 +201,8 @@ fn build_tool_permissions_context<'ctx, 'a>(
             .unwrap_or(AskForApproval::OnRequest),
         skip_confirmations: ctx.skip_confirmations,
         permissions_config: ctx.vt_cfg.map(|cfg| &cfg.permissions),
-        auto_mode_runtime: Some(
-            crate::agent::runloop::unified::run_loop_context::AutoModeRuntimeContext {
+        auto_permission_runtime: Some(
+            crate::agent::runloop::unified::run_loop_context::AutoPermissionRuntimeContext {
                 config: ctx.config,
                 vt_cfg: ctx.vt_cfg,
                 provider_client: ctx.provider_client.as_mut(),
@@ -503,9 +502,9 @@ pub(crate) async fn validate_tool_call<'a>(
             Ok(ValidationResult::Proceed(prepared))
         }
         Ok(ToolPermissionFlow::Denied) => {
-            let denial = if let Some(denial) = ctx.session_stats.last_auto_mode_denial() {
+            let denial = if let Some(denial) = ctx.session_stats.last_auto_permission_denial() {
                 serde_json::json!({
-                    "error": format!("Auto mode blocked tool '{}': {}", prepared.canonical_name, denial.reason),
+                    "error": format!("Auto permission review blocked tool '{}': {}", prepared.canonical_name, denial.reason),
                     "reason": denial.reason,
                     "matched_rule": denial.matched_rule,
                     "matched_exception": denial.matched_exception,
@@ -515,7 +514,7 @@ pub(crate) async fn validate_tool_call<'a>(
             } else {
                 ToolExecutionError::policy_violation(
                     canonical_tool_name,
-                    policy_denied_hint_message(&prepared.canonical_name),
+                    format!("Tool '{}' execution denied by policy", prepared.canonical_name),
                 )
                 .to_json_value()
             };

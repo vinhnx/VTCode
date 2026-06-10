@@ -226,8 +226,8 @@ pub struct AgentConfig {
     #[serde(default)]
     pub user_instructions: Option<String>,
 
-    /// Require user confirmation before executing a plan generated in plan mode
-    /// When true, exiting plan mode shows the implementation blueprint and
+    /// Require user confirmation before executing a plan generated in planning workflow
+    /// When true, exiting planning workflow shows the implementation blueprint and
     /// requires explicit user approval before enabling edit tools.
     #[serde(default = "default_require_plan_confirmation")]
     pub require_plan_confirmation: bool,
@@ -470,8 +470,7 @@ pub struct AgentCodexAppServerConfig {
     /// Maximum startup handshake time when launching the sidecar.
     #[serde(default = "default_codex_app_server_startup_timeout_secs")]
     pub startup_timeout_secs: u64,
-    /// Enable experimental Codex app-server features such as collaboration modes
-    /// and native review routing.
+    /// Enable experimental Codex app-server sidecar features.
     #[serde(default = "default_codex_app_server_experimental_features")]
     pub experimental_features: bool,
 }
@@ -1675,11 +1674,11 @@ mod tests {
 
     #[test]
     fn test_structured_reasoning_defaults_follow_prompt_mode() {
-        let default_mode = AgentConfig {
+        let default_prompt_config = AgentConfig {
             system_prompt_mode: SystemPromptMode::Default,
             ..Default::default()
         };
-        assert!(!default_mode.should_include_structured_reasoning_tags());
+        assert!(!default_prompt_config.should_include_structured_reasoning_tags());
 
         let specialized_mode = AgentConfig {
             system_prompt_mode: SystemPromptMode::Specialized,

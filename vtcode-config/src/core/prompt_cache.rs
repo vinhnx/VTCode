@@ -132,7 +132,7 @@ pub struct OpenAIPromptCacheSettings {
     pub surface_metrics: bool,
 
     /// Strategy for generating OpenAI `prompt_cache_key`.
-    /// Session mode derives one stable key per VT Code conversation.
+    /// Session-scoped keys derive one stable key per VT Code conversation.
     #[serde(default = "default_openai_prompt_cache_key_mode")]
     pub prompt_cache_key_mode: OpenAIPromptCacheKeyMode,
 

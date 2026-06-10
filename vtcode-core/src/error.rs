@@ -78,7 +78,7 @@ pub enum ErrorCode {
     // Security errors
     PermissionDenied,
     PolicyViolation,
-    PlanModeViolation,
+    PlanningPolicyViolation,
     SandboxViolation,
     DotfileProtection,
 
@@ -203,7 +203,7 @@ impl ErrorCode {
             ErrorCategory::ResourceNotFound => ErrorCode::ResourceNotFound,
             ErrorCategory::PermissionDenied => ErrorCode::PermissionDenied,
             ErrorCategory::PolicyViolation => ErrorCode::PolicyViolation,
-            ErrorCategory::PlanModeViolation => ErrorCode::PlanModeViolation,
+            ErrorCategory::PlanningPolicyViolation => ErrorCode::PlanningPolicyViolation,
             ErrorCategory::SandboxFailure => ErrorCode::SandboxViolation,
             ErrorCategory::ResourceExhausted => ErrorCode::ResourceUnavailable,
             ErrorCategory::Cancelled => ErrorCode::Cancelled,
@@ -225,7 +225,7 @@ impl ErrorCode {
             UnifiedErrorKind::ResourceExhausted => ErrorCode::ResourceUnavailable,
             UnifiedErrorKind::Cancelled => ErrorCode::Cancelled,
             UnifiedErrorKind::PolicyViolation => ErrorCode::PolicyViolation,
-            UnifiedErrorKind::PlanModeViolation => ErrorCode::PlanModeViolation,
+            UnifiedErrorKind::PlanningPolicyViolation => ErrorCode::PlanningPolicyViolation,
             UnifiedErrorKind::ExecutionFailed | UnifiedErrorKind::Unknown => {
                 ErrorCode::ToolExecutionFailed
             }

@@ -12,7 +12,7 @@ const MAX_FALLBACK_ARGS_INLINE_CHARS: usize = 240;
 
 #[cold]
 pub(super) fn is_blocked_or_denied_failure(error: &str) -> bool {
-    if agent_execution::is_plan_mode_denial(error) {
+    if agent_execution::is_planning_active_denial(error) {
         return true;
     }
 
@@ -113,7 +113,7 @@ fn failure_guidance(
         return (
             "policy_blocked",
             false,
-            "Switch to an allowed tool, or run `/mode auto` to enable auto-approval.",
+            "Switch to an allowed tool or mode.",
         );
     }
 
@@ -158,13 +158,13 @@ fn structured_failure_guidance(
         error.category,
         ErrorCategory::PermissionDenied
             | ErrorCategory::PolicyViolation
-            | ErrorCategory::PlanModeViolation
+            | ErrorCategory::PlanningPolicyViolation
     ) || is_blocked_or_denied_failure(&error.message)
     {
         return (
             "policy_blocked",
             false,
-            "Switch to an allowed tool, or run `/mode auto` to enable auto-approval.",
+            "Switch to an allowed tool or mode.",
         );
     }
 

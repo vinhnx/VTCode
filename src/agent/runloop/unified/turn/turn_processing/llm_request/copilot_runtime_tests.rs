@@ -301,7 +301,7 @@ async fn observed_tool_calls_emit_incremental_output_updates() {
     let traj = TrajectoryLogger::new(&workspace);
     let mut session_stats = SessionStats::default();
     let mut plan_session =
-        crate::agent::runloop::unified::plan_mode_state::PlanModeSessionState::default();
+        crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState::default();
     let mut mcp_panel_state = McpPanelState::default();
     let mut harness_state = HarnessTurnState::new(
         TurnRunId("run-test".to_string()),
@@ -404,7 +404,7 @@ async fn observed_shell_tool_calls_stream_into_inline_pty_ui() {
     let traj = TrajectoryLogger::new(&workspace);
     let mut session_stats = SessionStats::default();
     let mut plan_session =
-        crate::agent::runloop::unified::plan_mode_state::PlanModeSessionState::default();
+        crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState::default();
     let mut mcp_panel_state = McpPanelState::default();
     let mut harness_state = HarnessTurnState::new(
         TurnRunId("run-test".to_string()),
@@ -499,7 +499,7 @@ async fn copilot_terminal_sessions_bind_local_pty_output_and_release_cleanly() {
     let traj = TrajectoryLogger::new(&workspace);
     let mut session_stats = SessionStats::default();
     let mut plan_session =
-        crate::agent::runloop::unified::plan_mode_state::PlanModeSessionState::default();
+        crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState::default();
     let mut mcp_panel_state = McpPanelState::default();
     let mut harness_state = HarnessTurnState::new(
         TurnRunId("run-test".to_string()),
@@ -622,7 +622,7 @@ async fn vtcode_tool_calls_render_transcript_output_via_shared_pipeline() {
     let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
     let mut session_stats = SessionStats::default();
     let mut plan_session =
-        crate::agent::runloop::unified::plan_mode_state::PlanModeSessionState::default();
+        crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState::default();
     let mut mcp_panel_state = McpPanelState::default();
     let ctrl_c_state = Arc::new(CtrlCState::new());
     let ctrl_c_notify = Arc::new(Notify::new());

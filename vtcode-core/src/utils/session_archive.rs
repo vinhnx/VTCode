@@ -149,8 +149,6 @@ pub struct SessionArchiveMetadata {
     pub theme: String,
     pub reasoning_effort: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub session_mode: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub debug_log_path: Option<String>,
     /// Names of skills loaded in this session
     #[serde(default)]
@@ -260,7 +258,6 @@ impl SessionArchiveMetadata {
             provider: provider.into(),
             theme: theme.into(),
             reasoning_effort: reasoning_effort.into(),
-            session_mode: None,
             debug_log_path: None,
             loaded_skills: Vec::new(),
             prompt_cache_lineage_id: None,
@@ -332,7 +329,6 @@ impl SessionArchiveMetadata {
             provider: self.provider.clone(),
             theme: self.theme.clone(),
             reasoning_effort: self.reasoning_effort.clone(),
-            session_mode: self.session_mode.clone(),
             debug_log_path: self.debug_log_path.clone(),
             loaded_skills: self.loaded_skills.clone(),
             prompt_cache_lineage_id: self.prompt_cache_lineage_id.clone(),
@@ -1955,7 +1951,6 @@ fn shrink_snapshot_metadata(metadata: &mut SessionArchiveMetadata) -> bool {
     changed |= shrink_string(&mut metadata.provider);
     changed |= shrink_string(&mut metadata.theme);
     changed |= shrink_string(&mut metadata.reasoning_effort);
-    changed |= shrink_optional_string(&mut metadata.session_mode);
     changed |= shrink_optional_string(&mut metadata.debug_log_path);
     changed |= shrink_optional_string(&mut metadata.prompt_cache_lineage_id);
     changed |= shrink_optional_string(&mut metadata.external_thread_id);

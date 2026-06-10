@@ -1,6 +1,5 @@
 use serde_json::Value;
 
-use crate::config::PermissionMode;
 use crate::exec::events::ThreadCompletionSubtype;
 
 #[derive(Debug, Clone)]
@@ -127,7 +126,6 @@ pub enum PermissionUpdateKind {
     AddRules(Vec<String>),
     ReplaceRules(Vec<String>),
     RemoveRules(Vec<String>),
-    SetMode(PermissionMode),
     Unsupported(String),
 }
 

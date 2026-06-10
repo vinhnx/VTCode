@@ -206,9 +206,10 @@ impl AgentRunner {
             .compose_task_system_prompt(prompt_tools, is_simple_task)
             .await?;
 
-        let plan_mode = self.tool_registry.is_plan_mode();
-        let request_user_input_enabled =
-            self.features().request_user_input_enabled(plan_mode, false);
+        let planning_active = self.tool_registry.is_planning_active();
+        let request_user_input_enabled = self
+            .features()
+            .request_user_input_enabled(planning_active, false);
         let full_auto_active = self
             .tool_registry
             .current_full_auto_allowlist()
@@ -219,7 +220,7 @@ impl AgentRunner {
             &mut system_prompt,
             RuntimePromptContract {
                 full_auto: full_auto_active,
-                plan_mode,
+                planning_active,
                 request_user_input_enabled,
             },
         );
@@ -249,14 +250,14 @@ impl AgentRunner {
             bundle,
             |runner| Box::pin((*runner).build_runtime_prompt_bundle(is_simple_task)),
             |runner, bundle| {
-                let plan_mode = runner.tool_registry.is_plan_mode();
+                let planning_active = runner.tool_registry.is_planning_active();
                 let request_user_input_enabled = runner
                     .features()
-                    .request_user_input_enabled(plan_mode, false);
+                    .request_user_input_enabled(planning_active, false);
                 prompt_alignment::validate_prompt_catalog_alignment(
                     &bundle.system_instruction,
                     &bundle.tool_snapshot,
-                    plan_mode,
+                    planning_active,
                     request_user_input_enabled,
                 )
             },
@@ -474,10 +475,10 @@ impl AgentRunner {
 
             let mut continuation_controller = ContinuationController::new(
                 self._workspace.clone(),
-                self.tool_registry.plan_mode_state(),
+                self.tool_registry.planning_workflow_state(),
                 self.config().agent.harness.continuation_policy.clone(),
                 full_auto_active,
-                self.tool_registry.is_plan_mode(),
+                self.tool_registry.is_planning_active(),
                 review_like,
             );
             continuation_controller.prepare(&effective_task).await?;

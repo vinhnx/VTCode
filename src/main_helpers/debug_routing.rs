@@ -205,8 +205,8 @@ mod tests {
             resume_show_all: false,
             custom_session_id: None,
             summarize_fork: false,
-            plan_mode_entry_source:
-                vtcode_core::core::interfaces::session::PlanModeEntrySource::None,
+            planning_entry_source:
+                vtcode_core::core::interfaces::session::PlanningEntrySource::None,
         };
 
         configure_runtime_debug_context("seed".to_string(), Some("seed".to_string()));
@@ -234,8 +234,8 @@ mod tests {
             resume_show_all: false,
             custom_session_id: None,
             summarize_fork: false,
-            plan_mode_entry_source:
-                vtcode_core::core::interfaces::session::PlanModeEntrySource::None,
+            planning_entry_source:
+                vtcode_core::core::interfaces::session::PlanningEntrySource::None,
         };
 
         configure_runtime_debug_context("seed".to_string(), Some("seed".to_string()));

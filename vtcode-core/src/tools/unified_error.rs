@@ -56,8 +56,8 @@ pub enum UnifiedErrorKind {
     Cancelled,
     /// Policy violation (blocked by safety gateway)
     PolicyViolation,
-    /// Plan mode violation (mutating tool in read-only mode)
-    PlanModeViolation,
+    /// Planning workflow violation (mutating tool without write permissions)
+    PlanningPolicyViolation,
     /// Execution failed (general tool execution failure)
     ExecutionFailed,
     /// Unknown/unclassified error
@@ -238,7 +238,7 @@ impl From<ErrorCategory> for UnifiedErrorKind {
             ErrorCategory::ResourceNotFound => UnifiedErrorKind::ToolNotFound,
             ErrorCategory::PermissionDenied => UnifiedErrorKind::PermissionDenied,
             ErrorCategory::PolicyViolation => UnifiedErrorKind::PolicyViolation,
-            ErrorCategory::PlanModeViolation => UnifiedErrorKind::PlanModeViolation,
+            ErrorCategory::PlanningPolicyViolation => UnifiedErrorKind::PlanningPolicyViolation,
             ErrorCategory::SandboxFailure => UnifiedErrorKind::SandboxFailure,
             ErrorCategory::ResourceExhausted => UnifiedErrorKind::ResourceExhausted,
             ErrorCategory::Cancelled => UnifiedErrorKind::Cancelled,
@@ -262,7 +262,7 @@ impl From<UnifiedErrorKind> for ErrorCategory {
             UnifiedErrorKind::ResourceExhausted => ErrorCategory::ResourceExhausted,
             UnifiedErrorKind::Cancelled => ErrorCategory::Cancelled,
             UnifiedErrorKind::PolicyViolation => ErrorCategory::PolicyViolation,
-            UnifiedErrorKind::PlanModeViolation => ErrorCategory::PlanModeViolation,
+            UnifiedErrorKind::PlanningPolicyViolation => ErrorCategory::PlanningPolicyViolation,
             UnifiedErrorKind::ExecutionFailed => ErrorCategory::ExecutionError,
             UnifiedErrorKind::Unknown => ErrorCategory::ExecutionError,
         }

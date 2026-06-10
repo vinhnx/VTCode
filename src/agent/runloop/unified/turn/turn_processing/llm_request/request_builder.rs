@@ -68,9 +68,9 @@ pub(super) fn resolve_prompt_cache_shaping_mode(
 #[derive(Clone)]
 pub(super) struct TurnRequestSnapshot {
     pub provider_name: String,
-    pub plan_mode: bool,
+    pub planning_active: bool,
     pub full_auto: bool,
-    pub auto_mode: bool,
+    pub auto_permission: bool,
     pub tool_free_recovery: bool,
     pub recovery_reason: Option<String>,
     pub request_user_input_enabled: bool,
@@ -118,8 +118,8 @@ pub(super) fn capture_turn_request_snapshot(
     tool_free_recovery: bool,
 ) -> TurnRequestSnapshot {
     let prompt_cache_config = &ctx.config.prompt_cache;
-    let plan_mode = ctx.is_plan_mode();
-    let auto_mode = ctx.full_auto && !plan_mode;
+    let planning_active = ctx.is_planning_active();
+    let auto_permission = ctx.full_auto && !planning_active;
     let provider_name = ctx.provider_client.name().to_ascii_lowercase();
     let openai_prompt_cache_enabled = is_openai_prompt_cache_enabled(
         &provider_name,
@@ -129,7 +129,7 @@ pub(super) fn capture_turn_request_snapshot(
     let prompt_cache_shaping_mode =
         resolve_prompt_cache_shaping_mode(&provider_name, prompt_cache_config);
     let request_user_input_enabled =
-        FeatureSet::from_config(ctx.vt_cfg).request_user_input_enabled(plan_mode, true);
+        FeatureSet::from_config(ctx.vt_cfg).request_user_input_enabled(planning_active, true);
     let active_primary_agent = ctx.active_primary_agent.active().clone();
     let active_model = resolve_effective_request_model(active_model, &active_primary_agent);
     let context_window_size = ctx.provider_client.effective_context_size(&active_model);
@@ -147,9 +147,9 @@ pub(super) fn capture_turn_request_snapshot(
 
     TurnRequestSnapshot {
         provider_name,
-        plan_mode,
+        planning_active,
         full_auto,
-        auto_mode,
+        auto_permission,
         tool_free_recovery,
         recovery_reason: ctx.recovery_reason().map(str::to_string),
         request_user_input_enabled,
@@ -196,8 +196,8 @@ async fn build_prompt_output(
         .build_system_prompt(
             crate::agent::runloop::unified::context_manager::SystemPromptParams {
                 full_auto: input.turn.full_auto,
-                auto_mode: input.turn.auto_mode,
-                plan_mode: input.turn.plan_mode,
+                auto_permission: input.turn.auto_permission,
+                planning_active: input.turn.planning_active,
                 request_user_input_enabled: input.turn.request_user_input_enabled,
             },
         )
@@ -223,7 +223,7 @@ async fn build_prompt_output(
         SessionToolCatalogSnapshot::new(
             ctx.tool_catalog.current_version(),
             ctx.tool_catalog.current_epoch(),
-            input.turn.plan_mode,
+            input.turn.planning_active,
             input.turn.request_user_input_enabled,
             None,
             false,
@@ -232,7 +232,7 @@ async fn build_prompt_output(
         SessionToolCatalogSnapshot::new(
             ctx.tool_catalog.current_version(),
             ctx.tool_catalog.current_epoch(),
-            input.turn.plan_mode,
+            input.turn.planning_active,
             input.turn.request_user_input_enabled,
             None,
             false,
@@ -242,7 +242,7 @@ async fn build_prompt_output(
             .tool_catalog
             .filtered_snapshot_with_stats(
                 ctx.tools,
-                input.turn.plan_mode,
+                input.turn.planning_active,
                 input.turn.request_user_input_enabled,
             )
             .await;
@@ -273,7 +273,7 @@ fn apply_primary_agent_policy_to_tool_snapshot(
     SessionToolCatalogSnapshot::new(
         snapshot.version,
         snapshot.epoch,
-        snapshot.plan_mode,
+        snapshot.planning_active,
         snapshot.request_user_input_enabled,
         filtered,
         snapshot.cache_hit,
@@ -328,7 +328,7 @@ fn validate_prompt_output_alignment(
     prompt_alignment::validate_prompt_catalog_alignment(
         &prompt_output.system_prompt,
         &prompt_output.tool_snapshot,
-        turn.plan_mode,
+        turn.planning_active,
         turn.request_user_input_enabled,
     )
 }
@@ -642,8 +642,8 @@ async fn render_primary_agent_runtime_context(
         lines.push(format!("- Agent reasoning effort: {raw_effort}"));
     }
     lines.push(format!(
-        "- Session state: plan_mode={}, auto_mode={}, full_auto={}",
-        turn_snapshot.plan_mode, turn_snapshot.auto_mode, turn_snapshot.full_auto
+        "- Session state: planning_workflow={}, auto_permission={}, full_auto={}",
+        turn_snapshot.planning_active, turn_snapshot.auto_permission, turn_snapshot.full_auto
     ));
     lines.push(format!(
         "- Active primary permission default: {}",
@@ -826,7 +826,7 @@ pub(super) async fn build_turn_request(
             step_count,
             model: request_model,
             cache_hit: prompt_output.tool_snapshot.cache_hit,
-            plan_mode: turn_snapshot.plan_mode,
+            planning_active: turn_snapshot.planning_active,
             request_user_input_enabled: turn_snapshot.request_user_input_enabled,
             available_tools: prompt_output.tool_snapshot.available_tools(),
             stable_prefix_hash,
@@ -1345,7 +1345,10 @@ mod tests {
         assert!(runtime_context.contains("## Active Primary Agent Runtime State"));
         assert!(runtime_context.contains("- Active agent: planner"));
         assert!(runtime_context.contains("- Effective request tools: unified_search"));
-        assert!(runtime_context.contains("- Agent permission mode: plan"));
+        assert!(runtime_context.contains(
+            "- Session state: planning_workflow=false, auto_permission=false, full_auto=false"
+        ));
+        assert!(runtime_context.contains("- Active primary permission default: deny"));
         assert!(runtime_context.contains("Plan carefully before editing."));
         assert_eq!(
             built.continuation_messages,
@@ -2005,7 +2008,7 @@ mod tests {
             SessionToolCatalogSnapshot::new(
                 7,
                 11,
-                turn.plan_mode,
+                turn.planning_active,
                 turn.request_user_input_enabled,
                 Some(Arc::new(Vec::new())),
                 false,

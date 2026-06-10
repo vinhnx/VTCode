@@ -13,8 +13,8 @@ pub enum LightweightFeature {
     Memory,
     PromptSuggestions,
     PromptRefinement,
-    AutoModeReview,
-    AutoModeProbe,
+    AutoPermissionReview,
+    AutoPermissionProbe,
     LargeReadSummary,
     WebSummary,
     GitHistorySummary,
@@ -262,8 +262,8 @@ fn feature_uses_shared_model(
         LightweightFeature::GitHistorySummary => shared_cfg.use_for_git_history,
         LightweightFeature::PromptSuggestions
         | LightweightFeature::PromptRefinement
-        | LightweightFeature::AutoModeReview
-        | LightweightFeature::AutoModeProbe
+        | LightweightFeature::AutoPermissionReview
+        | LightweightFeature::AutoPermissionProbe
         | LightweightFeature::Subagent => true,
     }
 }

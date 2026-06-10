@@ -63,15 +63,15 @@ pub use api_keys::ApiKeySources;
 pub use context::{ContextFeaturesConfig, DynamicContextConfig, LedgerConfig};
 pub use core::{
     AgentCodexAppServerConfig, AgentConfig, AgentOnboardingConfig, AgentPromptSuggestionsConfig,
-    AuthConfig, AutoModeConfig, AutoModeEnvironmentConfig, AutomationConfig, BundledSkillsConfig,
-    CommandsConfig, CopilotAuthConfig, CustomProviderCommandAuthConfig, DockerSandboxConfig,
-    EditorToolConfig, ExternalSandboxConfig, ExternalSandboxType, FullAutoConfig, GatekeeperConfig,
-    MemoriesConfig, MicroVMSandboxConfig, ModelConfig, NetworkAllowlistEntryConfig, NetworkConfig,
-    OpenAIAuthConfig, OpenAIConfig, OpenAIHostedShellConfig, OpenAIHostedShellDomainSecret,
-    OpenAIHostedShellEnvironment, OpenAIHostedShellNetworkPolicy,
-    OpenAIHostedShellNetworkPolicyType, OpenAIHostedSkill, OpenAIManualCompactionConfig,
-    OpenAIPreferredMethod, OpenAIServiceTier, OpenResponsesConfig, OpenRouterAuthConfig,
-    PermissionMode, PluginRuntimeConfig, PluginTrustLevel, PromptCachingConfig,
+    AuthConfig, AutoPermissionConfig, AutoPermissionEnvironmentConfig, AutomationConfig,
+    BundledSkillsConfig, CommandsConfig, CopilotAuthConfig, CustomProviderCommandAuthConfig,
+    DockerSandboxConfig, EditorToolConfig, ExternalSandboxConfig, ExternalSandboxType,
+    FullAutoConfig, GatekeeperConfig, MemoriesConfig, MicroVMSandboxConfig, ModelConfig,
+    NetworkAllowlistEntryConfig, NetworkConfig, OpenAIAuthConfig, OpenAIConfig,
+    OpenAIHostedShellConfig, OpenAIHostedShellDomainSecret, OpenAIHostedShellEnvironment,
+    OpenAIHostedShellNetworkPolicy, OpenAIHostedShellNetworkPolicyType, OpenAIHostedSkill,
+    OpenAIManualCompactionConfig, OpenAIPreferredMethod, OpenAIServiceTier, OpenResponsesConfig,
+    OpenRouterAuthConfig, PluginRuntimeConfig, PluginTrustLevel, PromptCachingConfig,
     ProviderPromptCachingConfig, ResourceLimitsConfig, ResourceLimitsPreset, SandboxConfig,
     SandboxPolicy, SeccompConfig, SeccompProfilePreset, SecurityConfig, SensitivePathsConfig,
     SkillsConfig, SkillsRenderMode, ToolPolicy, ToolsConfig, WebFetchConfig,
@@ -128,8 +128,8 @@ pub use telemetry::TelemetryConfig;
 pub use terminal_title::{DEFAULT_TERMINAL_TITLE_ITEMS, TerminalTitleConfig};
 pub use timeouts::{TimeoutsConfig, resolve_timeout};
 pub use types::{
-    EditingMode, ReasoningEffortLevel, SystemPromptMode, ToolDocumentationMode,
-    UiSurfacePreference, VerbosityLevel,
+    ReasoningEffortLevel, SystemPromptMode, ToolDocumentationMode, UiSurfacePreference,
+    VerbosityLevel,
 };
 pub use workspace_env::{read_workspace_env_value, write_workspace_env_value};
 

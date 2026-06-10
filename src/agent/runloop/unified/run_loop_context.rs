@@ -1,6 +1,6 @@
 use crate::agent::runloop::mcp_events::McpPanelState;
 use crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter;
-use crate::agent::runloop::unified::plan_mode_state::PlanModeSessionState;
+use crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState;
 use crate::agent::runloop::unified::state::SessionStats;
 use crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator;
 use hashbrown::{HashMap, HashSet};
@@ -529,7 +529,7 @@ pub(crate) struct RunLoopContext<'a> {
     pub permissions_state: &'a Arc<RwLock<PermissionsConfig>>,
     pub decision_ledger: &'a Arc<RwLock<DecisionTracker>>,
     pub session_stats: &'a mut SessionStats,
-    pub plan_session: &'a mut PlanModeSessionState,
+    pub plan_session: &'a mut PlanningWorkflowSessionState,
     pub mcp_panel_state: &'a mut McpPanelState,
     pub approval_recorder: &'a ApprovalRecorder,
     pub session: &'a mut InlineSession,
@@ -537,11 +537,11 @@ pub(crate) struct RunLoopContext<'a> {
     pub traj: &'a TrajectoryLogger,
     pub harness_state: &'a mut HarnessTurnState,
     pub harness_emitter: Option<&'a HarnessEventEmitter>,
-    pub auto_mode: Option<AutoModeRuntimeContext<'a>>,
+    pub auto_permission: Option<AutoPermissionRuntimeContext<'a>>,
     pub active_agent_permissions: Option<&'a AgentPermissionsConfig>,
 }
 
-pub(crate) struct AutoModeRuntimeContext<'a> {
+pub(crate) struct AutoPermissionRuntimeContext<'a> {
     pub config: &'a CoreAgentConfig,
     pub vt_cfg: Option<&'a VTCodeConfig>,
     pub provider_client: &'a mut dyn uni::LLMProvider,
@@ -560,7 +560,7 @@ impl<'a> RunLoopContext<'a> {
         permissions_state: &'a Arc<RwLock<PermissionsConfig>>,
         decision_ledger: &'a Arc<RwLock<DecisionTracker>>,
         session_stats: &'a mut SessionStats,
-        plan_session: &'a mut PlanModeSessionState,
+        plan_session: &'a mut PlanningWorkflowSessionState,
         mcp_panel_state: &'a mut McpPanelState,
         approval_recorder: &'a ApprovalRecorder,
         session: &'a mut InlineSession,
@@ -569,7 +569,7 @@ impl<'a> RunLoopContext<'a> {
         harness_state: &'a mut HarnessTurnState,
         harness_emitter: Option<&'a HarnessEventEmitter>,
     ) -> Self {
-        Self::new_with_auto_mode_context(
+        Self::new_with_auto_permission_context(
             renderer,
             handle,
             tool_registry,
@@ -592,7 +592,7 @@ impl<'a> RunLoopContext<'a> {
     }
 
     #[expect(clippy::too_many_arguments)]
-    pub(crate) fn new_with_auto_mode_context(
+    pub(crate) fn new_with_auto_permission_context(
         renderer: &'a mut AnsiRenderer,
         handle: &'a InlineHandle,
         tool_registry: &'a mut ToolRegistry,
@@ -602,7 +602,7 @@ impl<'a> RunLoopContext<'a> {
         permissions_state: &'a Arc<RwLock<PermissionsConfig>>,
         decision_ledger: &'a Arc<RwLock<DecisionTracker>>,
         session_stats: &'a mut SessionStats,
-        plan_session: &'a mut PlanModeSessionState,
+        plan_session: &'a mut PlanningWorkflowSessionState,
         mcp_panel_state: &'a mut McpPanelState,
         approval_recorder: &'a ApprovalRecorder,
         session: &'a mut InlineSession,
@@ -610,7 +610,7 @@ impl<'a> RunLoopContext<'a> {
         traj: &'a TrajectoryLogger,
         harness_state: &'a mut HarnessTurnState,
         harness_emitter: Option<&'a HarnessEventEmitter>,
-        auto_mode: Option<AutoModeRuntimeContext<'a>>,
+        auto_permission: Option<AutoPermissionRuntimeContext<'a>>,
     ) -> Self {
         Self {
             renderer,
@@ -629,7 +629,7 @@ impl<'a> RunLoopContext<'a> {
             traj,
             harness_state,
             harness_emitter,
-            auto_mode,
+            auto_permission,
             active_agent_permissions: None,
         }
     }

@@ -10,7 +10,9 @@ use linkme::distributed_slice;
 use crate::config::constants::tools;
 use crate::config::types::CapabilityLevel;
 use crate::tool_policy::ToolPolicy;
-use crate::tools::handlers::{EnterPlanModeTool, ExitPlanModeTool, PlanModeState, TaskTrackerTool};
+use crate::tools::handlers::{
+    FinishPlanningTool, PlanningWorkflowState, StartPlanningTool, TaskTrackerTool,
+};
 use crate::tools::native_memory;
 use crate::tools::request_user_input::RequestUserInputTool;
 use crate::tools::tool_intent::builtin_tool_behavior;
@@ -29,9 +31,12 @@ use super::distributed::BUILTIN_TOOLS;
 use super::registration::{ToolCatalogSource, ToolRegistration};
 use super::{ToolInventory, ToolRegistry, native_cgp_tool_factory};
 
-/// Register all builtin tools into the inventory using the shared plan mode state.
-pub(super) fn register_builtin_tools(inventory: &ToolInventory, plan_mode_state: &PlanModeState) {
-    for registration in builtin_tool_registrations(Some(plan_mode_state)) {
+/// Register all builtin tools into the inventory using the shared planning workflow state.
+pub(super) fn register_builtin_tools(
+    inventory: &ToolInventory,
+    planning_workflow_state: &PlanningWorkflowState,
+) {
+    for registration in builtin_tool_registrations(Some(planning_workflow_state)) {
         let tool_name = registration.name().to_string();
         if let Err(err) = inventory.register_tool(registration) {
             tracing::warn!(tool = %tool_name, %err, "Failed to register builtin tool");
@@ -46,13 +51,13 @@ pub(super) fn register_builtin_tools(inventory: &ToolInventory, plan_mode_state:
 /// slice; this function iterates it to produce the final `Vec<ToolRegistration>`.
 ///
 /// In metadata-only contexts (e.g., declaration building), callers may pass
-/// `None`, and a placeholder `PlanModeState` will be used.
+/// `None`, and a placeholder `PlanningWorkflowState` will be used.
 pub(super) fn builtin_tool_registrations(
-    plan_mode_state: Option<&PlanModeState>,
+    planning_workflow_state: Option<&PlanningWorkflowState>,
 ) -> Vec<ToolRegistration> {
     let mut registrations: Vec<ToolRegistration> = BUILTIN_TOOLS
         .iter()
-        .map(|factory| factory(plan_mode_state))
+        .map(|factory| factory(planning_workflow_state))
         .map(with_builtin_behavior)
         .map(|registration| registration.with_catalog_source(ToolCatalogSource::Builtin))
         .collect();
@@ -87,7 +92,7 @@ pub(super) fn builtin_tool_registrations(
 // ---------------------------------------------------------------------------
 
 #[distributed_slice(BUILTIN_TOOLS)]
-fn register_request_user_input(_plan_state: Option<&PlanModeState>) -> ToolRegistration {
+fn register_request_user_input(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
     let request_user_input_factory = native_cgp_tool_factory(|| RequestUserInputTool);
     ToolRegistration::from_tool_instance(
         tools::REQUEST_USER_INPUT,
@@ -98,7 +103,7 @@ fn register_request_user_input(_plan_state: Option<&PlanModeState>) -> ToolRegis
 }
 
 #[distributed_slice(BUILTIN_TOOLS)]
-fn register_memory(_plan_state: Option<&PlanModeState>) -> ToolRegistration {
+fn register_memory(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
     ToolRegistration::new(
         tools::MEMORY,
         CapabilityLevel::Basic,
@@ -113,7 +118,7 @@ fn register_memory(_plan_state: Option<&PlanModeState>) -> ToolRegistration {
 }
 
 #[distributed_slice(BUILTIN_TOOLS)]
-fn register_cron_create(_plan_state: Option<&PlanModeState>) -> ToolRegistration {
+fn register_cron_create(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
     ToolRegistration::new(
         tools::CRON_CREATE,
         CapabilityLevel::Basic,
@@ -128,7 +133,7 @@ fn register_cron_create(_plan_state: Option<&PlanModeState>) -> ToolRegistration
 }
 
 #[distributed_slice(BUILTIN_TOOLS)]
-fn register_cron_list(_plan_state: Option<&PlanModeState>) -> ToolRegistration {
+fn register_cron_list(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
     ToolRegistration::new(
         tools::CRON_LIST,
         CapabilityLevel::Basic,
@@ -141,7 +146,7 @@ fn register_cron_list(_plan_state: Option<&PlanModeState>) -> ToolRegistration {
 }
 
 #[distributed_slice(BUILTIN_TOOLS)]
-fn register_cron_delete(_plan_state: Option<&PlanModeState>) -> ToolRegistration {
+fn register_cron_delete(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
     ToolRegistration::new(
         tools::CRON_DELETE,
         CapabilityLevel::Basic,
@@ -158,34 +163,34 @@ fn register_cron_delete(_plan_state: Option<&PlanModeState>) -> ToolRegistration
 // ---------------------------------------------------------------------------
 
 #[distributed_slice(BUILTIN_TOOLS)]
-fn register_start_planning(plan_state: Option<&PlanModeState>) -> ToolRegistration {
+fn register_start_planning(plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
     let plan_state = plan_state
         .cloned()
-        .unwrap_or_else(|| PlanModeState::new(PathBuf::new()));
+        .unwrap_or_else(|| PlanningWorkflowState::new(PathBuf::new()));
     let factory_state = plan_state.clone();
     ToolRegistration::from_tool_instance(
         tools::START_PLANNING,
         CapabilityLevel::Basic,
-        EnterPlanModeTool::new(plan_state),
+        StartPlanningTool::new(plan_state),
     )
     .with_native_cgp_factory(native_cgp_tool_factory(move || {
-        EnterPlanModeTool::new(factory_state.clone())
+        StartPlanningTool::new(factory_state.clone())
     }))
 }
 
 #[distributed_slice(BUILTIN_TOOLS)]
-fn register_finish_planning(plan_state: Option<&PlanModeState>) -> ToolRegistration {
+fn register_finish_planning(plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
     let plan_state = plan_state
         .cloned()
-        .unwrap_or_else(|| PlanModeState::new(PathBuf::new()));
+        .unwrap_or_else(|| PlanningWorkflowState::new(PathBuf::new()));
     let factory_state = plan_state.clone();
     ToolRegistration::from_tool_instance(
         tools::FINISH_PLANNING,
         CapabilityLevel::Basic,
-        ExitPlanModeTool::new(plan_state),
+        FinishPlanningTool::new(plan_state),
     )
     .with_native_cgp_factory(native_cgp_tool_factory(move || {
-        ExitPlanModeTool::new(factory_state.clone())
+        FinishPlanningTool::new(factory_state.clone())
     }))
 }
 
@@ -194,10 +199,10 @@ fn register_finish_planning(plan_state: Option<&PlanModeState>) -> ToolRegistrat
 // ---------------------------------------------------------------------------
 
 #[distributed_slice(BUILTIN_TOOLS)]
-fn register_task_tracker(plan_state: Option<&PlanModeState>) -> ToolRegistration {
+fn register_task_tracker(plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
     let plan_state = plan_state
         .cloned()
-        .unwrap_or_else(|| PlanModeState::new(PathBuf::new()));
+        .unwrap_or_else(|| PlanningWorkflowState::new(PathBuf::new()));
     let factory_state = plan_state.clone();
     ToolRegistration::from_tool_instance(
         tools::TASK_TRACKER,
@@ -221,7 +226,7 @@ fn register_task_tracker(plan_state: Option<&PlanModeState>) -> ToolRegistration
 // ---------------------------------------------------------------------------
 
 #[distributed_slice(BUILTIN_TOOLS)]
-fn register_spawn_agent(_plan_state: Option<&PlanModeState>) -> ToolRegistration {
+fn register_spawn_agent(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
     ToolRegistration::new(
         tools::SPAWN_AGENT,
         CapabilityLevel::Basic,
@@ -236,7 +241,9 @@ fn register_spawn_agent(_plan_state: Option<&PlanModeState>) -> ToolRegistration
 }
 
 #[distributed_slice(BUILTIN_TOOLS)]
-fn register_spawn_background_subprocess(_plan_state: Option<&PlanModeState>) -> ToolRegistration {
+fn register_spawn_background_subprocess(
+    _plan_state: Option<&PlanningWorkflowState>,
+) -> ToolRegistration {
     ToolRegistration::new(
         tools::SPAWN_BACKGROUND_SUBPROCESS,
         CapabilityLevel::Basic,
@@ -251,7 +258,7 @@ fn register_spawn_background_subprocess(_plan_state: Option<&PlanModeState>) -> 
 }
 
 #[distributed_slice(BUILTIN_TOOLS)]
-fn register_send_input(_plan_state: Option<&PlanModeState>) -> ToolRegistration {
+fn register_send_input(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
     ToolRegistration::new(
         tools::SEND_INPUT,
         CapabilityLevel::Basic,
@@ -266,7 +273,7 @@ fn register_send_input(_plan_state: Option<&PlanModeState>) -> ToolRegistration 
 }
 
 #[distributed_slice(BUILTIN_TOOLS)]
-fn register_wait_agent(_plan_state: Option<&PlanModeState>) -> ToolRegistration {
+fn register_wait_agent(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
     ToolRegistration::new(
         tools::WAIT_AGENT,
         CapabilityLevel::Basic,
@@ -281,7 +288,7 @@ fn register_wait_agent(_plan_state: Option<&PlanModeState>) -> ToolRegistration 
 }
 
 #[distributed_slice(BUILTIN_TOOLS)]
-fn register_resume_agent(_plan_state: Option<&PlanModeState>) -> ToolRegistration {
+fn register_resume_agent(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
     ToolRegistration::new(
         tools::RESUME_AGENT,
         CapabilityLevel::Basic,
@@ -296,7 +303,7 @@ fn register_resume_agent(_plan_state: Option<&PlanModeState>) -> ToolRegistratio
 }
 
 #[distributed_slice(BUILTIN_TOOLS)]
-fn register_close_agent(_plan_state: Option<&PlanModeState>) -> ToolRegistration {
+fn register_close_agent(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
     ToolRegistration::new(
         tools::CLOSE_AGENT,
         CapabilityLevel::Basic,
@@ -315,7 +322,7 @@ fn register_close_agent(_plan_state: Option<&PlanModeState>) -> ToolRegistration
 // ---------------------------------------------------------------------------
 
 #[distributed_slice(BUILTIN_TOOLS)]
-fn register_unified_search(_plan_state: Option<&PlanModeState>) -> ToolRegistration {
+fn register_unified_search(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
     ToolRegistration::new(
         tools::UNIFIED_SEARCH,
         CapabilityLevel::CodeSearch,
@@ -342,7 +349,7 @@ fn register_unified_search(_plan_state: Option<&PlanModeState>) -> ToolRegistrat
 }
 
 #[distributed_slice(BUILTIN_TOOLS)]
-fn register_mcp_search_tools(_plan_state: Option<&PlanModeState>) -> ToolRegistration {
+fn register_mcp_search_tools(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
     ToolRegistration::new(
         tools::MCP_SEARCH_TOOLS,
         CapabilityLevel::CodeSearch,
@@ -358,7 +365,7 @@ fn register_mcp_search_tools(_plan_state: Option<&PlanModeState>) -> ToolRegistr
 }
 
 #[distributed_slice(BUILTIN_TOOLS)]
-fn register_mcp_get_tool_details(_plan_state: Option<&PlanModeState>) -> ToolRegistration {
+fn register_mcp_get_tool_details(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
     ToolRegistration::new(
         tools::MCP_GET_TOOL_DETAILS,
         CapabilityLevel::CodeSearch,
@@ -374,7 +381,7 @@ fn register_mcp_get_tool_details(_plan_state: Option<&PlanModeState>) -> ToolReg
 }
 
 #[distributed_slice(BUILTIN_TOOLS)]
-fn register_mcp_list_servers(_plan_state: Option<&PlanModeState>) -> ToolRegistration {
+fn register_mcp_list_servers(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
     ToolRegistration::new(
         tools::MCP_LIST_SERVERS,
         CapabilityLevel::CodeSearch,
@@ -387,7 +394,7 @@ fn register_mcp_list_servers(_plan_state: Option<&PlanModeState>) -> ToolRegistr
 }
 
 #[distributed_slice(BUILTIN_TOOLS)]
-fn register_mcp_connect_server(_plan_state: Option<&PlanModeState>) -> ToolRegistration {
+fn register_mcp_connect_server(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
     ToolRegistration::new(
         tools::MCP_CONNECT_SERVER,
         CapabilityLevel::CodeSearch,
@@ -400,7 +407,7 @@ fn register_mcp_connect_server(_plan_state: Option<&PlanModeState>) -> ToolRegis
 }
 
 #[distributed_slice(BUILTIN_TOOLS)]
-fn register_mcp_disconnect_server(_plan_state: Option<&PlanModeState>) -> ToolRegistration {
+fn register_mcp_disconnect_server(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
     ToolRegistration::new(
         tools::MCP_DISCONNECT_SERVER,
         CapabilityLevel::CodeSearch,
@@ -417,7 +424,7 @@ fn register_mcp_disconnect_server(_plan_state: Option<&PlanModeState>) -> ToolRe
 // ---------------------------------------------------------------------------
 
 #[distributed_slice(BUILTIN_TOOLS)]
-fn register_unified_exec(_plan_state: Option<&PlanModeState>) -> ToolRegistration {
+fn register_unified_exec(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
     ToolRegistration::new(
         tools::UNIFIED_EXEC,
         CapabilityLevel::Bash,
@@ -460,7 +467,7 @@ fn register_unified_exec(_plan_state: Option<&PlanModeState>) -> ToolRegistratio
 // ---------------------------------------------------------------------------
 
 #[distributed_slice(BUILTIN_TOOLS)]
-fn register_unified_file(_plan_state: Option<&PlanModeState>) -> ToolRegistration {
+fn register_unified_file(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
     ToolRegistration::new(
         tools::UNIFIED_FILE,
         CapabilityLevel::Editing,
@@ -498,7 +505,7 @@ fn register_unified_file(_plan_state: Option<&PlanModeState>) -> ToolRegistratio
 // ---------------------------------------------------------------------------
 
 #[distributed_slice(BUILTIN_TOOLS)]
-fn register_read_file(_plan_state: Option<&PlanModeState>) -> ToolRegistration {
+fn register_read_file(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
     ToolRegistration::new(
         tools::READ_FILE,
         CapabilityLevel::CodeSearch,
@@ -514,7 +521,7 @@ fn register_read_file(_plan_state: Option<&PlanModeState>) -> ToolRegistration {
 }
 
 #[distributed_slice(BUILTIN_TOOLS)]
-fn register_list_files(_plan_state: Option<&PlanModeState>) -> ToolRegistration {
+fn register_list_files(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
     ToolRegistration::new(
         tools::LIST_FILES,
         CapabilityLevel::CodeSearch,
@@ -530,7 +537,7 @@ fn register_list_files(_plan_state: Option<&PlanModeState>) -> ToolRegistration 
 }
 
 #[distributed_slice(BUILTIN_TOOLS)]
-fn register_write_file(_plan_state: Option<&PlanModeState>) -> ToolRegistration {
+fn register_write_file(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
     ToolRegistration::new(
         tools::WRITE_FILE,
         CapabilityLevel::Editing,
@@ -541,7 +548,7 @@ fn register_write_file(_plan_state: Option<&PlanModeState>) -> ToolRegistration 
 }
 
 #[distributed_slice(BUILTIN_TOOLS)]
-fn register_edit_file(_plan_state: Option<&PlanModeState>) -> ToolRegistration {
+fn register_edit_file(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
     ToolRegistration::new(
         tools::EDIT_FILE,
         CapabilityLevel::Editing,
@@ -552,7 +559,7 @@ fn register_edit_file(_plan_state: Option<&PlanModeState>) -> ToolRegistration {
 }
 
 #[distributed_slice(BUILTIN_TOOLS)]
-fn register_run_pty_cmd(_plan_state: Option<&PlanModeState>) -> ToolRegistration {
+fn register_run_pty_cmd(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
     ToolRegistration::new(
         tools::RUN_PTY_CMD,
         CapabilityLevel::Bash,
@@ -563,7 +570,7 @@ fn register_run_pty_cmd(_plan_state: Option<&PlanModeState>) -> ToolRegistration
 }
 
 #[distributed_slice(BUILTIN_TOOLS)]
-fn register_send_pty_input(_plan_state: Option<&PlanModeState>) -> ToolRegistration {
+fn register_send_pty_input(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
     ToolRegistration::new(
         tools::SEND_PTY_INPUT,
         CapabilityLevel::Bash,
@@ -574,7 +581,7 @@ fn register_send_pty_input(_plan_state: Option<&PlanModeState>) -> ToolRegistrat
 }
 
 #[distributed_slice(BUILTIN_TOOLS)]
-fn register_read_pty_session(_plan_state: Option<&PlanModeState>) -> ToolRegistration {
+fn register_read_pty_session(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
     ToolRegistration::new(
         tools::READ_PTY_SESSION,
         CapabilityLevel::Bash,
@@ -585,7 +592,7 @@ fn register_read_pty_session(_plan_state: Option<&PlanModeState>) -> ToolRegistr
 }
 
 #[distributed_slice(BUILTIN_TOOLS)]
-fn register_create_pty_session(_plan_state: Option<&PlanModeState>) -> ToolRegistration {
+fn register_create_pty_session(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
     ToolRegistration::new(
         tools::CREATE_PTY_SESSION,
         CapabilityLevel::Bash,
@@ -596,7 +603,7 @@ fn register_create_pty_session(_plan_state: Option<&PlanModeState>) -> ToolRegis
 }
 
 #[distributed_slice(BUILTIN_TOOLS)]
-fn register_list_pty_sessions(_plan_state: Option<&PlanModeState>) -> ToolRegistration {
+fn register_list_pty_sessions(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
     ToolRegistration::new(
         tools::LIST_PTY_SESSIONS,
         CapabilityLevel::Bash,
@@ -607,7 +614,7 @@ fn register_list_pty_sessions(_plan_state: Option<&PlanModeState>) -> ToolRegist
 }
 
 #[distributed_slice(BUILTIN_TOOLS)]
-fn register_close_pty_session(_plan_state: Option<&PlanModeState>) -> ToolRegistration {
+fn register_close_pty_session(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
     ToolRegistration::new(
         tools::CLOSE_PTY_SESSION,
         CapabilityLevel::Bash,
@@ -618,7 +625,7 @@ fn register_close_pty_session(_plan_state: Option<&PlanModeState>) -> ToolRegist
 }
 
 #[distributed_slice(BUILTIN_TOOLS)]
-fn register_get_errors(_plan_state: Option<&PlanModeState>) -> ToolRegistration {
+fn register_get_errors(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
     ToolRegistration::new(
         tools::GET_ERRORS,
         CapabilityLevel::CodeSearch,
@@ -629,7 +636,7 @@ fn register_get_errors(_plan_state: Option<&PlanModeState>) -> ToolRegistration 
 }
 
 #[distributed_slice(BUILTIN_TOOLS)]
-fn register_apply_patch(_plan_state: Option<&PlanModeState>) -> ToolRegistration {
+fn register_apply_patch(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
     ToolRegistration::new(
         tools::APPLY_PATCH,
         CapabilityLevel::Editing,
@@ -744,7 +751,7 @@ mod tests {
 
     #[test]
     fn tool_backed_builtins_register_native_cgp_factories() {
-        let plan_state = PlanModeState::new(PathBuf::from("/workspace"));
+        let plan_state = PlanningWorkflowState::new(PathBuf::from("/workspace"));
         let registrations = builtin_tool_registrations(Some(&plan_state));
 
         for tool_name in [
@@ -772,7 +779,7 @@ mod tests {
 
     #[test]
     fn unified_builtins_preserve_public_aliases() {
-        let plan_state = PlanModeState::new(PathBuf::from("/workspace"));
+        let plan_state = PlanningWorkflowState::new(PathBuf::from("/workspace"));
         let registrations = builtin_tool_registrations(Some(&plan_state));
         let unified_search = registrations
             .iter()
@@ -825,7 +832,7 @@ mod tests {
 
     #[test]
     fn multi_agent_builtins_expose_updated_descriptions() {
-        let plan_state = PlanModeState::new(PathBuf::from("/workspace"));
+        let plan_state = PlanningWorkflowState::new(PathBuf::from("/workspace"));
         let registrations = builtin_tool_registrations(Some(&plan_state));
 
         let spawn_agent = registrations

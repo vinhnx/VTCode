@@ -127,7 +127,7 @@ pub(crate) async fn execute_llm_request(
     let active_model = turn_snapshot.active_model.clone();
     let request_timeout_secs = llm_attempt_timeout_secs(
         turn_snapshot.turn_timeout_secs,
-        turn_snapshot.plan_mode,
+        turn_snapshot.planning_active,
         &turn_snapshot.provider_name,
     );
 
@@ -277,7 +277,7 @@ pub(crate) async fn execute_llm_request(
             );
             let stream_options = StreamSpinnerOptions {
                 defer_finish: has_tools,
-                strip_proposed_plan_blocks: turn_snapshot.plan_mode,
+                strip_proposed_plan_blocks: turn_snapshot.planning_active,
             };
             let mut progress = |event: StreamProgressEvent| stream_bridge.on_progress(event);
             let stream_result =
@@ -646,7 +646,7 @@ pub(crate) async fn execute_llm_request(
         ctx,
         step_count,
         &active_model,
-        turn_snapshot.plan_mode,
+        turn_snapshot.planning_active,
         attempts_made,
         max_retries,
         llm_result.is_ok(),

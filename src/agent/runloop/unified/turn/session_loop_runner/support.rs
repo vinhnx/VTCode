@@ -13,8 +13,8 @@ use vtcode_ui::tui::app::{
     TransientRequest, TransientSubmission,
 };
 
-const STARTUP_PLAN_MODE_ENTER_ACTION: &str = "plan_mode:start_enter";
-const STARTUP_PLAN_MODE_STAY_ACTION: &str = "plan_mode:start_stay";
+const STARTUP_PLANNING_WORKFLOW_ENTER_ACTION: &str = "planning_active:start_enter";
+const STARTUP_PLANNING_WORKFLOW_STAY_ACTION: &str = "planning_active:start_stay";
 
 #[derive(Clone)]
 pub(super) struct TurnHistoryCheckpoint {
@@ -377,7 +377,7 @@ pub(super) fn build_exit_header_context_fast(
     }
 }
 
-pub(super) async fn prompt_startup_plan_mode(
+pub(super) async fn prompt_startup_planning_workflow(
     handle: &InlineHandle,
     session: &mut InlineSession,
     ctrl_c_state: &Arc<crate::agent::runloop::unified::state::CtrlCState>,
@@ -398,7 +398,7 @@ pub(super) async fn prompt_startup_plan_mode(
                 badge: Some("Recommended".to_string()),
                 indent: 0,
                 selection: Some(InlineListSelection::ConfigAction(
-                    STARTUP_PLAN_MODE_ENTER_ACTION.to_string(),
+                    STARTUP_PLANNING_WORKFLOW_ENTER_ACTION.to_string(),
                 )),
                 search_value: None,
             },
@@ -410,13 +410,13 @@ pub(super) async fn prompt_startup_plan_mode(
                 badge: None,
                 indent: 0,
                 selection: Some(InlineListSelection::ConfigAction(
-                    STARTUP_PLAN_MODE_STAY_ACTION.to_string(),
+                    STARTUP_PLANNING_WORKFLOW_STAY_ACTION.to_string(),
                 )),
                 search_value: None,
             },
         ],
         selected: Some(InlineListSelection::ConfigAction(
-            STARTUP_PLAN_MODE_ENTER_ACTION.to_string(),
+            STARTUP_PLANNING_WORKFLOW_ENTER_ACTION.to_string(),
         )),
         search: None,
         hotkeys: Vec::new(),
@@ -430,12 +430,12 @@ pub(super) async fn prompt_startup_plan_mode(
         ctrl_c_notify,
         |submission| match submission {
             TransientSubmission::Selection(InlineListSelection::ConfigAction(action))
-                if action == STARTUP_PLAN_MODE_ENTER_ACTION =>
+                if action == STARTUP_PLANNING_WORKFLOW_ENTER_ACTION =>
             {
                 Some(true)
             }
             TransientSubmission::Selection(InlineListSelection::ConfigAction(action))
-                if action == STARTUP_PLAN_MODE_STAY_ACTION =>
+                if action == STARTUP_PLANNING_WORKFLOW_STAY_ACTION =>
             {
                 Some(false)
             }

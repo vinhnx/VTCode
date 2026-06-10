@@ -3,7 +3,7 @@ const MAX_PLAN_SEED_BYTES: usize = 16_000;
 pub(super) async fn load_active_plan_seed(
     tool_registry: &vtcode_core::tools::registry::ToolRegistry,
 ) -> Option<String> {
-    let plan_state = tool_registry.plan_mode_state();
+    let plan_state = tool_registry.planning_workflow_state();
     let plan_file = plan_state.get_plan_file().await?;
     let plan_content = tokio::fs::read_to_string(&plan_file).await.ok();
     let tracker_file = plan_file
@@ -20,8 +20,10 @@ pub(super) async fn load_active_plan_seed(
         None
     };
 
-    let merged =
-        vtcode_core::tools::handlers::plan_mode::merge_plan_content(plan_content, tracker_content)?;
+    let merged = vtcode_core::tools::handlers::planning_workflow::merge_plan_content(
+        plan_content,
+        tracker_content,
+    )?;
     if merged.len() > MAX_PLAN_SEED_BYTES {
         let truncated = merged
             .char_indices()

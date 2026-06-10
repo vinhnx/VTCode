@@ -58,6 +58,8 @@ pub enum ModelId {
     ClaudeSonnet46,
     /// Claude Haiku 4.5 - Latest efficient Anthropic model (2025-10-15)
     ClaudeHaiku45,
+    /// Claude Mythos Preview - Invitation-only Anthropic research preview for defensive cybersecurity workflows
+    ClaudeMythosPreview,
     /// GitHub Copilot auto model selection
     CopilotAuto,
     /// GitHub Copilot GPT-5.2 Codex

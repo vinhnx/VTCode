@@ -737,7 +737,7 @@ mod tests {
             vtcode_core::primary_agent::ActivePrimaryAgentState::default(),
         ));
         let plan_session = Box::leak(Box::new(
-            crate::agent::runloop::unified::plan_mode_state::PlanModeSessionState::default(),
+            crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState::default(),
         ));
         let thread_handle = Box::leak(Box::new(
             vtcode_core::core::threads::ThreadManager::new().start_thread_with_identifier(

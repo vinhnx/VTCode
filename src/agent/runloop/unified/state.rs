@@ -17,7 +17,7 @@ pub(crate) enum ModelPickerTarget {
 }
 
 #[derive(Debug, Clone, Default)]
-pub(crate) struct AutoModeDenial {
+pub(crate) struct AutoPermissionDenial {
     pub stage: &'static str,
     pub reason: String,
     pub matched_rule: Option<String>,
@@ -55,14 +55,14 @@ const FOLLOW_UP_DEFAULT_THRESHOLD: usize = 3;
 pub(crate) struct SessionStats {
     tools: std::collections::BTreeSet<String>,
     pub task_panel_visible: bool,
-    /// Auto-mode classifier consecutive denial count.
-    auto_mode_consecutive_denials: u32,
-    /// Auto-mode classifier total denial count.
-    auto_mode_total_denials: u32,
-    /// Auto mode has fallen back to manual prompts for the rest of the session.
-    auto_mode_prompt_fallback: bool,
-    /// Most recent auto-mode classifier denial.
-    last_auto_mode_denial: Option<AutoModeDenial>,
+    /// Auto permission classifier consecutive denial count.
+    auto_permission_consecutive_denials: u32,
+    /// Auto permission classifier total denial count.
+    auto_permission_total_denials: u32,
+    /// Auto permission review has fallen back to manual prompts for the rest of the session.
+    auto_permission_prompt_fallback: bool,
+    /// Most recent auto permission classifier denial.
+    last_auto_permission_denial: Option<AutoPermissionDenial>,
     /// Whether Vim-style prompt editing is enabled for this session.
     pub vim_mode_enabled: bool,
     // Phase 4 Integration: Resilient execution components
@@ -194,7 +194,7 @@ impl SessionStats {
     }
 
     pub(crate) fn reset_for_planning_workflow_entry(&mut self) {
-        self.reset_auto_mode_review_state();
+        self.reset_auto_permission_review_state();
         self.tools.clear();
         self.clear_previous_response_chain();
     }
@@ -404,39 +404,40 @@ impl SessionStats {
         self.recent_touched_files.iter().cloned().collect()
     }
 
-    pub(crate) fn auto_mode_prompt_fallback_active(&self) -> bool {
-        self.auto_mode_prompt_fallback
+    pub(crate) fn auto_permission_prompt_fallback_active(&self) -> bool {
+        self.auto_permission_prompt_fallback
     }
 
-    pub(crate) fn last_auto_mode_denial(&self) -> Option<&AutoModeDenial> {
-        self.last_auto_mode_denial.as_ref()
+    pub(crate) fn last_auto_permission_denial(&self) -> Option<&AutoPermissionDenial> {
+        self.last_auto_permission_denial.as_ref()
     }
 
-    pub(crate) fn reset_auto_mode_review_state(&mut self) {
-        self.auto_mode_consecutive_denials = 0;
-        self.auto_mode_total_denials = 0;
-        self.auto_mode_prompt_fallback = false;
-        self.last_auto_mode_denial = None;
+    pub(crate) fn reset_auto_permission_review_state(&mut self) {
+        self.auto_permission_consecutive_denials = 0;
+        self.auto_permission_total_denials = 0;
+        self.auto_permission_prompt_fallback = false;
+        self.last_auto_permission_denial = None;
     }
 
-    pub(crate) fn record_auto_mode_allow(&mut self) {
-        self.auto_mode_consecutive_denials = 0;
-        self.last_auto_mode_denial = None;
+    pub(crate) fn record_auto_permission_allow(&mut self) {
+        self.auto_permission_consecutive_denials = 0;
+        self.last_auto_permission_denial = None;
     }
 
-    pub(crate) fn record_auto_mode_denial(
+    pub(crate) fn record_auto_permission_denial(
         &mut self,
-        denial: AutoModeDenial,
+        denial: AutoPermissionDenial,
         max_consecutive_denials: u32,
         max_total_denials: u32,
     ) -> bool {
-        self.auto_mode_consecutive_denials = self.auto_mode_consecutive_denials.saturating_add(1);
-        self.auto_mode_total_denials = self.auto_mode_total_denials.saturating_add(1);
-        self.last_auto_mode_denial = Some(denial);
-        self.auto_mode_prompt_fallback = self.auto_mode_consecutive_denials
+        self.auto_permission_consecutive_denials =
+            self.auto_permission_consecutive_denials.saturating_add(1);
+        self.auto_permission_total_denials = self.auto_permission_total_denials.saturating_add(1);
+        self.last_auto_permission_denial = Some(denial);
+        self.auto_permission_prompt_fallback = self.auto_permission_consecutive_denials
             >= max_consecutive_denials.max(1)
-            || self.auto_mode_total_denials >= max_total_denials.max(1);
-        self.auto_mode_prompt_fallback
+            || self.auto_permission_total_denials >= max_total_denials.max(1);
+        self.auto_permission_prompt_fallback
     }
 }
 
@@ -624,8 +625,9 @@ mod tests {
     use std::time::Duration;
 
     use super::{
-        AutoModeDenial, CtrlCSignal, CtrlCState, FollowUpPromptAction, PromptCacheDiagnostics,
-        SessionStats, is_follow_up_prompt_like, should_enforce_safe_mode_prompts,
+        AutoPermissionDenial, CtrlCSignal, CtrlCState, FollowUpPromptAction,
+        PromptCacheDiagnostics, SessionStats, is_follow_up_prompt_like,
+        should_enforce_safe_mode_prompts,
     };
     use vtcode_core::config::WorkspaceTrustLevel;
     use vtcode_core::config::constants::tools;
@@ -748,7 +750,7 @@ mod tests {
     }
 
     #[test]
-    fn safe_mode_prompts_are_disabled_for_auto_mode() {
+    fn safe_mode_prompts_are_disabled_for_auto_permission() {
         assert!(!should_enforce_safe_mode_prompts(
             false,
             true,
@@ -757,11 +759,11 @@ mod tests {
     }
 
     #[test]
-    fn auto_mode_denials_trigger_prompt_fallback_after_threshold() {
+    fn auto_permission_denials_trigger_prompt_fallback_after_threshold() {
         let mut stats = SessionStats::default();
 
-        assert!(!stats.record_auto_mode_denial(
-            AutoModeDenial {
+        assert!(!stats.record_auto_permission_denial(
+            AutoPermissionDenial {
                 stage: "stage2",
                 reason: "blocked".to_string(),
                 matched_rule: Some("rule".to_string()),
@@ -770,10 +772,10 @@ mod tests {
             3,
             20,
         ));
-        assert!(!stats.auto_mode_prompt_fallback_active());
+        assert!(!stats.auto_permission_prompt_fallback_active());
 
-        assert!(!stats.record_auto_mode_denial(
-            AutoModeDenial {
+        assert!(!stats.record_auto_permission_denial(
+            AutoPermissionDenial {
                 stage: "stage2",
                 reason: "blocked".to_string(),
                 matched_rule: Some("rule".to_string()),
@@ -782,10 +784,10 @@ mod tests {
             3,
             20,
         ));
-        assert!(!stats.auto_mode_prompt_fallback_active());
+        assert!(!stats.auto_permission_prompt_fallback_active());
 
-        assert!(stats.record_auto_mode_denial(
-            AutoModeDenial {
+        assert!(stats.record_auto_permission_denial(
+            AutoPermissionDenial {
                 stage: "stage2",
                 reason: "blocked".to_string(),
                 matched_rule: Some("rule".to_string()),
@@ -794,7 +796,7 @@ mod tests {
             3,
             20,
         ));
-        assert!(stats.auto_mode_prompt_fallback_active());
+        assert!(stats.auto_permission_prompt_fallback_active());
     }
 
     #[test]

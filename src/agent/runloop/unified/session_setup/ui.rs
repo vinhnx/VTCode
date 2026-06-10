@@ -118,7 +118,6 @@ pub(crate) async fn initialize_session_ui(
             &hooks,
             session_trigger,
             session_id,
-            vtcode_core::config::PermissionMode::Default,
         )?
     } else {
         None
@@ -393,13 +392,13 @@ pub(crate) async fn initialize_session_ui(
         if allowlist.is_empty() {
             renderer.line(
                 MessageStyle::Info,
-                "Full-auto mode enabled with no tool permissions; tool calls will be skipped.",
+                "Full-auto permission review enabled with no tool permissions; tool calls will be skipped.",
             )?;
         } else {
             renderer.line(
                 MessageStyle::Info,
                 &format!(
-                    "Full-auto mode enabled. Permitted tools: {}",
+                    "Full-auto permission review enabled. Permitted tools: {}",
                     allowlist.join(", ")
                 ),
             )?;

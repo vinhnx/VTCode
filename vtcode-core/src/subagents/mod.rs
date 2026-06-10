@@ -118,7 +118,6 @@ impl SubagentController {
             &config.vt_cfg.hooks,
             SessionStartTrigger::Startup,
             config.parent_session_id.clone(),
-            crate::config::PermissionMode::Default,
         )?;
         let background_children = load_background_state(&config.workspace_root)?
             .records
@@ -2004,7 +2003,8 @@ Run the managed background demo.
 name: duck
 description: Discussion controller.
 mode: primary
-permissionMode: plan
+permissions:
+  default: ask
 ---
 
 Discuss before implementation.
@@ -2023,7 +2023,8 @@ name: readonly-demo
 description: Read-only test child agent.
 tools:
   - read_file
-permissionMode: plan
+permissions:
+  default: ask
 ---
 
 Inspect the repository.

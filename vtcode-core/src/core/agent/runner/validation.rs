@@ -12,7 +12,7 @@ impl AgentRunner {
             surface: SessionSurface::AgentRunner,
             capability_level: CapabilityLevel::CodeSearch,
             documentation_mode: self.config().agent.tool_documentation_mode,
-            plan_mode: self.tool_registry.is_plan_mode(),
+            planning_active: self.tool_registry.is_planning_active(),
             request_user_input_enabled: false,
             model_capabilities: ToolModelCapabilities::for_model_name(&self.model),
             deferred_tool_policy: crate::tools::handlers::deferred_tool_policy_for_runtime(
@@ -45,7 +45,7 @@ impl AgentRunner {
 
         Ok(self.tool_registry.tool_catalog_state().snapshot_for_defs(
             exposed,
-            self.tool_registry.is_plan_mode(),
+            self.tool_registry.is_planning_active(),
             false,
         ))
     }
@@ -71,7 +71,7 @@ impl AgentRunner {
         if let Some(definitions) = self.tool_definitions_override.read().clone() {
             return Ok(self.tool_registry.tool_catalog_state().snapshot_for_defs(
                 definitions,
-                self.tool_registry.is_plan_mode(),
+                self.tool_registry.is_planning_active(),
                 false,
             ));
         }

@@ -944,7 +944,7 @@ enabled_languages = [
 # Timeout for syntax highlighting operations (milliseconds)
 highlight_timeout_ms = 1000
 
-# Automation features - Full-auto mode settings
+# Automation features - Full-auto permission review settings
 [automation.full_auto]
 # Enable full automation mode (DANGEROUS - requires careful oversight)
 enabled = false

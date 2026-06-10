@@ -1,7 +1,6 @@
 use anyhow::Result;
 use chrono::Utc;
 
-use vtcode_core::config::PermissionMode;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::core::decision_tracker::DecisionTracker;
 use vtcode_core::hooks::SessionEndReason;
@@ -80,15 +79,6 @@ pub(crate) async fn handle_manage_loop(
         ctx.renderer.line(MessageStyle::Info, &note)?;
     }
     Ok(SlashCommandControl::Continue)
-}
-
-pub(crate) fn persist_mode_settings(
-    workspace: &std::path::Path,
-    vt_cfg: &mut Option<VTCodeConfig>,
-    permission_mode: Option<PermissionMode>,
-) -> Result<()> {
-    let _ = (workspace, vt_cfg, permission_mode);
-    Ok(())
 }
 
 pub(crate) fn scheduler_enabled(vt_cfg: Option<&VTCodeConfig>) -> bool {
@@ -275,33 +265,4 @@ pub(crate) async fn handle_copy_latest_assistant_reply(
 pub(crate) async fn handle_exit(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     ctx.renderer.line(MessageStyle::Info, "✓")?;
     Ok(SlashCommandControl::BreakWithReason(SessionEndReason::Exit))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::persist_mode_settings;
-    use tempfile::TempDir;
-    use vtcode_core::config::PermissionMode;
-    use vtcode_core::config::loader::VTCodeConfig;
-
-    #[test]
-    fn persist_mode_settings_leaves_config_unchanged() {
-        let temp = TempDir::new().expect("temp dir");
-        let workspace = temp.path();
-        let initial = VTCodeConfig::default();
-        let initial_text = toml::to_string(&initial).expect("serialize initial config");
-        std::fs::write(workspace.join("vtcode.toml"), &initial_text).expect("write config");
-
-        let mut vt_cfg = Some(initial.clone());
-        persist_mode_settings(workspace, &mut vt_cfg, Some(PermissionMode::Auto))
-            .expect("persist mode settings");
-
-        let persisted = std::fs::read_to_string(workspace.join("vtcode.toml")).expect("config");
-        assert_eq!(persisted, initial_text);
-        assert_eq!(
-            toml::to_string(vt_cfg.as_ref().expect("config in memory"))
-                .expect("serialize in-memory config"),
-            initial_text
-        );
-    }
 }

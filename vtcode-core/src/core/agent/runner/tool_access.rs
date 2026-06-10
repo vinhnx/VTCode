@@ -89,7 +89,7 @@ impl AgentRunner {
         }
 
         self.features()
-            .allows_tool_name(tool_name, self.tool_registry.is_plan_mode(), false)
+            .allows_tool_name(tool_name, self.tool_registry.is_planning_active(), false)
             && self.is_tool_allowed(tool_name).await
     }
 

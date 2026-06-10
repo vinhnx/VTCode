@@ -5,7 +5,7 @@ mod execution;
 mod execution_attempts;
 mod execution_events;
 mod execution_helpers;
-mod execution_plan_mode;
+mod execution_planning;
 mod execution_run;
 mod execution_runtime;
 mod file_conflict_prompt;

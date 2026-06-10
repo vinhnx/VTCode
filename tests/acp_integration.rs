@@ -170,7 +170,6 @@ impl ToolRegistryProvider for FakeRegistry {
         match descriptor {
             ToolDescriptor::Acp(SupportedTool::ReadFile) => self.render_read_file(args),
             ToolDescriptor::Acp(SupportedTool::ListFiles) => self.render_list_files(args),
-            ToolDescriptor::Acp(SupportedTool::SwitchMode) => "Switch mode".to_string(),
             ToolDescriptor::Local => "Local tool".to_string(),
         }
     }

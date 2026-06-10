@@ -739,7 +739,7 @@ mod tests {
     }
 
     #[test]
-    fn payload_forces_tool_choice_to_auto_for_non_auto_modes() {
+    fn payload_forces_tool_choice_to_auto_for_non_auto_permissions() {
         let provider = ZAIProvider::new("test-key".to_string());
         let request = LLMRequest {
             model: models::zai::GLM_5.to_string(),

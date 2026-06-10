@@ -299,7 +299,7 @@ impl AgentRunner {
                 surface: crate::tools::handlers::SessionSurface::AgentRunner,
                 capability_level: crate::config::types::CapabilityLevel::CodeSearch,
                 documentation_mode: session_config.effective().agent.tool_documentation_mode,
-                plan_mode: tool_registry.is_plan_mode(),
+                planning_active: tool_registry.is_planning_active(),
                 request_user_input_enabled: false,
                 model_capabilities: crate::tools::handlers::ToolModelCapabilities::for_model_name(
                     model.as_str(),
@@ -383,13 +383,13 @@ impl AgentRunner {
         self.thread_handle.clone()
     }
 
-    /// Enable read-only plan mode for the underlying tool registry.
-    pub fn enable_plan_mode(&self) {
-        self.tool_registry.enable_plan_mode();
+    /// Enable read-only planning workflow for the underlying tool registry.
+    pub fn enable_planning(&self) {
+        self.tool_registry.enable_planning();
     }
 
-    pub fn disable_plan_mode(&self) {
-        self.tool_registry.disable_plan_mode();
+    pub fn disable_planning(&self) {
+        self.tool_registry.disable_planning();
     }
 
     /// Attach a callback that will be invoked for each structured event as it is recorded.
@@ -437,7 +437,7 @@ impl AgentRunner {
     /// Enable full-auto execution with the provided allow-list.
     pub async fn enable_full_auto(&mut self, allowed_tools: &[String]) {
         self.tool_registry
-            .enable_full_auto_mode(allowed_tools)
+            .enable_full_auto_permission(allowed_tools)
             .await;
     }
 

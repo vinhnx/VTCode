@@ -10,7 +10,7 @@ use vtcode_core::exec::events::ToolCallStatus;
 use vtcode_core::hooks::LifecycleHookEngine;
 use vtcode_core::tools::ToolInvocationId;
 use vtcode_core::tools::command_args;
-use vtcode_core::tools::handlers::plan_mode::PlanLifecyclePhase;
+use vtcode_core::tools::handlers::planning_workflow::PlanLifecyclePhase;
 use vtcode_core::tools::registry::{ExecSettlementMode, ToolExecutionError};
 use vtcode_core::tools::tool_intent;
 
@@ -28,7 +28,7 @@ use crate::agent::runloop::unified::tool_routing::{
 
 use super::execute_hitl_tool;
 use super::execution_events::{emit_tool_completion_for_status, emit_tool_completion_status};
-use super::execution_plan_mode::{handle_enter_plan_mode, handle_exit_plan_mode};
+use super::execution_planning::{handle_finish_planning, handle_start_planning};
 use super::execution_runtime::execute_with_cache_and_streaming;
 use super::file_conflict_prompt::resolve_file_conflict_status;
 use super::status::{ToolExecutionStatus, ToolPipelineOutcome};
@@ -250,10 +250,10 @@ pub(crate) async fn run_tool_call_with_args(
     }
 
     let request_user_input_enabled = FeatureSet::from_config(vt_cfg)
-        .request_user_input_enabled(ctx.tool_registry.is_plan_mode(), true);
-    if ctx.tool_registry.is_plan_mode() && name == tools::REQUEST_USER_INPUT {
+        .request_user_input_enabled(ctx.tool_registry.is_planning_active(), true);
+    if ctx.tool_registry.is_planning_active() && name == tools::REQUEST_USER_INPUT {
         ctx.tool_registry
-            .plan_mode_state()
+            .planning_workflow_state()
             .set_phase(PlanLifecyclePhase::InterviewPending);
     }
     if let Some(hitl_result) = execute_hitl_tool(
@@ -267,9 +267,9 @@ pub(crate) async fn run_tool_call_with_args(
     )
     .await
     {
-        if ctx.tool_registry.is_plan_mode() && name == tools::REQUEST_USER_INPUT {
+        if ctx.tool_registry.is_planning_active() && name == tools::REQUEST_USER_INPUT {
             ctx.tool_registry
-                .plan_mode_state()
+                .planning_workflow_state()
                 .set_phase(PlanLifecyclePhase::ActiveDrafting);
         }
         let status = match hitl_result {
@@ -286,7 +286,7 @@ pub(crate) async fn run_tool_call_with_args(
         return Ok(finish_with_status(status, true, &effective_args));
     }
 
-    if let Some(outcome) = handle_enter_plan_mode(
+    if let Some(outcome) = handle_start_planning(
         ctx,
         name,
         &effective_args,
@@ -309,7 +309,7 @@ pub(crate) async fn run_tool_call_with_args(
         );
         return Ok(outcome);
     }
-    if let Some(outcome) = handle_exit_plan_mode(
+    if let Some(outcome) = handle_finish_planning(
         ctx,
         name,
         &effective_args,
@@ -536,12 +536,12 @@ fn build_tool_permissions_context<'a>(
     'a,
     vtcode_ui::tui::app::InlineSession,
 > {
-    let auto_mode_runtime = ctx.auto_mode.as_mut().map(|auto_mode| {
-        crate::agent::runloop::unified::run_loop_context::AutoModeRuntimeContext {
-            config: auto_mode.config,
+    let auto_permission_runtime = ctx.auto_permission.as_mut().map(|auto_permission| {
+        crate::agent::runloop::unified::run_loop_context::AutoPermissionRuntimeContext {
+            config: auto_permission.config,
             vt_cfg,
-            provider_client: &mut *auto_mode.provider_client,
-            working_history: auto_mode.working_history,
+            provider_client: &mut *auto_permission.provider_client,
+            working_history: auto_permission.working_history,
         }
     });
 
@@ -572,7 +572,7 @@ fn build_tool_permissions_context<'a>(
             .unwrap_or(vtcode_core::exec_policy::AskForApproval::OnRequest),
         skip_confirmations,
         permissions_config: vt_cfg.map(|cfg| &cfg.permissions),
-        auto_mode_runtime,
+        auto_permission_runtime,
         session_stats: Some(ctx.session_stats),
     }
 }

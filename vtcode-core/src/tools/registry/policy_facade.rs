@@ -74,7 +74,7 @@ impl ToolRegistry {
         normalized
     }
 
-    pub async fn enable_full_auto_mode(&self, allowed_tools: &[String]) {
+    pub async fn enable_full_auto_permission(&self, allowed_tools: &[String]) {
         let normalized_allowed_tools: Vec<String> = allowed_tools
             .iter()
             .map(|tool| self.resolve_runtime_policy_name(tool))
@@ -83,11 +83,14 @@ impl ToolRegistry {
         self.policy_gateway
             .lock()
             .await
-            .enable_full_auto_mode(&normalized_allowed_tools, &available);
+            .enable_full_auto_permission(&normalized_allowed_tools, &available);
     }
 
-    pub async fn disable_full_auto_mode(&self) {
-        self.policy_gateway.lock().await.disable_full_auto_mode();
+    pub async fn disable_full_auto_permission(&self) {
+        self.policy_gateway
+            .lock()
+            .await
+            .disable_full_auto_permission();
     }
 
     pub async fn set_enforce_safe_mode_prompts(&self, enabled: bool) {

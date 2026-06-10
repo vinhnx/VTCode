@@ -29,17 +29,6 @@
         }
       ]
     },
-    "collaborationMode": {
-      "description": "EXPERIMENTAL - Set a pre-set collaboration mode. Takes precedence over model, reasoning_effort, and developer instructions if set.\n\nFor `collaboration_mode.settings.developer_instructions`, `null` means \"use the built-in instructions for the selected mode\".",
-      "anyOf": [
-        {
-          "$ref": "#/definitions/CollaborationMode"
-        },
-        {
-          "type": "null"
-        }
-      ]
-    },
     "cwd": {
       "description": "Override the working directory for this turn and subsequent turns.",
       "type": [
@@ -210,30 +199,6 @@
           "minimum": 0.0
         }
       }
-    },
-    "CollaborationMode": {
-      "description": "Collaboration mode for a Codex session.",
-      "type": "object",
-      "required": [
-        "mode",
-        "settings"
-      ],
-      "properties": {
-        "mode": {
-          "$ref": "#/definitions/ModeKind"
-        },
-        "settings": {
-          "$ref": "#/definitions/Settings"
-        }
-      }
-    },
-    "ModeKind": {
-      "description": "Initial collaboration mode to use when the TUI starts.",
-      "type": "string",
-      "enum": [
-        "plan",
-        "default"
-      ]
     },
     "NetworkAccess": {
       "type": "string",
@@ -455,34 +420,6 @@
         "fast",
         "flex"
       ]
-    },
-    "Settings": {
-      "description": "Settings for a collaboration mode.",
-      "type": "object",
-      "required": [
-        "model"
-      ],
-      "properties": {
-        "developer_instructions": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "model": {
-          "type": "string"
-        },
-        "reasoning_effort": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/ReasoningEffort"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      }
     },
     "TextElement": {
       "type": "object",

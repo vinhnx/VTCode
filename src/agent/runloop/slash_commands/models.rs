@@ -203,7 +203,7 @@ pub(crate) enum SlashCommandOutcome {
     RewindLatest {
         scope: vtcode_core::core::agent::snapshots::RevertScope,
     },
-    TogglePlanMode {
+    TogglePlanningWorkflow {
         enable: Option<bool>,
         prompt: Option<String>,
     },

@@ -1,7 +1,7 @@
 //! Prompt/catalog alignment guard for agent turns.
 //!
 //! Before each turn the system prompt, the tool catalog snapshot, and the live
-//! plan-mode flag must all be mutually consistent.  This module provides a
+//! planning workflow flag must all be mutually consistent.  This module provides a
 //! lightweight pure-function check so the runner can detect and self-heal any
 //! divergence before dispatching to the LLM provider.
 
@@ -10,17 +10,17 @@ use tracing::warn;
 
 use crate::core::agent::harness_kernel::SessionToolCatalogSnapshot;
 use crate::prompts::system::{
-    PLAN_MODE_INTERVIEW_POLICY_LINE, PLAN_MODE_NO_REQUEST_USER_INPUT_POLICY_LINE,
+    PLANNING_WORKFLOW_INTERVIEW_POLICY_LINE, PLANNING_WORKFLOW_NO_REQUEST_USER_INPUT_POLICY_LINE,
 };
 
 /// A misalignment between the system prompt and the tool catalog snapshot.
 #[derive(Debug, PartialEq, Eq)]
 pub enum AlignmentError {
-    /// The catalog was built with a different plan-mode flag than the live registry.
+    /// The catalog was built with a different planning workflow flag than the live registry.
     /// The caller should re-snapshot the tool catalog to self-heal.
-    PlanModeMismatch {
-        snapshot_plan_mode: bool,
-        registry_plan_mode: bool,
+    PlanningWorkflowMismatch {
+        snapshot_planning_active: bool,
+        registry_planning_active: bool,
     },
     /// The catalog was built with a different `request_user_input` flag than the
     /// live runtime.
@@ -28,15 +28,15 @@ pub enum AlignmentError {
         snapshot_request_user_input_enabled: bool,
         runtime_request_user_input_enabled: bool,
     },
-    /// The system prompt carries the wrong plan-mode interview policy line for
+    /// The system prompt carries the wrong planning workflow interview policy line for
     /// the current runtime.
-    PlanModePromptPolicyMismatch { expected_line: &'static str },
-    /// A mutating tool name appears in a plan-mode system prompt.
+    PlanningWorkflowPromptPolicyMismatch { expected_line: &'static str },
+    /// A mutating tool name appears in a planning workflow system prompt.
     ///
-    /// This should never occur after Phase 2-F/G (cache invalidation on plan mode
+    /// This should never occur after Phase 2-F/G (cache invalidation on planning workflow
     /// transition + catalog epoch in the prompt cache key).  If it fires, treat it
     /// as a canary metric indicating stale prompt generation.
-    MutatingToolInPlanModePrompt { tool_name: &'static str },
+    MutatingToolInPlanningWorkflowPrompt { tool_name: &'static str },
     /// The prompt's runtime tool metadata does not match the live snapshot.
     PromptCatalogMetadataMismatch {
         field: &'static str,
@@ -90,7 +90,7 @@ struct RuntimeToolCatalogMetadata {
     request_user_input_enabled: Option<bool>,
 }
 
-/// Validate consistency between the system prompt, tool catalog, and plan mode flag.
+/// Validate consistency between the system prompt, tool catalog, and planning workflow flag.
 ///
 /// Call this once per turn after both `system_instruction` and `tool_snapshot` are
 /// ready, but before the request is dispatched to the LLM provider.
@@ -102,13 +102,13 @@ struct RuntimeToolCatalogMetadata {
 pub fn validate_prompt_catalog_alignment(
     system_instruction: &str,
     tool_snapshot: &SessionToolCatalogSnapshot,
-    plan_mode: bool,
+    planning_active: bool,
     request_user_input_enabled: bool,
 ) -> Result<(), AlignmentError> {
-    if tool_snapshot.plan_mode != plan_mode {
-        return Err(AlignmentError::PlanModeMismatch {
-            snapshot_plan_mode: tool_snapshot.plan_mode,
-            registry_plan_mode: plan_mode,
+    if tool_snapshot.planning_active != planning_active {
+        return Err(AlignmentError::PlanningWorkflowMismatch {
+            snapshot_planning_active: tool_snapshot.planning_active,
+            registry_planning_active: planning_active,
         });
     }
 
@@ -123,29 +123,31 @@ pub fn validate_prompt_catalog_alignment(
         validate_runtime_tool_catalog_metadata(&metadata, tool_snapshot)?;
     }
 
-    // Canary: mutating tool signatures that must never appear in a plan-mode prompt.
+    // Canary: mutating tool signatures that must never appear in a planning workflow prompt.
     // After Phase 2-F/G these should be unreachable; the check is intentionally cheap.
-    if plan_mode {
+    if planning_active {
         let expected_line = if request_user_input_enabled {
-            PLAN_MODE_INTERVIEW_POLICY_LINE
+            PLANNING_WORKFLOW_INTERVIEW_POLICY_LINE
         } else {
-            PLAN_MODE_NO_REQUEST_USER_INPUT_POLICY_LINE
+            PLANNING_WORKFLOW_NO_REQUEST_USER_INPUT_POLICY_LINE
         };
         let unexpected_line = if request_user_input_enabled {
-            PLAN_MODE_NO_REQUEST_USER_INPUT_POLICY_LINE
+            PLANNING_WORKFLOW_NO_REQUEST_USER_INPUT_POLICY_LINE
         } else {
-            PLAN_MODE_INTERVIEW_POLICY_LINE
+            PLANNING_WORKFLOW_INTERVIEW_POLICY_LINE
         };
         if !system_instruction.contains(expected_line)
             || system_instruction.contains(unexpected_line)
         {
-            return Err(AlignmentError::PlanModePromptPolicyMismatch { expected_line });
+            return Err(AlignmentError::PlanningWorkflowPromptPolicyMismatch { expected_line });
         }
 
         const MUTATING_HINTS: &[&str] = &["apply_patch", "unified_file write", "unified_file edit"];
         for &hint in MUTATING_HINTS {
             if system_instruction.contains(hint) {
-                return Err(AlignmentError::MutatingToolInPlanModePrompt { tool_name: hint });
+                return Err(AlignmentError::MutatingToolInPlanningWorkflowPrompt {
+                    tool_name: hint,
+                });
             }
         }
     }
@@ -237,8 +239,15 @@ mod tests {
     use std::cell::Cell;
     use std::sync::Arc;
 
-    fn snapshot(plan_mode: bool) -> SessionToolCatalogSnapshot {
-        SessionToolCatalogSnapshot::new(1, 1, plan_mode, false, Some(Arc::new(Vec::new())), false)
+    fn snapshot(planning_active: bool) -> SessionToolCatalogSnapshot {
+        SessionToolCatalogSnapshot::new(
+            1,
+            1,
+            planning_active,
+            false,
+            Some(Arc::new(Vec::new())),
+            false,
+        )
     }
 
     #[tokio::test]
@@ -284,10 +293,10 @@ mod tests {
     }
 
     #[test]
-    fn alignment_ok_when_plan_modes_match() {
+    fn alignment_ok_when_planning_states_match() {
         validate_prompt_catalog_alignment("normal prompt", &snapshot(false), false, false).unwrap();
         validate_prompt_catalog_alignment(
-            PLAN_MODE_NO_REQUEST_USER_INPUT_POLICY_LINE,
+            PLANNING_WORKFLOW_NO_REQUEST_USER_INPUT_POLICY_LINE,
             &snapshot(true),
             true,
             false,
@@ -296,24 +305,24 @@ mod tests {
     }
 
     #[test]
-    fn plan_mode_mismatch_detected() {
+    fn planning_workflow_mismatch_detected() {
         let err = validate_prompt_catalog_alignment("any prompt", &snapshot(false), true, false)
             .expect_err("mismatch should be detected");
         assert_eq!(
             err,
-            AlignmentError::PlanModeMismatch {
-                snapshot_plan_mode: false,
-                registry_plan_mode: true,
+            AlignmentError::PlanningWorkflowMismatch {
+                snapshot_planning_active: false,
+                registry_planning_active: true,
             }
         );
     }
 
     #[test]
-    fn mutating_tool_in_plan_mode_prompt_detected() {
+    fn mutating_tool_in_planning_workflow_prompt_detected() {
         let err = validate_prompt_catalog_alignment(
             &format!(
                 "{}\nyou may call apply_patch to write files",
-                PLAN_MODE_NO_REQUEST_USER_INPUT_POLICY_LINE
+                PLANNING_WORKFLOW_NO_REQUEST_USER_INPUT_POLICY_LINE
             ),
             &snapshot(true),
             true,
@@ -322,7 +331,7 @@ mod tests {
         .expect_err("canary should fire");
         assert_eq!(
             err,
-            AlignmentError::MutatingToolInPlanModePrompt {
+            AlignmentError::MutatingToolInPlanningWorkflowPrompt {
                 tool_name: "apply_patch"
             }
         );
@@ -343,7 +352,7 @@ mod tests {
     #[test]
     fn request_user_input_mismatch_detected() {
         let err = validate_prompt_catalog_alignment(
-            PLAN_MODE_NO_REQUEST_USER_INPUT_POLICY_LINE,
+            PLANNING_WORKFLOW_NO_REQUEST_USER_INPUT_POLICY_LINE,
             &SessionToolCatalogSnapshot::new(1, 1, true, false, Some(Arc::new(Vec::new())), false),
             true,
             true,
@@ -361,7 +370,7 @@ mod tests {
     #[test]
     fn prompt_policy_mismatch_detected() {
         let err = validate_prompt_catalog_alignment(
-            PLAN_MODE_INTERVIEW_POLICY_LINE,
+            PLANNING_WORKFLOW_INTERVIEW_POLICY_LINE,
             &SessionToolCatalogSnapshot::new(1, 1, true, false, Some(Arc::new(Vec::new())), false),
             true,
             false,
@@ -369,8 +378,8 @@ mod tests {
         .expect_err("prompt policy mismatch should be detected");
         assert_eq!(
             err,
-            AlignmentError::PlanModePromptPolicyMismatch {
-                expected_line: PLAN_MODE_NO_REQUEST_USER_INPUT_POLICY_LINE,
+            AlignmentError::PlanningWorkflowPromptPolicyMismatch {
+                expected_line: PLANNING_WORKFLOW_NO_REQUEST_USER_INPUT_POLICY_LINE,
             }
         );
     }

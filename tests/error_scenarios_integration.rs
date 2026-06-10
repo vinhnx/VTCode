@@ -148,7 +148,7 @@ mod error_scenarios {
             ErrorCategory::InvalidParameters,
             ErrorCategory::ToolNotFound,
             ErrorCategory::PolicyViolation,
-            ErrorCategory::PlanModeViolation,
+            ErrorCategory::PlanningPolicyViolation,
         ];
 
         for cat in &non_retryable {
@@ -207,7 +207,7 @@ mod error_scenarios {
             ErrorCategory::ResourceNotFound,
             ErrorCategory::PermissionDenied,
             ErrorCategory::PolicyViolation,
-            ErrorCategory::PlanModeViolation,
+            ErrorCategory::PlanningPolicyViolation,
             ErrorCategory::SandboxFailure,
             ErrorCategory::ResourceExhausted,
             ErrorCategory::Cancelled,
