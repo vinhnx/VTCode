@@ -227,7 +227,10 @@ pub fn is_image_path(path: &Path) -> bool {
 /// Check whether a string is a Windows absolute path (e.g., `C:\...` or `C:/...`).
 pub fn is_windows_absolute_path(path: &str) -> bool {
     let bytes = path.as_bytes();
-    bytes.len() > 2 && bytes[1] == b':' && (bytes[2] == b'\\' || bytes[2] == b'/')
+    bytes.len() > 2
+        && bytes[0].is_ascii_alphabetic()
+        && bytes[1] == b':'
+        && (bytes[2] == b'\\' || bytes[2] == b'/')
 }
 
 /// Remove backslash-escaped whitespace from a token.
