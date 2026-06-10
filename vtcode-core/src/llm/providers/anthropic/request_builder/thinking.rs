@@ -156,9 +156,9 @@ mod tests {
     use crate::config::constants::models;
 
     #[test]
-    fn ignores_explicit_budget_for_opus_4_7() {
+    fn ignores_explicit_budget_for_opus_4_8() {
         let request = LLMRequest {
-            model: models::anthropic::CLAUDE_SONNET_4_6.to_string(),
+            model: models::anthropic::CLAUDE_OPUS_4_8.to_string(),
             thinking_budget: Some(2048),
             ..Default::default()
         };
