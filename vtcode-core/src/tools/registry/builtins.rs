@@ -1,3 +1,8 @@
+// The `linkme::distributed_slice` macro uses `link_section` internally,
+// which triggers the `unsafe_code` lint. This is inherent to the crate's
+// mechanism and cannot be avoided at the call site.
+#![allow(unsafe_code)]
+
 use std::path::PathBuf;
 
 use linkme::distributed_slice;

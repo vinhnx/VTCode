@@ -297,6 +297,6 @@ pub fn trim_trailing_image_path_str(raw: &str) -> &str {
             }
             return false;
         }
-        has_supported_image_extension(std::path::Path::new(path_str))
+        has_supported_image_extension(Path::new(path_str))
     })
 }
