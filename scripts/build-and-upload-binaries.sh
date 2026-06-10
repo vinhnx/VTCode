@@ -550,7 +550,15 @@ publish_homebrew_tap() {
     if ! (
         trap 'rm -rf "$temp_dir"' EXIT
 
-        if ! gh repo clone vinhnx/homebrew-tap "$temp_dir" >/dev/null 2>&1; then
+        local tap_token="${HOMEBREW_TAP_TOKEN:-${GITHUB_TOKEN:-}}"
+        if [[ -z "$tap_token" ]]; then
+            print_error "No token available for homebrew-tap. Set HOMEBREW_TAP_TOKEN or GITHUB_TOKEN."
+            exit 1
+        fi
+
+        local tap_repo_url="https://x-access-token:${tap_token}@github.com/vinhnx/homebrew-tap.git"
+
+        if ! git clone "$tap_repo_url" "$temp_dir" >/dev/null 2>&1; then
             print_error "Failed to clone vinhnx/homebrew-tap"
             exit 1
         fi
@@ -576,7 +584,7 @@ publish_homebrew_tap() {
             exit 1
         fi
 
-        if ! git -C "$temp_dir" -c credential.helper='!gh auth git-credential' push https://github.com/vinhnx/homebrew-tap.git HEAD:main; then
+        if ! git -C "$temp_dir" push "$tap_repo_url" HEAD:main; then
             print_error "Failed to push Homebrew tap update"
             exit 1
         fi

@@ -36,16 +36,16 @@ else
     print_error "✗ Missing Homebrew publish helper in release.sh"
 fi
 
-if grep -q "gh repo clone vinhnx/homebrew-tap" scripts/release.sh; then
+if grep -q "git clone.*homebrew-tap" scripts/release.sh; then
     print_success "✓ Found Homebrew tap clone command"
 else
     print_error "✗ Missing Homebrew tap clone command"
 fi
 
-if grep -q "credential.helper='!gh auth git-credential'" scripts/release.sh && grep -q "https://github.com/vinhnx/homebrew-tap.git" scripts/release.sh; then
-    print_success "✓ Found authenticated HTTPS push to tap repo"
+if grep -q "HOMEBREW_TAP_TOKEN" scripts/release.sh && grep -q "x-access-token:.*github.com/vinhnx/homebrew-tap.git" scripts/release.sh; then
+    print_success "✓ Found token-authenticated HTTPS push to tap repo"
 else
-    print_error "✗ Missing authenticated HTTPS push to tap repo"
+    print_error "✗ Missing token-authenticated HTTPS push to tap repo"
 fi
 
 if grep -q "Homebrew (vinhnx/homebrew-tap/vtcode)" scripts/release.sh; then

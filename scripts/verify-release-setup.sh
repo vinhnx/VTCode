@@ -218,10 +218,10 @@ test_release_script() {
     fi
 
     # Check for authenticated push to the tap repo
-    if grep -q "credential.helper='!gh auth git-credential'" scripts/release.sh && grep -q "https://github.com/vinhnx/homebrew-tap.git" scripts/release.sh; then
-        print_success "release.sh pushes to the tap repo via authenticated HTTPS"
+    if grep -q "HOMEBREW_TAP_TOKEN" scripts/release.sh && grep -q "x-access-token:.*github.com/vinhnx/homebrew-tap.git" scripts/release.sh; then
+        print_success "release.sh pushes to the tap repo via token-authenticated HTTPS"
     else
-        print_error "release.sh missing authenticated HTTPS push for the tap repo"
+        print_error "release.sh missing token-authenticated HTTPS push for the tap repo"
     fi
 }
 
@@ -265,10 +265,10 @@ test_build_script() {
     fi
 
     # Check for authenticated HTTPS push
-    if grep -q "gh auth git-credential" scripts/build-and-upload-binaries.sh && grep -q "https://github.com/vinhnx/homebrew-tap.git" scripts/build-and-upload-binaries.sh; then
-        print_success "build-and-upload-binaries.sh pushes via authenticated HTTPS"
+    if grep -q "HOMEBREW_TAP_TOKEN" scripts/build-and-upload-binaries.sh && grep -q "x-access-token:.*github.com/vinhnx/homebrew-tap.git" scripts/build-and-upload-binaries.sh; then
+        print_success "build-and-upload-binaries.sh pushes via token-authenticated HTTPS"
     else
-        print_error "build-and-upload-binaries.sh missing authenticated HTTPS push"
+        print_error "build-and-upload-binaries.sh missing token-authenticated HTTPS push"
     fi
 }
 
