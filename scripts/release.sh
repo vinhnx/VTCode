@@ -640,11 +640,11 @@ trigger_docs_rs_rebuild() {
 
     print_distribution "Triggering docs.rs rebuild for version $version..."
     local crates=(
-        vtcode vtcode-core vtcode-tui vtcode-design vtcode-config
+        vtcode vtcode-core vtcode-config
         vtcode-commons vtcode-markdown-store vtcode-indexer vtcode-bash-runner
         vtcode-exec-events vtcode-file-search vtcode-acp vtcode-auth
         vtcode-process-hardening vtcode-ghostty-core
-        vtcode-macros vtcode-terminal-detection vtcode-theme
+        vtcode-macros vtcode-terminal-detection
         vtcode-utility-tool-specs vtcode-collaboration-tool-specs vtcode-vim
     )
     for crate in "${crates[@]}"; do

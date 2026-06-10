@@ -32,8 +32,6 @@ All VT Code crates require Rust 1.88 or later due to dependencies (ratatui 0.30,
 |-------|---------|------|---------|--------------|
 | vtcode | 0.123.4 | 1.88 | 2024 | Initial release |
 | vtcode-core | 0.123.4 | 1.88 | 2024 | Initial release |
-| vtcode-tui | 0.123.4 | 1.88 | 2024 | Initial release |
-| vtcode-design | 0.123.4 | 1.88 | 2024 | 0.123.4 |
 | vtcode-config | 0.123.4 | 1.88 | 2024 | Initial release |
 | vtcode-commons | 0.123.4 | 1.88 | 2024 | Initial release |
 | vtcode-llm | 0.123.4 | 1.88 | 2024 | Initial release (publish=false) |
@@ -49,7 +47,7 @@ All VT Code crates require Rust 1.88 or later due to dependencies (ratatui 0.30,
 | vtcode-process-hardening | 0.123.4 | 1.88 | 2024 | Initial release |
 | vtcode-macros | 0.123.4 | 1.88 | 2024 | Initial release |
 | vtcode-terminal-detection | 0.123.4 | 1.88 | 2024 | Initial release |
-| vtcode-theme | 0.123.4 | 1.88 | 2024 | Initial release |
+| vtcode-ui | 0.123.10 | 1.88 | 2024 | Internal (publish=false) |
 | vtcode-utility-tool-specs | 0.123.4 | 1.88 | 2024 | Initial release |
 | vtcode-collaboration-tool-specs | 0.123.4 | 1.88 | 2024 | Initial release |
 | vtcode-vim | 0.123.4 | 1.88 | 2024 | Initial release |

@@ -92,20 +92,20 @@ The command-line interface is built on specific principles for robustness and in
 
 The terminal UI now has a dedicated crate boundary:
 
-- `vtcode-tui`: public TUI-facing API surface for downstream consumers
+- `vtcode-ui`: public UI-facing API surface for downstream consumers (TUI, design, theme)
 - `vtcode-core::ui::tui`: canonical runtime type surface for VT Code internals
 
 This separation allows external code to import TUI types and session APIs from
-`vtcode-tui` while keeping host-specific integrations inside `vtcode-core`.
+`vtcode-ui` while keeping host-specific integrations inside `vtcode-core`.
 
-`vtcode-tui` now exposes standalone launch primitives (`SessionOptions`,
+`vtcode-ui` now exposes standalone launch primitives (`SessionOptions`,
 `SessionSurface`, `KeyboardProtocolSettings`) plus host adapters
 (`host::HostAdapter`) so downstream projects can start sessions without
 importing `vtcode_core::config` types directly.
 
 The full TUI source tree is now located in:
 
-- `vtcode-tui/src/core_tui/`
+- `vtcode-ui/src/tui/core_tui/`
 
 `vtcode-core/src/ui/tui.rs` is a compatibility shim that compiles this migrated
 source tree to preserve existing `vtcode_core::ui::tui` paths.
@@ -113,7 +113,7 @@ source tree to preserve existing `vtcode_core::ui::tui` paths.
 The TUI runner is organized into focused modules:
 
 ```
-vtcode-tui/src/core_tui/runner/
+vtcode-ui/src/tui/core_tui/runner/
  mod.rs           # Orchestration entrypoint (`run_tui`)
  drive.rs         # Main terminal/event loop drive logic
  events.rs        # Async event stream + tick scheduling

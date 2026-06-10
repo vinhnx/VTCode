@@ -1,7 +1,7 @@
 //! Shared UI protocol types used across VT Code crates.
 //!
 //! These types form the data model shared between `vtcode-core` (the agent
-//! library) and `vtcode-tui` (the terminal surface). Extracting them here
+//! library) and `vtcode-ui` (the terminal surface). Extracting them here
 //! lets headless builds compile without duplicating every enum and struct.
 //!
 //! The channel protocol types (`InlineCommand`, `InlineHandle`,

@@ -2,7 +2,7 @@
 //!
 //! This module provides the single correct mapping from `anstyle::Color` to
 //! `ratatui::style::Color`. Previous implementations in `vtcode-commons` and
-//! `vtcode-tui` had bugs mapping `Magenta` and bright variants to incorrect
+//! `vtcode-ui` had bugs mapping `Magenta` and bright variants to incorrect
 //! ratatui colors.
 
 use anstyle::{AnsiColor, Color as AnstyleColor, RgbColor};
@@ -17,7 +17,7 @@ use anstyle::{AnsiColor, Color as AnstyleColor, RgbColor};
 /// # Bug fixes over prior implementations
 ///
 /// Prior implementations in `vtcode-commons::anstyle_utils` and
-/// `vtcode-tui::core_tui::style` incorrectly mapped:
+/// `vtcode-ui::tui::core_tui::style` incorrectly mapped:
 /// - `Magenta` to `DarkGray` (now correctly `Magenta`)
 /// - `BrightMagenta` to `DarkGray` (now correctly `LightMagenta`)
 /// - `BrightRed/Green/Yellow/Blue/Cyan` to non-bright variants

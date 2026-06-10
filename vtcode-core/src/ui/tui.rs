@@ -1,7 +1,7 @@
 //! TUI protocol types and session interface.
 //!
 //! When the `tui` feature is enabled, this module re-exports the full app-layer
-//! protocol from `vtcode-tui`.  When the feature is disabled (headless build),
+//! protocol from `vtcode-ui`.  When the feature is disabled (headless build),
 //! it re-exports the shared data types from `vtcode-commons` and provides
 //! lightweight no-op stubs for `InlineHandle`, `InlineSession`, and
 //! `InlineEvent`.

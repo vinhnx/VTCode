@@ -2,7 +2,7 @@ use crate::config::loader::SyntaxHighlightingConfig;
 use crate::ui::theme::{self, ThemeStyles};
 use anstyle::Style;
 
-// When TUI is enabled, use vtcode-tui's richer types (with internal methods).
+// When TUI is enabled, use vtcode-ui's richer types (with internal methods).
 #[cfg(feature = "tui")]
 pub use vtcode_ui::tui::ui::markdown::{
     HighlightedSegment, MarkdownLine, MarkdownSegment, RenderMarkdownOptions,

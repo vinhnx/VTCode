@@ -1,6 +1,6 @@
 //! Shared markdown rendering types.
 //!
-//! The actual rendering implementation lives in `vtcode-tui`.  These structs
+//! The actual rendering implementation lives in `vtcode-ui`.  These structs
 //! define the output format so that `vtcode-core` can work with rendered
 //! markdown lines regardless of whether the TUI crate is compiled in.
 

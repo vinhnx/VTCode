@@ -8,7 +8,7 @@
 //!
 //! Items from `design` and `theme` are also re-exported at the crate root for
 //! backward-compatibility with callers that previously imported from the
-//! standalone `vtcode-design` / `vtcode-theme` crates.
+//! standalone `vtcode-design` / `vtcode-theme` crates (now consolidated into `vtcode-ui`).
 
 pub mod design;
 pub mod theme;

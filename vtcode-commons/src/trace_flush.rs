@@ -1,6 +1,6 @@
 //! Global trace log flush hook.
 //!
-//! Allows any crate (including `vtcode-tui`) to trigger a trace log flush
+//! Allows any crate (including `vtcode-ui`) to trigger a trace log flush
 //! without depending on `vtcode-core`. The flush callback is registered once
 //! during tracing initialization and can be invoked from signal handlers or
 //! shutdown sequences.

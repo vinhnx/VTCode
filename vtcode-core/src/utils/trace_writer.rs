@@ -42,7 +42,7 @@ impl FlushableWriter {
         // Store globally so `flush_trace_log` works from anywhere.
         let _ = GLOBAL_WRITER.set(flushable.clone());
         // Register the flush hook in vtcode-commons so crates that don't
-        // depend on vtcode-core (e.g. vtcode-tui) can still trigger a flush.
+        // depend on vtcode-core (e.g. vtcode-ui) can still trigger a flush.
         vtcode_commons::trace_flush::register_trace_flush_hook(flush_trace_log);
         Ok(flushable)
     }

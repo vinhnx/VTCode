@@ -40,7 +40,7 @@ impl Default for HostSessionDefaults {
     }
 }
 
-/// Full host adapter contract for embedding `vtcode-tui` in other apps.
+/// Full host adapter contract for embedding `vtcode-ui` in other apps.
 pub trait HostAdapter: WorkspaceInfoProvider + NotificationProvider + ThemeProvider {
     /// Provide host-specific defaults for TUI session startup.
     fn session_defaults(&self) -> HostSessionDefaults {

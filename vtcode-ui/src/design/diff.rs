@@ -2,7 +2,7 @@
 //!
 //! Provides `format_colored_diff` as the single canonical implementation
 //! for rendering diff hunks with terminal colors. Previously duplicated
-//! in `vtcode-core` and `vtcode-tui`.
+//! in `vtcode-core` and `vtcode-ui`.
 
 use anstyle::{AnsiColor, Color, Reset, Style};
 use std::fmt::Write;
@@ -29,7 +29,7 @@ pub fn compute_diff_with_theme(old: &str, new: &str, options: DiffOptions<'_>) -
 /// Format diff hunks with standard ANSI colors for terminal display.
 ///
 /// This is the single canonical implementation. Both `vtcode-core` and
-/// `vtcode-tui` delegate to this function.
+/// `vtcode-ui` delegate to this function.
 pub fn format_colored_diff(hunks: &[DiffHunk], options: &DiffOptions<'_>) -> String {
     if hunks.is_empty() {
         return String::new();

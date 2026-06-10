@@ -309,7 +309,7 @@ Result: all commands completed successfully for the touched areas.
 
 Note on strict clippy:
 
-- `RUSTC_WRAPPER= cargo clippy --workspace --all-targets -- -D warnings` currently fails due pre-existing unrelated lint debt in other crates (`vtcode-tui`, `vtcode-config`, `vtcode-core`, `vtcode` tests)
+- `RUSTC_WRAPPER= cargo clippy --workspace --all-targets -- -D warnings` currently fails due pre-existing unrelated lint debt in other crates (`vtcode-ui`, `vtcode-config`, `vtcode-core`, `vtcode` tests)
 - touched packages were validated with focused checks/tests and format checks
 
 Performance sample output was written to `.vtcode/perf/diff.md` (single local sample; interpret as directional only).

@@ -83,7 +83,7 @@ implement double escape to rewind, reference.
 
 --
 
-idea: build a new version release note TUI (use Info tui component). showing only when user first update to a new version, and can be accessed later in the help menu.
+idea: build a new version release note TUI (use Info tui component). showing only when user first update to a new version, and can be accessed later in the help menu. show a note with top "# Highlight" items on release note, on click. open the latest release tag in github.
 
 example
 

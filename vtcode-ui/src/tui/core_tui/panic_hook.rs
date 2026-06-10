@@ -124,7 +124,7 @@ pub fn show_diagnostics() -> bool {
 
 /// Set application metadata used by release panic reports.
 ///
-/// If this is not set, metadata from the `vtcode-tui` crate is used.
+/// If this is not set, metadata from the `vtcode-ui` crate is used.
 pub fn set_app_metadata(
     name: &'static str,
     version: &'static str,

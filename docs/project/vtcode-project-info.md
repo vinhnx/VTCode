@@ -9,5 +9,5 @@ VT Code is an open-source coding agent with LLM-native code understanding and ro
 - Cargo workspace with multiple crates
 - `vtcode-core/` for reusable agent/runtime logic
 - `src/` for the CLI executable
-- `vtcode-tui/` for the terminal UI
+- `vtcode-ui/` for the terminal UI, design, and theme
 - `docs/` for architecture guides and developer docs

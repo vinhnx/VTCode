@@ -1,7 +1,7 @@
 //! Responsive layout mode logic.
 //!
 //! `LayoutMode` provides a single source of truth for layout decisions
-//! based on terminal dimensions. Extracted from `vtcode-tui`.
+//! based on terminal dimensions. Extracted from `vtcode-ui`.
 
 use ratatui::layout::Rect;
 

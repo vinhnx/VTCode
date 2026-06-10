@@ -62,7 +62,7 @@ Kept `format_numbered_unified_diff()` as a compatibility wrapper over the shared
 Replaced duplicate diff semantics in:
 
 - `src/agent/runloop/tool_output/streams.rs`
-- `vtcode-tui/src/core_tui/app/session/diff_preview.rs`
+- `vtcode-ui/src/tui/core_tui/app/session/diff_preview.rs`
 
 Benefits:
 
@@ -104,7 +104,7 @@ Removed duplicate implementation:
 
 Canonical owner remains:
 
-- `vtcode-tui/src/ui/file_colorizer.rs`
+- `vtcode-ui/src/tui/ui/file_colorizer.rs`
 
 Compatibility preserved via re-export from:
 
@@ -126,18 +126,18 @@ Added canonical image helper:
 Removed duplicate logic from:
 
 - `vtcode-core/src/tools/file_ops/mod.rs` now re-exports `vtcode_commons::fs::is_image_path`
-- deleted `vtcode-tui/src/utils/file_utils.rs`
+- deleted `vtcode-ui/src/tui/utils/file_utils.rs`
 
 Updated TUI call sites to use `vtcode-commons::fs` directly:
 
-- `vtcode-tui/src/core_tui/session/config.rs`
-- `vtcode-tui/src/core_tui/session/input.rs`
-- `vtcode-tui/src/utils/mod.rs`
+- `vtcode-ui/src/tui/core_tui/session/config.rs`
+- `vtcode-ui/src/tui/core_tui/session/input.rs`
+- `vtcode-ui/src/tui/utils/mod.rs`
 
 Benefits:
 
 - one owner for sync file helpers and image-path classification
-- less wrapper churn inside `vtcode-tui`
+- less wrapper churn inside `vtcode-ui`
 
 Risk level: low.
 
@@ -147,7 +147,7 @@ Canonical owner for shared UI text/defaults remains:
 
 - `vtcode-config/src/constants/ui.rs`
 
-`vtcode-tui/src/config/constants/ui.rs` now aliases a small shared subset instead of redefining it:
+`vtcode-ui/src/tui/config/constants/ui.rs` now aliases a small shared subset instead of redefining it:
 
 - tool output mode strings
 - default reasoning visibility
@@ -193,7 +193,7 @@ Reason not removed in this pass:
 
 - the import surface is broad across the workspace
 - deleting them all at once would create high-churn edits with low immediate payoff
-- the narrow wrapper removal in `vtcode-tui/src/utils/file_utils.rs` delivered a safer first reduction
+- the narrow wrapper removal in `vtcode-ui/src/tui/utils/file_utils.rs` delivered a safer first reduction
 
 Recommended follow-up:
 

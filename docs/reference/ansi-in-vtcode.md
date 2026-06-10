@@ -19,7 +19,7 @@ pub fn strip_ansi_bytes(input: &[u8]) -> Vec<u8>
 
 -   PTY output cleaning (`vtcode-core/src/tools/pty.rs:208`)
 -   Tool output formatting (`vtcode-core/src/tools/registry/executors.rs`)
--   TUI session rendering (`vtcode-tui/src/core_tui/session/text_utils.rs`)
+-   TUI session rendering (`vtcode-ui/src/tui/core_tui/session/text_utils.rs`)
 
 **Patterns Handled**:
 
@@ -34,7 +34,7 @@ pub fn strip_ansi_bytes(input: &[u8]) -> Vec<u8>
     `strip_ansi()` operates on decoded text (`ESC`-prefixed control forms),
     while `strip_ansi_bytes()` handles raw 8-bit C1 control bytes.
 
-`vtcode-core/src/utils/ansi_parser.rs` and `vtcode-tui/src/utils/ansi_parser.rs` both re-export this shared implementation.
+`vtcode-core/src/utils/ansi_parser.rs` and `vtcode-ui/src/tui/utils/ansi_parser.rs` both re-export this shared implementation.
 
 ### 2. Shared ANSI Sequences (`vtcode-commons/src/ansi_codes.rs`)
 
@@ -45,7 +45,7 @@ pub fn strip_ansi_bytes(input: &[u8]) -> Vec<u8>
 -   Exit summary rendering (`src/agent/runloop/unified/postamble.rs`)
 -   Terminal palette probing (`vtcode-core/src/utils/terminal_color_probe.rs`)
 -   Tool risk coloring (`vtcode-core/src/tools/registry/risk_scorer.rs`)
--   Syntax highlight reset emission (`vtcode-tui/src/ui/syntax_highlight.rs`)
+-   Syntax highlight reset emission (`vtcode-ui/src/tui/ui/syntax_highlight.rs`)
 -   HITL notifications (`vtcode-core/src/notifications/mod.rs`, `src/agent/runloop/mcp_elicitation.rs`)
 
 `vtcode-core/src/utils/ansi_codes.rs` re-exports this shared implementation so downstream crates use one canonical source of escape sequences.

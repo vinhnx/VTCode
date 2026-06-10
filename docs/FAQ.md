@@ -108,7 +108,7 @@ VT Code is an **AI coding agent** with:
 
 ### How does VT Code manage terminal state?
 
-The fullscreen TUI uses the shared runner in `vtcode-tui/src/core_tui/runner/` and writes terminal control sequences through `stderr`.
+The fullscreen TUI uses the shared runner in `vtcode-ui/src/tui/core_tui/runner/` and writes terminal control sequences through `stderr`.
 
 1. **Enter:** Save cursor position, enable terminal modes (raw mode, bracketed paste, focus events, keyboard enhancements, optional mouse capture), then enter alternate screen.
 2. **Running:** Process events, update state, and render only the current viewport.
