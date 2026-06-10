@@ -45,7 +45,7 @@ curl -fsSL https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.
 ```
 
 ```shell
-brew install vtcode    # via Homebrew
+brew install vinhnx/tap/vtcode    # via Homebrew (custom tap)
 ```
 
 Then run `vtcode` to get started.
