@@ -27,7 +27,7 @@ Options:
                      vtcode-terminal-detection,
                      vtcode-collaboration-tool-specs,
                      vtcode-utility-tool-specs,
-                     vtcode-core, vtcode-acp, vtcode.
+                     vtcode-ui, vtcode-core, vtcode-acp, vtcode.
   --skip-tests       Skip running the workspace fmt/clippy/test checks. Use with
                      caution; the release plan expects the validation suite to
                      pass before publishing.
@@ -113,6 +113,7 @@ CRATES=(
     vtcode-terminal-detection
     vtcode-collaboration-tool-specs
     vtcode-utility-tool-specs
+    vtcode-ui
     vtcode-core
     vtcode-acp
     vtcode

@@ -12,7 +12,6 @@ repository = "https://github.com/vinhnx/vtcode"
 documentation = "https://docs.rs/vtcode-ui"
 keywords = ["tui", "terminal", "ratatui", "design-system", "vtcode"]
 categories = ["command-line-utilities", "development-tools"]
-publish = false
 
 [package.metadata.docs.rs]
 all-features = true
