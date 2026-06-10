@@ -46,7 +46,7 @@ pub use provider::{
 pub use sandbox::{
     DockerSandboxConfig, ExternalSandboxConfig, ExternalSandboxType, MicroVMSandboxConfig,
     NetworkAllowlistEntryConfig, NetworkConfig, ResourceLimitsConfig, ResourceLimitsPreset,
-    SandboxConfig, SandboxMode, SeccompConfig, SeccompProfilePreset, SensitivePathsConfig,
+    SandboxConfig, SandboxPolicy, SeccompConfig, SeccompProfilePreset, SensitivePathsConfig,
 };
 pub use security::{GatekeeperConfig, SecurityConfig};
 pub use skills::{BundledSkillsConfig, PromptFormat, SkillsConfig, SkillsRenderMode};

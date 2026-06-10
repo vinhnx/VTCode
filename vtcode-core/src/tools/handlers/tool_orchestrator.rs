@@ -96,7 +96,7 @@ impl ToolOrchestrator {
 
         // 2) Select initial sandbox
         let canonical_policy = canonical_sandbox_policy(turn_ctx);
-        let initial_sandbox = match tool.sandbox_mode_for_first_attempt(req) {
+        let initial_sandbox = match tool.sandbox_policy_override_for_first_attempt(req) {
             SandboxOverride::BypassSandboxFirstAttempt => SandboxType::None,
             SandboxOverride::NoOverride => self
                 .sandbox
@@ -194,7 +194,7 @@ mod tests {
     use std::sync::Arc;
 
     use crate::tools::handlers::sandboxing::{
-        Approvable, BoxFuture, NetworkAccess, SandboxMode, SandboxPolicy, Sandboxable,
+        Approvable, BoxFuture, NetworkAccess, SandboxConfig, SandboxPolicy, Sandboxable,
         SandboxablePreference,
     };
     use crate::tools::handlers::tool_handler::{
@@ -335,7 +335,7 @@ mod tests {
         }
     }
 
-    fn test_turn_context(cwd: PathBuf, sandbox_policy: SandboxPolicy) -> TurnContext {
+    fn test_turn_context(cwd: PathBuf, sandbox_policy: SandboxConfig) -> TurnContext {
         TurnContext {
             cwd,
             turn_id: "turn-1".to_string(),
@@ -393,7 +393,7 @@ mod tests {
     async fn orchestrator_escalates_when_runtime_allows_it() {
         let cwd = PathBuf::from(".");
         let session = Arc::new(TestSession::new(cwd.clone()));
-        let turn = Arc::new(test_turn_context(cwd, SandboxPolicy::default()));
+        let turn = Arc::new(test_turn_context(cwd, SandboxConfig::default()));
         let tool_ctx = test_tool_ctx(turn.clone(), session);
         let mut runtime = TestRuntime::new(true);
         let mut orchestrator = ToolOrchestrator::new();
@@ -417,7 +417,7 @@ mod tests {
     async fn orchestrator_stops_on_sandbox_denial_when_runtime_disables_retry() {
         let cwd = PathBuf::from(".");
         let session = Arc::new(TestSession::new(cwd.clone()));
-        let turn = Arc::new(test_turn_context(cwd, SandboxPolicy::default()));
+        let turn = Arc::new(test_turn_context(cwd, SandboxConfig::default()));
         let tool_ctx = test_tool_ctx(turn.clone(), session);
         let mut runtime = TestRuntime::new(false);
         let mut orchestrator = ToolOrchestrator::new();
@@ -443,8 +443,8 @@ mod tests {
         let session = Arc::new(TestSession::new(cwd.clone()));
         let turn = Arc::new(test_turn_context(
             cwd,
-            SandboxPolicy {
-                mode: SandboxMode::DangerFullAccess,
+            SandboxConfig {
+                policy: SandboxPolicy::DangerFullAccess,
                 network_access: NetworkAccess::Full,
             },
         ));

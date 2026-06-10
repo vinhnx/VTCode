@@ -36,4 +36,12 @@ fn schema_helpers_produce_consistent_output() {
         as_string.contains("\"notification\""),
         "pretty schema output should include hooks.lifecycle.notification"
     );
+    assert!(
+        as_string.contains("\"default_policy\""),
+        "pretty schema output should include sandbox.default_policy"
+    );
+    assert!(
+        !as_string.contains("\"default_mode\""),
+        "pretty schema output should not include sandbox.default_mode"
+    );
 }

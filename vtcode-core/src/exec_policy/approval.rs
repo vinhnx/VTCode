@@ -106,7 +106,7 @@ impl AskForApproval {
 /// Compute the default approval requirement for a tool invocation.
 ///
 /// `requires_sandbox_approval_prompt` should be `true` when the selected
-/// sandbox mode still requires an approval prompt, and `false` when the tool is
+/// sandbox policy still requires an approval prompt, and `false` when the tool is
 /// already running unsandboxed or under an external sandbox that should not
 /// trigger an additional sandbox approval prompt.
 #[must_use]

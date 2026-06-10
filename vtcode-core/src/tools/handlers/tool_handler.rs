@@ -242,7 +242,7 @@ pub struct TurnContext {
     pub approval_policy: Constrained<ApprovalPolicy>,
     pub codex_linux_sandbox_exe: Option<PathBuf>,
     /// Sandbox policy from Codex (for orchestrator integration)
-    pub sandbox_policy: Constrained<super::sandboxing::SandboxPolicy>,
+    pub sandbox_policy: Constrained<super::sandboxing::SandboxConfig>,
 }
 
 impl TurnContext {

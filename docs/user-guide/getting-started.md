@@ -430,7 +430,7 @@ VT Code is designed with security as a first-class concern:
 
 1. **Review Tool Approvals** - Check `~/.config/vtcode/tool_policy.toml` regularly
 2. **Use "Approve Once"** - For unfamiliar operations, don't auto-approve
-3. **Enable Sandbox** - For network commands, configure sandbox mode
+3. **Enable Sandbox** - For network commands, configure sandbox policy
 4. **Monitor Logs** - Review `.vtcode/logs/` for suspicious activity
 5. **Be Cautious** - Don't process code from untrusted sources
 

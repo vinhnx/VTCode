@@ -11,7 +11,7 @@ use std::{
     path::{Path, PathBuf},
 };
 use vtcode_config::{
-    ResourceLimitsPreset, SandboxMode as RuntimeSandboxMode, SeccompProfilePreset,
+    ResourceLimitsPreset, SandboxPolicy as RuntimeSandboxPolicy, SeccompProfilePreset,
 };
 
 #[derive(Debug, Clone)]
@@ -122,16 +122,16 @@ pub(super) fn sandbox_policy_from_runtime_config(
     sandbox_config: &vtcode_config::SandboxConfig,
     workspace_root: &Path,
 ) -> Result<SandboxPolicy> {
-    match sandbox_config.default_mode {
-        RuntimeSandboxMode::ReadOnly => Ok(read_only_policy_from_runtime_config(sandbox_config)),
-        RuntimeSandboxMode::DangerFullAccess => Ok(SandboxPolicy::full_access()),
-        RuntimeSandboxMode::External => Ok(SandboxPolicy::ExternalSandbox {
+    match sandbox_config.default_policy {
+        RuntimeSandboxPolicy::ReadOnly => Ok(read_only_policy_from_runtime_config(sandbox_config)),
+        RuntimeSandboxPolicy::DangerFullAccess => Ok(SandboxPolicy::full_access()),
+        RuntimeSandboxPolicy::External => Ok(SandboxPolicy::ExternalSandbox {
             description: format!(
                 "external sandbox requested ({:?})",
                 sandbox_config.external.sandbox_type
             ),
         }),
-        RuntimeSandboxMode::WorkspaceWrite => Ok(workspace_write_policy_from_runtime_config(
+        RuntimeSandboxPolicy::WorkspaceWrite => Ok(workspace_write_policy_from_runtime_config(
             sandbox_config,
             workspace_root,
         )),
@@ -510,8 +510,8 @@ pub(super) fn apply_runtime_sandbox_to_command(
     };
     if matches!(policy, SandboxPolicy::ExternalSandbox { .. }) {
         return Err(anyhow!(
-            "Sandbox mode 'external' is not supported by local command-session execution. \
-             Use `read_only`/`workspace_write` or disable sandbox for this run."
+            "Sandbox policy 'external' is not supported by local command-session execution. \
+             Use `read_only`/`workspace_write` or disable sandboxing for this run."
         ));
     }
 

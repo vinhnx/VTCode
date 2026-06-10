@@ -226,7 +226,7 @@ Full configuration in `vtcode.toml`:
 ```toml
 [sandbox]
 enabled = false # opt-in; set true to enforce sandboxing
-default_mode = "read_only"
+default_policy = "read_only"
 
 [sandbox.network]
 allow_all = false

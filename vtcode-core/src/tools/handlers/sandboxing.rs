@@ -184,8 +184,8 @@ pub trait Approvable<Req>: Send + Sync {
     /// Generate an approval key for the request
     fn approval_key(&self, req: &Req) -> Self::ApprovalKey;
 
-    /// Some tools may request to skip the sandbox on the first attempt
-    fn sandbox_mode_for_first_attempt(&self, _req: &Req) -> SandboxOverride {
+    /// Some tools may request a sandbox policy override on the first attempt
+    fn sandbox_policy_override_for_first_attempt(&self, _req: &Req) -> SandboxOverride {
         SandboxOverride::NoOverride
     }
 
@@ -227,14 +227,14 @@ pub trait Approvable<Req>: Send + Sync {
 
 /// Sandbox policy configuration (from Codex protocol)
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct SandboxPolicy {
-    pub mode: SandboxMode,
+pub struct SandboxConfig {
+    pub policy: SandboxPolicy,
     pub network_access: NetworkAccess,
 }
 
-/// Sandbox mode (from Codex)
+/// Sandbox policy (from Codex)
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub enum SandboxMode {
+pub enum SandboxPolicy {
     /// Read-only filesystem access
     #[default]
     ReadOnly,
@@ -260,36 +260,36 @@ pub enum NetworkAccess {
 
 const LEGACY_EXTERNAL_SANDBOX_DESCRIPTION: &str = "legacy handler external sandbox";
 
-impl SandboxPolicy {
+impl SandboxConfig {
     #[must_use]
     pub fn requires_approval_prompt(&self) -> bool {
         !matches!(
-            self.mode,
-            SandboxMode::DangerFullAccess | SandboxMode::ExternalSandbox
+            self.policy,
+            SandboxPolicy::DangerFullAccess | SandboxPolicy::ExternalSandbox
         )
     }
 
     #[must_use]
     pub fn uses_runtime_sandbox(&self) -> bool {
         matches!(
-            self.mode,
-            SandboxMode::ReadOnly | SandboxMode::WorkspaceWrite
+            self.policy,
+            SandboxPolicy::ReadOnly | SandboxPolicy::WorkspaceWrite
         )
     }
 
     #[must_use]
     pub fn to_canonical_policy(&self, sandbox_cwd: &Path) -> CanonicalSandboxPolicy {
-        match (&self.mode, &self.network_access) {
-            (SandboxMode::ReadOnly, NetworkAccess::Restricted | NetworkAccess::Limited) => {
+        match (&self.policy, &self.network_access) {
+            (SandboxPolicy::ReadOnly, NetworkAccess::Restricted | NetworkAccess::Limited) => {
                 CanonicalSandboxPolicy::read_only()
             }
-            (SandboxMode::ReadOnly, NetworkAccess::Full) => {
+            (SandboxPolicy::ReadOnly, NetworkAccess::Full) => {
                 CanonicalSandboxPolicy::read_only_with_full_network()
             }
-            (SandboxMode::WorkspaceWrite, NetworkAccess::Restricted | NetworkAccess::Limited) => {
+            (SandboxPolicy::WorkspaceWrite, NetworkAccess::Restricted | NetworkAccess::Limited) => {
                 CanonicalSandboxPolicy::workspace_write(vec![sandbox_cwd.to_path_buf()])
             }
-            (SandboxMode::WorkspaceWrite, NetworkAccess::Full) => {
+            (SandboxPolicy::WorkspaceWrite, NetworkAccess::Full) => {
                 CanonicalSandboxPolicy::workspace_write_full(
                     vec![sandbox_cwd.to_path_buf()],
                     Vec::new(),
@@ -298,8 +298,8 @@ impl SandboxPolicy {
                     SeccompProfile::strict().with_network(),
                 )
             }
-            (SandboxMode::DangerFullAccess, _) => CanonicalSandboxPolicy::full_access(),
-            (SandboxMode::ExternalSandbox, _) => CanonicalSandboxPolicy::ExternalSandbox {
+            (SandboxPolicy::DangerFullAccess, _) => CanonicalSandboxPolicy::full_access(),
+            (SandboxPolicy::ExternalSandbox, _) => CanonicalSandboxPolicy::ExternalSandbox {
                 description: LEGACY_EXTERNAL_SANDBOX_DESCRIPTION.to_string(),
             },
         }
@@ -319,7 +319,7 @@ pub fn canonical_sandbox_policy(turn: &TurnContext) -> CanonicalSandboxPolicy {
 /// Compute default exec approval requirement (from Codex)
 pub fn default_exec_approval_requirement(
     policy: AskForApproval,
-    sandbox_policy: &SandboxPolicy,
+    sandbox_policy: &SandboxConfig,
 ) -> ExecApprovalRequirement {
     canonical_default_exec_approval_requirement(
         policy,
@@ -327,7 +327,7 @@ pub fn default_exec_approval_requirement(
     )
 }
 
-fn sandbox_requires_approval_prompt(sandbox_policy: &SandboxPolicy) -> bool {
+fn sandbox_requires_approval_prompt(sandbox_policy: &SandboxConfig) -> bool {
     sandbox_policy.requires_approval_prompt()
 }
 
@@ -392,7 +392,7 @@ impl From<CanonicalSandboxType> for SandboxType {
 /// Sandbox attempt context (from Codex)
 pub struct SandboxAttempt<'a> {
     pub sandbox: SandboxType,
-    pub policy: &'a SandboxPolicy,
+    pub policy: &'a SandboxConfig,
     pub sandbox_cwd: &'a Path,
     pub codex_linux_sandbox_exe: Option<&'a PathBuf>,
 }
@@ -522,7 +522,7 @@ impl SandboxManager {
     /// Select the initial sandbox type based on policy and preference
     pub fn select_initial(
         &self,
-        policy: &SandboxPolicy,
+        policy: &SandboxConfig,
         preference: SandboxablePreference,
     ) -> SandboxType {
         match preference {
@@ -608,7 +608,7 @@ impl ExecToolCallOutput {
 /// Execute command with environment (from Codex)
 pub async fn execute_env(
     env: ExecEnv,
-    _policy: &SandboxPolicy,
+    _policy: &SandboxConfig,
 ) -> Result<ExecToolCallOutput, anyhow::Error> {
     use tokio::process::Command;
 
@@ -649,8 +649,8 @@ mod tests {
     fn test_external_sandbox_skips_exec_approval_on_request() {
         let result = default_exec_approval_requirement(
             AskForApproval::OnRequest,
-            &SandboxPolicy {
-                mode: SandboxMode::ExternalSandbox,
+            &SandboxConfig {
+                policy: SandboxPolicy::ExternalSandbox,
                 network_access: NetworkAccess::Restricted,
             },
         );
@@ -668,8 +668,8 @@ mod tests {
     fn test_restricted_sandbox_requires_exec_approval_on_request() {
         let result = default_exec_approval_requirement(
             AskForApproval::OnRequest,
-            &SandboxPolicy {
-                mode: SandboxMode::ReadOnly,
+            &SandboxConfig {
+                policy: SandboxPolicy::ReadOnly,
                 network_access: NetworkAccess::Restricted,
             },
         );
@@ -694,8 +694,8 @@ mod tests {
 
         let requirement = default_exec_approval_requirement(
             policy,
-            &SandboxPolicy {
-                mode: SandboxMode::ReadOnly,
+            &SandboxConfig {
+                policy: SandboxPolicy::ReadOnly,
                 network_access: NetworkAccess::Restricted,
             },
         );
@@ -710,8 +710,8 @@ mod tests {
 
     #[test]
     fn read_only_restricted_maps_to_canonical_read_only() {
-        let policy = SandboxPolicy {
-            mode: SandboxMode::ReadOnly,
+        let policy = SandboxConfig {
+            policy: SandboxPolicy::ReadOnly,
             network_access: NetworkAccess::Restricted,
         };
 
@@ -723,8 +723,8 @@ mod tests {
 
     #[test]
     fn read_only_full_maps_to_canonical_full_network() {
-        let policy = SandboxPolicy {
-            mode: SandboxMode::ReadOnly,
+        let policy = SandboxConfig {
+            policy: SandboxPolicy::ReadOnly,
             network_access: NetworkAccess::Full,
         };
 
@@ -737,8 +737,8 @@ mod tests {
     #[test]
     fn workspace_write_restricted_maps_to_canonical_workspace_write() {
         let root = PathBuf::from("/workspace");
-        let policy = SandboxPolicy {
-            mode: SandboxMode::WorkspaceWrite,
+        let policy = SandboxConfig {
+            policy: SandboxPolicy::WorkspaceWrite,
             network_access: NetworkAccess::Restricted,
         };
 
@@ -751,8 +751,8 @@ mod tests {
     #[test]
     fn workspace_write_full_maps_to_canonical_workspace_write_with_network() {
         let root = PathBuf::from("/workspace");
-        let policy = SandboxPolicy {
-            mode: SandboxMode::WorkspaceWrite,
+        let policy = SandboxConfig {
+            policy: SandboxPolicy::WorkspaceWrite,
             network_access: NetworkAccess::Full,
         };
 
@@ -770,8 +770,8 @@ mod tests {
 
     #[test]
     fn danger_full_access_maps_to_canonical_full_access() {
-        let policy = SandboxPolicy {
-            mode: SandboxMode::DangerFullAccess,
+        let policy = SandboxConfig {
+            policy: SandboxPolicy::DangerFullAccess,
             network_access: NetworkAccess::Restricted,
         };
 
@@ -783,8 +783,8 @@ mod tests {
 
     #[test]
     fn external_sandbox_maps_to_canonical_external_sandbox() {
-        let policy = SandboxPolicy {
-            mode: SandboxMode::ExternalSandbox,
+        let policy = SandboxConfig {
+            policy: SandboxPolicy::ExternalSandbox,
             network_access: NetworkAccess::Full,
         };
 
@@ -798,8 +798,8 @@ mod tests {
 
     #[test]
     fn limited_network_maps_to_restricted_network() {
-        let policy = SandboxPolicy {
-            mode: SandboxMode::WorkspaceWrite,
+        let policy = SandboxConfig {
+            policy: SandboxPolicy::WorkspaceWrite,
             network_access: NetworkAccess::Limited,
         };
 
@@ -828,8 +828,8 @@ mod tests {
 
         // Auto preference respects policy
         let sandbox = manager.select_initial(
-            &SandboxPolicy {
-                mode: SandboxMode::DangerFullAccess,
+            &SandboxConfig {
+                policy: SandboxPolicy::DangerFullAccess,
                 ..Default::default()
             },
             SandboxablePreference::Auto,
@@ -838,7 +838,7 @@ mod tests {
 
         // Forbid always returns None
         let sandbox =
-            manager.select_initial(&SandboxPolicy::default(), SandboxablePreference::Forbid);
+            manager.select_initial(&SandboxConfig::default(), SandboxablePreference::Forbid);
         assert_eq!(sandbox, SandboxType::None);
     }
 

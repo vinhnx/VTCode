@@ -6,7 +6,7 @@
 pub use super::sandboxing::{
     Approvable, ApprovalCtx, ApprovalStore, AskForApproval, BoxFuture, CommandSpec,
     ExecApprovalRequirement, ExecEnv, ExecPolicyAmendment, ExecToolCallOutput, NetworkAccess,
-    RejectConfig, ReviewDecision, SandboxAttempt, SandboxManager, SandboxMode, SandboxOverride,
+    RejectConfig, ReviewDecision, SandboxAttempt, SandboxConfig, SandboxManager, SandboxOverride,
     SandboxPolicy, SandboxTransformError, SandboxType, Sandboxable, SandboxablePreference, ToolCtx,
     ToolError, ToolRuntime, canonical_sandbox_policy, default_exec_approval_requirement,
     execute_env, with_cached_approval,
@@ -19,7 +19,7 @@ mod tests {
 
     #[test]
     fn orchestrator_path_reexports_active_sandboxing_types() {
-        let _: SandboxPolicy = SandboxPolicy::default();
+        let _: SandboxConfig = SandboxConfig::default();
         let _: ToolOrchestrator = ToolOrchestrator::default();
     }
 }

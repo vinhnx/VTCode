@@ -73,7 +73,7 @@ pub use core::{
     OpenAIPreferredMethod, OpenAIServiceTier, OpenResponsesConfig, OpenRouterAuthConfig,
     PermissionMode, PluginRuntimeConfig, PluginTrustLevel, PromptCachingConfig,
     ProviderPromptCachingConfig, ResourceLimitsConfig, ResourceLimitsPreset, SandboxConfig,
-    SandboxMode, SeccompConfig, SeccompProfilePreset, SecurityConfig, SensitivePathsConfig,
+    SandboxPolicy, SeccompConfig, SeccompProfilePreset, SecurityConfig, SensitivePathsConfig,
     SkillsConfig, SkillsRenderMode, ToolPolicy, ToolsConfig, WebFetchConfig,
 };
 pub use debug::{DebugConfig, TraceLevel};
