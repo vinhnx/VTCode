@@ -168,13 +168,11 @@ close_pty_session = "allow"
 
 create_pty_session = "allow"
 
-enter_plan_mode = "prompt"
+finish_planning = "allow"
 
 exec_code = "allow"
 
 execute_code = "allow"
-
-exit_plan_mode = "allow"
 
 git_diff = "allow"
 
@@ -194,11 +192,11 @@ memory = "allow"
 
 open_file = "allow"
 
-plan_task_tracker = "prompt"
-
 read_pty_session = "allow"
 
 request_user_input = "allow"
+
+start_planning = "prompt"
 
 resize_pty_session = "allow"
 
@@ -253,4 +251,3 @@ items = [
     "app-name",
     "git-branch",
 ]
-
