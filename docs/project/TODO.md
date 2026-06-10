@@ -70,10 +70,6 @@ similar to subagents system design and UI design
 
 ---
 
-fix the agent stop and can't work /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/checkpoints/turn_379.json
-
----
-
 implement control+r to search all prompts with actual logic, reference.
 
 /Users/vinhnguyenxuan/Documents/vtcode-resources/idea/search_prompts.png
