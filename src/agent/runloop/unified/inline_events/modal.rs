@@ -80,6 +80,10 @@ impl<'a> InlineModalProcessor<'a> {
         }
     }
 
+    pub(crate) fn active_primary_agent_name(&self) -> Option<String> {
+        self.model_picker.header_context.primary_agent.clone()
+    }
+
     pub(crate) fn request_url_guard(
         &mut self,
         renderer: &mut AnsiRenderer,

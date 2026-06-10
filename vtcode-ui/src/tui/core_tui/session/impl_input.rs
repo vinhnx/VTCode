@@ -94,8 +94,6 @@ impl Session {
             }
             InlineCommand::SetHeaderContext { context } => {
                 let mut next_context = *context;
-                next_context.editing_mode = self.header_context.editing_mode;
-                next_context.autonomous_mode = self.header_context.autonomous_mode;
                 next_context.reasoning_stage = self.header_context.reasoning_stage.clone();
                 next_context.primary_agent = self.header_context.primary_agent.clone();
                 self.header_context = next_context;
@@ -210,15 +208,6 @@ impl Session {
             | InlineCommand::StopEventStream
             | InlineCommand::StartEventStream => {
                 // Handled by drive_terminal
-            }
-            InlineCommand::SetEditingMode(mode) => {
-                self.clear_inline_prompt_suggestion();
-                self.header_context.editing_mode = mode;
-                self.invalidate_header_cache();
-            }
-            InlineCommand::SetAutonomousMode(enabled) => {
-                self.header_context.autonomous_mode = enabled;
-                self.invalidate_header_cache();
             }
             InlineCommand::SetSkipConfirmations(skip) => {
                 self.skip_confirmations = skip;

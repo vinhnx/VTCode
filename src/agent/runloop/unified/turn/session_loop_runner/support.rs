@@ -327,9 +327,6 @@ pub(super) struct ExitHeaderDisplay {
     pub(super) provider_label: String,
     pub(super) reasoning_label: String,
     pub(super) context_window_size: usize,
-    pub(super) mode_label: String,
-    pub(super) editing_mode: vtcode_ui::tui::app::EditingMode,
-    pub(super) autonomous_mode: bool,
     pub(super) full_auto: bool,
     pub(super) primary_agent: Option<String>,
 }
@@ -365,7 +362,6 @@ pub(super) fn build_exit_header_context_fast(
         pr_review: None,
         editor_context: None,
         git: String::new(),
-        mode: display.mode_label,
         reasoning: format!("{}{}", ui::HEADER_REASONING_PREFIX, display.reasoning_label),
         reasoning_stage: None,
         workspace_trust: format!("{}{}", ui::HEADER_TRUST_PREFIX, trust_label),
@@ -378,8 +374,6 @@ pub(super) fn build_exit_header_context_fast(
         primary_agent: display.primary_agent,
         highlights: Vec::new(),
         subagent_badges: Vec::new(),
-        editing_mode: display.editing_mode,
-        autonomous_mode: display.autonomous_mode,
     }
 }
 
@@ -390,16 +384,17 @@ pub(super) async fn prompt_startup_plan_mode(
     ctrl_c_notify: &Arc<Notify>,
 ) -> Result<bool> {
     let overlay = TransientRequest::List(ListOverlayRequest {
-        title: "Enter Plan Mode?".to_string(),
+        title: "Start planning workflow?".to_string(),
         lines: vec![
-            "Your configuration sets default editing mode to Plan.".to_string(),
-            "Plan Mode is read-only and blocks mutating tools.".to_string(),
+            "Your configuration starts new sessions in the planning workflow.".to_string(),
+            "The planning workflow keeps mutating tools blocked until execution is approved."
+                .to_string(),
         ],
-        footer_hint: Some("You can toggle later with `/plan`.".to_string()),
+        footer_hint: Some("You can start or finish planning later with `/plan`.".to_string()),
         items: vec![
             InlineListItem {
-                title: "Enter Plan Mode".to_string(),
-                subtitle: Some("Switch to read-only planning.".to_string()),
+                title: "Start planning".to_string(),
+                subtitle: Some("Use the planning workflow before execution.".to_string()),
                 badge: Some("Recommended".to_string()),
                 indent: 0,
                 selection: Some(InlineListSelection::ConfigAction(
@@ -408,8 +403,10 @@ pub(super) async fn prompt_startup_plan_mode(
                 search_value: None,
             },
             InlineListItem {
-                title: "Stay in Edit Mode".to_string(),
-                subtitle: Some("Continue in edit mode.".to_string()),
+                title: "Start normally".to_string(),
+                subtitle: Some(
+                    "Use the selected primary agent without planning first.".to_string(),
+                ),
                 badge: None,
                 indent: 0,
                 selection: Some(InlineListSelection::ConfigAction(

@@ -75,7 +75,7 @@ pub(super) fn maybe_append_plan_mode_reminder(
 
 pub(super) fn inject_plan_mode_interview(
     processing_result: TurnProcessingResult,
-    session_stats: &mut crate::agent::runloop::unified::state::SessionStats,
+    plan_session: &mut crate::agent::runloop::unified::plan_mode_state::PlanModeSessionState,
     conversation_len: usize,
     _response_text: Option<&str>,
     synthesized_interview_args: Option<Value>,
@@ -112,7 +112,7 @@ pub(super) fn inject_plan_mode_interview(
     let call_id = format!("call_plan_interview_{}", conversation_len);
     let call = uni::ToolCall::function(call_id, tools::REQUEST_USER_INPUT.to_string(), args_json);
 
-    session_stats.mark_plan_mode_interview_shown();
+    plan_session.mark_interview_shown();
 
     match processing_result {
         TurnProcessingResult::ToolCalls {
@@ -174,7 +174,7 @@ pub(super) struct InterviewToolCallFilter {
 
 pub(super) fn filter_interview_tool_calls(
     processing_result: TurnProcessingResult,
-    session_stats: &mut crate::agent::runloop::unified::state::SessionStats,
+    plan_session: &mut crate::agent::runloop::unified::plan_mode_state::PlanModeSessionState,
     allow_interview: bool,
     response_has_plan: bool,
     needs_interview: bool,
@@ -218,7 +218,7 @@ pub(super) fn filter_interview_tool_calls(
         && (had_non_interview || !allow_interview)
         && !response_has_plan
     {
-        session_stats.mark_plan_mode_interview_pending();
+        plan_session.mark_interview_pending();
     }
 
     let processing_result = if filtered.is_empty() {

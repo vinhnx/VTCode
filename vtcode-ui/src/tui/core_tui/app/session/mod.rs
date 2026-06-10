@@ -796,8 +796,6 @@ fn to_core_command(command: &InlineCommand) -> Option<crate::tui::core_tui::type
         InlineCommand::ClearInputQueue => CoreCommand::ClearInputQueue,
         InlineCommand::StopEventStream => CoreCommand::StopEventStream,
         InlineCommand::StartEventStream => CoreCommand::StartEventStream,
-        InlineCommand::SetEditingMode(mode) => CoreCommand::SetEditingMode(*mode),
-        InlineCommand::SetAutonomousMode(enabled) => CoreCommand::SetAutonomousMode(*enabled),
         InlineCommand::SetSkipConfirmations(skip) => CoreCommand::SetSkipConfirmations(*skip),
         InlineCommand::Shutdown => CoreCommand::Shutdown,
         InlineCommand::SetReasoningStage(stage) => CoreCommand::SetReasoningStage(stage.clone()),

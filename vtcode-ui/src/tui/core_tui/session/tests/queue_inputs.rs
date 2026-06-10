@@ -178,13 +178,14 @@ fn control_i_toggles_inline_list_visibility() {
 }
 
 #[test]
-fn tab_queues_submission() {
+fn tab_cycles_primary_agent_with_submission_text() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
 
     session.set_input("queued".to_string());
 
-    let queued = session.process_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
-    assert!(matches!(queued, Some(InlineEvent::QueueSubmit(value)) if value == "queued"));
+    let event = session.process_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+    assert!(matches!(event, Some(InlineEvent::CyclePrimaryAgent)));
+    assert_eq!(session.input_manager.content(), "queued");
 }
 
 #[test]
@@ -496,16 +497,14 @@ fn tab_accepts_inline_prompt_suggestion_with_trailing_space_prefix() {
 }
 
 #[test]
-fn tab_queues_when_no_inline_prompt_suggestion_is_visible() {
+fn tab_cycles_primary_agent_when_no_inline_prompt_suggestion_is_visible() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
     session.set_input("Review the current.diff".to_string());
 
     let event = session.process_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
 
-    assert!(matches!(
-        event,
-        Some(InlineEvent::QueueSubmit(ref value)) if value == "Review the current.diff"
-    ));
+    assert!(matches!(event, Some(InlineEvent::CyclePrimaryAgent)));
+    assert_eq!(session.input_manager.content(), "Review the current.diff");
 }
 
 #[test]
@@ -557,11 +556,12 @@ fn busy_control_enter_steers_active_run() {
 }
 
 #[test]
-fn busy_tab_still_queues_submission() {
+fn busy_tab_cycles_primary_agent_without_retargeting_current_run() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
     set_busy_status(&mut session);
     session.set_input("queue this next".to_string());
 
     let event = session.process_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
-    assert!(matches!(event, Some(InlineEvent::QueueSubmit(value)) if value == "queue this next"));
+    assert!(matches!(event, Some(InlineEvent::CyclePrimaryAgent)));
+    assert_eq!(session.input_manager.content(), "queue this next");
 }

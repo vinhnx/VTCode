@@ -186,9 +186,13 @@ pub(crate) async fn initialize_session(
             .await
             .context("Failed to determine workspace trust level for tool policy")?,
     };
-    let autonomous_mode = full_auto;
-    apply_workspace_trust_prompt_policy(&mut tool_registry, autonomous_mode, workspace_trust_level)
-        .await;
+    let auto_permission_review_active = full_auto;
+    apply_workspace_trust_prompt_policy(
+        &mut tool_registry,
+        auto_permission_review_active,
+        workspace_trust_level,
+    )
+    .await;
 
     let subagent_controller = if resume.is_none_or(ResumeSession::is_root_thread)
         && let Some(cfg) = vt_cfg
@@ -590,11 +594,14 @@ async fn maybe_attach_mcp_client(
 
 async fn apply_workspace_trust_prompt_policy(
     tool_registry: &mut ToolRegistry,
-    autonomous_mode: bool,
+    auto_permission_review_active: bool,
     workspace_trust_level: Option<WorkspaceTrustLevel>,
 ) {
-    let enforce_safe_mode_prompts =
-        should_enforce_safe_mode_prompts(false, autonomous_mode, workspace_trust_level);
+    let enforce_safe_mode_prompts = should_enforce_safe_mode_prompts(
+        false,
+        auto_permission_review_active,
+        workspace_trust_level,
+    );
     tool_registry
         .set_enforce_safe_mode_prompts(enforce_safe_mode_prompts)
         .await;

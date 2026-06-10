@@ -4,9 +4,8 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::core::interfaces::session::PlanModeEntrySource;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::dot_config::load_workspace_trust_level;
-use vtcode_ui::tui::app::EditingMode;
 
-use crate::agent::runloop::unified::state::{SessionMode, should_enforce_safe_mode_prompts};
+use crate::agent::runloop::unified::state::should_enforce_safe_mode_prompts;
 
 use super::{SlashCommandContext, SlashCommandControl};
 
@@ -14,22 +13,14 @@ pub(crate) async fn handle_toggle_plan_mode(
     mut ctx: SlashCommandContext<'_>,
     enable: Option<bool>,
 ) -> Result<SlashCommandControl> {
-    let current = ctx.session_stats.is_plan_mode();
+    let current = ctx.tool_registry.is_plan_mode();
     let new_state = match enable {
         Some(value) => value,
         None => !current,
     };
 
     if new_state == current {
-        sync_workspace_trust_prompt_policy(
-            &mut ctx,
-            if current {
-                SessionMode::Plan
-            } else {
-                SessionMode::Edit
-            },
-        )
-        .await?;
+        sync_workspace_trust_prompt_policy(&mut ctx, false).await?;
         ctx.renderer.line(
             MessageStyle::Info,
             if current {
@@ -45,15 +36,14 @@ pub(crate) async fn handle_toggle_plan_mode(
         crate::agent::runloop::unified::plan_mode_state::transition_to_plan_mode(
             ctx.tool_registry,
             ctx.session_stats,
+            ctx.plan_session,
             ctx.handle,
             PlanModeEntrySource::UserRequest,
             true,
             true,
         )
         .await;
-        ctx.header_context.editing_mode = EditingMode::Plan;
-        ctx.header_context.autonomous_mode = false;
-        sync_workspace_trust_prompt_policy(&mut ctx, SessionMode::Plan).await?;
+        sync_workspace_trust_prompt_policy(&mut ctx, false).await?;
         ctx.renderer
             .line(MessageStyle::Info, "Planning workflow started")?;
         ctx.renderer.line(
@@ -75,14 +65,12 @@ pub(crate) async fn handle_toggle_plan_mode(
     } else {
         crate::agent::runloop::unified::plan_mode_state::transition_to_edit_mode(
             ctx.tool_registry,
-            ctx.session_stats,
+            ctx.plan_session,
             ctx.handle,
             true,
         )
         .await;
-        ctx.header_context.editing_mode = EditingMode::Edit;
-        ctx.header_context.autonomous_mode = false;
-        sync_workspace_trust_prompt_policy(&mut ctx, SessionMode::Edit).await?;
+        sync_workspace_trust_prompt_policy(&mut ctx, false).await?;
         ctx.renderer
             .line(MessageStyle::Info, "Planning workflow finished")?;
         ctx.renderer.line(
@@ -125,7 +113,7 @@ fn persist_mode_preference(
 
 async fn sync_workspace_trust_prompt_policy(
     ctx: &mut SlashCommandContext<'_>,
-    mode: SessionMode,
+    auto_permission_review_active: bool,
 ) -> Result<()> {
     let workspace_trust_level = match ctx.session_bootstrap.acp_workspace_trust {
         Some(level) => Some(level.to_workspace_trust_level()),
@@ -133,7 +121,7 @@ async fn sync_workspace_trust_prompt_policy(
     };
     let enforce_safe_mode_prompts = should_enforce_safe_mode_prompts(
         ctx.full_auto,
-        matches!(mode, SessionMode::Auto),
+        auto_permission_review_active,
         workspace_trust_level,
     );
     ctx.tool_registry

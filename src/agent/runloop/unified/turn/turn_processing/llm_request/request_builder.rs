@@ -118,8 +118,8 @@ pub(super) fn capture_turn_request_snapshot(
     tool_free_recovery: bool,
 ) -> TurnRequestSnapshot {
     let prompt_cache_config = &ctx.config.prompt_cache;
-    let plan_mode = ctx.session_stats.is_plan_mode();
-    let auto_mode = ctx.session_stats.is_autonomous_mode();
+    let plan_mode = ctx.is_plan_mode();
+    let auto_mode = ctx.full_auto && !plan_mode;
     let provider_name = ctx.provider_client.name().to_ascii_lowercase();
     let openai_prompt_cache_enabled = is_openai_prompt_cache_enabled(
         &provider_name,

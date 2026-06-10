@@ -1,5 +1,6 @@
 use crate::agent::runloop::mcp_events::McpPanelState;
 use crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter;
+use crate::agent::runloop::unified::plan_mode_state::PlanModeSessionState;
 use crate::agent::runloop::unified::state::SessionStats;
 use crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator;
 use hashbrown::{HashMap, HashSet};
@@ -528,6 +529,7 @@ pub(crate) struct RunLoopContext<'a> {
     pub permissions_state: &'a Arc<RwLock<PermissionsConfig>>,
     pub decision_ledger: &'a Arc<RwLock<DecisionTracker>>,
     pub session_stats: &'a mut SessionStats,
+    pub plan_session: &'a mut PlanModeSessionState,
     pub mcp_panel_state: &'a mut McpPanelState,
     pub approval_recorder: &'a ApprovalRecorder,
     pub session: &'a mut InlineSession,
@@ -558,6 +560,7 @@ impl<'a> RunLoopContext<'a> {
         permissions_state: &'a Arc<RwLock<PermissionsConfig>>,
         decision_ledger: &'a Arc<RwLock<DecisionTracker>>,
         session_stats: &'a mut SessionStats,
+        plan_session: &'a mut PlanModeSessionState,
         mcp_panel_state: &'a mut McpPanelState,
         approval_recorder: &'a ApprovalRecorder,
         session: &'a mut InlineSession,
@@ -576,6 +579,7 @@ impl<'a> RunLoopContext<'a> {
             permissions_state,
             decision_ledger,
             session_stats,
+            plan_session,
             mcp_panel_state,
             approval_recorder,
             session,
@@ -598,6 +602,7 @@ impl<'a> RunLoopContext<'a> {
         permissions_state: &'a Arc<RwLock<PermissionsConfig>>,
         decision_ledger: &'a Arc<RwLock<DecisionTracker>>,
         session_stats: &'a mut SessionStats,
+        plan_session: &'a mut PlanModeSessionState,
         mcp_panel_state: &'a mut McpPanelState,
         approval_recorder: &'a ApprovalRecorder,
         session: &'a mut InlineSession,
@@ -616,6 +621,7 @@ impl<'a> RunLoopContext<'a> {
             permissions_state,
             decision_ledger,
             session_stats,
+            plan_session,
             mcp_panel_state,
             approval_recorder,
             session,

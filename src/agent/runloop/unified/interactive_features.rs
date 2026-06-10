@@ -160,7 +160,7 @@ fn deterministic_prompt_suggestions(
 ) -> Vec<PromptSuggestion> {
     let mut suggestions = Vec::new();
 
-    if session_stats.is_plan_mode() {
+    if tool_registry.is_plan_mode() {
         suggestions.push(PromptSuggestion {
             id: "plan-refine".to_string(),
             title: "Refine the current plan".to_string(),
@@ -590,7 +590,7 @@ fn prompt_suggestion_cache_key(
         route.cache_key(),
         workspace.display(),
         history.len(),
-        session_stats.is_plan_mode(),
+        tool_registry.is_plan_mode(),
         session_stats.task_panel_visible,
         tool_registry.active_pty_sessions(),
         git_status_fragment(workspace),

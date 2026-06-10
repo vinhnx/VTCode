@@ -79,12 +79,8 @@ pub const HEADER_VERSION_PROMPT: &str = "> ";
 pub const HEADER_VERSION_PREFIX: &str = "App";
 pub const HEADER_VERSION_LEFT_DELIMITER: &str = "(";
 pub const HEADER_VERSION_RIGHT_DELIMITER: &str = ")";
-pub const HEADER_MODE_INLINE: &str = "Inline session";
-pub const HEADER_MODE_ALTERNATE: &str = "Alternate session";
-pub const HEADER_MODE_AUTO: &str = "Auto session";
-pub const HEADER_MODE_FULL_AUTO_SUFFIX: &str = " (full)";
-pub const HEADER_MODE_PRIMARY_SEPARATOR: &str = " | ";
-pub const HEADER_MODE_SECONDARY_SEPARATOR: &str = " | ";
+pub const HEADER_PRIMARY_SEPARATOR: &str = " | ";
+pub const HEADER_SECONDARY_SEPARATOR: &str = " | ";
 pub const HEADER_PROVIDER_PREFIX: &str = "Provider: ";
 pub const HEADER_MODEL_PREFIX: &str = "Model: ";
 pub const HEADER_REASONING_PREFIX: &str = "Reasoning effort: ";
@@ -108,7 +104,7 @@ pub const CHAT_INPUT_PLACEHOLDER_BOOTSTRAP: &str =
     vtcode_config::constants::ui::CHAT_INPUT_PLACEHOLDER_BOOTSTRAP;
 pub const CHAT_INPUT_PLACEHOLDER_FOLLOW_UP: &str =
     vtcode_config::constants::ui::CHAT_INPUT_PLACEHOLDER_FOLLOW_UP;
-pub const HEADER_SHORTCUT_HINT: &str = "Shortcuts: Alt+P suggest • Shift+Tab mode • Enter queue • Tab accept/queue • Ctrl+Enter run • Shift+Enter newline • Esc cancel • Ctrl+C interrupt";
+pub const HEADER_SHORTCUT_HINT: &str = "Shortcuts: Alt+P suggest • Tab next agent • Shift+Tab previous agent • Enter queue • Ctrl+Enter run • Shift+Enter newline • Esc cancel • Ctrl+C interrupt";
 pub const HEADER_META_SEPARATOR: &str = "   ";
 pub const WELCOME_TEXT_WIDTH: usize = vtcode_config::constants::ui::WELCOME_TEXT_WIDTH;
 pub const WELCOME_SHORTCUT_SECTION_TITLE: &str =

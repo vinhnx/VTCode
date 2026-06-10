@@ -419,7 +419,6 @@ pub(crate) async fn initialize_session_ui(
             session_bootstrap: &session_state.session_bootstrap,
             provider_client: &*session_state.provider_client,
             header_provider_label,
-            full_auto,
         },
     )
     .await?;

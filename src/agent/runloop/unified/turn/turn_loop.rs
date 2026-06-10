@@ -92,6 +92,7 @@ pub(crate) struct TurnLoopContext<'a> {
     pub handle: &'a InlineHandle,
     pub session: &'a mut InlineSession,
     pub session_stats: &'a mut crate::agent::runloop::unified::state::SessionStats,
+    pub plan_session: &'a mut crate::agent::runloop::unified::plan_mode_state::PlanModeSessionState,
     pub auto_exit_plan_mode_attempted: &'a mut bool,
     pub mcp_panel_state: &'a mut mcp_events::McpPanelState,
     pub tool_result_cache: &'a Arc<RwLock<ToolResultCache>>,
@@ -137,6 +138,7 @@ impl<'a> TurnLoopContext<'a> {
         handle: &'a InlineHandle,
         session: &'a mut InlineSession,
         session_stats: &'a mut crate::agent::runloop::unified::state::SessionStats,
+        plan_session: &'a mut crate::agent::runloop::unified::plan_mode_state::PlanModeSessionState,
         auto_exit_plan_mode_attempted: &'a mut bool,
         mcp_panel_state: &'a mut mcp_events::McpPanelState,
         tool_result_cache: &'a Arc<RwLock<ToolResultCache>>,
@@ -180,6 +182,7 @@ impl<'a> TurnLoopContext<'a> {
             handle,
             session,
             session_stats,
+            plan_session,
             auto_exit_plan_mode_attempted,
             mcp_panel_state,
             tool_result_cache,
@@ -238,6 +241,7 @@ impl<'a> TurnLoopContext<'a> {
             self.permissions_state,
             self.decision_ledger,
             self.session_stats,
+            self.plan_session,
             self.mcp_panel_state,
             self.approval_recorder,
             self.session,
@@ -297,6 +301,7 @@ impl<'a> TurnLoopContext<'a> {
         };
         let state = crate::agent::runloop::unified::turn::context::TurnProcessingState {
             session_stats: self.session_stats,
+            plan_session: self.plan_session,
             auto_exit_plan_mode_attempted: self.auto_exit_plan_mode_attempted,
             mcp_panel_state: self.mcp_panel_state,
             working_history,
@@ -319,7 +324,7 @@ impl<'a> TurnLoopContext<'a> {
     }
 
     pub(crate) fn is_plan_mode(&self) -> bool {
-        self.session_stats.is_plan_mode()
+        self.tool_registry.is_plan_mode()
     }
 
     pub(crate) fn set_phase(&mut self, phase: TurnPhase) {
@@ -615,24 +620,23 @@ pub(crate) async fn run_turn_loop(
 
         {
             if turn_processing_ctx.is_plan_mode() {
-                turn_processing_ctx
-                    .session_stats
-                    .increment_plan_mode_turns();
+                turn_processing_ctx.plan_session.increment_turns();
             }
         }
 
         // Process the LLM response
         let processing_result_outcome = {
-            let allow_plan_interview = turn_processing_ctx.session_stats.is_plan_mode()
+            let allow_plan_interview = turn_processing_ctx.is_plan_mode()
                 && turn_config.request_user_input_enabled
                 && crate::agent::runloop::unified::turn::turn_processing::plan_mode_interview_ready(
                     turn_processing_ctx.session_stats,
+                    turn_processing_ctx.plan_session,
                 );
             process_llm_response(
                 &response,
                 turn_processing_ctx.renderer,
                 turn_processing_ctx.working_history.len(),
-                turn_processing_ctx.session_stats.is_plan_mode(),
+                turn_processing_ctx.is_plan_mode(),
                 allow_plan_interview,
                 turn_config.request_user_input_enabled,
                 !tool_free_recovery,
@@ -722,6 +726,7 @@ pub(crate) async fn run_turn_loop(
                         &processing_result,
                         response.content.as_deref(),
                         turn_processing_ctx.session_stats,
+                        turn_processing_ctx.plan_session,
                     )
             };
             let synthesized_interview_args = if should_attempt_synthesis {
@@ -731,6 +736,7 @@ pub(crate) async fn run_turn_loop(
                     turn_processing_ctx.working_history,
                     response.content.as_deref(),
                     turn_processing_ctx.session_stats,
+                    turn_processing_ctx.plan_session,
                     Some(turn_processing_ctx.tool_registry.plan_mode_state()),
                 )
                 .await
@@ -743,6 +749,7 @@ pub(crate) async fn run_turn_loop(
                     processing_result,
                     response.content.as_deref(),
                     turn_processing_ctx.session_stats,
+                    turn_processing_ctx.plan_session,
                     turn_processing_ctx.working_history.len(),
                     synthesized_interview_args,
                 );

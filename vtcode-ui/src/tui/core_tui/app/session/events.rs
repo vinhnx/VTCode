@@ -452,10 +452,9 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             Some(InlineEvent::Submit("/clear".to_string()))
         }
         KeyCode::BackTab => {
-            // Shift+Tab: Toggle editing mode
             session.clear_inline_prompt_suggestion();
             session.mark_dirty();
-            Some(InlineEvent::ToggleMode)
+            Some(InlineEvent::CyclePrimaryAgentPrevious)
         }
         KeyCode::Esc => {
             if session.has_active_overlay() {
@@ -648,14 +647,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 session.mark_dirty();
                 return Some(InlineEvent::CyclePrimaryAgent);
             }
-
-            let Some(submitted) = take_submitted_input(session) else {
-                session.mark_dirty();
-                return None;
-            };
-            session.push_queued_input(submitted.clone());
-            session.mark_dirty();
-            Some(InlineEvent::QueueSubmit(submitted))
+            None
         }
         KeyCode::Backspace => {
             if session.core.input_enabled() {
@@ -806,13 +798,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                     session.mark_dirty();
                     return Some(InlineEvent::CyclePrimaryAgent);
                 }
-                let Some(submitted) = take_submitted_input(session) else {
-                    session.mark_dirty();
-                    return None;
-                };
-                session.push_queued_input(submitted.clone());
-                session.mark_dirty();
-                return Some(InlineEvent::QueueSubmit(submitted));
+                return None;
             }
 
             if has_command {
@@ -1170,9 +1156,6 @@ fn handle_transcript_review_key(
 
 fn can_cycle_primary_agent(session: &Session, key: &KeyEvent) -> bool {
     key.modifiers == KeyModifiers::NONE
-        && !session.is_running_activity()
-        && session.core.input_manager.content().is_empty()
-        && session.core.queued_inputs.is_empty()
         && session.visible_transient_surface().is_none()
         && !session.has_active_overlay()
 }

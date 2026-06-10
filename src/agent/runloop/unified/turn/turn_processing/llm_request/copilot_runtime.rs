@@ -36,6 +36,7 @@ use crate::agent::runloop::unified::inline_events::harness::{
     HarnessEventEmitter, tool_invocation_completed_event, tool_output_completed_event,
     tool_output_started_event, tool_started_event, tool_updated_event,
 };
+use crate::agent::runloop::unified::plan_mode_state::PlanModeSessionState;
 use crate::agent::runloop::unified::progress::{
     ProgressReporter, ProgressUpdateGuard, spawn_elapsed_time_updater,
 };
@@ -62,6 +63,7 @@ pub(super) struct CopilotRuntimeHost<'a> {
     tool_result_cache: &'a Arc<RwLock<vtcode_core::tools::ToolResultCache>>,
     session: &'a mut InlineSession,
     session_stats: &'a mut SessionStats,
+    plan_session: &'a mut PlanModeSessionState,
     mcp_panel_state: &'a mut McpPanelState,
     handle: &'a InlineHandle,
     ctrl_c_state: &'a Arc<CtrlCState>,
@@ -96,6 +98,7 @@ impl<'a> CopilotRuntimeHost<'a> {
         tool_result_cache: &'a Arc<RwLock<vtcode_core::tools::ToolResultCache>>,
         session: &'a mut InlineSession,
         session_stats: &'a mut SessionStats,
+        plan_session: &'a mut PlanModeSessionState,
         mcp_panel_state: &'a mut McpPanelState,
         handle: &'a InlineHandle,
         ctrl_c_state: &'a Arc<CtrlCState>,
@@ -140,6 +143,7 @@ impl<'a> CopilotRuntimeHost<'a> {
             tool_result_cache,
             session,
             session_stats,
+            plan_session,
             mcp_panel_state,
             handle,
             ctrl_c_state,
@@ -321,6 +325,7 @@ impl<'a> CopilotRuntimeHost<'a> {
                 self.permissions_state,
                 self.decision_ledger,
                 self.session_stats,
+                self.plan_session,
                 self.mcp_panel_state,
                 self.approval_recorder,
                 self.session,

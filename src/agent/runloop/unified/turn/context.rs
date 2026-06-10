@@ -144,7 +144,7 @@ impl PreparedAssistantToolCall {
 
 impl<'a> TurnProcessingContext<'a> {
     pub(crate) fn is_plan_mode(&self) -> bool {
-        self.session_stats.is_plan_mode()
+        self.tool_registry.is_plan_mode()
     }
 
     pub(crate) fn set_phase(

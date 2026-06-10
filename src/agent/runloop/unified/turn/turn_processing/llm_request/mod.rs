@@ -287,6 +287,7 @@ pub(crate) async fn execute_llm_request(
                         ctx.tool_result_cache,
                         ctx.session,
                         ctx.session_stats,
+                        ctx.plan_session,
                         ctx.mcp_panel_state,
                         ctx.handle,
                         ctx.ctrl_c_state,

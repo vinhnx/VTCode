@@ -416,10 +416,13 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 .map(|_| vtcode_core::llm::provider::PromptCacheProfile::BudgetContinuation),
         );
         session_stats.vim_mode_enabled = vt_cfg.as_ref().is_some_and(|cfg| cfg.ui.vim_mode);
+        let mut plan_session =
+            crate::agent::runloop::unified::plan_mode_state::PlanModeSessionState::default();
         if plan_mode_entry_source.should_auto_enter() {
             transition_to_plan_mode(
                 &tool_registry,
                 &mut session_stats,
+                &mut plan_session,
                 &handle,
                 plan_mode_entry_source,
                 true,
@@ -435,6 +438,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 transition_to_plan_mode(
                     &tool_registry,
                     &mut session_stats,
+                    &mut plan_session,
                     &handle,
                     plan_mode_entry_source,
                     true,
@@ -444,14 +448,6 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 render_plan_mode_next_step_hint(&mut renderer)?;
             }
         }
-        if !session_stats.is_plan_mode() {
-            session_stats.set_autonomous_mode(
-                active_primary_agent.active().permissions.default
-                    == vtcode_config::core::permissions::PermissionDefault::Auto,
-            );
-        }
-        header_context.autonomous_mode = session_stats.is_autonomous_mode();
-        handle.set_autonomous_mode(session_stats.is_autonomous_mode());
         let mut linked_directories: Vec<LinkedDirectory> = Vec::with_capacity(4);
         let mut model_picker_state: Option<ModelPickerState> = None;
         let mut palette_state: Option<ActivePalette> = None;
@@ -468,7 +464,9 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 ide_context_bridge.as_ref(),
             ),
         );
-        let mut queued_inputs: VecDeque<String> = VecDeque::with_capacity(8);
+        let mut queued_inputs: VecDeque<
+            crate::agent::runloop::unified::inline_events::QueuedInput,
+        > = VecDeque::with_capacity(8);
         let mut agent_touched_paths = std::collections::BTreeSet::new();
         let mut ctrl_c_notice_displayed = false;
         let mut inline_prompt_cost_notice_shown = false;
@@ -551,6 +549,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     context_manager: &mut context_manager,
                     active_primary_agent: &mut active_primary_agent,
                     session_stats: &mut session_stats,
+                    plan_session: &mut plan_session,
                     mcp_panel_state: &mut mcp_panel_state,
                     linked_directories: &mut linked_directories,
                     lifecycle_hooks: &mut lifecycle_hooks,
@@ -630,7 +629,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                             let plan_seed = load_active_plan_seed(&tool_registry).await;
                             crate::agent::runloop::unified::plan_mode_state::transition_to_edit_mode(
                             &tool_registry,
-                            &mut session_stats,
+                            &mut plan_session,
                             &handle,
                             true,
                         )
@@ -697,7 +696,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 let mut turn_metadata_cache = None;
                 let outcome = match loop {
                     let mut auto_exit_plan_mode_attempted = false;
-                    let plan_mode_active = session_stats.is_plan_mode();
+                    let plan_mode_active = tool_registry.is_plan_mode();
                     let max_tool_calls_per_turn = effective_max_tool_calls_for_turn(
                         harness_config.max_tool_calls_per_turn,
                         plan_mode_active,
@@ -721,6 +720,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                         &handle,
                         &mut session,
                         &mut session_stats,
+                        &mut plan_session,
                         &mut auto_exit_plan_mode_attempted,
                         &mut mcp_panel_state,
                         &tool_result_cache,
@@ -1252,15 +1252,6 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             .as_ref()
             .map(|cfg| cfg.agent.reasoning_effort.as_str().to_string())
             .unwrap_or_else(|| config.reasoning_effort.as_str().to_string());
-        let mode_label = match (config.ui_surface, full_auto) {
-            (vtcode_core::config::types::UiSurfacePreference::Inline, true) => "auto".to_string(),
-            (vtcode_core::config::types::UiSurfacePreference::Inline, false) => {
-                "inline".to_string()
-            }
-            (vtcode_core::config::types::UiSurfacePreference::Alternate, _) => "alt".to_string(),
-            (vtcode_core::config::types::UiSurfacePreference::Auto, true) => "auto".to_string(),
-            (vtcode_core::config::types::UiSurfacePreference::Auto, false) => "std".to_string(),
-        };
         let provider_label = {
             let label = crate::agent::runloop::unified::session_setup::resolve_provider_label(
                 &config,
@@ -1279,13 +1270,6 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 provider_label,
                 reasoning_label,
                 context_window_size: provider_client.effective_context_size(&config.model),
-                mode_label,
-                editing_mode: if session_stats.is_plan_mode() {
-                    vtcode_ui::tui::app::EditingMode::Plan
-                } else {
-                    vtcode_ui::tui::app::EditingMode::Edit
-                },
-                autonomous_mode: session_stats.is_autonomous_mode(),
                 full_auto,
                 primary_agent: Some(active_primary_agent.active().display_name.clone()),
             },

@@ -87,7 +87,7 @@ fn emit_turn_metric_log(
         metric,
         run_id = %ctx.harness_state.run_id.0,
         turn_id = %ctx.harness_state.turn_id.0,
-        plan_mode = ctx.session_stats.is_plan_mode(),
+        plan_mode = ctx.is_plan_mode(),
         tool = %tool_name,
         blocked_streak,
         blocked_cap,

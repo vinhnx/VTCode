@@ -377,7 +377,7 @@ mod tests {
     }
 
     #[test]
-    fn agent_view_hides_deprecated_autonomous_mode_field() {
+    fn agent_view_hides_deprecated_auto_permissions_field() {
         let state = SettingsPaletteState {
             workspace: PathBuf::from("."),
             source_path: PathBuf::from("vtcode.toml"),

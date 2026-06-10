@@ -60,8 +60,8 @@ pub(super) fn record_request_user_input_interview_result(
     let (answered_questions, cancelled) = output
         .map(request_user_input_result_stats)
         .unwrap_or((0, true));
-    ctx.session_stats
-        .record_plan_mode_interview_result(answered_questions, cancelled);
+    ctx.plan_session
+        .record_interview_result(answered_questions, cancelled);
 }
 
 fn normalize_subagent_section_items(lines: &[String]) -> Vec<String> {

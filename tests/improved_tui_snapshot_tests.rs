@@ -9,8 +9,8 @@ use anstyle::Effects;
 use insta::assert_snapshot;
 use ratatui::{Terminal, backend::TestBackend};
 use vtcode_core::ui::{
-    EditingMode, InlineHeaderContext, InlineMessageKind, InlineSegment, InlineTextStyle,
-    InlineTheme, SessionOptions, spawn_session_with_options,
+    InlineHeaderContext, InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme,
+    SessionOptions, spawn_session_with_options,
 };
 
 /// Test actual UI rendering with a full terminal backend simulation
@@ -91,7 +91,6 @@ fn test_header_context_rendering() {
         persistent_memory: None,
         pr_review: None,
         git: "main branch".to_string(),
-        mode: "interactive".to_string(),
         reasoning: "creative".to_string(),
         reasoning_stage: None,
         workspace_trust: "trusted".to_string(),
@@ -101,8 +100,6 @@ fn test_header_context_rendering() {
         highlights: vec![],
         subagent_badges: vec![],
         editor_context: None,
-        editing_mode: EditingMode::default(),
-        autonomous_mode: false,
     };
 
     // Test that the context can be properly represented

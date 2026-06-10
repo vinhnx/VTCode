@@ -150,7 +150,7 @@ impl<'a> TurnProcessingContext<'a> {
         } else {
             evaluate_interim_text_continuation(
                 self.full_auto,
-                self.session_stats.is_plan_mode(),
+                self.is_plan_mode(),
                 self.working_history,
                 &text,
             )
@@ -186,7 +186,7 @@ impl<'a> TurnProcessingContext<'a> {
                 continuation_decision.last_user_requested_progressive_work,
             recovery_pass_response,
             tool_free_recovery_pass,
-            plan_mode = self.session_stats.is_plan_mode(),
+            plan_mode = self.is_plan_mode(),
             full_auto = self.full_auto,
             history_len = self.working_history.len(),
             "turn metric"
@@ -213,7 +213,7 @@ impl<'a> TurnProcessingContext<'a> {
         }
         self.harness_state.stop_hook_active = false;
 
-        if self.session_stats.is_plan_mode()
+        if self.is_plan_mode()
             && let Some(plan_text) = proposed_plan
         {
             self.emit_plan_events(&plan_text).await;

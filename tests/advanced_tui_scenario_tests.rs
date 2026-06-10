@@ -103,7 +103,6 @@ fn test_tui_with_different_header_contexts() {
             InlineHeaderContext {
                 provider: "openai".to_string(),
                 model: "gpt-oss-20b".to_string(),
-                mode: "interactive".to_string(),
                 version: "test-version".to_string(),
                 ..Default::default()
             },
@@ -113,7 +112,6 @@ fn test_tui_with_different_header_contexts() {
             InlineHeaderContext {
                 provider: "anthropic".to_string(),
                 model: "claude-3".to_string(),
-                mode: "full-auto".to_string(),
                 reasoning: "analytical".to_string(),
                 version: "test-version".to_string(),
                 ..Default::default()
@@ -124,7 +122,6 @@ fn test_tui_with_different_header_contexts() {
             InlineHeaderContext {
                 provider: "local".to_string(),
                 model: "llama3".to_string(),
-                mode: "inline".to_string(),
                 version: "test-version".to_string(),
                 ..Default::default()
             },

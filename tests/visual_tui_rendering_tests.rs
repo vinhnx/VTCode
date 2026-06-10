@@ -254,7 +254,6 @@ async fn test_visual_header_variations() {
             InlineHeaderContext {
                 provider: "openai".to_string(),
                 model: "gpt-oss-20b".to_string(),
-                mode: "interactive".to_string(),
                 reasoning: "creative".to_string(),
                 ..Default::default()
             },
@@ -264,7 +263,6 @@ async fn test_visual_header_variations() {
             InlineHeaderContext {
                 provider: "anthropic".to_string(),
                 model: "claude-3".to_string(),
-                mode: "full-auto".to_string(),
                 reasoning: "analytical".to_string(),
                 ..Default::default()
             },
@@ -274,7 +272,6 @@ async fn test_visual_header_variations() {
             InlineHeaderContext {
                 provider: "local".to_string(),
                 model: "llama3".to_string(),
-                mode: "manual".to_string(),
                 reasoning: "precise".to_string(),
                 ..Default::default()
             },

@@ -86,11 +86,6 @@ fn dispatch_action(session: &mut Session, action: Action) -> Option<InlineEvent>
             session.mark_dirty();
             Some(InlineEvent::Submit("/clear".to_string()))
         }
-        Action::ToggleMode => {
-            session.clear_inline_prompt_suggestion();
-            session.mark_dirty();
-            Some(InlineEvent::ToggleMode)
-        }
         Action::ScrollPageUp => {
             session.scroll_page_up();
             session.mark_dirty();
@@ -552,14 +547,16 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 session.mark_dirty();
                 return Some(InlineEvent::CyclePrimaryAgent);
             }
-
-            let Some(submitted) = take_submitted_input(session) else {
-                session.mark_dirty();
+            None
+        }
+        KeyCode::BackTab => {
+            if !session.input_enabled {
                 return None;
-            };
-            session.push_queued_input(submitted.clone());
+            }
+
+            session.clear_inline_prompt_suggestion();
             session.mark_dirty();
-            Some(InlineEvent::QueueSubmit(submitted))
+            Some(InlineEvent::CyclePrimaryAgentPrevious)
         }
         KeyCode::Backspace => {
             if session.input_enabled {
@@ -689,13 +686,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                     session.mark_dirty();
                     return Some(InlineEvent::CyclePrimaryAgent);
                 }
-                let Some(submitted) = take_submitted_input(session) else {
-                    session.mark_dirty();
-                    return None;
-                };
-                session.push_queued_input(submitted.clone());
-                session.mark_dirty();
-                return Some(InlineEvent::QueueSubmit(submitted));
+                return None;
             }
 
             if has_command {
@@ -740,11 +731,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
 }
 
 fn can_cycle_primary_agent(session: &Session, key: &KeyEvent) -> bool {
-    key.modifiers == KeyModifiers::NONE
-        && !session.is_running_activity()
-        && session.input_manager.content().is_empty()
-        && session.queued_inputs.is_empty()
-        && !session.has_active_overlay()
+    key.modifiers == KeyModifiers::NONE && !session.has_active_overlay()
 }
 
 fn take_submitted_input(session: &mut Session) -> Option<String> {

@@ -566,7 +566,6 @@ async fn active_agent_auto_rule_enters_classifier_review() {
     let config = runtime_config();
     let history = vec![uni::Message::user("inspect the project".to_string())];
     let mut session_stats = SessionStats::default();
-    session_stats.set_autonomous_mode(true);
 
     let flow = ensure_tool_permission(
         ToolPermissionsContext {
@@ -1076,7 +1075,6 @@ async fn matching_deny_rule_denies_without_classifier_review() {
     let config = runtime_config();
     let history = vec![uni::Message::user("run the command".to_string())];
     let mut session_stats = SessionStats::default();
-    session_stats.set_autonomous_mode(true);
 
     let flow = ensure_tool_permission(
         ToolPermissionsContext {
@@ -1176,7 +1174,6 @@ async fn auto_mode_headless_fallback_returns_blocked_summary() {
     let agent_permissions = AgentPermissionsConfig::new(PermissionDefault::Auto);
     let history = vec![uni::Message::user("clean up the PR".to_string())];
     let mut session_stats = SessionStats::default();
-    session_stats.set_autonomous_mode(true);
 
     let flow = ensure_tool_permission(
         ToolPermissionsContext {
@@ -1250,7 +1247,6 @@ async fn auto_mode_interactive_fallback_notice_is_emitted_once() {
     let agent_permissions = AgentPermissionsConfig::new(PermissionDefault::Auto);
     let history = vec![uni::Message::user("clean up the PR".to_string())];
     let mut session_stats = SessionStats::default();
-    session_stats.set_autonomous_mode(true);
 
     let first_flow = ensure_tool_permission(
         ToolPermissionsContext {

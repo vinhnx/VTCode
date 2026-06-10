@@ -10,7 +10,7 @@ pub use crate::tui::core_tui::session::mouse_selection::MouseSelectionState;
 pub use crate::tui::core_tui::style::{convert_style, theme_from_styles};
 pub use crate::tui::core_tui::theme_parser::ThemeConfigParser;
 pub use crate::tui::core_tui::types::{
-    ContentPart, EditingMode, FocusChangeCallback, InlineEventCallback, InlineHeaderContext,
+    ContentPart, FocusChangeCallback, InlineEventCallback, InlineHeaderContext,
     InlineHeaderHighlight, InlineHeaderStatusBadge, InlineHeaderStatusTone, InlineLinkRange,
     InlineLinkTarget, InlineListItem, InlineListSearchConfig, InlineListSelection,
     InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme, ListOverlayRequest,

@@ -242,7 +242,7 @@ fn maybe_activate_turn_timeout_recovery(ctx: &mut TurnProcessingContext<'_>) {
         .unwrap_or(300);
     let reserve = Duration::from_secs(llm_attempt_timeout_secs(
         configured_turn_timeout_secs.max(1),
-        ctx.session_stats.is_plan_mode(),
+        ctx.is_plan_mode(),
         ctx.provider_client.name(),
     ));
     if !ctx
@@ -412,7 +412,7 @@ pub(crate) async fn handle_turn_balancer(
         ctx.working_history.push(uni::Message::system(format!(
             "{} {}",
             recovery_reason,
-            navigation_loop_guidance(ctx.session_stats.is_plan_mode(), recurrence)
+            navigation_loop_guidance(ctx.is_plan_mode(), recurrence)
         )));
         return apply_balancer_recovery(repeated_tool_attempts);
     }

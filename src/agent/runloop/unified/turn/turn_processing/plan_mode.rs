@@ -13,6 +13,8 @@ use vtcode_core::config::constants::tools;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::handlers::plan_mode::{PlanModeState, validate_plan_content};
 
+use crate::agent::runloop::unified::plan_mode_state::PlanModeSessionState;
+
 #[path = "plan_mode/interview_context.rs"]
 mod interview_context;
 #[path = "plan_mode/interview_forcing.rs"]
@@ -70,20 +72,22 @@ fn has_discovery_tool(session_stats: &crate::agent::runloop::unified::state::Ses
 
 pub(crate) fn plan_mode_interview_ready(
     session_stats: &crate::agent::runloop::unified::state::SessionStats,
+    plan_session: &PlanModeSessionState,
 ) -> bool {
     has_discovery_tool(session_stats)
-        && session_stats.plan_mode_turns() >= MIN_PLAN_MODE_TURNS_BEFORE_INTERVIEW
+        && plan_session.turns() >= MIN_PLAN_MODE_TURNS_BEFORE_INTERVIEW
 }
 
 pub(crate) fn should_attempt_dynamic_interview_generation(
     processing_result: &TurnProcessingResult,
     response_text: Option<&str>,
     session_stats: &crate::agent::runloop::unified::state::SessionStats,
+    plan_session: &PlanModeSessionState,
 ) -> bool {
     let response_has_plan = response_text
         .map(|text| text.contains("<proposed_plan>"))
         .unwrap_or(false);
-    if !plan_mode_interview_ready(session_stats) && !response_has_plan {
+    if !plan_mode_interview_ready(session_stats, plan_session) && !response_has_plan {
         return false;
     }
 
@@ -91,13 +95,13 @@ pub(crate) fn should_attempt_dynamic_interview_generation(
         return false;
     }
 
-    let need_state = interview_need_state(response_text, session_stats);
+    let need_state = interview_need_state(response_text, plan_session);
 
     if need_state.response_has_plan {
         return need_state.needs_interview;
     }
 
-    if session_stats.plan_mode_interview_pending() {
+    if plan_session.interview_pending() {
         return need_state.needs_interview;
     }
 
@@ -106,7 +110,7 @@ pub(crate) fn should_attempt_dynamic_interview_generation(
 
 fn interview_need_state(
     response_text: Option<&str>,
-    session_stats: &crate::agent::runloop::unified::state::SessionStats,
+    plan_session: &PlanModeSessionState,
 ) -> InterviewNeedState {
     let response_has_plan = response_text
         .map(|text| text.contains("<proposed_plan>"))
@@ -114,8 +118,8 @@ fn interview_need_state(
     let has_open_decisions = response_text
         .map(has_open_decision_markers)
         .unwrap_or(false);
-    let has_completed_interview = session_stats.plan_mode_interview_cycles_completed() > 0;
-    let interview_cancelled = session_stats.plan_mode_last_interview_cancelled();
+    let has_completed_interview = plan_session.interview_cycles_completed() > 0;
+    let interview_cancelled = plan_session.last_interview_cancelled();
 
     InterviewNeedState {
         response_has_plan,
@@ -129,6 +133,7 @@ pub(crate) async fn synthesize_plan_mode_interview_args(
     working_history: &[uni::Message],
     response_text: Option<&str>,
     session_stats: &crate::agent::runloop::unified::state::SessionStats,
+    _plan_session: &PlanModeSessionState,
     plan_state: Option<PlanModeState>,
 ) -> Option<Value> {
     let plan_context = load_plan_draft_context(plan_state).await;
@@ -219,17 +224,18 @@ pub(crate) fn maybe_force_plan_mode_interview(
     processing_result: TurnProcessingResult,
     response_text: Option<&str>,
     session_stats: &mut crate::agent::runloop::unified::state::SessionStats,
+    plan_session: &mut PlanModeSessionState,
     conversation_len: usize,
     synthesized_interview_args: Option<Value>,
 ) -> TurnProcessingResult {
-    let allow_interview = plan_mode_interview_ready(session_stats);
-    let need_state = interview_need_state(response_text, session_stats);
+    let allow_interview = plan_mode_interview_ready(session_stats, plan_session);
+    let need_state = interview_need_state(response_text, plan_session);
     let response_has_plan = need_state.response_has_plan;
 
     if response_has_plan {
         let processing_result = filter_interview_tool_calls(
             processing_result,
-            session_stats,
+            plan_session,
             allow_interview,
             response_has_plan,
             need_state.needs_interview,
@@ -240,7 +246,7 @@ pub(crate) fn maybe_force_plan_mode_interview(
             let stripped = strip_assistant_text(processing_result);
             return inject_plan_mode_interview(
                 stripped,
-                session_stats,
+                plan_session,
                 conversation_len,
                 response_text,
                 synthesized_interview_args,
@@ -252,7 +258,7 @@ pub(crate) fn maybe_force_plan_mode_interview(
 
     let filter_outcome = filter_interview_tool_calls(
         processing_result,
-        session_stats,
+        plan_session,
         allow_interview,
         response_has_plan,
         need_state.needs_interview,
@@ -261,14 +267,14 @@ pub(crate) fn maybe_force_plan_mode_interview(
     let has_interview_tool_calls = filter_outcome.had_interview_tool_calls;
     let has_non_interview_tool_calls = filter_outcome.had_non_interview_tool_calls;
 
-    if session_stats.plan_mode_interview_pending() {
+    if plan_session.interview_pending() {
         if !need_state.needs_interview {
-            session_stats.clear_plan_mode_interview_pending();
+            plan_session.clear_interview_pending();
             return processing_result;
         }
 
         if has_interview_tool_calls && allow_interview {
-            session_stats.mark_plan_mode_interview_shown();
+            plan_session.mark_interview_shown();
             return processing_result;
         }
 
@@ -282,7 +288,7 @@ pub(crate) fn maybe_force_plan_mode_interview(
 
         return inject_plan_mode_interview(
             processing_result,
-            session_stats,
+            plan_session,
             conversation_len,
             response_text,
             synthesized_interview_args,
@@ -294,23 +300,23 @@ pub(crate) fn maybe_force_plan_mode_interview(
         .unwrap_or(false);
     if explicit_questions {
         if allow_interview {
-            session_stats.mark_plan_mode_interview_shown();
+            plan_session.mark_interview_shown();
         }
         return processing_result;
     }
 
     if has_interview_tool_calls {
         if allow_interview {
-            session_stats.mark_plan_mode_interview_shown();
+            plan_session.mark_interview_shown();
         } else {
-            session_stats.mark_plan_mode_interview_pending();
+            plan_session.mark_interview_pending();
         }
         return processing_result;
     }
 
     if has_non_interview_tool_calls {
         if need_state.needs_interview {
-            session_stats.mark_plan_mode_interview_pending();
+            plan_session.mark_interview_pending();
         }
         return processing_result;
     }
@@ -321,7 +327,7 @@ pub(crate) fn maybe_force_plan_mode_interview(
 
     inject_plan_mode_interview(
         processing_result,
-        session_stats,
+        plan_session,
         conversation_len,
         response_text,
         synthesized_interview_args,

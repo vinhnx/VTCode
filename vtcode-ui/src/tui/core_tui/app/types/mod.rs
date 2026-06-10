@@ -20,7 +20,7 @@ pub use protocol::{
 pub use slash::SlashCommandItem;
 
 pub use crate::tui::core_tui::types::{
-    ContentPart, EditingMode, FocusChangeCallback, InlineHeaderBadge, InlineHeaderContext,
+    ContentPart, FocusChangeCallback, InlineHeaderBadge, InlineHeaderContext,
     InlineHeaderHighlight, InlineHeaderStatusBadge, InlineHeaderStatusTone, InlineLinkRange,
     InlineLinkTarget, InlineListItem, InlineListSearchConfig, InlineListSelection,
     InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme, LocalAgentEntry,

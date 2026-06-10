@@ -100,9 +100,7 @@ fn resolve_tool_loop_limit(configured_limit: usize, plan_mode_active: bool) -> u
 }
 
 fn plan_mode_fully_disabled(ctx: &TurnLoopContext<'_>) -> bool {
-    !ctx.session_stats.is_plan_mode()
-        && !ctx.tool_registry.is_plan_mode()
-        && !ctx.tool_registry.plan_mode_state().is_active()
+    !ctx.tool_registry.is_plan_mode() && !ctx.tool_registry.plan_mode_state().is_active()
 }
 
 fn configured_tool_loop_base_limit(ctx: &TurnLoopContext<'_>) -> usize {
@@ -111,7 +109,7 @@ fn configured_tool_loop_base_limit(ctx: &TurnLoopContext<'_>) -> usize {
         .map(|cfg| cfg.tools.max_tool_loops)
         .filter(|limit| *limit > 0)
         .unwrap_or(DEFAULT_MAX_TOOL_LOOPS);
-    if ctx.session_stats.is_plan_mode() {
+    if ctx.is_plan_mode() {
         configured.max(PLAN_MODE_MIN_TOOL_LOOPS)
     } else {
         configured
@@ -164,7 +162,7 @@ fn emit_loop_hard_cap_break_metric(
         reason,
         run_id = %ctx.harness_state.run_id.0,
         turn_id = %ctx.harness_state.turn_id.0,
-        plan_mode = ctx.session_stats.is_plan_mode(),
+        plan_mode = ctx.is_plan_mode(),
         step_count,
         current_limit,
         base_limit,
@@ -342,7 +340,7 @@ pub(super) async fn maybe_handle_plan_mode_exit_trigger(
     step_count: usize,
     result: &mut TurnLoopResult,
 ) -> Result<bool> {
-    if !ctx.session_stats.is_plan_mode() {
+    if !ctx.is_plan_mode() {
         return Ok(false);
     }
 
@@ -425,7 +423,7 @@ pub(super) async fn maybe_handle_plan_mode_enter_trigger(
     step_count: usize,
     result: &mut TurnLoopResult,
 ) -> Result<bool> {
-    if ctx.session_stats.is_plan_mode() {
+    if ctx.is_plan_mode() {
         return Ok(false);
     }
 
@@ -477,7 +475,7 @@ pub(super) async fn maybe_handle_plan_mode_enter_trigger(
     )
     .await
     {
-        Ok(_) if ctx.session_stats.is_plan_mode() => Ok(false),
+        Ok(_) if ctx.is_plan_mode() => Ok(false),
         Ok(_) => {
             *result = TurnLoopResult::Completed;
             Ok(true)
@@ -689,7 +687,7 @@ pub(super) async fn maybe_handle_tool_loop_limit(
         &format!("Reached maximum tool loops ({})", *current_max_tool_loops),
     )?;
 
-    let plan_mode_active = ctx.session_stats.is_plan_mode();
+    let plan_mode_active = ctx.is_plan_mode();
     let base_limit = configured_tool_loop_base_limit(ctx);
     let hard_cap = tool_loop_hard_cap(base_limit, plan_mode_active);
     if *current_max_tool_loops >= hard_cap {

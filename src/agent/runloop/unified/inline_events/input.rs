@@ -20,6 +20,7 @@ impl<'a, 'state> InlineInputProcessor<'a, 'state> {
         self,
         text: String,
         queue: &mut InlineQueueState<'_>,
+        primary_agent: Option<String>,
     ) -> InlineLoopAction {
         self.state.reset_interrupt_state();
         let trimmed = text.trim().to_string();
@@ -27,7 +28,7 @@ impl<'a, 'state> InlineInputProcessor<'a, 'state> {
             return InlineLoopAction::Continue;
         }
 
-        queue.push(trimmed);
+        queue.push(trimmed, primary_agent);
         InlineLoopAction::Continue
     }
 

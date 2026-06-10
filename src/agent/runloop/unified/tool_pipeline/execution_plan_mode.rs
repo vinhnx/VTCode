@@ -124,6 +124,7 @@ pub(super) async fn handle_enter_plan_mode(
             transition_to_plan_mode(
                 ctx.tool_registry,
                 ctx.session_stats,
+                ctx.plan_session,
                 ctx.handle,
                 PlanModeEntrySource::UserRequest,
                 false,
@@ -194,7 +195,7 @@ pub(super) async fn handle_exit_plan_mode(
                 );
             }
             ExitPlanModeDisposition::AutoAccept => {
-                transition_to_edit_mode(ctx.tool_registry, ctx.session_stats, ctx.handle, true)
+                transition_to_edit_mode(ctx.tool_registry, ctx.plan_session, ctx.handle, true)
                     .await;
                 tracing::info!(
                     target: "vtcode.plan_mode",
@@ -248,7 +249,7 @@ async fn handle_pending_confirmation(
                 outcome,
                 PlanConfirmationOutcome::Execute | PlanConfirmationOutcome::AutoAccept
             ) {
-                transition_to_edit_mode(ctx.tool_registry, ctx.session_stats, ctx.handle, true)
+                transition_to_edit_mode(ctx.tool_registry, ctx.plan_session, ctx.handle, true)
                     .await;
                 ctx.handle
                     .set_skip_confirmations(matches!(outcome, PlanConfirmationOutcome::AutoAccept));
@@ -431,6 +432,7 @@ async fn handle_enter_pending_confirmation(
             transition_to_plan_mode(
                 ctx.tool_registry,
                 ctx.session_stats,
+                ctx.plan_session,
                 ctx.handle,
                 PlanModeEntrySource::UserRequest,
                 false,

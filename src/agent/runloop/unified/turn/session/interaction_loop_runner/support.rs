@@ -733,8 +733,18 @@ pub(super) async fn resolve_inline_loop_action(
     let resolution = match inline_action {
         InlineLoopAction::Continue => InlineLoopActionResolution::ContinueLoop,
         InlineLoopAction::Submit(text) => InlineLoopActionResolution::Submit(text),
+        InlineLoopAction::SubmitQueued(queued) => {
+            if let Some(primary_agent) = queued.primary_agent {
+                handle_select_primary_agent(ctx, state, Some(primary_agent)).await?;
+            }
+            InlineLoopActionResolution::Submit(queued.text)
+        }
         InlineLoopAction::CyclePrimaryAgent => {
             handle_cycle_primary_agent(ctx, state).await?;
+            InlineLoopActionResolution::ContinueLoop
+        }
+        InlineLoopAction::CyclePrimaryAgentPrevious => {
+            handle_cycle_primary_agent_previous(ctx, state).await?;
             InlineLoopActionResolution::ContinueLoop
         }
         InlineLoopAction::SelectPrimaryAgent { name } => {
@@ -762,15 +772,14 @@ pub(super) async fn resolve_inline_loop_action(
             } else {
                 "manual edit approvals"
             };
-            let message =
-                format!("Plan approved. Switching to Edit Mode and starting execution ({mode}).");
+            let message = format!("Plan approved. Starting execution ({mode}).");
             ctx.renderer.line(MessageStyle::Info, &message)?;
             InlineLoopActionResolution::Outcome(InteractionOutcome::PlanApproved { auto_accept })
         }
         InlineLoopAction::PlanEditRequested => {
             ctx.renderer.line(
                 MessageStyle::Info,
-                "Staying in Plan Mode. Continue refining the plan.",
+                "Continuing the planning workflow. Refine the plan before execution.",
             )?;
             InlineLoopActionResolution::ContinueLoop
         }
@@ -829,6 +838,23 @@ async fn handle_cycle_primary_agent(
         return Ok(());
     };
     match next_primary_agent_name(ctx.active_primary_agent.active(), &specs) {
+        Some(name) => handle_select_primary_agent(ctx, state, Some(name)).await,
+        None => {
+            ctx.renderer
+                .line(MessageStyle::Error, "No primary agents are available.")?;
+            Ok(())
+        }
+    }
+}
+
+async fn handle_cycle_primary_agent_previous(
+    ctx: &mut InteractionLoopContext<'_>,
+    state: &mut InteractionState<'_>,
+) -> Result<()> {
+    let Some(specs) = load_primary_agent_specs_or_report(ctx).await? else {
+        return Ok(());
+    };
+    match previous_primary_agent_name(ctx.active_primary_agent.active(), &specs) {
         Some(name) => handle_select_primary_agent(ctx, state, Some(name)).await,
         None => {
             ctx.renderer
@@ -1005,15 +1031,7 @@ fn next_primary_agent_name(
     active: &vtcode_core::primary_agent::ActivePrimaryAgent,
     specs: &[vtcode_config::SubagentSpec],
 ) -> Option<String> {
-    let mut names = specs
-        .iter()
-        .filter(|spec| spec.is_primary())
-        .map(|spec| spec.name.trim())
-        .filter(|name| !name.is_empty())
-        .map(str::to_string)
-        .collect::<Vec<_>>();
-    names.sort_by_key(|name| name.to_ascii_lowercase());
-    names.dedup_by(|left, right| left.eq_ignore_ascii_case(right));
+    let names = primary_agent_names(specs);
 
     if names.is_empty() {
         return None;
@@ -1025,6 +1043,37 @@ fn next_primary_agent_name(
             Some(_) | None => names[0].clone(),
         },
     )
+}
+
+fn previous_primary_agent_name(
+    active: &vtcode_core::primary_agent::ActivePrimaryAgent,
+    specs: &[vtcode_config::SubagentSpec],
+) -> Option<String> {
+    let names = primary_agent_names(specs);
+
+    if names.is_empty() {
+        return None;
+    }
+
+    Some(
+        match names.iter().position(|name| name == &active.identity.name) {
+            Some(0) | None => names[names.len() - 1].clone(),
+            Some(index) => names[index - 1].clone(),
+        },
+    )
+}
+
+fn primary_agent_names(specs: &[vtcode_config::SubagentSpec]) -> Vec<String> {
+    let mut names = specs
+        .iter()
+        .filter(|spec| spec.is_primary())
+        .map(|spec| spec.name.trim())
+        .filter(|name| !name.is_empty())
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    names.sort_by_key(|name| name.to_ascii_lowercase());
+    names.dedup_by(|left, right| left.eq_ignore_ascii_case(right));
+    names
 }
 
 #[cfg(test)]

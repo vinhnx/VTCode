@@ -27,6 +27,8 @@ async fn test_run_tool_call_unknown_tool_failure() {
     let result_cache = Arc::new(tokio::sync::RwLock::new(ToolResultCache::new(10)));
     let decision_ledger = Arc::new(tokio::sync::RwLock::new(DecisionTracker::new()));
     let mut session_stats = crate::agent::runloop::unified::state::SessionStats::default();
+    let mut plan_session =
+        crate::agent::runloop::unified::plan_mode_state::PlanModeSessionState::default();
     let mut mcp_panel = crate::agent::runloop::mcp_events::McpPanelState::new(10, true);
     let approval_recorder = test_ctx.approval_recorder;
     let traj = TrajectoryLogger::new(&test_ctx.workspace);
@@ -43,6 +45,7 @@ async fn test_run_tool_call_unknown_tool_failure() {
         &test_ctx.permissions_state,
         &decision_ledger,
         &mut session_stats,
+        &mut plan_session,
         &mut mcp_panel,
         &approval_recorder,
         &mut test_ctx.session,
@@ -91,6 +94,8 @@ async fn test_run_tool_call_respects_max_tool_calls_budget() {
     let result_cache = Arc::new(tokio::sync::RwLock::new(ToolResultCache::new(10)));
     let decision_ledger = Arc::new(tokio::sync::RwLock::new(DecisionTracker::new()));
     let mut session_stats = crate::agent::runloop::unified::state::SessionStats::default();
+    let mut plan_session =
+        crate::agent::runloop::unified::plan_mode_state::PlanModeSessionState::default();
     let mut mcp_panel = crate::agent::runloop::mcp_events::McpPanelState::new(10, true);
     let approval_recorder = test_ctx.approval_recorder;
     let traj = TrajectoryLogger::new(&test_ctx.workspace);
@@ -108,6 +113,7 @@ async fn test_run_tool_call_respects_max_tool_calls_budget() {
         &test_ctx.permissions_state,
         &decision_ledger,
         &mut session_stats,
+        &mut plan_session,
         &mut mcp_panel,
         &approval_recorder,
         &mut test_ctx.session,
@@ -164,6 +170,8 @@ async fn test_run_tool_call_allows_unlimited_budget_when_disabled() {
     let result_cache = Arc::new(tokio::sync::RwLock::new(ToolResultCache::new(10)));
     let decision_ledger = Arc::new(tokio::sync::RwLock::new(DecisionTracker::new()));
     let mut session_stats = crate::agent::runloop::unified::state::SessionStats::default();
+    let mut plan_session =
+        crate::agent::runloop::unified::plan_mode_state::PlanModeSessionState::default();
     let mut mcp_panel = crate::agent::runloop::mcp_events::McpPanelState::new(10, true);
     let approval_recorder = test_ctx.approval_recorder;
     let traj = TrajectoryLogger::new(&test_ctx.workspace);
@@ -183,6 +191,7 @@ async fn test_run_tool_call_allows_unlimited_budget_when_disabled() {
         &test_ctx.permissions_state,
         &decision_ledger,
         &mut session_stats,
+        &mut plan_session,
         &mut mcp_panel,
         &approval_recorder,
         &mut test_ctx.session,
@@ -233,6 +242,8 @@ async fn test_run_tool_call_forwards_runtime_agent_permissions_to_routing() {
     let result_cache = Arc::new(tokio::sync::RwLock::new(ToolResultCache::new(10)));
     let decision_ledger = Arc::new(tokio::sync::RwLock::new(DecisionTracker::new()));
     let mut session_stats = crate::agent::runloop::unified::state::SessionStats::default();
+    let mut plan_session =
+        crate::agent::runloop::unified::plan_mode_state::PlanModeSessionState::default();
     let mut mcp_panel = crate::agent::runloop::mcp_events::McpPanelState::new(10, true);
     let approval_recorder = test_ctx.approval_recorder;
     let traj = TrajectoryLogger::new(&test_ctx.workspace);
@@ -250,6 +261,7 @@ async fn test_run_tool_call_forwards_runtime_agent_permissions_to_routing() {
         &test_ctx.permissions_state,
         &decision_ledger,
         &mut session_stats,
+        &mut plan_session,
         &mut mcp_panel,
         &approval_recorder,
         &mut test_ctx.session,
@@ -313,6 +325,8 @@ async fn test_run_tool_call_prevalidated_blocks_mutation_in_plan_mode() {
     let result_cache = Arc::new(tokio::sync::RwLock::new(ToolResultCache::new(10)));
     let decision_ledger = Arc::new(tokio::sync::RwLock::new(DecisionTracker::new()));
     let mut session_stats = crate::agent::runloop::unified::state::SessionStats::default();
+    let mut plan_session =
+        crate::agent::runloop::unified::plan_mode_state::PlanModeSessionState::default();
     let mut mcp_panel = crate::agent::runloop::mcp_events::McpPanelState::new(10, true);
     let approval_recorder = test_ctx.approval_recorder;
     let traj = TrajectoryLogger::new(&test_ctx.workspace);
@@ -320,7 +334,7 @@ async fn test_run_tool_call_prevalidated_blocks_mutation_in_plan_mode() {
 
     registry.enable_plan_mode();
     registry.plan_mode_state().enable();
-    session_stats.set_plan_mode(true);
+    plan_session.enter(vtcode_core::core::interfaces::session::PlanModeEntrySource::UserRequest);
 
     let mut harness_state = build_harness_state();
     let mut ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext::new(
@@ -333,6 +347,7 @@ async fn test_run_tool_call_prevalidated_blocks_mutation_in_plan_mode() {
         &test_ctx.permissions_state,
         &decision_ledger,
         &mut session_stats,
+        &mut plan_session,
         &mut mcp_panel,
         &approval_recorder,
         &mut test_ctx.session,
@@ -378,7 +393,6 @@ async fn test_run_tool_call_prevalidated_blocks_mutation_in_plan_mode() {
         }
         other => panic!("Expected plan mode failure, got: {:?}", other),
     }
-    assert!(session_stats.is_plan_mode());
     assert!(registry.is_plan_mode());
     assert!(registry.plan_mode_state().is_active());
 }
@@ -392,6 +406,8 @@ async fn test_run_tool_call_prevalidated_allows_task_tracker_in_plan_mode() {
     let result_cache = Arc::new(tokio::sync::RwLock::new(ToolResultCache::new(10)));
     let decision_ledger = Arc::new(tokio::sync::RwLock::new(DecisionTracker::new()));
     let mut session_stats = crate::agent::runloop::unified::state::SessionStats::default();
+    let mut plan_session =
+        crate::agent::runloop::unified::plan_mode_state::PlanModeSessionState::default();
     let mut mcp_panel = crate::agent::runloop::mcp_events::McpPanelState::new(10, true);
     let approval_recorder = test_ctx.approval_recorder;
     let traj = TrajectoryLogger::new(&test_ctx.workspace);
@@ -399,7 +415,7 @@ async fn test_run_tool_call_prevalidated_allows_task_tracker_in_plan_mode() {
 
     registry.enable_plan_mode();
     registry.plan_mode_state().enable();
-    session_stats.set_plan_mode(true);
+    plan_session.enter(vtcode_core::core::interfaces::session::PlanModeEntrySource::UserRequest);
 
     let plans_dir = test_ctx.workspace.join(".vtcode").join("plans");
     std::fs::create_dir_all(&plans_dir).expect("create plans dir");
@@ -421,6 +437,7 @@ async fn test_run_tool_call_prevalidated_allows_task_tracker_in_plan_mode() {
         &test_ctx.permissions_state,
         &decision_ledger,
         &mut session_stats,
+        &mut plan_session,
         &mut mcp_panel,
         &approval_recorder,
         &mut test_ctx.session,
@@ -477,6 +494,8 @@ async fn test_run_tool_call_non_prevalidated_allows_task_tracker_in_plan_mode_an
     let result_cache = Arc::new(tokio::sync::RwLock::new(ToolResultCache::new(10)));
     let decision_ledger = Arc::new(tokio::sync::RwLock::new(DecisionTracker::new()));
     let mut session_stats = crate::agent::runloop::unified::state::SessionStats::default();
+    let mut plan_session =
+        crate::agent::runloop::unified::plan_mode_state::PlanModeSessionState::default();
     let mut mcp_panel = crate::agent::runloop::mcp_events::McpPanelState::new(10, true);
     let approval_recorder = test_ctx.approval_recorder;
     let traj = TrajectoryLogger::new(&test_ctx.workspace);
@@ -484,7 +503,7 @@ async fn test_run_tool_call_non_prevalidated_allows_task_tracker_in_plan_mode_an
 
     registry.enable_plan_mode();
     registry.plan_mode_state().enable();
-    session_stats.set_plan_mode(true);
+    plan_session.enter(vtcode_core::core::interfaces::session::PlanModeEntrySource::UserRequest);
 
     let plans_dir = test_ctx.workspace.join(".vtcode").join("plans");
     std::fs::create_dir_all(&plans_dir).expect("create plans dir");
@@ -506,6 +525,7 @@ async fn test_run_tool_call_non_prevalidated_allows_task_tracker_in_plan_mode_an
         &test_ctx.permissions_state,
         &decision_ledger,
         &mut session_stats,
+        &mut plan_session,
         &mut mcp_panel,
         &approval_recorder,
         &mut test_ctx.session,
@@ -564,6 +584,8 @@ async fn test_run_tool_call_invalid_preflight_does_not_consume_budget() {
     let result_cache = Arc::new(tokio::sync::RwLock::new(ToolResultCache::new(10)));
     let decision_ledger = Arc::new(tokio::sync::RwLock::new(DecisionTracker::new()));
     let mut session_stats = crate::agent::runloop::unified::state::SessionStats::default();
+    let mut plan_session =
+        crate::agent::runloop::unified::plan_mode_state::PlanModeSessionState::default();
     let mut mcp_panel = crate::agent::runloop::mcp_events::McpPanelState::new(10, true);
     let approval_recorder = test_ctx.approval_recorder;
     let traj = TrajectoryLogger::new(&test_ctx.workspace);
@@ -580,6 +602,7 @@ async fn test_run_tool_call_invalid_preflight_does_not_consume_budget() {
         &test_ctx.permissions_state,
         &decision_ledger,
         &mut session_stats,
+        &mut plan_session,
         &mut mcp_panel,
         &approval_recorder,
         &mut test_ctx.session,
@@ -657,6 +680,8 @@ async fn test_run_tool_call_unified_exec_git_diff_uses_cache_on_repeat() {
     let result_cache = Arc::new(tokio::sync::RwLock::new(ToolResultCache::new(32)));
     let decision_ledger = Arc::new(tokio::sync::RwLock::new(DecisionTracker::new()));
     let mut session_stats = crate::agent::runloop::unified::state::SessionStats::default();
+    let mut plan_session =
+        crate::agent::runloop::unified::plan_mode_state::PlanModeSessionState::default();
     let mut mcp_panel = crate::agent::runloop::mcp_events::McpPanelState::new(10, true);
     let approval_recorder = test_ctx.approval_recorder;
     let traj = TrajectoryLogger::new(&test_ctx.workspace);
@@ -673,6 +698,7 @@ async fn test_run_tool_call_unified_exec_git_diff_uses_cache_on_repeat() {
         &test_ctx.permissions_state,
         &decision_ledger,
         &mut session_stats,
+        &mut plan_session,
         &mut mcp_panel,
         &approval_recorder,
         &mut test_ctx.session,
@@ -794,6 +820,8 @@ async fn test_run_tool_call_rejects_escalated_shell_when_hitl_disabled() {
     let result_cache = Arc::new(tokio::sync::RwLock::new(ToolResultCache::new(10)));
     let decision_ledger = Arc::new(tokio::sync::RwLock::new(DecisionTracker::new()));
     let mut session_stats = crate::agent::runloop::unified::state::SessionStats::default();
+    let mut plan_session =
+        crate::agent::runloop::unified::plan_mode_state::PlanModeSessionState::default();
     let mut mcp_panel = crate::agent::runloop::mcp_events::McpPanelState::new(10, true);
     let approval_recorder = test_ctx.approval_recorder;
     let traj = TrajectoryLogger::new(&test_ctx.workspace);
@@ -810,6 +838,7 @@ async fn test_run_tool_call_rejects_escalated_shell_when_hitl_disabled() {
         &test_ctx.permissions_state,
         &decision_ledger,
         &mut session_stats,
+        &mut plan_session,
         &mut mcp_panel,
         &approval_recorder,
         &mut test_ctx.session,
@@ -871,6 +900,8 @@ async fn test_run_tool_call_allows_escalated_shell_with_saved_prefix_rule() {
     let result_cache = Arc::new(tokio::sync::RwLock::new(ToolResultCache::new(10)));
     let decision_ledger = Arc::new(tokio::sync::RwLock::new(DecisionTracker::new()));
     let mut session_stats = crate::agent::runloop::unified::state::SessionStats::default();
+    let mut plan_session =
+        crate::agent::runloop::unified::plan_mode_state::PlanModeSessionState::default();
     let mut mcp_panel = crate::agent::runloop::mcp_events::McpPanelState::new(10, true);
     let approval_recorder = test_ctx.approval_recorder;
     let traj = TrajectoryLogger::new(&test_ctx.workspace);
@@ -887,6 +918,7 @@ async fn test_run_tool_call_allows_escalated_shell_with_saved_prefix_rule() {
         &test_ctx.permissions_state,
         &decision_ledger,
         &mut session_stats,
+        &mut plan_session,
         &mut mcp_panel,
         &approval_recorder,
         &mut test_ctx.session,
@@ -959,6 +991,8 @@ async fn test_run_tool_call_reuses_streamed_invocation_item_without_duplicate_st
     let result_cache = Arc::new(tokio::sync::RwLock::new(ToolResultCache::new(10)));
     let decision_ledger = Arc::new(tokio::sync::RwLock::new(DecisionTracker::new()));
     let mut session_stats = crate::agent::runloop::unified::state::SessionStats::default();
+    let mut plan_session =
+        crate::agent::runloop::unified::plan_mode_state::PlanModeSessionState::default();
     let mut mcp_panel = crate::agent::runloop::mcp_events::McpPanelState::new(10, true);
     let approval_recorder = test_ctx.approval_recorder;
     let traj = TrajectoryLogger::new(&test_ctx.workspace);
@@ -996,6 +1030,7 @@ async fn test_run_tool_call_reuses_streamed_invocation_item_without_duplicate_st
         &test_ctx.permissions_state,
         &decision_ledger,
         &mut session_stats,
+        &mut plan_session,
         &mut mcp_panel,
         &approval_recorder,
         &mut test_ctx.session,

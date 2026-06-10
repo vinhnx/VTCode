@@ -250,8 +250,8 @@ pub(crate) async fn run_tool_call_with_args(
     }
 
     let request_user_input_enabled = FeatureSet::from_config(vt_cfg)
-        .request_user_input_enabled(ctx.session_stats.is_plan_mode(), true);
-    if ctx.session_stats.is_plan_mode() && name == tools::REQUEST_USER_INPUT {
+        .request_user_input_enabled(ctx.tool_registry.is_plan_mode(), true);
+    if ctx.tool_registry.is_plan_mode() && name == tools::REQUEST_USER_INPUT {
         ctx.tool_registry
             .plan_mode_state()
             .set_phase(PlanLifecyclePhase::InterviewPending);
@@ -267,7 +267,7 @@ pub(crate) async fn run_tool_call_with_args(
     )
     .await
     {
-        if ctx.session_stats.is_plan_mode() && name == tools::REQUEST_USER_INPUT {
+        if ctx.tool_registry.is_plan_mode() && name == tools::REQUEST_USER_INPUT {
             ctx.tool_registry
                 .plan_mode_state()
                 .set_phase(PlanLifecyclePhase::ActiveDrafting);

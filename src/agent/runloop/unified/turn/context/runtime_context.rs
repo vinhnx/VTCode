@@ -88,6 +88,7 @@ pub(crate) struct UIContext<'a> {
 
 pub(crate) struct TurnProcessingState<'a> {
     pub session_stats: &'a mut SessionStats,
+    pub plan_session: &'a mut crate::agent::runloop::unified::plan_mode_state::PlanModeSessionState,
     pub auto_exit_plan_mode_attempted: &'a mut bool,
     pub mcp_panel_state: &'a mut mcp_events::McpPanelState,
     pub working_history: &'a mut Vec<uni::Message>,
@@ -112,6 +113,7 @@ pub(crate) struct TurnProcessingContext<'a> {
     pub renderer: &'a mut AnsiRenderer,
     pub handle: &'a InlineHandle,
     pub session_stats: &'a mut SessionStats,
+    pub plan_session: &'a mut crate::agent::runloop::unified::plan_mode_state::PlanModeSessionState,
     pub auto_exit_plan_mode_attempted: &'a mut bool,
     pub mcp_panel_state: &'a mut mcp_events::McpPanelState,
     pub tool_result_cache: &'a Arc<RwLock<vtcode_core::tools::ToolResultCache>>,
@@ -169,6 +171,7 @@ impl<'a> TurnProcessingContext<'a> {
             renderer: ui.renderer,
             handle: ui.handle,
             session_stats: state.session_stats,
+            plan_session: state.plan_session,
             auto_exit_plan_mode_attempted: state.auto_exit_plan_mode_attempted,
             mcp_panel_state: state.mcp_panel_state,
             tool_result_cache: tool.tool_result_cache,
@@ -250,6 +253,7 @@ impl<'a> TurnProcessingContext<'a> {
         };
         let state = TurnProcessingState {
             session_stats: self.session_stats,
+            plan_session: self.plan_session,
             auto_exit_plan_mode_attempted: self.auto_exit_plan_mode_attempted,
             mcp_panel_state: self.mcp_panel_state,
             working_history: self.working_history,
@@ -286,6 +290,7 @@ impl<'a> TurnProcessingContext<'a> {
             ui_ctx.handle,
             ui_ctx.session,
             state.session_stats,
+            state.plan_session,
             state.auto_exit_plan_mode_attempted,
             state.mcp_panel_state,
             tool_ctx.tool_result_cache,
@@ -353,6 +358,7 @@ impl<'a> TurnProcessingContext<'a> {
             tool_ctx.permissions_state,
             llm_ctx.decision_ledger,
             state.session_stats,
+            state.plan_session,
             state.mcp_panel_state,
             tool_ctx.approval_recorder,
             ui_ctx.session,

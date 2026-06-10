@@ -3,7 +3,9 @@ use vtcode_core::hooks::SessionEndReason;
 pub(crate) enum InlineLoopAction {
     Continue,
     Submit(String),
+    SubmitQueued(super::queue::QueuedInput),
     CyclePrimaryAgent,
+    CyclePrimaryAgentPrevious,
     SelectPrimaryAgent {
         name: Option<String>,
     },
