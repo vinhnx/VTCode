@@ -103,7 +103,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 .map(|path| path.to_string_lossy().to_string()),
         );
         let reserved_archive_id = crate::main_helpers::runtime_archive_session_id();
-        let history_enabled = vtcode_core::utils::session_archive::history_persistence_enabled();
+        let history_enabled = session_archive::history_persistence_enabled();
         let summarized_fork_provider = if resume_ref.is_some_and(|resume| resume.summarize_fork()) {
             Some(
                 crate::agent::runloop::unified::session_setup::create_provider_client(
@@ -178,13 +178,13 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             let thread_id = if let Some(identifier) = reserved_archive_id.clone() {
                 identifier
             } else if history_enabled {
-                vtcode_core::utils::session_archive::reserve_session_archive_identifier(
+                session_archive::reserve_session_archive_identifier(
                     &workspace_archive_label(&config.workspace),
                     None,
                 )
                 .await?
             } else {
-                vtcode_core::utils::session_archive::generate_session_archive_identifier(
+                session_archive::generate_session_archive_identifier(
                     &workspace_archive_label(&config.workspace),
                     None,
                 )
@@ -1080,7 +1080,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             archive.set_loaded_skills(skill_names);
             archive.set_continuation_metadata(session_stats.budget_limit().map(
                 |(max_budget_usd, actual_cost_usd)| {
-                    vtcode_core::utils::session_archive::SessionContinuationMetadata::budget_limit(
+                    session_archive::SessionContinuationMetadata::budget_limit(
                         max_budget_usd,
                         actual_cost_usd,
                         crate::agent::runloop::unified::turn::compaction::has_latest_memory_envelope(

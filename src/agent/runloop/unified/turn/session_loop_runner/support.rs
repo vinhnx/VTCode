@@ -6,6 +6,8 @@ use crate::agent::runloop::git::{
 use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_overlay_and_wait};
 use crate::agent::runloop::welcome::SessionBootstrap;
 use std::sync::Arc;
+use vtcode_core::llm::provider::MessageRole;
+use vtcode_core::utils::session_archive;
 use vtcode_ui::tui::app::{
     InlineHandle, InlineListItem, InlineListSelection, InlineSession, ListOverlayRequest,
     TransientRequest, TransientSubmission,
@@ -73,8 +75,7 @@ pub(super) fn remove_transient_system_notes(
 ) {
     for note in notes.iter().rev() {
         if let Some(index) = history.iter().rposition(|message| {
-            message.role == vtcode_core::llm::provider::MessageRole::System
-                && message.content.as_text() == note.as_str()
+            message.role == MessageRole::System && message.content.as_text() == note.as_str()
         }) {
             let _ = history.remove(index);
         }
@@ -168,7 +169,7 @@ pub(super) fn latest_assistant_result_text(
     messages
         .iter()
         .rev()
-        .find(|message| message.role == vtcode_core::llm::provider::MessageRole::Assistant)
+        .find(|message| message.role == MessageRole::Assistant)
         .map(|message| message.content.as_text().trim().to_string())
         .filter(|text| !text.is_empty())
 }
@@ -178,11 +179,11 @@ pub(super) fn take_pending_resumed_user_prompt(
 ) -> Option<String> {
     let user_index = history
         .iter()
-        .rposition(|message| message.role == vtcode_core::llm::provider::MessageRole::User)?;
+        .rposition(|message| message.role == MessageRole::User)?;
     if history
         .iter()
         .skip(user_index + 1)
-        .any(|message| message.role != vtcode_core::llm::provider::MessageRole::System)
+        .any(|message| message.role != MessageRole::System)
     {
         return None;
     }
@@ -226,7 +227,7 @@ pub(super) fn live_reload_preserves_session_config(
 
 pub(super) fn prepare_resume_bootstrap_without_archive(
     resume: &ResumeSession,
-    mut metadata: vtcode_core::utils::session_archive::SessionArchiveMetadata,
+    mut metadata: session_archive::SessionArchiveMetadata,
     reserved_archive_id: Option<String>,
 ) -> (vtcode_core::core::threads::ThreadBootstrap, String) {
     let source_metadata = &resume.snapshot().metadata;
@@ -240,9 +241,9 @@ pub(super) fn prepare_resume_bootstrap_without_archive(
     if resume.is_fork() {
         metadata.parent_session_id = Some(resume.identifier());
         metadata.fork_mode = Some(if resume.summarize_fork() {
-            vtcode_core::utils::session_archive::SessionForkMode::Summarized
+            session_archive::SessionForkMode::Summarized
         } else {
-            vtcode_core::utils::session_archive::SessionForkMode::FullCopy
+            session_archive::SessionForkMode::FullCopy
         });
     }
 
@@ -256,7 +257,7 @@ pub(super) fn prepare_resume_bootstrap_without_archive(
         vtcode_core::core::threads::ArchivedSessionIntent::ResumeInPlace => resume.identifier(),
         vtcode_core::core::threads::ArchivedSessionIntent::ForkNewArchive { .. } => {
             reserved_archive_id.unwrap_or_else(|| {
-                vtcode_core::utils::session_archive::generate_session_archive_identifier(
+                session_archive::generate_session_archive_identifier(
                     &workspace_archive_label(std::path::Path::new(
                         &resume.snapshot().metadata.workspace_path,
                     )),
@@ -270,7 +271,7 @@ pub(super) fn prepare_resume_bootstrap_without_archive(
 }
 
 pub(super) async fn checkpoint_session_archive_start(
-    archive: &vtcode_core::utils::session_archive::SessionArchive,
+    archive: &session_archive::SessionArchive,
     thread_handle: &vtcode_core::core::threads::ThreadRuntimeHandle,
 ) -> Result<()> {
     let snapshot = thread_handle.snapshot();
