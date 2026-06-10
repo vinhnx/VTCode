@@ -7,8 +7,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-fn append_auto_mode_notice(prompt: &mut String) {
-    if prompt.contains("## Auto Mode Active") {
+fn append_auto_permission_notice(prompt: &mut String) {
+    if prompt.contains("## Auto Permission Review Active") {
         return;
     }
     prompt.push('\n');
@@ -138,8 +138,8 @@ impl IncrementalSystemPrompt {
     /// Assembly order:
     /// 1. Base system prompt (from `vtcode_core::prompts::system`)
     /// 2. Instruction appendix (from AGENTS.md / project docs)
-    /// 3. Runtime mode sections (plan mode, auto mode, request_user_input)
-    /// 4. Auto-mode notice (if auto_mode && !plan_mode)
+    /// 3. Runtime prompt contract sections
+    /// 4. Auto permission review notice when applicable
     async fn build_prompt_content(
         &self,
         base_system_prompt: &str,
@@ -180,7 +180,7 @@ impl IncrementalSystemPrompt {
         );
 
         if context.auto_mode && !context.plan_mode {
-            append_auto_mode_notice(&mut prompt);
+            append_auto_permission_notice(&mut prompt);
         }
 
         prompt

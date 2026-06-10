@@ -254,9 +254,9 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **User Questions**: "What can you tell me about Configuring the inline status line?", "How does Available modes work?", "How does Command payload structure work?"
 
 - **File**: `docs/guides/full_auto_mode.md`
-  - **Content**: Full-Auto Mode
+  - **Content**: Full-Auto Automation
   - **Topics**: Activation Checklist, Runtime Behaviour, Customising the Allow-List, Orchestrated Harness Mode, Profile File Recommendations
-  - **User Questions**: "What can you tell me about Full-Auto Mode?", "How does Activation Checklist work?", "How does Runtime Behaviour work?"
+  - **User Questions**: "What can you tell me about Full-Auto Automation?", "How does Activation Checklist work?", "How does Runtime Behaviour work?"
 
 - **File**: `docs/guides/memory-management.md`
   - **Content**: Guidance and Persistent Memory for VT Code
@@ -299,9 +299,9 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **User Questions**: "What can you tell me about PTY Integration Testing Guide?", "How does Automated Verification work?", "How does Manual TUI Walkthrough work?"
 
 - **File**: `docs/guides/PLAN_MODE.md`
-  - **Content**: Plan Mode
+  - **Content**: Planning Workflow
   - **Topics**: Overview, Benefits, Usage, Plan Output Format, Summary
-  - **User Questions**: "What can you tell me about Plan Mode?", "How does Overview work?", "How does Benefits work?"
+  - **User Questions**: "What can you tell me about Planning Workflow?", "How does Overview work?", "How does Benefits work?"
 
 - **File**: `docs/guides/responses-api-reasoning.md`
   - **Content**: Responses API & Reasoning Models
@@ -611,8 +611,8 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 - **File**: `docs/harness/EXEC_PLANS.md`
   - **Content**: Execution Plans
-  - **Topics**: Why Exec Plans?, Exec Plans vs Plan Mode, Directory Structure, Mandatory Sections, Template
-  - **User Questions**: "What can you tell me about Execution Plans?", "How does Why Exec Plans? work?", "How does Exec Plans vs Plan Mode work?"
+  - **Topics**: Why Exec Plans?, Exec Plans vs Planning Workflow, Directory Structure, Mandatory Sections, Template
+  - **User Questions**: "What can you tell me about Execution Plans?", "How does Why Exec Plans? work?", "How does Exec Plans vs Planning Workflow work?"
 
 - **File**: `docs/features/FILE_REFERENCE.md`
   - **Content**: File Reference Feature (@-Symbol)
@@ -954,7 +954,7 @@ This document serves as an index of all VT Code documentation. When users ask qu
 - "How can I reduce token usage with tool documentation modes?"
 
 ### Workflows & Agent Behavior
-- "What is Plan Mode and how do I use it?"
+- "How do I use the planning workflow?"
 - "How do I use the @ symbol to reference files in my messages?"
 - "How do I use the /files slash command to browse my workspace?"
 - "What is the Decision Ledger and how does it help with coherence?"
