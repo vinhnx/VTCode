@@ -6905,7 +6905,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode"
-version = "0.124.0"
+version = "0.125.0"
 dependencies = [
  "agent-client-protocol",
  "anstyle",
@@ -6966,7 +6966,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-acp"
-version = "0.124.0"
+version = "0.125.0"
 dependencies = [
  "agent-client-protocol",
  "anyhow",
@@ -6990,7 +6990,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-auth"
-version = "0.124.0"
+version = "0.125.0"
 dependencies = [
  "anyhow",
  "apple-native-keyring-store",
@@ -7020,7 +7020,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-bash-runner"
-version = "0.124.0"
+version = "0.125.0"
 dependencies = [
  "anyhow",
  "assert_fs",
@@ -7040,14 +7040,14 @@ dependencies = [
 
 [[package]]
 name = "vtcode-collaboration-tool-specs"
-version = "0.124.0"
+version = "0.125.0"
 dependencies = [
  "serde_json",
 ]
 
 [[package]]
 name = "vtcode-commons"
-version = "0.124.0"
+version = "0.125.0"
 dependencies = [
  "anstyle",
  "anstyle-query",
@@ -7079,7 +7079,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-config"
-version = "0.124.0"
+version = "0.125.0"
 dependencies = [
  "anyhow",
  "assert_fs",
@@ -7111,7 +7111,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-core"
-version = "0.124.0"
+version = "0.125.0"
 dependencies = [
  "ansi-to-tui",
  "anstream",
@@ -7231,7 +7231,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-exec-events"
-version = "0.124.0"
+version = "0.125.0"
 dependencies = [
  "chrono",
  "compact_str",
@@ -7246,7 +7246,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-file-search"
-version = "0.124.0"
+version = "0.125.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -7264,14 +7264,14 @@ dependencies = [
 
 [[package]]
 name = "vtcode-ghostty-core"
-version = "0.124.0"
+version = "0.125.0"
 dependencies = [
  "unicode-width",
 ]
 
 [[package]]
 name = "vtcode-indexer"
-version = "0.124.0"
+version = "0.125.0"
 dependencies = [
  "anyhow",
  "hashbrown 0.17.1",
@@ -7284,7 +7284,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-llm"
-version = "0.124.0"
+version = "0.125.0"
 dependencies = [
  "anyhow",
  "assert_fs",
@@ -7296,7 +7296,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-lmstudio"
-version = "0.124.0"
+version = "0.125.0"
 dependencies = [
  "reqwest 0.12.28",
  "serde_json",
@@ -7310,7 +7310,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-macros"
-version = "0.124.0"
+version = "0.125.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -7319,7 +7319,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-markdown-store"
-version = "0.124.0"
+version = "0.125.0"
 dependencies = [
  "anyhow",
  "fs2",
@@ -7333,7 +7333,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-process-hardening"
-version = "0.124.0"
+version = "0.125.0"
 dependencies = [
  "libc",
  "pretty_assertions",
@@ -7341,7 +7341,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-terminal-detection"
-version = "0.124.0"
+version = "0.125.0"
 dependencies = [
  "anyhow",
  "dirs",
@@ -7349,7 +7349,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-tools"
-version = "0.124.0"
+version = "0.125.0"
 dependencies = [
  "anyhow",
  "assert_fs",
@@ -7368,7 +7368,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-ui"
-version = "0.124.0"
+version = "0.125.0"
 dependencies = [
  "anstyle",
  "anstyle-git",
@@ -7415,7 +7415,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-utility-tool-specs"
-version = "0.124.0"
+version = "0.125.0"
 dependencies = [
  "rmcp",
  "serde",
@@ -7424,7 +7424,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-vim"
-version = "0.124.0"
+version = "0.125.0"
 dependencies = [
  "criterion",
  "crossterm",
@@ -8422,7 +8422,7 @@ dependencies = [
 
 [[package]]
 name = "xtask"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "clap",
  "clap_complete",
