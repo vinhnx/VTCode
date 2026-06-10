@@ -53,7 +53,7 @@ pub async fn handle_auto_task_command(
         .provider
         .eq_ignore_ascii_case(crate::codex_app_server::CODEX_PROVIDER)
     {
-        let completed = crate::codex_app_server::run_codex_noninteractive(
+        let completed = crate::codex_app_server::run_codex_noninteractive_with_instructions(
             &run_config,
             Some(&run_vt_cfg),
             crate::codex_app_server::CodexNonInteractiveRun {
@@ -65,6 +65,7 @@ pub async fn handle_auto_task_command(
                 seed_messages: Vec::new(),
                 review_target: None,
             },
+            primary_agent_turn_instructions(&primary_agent_runtime.active_primary_agent),
         )
         .await?;
         if !completed.output.trim().is_empty() {
@@ -153,4 +154,11 @@ pub async fn handle_auto_task_command(
     }
 
     Ok(())
+}
+
+fn primary_agent_turn_instructions(
+    active_primary_agent: &vtcode_core::ActivePrimaryAgent,
+) -> Option<String> {
+    Some(active_primary_agent.instructions.trim().to_string())
+        .filter(|instructions| !instructions.is_empty())
 }

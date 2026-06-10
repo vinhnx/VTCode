@@ -225,6 +225,7 @@ pub(crate) async fn handle_codex_ask_command(
             &config,
             thread.thread.id,
             prompt_text,
+            None,
             true,
             options.skip_confirmations,
         ),
@@ -285,6 +286,30 @@ pub(crate) async fn run_codex_noninteractive(
     vt_cfg: Option<&vtcode_config::VTCodeConfig>,
     run: CodexNonInteractiveRun,
 ) -> Result<CodexCompletedRun> {
+    run_codex_noninteractive_inner(config, vt_cfg, run, None).await
+}
+
+pub(crate) async fn run_codex_noninteractive_with_instructions(
+    config: &CoreAgentConfig,
+    vt_cfg: Option<&vtcode_config::VTCodeConfig>,
+    run: CodexNonInteractiveRun,
+    instructions: Option<String>,
+) -> Result<CodexCompletedRun> {
+    run_codex_noninteractive_inner(
+        config,
+        vt_cfg,
+        run,
+        normalise_turn_instructions(instructions),
+    )
+    .await
+}
+
+async fn run_codex_noninteractive_inner(
+    config: &CoreAgentConfig,
+    vt_cfg: Option<&vtcode_config::VTCodeConfig>,
+    run: CodexNonInteractiveRun,
+    turn_instructions: Option<String>,
+) -> Result<CodexCompletedRun> {
     let client = CodexAppServerClient::connect(vt_cfg).await?;
     let mut events = client.subscribe();
     let mut mcp_startup = load_mcp_startup_tracker(&client).await;
@@ -302,7 +327,7 @@ pub(crate) async fn run_codex_noninteractive(
     let thread_id = thread.thread.id.clone();
     drain_startup_notifications(&mut events, &mut mcp_startup)?;
 
-    let output = if experimental_features {
+    let output = if experimental_features && turn_instructions.is_none() {
         if let Some(target) = run.review_target.clone() {
             let review = client
                 .review_start(CodexReviewStartRequest {
@@ -329,6 +354,7 @@ pub(crate) async fn run_codex_noninteractive(
                     config,
                     thread_id.clone(),
                     run.prompt.clone(),
+                    turn_instructions.clone(),
                     run.read_only,
                     run.skip_confirmations,
                 ),
@@ -346,6 +372,7 @@ pub(crate) async fn run_codex_noninteractive(
                 config,
                 thread_id.clone(),
                 run.prompt.clone(),
+                turn_instructions.clone(),
                 run.read_only,
                 run.skip_confirmations,
             ),
@@ -363,6 +390,12 @@ pub(crate) async fn run_codex_noninteractive(
         thread_id,
         messages,
     })
+}
+
+fn normalise_turn_instructions(instructions: Option<String>) -> Option<String> {
+    instructions
+        .map(|instructions| instructions.trim().to_string())
+        .filter(|instructions| !instructions.is_empty())
 }
 
 async fn run_interactive_session(
@@ -420,6 +453,7 @@ async fn run_interactive_session(
                 config,
                 thread.thread.id.clone(),
                 turn_input,
+                None,
                 planning_active,
                 skip_confirmations || full_auto,
             ),
@@ -566,12 +600,14 @@ fn build_turn_request(
     config: &CoreAgentConfig,
     thread_id: String,
     input: String,
+    instructions: Option<String>,
     read_only: bool,
     skip_confirmations: bool,
 ) -> CodexTurnRequest {
     CodexTurnRequest {
         thread_id,
         input,
+        instructions,
         cwd: config.workspace.to_string_lossy().to_string(),
         model: Some(config.model.clone()),
         approval_policy: approval_policy(skip_confirmations),

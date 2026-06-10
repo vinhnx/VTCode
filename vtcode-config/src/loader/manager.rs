@@ -388,7 +388,11 @@ impl ConfigManager {
         table.remove("project_doc_max_bytes");
         table.remove("project_doc_fallback_filenames");
         Self::remove_table_keys(table, "agent", &["autonomous_mode", "default_editing_mode"]);
-        Self::remove_table_keys(table, "permissions", &["allowed_tools", "disallowed_tools"]);
+        Self::remove_table_keys(
+            table,
+            "permissions",
+            &["allowed_tools", "disallowed_tools", "auto_permission"],
+        );
     }
 
     fn remove_table_keys(table: &mut toml_edit::Table, section: &str, keys: &[&str]) {
@@ -684,5 +688,79 @@ mod sparse_config_tests {
                 .and_then(toml::Value::as_str),
             Some("auto")
         );
+    }
+
+    #[test]
+    fn save_config_migrates_legacy_permissions_auto_permission_table() {
+        let temp_dir = tempfile::tempdir().expect("temp dir");
+        let config_path = temp_dir.path().join("vtcode.toml");
+        fs::write(
+            &config_path,
+            r#"
+[permissions.auto_permission]
+model = "legacy-reviewer"
+max_consecutive_denials = 2
+"#,
+        )
+        .expect("write legacy config");
+
+        let mut config = VTCodeConfig::default();
+        config.permissions.auto_permission.model = "legacy-reviewer".to_string();
+        config.permissions.auto_permission.max_consecutive_denials = 2;
+
+        ConfigManager::save_config_to_path(&config_path, &config).expect("save config");
+
+        let saved_content = fs::read_to_string(&config_path).expect("read saved config");
+        assert!(
+            saved_content.contains("[permissions.auto]"),
+            "canonical auto permission table should be persisted. Got:\n{saved_content}"
+        );
+        assert!(
+            !saved_content.contains("auto_permission"),
+            "legacy auto_permission table should be removed. Got:\n{saved_content}"
+        );
+
+        let reloaded = ConfigManager::load_from_file(&config_path).expect("reload saved config");
+        assert_eq!(
+            reloaded.config().permissions.auto_permission.model,
+            "legacy-reviewer"
+        );
+        assert_eq!(
+            reloaded
+                .config()
+                .permissions
+                .auto_permission
+                .max_consecutive_denials,
+            2
+        );
+    }
+
+    #[test]
+    fn save_config_removes_legacy_permissions_auto_permission_when_sparse_default() {
+        let temp_dir = tempfile::tempdir().expect("temp dir");
+        let config_path = temp_dir.path().join("vtcode.toml");
+        fs::write(
+            &config_path,
+            r#"
+[permissions.auto_permission]
+max_consecutive_denials = 3
+"#,
+        )
+        .expect("write legacy config");
+
+        ConfigManager::save_config_to_path(&config_path, &VTCodeConfig::default())
+            .expect("save config");
+
+        let saved_content = fs::read_to_string(&config_path).expect("read saved config");
+        assert!(
+            !saved_content.contains("auto_permission"),
+            "legacy auto_permission table should be removed. Got:\n{saved_content}"
+        );
+        assert!(
+            !saved_content.contains("[permissions.auto]"),
+            "default auto permission config should remain sparse. Got:\n{saved_content}"
+        );
+
+        ConfigManager::load_from_file(&config_path).expect("reload saved config");
     }
 }

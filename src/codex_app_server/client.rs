@@ -653,6 +653,7 @@ impl CodexThreadRequest {
 pub(crate) struct CodexTurnRequest {
     pub(crate) thread_id: String,
     pub(crate) input: String,
+    pub(crate) instructions: Option<String>,
     pub(crate) cwd: String,
     pub(crate) model: Option<String>,
     pub(crate) approval_policy: &'static str,
@@ -662,7 +663,7 @@ pub(crate) struct CodexTurnRequest {
 
 impl CodexTurnRequest {
     fn as_json(&self) -> Value {
-        json!({
+        let mut request = json!({
             "approvalPolicy": self.approval_policy,
             "approvalsReviewer": "user",
             "cwd": self.cwd,
@@ -678,7 +679,20 @@ impl CodexTurnRequest {
             "sandboxPolicy": self.sandbox_policy,
             "summary": "concise",
             "threadId": self.thread_id,
-        })
+        });
+        if let Some(instructions) = self
+            .instructions
+            .as_deref()
+            .map(str::trim)
+            .filter(|instructions| !instructions.is_empty())
+            && let Some(object) = request.as_object_mut()
+        {
+            object.insert(
+                "instructions".to_string(),
+                Value::String(instructions.to_string()),
+            );
+        }
+        request
     }
 }
 
@@ -980,6 +994,7 @@ mod tests {
         let turn = CodexTurnRequest {
             thread_id: "thread-123".to_string(),
             input: "hello".to_string(),
+            instructions: None,
             cwd: "/tmp/demo".to_string(),
             model: Some("gpt-5".to_string()),
             approval_policy: "interactive",
@@ -992,6 +1007,25 @@ mod tests {
             json!("user")
         );
         assert_eq!(turn.as_json()["approvalsReviewer"], json!("user"));
+    }
+
+    #[test]
+    fn turn_request_includes_instructions_when_provided() {
+        let turn = CodexTurnRequest {
+            thread_id: "thread-123".to_string(),
+            input: "hello".to_string(),
+            instructions: Some("Use the active primary agent constraints.".to_string()),
+            cwd: "/tmp/demo".to_string(),
+            model: Some("gpt-5".to_string()),
+            approval_policy: "never",
+            sandbox_policy: json!({"type": "workspaceWrite", "networkAccess": false}),
+            reasoning_effort: Some("medium".to_string()),
+        };
+
+        assert_eq!(
+            turn.as_json()["instructions"],
+            json!("Use the active primary agent constraints.")
+        );
     }
 
     #[test]

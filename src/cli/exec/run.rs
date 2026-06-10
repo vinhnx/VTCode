@@ -21,7 +21,8 @@ use super::event_output::{
 };
 use super::{ExecCommandKind, ExecCommandOptions, prep};
 use crate::codex_app_server::{
-    CODEX_PROVIDER, CodexNonInteractiveRun, CodexReviewTarget, run_codex_noninteractive,
+    CODEX_PROVIDER, CodexNonInteractiveRun, CodexReviewTarget,
+    run_codex_noninteractive_with_instructions,
 };
 
 const EXEC_TASK_ID: &str = "exec-task";
@@ -256,12 +257,13 @@ async fn handle_codex_exec_command_impl(
         config: run_config,
         vt_cfg: run_vt_cfg,
         model_id: _,
-        active_primary_agent: _,
+        active_primary_agent,
         prompt,
         session_id: _,
         archive,
         thread_bootstrap,
     } = prepared;
+    let task_spec = task_spec(&options.command, options.dry_run);
 
     if options.events_path.is_some() || run_vt_cfg.agent.harness.event_log_path.is_some() {
         eprintln!(
@@ -269,7 +271,7 @@ async fn handle_codex_exec_command_impl(
         );
     }
 
-    let completed = run_codex_noninteractive(
+    let completed = run_codex_noninteractive_with_instructions(
         &run_config,
         Some(&run_vt_cfg),
         CodexNonInteractiveRun {
@@ -286,6 +288,7 @@ async fn handle_codex_exec_command_impl(
             review_target: native_review_target(&options.command, run_config.workspace.as_path())
                 .await?,
         },
+        codex_exec_turn_instructions(&active_primary_agent, task_spec.instructions),
     )
     .await?;
 
@@ -345,6 +348,23 @@ async fn handle_codex_exec_command_impl(
     }
 
     Ok(())
+}
+
+fn codex_exec_turn_instructions(
+    active_primary_agent: &vtcode_core::ActivePrimaryAgent,
+    task_instructions: &str,
+) -> Option<String> {
+    let mut sections = Vec::new();
+    let active_instructions = active_primary_agent.instructions.trim();
+    if !active_instructions.is_empty() {
+        sections.push(active_instructions);
+    }
+    let task_instructions = task_instructions.trim();
+    if !task_instructions.is_empty() {
+        sections.push(task_instructions);
+    }
+
+    (!sections.is_empty()).then(|| sections.join("\n\n"))
 }
 
 fn external_thread_id_from_bootstrap(

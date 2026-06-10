@@ -1,5 +1,8 @@
 use crate::env_helpers::default_enabled;
+use serde::Deserializer;
+use serde::de::{MapAccess, Visitor};
 use serde::{Deserialize, Serialize};
+use std::fmt;
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
@@ -49,7 +52,12 @@ impl AgentPermissionsConfig {
 #[serde(deny_unknown_fields)]
 pub struct PermissionsConfig {
     /// Classifier-backed auto permission review policy and environment settings.
-    #[serde(default)]
+    #[serde(
+        default,
+        rename = "auto",
+        alias = "auto_permission",
+        deserialize_with = "deserialize_auto_permission_config"
+    )]
     pub auto_permission: AutoPermissionConfig,
 
     /// Rules that allow matching tool calls without prompting.
@@ -138,6 +146,32 @@ pub struct AutoPermissionConfig {
     /// Trusted environment boundaries for the classifier.
     #[serde(default)]
     pub environment: AutoPermissionEnvironmentConfig,
+}
+
+fn deserialize_auto_permission_config<'de, D>(
+    deserializer: D,
+) -> Result<AutoPermissionConfig, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    struct AutoPermissionConfigVisitor;
+
+    impl<'de> Visitor<'de> for AutoPermissionConfigVisitor {
+        type Value = AutoPermissionConfig;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            formatter.write_str("a table of auto permission settings")
+        }
+
+        fn visit_map<M>(self, map: M) -> Result<Self::Value, M::Error>
+        where
+            M: MapAccess<'de>,
+        {
+            AutoPermissionConfig::deserialize(serde::de::value::MapAccessDeserializer::new(map))
+        }
+    }
+
+    deserializer.deserialize_map(AutoPermissionConfigVisitor)
 }
 
 /// Trust-boundary configuration for auto permission review.
@@ -334,7 +368,36 @@ mod tests {
             "#,
         )
         .unwrap_err();
-        assert!(err.to_string().contains("unknown field `auto`"));
+        assert!(err.to_string().contains("invalid type"));
+    }
+
+    #[test]
+    fn parses_auto_permission_settings_from_canonical_auto_table() {
+        let config: PermissionsConfig = toml::from_str(
+            r#"
+            [auto]
+            model = "gpt-5-mini"
+            max_consecutive_denials = 2
+            drop_broad_allow_rules = false
+
+            [auto.environment]
+            trusted_paths = ["/work/project"]
+            trusted_domains = ["example.com"]
+            "#,
+        )
+        .expect("permissions config");
+
+        assert_eq!(config.auto_permission.model, "gpt-5-mini");
+        assert_eq!(config.auto_permission.max_consecutive_denials, 2);
+        assert!(!config.auto_permission.drop_broad_allow_rules);
+        assert_eq!(
+            config.auto_permission.environment.trusted_paths,
+            vec!["/work/project".to_string()]
+        );
+        assert_eq!(
+            config.auto_permission.environment.trusted_domains,
+            vec!["example.com".to_string()]
+        );
     }
 
     #[test]
