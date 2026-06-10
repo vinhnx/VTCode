@@ -410,12 +410,6 @@ impl ConfigManager {
         let default_value = toml::Value::try_from(VTCodeConfig::default())
             .context("Failed to serialize default configuration")?;
         Self::prune_default_values(&mut value, &default_value);
-        if let toml::Value::Table(table) = &mut value {
-            table.insert(
-                "default_primary_agent".to_string(),
-                toml::Value::String(config.default_primary_agent.clone()),
-            );
-        }
         Ok(value)
     }
 
@@ -663,4 +657,32 @@ fn migrate_custom_api_keys_if_needed(config: &mut VTCodeConfig) -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod sparse_config_tests {
+    use super::*;
+
+    #[test]
+    fn sparse_config_omits_default_primary_agent_when_unmodified() {
+        let config = VTCodeConfig::default();
+        let value = ConfigManager::sparse_config_value(&config).expect("sparse config");
+
+        assert!(value.get("default_primary_agent").is_none());
+    }
+
+    #[test]
+    fn sparse_config_persists_non_default_primary_agent() {
+        let mut config = VTCodeConfig::default();
+        config.default_primary_agent = "auto".to_string();
+
+        let value = ConfigManager::sparse_config_value(&config).expect("sparse config");
+
+        assert_eq!(
+            value
+                .get("default_primary_agent")
+                .and_then(toml::Value::as_str),
+            Some("auto")
+        );
+    }
 }

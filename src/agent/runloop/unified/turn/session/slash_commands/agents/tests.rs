@@ -1,6 +1,7 @@
 use super::{
-    active_subagent_entries, background_subprocess_summary, scaffold_agent_markdown,
-    subprocess_action_prompt, summarize_thread_event_preview, visible_subagent_entries,
+    DEFAULT_AGENT_TOOL_IDS, active_subagent_entries, background_subprocess_summary,
+    scaffold_agent_markdown, subprocess_action_prompt, summarize_thread_event_preview,
+    visible_subagent_entries,
 };
 use chrono::Utc;
 use std::path::PathBuf;
@@ -180,4 +181,5 @@ fn scaffold_agent_markdown_generates_valid_permission_rules() {
     let spec =
         load_subagent_from_file(&path, SubagentSource::ProjectVtcode).expect("load scaffold");
     assert_eq!(spec.permissions.default, PermissionDefault::Deny);
+    assert_eq!(spec.permissions.allow, DEFAULT_AGENT_TOOL_IDS);
 }

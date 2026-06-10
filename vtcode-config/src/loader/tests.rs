@@ -567,7 +567,11 @@ fn save_config_writes_sparse_model_theme_and_permission_values() {
         .expect("failed to save config");
 
     let saved_content = fs::read_to_string(&config_path).expect("failed to read saved config");
-    assert!(saved_content.contains("default_primary_agent = \"duck\""));
+    assert!(
+        !saved_content.contains("default_primary_agent"),
+        "unchanged default primary agent should not be persisted. Got:\n{}",
+        saved_content
+    );
     assert!(saved_content.contains("[agent]"));
     assert!(saved_content.contains("default_model = \"gpt-5.4\""));
     assert!(saved_content.contains("theme = \"ansi\""));
