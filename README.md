@@ -41,11 +41,7 @@ VT Code is a local-first coding agent built in Rust, the only one with defense-i
 ### Installing and running VT Code
 
 ```shell
-curl -fsSL https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.sh | bash   # macOS / Linux
-```
-
-```shell
-cargo install vtcode   # via cargo
+curl -fsSL https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.sh | bash   # macOS / Linux (recommended)
 ```
 
 ```shell
