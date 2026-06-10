@@ -2,6 +2,13 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.125.0 - 2026-06-10
+
+### Highlights
+#### Features
+
+- Add vtcode-ui to publish sequence and update CLI documentation (bb7228ed) 
+### Other Changes
 ## 0.124.0 - 2026-06-10
 
 ### Highlights
