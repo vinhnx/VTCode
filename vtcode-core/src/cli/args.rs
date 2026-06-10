@@ -221,10 +221,16 @@ pub struct Cli {
     )]
     pub print: Option<String>,
 
-    /// Enable full-auto permission review (no interaction) or run a headless task
+    /// Run non-interactively with full-auto permission review
     #[arg(
         long = "full-auto",
         global = true,
+        help = "Run non-interactively with full-auto permission review",
+        long_help = r#"Run non-interactively on top of the active primary agent.
+
+If no primary agent is explicitly selected or configured, VT Code selects the effective `auto` primary agent. Explicit choices, including `duck`, are honoured. Full-auto is an execution and permission layer, not a primary agent.
+
+Full-auto does not override explicit denies or grant tools outside `[automation.full_auto].allowed_tools`. Tools outside that allow-list are denied. Promptable actions inside the allow-list are routed through automatic permission review after deny and policy checks instead of asking. The run fails fast if it needs the defaulted `auto` primary agent and no effective `auto` exists."#,
         value_name = "PROMPT",
         num_args = 0..=1,
         default_missing_value = "",
@@ -286,8 +292,13 @@ pub struct Cli {
     #[arg(long = "disallowed-tools", global = true, value_name = "TOOLS", action = ArgAction::Append)]
     pub disallowed_tools: Vec<String>,
 
-    /// Skip all permission prompts (reduces security - use with caution)
-    #[arg(long = "dangerously-skip-permissions", global = true)]
+    /// Auto-approve promptable actions while respecting denies and policy blocks
+    #[arg(
+        long = "dangerously-skip-permissions",
+        global = true,
+        help = "Auto-approve promptable actions while respecting denies and policy blocks",
+        long_help = "Auto-approve promptable actions while still respecting explicit denies and policy blocks."
+    )]
     pub dangerously_skip_permissions: bool,
 
     /// Explicitly connect to IDE on startup (auto-detects available IDEs)

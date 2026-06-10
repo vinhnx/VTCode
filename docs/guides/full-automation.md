@@ -1,13 +1,16 @@
 # Full Automation
 
-`--full-auto` lets VT Code run without pausing for human approval on explicitly allow-listed tools. Use it only when you fully trust the workspace configuration and have reviewed the safeguards below.
+`--full-auto` lets VT Code run non-interactively on explicitly allow-listed tools. It is an execution and permission layer on top of the active primary agent, not a primary agent of its own. Use it only when you fully trust the workspace configuration and have reviewed the safeguards below.
 
 `--full-auto` is intentionally separate from normal session permissions:
 
 - Normal sessions use primary agents plus granular permission rules.
 - Agent specs use `permissions.default` plus `allow`, `ask`, `auto`, and `deny` rule buckets.
 - The `permissions.auto` bucket sends matching calls to classifier-backed review instead of treating them as unrestricted.
-- `--full-auto` uses the explicit `[automation.full_auto]` allow-list and skips normal approval prompts for allow-listed tools.
+- `--full-auto` uses the explicit `[automation.full_auto]` allow-list as a hard gate. Tools outside the allow-list are denied; promptable outcomes inside the allow-list are routed through automatic permission review after explicit deny and policy checks instead of asking.
+- `--dangerously-skip-permissions` auto-approves promptable actions while still respecting explicit denies and policy blocks.
+
+Primary-agent selection still works normally. If you explicitly select or configure a primary agent, including `duck`, full-auto runs on top of that agent. If no primary agent is explicitly selected or configured, VT Code selects the effective `auto` primary agent. If full-auto needs that defaulted `auto` agent and no effective `auto` exists, startup fails fast.
 
 ## Activation Checklist
 
@@ -21,16 +24,17 @@
 3. **Review tool policies**
     - Full automation still honours existing tool policies; denied tools remain blocked.
     - Tools not included in the allow-list will be rejected automatically.
+    - Allow-listed promptable actions use automatic permission review after deny and policy checks.
 4. **Launch the agent**
     - Run `vtcode --full-auto` with any other CLI flags you need.
-    - VT Code will also set `--skip-confirmations` internally.
 
 ## Runtime Behaviour
 
 - VT Code displays the active allow-list at session start.
-- Tool permission prompts are bypassed for allow-listed tools.
+- Full-auto does not grant tools outside `[automation.full_auto].allowed_tools`.
+- Explicit denies and policy blocks are honoured before full-auto review.
+- Promptable allow-listed actions are reviewed automatically instead of interrupting for user input.
 - Non allow-listed tools are rejected before execution, and their attempts are logged.
-- Git diff confirmations and other safety prompts are skipped automatically.
 - If the acknowledgement profile is missing while required, the CLI aborts before launching.
 
 ## Customising The Allow-List
@@ -53,6 +57,7 @@ Tips:
 - Use the constants listed in `vtcode_core::config::constants::tools` to avoid typos.
 - Include `"*"` only when the workspace is fully isolated.
 - Combine with granular agent permissions if you need per-tool constraints in normal interactive sessions.
+- Treat the list as a hard execution boundary for full-auto: outside the list is denied, and inside the list still passes deny and policy checks before automatic review.
 
 ## Orchestrated Harness
 
