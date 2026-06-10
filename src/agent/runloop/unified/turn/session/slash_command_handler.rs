@@ -12,6 +12,7 @@ use crate::agent::runloop::unified::turn::session::interaction_loop::{
 use crate::agent::runloop::unified::turn::session::slash_commands::{
     self, SlashCommandContext, SlashCommandControl,
 };
+use vtcode_commons::fs::{is_windows_absolute_path, trim_trailing_image_path, unescape_whitespace};
 use vtcode_core::hooks::SessionEndReason;
 use vtcode_core::scheduler::{ScheduleSpec, SessionLanguageCommand, scheduled_tasks_enabled};
 use vtcode_core::tools::file_ops::is_image_path;
@@ -315,28 +316,6 @@ fn leading_path_token(input: &str) -> Option<String> {
     }
 }
 
-fn is_windows_absolute_path(path: &str) -> bool {
-    let bytes = path.as_bytes();
-    bytes.len() > 2 && bytes[1] == b':' && (bytes[2] == b'\\' || bytes[2] == b'/')
-}
-
-fn unescape_whitespace(token: &str) -> String {
-    let mut result = String::with_capacity(token.len());
-    let mut chars = token.chars().peekable();
-    while let Some(ch) = chars.next() {
-        if ch == '\\'
-            && let Some(next) = chars.peek()
-            && next.is_ascii_whitespace()
-        {
-            result.push(*next);
-            chars.next();
-            continue;
-        }
-        result.push(ch);
-    }
-    result
-}
-
 static ABSOLUTE_IMAGE_PATH_REGEX: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
         r#"(?ix)
@@ -348,7 +327,7 @@ static ABSOLUTE_IMAGE_PATH_REGEX: LazyLock<Regex> = LazyLock::new(|| {
               | /(?:[^\n/]+/)+
               | [A-Za-z]:[\\/](?:[^\n\\\/]+[\\/])+
             )
-            [^\n]*?
+            [^\n]+?
             \.(?:png|jpe?g|gif|bmp|webp|tiff?|svg)
         )"#,
     )
@@ -356,7 +335,33 @@ static ABSOLUTE_IMAGE_PATH_REGEX: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 fn matches_absolute_image_path(input: &str) -> bool {
-    ABSOLUTE_IMAGE_PATH_REGEX.is_match(input)
+    let Some(caps) = ABSOLUTE_IMAGE_PATH_REGEX.captures(input) else {
+        return false;
+    };
+    let Some(path_match) = caps.get(1) else {
+        return false;
+    };
+    let raw = path_match.as_str();
+    // The regex may consume trailing text after the image extension.
+    // Try progressively shorter suffixes to find a valid image path.
+    let trimmed = trim_trailing_image_path(raw, is_absolute_image_path_str);
+    is_absolute_image_path_str(trimmed)
+}
+
+/// Check if a string is an absolute image path, handling `file://` and `~/`.
+fn is_absolute_image_path_str(token: &str) -> bool {
+    let unescaped = unescape_whitespace(token);
+    let mut candidate = unescaped.as_str();
+    if let Some(rest) = candidate.strip_prefix("file://") {
+        candidate = rest;
+    }
+    if let Some(rest) = candidate.strip_prefix("~/") {
+        if let Some(home) = dirs::home_dir() {
+            return is_image_path(&home.join(rest));
+        }
+        return false;
+    }
+    is_image_path(Path::new(candidate))
 }
 
 fn contains_image_extension(input: &str) -> bool {
@@ -404,5 +409,20 @@ mod tests {
     fn absolute_image_path_with_narrow_no_break_space_is_not_treated_as_slash_command() {
         let input = "/Users/vinhnguyenxuan/Desktop/Screenshot 2026-02-06 at 4.00.44\u{202F}PM.png can you see";
         assert!(is_absolute_image_path_input(input));
+    }
+
+    #[test]
+    fn regex_does_not_include_trailing_text_in_match() {
+        let input = "/Users/foo/Desktop/Screenshot 2026-02-06 at 3.39.48 PM.png can you see";
+        let captures: Vec<_> = super::ABSOLUTE_IMAGE_PATH_REGEX
+            .captures_iter(input)
+            .collect();
+        assert_eq!(captures.len(), 1, "Should match exactly one image path");
+        let matched = captures[0].get(1).unwrap().as_str();
+        assert!(
+            !matched.contains("can you"),
+            "Match should not include trailing text, got: {matched}"
+        );
+        assert!(matched.ends_with(".png"));
     }
 }
