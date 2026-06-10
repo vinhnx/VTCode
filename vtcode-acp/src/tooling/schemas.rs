@@ -3,7 +3,6 @@ use std::path::Path;
 use serde_json::json;
 
 use vtcode_core::config::constants::tools;
-use vtcode_core::core::interfaces::SessionMode;
 use vtcode_core::llm::provider::ToolDefinition;
 
 pub const TOOL_READ_FILE_DESCRIPTION: &str =
@@ -172,32 +171,4 @@ pub(super) fn build_list_files_definition(workspace_root: &Path) -> ToolDefiniti
     });
 
     ToolDefinition::function(tools::LIST_FILES.to_string(), description, schema)
-}
-
-pub(super) fn build_switch_mode_definition() -> ToolDefinition {
-    let description = format!(
-        "Switch the current session mode. {ask} and {architect} are read-only; {code} enables local implementation tools. Possible modes: {ask}, {architect}, {code}.",
-        ask = SessionMode::Ask.as_str(),
-        architect = SessionMode::Architect.as_str(),
-        code = SessionMode::Code.as_str()
-    );
-    let schema = json!({
-        "type": "object",
-        "required": ["mode_id"],
-        "properties": {
-            "mode_id": {
-                "type": "string",
-                "enum": [
-                    SessionMode::Ask.as_str(),
-                    SessionMode::Architect.as_str(),
-                    SessionMode::Code.as_str()
-                ],
-                "description": "The ID of the mode to switch to"
-            }
-        },
-        "additionalProperties": false,
-        "description": description,
-    });
-
-    ToolDefinition::function("switch_mode".to_string(), description, schema)
 }

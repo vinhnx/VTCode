@@ -18,7 +18,6 @@ use vtcode_core::config::{AgentClientProtocolZedConfig, CommandsConfig, ToolsCon
 use vtcode_core::core::agent::snapshots::{
     DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
 };
-use vtcode_core::core::interfaces::SessionMode;
 use vtcode_core::llm::provider::{MessageRole, ToolDefinition};
 
 async fn build_agent(workspace: &Path) -> ZedAgent {
@@ -68,6 +67,7 @@ async fn build_agent_with_tools_config(workspace: &Path, tools_config: ToolsConf
         String::new(),
         tx,
         Some("Zed".to_string()),
+        "duck".to_string(),
     )
     .await
 }
@@ -234,7 +234,7 @@ async fn resolve_terminal_working_dir_accepts_workdir_alias() {
 }
 
 #[tokio::test]
-async fn read_only_modes_hide_local_tools() {
+async fn read_only_primary_agents_hide_local_tools() {
     let temp = TempDir::new().unwrap();
     let agent = build_agent(temp.path()).await;
     let enabled_tools: Vec<_> = agent
@@ -246,32 +246,29 @@ async fn read_only_modes_hide_local_tools() {
         })
         .collect();
 
-    let ask_names = definition_names(
+    let duck_names = definition_names(
         agent
-            .tool_definitions(true, &enabled_tools, SessionMode::Ask)
+            .tool_definitions(true, &enabled_tools, "duck")
             .unwrap(),
     );
-    let architect_names = definition_names(
+    let review_names = definition_names(
         agent
-            .tool_definitions(true, &enabled_tools, SessionMode::Architect)
+            .tool_definitions(true, &enabled_tools, "review")
             .unwrap(),
     );
-    let code_names = definition_names(
+    let build_names = definition_names(
         agent
-            .tool_definitions(true, &enabled_tools, SessionMode::Code)
+            .tool_definitions(true, &enabled_tools, "build")
             .unwrap(),
     );
 
-    assert_eq!(
-        ask_names,
-        vec![tools::LIST_FILES.to_string(), "switch_mode".to_string()]
-    );
-    assert_eq!(architect_names, ask_names);
-    assert!(code_names.contains(&"switch_mode".to_string()));
-    assert!(code_names.contains(&tools::LIST_FILES.to_string()));
-    assert!(code_names.contains(&"unified_search".to_string()));
-    assert!(code_names.contains(&"unified_file".to_string()));
-    assert!(code_names.contains(&"unified_exec".to_string()));
+    assert_eq!(duck_names, vec![tools::LIST_FILES.to_string()]);
+    assert_eq!(review_names, duck_names);
+    assert!(!build_names.contains(&"switch_mode".to_string()));
+    assert!(build_names.contains(&tools::LIST_FILES.to_string()));
+    assert!(build_names.contains(&"unified_search".to_string()));
+    assert!(build_names.contains(&"unified_file".to_string()));
+    assert!(build_names.contains(&"unified_exec".to_string()));
 }
 
 #[tokio::test]
@@ -393,19 +390,17 @@ async fn local_tool_metadata_uses_core_action_labels_and_kinds() {
 }
 
 #[tokio::test]
-async fn resolved_messages_include_mode_prompt_for_read_only_modes() {
+async fn resolved_messages_include_primary_agent_prompt() {
     let temp = TempDir::new().unwrap();
     let agent = build_agent(temp.path()).await;
     let session_id = agent.register_session();
     let session = agent.session_handle(&session_id).unwrap();
 
-    assert!(agent.resolved_messages(&session).is_empty());
-
-    agent.update_session_mode(&session, SessionMode::Architect);
     let messages = agent.resolved_messages(&session);
     assert_eq!(messages.len(), 1);
     assert_eq!(messages[0].role, MessageRole::System);
     let prompt = messages[0].content.as_text();
-    assert!(prompt.contains("Architect mode"));
-    assert!(prompt.contains("switch to Code mode"));
+    assert!(prompt.contains("duck primary agent"));
+    assert!(!prompt.contains("Architect mode"));
+    assert!(!prompt.contains("Code mode"));
 }

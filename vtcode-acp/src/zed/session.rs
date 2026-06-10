@@ -18,6 +18,7 @@ use super::constants::{
     WORKSPACE_TRUST_ALREADY_SATISFIED_LOG, WORKSPACE_TRUST_DOWNGRADE_SKIPPED_LOG,
     WORKSPACE_TRUST_UPGRADE_LOG,
 };
+use super::helpers::normalise_primary_agent_id_or_default;
 use super::types::NotificationEnvelope;
 
 pub async fn run_acp_agent(
@@ -64,6 +65,8 @@ pub async fn run_acp_agent(
     };
     let tools_config = vt_cfg.tools.clone();
     let commands_config = vt_cfg.commands.clone();
+    let default_primary_agent =
+        normalise_primary_agent_id_or_default(&vt_cfg.default_primary_agent).to_string();
 
     let local_set = tokio::task::LocalSet::new();
     let config_clone = config.clone();
@@ -83,6 +86,7 @@ pub async fn run_acp_agent(
                 system_prompt,
                 tx,
                 title_clone,
+                default_primary_agent,
             )
             .await;
             let (raw_conn, io_task) =

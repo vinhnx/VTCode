@@ -5,9 +5,7 @@ use vtcode_core::config::constants::tools;
 use vtcode_core::llm::provider::ToolDefinition;
 use vtcode_core::tools::tool_intent;
 
-use super::schemas::{
-    build_list_files_definition, build_read_file_definition, build_switch_mode_definition,
-};
+use super::schemas::{build_list_files_definition, build_read_file_definition};
 use super::titles::render_title;
 
 /// Enum of tools available via the Agent Client Protocol (ACP) integration.
@@ -15,7 +13,6 @@ use super::titles::render_title;
 pub enum SupportedTool {
     ReadFile,
     ListFiles,
-    SwitchMode,
 }
 
 impl SupportedTool {
@@ -23,7 +20,6 @@ impl SupportedTool {
         match self {
             Self::ReadFile => crate::acp::ToolKind::Read,
             Self::ListFiles => crate::acp::ToolKind::Search,
-            Self::SwitchMode => crate::acp::ToolKind::Other,
         }
     }
 
@@ -31,7 +27,6 @@ impl SupportedTool {
         match self {
             Self::ReadFile => "Read file",
             Self::ListFiles => "List files",
-            Self::SwitchMode => "Switch session mode",
         }
     }
 
@@ -39,7 +34,6 @@ impl SupportedTool {
         match self {
             Self::ReadFile => tools::READ_FILE,
             Self::ListFiles => tools::LIST_FILES,
-            Self::SwitchMode => "switch_mode",
         }
     }
 
@@ -47,7 +41,6 @@ impl SupportedTool {
         match self {
             Self::ReadFile => 0,
             Self::ListFiles => 1,
-            Self::SwitchMode => 2,
         }
     }
 }
@@ -104,13 +97,6 @@ impl AcpToolRegistry {
                 build_list_files_definition(workspace_root),
             );
         }
-
-        push_registry_entry(
-            &mut entries,
-            &mut mapping,
-            SupportedTool::SwitchMode,
-            build_switch_mode_definition(),
-        );
 
         entries.sort_unstable_by_key(|entry| entry.tool.sort_key());
 

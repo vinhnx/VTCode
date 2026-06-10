@@ -8,7 +8,6 @@ use std::str::FromStr;
 use std::sync::Arc;
 use vtcode_core::config::models::{ModelId, Provider};
 use vtcode_core::config::types::ReasoningEffortLevel;
-use vtcode_core::core::interfaces::SessionMode;
 use vtcode_core::core::threads::{ThreadBootstrap, build_thread_archive_metadata};
 use vtcode_core::llm::ModelResolver;
 use vtcode_core::llm::factory::get_factory;
@@ -16,7 +15,10 @@ use vtcode_core::llm::provider::{FinishReason, Message};
 use vtcode_core::utils::session_archive::find_session_by_identifier;
 
 use super::super::constants::SESSION_PREFIX;
-use super::super::helpers::{session_config_options, session_mode_id, session_mode_prompt};
+use super::super::helpers::{
+    normalise_primary_agent_id, normalise_primary_agent_id_or_default, primary_agent_prompt,
+    session_config_options,
+};
 use super::super::types::{SessionData, SessionHandle};
 
 impl ZedAgent {
@@ -28,18 +30,6 @@ impl ZedAgent {
             .metadata()
             .and_then(|metadata| ReasoningEffortLevel::parse(&metadata.reasoning_effort))
             .unwrap_or(self.config.reasoning_effort)
-    }
-
-    fn session_mode_for_thread(
-        &self,
-        thread: &vtcode_core::core::threads::ThreadRuntimeHandle,
-    ) -> SessionMode {
-        thread
-            .metadata()
-            .and_then(|metadata| metadata.session_mode)
-            .as_deref()
-            .and_then(SessionMode::parse)
-            .unwrap_or(SessionMode::Code)
     }
 
     fn sync_thread_reasoning_effort(
@@ -73,17 +63,6 @@ impl ZedAgent {
             .unwrap_or_else(|| self.config.model.clone())
     }
 
-    fn sync_thread_mode(
-        &self,
-        thread: &vtcode_core::core::threads::ThreadRuntimeHandle,
-        mode: SessionMode,
-    ) {
-        if let Some(mut metadata) = thread.metadata() {
-            metadata.session_mode = Some(mode.as_str().to_string());
-            thread.replace_metadata(Some(metadata));
-        }
-    }
-
     fn sync_thread_provider_and_model(
         &self,
         thread: &vtcode_core::core::threads::ThreadRuntimeHandle,
@@ -109,15 +88,16 @@ impl ZedAgent {
         thread: vtcode_core::core::threads::ThreadRuntimeHandle,
     ) -> SessionHandle {
         let reasoning_effort = self.session_reasoning_effort_for_thread(&thread);
-        let current_mode = self.session_mode_for_thread(&thread);
         let provider = self.session_provider_for_thread(&thread);
         let model = self.session_model_for_thread(&thread);
+        let primary_agent =
+            normalise_primary_agent_id_or_default(&self.default_primary_agent).to_string();
         SessionHandle {
             data: Rc::new(RefCell::new(SessionData {
                 _session_id: session_id,
                 thread,
                 tool_notice_sent: false,
-                current_mode,
+                primary_agent,
                 reasoning_effort,
                 provider,
                 model,
@@ -131,14 +111,13 @@ impl ZedAgent {
         let raw_id = self.next_session_id.get();
         self.next_session_id.set(raw_id + 1);
         let session_id = acp::SessionId::new(Arc::from(format!("{SESSION_PREFIX}-{raw_id}")));
-        let mut metadata = build_thread_archive_metadata(
+        let metadata = build_thread_archive_metadata(
             self.config.workspace.as_path(),
             &self.config.model,
             &self.config.provider,
             &self.config.theme,
             self.config.reasoning_effort.as_str(),
         );
-        metadata.session_mode = Some(SessionMode::Code.as_str().to_string());
         let thread = self.thread_manager.start_thread_with_identifier(
             session_id.0.to_string(),
             ThreadBootstrap::new(Some(metadata)),
@@ -166,41 +145,20 @@ impl ZedAgent {
         session.data.borrow_mut().tool_notice_sent = true;
     }
 
-    pub(super) fn update_session_mode(&self, session: &SessionHandle, mode: SessionMode) -> bool {
+    pub(super) fn update_session_primary_agent(
+        &self,
+        session: &SessionHandle,
+        primary_agent: String,
+    ) -> bool {
+        let Some(primary_agent) = normalise_primary_agent_id(&primary_agent) else {
+            return false;
+        };
         let mut data = session.data.borrow_mut();
-        if data.current_mode == mode {
+        if data.primary_agent.eq_ignore_ascii_case(&primary_agent) {
             return false;
         }
-        data.current_mode = mode;
-        self.sync_thread_mode(&data.thread, mode);
+        data.primary_agent = primary_agent.to_string();
         true
-    }
-
-    pub(super) async fn apply_session_mode(
-        &self,
-        session_id: &acp::SessionId,
-        session: &SessionHandle,
-        mode: SessionMode,
-    ) -> Result<bool, acp::Error> {
-        if !self.update_session_mode(session, mode) {
-            return Ok(false);
-        }
-
-        let config_options = self.current_session_config_options(session);
-        self.send_update(
-            session_id,
-            acp::SessionUpdate::CurrentModeUpdate(acp::CurrentModeUpdate::new(session_mode_id(
-                mode,
-            ))),
-        )
-        .await?;
-        self.send_update(
-            session_id,
-            acp::SessionUpdate::ConfigOptionUpdate(acp::ConfigOptionUpdate::new(config_options)),
-        )
-        .await?;
-
-        Ok(true)
     }
 
     pub(super) fn update_session_reasoning_effort(
@@ -343,7 +301,7 @@ impl ZedAgent {
         let provider_options = self.provider_select_options(&data.provider);
         let model_options = self.model_select_options(&data.provider, &data.model);
         let config_options = session_config_options(
-            data.current_mode,
+            &data.primary_agent,
             data.reasoning_effort,
             self.model_supports_thought_level(&data.provider, &data.model),
             &data.provider,
@@ -354,6 +312,7 @@ impl ZedAgent {
 
         tracing::debug!(
             config_option_count = config_options.len(),
+            primary_agent = %data.primary_agent,
             current_provider = %data.provider,
             current_model = %data.model,
             "Built session config options for ACP"
@@ -369,7 +328,7 @@ impl ZedAgent {
         }
 
         let history = session.data.borrow();
-        if let Some(prompt) = session_mode_prompt(history.current_mode) {
+        if let Some(prompt) = primary_agent_prompt(&history.primary_agent) {
             messages.push(Message::system(prompt.to_string()));
         }
         messages.extend(history.thread.messages());
@@ -433,6 +392,13 @@ mod tests {
     };
 
     async fn build_agent(workspace: &Path) -> ZedAgent {
+        build_agent_with_default_primary_agent(workspace, "duck").await
+    }
+
+    async fn build_agent_with_default_primary_agent(
+        workspace: &Path,
+        default_primary_agent: &str,
+    ) -> ZedAgent {
         let core_config = CoreAgentConfig {
             model: "gpt-5.4".to_string(),
             api_key: String::new(),
@@ -471,6 +437,7 @@ mod tests {
             String::new(),
             tx,
             Some("Zed".to_string()),
+            default_primary_agent.to_string(),
         )
         .await
     }
@@ -502,16 +469,12 @@ mod tests {
         };
         let thread = agent.thread_manager.start_thread_with_identifier(
             "session-vtcode-acp-archive",
-            ThreadBootstrap::from_listing({
-                let mut listing = listing;
-                listing.snapshot.metadata.session_mode = Some("architect".to_string());
-                listing
-            }),
+            ThreadBootstrap::from_listing(listing),
         );
 
         let handle = agent.build_session_handle(acp::SessionId::new("session-1"), thread);
 
-        assert_eq!(handle.data.borrow().current_mode, SessionMode::Architect);
+        assert_eq!(handle.data.borrow().primary_agent, "duck");
         assert_eq!(
             handle.data.borrow().reasoning_effort,
             ReasoningEffortLevel::XHigh
@@ -521,24 +484,36 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn update_session_mode_syncs_thread_metadata() {
+    async fn register_session_falls_back_for_unknown_default_primary_agent() {
+        let temp = TempDir::new().unwrap();
+        let agent = build_agent_with_default_primary_agent(temp.path(), "research").await;
+        let session_id = agent.register_session();
+        let session = agent.session_handle(&session_id).unwrap();
+
+        assert_eq!(session.data.borrow().primary_agent, "duck");
+    }
+
+    #[tokio::test]
+    async fn register_session_uses_known_default_primary_agent_ids() {
+        for primary_agent in ["duck", "plan", "build", "auto", "review"] {
+            let temp = TempDir::new().unwrap();
+            let agent = build_agent_with_default_primary_agent(temp.path(), primary_agent).await;
+            let session_id = agent.register_session();
+            let session = agent.session_handle(&session_id).unwrap();
+
+            assert_eq!(session.data.borrow().primary_agent, primary_agent);
+        }
+    }
+
+    #[tokio::test]
+    async fn update_session_primary_agent_updates_session_data() {
         let temp = TempDir::new().unwrap();
         let agent = build_agent(temp.path()).await;
         let session_id = agent.register_session();
         let session = agent.session_handle(&session_id).unwrap();
 
-        assert!(agent.update_session_mode(&session, SessionMode::Ask));
-        assert_eq!(
-            session
-                .data
-                .borrow()
-                .thread
-                .metadata()
-                .unwrap()
-                .session_mode
-                .as_deref(),
-            Some("ask")
-        );
+        assert!(agent.update_session_primary_agent(&session, "build".to_string()));
+        assert_eq!(session.data.borrow().primary_agent, "build");
     }
 
     #[tokio::test]
@@ -573,6 +548,9 @@ mod tests {
         let config_options = agent.current_session_config_options(&session);
 
         assert_eq!(config_options.len(), 3);
-        assert_eq!(config_options[0].id, acp::SessionConfigId::new("mode"));
+        assert_eq!(
+            config_options[0].id,
+            acp::SessionConfigId::new("primary_agent")
+        );
     }
 }

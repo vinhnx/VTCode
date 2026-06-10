@@ -53,11 +53,6 @@ pub(super) fn render_title(
                     tool.default_title().to_string()
                 }
             }
-            SupportedTool::SwitchMode => args
-                .get("mode_id")
-                .and_then(Value::as_str)
-                .map(|mode| format!("Switch to {mode} mode"))
-                .unwrap_or_else(|| tool.default_title().to_string()),
         },
         ToolDescriptor::Local => tool_action_label(function_name, args).to_string(),
     }
