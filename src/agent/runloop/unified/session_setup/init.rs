@@ -430,7 +430,7 @@ fn active_primary_agent_from_specs(
     active_primary_agent_from_specs_for_mode(specs, vt_cfg, false, false)
 }
 
-fn active_primary_agent_from_specs_for_mode(
+pub(crate) fn active_primary_agent_from_specs_for_mode(
     specs: &[vtcode_config::SubagentSpec],
     vt_cfg: Option<&VTCodeConfig>,
     full_auto: bool,

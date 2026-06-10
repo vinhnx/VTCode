@@ -205,6 +205,7 @@ impl AgentRunner {
         let mut system_prompt = self
             .compose_task_system_prompt(prompt_tools, is_simple_task)
             .await?;
+        self.append_active_primary_agent_context(&mut system_prompt);
 
         let planning_active = self.tool_registry.is_planning_active();
         let request_user_input_enabled = self
@@ -237,6 +238,38 @@ impl AgentRunner {
             tool_snapshot,
             request_tools,
         })
+    }
+
+    fn append_active_primary_agent_context(&self, system_prompt: &mut String) {
+        let Some(active_primary_agent) = self.active_primary_agent.as_ref() else {
+            return;
+        };
+
+        system_prompt.push_str("\n\n## Active Primary Agent Runtime State\n");
+        system_prompt.push_str("- Active agent: ");
+        system_prompt.push_str(&active_primary_agent.display_name);
+        system_prompt.push_str("\n- Spec name: ");
+        system_prompt.push_str(&active_primary_agent.identity.name);
+        if let Some(model) = active_primary_agent
+            .model
+            .as_deref()
+            .map(str::trim)
+            .filter(|model| !model.is_empty() && !model.eq_ignore_ascii_case("inherit"))
+        {
+            system_prompt.push_str("\n- Agent model: ");
+            system_prompt.push_str(model);
+        }
+        if let Some(reasoning_effort) = active_primary_agent
+            .reasoning_effort
+            .as_deref()
+            .map(str::trim)
+            .filter(|reasoning_effort| !reasoning_effort.is_empty())
+        {
+            system_prompt.push_str("\n- Agent reasoning effort: ");
+            system_prompt.push_str(reasoning_effort);
+        }
+        system_prompt.push_str("\n\n## Active Primary Agent Instructions\n");
+        system_prompt.push_str(active_primary_agent.instructions.trim());
     }
 
     async fn build_validated_runtime_prompt_bundle(

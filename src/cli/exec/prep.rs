@@ -51,10 +51,16 @@ pub(super) struct ExecPreparedRun {
     pub config: CoreAgentConfig,
     pub vt_cfg: VTCodeConfig,
     pub model_id: ModelId,
+    pub active_primary_agent: vtcode_core::ActivePrimaryAgent,
     pub prompt: String,
     pub session_id: String,
     pub archive: Option<SessionArchive>,
     pub thread_bootstrap: ThreadBootstrap,
+}
+
+struct ExecVtConfig {
+    config: VTCodeConfig,
+    primary_agent_explicitly_configured: bool,
 }
 
 pub(crate) fn resolve_exec_command(
@@ -118,8 +124,24 @@ pub(super) async fn prepare_exec_run(
     };
     run_config.workspace = run_workspace.clone();
 
-    let mut run_vt_cfg = load_exec_vt_config(vt_cfg, &run_workspace, &config.workspace).await?;
+    let loaded_vt_cfg = load_exec_vt_config(
+        vt_cfg,
+        &run_workspace,
+        &config.workspace,
+        options.primary_agent_explicitly_configured,
+    )
+    .await?;
+    let mut run_vt_cfg = loaded_vt_cfg.config;
     apply_runtime_overrides(Some(&mut run_vt_cfg), &run_config);
+    let primary_agent_runtime =
+        crate::cli::full_auto_primary_agent::resolve_full_auto_primary_agent_runtime(
+            &run_config.workspace,
+            &run_vt_cfg,
+            loaded_vt_cfg.primary_agent_explicitly_configured,
+        )?;
+    run_vt_cfg = primary_agent_runtime.vt_cfg;
+    run_config.model = run_vt_cfg.agent.default_model.clone();
+    run_config.reasoning_effort = run_vt_cfg.agent.reasoning_effort;
 
     // Auto-trust workspace when full_auto is enabled and trust env var is set,
     // or when running in non-interactive (exec) mode with full_auto config.
@@ -206,6 +228,7 @@ pub(super) async fn prepare_exec_run(
         config: run_config,
         vt_cfg: run_vt_cfg,
         model_id,
+        active_primary_agent: primary_agent_runtime.active_primary_agent,
         prompt,
         session_id,
         archive,
@@ -375,13 +398,22 @@ async fn load_exec_vt_config(
     base: &VTCodeConfig,
     workspace: &Path,
     original_workspace: &Path,
-) -> Result<VTCodeConfig> {
+    original_primary_agent_explicitly_configured: bool,
+) -> Result<ExecVtConfig> {
     if workspace == original_workspace {
-        return Ok(base.clone());
+        return Ok(ExecVtConfig {
+            config: base.clone(),
+            primary_agent_explicitly_configured: original_primary_agent_explicitly_configured,
+        });
     }
 
     let manager = crate::main_helpers::load_workspace_config(workspace)?;
-    Ok(manager.config().clone())
+    Ok(ExecVtConfig {
+        config: manager.config().clone(),
+        primary_agent_explicitly_configured: crate::startup::has_explicit_default_primary_agent(
+            &manager.effective_config(),
+        ),
+    })
 }
 
 async fn resolve_resume_listing(
@@ -424,7 +456,7 @@ async fn resolve_resume_listing(
 #[cfg(test)]
 mod tests {
     use super::{
-        ExecCommandKind, build_exec_archive_metadata, next_exec_session_id,
+        ExecCommandKind, build_exec_archive_metadata, load_exec_vt_config, next_exec_session_id,
         prompt_with_stdin_context, resolve_exec_command, validate_resume_prompt_requirement,
     };
     use std::path::{Path, PathBuf};
@@ -537,6 +569,50 @@ mod tests {
                 .expect("reserved session id should win");
 
         assert_eq!(session_id, "session-reserved");
+    }
+
+    #[tokio::test]
+    async fn load_exec_vt_config_uses_resumed_workspace_primary_agent_metadata() {
+        let launch_dir = tempfile::tempdir().expect("launch workspace");
+        let resumed_dir = tempfile::tempdir().expect("resumed workspace");
+        std::fs::write(
+            resumed_dir.path().join("vtcode.toml"),
+            r#"
+default_primary_agent = "duck"
+
+[agent]
+default_model = "gpt-5"
+"#,
+        )
+        .expect("resumed config");
+
+        let loaded = load_exec_vt_config(
+            &VTCodeConfig::default(),
+            resumed_dir.path(),
+            launch_dir.path(),
+            false,
+        )
+        .await
+        .expect("resumed config should load");
+
+        assert_eq!(loaded.config.default_primary_agent, "duck");
+        assert!(loaded.primary_agent_explicitly_configured);
+    }
+
+    #[tokio::test]
+    async fn load_exec_vt_config_preserves_launch_primary_agent_metadata_for_same_workspace() {
+        let workspace = tempfile::tempdir().expect("workspace");
+
+        let loaded = load_exec_vt_config(
+            &VTCodeConfig::default(),
+            workspace.path(),
+            workspace.path(),
+            true,
+        )
+        .await
+        .expect("same-workspace config should load");
+
+        assert!(loaded.primary_agent_explicitly_configured);
     }
 
     #[test]

@@ -26,6 +26,7 @@ use crate::llm::AnyClient;
 use crate::llm::client::ProviderClientAdapter;
 use crate::llm::factory::{ProviderConfig, create_provider_with_config, infer_provider_from_model};
 use crate::llm::provider as uni_provider;
+use crate::primary_agent::ActivePrimaryAgent;
 use crate::prompts::PromptContext;
 use crate::tools::ToolRegistry;
 
@@ -109,6 +110,8 @@ pub struct AgentRunner {
     tool_definitions_override: RwLock<Option<Vec<uni_provider::ToolDefinition>>>,
     /// Optional argument transformer applied before tool validation/execution.
     tool_arg_transform: Option<ToolArgTransform>,
+    /// Active primary-agent policy to intersect with runner tools.
+    active_primary_agent: Option<ActivePrimaryAgent>,
 }
 
 impl AgentRunner {
@@ -365,6 +368,7 @@ impl AgentRunner {
             steering_receiver: Mutex::new(steering_receiver),
             tool_definitions_override: RwLock::new(None),
             tool_arg_transform: None,
+            active_primary_agent: None,
         })
     }
 
@@ -432,6 +436,11 @@ impl AgentRunner {
 
     pub fn clear_tool_arg_transform(&mut self) {
         self.tool_arg_transform = None;
+    }
+
+    /// Apply active primary-agent tool and permission policy to this runner.
+    pub fn set_active_primary_agent(&mut self, active_primary_agent: ActivePrimaryAgent) {
+        self.active_primary_agent = Some(active_primary_agent);
     }
 
     /// Enable full-auto execution with the provided allow-list.

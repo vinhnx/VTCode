@@ -13,6 +13,7 @@ mod theme;
 mod validation;
 mod workspace_trust;
 
+pub(crate) use config_loading::has_explicit_default_primary_agent;
 use config_loading::load_startup_config;
 pub(crate) use dependency_advisories::{SearchToolsBundleNotice, take_search_tools_bundle_notice};
 use resume::{resolve_session_resume, validate_resume_all_usage};

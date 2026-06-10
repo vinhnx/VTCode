@@ -66,7 +66,7 @@ pub(super) async fn load_startup_config(args: &Cli) -> Result<LoadedStartupConfi
 
     let manager = builder.build().context("Failed to load configuration")?;
     let primary_agent_explicitly_configured =
-        has_top_level_config_key(&manager.effective_config(), "default_primary_agent");
+        has_explicit_default_primary_agent(&manager.effective_config());
     let mut config = manager.config().clone();
 
     let (full_auto_requested, automation_prompt) = match args.full_auto.clone() {
@@ -91,6 +91,10 @@ pub(super) async fn load_startup_config(args: &Cli) -> Result<LoadedStartupConfi
         automation_prompt,
         primary_agent_explicitly_configured,
     })
+}
+
+pub(crate) fn has_explicit_default_primary_agent(config: &toml::Value) -> bool {
+    has_top_level_config_key(config, "default_primary_agent")
 }
 
 fn has_top_level_config_key(config: &toml::Value, key: &str) -> bool {
@@ -146,10 +150,7 @@ provider = "openai""#
             .parse()
             .expect("toml");
 
-        assert!(has_top_level_config_key(&with_key, "default_primary_agent"));
-        assert!(!has_top_level_config_key(
-            &without_key,
-            "default_primary_agent"
-        ));
+        assert!(has_explicit_default_primary_agent(&with_key));
+        assert!(!has_explicit_default_primary_agent(&without_key));
     }
 }

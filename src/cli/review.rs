@@ -12,6 +12,7 @@ pub struct ReviewCommandOptions {
     pub events_path: Option<PathBuf>,
     pub last_message_file: Option<PathBuf>,
     pub spec: ReviewSpec,
+    pub primary_agent_explicitly_configured: bool,
 }
 
 pub async fn handle_review_command(
@@ -25,6 +26,7 @@ pub async fn handle_review_command(
         events_path: options.events_path,
         last_message_file: options.last_message_file,
         command: ExecCommandKind::Review { spec: options.spec },
+        primary_agent_explicitly_configured: options.primary_agent_explicitly_configured,
     };
 
     super::exec::handle_exec_command(config, vt_cfg, exec_options).await

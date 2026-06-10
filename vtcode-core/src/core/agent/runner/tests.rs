@@ -17,6 +17,7 @@ use crate::exec::events::{
 use crate::llm::provider::{
     FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, ToolCall,
 };
+use crate::primary_agent::ActivePrimaryAgent;
 use crate::tools::Tool;
 use crate::tools::circuit_breaker::{CircuitBreaker, CircuitBreakerConfig};
 use crate::tools::handlers::{PlanningWorkflowState, TaskTrackerTool};
@@ -31,6 +32,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tempfile::TempDir;
+use vtcode_config::core::permissions::{AgentPermissionsConfig, PermissionDefault};
 
 #[test]
 fn record_turn_duration_records_once() {
@@ -285,6 +287,52 @@ async fn build_universal_tools_uses_override_when_present() {
 
     assert_eq!(tools.len(), 1);
     assert_eq!(tools[0].function_name(), "only_tool");
+}
+
+#[tokio::test]
+async fn active_primary_agent_policy_intersects_runner_tools() {
+    let temp = TempDir::new().expect("tempdir");
+    let mut runner = AgentRunner::new_with_bootstrap(
+        AgentType::Single,
+        ModelId::default(),
+        "test-key".to_string(),
+        temp.path().to_path_buf(),
+        "thread-primary-agent-policy".to_string(),
+        RunnerSettings {
+            reasoning_effort: None,
+            verbosity: None,
+        },
+        None,
+        ThreadBootstrap::new(None),
+        Some(VTCodeConfig::default()),
+        None,
+    )
+    .await
+    .expect("runner");
+
+    let mut spec = vtcode_config::builtin_primary_auto_agent();
+    spec.tools = Some(vec![tools::READ_FILE.to_string()]);
+    spec.permissions = AgentPermissionsConfig::new(PermissionDefault::Deny);
+    runner.set_active_primary_agent(ActivePrimaryAgent::from_spec(&spec));
+
+    assert!(runner.is_tool_exposed(tools::READ_FILE).await);
+    assert!(!runner.is_tool_exposed(tools::UNIFIED_EXEC).await);
+
+    let mut session_state =
+        AgentSessionState::new("thread-primary-agent-policy".to_string(), 1, 1, 8_000);
+    let denied = runner
+        .admit_tool_call(
+            tools::READ_FILE,
+            json!({ "path": "Cargo.toml" }),
+            &mut session_state,
+        )
+        .expect_err("primary-agent deny should block execution");
+
+    assert!(
+        denied
+            .to_string()
+            .contains("denied by active primary agent 'auto'")
+    );
 }
 
 #[tokio::test]

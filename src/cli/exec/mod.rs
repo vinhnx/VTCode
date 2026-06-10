@@ -17,6 +17,7 @@ pub struct ExecCommandOptions {
     pub events_path: Option<PathBuf>,
     pub last_message_file: Option<PathBuf>,
     pub command: ExecCommandKind,
+    pub primary_agent_explicitly_configured: bool,
 }
 
 pub async fn handle_exec_command(

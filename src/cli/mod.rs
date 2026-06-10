@@ -16,6 +16,7 @@ mod checkpoints;
 mod config;
 mod create_project;
 mod dispatch;
+mod full_auto_primary_agent;
 mod init;
 mod init_project;
 mod man;
@@ -77,7 +78,13 @@ pub async fn dispatch(
             .await?;
         }
         ResolvedCliAction::FullAuto { prompt } => {
-            auto::handle_auto_task_command(core_cfg, cfg, &prompt).await?;
+            auto::handle_auto_task_command(
+                core_cfg,
+                cfg,
+                &prompt,
+                startup.primary_agent_explicitly_configured,
+            )
+            .await?;
         }
         ResolvedCliAction::Resume { mode } => {
             handle_resume_session_command(

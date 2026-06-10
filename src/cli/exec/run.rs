@@ -123,6 +123,7 @@ pub(super) async fn handle_exec_command_impl(
         config: run_config,
         vt_cfg: run_vt_cfg,
         model_id,
+        active_primary_agent,
         prompt,
         session_id,
         archive,
@@ -148,6 +149,7 @@ pub(super) async fn handle_exec_command_impl(
         run_config.openai_chatgpt_auth.clone(),
     )
     .await?;
+    runner.set_active_primary_agent(active_primary_agent);
 
     if let Some(archive) = archive.as_ref() {
         let initial_session_messages = runner.session_messages();
@@ -254,6 +256,7 @@ async fn handle_codex_exec_command_impl(
         config: run_config,
         vt_cfg: run_vt_cfg,
         model_id: _,
+        active_primary_agent: _,
         prompt,
         session_id: _,
         archive,
