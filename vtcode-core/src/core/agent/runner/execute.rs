@@ -390,14 +390,6 @@ impl AgentRunner {
             .set_harness_session(self.session_id.clone());
         self.tool_registry.set_harness_task(Some(task.id.clone()));
 
-        // Ensure the tool registry is ready before entering the turn loop to avoid per-turn reinit.
-        if let Err(err) = self.tool_registry.initialize_async().await {
-            warn!(
-                error = %err,
-                "Tool registry initialization failed at task start"
-            );
-        }
-
         let steering_receiver = self.steering_receiver.lock().take();
         let runtime_setup = {
             // Agent execution status

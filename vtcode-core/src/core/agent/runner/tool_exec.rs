@@ -12,6 +12,7 @@ use crate::core::agent::harness_kernel::{
 use crate::core::agent::runtime::{AgentRuntime, RuntimeControl};
 use crate::exec::events::{ItemCompletedEvent, ThreadEvent, ThreadItemDetails, ToolCallStatus};
 use crate::llm::provider::ToolCall;
+use crate::tools::registry::{ToolErrorType, ToolExecutionError};
 use anyhow::Result;
 use std::collections::VecDeque;
 use std::sync::Arc;
@@ -248,6 +249,43 @@ fn finish_successful_tool_output(
         None,
         &payload.aggregated_output,
         payload.spool_path.as_deref(),
+    );
+}
+
+fn apply_tool_success(
+    runner: &AgentRunner,
+    runtime: &mut AgentRuntime,
+    event_recorder: &mut ExecEventRecorder,
+    agent_prefix: &str,
+    call_id: &str,
+    name: &str,
+    args: &serde_json::Value,
+    tool_call_item: &ToolCallItemRef,
+    result: serde_json::Value,
+    is_gemini: bool,
+) {
+    if !runner.quiet {
+        info!(agent = %agent_prefix, tool = %name, "Tool executed successfully");
+    }
+    let optimized_result = reduce_tool_result(name, result);
+    runner.update_last_paths_from_args(name, args, &mut runtime.state);
+    runtime
+        .state
+        .push_tool_result(call_id.to_string(), name, &optimized_result, is_gemini);
+    complete_tool_invocation(
+        runtime,
+        event_recorder,
+        call_id,
+        name,
+        args,
+        tool_call_item,
+        ToolCallStatus::Completed,
+    );
+    finish_successful_tool_output(
+        event_recorder,
+        &tool_call_item.call_item_id,
+        call_id,
+        &optimized_result,
     );
 }
 
@@ -547,11 +585,23 @@ impl AgentRunner {
                 // Acquire a concurrency slot when the cap is in force.  The permit
                 // is held for the duration of tool execution and released on drop.
                 let _permit = if let Some(s) = sem {
-                    Some(
-                        s.acquire_owned()
-                            .await
-                            .expect("parallel tool semaphore closed unexpectedly"),
-                    )
+                    match s.acquire_owned().await {
+                        Ok(permit) => Some(permit),
+                        Err(_) => {
+                            return (
+                                name,
+                                tool_call_id,
+                                args,
+                                tool_call_item,
+                                Err(ToolExecutionError::new(
+                                    "parallel_tool_semaphore",
+                                    ToolErrorType::ExecutionError,
+                                    "parallel tool semaphore closed",
+                                )),
+                                circuit_before,
+                            );
+                        }
+                    }
                 } else {
                     None
                 };
@@ -574,36 +624,19 @@ impl AgentRunner {
             record_circuit_transition(self, &runtime.state.error_recovery, &name, circuit_before);
             match result {
                 Ok(result) => {
-                    if !self.quiet {
-                        info!(agent = %agent_prefix, tool = %name, "Tool executed successfully");
-                    }
-
-                    let optimized_result = reduce_tool_result(&name, result);
-
-                    self.update_last_paths_from_args(&name, &args, &mut runtime.state);
-
-                    runtime.state.push_tool_result(
-                        call_id.clone(),
-                        &name,
-                        &optimized_result,
-                        is_gemini,
-                    );
-                    complete_tool_invocation(
+                    event_recorder
+                        .tool_output_started(&tool_call_item.call_item_id, Some(&call_id));
+                    apply_tool_success(
+                        self,
                         runtime,
                         event_recorder,
+                        agent_prefix,
                         &call_id,
                         &name,
                         &args,
                         &tool_call_item,
-                        ToolCallStatus::Completed,
-                    );
-                    event_recorder
-                        .tool_output_started(&tool_call_item.call_item_id, Some(&call_id));
-                    finish_successful_tool_output(
-                        event_recorder,
-                        &tool_call_item.call_item_id,
-                        &call_id,
-                        &optimized_result,
+                        result,
+                        is_gemini,
                     );
                 }
                 Err(e) => {
@@ -642,25 +675,8 @@ impl AgentRunner {
                             is_gemini,
                         )?;
                     } else {
-                        // Standard failure handling
                         let category = e.category;
-                        let failure_text = e.user_message();
-                        error!(
-                            agent = %agent_prefix,
-                            tool = %name,
-                            error = %e.message,
-                            category = ?category,
-                            retryable = e.retryable,
-                            partial_state_possible = e.partial_state_possible,
-                            "Tool execution failed"
-                        );
-                        halt_turn = apply_tool_failure_halt_policy(&mut runtime.state, category);
-                        runtime.state.push_tool_error(
-                            call_id.clone(),
-                            &name,
-                            &e.to_json_value(),
-                            is_gemini,
-                        );
+                        let should_halt = apply_tool_failure_halt_policy(&mut runtime.state, category);
                         complete_tool_invocation(
                             runtime,
                             event_recorder,
@@ -670,17 +686,22 @@ impl AgentRunner {
                             &tool_call_item,
                             ToolCallStatus::Failed,
                         );
-                        event_recorder
-                            .tool_output_started(&tool_call_item.call_item_id, Some(&call_id));
-                        event_recorder.tool_output_finished(
-                            &tool_call_item.call_item_id,
-                            Some(&call_id),
-                            ToolCallStatus::Failed,
-                            None,
-                            &failure_text,
-                            None,
+                        let mut failure_ctx = ToolFailureContext {
+                            agent_prefix,
+                            session_state: &mut runtime.state,
+                            event_recorder,
+                            tool_call_id: &call_id,
+                            call_item_id: Some(tool_call_item.call_item_id.as_str()),
+                            is_gemini,
+                        };
+                        self.record_tool_failure(
+                            &mut failure_ctx,
+                            &name,
+                            &e,
+                            Some(call_id.as_str()),
                         );
-                        if halt_turn {
+                        if should_halt {
+                            halt_turn = true;
                             break;
                         }
                     }
@@ -727,34 +748,17 @@ impl AgentRunner {
                     &name,
                     circuit_before,
                 );
-                if !self.quiet {
-                    info!(agent = %agent_prefix, tool = %name, "Tool executed successfully");
-                }
-
-                let optimized_result = reduce_tool_result(&name, result);
-
-                self.update_last_paths_from_args(&name, &args, &mut runtime.state);
-
-                runtime.state.push_tool_result(
-                    call.tool_call_id.clone(),
-                    &name,
-                    &optimized_result,
-                    is_gemini,
-                );
-                complete_tool_invocation(
+                apply_tool_success(
+                    self,
                     runtime,
                     event_recorder,
+                    agent_prefix,
                     &call.tool_call_id,
                     &name,
                     &args,
                     &tool_call_item,
-                    ToolCallStatus::Completed,
-                );
-                finish_successful_tool_output(
-                    event_recorder,
-                    &tool_call_item.call_item_id,
-                    &call.tool_call_id,
-                    &optimized_result,
+                    result,
+                    is_gemini,
                 );
                 Ok(false)
             }
