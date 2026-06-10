@@ -572,7 +572,7 @@ pub enum Commands {
     ///   vtcode schedule create --name "daily-review" --cron "0 9 * * 1-5" --prompt "review recent changes"
     ///   vtcode schedule create --name "reminder" --reminder "standup in 10 minutes" --at "09:50"
     ///   vtcode schedule list
-    ///   vtcode schedule delete <task-id>
+    ///   vtcode schedule delete `<task-id>`
     Schedule {
         #[command(subcommand)]
         command: ScheduleSubcommand,
