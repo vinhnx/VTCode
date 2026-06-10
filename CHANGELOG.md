@@ -2,6 +2,42 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.124.0 - 2026-06-10
+
+### Highlights
+#### Bug Fixes
+
+- Handle parameterised close tags in collect_pseudo_marker_regions (dac7afa0) 
+- Apply PR review fixes (d530f6c7) 
+- Restore harness robustness plan section in TODO.md (84a652ea) 
+- Update tool call region collection to use pseudo marker (c67d347c) 
+- Improve screenshot path resolver to stop consuming trailing text (2b101bb1) 
+- Improve screenshot path resolver and extract shared path utilities (75e445c4) 
+- Update path handling in trim_trailing_image_path_str function (59208038) 
+- Add image handling in request processing and refactor fallback logic (52f780ae) 
+- Pin ratatui to =0.30.0 to prevent CellEffect Send breakage (8539a774) 
+#### Documentation
+
+- Enhance ast-grep documentation in AGENTS.md and TODO.md; update system prompt to prefer ast-grep for code-shape queries (50afb69a) 
+#### Features
+
+- Implement strip_textual_tool_call_regions function and update related error messages (c62e4253) 
+- Enhance recovery handling for tool-call markers and improve documentation (e30b9e68) 
+- Add Claude Fable 5 with fallback credit, remove deprecated models (d4ed7872) 
+- Enhance Anthropic provider with new request handling and response parsing (73002a49) 
+- Add support for CLAUDE_OPUS_4_8 in thinking profile and update test case (24fc08e8) 
+### Other Changes
+#### Other
+
+- Remove outdated documentation references and clean up project files (ebdfe55f) 
+- Update ignore (114a62ec) 
+#### Refactors
+
+- Merge vtcode-design, vtcode-theme, vtcode-tui into vtcode-ui (1f13c2fa) 
+- Remove TODO.md entry from documentation map (72a0f9c6) 
+- Format code for improved readability and consistency (0dcbbaaa) 
+- Consolidate vtcode-tui and vtcode-design into vtcode-ui, update documentation and references (c8d1cf29) 
+- Simplify session_archive usage in session loop runner (1a7ccf90) 
 ## 0.123.10 - 2026-06-09
 
 ### Highlights
