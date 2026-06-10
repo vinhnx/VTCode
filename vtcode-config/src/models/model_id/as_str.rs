@@ -24,10 +24,10 @@ impl ModelId {
             ModelId::OpenAIGptOss20b => models::openai::GPT_OSS_20B,
             ModelId::OpenAIGptOss120b => models::openai::GPT_OSS_120B,
             // Anthropic models
+            ModelId::ClaudeFable5 => models::CLAUDE_FABLE_5,
             ModelId::ClaudeOpus48 => models::CLAUDE_OPUS_4_8,
             ModelId::ClaudeSonnet46 => models::CLAUDE_SONNET_4_6,
             ModelId::ClaudeHaiku45 => models::CLAUDE_HAIKU_4_5,
-            ModelId::ClaudeMythosPreview => models::CLAUDE_MYTHOS_PREVIEW,
             ModelId::CopilotAuto => models::copilot::AUTO,
             ModelId::CopilotGPT52Codex => models::copilot::GPT_5_2_CODEX,
             ModelId::CopilotGPT51CodexMax => models::copilot::GPT_5_1_CODEX_MAX,

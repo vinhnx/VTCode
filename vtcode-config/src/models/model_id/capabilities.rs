@@ -148,7 +148,7 @@ impl ModelId {
             ModelId::GPT55 | ModelId::GPT54 | ModelId::GPT54Pro => Some(ModelId::GPT54Mini),
             ModelId::OpenCodeZenGPT54 => Some(ModelId::OpenCodeZenGPT54Mini),
             ModelId::GPT53Codex => Some(ModelId::GPT54Mini),
-            ModelId::ClaudeOpus48 | ModelId::ClaudeSonnet46 | ModelId::ClaudeMythosPreview => {
+            ModelId::ClaudeFable5 | ModelId::ClaudeOpus48 | ModelId::ClaudeSonnet46 => {
                 Some(ModelId::ClaudeHaiku45)
             }
             ModelId::CopilotGPT54 => Some(ModelId::CopilotGPT54Mini),
@@ -244,9 +244,8 @@ impl ModelId {
             }
             ModelId::OllamaDeepseekV4ProCloud => Some(ModelId::OllamaDeepseekV4FlashCloud),
             ModelId::ZaiGlm5 | ModelId::ZaiGlm51 => Some(ModelId::OllamaGlm5Cloud),
-            ModelId::ClaudeOpus48 | ModelId::ClaudeSonnet46 | ModelId::ClaudeMythosPreview => {
-                Some(ModelId::ClaudeSonnet46)
-            }
+            ModelId::ClaudeFable5 => None, // Always-on adaptive thinking, no non-reasoning variant
+            ModelId::ClaudeOpus48 | ModelId::ClaudeSonnet46 => Some(ModelId::ClaudeSonnet46),
             ModelId::OpenCodeGoMinimaxM27 => Some(ModelId::OpenCodeGoMinimaxM25),
             ModelId::MinimaxM27 | ModelId::MinimaxM25 => None,
             _ => None,
@@ -292,9 +291,9 @@ impl ModelId {
                 | ModelId::CopilotGPT51CodexMax
                 | ModelId::CopilotGPT54
                 | ModelId::CopilotClaudeSonnet46
+                | ModelId::ClaudeFable5
                 | ModelId::ClaudeOpus48
                 | ModelId::ClaudeSonnet46
-                | ModelId::ClaudeMythosPreview
                 | ModelId::OpenCodeZenGPT54
                 | ModelId::OpenCodeZenClaudeSonnet46
                 | ModelId::OpenCodeZenGlm51
@@ -365,9 +364,9 @@ impl ModelId {
                 | ModelId::GPT54
                 | ModelId::GPT54Pro
                 | ModelId::GPT53Codex
+                | ModelId::ClaudeFable5
                 | ModelId::ClaudeOpus48
                 | ModelId::ClaudeSonnet46
-                | ModelId::ClaudeMythosPreview
                 | ModelId::OpenCodeZenGPT54
                 | ModelId::OpenCodeZenClaudeSonnet46
                 | ModelId::OpenCodeZenGlm51
@@ -431,10 +430,10 @@ impl ModelId {
             ModelId::GPT53Codex => "5.3",
             ModelId::OpenAIGptOss20b | ModelId::OpenAIGptOss120b => "5",
             // Anthropic generations
+            ModelId::ClaudeFable5 => "5",
             ModelId::ClaudeOpus48 => "4.8",
             ModelId::ClaudeSonnet46 => "4.6",
             ModelId::ClaudeHaiku45 => "4.5",
-            ModelId::ClaudeMythosPreview => "preview",
             // DeepSeek generations
             ModelId::DeepSeekV4Pro | ModelId::DeepSeekV4Flash => "4",
             // Z.AI generations

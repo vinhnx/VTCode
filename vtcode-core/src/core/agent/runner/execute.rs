@@ -150,6 +150,7 @@ fn estimate_session_cost_usd(
         cached_prompt_tokens: Some(u32::try_from(usage.cached_input_tokens).unwrap_or(u32::MAX)),
         cache_creation_tokens: Some(u32::try_from(usage.cache_creation_tokens).unwrap_or(u32::MAX)),
         cache_read_tokens: Some(u32::try_from(usage.cached_input_tokens).unwrap_or(u32::MAX)),
+        iterations: None,
     };
     let resolved = ModelResolver::resolve(Some(provider), model, &[], None)?;
     let pricing = resolved.pricing()?;

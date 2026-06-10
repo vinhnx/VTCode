@@ -54,6 +54,18 @@ const OPENAI_GPT55_CONTRACT_LINES: &[&str] = &[
     "Use retrieved evidence for citation-sensitive work; use the minimum evidence sufficient to answer correctly, then stop.",
 ];
 
+const FABLE_5_CONTRACT_HEADER: &str = "## Fable 5 Behavioral Addendum";
+const FABLE_5_CONTRACT_LINES: &[&str] = &[
+    "When you have enough information to act, act. Do not re-derive facts already established in the conversation, re-litigate a decision already made, or narrate options you will not pursue. If you are weighing a choice, give a recommendation, not an exhaustive survey.",
+    "Don't add features, refactor, or introduce abstractions beyond what the task requires. Do the simplest thing that works well. Don't design for hypothetical future requirements.",
+    "Before reporting progress, audit each claim against a tool result from this session. Only report work you can point to evidence for; if something is not yet verified, say so explicitly.",
+    "When the user is describing a problem, asking a question, or thinking out loud rather than requesting a change, the deliverable is your assessment. Don't apply a fix until they ask for one.",
+    "Pause for the user only when the work genuinely requires them: a destructive or irreversible action, a real scope change, or input that only they can provide.",
+    "You have ample context remaining. Do not stop, summarize, or suggest a new session on account of context limits. Continue the work.",
+    "Delegate independent subtasks to subagents and keep working while they run. Intervene if a subagent goes off track or is missing relevant context.",
+    "Lead with the outcome. Your first sentence after finishing should answer what happened or what you found. Supporting detail comes after. Being readable and being concise are different things; readability matters more.",
+];
+
 const DEFAULT_CONTRACT_LINES: &[&str] = &[
     "Start with `AGENTS.md`; inspect code first, match local patterns, use `@file`.",
     "If context is missing, say so, do not guess, finish unblocked slices first.",
@@ -149,6 +161,25 @@ pub fn openai_gpt55_contract_addendum() -> String {
     prompt.push_str(OPENAI_GPT55_CONTRACT_HEADER);
     prompt.push_str("\n\n");
     for line in OPENAI_GPT55_CONTRACT_LINES {
+        prompt.push_str("- ");
+        prompt.push_str(line);
+        prompt.push('\n');
+    }
+    prompt.pop();
+    prompt
+}
+
+pub fn fable_5_contract_addendum() -> String {
+    let lines_len = FABLE_5_CONTRACT_LINES
+        .iter()
+        .map(|line| line.len())
+        .sum::<usize>();
+    let mut prompt = String::with_capacity(
+        FABLE_5_CONTRACT_HEADER.len() + lines_len + FABLE_5_CONTRACT_LINES.len() * 3 + 8,
+    );
+    prompt.push_str(FABLE_5_CONTRACT_HEADER);
+    prompt.push_str("\n\n");
+    for line in FABLE_5_CONTRACT_LINES {
         prompt.push_str("- ");
         prompt.push_str(line);
         prompt.push('\n');
@@ -1022,6 +1053,20 @@ mod tests {
         assert!(addendum.contains("brief progress update"));
         assert!(addendum.contains("minimum evidence sufficient"));
         assert!(!default_system_prompt().contains(OPENAI_GPT55_CONTRACT_HEADER));
+    }
+
+    #[test]
+    fn test_fable5_contract_addendum_is_specific() {
+        let addendum = fable_5_contract_addendum();
+
+        assert!(addendum.contains(FABLE_5_CONTRACT_HEADER));
+        assert!(addendum.contains("enough information to act, act"));
+        assert!(addendum.contains("audit each claim against a tool result"));
+        assert!(addendum.contains("deliverable is your assessment"));
+        assert!(addendum.contains("ample context remaining"));
+        assert!(addendum.contains("Delegate independent subtasks"));
+        assert!(addendum.contains("Lead with the outcome"));
+        assert!(!default_system_prompt().contains(FABLE_5_CONTRACT_HEADER));
     }
 
     #[tokio::test]

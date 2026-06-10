@@ -74,6 +74,7 @@ pub fn create_stream(
                                 cached_prompt_tokens: message.usage.cache_read_input_tokens,
                                 cache_creation_tokens: message.usage.cache_creation_input_tokens,
                                 cache_read_tokens: message.usage.cache_read_input_tokens,
+                                iterations: None,
                             });
                         }
                         AnthropicStreamEvent::ContentBlockStart {

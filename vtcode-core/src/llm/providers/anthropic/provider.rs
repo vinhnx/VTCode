@@ -446,6 +446,11 @@ impl AnthropicProvider {
                 .get("output_config")
                 .and_then(|value| value.get("task_budget"))
                 .is_some(),
+            include_server_side_fallback: anthropic_request
+                .get("fallbacks")
+                .and_then(|value| value.as_array())
+                .is_some_and(|arr| !arr.is_empty()),
+            include_fallback_credit: request.fallback_credit_token.is_some(),
         };
 
         headers::combined_beta_header_value(
@@ -545,8 +550,8 @@ impl LLMProvider for AnthropicProvider {
     }
 
     fn supports_responses_compaction(&self, model: &str) -> bool {
-        // Anthropic server-side compaction is supported on Claude Opus 4.x,
-        // Sonnet 4.6+, and Mythos Preview models via context_management.edits.
+        // Anthropic server-side compaction is supported on Claude Opus 4.x
+        // and Sonnet 4.6+ models via context_management.edits.
         capabilities::supports_compaction(model)
     }
 
@@ -808,10 +813,10 @@ mod tests {
     fn effective_betas_include_code_execution_and_files_api_when_needed() {
         let provider = AnthropicProvider::with_model(
             "test-key".to_string(),
-            models::CLAUDE_OPUS_4_7.to_string(),
+            models::CLAUDE_SONNET_4_6.to_string(),
         );
         let request = LLMRequest {
-            model: models::CLAUDE_OPUS_4_7.to_string(),
+            model: models::CLAUDE_SONNET_4_6.to_string(),
             messages: vec![Message {
                 role: crate::llm::provider::MessageRole::User,
                 content: MessageContent::Parts(vec![
@@ -844,10 +849,10 @@ mod tests {
     fn effective_betas_include_context_management_beta_for_memory_tools() {
         let provider = AnthropicProvider::with_model(
             "test-key".to_string(),
-            models::CLAUDE_OPUS_4_7.to_string(),
+            models::CLAUDE_SONNET_4_6.to_string(),
         );
         let request = LLMRequest {
-            model: models::CLAUDE_OPUS_4_7.to_string(),
+            model: models::CLAUDE_SONNET_4_6.to_string(),
             messages: vec![Message::user("remember this preference".to_string())],
             tools: Some(std::sync::Arc::new(vec![ToolDefinition {
                 tool_type: "memory_20250818".to_string(),
@@ -876,10 +881,10 @@ mod tests {
     fn effective_betas_include_context_management_beta_for_context_edits() {
         let provider = AnthropicProvider::with_model(
             "test-key".to_string(),
-            models::CLAUDE_OPUS_4_7.to_string(),
+            models::CLAUDE_SONNET_4_6.to_string(),
         );
         let request = LLMRequest {
-            model: models::CLAUDE_OPUS_4_7.to_string(),
+            model: models::CLAUDE_SONNET_4_6.to_string(),
             messages: vec![Message::user("continue".to_string())],
             context_management: Some(json!({
                 "edits": [
@@ -902,10 +907,10 @@ mod tests {
     fn effective_betas_include_compact_beta_for_compaction_requests() {
         let provider = AnthropicProvider::with_model(
             "test-key".to_string(),
-            models::CLAUDE_OPUS_4_7.to_string(),
+            models::CLAUDE_SONNET_4_6.to_string(),
         );
         let request = LLMRequest {
-            model: models::CLAUDE_OPUS_4_7.to_string(),
+            model: models::CLAUDE_SONNET_4_6.to_string(),
             messages: vec![Message::user("continue".to_string())],
             context_management: Some(json!([
                 {
@@ -924,10 +929,10 @@ mod tests {
     fn effective_betas_include_compact_beta_for_compaction_edits() {
         let provider = AnthropicProvider::with_model(
             "test-key".to_string(),
-            models::CLAUDE_OPUS_4_7.to_string(),
+            models::CLAUDE_SONNET_4_6.to_string(),
         );
         let request = LLMRequest {
-            model: models::CLAUDE_OPUS_4_7.to_string(),
+            model: models::CLAUDE_SONNET_4_6.to_string(),
             messages: vec![Message::user("continue".to_string())],
             context_management: Some(json!({
                 "edits": [
@@ -956,10 +961,10 @@ mod tests {
     fn effective_betas_include_both_headers_for_mixed_context_edits() {
         let provider = AnthropicProvider::with_model(
             "test-key".to_string(),
-            models::CLAUDE_OPUS_4_7.to_string(),
+            models::CLAUDE_SONNET_4_6.to_string(),
         );
         let request = LLMRequest {
-            model: models::CLAUDE_OPUS_4_7.to_string(),
+            model: models::CLAUDE_SONNET_4_6.to_string(),
             messages: vec![Message::user("continue".to_string())],
             context_management: Some(json!({
                 "edits": [
@@ -989,10 +994,10 @@ mod tests {
     fn beta_header_includes_advanced_tool_use_for_programmatic_tools() {
         let provider = AnthropicProvider::with_model(
             "test-key".to_string(),
-            models::CLAUDE_OPUS_4_7.to_string(),
+            models::CLAUDE_SONNET_4_6.to_string(),
         );
         let request = LLMRequest {
-            model: models::CLAUDE_OPUS_4_7.to_string(),
+            model: models::CLAUDE_SONNET_4_6.to_string(),
             messages: vec![Message::user("find warmest city".to_string())],
             tools: Some(std::sync::Arc::new(vec![
                 ToolDefinition::function(
@@ -1024,10 +1029,8 @@ mod tests {
     #[test]
     fn beta_header_omits_context_1m_for_native_1m_models() {
         for model in [
+            models::CLAUDE_FABLE_5,
             models::CLAUDE_SONNET_4_6,
-            models::CLAUDE_OPUS_4_6,
-            models::CLAUDE_OPUS_4_7,
-            models::CLAUDE_MYTHOS_PREVIEW,
         ] {
             let provider = AnthropicProvider::with_model("test-key".to_string(), model.to_string());
             let request = LLMRequest {
@@ -1051,7 +1054,7 @@ mod tests {
     fn beta_header_uses_request_model_instead_of_provider_default() {
         let provider = AnthropicProvider::with_model(
             "test-key".to_string(),
-            models::CLAUDE_OPUS_4_7.to_string(),
+            models::CLAUDE_SONNET_4_6.to_string(),
         );
         let request = LLMRequest {
             model: models::CLAUDE_SONNET_4_6.to_string(),
@@ -1074,7 +1077,7 @@ mod tests {
     fn beta_header_includes_interleaved_thinking_for_sonnet_4_6_manual_mode() {
         let provider = AnthropicProvider::with_model(
             "test-key".to_string(),
-            models::CLAUDE_OPUS_4_7.to_string(),
+            models::CLAUDE_SONNET_4_6.to_string(),
         );
         let request = LLMRequest {
             model: models::CLAUDE_SONNET_4_6.to_string(),
@@ -1093,61 +1096,6 @@ mod tests {
 
         assert_eq!(payload["thinking"]["type"], "enabled");
         assert!(beta_header.contains("interleaved-thinking-2025-05-14"));
-    }
-
-    #[test]
-    fn beta_header_omits_interleaved_thinking_for_opus_4_6_manual_mode() {
-        let provider = AnthropicProvider::with_model(
-            "test-key".to_string(),
-            models::CLAUDE_OPUS_4_6.to_string(),
-        );
-        let request = LLMRequest {
-            model: models::CLAUDE_OPUS_4_6.to_string(),
-            messages: vec![Message::user("hello".to_string())],
-            ..Default::default()
-        };
-
-        let payload = provider
-            .convert_to_anthropic_format(&request)
-            .expect("payload conversion");
-        let beta_header = provider.beta_header_for_request(&request, &payload, false, None);
-
-        if let Some(header) = &beta_header {
-            assert!(!header.contains("interleaved-thinking-2025-05-14"));
-        }
-    }
-
-    #[test]
-    fn beta_header_includes_task_budget_beta_for_opus_4_7() {
-        let provider = AnthropicProvider::from_config(
-            Some("test-key".to_string()),
-            Some(models::CLAUDE_OPUS_4_7.to_string()),
-            None,
-            None,
-            None,
-            Some(AnthropicConfig {
-                task_budget_tokens: Some(128_000),
-                ..AnthropicConfig::default()
-            }),
-            None,
-        );
-        let request = LLMRequest {
-            model: models::CLAUDE_OPUS_4_7.to_string(),
-            messages: vec![Message::user("hello".to_string())],
-            ..Default::default()
-        };
-
-        let payload = provider
-            .convert_to_anthropic_format(&request)
-            .expect("payload conversion");
-        let beta_header = provider
-            .beta_header_for_request(&request, &payload, false, None)
-            .expect("beta header");
-
-        assert_eq!(payload["output_config"]["task_budget"]["type"], "tokens");
-        assert_eq!(payload["output_config"]["task_budget"]["total"], 128000);
-        assert!(beta_header.contains("task-budgets-2026-03-13"));
-        assert!(!beta_header.contains("effort-2025-11-24"));
     }
 
     #[test]
@@ -1172,10 +1120,10 @@ mod tests {
     fn beta_header_includes_advanced_tool_use_for_tool_search_requests() {
         let provider = AnthropicProvider::with_model(
             "test-key".to_string(),
-            models::CLAUDE_OPUS_4_7.to_string(),
+            models::CLAUDE_SONNET_4_6.to_string(),
         );
         let request = LLMRequest {
-            model: models::CLAUDE_OPUS_4_7.to_string(),
+            model: models::CLAUDE_SONNET_4_6.to_string(),
             messages: vec![Message::user("find the deployment tool".to_string())],
             tools: Some(std::sync::Arc::new(vec![ToolDefinition::tool_search(
                 crate::llm::provider::ToolSearchAlgorithm::Regex,

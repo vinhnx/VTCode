@@ -230,7 +230,6 @@ fn normalize_subagent_model_alias(model: &str) -> &str {
         "claude-haiku-4.5" => models::anthropic::CLAUDE_HAIKU_4_5,
         "claude-sonnet-4.6" => models::anthropic::CLAUDE_SONNET_4_6,
         "claude-opus-4.8" => models::anthropic::CLAUDE_OPUS_4_8,
-        "claude-opus-4.7" => models::anthropic::CLAUDE_OPUS_4_7,
         other => other,
     }
 }

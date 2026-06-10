@@ -538,6 +538,7 @@ mod tests {
             cached_prompt_tokens: Some(20),
             cache_creation_tokens: Some(10),
             cache_read_tokens: None,
+            iterations: None,
         };
 
         let total = ModelResolver::estimate_cost(pricing, &usage).expect("cost");

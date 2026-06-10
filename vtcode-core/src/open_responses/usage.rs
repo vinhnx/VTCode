@@ -200,6 +200,7 @@ mod tests {
             cached_prompt_tokens: Some(400),
             cache_creation_tokens: None,
             cache_read_tokens: None,
+            iterations: None,
         });
 
         assert_eq!(usage.input_tokens, 1000);

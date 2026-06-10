@@ -123,6 +123,20 @@ pub fn parse_response(response_json: Value, model: String) -> Result<LLMResponse
                     .and_then(|t| t.as_str())
                     .map(|s| s.to_string());
             }
+            Some("fallback") => {
+                // Fallback content block marks model boundary - preserve for conversation continuity
+                if let Some(from) = block.get("from").and_then(|v| v.get("model").and_then(|m| m.as_str()))
+                    && let Some(to) = block.get("to").and_then(|v| v.get("model").and_then(|m| m.as_str()))
+                {
+                    let detail = json!({
+                        "type": "fallback",
+                        "from": { "model": from },
+                        "to": { "model": to },
+                    });
+                    reasoning_details_vec.push(detail.to_string());
+                    text_parts.push(format!("[fallback: {} -> {}]", from, to));
+                }
+            }
             _ => {} // Ignore unknown block types
         }
     }
@@ -146,6 +160,33 @@ pub fn parse_response(response_json: Value, model: String) -> Result<LLMResponse
         .and_then(|sr| sr.as_str())
         .unwrap_or("end_turn");
     let finish_reason = parse_finish_reason(stop_reason);
+
+    // Parse stop_details for refusal/fallback credit information
+    if let Some(sd) = response_json.get("stop_details") {
+        let category = sd.get("category").and_then(|c| c.as_str()).unwrap_or("");
+        let explanation = sd.get("explanation").and_then(|e| e.as_str()).unwrap_or("");
+        let credit_token = sd
+            .get("fallback_credit_token")
+            .and_then(|t| t.as_str())
+            .unwrap_or("");
+        let has_prefill = sd
+            .get("fallback_has_prefill_claim")
+            .and_then(|v| v.as_bool());
+        let mut detail = json!({
+            "type": "stop_details",
+            "category": category,
+        });
+        if !explanation.is_empty() {
+            detail["explanation"] = Value::String(explanation.to_string());
+        }
+        if !credit_token.is_empty() {
+            detail["fallback_credit_token"] = Value::String(credit_token.to_string());
+        }
+        if let Some(prefill) = has_prefill {
+            detail["fallback_has_prefill_claim"] = Value::Bool(prefill);
+        }
+        reasoning_details_vec.push(detail.to_string());
+    }
 
     let usage = response_json.get("usage").map(parse_usage);
 
@@ -200,6 +241,41 @@ pub fn parse_usage(usage_value: &Value) -> Usage {
         .and_then(|value| value.as_u64())
         .map(|value| value as u32);
 
+    // Parse iterations for fallback tracking
+    let iterations = usage_value.get("iterations").and_then(|iters| iters.as_array()).map(|arr| {
+        arr.iter()
+            .filter_map(|iter| {
+                let iter_type = iter.get("type").and_then(|t| t.as_str());
+                let input_tokens = iter
+                    .get("input_tokens")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0) as u32;
+                let output_tokens = iter
+                    .get("output_tokens")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0) as u32;
+                let cache_creation = iter
+                    .get("cache_creation_input_tokens")
+                    .and_then(|v| v.as_u64())
+                    .map(|v| v as u32);
+                let cache_read = iter
+                    .get("cache_read_input_tokens")
+                    .and_then(|v| v.as_u64())
+                    .map(|v| v as u32);
+                let model = iter.get("model").and_then(|v| v.as_str()).unwrap_or("");
+
+                Some(json!({
+                    "type": iter_type,
+                    "model": model,
+                    "input_tokens": input_tokens,
+                    "output_tokens": output_tokens,
+                    "cache_creation_input_tokens": cache_creation,
+                    "cache_read_input_tokens": cache_read,
+                }))
+            })
+            .collect::<Vec<_>>()
+    });
+
     Usage {
         prompt_tokens: usage_value
             .get("input_tokens")
@@ -220,5 +296,6 @@ pub fn parse_usage(usage_value: &Value) -> Usage {
         cached_prompt_tokens: cache_read_tokens,
         cache_creation_tokens,
         cache_read_tokens,
+        iterations,
     }
 }

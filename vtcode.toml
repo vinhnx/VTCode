@@ -96,8 +96,7 @@ version = "0.96.12"
 [provider.anthropic]
 # Effort level for adaptive thinking/token usage (low, medium, high, xhigh, max) Controls how many
 # tokens Claude uses when responding, trading off between response thoroughness and token efficiency.
-# VT Code enables this for Claude Opus 4.7, Claude Opus 4.6, Claude Sonnet 4.6, and Claude Mythos
-# Preview. `xhigh` is Opus 4.7-only; models that do not support it fall back to their supported
+# VT Code enables this for Claude Opus 4.7, Claude Opus 4.6, and Claude Sonnet 4.6. `xhigh` is Opus 4.7-only; models that do not support it fall back to their supported
 # default, typically `high`.
 # Possible values: high, low, max, medium, xhigh
 # Default: "xhigh"

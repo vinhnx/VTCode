@@ -21,10 +21,10 @@ impl ModelId {
             | ModelId::GPT53Codex
             | ModelId::OpenAIGptOss20b
             | ModelId::OpenAIGptOss120b => Provider::OpenAI,
-            ModelId::ClaudeOpus48
+            ModelId::ClaudeFable5
+            | ModelId::ClaudeOpus48
             | ModelId::ClaudeSonnet46
-            | ModelId::ClaudeHaiku45
-            | ModelId::ClaudeMythosPreview => Provider::Anthropic,
+            | ModelId::ClaudeHaiku45 => Provider::Anthropic,
             ModelId::CopilotAuto
             | ModelId::CopilotGPT52Codex
             | ModelId::CopilotGPT51CodexMax

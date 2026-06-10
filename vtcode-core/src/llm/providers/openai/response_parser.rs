@@ -129,6 +129,7 @@ pub(crate) fn parse_chat_response(
                 cached_prompt_tokens,
                 cache_creation_tokens: None,
                 cache_read_tokens: None,
+                iterations: None,
             }
         }),
         finish_reason,

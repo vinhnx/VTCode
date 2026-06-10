@@ -22,10 +22,10 @@ impl ModelId {
             ModelId::OpenAIGptOss20b => "GPT-OSS 20B",
             ModelId::OpenAIGptOss120b => "GPT-OSS 120B",
             // Anthropic models
+            ModelId::ClaudeFable5 => "Claude Fable 5",
             ModelId::ClaudeOpus48 => "Claude Opus 4.8",
             ModelId::ClaudeSonnet46 => "Claude Sonnet 4.6",
             ModelId::ClaudeHaiku45 => "Claude Haiku 4.5",
-            ModelId::ClaudeMythosPreview => "Claude Mythos Preview",
             ModelId::CopilotAuto => "GitHub Copilot Auto",
             ModelId::CopilotGPT52Codex => "GitHub Copilot GPT-5.2 Codex",
             ModelId::CopilotGPT51CodexMax => "GitHub Copilot GPT-5.1 Codex Max",

@@ -406,6 +406,8 @@ pub fn convert_anthropic_to_llm_request(request: AnthropicMessagesRequest) -> LL
         service_tier: None,
         prompt_cache_key: None,
         prompt_cache_profile: None,
+        fallbacks: None,
+        fallback_credit_token: None,
         anthropic_request_overrides,
     }
 }
@@ -734,7 +736,7 @@ fn anthropic_block_text(block: &AnthropicContentBlock) -> String {
 }
 
 fn compatibility_thinking_mode(
-    model: &str,
+    _model: &str,
     thinking: Option<&ThinkingConfig>,
 ) -> AnthropicThinkingModeOverride {
     match thinking {
@@ -743,17 +745,7 @@ fn compatibility_thinking_mode(
             AnthropicThinkingModeOverride::ManualBudget(*budget_tokens)
         }
         Some(ThinkingConfig::Disabled) => AnthropicThinkingModeOverride::Disabled,
-        None => {
-            let is_mythos = model
-                == crate::config::constants::models::anthropic::CLAUDE_MYTHOS_PREVIEW
-                || model
-                    .contains(crate::config::constants::models::anthropic::CLAUDE_MYTHOS_PREVIEW);
-            if is_mythos {
-                AnthropicThinkingModeOverride::Adaptive
-            } else {
-                AnthropicThinkingModeOverride::Disabled
-            }
-        }
+        None => AnthropicThinkingModeOverride::Disabled,
     }
 }
 

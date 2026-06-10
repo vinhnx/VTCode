@@ -122,9 +122,9 @@ fn subagent_reasoning_levels_only_enable_xhigh_when_supported() {
     assert!(supported.contains(&ReasoningEffortLevel::XHigh));
     assert!(!supported.contains(&ReasoningEffortLevel::Max));
 
-    let opus = subagent_reasoning_levels("claude-opus-4-7", true);
-    assert!(opus.contains(&ReasoningEffortLevel::XHigh));
-    assert!(opus.contains(&ReasoningEffortLevel::Max));
+    let sonnet = subagent_reasoning_levels("claude-sonnet-4-6", true);
+    assert!(!sonnet.contains(&ReasoningEffortLevel::XHigh));
+    assert!(sonnet.contains(&ReasoningEffortLevel::Max));
 
     let shortcut = subagent_reasoning_levels("haiku", true);
     assert!(!shortcut.contains(&ReasoningEffortLevel::XHigh));
@@ -166,15 +166,15 @@ fn subagent_reasoning_normalization_drops_invalid_or_unsupported_values() {
         Some("xhigh".to_string())
     );
 
-    let opus = SubagentModelTarget::Concrete(selection::selection_from_dynamic(
+    let sonnet = SubagentModelTarget::Concrete(selection::selection_from_dynamic(
         Provider::Anthropic,
-        "claude-opus-4-7",
-        "claude-opus-4-7",
+        "claude-sonnet-4-6",
+        "claude-sonnet-4-6",
         None,
         None,
     ));
     assert_eq!(
-        normalized_subagent_reasoning(&opus, Some("max")),
+        normalized_subagent_reasoning(&sonnet, Some("max")),
         Some("max".to_string())
     );
 }
@@ -488,14 +488,10 @@ fn openai_codex_reasoning_helpers_match_supported_variants() {
     assert!(supports_xhigh_reasoning("gpt-5.2"));
     assert!(supports_xhigh_reasoning("gpt-5.2-codex"));
     assert!(supports_xhigh_reasoning("gpt-5.3-codex"));
-    assert!(supports_xhigh_reasoning("claude-opus-4-7"));
     assert!(!supports_xhigh_reasoning("gpt-5.1-codex"));
     assert!(!supports_xhigh_reasoning("gpt-5.1-codex-max"));
 
-    assert!(supports_max_reasoning("claude-opus-4-7"));
     assert!(supports_max_reasoning("claude-sonnet-4-6"));
-    assert!(supports_max_reasoning("claude-opus-4-6"));
-    assert!(supports_max_reasoning("claude-mythos-preview"));
     assert!(!supports_max_reasoning("gpt-5.4"));
 }
 

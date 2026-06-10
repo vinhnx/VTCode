@@ -63,9 +63,9 @@ pub use provider_trait::{
 };
 pub use request::{
     AnthropicOptionalStringOverride, AnthropicOptionalU32Override, AnthropicRequestOverrides,
-    AnthropicThinkingDisplayOverride, AnthropicThinkingModeOverride, CodingAgentSettings,
-    LLMRequest, ParallelToolConfig, PromptCacheProfile, ResponsesCompactionOptions,
-    SpecificFunctionChoice, SpecificToolChoice, ToolChoice,
+    AnthropicThinkingConfig, AnthropicThinkingDisplayOverride, AnthropicThinkingModeOverride,
+    CodingAgentSettings, FallbackModel, LLMRequest, ParallelToolConfig, PromptCacheProfile,
+    ResponsesCompactionOptions, SpecificFunctionChoice, SpecificToolChoice, ToolChoice,
 };
 pub use response::{
     BorrowedLLMStream, FinishReason, LLMNormalizedStream, LLMResponse, LLMStream, LLMStreamEvent,

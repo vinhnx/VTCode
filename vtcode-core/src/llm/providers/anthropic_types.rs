@@ -1,6 +1,21 @@
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Map, Value};
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum AnthropicFallback {
+    #[serde(rename = "fallback")]
+    Fallback {
+        from: AnthropicFallbackModel,
+        to: AnthropicFallbackModel,
+    },
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AnthropicFallbackModel {
+    pub model: String,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AnthropicRequest {
     pub model: String,
@@ -28,7 +43,22 @@ pub struct AnthropicRequest {
     pub output_config: Option<Box<AnthropicOutputConfig>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub context_management: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fallbacks: Option<Vec<AnthropicFallbackParam>>,
+    /// Opaque credit token returned by a refused request's `stop_details.fallback_credit_token`.
+    /// Echoed on the retry to avoid paying the prompt-cache cost twice.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fallback_credit_token: Option<String>,
     pub stream: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AnthropicFallbackParam {
+    pub model: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_tokens: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thinking: Option<ThinkingConfig>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -54,7 +84,7 @@ pub enum ThinkingDisplay {
     Summarized,
     /// Thinking blocks are returned with an empty `thinking` field; the `signature`
     /// still carries encrypted full thinking for multi-turn continuity
-    /// (default on Claude Opus 4.7 and Claude Mythos Preview).
+    /// (default on Claude Opus 4.7).
     Omitted,
 }
 
@@ -133,6 +163,12 @@ pub enum AnthropicContentBlock {
     /// Native web search result blocks returned by Anthropic web search tools.
     #[serde(rename = "web_search_tool_result")]
     WebSearchToolResult { tool_use_id: String, content: Value },
+    /// Fallback content block marking model boundary in server-side fallback
+    #[serde(rename = "fallback")]
+    Fallback {
+        from: AnthropicFallbackModel,
+        to: AnthropicFallbackModel,
+    },
 }
 
 /// Extracted struct for `AnthropicContentBlock::ToolUse` (boxed to reduce enum size).
@@ -356,6 +392,20 @@ pub struct AnthropicMessageDelta {
     pub stop_sequence: Option<String>,
 }
 
+#[derive(Debug, Deserialize, Clone)]
+pub struct AnthropicStopDetails {
+    #[serde(rename = "type")]
+    pub stop_details_type: Option<String>,
+    pub category: Option<String>,
+    pub explanation: Option<String>,
+    /// Opaque token that represents fallback credit when retrying on another model.
+    /// Present when the refusal qualifies for fallback credit.
+    pub fallback_credit_token: Option<String>,
+    /// Whether the retry can append an assistant message continuing the refused model's
+    /// partial output (`true`) or must use the unchanged request body (`false`).
+    pub fallback_has_prefill_claim: Option<bool>,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct AnthropicMessageResponse {
     pub id: String,
@@ -364,6 +414,7 @@ pub struct AnthropicMessageResponse {
     pub model: String,
     pub stop_reason: Option<String>,
     pub stop_sequence: Option<String>,
+    pub stop_details: Option<AnthropicStopDetails>,
     pub usage: AnthropicUsage,
 }
 
@@ -373,18 +424,35 @@ pub struct AnthropicUsage {
     pub output_tokens: u32,
     pub cache_creation_input_tokens: Option<u32>,
     pub cache_read_input_tokens: Option<u32>,
-    /// Per-iteration token usage, populated when compaction triggers.
-    /// Each entry represents one sampling pass (compaction or message).
+    /// Per-iteration token usage, populated when compaction triggers or server-side fallback runs.
+    /// Each entry represents one sampling pass (compaction, message, or fallback_message).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub iterations: Option<Vec<AnthropicUsageIteration>>,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct AnthropicUsageIteration {
-    #[serde(rename = "type")]
-    pub iteration_type: String,
-    pub input_tokens: u32,
-    pub output_tokens: u32,
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum AnthropicUsageIteration {
+    Message {
+        model: String,
+        input_tokens: u32,
+        output_tokens: u32,
+        cache_creation_input_tokens: Option<u32>,
+        cache_read_input_tokens: Option<u32>,
+    },
+    FallbackMessage {
+        model: String,
+        input_tokens: u32,
+        output_tokens: u32,
+        cache_creation_input_tokens: Option<u32>,
+        cache_read_input_tokens: Option<u32>,
+    },
+    Compaction {
+        input_tokens: u32,
+        output_tokens: u32,
+        cache_creation_input_tokens: Option<u32>,
+        cache_read_input_tokens: Option<u32>,
+    },
 }
 
 #[derive(Debug, Deserialize)]

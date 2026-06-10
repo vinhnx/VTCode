@@ -4,6 +4,7 @@
 /// and command history navigation.  Text editing and cursor positioning are
 /// delegated to [`ratatui_textarea::TextArea`], which provides undo/redo,
 /// proper UTF-8 handling, and a battle-tested editing model.
+use chrono::{DateTime, Utc};
 use ratatui_textarea::{CursorMove, DataCursor, TextArea};
 
 use super::super::types::ContentPart;
@@ -19,6 +20,7 @@ fn configure_textarea(textarea: &mut TextArea<'static>) {
 pub struct InputHistoryEntry {
     content: String,
     elements: Vec<ContentPart>,
+    created_at: DateTime<Utc>,
 }
 
 impl InputHistoryEntry {
@@ -28,7 +30,11 @@ impl InputHistoryEntry {
             elements.push(ContentPart::text(content.clone()));
         }
         elements.extend(attachments.into_iter().filter(ContentPart::is_image));
-        Self { content, elements }
+        Self {
+            content,
+            elements,
+            created_at: Utc::now(),
+        }
     }
 
     pub fn content(&self) -> &str {
@@ -49,6 +55,10 @@ impl InputHistoryEntry {
             .filter(|part| part.is_image())
             .cloned()
             .collect()
+    }
+
+    pub fn timestamp(&self) -> DateTime<Utc> {
+        self.created_at
     }
 }
 

@@ -86,6 +86,7 @@ pub fn parse_response_openai_format(
             },
             cache_creation_tokens: None,
             cache_read_tokens: None,
+            iterations: None,
         }),
         finish_reason: crate::llm::provider::FinishReason::Stop,
         reasoning: reasoning_content,

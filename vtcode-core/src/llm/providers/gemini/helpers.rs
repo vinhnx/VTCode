@@ -620,6 +620,7 @@ impl GeminiProvider {
                 cached_prompt_tokens: usage.total_cached_tokens,
                 cache_creation_tokens: None,
                 cache_read_tokens: usage.total_cached_tokens,
+                iterations: None,
             }),
             finish_reason,
             reasoning,

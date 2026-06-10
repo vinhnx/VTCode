@@ -50,14 +50,14 @@ pub enum ModelId {
     OpenAIGptOss120b,
 
     // Anthropic models
+    /// Claude Fable 5 - Anthropic's most capable widely released model with 1M context, 128k output, adaptive thinking
+    ClaudeFable5,
     /// Claude Opus 4.8 - Anthropic's most capable model for complex reasoning and agentic coding
     ClaudeOpus48,
     /// Claude Sonnet 4.6 - Balanced flagship Anthropic model in VT Code's conservative rollout
     ClaudeSonnet46,
     /// Claude Haiku 4.5 - Latest efficient Anthropic model (2025-10-15)
     ClaudeHaiku45,
-    /// Claude Mythos Preview - Invitation-only Anthropic research preview for defensive cybersecurity workflows
-    ClaudeMythosPreview,
     /// GitHub Copilot auto model selection
     CopilotAuto,
     /// GitHub Copilot GPT-5.2 Codex

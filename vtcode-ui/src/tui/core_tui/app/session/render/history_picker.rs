@@ -9,7 +9,7 @@ use crate::tui::core_tui::session::list_panel::{
 use ratatui::widgets::Clear;
 
 struct HistoryPickerPanelModel {
-    entries: Vec<String>,
+    entries: Vec<(String, String)>,
     selected: Option<usize>,
     offset: usize,
     visible_rows: usize,
@@ -39,16 +39,24 @@ impl SharedListWidgetModel for HistoryPickerPanelModel {
         self.entries
             .iter()
             .enumerate()
-            .map(|(idx, content)| {
+            .map(|(idx, (content, time_label))| {
                 let is_selected = self.selected == Some(idx);
                 let max_chars = width as usize;
-                let item_len = content.chars().count();
+
+                // Build display text: "content · 3h ago"
+                let display_text = if time_label.is_empty() {
+                    content.clone()
+                } else {
+                    format!("{content} \u{b7} {time_label}")
+                };
+
+                let item_len = display_text.chars().count();
                 let truncated = if item_len > max_chars {
                     let kept = max_chars.saturating_sub(1);
-                    let text: String = content.chars().take(kept).collect();
+                    let text: String = display_text.chars().take(kept).collect();
                     format!("{text}…")
                 } else {
-                    content.clone()
+                    display_text
                 };
                 let cursor = if is_selected {
                     format!("{} ", ui::MODAL_LIST_HIGHLIGHT_SYMBOL)
@@ -174,7 +182,7 @@ pub fn render_history_picker(session: &mut Session, frame: &mut Frame<'_>, area:
 
     let entries = matches
         .into_iter()
-        .map(|item| item.content)
+        .map(|item| (item.content, item.time_label))
         .collect::<Vec<_>>();
     let mut panel_model = HistoryPickerPanelModel {
         entries,

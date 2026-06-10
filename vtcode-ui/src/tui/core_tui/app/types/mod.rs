@@ -13,7 +13,10 @@ pub use overlay::{
     TransientSubmission, WizardOverlayRequest,
 };
 pub use plan::{PlanContent, PlanPhase, PlanStep};
-pub use protocol::{InlineCommand, InlineEvent, InlineEventCallback, InlineHandle, InlineSession};
+pub use protocol::{
+    ArchivedPromptEntry, InlineCommand, InlineEvent, InlineEventCallback, InlineHandle,
+    InlineSession,
+};
 pub use slash::SlashCommandItem;
 
 pub use crate::tui::core_tui::types::{

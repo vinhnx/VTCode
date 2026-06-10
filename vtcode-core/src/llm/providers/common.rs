@@ -1104,6 +1104,7 @@ pub fn parse_usage_openai_format(
                 None
             },
             cache_read_tokens: None,
+            iterations: None,
         })
 }
 

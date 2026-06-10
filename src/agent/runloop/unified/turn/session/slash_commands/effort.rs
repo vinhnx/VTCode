@@ -313,8 +313,8 @@ fn effort_description(level: ReasoningEffortLevel, model: &str) -> &'static str 
         ReasoningEffortLevel::High => {
             "Comprehensive implementation with extensive testing and documentation"
         }
-        ReasoningEffortLevel::XHigh if model == "claude-opus-4-8" || model == "claude-opus-4-7" => {
-            "Deeper reasoning than high, just below maximum (Opus 4.8/4.7 only)"
+        ReasoningEffortLevel::XHigh if model == "claude-opus-4-8" => {
+            "Deeper reasoning than high, just below maximum (Opus 4.8 only)"
         }
         ReasoningEffortLevel::XHigh => "Deeper reasoning for harder, longer-running problems",
         ReasoningEffortLevel::Max => {
@@ -330,31 +330,10 @@ mod tests {
     use vtcode_core::config::types::ReasoningEffortLevel;
 
     #[test]
-    fn opus_preset_exposes_xhigh_and_max() {
-        let preset = resolve_model_preset(Provider::Anthropic, "claude-opus-4-7")
-            .expect("preset should exist");
-        let levels = preset
-            .supported_reasoning_efforts
-            .iter()
-            .map(|value| value.effort)
-            .collect::<Vec<_>>();
-        assert_eq!(
-            levels,
-            vec![
-                ReasoningEffortLevel::Low,
-                ReasoningEffortLevel::Medium,
-                ReasoningEffortLevel::High,
-                ReasoningEffortLevel::XHigh,
-                ReasoningEffortLevel::Max,
-            ]
-        );
-    }
-
-    #[test]
     fn xhigh_description_matches_requested_opus_copy() {
         assert_eq!(
-            effort_description(ReasoningEffortLevel::XHigh, "claude-opus-4-7"),
-            "Deeper reasoning than high, just below maximum (Opus 4.8/4.7 only)"
+            effort_description(ReasoningEffortLevel::XHigh, "claude-opus-4-8"),
+            "Deeper reasoning than high, just below maximum (Opus 4.8 only)"
         );
     }
 }

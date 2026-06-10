@@ -43,6 +43,9 @@ use support::{
     prompt_startup_plan_mode, remove_transient_system_notes, take_pending_resumed_user_prompt,
 };
 use tokio::sync::{Notify, mpsc};
+use vtcode_core::llm::provider::MessageRole;
+use vtcode_core::utils::session_archive;
+use vtcode_ui::tui::app::ArchivedPromptEntry;
 
 #[expect(clippy::too_many_arguments)]
 pub(super) async fn run_single_agent_loop_unified_impl(
@@ -299,6 +302,16 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         let mut renderer = ui_setup.renderer;
         let mut session = ui_setup.session;
         let handle = ui_setup.handle;
+
+        // Load archived prompts from recent sessions into the history picker.
+        // Runs in the background so the TUI starts immediately.
+        {
+            let handle = handle.clone();
+            tokio::spawn(async move {
+                load_archived_prompts_for_history(&handle).await;
+            });
+        }
+
         let mut header_context = ui_setup.header_context;
         let mut ide_context_bridge = ui_setup.ide_context_bridge;
         let ctrl_c_state = ui_setup.ctrl_c_state;
@@ -1297,6 +1310,59 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         break;
     }
     Ok(())
+}
+
+/// Load user prompts from recent session archives (last 24 hours) and inject
+/// them into the history picker so Ctrl+R can search across sessions.
+async fn load_archived_prompts_for_history(handle: &vtcode_ui::tui::app::InlineHandle) {
+    use chrono::{Duration, Utc};
+
+    let cutoff = Utc::now() - Duration::hours(24);
+
+    let listings = match session_archive::list_recent_sessions(50).await {
+        Ok(listings) => listings,
+        Err(_) => return,
+    };
+
+    let mut entries = Vec::new();
+    for listing in &listings {
+        // Skip sessions older than 24 hours
+        if listing.snapshot.started_at < cutoff {
+            continue;
+        }
+
+        let session_label = listing.identifier();
+        for msg in &listing.snapshot.messages {
+            if msg.role != MessageRole::User {
+                continue;
+            }
+            let content = msg.content.as_text();
+            let trimmed = content.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            // Use first line as the prompt preview
+            let preview = trimmed
+                .lines()
+                .next()
+                .unwrap_or(trimmed)
+                .chars()
+                .take(200)
+                .collect::<String>();
+            // NOTE: `created_at` uses the session start time because per-message
+            // timestamps are not stored in the archive format. The time label is
+            // therefore an approximation of when the conversation happened.
+            entries.push(ArchivedPromptEntry {
+                content: preview,
+                created_at: listing.snapshot.started_at,
+                session_label: session_label.clone(),
+            });
+        }
+    }
+
+    if !entries.is_empty() {
+        handle.set_archived_history(entries);
+    }
 }
 
 #[cfg(test)]

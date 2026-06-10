@@ -64,7 +64,7 @@ pub(crate) fn claude_thinking_profile(
 ) -> Option<ClaudeThinkingProfile> {
     let requested = resolve_model_name(model, default_model);
 
-    if matches_model(requested, models::anthropic::CLAUDE_MYTHOS_PREVIEW) {
+    if matches_model(requested, models::anthropic::CLAUDE_FABLE_5) {
         return Some(ClaudeThinkingProfile {
             mode: ClaudeThinkingMode::Adaptive,
             supports_manual_budget: false,
@@ -72,44 +72,10 @@ pub(crate) fn claude_thinking_profile(
             default_thinking_enabled: true,
             manual_interleaved_beta: false,
             supports_effort: true,
-            supports_task_budget: false,
-            default_display: ThinkingDisplay::Omitted,
-            default_effort: reasoning::HIGH,
-            supports_xhigh_effort: false,
-            supports_max_effort: true,
-        });
-    }
-
-    if matches_model(requested, models::anthropic::CLAUDE_OPUS_4_8)
-        || matches_model(requested, models::anthropic::CLAUDE_OPUS_4_7)
-    {
-        return Some(ClaudeThinkingProfile {
-            mode: ClaudeThinkingMode::Adaptive,
-            supports_manual_budget: false,
-            adaptive_only: true,
-            default_thinking_enabled: false,
-            manual_interleaved_beta: false,
-            supports_effort: true,
             supports_task_budget: true,
             default_display: ThinkingDisplay::Omitted,
             default_effort: reasoning::XHIGH,
             supports_xhigh_effort: true,
-            supports_max_effort: true,
-        });
-    }
-
-    if matches_model(requested, models::anthropic::CLAUDE_OPUS_4_6) {
-        return Some(ClaudeThinkingProfile {
-            mode: ClaudeThinkingMode::Adaptive,
-            supports_manual_budget: true,
-            adaptive_only: false,
-            default_thinking_enabled: false,
-            manual_interleaved_beta: false,
-            supports_effort: true,
-            supports_task_budget: false,
-            default_display: ThinkingDisplay::Summarized,
-            default_effort: reasoning::HIGH,
-            supports_xhigh_effort: false,
             supports_max_effort: true,
         });
     }
@@ -150,11 +116,9 @@ pub(crate) fn claude_thinking_profile(
 }
 
 fn supports_native_1m_context(model: &str) -> bool {
-    matches_model(model, models::anthropic::CLAUDE_SONNET_4_6)
+    matches_model(model, models::anthropic::CLAUDE_FABLE_5)
+        || matches_model(model, models::anthropic::CLAUDE_SONNET_4_6)
         || matches_model(model, models::anthropic::CLAUDE_OPUS_4_8)
-        || matches_model(model, models::anthropic::CLAUDE_OPUS_4_6)
-        || matches_model(model, models::anthropic::CLAUDE_OPUS_4_7)
-        || matches_model(model, models::anthropic::CLAUDE_MYTHOS_PREVIEW)
 }
 
 pub fn supports_reasoning(model: &str, default_model: &str) -> bool {
@@ -202,9 +166,8 @@ pub(crate) fn supports_manual_interleaved_beta(model: &str, default_model: &str)
 pub(crate) fn supports_assistant_prefill(model: &str, default_model: &str) -> bool {
     let requested = resolve_model_name(model, default_model);
 
-    !(matches_model(requested, models::anthropic::CLAUDE_OPUS_4_6)
+    !(matches_model(requested, models::anthropic::CLAUDE_FABLE_5)
         || matches_model(requested, models::anthropic::CLAUDE_OPUS_4_8)
-        || matches_model(requested, models::anthropic::CLAUDE_OPUS_4_7)
         || matches_model(requested, models::anthropic::CLAUDE_SONNET_4_6))
 }
 
@@ -249,11 +212,9 @@ pub(crate) fn effort_allowed_for_model(model: &str, default_model: &str, effort:
 }
 
 pub fn supports_compaction(model: &str) -> bool {
-    matches_model(model, models::anthropic::CLAUDE_OPUS_4_8)
-        || matches_model(model, models::anthropic::CLAUDE_OPUS_4_7)
-        || matches_model(model, models::anthropic::CLAUDE_OPUS_4_6)
+    matches_model(model, models::anthropic::CLAUDE_FABLE_5)
+        || matches_model(model, models::anthropic::CLAUDE_OPUS_4_8)
         || matches_model(model, models::anthropic::CLAUDE_SONNET_4_6)
-        || matches_model(model, models::anthropic::CLAUDE_MYTHOS_PREVIEW)
 }
 
 pub fn supports_parallel_tool_config(_model: &str) -> bool {
@@ -289,8 +250,6 @@ pub fn supports_vision(model: &str, default_model: &str) -> bool {
 
     requested.contains("claude-3")
         || requested.contains("claude-4-sonnet")
-        || requested.contains("claude-4-6")
-        || requested.contains("claude-4-7")
         || requested == models::anthropic::CLAUDE_HAIKU_4_5
         || requested == models::anthropic::CLAUDE_HAIKU_4_5_20251001
 }

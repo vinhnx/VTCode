@@ -463,6 +463,7 @@ pub fn parse_responses_payload(
             cached_prompt_tokens,
             cache_creation_tokens: None,
             cache_read_tokens: None,
+            iterations: None,
         }
     });
 

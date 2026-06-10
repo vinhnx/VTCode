@@ -12,13 +12,21 @@ use crate::tui::core_tui::session::modal::{ModalKeyModifiers, ModalListKeyResult
 use crate::tui::core_tui::session::reverse_search;
 use crate::tui::core_tui::types::InlineSegment;
 
-fn input_history_entries(session: &Session) -> Vec<(String, Vec<ContentPart>)> {
+fn input_history_entries(
+    session: &Session,
+) -> Vec<(String, Vec<ContentPart>, chrono::DateTime<chrono::Utc>)> {
     session
         .core
         .input_manager
         .history()
         .iter()
-        .map(|entry| (entry.content().to_string(), entry.attachment_elements()))
+        .map(|entry| {
+            (
+                entry.content().to_string(),
+                entry.attachment_elements(),
+                entry.timestamp(),
+            )
+        })
         .collect()
 }
 

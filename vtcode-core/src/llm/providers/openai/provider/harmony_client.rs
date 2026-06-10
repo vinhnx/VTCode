@@ -354,6 +354,7 @@ impl OpenAIProvider {
                 cached_prompt_tokens: None,
                 cache_creation_tokens: None,
                 cache_read_tokens: None,
+                iterations: None,
             }),
             finish_reason: provider::FinishReason::Stop,
             reasoning: None,

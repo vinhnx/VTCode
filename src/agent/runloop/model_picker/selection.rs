@@ -295,18 +295,14 @@ pub(super) fn supports_xhigh_reasoning(model_id: &str) -> bool {
             | "gpt-5.4-pro"
             | "gpt-5.3-codex"
             | "claude-opus-4-8"
-            | "claude-opus-4-7"
+            | "claude-fable-5"
     )
 }
 
 pub(super) fn supports_max_reasoning(model_id: &str) -> bool {
     matches!(
         model_id,
-        "claude-opus-4-8"
-            | "claude-opus-4-7"
-            | "claude-opus-4-6"
-            | "claude-sonnet-4-6"
-            | "claude-mythos-preview"
+        "claude-opus-4-8" | "claude-sonnet-4-6" | "claude-fable-5"
     )
 }
 

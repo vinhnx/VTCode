@@ -80,3 +80,14 @@ implement double escape to rewind, reference.
 
 1. show rewind history, reference. '/Users/vinhnguyenxuan/Documents/vtcode-resources/idea/Screenshot 2026-06-07 at 9.15.02 AM.png'
 2. when user select a history. show 4 options. implement actual logic you see from the screenshot. reference. ''/Users/vinhnguyenxuan/Documents/vtcode-resources/idea/Screenshot 2026-06-07 at 9.15.35 AM.png'
+
+--
+
+1/ Yank vtcode-tui, vtcode-design, vtcode-theme 0.123.x from crates.io (now merged into vtcode-ui)
+2/ Update release scripts to remove stale crate references
+3/ File upstream issue on ratatui to add Send + Sync bounds to CellEffect trait
+--
+
+idea: build a new version release note TUI (use Info tui). showing only when user first update to a new version, and can be accessed later in the help menu.
+
+--

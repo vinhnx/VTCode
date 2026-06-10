@@ -737,6 +737,7 @@ Enable that provider in your HuggingFace Inference Providers settings, or switch
             cached_prompt_tokens: None,
             cache_creation_tokens: None,
             cache_read_tokens: None,
+            iterations: None,
         });
 
         Ok(LLMResponse {
@@ -1116,6 +1117,7 @@ impl HuggingFaceProvider {
                                         cached_prompt_tokens: None,
                                         cache_creation_tokens: None,
                                         cache_read_tokens: None,
+                                        iterations: None,
                                     });
                                 }
 

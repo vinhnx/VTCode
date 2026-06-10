@@ -148,6 +148,7 @@ mod tests {
                 cached_prompt_tokens: Some(50),
                 cache_creation_tokens: None,
                 cache_read_tokens: None,
+                iterations: None,
             }),
         );
         telemetry.record_llm_request("gpt-5", Duration::from_secs(10), None);
@@ -177,6 +178,7 @@ mod tests {
                 cached_prompt_tokens: Some(320),
                 cache_creation_tokens: Some(80),
                 cache_read_tokens: None,
+                iterations: None,
             }),
         );
 

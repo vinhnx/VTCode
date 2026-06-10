@@ -40,6 +40,7 @@ pub(crate) fn parse_usage_value(value: &Value) -> Usage {
         cached_prompt_tokens,
         cache_creation_tokens,
         cache_read_tokens,
+        iterations: None,
     }
 }
 

@@ -16,8 +16,6 @@ pub const GPT_5: &str = "gpt-5";
 pub const GPT_5_CODEX: &str = "gpt-5-codex";
 pub const GPT_5_NANO: &str = "gpt-5-nano";
 
-pub const CLAUDE_OPUS_4_7: &str = "claude-opus-4-7";
-pub const CLAUDE_OPUS_4_6: &str = "claude-opus-4-6";
 pub const CLAUDE_OPUS_4_5: &str = "claude-opus-4-5";
 pub const CLAUDE_OPUS_4_1: &str = "claude-opus-4-1";
 pub const CLAUDE_SONNET_4_6: &str = "claude-sonnet-4-6";
@@ -53,8 +51,6 @@ pub const OPENAI_MODELS: &[&str] = &[
 ];
 
 pub const ANTHROPIC_MODELS: &[&str] = &[
-    CLAUDE_OPUS_4_7,
-    CLAUDE_OPUS_4_6,
     CLAUDE_OPUS_4_5,
     CLAUDE_OPUS_4_1,
     CLAUDE_SONNET_4_6,
@@ -94,8 +90,6 @@ pub const SUPPORTED_MODELS: &[&str] = &[
     GPT_5,
     GPT_5_CODEX,
     GPT_5_NANO,
-    CLAUDE_OPUS_4_7,
-    CLAUDE_OPUS_4_6,
     CLAUDE_OPUS_4_5,
     CLAUDE_OPUS_4_1,
     CLAUDE_SONNET_4_6,

@@ -235,6 +235,7 @@ mod tests {
                         cached_prompt_tokens: None,
                         cache_creation_tokens: None,
                         cache_read_tokens: None,
+                        iterations: None,
                     },
                 }),
                 Ok(NormalizedStreamEvent::Done {

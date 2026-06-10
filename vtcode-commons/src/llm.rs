@@ -33,6 +33,10 @@ pub struct Usage {
     pub cached_prompt_tokens: Option<u32>,
     pub cache_creation_tokens: Option<u32>,
     pub cache_read_tokens: Option<u32>,
+    /// Per-iteration token usage for Anthropic server-side fallback and compaction.
+    /// Each entry represents one sampling pass (message, fallback_message, or compaction).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub iterations: Option<Vec<serde_json::Value>>,
 }
 
 impl Usage {

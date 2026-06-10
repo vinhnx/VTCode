@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use chrono::{DateTime, Utc};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use super::overlay::{
@@ -13,6 +14,14 @@ use crate::tui::core_tui::types::{
     InlineListSelection, InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme,
     LocalAgentEntry, SecurePromptConfig,
 };
+
+/// A user prompt from a previous session archive, used to populate the history picker.
+#[derive(Debug, Clone)]
+pub struct ArchivedPromptEntry {
+    pub content: String,
+    pub created_at: DateTime<Utc>,
+    pub session_label: String,
+}
 
 pub enum InlineCommand {
     AppendLine {
@@ -80,6 +89,10 @@ pub enum InlineCommand {
     },
     SetLocalAgents {
         entries: Vec<LocalAgentEntry>,
+    },
+    /// Inject archived prompts from previous sessions into the history picker.
+    SetArchivedHistory {
+        entries: Vec<ArchivedPromptEntry>,
     },
     SetPrimaryAgent {
         name: Option<String>,
@@ -351,6 +364,10 @@ impl InlineHandle {
 
     pub fn set_local_agents(&self, entries: Vec<LocalAgentEntry>) {
         self.send_command(InlineCommand::SetLocalAgents { entries });
+    }
+
+    pub fn set_archived_history(&self, entries: Vec<ArchivedPromptEntry>) {
+        self.send_command(InlineCommand::SetArchivedHistory { entries });
     }
 
     pub fn set_primary_agent(&self, name: Option<String>) {

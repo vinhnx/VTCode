@@ -18,6 +18,8 @@ pub struct BetaHeaderConfig<'a> {
     pub include_manual_interleaved_beta: bool,
     pub request_betas: Option<&'a [String]>,
     pub include_task_budget: bool,
+    pub include_server_side_fallback: bool,
+    pub include_fallback_credit: bool,
 }
 
 pub fn prompt_cache_beta_header_value(
@@ -66,6 +68,14 @@ pub fn combined_beta_header_value(
 
     if config.include_task_budget {
         pieces.push(config.config.task_budget_beta.clone());
+    }
+
+    if config.include_server_side_fallback {
+        pieces.push("server-side-fallback-2026-06-01".to_owned());
+    }
+
+    if config.include_fallback_credit {
+        pieces.push("fallback-credit-2026-06-01".to_owned());
     }
 
     if let Some(betas) = config.request_betas {

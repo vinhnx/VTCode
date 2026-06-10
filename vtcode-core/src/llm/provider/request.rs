@@ -5,6 +5,37 @@ use std::sync::Arc;
 
 use super::{Message, ToolDefinition};
 
+/// Fallback model configuration for Anthropic server-side fallback.
+/// Used with the `server-side-fallback-2026-06-01` beta header.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct FallbackModel {
+    /// The model identifier to fall back to (e.g., "claude-opus-4-8")
+    pub model: String,
+    /// Optional max_tokens override for this fallback attempt
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_tokens: Option<u32>,
+    /// Optional thinking configuration override for this fallback attempt
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thinking: Option<AnthropicThinkingConfig>,
+}
+
+/// Anthropic thinking configuration for fallback models.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum AnthropicThinkingConfig {
+    #[default]
+    Disabled,
+    Enabled {
+        budget_tokens: u32,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        display: Option<String>,
+    },
+    Adaptive {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        display: Option<String>,
+    },
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum PromptCacheProfile {
@@ -156,6 +187,16 @@ pub struct LLMRequest {
 
     /// Optional request-scoped prompt cache profile for provider-specific TTL overrides.
     pub prompt_cache_profile: Option<PromptCacheProfile>,
+
+    /// Optional fallback models for Anthropic server-side fallback (Claude Fable 5).
+    /// Requires the `server-side-fallback-2026-06-01` beta header.
+    pub fallbacks: Option<Vec<FallbackModel>>,
+
+    /// Optional opaque credit token from a refused request's `stop_details.fallback_credit_token`.
+    /// Echoed on the retry to avoid paying the prompt-cache cost twice.
+    /// Requires the `fallback-credit-2026-06-01` beta header on both the refused request and
+    /// the retry.
+    pub fallback_credit_token: Option<String>,
 
     /// Optional Anthropic-specific request overrides used when request semantics must
     /// not inherit VT Code's provider defaults, such as the Anthropic compatibility server.

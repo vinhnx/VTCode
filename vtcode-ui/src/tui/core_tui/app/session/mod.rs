@@ -618,6 +618,18 @@ impl AppSession {
                     self.local_agents_auto_opened = false;
                 }
             }
+            InlineCommand::SetArchivedHistory { entries } => {
+                let archived = entries
+                    .into_iter()
+                    .map(|e| history_picker::ArchivedPrompt {
+                        content: e.content,
+                        created_at: e.created_at,
+                        session_label: e.session_label,
+                    })
+                    .collect();
+                self.history_picker_state.set_archived_prompts(archived);
+                self.core.mark_dirty();
+            }
             InlineCommand::SetInput(value) => {
                 self.core
                     .handle_command(crate::tui::core_tui::types::InlineCommand::SetInput(value));
@@ -758,6 +770,7 @@ fn to_core_command(command: &InlineCommand) -> Option<crate::tui::core_tui::type
             CoreCommand::SetSubagentPreview { text: text.clone() }
         }
         InlineCommand::SetLocalAgents { .. } => return None,
+        InlineCommand::SetArchivedHistory { .. } => return None,
         InlineCommand::SetPrimaryAgent { name } => {
             CoreCommand::SetPrimaryAgent { name: name.clone() }
         }

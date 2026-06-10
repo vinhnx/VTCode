@@ -1505,8 +1505,29 @@
     "api": "https://api.anthropic.com/v1",
     "name": "Anthropic",
     "doc": "https://docs.anthropic.com/claude/docs/models-overview",
-    "default_model": "claude-opus-4-8",
+    "default_model": "claude-fable-5",
     "models": {
+      "claude-fable-5": {
+        "id": "claude-fable-5",
+        "name": "Claude Fable 5",
+        "description": "Anthropic's most capable widely released model with 1M context window, 128k max output tokens, and always-on adaptive thinking",
+        "reasoning": true,
+        "effort": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1000000,
+        "output_tokens": 128000,
+        "status": "current",
+        "version": "5"
+      },
       "claude-opus-4-8": {
         "id": "claude-opus-4-8",
         "name": "Claude Opus 4.8",
@@ -1547,45 +1568,6 @@
         "output_tokens": 64000,
         "status": "current"
       },
-      "claude-opus-4-7": {
-        "id": "claude-opus-4-7",
-        "name": "Claude Opus 4.7",
-        "description": "Next-gen flagship model with adaptive thinking, optional task budgets, and 1M context.",
-        "reasoning": true,
-        "effort": true,
-        "tool_call": true,
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "context": 1000000,
-        "output_tokens": 128000,
-        "status": "current"
-      },
-      "claude-opus-4-6": {
-        "id": "claude-opus-4-6",
-        "name": "Claude Opus 4.6",
-        "description": "Previous Anthropic flagship. VT Code currently keeps it on the budgeted-thinking path for compatibility.",
-        "reasoning": true,
-        "tool_call": true,
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "context": 1000000,
-        "output_tokens": 128000,
-        "status": "legacy"
-      },
       "claude-sonnet-4-6": {
         "id": "claude-sonnet-4-6",
         "name": "Claude Sonnet 4.6",
@@ -1604,26 +1586,6 @@
         "context": 1000000,
         "output_tokens": 64000,
         "status": "current"
-      },
-      "claude-mythos-preview": {
-        "id": "claude-mythos-preview",
-        "name": "Claude Mythos Preview",
-        "description": "Invitation-only Anthropic research preview for defensive cybersecurity workflows with adaptive thinking.",
-        "reasoning": true,
-        "effort": true,
-        "tool_call": true,
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "context": 1000000,
-        "output_tokens": 128000,
-        "status": "preview"
       },
       "claude-haiku-4-5": {
         "id": "claude-haiku-4-5",

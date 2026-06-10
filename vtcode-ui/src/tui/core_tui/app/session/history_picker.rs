@@ -5,21 +5,35 @@ use crate::tui::ui::search::fuzzy_score;
 ///
 /// Provides a visual palette for searching and selecting from command history
 /// using nucleo fuzzy matching, similar to the slash command palette.
+use chrono::{DateTime, Duration, Utc};
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::tui::core_tui::session::input_manager::InputManager;
 
+/// A prompt from a previous session archive.
+#[derive(Debug, Clone)]
+pub struct ArchivedPrompt {
+    pub content: String,
+    pub created_at: DateTime<Utc>,
+    pub session_label: String,
+}
+
 /// A single history entry with fuzzy match score
 #[derive(Debug, Clone)]
 pub struct HistoryMatch {
-    /// Index in the original history
-    pub history_index: usize,
+    /// Index in the original in-memory history. `None` for archived entries
+    /// that come from a previous session rather than the current one.
+    pub history_index: Option<usize>,
     /// The command text
     pub content: String,
     /// Fuzzy match score (higher is better)
     pub score: u32,
     /// Associated attachments
     pub attachments: Vec<ContentPart>,
+    /// When this prompt was submitted (None for legacy entries without timestamps)
+    pub created_at: Option<DateTime<Utc>>,
+    /// Short relative time label (e.g. "3h ago", "just now")
+    pub time_label: String,
 }
 
 /// State for the history picker overlay
@@ -39,6 +53,8 @@ pub struct HistoryPickerState {
     original_cursor: usize,
     /// Original attachments before picker was opened
     original_attachments: Vec<ContentPart>,
+    /// Prompts loaded from archived sessions (injected externally)
+    archived_prompts: Vec<ArchivedPrompt>,
 }
 
 impl Default for HistoryPickerState {
@@ -58,7 +74,13 @@ impl HistoryPickerState {
             original_content: String::new(),
             original_cursor: 0,
             original_attachments: Vec::new(),
+            archived_prompts: Vec::new(),
         }
+    }
+
+    /// Set archived prompts loaded from previous sessions.
+    pub fn set_archived_prompts(&mut self, entries: Vec<ArchivedPrompt>) {
+        self.archived_prompts = entries;
     }
 
     /// Open the history picker
@@ -113,45 +135,79 @@ impl HistoryPickerState {
         self.navigator.select_index(index)
     }
 
-    /// Update the search query and filter matches
-    pub fn update_search(&mut self, history: &[(String, Vec<ContentPart>)]) {
+    /// Update the search query and filter matches.
+    ///
+    /// Merges in-memory session history with archived prompts from previous
+    /// sessions.  Archived entries are included so the user can search across
+    /// all recent prompts, not just the current conversation.
+    pub fn update_search(&mut self, history: &[(String, Vec<ContentPart>, DateTime<Utc>)]) {
         self.matches.clear();
+        let now = Utc::now();
 
-        // Score and collect all matching entries
+        // Score and collect in-memory history entries
         let query = self.search_query.to_lowercase();
-        for (idx, (content, attachments)) in history.iter().enumerate().rev() {
-            // Skip empty entries
+        for (idx, (content, attachments, created_at)) in history.iter().enumerate().rev() {
             if content.trim().is_empty() {
                 continue;
             }
 
-            // Calculate fuzzy score or use substring match as fallback
             let score = if query.is_empty() {
-                // No query - include all with recency score
                 Some(history.len().saturating_sub(idx) as u32)
             } else {
                 fuzzy_score(&query, content)
             };
 
             if let Some(score) = score {
+                let time_label = format_time_ago(now - *created_at);
                 self.matches.push(HistoryMatch {
-                    history_index: idx,
+                    history_index: Some(idx),
                     content: content.clone(),
                     score,
                     attachments: attachments.clone(),
+                    created_at: Some(*created_at),
+                    time_label,
                 });
             }
         }
 
-        // Sort by score (descending) - higher scores first
+        // Merge archived prompts from previous sessions
+        for archived in &self.archived_prompts {
+            if archived.content.trim().is_empty() {
+                continue;
+            }
+
+            let score = if query.is_empty() {
+                // Recency-based score: archived prompts get lower base score
+                // than current-session entries so they sort below them.
+                let age_hours = (now - archived.created_at).num_hours().max(0) as u32;
+                1000u32.saturating_sub(age_hours)
+            } else {
+                match fuzzy_score(&query, &archived.content) {
+                    Some(s) => s,
+                    None => continue,
+                }
+            };
+
+            let time_label = format_time_ago(now - archived.created_at);
+            self.matches.push(HistoryMatch {
+                history_index: None,
+                content: archived.content.clone(),
+                score,
+                attachments: Vec::new(),
+                created_at: Some(archived.created_at),
+                time_label,
+            });
+        }
+
+        // Sort by score (descending)
         self.matches.sort_by(|a, b| b.score.cmp(&a.score));
 
-        // Deduplicate by content (keep highest scored entry for each unique command)
+        // Deduplicate by content (keep highest scored entry)
         let mut seen = hashbrown::HashSet::new();
         self.matches.retain(|m| seen.insert(m.content.clone()));
 
         // Limit to reasonable number
-        self.matches.truncate(100);
+        self.matches.truncate(200);
 
         self.navigator.set_item_count(self.matches.len());
         if self.matches.is_empty() {
@@ -162,13 +218,13 @@ impl HistoryPickerState {
     }
 
     /// Add a character to the search query
-    pub fn add_char(&mut self, ch: char, history: &[(String, Vec<ContentPart>)]) {
+    pub fn add_char(&mut self, ch: char, history: &[(String, Vec<ContentPart>, DateTime<Utc>)]) {
         self.search_query.push(ch);
         self.update_search(history);
     }
 
     /// Remove the last character from the search query
-    pub fn backspace(&mut self, history: &[(String, Vec<ContentPart>)]) {
+    pub fn backspace(&mut self, history: &[(String, Vec<ContentPart>, DateTime<Utc>)]) {
         self.search_query.pop();
         self.update_search(history);
     }
@@ -200,7 +256,7 @@ pub fn handle_history_picker_key(
     key: &KeyEvent,
     picker: &mut HistoryPickerState,
     input_manager: &mut InputManager,
-    history: &[(String, Vec<ContentPart>)],
+    history: &[(String, Vec<ContentPart>, DateTime<Utc>)],
 ) -> bool {
     if !picker.active {
         return false;
@@ -268,17 +324,45 @@ pub fn handle_history_picker_key(
     }
 }
 
+/// Format a `chrono::Duration` as a compact human-readable relative time label.
+///
+/// Returns strings like `"just now"`, `"5m ago"`, `"3h ago"`, `"2d ago"`.
+pub fn format_time_ago(elapsed: Duration) -> String {
+    if elapsed < Duration::zero() {
+        return "just now".to_string();
+    }
+    let seconds = elapsed.num_seconds();
+    if seconds < 60 {
+        "just now".to_string()
+    } else if seconds < 3600 {
+        format!("{}m ago", seconds / 60)
+    } else if seconds < 86400 {
+        format!("{}h ago", seconds / 3600)
+    } else {
+        format!("{}d ago", seconds / 86400)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn make_history() -> Vec<(String, Vec<ContentPart>)> {
+    fn make_history() -> Vec<(String, Vec<ContentPart>, DateTime<Utc>)> {
+        let now = Utc::now();
         vec![
-            ("cargo build".to_string(), vec![]),
-            ("cargo test".to_string(), vec![]),
-            ("git status".to_string(), vec![]),
-            ("cargo clippy".to_string(), vec![]),
-            ("git diff".to_string(), vec![]),
+            (
+                "cargo build".to_string(),
+                vec![],
+                now - Duration::minutes(4),
+            ),
+            ("cargo test".to_string(), vec![], now - Duration::minutes(3)),
+            ("git status".to_string(), vec![], now - Duration::minutes(2)),
+            (
+                "cargo clippy".to_string(),
+                vec![],
+                now - Duration::minutes(1),
+            ),
+            ("git diff".to_string(), vec![], now),
         ]
     }
 
@@ -373,11 +457,20 @@ mod tests {
     fn test_deduplication() {
         let mut picker = HistoryPickerState::new();
         let manager = InputManager::new();
+        let now = Utc::now();
         let history = vec![
-            ("cargo build".to_string(), vec![]),
-            ("cargo test".to_string(), vec![]),
-            ("cargo build".to_string(), vec![]), // Duplicate
-            ("cargo build".to_string(), vec![]), // Another duplicate
+            (
+                "cargo build".to_string(),
+                vec![],
+                now - Duration::minutes(3),
+            ),
+            ("cargo test".to_string(), vec![], now - Duration::minutes(2)),
+            (
+                "cargo build".to_string(),
+                vec![],
+                now - Duration::minutes(1),
+            ), // Duplicate
+            ("cargo build".to_string(), vec![], now), // Another duplicate
         ];
 
         picker.open(&manager);
@@ -385,5 +478,64 @@ mod tests {
 
         // Should deduplicate to 2 unique entries
         assert_eq!(picker.match_count(), 2);
+    }
+
+    #[test]
+    fn test_archived_prompts_merged() {
+        let mut picker = HistoryPickerState::new();
+        let manager = InputManager::new();
+        let now = Utc::now();
+        let history = vec![("cargo build".to_string(), vec![], now)];
+
+        picker.set_archived_prompts(vec![
+            ArchivedPrompt {
+                content: "implement auth".to_string(),
+                created_at: now - Duration::hours(3),
+                session_label: "session-1".to_string(),
+            },
+            ArchivedPrompt {
+                content: "fix login bug".to_string(),
+                created_at: now - Duration::hours(6),
+                session_label: "session-2".to_string(),
+            },
+        ]);
+
+        picker.open(&manager);
+        picker.update_search(&history);
+
+        // 1 current + 2 archived = 3
+        assert_eq!(picker.match_count(), 3);
+    }
+
+    #[test]
+    fn test_archived_dedup_with_current() {
+        let mut picker = HistoryPickerState::new();
+        let manager = InputManager::new();
+        let now = Utc::now();
+        let history = vec![("cargo build".to_string(), vec![], now)];
+
+        picker.set_archived_prompts(vec![ArchivedPrompt {
+            content: "cargo build".to_string(), // same as current
+            created_at: now - Duration::hours(3),
+            session_label: "session-1".to_string(),
+        }]);
+
+        picker.open(&manager);
+        picker.update_search(&history);
+
+        // Should dedup to 1 entry
+        assert_eq!(picker.match_count(), 1);
+    }
+
+    #[test]
+    fn test_format_time_ago() {
+        assert_eq!(format_time_ago(Duration::seconds(30)), "just now");
+        assert_eq!(format_time_ago(Duration::seconds(90)), "1m ago");
+        assert_eq!(format_time_ago(Duration::minutes(45)), "45m ago");
+        assert_eq!(format_time_ago(Duration::hours(3)), "3h ago");
+        assert_eq!(format_time_ago(Duration::hours(25)), "1d ago");
+        assert_eq!(format_time_ago(Duration::zero()), "just now");
+        // Negative duration (clock skew)
+        assert_eq!(format_time_ago(Duration::seconds(-10)), "just now");
     }
 }

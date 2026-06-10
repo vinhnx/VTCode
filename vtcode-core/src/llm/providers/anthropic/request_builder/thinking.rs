@@ -156,23 +156,9 @@ mod tests {
     use crate::config::constants::models;
 
     #[test]
-    fn uses_adaptive_thinking_for_opus_4_7_by_default() {
-        let request = LLMRequest {
-            model: models::anthropic::CLAUDE_OPUS_4_7.to_string(),
-            ..Default::default()
-        };
-        let config = AnthropicConfig::default();
-        let (thinking, reasoning) =
-            build_thinking_config(&request, &config, models::anthropic::DEFAULT_MODEL);
-
-        assert!(matches!(thinking, Some(ThinkingConfig::Adaptive { .. })));
-        assert!(reasoning.is_none());
-    }
-
-    #[test]
     fn ignores_explicit_budget_for_opus_4_7() {
         let request = LLMRequest {
-            model: models::anthropic::CLAUDE_OPUS_4_7.to_string(),
+            model: models::anthropic::CLAUDE_SONNET_4_6.to_string(),
             thinking_budget: Some(2048),
             ..Default::default()
         };
@@ -186,7 +172,7 @@ mod tests {
     #[test]
     fn adaptive_thinking_includes_summarized_display() {
         let request = LLMRequest {
-            model: models::anthropic::CLAUDE_OPUS_4_7.to_string(),
+            model: models::anthropic::CLAUDE_SONNET_4_6.to_string(),
             ..Default::default()
         };
         let config = AnthropicConfig {
@@ -207,7 +193,7 @@ mod tests {
     #[test]
     fn adaptive_thinking_includes_omitted_display() {
         let request = LLMRequest {
-            model: models::anthropic::CLAUDE_OPUS_4_7.to_string(),
+            model: models::anthropic::CLAUDE_SONNET_4_6.to_string(),
             ..Default::default()
         };
         let config = AnthropicConfig {
@@ -249,7 +235,7 @@ mod tests {
     #[test]
     fn thinking_display_defaults_to_none() {
         let request = LLMRequest {
-            model: models::anthropic::CLAUDE_OPUS_4_7.to_string(),
+            model: models::anthropic::CLAUDE_SONNET_4_6.to_string(),
             ..Default::default()
         };
         let config = AnthropicConfig::default();
@@ -262,52 +248,4 @@ mod tests {
         }
     }
 
-    #[test]
-    fn uses_adaptive_thinking_for_mythos_preview() {
-        let request = LLMRequest {
-            model: models::anthropic::CLAUDE_MYTHOS_PREVIEW.to_string(),
-            ..Default::default()
-        };
-        let config = AnthropicConfig::default();
-        let (thinking, reasoning) =
-            build_thinking_config(&request, &config, models::anthropic::DEFAULT_MODEL);
-
-        assert!(matches!(thinking, Some(ThinkingConfig::Adaptive { .. })));
-        assert!(reasoning.is_none());
-    }
-
-    #[test]
-    fn uses_adaptive_thinking_for_opus_4_6_by_default() {
-        let request = LLMRequest {
-            model: models::anthropic::CLAUDE_OPUS_4_6.to_string(),
-            ..Default::default()
-        };
-        let config = AnthropicConfig::default();
-        let (thinking, reasoning) =
-            build_thinking_config(&request, &config, models::anthropic::DEFAULT_MODEL);
-
-        assert!(matches!(thinking, Some(ThinkingConfig::Adaptive { .. })));
-        assert!(reasoning.is_none());
-    }
-
-    #[test]
-    fn uses_budgeted_thinking_for_opus_4_6_when_budget_is_explicit() {
-        let request = LLMRequest {
-            model: models::anthropic::CLAUDE_OPUS_4_6.to_string(),
-            thinking_budget: Some(4096),
-            ..Default::default()
-        };
-        let config = AnthropicConfig::default();
-        let (thinking, reasoning) =
-            build_thinking_config(&request, &config, models::anthropic::DEFAULT_MODEL);
-
-        assert!(matches!(
-            thinking,
-            Some(ThinkingConfig::Enabled {
-                budget_tokens: 4096,
-                ..
-            })
-        ));
-        assert!(reasoning.is_none());
-    }
 }

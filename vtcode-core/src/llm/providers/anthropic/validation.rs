@@ -83,17 +83,19 @@ pub fn validate_request(
         });
     }
 
-    if (matches_model(
+    let rejects_sampling = matches_model(
         resolved_model,
         crate::config::constants::models::anthropic::CLAUDE_OPUS_4_8,
     ) || matches_model(
         resolved_model,
-        crate::config::constants::models::anthropic::CLAUDE_OPUS_4_7,
-    )) && (request.temperature.is_some() || request.top_p.is_some() || request.top_k.is_some())
+        crate::config::constants::models::anthropic::CLAUDE_FABLE_5,
+    );
+    if rejects_sampling
+        && (request.temperature.is_some() || request.top_p.is_some() || request.top_k.is_some())
     {
         let formatted_error = error_display::format_llm_error(
             "Anthropic",
-            "Claude Opus 4.8/4.7 rejects explicit temperature, top_p, and top_k values; omit sampling parameters entirely.",
+            "Claude Opus 4.8 and Claude Fable 5 reject explicit temperature, top_p, and top_k values; omit sampling parameters entirely.",
         );
         return Err(LLMError::InvalidRequest {
             message: formatted_error,
@@ -481,7 +483,7 @@ fn validate_effort_setting(effort: &str, model: &str, default_model: &str) -> Re
         let formatted_error = error_display::format_llm_error(
             "Anthropic",
             &format!(
-                "effort is not supported for model '{}'. VT Code currently enables effort on Claude Opus 4.8, Claude Opus 4.7, Claude Opus 4.6, Claude Sonnet 4.6, and Claude Mythos Preview on the Anthropic provider.",
+                "effort is not supported for model '{}'. VT Code currently enables effort on Claude Opus 4.8, Claude Opus 4.7, Claude Opus 4.6, and Claude Sonnet 4.6 on the Anthropic provider.",
                 if model.trim().is_empty() {
                     default_model
                 } else {
