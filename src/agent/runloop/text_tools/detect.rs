@@ -240,7 +240,7 @@ pub(crate) fn strip_textual_tool_call_regions(text: &str) -> String {
         &mut regions,
     );
     collect_enclosed_regions(text, "<invoke name=\"", "</invoke>", &mut regions);
-    collect_enclosed_regions(text, "<tool_call>", "</tool_call>", &mut regions);
+    collect_pseudo_marker_regions(text, "<tool_call>", "</tool_call", &mut regions);
     // Strip <function=name>...</function> and <parameter=name>...</parameter>
     // blocks that models emit as pseudo-tool-call markup when tools are
     // unavailable. These may appear inside a <tool_call> wrapper (already
