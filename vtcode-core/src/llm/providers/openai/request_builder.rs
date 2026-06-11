@@ -749,9 +749,12 @@ fn build_responses_request_from_history(
         openai_request["text"] = text_format;
     }
 
-    // Rig 0.38.2 lacks typed prompt-cache fields. Keep this overlay at the
-    // final JSON boundary so future Rig typed support wins without being
-    // overwritten by VTCode's compatibility injection.
+    // Rig 0.38.2 lacks typed `prompt_cache_key` and
+    // `prompt_cache_retention` fields, so VT Code injects them after typed
+    // request construction at the final JSON boundary. `or_insert` preserves
+    // future Rig output; remove this overlay once Rig exposes typed fields and
+    // the prompt-cache JSON-boundary tests are updated to assert Rig-owned
+    // serialisation instead.
     apply_prompt_cache_overlay(&mut openai_request, ctx);
 
     Ok(openai_request)

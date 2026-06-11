@@ -33,11 +33,18 @@ pub(crate) enum OpenAIBackendKind {
 pub(crate) enum ChatGptSubscriptionAuthSource {
     /// Default ChatGPT subscription path. VT Code snapshots/refreshed stored
     /// sessions, then hands the access token/account pair to Rig's public
-    /// ChatGPT auth primitive for request authorisation.
+    /// ChatGPT auth primitive for request authorisation. Rig's lower refresh
+    /// store is not public, so VT Code keeps the stored-session boundary.
+    /// Protected by `chatgpt_auth_backend_setup_uses_rig_chatgpt_by_default`,
+    /// `chatgpt_auth_backend_setup_applies_account_and_session_headers`, and
+    /// `external_chatgpt_auth_retries_with_refreshed_tokens_after_401`.
+    /// Remove when Rig exposes equivalent refresh/session metadata hooks.
     RigChatGpt,
     /// Temporary bridge for VT Code's existing Codex app-server-derived request
     /// auth shape. Kept only for an explicit fallback while the remaining
-    /// Responses request/stream parity is moved behind Rig in later slices.
+    /// Responses request/stream parity is moved behind Rig. Protected by
+    /// `chatgpt_auth_backend_setup_keeps_compatibility_auth_behind_boundary`.
+    /// Remove once no supported config path still needs the legacy auth shape.
     #[allow(dead_code)]
     CodexAppServerCompatibility,
 }

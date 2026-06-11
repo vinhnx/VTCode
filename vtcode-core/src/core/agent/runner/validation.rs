@@ -43,6 +43,11 @@ impl AgentRunner {
     pub(super) async fn build_exposed_tool_snapshot(&self) -> Result<SessionToolCatalogSnapshot> {
         let planning_active = self.tool_registry.is_planning_active();
         let request_user_input_enabled = false;
+        // Keep the provider catalogue stable for cache locality. Runtime
+        // policy only affects `active_tool_names`, which drives prompt state
+        // and OpenAI's advisory `allowed_tools`; dispatch still re-checks the
+        // concrete call. Protected by the active-agent, full-auto, planning,
+        // explicit-policy, and allowed-tools routing tests.
         let stable_config = self.session_tools_config_for_snapshot(false, true);
         let definitions = self.tool_registry.model_tools(stable_config).await;
         let mut active_tool_names = Vec::new();
