@@ -2,6 +2,13 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.125.3 - 2026-06-11
+
+### Highlights
+### Other Changes
+#### Other
+
+- Fix/671 chatgpt OpenAI requests  (071c9e64) (@kernitus)
 ## 0.125.2 - 2026-06-11
 
 ### Highlights
