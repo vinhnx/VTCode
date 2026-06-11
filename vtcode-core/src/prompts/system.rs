@@ -20,26 +20,26 @@ use std::path::Path;
 use std::sync::OnceLock;
 use tracing::warn;
 
-/// Shared Plan Mode header used by both static and incremental prompt builders.
-pub const PLAN_MODE_READ_ONLY_HEADER: &str = "# PLAN MODE (READ-ONLY)";
-/// Shared Plan Mode notice line describing strict read-only enforcement.
-pub const PLAN_MODE_READ_ONLY_NOTICE_LINE: &str = "Plan Mode is active. Mutating tools are blocked except for optional plan artifact writes under `.vtcode/plans/` (or an explicit custom plan path).";
-/// Shared Plan Mode instruction line for transitioning to implementation.
-pub const PLAN_MODE_EXIT_INSTRUCTION_LINE: &str =
-    "Call `exit_plan_mode` when ready to transition to implementation.";
-/// Shared Plan Mode instruction line for decision-complete planning output.
-pub const PLAN_MODE_PLAN_QUALITY_LINE: &str = "Explore repository facts first, ask only material blocking questions, keep planning read-only, and emit exactly one decision-complete `<proposed_plan>` block with a summary, implementation steps, test cases, and assumptions/defaults. If something is still unresolved, end with `Next open decision: ...`.";
-/// Shared Plan Mode policy line requiring context-aware interview closure before final plans.
-pub const PLAN_MODE_INTERVIEW_POLICY_LINE: &str = "In Plan Mode, prefer model-generated `request_user_input` interview questions informed by discovered repository context, keep custom notes/free-form responses available as first-class input, and continue interviewing until material scope/decomposition/verification decisions are closed before finalizing `<proposed_plan>`.";
-/// Shared Plan Mode policy line for runtimes where `request_user_input` is unavailable.
-pub const PLAN_MODE_NO_REQUEST_USER_INPUT_POLICY_LINE: &str = "In this runtime, `request_user_input` is unavailable. In Plan Mode, continue exploring repository facts in read-only mode, finish any unblocked planning work, and surface material blockers explicitly in plain text instead of emitting interview tool calls.";
-/// Shared Plan Mode guard line requiring explicit transition from planning to execution.
-pub const PLAN_MODE_NO_AUTO_EXIT_LINE: &str = "Do not auto-exit Plan Mode just because a plan exists; wait for explicit implementation intent.";
-/// Shared Plan Mode task-tracking line clarifying availability and aliasing.
-pub const PLAN_MODE_TASK_TRACKER_LINE: &str =
-    "`task_tracker` remains available in Plan Mode (`plan_task_tracker` is a compatibility alias).";
-/// Shared reminder appended when presenting plans while still in Plan Mode.
-pub const PLAN_MODE_IMPLEMENT_REMINDER: &str = "• Still in Plan Mode (read-only). Say “implement” to execute, or “stay in plan mode” to revise. If automatic Plan->Edit switching fails, manually switch with `/plan off` or `/mode` (or press `Shift+Tab`/`Alt+M` in interactive mode).";
+/// Shared Planning workflow header used by both static and incremental prompt builders.
+pub const PLANNING_WORKFLOW_READ_ONLY_HEADER: &str = "# PLANNING WORKFLOW (READ-ONLY)";
+/// Shared Planning workflow notice line describing strict read-only enforcement.
+pub const PLANNING_WORKFLOW_READ_ONLY_NOTICE_LINE: &str = "Planning workflow is active. Mutating tools are blocked except for optional plan artifact writes under `.vtcode/plans/` (or an explicit custom plan path).";
+/// Shared Planning workflow instruction line for transitioning to implementation.
+pub const PLANNING_WORKFLOW_EXIT_INSTRUCTION_LINE: &str =
+    "Call `finish_planning` when ready to transition to implementation.";
+/// Shared Planning workflow instruction line for decision-complete planning output.
+pub const PLANNING_WORKFLOW_PLAN_QUALITY_LINE: &str = "Explore repository facts first, ask only material blocking questions, keep planning read-only, and emit exactly one decision-complete `<proposed_plan>` block with a summary, implementation steps, test cases, and assumptions/defaults. If something is still unresolved, end with `Next open decision: ...`.";
+/// Shared Planning workflow policy line requiring context-aware interview closure before final plans.
+pub const PLANNING_WORKFLOW_INTERVIEW_POLICY_LINE: &str = "In Planning workflow, prefer model-generated `request_user_input` interview questions informed by discovered repository context, keep custom notes/free-form responses available as first-class input, and continue interviewing until material scope/decomposition/verification decisions are closed before finalizing `<proposed_plan>`.";
+/// Shared Planning workflow policy line for runtimes where `request_user_input` is unavailable.
+pub const PLANNING_WORKFLOW_NO_REQUEST_USER_INPUT_POLICY_LINE: &str = "In this runtime, `request_user_input` is unavailable. In Planning workflow, continue exploring repository facts with read-only permissions, finish any unblocked planning work, and surface material blockers explicitly in plain text instead of emitting interview tool calls.";
+/// Shared Planning workflow guard line requiring explicit transition from planning to execution.
+pub const PLANNING_WORKFLOW_NO_AUTO_EXIT_LINE: &str = "Do not auto-exit Planning workflow just because a plan exists; wait for explicit implementation intent.";
+/// Shared Planning workflow task-tracking line clarifying availability and aliasing.
+pub const PLANNING_WORKFLOW_TASK_TRACKER_LINE: &str =
+    "`task_tracker` remains available while planning.";
+/// Shared reminder appended when presenting plans while still in Planning workflow.
+pub const PLANNING_WORKFLOW_IMPLEMENT_REMINDER: &str = "• Planning workflow is active with read-only permissions. Say “implement” to execute, or “stay in planning workflow” to revise. If automatic planning handoff fails, call `finish_planning` to present the plan again.";
 
 const PROMPT_TITLE: &str = "# VT Code";
 const PROMPT_INTRO: &str = "VT Code. Be concise and safe.";
@@ -91,28 +91,28 @@ const MINIMAL_CONTRACT_LINES: &[&str] = &[
     "Keep outputs concise.",
 ];
 
-const DEFAULT_MODE_DELTA: &str = r#"## Mode
+const DEFAULT_OPERATING_PROFILE_DELTA: &str = r#"## Operating Profile
 
 - Use `task_tracker` for non-trivial work.
 - Treat completion language as a checkpoint, not proof; only stop when the tracker is current and verification is resolved.
-- Use Plan Mode for research/spec work; stay read-only until implementation intent is explicit."#;
+- Use Planning workflow for research/spec work; stay read-only until implementation intent is explicit."#;
 
-const MINIMAL_MODE_DELTA: &str = r#"## Mode
+const MINIMAL_OPERATING_PROFILE_DELTA: &str = r#"## Operating Profile
 
 - Stay precise; use `task_tracker` once work stops being trivial.
 - Treat completion language as a checkpoint, not proof.
 - Use `AGENTS.md` as the map; open repo docs only when structural rules matter."#;
 
-const LIGHTWEIGHT_MODE_DELTA: &str = r#"## Mode
+const LIGHTWEIGHT_OPERATING_PROFILE_DELTA: &str = r#"## Operating Profile
 
 - Act and verify in one thread.
 - Completion language is a checkpoint.
 - Use `task_tracker` for nontrivial work."#;
 
-const SPECIALIZED_MODE_DELTA: &str = r#"## Mode
+const SPECIALIZED_OPERATING_PROFILE_DELTA: &str = r#"## Operating Profile
 
 - Explore, plan, then execute.
-- Use `task_tracker` for multi-step work and Plan Mode when scope or verification is still open.
+- Use `task_tracker` for multi-step work and Planning workflow when scope or verification is still open.
 - Treat completion language as a checkpoint, not proof; only stop when tracker state, verification, and resumable state agree.
 - End plan work with one `<proposed_plan>` block; if a path stalls, re-plan into smaller verified slices.
 - Use `AGENTS.md` and `docs/harness/ARCHITECTURAL_INVARIANTS.md` when repo-wide invariants matter."#;
@@ -123,19 +123,19 @@ static DEFAULT_LIGHTWEIGHT_PROMPT: OnceLock<String> = OnceLock::new();
 static DEFAULT_SPECIALIZED_PROMPT: OnceLock<String> = OnceLock::new();
 
 pub fn default_system_prompt() -> &'static str {
-    static_mode_prompt(SystemPromptMode::Default)
+    static_profile_prompt(SystemPromptMode::Default)
 }
 
 pub fn minimal_system_prompt() -> &'static str {
-    static_mode_prompt(SystemPromptMode::Minimal)
+    static_profile_prompt(SystemPromptMode::Minimal)
 }
 
 pub fn default_lightweight_prompt() -> &'static str {
-    static_mode_prompt(SystemPromptMode::Lightweight)
+    static_profile_prompt(SystemPromptMode::Lightweight)
 }
 
 pub fn specialized_system_prompt() -> &'static str {
-    static_mode_prompt(SystemPromptMode::Specialized)
+    static_profile_prompt(SystemPromptMode::Specialized)
 }
 
 pub fn minimal_instruction_text() -> String {
@@ -234,7 +234,7 @@ pub async fn compose_system_instruction_text(
     let prompt_mode = vtcode_config
         .map(|c| c.agent.system_prompt_mode)
         .unwrap_or(SystemPromptMode::Default);
-    let static_base_prompt = static_mode_prompt(prompt_mode);
+    let static_base_prompt = static_profile_prompt(prompt_mode);
     let resolved_layers = resolve_system_prompt_layers(_project_root).await;
     let base_prompt = apply_system_prompt_layers(static_base_prompt, &resolved_layers);
 
@@ -275,30 +275,30 @@ fn append_prompt_section(prompt: &mut String, section: &str) {
     prompt.push_str(section);
 }
 
-fn static_mode_prompt(prompt_mode: SystemPromptMode) -> &'static str {
+fn static_profile_prompt(prompt_mode: SystemPromptMode) -> &'static str {
     match prompt_mode {
         SystemPromptMode::Default => DEFAULT_SYSTEM_PROMPT.get_or_init(|| {
-            build_mode_prompt(
+            build_profile_prompt(
                 &build_contract_prompt(DEFAULT_CONTRACT_LINES),
-                DEFAULT_MODE_DELTA,
+                DEFAULT_OPERATING_PROFILE_DELTA,
             )
         }),
         SystemPromptMode::Minimal => MINIMAL_SYSTEM_PROMPT.get_or_init(|| {
-            build_mode_prompt(
+            build_profile_prompt(
                 &build_contract_prompt(MINIMAL_CONTRACT_LINES),
-                MINIMAL_MODE_DELTA,
+                MINIMAL_OPERATING_PROFILE_DELTA,
             )
         }),
         SystemPromptMode::Lightweight => DEFAULT_LIGHTWEIGHT_PROMPT.get_or_init(|| {
-            build_mode_prompt(
+            build_profile_prompt(
                 &build_contract_prompt(DEFAULT_CONTRACT_LINES),
-                LIGHTWEIGHT_MODE_DELTA,
+                LIGHTWEIGHT_OPERATING_PROFILE_DELTA,
             )
         }),
         SystemPromptMode::Specialized => DEFAULT_SPECIALIZED_PROMPT.get_or_init(|| {
-            build_mode_prompt(
+            build_profile_prompt(
                 &build_contract_prompt(DEFAULT_CONTRACT_LINES),
-                SPECIALIZED_MODE_DELTA,
+                SPECIALIZED_OPERATING_PROFILE_DELTA,
             )
         }),
     }
@@ -333,11 +333,11 @@ fn build_contract_prompt(contract_lines: &[&str]) -> String {
     prompt
 }
 
-fn build_mode_prompt(base_prompt: &str, mode_delta: &str) -> String {
-    let mut prompt = String::with_capacity(base_prompt.len() + mode_delta.len() + 2);
+fn build_profile_prompt(base_prompt: &str, profile_delta: &str) -> String {
+    let mut prompt = String::with_capacity(base_prompt.len() + profile_delta.len() + 2);
     prompt.push_str(base_prompt);
     prompt.push_str("\n\n");
-    prompt.push_str(mode_delta);
+    prompt.push_str(profile_delta);
     prompt
 }
 
@@ -393,13 +393,13 @@ fn render_interaction_addendum(cfg: &crate::config::VTCodeConfig) -> Option<Stri
     match (cfg.security.human_in_the_loop, cfg.chat.ask_questions.enabled) {
         (true, true) => None,
         (true, false) => Some(
-            "- Interaction: approval may gate sensitive actions; no `request_user_input`, so make reasonable assumptions unless Plan Mode needs follow-up.".to_string(),
+            "- Interaction: approval may gate sensitive actions; no `request_user_input`, so make reasonable assumptions unless Planning workflow needs follow-up.".to_string(),
         ),
         (false, true) => Some(
             "- Interaction: approval reduced by config; use `request_user_input` for material blockers.".to_string(),
         ),
         (false, false) => Some(
-            "- Interaction: approval reduced by config; no `request_user_input`, so make reasonable assumptions unless Plan Mode needs follow-up.".to_string(),
+            "- Interaction: approval reduced by config; no `request_user_input`, so make reasonable assumptions unless Planning workflow needs follow-up.".to_string(),
         ),
     }
 }
@@ -486,7 +486,7 @@ pub async fn apply_output_style(
 /// Build a cache key for the system prompt.
 ///
 /// `catalog_epoch` is the tool-catalog version at the time of the request. When
-/// the tool set changes (e.g. plan mode is toggled, MCP tools are refreshed), the
+/// the tool set changes (e.g. planning workflow is toggled, MCP tools are refreshed), the
 /// epoch advances and the old cached prompt is superseded rather than served stale.
 /// Pass `None` to get the same behaviour as before epoch tracking was introduced.
 fn cache_key(
@@ -518,7 +518,7 @@ fn cache_key(
         "default".hash(&mut hasher);
     }
 
-    // Invalidate the cached prompt when the tool catalog changes (plan mode toggle,
+    // Invalidate the cached prompt when the tool catalog changes (planning workflow toggle,
     // MCP refresh, permission grant/revoke).
     catalog_epoch.unwrap_or(0).hash(&mut hasher);
 
@@ -572,7 +572,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_default_mode_selection() {
+    async fn test_default_prompt_selection() {
         let mut config = VTCodeConfig::default();
         config.agent.system_prompt_mode = SystemPromptMode::Default;
         // Disable enhancements for base prompt size testing
@@ -590,7 +590,7 @@ mod tests {
         );
         assert!(result.contains("task_tracker"));
         assert!(result.contains("@file"));
-        assert!(result.contains("Plan Mode"));
+        assert!(result.contains("Planning workflow"));
     }
 
     #[tokio::test]
@@ -653,7 +653,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_default_mode_omits_structured_reasoning_by_default() {
+    async fn test_default_prompt_omits_structured_reasoning_by_default() {
         let mut config = VTCodeConfig::default();
         config.agent.system_prompt_mode = SystemPromptMode::Default;
         config.agent.include_temporal_context = false;
@@ -1070,7 +1070,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_generated_prompts_keep_mode_deltas_bounded() {
+    async fn test_generated_prompts_keep_operating_profiles_bounded() {
         let project_root = PathBuf::from(".");
 
         for (mode_name, mode) in [
@@ -1092,8 +1092,8 @@ mod tests {
                 "{mode_name} prompt should reuse the canonical base prompt"
             );
             assert!(
-                result.matches("## Mode").count() == 1,
-                "{mode_name} prompt should add only one mode delta"
+                result.matches("## Operating Profile").count() == 1,
+                "{mode_name} prompt should add only one operating profile"
             );
         }
     }
@@ -1131,8 +1131,8 @@ mod tests {
             compose_system_instruction_text(&PathBuf::from("."), Some(&config), Some(&ctx)).await;
 
         assert!(
-            result.contains("Mode: read-only"),
-            "Should detect read-only mode when no edit/write/exec tools available"
+            result.contains("Capabilities: read-only"),
+            "Should detect read-only capabilities when no edit/write/exec tools available"
         );
         assert!(
             result.contains("do not modify files"),
@@ -1531,12 +1531,17 @@ mod tests {
         let result =
             compose_system_instruction_text(&PathBuf::from("."), Some(&config), Some(&ctx)).await;
 
-        let mode_pos = result.find("## Mode").expect("mode section");
+        let mode_pos = result
+            .find("## Operating Profile")
+            .expect("operating profile section");
         let tools_pos = result.find("## Active Tools").expect("tools section");
         let skills_pos = result.find("## Skills").expect("skills section");
         let env_pos = result.find("## Environment").expect("environment section");
 
-        assert!(mode_pos < tools_pos, "mode should precede tools");
+        assert!(
+            mode_pos < tools_pos,
+            "operating profile should precede tools"
+        );
         assert!(tools_pos < skills_pos, "tools should precede skills");
         assert!(skills_pos < env_pos, "skills should precede environment");
     }

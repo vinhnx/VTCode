@@ -1,46 +1,64 @@
 use crate::env_helpers::default_enabled;
+use serde::Deserializer;
+use serde::de::{MapAccess, Visitor};
 use serde::{Deserialize, Serialize};
+use std::fmt;
 
-/// Unified permission mode for authored policy evaluation.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
-pub enum PermissionMode {
-    /// Standard interactive behavior with prompts when policy requires them.
-    #[default]
-    #[serde(alias = "ask", alias = "suggest")]
-    Default,
-    /// Auto-allow built-in file mutations for the active session.
-    #[serde(alias = "acceptEdits", alias = "accept-edits", alias = "auto-approved")]
-    AcceptEdits,
-    /// Classifier-backed autonomous mode.
-    #[serde(alias = "trusted_auto", alias = "trusted-auto")]
+pub enum PermissionDefault {
+    Ask,
+    Allow,
     Auto,
-    /// Read-only planning mode.
-    Plan,
-    /// Deny any action that is not explicitly allowed.
-    #[serde(alias = "dontAsk", alias = "dont-ask")]
-    DontAsk,
-    /// Skip prompts except protected writes and sandbox escalation prompts.
-    #[serde(
-        alias = "bypassPermissions",
-        alias = "bypass-permissions",
-        alias = "full-auto"
-    )]
-    BypassPermissions,
+    Deny,
+}
+
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct AgentPermissionsConfig {
+    pub default: PermissionDefault,
+
+    #[serde(default)]
+    pub allow: Vec<String>,
+
+    #[serde(default)]
+    pub ask: Vec<String>,
+
+    #[serde(default)]
+    pub auto: Vec<String>,
+
+    #[serde(default)]
+    pub deny: Vec<String>,
+}
+
+impl AgentPermissionsConfig {
+    #[must_use]
+    pub fn new(default: PermissionDefault) -> Self {
+        Self {
+            default,
+            allow: Vec::new(),
+            ask: Vec::new(),
+            auto: Vec::new(),
+            deny: Vec::new(),
+        }
+    }
 }
 
 /// Permission system configuration - Controls command resolution, audit logging, and caching
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct PermissionsConfig {
-    /// Default unified permission mode for the current session.
-    #[serde(default)]
-    pub default_mode: PermissionMode,
-
-    /// Classifier-backed auto mode policy and environment settings.
-    #[serde(default)]
-    pub auto_mode: AutoModeConfig,
+    /// Classifier-backed auto permission review policy and environment settings.
+    #[serde(
+        default,
+        rename = "auto",
+        alias = "auto_permission",
+        deserialize_with = "deserialize_auto_permission_config"
+    )]
+    pub auto_permission: AutoPermissionConfig,
 
     /// Rules that allow matching tool calls without prompting.
     #[serde(default)]
@@ -93,10 +111,10 @@ pub struct PermissionsConfig {
     pub cache_ttl_seconds: u64,
 }
 
-/// Classifier-backed auto mode configuration.
+/// Classifier-backed auto permission review configuration.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct AutoModeConfig {
+pub struct AutoPermissionConfig {
     /// Optional model override for the transcript reviewer.
     #[serde(default)]
     pub model: String,
@@ -105,35 +123,61 @@ pub struct AutoModeConfig {
     #[serde(default)]
     pub probe_model: String,
 
-    /// Maximum consecutive denials before auto mode falls back.
-    #[serde(default = "default_auto_mode_max_consecutive_denials")]
+    /// Maximum consecutive denials before auto permission review falls back.
+    #[serde(default = "default_auto_permission_max_consecutive_denials")]
     pub max_consecutive_denials: u32,
 
-    /// Maximum total denials before auto mode falls back.
-    #[serde(default = "default_auto_mode_max_total_denials")]
+    /// Maximum total denials before auto permission review falls back.
+    #[serde(default = "default_auto_permission_max_total_denials")]
     pub max_total_denials: u32,
 
-    /// Drop broad code-execution allow rules while auto mode is active.
-    #[serde(default = "default_auto_mode_drop_broad_allow_rules")]
+    /// Drop broad code-execution allow rules while auto permission review is active.
+    #[serde(default = "default_auto_permission_drop_broad_allow_rules")]
     pub drop_broad_allow_rules: bool,
 
     /// Classifier block rules applied in stage 2 reasoning.
-    #[serde(default = "default_auto_mode_block_rules")]
+    #[serde(default = "default_auto_permission_block_rules")]
     pub block_rules: Vec<String>,
 
     /// Narrow allow exceptions applied after block rules.
-    #[serde(default = "default_auto_mode_allow_exceptions")]
+    #[serde(default = "default_auto_permission_allow_exceptions")]
     pub allow_exceptions: Vec<String>,
 
     /// Trusted environment boundaries for the classifier.
     #[serde(default)]
-    pub environment: AutoModeEnvironmentConfig,
+    pub environment: AutoPermissionEnvironmentConfig,
 }
 
-/// Trust-boundary configuration for auto mode.
+fn deserialize_auto_permission_config<'de, D>(
+    deserializer: D,
+) -> Result<AutoPermissionConfig, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    struct AutoPermissionConfigVisitor;
+
+    impl<'de> Visitor<'de> for AutoPermissionConfigVisitor {
+        type Value = AutoPermissionConfig;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            formatter.write_str("a table of auto permission settings")
+        }
+
+        fn visit_map<M>(self, map: M) -> Result<Self::Value, M::Error>
+        where
+            M: MapAccess<'de>,
+        {
+            AutoPermissionConfig::deserialize(serde::de::value::MapAccessDeserializer::new(map))
+        }
+    }
+
+    deserializer.deserialize_map(AutoPermissionConfigVisitor)
+}
+
+/// Trust-boundary configuration for auto permission review.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
-pub struct AutoModeEnvironmentConfig {
+pub struct AutoPermissionEnvironmentConfig {
     #[serde(default)]
     pub trusted_paths: Vec<String>,
 
@@ -150,17 +194,17 @@ pub struct AutoModeEnvironmentConfig {
     pub trusted_services: Vec<String>,
 }
 
-impl Default for AutoModeConfig {
+impl Default for AutoPermissionConfig {
     fn default() -> Self {
         Self {
             model: String::new(),
             probe_model: String::new(),
-            max_consecutive_denials: default_auto_mode_max_consecutive_denials(),
-            max_total_denials: default_auto_mode_max_total_denials(),
-            drop_broad_allow_rules: default_auto_mode_drop_broad_allow_rules(),
-            block_rules: default_auto_mode_block_rules(),
-            allow_exceptions: default_auto_mode_allow_exceptions(),
-            environment: AutoModeEnvironmentConfig::default(),
+            max_consecutive_denials: default_auto_permission_max_consecutive_denials(),
+            max_total_denials: default_auto_permission_max_total_denials(),
+            drop_broad_allow_rules: default_auto_permission_drop_broad_allow_rules(),
+            block_rules: default_auto_permission_block_rules(),
+            allow_exceptions: default_auto_permission_allow_exceptions(),
+            environment: AutoPermissionEnvironmentConfig::default(),
         }
     }
 }
@@ -208,21 +252,21 @@ const fn default_cache_ttl_seconds() -> u64 {
 }
 
 #[inline]
-const fn default_auto_mode_max_consecutive_denials() -> u32 {
+const fn default_auto_permission_max_consecutive_denials() -> u32 {
     3
 }
 
 #[inline]
-const fn default_auto_mode_max_total_denials() -> u32 {
+const fn default_auto_permission_max_total_denials() -> u32 {
     20
 }
 
 #[inline]
-const fn default_auto_mode_drop_broad_allow_rules() -> bool {
+const fn default_auto_permission_drop_broad_allow_rules() -> bool {
     true
 }
 
-fn default_auto_mode_block_rules() -> Vec<String> {
+fn default_auto_permission_block_rules() -> Vec<String> {
     vec![
         "Block destructive source-control actions such as force-pushes, direct pushes to protected branches, or remote branch deletion unless the user explicitly authorized that exact blast radius.".to_string(),
         "Block remote code download-and-execute flows, including curl-or-wget pipes into interpreters or shells, and running code from freshly cloned external repositories.".to_string(),
@@ -234,7 +278,7 @@ fn default_auto_mode_block_rules() -> Vec<String> {
     ]
 }
 
-fn default_auto_mode_allow_exceptions() -> Vec<String> {
+fn default_auto_permission_allow_exceptions() -> Vec<String> {
     vec![
         "Allow read-only tools and read-only browsing/search actions.".to_string(),
         "Allow file edits and writes inside the current workspace when the path is not protected.".to_string(),
@@ -245,8 +289,7 @@ fn default_auto_mode_allow_exceptions() -> Vec<String> {
 impl Default for PermissionsConfig {
     fn default() -> Self {
         Self {
-            default_mode: PermissionMode::default(),
-            auto_mode: AutoModeConfig::default(),
+            auto_permission: AutoPermissionConfig::default(),
             allow: Vec::new(),
             ask: Vec::new(),
             deny: Vec::new(),
@@ -265,76 +308,27 @@ impl Default for PermissionsConfig {
 
 #[cfg(test)]
 mod tests {
-    use super::{PermissionMode, PermissionsConfig};
+    use super::{AgentPermissionsConfig, PermissionDefault, PermissionsConfig};
 
     #[test]
-    fn parses_claude_style_mode_aliases() {
-        let config: PermissionsConfig = toml::from_str(
-            r#"
-            default_mode = "acceptEdits"
-            "#,
-        )
-        .expect("permissions config");
-        assert_eq!(config.default_mode, PermissionMode::AcceptEdits);
+    fn parses_agent_permission_defaults_and_empty_buckets() {
+        for (value, expected) in [
+            ("ask", PermissionDefault::Ask),
+            ("allow", PermissionDefault::Allow),
+            ("auto", PermissionDefault::Auto),
+            ("deny", PermissionDefault::Deny),
+        ] {
+            let config: AgentPermissionsConfig =
+                toml::from_str(&format!(r#"default = "{value}""#)).expect("agent permissions");
+            assert_eq!(config.default, expected);
+            assert!(config.allow.is_empty());
+            assert!(config.ask.is_empty());
+            assert!(config.auto.is_empty());
+            assert!(config.deny.is_empty());
+        }
 
-        let config: PermissionsConfig = toml::from_str(
-            r#"
-            default_mode = "dontAsk"
-            "#,
-        )
-        .expect("permissions config");
-        assert_eq!(config.default_mode, PermissionMode::DontAsk);
-
-        let config: PermissionsConfig = toml::from_str(
-            r#"
-            default_mode = "bypassPermissions"
-            "#,
-        )
-        .expect("permissions config");
-        assert_eq!(config.default_mode, PermissionMode::BypassPermissions);
-
-        let config: PermissionsConfig = toml::from_str(
-            r#"
-            default_mode = "auto"
-            "#,
-        )
-        .expect("permissions config");
-        assert_eq!(config.default_mode, PermissionMode::Auto);
-    }
-
-    #[test]
-    fn parses_legacy_mode_aliases() {
-        let config: PermissionsConfig = toml::from_str(
-            r#"
-            default_mode = "ask"
-            "#,
-        )
-        .expect("permissions config");
-        assert_eq!(config.default_mode, PermissionMode::Default);
-
-        let config: PermissionsConfig = toml::from_str(
-            r#"
-            default_mode = "auto-approved"
-            "#,
-        )
-        .expect("permissions config");
-        assert_eq!(config.default_mode, PermissionMode::AcceptEdits);
-
-        let config: PermissionsConfig = toml::from_str(
-            r#"
-            default_mode = "full-auto"
-            "#,
-        )
-        .expect("permissions config");
-        assert_eq!(config.default_mode, PermissionMode::BypassPermissions);
-
-        let config: PermissionsConfig = toml::from_str(
-            r#"
-            default_mode = "trusted_auto"
-            "#,
-        )
-        .expect("permissions config");
-        assert_eq!(config.default_mode, PermissionMode::Auto);
+        let err = toml::from_str::<AgentPermissionsConfig>(r#"default = "plan""#).unwrap_err();
+        assert!(err.to_string().contains("unknown variant"));
     }
 
     #[test]
@@ -355,14 +349,66 @@ mod tests {
     }
 
     #[test]
-    fn auto_mode_defaults_are_conservative() {
+    fn rejects_removed_global_default_and_auto_rules() {
+        let removed_field = format!("default_{}", "mode");
+        let input = format!(
+            r#"
+            {removed_field} = "ask"
+            "#,
+        );
+        let err = toml::from_str::<PermissionsConfig>(&input).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains(&format!("unknown field `{removed_field}`"))
+        );
+
+        let err = toml::from_str::<PermissionsConfig>(
+            r#"
+            auto = ["unified_exec"]
+            "#,
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("invalid type"));
+    }
+
+    #[test]
+    fn parses_auto_permission_settings_from_canonical_auto_table() {
+        let config: PermissionsConfig = toml::from_str(
+            r#"
+            [auto]
+            model = "gpt-5-mini"
+            max_consecutive_denials = 2
+            drop_broad_allow_rules = false
+
+            [auto.environment]
+            trusted_paths = ["/work/project"]
+            trusted_domains = ["example.com"]
+            "#,
+        )
+        .expect("permissions config");
+
+        assert_eq!(config.auto_permission.model, "gpt-5-mini");
+        assert_eq!(config.auto_permission.max_consecutive_denials, 2);
+        assert!(!config.auto_permission.drop_broad_allow_rules);
+        assert_eq!(
+            config.auto_permission.environment.trusted_paths,
+            vec!["/work/project".to_string()]
+        );
+        assert_eq!(
+            config.auto_permission.environment.trusted_domains,
+            vec!["example.com".to_string()]
+        );
+    }
+
+    #[test]
+    fn auto_permission_defaults_are_conservative() {
         let config = PermissionsConfig::default();
 
-        assert_eq!(config.auto_mode.max_consecutive_denials, 3);
-        assert_eq!(config.auto_mode.max_total_denials, 20);
-        assert!(config.auto_mode.drop_broad_allow_rules);
-        assert!(!config.auto_mode.block_rules.is_empty());
-        assert!(!config.auto_mode.allow_exceptions.is_empty());
-        assert!(config.auto_mode.environment.trusted_paths.is_empty());
+        assert_eq!(config.auto_permission.max_consecutive_denials, 3);
+        assert_eq!(config.auto_permission.max_total_denials, 20);
+        assert!(config.auto_permission.drop_broad_allow_rules);
+        assert!(!config.auto_permission.block_rules.is_empty());
+        assert!(!config.auto_permission.allow_exceptions.is_empty());
+        assert!(config.auto_permission.environment.trusted_paths.is_empty());
     }
 }

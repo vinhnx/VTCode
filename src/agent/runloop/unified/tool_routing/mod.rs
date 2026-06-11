@@ -17,26 +17,27 @@ use tokio::sync::{Notify, RwLock};
 use serde_json::Value;
 use vtcode_core::acp::{PermissionGrant, ToolPermissionCache};
 use vtcode_core::command_safety::parse_bash_lc_commands;
+use vtcode_core::config::PermissionsConfig;
 use vtcode_core::config::loader::ConfigManager;
-use vtcode_core::config::{PermissionMode, PermissionsConfig};
 use vtcode_core::core::interfaces::ui::UiSession;
 use vtcode_core::exec_policy::AskForApproval;
 use vtcode_core::hooks::{
-    LifecycleHookEngine, PermissionDecisionBehavior, PermissionDecisionScope, PermissionUpdateKind,
-    PreToolHookDecision,
+    LifecycleHookEngine, PermissionDecisionBehavior, PermissionDecisionScope, PreToolHookDecision,
 };
 use vtcode_core::permissions::{
-    PermissionRequest, PermissionRequestKind, build_permission_request, evaluate_permissions,
+    PermissionRequest, PermissionRequestKind, ResolvedPermissionDecision, build_permission_request,
+    evaluate_effective_permissions, evaluate_permissions,
 };
-use vtcode_core::primary_agent::clamp_primary_permission_mode;
 use vtcode_core::tool_policy::ToolPolicy;
 use vtcode_core::tools::registry::{ToolPermissionDecision, ToolRegistry};
 use vtcode_core::tools::{JustificationExtractor, ToolRiskScorer};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_ui::tui::app::InlineHandle;
 
-use crate::agent::runloop::unified::auto_mode::{AutoModeReviewDecision, review_tool_call};
-use crate::agent::runloop::unified::run_loop_context::AutoModeRuntimeContext;
+use crate::agent::runloop::unified::auto_permission::{
+    AutoPermissionReviewDecision, review_tool_call,
+};
+use crate::agent::runloop::unified::run_loop_context::AutoPermissionRuntimeContext;
 use crate::agent::runloop::unified::state::SessionStats;
 
 use super::state::CtrlCState;
@@ -80,7 +81,7 @@ pub(crate) enum ToolPermissionFlow {
     Interrupted,
 }
 
-enum AutoModePermissionOutcome {
+enum AutoPermissionPermissionOutcome {
     Allow,
     Block,
     PromptFallback,
@@ -173,40 +174,45 @@ pub(crate) struct ToolPermissionsContext<'a, S: UiSession + ?Sized> {
         Option<&'a Arc<RwLock<vtcode_core::core::decision_tracker::DecisionTracker>>>,
     pub tool_permission_cache: Option<&'a Arc<RwLock<ToolPermissionCache>>>,
     pub permissions_state: Option<&'a Arc<RwLock<PermissionsConfig>>>,
-    pub permission_mode_override: Option<PermissionMode>,
+    pub active_agent_permissions:
+        Option<&'a vtcode_config::core::permissions::AgentPermissionsConfig>,
     pub hitl_notification_bell: bool,
     pub approval_policy: AskForApproval,
     pub skip_confirmations: bool,
     pub permissions_config: Option<&'a PermissionsConfig>,
-    pub auto_mode_runtime: Option<AutoModeRuntimeContext<'a>>,
+    pub auto_permission_runtime: Option<AutoPermissionRuntimeContext<'a>>,
     pub session_stats: Option<&'a mut SessionStats>,
 }
 
-fn current_permission_mode(config: &PermissionsConfig) -> PermissionMode {
-    config.default_mode
-}
-
-fn effective_permissions_config(
-    config: &PermissionsConfig,
-    permission_mode: PermissionMode,
-) -> Option<PermissionsConfig> {
-    let mut effective = config.clone();
-    if permission_mode != PermissionMode::Auto || !effective.auto_mode.drop_broad_allow_rules {
-        return Some(effective);
-    }
-
-    let initial_rule_count = effective.allow.len();
-    effective
-        .allow
-        .retain(|rule| !is_broad_auto_mode_allow_rule(rule));
-    let dropped = initial_rule_count.saturating_sub(effective.allow.len());
-    if dropped > 0 {
-        tracing::trace!(
-            dropped_broad_allow_rules = dropped,
-            "auto mode filtered broad allow rules"
+fn resolve_permission_decision(
+    permissions: &PermissionsConfig,
+    active_agent_permissions: Option<&vtcode_config::core::permissions::AgentPermissionsConfig>,
+    workspace_root: &std::path::Path,
+    current_dir: &std::path::Path,
+    request: &PermissionRequest,
+) -> ResolvedPermissionDecision {
+    if let Some(agent_permissions) = active_agent_permissions {
+        return evaluate_effective_permissions(
+            permissions,
+            agent_permissions,
+            workspace_root,
+            current_dir,
+            request,
         );
     }
-    Some(effective)
+
+    let matches = evaluate_permissions(permissions, workspace_root, current_dir, request);
+    if matches.deny {
+        return ResolvedPermissionDecision::Deny;
+    }
+    if matches.ask {
+        return ResolvedPermissionDecision::Ask;
+    }
+    if matches.allow {
+        return ResolvedPermissionDecision::Allow;
+    }
+
+    ResolvedPermissionDecision::Ask
 }
 
 fn build_permission_suggestions(
@@ -285,12 +291,6 @@ async fn apply_permission_hook_updates(
                 messages.push(HookMessage::warning(format!(
                     "PermissionRequest hook ignored unsupported permission update `{field}`"
                 )));
-            }
-            (destination, PermissionUpdateKind::SetMode(mode)) => {
-                next_permissions.default_mode = *mode;
-                changed = true;
-                persist_project |=
-                    matches!(destination, PermissionUpdateDestination::ProjectSettings);
             }
             (destination, PermissionUpdateKind::AddRules(rules)) => {
                 let rules = bounded_permission_rules("add_rules", rules, &mut messages);
@@ -422,8 +422,7 @@ fn map_permission_decision(
 fn should_allow_without_prompt(
     workspace_root: &std::path::Path,
     permission_request: &PermissionRequest,
-    permission_mode: PermissionMode,
-    permission_matches: &vtcode_core::permissions::PermissionRuleMatches,
+    permission_decision: ResolvedPermissionDecision,
     requires_rule_prompt: bool,
     requires_sandbox_prompt: bool,
 ) -> bool {
@@ -431,12 +430,15 @@ fn should_allow_without_prompt(
         return false;
     }
 
-    permission_matches.allow
-        || (permission_mode == PermissionMode::Auto
-            && auto_mode_safe_builtin_allow(workspace_root, permission_request))
-        || (permission_mode == PermissionMode::AcceptEdits
-            && permission_request.builtin_file_mutation)
-        || permission_mode == PermissionMode::BypassPermissions
+    permission_decision == ResolvedPermissionDecision::Allow
+        || (permission_decision == ResolvedPermissionDecision::Auto
+            && auto_permission_safe_builtin_allow(workspace_root, permission_request))
+}
+
+fn full_auto_unavailable_reason(tool_name: &str) -> String {
+    format!(
+        "Auto permission review is unavailable for `{tool_name}` while full-auto permission review is active."
+    )
 }
 
 async fn reuse_saved_approval(
@@ -673,50 +675,7 @@ async fn finalize_permission_decision(
     }
 }
 
-fn is_broad_auto_mode_allow_rule(rule: &str) -> bool {
-    let normalized = rule.trim().to_ascii_lowercase();
-    if normalized.is_empty() {
-        return false;
-    }
-
-    if matches!(
-        normalized.as_str(),
-        "bash" | "bash(*)" | "unified_exec" | "run_pty_cmd" | "agent"
-    ) {
-        return true;
-    }
-
-    let interpreter_prefixes = [
-        "bash(python",
-        "bash(python3",
-        "bash(node",
-        "bash(ruby",
-        "bash(bash",
-        "bash(sh",
-        "bash(zsh",
-        "bash(fish",
-        "bash(pwsh",
-        "bash(powershell",
-    ];
-    if interpreter_prefixes
-        .iter()
-        .any(|prefix| normalized.starts_with(prefix))
-    {
-        return true;
-    }
-
-    [
-        "bash(npm run",
-        "bash(pnpm run",
-        "bash(yarn run",
-        "bash(cargo run",
-        "bash(uv run",
-    ]
-    .iter()
-    .any(|prefix| normalized.starts_with(prefix))
-}
-
-fn auto_mode_safe_builtin_allow(
+fn auto_permission_safe_builtin_allow(
     workspace_root: &std::path::Path,
     request: &PermissionRequest,
 ) -> bool {
@@ -738,18 +697,18 @@ fn auto_mode_safe_builtin_allow(
 }
 
 #[cold]
-fn headless_auto_mode_fallback_reason(
+fn headless_auto_permission_fallback_reason(
     tool_name: &str,
-    denial: Option<&crate::agent::runloop::unified::state::AutoModeDenial>,
+    denial: Option<&crate::agent::runloop::unified::state::AutoPermissionDenial>,
 ) -> String {
     let Some(denial) = denial else {
         return format!(
-            "Auto mode cannot fall back to manual prompts for `{tool_name}` in non-interactive mode."
+            "Auto permission review cannot fall back to manual prompts for `{tool_name}` in non-interactive runs."
         );
     };
 
     let mut reason = format!(
-        "Auto mode blocked `{tool_name}` and reached its denial threshold in non-interactive mode: {}",
+        "Auto permission review blocked `{tool_name}` and reached its denial threshold in non-interactive runs: {}",
         denial.reason
     );
     if let Some(rule) = denial.matched_rule.as_deref() {
@@ -761,64 +720,75 @@ fn headless_auto_mode_fallback_reason(
     reason
 }
 
-async fn resolve_auto_mode_permission(
+async fn resolve_auto_permission(
     renderer: &mut AnsiRenderer,
     tool_registry: &ToolRegistry,
     tool_name: &str,
     tool_args: Option<&Value>,
     permission_request: &PermissionRequest,
     permissions: &PermissionsConfig,
-    auto_mode_runtime: Option<AutoModeRuntimeContext<'_>>,
+    auto_permission_runtime: Option<AutoPermissionRuntimeContext<'_>>,
     session_stats: Option<&mut SessionStats>,
-) -> Result<AutoModePermissionOutcome> {
+    allow_prompt_fallback: bool,
+) -> Result<AutoPermissionPermissionOutcome> {
     let Some(stats) = session_stats else {
-        tracing::warn!(tool = %tool_name, "auto mode reviewer missing session stats");
-        return Ok(AutoModePermissionOutcome::PromptFallback);
+        tracing::warn!(tool = %tool_name, "auto permission review reviewer missing session stats");
+        if !allow_prompt_fallback {
+            return Ok(AutoPermissionPermissionOutcome::AbortHeadless {
+                reason: full_auto_unavailable_reason(tool_name),
+            });
+        }
+        return Ok(AutoPermissionPermissionOutcome::PromptFallback);
     };
 
-    if stats.auto_mode_prompt_fallback_active() {
-        tracing::trace!(tool = %tool_name, "auto mode prompt fallback active");
-        if !renderer.supports_inline_ui() {
-            return Ok(AutoModePermissionOutcome::AbortHeadless {
-                reason: headless_auto_mode_fallback_reason(
+    if stats.auto_permission_prompt_fallback_active() {
+        tracing::trace!(tool = %tool_name, "auto permission review prompt fallback active");
+        if !allow_prompt_fallback || !renderer.supports_inline_ui() {
+            return Ok(AutoPermissionPermissionOutcome::AbortHeadless {
+                reason: headless_auto_permission_fallback_reason(
                     tool_name,
-                    stats.last_auto_mode_denial(),
+                    stats.last_auto_permission_denial(),
                 ),
             });
         }
-        return Ok(AutoModePermissionOutcome::PromptFallback);
+        return Ok(AutoPermissionPermissionOutcome::PromptFallback);
     }
 
-    let Some(auto_mode_runtime) = auto_mode_runtime else {
-        tracing::warn!(tool = %tool_name, "auto mode reviewer missing runtime context");
-        return Ok(AutoModePermissionOutcome::PromptFallback);
+    let Some(auto_permission_runtime) = auto_permission_runtime else {
+        tracing::warn!(tool = %tool_name, "auto permission review reviewer missing runtime context");
+        if !allow_prompt_fallback {
+            return Ok(AutoPermissionPermissionOutcome::AbortHeadless {
+                reason: full_auto_unavailable_reason(tool_name),
+            });
+        }
+        return Ok(AutoPermissionPermissionOutcome::PromptFallback);
     };
 
     match review_tool_call(
-        auto_mode_runtime.provider_client,
-        auto_mode_runtime.config,
-        auto_mode_runtime.vt_cfg,
+        auto_permission_runtime.provider_client,
+        auto_permission_runtime.config,
+        auto_permission_runtime.vt_cfg,
         permissions,
         tool_registry.workspace_root(),
-        auto_mode_runtime.working_history,
+        auto_permission_runtime.working_history,
         tool_name,
         tool_args,
         permission_request,
     )
     .await
     {
-        Ok(AutoModeReviewDecision::Allow { stage }) => {
+        Ok(AutoPermissionReviewDecision::Allow { stage }) => {
             tool_registry.mark_tool_preapproved(tool_name).await;
-            stats.record_auto_mode_allow();
-            tracing::trace!(tool = %tool_name, stage, "auto mode approved tool");
-            Ok(AutoModePermissionOutcome::Allow)
+            stats.record_auto_permission_allow();
+            tracing::trace!(tool = %tool_name, stage, "auto permission review approved tool");
+            Ok(AutoPermissionPermissionOutcome::Allow)
         }
-        Ok(AutoModeReviewDecision::Block(denial)) => {
-            let fallback_was_active = stats.auto_mode_prompt_fallback_active();
-            let fallback = stats.record_auto_mode_denial(
+        Ok(AutoPermissionReviewDecision::Block(denial)) => {
+            let fallback_was_active = stats.auto_permission_prompt_fallback_active();
+            let fallback = stats.record_auto_permission_denial(
                 denial.clone(),
-                permissions.auto_mode.max_consecutive_denials,
-                permissions.auto_mode.max_total_denials,
+                permissions.auto_permission.max_consecutive_denials,
+                permissions.auto_permission.max_total_denials,
             );
             tracing::trace!(
                 tool = %tool_name,
@@ -826,29 +796,34 @@ async fn resolve_auto_mode_permission(
                 matched_rule = denial.matched_rule.as_deref().unwrap_or(""),
                 matched_exception = denial.matched_exception.as_deref().unwrap_or(""),
                 fallback,
-                "auto mode blocked tool"
+                "auto permission review blocked tool"
             );
 
             if fallback && !fallback_was_active {
                 if !renderer.supports_inline_ui() {
-                    return Ok(AutoModePermissionOutcome::AbortHeadless {
-                        reason: headless_auto_mode_fallback_reason(
+                    return Ok(AutoPermissionPermissionOutcome::AbortHeadless {
+                        reason: headless_auto_permission_fallback_reason(
                             tool_name,
-                            stats.last_auto_mode_denial(),
+                            stats.last_auto_permission_denial(),
                         ),
                     });
                 }
                 renderer.line(
                     MessageStyle::Info,
-                    "Auto mode fell back to manual prompts after repeated classifier denials.",
+                    "Auto permission review fell back to manual prompts after repeated classifier denials.",
                 )?;
             }
 
-            Ok(AutoModePermissionOutcome::Block)
+            Ok(AutoPermissionPermissionOutcome::Block)
         }
         Err(err) => {
-            tracing::warn!(tool = %tool_name, error = %err, "auto mode reviewer failed");
-            Ok(AutoModePermissionOutcome::PromptFallback)
+            tracing::warn!(tool = %tool_name, error = %err, "auto permission review reviewer failed");
+            if !allow_prompt_fallback {
+                return Ok(AutoPermissionPermissionOutcome::AbortHeadless {
+                    reason: full_auto_unavailable_reason(tool_name),
+                });
+            }
+            Ok(AutoPermissionPermissionOutcome::PromptFallback)
         }
     }
 }
@@ -971,12 +946,12 @@ pub(crate) async fn ensure_tool_permission_with_call_id<S: UiSession + ?Sized>(
         decision_ledger,
         tool_permission_cache,
         permissions_state,
-        permission_mode_override,
+        active_agent_permissions,
         hitl_notification_bell,
         approval_policy,
         skip_confirmations,
         permissions_config,
-        auto_mode_runtime,
+        auto_permission_runtime,
         session_stats,
     } = ctx;
 
@@ -1027,52 +1002,55 @@ pub(crate) async fn ensure_tool_permission_with_call_id<S: UiSession + ?Sized>(
         })
         .unwrap_or_else(|| tool_name.to_string());
 
+    let policy_decision = tool_registry.evaluate_tool_policy(tool_name).await?;
+    if policy_decision == ToolPermissionDecision::Deny {
+        return Ok(ToolPermissionFlow::Denied);
+    }
+
     let current_dir =
         std::env::current_dir().unwrap_or_else(|_| tool_registry.workspace_root().clone());
-    let mut permissions_snapshot = if let Some(state) = permissions_state {
+    let permissions_snapshot = if let Some(state) = permissions_state {
         state.read().await.clone()
     } else {
         permissions_config.cloned().unwrap_or_default()
     };
-    let base_permission_mode = permissions_snapshot.default_mode;
-    permissions_snapshot.default_mode =
-        clamp_primary_permission_mode(base_permission_mode, permission_mode_override);
-    let session_override_narrows_permissions = permission_mode_override.is_some()
-        && permissions_snapshot.default_mode != base_permission_mode;
-    let permission_mode = current_permission_mode(&permissions_snapshot);
-    let effective_permissions =
-        effective_permissions_config(&permissions_snapshot, permission_mode);
     let permission_request = build_permission_request(
         tool_registry.workspace_root(),
         &current_dir,
         &normalized_tool_name,
         tool_args,
     );
-    let permission_matches = effective_permissions
-        .as_ref()
-        .map(|config| {
-            evaluate_permissions(
-                config,
-                tool_registry.workspace_root(),
-                &current_dir,
-                &permission_request,
-            )
-        })
-        .unwrap_or_default();
+    let permission_decision = resolve_permission_decision(
+        &permissions_snapshot,
+        active_agent_permissions,
+        tool_registry.workspace_root(),
+        &current_dir,
+        &permission_request,
+    );
 
-    if permission_matches.deny {
+    if permission_decision == ResolvedPermissionDecision::Deny {
         return Ok(ToolPermissionFlow::Denied);
     }
+
+    let full_auto_allowlist_active = tool_registry.current_full_auto_allowlist().await.is_some();
+    if full_auto_allowlist_active
+        && !tool_registry
+            .is_allowed_in_full_auto(&normalized_tool_name)
+            .await
+    {
+        return Ok(ToolPermissionFlow::Denied);
+    }
+
+    let effective_permission_decision =
+        if full_auto_allowlist_active && permission_decision == ResolvedPermissionDecision::Ask {
+            ResolvedPermissionDecision::Auto
+        } else {
+            permission_decision
+        };
     let requires_protected_write_prompt = permission_request.requires_protected_write_prompt();
-    let requires_rule_prompt =
-        hook_requires_prompt || permission_matches.ask || requires_protected_write_prompt;
-    let auto_mode_classifier_review = permission_mode == PermissionMode::Auto
-        && !requires_rule_prompt
-        && !auto_mode_safe_builtin_allow(tool_registry.workspace_root(), &permission_request);
-    let policy_decision = tool_registry.evaluate_tool_policy(tool_name).await?;
-    if policy_decision == ToolPermissionDecision::Deny {
-        return Ok(ToolPermissionFlow::Denied);
-    }
+    let raw_requires_rule_prompt = hook_requires_prompt
+        || permission_decision == ResolvedPermissionDecision::Ask
+        || requires_protected_write_prompt;
 
     let persisted_shell_approval =
         persisted_shell_approval(tool_registry, &normalized_tool_name, tool_args).await;
@@ -1108,8 +1086,22 @@ pub(crate) async fn ensure_tool_permission_with_call_id<S: UiSession + ?Sized>(
         &display_labels.learning_label,
     );
 
-    let requires_sandbox_prompt = shell_approval_reason.is_some() && !auto_mode_classifier_review;
-    let can_reuse_saved_approval = !requires_rule_prompt && !auto_mode_classifier_review;
+    let raw_requires_sandbox_prompt = shell_approval_reason.is_some();
+    let policy_requires_prompt = policy_decision == ToolPermissionDecision::Prompt;
+    let full_auto_promptable = full_auto_allowlist_active
+        && (raw_requires_rule_prompt || raw_requires_sandbox_prompt || policy_requires_prompt);
+    let requires_rule_prompt = raw_requires_rule_prompt && !full_auto_allowlist_active;
+    let auto_permission_classifier_review = (effective_permission_decision
+        == ResolvedPermissionDecision::Auto
+        && !auto_permission_safe_builtin_allow(
+            tool_registry.workspace_root(),
+            &permission_request,
+        ))
+        || full_auto_promptable;
+    let requires_sandbox_prompt = raw_requires_sandbox_prompt && !auto_permission_classifier_review;
+    let can_reuse_saved_approval = !raw_requires_rule_prompt
+        && !auto_permission_classifier_review
+        && !full_auto_allowlist_active;
 
     if can_reuse_saved_approval
         && let Some(flow) = reuse_saved_approval(
@@ -1130,61 +1122,59 @@ pub(crate) async fn ensure_tool_permission_with_call_id<S: UiSession + ?Sized>(
     if should_allow_without_prompt(
         tool_registry.workspace_root(),
         &permission_request,
-        permission_mode,
-        &permission_matches,
+        effective_permission_decision,
         requires_rule_prompt,
         requires_sandbox_prompt,
     ) {
         return Ok(approve_tool_permission_no_cache(tool_registry, tool_name).await);
     }
 
-    if permission_mode == PermissionMode::DontAsk {
-        return Ok(ToolPermissionFlow::Denied);
-    }
-
     if policy_decision == ToolPermissionDecision::Allow
         && !requires_rule_prompt
         && !requires_sandbox_prompt
-        && !auto_mode_classifier_review
+        && !auto_permission_classifier_review
+        && !full_auto_allowlist_active
     {
         return Ok(approve_tool_permission_no_cache(tool_registry, tool_name).await);
     }
 
-    if skip_confirmations && !session_override_narrows_permissions {
-        return Ok(approve_tool_permission_no_cache(tool_registry, tool_name).await);
-    }
-
     let mut requires_auto_fallback_prompt = false;
-    if auto_mode_classifier_review {
-        match resolve_auto_mode_permission(
+    if auto_permission_classifier_review {
+        match resolve_auto_permission(
             renderer,
             tool_registry,
             &normalized_tool_name,
             tool_args,
             &permission_request,
             &permissions_snapshot,
-            auto_mode_runtime,
+            auto_permission_runtime,
             session_stats,
+            !full_auto_allowlist_active,
         )
         .await?
         {
-            AutoModePermissionOutcome::Allow => {
+            AutoPermissionPermissionOutcome::Allow => {
                 return Ok(ToolPermissionFlow::Approved { updated_args: None });
             }
-            AutoModePermissionOutcome::Block => return Ok(ToolPermissionFlow::Denied),
-            AutoModePermissionOutcome::PromptFallback => {
+            AutoPermissionPermissionOutcome::Block => return Ok(ToolPermissionFlow::Denied),
+            AutoPermissionPermissionOutcome::PromptFallback => {
                 requires_auto_fallback_prompt = true;
             }
-            AutoModePermissionOutcome::AbortHeadless { reason } => {
+            AutoPermissionPermissionOutcome::AbortHeadless { reason } => {
                 return Ok(ToolPermissionFlow::Blocked { reason });
             }
         }
     }
 
+    if skip_confirmations && !full_auto_allowlist_active {
+        return Ok(approve_tool_permission_no_cache(tool_registry, tool_name).await);
+    }
+
     let should_prompt = requires_rule_prompt
         || requires_sandbox_prompt
         || requires_auto_fallback_prompt
-        || (policy_decision == ToolPermissionDecision::Prompt && !auto_mode_classifier_review);
+        || (policy_decision == ToolPermissionDecision::Prompt
+            && !auto_permission_classifier_review);
     if !should_prompt {
         return Ok(approve_tool_permission_no_cache(tool_registry, tool_name).await);
     }
@@ -1223,14 +1213,6 @@ pub(crate) async fn ensure_tool_permission_with_call_id<S: UiSession + ?Sized>(
                             &decision.permission_updates,
                         )
                         .await;
-                        if decision
-                            .permission_updates
-                            .iter()
-                            .any(|update| matches!(update.kind, PermissionUpdateKind::SetMode(_)))
-                        {
-                            let current_mode = permissions_state.read().await.default_mode;
-                            hooks.update_permission_mode(current_mode).await;
-                        }
                         update_messages
                     } else if !decision.permission_updates.is_empty() {
                         vec![vtcode_core::hooks::HookMessage::warning(

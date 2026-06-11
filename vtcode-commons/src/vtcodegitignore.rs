@@ -24,7 +24,7 @@ impl VTCodeGitignore {
     /// Create a new VTCodeGitignore instance by looking for .vtcodegitignore in the current directory
     pub async fn new() -> Result<Self> {
         let current_dir = std::env::current_dir()
-            .map_err(|e| anyhow!("Failed to get current directory: {}", e))?;
+            .map_err(|e| anyhow!("Failed to get current directory: {e}"))?;
 
         Self::from_directory(&current_dir).await
     }
@@ -66,7 +66,7 @@ impl VTCodeGitignore {
     async fn load_patterns(file_path: &Path, builder: &mut GitignoreBuilder) -> Result<()> {
         let content = fs::read_to_string(file_path)
             .await
-            .map_err(|e| anyhow!("Failed to read .vtcodegitignore: {}", e))?;
+            .map_err(|e| anyhow!("Failed to read .vtcodegitignore: {e}"))?;
 
         for (line_num, line) in content.lines().enumerate() {
             let line = line.trim();

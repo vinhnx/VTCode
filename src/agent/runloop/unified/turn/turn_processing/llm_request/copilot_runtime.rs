@@ -9,6 +9,7 @@ use async_trait::async_trait;
 use serde_json::{Value, json};
 use tokio::sync::RwLock;
 use vtcode_config::auth::CopilotAuthConfig;
+use vtcode_config::core::permissions::AgentPermissionsConfig;
 use vtcode_core::acp::{PermissionGrant, ToolPermissionCache};
 use vtcode_core::config::PtyConfig;
 use vtcode_core::copilot::{
@@ -35,6 +36,7 @@ use crate::agent::runloop::unified::inline_events::harness::{
     HarnessEventEmitter, tool_invocation_completed_event, tool_output_completed_event,
     tool_output_started_event, tool_started_event, tool_updated_event,
 };
+use crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState;
 use crate::agent::runloop::unified::progress::{
     ProgressReporter, ProgressUpdateGuard, spawn_elapsed_time_updater,
 };
@@ -61,6 +63,7 @@ pub(super) struct CopilotRuntimeHost<'a> {
     tool_result_cache: &'a Arc<RwLock<vtcode_core::tools::ToolResultCache>>,
     session: &'a mut InlineSession,
     session_stats: &'a mut SessionStats,
+    plan_session: &'a mut PlanningWorkflowSessionState,
     mcp_panel_state: &'a mut McpPanelState,
     handle: &'a InlineHandle,
     ctrl_c_state: &'a Arc<CtrlCState>,
@@ -70,7 +73,7 @@ pub(super) struct CopilotRuntimeHost<'a> {
     decision_ledger: &'a Arc<RwLock<vtcode_core::core::decision_tracker::DecisionTracker>>,
     tool_permission_cache: &'a Arc<RwLock<ToolPermissionCache>>,
     permissions_state: &'a Arc<RwLock<vtcode_core::config::PermissionsConfig>>,
-    permission_mode_override: Option<vtcode_config::PermissionMode>,
+    active_agent_permissions: Option<&'a AgentPermissionsConfig>,
     safety_validator: &'a Arc<ToolCallSafetyValidator>,
     lifecycle_hooks: Option<&'a vtcode_core::hooks::LifecycleHookEngine>,
     approval_policy: AskForApproval,
@@ -95,6 +98,7 @@ impl<'a> CopilotRuntimeHost<'a> {
         tool_result_cache: &'a Arc<RwLock<vtcode_core::tools::ToolResultCache>>,
         session: &'a mut InlineSession,
         session_stats: &'a mut SessionStats,
+        plan_session: &'a mut PlanningWorkflowSessionState,
         mcp_panel_state: &'a mut McpPanelState,
         handle: &'a InlineHandle,
         ctrl_c_state: &'a Arc<CtrlCState>,
@@ -104,7 +108,7 @@ impl<'a> CopilotRuntimeHost<'a> {
         decision_ledger: &'a Arc<RwLock<vtcode_core::core::decision_tracker::DecisionTracker>>,
         tool_permission_cache: &'a Arc<RwLock<ToolPermissionCache>>,
         permissions_state: &'a Arc<RwLock<vtcode_core::config::PermissionsConfig>>,
-        permission_mode_override: Option<vtcode_config::PermissionMode>,
+        active_agent_permissions: Option<&'a AgentPermissionsConfig>,
         safety_validator: &'a Arc<ToolCallSafetyValidator>,
         lifecycle_hooks: Option<&'a vtcode_core::hooks::LifecycleHookEngine>,
         vt_cfg: Option<&'a vtcode_config::loader::VTCodeConfig>,
@@ -139,6 +143,7 @@ impl<'a> CopilotRuntimeHost<'a> {
             tool_result_cache,
             session,
             session_stats,
+            plan_session,
             mcp_panel_state,
             handle,
             ctrl_c_state,
@@ -148,7 +153,7 @@ impl<'a> CopilotRuntimeHost<'a> {
             decision_ledger,
             tool_permission_cache,
             permissions_state,
-            permission_mode_override,
+            active_agent_permissions,
             safety_validator,
             lifecycle_hooks,
             approval_policy,
@@ -320,6 +325,7 @@ impl<'a> CopilotRuntimeHost<'a> {
                 self.permissions_state,
                 self.decision_ledger,
                 self.session_stats,
+                self.plan_session,
                 self.mcp_panel_state,
                 self.approval_recorder,
                 self.session,
@@ -490,12 +496,12 @@ impl<'a> CopilotRuntimeHost<'a> {
             decision_ledger: Some(self.decision_ledger),
             tool_permission_cache: Some(self.tool_permission_cache),
             permissions_state: Some(self.permissions_state),
-            permission_mode_override: self.permission_mode_override,
+            active_agent_permissions: self.active_agent_permissions,
             hitl_notification_bell: self.hitl_notification_bell,
             approval_policy: self.approval_policy,
             skip_confirmations: self.skip_confirmations,
             permissions_config: self.vt_cfg.map(|cfg| &cfg.permissions),
-            auto_mode_runtime: None,
+            auto_permission_runtime: None,
             session_stats: Some(self.session_stats),
         }
     }

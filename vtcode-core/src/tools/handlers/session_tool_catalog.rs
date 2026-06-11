@@ -183,7 +183,7 @@ pub struct SessionToolsConfig {
     pub surface: SessionSurface,
     pub capability_level: CapabilityLevel,
     pub documentation_mode: ToolDocumentationMode,
-    pub plan_mode: bool,
+    pub planning_active: bool,
     pub request_user_input_enabled: bool,
     pub model_capabilities: ToolModelCapabilities,
     pub deferred_tool_policy: DeferredToolPolicy,
@@ -201,7 +201,7 @@ impl SessionToolsConfig {
             surface,
             capability_level,
             documentation_mode,
-            plan_mode: true,
+            planning_active: true,
             request_user_input_enabled: true,
             model_capabilities,
             deferred_tool_policy: DeferredToolPolicy::default(),
@@ -580,9 +580,8 @@ fn is_core_tool_entry(entry: &ToolCatalogEntry, config: &SessionToolsConfig) -> 
         | tools::UNIFIED_FILE
         | tools::UNIFIED_EXEC
         | tools::TASK_TRACKER
-        | tools::PLAN_TASK_TRACKER
-        | tools::ENTER_PLAN_MODE
-        | tools::EXIT_PLAN_MODE
+        | tools::START_PLANNING
+        | tools::FINISH_PLANNING
         | tools::SPAWN_AGENT
         | tools::SPAWN_BACKGROUND_SUBPROCESS
         | tools::SEND_INPUT
@@ -758,7 +757,7 @@ mod tests {
             surface: SessionSurface::Interactive,
             capability_level: CapabilityLevel::CodeSearch,
             documentation_mode: ToolDocumentationMode::Full,
-            plan_mode: true,
+            planning_active: true,
             request_user_input_enabled: false,
             model_capabilities: ToolModelCapabilities::default(),
             deferred_tool_policy: DeferredToolPolicy::default(),
@@ -769,8 +768,8 @@ mod tests {
     }
 
     #[test]
-    fn plan_task_tracker_stays_visible_outside_plan_mode() {
-        let registration = registration(tools::PLAN_TASK_TRACKER)
+    fn task_tracker_stays_visible_outside_planning_workflow() {
+        let registration = registration(tools::TASK_TRACKER)
             .with_description("Track plan tasks")
             .with_parameter_schema(empty_object_schema());
 
@@ -779,14 +778,14 @@ mod tests {
             surface: SessionSurface::Interactive,
             capability_level: CapabilityLevel::CodeSearch,
             documentation_mode: ToolDocumentationMode::Full,
-            plan_mode: false,
+            planning_active: false,
             request_user_input_enabled: true,
             model_capabilities: ToolModelCapabilities::default(),
             deferred_tool_policy: DeferredToolPolicy::default(),
             anthropic_native_memory_enabled: false,
         });
 
-        assert_eq!(names, vec![tools::PLAN_TASK_TRACKER.to_string()]);
+        assert_eq!(names, vec![tools::TASK_TRACKER.to_string()]);
     }
 
     #[test]

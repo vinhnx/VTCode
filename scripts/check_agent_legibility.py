@@ -41,8 +41,8 @@ TARGETS = (
         label="turn context",
     ),
     LegibilityTarget(
-        path="src/agent/runloop/unified/turn/turn_processing/plan_mode.rs",
-        label="plan mode",
+        path="src/agent/runloop/unified/turn/turn_processing/planning_workflow.rs",
+        label="planning workflow",
     ),
     LegibilityTarget(
         path="src/agent/runloop/unified/turn/tool_outcomes/execution_result.rs",

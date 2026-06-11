@@ -186,13 +186,12 @@ pub(super) async fn spawn_event_loop(
             }
             maybe_event = crossterm_event => {
                 match maybe_event {
-                    Some(Ok(evt)) => {
-                        // Only send if not paused. When paused (e.g., during external editor launch),
-                        // skip sending to prevent processing input while the editor is active.
-                        if !rx_paused.load(std::sync::atomic::Ordering::Acquire) {
-                            let _ = event_tx.send(TerminalEvent::Crossterm(evt));
-                        }
+                    // Only send if not paused. When paused (e.g., during external editor launch),
+                    // skip sending to prevent processing input while the editor is active.
+                    Some(Ok(evt)) if !rx_paused.load(std::sync::atomic::Ordering::Acquire) => {
+                        let _ = event_tx.send(TerminalEvent::Crossterm(evt));
                     }
+                    Some(Ok(_)) => {}
                     Some(Err(error)) => {
                         tracing::error!(%error, "terminal event stream error");
                     }

@@ -5,11 +5,13 @@ use std::path::Path;
 
 use crate::acp::AgentClientProtocolConfig;
 use crate::codex::{FileOpener, HistoryConfig, TuiConfig};
+use crate::constants::defaults::DEFAULT_PRIMARY_AGENT_NAME;
 use crate::context::ContextFeaturesConfig;
 use crate::core::{
-    AgentConfig, AnthropicConfig, AuthConfig, AutomationConfig, CommandsConfig,
-    CustomProviderConfig, DotfileProtectionConfig, ModelConfig, OpenAIConfig, PermissionsConfig,
-    PromptCachingConfig, SandboxConfig, SecurityConfig, SkillsConfig, ToolsConfig,
+    AgentConfig, AgentPermissionsConfig, AnthropicConfig, AuthConfig, AutomationConfig,
+    CommandsConfig, CustomProviderConfig, DotfileProtectionConfig, ModelConfig, OpenAIConfig,
+    PermissionsConfig, PromptCachingConfig, SandboxConfig, SecurityConfig, SkillsConfig,
+    ToolsConfig,
 };
 use crate::debug::DebugConfig;
 use crate::defaults::{self, ConfigDefaultsProvider};
@@ -55,8 +57,12 @@ pub struct FeaturesConfig {
 
 /// Main configuration structure for VT Code
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct VTCodeConfig {
+    /// Primary agent selected at startup when no session override is active.
+    #[serde(default = "default_primary_agent")]
+    pub default_primary_agent: String,
+
     /// Codex-compatible top-level feature flags (`[features]` table).
     #[serde(default)]
     pub features: FeaturesConfig,
@@ -96,6 +102,11 @@ pub struct VTCodeConfig {
     /// Permission system settings (resolution, audit logging, caching)
     #[serde(default)]
     pub permissions: PermissionsConfig,
+
+    /// Runtime-only agent permission policy supplied by derived child agents.
+    #[serde(skip)]
+    #[cfg_attr(feature = "schema", schemars(skip))]
+    pub runtime_agent_permissions: Option<AgentPermissionsConfig>,
 
     /// Security settings
     #[serde(default)]
@@ -194,6 +205,49 @@ pub struct VTCodeConfig {
     /// Dotfile protection configuration
     #[serde(default)]
     pub dotfile_protection: DotfileProtectionConfig,
+}
+
+impl Default for VTCodeConfig {
+    fn default() -> Self {
+        Self {
+            default_primary_agent: default_primary_agent(),
+            features: FeaturesConfig::default(),
+            file_opener: FileOpener::default(),
+            notify: Vec::new(),
+            history: HistoryConfig::default(),
+            tui: TuiConfig::default(),
+            agent: AgentConfig::default(),
+            auth: AuthConfig::default(),
+            tools: ToolsConfig::default(),
+            commands: CommandsConfig::default(),
+            permissions: PermissionsConfig::default(),
+            runtime_agent_permissions: None,
+            security: SecurityConfig::default(),
+            sandbox: SandboxConfig::default(),
+            ui: UiConfig::default(),
+            chat: ChatConfig::default(),
+            pty: PtyConfig::default(),
+            debug: DebugConfig::default(),
+            context: ContextFeaturesConfig::default(),
+            telemetry: TelemetryConfig::default(),
+            optimization: OptimizationConfig::default(),
+            syntax_highlighting: SyntaxHighlightingConfig::default(),
+            timeouts: TimeoutsConfig::default(),
+            automation: AutomationConfig::default(),
+            subagents: SubagentRuntimeLimits::default(),
+            prompt_cache: PromptCachingConfig::default(),
+            mcp: McpClientConfig::default(),
+            acp: AgentClientProtocolConfig::default(),
+            ide_context: IdeContextConfig::default(),
+            hooks: HooksConfig::default(),
+            model: ModelConfig::default(),
+            provider: ProviderConfig::default(),
+            skills: SkillsConfig::default(),
+            custom_providers: Vec::new(),
+            output_style: OutputStyleConfig::default(),
+            dotfile_protection: DotfileProtectionConfig::default(),
+        }
+    }
 }
 
 impl VTCodeConfig {
@@ -432,6 +486,9 @@ impl VTCodeConfig {
 
 # Clickable file citation URI scheme ("vscode", "cursor", "windsurf", "vscode-insiders", "none")
 file_opener = "none"
+
+# Primary agent selected for new sessions when no explicit session selection is active
+default_primary_agent = "duck"
 
 # Optional external command invoked after each completed agent turn
 notify = []
@@ -887,7 +944,7 @@ enabled_languages = [
 # Timeout for syntax highlighting operations (milliseconds)
 highlight_timeout_ms = 1000
 
-# Automation features - Full-auto mode settings
+# Automation features - Full-auto permission review settings
 [automation.full_auto]
 # Enable full automation mode (DANGEROUS - requires careful oversight)
 enabled = false
@@ -1101,6 +1158,10 @@ target/, build/, dist/, node_modules/, vendor/
 
         Ok(())
     }
+}
+
+fn default_primary_agent() -> String {
+    DEFAULT_PRIMARY_AGENT_NAME.to_string()
 }
 
 #[cfg(test)]

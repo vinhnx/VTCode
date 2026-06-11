@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -91,6 +92,8 @@ pub(crate) struct TestTurnProcessingBacking {
     decision_ledger: Arc<RwLock<DecisionTracker>>,
     approval_recorder: Arc<ApprovalRecorder>,
     session_stats: SessionStats,
+    plan_session:
+        crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState,
     mcp_panel_state: McpPanelState,
     context_manager: ContextManager,
     last_forced_redraw: Instant,
@@ -108,7 +111,7 @@ pub(crate) struct TestTurnProcessingBacking {
     autonomous_executor: Arc<vtcode_core::tools::autonomous_executor::AutonomousExecutor>,
     error_recovery: Arc<RwLock<vtcode_core::core::agent::error_recovery::ErrorRecoveryState>>,
     harness_state: HarnessTurnState,
-    auto_exit_plan_mode_attempted: bool,
+    auto_finish_planning_attempted: bool,
     working_history: Vec<uni::Message>,
     tool_catalog: Arc<ToolCatalogState>,
     default_placeholder: Option<String>,
@@ -135,6 +138,8 @@ impl TestTurnProcessingBacking {
         let decision_ledger = Arc::new(RwLock::new(DecisionTracker::new()));
         let approval_recorder = Arc::new(ApprovalRecorder::new(workspace.clone()));
         let session_stats = SessionStats::default();
+        let plan_session =
+            crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState::default();
         let mcp_panel_state = McpPanelState::default();
         let loaded_skills = Arc::new(RwLock::new(HashMap::new()));
         let context_manager =
@@ -202,6 +207,7 @@ impl TestTurnProcessingBacking {
             decision_ledger,
             approval_recorder,
             session_stats,
+            plan_session,
             mcp_panel_state,
             context_manager,
             last_forced_redraw,
@@ -219,7 +225,7 @@ impl TestTurnProcessingBacking {
             autonomous_executor,
             error_recovery,
             harness_state,
-            auto_exit_plan_mode_attempted: false,
+            auto_finish_planning_attempted: false,
             working_history: Vec::new(),
             tool_catalog,
             default_placeholder: None,
@@ -234,6 +240,10 @@ impl TestTurnProcessingBacking {
 
     pub(crate) async fn add_tool_definition(&self, tool: ToolDefinition) {
         self.tools.write().await.push(tool);
+    }
+
+    pub(crate) fn workspace_path(&self) -> &Path {
+        self._temp.path()
     }
 
     pub(crate) fn select_primary_agent_from_specs(
@@ -293,7 +303,8 @@ impl TestTurnProcessingBacking {
             &self.handle,
             &mut self.session,
             &mut self.session_stats,
-            &mut self.auto_exit_plan_mode_attempted,
+            &mut self.plan_session,
+            &mut self.auto_finish_planning_attempted,
             &mut self.mcp_panel_state,
             &self.tool_result_cache,
             &self.approval_recorder,
@@ -371,7 +382,8 @@ impl TestTurnProcessingBacking {
         };
         let state = TurnProcessingState {
             session_stats: &mut self.session_stats,
-            auto_exit_plan_mode_attempted: &mut self.auto_exit_plan_mode_attempted,
+            plan_session: &mut self.plan_session,
+            auto_finish_planning_attempted: &mut self.auto_finish_planning_attempted,
             mcp_panel_state: &mut self.mcp_panel_state,
             working_history: &mut self.working_history,
             turn_metadata_cache: &mut self.turn_metadata_cache,

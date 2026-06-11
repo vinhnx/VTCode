@@ -851,7 +851,7 @@ async fn tool_output_summary_input_decodes_invalid_utf8_spool_lossily() {
 #[test]
 fn blocked_or_denied_failure_detects_guardable_errors() {
     assert!(is_blocked_or_denied_failure(
-        "plan_task_tracker is a Plan Mode compatibility alias. Use task_tracker in Edit mode, or switch to Plan Mode."
+        "task_tracker is only available when planning workflow state is active."
     ));
     assert!(is_blocked_or_denied_failure("Tool permission denied"));
     assert!(is_blocked_or_denied_failure(

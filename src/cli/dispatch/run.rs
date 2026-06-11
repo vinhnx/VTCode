@@ -3,7 +3,7 @@ use anyhow::Result;
 use vtcode_core::cli::args::AskCommandOptions;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
-use vtcode_core::core::interfaces::session::PlanModeEntrySource;
+use vtcode_core::core::interfaces::session::PlanningEntrySource;
 
 use crate::cli::{analyze, sessions};
 
@@ -35,14 +35,16 @@ pub(crate) async fn handle_chat_command(
     vt_cfg: VTCodeConfig,
     skip_confirmations: bool,
     full_auto_requested: bool,
-    plan_mode_entry_source: PlanModeEntrySource,
+    primary_agent_explicitly_configured: bool,
+    planning_entry_source: PlanningEntrySource,
 ) -> Result<()> {
     crate::agent::agents::run_single_agent_loop(
         &core_cfg,
         Some(vt_cfg),
         skip_confirmations,
         full_auto_requested,
-        plan_mode_entry_source,
+        primary_agent_explicitly_configured,
+        planning_entry_source,
         None,
     )
     .await
@@ -64,7 +66,6 @@ pub(super) async fn handle_analyze_command(
             crate::codex_app_server::CodexNonInteractiveRun {
                 prompt,
                 read_only: true,
-                plan_mode: false,
                 skip_confirmations: true,
                 ephemeral: true,
                 resume_thread_id: None,
@@ -108,7 +109,7 @@ fn codex_analyze_prompt(analysis_type: &analyze::AnalysisType) -> String {
     };
 
     format!(
-        "Analyze the current workspace in read-only mode. Focus on {focus}. Ground the answer in the repository, include concise file references when useful, and do not modify files or request additional user input."
+        "Analyze the current workspace with read-only permissions. Focus on {focus}. Ground the answer in the repository, include concise file references when useful, and do not modify files or request additional user input."
     )
 }
 

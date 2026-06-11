@@ -8,15 +8,15 @@ Execution plans are self-contained, living design documents for complex multi-st
 - **Decision logging**: captures why choices were made, not just what was done.
 - **Retrospectives**: completed plans become learning artifacts for future work.
 
-## Exec Plans vs Plan Mode
+## Exec Plans vs Planning Workflow
 
 These are distinct concepts:
 
 - **Exec Plans** are persistent design documents stored in `docs/harness/exec-plans/`. They capture goals, decisions, and retrospectives for complex work. They survive across sessions.
-- **Plan Mode** is a runtime safety state in VT Code that blocks mutating tools. It uses `.vtcode/plans/` for ephemeral session plans and has an `exit_plan_mode` tool to transition to implementation.
+- The **planning workflow** is driven by the `plan` primary agent and `/plan`. It is for repository exploration and proposal drafting before implementation.
 
 Exec Plans are written to `docs/harness/exec-plans/active/` and are part of the repository's knowledge base.
-Plan Mode session plans are written to `.vtcode/plans/` and are ephemeral per-session artifacts.
+Planning workflow artefacts may be written to `.vtcode/plans/` when the active agent permission policy allows them.
 
 ## Directory Structure
 

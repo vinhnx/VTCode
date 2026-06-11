@@ -8,5 +8,6 @@ pub(crate) use client::{
     is_codex_cli_unavailable, launch_app_server_proxy,
 };
 pub(crate) use runtime::{
-    CodexNonInteractiveRun, CodexSessionRuntime, handle_codex_ask_command, run_codex_noninteractive,
+    CodexNonInteractiveRun, CodexSessionRuntime, handle_codex_ask_command,
+    run_codex_noninteractive, run_codex_noninteractive_with_instructions,
 };

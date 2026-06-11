@@ -20,6 +20,7 @@ use crate::agent::runloop::unified::async_mcp_manager::AsyncMcpManager;
 use crate::agent::runloop::unified::context_manager::ContextManager;
 use crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter;
 use crate::agent::runloop::unified::palettes::ActivePalette;
+use crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState;
 use crate::agent::runloop::unified::session_setup::IdeContextBridge;
 use crate::agent::runloop::unified::state::{CtrlCState, SessionStats};
 use crate::agent::runloop::unified::status_line::InputStatusState;
@@ -59,6 +60,7 @@ pub(crate) struct SlashCommandContext<'a> {
     pub(crate) context_manager: &'a mut ContextManager,
     pub(crate) active_primary_agent: &'a mut ActivePrimaryAgentState,
     pub(crate) session_stats: &'a mut SessionStats,
+    pub(crate) plan_session: &'a mut PlanningWorkflowSessionState,
     pub(crate) input_status_state: &'a mut InputStatusState,
     pub(crate) tools: &'a Arc<RwLock<Vec<uni::ToolDefinition>>>,
     pub(crate) tool_catalog: &'a Arc<ToolCatalogState>,
@@ -98,6 +100,7 @@ impl<'a> SlashCommandContext<'a> {
             context_manager: self.context_manager,
             active_primary_agent: &mut *self.active_primary_agent,
             session_stats: self.session_stats,
+            plan_session: self.plan_session,
             input_status_state: self.input_status_state,
             tools: self.tools,
             tool_catalog: self.tool_catalog,

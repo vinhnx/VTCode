@@ -91,7 +91,7 @@ pub fn detect_mime_type_from_extension(path: &Path) -> Result<String> {
         "bmp" => "image/bmp",
         "tiff" | "tif" => "image/tiff",
         "svg" => "image/svg+xml",
-        _ => return Err(anyhow::anyhow!("Unsupported image format: {}", extension)),
+        _ => return Err(anyhow::anyhow!("Unsupported image format: {extension}")),
     };
 
     Ok(mime_type.to_string())

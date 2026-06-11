@@ -113,7 +113,7 @@ async fn test_prepare_session_bootstrap_builds_sections() {
     assert!(prompt.contains("## SESSION CONTEXT"));
     assert!(prompt.contains("Workflow Hint"));
     assert!(prompt.contains("@file"));
-    assert!(prompt.contains("Plan Mode"));
+    assert!(prompt.contains("Planning workflow"));
     assert!(prompt.contains("task_tracker"));
     assert!(prompt.contains("Suggested Next Actions"));
 

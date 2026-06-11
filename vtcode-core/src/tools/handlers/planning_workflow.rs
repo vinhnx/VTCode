@@ -1,15 +1,15 @@
-//! Plan mode tools for entering, exiting, and managing planning workflow
+//! Planning workflow tools for entering, exiting, and managing planning workflow
 //!
-//! These tools allow the agent to programmatically enter and exit plan mode.
+//! These tools allow the agent to programmatically enter and exit planning workflow.
 //! The agent can:
-//! - Enter plan mode to switch to read-only exploration
-//! - Exit plan mode (triggering plan review) to start implementation
+//! - Enter planning workflow to switch to read-only exploration
+//! - Exit planning workflow (triggering plan review) to start implementation
 //! - Persist canonical plans under `.vtcode/plans/` by default (with optional custom path)
 //!
-//! Based on insights from Claude Code's plan mode implementation:
+//! Based on insights from Claude Code's planning workflow implementation:
 //! - Plan files are written to a dedicated directory
 //! - The agent edits its own plan file during planning
-//! - Exiting plan mode reads the plan file and starts execution
+//! - Exiting planning workflow reads the plan file and starts execution
 //! - User confirmation is required before transitioning to execution (HITL)
 
 use crate::config::constants::tools;
@@ -110,10 +110,10 @@ pub struct PersistedPlanDraft {
     pub validation: PlanValidationReport,
 }
 
-/// Shared state for plan mode across tools
+/// Shared state for planning workflow across tools
 #[derive(Debug, Clone)]
-pub struct PlanModeState {
-    /// Whether plan mode is currently active
+pub struct PlanningWorkflowState {
+    /// Whether planning workflow is currently active
     is_active: Arc<AtomicBool>,
     /// Path to the current plan file (if any)
     current_plan_file: Arc<tokio::sync::RwLock<Option<PathBuf>>>,
@@ -125,7 +125,7 @@ pub struct PlanModeState {
     lifecycle_phase: Arc<std::sync::atomic::AtomicU8>,
 }
 
-impl PlanModeState {
+impl PlanningWorkflowState {
     pub fn new(workspace_root: PathBuf) -> Self {
         Self {
             is_active: Arc::new(AtomicBool::new(false)),
@@ -138,17 +138,17 @@ impl PlanModeState {
         }
     }
 
-    /// Check if plan mode is active
+    /// Check if planning workflow is active
     pub fn is_active(&self) -> bool {
         self.is_active.load(Ordering::Relaxed)
     }
 
-    /// Enable plan mode
+    /// Enable planning workflow
     pub fn enable(&self) {
         self.is_active.store(true, Ordering::Relaxed);
     }
 
-    /// Disable plan mode
+    /// Disable planning workflow
     pub fn disable(&self) {
         self.is_active.store(false, Ordering::Relaxed);
         self.set_phase(PlanLifecyclePhase::Off);
@@ -206,12 +206,12 @@ impl PlanModeState {
 }
 
 // ============================================================================
-// Enter Plan Mode Tool
+// Enter Planning workflow Tool
 // ============================================================================
 
-/// Arguments for entering plan mode
+/// Arguments for entering planning workflow
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EnterPlanModeArgs {
+pub struct StartPlanningArgs {
     /// Optional: Name for the plan file (defaults to timestamp-based name)
     #[serde(default)]
     pub plan_name: Option<String>,
@@ -233,13 +233,13 @@ pub struct EnterPlanModeArgs {
     pub approved: bool,
 }
 
-/// Tool for entering plan mode
-pub struct EnterPlanModeTool {
-    state: PlanModeState,
+/// Tool for entering planning workflow
+pub struct StartPlanningTool {
+    state: PlanningWorkflowState,
 }
 
-impl EnterPlanModeTool {
-    pub fn new(state: PlanModeState) -> Self {
+impl StartPlanningTool {
+    pub fn new(state: PlanningWorkflowState) -> Self {
         Self { state }
     }
 
@@ -702,13 +702,13 @@ pub async fn sync_tracker_into_plan_file(plan_file: &Path, tracker_markdown: &st
 }
 
 pub async fn persist_plan_draft(
-    state: &PlanModeState,
+    state: &PlanningWorkflowState,
     plan_markdown: &str,
 ) -> Result<PersistedPlanDraft> {
     let plan_file = state
         .get_plan_file()
         .await
-        .context("No active plan file. Call enter_plan_mode first.")?;
+        .context("No active plan file. Call start_planning first.")?;
     let existing_plan = read_file_with_context(&plan_file, "plan file").await.ok();
     let tracker_file = tracker_file_for_plan_file(&plan_file);
     let (existing_tracker, tracker_from_sidecar) = if let Some(path) = tracker_file.as_ref() {
@@ -858,7 +858,7 @@ fn render_initial_plan_file_content(
         content.push_str(&format!("Description: {}\n", description));
     }
     content.push('\n');
-    content.push_str("> Plan Mode is active. Research first, then materialize one concrete `<proposed_plan>` draft here.\n");
+    content.push_str("> Planning workflow is active. Research first, then materialize one concrete `<proposed_plan>` draft here.\n");
     content.push_str(&format!(
         "> Suggested validation defaults: build/lint {}; tests {}.\n",
         validation_hints.build_and_lint, validation_hints.tests
@@ -984,9 +984,9 @@ fn detect_validation_command_hints(workspace_root: &Path) -> ValidationCommandHi
 }
 
 #[async_trait]
-impl Tool for EnterPlanModeTool {
+impl Tool for StartPlanningTool {
     async fn execute(&self, args: Value) -> Result<Value> {
-        let args: EnterPlanModeArgs = serde_json::from_value(args).unwrap_or(EnterPlanModeArgs {
+        let args: StartPlanningArgs = serde_json::from_value(args).unwrap_or(StartPlanningArgs {
             plan_name: None,
             description: None,
             plan_path: None,
@@ -1000,7 +1000,7 @@ impl Tool for EnterPlanModeTool {
             .unwrap_or_else(|| PathBuf::from("."));
         let validation_hints = detect_validation_command_hints(&workspace_root);
 
-        // Check if already in plan mode
+        // Check if already in planning workflow
         if self.state.is_active() {
             let fallback_plan_name = self.generate_plan_name(args.plan_name.as_deref());
             let existing_plan_file = self.state.get_plan_file().await;
@@ -1011,7 +1011,7 @@ impl Tool for EnterPlanModeTool {
             if existing_plan_file_exists {
                 return Ok(json!({
                     "status": "already_active",
-                    "message": "Plan Mode is already active. Continue with your planning workflow.",
+                    "message": "Planning workflow is already active. Continue with your planning workflow.",
                     "plan_file": existing_plan_file.map(|p| p.display().to_string())
                 }));
             }
@@ -1051,9 +1051,9 @@ impl Tool for EnterPlanModeTool {
             self.state.set_phase(PlanLifecyclePhase::ActiveDrafting);
 
             let message = if created_plan_file {
-                "Plan Mode is already active. Initialized plan file for planning workflow."
+                "Planning workflow is already active. Initialized plan file for planning workflow."
             } else {
-                "Plan Mode is already active. Using existing plan file for planning workflow."
+                "Planning workflow is already active. Using existing plan file for planning workflow."
             };
 
             return Ok(json!({
@@ -1079,14 +1079,14 @@ impl Tool for EnterPlanModeTool {
             return Ok(json!({
                 "status": "pending_confirmation",
                 "requires_confirmation": true,
-                "message": "Plan Mode entry requires user confirmation.",
+                "message": "Planning workflow entry requires user confirmation.",
                 "plan_file": plan_file.display().to_string(),
                 "plan_title": plan_title.clone(),
                 "description": args.description,
             }));
         }
 
-        // Enable plan mode only after explicit approval.
+        // Enable planning workflow only after explicit approval.
         self.state.enable();
         self.state.set_phase(PlanLifecyclePhase::ActiveDrafting);
 
@@ -1111,13 +1111,13 @@ impl Tool for EnterPlanModeTool {
 
         Ok(json!({
             "status": "success",
-            "message": "Entered Plan Mode. You are now in read-only mode for exploration and planning.",
+            "message": "Entered Planning workflow. Mutating actions are disabled for exploration and planning.",
             "plan_file": plan_file.display().to_string(),
             "instructions": [
                 "1. Explore files and capture repository facts before drafting the plan",
                 "2. Ask or close only material blocking decisions",
                 "3. Emit one concrete <proposed_plan> draft and persist it to the plan file",
-                "4. Use exit_plan_mode when ready for the user to review and approve"
+                "4. Use finish_planning when ready for the user to review and approve"
             ],
             "workflow_phases": [
                 "Phase A: Explore facts",
@@ -1128,11 +1128,11 @@ impl Tool for EnterPlanModeTool {
     }
 
     fn name(&self) -> &str {
-        tools::ENTER_PLAN_MODE
+        tools::START_PLANNING
     }
 
     fn description(&self) -> &str {
-        "Enter Plan Mode to switch to read-only exploration. In Plan Mode, you can only read files, search code, and write canonical plan artifacts. Use this when you need to understand requirements before making changes."
+        "Enter Planning workflow for read-safe exploration. In Planning workflow, you can only read files, search code, and write canonical plan artifacts. Use this when you need to understand requirements before making changes."
     }
 
     fn parameter_schema(&self) -> Option<Value> {
@@ -1157,52 +1157,52 @@ impl Tool for EnterPlanModeTool {
     }
 
     fn is_mutating(&self) -> bool {
-        false // This is a mode switch, not a file mutation
+        false // This changes the planning permission state, not files.
     }
 
     fn is_parallel_safe(&self) -> bool {
-        false // Mode switches should be sequential
+        false // Planning permission changes should be sequential.
     }
 }
 
 // ============================================================================
-// Exit Plan Mode Tool
+// Exit Planning workflow Tool
 // ============================================================================
 
-/// Arguments for exiting plan mode
+/// Arguments for exiting planning workflow
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ExitPlanModeArgs {
+pub struct FinishPlanningArgs {
     /// Optional: Reason for exiting (e.g., "planning complete", "need more info")
     #[serde(default)]
     pub reason: Option<String>,
 }
 
-/// Tool for exiting plan mode
-pub struct ExitPlanModeTool {
-    state: PlanModeState,
+/// Tool for exiting planning workflow
+pub struct FinishPlanningTool {
+    state: PlanningWorkflowState,
 }
 
-impl ExitPlanModeTool {
-    pub fn new(state: PlanModeState) -> Self {
+impl FinishPlanningTool {
+    pub fn new(state: PlanningWorkflowState) -> Self {
         Self { state }
     }
 }
 
 #[async_trait]
-impl Tool for ExitPlanModeTool {
+impl Tool for FinishPlanningTool {
     async fn execute(&self, args: Value) -> Result<Value> {
-        let args: ExitPlanModeArgs =
-            serde_json::from_value(args).unwrap_or(ExitPlanModeArgs { reason: None });
+        let args: FinishPlanningArgs =
+            serde_json::from_value(args).unwrap_or(FinishPlanningArgs { reason: None });
         let auto_trigger = args
             .reason
             .as_deref()
             .is_some_and(|reason| reason == "auto_trigger_on_plan_ready");
 
-        // Check if not in plan mode
+        // Check if not in planning workflow
         if !self.state.is_active() {
             return Ok(json!({
                 "status": "not_active",
-                "message": "Plan Mode is not currently active."
+                "message": "Planning workflow is not currently active."
             }));
         }
 
@@ -1289,8 +1289,9 @@ impl Tool for ExitPlanModeTool {
                 ));
             }
             if !plan_recently_updated {
-                blockers
-                    .push("Plan file has not been updated since entering Plan Mode.".to_string());
+                blockers.push(
+                    "Plan file has not been updated since entering Planning workflow.".to_string(),
+                );
             }
             if auto_trigger {
                 self.state.set_phase(PlanLifecyclePhase::ReviewPending);
@@ -1361,13 +1362,13 @@ impl Tool for ExitPlanModeTool {
             })
         });
 
-        // NOTE: The actual plan mode state transition is now handled by the caller
+        // NOTE: The actual planning workflow state transition is now handled by the caller
         // after the user confirms via the plan confirmation dialog.
-        // We keep plan mode active until confirmation is received.
+        // We keep planning workflow active until confirmation is received.
         // The caller should:
         // 1. Display the shared plan confirmation overlay
         // 2. Wait for user approval (PlanApproved action)
-        // 3. Only then disable plan mode and enable edit tools
+        // 3. Only then disable planning workflow and enable edit tools
 
         Ok(json!({
             "status": "pending_confirmation",
@@ -1379,8 +1380,8 @@ impl Tool for ExitPlanModeTool {
             "plan_summary": plan_summary,
             "next_steps": [
                 "User will see the Implementation Blueprint panel",
-                "User can choose: Execute or Stay in Plan Mode",
-                "If approved, Plan Mode will be disabled and mutating tools will be enabled",
+                "User can choose: Execute or Stay in Planning workflow",
+                "If approved, Planning workflow will be disabled and mutating tools will be enabled",
                 "Execute the plan step by step after approval"
             ],
             "requires_confirmation": true,
@@ -1389,11 +1390,11 @@ impl Tool for ExitPlanModeTool {
     }
 
     fn name(&self) -> &str {
-        tools::EXIT_PLAN_MODE
+        tools::FINISH_PLANNING
     }
 
     fn description(&self) -> &str {
-        "Exit Plan Mode after finishing your plan. This signals that you're done planning and ready for user review. The plan file content will be shown to the user for approval. Only use this when the task requires planning implementation steps, not for research tasks."
+        "Exit Planning workflow after finishing your plan. This signals that you're done planning and ready for user review. The plan file content will be shown to the user for approval. Only use this when the task requires planning implementation steps, not for research tasks."
     }
 
     fn parameter_schema(&self) -> Option<Value> {
@@ -1402,7 +1403,7 @@ impl Tool for ExitPlanModeTool {
             "properties": {
                 "reason": {
                     "type": "string",
-                    "description": "Optional reason for exiting plan mode (e.g., 'planning complete', 'need clarification from user')"
+                    "description": "Optional reason for exiting planning workflow (e.g., 'planning complete', 'need clarification from user')"
                 }
             },
             "required": []
@@ -1428,15 +1429,15 @@ mod tests {
     use tempfile::TempDir;
 
     #[tokio::test]
-    async fn test_enter_plan_mode() {
+    async fn test_start_planning() {
         let temp_dir = TempDir::new().unwrap();
-        let state = PlanModeState::new(temp_dir.path().to_path_buf());
-        let tool = EnterPlanModeTool::new(state.clone());
+        let state = PlanningWorkflowState::new(temp_dir.path().to_path_buf());
+        let tool = StartPlanningTool::new(state.clone());
 
-        // Initially not in plan mode
+        // Initially not in planning workflow
         assert!(!state.is_active());
 
-        // Enter plan mode
+        // Enter planning workflow
         let result = tool
             .execute(json!({
                 "plan_name": "test-plan",
@@ -1445,7 +1446,7 @@ mod tests {
             .await
             .unwrap();
 
-        // Should be in plan mode now
+        // Should be in planning workflow now
         assert!(state.is_active());
         assert_eq!(result["status"], "success");
 
@@ -1472,10 +1473,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_enter_plan_mode_returns_pending_confirmation_when_requested() {
+    async fn test_start_planning_returns_pending_confirmation_when_requested() {
         let temp_dir = TempDir::new().unwrap();
-        let state = PlanModeState::new(temp_dir.path().to_path_buf());
-        let tool = EnterPlanModeTool::new(state.clone());
+        let state = PlanningWorkflowState::new(temp_dir.path().to_path_buf());
+        let tool = StartPlanningTool::new(state.clone());
 
         let result = tool
             .execute(json!({
@@ -1520,11 +1521,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_exit_plan_mode() {
+    async fn test_finish_planning() {
         let temp_dir = TempDir::new().unwrap();
-        let state = PlanModeState::new(temp_dir.path().to_path_buf());
+        let state = PlanningWorkflowState::new(temp_dir.path().to_path_buf());
 
-        // Set up plan mode
+        // Set up planning workflow
         state.enable();
         let plans_dir = state.plans_dir();
         std::fs::create_dir_all(&plans_dir).unwrap();
@@ -1536,9 +1537,9 @@ mod tests {
         .unwrap();
         state.set_plan_file(Some(plan_file)).await;
 
-        let tool = ExitPlanModeTool::new(state.clone());
+        let tool = FinishPlanningTool::new(state.clone());
 
-        // Exit plan mode
+        // Exit planning workflow
         let result = tool
             .execute(json!({
                 "reason": "planning complete"
@@ -1546,7 +1547,7 @@ mod tests {
             .await
             .unwrap();
 
-        // Plan mode should still be active - waiting for user confirmation (HITL)
+        // Planning workflow should still be active - waiting for user confirmation (HITL)
         assert!(state.is_active());
         assert_eq!(result["status"], "pending_confirmation");
         assert!(result["requires_confirmation"].as_bool().unwrap());
@@ -1565,9 +1566,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_exit_plan_mode_merges_plan_tracker_sidecar_content() {
+    async fn test_finish_planning_merges_plan_tracker_sidecar_content() {
         let temp_dir = TempDir::new().unwrap();
-        let state = PlanModeState::new(temp_dir.path().to_path_buf());
+        let state = PlanningWorkflowState::new(temp_dir.path().to_path_buf());
 
         state.enable();
         let plans_dir = state.plans_dir();
@@ -1586,7 +1587,7 @@ mod tests {
         .unwrap();
         state.set_plan_file(Some(plan_file)).await;
 
-        let tool = ExitPlanModeTool::new(state.clone());
+        let tool = FinishPlanningTool::new(state.clone());
         let result = tool
             .execute(json!({ "reason": "merge test" }))
             .await
@@ -1603,9 +1604,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_exit_plan_mode_not_ready_without_actionable_steps() {
+    async fn test_finish_planning_not_ready_without_actionable_steps() {
         let temp_dir = TempDir::new().unwrap();
-        let state = PlanModeState::new(temp_dir.path().to_path_buf());
+        let state = PlanningWorkflowState::new(temp_dir.path().to_path_buf());
 
         state.enable();
         let plans_dir = state.plans_dir();
@@ -1618,7 +1619,7 @@ mod tests {
         .unwrap();
         state.set_plan_file(Some(plan_file)).await;
 
-        let tool = ExitPlanModeTool::new(state.clone());
+        let tool = FinishPlanningTool::new(state.clone());
         let result = tool.execute(json!({})).await.unwrap();
 
         assert_eq!(result["status"], "not_ready");
@@ -1633,9 +1634,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_exit_plan_mode_auto_trigger_incomplete() {
+    async fn test_finish_planning_auto_trigger_incomplete() {
         let temp_dir = TempDir::new().unwrap();
-        let state = PlanModeState::new(temp_dir.path().to_path_buf());
+        let state = PlanningWorkflowState::new(temp_dir.path().to_path_buf());
 
         state.enable();
         let plans_dir = state.plans_dir();
@@ -1644,7 +1645,7 @@ mod tests {
         std::fs::write(&plan_file, "# Test Plan\n\n## Plan of Work\n- Draft step\n").unwrap();
         state.set_plan_file(Some(plan_file)).await;
 
-        let tool = ExitPlanModeTool::new(state.clone());
+        let tool = FinishPlanningTool::new(state.clone());
         let result = tool
             .execute(json!({ "reason": "auto_trigger_on_plan_ready" }))
             .await
@@ -1657,10 +1658,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_exit_plan_mode_not_ready_when_plan_not_updated_since_baseline() {
+    async fn test_finish_planning_not_ready_when_plan_not_updated_since_baseline() {
         let temp_dir = TempDir::new().unwrap();
-        let state = PlanModeState::new(temp_dir.path().to_path_buf());
-        let tool = EnterPlanModeTool::new(state.clone());
+        let state = PlanningWorkflowState::new(temp_dir.path().to_path_buf());
+        let tool = StartPlanningTool::new(state.clone());
 
         let result = tool
             .execute(json!({ "plan_name": "baseline-test" }))
@@ -1677,7 +1678,7 @@ mod tests {
             .unwrap();
         state.set_plan_baseline(Some(baseline)).await;
 
-        let exit_tool = ExitPlanModeTool::new(state.clone());
+        let exit_tool = FinishPlanningTool::new(state.clone());
         let exit_result = exit_tool.execute(json!({})).await.unwrap();
 
         assert_eq!(exit_result["status"], "not_ready");
@@ -1685,9 +1686,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_already_in_plan_mode() {
+    async fn test_already_in_planning_workflow() {
         let temp_dir = TempDir::new().unwrap();
-        let state = PlanModeState::new(temp_dir.path().to_path_buf());
+        let state = PlanningWorkflowState::new(temp_dir.path().to_path_buf());
         state.enable();
         let plans_dir = state.plans_dir();
         std::fs::create_dir_all(&plans_dir).unwrap();
@@ -1695,7 +1696,7 @@ mod tests {
         std::fs::write(&plan_file, "# Test Plan\n").unwrap();
         state.set_plan_file(Some(plan_file)).await;
 
-        let tool = EnterPlanModeTool::new(state);
+        let tool = StartPlanningTool::new(state);
         let result = tool.execute(json!({})).await.unwrap();
 
         assert_eq!(result["status"], "already_active");
@@ -1704,10 +1705,10 @@ mod tests {
     #[tokio::test]
     async fn test_already_active_initializes_missing_plan_file() {
         let temp_dir = TempDir::new().unwrap();
-        let state = PlanModeState::new(temp_dir.path().to_path_buf());
+        let state = PlanningWorkflowState::new(temp_dir.path().to_path_buf());
         state.enable();
 
-        let tool = EnterPlanModeTool::new(state.clone());
+        let tool = StartPlanningTool::new(state.clone());
         let result = tool
             .execute(json!({
                 "plan_name": "missing-plan"
@@ -1767,18 +1768,18 @@ Next open decision: [if any], otherwise: No remaining scope decisions.
     #[test]
     fn validate_plan_content_accepts_concrete_plan() {
         let report = validate_plan_content(
-            r#"# Fix Plan Mode
+            r#"# Fix Planning workflow
 
 ## Summary
 Persist the reviewed plan draft and route execution through explicit approval.
 
 ## Implementation Steps
-1. Add plan lifecycle state -> files: [vtcode-core/src/tools/handlers/plan_mode.rs] -> verify: [cargo test -p vtcode-core test_enter_plan_mode -- --nocapture]
-2. Gate plan entry with overlay approval -> files: [src/agent/runloop/unified/tool_pipeline/execution_plan_mode.rs] -> verify: [cargo test -p vtcode test_run_tool_call_prevalidated_allows_task_tracker_in_plan_mode -- --nocapture]
+1. Add plan lifecycle state -> files: [vtcode-core/src/tools/handlers/planning_workflow.rs] -> verify: [cargo test -p vtcode-core test_start_planning -- --nocapture]
+2. Gate plan entry with overlay approval -> files: [src/agent/runloop/unified/tool_pipeline/execution_planning.rs] -> verify: [cargo test -p vtcode test_run_tool_call_prevalidated_allows_task_tracker_in_planning_workflow -- --nocapture]
 
 ## Test Cases and Validation
 1. Build and lint: cargo check
-2. Tests: cargo test -p vtcode-core test_enter_plan_mode -- --nocapture
+2. Tests: cargo test -p vtcode-core test_start_planning -- --nocapture
 
 ## Assumptions and Defaults
 1. Keep tracker sidecars for compatibility.
@@ -1792,8 +1793,8 @@ Persist the reviewed plan draft and route execution through explicit approval.
     #[tokio::test]
     async fn persist_plan_draft_generates_tracker_and_global_task_file() {
         let temp_dir = TempDir::new().unwrap();
-        let state = PlanModeState::new(temp_dir.path().to_path_buf());
-        let tool = EnterPlanModeTool::new(state.clone());
+        let state = PlanningWorkflowState::new(temp_dir.path().to_path_buf());
+        let tool = StartPlanningTool::new(state.clone());
         tool.execute(json!({"plan_name":"draft-sync","approved":true}))
             .await
             .unwrap();
@@ -1806,7 +1807,7 @@ Persist the reviewed plan draft and route execution through explicit approval.
 Persist a concrete draft and seed tracker state.
 
 ## Implementation Steps
-1. Persist the plan -> files: [vtcode-core/src/tools/handlers/plan_mode.rs] -> verify: [cargo test]
+1. Persist the plan -> files: [vtcode-core/src/tools/handlers/planning_workflow.rs] -> verify: [cargo test]
 2. Sync the tracker -> files: [vtcode-core/src/tools/handlers/task_tracker.rs] -> verify: [cargo test]
 
 ## Test Cases and Validation

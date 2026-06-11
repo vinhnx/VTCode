@@ -17,8 +17,8 @@ use crate::agent::runloop::unified::incremental_system_prompt::{
 #[derive(Clone)]
 pub(crate) struct SystemPromptParams {
     pub full_auto: bool,
-    pub auto_mode: bool,
-    pub plan_mode: bool,
+    pub auto_permission: bool,
+    pub planning_active: bool,
     pub request_user_input_enabled: bool,
 }
 
@@ -213,8 +213,8 @@ impl ContextManager {
 
         let context = SystemPromptContext {
             full_auto: params.full_auto,
-            auto_mode: params.auto_mode,
-            plan_mode: params.plan_mode,
+            auto_permission: params.auto_permission,
+            planning_active: params.planning_active,
             request_user_input_enabled: params.request_user_input_enabled,
             discovered_skills: self.loaded_skills.read().await.values().cloned().collect(),
             active_instruction_directory: self.active_instruction_directory(),

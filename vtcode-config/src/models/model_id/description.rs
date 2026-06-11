@@ -316,7 +316,12 @@ impl ModelId {
             }
             ModelId::OpenRouterZaiGlm51 => "Z.AI GLM-5.1 next-gen foundation model via OpenRouter",
             ModelId::OpenRouterOpenAIGpt55 => "OpenAI GPT-5.5 model accessed through OpenRouter",
-            _ => unreachable!(),
+            model => {
+                model
+                    .openrouter_metadata()
+                    .expect("generated OpenRouter model should have metadata")
+                    .description
+            }
         }
     }
 }

@@ -672,7 +672,7 @@ fn validate_agent_name(name: &str) -> Result<()> {
 
 fn scaffold_agent_markdown(name: &str) -> String {
     format!(
-        "---\nname: {name}\ndescription: {description}\ntools:\n  - {read_file}\n  - {list_files}\n  - {unified_search}\nmodel: inherit\ncolor: blue\nreasoning_effort: medium\n---\n{body}",
+        "---\nname: {name}\ndescription: {description}\ntools:\n  - {read_file}\n  - {list_files}\n  - {unified_search}\nmodel: inherit\ncolor: blue\nreasoning_effort: medium\npermissions:\n  default: deny\n  allow:\n    - {read_file}\n    - {list_files}\n    - {unified_search}\n---\n{body}",
         description = DEFAULT_AGENT_DESCRIPTION_TEXT,
         read_file = DEFAULT_AGENT_TOOL_IDS[0],
         list_files = DEFAULT_AGENT_TOOL_IDS[1],

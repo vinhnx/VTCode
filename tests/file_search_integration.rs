@@ -65,7 +65,7 @@ mod file_search_integration_tests {
                 );
             }
             Ok(Err(e)) => {
-                eprintln!("File search error (non-fatal for test): {}", e);
+                eprintln!("File search error (non-fatal for test): {e}");
             }
             Err(_) => {
                 eprintln!("File search panicked (non-fatal for test)");
@@ -97,7 +97,7 @@ mod file_search_integration_tests {
                 );
             }
             Err(e) => {
-                eprintln!("Cancellation triggered search error (expected): {}", e);
+                eprintln!("Cancellation triggered search error (expected): {e}");
             }
         }
     }
@@ -156,7 +156,7 @@ mod file_search_integration_tests {
                 eprintln!("Found {} files matching 'Cargo'", files.len());
             }
             Ok(Err(e)) => {
-                eprintln!("File enumeration error (non-fatal): {}", e);
+                eprintln!("File enumeration error (non-fatal): {e}");
             }
             Err(_) => {
                 eprintln!("File enumeration panicked (non-fatal)");
@@ -179,7 +179,7 @@ mod file_search_integration_tests {
                 eprintln!("Listed {} files", files.len());
             }
             Err(e) => {
-                eprintln!("File listing error (may be expected): {}", e);
+                eprintln!("File listing error (may be expected): {e}");
             }
         }
     }

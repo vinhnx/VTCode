@@ -259,13 +259,6 @@ fn persist_effort_preference(
 }
 
 async fn refresh_header_reasoning(ctx: &mut SlashCommandContext<'_>) -> Result<()> {
-    let mode_label = match (ctx.config.ui_surface, ctx.full_auto) {
-        (vtcode_core::config::types::UiSurfacePreference::Inline, true) => "auto".to_string(),
-        (vtcode_core::config::types::UiSurfacePreference::Inline, false) => "inline".to_string(),
-        (vtcode_core::config::types::UiSurfacePreference::Alternate, _) => "alt".to_string(),
-        (vtcode_core::config::types::UiSurfacePreference::Auto, true) => "auto".to_string(),
-        (vtcode_core::config::types::UiSurfacePreference::Auto, false) => "std".to_string(),
-    };
     let next_header_context = build_inline_header_context(
         ctx.config,
         ctx.vt_cfg.as_ref(),
@@ -274,7 +267,6 @@ async fn refresh_header_reasoning(ctx: &mut SlashCommandContext<'_>) -> Result<(
         ctx.config.model.clone(),
         ctx.provider_client
             .effective_context_size(&ctx.config.model),
-        mode_label,
         ctx.config.reasoning_effort.as_str().to_string(),
     )
     .await?;

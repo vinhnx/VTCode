@@ -2,10 +2,14 @@ use super::AgentRunner;
 use crate::config::constants::tools;
 use crate::core::agent::harness_kernel::PreparedToolCall;
 use crate::core::agent::session::AgentSessionState;
+use crate::permissions::{
+    ResolvedPermissionDecision, build_permission_request, evaluate_effective_permissions,
+};
+use crate::primary_agent::primary_agent_allows_tool;
 use crate::tools::file_ops::restore_exact_text_content;
 use crate::tools::registry::{ExecutionPolicySnapshot, ToolExecutionError};
 use crate::tools::{command_args, tool_intent};
-use anyhow::Result;
+use anyhow::{Result, bail};
 use serde_json::Value;
 use tracing::info;
 
@@ -67,10 +71,60 @@ impl AgentRunner {
         session_state: &mut AgentSessionState,
     ) -> Result<PreparedToolCall> {
         let normalized_args = self.normalize_tool_args(tool_name, args, session_state);
+        self.ensure_active_primary_agent_allows_tool_call(tool_name, &normalized_args)?;
         self.tool_registry.admit_public_tool_call(
             Self::canonical_exec_request_name(tool_name),
             &normalized_args,
         )
+    }
+
+    fn ensure_active_primary_agent_allows_tool_call(
+        &self,
+        tool_name: &str,
+        args: &Value,
+    ) -> Result<()> {
+        let Some(active_primary_agent) = self.active_primary_agent.as_ref() else {
+            return Ok(());
+        };
+
+        let requested_name = Self::canonical_exec_request_name(tool_name);
+        let normalized_tool_name = self
+            .tool_registry
+            .resolve_public_tool_name(requested_name)
+            .unwrap_or_else(|_| requested_name.to_string());
+
+        if !primary_agent_allows_tool(active_primary_agent, &normalized_tool_name) {
+            bail!(
+                "Tool '{}' is not permitted by active primary agent '{}'",
+                normalized_tool_name,
+                active_primary_agent.identity.name
+            );
+        }
+
+        let current_dir = std::env::current_dir().unwrap_or_else(|_| self._workspace.clone());
+        let permission_request = build_permission_request(
+            &self._workspace,
+            &current_dir,
+            &normalized_tool_name,
+            Some(args),
+        );
+        let decision = evaluate_effective_permissions(
+            &self.config().permissions,
+            &active_primary_agent.permissions,
+            &self._workspace,
+            &current_dir,
+            &permission_request,
+        );
+
+        if decision == ResolvedPermissionDecision::Deny {
+            bail!(
+                "Tool '{}' is denied by active primary agent '{}'",
+                normalized_tool_name,
+                active_primary_agent.identity.name
+            );
+        }
+
+        Ok(())
     }
 
     /// Check if a tool is allowed for this agent
@@ -84,12 +138,18 @@ impl AgentRunner {
 
     /// Check if a tool is exposed to the active runtime after feature gating.
     pub(super) async fn is_tool_exposed(&self, tool_name: &str) -> bool {
+        if let Some(active_primary_agent) = self.active_primary_agent.as_ref()
+            && !primary_agent_allows_tool(active_primary_agent, tool_name)
+        {
+            return false;
+        }
+
         if !self.tool_registry.is_allowed_in_full_auto(tool_name).await {
             return false;
         }
 
         self.features()
-            .allows_tool_name(tool_name, self.tool_registry.is_plan_mode(), false)
+            .allows_tool_name(tool_name, self.tool_registry.is_planning_active(), false)
             && self.is_tool_allowed(tool_name).await
     }
 

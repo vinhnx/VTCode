@@ -1,7 +1,6 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use chrono::Utc;
 
-use vtcode_core::config::PermissionMode;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::core::decision_tracker::DecisionTracker;
 use vtcode_core::hooks::SessionEndReason;
@@ -80,31 +79,6 @@ pub(crate) async fn handle_manage_loop(
         ctx.renderer.line(MessageStyle::Info, &note)?;
     }
     Ok(SlashCommandControl::Continue)
-}
-
-pub(crate) fn persist_mode_settings(
-    workspace: &std::path::Path,
-    vt_cfg: &mut Option<VTCodeConfig>,
-    permission_mode: Option<PermissionMode>,
-) -> Result<()> {
-    let Some(mode) = permission_mode else {
-        return Ok(());
-    };
-
-    let mut manager = crate::main_helpers::load_workspace_config(workspace)?;
-    let mut config = manager.config().clone();
-
-    config.permissions.default_mode = mode;
-
-    manager
-        .save_config(&config)
-        .context("Failed to persist mode settings")?;
-
-    if let Some(cfg) = vt_cfg.as_mut() {
-        cfg.permissions.default_mode = mode;
-    }
-
-    Ok(())
 }
 
 pub(crate) fn scheduler_enabled(vt_cfg: Option<&VTCodeConfig>) -> bool {
@@ -291,37 +265,4 @@ pub(crate) async fn handle_copy_latest_assistant_reply(
 pub(crate) async fn handle_exit(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     ctx.renderer.line(MessageStyle::Info, "✓")?;
     Ok(SlashCommandControl::BreakWithReason(SessionEndReason::Exit))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::persist_mode_settings;
-    use tempfile::TempDir;
-    use vtcode_core::config::PermissionMode;
-    use vtcode_core::config::loader::VTCodeConfig;
-
-    #[test]
-    fn persist_mode_settings_updates_only_permissions_default_mode() {
-        let temp = TempDir::new().expect("temp dir");
-        let workspace = temp.path();
-        let initial = VTCodeConfig::default();
-        std::fs::write(
-            workspace.join("vtcode.toml"),
-            toml::to_string(&initial).expect("serialize config"),
-        )
-        .expect("write config");
-
-        let mut vt_cfg = Some(initial.clone());
-        persist_mode_settings(workspace, &mut vt_cfg, Some(PermissionMode::Auto))
-            .expect("persist mode settings");
-
-        let persisted = std::fs::read_to_string(workspace.join("vtcode.toml")).expect("config");
-        assert!(persisted.contains("default_mode = \"auto\""));
-        assert!(
-            !persisted.contains("default_model ="),
-            "mode persistence should not expand agent defaults. Got:\n{}",
-            persisted
-        );
-        assert!(vt_cfg.is_some_and(|cfg| { cfg.permissions.default_mode == PermissionMode::Auto }));
-    }
 }

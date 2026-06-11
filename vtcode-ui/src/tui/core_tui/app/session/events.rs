@@ -452,10 +452,9 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             Some(InlineEvent::Submit("/clear".to_string()))
         }
         KeyCode::BackTab => {
-            // Shift+Tab: Toggle editing mode
             session.clear_inline_prompt_suggestion();
             session.mark_dirty();
-            Some(InlineEvent::ToggleMode)
+            Some(InlineEvent::CyclePrimaryAgentPrevious)
         }
         KeyCode::Esc => {
             if session.has_active_overlay() {
@@ -648,14 +647,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 session.mark_dirty();
                 return Some(InlineEvent::CyclePrimaryAgent);
             }
-
-            let Some(submitted) = take_submitted_input(session) else {
-                session.mark_dirty();
-                return None;
-            };
-            session.push_queued_input(submitted.clone());
-            session.mark_dirty();
-            Some(InlineEvent::QueueSubmit(submitted))
+            None
         }
         KeyCode::Backspace => {
             if session.core.input_enabled() {
@@ -806,13 +798,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                     session.mark_dirty();
                     return Some(InlineEvent::CyclePrimaryAgent);
                 }
-                let Some(submitted) = take_submitted_input(session) else {
-                    session.mark_dirty();
-                    return None;
-                };
-                session.push_queued_input(submitted.clone());
-                session.mark_dirty();
-                return Some(InlineEvent::QueueSubmit(submitted));
+                return None;
             }
 
             if has_command {
@@ -841,53 +827,41 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                         session.move_right_word();
                         session.mark_dirty();
                     }
-                    'd' | 'D' => {
-                        // Alt+D: Kill (cut) forwards to the end of the current word
-                        if session.core.input_enabled() {
-                            session.delete_word_forward();
-                            session.update_input_triggers();
-                            session.mark_dirty();
-                        }
+                    // Alt+D: Kill (cut) forwards to the end of the current word
+                    'd' | 'D' if session.core.input_enabled() => {
+                        session.delete_word_forward();
+                        session.update_input_triggers();
+                        session.mark_dirty();
                     }
-                    'u' | 'U' => {
-                        // Alt+U: Uppercase the current word
-                        if session.core.input_enabled() {
-                            session.uppercase_word();
-                            session.update_input_triggers();
-                            session.mark_dirty();
-                        }
+                    // Alt+U: Uppercase the current word
+                    'u' | 'U' if session.core.input_enabled() => {
+                        session.uppercase_word();
+                        session.update_input_triggers();
+                        session.mark_dirty();
                     }
-                    'l' | 'L' => {
-                        // Alt+L: Lowercase the current word
-                        if session.core.input_enabled() {
-                            session.lowercase_word();
-                            session.update_input_triggers();
-                            session.mark_dirty();
-                        }
+                    // Alt+L: Lowercase the current word
+                    'l' | 'L' if session.core.input_enabled() => {
+                        session.lowercase_word();
+                        session.update_input_triggers();
+                        session.mark_dirty();
                     }
-                    'c' | 'C' => {
-                        // Alt+C: Capitalize the current word
-                        if session.core.input_enabled() {
-                            session.capitalize_word();
-                            session.update_input_triggers();
-                            session.mark_dirty();
-                        }
+                    // Alt+C: Capitalize the current word
+                    'c' | 'C' if session.core.input_enabled() => {
+                        session.capitalize_word();
+                        session.update_input_triggers();
+                        session.mark_dirty();
                     }
-                    't' | 'T' => {
-                        // Alt+T: Transpose words
-                        if session.core.input_enabled() {
-                            session.transpose_words();
-                            session.update_input_triggers();
-                            session.mark_dirty();
-                        }
+                    // Alt+T: Transpose words
+                    't' | 'T' if session.core.input_enabled() => {
+                        session.transpose_words();
+                        session.update_input_triggers();
+                        session.mark_dirty();
                     }
-                    '\\' => {
-                        // Alt+\: Delete whitespace around the cursor
-                        if session.core.input_enabled() {
-                            session.delete_whitespace_around_cursor();
-                            session.update_input_triggers();
-                            session.mark_dirty();
-                        }
+                    // Alt+\: Delete whitespace around the cursor
+                    '\\' if session.core.input_enabled() => {
+                        session.delete_whitespace_around_cursor();
+                        session.update_input_triggers();
+                        session.mark_dirty();
                     }
                     _ => {}
                 }
@@ -1170,9 +1144,6 @@ fn handle_transcript_review_key(
 
 fn can_cycle_primary_agent(session: &Session, key: &KeyEvent) -> bool {
     key.modifiers == KeyModifiers::NONE
-        && !session.is_running_activity()
-        && session.core.input_manager.content().is_empty()
-        && session.core.queued_inputs.is_empty()
         && session.visible_transient_surface().is_none()
         && !session.has_active_overlay()
 }

@@ -8,36 +8,23 @@
 
 /// Shared execution guidance messages for agent/runloop/tool registry.
 pub mod agent_execution {
-    /// Marker used when plan mode blocks a mutating tool call.
-    pub const PLAN_MODE_DENIED_CONTEXT: &str = "tool denied by plan mode";
+    /// Marker used when planning workflow blocks a mutating tool call.
+    pub const PLANNING_DENIED_CONTEXT: &str = "tool denied by planning workflow";
     /// Prefix for loop detection failures.
     pub const LOOP_DETECTION_PREFIX: &str = "LOOP DETECTION";
     /// Canonical action-required line for loop detection blocks.
     pub const LOOP_RETRY_BLOCKED_LINE: &str = "ACTION REQUIRED: DO NOT retry this tool call. The tool execution has been prevented to avoid infinite loops.";
 
-    /// Hint appended to policy-denied tool errors to guide the agent toward resolution.
-    pub const POLICY_DENIED_HINT: &str = "Hint: If this command should be allowed, run `/mode auto` to enable \
-        classifier-backed auto-approval, or `/mode cycle` to cycle modes. \
-        You can also configure `[permissions]` rules in vtcode.toml to allow specific tools.";
-
-    /// Build the canonical plan-mode denial message.
-    pub fn plan_mode_denial_message(tool_name: &str) -> String {
+    /// Build the canonical Planning workflow denial message.
+    pub fn planning_workflow_denial_message(tool_name: &str) -> String {
         format!(
-            "Tool '{}' execution failed: tool denied by plan mode\n\n\
-             ACTION REQUIRED: You are in Plan Mode (read-only). To start implementation:\n\
-             1. Call `exit_plan_mode` tool to show the user your plan for approval\n\
+            "Tool '{}' execution failed: tool denied by planning workflow\n\n\
+             ACTION REQUIRED: Planning workflow is using read-only permissions. To start implementation:\n\
+             1. Call `finish_planning` tool to show the user your plan for approval\n\
              2. Wait for user to confirm (they will see the Implementation Blueprint)\n\
              3. After approval, mutating tools will be enabled\n\n\
-             Fallback if automatic Plan->Edit switching keeps failing: manually switch using `/plan off` or `/mode` (or `Shift+Tab`/`Alt+M` in interactive mode).",
+             Fallback if automatic planning handoff keeps failing: call `finish_planning` to present the plan again.",
             tool_name
-        )
-    }
-
-    /// Build a policy-denied message with actionable hints about mode switching.
-    pub fn policy_denied_hint_message(tool_name: &str) -> String {
-        format!(
-            "Tool '{}' execution denied by policy.\n\n{}",
-            tool_name, POLICY_DENIED_HINT
         )
     }
 
@@ -64,9 +51,9 @@ pub mod agent_execution {
         message
     }
 
-    /// Check whether an error string corresponds to plan mode denial.
-    pub fn is_plan_mode_denial(error: &str) -> bool {
-        error.contains(PLAN_MODE_DENIED_CONTEXT)
+    /// Check whether an error string corresponds to planning workflow denial.
+    pub fn is_planning_active_denial(error: &str) -> bool {
+        error.contains(PLANNING_DENIED_CONTEXT)
     }
 }
 
@@ -90,32 +77,24 @@ mod tests {
 
     #[test]
     fn test_error_messages_are_not_empty() {
-        assert!(!agent_execution::PLAN_MODE_DENIED_CONTEXT.is_empty());
+        assert!(!agent_execution::PLANNING_DENIED_CONTEXT.is_empty());
         assert!(!agent_execution::LOOP_RETRY_BLOCKED_LINE.is_empty());
-        assert!(!agent_execution::POLICY_DENIED_HINT.is_empty());
         assert!(!skill_ops::SKILL_NOT_FOUND.is_empty());
     }
 
     #[test]
     fn test_agent_execution_message_helpers() {
-        let plan_mode_msg = agent_execution::plan_mode_denial_message("write_file");
-        assert!(agent_execution::is_plan_mode_denial(&plan_mode_msg));
-        assert!(plan_mode_msg.contains("exit_plan_mode"));
-        assert!(plan_mode_msg.contains("/plan off"));
-        assert!(plan_mode_msg.contains("/mode"));
-        assert!(plan_mode_msg.contains("Shift+Tab"));
-        assert!(!plan_mode_msg.contains("DO NOT retry this tool or use /plan off"));
+        let planning_msg = agent_execution::planning_workflow_denial_message("write_file");
+        assert!(agent_execution::is_planning_active_denial(&planning_msg));
+        assert!(planning_msg.contains("finish_planning"));
+        assert!(planning_msg.contains("read-only permissions"));
+        assert!(!planning_msg.contains(&format!("/{}", "mode")));
+        assert!(!planning_msg.contains("DO NOT retry this tool or use /plan off"));
 
         let loop_msg =
             agent_execution::loop_detection_block_message("read_file", 3, Some("base error"));
         assert!(loop_msg.contains("LOOP DETECTION"));
         assert!(loop_msg.contains("DO NOT retry"));
         assert!(loop_msg.contains("Original error: base error"));
-
-        let policy_msg = agent_execution::policy_denied_hint_message("unified_exec");
-        assert!(policy_msg.contains("unified_exec"));
-        assert!(policy_msg.contains("/mode auto"));
-        assert!(policy_msg.contains("/mode cycle"));
-        assert!(policy_msg.contains("vtcode.toml"));
     }
 }

@@ -101,7 +101,7 @@ pub fn safe_replace_text(content: &str, old_str: &str, new_str: &str) -> Result<
     }
 
     if !content.contains(old_str) {
-        return Err(anyhow::anyhow!("Text '{}' not found in content", old_str));
+        return Err(anyhow::anyhow!("Text '{old_str}' not found in content"));
     }
 
     Ok(content.replace(old_str, new_str))

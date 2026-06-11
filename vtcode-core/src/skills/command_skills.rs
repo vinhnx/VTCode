@@ -385,14 +385,8 @@ pub const COMMAND_SKILL_SPECS: &[CommandSkillSpec] = &[
     ),
     built_in_command_spec!(
         "plan",
-        "Plan Mode: read-only planning with optional prompt (usage: /plan [on|off] [task])",
-        "/plan [on|off] [task]",
-        "session"
-    ),
-    built_in_command_spec!(
-        "mode",
-        "Open the session mode picker or switch directly (usage: /mode [edit|auto|plan|cycle])",
-        "/mode [edit|auto|plan|cycle]",
+        "Start or continue the planning workflow with an optional task prompt (usage: /plan [task])",
+        "/plan [task]",
         "session"
     ),
     built_in_command_spec!(
@@ -587,5 +581,19 @@ mod tests {
     fn removed_generate_agent_file_command_is_not_registered() {
         assert!(find_command_skill_by_slash_name("generate-agent-file").is_none());
         assert!(find_command_skill_by_skill_name("cmd-generate-agent-file").is_none());
+    }
+
+    #[test]
+    fn removed_mode_command_is_not_registered() {
+        assert!(find_command_skill_by_slash_name("mode").is_none());
+        assert!(find_command_skill_by_skill_name("cmd-mode").is_none());
+    }
+
+    #[test]
+    fn plan_command_skill_uses_workflow_copy() {
+        let plan = find_command_skill_by_slash_name("plan").expect("plan spec");
+        assert!(plan.description.contains("planning workflow"));
+        assert!(!plan.description.contains("mode"));
+        assert_eq!(plan.usage, "/plan [task]");
     }
 }

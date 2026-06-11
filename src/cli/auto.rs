@@ -21,6 +21,7 @@ pub async fn handle_auto_task_command(
     config: &CoreAgentConfig,
     vt_cfg: &VTCodeConfig,
     prompt: &str,
+    primary_agent_explicitly_configured: bool,
 ) -> Result<()> {
     let trimmed = prompt.trim();
     if trimmed.is_empty() {
@@ -37,23 +38,34 @@ pub async fn handle_auto_task_command(
         );
     }
 
-    if config
+    let primary_agent_runtime =
+        crate::cli::full_auto_primary_agent::resolve_full_auto_primary_agent_runtime(
+            &config.workspace,
+            vt_cfg,
+            primary_agent_explicitly_configured,
+        )?;
+    let run_vt_cfg = primary_agent_runtime.vt_cfg;
+    let mut run_config = config.clone();
+    run_config.model = run_vt_cfg.agent.default_model.clone();
+    run_config.reasoning_effort = run_vt_cfg.agent.reasoning_effort;
+
+    if run_config
         .provider
         .eq_ignore_ascii_case(crate::codex_app_server::CODEX_PROVIDER)
     {
-        let completed = crate::codex_app_server::run_codex_noninteractive(
-            config,
-            Some(vt_cfg),
+        let completed = crate::codex_app_server::run_codex_noninteractive_with_instructions(
+            &run_config,
+            Some(&run_vt_cfg),
             crate::codex_app_server::CodexNonInteractiveRun {
                 prompt: trimmed.to_string(),
                 read_only: false,
-                plan_mode: false,
                 skip_confirmations: true,
                 ephemeral: true,
                 resume_thread_id: None,
                 seed_messages: Vec::new(),
                 review_target: None,
             },
+            primary_agent_turn_instructions(&primary_agent_runtime.active_primary_agent),
         )
         .await?;
         if !completed.output.trim().is_empty() {
@@ -62,11 +74,11 @@ pub async fn handle_auto_task_command(
         return Ok(());
     }
 
-    let model_id = ModelId::from_str(&config.model).with_context(|| {
+    let model_id = ModelId::from_str(&run_config.model).with_context(|| {
         format!(
             "Model '{}' is not recognized for autonomous execution. Update vtcode.toml to a \
              supported identifier.",
-            config.model
+            run_config.model
         )
     })?;
 
@@ -81,19 +93,20 @@ pub async fn handle_auto_task_command(
     let mut runner = AgentRunner::new_with_bootstrap(
         AgentType::Single,
         model_id,
-        config.api_key.clone(),
-        config.workspace.clone(),
+        run_config.api_key.clone(),
+        run_config.workspace.clone(),
         session_id,
         RunnerSettings {
-            reasoning_effort: Some(config.reasoning_effort),
+            reasoning_effort: Some(run_config.reasoning_effort),
             verbosity: None,
         },
         None,
         ThreadBootstrap::new(None),
-        None,
-        config.openai_chatgpt_auth.clone(),
+        Some(run_vt_cfg),
+        run_config.openai_chatgpt_auth.clone(),
     )
     .await?;
+    runner.set_active_primary_agent(primary_agent_runtime.active_primary_agent);
 
     runner.enable_full_auto(&automation_cfg.allowed_tools).await;
 
@@ -141,4 +154,11 @@ pub async fn handle_auto_task_command(
     }
 
     Ok(())
+}
+
+fn primary_agent_turn_instructions(
+    active_primary_agent: &vtcode_core::ActivePrimaryAgent,
+) -> Option<String> {
+    Some(active_primary_agent.instructions.trim().to_string())
+        .filter(|instructions| !instructions.is_empty())
 }

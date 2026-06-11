@@ -14,6 +14,11 @@ use tempfile::NamedTempFile;
 use vtcode_commons::reference::StaticWorkspacePaths;
 
 #[test]
+fn default_config_selects_duck_primary_agent() {
+    assert_eq!(VTCodeConfig::default().default_primary_agent, "duck");
+}
+
+#[test]
 #[serial]
 fn test_layered_config_loading() {
     let workspace = assert_fs::TempDir::new().expect("failed to create workspace");
@@ -545,7 +550,7 @@ show_sidebar = false
 
 #[test]
 #[serial]
-fn save_config_writes_sparse_model_theme_and_mode_values() {
+fn save_config_writes_sparse_model_theme_and_permission_values() {
     let temp_dir = tempfile::tempdir().unwrap();
     let workspace = temp_dir.path();
     let config_path = workspace.join("vtcode.toml");
@@ -555,18 +560,23 @@ fn save_config_writes_sparse_model_theme_and_mode_values() {
     let mut modified_config = manager.config().clone();
     modified_config.agent.default_model = "gpt-5.4".to_string();
     modified_config.agent.theme = "ansi".to_string();
-    modified_config.permissions.default_mode = crate::PermissionMode::Plan;
+    modified_config.permissions.allow = vec!["read_file".to_string()];
 
     manager
         .save_config(&modified_config)
         .expect("failed to save config");
 
     let saved_content = fs::read_to_string(&config_path).expect("failed to read saved config");
+    assert!(
+        !saved_content.contains("default_primary_agent"),
+        "unchanged default primary agent should not be persisted. Got:\n{}",
+        saved_content
+    );
     assert!(saved_content.contains("[agent]"));
     assert!(saved_content.contains("default_model = \"gpt-5.4\""));
     assert!(saved_content.contains("theme = \"ansi\""));
     assert!(saved_content.contains("[permissions]"));
-    assert!(saved_content.contains("default_mode = \"plan\""));
+    assert!(saved_content.contains("allow = [\"read_file\"]"));
     assert!(
         !saved_content.contains("provider = \"openai\""),
         "default agent provider should not be expanded. Got:\n{}",
@@ -582,55 +592,37 @@ fn save_config_writes_sparse_model_theme_and_mode_values() {
     assert_eq!(reloaded.config().agent.default_model, "gpt-5.4");
     assert_eq!(reloaded.config().agent.theme, "ansi");
     assert_eq!(
-        reloaded.config().permissions.default_mode,
-        crate::PermissionMode::Plan
+        reloaded.config().permissions.allow,
+        vec!["read_file".to_string()]
     );
 }
 
 #[test]
 #[serial]
-fn save_config_removes_deprecated_config_keys() {
-    let temp_dir = tempfile::tempdir().unwrap();
-    let workspace = temp_dir.path();
-    let config_path = workspace.join("vtcode.toml");
-    fs::write(
-        &config_path,
-        r#"
-project_doc_max_bytes = 1
-project_doc_fallback_filenames = ["RULES.md"]
-
-[agent]
-default_model = "gpt-5.4"
-autonomous_mode = true
-default_editing_mode = "plan"
-
+fn deprecated_permission_keys_are_rejected() {
+    for deprecated_key in ["allowed_tools", "disallowed_tools"] {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let workspace = temp_dir.path();
+        let config_path = workspace.join("vtcode.toml");
+        fs::write(
+            &config_path,
+            format!(
+                r#"
 [permissions]
-default_mode = "plan"
-allowed_tools = ["read_file"]
-disallowed_tools = ["unified_exec"]
-"#,
-    )
-    .expect("failed to write initial config");
+{deprecated_key} = ["read_file"]
+"#
+            ),
+        )
+        .expect("failed to write config");
 
-    let mut manager = ConfigManager::load_from_workspace(workspace).expect("failed to load config");
-    let config = manager.config().clone();
-
-    manager.save_config(&config).expect("failed to save config");
-
-    let saved_content = fs::read_to_string(&config_path).expect("failed to read saved config");
-    for removed_key in [
-        "project_doc_max_bytes",
-        "project_doc_fallback_filenames",
-        "autonomous_mode",
-        "default_editing_mode",
-        "allowed_tools",
-        "disallowed_tools",
-    ] {
+        let error = match ConfigManager::load_from_workspace(workspace) {
+            Ok(_) => panic!("deprecated permission keys should be rejected"),
+            Err(error) => error,
+        };
+        let error = format!("{error:#}");
         assert!(
-            !saved_content.contains(removed_key),
-            "saved config should remove deprecated key {removed_key}. Got:\n{saved_content}"
+            error.contains(deprecated_key),
+            "error should mention deprecated key {deprecated_key}. Got:\n{error}"
         );
     }
-    assert!(saved_content.contains("default_model = \"gpt-5.4\""));
-    assert!(saved_content.contains("default_mode = \"plan\""));
 }

@@ -1,7 +1,7 @@
 use super::builtins::{DoctorCommand, parse_doctor_args, parse_effort_args, parse_update_args};
 use super::{
     AgentManagerAction, CompactConversationCommand, ScheduleCommandAction, SessionLogExportFormat,
-    SessionModeCommand, SlashCommandOutcome, SubprocessManagerAction, handle_slash_command,
+    SlashCommandOutcome, SubprocessManagerAction, handle_slash_command,
 };
 use vtcode_core::config::types::ReasoningEffortLevel;
 use vtcode_core::llm::provider::ResponsesCompactionOptions;
@@ -539,25 +539,43 @@ async fn interactive_mode_commands_parse_to_expected_outcomes() {
         .expect("jobs should parse");
     assert!(matches!(jobs, SlashCommandOutcome::ShowJobsPanel));
 
-    let mode = handle_slash_command("mode", &mut renderer, &workspace)
+    let removed_command = format!("{} auto", "mode");
+    let removed_mode = handle_slash_command(&removed_command, &mut renderer, &workspace)
         .await
-        .expect("mode should parse");
-    assert!(matches!(mode, SlashCommandOutcome::StartModeSelection));
-
-    let auto_mode = handle_slash_command("mode auto", &mut renderer, &workspace)
-        .await
-        .expect("mode auto should parse");
+        .expect("mode should fall through");
+    let removed_prompt = format!("/{}", removed_command);
     assert!(matches!(
-        auto_mode,
-        SlashCommandOutcome::SetMode {
-            mode: SessionModeCommand::Auto
+        removed_mode,
+        SlashCommandOutcome::SubmitPrompt { ref prompt } if prompt == &removed_prompt
+    ));
+}
+
+#[tokio::test]
+async fn plan_command_still_routes_to_planning_workflow() {
+    let workspace = std::env::current_dir().expect("workspace");
+    let mut renderer = renderer_for_tests();
+
+    let toggle = handle_slash_command("plan", &mut renderer, &workspace)
+        .await
+        .expect("plan should parse");
+    assert!(matches!(
+        toggle,
+        SlashCommandOutcome::TogglePlanningWorkflow {
+            enable: None,
+            prompt: None
         }
     ));
 
-    let cycle = handle_slash_command("mode cycle", &mut renderer, &workspace)
+    let with_prompt = handle_slash_command("plan implement auth checks", &mut renderer, &workspace)
         .await
-        .expect("mode cycle should parse");
-    assert!(matches!(cycle, SlashCommandOutcome::CycleMode));
+        .expect("plan prompt should parse");
+    assert!(matches!(
+        with_prompt,
+        SlashCommandOutcome::TogglePlanningWorkflow {
+            enable: Some(true),
+            prompt: Some(ref prompt)
+        } if prompt == "implement auth checks"
+    ));
 }
 
 #[tokio::test]

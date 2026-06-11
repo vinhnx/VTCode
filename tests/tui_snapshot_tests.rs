@@ -7,9 +7,7 @@
 //! To update snapshots, run: `cargo insta review`
 
 use insta::assert_snapshot;
-use vtcode_core::ui::{
-    EditingMode, InlineHeaderContext, InlineMessageKind, InlineSegment, InlineTextStyle,
-};
+use vtcode_core::ui::{InlineHeaderContext, InlineMessageKind, InlineSegment, InlineTextStyle};
 
 /// Test message kind string representation
 #[test]
@@ -43,7 +41,6 @@ fn test_header_context_snapshot() {
         context_window_size: None,
         reasoning: "creative".to_string(),
         reasoning_stage: None,
-        mode: "inline".to_string(),
         workspace_trust: "trusted".to_string(),
         tools: "enabled".to_string(),
         git: "clean".to_string(),
@@ -56,8 +53,6 @@ fn test_header_context_snapshot() {
         persistent_memory: None,
         pr_review: None,
         editor_context: None,
-        editing_mode: EditingMode::default(),
-        autonomous_mode: false,
     };
     assert_snapshot!("header_context", format!("{:?}", context));
 }
@@ -89,7 +84,6 @@ fn test_ui_component_combinations() {
     let context = InlineHeaderContext {
         provider: "anthropic".to_string(),
         model: "claude-3".to_string(),
-        mode: "alternate".to_string(),
         reasoning_stage: None,
         version: "test-version".to_string(),
         ..Default::default()

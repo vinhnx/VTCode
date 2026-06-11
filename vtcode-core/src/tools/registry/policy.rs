@@ -254,7 +254,11 @@ impl ToolPolicyGateway {
         }
     }
 
-    pub fn enable_full_auto_mode(&mut self, allowed_tools: &[String], available_tools: &[String]) {
+    pub fn enable_full_auto_permission(
+        &mut self,
+        allowed_tools: &[String],
+        available_tools: &[String],
+    ) {
         let mut normalized: FxHashSet<String> = FxHashSet::default();
         if allowed_tools
             .iter()
@@ -277,7 +281,7 @@ impl ToolPolicyGateway {
         self.full_auto_allowlist = Some(normalized);
     }
 
-    pub fn disable_full_auto_mode(&mut self) {
+    pub fn disable_full_auto_permission(&mut self) {
         self.full_auto_allowlist = None;
     }
 
@@ -333,7 +337,7 @@ impl ToolPolicyGateway {
                         return Ok(ToolPermissionDecision::Allow);
                     }
                     ToolPolicy::Prompt => {
-                        // Always prompt for explicit "prompt" policy, even in full-auto mode
+                        // Always prompt for explicit "prompt" policy, even in full-auto permission review
                         // This ensures human-in-the-loop approval for sensitive operations
                         return Ok(ToolPermissionDecision::Prompt);
                     }

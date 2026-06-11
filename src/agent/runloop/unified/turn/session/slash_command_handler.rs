@@ -83,6 +83,7 @@ pub(crate) async fn handle_input_commands(
                         context_manager: ctx.context_manager,
                         active_primary_agent: ctx.active_primary_agent,
                         session_stats: ctx.session_stats,
+                        plan_session: ctx.plan_session,
                         input_status_state: state.input_status_state,
                         tools: ctx.tools,
                         tool_catalog: ctx.tool_catalog,
@@ -94,7 +95,7 @@ pub(crate) async fn handle_input_commands(
                         full_auto: ctx.full_auto,
                         loaded_skills: ctx.loaded_skills,
                         checkpoint_manager: ctx.checkpoint_manager,
-                        lifecycle_hooks: ctx.lifecycle_hooks,
+                        lifecycle_hooks: ctx.lifecycle_hooks.as_ref(),
                         harness_emitter: ctx.harness_emitter,
                     },
                 )

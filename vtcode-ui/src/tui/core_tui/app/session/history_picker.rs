@@ -199,8 +199,9 @@ impl HistoryPickerState {
             });
         }
 
-        // Sort by score (descending)
-        self.matches.sort_by(|a, b| b.score.cmp(&a.score));
+        // Sort by score (descending) - higher scores first
+        self.matches
+            .sort_by_key(|history_match| std::cmp::Reverse(history_match.score));
 
         // Deduplicate by content (keep highest scored entry)
         let mut seen = hashbrown::HashSet::new();

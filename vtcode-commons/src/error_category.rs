@@ -52,8 +52,8 @@ pub enum ErrorCategory {
     PermissionDenied,
     /// Policy violation (workspace boundary, tool deny policy, safety gate)
     PolicyViolation,
-    /// Plan mode violation (mutating tool in read-only mode)
-    PlanModeViolation,
+    /// Planning workflow violation (mutating tool without read-only capabilities)
+    PlanningPolicyViolation,
     /// Sandbox execution failure
     SandboxFailure,
     /// Resource exhausted (quota, billing, spending limit, disk, memory)
@@ -134,7 +134,7 @@ impl ErrorCategory {
             self,
             ErrorCategory::Authentication
                 | ErrorCategory::PolicyViolation
-                | ErrorCategory::PlanModeViolation
+                | ErrorCategory::PlanningPolicyViolation
                 | ErrorCategory::ResourceExhausted
         )
     }
@@ -230,9 +230,11 @@ impl ErrorCategory {
                 Cow::Borrowed("Review workspace policies and restrictions"),
                 Cow::Borrowed("Use alternative tools that comply with policies"),
             ],
-            ErrorCategory::PlanModeViolation => vec![
-                Cow::Borrowed("This operation is not allowed in plan/read-only mode"),
-                Cow::Borrowed("Exit plan mode to perform mutating operations"),
+            ErrorCategory::PlanningPolicyViolation => vec![
+                Cow::Borrowed(
+                    "This operation is not allowed in the Planning workflow with read-only permissions",
+                ),
+                Cow::Borrowed("Exit the Planning workflow to perform mutating operations"),
             ],
             ErrorCategory::SandboxFailure => vec![
                 Cow::Borrowed("The sandbox denied this operation"),
@@ -265,7 +267,7 @@ impl ErrorCategory {
             ErrorCategory::ResourceNotFound => "Resource not found",
             ErrorCategory::PermissionDenied => "Permission denied",
             ErrorCategory::PolicyViolation => "Blocked by policy",
-            ErrorCategory::PlanModeViolation => "Not allowed in plan mode",
+            ErrorCategory::PlanningPolicyViolation => "Not allowed in planning workflow",
             ErrorCategory::SandboxFailure => "Sandbox denied",
             ErrorCategory::ResourceExhausted => "Resource limit reached",
             ErrorCategory::Cancelled => "Operation cancelled",
@@ -316,8 +318,8 @@ pub fn classify_error_message(msg: &str) -> ErrorCategory {
             "denied by policy",
             "tool permission denied",
             "safety validation failed",
-            "not allowed in plan mode",
-            "only available when plan mode is active",
+            "not allowed in planning workflow",
+            "only available when planning workflow is active",
             "workspace boundary",
             "blocked by policy",
         ],
@@ -325,12 +327,17 @@ pub fn classify_error_message(msg: &str) -> ErrorCategory {
         return ErrorCategory::PolicyViolation;
     }
 
-    // --- Priority 2: Plan mode violations ---
+    // --- Priority 2: Planning workflow violations ---
     if contains_any(
         &msg,
-        &["plan mode", "read-only mode", "plan_mode_violation"],
+        &[
+            "planning workflow",
+            "read-only permissions",
+            concat!("read-only ", "mode"),
+            "planning_policy_violation",
+        ],
     ) {
-        return ErrorCategory::PlanModeViolation;
+        return ErrorCategory::PlanningPolicyViolation;
     }
 
     // --- Priority 3: Authentication / Authorization ---
@@ -737,9 +744,9 @@ mod tests {
     }
 
     #[test]
-    fn plan_mode_violation() {
+    fn planning_policy_violation() {
         assert_eq!(
-            classify_error_message("not allowed in plan mode"),
+            classify_error_message("not allowed in planning workflow"),
             ErrorCategory::PolicyViolation
         );
     }
@@ -929,8 +936,7 @@ mod tests {
         ] {
             assert!(
                 !cat.recovery_suggestions().is_empty(),
-                "Missing recovery suggestions for {:?}",
-                cat
+                "Missing recovery suggestions for {cat:?}"
             );
         }
     }

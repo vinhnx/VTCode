@@ -6,7 +6,7 @@ use std::path::Path;
 /// Validate that a string is non-empty
 pub fn validate_non_empty(value: &str, field_name: &str) -> Result<()> {
     if value.trim().is_empty() {
-        bail!("{} cannot be empty", field_name);
+        bail!("{field_name} cannot be empty");
     }
     Ok(())
 }
@@ -14,7 +14,7 @@ pub fn validate_non_empty(value: &str, field_name: &str) -> Result<()> {
 /// Validate and return non-empty string
 pub fn validate_non_empty_string(value: String, field_name: &str) -> Result<String> {
     if value.trim().is_empty() {
-        bail!("{} cannot be empty", field_name);
+        bail!("{field_name} cannot be empty");
     }
     Ok(value)
 }
@@ -30,7 +30,7 @@ pub fn validate_optional_non_empty(value: &Option<String>, field_name: &str) -> 
 /// Validate collection is not empty
 pub fn validate_non_empty_collection<T>(collection: &[T], field_name: &str) -> Result<()> {
     if collection.is_empty() {
-        bail!("{} collection cannot be empty", field_name);
+        bail!("{field_name} collection cannot be empty");
     }
     Ok(())
 }
@@ -39,7 +39,7 @@ pub fn validate_non_empty_collection<T>(collection: &[T], field_name: &str) -> R
 pub fn validate_all_non_empty(values: &[String], field_name: &str) -> Result<()> {
     for (i, value) in values.iter().enumerate() {
         if value.trim().is_empty() {
-            bail!("{}[{}] cannot be empty", field_name, i);
+            bail!("{field_name}[{i}] cannot be empty");
         }
     }
     Ok(())
@@ -74,10 +74,7 @@ pub fn validate_is_directory(path: &Path, field_name: &str) -> Result<()> {
 /// Basic URL format validation
 pub fn validate_url_format(url: &str, field_name: &str) -> Result<()> {
     if !url.starts_with("http://") && !url.starts_with("https://") {
-        bail!(
-            "{} must be a valid URL starting with http:// or https://",
-            field_name
-        );
+        bail!("{field_name} must be a valid URL starting with http:// or https://");
     }
     Ok(())
 }
@@ -85,13 +82,13 @@ pub fn validate_url_format(url: &str, field_name: &str) -> Result<()> {
 /// Validate alphanumeric identifier
 pub fn validate_identifier(id: &str, field_name: &str) -> Result<()> {
     if id.is_empty() {
-        bail!("{} cannot be empty", field_name);
+        bail!("{field_name} cannot be empty");
     }
     if !id
         .chars()
         .all(|c| c.is_alphanumeric() || c == '_' || c == '-')
     {
-        bail!("{} must be alphanumeric (can include _ or -)", field_name);
+        bail!("{field_name} must be alphanumeric (can include _ or -)");
     }
     Ok(())
 }

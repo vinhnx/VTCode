@@ -6,71 +6,6 @@ use vtcode_core::config::validator::ConfigValidator;
 use vtcode_core::tools::RipgrepStatus;
 use vtcode_core::utils::path::canonicalize_workspace;
 
-pub(super) fn apply_permission_mode_override(config: &mut VTCodeConfig, mode: &str) -> Result<()> {
-    use vtcode_config::constants::tools;
-    use vtcode_core::config::PermissionMode;
-
-    match mode.to_lowercase().as_str() {
-        "default" => {
-            config.permissions.default_mode = PermissionMode::Default;
-        }
-        "accept_edits" | "accept-edits" | "acceptedits" => {
-            config.permissions.default_mode = PermissionMode::AcceptEdits;
-        }
-        "auto" | "trusted_auto" | "trusted-auto" => {
-            config.permissions.default_mode = PermissionMode::Auto;
-        }
-        "dont_ask" | "dont-ask" | "dontask" => {
-            config.permissions.default_mode = PermissionMode::DontAsk;
-        }
-        "bypass_permissions" | "bypass-permissions" | "bypasspermissions" => {
-            config.permissions.default_mode = PermissionMode::BypassPermissions;
-        }
-        "ask" => {
-            config.permissions.default_mode = PermissionMode::Default;
-            config.security.human_in_the_loop = true;
-            config.security.require_write_tool_for_claims = true;
-            config.automation.full_auto.enabled = false;
-        }
-        "suggest" => {
-            config.permissions.default_mode = PermissionMode::Default;
-            config.security.human_in_the_loop = true;
-            config.security.require_write_tool_for_claims = false;
-            config.automation.full_auto.enabled = false;
-        }
-        "auto-approved" => {
-            config.permissions.default_mode = PermissionMode::AcceptEdits;
-            config.security.human_in_the_loop = false;
-            config.security.require_write_tool_for_claims = false;
-            config.automation.full_auto.enabled = true;
-            config.automation.full_auto.allowed_tools = vec![
-                tools::READ_FILE.to_string(),
-                tools::LIST_FILES.to_string(),
-                tools::GREP_FILE.to_string(),
-            ];
-        }
-        "full-auto" => {
-            config.permissions.default_mode = PermissionMode::BypassPermissions;
-            config.security.human_in_the_loop = false;
-            config.security.require_write_tool_for_claims = false;
-            config.automation.full_auto.enabled = true;
-            config.automation.full_auto.allowed_tools = vec![];
-        }
-        "plan" => {
-            config.permissions.default_mode = PermissionMode::Plan;
-            return Ok(());
-        }
-        _ => {
-            bail!(
-                "Invalid permission mode '{}'. Valid options: default, accept_edits, auto, dont_ask, bypass_permissions, ask, suggest, auto-approved, full-auto, trusted_auto, plan",
-                mode
-            );
-        }
-    }
-
-    Ok(())
-}
-
 pub(super) fn apply_cli_permission_overrides(
     config: &mut VTCodeConfig,
     allowed_tools: &[String],
@@ -151,14 +86,14 @@ pub(super) fn validate_full_auto_configuration(
     let automation_cfg = &config.automation.full_auto;
     if !automation_cfg.enabled {
         bail!(
-            "Full-auto mode is disabled in configuration. Enable it under [automation.full_auto]."
+            "Full-auto permission review is disabled in configuration. Enable it under [automation.full_auto]."
         );
     }
 
     if automation_cfg.require_profile_ack {
         let profile_path = automation_cfg.profile_path.clone().ok_or_else(|| {
             anyhow!(
-                "Full-auto mode requires 'profile_path' in [automation.full_auto] when require_profile_ack = true."
+                "Full-auto permission review requires 'profile_path' in [automation.full_auto] when require_profile_ack = true."
             )
         })?;
         let resolved_profile = if profile_path.is_absolute() {

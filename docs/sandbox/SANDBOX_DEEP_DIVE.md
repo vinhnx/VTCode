@@ -1,6 +1,6 @@
 # VT Code Sandbox Deep Dive
 
-This document describes VT Code's sandboxing implementation, inspired by the [Codex sandbox model](https://pierce.dev/notes/a-deep-dive-on-agent-sandboxes) and the AI sandbox field guide.
+This document describes VT Code's sandboxing implementation, inspired by the [Codex sandboxing model](https://pierce.dev/notes/a-deep-dive-on-agent-sandboxes) and the AI sandbox field guide.
 
 ## Design Philosophy
 
@@ -25,7 +25,7 @@ VT Code supports three main isolation levels (`SandboxPolicy`):
 - Conservative resource limits (512MB memory, 64 PIDs)
 - Harness compatibility: mutating `run_pty_cmd` workflows are adaptively upgraded to `WorkspaceWrite` to avoid blocking normal agent edit/build loops.
 
-### WorkspaceWrite (Auto mode)
+### WorkspaceWrite policy
 - Read files everywhere
 - Write only to workspace roots
 - **`.git` directories are read-only** (agents can't corrupt git history)

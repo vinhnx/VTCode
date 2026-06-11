@@ -9,12 +9,12 @@
 // ── Shared data types (always available from vtcode-commons) ────────────────
 
 pub use vtcode_commons::ui_protocol::{
-    EditingMode, InlineHeaderContext, InlineHeaderHighlight, InlineHeaderStatusBadge,
-    InlineHeaderStatusTone, InlineLinkRange, InlineLinkTarget, InlineListItem,
-    InlineListSearchConfig, InlineListSelection, InlineMessageKind, InlineSegment, InlineTextStyle,
-    InlineTheme, LayoutModeOverride, PlanContent, PlanPhase, PlanStep, ReasoningDisplayMode,
-    RewindAction, SecurePromptConfig, SessionSurface, SlashCommandItem, UiMode, WizardModalMode,
-    WizardStep, convert_style, theme_from_color_fields,
+    InlineHeaderContext, InlineHeaderHighlight, InlineHeaderStatusBadge, InlineHeaderStatusTone,
+    InlineLinkRange, InlineLinkTarget, InlineListItem, InlineListSearchConfig, InlineListSelection,
+    InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme, LayoutModeOverride,
+    PlanContent, PlanPhase, PlanStep, ReasoningDisplayMode, RewindAction, SecurePromptConfig,
+    SessionSurface, SlashCommandItem, UiMode, WizardModalMode, WizardStep, convert_style,
+    theme_from_color_fields,
 };
 
 pub use vtcode_commons::ui_protocol::KeyboardProtocolSettings;
@@ -60,7 +60,6 @@ mod headless {
         LaunchEditor,
         ForceCancelPtySession,
         RequestInlinePromptSuggestion(String),
-        ToggleMode,
         HistoryPrevious,
         HistoryNext,
     }

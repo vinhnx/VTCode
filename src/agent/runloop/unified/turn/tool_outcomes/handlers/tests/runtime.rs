@@ -52,6 +52,7 @@ async fn blocked_tool_call_guard_short_circuits_to_recovery_when_active() {
 #[tokio::test]
 async fn unified_validation_ignores_preseeded_legacy_loop_detector_state() {
     let mut backing = TestContextBacking::new(2).await;
+    backing.select_build_primary_agent();
     let valid_file = backing.sample_file.clone();
     let valid_args = json!({"path": valid_file.to_string_lossy()});
     cache_tool_permission(
@@ -226,12 +227,13 @@ async fn validate_tool_call_blocks_when_wall_clock_budget_exhausted() {
 }
 
 #[tokio::test]
-async fn enter_plan_mode_clears_task_tracker_create_signatures() {
+async fn start_planning_clears_task_tracker_create_signatures() {
     let mut backing = TestContextBacking::new(4).await;
+    backing.select_build_primary_agent();
     let enter_args = json!({});
     cache_tool_permission(
         &mut backing,
-        tool_names::ENTER_PLAN_MODE,
+        tool_names::START_PLANNING,
         &enter_args,
         PermissionGrant::Permanent,
     )
@@ -253,12 +255,12 @@ async fn enter_plan_mode_clears_task_tracker_create_signatures() {
 
     let result = validate_tool_call(
         &mut ctx,
-        "enter_plan_mode_call",
-        tool_names::ENTER_PLAN_MODE,
+        "start_planning_call",
+        tool_names::START_PLANNING,
         &enter_args,
     )
     .await
-    .expect("validate enter_plan_mode");
+    .expect("validate start_planning");
     assert!(matches!(result, ValidationResult::Proceed(_)));
 
     let second = enforce_duplicate_task_tracker_create_guard(
@@ -294,6 +296,7 @@ async fn recovery_skip_step_pushes_structured_tool_message() {
 #[tokio::test]
 async fn repeated_identical_readonly_call_in_same_turn_reuses_recent_result() {
     let mut backing = TestContextBacking::new(4).await;
+    backing.select_build_primary_agent();
     let args = json!({
         "action": "read",
         "path": backing.sample_file.to_string_lossy()
@@ -351,6 +354,7 @@ async fn repeated_identical_readonly_call_in_same_turn_reuses_recent_result() {
 async fn repeated_same_file_read_variants_activate_recovery_at_read_family_cap() {
     let read_family_cap = 12;
     let mut backing = TestContextBacking::new(read_family_cap).await;
+    backing.select_build_primary_agent();
     let sample_file = backing.sample_file.clone();
     std::fs::write(
         &sample_file,
@@ -447,6 +451,7 @@ async fn repeated_same_file_read_variants_activate_recovery_at_read_family_cap()
 #[tokio::test]
 async fn denied_tool_permission_emits_policy_response_without_budget_burn() {
     let mut backing = TestContextBacking::new(2).await;
+    backing.select_build_primary_agent();
     let valid_file = backing.sample_file.clone();
     let denial_args = json!({"path": valid_file.to_string_lossy()});
     cache_tool_permission(
@@ -488,6 +493,7 @@ async fn denied_tool_permission_emits_policy_response_without_budget_burn() {
 #[tokio::test]
 async fn prepared_tool_calls_respect_unlimited_budget_when_cap_disabled() {
     let mut backing = TestContextBacking::new(0).await;
+    backing.select_build_primary_agent();
     let valid_file = backing.sample_file.clone();
     let valid_args = json!({"path": valid_file.to_string_lossy()});
     cache_tool_permission(
@@ -531,6 +537,7 @@ async fn prepared_tool_calls_respect_unlimited_budget_when_cap_disabled() {
 #[tokio::test]
 async fn multiple_prepared_tool_calls_respect_unlimited_budget_when_cap_disabled() {
     let mut backing = TestContextBacking::new(0).await;
+    backing.select_build_primary_agent();
     let second_file = backing
         .sample_file
         .parent()
@@ -588,6 +595,7 @@ async fn multiple_prepared_tool_calls_respect_unlimited_budget_when_cap_disabled
 #[tokio::test]
 async fn end_to_end_blocked_calls_do_not_burn_budget_before_valid_call() {
     let mut backing = TestContextBacking::new(1).await;
+    backing.select_build_primary_agent();
     let valid_file = backing.sample_file.clone();
     let valid_args = json!({"path": valid_file.to_string_lossy()});
     cache_tool_permission(

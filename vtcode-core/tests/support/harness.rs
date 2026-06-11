@@ -64,5 +64,5 @@ impl TestHarness {
 fn next_session_id() -> String {
     static COUNTER: AtomicU64 = AtomicU64::new(1);
     let id = COUNTER.fetch_add(1, Ordering::Relaxed);
-    format!("harness_session_{}", id)
+    format!("harness_session_{id}")
 }

@@ -2,7 +2,6 @@ use anstyle::{AnsiColor, Color, Effects, Style as AnsiStyle};
 use anyhow::Result;
 use vtcode_auth::{AuthStatus, OpenAIChatGptAuthStatus, OpenAIResolvedAuthSource};
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
-use vtcode_core::config::types::UiSurfacePreference;
 use vtcode_core::copilot::{
     COPILOT_AUTH_DOC_PATH, CopilotAuthEvent, CopilotAuthStatus, CopilotAuthStatusKind,
     login_with_events, logout_with_events, probe_auth_status,
@@ -737,6 +736,9 @@ mod tests {
         let active_primary_agent = Box::leak(Box::new(
             vtcode_core::primary_agent::ActivePrimaryAgentState::default(),
         ));
+        let plan_session = Box::leak(Box::new(
+            crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState::default(),
+        ));
         let thread_handle = Box::leak(Box::new(
             vtcode_core::core::threads::ThreadManager::new().start_thread_with_identifier(
                 "test-thread",
@@ -765,6 +767,7 @@ mod tests {
             context_manager: turn.context_manager,
             active_primary_agent,
             session_stats: turn.session_stats,
+            plan_session,
             input_status_state: turn.input_status_state,
             tools: turn.tools,
             tool_catalog: turn.tool_catalog,
@@ -1156,13 +1159,6 @@ async fn sync_openai_runtime_if_active(ctx: &mut SlashCommandContext<'_>) -> Res
     } else {
         "openai".to_string()
     };
-    let mode_label = match (ctx.config.ui_surface, ctx.full_auto) {
-        (UiSurfacePreference::Inline, true) => "auto".to_string(),
-        (UiSurfacePreference::Inline, false) => "inline".to_string(),
-        (UiSurfacePreference::Alternate, _) => "alt".to_string(),
-        (UiSurfacePreference::Auto, true) => "auto".to_string(),
-        (UiSurfacePreference::Auto, false) => "std".to_string(),
-    };
     let next_header_context = build_inline_header_context(
         ctx.config,
         ctx.vt_cfg.as_ref(),
@@ -1171,7 +1167,6 @@ async fn sync_openai_runtime_if_active(ctx: &mut SlashCommandContext<'_>) -> Res
         ctx.config.model.clone(),
         ctx.provider_client
             .effective_context_size(&ctx.config.model),
-        mode_label,
         ctx.config.reasoning_effort.as_str().to_string(),
     )
     .await?;
@@ -1206,13 +1201,6 @@ async fn sync_copilot_runtime_if_active(ctx: &mut SlashCommandContext<'_>) -> Re
     ctx.config.api_key.clear();
     ctx.config.openai_chatgpt_auth = None;
 
-    let mode_label = match (ctx.config.ui_surface, ctx.full_auto) {
-        (UiSurfacePreference::Inline, true) => "auto".to_string(),
-        (UiSurfacePreference::Inline, false) => "inline".to_string(),
-        (UiSurfacePreference::Alternate, _) => "alt".to_string(),
-        (UiSurfacePreference::Auto, true) => "auto".to_string(),
-        (UiSurfacePreference::Auto, false) => "std".to_string(),
-    };
     let next_header_context = build_inline_header_context(
         ctx.config,
         ctx.vt_cfg.as_ref(),
@@ -1221,7 +1209,6 @@ async fn sync_copilot_runtime_if_active(ctx: &mut SlashCommandContext<'_>) -> Re
         ctx.config.model.clone(),
         ctx.provider_client
             .effective_context_size(&ctx.config.model),
-        mode_label,
         ctx.config.reasoning_effort.as_str().to_string(),
     )
     .await?;

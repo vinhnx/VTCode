@@ -1,4 +1,4 @@
-//! Plan mode and mutation detection helpers for ToolRegistry.
+//! Planning workflow and mutation detection helpers for ToolRegistry.
 
 use serde_json::Value;
 
@@ -37,19 +37,18 @@ impl ToolRegistry {
         true
     }
 
-    /// Check if a tool is allowed to run in plan mode without switching modes.
+    /// Check if a tool is allowed to run in planning workflow without switching modes.
     ///
     /// Returns true for non-mutating tools and plan-safe exceptions like
     /// writing to active plan storage (`/tmp/vtcode-plans/` by default) or read-only unified tool actions.
-    pub fn is_plan_mode_allowed(&self, tool_name: &str, args: &Value) -> bool {
+    pub fn is_planning_active_allowed(&self, tool_name: &str, args: &Value) -> bool {
         use crate::config::constants::tools;
         use crate::tools::names::canonical_tool_name;
 
-        // Keep adaptive task tracker available in all modes; retain plan alias.
+        // Keep adaptive task tracker available in all modes.
         let canonical = canonical_tool_name(tool_name);
         match canonical {
             tools::TASK_TRACKER => return true,
-            tools::PLAN_TASK_TRACKER => return true,
             _ => {}
         }
 
@@ -73,7 +72,7 @@ impl ToolRegistry {
     }
 
     /// Check if a tool operation is targeting the plans directory.
-    /// In plan mode, writes to active plan storage are allowed for the agent to write its plan.
+    /// In planning workflow, writes to active plan storage are allowed for the agent to write its plan.
     pub(super) fn is_plan_file_operation(&self, tool_name: &str, args: &Value) -> bool {
         use crate::config::constants::tools as tool_names;
         use crate::tools::names::canonical_tool_name;
@@ -201,34 +200,32 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn plan_mode_allows_adaptive_task_tracker_and_plan_alias() -> Result<()> {
+    async fn planning_workflow_allows_adaptive_task_tracker() -> Result<()> {
         let temp_dir = TempDir::new()?;
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
-        registry.enable_plan_mode();
+        registry.enable_planning();
 
-        assert!(registry.is_plan_mode_allowed(tools::TASK_TRACKER, &json!({"action": "list"})));
         assert!(
-            registry.is_plan_mode_allowed(tools::PLAN_TASK_TRACKER, &json!({"action": "list"}))
+            registry.is_planning_active_allowed(tools::TASK_TRACKER, &json!({"action": "list"}))
         );
-
         Ok(())
     }
 
     #[tokio::test]
-    async fn plan_mode_allows_readonly_unified_exec_runs() -> Result<()> {
+    async fn planning_workflow_allows_readonly_unified_exec_runs() -> Result<()> {
         let temp_dir = TempDir::new()?;
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
-        registry.enable_plan_mode();
+        registry.enable_planning();
 
-        assert!(registry.is_plan_mode_allowed(
+        assert!(registry.is_planning_active_allowed(
             tools::UNIFIED_EXEC,
             &json!({"action": "run", "command": "ls -la"})
         ));
-        assert!(registry.is_plan_mode_allowed(
+        assert!(registry.is_planning_active_allowed(
             tools::UNIFIED_EXEC,
             &json!({"action": "run", "command": "npm install --dry-run"})
         ));
-        assert!(!registry.is_plan_mode_allowed(
+        assert!(!registry.is_planning_active_allowed(
             tools::UNIFIED_EXEC,
             &json!({"action": "run", "command": "echo hi"})
         ));

@@ -496,7 +496,7 @@ impl From<ErrorCategory> for ToolErrorType {
                 ToolErrorType::NetworkError
             }
             ErrorCategory::Timeout => ToolErrorType::Timeout,
-            ErrorCategory::PolicyViolation | ErrorCategory::PlanModeViolation => {
+            ErrorCategory::PolicyViolation | ErrorCategory::PlanningPolicyViolation => {
                 ToolErrorType::PolicyViolation
             }
             ErrorCategory::RateLimit => ToolErrorType::NetworkError,

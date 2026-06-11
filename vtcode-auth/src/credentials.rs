@@ -795,10 +795,10 @@ mod tests {
         );
 
         // Auto should resolve to either Keyring or File
-        let auto_mode = AuthCredentialsStoreMode::Auto.effective_mode();
+        let auto_permission = AuthCredentialsStoreMode::Auto.effective_mode();
         assert!(
-            auto_mode == AuthCredentialsStoreMode::Keyring
-                || auto_mode == AuthCredentialsStoreMode::File
+            auto_permission == AuthCredentialsStoreMode::Keyring
+                || auto_permission == AuthCredentialsStoreMode::File
         );
     }
 

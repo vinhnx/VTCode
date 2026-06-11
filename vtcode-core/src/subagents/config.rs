@@ -1,7 +1,10 @@
 use anyhow::Result;
 use std::path::Path;
+use std::path::PathBuf;
+use vtcode_config::core::permissions::AgentPermissionsConfig;
 use vtcode_config::{
-    HooksConfig, McpProviderConfig, PermissionMode, SubagentMcpServer, SubagentSpec,
+    HooksConfig, McpProviderConfig, SubagentMcpServer, SubagentMemoryScope, SubagentSource,
+    SubagentSpec,
 };
 
 use super::constants::{
@@ -17,6 +20,54 @@ use crate::llm::provider::ToolDefinition;
 use crate::tools::mcp::MCP_QUALIFIED_TOOL_PREFIX;
 use crate::utils::session_archive::{SessionArchiveMetadata, SessionForkMode};
 
+#[derive(Debug, Clone)]
+pub struct ResolvedAgentRuntimeView {
+    pub canonical_name: String,
+    pub display_name: String,
+    pub description: String,
+    pub color: Option<String>,
+    pub aliases: Vec<String>,
+    pub instructions: String,
+    pub tools: Option<Vec<String>>,
+    pub disallowed_tools: Vec<String>,
+    pub permissions: AgentPermissionsConfig,
+    pub model: Option<String>,
+    pub reasoning_effort: Option<String>,
+    pub hooks: Option<HooksConfig>,
+    pub mcp_servers: Vec<SubagentMcpServer>,
+    pub skills: Vec<String>,
+    pub memory: Option<SubagentMemoryScope>,
+    pub read_only: bool,
+    pub source: SubagentSource,
+    pub file_path: Option<PathBuf>,
+}
+
+impl ResolvedAgentRuntimeView {
+    #[must_use]
+    pub fn from_spec(spec: &SubagentSpec) -> Self {
+        Self {
+            canonical_name: spec.name.clone(),
+            display_name: spec.name.clone(),
+            description: spec.description.clone(),
+            color: spec.color.clone(),
+            aliases: spec.aliases.clone(),
+            instructions: spec.prompt.clone(),
+            tools: spec.tools.clone(),
+            disallowed_tools: spec.disallowed_tools.clone(),
+            permissions: spec.permissions.clone(),
+            model: spec.model.clone(),
+            reasoning_effort: spec.reasoning_effort.clone(),
+            hooks: spec.hooks.clone(),
+            mcp_servers: spec.mcp_servers.clone(),
+            skills: spec.skills.clone(),
+            memory: spec.memory,
+            read_only: spec.is_read_only(),
+            source: spec.source.clone(),
+            file_path: spec.file_path.clone(),
+        }
+    }
+}
+
 // ─── Child Config Building ─────────────────────────────────────────────────
 
 pub fn build_child_config(
@@ -25,17 +76,28 @@ pub fn build_child_config(
     model: &str,
     max_turns: Option<usize>,
 ) -> VTCodeConfig {
+    build_child_config_from_runtime(
+        parent,
+        &ResolvedAgentRuntimeView::from_spec(spec),
+        model,
+        max_turns,
+    )
+}
+
+fn build_child_config_from_runtime(
+    parent: &VTCodeConfig,
+    runtime: &ResolvedAgentRuntimeView,
+    model: &str,
+    max_turns: Option<usize>,
+) -> VTCodeConfig {
     let mut child = parent.clone();
     child.agent.default_model = model.to_string();
-    if let Some(mode) = spec.permission_mode {
-        child.permissions.default_mode =
-            clamp_permission_mode(parent.permissions.default_mode, mode);
-    }
+    child.runtime_agent_permissions = Some(runtime.permissions.clone());
     if let Some(max_turns) = normalize_child_max_turns(max_turns) {
         child.automation.full_auto.max_turns = max_turns;
     }
 
-    let mut allowed_tools = spec.tools.clone().unwrap_or_default();
+    let mut allowed_tools = runtime.tools.clone().unwrap_or_default();
     if !allowed_tools.is_empty() {
         allowed_tools.retain(|tool| !SUBAGENT_TOOL_NAMES.iter().any(|blocked| blocked == tool));
         child.permissions.allow =
@@ -43,15 +105,15 @@ pub fn build_child_config(
     }
 
     let mut disallowed_tools = parent.permissions.deny.clone();
-    disallowed_tools.extend(spec.disallowed_tools.clone());
+    disallowed_tools.extend(runtime.disallowed_tools.clone());
     for tool in SUBAGENT_TOOL_NAMES {
         if !disallowed_tools.iter().any(|entry| entry == tool) {
             disallowed_tools.push((*tool).to_string());
         }
     }
     child.permissions.deny = disallowed_tools;
-    merge_child_hooks(&mut child, spec.hooks.as_ref());
-    merge_child_mcp_servers(&mut child, spec.mcp_servers.as_slice());
+    merge_child_hooks(&mut child, runtime.hooks.as_ref());
+    merge_child_mcp_servers(&mut child, runtime.mcp_servers.as_slice());
     child
 }
 
@@ -89,19 +151,22 @@ pub fn prepare_child_runtime_config(
         &str,
     ) -> Result<ModelId>,
 ) -> Result<(ModelId, ReasoningEffortLevel, VTCodeConfig)> {
+    let runtime = ResolvedAgentRuntimeView::from_spec(spec);
     let resolved_model = resolve_model(
         parent,
         parent_model,
         parent_provider,
         model_override,
-        spec.model.as_deref(),
-        spec.name.as_str(),
+        runtime.model.as_deref(),
+        runtime.canonical_name.as_str(),
     )?;
-    let mut child_cfg = build_child_config(parent, spec, resolved_model.as_str(), max_turns);
+    let mut child_cfg =
+        build_child_config_from_runtime(parent, &runtime, resolved_model.as_str(), max_turns);
     let child_reasoning_effort = reasoning_override
         .and_then(ReasoningEffortLevel::parse)
         .or_else(|| {
-            spec.reasoning_effort
+            runtime
+                .reasoning_effort
                 .as_deref()
                 .and_then(ReasoningEffortLevel::parse)
         })
@@ -109,33 +174,6 @@ pub fn prepare_child_runtime_config(
     child_cfg.agent.default_model = resolved_model.to_string();
     child_cfg.agent.reasoning_effort = child_reasoning_effort;
     Ok((resolved_model, child_reasoning_effort, child_cfg))
-}
-
-// ─── Permission Handling ────────────────────────────────────────────────────
-
-fn clamp_permission_mode(parent: PermissionMode, requested: PermissionMode) -> PermissionMode {
-    if matches!(
-        parent,
-        PermissionMode::Auto | PermissionMode::BypassPermissions
-    ) {
-        return parent;
-    }
-    if permission_rank(requested) <= permission_rank(parent) {
-        requested
-    } else {
-        parent
-    }
-}
-
-fn permission_rank(mode: PermissionMode) -> u8 {
-    match mode {
-        PermissionMode::DontAsk => 0,
-        PermissionMode::Plan => 1,
-        PermissionMode::Default => 2,
-        PermissionMode::AcceptEdits => 3,
-        PermissionMode::Auto => 4,
-        PermissionMode::BypassPermissions => 5,
-    }
 }
 
 fn intersect_allowed_tools(parent_allowed: &[String], spec_allowed: &[String]) -> Vec<String> {
@@ -364,7 +402,13 @@ fn inline_mcp_provider(name: &str, value: &serde_json::Value) -> Option<McpProvi
         serde_json::Value::String(name.to_string()),
     );
     for (key, value) in object {
+        if key == "type" {
+            continue;
+        }
         payload.insert(key.clone(), value.clone());
+    }
+    if payload.contains_key("command") && !payload.contains_key("args") {
+        payload.insert("args".to_string(), serde_json::Value::Array(Vec::new()));
     }
     serde_json::from_value(serde_json::Value::Object(payload)).ok()
 }
@@ -389,8 +433,8 @@ Do not guess hidden or legacy helpers such as `list_files`, `read_file`, `unifie
 are not visible. For workspace discovery here, prefer `unified_search`; if that is insufficient, report the blocker \
 instead of retrying denied calls.";
 
-const READ_ONLY_PLAN_MODE_REMINDER: &str = "This delegated agent already runs with a read-only tool surface. \
-Do not try to enter or exit plan mode, do not call hidden mutating tools, and do not retry the same denied tool \
+const READ_ONLY_PLANNING_WORKFLOW_REMINDER: &str = "This delegated agent already runs with a read-only tool surface. \
+Do not try to enter or exit planning workflow, do not call hidden mutating tools, and do not retry the same denied tool \
 call; adjust strategy or report the blocker instead.";
 
 const WRITE_TOOL_REMINDER: &str = "Tool reminder: `list_files` on the workspace root (`.`) is blocked, and \
@@ -402,23 +446,33 @@ pub fn compose_subagent_instructions(
     spec: &SubagentSpec,
     memory_appendix: Option<String>,
 ) -> String {
+    compose_subagent_runtime_instructions(
+        &ResolvedAgentRuntimeView::from_spec(spec),
+        memory_appendix,
+    )
+}
+
+fn compose_subagent_runtime_instructions(
+    runtime: &ResolvedAgentRuntimeView,
+    memory_appendix: Option<String>,
+) -> String {
     let mut sections = Vec::new();
-    if !spec.prompt.trim().is_empty() {
-        sections.push(spec.prompt.trim().to_string());
+    if !runtime.instructions.trim().is_empty() {
+        sections.push(runtime.instructions.trim().to_string());
     }
     sections.push(FINAL_RESPONSE_CONTRACT.to_string());
 
-    if spec.is_read_only() {
+    if is_runtime_read_only(runtime) {
         sections.push(READ_ONLY_TOOL_REMINDER.to_string());
-        sections.push(READ_ONLY_PLAN_MODE_REMINDER.to_string());
+        sections.push(READ_ONLY_PLANNING_WORKFLOW_REMINDER.to_string());
     } else {
         sections.push(WRITE_TOOL_REMINDER.to_string());
     }
 
-    if !spec.skills.is_empty() {
+    if !runtime.skills.is_empty() {
         sections.push(format!(
             "Preloaded skill names: {}. Use their established repository conventions.",
-            spec.skills.join(", ")
+            runtime.skills.join(", ")
         ));
     }
     if let Some(memory_appendix) = memory_appendix
@@ -427,6 +481,10 @@ pub fn compose_subagent_instructions(
         sections.push(memory_appendix);
     }
     sections.join("\n\n")
+}
+
+fn is_runtime_read_only(runtime: &ResolvedAgentRuntimeView) -> bool {
+    runtime.read_only
 }
 
 pub fn build_subagent_archive_metadata(

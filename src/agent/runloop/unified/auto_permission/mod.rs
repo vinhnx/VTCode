@@ -2,7 +2,7 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use crate::agent::runloop::unified::state::AutoModeDenial;
+use crate::agent::runloop::unified::state::AutoPermissionDenial;
 use anyhow::{Context, Result, anyhow};
 use reqwest::Url;
 use serde::Deserialize;
@@ -16,10 +16,10 @@ use vtcode_core::llm::{LightweightFeature, provider as uni, resolve_lightweight_
 use vtcode_core::permissions::{PermissionRequest, build_permission_request};
 use vtcode_core::tools::command_args;
 
-const AUTO_MODE_SYSTEM_PROMPT: &str =
-    include_str!("../../../../../system-prompts/system-prompt-auto-mode.md");
+const AUTO_PERMISSION_SYSTEM_PROMPT: &str =
+    include_str!("../../../../../system-prompts/system-prompt-auto-permission-review.md");
 const REVIEWER_PROMPT: &str =
-    include_str!("../../../../../system-prompts/agent-prompt-auto-mode-rule-reviewer.md");
+    include_str!("../../../../../system-prompts/agent-prompt-auto-permission-rule-reviewer.md");
 
 const PROBE_PROMPT: &str = r#"
 You are VT Code's prompt-injection probe for tool outputs.
@@ -32,9 +32,9 @@ const MAX_ENTRY_CHARS: usize = 1600;
 const MAX_TOOL_OUTPUT_CHARS: usize = 2400;
 
 #[derive(Debug, Clone)]
-pub(crate) enum AutoModeReviewDecision {
+pub(crate) enum AutoPermissionReviewDecision {
     Allow { stage: &'static str },
-    Block(AutoModeDenial),
+    Block(AutoPermissionDenial),
 }
 
 #[derive(Debug, Clone)]
@@ -53,7 +53,7 @@ struct StageTwoDecision {
 }
 
 pub(crate) fn system_prompt_addendum() -> &'static str {
-    AUTO_MODE_SYSTEM_PROMPT
+    AUTO_PERMISSION_SYSTEM_PROMPT
 }
 
 pub(crate) async fn review_tool_call(
@@ -66,7 +66,7 @@ pub(crate) async fn review_tool_call(
     tool_name: &str,
     tool_args: Option<&Value>,
     permission_request: &PermissionRequest,
-) -> Result<AutoModeReviewDecision> {
+) -> Result<AutoPermissionReviewDecision> {
     let transcript = build_classifier_transcript(workspace_root, history);
     let pending_action = normalized_tool_payload(workspace_root, tool_name, tool_args);
     let stage_one_prompt = review_prompt(
@@ -82,8 +82,8 @@ pub(crate) async fn review_tool_call(
     let stage_one_models = selected_models(
         agent_config,
         vt_cfg,
-        permissions.auto_mode.model.as_str(),
-        LightweightFeature::AutoModeReview,
+        permissions.auto_permission.model.as_str(),
+        LightweightFeature::AutoPermissionReview,
     );
     let stage_one = raw_completion(
         provider,
@@ -94,16 +94,16 @@ pub(crate) async fn review_tool_call(
         Some(8),
     )
     .await
-    .context("auto mode stage-1 review")?;
+    .context("auto permission review stage-1 review")?;
     let stage_one_decision = first_upper_token(&stage_one);
     tracing::trace!(
         tool = %tool_name,
         stage = "stage1",
         decision = %stage_one_decision,
-        "auto mode reviewer completed"
+        "auto permission review reviewer completed"
     );
     if stage_one_decision == "ALLOW" {
-        return Ok(AutoModeReviewDecision::Allow { stage: "stage1" });
+        return Ok(AutoPermissionReviewDecision::Allow { stage: "stage1" });
     }
 
     let script_context =
@@ -127,7 +127,7 @@ pub(crate) async fn review_tool_call(
         Some(300),
     )
     .await
-    .context("auto mode stage-2 review")?;
+    .context("auto permission review stage-2 review")?;
     let parsed = parse_stage_two_decision(&stage_two)?;
     let allow = parsed.decision.trim().eq_ignore_ascii_case("allow");
     tracing::trace!(
@@ -136,14 +136,14 @@ pub(crate) async fn review_tool_call(
         decision = if allow { "allow" } else { "block" },
         matched_rule = parsed.matched_rule.as_deref().unwrap_or(""),
         matched_exception = parsed.matched_exception.as_deref().unwrap_or(""),
-        "auto mode reviewer completed"
+        "auto permission review reviewer completed"
     );
 
     if allow {
-        return Ok(AutoModeReviewDecision::Allow { stage: "stage2" });
+        return Ok(AutoPermissionReviewDecision::Allow { stage: "stage2" });
     }
 
-    Ok(AutoModeReviewDecision::Block(AutoModeDenial {
+    Ok(AutoPermissionReviewDecision::Block(AutoPermissionDenial {
         stage: "stage2",
         reason: parsed.reason,
         matched_rule: parsed.matched_rule,
@@ -166,8 +166,8 @@ pub(crate) async fn probe_tool_output(
     let probe_models = selected_models(
         agent_config,
         vt_cfg,
-        permissions.auto_mode.probe_model.as_str(),
-        LightweightFeature::AutoModeProbe,
+        permissions.auto_permission.probe_model.as_str(),
+        LightweightFeature::AutoPermissionProbe,
     );
     let recent_user_context = history
         .iter()
@@ -195,9 +195,9 @@ pub(crate) async fn probe_tool_output(
         Some(8),
     )
     .await
-    .context("auto mode prompt-injection probe")?;
+    .context("auto permission review prompt-injection probe")?;
     let decision = first_upper_token(&response);
-    tracing::trace!(stage = "probe", decision = %decision, "auto mode prompt probe completed");
+    tracing::trace!(stage = "probe", decision = %decision, "auto permission review prompt probe completed");
     if decision != "SUSPECT" {
         return Ok(None);
     }
@@ -217,8 +217,8 @@ async fn review_prompt(
     script_context: Option<&str>,
 ) -> String {
     let environment = render_environment(permissions, workspace_root).await;
-    let block_rules = numbered_lines(&permissions.auto_mode.block_rules);
-    let allow_exceptions = numbered_lines(&permissions.auto_mode.allow_exceptions);
+    let block_rules = numbered_lines(&permissions.auto_permission.block_rules);
+    let allow_exceptions = numbered_lines(&permissions.auto_permission.allow_exceptions);
     let transcript = if transcript.is_empty() {
         "<empty>".to_string()
     } else {
@@ -246,7 +246,7 @@ async fn render_environment(permissions: &PermissionsConfig, workspace_root: &Pa
     trusted_paths.insert(workspace_root.display().to_string());
     trusted_paths.extend(
         permissions
-            .auto_mode
+            .auto_permission
             .environment
             .trusted_paths
             .iter()
@@ -257,7 +257,7 @@ async fn render_environment(permissions: &PermissionsConfig, workspace_root: &Pa
     let mut trusted_domains = BTreeSet::new();
     trusted_domains.extend(
         permissions
-            .auto_mode
+            .auto_permission
             .environment
             .trusted_domains
             .iter()
@@ -269,7 +269,7 @@ async fn render_environment(permissions: &PermissionsConfig, workspace_root: &Pa
     let mut trusted_git_orgs = BTreeSet::new();
     trusted_git_hosts.extend(
         permissions
-            .auto_mode
+            .auto_permission
             .environment
             .trusted_git_hosts
             .iter()
@@ -278,7 +278,7 @@ async fn render_environment(permissions: &PermissionsConfig, workspace_root: &Pa
     );
     trusted_git_orgs.extend(
         permissions
-            .auto_mode
+            .auto_permission
             .environment
             .trusted_git_orgs
             .iter()
@@ -299,7 +299,7 @@ async fn render_environment(permissions: &PermissionsConfig, workspace_root: &Pa
     }
 
     let trusted_services = permissions
-        .auto_mode
+        .auto_permission
         .environment
         .trusted_services
         .iter()
@@ -608,7 +608,7 @@ async fn raw_completion(
                 model,
                 fallback_model,
                 error = %primary_err,
-                "auto mode lightweight request failed; retrying with main model"
+                "auto permission review lightweight request failed; retrying with main model"
             );
             let fallback_request = uni::LLMRequest {
                 model: fallback_model.to_string(),
@@ -634,10 +634,10 @@ fn parse_stage_two_decision(raw: &str) -> Result<StageTwoDecision> {
     let end = raw
         .rfind('}')
         .ok_or_else(|| anyhow!("missing JSON object"))?;
-    serde_json::from_str(&raw[start..=end]).context("parse auto mode stage-2 JSON")
+    serde_json::from_str(&raw[start..=end]).context("parse auto permission review stage-2 JSON")
 }
 
-struct AutoModeModels {
+struct AutoPermissionModels {
     primary_model: String,
     fallback_model: Option<String>,
 }
@@ -647,14 +647,14 @@ fn selected_models(
     vt_cfg: Option<&VTCodeConfig>,
     configured_model: &str,
     feature: LightweightFeature,
-) -> AutoModeModels {
+) -> AutoPermissionModels {
     let resolution =
         resolve_lightweight_route(agent_config, vt_cfg, feature, Some(configured_model));
     if let Some(warning) = &resolution.warning {
-        tracing::warn!(warning = %warning, "auto mode route adjusted");
+        tracing::warn!(warning = %warning, "auto permission review route adjusted");
     }
 
-    AutoModeModels {
+    AutoPermissionModels {
         primary_model: resolution.primary.model,
         fallback_model: resolution.fallback.map(|route| route.model),
     }

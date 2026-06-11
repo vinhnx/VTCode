@@ -17,7 +17,7 @@ where
 {
     match timeout(duration, fut).await {
         Ok(result) => Ok(result),
-        Err(_) => anyhow::bail!("Operation timed out after {:?}: {}", duration, context),
+        Err(_) => anyhow::bail!("Operation timed out after {duration:?}: {context}"),
     }
 }
 
@@ -73,12 +73,7 @@ where
     }
 
     let err = last_error.unwrap_or_else(|| anyhow::anyhow!("Retry failed without error"));
-    Err(err).with_context(|| {
-        format!(
-            "Operation failed after {} retries: {}",
-            max_retries, context
-        )
-    })
+    Err(err).with_context(|| format!("Operation failed after {max_retries} retries: {context}"))
 }
 
 /// Sleep with context

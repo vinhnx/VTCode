@@ -142,7 +142,12 @@ impl ModelId {
             ModelId::OpenRouterQwen3CoderNext => "qwen/qwen3-coder-next",
             ModelId::OpenRouterMoonshotaiKimiK26 => "moonshotai/kimi-k2.6",
             ModelId::OpenRouterZaiGlm51 => "z-ai/glm-5.1",
-            _ => unreachable!(),
+            model => {
+                model
+                    .openrouter_metadata()
+                    .expect("generated OpenRouter model should have metadata")
+                    .id
+            }
         }
     }
 }

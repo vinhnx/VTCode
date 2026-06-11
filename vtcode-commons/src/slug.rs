@@ -3,7 +3,7 @@
 //! Generates memorable identifiers by combining random adjectives and nouns,
 //! producing slugs like "gentle-harbor" or "cosmic-wizard".
 //!
-//! Based on OpenCode's slug utility pattern for plan mode file naming.
+//! Based on OpenCode's slug utility pattern for planning workflow file naming.
 
 use rand::RngExt;
 

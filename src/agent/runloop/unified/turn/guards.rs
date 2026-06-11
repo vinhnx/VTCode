@@ -242,7 +242,7 @@ fn maybe_activate_turn_timeout_recovery(ctx: &mut TurnProcessingContext<'_>) {
         .unwrap_or(300);
     let reserve = Duration::from_secs(llm_attempt_timeout_secs(
         configured_turn_timeout_secs.max(1),
-        ctx.session_stats.is_plan_mode(),
+        ctx.is_planning_active(),
         ctx.provider_client.name(),
     ));
     if !ctx
@@ -347,11 +347,11 @@ fn normalize_turn_balancer_tool_name(name: &str) -> Cow<'_, str> {
     }
 }
 
-fn navigation_loop_guidance(plan_mode: bool, repetition: usize) -> &'static str {
+fn navigation_loop_guidance(planning_active: bool, repetition: usize) -> &'static str {
     if repetition >= 2 {
         "CRITICAL: You have triggered the navigation-loop guard repeatedly. STOP all read/search operations immediately. DO NOT browse or explore further. Provide a direct synthesis with the next action or ask one blocking question, and nothing else."
-    } else if plan_mode {
-        "WARNING: Too many read/search steps in Plan Mode without an actionable output. Stop browsing, summarize key findings, then update `task_tracker` with concrete steps (files + outcome + verification), or ask one blocking question."
+    } else if planning_active {
+        "WARNING: Too many read/search steps in Planning workflow without an actionable output. Stop browsing, summarize key findings, then update `task_tracker` with concrete steps (files + outcome + verification), or ask one blocking question."
     } else {
         "WARNING: Too many read/search steps without edits or execution. Summarize findings and propose the next concrete edit/action, or explain the blocker."
     }
@@ -412,7 +412,7 @@ pub(crate) async fn handle_turn_balancer(
         ctx.working_history.push(uni::Message::system(format!(
             "{} {}",
             recovery_reason,
-            navigation_loop_guidance(ctx.session_stats.is_plan_mode(), recurrence)
+            navigation_loop_guidance(ctx.is_planning_active(), recurrence)
         )));
         return apply_balancer_recovery(repeated_tool_attempts);
     }
@@ -614,13 +614,13 @@ mod tests {
     }
 
     #[test]
-    fn navigation_loop_guidance_mentions_task_tracker_in_plan_mode() {
+    fn navigation_loop_guidance_mentions_task_tracker_in_planning_workflow() {
         let guidance = navigation_loop_guidance(true, 1);
         assert!(guidance.contains("task_tracker"));
     }
 
     #[test]
-    fn navigation_loop_guidance_uses_generic_text_outside_plan_mode() {
+    fn navigation_loop_guidance_uses_generic_text_outside_planning_workflow() {
         let guidance = navigation_loop_guidance(false, 1);
         assert!(guidance.contains("read/search"));
         assert!(!guidance.contains("task_tracker"));

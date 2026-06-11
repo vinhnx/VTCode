@@ -59,6 +59,21 @@ EXCLUDE_TOPIC_PATTERNS = [
     r"Quick Start",
 ]
 
+MODE_TITLE_REPLACEMENTS = [
+    ("Plan", "Planning Workflow"),
+    ("Full-Auto", "Full-Auto Automation"),
+    ("Auto", "Auto Permission Review"),
+    ("Edit", "Editing Workflow"),
+]
+
+
+def remove_stale_mode_terms(text):
+    """Normalise legacy mode titles in generated documentation-map text."""
+    for label, replacement in MODE_TITLE_REPLACEMENTS:
+        text = text.replace(f"{label} Mode", replacement)
+    return text
+
+
 def extract_metadata(file_path):
     """Extract title and topics from a markdown file."""
     content = ""
@@ -71,13 +86,14 @@ def extract_metadata(file_path):
     # Try to find the H1 title
     title_match = re.search(r'^#\s+(.+)$', content, re.MULTILINE)
     title = title_match.group(1).strip() if title_match else file_path.name
+    title = remove_stale_mode_terms(title)
 
     # Try to find H2 headers for topics
     topics = []
     for match in re.finditer(r'^##\s+(.+)$', content, re.MULTILINE):
         topic = match.group(1).strip()
         if not any(re.search(pattern, topic, re.IGNORECASE) for pattern in EXCLUDE_TOPIC_PATTERNS):
-            topics.append(topic)
+            topics.append(remove_stale_mode_terms(topic))
 
     # If it's a JSON file, handle differently
     if file_path.suffix == '.json':
@@ -193,7 +209,7 @@ def main():
         "- \"How can I reduce token usage with tool documentation modes?\"",
         "",
         "### Workflows & Agent Behavior",
-        "- \"What is Plan Mode and how do I use it?\"",
+        "- \"How do I use the planning workflow?\"",
         "- \"How do I use the @ symbol to reference files in my messages?\"",
         "- \"How do I use the /files slash command to browse my workspace?\"",
         "- \"What is the Decision Ledger and how does it help with coherence?\"",

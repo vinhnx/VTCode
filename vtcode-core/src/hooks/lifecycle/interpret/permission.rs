@@ -1,7 +1,6 @@
 use serde_json::Value;
 
 use crate::config::HookCommandConfig;
-use crate::config::PermissionMode;
 use crate::hooks::lifecycle::types::{
     HookMessage, PermissionDecisionBehavior, PermissionDecisionScope,
     PermissionRequestHookDecision, PermissionRequestHookOutcome, PermissionUpdateDestination,
@@ -166,22 +165,12 @@ fn parse_permission_update(value: &Value) -> Option<PermissionUpdateRequest> {
         });
     }
 
-    if let Some(mode) = object
-        .get("setMode")
-        .cloned()
-        .and_then(|raw| serde_json::from_value::<PermissionMode>(raw).ok())
-    {
-        return Some(PermissionUpdateRequest {
-            destination,
-            kind: PermissionUpdateKind::SetMode(mode),
-        });
-    }
-
     let unsupported_key = [
         "localSettings",
         "userSettings",
         "addDirectories",
         "removeDirectories",
+        "setMode",
     ]
     .into_iter()
     .find(|key| object.contains_key(*key))

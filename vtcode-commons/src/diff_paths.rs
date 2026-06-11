@@ -195,7 +195,7 @@ pub fn parse_hunk_starts(line: &str) -> Option<(usize, usize)> {
 /// Normalize hunk header to start-only form: `@@ -old +new @@`.
 pub fn format_start_only_hunk_header(line: &str) -> Option<String> {
     let (old_start, new_start) = parse_hunk_starts(line)?;
-    Some(format!("@@ -{} +{} @@", old_start, new_start))
+    Some(format!("@@ -{old_start} +{new_start} @@"))
 }
 
 #[cfg(test)]

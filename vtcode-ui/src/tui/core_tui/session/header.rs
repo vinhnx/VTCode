@@ -39,7 +39,7 @@ fn format_model_summary_label(model: &str) -> String {
 
 fn primary_agent_header_label(name: Option<&str>) -> String {
     let Some(name) = name.map(str::trim).filter(|name| !name.is_empty()) else {
-        return "Build".to_string();
+        return "Duck".to_string();
     };
     format_model_summary_label(name)
 }
@@ -219,16 +219,6 @@ impl Session {
             ));
         }
 
-        if let Some((mode_text, mode_style)) = self.header_active_mode_summary() {
-            if !spans.is_empty() {
-                spans.push(Span::styled(
-                    " · ".to_owned(),
-                    self.header_secondary_style(),
-                ));
-            }
-            spans.push(Span::styled(mode_text, mode_style));
-        }
-
         if !spans.is_empty() && !model_summary_spans.is_empty() {
             spans.push(Span::styled(
                 " · ".to_owned(),
@@ -288,34 +278,6 @@ impl Session {
         }
 
         spans
-    }
-
-    fn header_active_mode_summary(&self) -> Option<(String, Style)> {
-        use super::super::types::EditingMode;
-
-        if self.header_context.autonomous_mode {
-            return Some((
-                "Auto".to_string(),
-                Style::default()
-                    .fg(Color::Green)
-                    .add_modifier(Modifier::BOLD),
-            ));
-        }
-
-        match self.header_context.editing_mode {
-            EditingMode::Plan => Some((
-                "Plan".to_string(),
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD),
-            )),
-            EditingMode::Edit => Some((
-                "Edit".to_string(),
-                Style::default()
-                    .fg(Color::Cyan)
-                    .add_modifier(Modifier::BOLD),
-            )),
-        }
     }
 
     pub fn header_title_line(&self) -> Line<'static> {
@@ -392,10 +354,7 @@ impl Session {
         }
 
         let separator_style = self.header_secondary_style();
-        let separator = Span::styled(
-            ui::HEADER_MODE_PRIMARY_SEPARATOR.to_owned(),
-            separator_style,
-        );
+        let separator = Span::styled(ui::HEADER_PRIMARY_SEPARATOR.to_owned(), separator_style);
 
         let mut append_section = |section: &mut Vec<Span<'static>>| {
             if section.is_empty() {
@@ -433,40 +392,6 @@ impl Session {
         } else {
             self.header_context.model.clone()
         }
-    }
-
-    fn header_mode_label(&self) -> String {
-        let trimmed = self.header_context.mode.trim();
-        if trimmed.is_empty() {
-            InlineHeaderContext::default().mode
-        } else {
-            self.header_context.mode.clone()
-        }
-    }
-
-    pub fn header_mode_short_label(&self) -> String {
-        let full = self.header_mode_label();
-        let value = full.trim();
-        if value.eq_ignore_ascii_case(ui::HEADER_MODE_AUTO) {
-            return "Auto".to_owned();
-        }
-        if value.eq_ignore_ascii_case(ui::HEADER_MODE_INLINE) {
-            return "Inline".to_owned();
-        }
-        if value.eq_ignore_ascii_case(ui::HEADER_MODE_ALTERNATE) {
-            return "Alternate".to_owned();
-        }
-
-        // Handle common abbreviations with more descriptive names
-        if value.to_lowercase() == "std" {
-            return "Session: Standard".to_owned();
-        }
-
-        let compact = value
-            .strip_suffix(ui::HEADER_MODE_FULL_AUTO_SUFFIX)
-            .unwrap_or(value)
-            .trim();
-        compact.to_owned()
     }
 
     fn header_reasoning_value(&self) -> Option<String> {
@@ -552,8 +477,6 @@ impl Session {
     }
 
     pub fn header_meta_line(&self) -> Line<'static> {
-        use super::super::types::EditingMode;
-
         let mut spans = Vec::new();
 
         let mut first_section = true;
@@ -563,7 +486,7 @@ impl Session {
             |spans: &mut Vec<Span<'static>>, text: String, style: Style, first: &mut bool| {
                 if !*first {
                     spans.push(Span::styled(
-                        ui::HEADER_MODE_SECONDARY_SEPARATOR.to_owned(),
+                        ui::HEADER_SECONDARY_SEPARATOR.to_owned(),
                         separator_style,
                     ));
                 }
@@ -580,32 +503,6 @@ impl Session {
             agent_style,
             &mut first_section,
         );
-
-        // Show editing mode badge
-        if self.header_context.editing_mode == EditingMode::Plan {
-            let badge_style = Style::default()
-                .fg(Color::Yellow)
-                .add_modifier(Modifier::BOLD);
-            push_badge(
-                &mut spans,
-                "Plan".to_string(),
-                badge_style,
-                &mut first_section,
-            );
-        }
-
-        // Show autonomous mode indicator
-        if self.header_context.autonomous_mode {
-            let badge_style = Style::default()
-                .fg(Color::Green)
-                .add_modifier(Modifier::BOLD);
-            push_badge(
-                &mut spans,
-                "Auto".to_string(),
-                badge_style,
-                &mut first_section,
-            );
-        }
 
         // Show trust level badge
         let trust_value = self.header_context.workspace_trust.to_lowercase();
@@ -639,7 +536,7 @@ impl Session {
         {
             if !first_section {
                 spans.push(Span::styled(
-                    ui::HEADER_MODE_SECONDARY_SEPARATOR.to_owned(),
+                    ui::HEADER_SECONDARY_SEPARATOR.to_owned(),
                     self.header_secondary_style(),
                 ));
             }
@@ -656,7 +553,7 @@ impl Session {
         {
             if !first_section {
                 spans.push(Span::styled(
-                    ui::HEADER_MODE_SECONDARY_SEPARATOR.to_owned(),
+                    ui::HEADER_SECONDARY_SEPARATOR.to_owned(),
                     self.header_secondary_style(),
                 ));
             }
@@ -673,7 +570,7 @@ impl Session {
         {
             if !first_section {
                 spans.push(Span::styled(
-                    ui::HEADER_MODE_SECONDARY_SEPARATOR.to_owned(),
+                    ui::HEADER_SECONDARY_SEPARATOR.to_owned(),
                     self.header_secondary_style(),
                 ));
             }
@@ -689,7 +586,7 @@ impl Session {
         for value in self.header_chain_values() {
             if !first_section {
                 spans.push(Span::styled(
-                    ui::HEADER_MODE_SECONDARY_SEPARATOR.to_owned(),
+                    ui::HEADER_SECONDARY_SEPARATOR.to_owned(),
                     self.header_secondary_style(),
                 ));
             }

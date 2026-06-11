@@ -1,9 +1,13 @@
 use super::{
-    active_subagent_entries, background_subprocess_summary, subprocess_action_prompt,
-    summarize_thread_event_preview, visible_subagent_entries,
+    DEFAULT_AGENT_TOOL_IDS, active_subagent_entries, background_subprocess_summary,
+    scaffold_agent_markdown, subprocess_action_prompt, summarize_thread_event_preview,
+    visible_subagent_entries,
 };
 use chrono::Utc;
 use std::path::PathBuf;
+use tempfile::TempDir;
+use vtcode_config::core::permissions::PermissionDefault;
+use vtcode_config::{SubagentSource, load_subagent_from_file};
 use vtcode_core::subagents::{
     BackgroundSubprocessEntry, BackgroundSubprocessStatus, SubagentStatus, SubagentStatusEntry,
 };
@@ -163,4 +167,19 @@ fn background_subprocess_summary_reports_waiting_state_without_summary() {
         background_subprocess_summary(&entry),
         "Starting; waiting for subprocess output."
     );
+}
+
+#[test]
+fn scaffold_agent_markdown_generates_valid_permission_rules() {
+    let rendered = scaffold_agent_markdown("reviewer");
+    assert!(rendered.contains("permissions:\n  default: deny\n"));
+
+    let temp = TempDir::new().expect("temp dir");
+    let path = temp.path().join("reviewer.md");
+    std::fs::write(&path, rendered).expect("write scaffold");
+
+    let spec =
+        load_subagent_from_file(&path, SubagentSource::ProjectVtcode).expect("load scaffold");
+    assert_eq!(spec.permissions.default, PermissionDefault::Deny);
+    assert_eq!(spec.permissions.allow, DEFAULT_AGENT_TOOL_IDS);
 }

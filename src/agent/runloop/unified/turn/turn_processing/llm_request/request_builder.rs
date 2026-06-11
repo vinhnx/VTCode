@@ -18,12 +18,13 @@ use vtcode_core::llm::provider::{
     supports_responses_chaining,
 };
 use vtcode_core::prompts::{
-    append_runtime_tool_prompt_sections, temporal::generate_temporal_context,
+    PromptContext, append_runtime_tool_prompt_sections, temporal::generate_temporal_context,
     upsert_harness_limits_section,
 };
+use vtcode_core::subagents::load_primary_memory_appendix;
 use vtcode_core::tools::handlers::anthropic_native_memory_enabled_for_runtime;
 use vtcode_core::{
-    ActivePrimaryAgent, apply_primary_agent_tool_policy, clamp_primary_permission_mode,
+    ActivePrimaryAgent, apply_primary_agent_prompt_context, apply_primary_agent_tool_policy,
 };
 
 use super::metrics::{ToolCatalogCacheMetrics, emit_tool_catalog_cache_metrics};
@@ -67,9 +68,9 @@ pub(super) fn resolve_prompt_cache_shaping_mode(
 #[derive(Clone)]
 pub(super) struct TurnRequestSnapshot {
     pub provider_name: String,
-    pub plan_mode: bool,
+    pub planning_active: bool,
     pub full_auto: bool,
-    pub auto_mode: bool,
+    pub auto_permission: bool,
     pub tool_free_recovery: bool,
     pub recovery_reason: Option<String>,
     pub request_user_input_enabled: bool,
@@ -117,8 +118,8 @@ pub(super) fn capture_turn_request_snapshot(
     tool_free_recovery: bool,
 ) -> TurnRequestSnapshot {
     let prompt_cache_config = &ctx.config.prompt_cache;
-    let plan_mode = ctx.session_stats.is_plan_mode();
-    let auto_mode = ctx.session_stats.is_autonomous_mode();
+    let planning_active = ctx.is_planning_active();
+    let auto_permission = ctx.full_auto && !planning_active;
     let provider_name = ctx.provider_client.name().to_ascii_lowercase();
     let openai_prompt_cache_enabled = is_openai_prompt_cache_enabled(
         &provider_name,
@@ -128,7 +129,7 @@ pub(super) fn capture_turn_request_snapshot(
     let prompt_cache_shaping_mode =
         resolve_prompt_cache_shaping_mode(&provider_name, prompt_cache_config);
     let request_user_input_enabled =
-        FeatureSet::from_config(ctx.vt_cfg).request_user_input_enabled(plan_mode, true);
+        FeatureSet::from_config(ctx.vt_cfg).request_user_input_enabled(planning_active, true);
     let active_primary_agent = ctx.active_primary_agent.active().clone();
     let active_model = resolve_effective_request_model(active_model, &active_primary_agent);
     let context_window_size = ctx.provider_client.effective_context_size(&active_model);
@@ -146,9 +147,9 @@ pub(super) fn capture_turn_request_snapshot(
 
     TurnRequestSnapshot {
         provider_name,
-        plan_mode,
+        planning_active,
         full_auto,
-        auto_mode,
+        auto_permission,
         tool_free_recovery,
         recovery_reason: ctx.recovery_reason().map(str::to_string),
         request_user_input_enabled,
@@ -195,12 +196,14 @@ async fn build_prompt_output(
         .build_system_prompt(
             crate::agent::runloop::unified::context_manager::SystemPromptParams {
                 full_auto: input.turn.full_auto,
-                auto_mode: input.turn.auto_mode,
-                plan_mode: input.turn.plan_mode,
+                auto_permission: input.turn.auto_permission,
+                planning_active: input.turn.planning_active,
                 request_user_input_enabled: input.turn.request_user_input_enabled,
             },
         )
         .await?;
+
+    append_active_primary_agent_skills(&mut system_prompt, ctx, &input.turn.active_primary_agent);
 
     upsert_harness_limits_section(
         &mut system_prompt,
@@ -220,7 +223,7 @@ async fn build_prompt_output(
         SessionToolCatalogSnapshot::new(
             ctx.tool_catalog.current_version(),
             ctx.tool_catalog.current_epoch(),
-            input.turn.plan_mode,
+            input.turn.planning_active,
             input.turn.request_user_input_enabled,
             None,
             false,
@@ -229,7 +232,7 @@ async fn build_prompt_output(
         SessionToolCatalogSnapshot::new(
             ctx.tool_catalog.current_version(),
             ctx.tool_catalog.current_epoch(),
-            input.turn.plan_mode,
+            input.turn.planning_active,
             input.turn.request_user_input_enabled,
             None,
             false,
@@ -239,7 +242,7 @@ async fn build_prompt_output(
             .tool_catalog
             .filtered_snapshot_with_stats(
                 ctx.tools,
-                input.turn.plan_mode,
+                input.turn.planning_active,
                 input.turn.request_user_input_enabled,
             )
             .await;
@@ -270,11 +273,52 @@ fn apply_primary_agent_policy_to_tool_snapshot(
     SessionToolCatalogSnapshot::new(
         snapshot.version,
         snapshot.epoch,
-        snapshot.plan_mode,
+        snapshot.planning_active,
         snapshot.request_user_input_enabled,
         filtered,
         snapshot.cache_hit,
     )
+}
+
+fn active_primary_agent_prompt_context(
+    ctx: &TurnProcessingContext<'_>,
+    agent: &ActivePrimaryAgent,
+) -> PromptContext {
+    let mut prompt_context = PromptContext::from_workspace_tools(
+        ctx.config.workspace.as_path(),
+        std::iter::empty::<String>(),
+    );
+    apply_primary_agent_prompt_context(&mut prompt_context, agent);
+    prompt_context
+}
+
+fn append_active_primary_agent_skills(
+    system_prompt: &mut String,
+    ctx: &TurnProcessingContext<'_>,
+    agent: &ActivePrimaryAgent,
+) {
+    if agent.skills.is_empty() {
+        return;
+    }
+
+    let prompt_context = active_primary_agent_prompt_context(ctx, agent);
+    let mut lines = Vec::new();
+    lines.push("## Active Primary Agent Skills".to_string());
+    lines.push("These skills are scoped to the active primary agent for this request.".to_string());
+
+    if prompt_context.available_skill_metadata.is_empty() {
+        for skill in &agent.skills {
+            lines.push(format!("- {skill}"));
+        }
+    } else {
+        let mut skills = prompt_context.available_skill_metadata;
+        skills.sort_by(|left, right| left.name.cmp(&right.name));
+        for skill in skills {
+            lines.push(format!("- {}: {}", skill.name, skill.description));
+        }
+    }
+
+    let _ = writeln!(system_prompt, "\n{}", lines.join("\n"));
 }
 
 fn validate_prompt_output_alignment(
@@ -284,7 +328,7 @@ fn validate_prompt_output_alignment(
     prompt_alignment::validate_prompt_catalog_alignment(
         &prompt_output.system_prompt,
         &prompt_output.tool_snapshot,
-        turn.plan_mode,
+        turn.planning_active,
         turn.request_user_input_enabled,
     )
 }
@@ -573,9 +617,6 @@ async fn render_primary_agent_runtime_context(
     agent: &ActivePrimaryAgent,
     reasoning_effort: Option<vtcode_core::config::types::ReasoningEffortLevel>,
 ) -> String {
-    let permissions = ctx.permissions_state.read().await;
-    let effective_permission_mode =
-        clamp_primary_permission_mode(permissions.default_mode, agent.permission_mode);
     let mut lines = Vec::new();
     lines.push("## Active Primary Agent Runtime State".to_string());
     lines.push(format!("- Active agent: {}", agent.display_name));
@@ -601,22 +642,13 @@ async fn render_primary_agent_runtime_context(
         lines.push(format!("- Agent reasoning effort: {raw_effort}"));
     }
     lines.push(format!(
-        "- Session mode: plan_mode={}, auto_mode={}, full_auto={}, permission_mode={}",
-        turn_snapshot.plan_mode,
-        turn_snapshot.auto_mode,
-        turn_snapshot.full_auto,
-        permission_mode_label(effective_permission_mode)
+        "- Session state: planning_workflow={}, auto_permission={}, full_auto={}",
+        turn_snapshot.planning_active, turn_snapshot.auto_permission, turn_snapshot.full_auto
     ));
-    if let Some(mode) = agent.permission_mode {
-        lines.push(format!(
-            "- Agent permission mode: {}",
-            permission_mode_label(mode)
-        ));
-        lines.push(format!(
-            "- Effective permission mode: {}",
-            permission_mode_label(effective_permission_mode)
-        ));
-    }
+    lines.push(format!(
+        "- Active primary permission default: {}",
+        permission_default_label(agent.permissions.default)
+    ));
     lines.push(format!(
         "- Effective request tools: {}",
         render_tool_names(tool_snapshot)
@@ -633,6 +665,23 @@ async fn render_primary_agent_runtime_context(
             agent.disallowed_tools.join(", ")
         ));
     }
+    if !agent.skills.is_empty() {
+        let prompt_context = active_primary_agent_prompt_context(ctx, agent);
+        if prompt_context.available_skill_metadata.is_empty() {
+            lines.push(format!(
+                "- Active primary skills: {}",
+                agent.skills.join(", ")
+            ));
+        } else {
+            let mut names = prompt_context
+                .available_skill_metadata
+                .iter()
+                .map(|skill| skill.name.as_str())
+                .collect::<Vec<_>>();
+            names.sort_unstable();
+            lines.push(format!("- Active primary skills: {}", names.join(", ")));
+        }
+    }
     if let Some(cfg) = ctx.vt_cfg
         && cfg.agent.include_temporal_context
     {
@@ -645,7 +694,32 @@ async fn render_primary_agent_runtime_context(
 
     lines.push("### Instructions".to_string());
     lines.push(agent.instructions.trim().to_string());
+    if let Some(memory_appendix) = active_primary_agent_memory_appendix(ctx, agent) {
+        lines.push("### Memory Appendix".to_string());
+        lines.push(memory_appendix);
+    }
     lines.join("\n")
+}
+
+fn active_primary_agent_memory_appendix(
+    ctx: &TurnProcessingContext<'_>,
+    agent: &ActivePrimaryAgent,
+) -> Option<String> {
+    match load_primary_memory_appendix(
+        ctx.config.workspace.as_path(),
+        agent.identity.name.as_str(),
+        agent.memory,
+    ) {
+        Ok(appendix) => appendix,
+        Err(err) => {
+            tracing::warn!(
+                agent_name = %agent.identity.name,
+                error = %err,
+                "Failed to load active primary-agent memory appendix"
+            );
+            None
+        }
+    }
 }
 
 fn render_tool_names(tool_snapshot: &SessionToolCatalogSnapshot) -> String {
@@ -668,14 +742,14 @@ fn render_tool_names(tool_snapshot: &SessionToolCatalogSnapshot) -> String {
         .join(", ")
 }
 
-fn permission_mode_label(mode: vtcode_config::PermissionMode) -> &'static str {
-    match mode {
-        vtcode_config::PermissionMode::Default => "default",
-        vtcode_config::PermissionMode::AcceptEdits => "accept_edits",
-        vtcode_config::PermissionMode::Auto => "auto",
-        vtcode_config::PermissionMode::Plan => "plan",
-        vtcode_config::PermissionMode::DontAsk => "dont_ask",
-        vtcode_config::PermissionMode::BypassPermissions => "bypass_permissions",
+fn permission_default_label(
+    default: vtcode_config::core::permissions::PermissionDefault,
+) -> &'static str {
+    match default {
+        vtcode_config::core::permissions::PermissionDefault::Ask => "ask",
+        vtcode_config::core::permissions::PermissionDefault::Allow => "allow",
+        vtcode_config::core::permissions::PermissionDefault::Auto => "auto",
+        vtcode_config::core::permissions::PermissionDefault::Deny => "deny",
     }
 }
 
@@ -752,7 +826,7 @@ pub(super) async fn build_turn_request(
             step_count,
             model: request_model,
             cache_hit: prompt_output.tool_snapshot.cache_hit,
-            plan_mode: turn_snapshot.plan_mode,
+            planning_active: turn_snapshot.planning_active,
             request_user_input_enabled: turn_snapshot.request_user_input_enabled,
             available_tools: prompt_output.tool_snapshot.available_tools(),
             stable_prefix_hash,
@@ -824,7 +898,8 @@ mod tests {
     use std::sync::Arc;
 
     use serde_json::json;
-    use vtcode_config::{PermissionMode, SubagentSource, SubagentSpec};
+    use vtcode_config::core::permissions::{AgentPermissionsConfig, PermissionDefault};
+    use vtcode_config::{SubagentMemoryScope, SubagentSource, SubagentSpec};
     use vtcode_core::config::loader::VTCodeConfig;
     use vtcode_core::config::types::ReasoningEffortLevel;
     use vtcode_core::core::agent::harness_kernel::SessionToolCatalogSnapshot;
@@ -850,7 +925,7 @@ mod tests {
             model: None,
             color: None,
             reasoning_effort: None,
-            permission_mode: Some(PermissionMode::Plan),
+            permissions: AgentPermissionsConfig::new(PermissionDefault::Deny),
             skills: Vec::new(),
             mcp_servers: Vec::new(),
             hooks: None,
@@ -912,6 +987,10 @@ mod tests {
     #[tokio::test]
     async fn recovery_request_omits_tools_and_disables_tool_choice() {
         let mut backing = TestTurnProcessingBacking::new(4).await;
+        backing.select_primary_agent_from_specs(
+            &[vtcode_config::builtin_primary_build_agent()],
+            "build",
+        );
         backing
             .add_tool_definition(ToolDefinition::function(
                 "unified_search".to_string(),
@@ -1270,12 +1349,143 @@ mod tests {
         assert!(runtime_context.contains("## Active Primary Agent Runtime State"));
         assert!(runtime_context.contains("- Active agent: planner"));
         assert!(runtime_context.contains("- Effective request tools: unified_search"));
-        assert!(runtime_context.contains("- Agent permission mode: plan"));
+        assert!(runtime_context.contains(
+            "- Session state: planning_workflow=false, auto_permission=false, full_auto=false"
+        ));
+        assert!(runtime_context.contains("- Active primary permission default: deny"));
         assert!(runtime_context.contains("Plan carefully before editing."));
         assert_eq!(
             built.continuation_messages,
             vec![uni::Message::user("hello".to_string())]
         );
+    }
+
+    #[tokio::test]
+    async fn active_primary_agent_memory_appendix_uses_canonical_name_for_alias_selection() {
+        let mut backing = TestTurnProcessingBacking::new(4).await;
+        let workspace = backing.workspace_path().to_path_buf();
+        std::fs::create_dir_all(workspace.join(".vtcode/agent-memory/reviewer"))
+            .expect("canonical memory dir");
+        std::fs::write(
+            workspace.join(".vtcode/agent-memory/reviewer/MEMORY.md"),
+            "# Reviewer Memory\n\n- Canonical reviewer memory.\n",
+        )
+        .expect("canonical memory");
+        std::fs::create_dir_all(workspace.join(".vtcode/agent-memory/critic"))
+            .expect("alias memory dir");
+        std::fs::write(
+            workspace.join(".vtcode/agent-memory/critic/MEMORY.md"),
+            "# Critic Memory\n\n- Alias memory must not load.\n",
+        )
+        .expect("alias memory");
+
+        let mut spec = test_primary_agent_spec("reviewer", "Review carefully.");
+        spec.memory = Some(SubagentMemoryScope::Project);
+        spec.aliases = vec!["critic".to_string()];
+        backing.select_primary_agent_from_specs(&[spec], "critic");
+
+        let built = {
+            let mut ctx = backing.turn_processing_context();
+            ctx.working_history
+                .push(uni::Message::user("hello".to_string()));
+            let snapshot = capture_turn_request_snapshot(&mut ctx, "noop-model", false);
+            build_turn_request(&mut ctx, 1, "noop-model", &snapshot, Some(320), None, false)
+                .await
+                .expect("request should build")
+        };
+
+        let runtime_context = built.request.messages[1].content.as_text();
+        assert!(runtime_context.contains("### Memory Appendix"));
+        assert!(runtime_context.contains("Primary-agent memory file:"));
+        assert!(runtime_context.contains(".vtcode/agent-memory/reviewer/MEMORY.md"));
+        assert!(runtime_context.contains("Canonical reviewer memory."));
+        assert!(!runtime_context.contains("Alias memory must not load."));
+        assert!(!runtime_context.contains("Create or update `MEMORY.md`"));
+        assert!(!runtime_context.contains("Read and maintain `MEMORY.md`"));
+    }
+
+    #[tokio::test]
+    async fn active_primary_agent_missing_memory_is_noop_and_does_not_expand_tools() {
+        let mut backing = TestTurnProcessingBacking::new(4).await;
+        backing
+            .add_tool_definition(named_tool("unified_search"))
+            .await;
+        backing
+            .add_tool_definition(named_tool("unified_file"))
+            .await;
+        let workspace = backing.workspace_path().to_path_buf();
+        let memory_dir = workspace.join(".vtcode/agent-memory/planner");
+
+        let mut spec = test_primary_agent_spec("planner", "Plan carefully.");
+        spec.memory = Some(SubagentMemoryScope::Project);
+        spec.tools = Some(vec!["unified_search".to_string()]);
+        spec.disallowed_tools = Vec::new();
+        backing.select_primary_agent_from_specs(&[spec], "planner");
+
+        let built = {
+            let mut ctx = backing.turn_processing_context();
+            ctx.working_history
+                .push(uni::Message::user("hello".to_string()));
+            let snapshot = capture_turn_request_snapshot(&mut ctx, "noop-model", false);
+            build_turn_request(&mut ctx, 1, "noop-model", &snapshot, Some(320), None, false)
+                .await
+                .expect("request should build")
+        };
+
+        let runtime_context = built.request.messages[1].content.as_text();
+        assert!(!runtime_context.contains("### Memory Appendix"));
+        assert!(!runtime_context.contains("Create or update `MEMORY.md`"));
+        assert!(!memory_dir.exists());
+        assert_eq!(request_tool_names(&built.request), vec!["unified_search"]);
+    }
+
+    #[tokio::test]
+    async fn active_primary_agent_memory_appendix_is_replaced_on_switch() {
+        let mut backing = TestTurnProcessingBacking::new(4).await;
+        let workspace = backing.workspace_path().to_path_buf();
+        for (agent, memory) in [
+            ("planner", "Planner-only durable note."),
+            ("reviewer", "Reviewer-only durable note."),
+        ] {
+            let memory_dir = workspace.join(".vtcode/agent-memory").join(agent);
+            std::fs::create_dir_all(&memory_dir).expect("memory dir");
+            std::fs::write(memory_dir.join("MEMORY.md"), format!("- {memory}\n")).expect("memory");
+        }
+
+        let mut planner = test_primary_agent_spec("planner", "Planner instructions.");
+        planner.memory = Some(SubagentMemoryScope::Project);
+        let mut reviewer = test_primary_agent_spec("reviewer", "Reviewer instructions.");
+        reviewer.memory = Some(SubagentMemoryScope::Project);
+
+        backing.select_primary_agent_from_specs(std::slice::from_ref(&planner), "planner");
+        let first_built = {
+            let mut ctx = backing.turn_processing_context();
+            ctx.working_history
+                .push(uni::Message::user("hello".to_string()));
+            let snapshot = capture_turn_request_snapshot(&mut ctx, "noop-model", false);
+            build_turn_request(&mut ctx, 1, "noop-model", &snapshot, Some(320), None, false)
+                .await
+                .expect("first request should build")
+        };
+
+        backing.select_primary_agent_from_specs(std::slice::from_ref(&reviewer), "reviewer");
+        let second_built = {
+            let mut ctx = backing.turn_processing_context();
+            ctx.working_history.clear();
+            ctx.working_history
+                .push(uni::Message::user("hello".to_string()));
+            let snapshot = capture_turn_request_snapshot(&mut ctx, "noop-model", false);
+            build_turn_request(&mut ctx, 2, "noop-model", &snapshot, Some(320), None, false)
+                .await
+                .expect("second request should build")
+        };
+
+        let first_runtime = first_built.request.messages[1].content.as_text();
+        let second_runtime = second_built.request.messages[1].content.as_text();
+        assert!(first_runtime.contains("Planner-only durable note."));
+        assert!(!first_runtime.contains("Reviewer-only durable note."));
+        assert!(second_runtime.contains("Reviewer-only durable note."));
+        assert!(!second_runtime.contains("Planner-only durable note."));
     }
 
     #[tokio::test]
@@ -1351,6 +1561,10 @@ mod tests {
     #[tokio::test]
     async fn unconstrained_primary_agent_falls_back_to_baseline_tools() {
         let mut backing = TestTurnProcessingBacking::new(4).await;
+        backing.select_primary_agent_from_specs(
+            &[vtcode_config::builtin_primary_build_agent()],
+            "build",
+        );
         backing
             .add_tool_definition(named_tool("unified_search"))
             .await;
@@ -1478,6 +1692,52 @@ mod tests {
         assert!(second_runtime.contains("Reviewer instructions."));
         assert!(first_runtime.contains("Current date and time"));
         assert!(second_runtime.contains("Current date and time"));
+    }
+
+    #[tokio::test]
+    async fn active_primary_agent_skills_are_request_scoped_on_switch() {
+        let mut backing = TestTurnProcessingBacking::new(4).await;
+        let mut first = test_primary_agent_spec("planner", "Planner instructions.");
+        first.skills = vec!["alpha".to_string()];
+        let mut second = test_primary_agent_spec("reviewer", "Reviewer instructions.");
+        second.skills = vec!["beta".to_string()];
+
+        backing.select_primary_agent_from_specs(std::slice::from_ref(&first), "planner");
+        let first_built = {
+            let mut ctx = backing.turn_processing_context();
+            ctx.working_history
+                .push(uni::Message::user("hello".to_string()));
+            let snapshot = capture_turn_request_snapshot(&mut ctx, "noop-model", false);
+            build_turn_request(&mut ctx, 1, "noop-model", &snapshot, Some(320), None, false)
+                .await
+                .expect("first request should build")
+        };
+
+        backing.select_primary_agent_from_specs(std::slice::from_ref(&second), "reviewer");
+        let second_built = {
+            let mut ctx = backing.turn_processing_context();
+            ctx.working_history.clear();
+            ctx.working_history
+                .push(uni::Message::user("hello".to_string()));
+            let snapshot = capture_turn_request_snapshot(&mut ctx, "noop-model", false);
+            build_turn_request(&mut ctx, 2, "noop-model", &snapshot, Some(320), None, false)
+                .await
+                .expect("second request should build")
+        };
+
+        let first_system = first_built.request.system_prompt.as_ref().expect("system");
+        let second_system = second_built.request.system_prompt.as_ref().expect("system");
+        assert!(first_system.contains("## Active Primary Agent Skills"));
+        assert!(first_system.contains("- alpha"));
+        assert!(!first_system.contains("- beta"));
+        assert!(second_system.contains("## Active Primary Agent Skills"));
+        assert!(second_system.contains("- beta"));
+        assert!(!second_system.contains("- alpha"));
+
+        let first_runtime = first_built.request.messages[1].content.as_text();
+        let second_runtime = second_built.request.messages[1].content.as_text();
+        assert!(first_runtime.contains("- Active primary skills: alpha"));
+        assert!(second_runtime.contains("- Active primary skills: beta"));
     }
 
     #[tokio::test]
@@ -1756,7 +2016,7 @@ mod tests {
             SessionToolCatalogSnapshot::new(
                 7,
                 11,
-                turn.plan_mode,
+                turn.planning_active,
                 turn.request_user_input_enabled,
                 Some(Arc::new(Vec::new())),
                 false,

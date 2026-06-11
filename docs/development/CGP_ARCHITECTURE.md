@@ -331,8 +331,7 @@ through the same mode automatically. This closes the earlier gap where
 dynamic registrations added after startup bypassed the CGP runtime entirely.
 
 Builtin `Tool`-backed registrations such as `request_user_input`,
-`enter_plan_mode`, `exit_plan_mode`, `task_tracker`, and
-`plan_task_tracker` now attach a native CGP factory. Before CGP activation
+`start_planning`, `finish_planning`, and `task_tracker` now attach a native CGP factory. Before CGP activation
 they behave exactly like normal tool registrations; once the pipeline is
 enabled they switch to a typed CGP facade instead of `PassthroughExecutor`.
 The native factory now receives the final `ToolRegistration`, so the wrapped

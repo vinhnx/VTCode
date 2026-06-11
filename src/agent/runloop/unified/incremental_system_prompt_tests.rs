@@ -3,8 +3,8 @@ use super::*;
 fn test_context() -> SystemPromptContext {
     SystemPromptContext {
         full_auto: false,
-        auto_mode: false,
-        plan_mode: false,
+        auto_permission: false,
+        planning_active: false,
         request_user_input_enabled: true,
         discovered_skills: Vec::new(),
         active_instruction_directory: None,
@@ -117,10 +117,10 @@ async fn test_prompt_omits_runtime_context_sections() {
 }
 
 #[tokio::test]
-async fn test_plan_mode_notice_appended() {
+async fn test_planning_workflow_notice_appended() {
     let prompt_builder = IncrementalSystemPrompt::new();
     let context = SystemPromptContext {
-        plan_mode: true,
+        planning_active: true,
         ..test_context()
     };
 
@@ -134,22 +134,22 @@ async fn test_plan_mode_notice_appended() {
         )
         .await;
 
-    assert!(prompt.contains(vtcode_core::prompts::system::PLAN_MODE_READ_ONLY_HEADER));
-    assert!(prompt.contains(vtcode_core::prompts::system::PLAN_MODE_EXIT_INSTRUCTION_LINE));
-    assert!(prompt.contains(vtcode_core::prompts::system::PLAN_MODE_PLAN_QUALITY_LINE));
+    assert!(prompt.contains(vtcode_core::prompts::system::PLANNING_WORKFLOW_READ_ONLY_HEADER));
+    assert!(prompt.contains(vtcode_core::prompts::system::PLANNING_WORKFLOW_EXIT_INSTRUCTION_LINE));
+    assert!(prompt.contains(vtcode_core::prompts::system::PLANNING_WORKFLOW_PLAN_QUALITY_LINE));
     assert!(prompt.contains("<proposed_plan>"));
     assert!(prompt.contains("Next open decision"));
     assert!(!prompt.contains("Scope checkpoint"));
-    assert!(prompt.contains(vtcode_core::prompts::system::PLAN_MODE_NO_AUTO_EXIT_LINE));
-    assert!(prompt.contains(vtcode_core::prompts::system::PLAN_MODE_TASK_TRACKER_LINE));
+    assert!(prompt.contains(vtcode_core::prompts::system::PLANNING_WORKFLOW_NO_AUTO_EXIT_LINE));
+    assert!(prompt.contains(vtcode_core::prompts::system::PLANNING_WORKFLOW_TASK_TRACKER_LINE));
     assert!(!prompt.contains("[Context]"));
 }
 
 #[tokio::test]
-async fn test_plan_mode_uses_noninteractive_notice_when_request_user_input_is_disabled() {
+async fn test_planning_workflow_uses_noninteractive_notice_when_request_user_input_is_disabled() {
     let prompt_builder = IncrementalSystemPrompt::new();
     let context = SystemPromptContext {
-        plan_mode: true,
+        planning_active: true,
         request_user_input_enabled: false,
         ..test_context()
     };
@@ -164,18 +164,20 @@ async fn test_plan_mode_uses_noninteractive_notice_when_request_user_input_is_di
         )
         .await;
 
+    assert!(prompt.contains(
+        vtcode_core::prompts::system::PLANNING_WORKFLOW_NO_REQUEST_USER_INPUT_POLICY_LINE
+    ));
     assert!(
-        prompt.contains(vtcode_core::prompts::system::PLAN_MODE_NO_REQUEST_USER_INPUT_POLICY_LINE)
+        !prompt.contains(vtcode_core::prompts::system::PLANNING_WORKFLOW_INTERVIEW_POLICY_LINE)
     );
-    assert!(!prompt.contains(vtcode_core::prompts::system::PLAN_MODE_INTERVIEW_POLICY_LINE));
 }
 
 #[tokio::test]
-async fn test_full_auto_is_constrained_in_plan_mode() {
+async fn test_full_auto_is_constrained_in_planning_workflow() {
     let prompt_builder = IncrementalSystemPrompt::new();
     let context = SystemPromptContext {
         full_auto: true,
-        plan_mode: true,
+        planning_active: true,
         ..test_context()
     };
 
@@ -189,9 +191,9 @@ async fn test_full_auto_is_constrained_in_plan_mode() {
         )
         .await;
 
-    assert!(
-        prompt.contains("# FULL-AUTO (PLAN MODE): Work autonomously within Plan Mode constraints.")
-    );
+    assert!(prompt.contains(
+        "# FULL-AUTO (PLANNING WORKFLOW): Work autonomously within planning workflow constraints."
+    ));
     assert!(!prompt.contains("# FULL-AUTO: Complete task autonomously until done or blocked."));
 }
 

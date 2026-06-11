@@ -13,7 +13,7 @@ use crate::cli::auth::{
 };
 
 use super::SlashCommandOutcome;
-use super::{OAuthProviderAction, SessionModeCommand, SessionPaletteMode};
+use super::{OAuthProviderAction, SessionPaletteMode};
 
 fn parse_session_palette_args(
     args: &str,
@@ -218,7 +218,7 @@ pub(super) fn handle_plan_command(
 ) -> Result<SlashCommandOutcome> {
     let trimmed = args.trim();
     if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("toggle") {
-        return Ok(SlashCommandOutcome::TogglePlanMode {
+        return Ok(SlashCommandOutcome::TogglePlanningWorkflow {
             enable: None,
             prompt: None,
         });
@@ -229,7 +229,7 @@ pub(super) fn handle_plan_command(
     let rest = parts.next().unwrap_or("").trim();
 
     match first.to_ascii_lowercase().as_str() {
-        "on" | "enable" => Ok(SlashCommandOutcome::TogglePlanMode {
+        "on" | "enable" => Ok(SlashCommandOutcome::TogglePlanningWorkflow {
             enable: Some(true),
             prompt: if rest.is_empty() {
                 None
@@ -241,75 +241,28 @@ pub(super) fn handle_plan_command(
             if !rest.is_empty() {
                 renderer.line(
                     MessageStyle::Error,
-                    "Usage: /plan [on|off] [task] - Enable Plan Mode and optionally submit a planning prompt",
+                    "Usage: /plan [on|off] [task] - Start planning and optionally submit a planning prompt",
                 )?;
                 renderer.line(
                     MessageStyle::Info,
-                    "  /plan <task> - Enable Plan Mode and start planning",
+                    "  /plan <task> - Start the planning workflow with a task",
                 )?;
                 renderer.line(
                     MessageStyle::Info,
-                    "  /plan on <task> - Enable Plan Mode and start planning",
+                    "  /plan on <task> - Start the planning workflow with a task",
                 )?;
-                renderer.line(MessageStyle::Info, "  /plan off - Disable Plan Mode")?;
+                renderer.line(MessageStyle::Info, "  /plan off - Finish planning")?;
                 return Ok(SlashCommandOutcome::Handled);
             }
-            Ok(SlashCommandOutcome::TogglePlanMode {
+            Ok(SlashCommandOutcome::TogglePlanningWorkflow {
                 enable: Some(false),
                 prompt: None,
             })
         }
-        _ => Ok(SlashCommandOutcome::TogglePlanMode {
+        _ => Ok(SlashCommandOutcome::TogglePlanningWorkflow {
             enable: Some(true),
             prompt: Some(trimmed.to_string()),
         }),
-    }
-}
-
-pub(super) fn handle_mode_command(
-    args: &str,
-    renderer: &mut AnsiRenderer,
-) -> Result<SlashCommandOutcome> {
-    let trimmed = args.trim();
-    if trimmed.is_empty() {
-        return Ok(SlashCommandOutcome::StartModeSelection);
-    }
-
-    match trimmed.to_ascii_lowercase().as_str() {
-        "edit" => Ok(SlashCommandOutcome::SetMode {
-            mode: SessionModeCommand::Edit,
-        }),
-        "auto" | "trusted" | "trusted-auto" | "trusted_auto" => Ok(SlashCommandOutcome::SetMode {
-            mode: SessionModeCommand::Auto,
-        }),
-        "plan" => Ok(SlashCommandOutcome::SetMode {
-            mode: SessionModeCommand::Plan,
-        }),
-        "cycle" | "next" | "toggle" => Ok(SlashCommandOutcome::CycleMode),
-        _ => {
-            renderer.line(MessageStyle::Error, "Usage: /mode [edit|auto|plan|cycle]")?;
-            renderer.line(
-                MessageStyle::Info,
-                "  /mode        - Open the interactive mode picker",
-            )?;
-            renderer.line(
-                MessageStyle::Info,
-                "  /mode edit   - Standard edit mode with normal confirmations",
-            )?;
-            renderer.line(
-                MessageStyle::Info,
-                "  /mode auto   - Auto mode with classifier-backed permission checks",
-            )?;
-            renderer.line(
-                MessageStyle::Info,
-                "  /mode plan   - Read-only planning mode",
-            )?;
-            renderer.line(
-                MessageStyle::Info,
-                "  /mode cycle  - Cycle Edit -> Auto -> Plan",
-            )?;
-            Ok(SlashCommandOutcome::Handled)
-        }
     }
 }
 

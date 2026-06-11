@@ -176,13 +176,12 @@ impl TraversalFilter for ConfigTraversalFilter {
         }
 
         // Always skip known sensitive files regardless of config.
-        if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
-            if vtcode_commons::exclusions::is_sensitive_file(file_name)
+        if let Some(file_name) = path.file_name().and_then(|n| n.to_str())
+            && (vtcode_commons::exclusions::is_sensitive_file(file_name)
                 || file_name == ".gitignore"
-                || file_name == ".git"
-            {
-                return false;
-            }
+                || file_name == ".git")
+        {
+            return false;
         }
 
         true

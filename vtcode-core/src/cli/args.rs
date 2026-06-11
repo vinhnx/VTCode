@@ -221,10 +221,16 @@ pub struct Cli {
     )]
     pub print: Option<String>,
 
-    /// Enable full-auto mode (no interaction) or run a headless task
+    /// Run non-interactively with full-auto permission review
     #[arg(
         long = "full-auto",
         global = true,
+        help = "Run non-interactively with full-auto permission review",
+        long_help = r#"Run non-interactively on top of the active primary agent.
+
+If no primary agent is explicitly selected or configured, VT Code selects the effective `auto` primary agent. Explicit choices, including `duck`, are honoured. Full-auto is an execution and permission layer, not a primary agent.
+
+Full-auto does not override explicit denies or grant tools outside `[automation.full_auto].allowed_tools`. Tools outside that allow-list are denied. Promptable actions inside the allow-list are routed through automatic permission review after deny and policy checks instead of asking. The run fails fast if it needs the defaulted `auto` primary agent and no effective `auto` exists."#,
         value_name = "PROMPT",
         num_args = 0..=1,
         default_missing_value = "",
@@ -286,17 +292,18 @@ pub struct Cli {
     #[arg(long = "disallowed-tools", global = true, value_name = "TOOLS", action = ArgAction::Append)]
     pub disallowed_tools: Vec<String>,
 
-    /// Skip all permission prompts (reduces security - use with caution)
-    #[arg(long = "dangerously-skip-permissions", global = true)]
+    /// Auto-approve promptable actions while respecting denies and policy blocks
+    #[arg(
+        long = "dangerously-skip-permissions",
+        global = true,
+        help = "Auto-approve promptable actions while respecting denies and policy blocks",
+        long_help = "Auto-approve promptable actions while still respecting explicit denies and policy blocks."
+    )]
     pub dangerously_skip_permissions: bool,
 
     /// Explicitly connect to IDE on startup (auto-detects available IDEs)
     #[arg(long, global = true)]
     pub ide: bool,
-
-    /// Begin in a specified permission mode (default, accept_edits, auto, dont_ask, bypass_permissions, plus legacy ask/suggest/auto-approved/full-auto/trusted_auto/plan)
-    #[arg(long, global = true, value_name = "MODE")]
-    pub permission_mode: Option<String>,
 
     #[command(subcommand)]
     pub command: Option<Commands>,
@@ -540,7 +547,7 @@ pub enum Commands {
             long_help = "Stream newline-delimited JSON events to stdout.\nEach line is a JSON object representing an agent event (tool call, message, etc.).\nUseful for programmatic consumption and CI integration."
         )]
         json: bool,
-        /// Run in read-only dry-run mode (blocks mutating tool calls)
+        /// Run a read-only dry-run execution (blocks mutating tool calls)
         #[arg(
             long,
             long_help = "Simulate execution without making changes.\nThe agent plans tool calls but does not execute mutating operations (file writes, shell commands).\nUseful for previewing what the agent would do."
@@ -1287,7 +1294,7 @@ mod exec_command_tests {
         CheckSubcommand, Cli, Commands, DependenciesSubcommand, ExecSubcommand, ManagedDependency,
         PodsCommands,
     };
-    use clap::Parser;
+    use clap::{CommandFactory, Parser};
     use std::path::PathBuf;
 
     #[test]
@@ -1653,7 +1660,6 @@ impl Default for Cli {
             disallowed_tools: Vec::new(),        // No tool restrictions by default
             dangerously_skip_permissions: false, // Safety confirmations enabled by default
             ide: false,                          // No auto IDE connection by default
-            permission_mode: None,               // Use config permission mode by default
             chrome: false,                       // Chrome integration disabled by default
             no_chrome: false,                    // Chrome integration not explicitly disabled
             command: Some(Commands::Chat),

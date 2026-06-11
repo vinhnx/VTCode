@@ -277,7 +277,6 @@ pub(crate) async fn build_inline_header_context(
     provider_label: String,
     model_label: String,
     context_window_size: usize,
-    mode_label: String,
     reasoning_label: String,
 ) -> Result<InlineHeaderContext> {
     let InlineStatusDetails {
@@ -317,13 +316,6 @@ pub(crate) async fn build_inline_header_context(
     } else {
         format!("{}{}", ui::HEADER_MODEL_PREFIX, model_label.trim())
     };
-    let trimmed_mode = mode_label.trim();
-    let mode = if trimmed_mode.is_empty() {
-        ui::HEADER_MODE_INLINE.to_string()
-    } else {
-        trimmed_mode.to_string()
-    };
-
     let reasoning = if reasoning_label.trim().is_empty() {
         format!(
             "{}{}",
@@ -413,7 +405,6 @@ pub(crate) async fn build_inline_header_context(
         pr_review: None,
         editor_context: None,
         git: chain_entries.get(1).cloned().unwrap_or_default(),
-        mode,
         reasoning,
         workspace_trust: trust_value,
         tools: chain_entries.first().cloned().unwrap_or_default(),
@@ -421,8 +412,6 @@ pub(crate) async fn build_inline_header_context(
         primary_agent: None,
         highlights, // Use the modified highlights that may include the home directory warning
         subagent_badges: Vec::new(),
-        editing_mode: vtcode_ui::tui::app::EditingMode::default(),
-        autonomous_mode: false,
         reasoning_stage: None,
     };
     Ok(context)

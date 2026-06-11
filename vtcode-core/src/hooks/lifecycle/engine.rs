@@ -10,7 +10,7 @@ use tokio::process::Command;
 use tokio::sync::Mutex;
 use tokio::time;
 
-use crate::config::{HookCommandConfig, HooksConfig, PermissionMode};
+use crate::config::{HookCommandConfig, HooksConfig};
 use crate::exec::events::{CompactionMode, CompactionTrigger};
 use crate::permissions::PermissionRequest;
 
@@ -41,13 +41,7 @@ impl LifecycleHookEngine {
         config: &HooksConfig,
         trigger: SessionStartTrigger,
     ) -> Result<Option<Self>> {
-        Self::new_with_session(
-            workspace,
-            config,
-            trigger,
-            generate_session_id(),
-            PermissionMode::Default,
-        )
+        Self::new_with_session(workspace, config, trigger, generate_session_id())
     }
 
     pub fn new_with_session(
@@ -55,7 +49,6 @@ impl LifecycleHookEngine {
         config: &HooksConfig,
         trigger: SessionStartTrigger,
         session_id: impl Into<String>,
-        permission_mode: PermissionMode,
     ) -> Result<Option<Self>> {
         if config.lifecycle.is_empty() {
             return Ok(None);
@@ -70,7 +63,6 @@ impl LifecycleHookEngine {
             inner: Arc::new(LifecycleHookInner {
                 workspace,
                 session_id: session_id.into(),
-                permission_mode: tokio::sync::RwLock::new(permission_mode),
                 trigger,
                 hooks: compiled,
                 state: Mutex::new(LifecycleHookState {
@@ -609,9 +601,9 @@ impl LifecycleHookEngine {
         state.transcript_path = path;
     }
 
-    pub async fn update_permission_mode(&self, permission_mode: PermissionMode) {
-        let mut current = self.inner.permission_mode.write().await;
-        *current = permission_mode;
+    pub async fn transcript_path(&self) -> Option<PathBuf> {
+        let state = self.inner.state.lock().await;
+        state.transcript_path.clone()
     }
 
     async fn execute_command(
@@ -724,7 +716,6 @@ impl LifecycleHookEngine {
 struct LifecycleHookInner {
     workspace: PathBuf,
     session_id: String,
-    permission_mode: tokio::sync::RwLock<PermissionMode>,
     trigger: SessionStartTrigger,
     hooks: CompiledLifecycleHooks,
     state: Mutex<LifecycleHookState>,

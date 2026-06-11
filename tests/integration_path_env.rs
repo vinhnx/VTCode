@@ -39,12 +39,12 @@ mod path_environment_tests {
                 Ok(out) => {
                     // If the command exists in PATH, that's good
                     if out.status.success() {
-                        println!("✓ {} found in PATH", cmd);
+                        println!("✓ {cmd} found in PATH");
                     }
                 }
                 Err(_) => {
                     // which command itself might not be available on all systems
-                    println!("[WARN] Could not check for {}", cmd);
+                    println!("[WARN] Could not check for {cmd}");
                 }
             }
         }
@@ -65,14 +65,14 @@ mod path_environment_tests {
             match Command::new(tool).arg(flag).output() {
                 Ok(output) => {
                     if output.status.success() {
-                        println!("✓ {} is available", tool);
+                        println!("✓ {tool} is available");
                     } else {
-                        println!("[WARN] {} exists but returned error", tool);
+                        println!("[WARN] {tool} exists but returned error");
                     }
                 }
                 Err(_) => {
                     // Tool not installed - that's expected on some systems
-                    println!("[INFO] {} not installed (this is OK)", tool);
+                    println!("[INFO] {tool} not installed (this is OK)");
                 }
             }
         }
@@ -96,9 +96,9 @@ mod path_environment_tests {
 
         for local_path in user_paths {
             if let Some(ref home_dir) = home {
-                let full_path = format!("{}/{}", home_dir, local_path);
+                let full_path = format!("{home_dir}/{local_path}");
                 if path.contains(&full_path) {
-                    println!("✓ User path found in PATH: {}", full_path);
+                    println!("✓ User path found in PATH: {full_path}");
                 }
             }
         }
@@ -128,7 +128,7 @@ mod path_environment_tests {
         println!("✓ SHELL={:?}", shell.ok());
         if let Ok(p) = path {
             let path_entries: Vec<&str> = p.split(':').take(3).collect();
-            println!("✓ PATH (first 3): {:?}", path_entries);
+            println!("✓ PATH (first 3): {path_entries:?}");
         }
     }
 
@@ -151,7 +151,7 @@ mod path_environment_tests {
                 }
             }
             Err(e) => {
-                println!("[WARN] cargo not found in PATH: {}", e);
+                println!("[WARN] cargo not found in PATH: {e}");
                 println!("  This is expected if Rust is not installed");
             }
         }
@@ -172,7 +172,7 @@ mod path_environment_tests {
 
         println!("✓ PATH has {} entries", path_entries.len());
         for (i, entry) in path_entries.iter().enumerate().take(5) {
-            println!("  [{}] {}", i, entry);
+            println!("  [{i}] {entry}");
         }
     }
 }
@@ -212,7 +212,7 @@ mod path_documentation_tests {
 
         println!("✓ These commands are now accessible via PATH inheritance:");
         for (cmd, desc) in examples {
-            println!("  - {} ({})", cmd, desc);
+            println!("  - {cmd} ({desc})");
         }
     }
 
@@ -241,7 +241,7 @@ mod regression_tests {
 
         println!("✓ Dangerous commands are still blocked by policy:");
         for (cmd, reason) in dangerous_commands {
-            println!("  - {} blocked ({})", cmd, reason);
+            println!("  - {cmd} blocked ({reason})");
         }
     }
 
@@ -259,7 +259,7 @@ mod regression_tests {
 
         println!("✓ Environment overrides are still applied:");
         for (var, val) in overrides {
-            println!("  - {} = {} (override for consistency)", var, val);
+            println!("  - {var} = {val} (override for consistency)");
         }
     }
 }

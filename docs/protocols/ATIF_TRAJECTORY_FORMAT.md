@@ -81,7 +81,7 @@ VT Code converts its internal `ThreadEvent` stream to ATIF steps:
 | VT Code Event | ATIF Source | Notes |
 |--------------|-------------|-------|
 | `AgentMessage` | `agent` | Agent text response |
-| `Plan` | `agent` | Plan mode content |
+| `Plan` | `agent` | Planning workflow content |
 | `Reasoning` | `agent` | Model reasoning/thinking |
 | `ToolInvocation` + `ToolOutput` | `agent` | Paired into single step with tool_calls + observation |
 | `CommandExecution` | `agent` | Shell command with output |

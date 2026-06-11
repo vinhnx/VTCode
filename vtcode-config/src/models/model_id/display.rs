@@ -131,7 +131,12 @@ impl ModelId {
             ModelId::OpenCodeGoMinimaxM25 => "MiniMax-M2.5 (OpenCode Go)",
             ModelId::OpenCodeGoMinimaxM27 => "MiniMax-M2.7 (OpenCode Go)",
             // OpenRouter models
-            _ => unreachable!(),
+            model => {
+                model
+                    .openrouter_metadata()
+                    .expect("generated OpenRouter model should have metadata")
+                    .display
+            }
         }
     }
 }

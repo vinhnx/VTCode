@@ -228,7 +228,7 @@ Once Alt keys are working, these shortcuts should be available:
 | Shortcut | Action |
 |----------|--------|
 | Alt+h | Help/hint (context-dependent) |
-| Alt+a | Alternative action/mode |
+| Alt+a | Alternative action |
 | Alt+j | Jump/navigation down |
 | Alt+k | Jump/navigation up |
 | Alt+↑ | Scroll up (if applicable) |

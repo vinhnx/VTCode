@@ -267,7 +267,7 @@ impl AgentRunner {
     ) -> bool {
         full_auto_active
             && !review_like
-            && !self.tool_registry.is_plan_mode()
+            && !self.tool_registry.is_planning_active()
             && matches!(
                 self.config().agent.harness.orchestration_mode,
                 vtcode_config::core::agent::HarnessOrchestrationMode::PlanBuildEvaluate
@@ -307,7 +307,7 @@ impl AgentRunner {
             .unwrap_or_else(|| task.title.clone());
         let tracker_tool = TaskTrackerTool::new(
             self._workspace.clone(),
-            self.tool_registry.plan_mode_state(),
+            self.tool_registry.planning_workflow_state(),
         );
         tracker_tool
             .execute(json!({

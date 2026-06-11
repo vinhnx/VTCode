@@ -72,7 +72,11 @@ impl FeatureSet {
         }
     }
 
-    pub fn request_user_input_enabled(&self, _plan_mode: bool, interactive_session: bool) -> bool {
+    pub fn request_user_input_enabled(
+        &self,
+        _planning_active: bool,
+        interactive_session: bool,
+    ) -> bool {
         interactive_session && self.request_user_input.enabled
     }
 
@@ -82,12 +86,12 @@ impl FeatureSet {
 
     pub fn tool_enabled_for_mode(
         tool_name: &str,
-        plan_mode: bool,
+        planning_active: bool,
         request_user_input_enabled: bool,
     ) -> bool {
         match tool_name {
             tools::REQUEST_USER_INPUT => request_user_input_enabled,
-            _ if !plan_mode => true,
+            _ if !planning_active => true,
             _ => builtin_tool_behavior(tool_name)
                 .map(|behavior| !matches!(behavior.mutation_model, ToolMutationModel::Mutating))
                 .unwrap_or(true),
@@ -97,13 +101,13 @@ impl FeatureSet {
     pub fn allows_tool_name(
         &self,
         tool_name: &str,
-        plan_mode: bool,
+        planning_active: bool,
         interactive_session: bool,
     ) -> bool {
         Self::tool_enabled_for_mode(
             tool_name,
-            plan_mode,
-            self.request_user_input_enabled(plan_mode, interactive_session),
+            planning_active,
+            self.request_user_input_enabled(planning_active, interactive_session),
         )
     }
 }
@@ -125,12 +129,12 @@ mod tests {
         assert!(features.allows_tool_name(tools::REQUEST_USER_INPUT, false, true));
         assert!(features.allows_tool_name(tools::REQUEST_USER_INPUT, true, true));
         assert!(!features.allows_tool_name(tools::REQUEST_USER_INPUT, true, false));
-        assert!(features.allows_tool_name(tools::PLAN_TASK_TRACKER, true, false));
-        assert!(features.allows_tool_name(tools::PLAN_TASK_TRACKER, false, true));
+        assert!(features.allows_tool_name(tools::TASK_TRACKER, true, false));
+        assert!(features.allows_tool_name(tools::TASK_TRACKER, false, true));
     }
 
     #[test]
-    fn request_user_input_honors_chat_setting_outside_plan_mode() {
+    fn request_user_input_honors_chat_setting_outside_planning_workflow() {
         let mut cfg = VTCodeConfig::default();
         cfg.chat.ask_questions.enabled = false;
 
@@ -141,7 +145,7 @@ mod tests {
     }
 
     #[test]
-    fn plan_mode_hides_mutating_only_tools_but_keeps_conditional_tools() {
+    fn planning_workflow_hides_mutating_only_tools_but_keeps_conditional_tools() {
         let cfg = VTCodeConfig::default();
         let features = FeatureSet::from_config(Some(&cfg));
 

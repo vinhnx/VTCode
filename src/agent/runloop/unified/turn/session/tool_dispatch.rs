@@ -104,12 +104,12 @@ pub(crate) async fn execute_direct_tool_call(
         ctx.interaction_ctx.harness_config.max_tool_retries,
     );
 
-    let mut auto_exit_plan_mode_attempted = false;
+    let mut auto_finish_planning_attempted = false;
 
     // Construct TurnProcessingContext to leverage unified execution handlers
     let mut tp_ctx = ctx.interaction_ctx.as_turn_processing_context(
         &mut harness_state,
-        &mut auto_exit_plan_mode_attempted,
+        &mut auto_finish_planning_attempted,
         ctx.input_status_state,
         direct_tool_skips_confirmations(tool_name),
     );
@@ -657,6 +657,7 @@ mod tests {
     use tempfile::TempDir;
     use vtcode_config::SubagentSource;
     use vtcode_config::SubagentSpec;
+    use vtcode_config::core::permissions::{AgentPermissionsConfig, PermissionDefault};
     use vtcode_core::config::constants::tools;
     use vtcode_core::llm::provider as uni;
 
@@ -670,7 +671,7 @@ mod tests {
             model: None,
             color: None,
             reasoning_effort: None,
-            permission_mode: None,
+            permissions: AgentPermissionsConfig::new(PermissionDefault::Ask),
             skills: Vec::new(),
             mcp_servers: Vec::new(),
             hooks: None,

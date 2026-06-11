@@ -8,7 +8,7 @@ use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::flow::{
     handle_auth_command, handle_fork_command, handle_login_command, handle_logout_command,
-    handle_mode_command, handle_plan_command, handle_resume_command, handle_rewind_command,
+    handle_plan_command, handle_resume_command, handle_rewind_command,
 };
 use super::management::{
     handle_local_command, handle_loop_command, handle_mcp_command, handle_schedule_command,
@@ -339,7 +339,6 @@ pub(in crate::agent::runloop::slash_commands) async fn execute_built_in_command_
             }
         },
         "plan" => handle_plan_command(args, renderer),
-        "mode" => handle_mode_command(args, renderer),
         "login" => handle_login_command(args, renderer),
         "logout" => handle_logout_command(args, renderer),
         "refresh-oauth" => super::flow::handle_refresh_oauth_command(args, renderer),

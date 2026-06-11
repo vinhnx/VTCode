@@ -135,7 +135,7 @@ pub fn unified_exec_parameters() -> Value {
             "sandbox_permissions": {
                 "type": "string",
                 "enum": ["use_default", "with_additional_permissions", "require_escalated"],
-                "description": "Sandbox mode. Use `require_escalated` only when needed."
+                "description": "Sandbox policy. Use `require_escalated` only when needed."
             },
             "additional_permissions": {
                 "type": "object",

@@ -26,6 +26,7 @@ use crate::llm::AnyClient;
 use crate::llm::client::ProviderClientAdapter;
 use crate::llm::factory::{ProviderConfig, create_provider_with_config, infer_provider_from_model};
 use crate::llm::provider as uni_provider;
+use crate::primary_agent::ActivePrimaryAgent;
 use crate::prompts::PromptContext;
 use crate::tools::ToolRegistry;
 
@@ -109,6 +110,8 @@ pub struct AgentRunner {
     tool_definitions_override: RwLock<Option<Vec<uni_provider::ToolDefinition>>>,
     /// Optional argument transformer applied before tool validation/execution.
     tool_arg_transform: Option<ToolArgTransform>,
+    /// Active primary-agent policy to intersect with runner tools.
+    active_primary_agent: Option<ActivePrimaryAgent>,
 }
 
 impl AgentRunner {
@@ -299,7 +302,7 @@ impl AgentRunner {
                 surface: crate::tools::handlers::SessionSurface::AgentRunner,
                 capability_level: crate::config::types::CapabilityLevel::CodeSearch,
                 documentation_mode: session_config.effective().agent.tool_documentation_mode,
-                plan_mode: tool_registry.is_plan_mode(),
+                planning_active: tool_registry.is_planning_active(),
                 request_user_input_enabled: false,
                 model_capabilities: crate::tools::handlers::ToolModelCapabilities::for_model_name(
                     model.as_str(),
@@ -365,6 +368,7 @@ impl AgentRunner {
             steering_receiver: Mutex::new(steering_receiver),
             tool_definitions_override: RwLock::new(None),
             tool_arg_transform: None,
+            active_primary_agent: None,
         })
     }
 
@@ -383,13 +387,13 @@ impl AgentRunner {
         self.thread_handle.clone()
     }
 
-    /// Enable read-only plan mode for the underlying tool registry.
-    pub fn enable_plan_mode(&self) {
-        self.tool_registry.enable_plan_mode();
+    /// Enable read-only planning workflow for the underlying tool registry.
+    pub fn enable_planning(&self) {
+        self.tool_registry.enable_planning();
     }
 
-    pub fn disable_plan_mode(&self) {
-        self.tool_registry.disable_plan_mode();
+    pub fn disable_planning(&self) {
+        self.tool_registry.disable_planning();
     }
 
     /// Attach a callback that will be invoked for each structured event as it is recorded.
@@ -434,10 +438,15 @@ impl AgentRunner {
         self.tool_arg_transform = None;
     }
 
+    /// Apply active primary-agent tool and permission policy to this runner.
+    pub fn set_active_primary_agent(&mut self, active_primary_agent: ActivePrimaryAgent) {
+        self.active_primary_agent = Some(active_primary_agent);
+    }
+
     /// Enable full-auto execution with the provided allow-list.
     pub async fn enable_full_auto(&mut self, allowed_tools: &[String]) {
         self.tool_registry
-            .enable_full_auto_mode(allowed_tools)
+            .enable_full_auto_permission(allowed_tools)
             .await;
     }
 
@@ -461,9 +470,8 @@ impl AgentRunner {
                     canonical,
                     tools::REQUEST_USER_INPUT
                         | tools::TASK_TRACKER
-                        | tools::PLAN_TASK_TRACKER
-                        | tools::ENTER_PLAN_MODE
-                        | tools::EXIT_PLAN_MODE
+                        | tools::START_PLANNING
+                        | tools::FINISH_PLANNING
                 ) && (canonical == tools::UNIFIED_FILE
                     || !self.tool_registry.is_mutating_tool(tool_name))
             })

@@ -6,7 +6,7 @@ use vtcode_config::{read_workspace_env_value, resolve_openai_auth, write_workspa
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::models::Provider;
-use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, UiSurfacePreference};
+use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::copilot::{CopilotAuthStatusKind, probe_auth_status};
 use vtcode_core::llm::factory::{ProviderConfig, create_provider_with_config};
 use vtcode_core::llm::provider::LLMProvider;
@@ -43,7 +43,7 @@ pub(crate) async fn finalize_model_selection(
     session_bootstrap: &SessionBootstrap,
     handle: &InlineHandle,
     header_context: &mut InlineHeaderContext,
-    full_auto: bool,
+    _full_auto: bool,
     conversation_history_len: usize,
 ) -> Result<()> {
     let workspace = config.workspace.clone();
@@ -120,13 +120,6 @@ pub(crate) async fn finalize_model_selection(
     }
 
     let reasoning_label = selection.reasoning.as_str().to_string();
-    let mode_label = match (config.ui_surface, full_auto) {
-        (UiSurfacePreference::Inline, true) => "auto".to_string(),
-        (UiSurfacePreference::Inline, false) => "inline".to_string(),
-        (UiSurfacePreference::Alternate, _) => "alt".to_string(),
-        (UiSurfacePreference::Auto, true) => "auto".to_string(),
-        (UiSurfacePreference::Auto, false) => "std".to_string(),
-    };
     let next_header_context = build_inline_header_context(
         config,
         vt_cfg.as_ref(),
@@ -134,7 +127,6 @@ pub(crate) async fn finalize_model_selection(
         runtime_provider_label(&selection, using_chatgpt_auth),
         selection.model.clone(),
         provider_client.effective_context_size(&selection.model),
-        mode_label,
         reasoning_label.clone(),
     )
     .await?;

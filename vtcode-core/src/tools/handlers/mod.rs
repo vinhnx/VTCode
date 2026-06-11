@@ -59,8 +59,8 @@ pub mod turn_diff_tracker;
 
 // Handler implementations
 pub mod list_dir_handler;
-pub mod plan_mode;
-pub mod plan_task_tracker;
+pub mod planning_task_tracker;
+pub mod planning_workflow;
 pub mod read_file;
 pub mod session_tool_catalog;
 pub mod shell_handler;
@@ -94,7 +94,7 @@ pub use list_dir_handler::{DirEntry, ListDirArgs, ListDirHandler, create_list_di
 pub use sandboxing::{
     Approvable, ApprovalCtx, ApprovalStore, AskForApproval, BoxFuture, CommandSpec,
     ExecApprovalRequirement, ExecEnv, ExecPolicyAmendment, ExecToolCallOutput, NetworkAccess,
-    RejectConfig, ReviewDecision, SandboxAttempt, SandboxManager, SandboxMode, SandboxOverride,
+    RejectConfig, ReviewDecision, SandboxAttempt, SandboxConfig, SandboxManager, SandboxOverride,
     SandboxPolicy, SandboxTransformError, SandboxType, Sandboxable, SandboxablePreference, ToolCtx,
     ToolError, ToolRuntime, default_exec_approval_requirement, execute_env, with_cached_approval,
 };
@@ -117,11 +117,11 @@ pub use session_tool_catalog::{
 };
 pub use shell_handler::{ShellHandler, create_shell_tool};
 
-// Plan mode tools
-pub use plan_mode::{EnterPlanModeTool, ExitPlanModeTool, PlanModeState};
+// Planning workflow tools
+pub use planning_workflow::{FinishPlanningTool, PlanningWorkflowState, StartPlanningTool};
 
 // Task tracker (NL2Repo-Bench)
-pub use plan_task_tracker::PlanTaskTrackerTool;
+pub use planning_task_tracker::PlanningTaskTrackerTool;
 pub use task_tracker::TaskTrackerTool;
 
 // Core tool handler types

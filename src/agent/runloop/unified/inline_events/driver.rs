@@ -17,7 +17,9 @@ use crate::agent::runloop::unified::state::CtrlCState;
 use crate::agent::runloop::welcome::SessionBootstrap;
 use crate::updater::{StartupUpdateNotice, display_update_notice};
 
-use super::{InlineEventContext, InlineInterruptCoordinator, InlineLoopAction, InlineQueueState};
+use super::{
+    InlineEventContext, InlineInterruptCoordinator, InlineLoopAction, InlineQueueState, QueuedInput,
+};
 
 struct InlineEventLoop<'a> {
     renderer: &'a mut AnsiRenderer,
@@ -196,10 +198,10 @@ impl<'a> InlineEventLoop<'a> {
 
     fn take_queued_submission(&mut self) -> Option<InlineLoopAction> {
         self.queue.take_next_submission().map(|queued| {
-            if queued.is_empty() {
+            if queued.text.is_empty() {
                 InlineLoopAction::Continue
             } else {
-                InlineLoopAction::Submit(queued)
+                InlineLoopAction::SubmitQueued(queued)
             }
         })
     }
@@ -209,7 +211,9 @@ impl<'a> InlineEventLoop<'a> {
             InlineLoopAction::Exit(reason) => Some(InlineLoopAction::Exit(reason)),
             InlineLoopAction::Continue => None,
             InlineLoopAction::Submit(_) => None,
+            InlineLoopAction::SubmitQueued(_) => None,
             InlineLoopAction::CyclePrimaryAgent => None,
+            InlineLoopAction::CyclePrimaryAgentPrevious => None,
             InlineLoopAction::SelectPrimaryAgent { .. } => None,
             InlineLoopAction::RequestInlinePromptSuggestion(_) => None,
             InlineLoopAction::OpenTranscriptReviewInEditor(_) => None,
@@ -231,7 +235,7 @@ pub(crate) struct InlineEventLoopResources<'a> {
     pub interrupts: InlineInterruptCoordinator<'a>,
     pub ctrl_c_notice_displayed: &'a mut bool,
     pub default_placeholder: &'a Option<String>,
-    pub queued_inputs: &'a mut VecDeque<String>,
+    pub queued_inputs: &'a mut VecDeque<QueuedInput>,
     pub prefer_latest_queued_input_once: &'a mut bool,
     pub model_picker_state: &'a mut Option<ModelPickerState>,
     pub palette_state: &'a mut Option<ActivePalette>,

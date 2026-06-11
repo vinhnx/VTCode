@@ -283,6 +283,7 @@ fn item_prompt_segment(item: &SubagentInputItem) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
+    use vtcode_config::core::permissions::{AgentPermissionsConfig, PermissionDefault};
     use vtcode_config::{AgentMode, SubagentSource, SubagentSpec};
 
     use super::extract_explicit_agent_mentions;
@@ -297,7 +298,7 @@ mod tests {
             model: None,
             color: None,
             reasoning_effort: None,
-            permission_mode: None,
+            permissions: AgentPermissionsConfig::new(PermissionDefault::Ask),
             skills: Vec::new(),
             mcp_servers: Vec::new(),
             hooks: None,

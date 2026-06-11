@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use serde_json::json;
 use tokio::sync::Notify;
+use vtcode_config::core::permissions::{AgentPermissionsConfig, PermissionDefault};
 use vtcode_core::acp::PermissionGrant;
 use vtcode_core::acp::permission_cache::ToolPermissionCache;
 use vtcode_core::config::constants::tools;
@@ -26,6 +27,8 @@ async fn test_run_tool_call_unknown_tool_failure() {
     let result_cache = Arc::new(tokio::sync::RwLock::new(ToolResultCache::new(10)));
     let decision_ledger = Arc::new(tokio::sync::RwLock::new(DecisionTracker::new()));
     let mut session_stats = crate::agent::runloop::unified::state::SessionStats::default();
+    let mut plan_session =
+        crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState::default();
     let mut mcp_panel = crate::agent::runloop::mcp_events::McpPanelState::new(10, true);
     let approval_recorder = test_ctx.approval_recorder;
     let traj = TrajectoryLogger::new(&test_ctx.workspace);
@@ -42,6 +45,7 @@ async fn test_run_tool_call_unknown_tool_failure() {
         &test_ctx.permissions_state,
         &decision_ledger,
         &mut session_stats,
+        &mut plan_session,
         &mut mcp_panel,
         &approval_recorder,
         &mut test_ctx.session,
@@ -90,6 +94,8 @@ async fn test_run_tool_call_respects_max_tool_calls_budget() {
     let result_cache = Arc::new(tokio::sync::RwLock::new(ToolResultCache::new(10)));
     let decision_ledger = Arc::new(tokio::sync::RwLock::new(DecisionTracker::new()));
     let mut session_stats = crate::agent::runloop::unified::state::SessionStats::default();
+    let mut plan_session =
+        crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState::default();
     let mut mcp_panel = crate::agent::runloop::mcp_events::McpPanelState::new(10, true);
     let approval_recorder = test_ctx.approval_recorder;
     let traj = TrajectoryLogger::new(&test_ctx.workspace);
@@ -107,6 +113,7 @@ async fn test_run_tool_call_respects_max_tool_calls_budget() {
         &test_ctx.permissions_state,
         &decision_ledger,
         &mut session_stats,
+        &mut plan_session,
         &mut mcp_panel,
         &approval_recorder,
         &mut test_ctx.session,
@@ -163,6 +170,8 @@ async fn test_run_tool_call_allows_unlimited_budget_when_disabled() {
     let result_cache = Arc::new(tokio::sync::RwLock::new(ToolResultCache::new(10)));
     let decision_ledger = Arc::new(tokio::sync::RwLock::new(DecisionTracker::new()));
     let mut session_stats = crate::agent::runloop::unified::state::SessionStats::default();
+    let mut plan_session =
+        crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState::default();
     let mut mcp_panel = crate::agent::runloop::mcp_events::McpPanelState::new(10, true);
     let approval_recorder = test_ctx.approval_recorder;
     let traj = TrajectoryLogger::new(&test_ctx.workspace);
@@ -182,6 +191,7 @@ async fn test_run_tool_call_allows_unlimited_budget_when_disabled() {
         &test_ctx.permissions_state,
         &decision_ledger,
         &mut session_stats,
+        &mut plan_session,
         &mut mcp_panel,
         &approval_recorder,
         &mut test_ctx.session,
@@ -224,7 +234,85 @@ async fn test_run_tool_call_allows_unlimited_budget_when_disabled() {
 }
 
 #[tokio::test]
-async fn test_run_tool_call_prevalidated_blocks_mutation_in_plan_mode() {
+async fn test_run_tool_call_forwards_runtime_agent_permissions_to_routing() {
+    let mut test_ctx = TestContext::new().await;
+    let mut registry = test_ctx.registry;
+
+    let permission_cache_arc = Arc::new(tokio::sync::RwLock::new(ToolPermissionCache::new()));
+    let result_cache = Arc::new(tokio::sync::RwLock::new(ToolResultCache::new(10)));
+    let decision_ledger = Arc::new(tokio::sync::RwLock::new(DecisionTracker::new()));
+    let mut session_stats = crate::agent::runloop::unified::state::SessionStats::default();
+    let mut plan_session =
+        crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState::default();
+    let mut mcp_panel = crate::agent::runloop::mcp_events::McpPanelState::new(10, true);
+    let approval_recorder = test_ctx.approval_recorder;
+    let traj = TrajectoryLogger::new(&test_ctx.workspace);
+    let tools = Arc::new(tokio::sync::RwLock::new(Vec::new()));
+    let agent_permissions = AgentPermissionsConfig::new(PermissionDefault::Deny);
+
+    let mut harness_state = build_harness_state();
+    let mut ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext::new(
+        &mut test_ctx.renderer,
+        &test_ctx.handle,
+        &mut registry,
+        &tools,
+        &result_cache,
+        &permission_cache_arc,
+        &test_ctx.permissions_state,
+        &decision_ledger,
+        &mut session_stats,
+        &mut plan_session,
+        &mut mcp_panel,
+        &approval_recorder,
+        &mut test_ctx.session,
+        None,
+        &traj,
+        &mut harness_state,
+        None,
+    );
+    let mut vt_cfg = VTCodeConfig::default();
+    vt_cfg.runtime_agent_permissions = Some(agent_permissions);
+
+    let args = serde_json::to_string(&json!({
+        "action": "write",
+        "path": "notes.md",
+        "content": "hello"
+    }))
+    .expect("serialize unified_file args");
+    let call = vtcode_core::llm::provider::ToolCall::function(
+        "call_active_agent_deny".to_string(),
+        tools::UNIFIED_FILE.to_string(),
+        args,
+    );
+    let ctrl_c_state = Arc::new(CtrlCState::new());
+    let ctrl_c_notify = Arc::new(Notify::new());
+
+    let outcome = run_tool_call(
+        &mut ctx,
+        &call,
+        &ctrl_c_state,
+        &ctrl_c_notify,
+        None,
+        None,
+        true,
+        Some(&vt_cfg),
+        0,
+        false,
+    )
+    .await
+    .expect("run_tool_call must run");
+
+    match outcome.status {
+        ToolExecutionStatus::Failure { error } => {
+            assert!(error.to_string().contains("Tool permission denied"));
+        }
+        other => panic!("Expected permission denial, got: {:?}", other),
+    }
+    assert!(!test_ctx.workspace.join("notes.md").exists());
+}
+
+#[tokio::test]
+async fn test_run_tool_call_prevalidated_blocks_mutation_in_planning_workflow() {
     let mut test_ctx = TestContext::new().await;
     let mut registry = test_ctx.registry;
 
@@ -237,14 +325,16 @@ async fn test_run_tool_call_prevalidated_blocks_mutation_in_plan_mode() {
     let result_cache = Arc::new(tokio::sync::RwLock::new(ToolResultCache::new(10)));
     let decision_ledger = Arc::new(tokio::sync::RwLock::new(DecisionTracker::new()));
     let mut session_stats = crate::agent::runloop::unified::state::SessionStats::default();
+    let mut plan_session =
+        crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState::default();
     let mut mcp_panel = crate::agent::runloop::mcp_events::McpPanelState::new(10, true);
     let approval_recorder = test_ctx.approval_recorder;
     let traj = TrajectoryLogger::new(&test_ctx.workspace);
     let tool_defs = Arc::new(tokio::sync::RwLock::new(Vec::new()));
 
-    registry.enable_plan_mode();
-    registry.plan_mode_state().enable();
-    session_stats.set_plan_mode(true);
+    registry.enable_planning();
+    registry.planning_workflow_state().enable();
+    plan_session.enter(vtcode_core::core::interfaces::session::PlanningEntrySource::UserRequest);
 
     let mut harness_state = build_harness_state();
     let mut ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext::new(
@@ -257,6 +347,7 @@ async fn test_run_tool_call_prevalidated_blocks_mutation_in_plan_mode() {
         &test_ctx.permissions_state,
         &decision_ledger,
         &mut session_stats,
+        &mut plan_session,
         &mut mcp_panel,
         &approval_recorder,
         &mut test_ctx.session,
@@ -268,7 +359,7 @@ async fn test_run_tool_call_prevalidated_blocks_mutation_in_plan_mode() {
 
     let payload = serde_json::to_string(&json!({
         "path": "notes.txt",
-        "content": "hello plan mode"
+        "content": "hello planning workflow"
     }))
     .expect("serialize tool args");
     let call = vtcode_core::llm::provider::ToolCall::function(
@@ -294,21 +385,23 @@ async fn test_run_tool_call_prevalidated_blocks_mutation_in_plan_mode() {
     .await
     .expect("run_tool_call must run");
 
-    println!("Plan-mode guard test outcome status: {:?}", outcome.status);
+    println!(
+        "Planning workflow guard test outcome status: {:?}",
+        outcome.status
+    );
 
     match outcome.status {
         ToolExecutionStatus::Failure { error } => {
-            assert!(error.to_string().contains("plan mode"));
+            assert!(error.to_string().contains("planning workflow"));
         }
-        other => panic!("Expected plan mode failure, got: {:?}", other),
+        other => panic!("Expected planning workflow failure, got: {:?}", other),
     }
-    assert!(session_stats.is_plan_mode());
-    assert!(registry.is_plan_mode());
-    assert!(registry.plan_mode_state().is_active());
+    assert!(registry.is_planning_active());
+    assert!(registry.planning_workflow_state().is_active());
 }
 
 #[tokio::test]
-async fn test_run_tool_call_prevalidated_allows_task_tracker_in_plan_mode() {
+async fn test_run_tool_call_prevalidated_allows_task_tracker_in_planning_workflow() {
     let mut test_ctx = TestContext::new().await;
     let mut registry = test_ctx.registry;
 
@@ -316,21 +409,23 @@ async fn test_run_tool_call_prevalidated_allows_task_tracker_in_plan_mode() {
     let result_cache = Arc::new(tokio::sync::RwLock::new(ToolResultCache::new(10)));
     let decision_ledger = Arc::new(tokio::sync::RwLock::new(DecisionTracker::new()));
     let mut session_stats = crate::agent::runloop::unified::state::SessionStats::default();
+    let mut plan_session =
+        crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState::default();
     let mut mcp_panel = crate::agent::runloop::mcp_events::McpPanelState::new(10, true);
     let approval_recorder = test_ctx.approval_recorder;
     let traj = TrajectoryLogger::new(&test_ctx.workspace);
     let tool_defs = Arc::new(tokio::sync::RwLock::new(Vec::new()));
 
-    registry.enable_plan_mode();
-    registry.plan_mode_state().enable();
-    session_stats.set_plan_mode(true);
+    registry.enable_planning();
+    registry.planning_workflow_state().enable();
+    plan_session.enter(vtcode_core::core::interfaces::session::PlanningEntrySource::UserRequest);
 
     let plans_dir = test_ctx.workspace.join(".vtcode").join("plans");
     std::fs::create_dir_all(&plans_dir).expect("create plans dir");
     let plan_file = plans_dir.join("tracker-test-task-tracker.md");
     std::fs::write(&plan_file, "# Tracker Test\n").expect("write plan file");
     registry
-        .plan_mode_state()
+        .planning_workflow_state()
         .set_plan_file(Some(plan_file))
         .await;
 
@@ -345,6 +440,7 @@ async fn test_run_tool_call_prevalidated_allows_task_tracker_in_plan_mode() {
         &test_ctx.permissions_state,
         &decision_ledger,
         &mut session_stats,
+        &mut plan_session,
         &mut mcp_panel,
         &approval_recorder,
         &mut test_ctx.session,
@@ -355,7 +451,7 @@ async fn test_run_tool_call_prevalidated_allows_task_tracker_in_plan_mode() {
     );
 
     let call = vtcode_core::llm::provider::ToolCall::function(
-        "call_plan_task_tracker".to_string(),
+        "call_task_tracker".to_string(),
         tools::TASK_TRACKER.to_string(),
         r#"{"action":"list"}"#.to_string(),
     );
@@ -386,180 +482,14 @@ async fn test_run_tool_call_prevalidated_allows_task_tracker_in_plan_mode() {
             );
         }
         other => panic!(
-            "Expected task_tracker success in plan mode, got: {:?}",
+            "Expected task_tracker success in planning workflow, got: {:?}",
             other
         ),
     }
 }
 
 #[tokio::test]
-async fn test_run_tool_call_non_prevalidated_allows_task_tracker_in_plan_mode_and_tracks_budget() {
-    let mut test_ctx = TestContext::new().await;
-    let mut registry = test_ctx.registry;
-
-    let permission_cache_arc = Arc::new(tokio::sync::RwLock::new(ToolPermissionCache::new()));
-    let result_cache = Arc::new(tokio::sync::RwLock::new(ToolResultCache::new(10)));
-    let decision_ledger = Arc::new(tokio::sync::RwLock::new(DecisionTracker::new()));
-    let mut session_stats = crate::agent::runloop::unified::state::SessionStats::default();
-    let mut mcp_panel = crate::agent::runloop::mcp_events::McpPanelState::new(10, true);
-    let approval_recorder = test_ctx.approval_recorder;
-    let traj = TrajectoryLogger::new(&test_ctx.workspace);
-    let tool_defs = Arc::new(tokio::sync::RwLock::new(Vec::new()));
-
-    registry.enable_plan_mode();
-    registry.plan_mode_state().enable();
-    session_stats.set_plan_mode(true);
-
-    let plans_dir = test_ctx.workspace.join(".vtcode").join("plans");
-    std::fs::create_dir_all(&plans_dir).expect("create plans dir");
-    let plan_file = plans_dir.join("tracker-test-task-tracker-non-prevalidated.md");
-    std::fs::write(&plan_file, "# Tracker Test\n").expect("write plan file");
-    registry
-        .plan_mode_state()
-        .set_plan_file(Some(plan_file))
-        .await;
-
-    let mut harness_state = build_harness_state_with(2);
-    let mut ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext::new(
-        &mut test_ctx.renderer,
-        &test_ctx.handle,
-        &mut registry,
-        &tool_defs,
-        &result_cache,
-        &permission_cache_arc,
-        &test_ctx.permissions_state,
-        &decision_ledger,
-        &mut session_stats,
-        &mut mcp_panel,
-        &approval_recorder,
-        &mut test_ctx.session,
-        None,
-        &traj,
-        &mut harness_state,
-        None,
-    );
-
-    let call = vtcode_core::llm::provider::ToolCall::function(
-        "call_plan_task_tracker_non_prevalidated".to_string(),
-        tools::TASK_TRACKER.to_string(),
-        r#"{"action":"list"}"#.to_string(),
-    );
-    let ctrl_c_state = Arc::new(CtrlCState::new());
-    let ctrl_c_notify = Arc::new(Notify::new());
-
-    let outcome = run_tool_call(
-        &mut ctx,
-        &call,
-        &ctrl_c_state,
-        &ctrl_c_notify,
-        None,
-        None,
-        true,
-        None,
-        0,
-        false,
-    )
-    .await
-    .expect("run_tool_call must run");
-
-    match outcome.status {
-        ToolExecutionStatus::Success { output, .. } => {
-            assert!(
-                output["status"] == "ok" || output["status"] == "empty",
-                "unexpected status: {}",
-                output["status"]
-            );
-        }
-        other => panic!(
-            "Expected task_tracker success in plan mode, got: {:?}",
-            other
-        ),
-    }
-
-    assert_eq!(ctx.harness_state.tool_calls, 1);
-}
-
-#[tokio::test]
-async fn test_run_tool_call_prevalidated_allows_plan_task_tracker_in_plan_mode() {
-    let mut test_ctx = TestContext::new().await;
-    let mut registry = test_ctx.registry;
-
-    let permission_cache_arc = Arc::new(tokio::sync::RwLock::new(ToolPermissionCache::new()));
-    let result_cache = Arc::new(tokio::sync::RwLock::new(ToolResultCache::new(10)));
-    let decision_ledger = Arc::new(tokio::sync::RwLock::new(DecisionTracker::new()));
-    let mut session_stats = crate::agent::runloop::unified::state::SessionStats::default();
-    let mut mcp_panel = crate::agent::runloop::mcp_events::McpPanelState::new(10, true);
-    let approval_recorder = test_ctx.approval_recorder;
-    let traj = TrajectoryLogger::new(&test_ctx.workspace);
-    let tool_defs = Arc::new(tokio::sync::RwLock::new(Vec::new()));
-
-    registry.enable_plan_mode();
-    registry.plan_mode_state().enable();
-    session_stats.set_plan_mode(true);
-
-    let plans_dir = test_ctx.workspace.join(".vtcode").join("plans");
-    std::fs::create_dir_all(&plans_dir).expect("create plans dir");
-    let plan_file = plans_dir.join("tracker-test.md");
-    std::fs::write(&plan_file, "# Tracker Test\n").expect("write plan file");
-    registry
-        .plan_mode_state()
-        .set_plan_file(Some(plan_file))
-        .await;
-
-    let mut harness_state = build_harness_state();
-    let mut ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext::new(
-        &mut test_ctx.renderer,
-        &test_ctx.handle,
-        &mut registry,
-        &tool_defs,
-        &result_cache,
-        &permission_cache_arc,
-        &test_ctx.permissions_state,
-        &decision_ledger,
-        &mut session_stats,
-        &mut mcp_panel,
-        &approval_recorder,
-        &mut test_ctx.session,
-        None,
-        &traj,
-        &mut harness_state,
-        None,
-    );
-
-    let call = vtcode_core::llm::provider::ToolCall::function(
-        "call_plan_task_tracker_allowed".to_string(),
-        tools::PLAN_TASK_TRACKER.to_string(),
-        r#"{"action":"create","items":["Define guard","  Verify guard"]}"#.to_string(),
-    );
-    let ctrl_c_state = Arc::new(CtrlCState::new());
-    let ctrl_c_notify = Arc::new(Notify::new());
-
-    let outcome = run_tool_call(
-        &mut ctx,
-        &call,
-        &ctrl_c_state,
-        &ctrl_c_notify,
-        None,
-        None,
-        true,
-        None,
-        0,
-        true,
-    )
-    .await
-    .expect("run_tool_call must run");
-
-    match outcome.status {
-        ToolExecutionStatus::Success { output, .. } => {
-            assert_eq!(output["status"], "created");
-            assert_eq!(output["checklist"]["total"], 2);
-        }
-        other => panic!("Expected success, got: {:?}", other),
-    }
-}
-
-#[tokio::test]
-async fn test_run_tool_call_non_prevalidated_blocks_plan_task_tracker_outside_plan_mode_without_budget_use()
+async fn test_run_tool_call_non_prevalidated_allows_task_tracker_in_planning_workflow_and_tracks_budget()
  {
     let mut test_ctx = TestContext::new().await;
     let mut registry = test_ctx.registry;
@@ -568,22 +498,38 @@ async fn test_run_tool_call_non_prevalidated_blocks_plan_task_tracker_outside_pl
     let result_cache = Arc::new(tokio::sync::RwLock::new(ToolResultCache::new(10)));
     let decision_ledger = Arc::new(tokio::sync::RwLock::new(DecisionTracker::new()));
     let mut session_stats = crate::agent::runloop::unified::state::SessionStats::default();
+    let mut plan_session =
+        crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState::default();
     let mut mcp_panel = crate::agent::runloop::mcp_events::McpPanelState::new(10, true);
     let approval_recorder = test_ctx.approval_recorder;
     let traj = TrajectoryLogger::new(&test_ctx.workspace);
-    let tools = Arc::new(tokio::sync::RwLock::new(Vec::new()));
+    let tool_defs = Arc::new(tokio::sync::RwLock::new(Vec::new()));
+
+    registry.enable_planning();
+    registry.planning_workflow_state().enable();
+    plan_session.enter(vtcode_core::core::interfaces::session::PlanningEntrySource::UserRequest);
+
+    let plans_dir = test_ctx.workspace.join(".vtcode").join("plans");
+    std::fs::create_dir_all(&plans_dir).expect("create plans dir");
+    let plan_file = plans_dir.join("tracker-test-task-tracker-non-prevalidated.md");
+    std::fs::write(&plan_file, "# Tracker Test\n").expect("write plan file");
+    registry
+        .planning_workflow_state()
+        .set_plan_file(Some(plan_file))
+        .await;
 
     let mut harness_state = build_harness_state_with(2);
     let mut ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext::new(
         &mut test_ctx.renderer,
         &test_ctx.handle,
         &mut registry,
-        &tools,
+        &tool_defs,
         &result_cache,
         &permission_cache_arc,
         &test_ctx.permissions_state,
         &decision_ledger,
         &mut session_stats,
+        &mut plan_session,
         &mut mcp_panel,
         &approval_recorder,
         &mut test_ctx.session,
@@ -594,8 +540,8 @@ async fn test_run_tool_call_non_prevalidated_blocks_plan_task_tracker_outside_pl
     );
 
     let call = vtcode_core::llm::provider::ToolCall::function(
-        "call_plan_task_tracker_blocked".to_string(),
-        tools::PLAN_TASK_TRACKER.to_string(),
+        "call_task_tracker_non_prevalidated".to_string(),
+        tools::TASK_TRACKER.to_string(),
         r#"{"action":"list"}"#.to_string(),
     );
     let ctrl_c_state = Arc::new(CtrlCState::new());
@@ -617,14 +563,20 @@ async fn test_run_tool_call_non_prevalidated_blocks_plan_task_tracker_outside_pl
     .expect("run_tool_call must run");
 
     match outcome.status {
-        ToolExecutionStatus::Failure { error } => {
-            assert!(error.to_string().contains("plan_task_tracker"));
-            assert!(error.to_string().contains("compatibility alias"));
+        ToolExecutionStatus::Success { output, .. } => {
+            assert!(
+                output["status"] == "ok" || output["status"] == "empty",
+                "unexpected status: {}",
+                output["status"]
+            );
         }
-        other => panic!("Expected plan mode failure, got: {:?}", other),
+        other => panic!(
+            "Expected task_tracker success in planning workflow, got: {:?}",
+            other
+        ),
     }
 
-    assert_eq!(ctx.harness_state.tool_calls, 0);
+    assert_eq!(ctx.harness_state.tool_calls, 1);
 }
 
 #[tokio::test]
@@ -636,6 +588,8 @@ async fn test_run_tool_call_invalid_preflight_does_not_consume_budget() {
     let result_cache = Arc::new(tokio::sync::RwLock::new(ToolResultCache::new(10)));
     let decision_ledger = Arc::new(tokio::sync::RwLock::new(DecisionTracker::new()));
     let mut session_stats = crate::agent::runloop::unified::state::SessionStats::default();
+    let mut plan_session =
+        crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState::default();
     let mut mcp_panel = crate::agent::runloop::mcp_events::McpPanelState::new(10, true);
     let approval_recorder = test_ctx.approval_recorder;
     let traj = TrajectoryLogger::new(&test_ctx.workspace);
@@ -652,6 +606,7 @@ async fn test_run_tool_call_invalid_preflight_does_not_consume_budget() {
         &test_ctx.permissions_state,
         &decision_ledger,
         &mut session_stats,
+        &mut plan_session,
         &mut mcp_panel,
         &approval_recorder,
         &mut test_ctx.session,
@@ -729,6 +684,8 @@ async fn test_run_tool_call_unified_exec_git_diff_uses_cache_on_repeat() {
     let result_cache = Arc::new(tokio::sync::RwLock::new(ToolResultCache::new(32)));
     let decision_ledger = Arc::new(tokio::sync::RwLock::new(DecisionTracker::new()));
     let mut session_stats = crate::agent::runloop::unified::state::SessionStats::default();
+    let mut plan_session =
+        crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState::default();
     let mut mcp_panel = crate::agent::runloop::mcp_events::McpPanelState::new(10, true);
     let approval_recorder = test_ctx.approval_recorder;
     let traj = TrajectoryLogger::new(&test_ctx.workspace);
@@ -745,6 +702,7 @@ async fn test_run_tool_call_unified_exec_git_diff_uses_cache_on_repeat() {
         &test_ctx.permissions_state,
         &decision_ledger,
         &mut session_stats,
+        &mut plan_session,
         &mut mcp_panel,
         &approval_recorder,
         &mut test_ctx.session,
@@ -866,6 +824,8 @@ async fn test_run_tool_call_rejects_escalated_shell_when_hitl_disabled() {
     let result_cache = Arc::new(tokio::sync::RwLock::new(ToolResultCache::new(10)));
     let decision_ledger = Arc::new(tokio::sync::RwLock::new(DecisionTracker::new()));
     let mut session_stats = crate::agent::runloop::unified::state::SessionStats::default();
+    let mut plan_session =
+        crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState::default();
     let mut mcp_panel = crate::agent::runloop::mcp_events::McpPanelState::new(10, true);
     let approval_recorder = test_ctx.approval_recorder;
     let traj = TrajectoryLogger::new(&test_ctx.workspace);
@@ -882,6 +842,7 @@ async fn test_run_tool_call_rejects_escalated_shell_when_hitl_disabled() {
         &test_ctx.permissions_state,
         &decision_ledger,
         &mut session_stats,
+        &mut plan_session,
         &mut mcp_panel,
         &approval_recorder,
         &mut test_ctx.session,
@@ -943,6 +904,8 @@ async fn test_run_tool_call_allows_escalated_shell_with_saved_prefix_rule() {
     let result_cache = Arc::new(tokio::sync::RwLock::new(ToolResultCache::new(10)));
     let decision_ledger = Arc::new(tokio::sync::RwLock::new(DecisionTracker::new()));
     let mut session_stats = crate::agent::runloop::unified::state::SessionStats::default();
+    let mut plan_session =
+        crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState::default();
     let mut mcp_panel = crate::agent::runloop::mcp_events::McpPanelState::new(10, true);
     let approval_recorder = test_ctx.approval_recorder;
     let traj = TrajectoryLogger::new(&test_ctx.workspace);
@@ -959,6 +922,7 @@ async fn test_run_tool_call_allows_escalated_shell_with_saved_prefix_rule() {
         &test_ctx.permissions_state,
         &decision_ledger,
         &mut session_stats,
+        &mut plan_session,
         &mut mcp_panel,
         &approval_recorder,
         &mut test_ctx.session,
@@ -970,6 +934,7 @@ async fn test_run_tool_call_allows_escalated_shell_with_saved_prefix_rule() {
 
     let mut vt_cfg = VTCodeConfig::default();
     vt_cfg.security.human_in_the_loop = false;
+    vt_cfg.runtime_agent_permissions = Some(AgentPermissionsConfig::new(PermissionDefault::Allow));
     vt_cfg.commands.approval_prefixes.push(
         "echo hi|sandbox_permissions=\"require_escalated\"|additional_permissions=null".to_string(),
     );
@@ -1031,6 +996,8 @@ async fn test_run_tool_call_reuses_streamed_invocation_item_without_duplicate_st
     let result_cache = Arc::new(tokio::sync::RwLock::new(ToolResultCache::new(10)));
     let decision_ledger = Arc::new(tokio::sync::RwLock::new(DecisionTracker::new()));
     let mut session_stats = crate::agent::runloop::unified::state::SessionStats::default();
+    let mut plan_session =
+        crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState::default();
     let mut mcp_panel = crate::agent::runloop::mcp_events::McpPanelState::new(10, true);
     let approval_recorder = test_ctx.approval_recorder;
     let traj = TrajectoryLogger::new(&test_ctx.workspace);
@@ -1068,6 +1035,7 @@ async fn test_run_tool_call_reuses_streamed_invocation_item_without_duplicate_st
         &test_ctx.permissions_state,
         &decision_ledger,
         &mut session_stats,
+        &mut plan_session,
         &mut mcp_panel,
         &approval_recorder,
         &mut test_ctx.session,

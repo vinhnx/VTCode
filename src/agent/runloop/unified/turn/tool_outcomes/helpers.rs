@@ -4,7 +4,7 @@ use std::time::Instant;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::names::canonical_tool_name;
 
-pub(crate) const EXIT_PLAN_MODE_REASON_USER_REQUESTED_IMPLEMENTATION: &str =
+pub(crate) const FINISH_PLANNING_REASON_USER_REQUESTED_IMPLEMENTATION: &str =
     "user_requested_implementation";
 
 /// Threshold: number of consecutive file mutations before the Anti-Blind-Editing
@@ -228,14 +228,14 @@ pub(crate) fn push_invalid_tool_args_response<S>(
     push_tool_response(history, tool_call_id, payload.to_string());
 }
 
-pub(crate) fn build_exit_plan_mode_args(reason: &str) -> serde_json::Value {
+pub(crate) fn build_finish_planning_args(reason: &str) -> serde_json::Value {
     serde_json::json!({
         "reason": reason
     })
 }
 
-pub(crate) fn build_step_exit_plan_mode_call_id(step_count: usize) -> String {
-    format!("call_{step_count}_exit_plan_mode")
+pub(crate) fn build_step_finish_planning_call_id(step_count: usize) -> String {
+    format!("call_{step_count}_finish_planning")
 }
 
 /// Generate a tool signature key with predictable structure for loop tracking.
@@ -314,7 +314,7 @@ fn is_plan_artifact_write(name: &str, args: &serde_json::Value) -> bool {
 
     let canonical = canonical_tool_name(name);
     match canonical {
-        tool_names::PLAN_TASK_TRACKER | tool_names::TASK_TRACKER => true,
+        tool_names::TASK_TRACKER => true,
         tool_names::UNIFIED_FILE => {
             if !unified_file_action(args)
                 .map(|action| action.eq_ignore_ascii_case("read"))
@@ -400,7 +400,7 @@ pub(crate) fn update_repetition_tracker(
             loop_tracker.reset_low_signal_attempts();
         }
     } else if is_plan_artifact_write(canonical_name, args) {
-        // Plan artifact writes in dedicated plan storage are allowed in Plan Mode and
+        // Plan artifact writes in dedicated plan storage are allowed in Planning workflow and
         // should not trigger anti-blind-editing verification pressure.
         loop_tracker.consecutive_navigations = 0;
         loop_tracker.nav_signatures.clear();
@@ -649,7 +649,7 @@ mod tests {
     }
 
     #[test]
-    fn plan_task_tracker_does_not_increment_mutations() {
+    fn task_tracker_does_not_increment_mutations_in_planning() {
         let mut tracker = LoopTracker::new();
         let success = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
             output: serde_json::json!({}),
@@ -661,7 +661,7 @@ mod tests {
         update_repetition_tracker(
             &mut tracker,
             &success,
-            tools::PLAN_TASK_TRACKER,
+            tools::TASK_TRACKER,
             &json!({"action":"create","items":["step"]}),
         );
         assert_eq!(tracker.consecutive_mutations, 0);

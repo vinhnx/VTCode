@@ -1,8 +1,7 @@
 use super::super::constants::*;
 use super::super::helpers::{
-    SESSION_CONFIG_MODE_ID, SESSION_CONFIG_MODEL_ID, SESSION_CONFIG_PROVIDER_ID,
-    SESSION_CONFIG_THOUGHT_LEVEL_ID, acp_session_modes, agent_implementation_info, session_mode_id,
-    text_chunk,
+    SESSION_CONFIG_MODEL_ID, SESSION_CONFIG_PRIMARY_AGENT_ID, SESSION_CONFIG_PROVIDER_ID,
+    SESSION_CONFIG_THOUGHT_LEVEL_ID, agent_implementation_info, text_chunk,
 };
 use super::super::types::{PlanProgress, ToolRuntime};
 use super::ZedAgent;
@@ -13,7 +12,6 @@ use serde_json::json;
 use tracing::warn;
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
 use vtcode_core::config::types::ReasoningEffortLevel;
-use vtcode_core::core::interfaces::SessionMode;
 use vtcode_core::llm::factory::ProviderConfig;
 use vtcode_core::llm::factory::create_provider_with_config;
 use vtcode_core::llm::provider::{LLMRequest, LLMStreamEvent, Message};
@@ -155,16 +153,11 @@ impl acp::Agent for ZedAgent {
         let session = self
             .session_handle(&session_id)
             .ok_or_else(acp::Error::internal_error)?;
-        let available_modes = acp_session_modes();
         let config_options = self.current_session_config_options(&session);
 
         self.send_available_commands_update(&session_id).await?;
 
-        let modes = acp::SessionModeState::new(session_mode_id(SessionMode::Code), available_modes);
-
-        Ok(acp::NewSessionResponse::new(session_id)
-            .modes(modes)
-            .config_options(config_options))
+        Ok(acp::NewSessionResponse::new(session_id).config_options(config_options))
     }
 
     async fn load_session(
@@ -183,15 +176,9 @@ impl acp::Agent for ZedAgent {
         self.send_available_commands_update(&args.session_id)
             .await?;
 
-        let modes = acp::SessionModeState::new(
-            session_mode_id(session.data.borrow().current_mode),
-            acp_session_modes(),
-        );
         let config_options = self.current_session_config_options(&session);
 
-        Ok(acp::LoadSessionResponse::new()
-            .modes(modes)
-            .config_options(config_options))
+        Ok(acp::LoadSessionResponse::new().config_options(config_options))
     }
 
     async fn prompt(&self, args: acp::PromptRequest) -> Result<acp::PromptResponse, acp::Error> {
@@ -247,7 +234,7 @@ impl acp::Agent for ZedAgent {
         let mut assistant_message = String::with_capacity(4096);
         let client_supports_read_text_file = self.client_supports_read_text_file();
         let provider_supports_tools = provider.supports_tools(&session_model);
-        let mut session_mode = session.data.borrow().current_mode;
+        let mut primary_agent = session.data.borrow().primary_agent.clone();
         let availability = self.tool_availability(
             provider_supports_tools,
             client_supports_read_text_file,
@@ -272,17 +259,17 @@ impl acp::Agent for ZedAgent {
             self.mark_tool_notice_sent(&session);
         }
 
-        let mut has_local_tools = self.local_tools_available(session_mode);
+        let mut has_local_tools = self.local_tools_available(&primary_agent);
         let mut tools_allowed =
             provider_supports_tools && (!enabled_tools.is_empty() || has_local_tools);
         let mut tool_definitions = self
-            .tool_definitions(provider_supports_tools, &enabled_tools, session_mode)
+            .tool_definitions(provider_supports_tools, &enabled_tools, &primary_agent)
             .map(std::sync::Arc::new);
         let mut messages = self.resolved_messages(&session);
         let allow_streaming = supports_streaming && !tools_allowed;
 
         tracing::debug!(
-            session_mode = session_mode.as_str(),
+            primary_agent = %primary_agent,
             tools_allowed = tools_allowed,
             has_local_tools = has_local_tools,
             acp_tools_count = enabled_tools.len(),
@@ -458,12 +445,12 @@ impl acp::Agent for ZedAgent {
                         break;
                     }
                     messages = self.resolved_messages(&session);
-                    session_mode = session.data.borrow().current_mode;
-                    has_local_tools = self.local_tools_available(session_mode);
+                    primary_agent = session.data.borrow().primary_agent.clone();
+                    has_local_tools = self.local_tools_available(&primary_agent);
                     tools_allowed =
                         provider_supports_tools && (!enabled_tools.is_empty() || has_local_tools);
                     tool_definitions = self
-                        .tool_definitions(provider_supports_tools, &enabled_tools, session_mode)
+                        .tool_definitions(provider_supports_tools, &enabled_tools, &primary_agent)
                         .map(std::sync::Arc::new);
                     continue;
                 }
@@ -522,26 +509,6 @@ impl acp::Agent for ZedAgent {
         Ok(acp::PromptResponse::new(stop_reason))
     }
 
-    async fn set_session_mode(
-        &self,
-        args: acp::SetSessionModeRequest,
-    ) -> Result<acp::SetSessionModeResponse, acp::Error> {
-        let Some(session) = self.session_handle(&args.session_id) else {
-            return Err(acp::Error::invalid_params().data(json!({ "reason": "unknown_session" })));
-        };
-
-        let Some(mode) = SessionMode::parse(args.mode_id.0.as_ref()) else {
-            return Err(acp::Error::invalid_params()
-                .data(json!({ "reason": "unknown_mode", "mode_id": args.mode_id.0 })));
-        };
-
-        let _ = self
-            .apply_session_mode(&args.session_id, &session, mode)
-            .await?;
-
-        Ok(acp::SetSessionModeResponse::new())
-    }
-
     async fn set_session_config_option(
         &self,
         args: acp::SetSessionConfigOptionRequest,
@@ -551,17 +518,25 @@ impl acp::Agent for ZedAgent {
         };
 
         match args.config_id.0.as_ref() {
-            SESSION_CONFIG_MODE_ID => {
-                let Some(mode) = SessionMode::parse(args.value.0.as_ref()) else {
+            SESSION_CONFIG_PRIMARY_AGENT_ID => {
+                let Some(primary_agent) = self.primary_agents.resolve_id(args.value.0.as_ref())
+                else {
                     return Err(acp::Error::invalid_params().data(json!({
-                        "reason": "unknown_mode",
-                        "mode_id": args.value.0,
+                        "reason": "unknown_primary_agent",
+                        "value": args.value.0,
                     })));
                 };
 
-                let _ = self
-                    .apply_session_mode(&args.session_id, &session, mode)
+                if self.update_session_primary_agent(&session, primary_agent.to_string()) {
+                    let config_options = self.current_session_config_options(&session);
+                    self.send_update(
+                        &args.session_id,
+                        acp::SessionUpdate::ConfigOptionUpdate(acp::ConfigOptionUpdate::new(
+                            config_options,
+                        )),
+                    )
                     .await?;
+                }
             }
             SESSION_CONFIG_THOUGHT_LEVEL_ID => {
                 let (session_provider, session_model) = {

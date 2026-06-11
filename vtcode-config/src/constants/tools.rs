@@ -91,16 +91,14 @@ pub const CRON_LIST: &str = "cron_list";
 pub const CRON_DELETE: &str = "cron_delete";
 
 // ============================================================
-// PLAN MODE
+// PLANNING WORKFLOW
 // ============================================================
-/// Enter plan mode - enables read-only tools and planning workflow.
-pub const ENTER_PLAN_MODE: &str = "enter_plan_mode";
-/// Exit plan mode - triggers confirmation modal before execution.
-pub const EXIT_PLAN_MODE: &str = "exit_plan_mode";
+/// Start planning - enables read-only tools and planning workflow.
+pub const START_PLANNING: &str = "start_planning";
+/// Finish planning - triggers confirmation modal before execution.
+pub const FINISH_PLANNING: &str = "finish_planning";
 /// Task tracker / plan manager - tracks checklist progress during complex tasks.
 pub const TASK_TRACKER: &str = "task_tracker";
-/// Plan-mode scoped task tracker persisted under `.vtcode/plans/`.
-pub const PLAN_TASK_TRACKER: &str = "plan_task_tracker";
 
 // ============================================================
 // SUBAGENT COLLABORATION

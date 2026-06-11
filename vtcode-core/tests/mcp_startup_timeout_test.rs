@@ -104,8 +104,7 @@ async fn test_unreachable_provider_does_not_block_initialization() {
         has_tool_err
             .to_string()
             .contains("No MCP providers are currently connected"),
-        "unexpected has_mcp_tool error: {}",
-        has_tool_err
+        "unexpected has_mcp_tool error: {has_tool_err}"
     );
 }
 

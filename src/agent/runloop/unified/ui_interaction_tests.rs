@@ -532,7 +532,7 @@ async fn renders_reasoning_when_no_content() {
 }
 
 #[tokio::test]
-async fn keeps_proposed_plan_tags_visible_outside_plan_mode() {
+async fn keeps_proposed_plan_tags_visible_outside_planning_workflow() {
     let provider = CompletedOnlyProvider {
         content: Some("<proposed_plan>\n- Step 1\n</proposed_plan>".to_string()),
         reasoning: None,
@@ -556,7 +556,7 @@ async fn keeps_proposed_plan_tags_visible_outside_plan_mode() {
 
     assert!(
         emitted,
-        "outside plan mode, proposed_plan blocks should remain visible"
+        "outside planning workflow, proposed_plan blocks should remain visible"
     );
 }
 

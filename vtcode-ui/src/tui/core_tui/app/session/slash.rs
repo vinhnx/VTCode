@@ -484,35 +484,34 @@ pub(crate) fn should_submit_immediately_from_palette(session: &Session) -> bool 
         return false;
     };
 
-    matches!(
-        command,
-        "/files"
-            | "/ide"
-            | "/mode"
-            | "/status"
-            | "/stop"
-            | "/pause"
-            | "/doctor"
-            | "/model"
-            | "/mcp"
-            | "/skills"
-            | "/new"
-            | "/review"
-            | "/git"
-            | "/docs"
-            | "/copy"
-            | "/help"
-            | "/clear"
-            | "/compact"
-            | "/login"
-            | "/logout"
-            | "/auth"
-            | "/refresh-oauth"
-            | "/resume"
-            | "/fork"
-            | "/history"
-            | "/exit"
-    )
+    command.strip_prefix('/') == Some("model")
+        || matches!(
+            command,
+            "/files"
+                | "/ide"
+                | "/status"
+                | "/stop"
+                | "/pause"
+                | "/doctor"
+                | "/mcp"
+                | "/skills"
+                | "/new"
+                | "/review"
+                | "/git"
+                | "/docs"
+                | "/copy"
+                | "/help"
+                | "/clear"
+                | "/compact"
+                | "/login"
+                | "/logout"
+                | "/auth"
+                | "/refresh-oauth"
+                | "/resume"
+                | "/fork"
+                | "/history"
+                | "/exit"
+        )
 }
 
 #[derive(Clone)]
@@ -575,9 +574,6 @@ mod tests {
         session.set_input("   /status   ".to_string());
         assert!(should_submit_immediately_from_palette(&session));
 
-        session.set_input("/mode".to_string());
-        assert!(should_submit_immediately_from_palette(&session));
-
         session.set_input("/history".to_string());
         assert!(should_submit_immediately_from_palette(&session));
 
@@ -625,6 +621,9 @@ mod tests {
         assert!(!should_submit_immediately_from_palette(&session));
 
         session.set_input("/review-template src/lib.rs".to_string());
+        assert!(!should_submit_immediately_from_palette(&session));
+
+        session.set_input(format!("/{name}", name = "mode"));
         assert!(!should_submit_immediately_from_palette(&session));
     }
 

@@ -1,6 +1,8 @@
 use anyhow::{Context, Result};
 use vtcode_config::SubagentSpec;
 
+use std::path::{Path, PathBuf};
+
 use crate::config::VTCodeConfig;
 use crate::config::constants::models;
 use crate::config::models::{ModelId, Provider};
@@ -272,7 +274,7 @@ use crate::persistent_memory::extract_memory_highlights;
 use vtcode_config::SubagentMemoryScope;
 
 pub fn load_memory_appendix(
-    workspace_root: &std::path::Path,
+    workspace_root: &Path,
     agent_name: &str,
     scope: Option<SubagentMemoryScope>,
 ) -> Result<Option<String>> {
@@ -280,18 +282,7 @@ pub fn load_memory_appendix(
         return Ok(None);
     };
 
-    let memory_dir = match scope {
-        SubagentMemoryScope::Project => {
-            workspace_root.join(".vtcode/agent-memory").join(agent_name)
-        }
-        SubagentMemoryScope::Local => workspace_root
-            .join(".vtcode/agent-memory-local")
-            .join(agent_name),
-        SubagentMemoryScope::User => dirs::home_dir()
-            .unwrap_or_default()
-            .join(".vtcode/agent-memory")
-            .join(agent_name),
-    };
+    let memory_dir = agent_memory_dir(workspace_root, agent_name, scope);
     std::fs::create_dir_all(&memory_dir).with_context(|| {
         format!(
             "Failed to create subagent memory directory {}",
@@ -308,20 +299,7 @@ pub fn load_memory_appendix(
 
     let content = std::fs::read_to_string(&memory_file)
         .with_context(|| format!("Failed to read {}", memory_file.display()))?;
-    let total_lines = content.lines().count();
-    let mut bytes = 0usize;
-    let mut excerpt_lines = Vec::new();
-    for line in content.lines().take(SUBAGENT_MEMORY_LINE_LIMIT) {
-        let next_bytes = bytes.saturating_add(line.len() + 1);
-        if next_bytes > SUBAGENT_MEMORY_BYTES_LIMIT {
-            break;
-        }
-        bytes = next_bytes;
-        excerpt_lines.push(line);
-    }
-
-    let excerpt = excerpt_lines.join("\n");
-    let truncated = excerpt_lines.len() < total_lines;
+    let (excerpt, truncated) = memory_excerpt(&content);
     let highlights = extract_memory_highlights(&excerpt, SUBAGENT_MEMORY_HIGHLIGHT_LIMIT);
     let mut appendix = String::new();
     appendix.push_str(&format!(
@@ -344,4 +322,80 @@ pub fn load_memory_appendix(
     }
 
     Ok(Some(appendix))
+}
+
+pub fn load_primary_memory_appendix(
+    workspace_root: &Path,
+    agent_name: &str,
+    scope: Option<SubagentMemoryScope>,
+) -> Result<Option<String>> {
+    let Some(scope) = scope else {
+        return Ok(None);
+    };
+
+    let memory_file = agent_memory_dir(workspace_root, agent_name, scope).join("MEMORY.md");
+    if !memory_file.exists() {
+        return Ok(None);
+    }
+
+    let content = std::fs::read_to_string(&memory_file)
+        .with_context(|| format!("Failed to read {}", memory_file.display()))?;
+    let (excerpt, truncated) = memory_excerpt(&content);
+    let highlights = extract_memory_highlights(&excerpt, SUBAGENT_MEMORY_HIGHLIGHT_LIMIT);
+    let mut appendix = String::new();
+    appendix.push_str(&format!(
+        "Primary-agent memory file: {}.\nLoaded read-only for this request.",
+        memory_file.display()
+    ));
+
+    if !highlights.is_empty() {
+        appendix.push_str("\n\nKey points:\n");
+        for highlight in highlights {
+            appendix.push_str("- ");
+            appendix.push_str(&highlight);
+            appendix.push('\n');
+        }
+    }
+
+    if truncated {
+        appendix.push_str("\nMemory indexing stopped after the configured startup budget.");
+    }
+
+    Ok(Some(appendix))
+}
+
+fn agent_memory_dir(
+    workspace_root: &Path,
+    agent_name: &str,
+    scope: SubagentMemoryScope,
+) -> PathBuf {
+    match scope {
+        SubagentMemoryScope::Project => {
+            workspace_root.join(".vtcode/agent-memory").join(agent_name)
+        }
+        SubagentMemoryScope::Local => workspace_root
+            .join(".vtcode/agent-memory-local")
+            .join(agent_name),
+        SubagentMemoryScope::User => dirs::home_dir()
+            .unwrap_or_default()
+            .join(".vtcode/agent-memory")
+            .join(agent_name),
+    }
+}
+
+fn memory_excerpt(content: &str) -> (String, bool) {
+    let total_lines = content.lines().count();
+    let mut bytes = 0usize;
+    let mut excerpt_lines = Vec::new();
+    for line in content.lines().take(SUBAGENT_MEMORY_LINE_LIMIT) {
+        let next_bytes = bytes.saturating_add(line.len() + 1);
+        if next_bytes > SUBAGENT_MEMORY_BYTES_LIMIT {
+            break;
+        }
+        bytes = next_bytes;
+        excerpt_lines.push(line);
+    }
+
+    let truncated = excerpt_lines.len() < total_lines;
+    (excerpt_lines.join("\n"), truncated)
 }

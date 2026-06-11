@@ -150,7 +150,7 @@ impl<'a> TurnProcessingContext<'a> {
         } else {
             evaluate_interim_text_continuation(
                 self.full_auto,
-                self.session_stats.is_plan_mode(),
+                self.is_planning_active(),
                 self.working_history,
                 &text,
             )
@@ -186,7 +186,7 @@ impl<'a> TurnProcessingContext<'a> {
                 continuation_decision.last_user_requested_progressive_work,
             recovery_pass_response,
             tool_free_recovery_pass,
-            plan_mode = self.session_stats.is_plan_mode(),
+            planning_workflow = self.is_planning_active(),
             full_auto = self.full_auto,
             history_len = self.working_history.len(),
             "turn metric"
@@ -213,19 +213,20 @@ impl<'a> TurnProcessingContext<'a> {
         }
         self.harness_state.stop_hook_active = false;
 
-        if self.session_stats.is_plan_mode()
+        if self.is_planning_active()
             && let Some(plan_text) = proposed_plan
         {
             self.emit_plan_events(&plan_text).await;
             let persisted =
-                persist_plan_draft(&self.tool_registry.plan_mode_state(), &plan_text).await?;
-            self.tool_registry
-                .plan_mode_state()
-                .set_phase(if persisted.validation.is_ready() {
+                persist_plan_draft(&self.tool_registry.planning_workflow_state(), &plan_text)
+                    .await?;
+            self.tool_registry.planning_workflow_state().set_phase(
+                if persisted.validation.is_ready() {
                     PlanLifecyclePhase::DraftReady
                 } else {
                     PlanLifecyclePhase::ActiveDrafting
-                });
+                },
+            );
         }
 
         Ok(TurnHandlerOutcome::Break(TurnLoopResult::Completed))

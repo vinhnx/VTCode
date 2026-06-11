@@ -64,8 +64,8 @@ vtcode --resume                # pick up the last session
 
 <table style="border: none; border-collapse: collapse;">
   <tr>
-    <td style="border: none; vertical-align: top; padding-right: 20px;"><a href="./README.md#quick-start"><strong>Interactive TUI</strong></a><br>Session modes, slash commands (<code>/model</code>, <code>/review</code>, <code>/mcp</code>, <code>/skills</code>, <code>/theme</code>, <code>/compact</code>, <code>/schedule</code>)</td>
-    <td style="border: none; vertical-align: top; padding-right: 20px;"><a href="./docs/guides/full_auto_mode.md"><strong>Autonomous agent</strong></a><br>Full-auto CLI, plan-build-evaluate harness, subagents, scheduled tasks</td>
+    <td style="border: none; vertical-align: top; padding-right: 20px;"><a href="./README.md#quick-start"><strong>Interactive TUI</strong></a><br>Primary agents, slash commands (<code>/model</code>, <code>/review</code>, <code>/mcp</code>, <code>/skills</code>, <code>/theme</code>, <code>/compact</code>, <code>/schedule</code>)</td>
+    <td style="border: none; vertical-align: top; padding-right: 20px;"><a href="./docs/guides/full-automation.md"><strong>Full automation</strong></a><br><code>--full-auto</code> CLI, plan-build-evaluate harness, subagents, scheduled tasks</td>
     <td style="border: none; vertical-align: top; padding-right: 20px;"><a href="./docs/providers/PROVIDER_GUIDES.md"><strong>Providers</strong></a><br>Setup guides for all 21 providers</td>
   </tr>
   <tr>

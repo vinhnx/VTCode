@@ -17,7 +17,7 @@ Last reviewed: 2026-03-28
 - [Configuration Precedence](config/CONFIGURATION_PRECEDENCE.md) - Runtime config loading order.
 - [Config Field Reference](config/CONFIG_FIELD_REFERENCE.md) - Field-level schema reference.
 - [Scheduled Tasks](user-guide/scheduled-tasks.md) - Session `/loop` polling, reminders, and durable scheduler flows.
-- [Permissions Guide](guides/permissions.md) - Unified permission modes and rule grammar.
+- [Permissions Guide](guides/permissions.md) - Granular agent permissions and rule grammar.
 - [Provider Guides](providers/PROVIDER_GUIDES.md) - LLM provider setup and behavior.
 - [Security Model](security/SECURITY_MODEL.md) - Security architecture.
 - [Process Hardening](development/PROCESS_HARDENING.md) - Runtime hardening controls.

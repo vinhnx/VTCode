@@ -69,7 +69,7 @@ impl UnicodeMonitor {
         }
 
         if let Ok(mut last) = self.last_error.lock() {
-            *last = Some(format!("{}: {}", error_type, details));
+            *last = Some(format!("{error_type}: {details}"));
         }
     }
 

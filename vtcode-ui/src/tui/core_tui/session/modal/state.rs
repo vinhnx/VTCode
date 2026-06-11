@@ -229,15 +229,13 @@ impl ModalState {
                     }
                     return ModalListKeyResult::HandledNoRedraw;
                 }
-                KeyCode::Esc => {
-                    if search.clear() {
-                        let previous = list.current_selection();
-                        list.apply_search(&search.query);
-                        if let Some(event) = selection_change_event(list, previous) {
-                            return ModalListKeyResult::Emit(event);
-                        }
-                        return ModalListKeyResult::Redraw;
+                KeyCode::Esc if search.clear() => {
+                    let previous = list.current_selection();
+                    list.apply_search(&search.query);
+                    if let Some(event) = selection_change_event(list, previous) {
+                        return ModalListKeyResult::Emit(event);
                     }
+                    return ModalListKeyResult::Redraw;
                 }
                 _ => {}
             }
@@ -1131,16 +1129,14 @@ impl WizardModalState {
                     step.notes = state.value().to_owned();
                     return ModalListKeyResult::Redraw;
                 }
-                KeyCode::Backspace => {
-                    if !step.notes.is_empty() {
-                        step.notes_active = true;
-                        let mut state = InputState::new();
-                        state.set_value(step.notes.clone());
-                        state.end();
-                        state.delete_before();
-                        step.notes = state.value().to_owned();
-                        return ModalListKeyResult::Redraw;
-                    }
+                KeyCode::Backspace if !step.notes.is_empty() => {
+                    step.notes_active = true;
+                    let mut state = InputState::new();
+                    state.set_value(step.notes.clone());
+                    state.end();
+                    state.delete_before();
+                    step.notes = state.value().to_owned();
+                    return ModalListKeyResult::Redraw;
                 }
                 _ => {}
             }
@@ -1178,11 +1174,9 @@ impl WizardModalState {
                     }
                     return ModalListKeyResult::HandledNoRedraw;
                 }
-                KeyCode::Esc => {
-                    if search.clear() {
-                        step.list.apply_search(&search.query);
-                        return ModalListKeyResult::Redraw;
-                    }
+                KeyCode::Esc if search.clear() => {
+                    step.list.apply_search(&search.query);
+                    return ModalListKeyResult::Redraw;
                 }
                 _ => {}
             }

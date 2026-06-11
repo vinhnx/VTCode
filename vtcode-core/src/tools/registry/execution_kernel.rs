@@ -447,11 +447,11 @@ pub(super) fn preflight_validate_resolved_call(
         validation_args.as_ref(),
     );
     let readonly_classification = !intent.mutating;
-    if registry.is_plan_mode()
-        && !registry.is_plan_mode_allowed(&effective_tool_name, validation_args.as_ref())
+    if registry.is_planning_active()
+        && !registry.is_planning_active_allowed(&effective_tool_name, validation_args.as_ref())
     {
-        let msg = agent_execution::plan_mode_denial_message(&effective_tool_name);
-        return Err(anyhow!(msg).context(agent_execution::PLAN_MODE_DENIED_CONTEXT));
+        let msg = agent_execution::planning_workflow_denial_message(&effective_tool_name);
+        return Err(anyhow!(msg).context(agent_execution::PLANNING_DENIED_CONTEXT));
     }
 
     Ok(ToolPreflightOutcome {

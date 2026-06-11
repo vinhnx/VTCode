@@ -220,19 +220,22 @@ fn core_tab_cycles_primary_agent_when_composer_is_empty() {
 }
 
 #[test]
-fn tab_does_not_cycle_primary_agent_while_running() {
+fn tab_cycles_primary_agent_while_running() {
     let mut session = app_session_with_input("", 0);
     load_primary_agent_palette(&mut session);
     set_app_session_busy_status(&mut session);
 
     let event = session.process_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
 
-    assert!(event.is_none());
+    assert!(matches!(
+        event,
+        Some(app_types::InlineEvent::CyclePrimaryAgent)
+    ));
     assert_eq!(session.core.input_manager.content(), "");
 }
 
 #[test]
-fn tab_queues_draft_while_running_instead_of_switching_primary_agent() {
+fn tab_cycles_primary_agent_while_running_with_draft() {
     let mut session = app_session_with_input("Review this", "Review this".len());
     load_primary_agent_palette(&mut session);
     set_app_session_busy_status(&mut session);
@@ -241,8 +244,9 @@ fn tab_queues_draft_while_running_instead_of_switching_primary_agent() {
 
     assert!(matches!(
         event,
-        Some(app_types::InlineEvent::QueueSubmit(value)) if value == "Review this"
+        Some(app_types::InlineEvent::CyclePrimaryAgent)
     ));
+    assert_eq!(session.core.input_manager.content(), "Review this");
 }
 
 #[test]
@@ -279,7 +283,7 @@ fn tab_accepts_inline_prompt_suggestion_before_primary_agent_cycle() {
 }
 
 #[test]
-fn tab_queues_draft_instead_of_switching_primary_agent() {
+fn tab_cycles_primary_agent_with_draft() {
     let mut session = app_session_with_input("Review this", "Review this".len());
     load_primary_agent_palette(&mut session);
 
@@ -287,20 +291,37 @@ fn tab_queues_draft_instead_of_switching_primary_agent() {
 
     assert!(matches!(
         event,
-        Some(app_types::InlineEvent::QueueSubmit(value)) if value == "Review this"
+        Some(app_types::InlineEvent::CyclePrimaryAgent)
     ));
+    assert_eq!(session.core.input_manager.content(), "Review this");
 }
 
 #[test]
-fn tab_does_not_switch_primary_agent_when_queued_input_exists() {
+fn tab_cycles_primary_agent_when_queued_input_exists() {
     let mut session = app_session_with_input("", 0);
     load_primary_agent_palette(&mut session);
     set_app_session_queued_inputs(&mut session, vec!["queued follow-up".to_string()]);
 
     let event = session.process_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
 
-    assert!(event.is_none());
+    assert!(matches!(
+        event,
+        Some(app_types::InlineEvent::CyclePrimaryAgent)
+    ));
     assert_eq!(session.core.queued_inputs, vec!["queued follow-up"]);
+}
+
+#[test]
+fn shift_tab_cycles_previous_primary_agent() {
+    let mut session = app_session_with_input("", 0);
+    load_primary_agent_palette(&mut session);
+
+    let event = session.process_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT));
+
+    assert!(matches!(
+        event,
+        Some(app_types::InlineEvent::CyclePrimaryAgentPrevious)
+    ));
 }
 
 #[test]

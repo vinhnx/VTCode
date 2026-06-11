@@ -84,7 +84,7 @@ pub fn is_bell_enabled(default_enabled: bool) -> bool {
 
 #[inline]
 fn emit_bell() {
-    print!("{}", BEL);
+    print!("{BEL}");
     let _ = std::io::stdout().flush();
 }
 
@@ -182,14 +182,14 @@ fn send_osc777_notification(message: Option<&str>) {
     let body = sanitize_notification_text(message.unwrap_or("Human approval required"));
     let title = sanitize_notification_text("VT Code");
     let payload = build_osc777_payload(&title, &body);
-    print!("{}{}", payload, BEL);
+    print!("{payload}{BEL}");
     let _ = std::io::stdout().flush();
 }
 
 fn send_osc9_notification(message: Option<&str>) {
     let body = sanitize_notification_text(message.unwrap_or("Human approval required"));
     let payload = build_osc9_payload(&body);
-    print!("{}{}", payload, BEL);
+    print!("{payload}{BEL}");
     let _ = std::io::stdout().flush();
 }
 
@@ -241,11 +241,11 @@ fn detect_terminal_notify_kind_from(
 }
 
 fn build_osc777_payload(title: &str, body: &str) -> String {
-    format!("{}777;notify;{};{}", OSC, title, body)
+    format!("{OSC}777;notify;{title};{body}")
 }
 
 fn build_osc9_payload(body: &str) -> String {
-    format!("{}9;{}", OSC, body)
+    format!("{OSC}9;{body}")
 }
 
 #[cfg(test)]
@@ -293,10 +293,10 @@ mod redraw_tests {
 
     #[test]
     fn osc_payload_format_is_stable() {
-        assert_eq!(build_osc9_payload("done"), format!("{}9;done", OSC));
+        assert_eq!(build_osc9_payload("done"), format!("{OSC}9;done"));
         assert_eq!(
             build_osc777_payload("VT Code", "finished"),
-            format!("{}777;notify;VT Code;finished", OSC)
+            format!("{OSC}777;notify;VT Code;finished")
         );
     }
 }
@@ -567,27 +567,27 @@ pub fn bg_rgb(r: u8, g: u8, b: u8) -> String {
 
 #[inline]
 pub fn colored(text: &str, color: &str) -> String {
-    format!("{}{}{}", color, text, RESET)
+    format!("{color}{text}{RESET}")
 }
 
 #[inline]
 pub fn bold(text: &str) -> String {
-    format!("{}{}{}", BOLD, text, RESET_BOLD_DIM)
+    format!("{BOLD}{text}{RESET_BOLD_DIM}")
 }
 
 #[inline]
 pub fn italic(text: &str) -> String {
-    format!("{}{}{}", ITALIC, text, RESET_ITALIC)
+    format!("{ITALIC}{text}{RESET_ITALIC}")
 }
 
 #[inline]
 pub fn underline(text: &str) -> String {
-    format!("{}{}{}", UNDERLINE, text, RESET_UNDERLINE)
+    format!("{UNDERLINE}{text}{RESET_UNDERLINE}")
 }
 
 #[inline]
 pub fn dim(text: &str) -> String {
-    format!("{}{}{}", DIM, text, RESET_BOLD_DIM)
+    format!("{DIM}{text}{RESET_BOLD_DIM}")
 }
 
 #[inline]
@@ -642,7 +642,7 @@ pub fn pad_to_width(text: &str, width: usize, pad_char: char) -> String {
         text.to_string()
     } else {
         let padding = pad_char.to_string().repeat(width - current_width);
-        format!("{}{}", text, padding)
+        format!("{text}{padding}")
     }
 }
 
@@ -666,9 +666,9 @@ pub fn truncate_to_width(text: &str, max_width: usize, ellipsis: &str) -> String
                 break;
             }
         }
-        format!("{}{}{}{}", ansi_prefix, truncated_plain, ellipsis, RESET)
+        format!("{ansi_prefix}{truncated_plain}{ellipsis}{RESET}")
     } else {
-        format!("{}{}", truncated_plain, ellipsis)
+        format!("{truncated_plain}{ellipsis}")
     }
 }
 

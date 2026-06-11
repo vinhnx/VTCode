@@ -259,10 +259,7 @@ pub(super) async fn render_help(
             MessageStyle::Info,
             "  Ctrl+Enter – Run now / steer the active turn",
         )?;
-        renderer.line(
-            MessageStyle::Info,
-            "  Shift+Tab – Open the Edit/Auto/Plan mode picker",
-        )?;
+        renderer.line(MessageStyle::Info, "  Shift+Tab – Cycle primary agent")?;
         renderer.line(MessageStyle::Info, "")?;
         renderer.line(MessageStyle::Info, "Multiline input:")?;
         renderer.line(

@@ -43,13 +43,13 @@ mod tests {
         TOOL_LIST_FILES_ITEMS_KEY, TOOL_LIST_FILES_RESULT_KEY, TOOL_LIST_FILES_URI_ARG,
     };
     use crate::zed::helpers::{
-        SESSION_CONFIG_MODE_ID, SESSION_CONFIG_MODEL_ID, SESSION_CONFIG_PROVIDER_ID,
-        SESSION_CONFIG_THOUGHT_LEVEL_ID,
+        PrimaryAgentCatalog, SESSION_CONFIG_MODEL_ID, SESSION_CONFIG_PRIMARY_AGENT_ID,
+        SESSION_CONFIG_PROVIDER_ID, SESSION_CONFIG_THOUGHT_LEVEL_ID,
     };
     use crate::zed::types::NotificationEnvelope;
     use agent_client_protocol::{
-        Agent, LoadSessionRequest, NewSessionRequest, SessionConfigKind, SessionModeId,
-        SetSessionConfigOptionRequest, ToolCallStatus,
+        Agent, LoadSessionRequest, NewSessionRequest, SessionConfigKind,
+        SessionConfigSelectOptions, SetSessionConfigOptionRequest, ToolCallStatus,
     };
     use assert_fs::TempDir;
     use serde_json::{Value, json};
@@ -57,6 +57,7 @@ mod tests {
     use std::path::Path;
     use tokio::fs;
     use tokio::sync::mpsc;
+    use vtcode_config::{SubagentDiscoveryInput, discover_subagents};
     use vtcode_core::config::core::PromptCachingConfig;
     use vtcode_core::config::models::{ModelId, Provider};
     use vtcode_core::config::types::{
@@ -67,7 +68,6 @@ mod tests {
     use vtcode_core::core::agent::snapshots::{
         DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
     };
-    use vtcode_core::core::interfaces::SessionMode;
 
     async fn build_agent(workspace: &Path) -> ZedAgent {
         let core_config = CoreAgentConfig {
@@ -105,6 +105,11 @@ mod tests {
                 let _ = envelope.completion.send(());
             }
         });
+        let mut discovery_input = SubagentDiscoveryInput::new(workspace.to_path_buf());
+        discovery_input.include_user_agents = false;
+        let discovered = discover_subagents(&discovery_input).expect("discover primary agents");
+        let primary_agents =
+            PrimaryAgentCatalog::from_specs_with_default(&discovered.effective, "duck");
 
         ZedAgent::new(
             core_config,
@@ -114,6 +119,7 @@ mod tests {
             String::new(),
             tx,
             Some("Zed".to_string()),
+            primary_agents,
         )
         .await
     }
@@ -128,12 +134,72 @@ mod tests {
             .unwrap_or_default()
     }
 
+    fn primary_agent_select_values(
+        config_options: &[crate::acp::SessionConfigOption],
+    ) -> Vec<String> {
+        config_options
+            .iter()
+            .find_map(|option| {
+                (option.id == crate::acp::SessionConfigId::new(SESSION_CONFIG_PRIMARY_AGENT_ID))
+                    .then_some(&option.kind)
+            })
+            .and_then(|kind| match kind {
+                SessionConfigKind::Select(select) => Some(match &select.options {
+                    SessionConfigSelectOptions::Ungrouped(options) => options
+                        .iter()
+                        .map(|option| option.value.0.as_ref().to_string())
+                        .collect(),
+                    _ => Vec::new(),
+                }),
+                _ => None,
+            })
+            .unwrap_or_default()
+    }
+
+    fn primary_agent_select_labels(
+        config_options: &[crate::acp::SessionConfigOption],
+    ) -> Vec<String> {
+        config_options
+            .iter()
+            .find_map(|option| {
+                (option.id == crate::acp::SessionConfigId::new(SESSION_CONFIG_PRIMARY_AGENT_ID))
+                    .then_some(&option.kind)
+            })
+            .and_then(|kind| match kind {
+                SessionConfigKind::Select(select) => Some(match &select.options {
+                    SessionConfigSelectOptions::Ungrouped(options) => {
+                        options.iter().map(|option| option.name.clone()).collect()
+                    }
+                    _ => Vec::new(),
+                }),
+                _ => None,
+            })
+            .unwrap_or_default()
+    }
+
+    fn primary_agent_current_value(
+        config_options: &[crate::acp::SessionConfigOption],
+    ) -> Option<String> {
+        config_options.iter().find_map(|option| {
+            if option.id == crate::acp::SessionConfigId::new(SESSION_CONFIG_PRIMARY_AGENT_ID) {
+                match &option.kind {
+                    SessionConfigKind::Select(select) => {
+                        Some(select.current_value.0.as_ref().to_string())
+                    }
+                    _ => None,
+                }
+            } else {
+                None
+            }
+        })
+    }
+
     #[tokio::test]
     async fn run_list_files_defaults_to_workspace_root() {
         let temp = TempDir::new().unwrap();
         let subdir = temp.path().join("src");
         fs::create_dir(&subdir).await.unwrap();
-        let file_path = subdir.join("example.txt");
+        let file_path = subdir.join("sample.txt");
         fs::write(&file_path, "hello").await.unwrap();
 
         let agent = build_agent(temp.path()).await;
@@ -142,12 +208,20 @@ mod tests {
         assert!(matches!(report.status, ToolCallStatus::Completed));
         let payload = report.raw_output.unwrap();
         let items = list_items_from_payload(&payload);
-        assert!(items.iter().any(|item| {
-            item.get("name")
-                .and_then(Value::as_str)
-                .map(|name| name == "example.txt")
-                .unwrap_or(false)
-        }));
+        assert!(
+            items.iter().any(|item| {
+                item.get("name")
+                    .and_then(Value::as_str)
+                    .map(|name| name == "sample.txt")
+                    .or_else(|| {
+                        item.get("path")
+                            .and_then(Value::as_str)
+                            .map(|path| path.ends_with("sample.txt"))
+                    })
+                    .unwrap_or(false)
+            }),
+            "payload: {payload}"
+        );
     }
 
     #[tokio::test]
@@ -182,30 +256,26 @@ mod tests {
         let agent = build_agent(temp.path()).await;
         let session_id = agent.register_session();
 
-        // Change the mode of the registered session
         {
             let session = agent.session_handle(&session_id).unwrap();
             let mut data = session.data.borrow_mut();
-            data.current_mode = SessionMode::Architect;
+            data.primary_agent = "build".to_string();
             data.reasoning_effort = ReasoningEffortLevel::High;
         }
 
         let args = LoadSessionRequest::new(session_id, temp.path());
         let response = agent.load_session(args).await.unwrap();
 
-        assert_eq!(
-            response.modes.unwrap().current_mode_id,
-            SessionModeId::new("architect")
-        );
+        assert!(response.modes.is_none());
         let config_options = response.config_options.unwrap();
         assert_eq!(config_options.len(), 4);
         assert!(config_options.iter().any(|option| {
-            option.id == crate::acp::SessionConfigId::new(SESSION_CONFIG_MODE_ID)
+            option.id == crate::acp::SessionConfigId::new(SESSION_CONFIG_PRIMARY_AGENT_ID)
                 && matches!(
                     &option.kind,
                     SessionConfigKind::Select(select)
                         if select.current_value
-                            == crate::acp::SessionConfigValueId::new("architect")
+                            == crate::acp::SessionConfigValueId::new("build")
                 )
         }));
         assert!(config_options.iter().any(|option| {
@@ -247,19 +317,16 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(
-            response.modes.unwrap().current_mode_id,
-            SessionModeId::new("code")
-        );
+        assert!(response.modes.is_none());
         let config_options = response.config_options.unwrap();
         assert_eq!(config_options.len(), 4);
         assert!(config_options.iter().any(|option| {
-            option.id == crate::acp::SessionConfigId::new(SESSION_CONFIG_MODE_ID)
+            option.id == crate::acp::SessionConfigId::new(SESSION_CONFIG_PRIMARY_AGENT_ID)
                 && matches!(
                     &option.kind,
                     SessionConfigKind::Select(select)
                         if select.current_value
-                            == crate::acp::SessionConfigValueId::new("code")
+                            == crate::acp::SessionConfigValueId::new("duck")
                 )
         }));
         assert!(config_options.iter().any(|option| {
@@ -292,7 +359,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn set_session_config_option_updates_mode() {
+    async fn set_session_config_option_updates_primary_agent() {
         let temp = TempDir::new().unwrap();
         let agent = build_agent(temp.path()).await;
         let session_id = agent.register_session();
@@ -300,23 +367,154 @@ mod tests {
         let response = agent
             .set_session_config_option(SetSessionConfigOptionRequest::new(
                 session_id.clone(),
-                SESSION_CONFIG_MODE_ID,
-                "architect",
+                SESSION_CONFIG_PRIMARY_AGENT_ID,
+                "build",
             ))
             .await
             .unwrap();
 
         let session = agent.session_handle(&session_id).unwrap();
-        assert_eq!(session.data.borrow().current_mode, SessionMode::Architect);
+        assert_eq!(session.data.borrow().primary_agent, "build");
         assert!(response.config_options.iter().any(|option| {
-            option.id == crate::acp::SessionConfigId::new(SESSION_CONFIG_MODE_ID)
+            option.id == crate::acp::SessionConfigId::new(SESSION_CONFIG_PRIMARY_AGENT_ID)
                 && matches!(
                     &option.kind,
                     SessionConfigKind::Select(select)
                         if select.current_value
-                            == crate::acp::SessionConfigValueId::new("architect")
+                            == crate::acp::SessionConfigValueId::new("build")
                 )
         }));
+    }
+
+    #[tokio::test]
+    async fn set_session_config_option_accepts_only_known_primary_agent_ids() {
+        let temp = TempDir::new().unwrap();
+        let agent = build_agent(temp.path()).await;
+        let session_id = agent.register_session();
+
+        for primary_agent in ["duck", "plan", "build", "auto"] {
+            let response = agent
+                .set_session_config_option(SetSessionConfigOptionRequest::new(
+                    session_id.clone(),
+                    SESSION_CONFIG_PRIMARY_AGENT_ID,
+                    primary_agent,
+                ))
+                .await
+                .unwrap();
+
+            let session = agent.session_handle(&session_id).unwrap();
+            assert_eq!(session.data.borrow().primary_agent, primary_agent);
+            assert_eq!(
+                primary_agent_current_value(&response.config_options),
+                Some(primary_agent.to_string())
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn set_session_config_option_rejects_unknown_primary_agent() {
+        let temp = TempDir::new().unwrap();
+        let agent = build_agent(temp.path()).await;
+        let session_id = agent.register_session();
+        let session = agent.session_handle(&session_id).unwrap();
+        session.data.borrow_mut().primary_agent = "build".to_string();
+
+        let result = agent
+            .set_session_config_option(SetSessionConfigOptionRequest::new(
+                session_id.clone(),
+                SESSION_CONFIG_PRIMARY_AGENT_ID,
+                "research",
+            ))
+            .await;
+
+        let error = result.expect_err("unknown primary agent should be rejected");
+        let error = format!("{error:?}");
+        assert!(error.contains("unknown_primary_agent"));
+        assert!(error.contains("research"));
+        assert_eq!(session.data.borrow().primary_agent, "build");
+    }
+
+    #[tokio::test]
+    async fn session_config_options_include_custom_primary_agent() {
+        let temp = TempDir::new().unwrap();
+        fs::create_dir_all(temp.path().join(".vtcode/agents"))
+            .await
+            .unwrap();
+        fs::write(
+            temp.path().join(".vtcode/agents/research.md"),
+            r#"---
+name: research
+description: Research primary
+mode: primary
+permissions:
+  default: deny
+---
+Research primary prompt."#,
+        )
+        .await
+        .unwrap();
+        let agent = build_agent(temp.path()).await;
+        let session_id = agent.register_session();
+        let session = agent.session_handle(&session_id).unwrap();
+        session.data.borrow_mut().primary_agent = "research".to_string();
+
+        let response = agent
+            .load_session(LoadSessionRequest::new(session_id, temp.path()))
+            .await
+            .unwrap();
+        let config_options = response.config_options.unwrap();
+
+        assert_eq!(
+            primary_agent_select_values(&config_options),
+            ["duck", "plan", "build", "auto", "research"]
+                .map(str::to_string)
+                .to_vec()
+        );
+        assert!(primary_agent_select_labels(&config_options).contains(&"Research primary".into()));
+        assert_eq!(
+            primary_agent_current_value(&config_options),
+            Some("research".to_string())
+        );
+    }
+
+    #[tokio::test]
+    async fn session_config_options_use_overridden_builtin_primary_agent_metadata() {
+        let temp = TempDir::new().unwrap();
+        fs::create_dir_all(temp.path().join(".vtcode/agents"))
+            .await
+            .unwrap();
+        fs::write(
+            temp.path().join(".vtcode/agents/build.md"),
+            r#"---
+name: build
+description: Project Build
+mode: primary
+permissions:
+  default: deny
+aliases:
+  - project-builder
+---
+Project build prompt."#,
+        )
+        .await
+        .unwrap();
+        let agent = build_agent(temp.path()).await;
+        let session_id = agent.register_session();
+        let session = agent.session_handle(&session_id).unwrap();
+
+        let response = agent
+            .set_session_config_option(SetSessionConfigOptionRequest::new(
+                session_id,
+                SESSION_CONFIG_PRIMARY_AGENT_ID,
+                "project-builder",
+            ))
+            .await
+            .unwrap();
+
+        assert_eq!(session.data.borrow().primary_agent, "build");
+        assert!(
+            primary_agent_select_labels(&response.config_options).contains(&"Project Build".into())
+        );
     }
 
     #[tokio::test]
@@ -416,30 +614,5 @@ mod tests {
                             == crate::acp::SessionConfigValueId::new("gpt-5.4-mini")
                 )
         }));
-    }
-
-    #[tokio::test]
-    async fn run_switch_mode_updates_session_mode() {
-        let temp = TempDir::new().unwrap();
-        let agent = build_agent(temp.path()).await;
-        let session_id = agent.register_session();
-
-        // Verify initial mode is "code" (default in register_session)
-        {
-            let session = agent.session_handle(&session_id).unwrap();
-            assert_eq!(session.data.borrow().current_mode, SessionMode::Code);
-        }
-
-        // Switch to "architect"
-        let args = json!({ "mode_id": "architect" });
-        let report = agent.run_switch_mode(&session_id, &args).await.unwrap();
-
-        assert!(matches!(report.status, ToolCallStatus::Completed));
-
-        // Verify session mode was updated
-        {
-            let session = agent.session_handle(&session_id).unwrap();
-            assert_eq!(session.data.borrow().current_mode, SessionMode::Architect);
-        }
     }
 }

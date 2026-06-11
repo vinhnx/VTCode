@@ -405,7 +405,7 @@ pub(crate) async fn refresh_runtime_config_from_manager(
     vt_cfg: &mut Option<VTCodeConfig>,
     provider_client: &dyn vtcode_core::llm::provider::LLMProvider,
     session_bootstrap: &SessionBootstrap,
-    full_auto: bool,
+    _full_auto: bool,
 ) -> Result<()> {
     if let Ok(runtime_manager) = ConfigManager::load_from_workspace(&config.workspace) {
         let runtime_config = runtime_manager.config().clone();
@@ -434,15 +434,6 @@ pub(crate) async fn refresh_runtime_config_from_manager(
             }
         };
         let reasoning_label = config.reasoning_effort.as_str().to_string();
-        let mode_label = match (config.ui_surface, full_auto) {
-            (vtcode_core::config::types::UiSurfacePreference::Inline, true) => "auto".to_string(),
-            (vtcode_core::config::types::UiSurfacePreference::Inline, false) => {
-                "inline".to_string()
-            }
-            (vtcode_core::config::types::UiSurfacePreference::Alternate, _) => "alt".to_string(),
-            (vtcode_core::config::types::UiSurfacePreference::Auto, true) => "auto".to_string(),
-            (vtcode_core::config::types::UiSurfacePreference::Auto, false) => "std".to_string(),
-        };
         if let Ok(header_context) = build_inline_header_context(
             config,
             Some(&runtime_config),
@@ -450,7 +441,6 @@ pub(crate) async fn refresh_runtime_config_from_manager(
             provider_label,
             config.model.clone(),
             provider_client.effective_context_size(&config.model),
-            mode_label,
             reasoning_label,
         )
         .await

@@ -315,7 +315,7 @@ fn classify_halt_decision(category: ErrorCategory) -> ToolHaltDecision {
             warning: "Tool was rate limited; halting further tool calls this turn.",
             mark_loop_limit: true,
         },
-        ErrorCategory::PolicyViolation | ErrorCategory::PlanModeViolation => {
+        ErrorCategory::PolicyViolation | ErrorCategory::PlanningPolicyViolation => {
             ToolHaltDecision::Halt {
                 warning: "Tool denied by policy; halting further tool calls this turn.",
                 mark_loop_limit: false,

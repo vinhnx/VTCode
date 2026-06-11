@@ -22,7 +22,6 @@ pub(super) struct HeaderContextInit<'a> {
     pub(super) session_bootstrap: &'a SessionBootstrap,
     pub(super) provider_client: &'a dyn uni::LLMProvider,
     pub(super) header_provider_label: String,
-    pub(super) full_auto: bool,
 }
 
 pub(super) async fn initialize_header_context(
@@ -38,7 +37,6 @@ pub(super) async fn initialize_header_context(
         session_bootstrap,
         provider_client,
         header_provider_label,
-        full_auto,
     } = init;
 
     let persistent_memory_status = load_persistent_memory_status(config, vt_cfg).await;
@@ -70,14 +68,6 @@ pub(super) async fn initialize_header_context(
         .map(|cfg| cfg.agent.reasoning_effort.as_str().to_string())
         .unwrap_or_else(|| config.reasoning_effort.as_str().to_string());
 
-    let mode_label = match (config.ui_surface, full_auto) {
-        (vtcode_core::config::types::UiSurfacePreference::Inline, true) => "auto".to_string(),
-        (vtcode_core::config::types::UiSurfacePreference::Inline, false) => "inline".to_string(),
-        (vtcode_core::config::types::UiSurfacePreference::Alternate, _) => "alt".to_string(),
-        (vtcode_core::config::types::UiSurfacePreference::Auto, true) => "auto".to_string(),
-        (vtcode_core::config::types::UiSurfacePreference::Auto, false) => "std".to_string(),
-    };
-
     let mut header_context = build_inline_header_context(
         config,
         vt_cfg,
@@ -85,7 +75,6 @@ pub(super) async fn initialize_header_context(
         header_provider_label,
         config.model.clone(),
         provider_client.effective_context_size(&config.model),
-        mode_label,
         reasoning_label,
     )
     .await?;

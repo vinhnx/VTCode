@@ -1,8 +1,8 @@
 use anyhow::Result;
 use serde_json::json;
 
-use crate::agent::runloop::unified::plan_mode_state::{
-    plan_mode_still_active_hint_with_fallback, short_confirmation_hint_with_fallback,
+use crate::agent::runloop::unified::planning_workflow_state::{
+    planning_still_active_hint_with_fallback, short_confirmation_hint_with_fallback,
 };
 use crate::agent::runloop::unified::turn::context::TurnLoopResult;
 use crate::agent::runloop::unified::turn::turn_helpers::{display_error, display_status};
@@ -29,25 +29,25 @@ const UNLIMITED_TOOL_LOOPS: usize = usize::MAX;
 #[inline]
 pub(super) fn extract_turn_config(
     vt_cfg: Option<&VTCodeConfig>,
-    plan_mode_active: bool,
+    planning_active: bool,
 ) -> PrecomputedTurnConfig {
     let features = FeatureSet::from_config(vt_cfg);
     vt_cfg
         .map(|cfg| PrecomputedTurnConfig {
-            max_tool_loops: resolve_tool_loop_limit(cfg.tools.max_tool_loops, plan_mode_active),
+            max_tool_loops: resolve_tool_loop_limit(cfg.tools.max_tool_loops, planning_active),
             tool_repeat_limit: if cfg.tools.max_repeated_tool_calls > 0 {
                 cfg.tools.max_repeated_tool_calls
             } else {
                 DEFAULT_MAX_REPEATED_TOOL_CALLS
             },
             max_session_turns: cfg.agent.max_conversation_turns,
-            request_user_input_enabled: features.request_user_input_enabled(plan_mode_active, true),
+            request_user_input_enabled: features.request_user_input_enabled(planning_active, true),
         })
         .unwrap_or(PrecomputedTurnConfig {
-            max_tool_loops: resolve_tool_loop_limit(DEFAULT_MAX_TOOL_LOOPS, plan_mode_active),
+            max_tool_loops: resolve_tool_loop_limit(DEFAULT_MAX_TOOL_LOOPS, planning_active),
             tool_repeat_limit: DEFAULT_MAX_REPEATED_TOOL_CALLS,
             max_session_turns: DEFAULT_MAX_CONVERSATION_TURNS,
-            request_user_input_enabled: features.request_user_input_enabled(plan_mode_active, true),
+            request_user_input_enabled: features.request_user_input_enabled(planning_active, true),
         })
 }
 
@@ -61,14 +61,14 @@ pub(super) enum ToolLoopLimitAction {
 pub(super) fn resolve_safety_tool_call_limits(
     max_tool_calls_per_turn: usize,
     max_session_turns: usize,
-    plan_mode_active: bool,
+    planning_active: bool,
 ) -> (usize, usize) {
     let turn_limit = if max_tool_calls_per_turn == 0 {
         usize::MAX
     } else {
         max_tool_calls_per_turn
     };
-    let session_limit = if plan_mode_active || max_tool_calls_per_turn == 0 {
+    let session_limit = if planning_active || max_tool_calls_per_turn == 0 {
         usize::MAX
     } else {
         max_tool_calls_per_turn.saturating_mul(max_session_turns.max(1))
@@ -80,29 +80,27 @@ pub(super) fn resolve_safety_tool_call_limits(
 const MAX_TOOL_LOOP_LIMIT_ABSOLUTE_CAP: usize = 120;
 const MAX_TOOL_LOOP_CAP_MULTIPLIER: usize = 3;
 const MAX_TOOL_LOOP_INCREMENT_PER_PROMPT: usize = 50;
-const PLAN_MODE_MIN_TOOL_LOOPS: usize = 40;
-const PLAN_MODE_MAX_TOOL_LOOP_LIMIT_ABSOLUTE_CAP: usize = 240;
-const PLAN_MODE_TOOL_LOOP_CAP_MULTIPLIER: usize = 6;
-const PLAN_MODE_MAX_TOOL_LOOP_INCREMENT_PER_PROMPT: usize = 80;
-const PLAN_MODE_ENTER_TRIGGER_STATUS: &str = "Plan Mode: explicit planning request detected. Entering read-only planning before continuing this turn.";
-const PLAN_MODE_EXIT_TRIGGER_STATUS: &str = "Plan Mode: implementation intent detected from your message. Running `exit_plan_mode` for plan confirmation; once approved, VT Code will switch to Edit Mode and execute.";
-const PLAN_MODE_EXIT_SWITCHED_CONTINUE_STATUS: &str =
-    "Plan Mode disabled. Continuing this turn in Edit Mode to execute your implementation request.";
+const PLANNING_WORKFLOW_MIN_TOOL_LOOPS: usize = 40;
+const PLANNING_WORKFLOW_MAX_TOOL_LOOP_LIMIT_ABSOLUTE_CAP: usize = 240;
+const PLANNING_WORKFLOW_TOOL_LOOP_CAP_MULTIPLIER: usize = 6;
+const PLANNING_WORKFLOW_MAX_TOOL_LOOP_INCREMENT_PER_PROMPT: usize = 80;
+const PLANNING_WORKFLOW_ENTER_TRIGGER_STATUS: &str = "Planning workflow: explicit planning request detected. Entering read-only planning before continuing this turn.";
+const PLANNING_WORKFLOW_EXIT_TRIGGER_STATUS: &str = "Planning workflow: implementation intent detected from your message. Running `finish_planning` for plan confirmation; once approved, VT Code will switch to the selected primary agent and execute.";
+const PLANNING_WORKFLOW_EXIT_SWITCHED_CONTINUE_STATUS: &str = "Planning workflow disabled. Continuing this turn with the selected primary agent to execute your implementation request.";
 
-fn resolve_tool_loop_limit(configured_limit: usize, plan_mode_active: bool) -> usize {
+fn resolve_tool_loop_limit(configured_limit: usize, planning_active: bool) -> usize {
     if configured_limit == 0 {
         UNLIMITED_TOOL_LOOPS
-    } else if plan_mode_active {
-        configured_limit.max(PLAN_MODE_MIN_TOOL_LOOPS)
+    } else if planning_active {
+        configured_limit.max(PLANNING_WORKFLOW_MIN_TOOL_LOOPS)
     } else {
         configured_limit
     }
 }
 
-fn plan_mode_fully_disabled(ctx: &TurnLoopContext<'_>) -> bool {
-    !ctx.session_stats.is_plan_mode()
-        && !ctx.tool_registry.is_plan_mode()
-        && !ctx.tool_registry.plan_mode_state().is_active()
+fn planning_fully_disabled(ctx: &TurnLoopContext<'_>) -> bool {
+    !ctx.tool_registry.is_planning_active()
+        && !ctx.tool_registry.planning_workflow_state().is_active()
 }
 
 fn configured_tool_loop_base_limit(ctx: &TurnLoopContext<'_>) -> usize {
@@ -111,21 +109,21 @@ fn configured_tool_loop_base_limit(ctx: &TurnLoopContext<'_>) -> usize {
         .map(|cfg| cfg.tools.max_tool_loops)
         .filter(|limit| *limit > 0)
         .unwrap_or(DEFAULT_MAX_TOOL_LOOPS);
-    if ctx.session_stats.is_plan_mode() {
-        configured.max(PLAN_MODE_MIN_TOOL_LOOPS)
+    if ctx.is_planning_active() {
+        configured.max(PLANNING_WORKFLOW_MIN_TOOL_LOOPS)
     } else {
         configured
     }
 }
 
-fn tool_loop_hard_cap(base_limit: usize, plan_mode_active: bool) -> usize {
-    if plan_mode_active {
-        if base_limit >= PLAN_MODE_MAX_TOOL_LOOP_LIMIT_ABSOLUTE_CAP {
+fn tool_loop_hard_cap(base_limit: usize, planning_active: bool) -> usize {
+    if planning_active {
+        if base_limit >= PLANNING_WORKFLOW_MAX_TOOL_LOOP_LIMIT_ABSOLUTE_CAP {
             return base_limit;
         }
         return base_limit
-            .saturating_mul(PLAN_MODE_TOOL_LOOP_CAP_MULTIPLIER)
-            .min(PLAN_MODE_MAX_TOOL_LOOP_LIMIT_ABSOLUTE_CAP);
+            .saturating_mul(PLANNING_WORKFLOW_TOOL_LOOP_CAP_MULTIPLIER)
+            .min(PLANNING_WORKFLOW_MAX_TOOL_LOOP_LIMIT_ABSOLUTE_CAP);
     }
     if base_limit >= MAX_TOOL_LOOP_LIMIT_ABSOLUTE_CAP {
         return base_limit;
@@ -139,11 +137,11 @@ fn clamp_tool_loop_increment(
     requested_increment: usize,
     current_limit: usize,
     hard_cap: usize,
-    plan_mode_active: bool,
+    planning_active: bool,
 ) -> usize {
     let remaining = hard_cap.saturating_sub(current_limit);
-    let per_prompt_limit = if plan_mode_active {
-        PLAN_MODE_MAX_TOOL_LOOP_INCREMENT_PER_PROMPT
+    let per_prompt_limit = if planning_active {
+        PLANNING_WORKFLOW_MAX_TOOL_LOOP_INCREMENT_PER_PROMPT
     } else {
         MAX_TOOL_LOOP_INCREMENT_PER_PROMPT
     };
@@ -164,7 +162,7 @@ fn emit_loop_hard_cap_break_metric(
         reason,
         run_id = %ctx.harness_state.run_id.0,
         turn_id = %ctx.harness_state.turn_id.0,
-        plan_mode = ctx.session_stats.is_plan_mode(),
+        planning_workflow = ctx.is_planning_active(),
         step_count,
         current_limit,
         base_limit,
@@ -336,13 +334,13 @@ async fn handle_pause_signal(
     }
 }
 
-pub(super) async fn maybe_handle_plan_mode_exit_trigger(
+pub(super) async fn maybe_handle_planning_exit_trigger(
     ctx: &mut TurnLoopContext<'_>,
     working_history: &mut [uni::Message],
     step_count: usize,
     result: &mut TurnLoopResult,
 ) -> Result<bool> {
-    if !ctx.session_stats.is_plan_mode() {
+    if !ctx.is_planning_active() {
         return Ok(false);
     }
 
@@ -355,8 +353,8 @@ pub(super) async fn maybe_handle_plan_mode_exit_trigger(
     };
 
     let text = last_user_msg.content.as_text();
-    let should_exit_plan = should_exit_plan_mode_from_user_text(&text)
-        || should_exit_plan_mode_from_confirmation(&text, working_history);
+    let should_exit_plan = should_finish_planning_from_user_text(&text)
+        || should_finish_planning_from_confirmation(&text, working_history);
 
     if !should_exit_plan {
         if is_short_confirmation_intent(&text) {
@@ -365,19 +363,19 @@ pub(super) async fn maybe_handle_plan_mode_exit_trigger(
         return Ok(false);
     }
 
-    display_status(ctx.renderer, PLAN_MODE_EXIT_TRIGGER_STATUS)?;
+    display_status(ctx.renderer, PLANNING_WORKFLOW_EXIT_TRIGGER_STATUS)?;
 
     use crate::agent::runloop::unified::tool_pipeline::run_tool_call;
     use crate::agent::runloop::unified::turn::tool_outcomes::helpers::{
-        EXIT_PLAN_MODE_REASON_USER_REQUESTED_IMPLEMENTATION, build_exit_plan_mode_args,
-        build_step_exit_plan_mode_call_id,
+        FINISH_PLANNING_REASON_USER_REQUESTED_IMPLEMENTATION, build_finish_planning_args,
+        build_step_finish_planning_call_id,
     };
     use vtcode_core::llm::provider::ToolCall;
 
-    let args = build_exit_plan_mode_args(EXIT_PLAN_MODE_REASON_USER_REQUESTED_IMPLEMENTATION);
+    let args = build_finish_planning_args(FINISH_PLANNING_REASON_USER_REQUESTED_IMPLEMENTATION);
     let call = ToolCall::function(
-        build_step_exit_plan_mode_call_id(step_count),
-        tool_names::EXIT_PLAN_MODE.to_string(),
+        build_step_finish_planning_call_id(step_count),
+        tool_names::FINISH_PLANNING.to_string(),
         serde_json::to_string(&args).unwrap_or_else(|_| "{}".to_string()),
     );
     let ctrl_c_state = ctx.ctrl_c_state;
@@ -403,29 +401,32 @@ pub(super) async fn maybe_handle_plan_mode_exit_trigger(
 
     match outcome {
         Ok(_pipe_outcome) => {
-            if !plan_mode_fully_disabled(ctx) {
-                display_status(ctx.renderer, &plan_mode_still_active_hint_with_fallback())?;
+            if !planning_fully_disabled(ctx) {
+                display_status(ctx.renderer, &planning_still_active_hint_with_fallback())?;
                 *result = TurnLoopResult::Completed;
                 return Ok(true);
             }
 
-            display_status(ctx.renderer, PLAN_MODE_EXIT_SWITCHED_CONTINUE_STATUS)?;
+            display_status(
+                ctx.renderer,
+                PLANNING_WORKFLOW_EXIT_SWITCHED_CONTINUE_STATUS,
+            )?;
             Ok(false)
         }
         Err(err) => {
-            display_error(ctx.renderer, "Failed to exit Plan Mode", &err)?;
+            display_error(ctx.renderer, "Failed to exit Planning workflow", &err)?;
             Ok(false)
         }
     }
 }
 
-pub(super) async fn maybe_handle_plan_mode_enter_trigger(
+pub(super) async fn maybe_handle_planning_enter_trigger(
     ctx: &mut TurnLoopContext<'_>,
     working_history: &mut [uni::Message],
     step_count: usize,
     result: &mut TurnLoopResult,
 ) -> Result<bool> {
-    if ctx.session_stats.is_plan_mode() {
+    if ctx.is_planning_active() {
         return Ok(false);
     }
 
@@ -438,18 +439,18 @@ pub(super) async fn maybe_handle_plan_mode_enter_trigger(
     };
 
     let text = last_user_msg.content.as_text();
-    if !should_enter_plan_mode_from_user_text(&text) {
+    if !should_start_planning_from_user_text(&text) {
         return Ok(false);
     }
 
-    display_status(ctx.renderer, PLAN_MODE_ENTER_TRIGGER_STATUS)?;
+    display_status(ctx.renderer, PLANNING_WORKFLOW_ENTER_TRIGGER_STATUS)?;
 
     use crate::agent::runloop::unified::tool_pipeline::run_tool_call;
     use vtcode_core::llm::provider::ToolCall;
 
     let call = ToolCall::function(
-        format!("call_{step_count}_enter_plan_mode"),
-        tool_names::ENTER_PLAN_MODE.to_string(),
+        format!("call_{step_count}_start_planning"),
+        tool_names::START_PLANNING.to_string(),
         serde_json::to_string(&json!({
             "description": text,
             "approved": true
@@ -477,35 +478,35 @@ pub(super) async fn maybe_handle_plan_mode_enter_trigger(
     )
     .await
     {
-        Ok(_) if ctx.session_stats.is_plan_mode() => Ok(false),
+        Ok(_) if ctx.is_planning_active() => Ok(false),
         Ok(_) => {
             *result = TurnLoopResult::Completed;
             Ok(true)
         }
         Err(err) => {
-            display_error(ctx.renderer, "Failed to enter Plan Mode", &err)?;
+            display_error(ctx.renderer, "Failed to enter Planning workflow", &err)?;
             *result = TurnLoopResult::Completed;
             Ok(true)
         }
     }
 }
 
-fn should_exit_plan_mode_from_user_text(text: &str) -> bool {
+fn should_finish_planning_from_user_text(text: &str) -> bool {
     let normalized = normalize_user_intent_text(text);
     let normalized_trimmed = normalized.trim();
 
-    // Prefer explicit "stay in plan mode" / "don't implement" instructions over
+    // Prefer explicit "stay in planning workflow" / "don't implement" instructions over
     // generic implementation words that might appear in the same sentence.
     let stay_phrases = [
-        "stay in plan mode",
-        "keep in plan mode",
+        "stay in planning workflow",
+        "keep in planning workflow",
         "continue planning",
         "keep planning",
         "do not implement",
         "don t implement",
         "not ready to implement",
-        "don t exit plan mode",
-        "do not exit plan mode",
+        "don t exit planning workflow",
+        "do not exit planning workflow",
     ];
     if stay_phrases
         .iter()
@@ -515,7 +516,7 @@ fn should_exit_plan_mode_from_user_text(text: &str) -> bool {
     }
 
     // Handle short imperative commands like "implement" (with punctuation/slash variants).
-    // These are common in TUI flows and should reliably trigger Plan Mode exit.
+    // These are common in TUI flows and should reliably trigger Planning workflow exit.
     let direct_commands = [
         "implement",
         "yes",
@@ -528,11 +529,9 @@ fn should_exit_plan_mode_from_user_text(text: &str) -> bool {
         "execute plan",
         "execute the plan",
         "execute this plan",
-        "switch to edit mode",
-        "go to edit mode",
         "switch to agent mode",
-        "exit plan mode",
-        "exit plan mode and implement",
+        "exit planning workflow",
+        "exit planning workflow and implement",
     ];
     if direct_commands.contains(&normalized_trimmed) {
         return true;
@@ -562,17 +561,15 @@ fn should_exit_plan_mode_from_user_text(text: &str) -> bool {
         "start coding",
         "start building",
         "switch to agent mode",
-        "switch to edit mode",
-        "go to edit mode",
-        "exit plan mode",
-        "exit plan mode and implement",
+        "exit planning workflow",
+        "exit planning workflow and implement",
     ];
     trigger_phrases
         .iter()
         .any(|phrase| normalized.contains(phrase))
 }
 
-fn should_exit_plan_mode_from_confirmation(text: &str, working_history: &[uni::Message]) -> bool {
+fn should_finish_planning_from_confirmation(text: &str, working_history: &[uni::Message]) -> bool {
     is_short_confirmation_intent(text)
         && assistant_recently_prompted_implementation(working_history)
 }
@@ -622,9 +619,9 @@ fn assistant_recently_prompted_implementation(working_history: &[uni::Message]) 
         "implement this plan",
         "implement the plan",
         "ready to implement",
-        "exit plan mode",
+        "exit planning workflow",
         "execute the plan",
-        "switch out of plan mode",
+        "switch out of planning workflow",
         "start implementation",
         "start implementing",
         "start coding",
@@ -632,7 +629,7 @@ fn assistant_recently_prompted_implementation(working_history: &[uni::Message]) 
     cues.iter().any(|cue| assistant_text.contains(cue))
 }
 
-fn should_enter_plan_mode_from_user_text(text: &str) -> bool {
+fn should_start_planning_from_user_text(text: &str) -> bool {
     let normalized = normalize_user_intent_text(text);
     let normalized_trimmed = normalized.trim();
 
@@ -646,7 +643,7 @@ fn should_enter_plan_mode_from_user_text(text: &str) -> bool {
         "write a plan",
         "come up with a plan",
         "plan this",
-        "stay in plan mode",
+        "stay in planning workflow",
         "keep planning",
         "continue planning",
         "before you implement make a plan",
@@ -689,9 +686,9 @@ pub(super) async fn maybe_handle_tool_loop_limit(
         &format!("Reached maximum tool loops ({})", *current_max_tool_loops),
     )?;
 
-    let plan_mode_active = ctx.session_stats.is_plan_mode();
+    let planning_active = ctx.is_planning_active();
     let base_limit = configured_tool_loop_base_limit(ctx);
-    let hard_cap = tool_loop_hard_cap(base_limit, plan_mode_active);
+    let hard_cap = tool_loop_hard_cap(base_limit, planning_active);
     if *current_max_tool_loops >= hard_cap {
         emit_loop_hard_cap_break_metric(
             ctx,
@@ -724,7 +721,7 @@ pub(super) async fn maybe_handle_tool_loop_limit(
                 requested_increment,
                 *current_max_tool_loops,
                 hard_cap,
-                plan_mode_active,
+                planning_active,
             );
             if increment == 0 {
                 emit_loop_hard_cap_break_metric(
@@ -764,11 +761,11 @@ pub(super) async fn maybe_handle_tool_loop_limit(
 #[cfg(test)]
 mod tests {
     use super::{
-        PLAN_MODE_EXIT_SWITCHED_CONTINUE_STATUS, PLAN_MODE_EXIT_TRIGGER_STATUS,
-        PLAN_MODE_MIN_TOOL_LOOPS, UNLIMITED_TOOL_LOOPS, clamp_tool_loop_increment,
+        PLANNING_WORKFLOW_EXIT_SWITCHED_CONTINUE_STATUS, PLANNING_WORKFLOW_EXIT_TRIGGER_STATUS,
+        PLANNING_WORKFLOW_MIN_TOOL_LOOPS, UNLIMITED_TOOL_LOOPS, clamp_tool_loop_increment,
         extract_turn_config, handle_steering_messages, resolve_safety_tool_call_limits,
-        resolve_tool_loop_limit, should_enter_plan_mode_from_user_text,
-        should_exit_plan_mode_from_confirmation, should_exit_plan_mode_from_user_text,
+        resolve_tool_loop_limit, should_finish_planning_from_confirmation,
+        should_finish_planning_from_user_text, should_start_planning_from_user_text,
         tool_loop_hard_cap,
     };
     use crate::agent::runloop::unified::turn::context::TurnLoopResult;
@@ -780,90 +777,88 @@ mod tests {
 
     #[test]
     fn detects_implement_the_plan_trigger() {
-        assert!(should_exit_plan_mode_from_user_text("Implement the plan."));
-        assert!(should_exit_plan_mode_from_user_text(
+        assert!(should_finish_planning_from_user_text("Implement the plan."));
+        assert!(should_finish_planning_from_user_text(
             "Please execute this plan and start coding."
         ));
     }
 
     #[test]
     fn detects_existing_exit_intents() {
-        assert!(should_exit_plan_mode_from_user_text(
-            "Exit plan mode and implement."
+        assert!(should_finish_planning_from_user_text(
+            "Exit planning workflow and implement."
         ));
-        assert!(should_exit_plan_mode_from_user_text(
-            "Switch to edit mode and proceed."
+        assert!(should_finish_planning_from_user_text(
+            "Exit planning workflow and proceed."
         ));
     }
 
     #[test]
     fn does_not_exit_when_user_wants_to_keep_planning() {
-        assert!(!should_exit_plan_mode_from_user_text(
-            "Don't implement yet, stay in plan mode and refine the plan."
+        assert!(!should_finish_planning_from_user_text(
+            "Don't implement yet, stay in planning workflow and refine the plan."
         ));
-        assert!(!should_exit_plan_mode_from_user_text(
+        assert!(!should_finish_planning_from_user_text(
             "Continue planning for now."
         ));
     }
 
     #[test]
     fn detects_bare_implement_trigger() {
-        assert!(should_exit_plan_mode_from_user_text("implement"));
-        assert!(should_exit_plan_mode_from_user_text("/implement"));
-        assert!(should_exit_plan_mode_from_user_text("implement."));
+        assert!(should_finish_planning_from_user_text("implement"));
+        assert!(should_finish_planning_from_user_text("/implement"));
+        assert!(should_finish_planning_from_user_text("implement."));
     }
 
     #[test]
     fn detects_short_implement_variants() {
-        assert!(should_exit_plan_mode_from_user_text("Implement now"));
-        assert!(should_exit_plan_mode_from_user_text("Start implementing"));
+        assert!(should_finish_planning_from_user_text("Implement now"));
+        assert!(should_finish_planning_from_user_text("Start implementing"));
     }
 
     #[test]
     fn detects_direct_confirmation_aliases_as_execute_intent() {
-        assert!(should_exit_plan_mode_from_user_text("yes"));
-        assert!(should_exit_plan_mode_from_user_text("continue"));
-        assert!(should_exit_plan_mode_from_user_text("go"));
-        assert!(should_exit_plan_mode_from_user_text("start"));
-        assert!(should_exit_plan_mode_from_user_text("yes!"));
+        assert!(should_finish_planning_from_user_text("yes"));
+        assert!(should_finish_planning_from_user_text("continue"));
+        assert!(should_finish_planning_from_user_text("go"));
+        assert!(should_finish_planning_from_user_text("start"));
+        assert!(should_finish_planning_from_user_text("yes!"));
     }
 
     #[test]
     fn stay_mode_has_priority_over_implement_keyword() {
-        assert!(!should_exit_plan_mode_from_user_text(
+        assert!(!should_finish_planning_from_user_text(
             "Do not implement yet; keep planning."
         ));
-        assert!(!should_exit_plan_mode_from_user_text(
-            "Stay in plan mode and don't implement."
+        assert!(!should_finish_planning_from_user_text(
+            "Stay in planning workflow and don't implement."
         ));
     }
 
     #[test]
     fn does_not_false_trigger_on_non_intent_implementation_text() {
-        assert!(!should_exit_plan_mode_from_user_text(
+        assert!(!should_finish_planning_from_user_text(
             "The implementation details are unclear."
         ));
     }
 
     #[test]
-    fn detects_explicit_plan_mode_requests() {
-        assert!(should_enter_plan_mode_from_user_text(
-            "make a plan for this"
-        ));
-        assert!(should_enter_plan_mode_from_user_text(
+    fn detects_explicit_planning_requests() {
+        assert!(should_start_planning_from_user_text("make a plan for this"));
+        assert!(should_start_planning_from_user_text(
             "before implementing, create a plan"
         ));
-        assert!(should_enter_plan_mode_from_user_text(
+        assert!(should_start_planning_from_user_text(
             "outline the implementation plan"
         ));
     }
 
     #[test]
-    fn does_not_enter_plan_mode_for_generic_research_requests() {
-        assert!(!should_enter_plan_mode_from_user_text(
+    fn does_not_start_planning_for_generic_research_requests() {
+        assert!(!should_start_planning_from_user_text(
             "explore and tell me about the core agent loop"
         ));
-        assert!(!should_enter_plan_mode_from_user_text(
+        assert!(!should_start_planning_from_user_text(
             "review the runloop and summarize the behavior"
         ));
     }
@@ -874,13 +869,13 @@ mod tests {
             uni::Message::assistant("Implement this plan?".to_string()),
             uni::Message::user("yes".to_string()),
         ];
-        assert!(should_exit_plan_mode_from_confirmation("yes", &history));
-        assert!(should_exit_plan_mode_from_confirmation(
+        assert!(should_finish_planning_from_confirmation("yes", &history));
+        assert!(should_finish_planning_from_confirmation(
             "continue", &history
         ));
-        assert!(should_exit_plan_mode_from_confirmation("go", &history));
-        assert!(should_exit_plan_mode_from_confirmation("start", &history));
-        assert!(should_exit_plan_mode_from_confirmation("begin", &history));
+        assert!(should_finish_planning_from_confirmation("go", &history));
+        assert!(should_finish_planning_from_confirmation("start", &history));
+        assert!(should_finish_planning_from_confirmation("begin", &history));
     }
 
     #[test]
@@ -889,35 +884,35 @@ mod tests {
             uni::Message::assistant("Continue planning and expand the risks section.".to_string()),
             uni::Message::user("yes".to_string()),
         ];
-        assert!(!should_exit_plan_mode_from_confirmation("yes", &history));
-        assert!(!should_exit_plan_mode_from_confirmation(
+        assert!(!should_finish_planning_from_confirmation("yes", &history));
+        assert!(!should_finish_planning_from_confirmation(
             "continue", &history
         ));
     }
 
     #[test]
-    fn confirmation_words_do_not_trigger_when_stay_in_plan_mode_is_prompted() {
+    fn confirmation_words_do_not_trigger_when_stay_in_planning_workflow_is_prompted() {
         let history = vec![
             uni::Message::assistant(
-                "Do you want to stay in plan mode and revise the plan?".to_string(),
+                "Do you want to stay in planning workflow and revise the plan?".to_string(),
             ),
             uni::Message::user("yes".to_string()),
         ];
-        assert!(!should_exit_plan_mode_from_confirmation("yes", &history));
-        assert!(!should_exit_plan_mode_from_confirmation("start", &history));
+        assert!(!should_finish_planning_from_confirmation("yes", &history));
+        assert!(!should_finish_planning_from_confirmation("start", &history));
     }
 
     #[test]
-    fn plan_mode_exit_trigger_status_mentions_exit_tool_and_transition() {
-        assert!(PLAN_MODE_EXIT_TRIGGER_STATUS.contains("exit_plan_mode"));
-        assert!(PLAN_MODE_EXIT_TRIGGER_STATUS.contains("Edit Mode"));
-        assert!(PLAN_MODE_EXIT_TRIGGER_STATUS.contains("implementation intent"));
+    fn planning_exit_trigger_status_mentions_exit_tool_and_transition() {
+        assert!(PLANNING_WORKFLOW_EXIT_TRIGGER_STATUS.contains("finish_planning"));
+        assert!(PLANNING_WORKFLOW_EXIT_TRIGGER_STATUS.contains("selected primary agent"));
+        assert!(PLANNING_WORKFLOW_EXIT_TRIGGER_STATUS.contains("implementation intent"));
     }
 
     #[test]
-    fn plan_mode_exit_switched_continue_status_mentions_edit_mode_and_turn_continuation() {
-        assert!(PLAN_MODE_EXIT_SWITCHED_CONTINUE_STATUS.contains("Edit Mode"));
-        assert!(PLAN_MODE_EXIT_SWITCHED_CONTINUE_STATUS.contains("Continuing this turn"));
+    fn planning_exit_switched_continue_status_mentions_agent_and_turn_continuation() {
+        assert!(PLANNING_WORKFLOW_EXIT_SWITCHED_CONTINUE_STATUS.contains("selected primary agent"));
+        assert!(PLANNING_WORKFLOW_EXIT_SWITCHED_CONTINUE_STATUS.contains("Continuing this turn"));
     }
 
     #[test]
@@ -940,15 +935,15 @@ mod tests {
     }
 
     #[test]
-    fn extract_turn_config_applies_plan_mode_loop_floor() {
+    fn extract_turn_config_applies_planning_workflow_loop_floor() {
         let mut cfg = VTCodeConfig::default();
         cfg.tools.max_tool_loops = 20;
         let turn_cfg = extract_turn_config(Some(&cfg), true);
-        assert_eq!(turn_cfg.max_tool_loops, PLAN_MODE_MIN_TOOL_LOOPS);
+        assert_eq!(turn_cfg.max_tool_loops, PLANNING_WORKFLOW_MIN_TOOL_LOOPS);
     }
 
     #[test]
-    fn extract_turn_config_keeps_non_plan_mode_loop_limit() {
+    fn extract_turn_config_keeps_non_planning_workflow_loop_limit() {
         let mut cfg = VTCodeConfig::default();
         cfg.tools.max_tool_loops = 20;
         let turn_cfg = extract_turn_config(Some(&cfg), false);
@@ -975,7 +970,7 @@ mod tests {
     }
 
     #[test]
-    fn resolve_safety_tool_call_limits_keeps_plan_mode_session_unbounded() {
+    fn resolve_safety_tool_call_limits_keeps_planning_workflow_session_unbounded() {
         assert_eq!(
             resolve_safety_tool_call_limits(48, 40, true),
             (48, usize::MAX)
@@ -983,7 +978,7 @@ mod tests {
     }
 
     #[test]
-    fn extract_turn_config_honors_request_user_input_setting_in_plan_mode() {
+    fn extract_turn_config_honors_request_user_input_setting_in_planning_workflow() {
         let mut cfg = VTCodeConfig::default();
         cfg.chat.ask_questions.enabled = false;
 

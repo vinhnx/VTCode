@@ -39,6 +39,7 @@ use vtcode_core::hooks::{LifecycleHookEngine, SessionEndReason, SessionStartTrig
 use vtcode_core::notifications::{
     set_global_notification_hook_engine, set_global_terminal_focused,
 };
+use vtcode_core::primary_agent::build_primary_agent_hook_config;
 use vtcode_core::prompts::discover_prompt_templates;
 use vtcode_core::ui::slash::visible_commands;
 use vtcode_core::ui::theme;
@@ -110,12 +111,13 @@ pub(crate) async fn initialize_session_ui(
     } = options;
 
     let lifecycle_hooks = if let Some(vt) = vt_cfg {
+        let hooks =
+            build_primary_agent_hook_config(&vt.hooks, session_state.active_primary_agent.active());
         LifecycleHookEngine::new_with_session(
             config.workspace.clone(),
-            &vt.hooks,
+            &hooks,
             session_trigger,
             session_id,
-            vt.permissions.default_mode,
         )?
     } else {
         None
@@ -390,13 +392,13 @@ pub(crate) async fn initialize_session_ui(
         if allowlist.is_empty() {
             renderer.line(
                 MessageStyle::Info,
-                "Full-auto mode enabled with no tool permissions; tool calls will be skipped.",
+                "Full-auto permission review enabled with no tool permissions; tool calls will be skipped.",
             )?;
         } else {
             renderer.line(
                 MessageStyle::Info,
                 &format!(
-                    "Full-auto mode enabled. Permitted tools: {}",
+                    "Full-auto permission review enabled. Permitted tools: {}",
                     allowlist.join(", ")
                 ),
             )?;
@@ -405,7 +407,7 @@ pub(crate) async fn initialize_session_ui(
 
     handle.set_placeholder(default_placeholder.clone());
 
-    let header_context = initialize_header_context(
+    let mut header_context = initialize_header_context(
         &mut renderer,
         &handle,
         &mut context_manager,
@@ -416,10 +418,16 @@ pub(crate) async fn initialize_session_ui(
             session_bootstrap: &session_state.session_bootstrap,
             provider_client: &*session_state.provider_client,
             header_provider_label,
-            full_auto,
         },
     )
     .await?;
+    let primary_agent_name = session_state
+        .active_primary_agent
+        .active()
+        .display_name
+        .clone();
+    header_context.primary_agent = Some(primary_agent_name.clone());
+    handle.set_primary_agent(Some(primary_agent_name));
 
     let mut startup_update_notice_rx = None;
     let mut startup_update_task_guard = None;

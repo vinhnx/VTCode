@@ -179,12 +179,10 @@ impl Session {
                     }
                 }
             }
-            InlineMessageKind::Policy => {
-                // No spacing if followed by Agent (reasoning -> content flow)
-                if next_kind != Some(InlineMessageKind::Agent) {
-                    for _ in 0..spacing {
-                        wrapped.push(TranscriptLine::default());
-                    }
+            // No spacing if followed by Agent (reasoning -> content flow)
+            InlineMessageKind::Policy if next_kind != Some(InlineMessageKind::Agent) => {
+                for _ in 0..spacing {
+                    wrapped.push(TranscriptLine::default());
                 }
             }
             InlineMessageKind::User => {
@@ -193,12 +191,12 @@ impl Session {
                     wrapped.push(TranscriptLine::default());
                 }
             }
-            InlineMessageKind::Agent => {
-                // Check if next message is a different type (end of agent turn)
-                if next_kind.is_some() && next_kind != Some(InlineMessageKind::Agent) {
-                    for _ in 0..spacing {
-                        wrapped.push(TranscriptLine::default());
-                    }
+            // Check if next message is a different type (end of agent turn)
+            InlineMessageKind::Agent
+                if next_kind.is_some() && next_kind != Some(InlineMessageKind::Agent) =>
+            {
+                for _ in 0..spacing {
+                    wrapped.push(TranscriptLine::default());
                 }
             }
             _ => {}
@@ -489,10 +487,8 @@ impl Session {
         let first_line_prefix_width = UnicodeWidthStr::width(first_line_prefix_text.as_str());
         let indent = " ".repeat(prefix_width);
         let mut lines = Vec::with_capacity(wrapped.len());
-        for (index, (mut line, mut line_links)) in wrapped
-            .into_iter()
-            .zip(explicit_links.into_iter())
-            .enumerate()
+        for (index, (mut line, mut line_links)) in
+            wrapped.into_iter().zip(explicit_links).enumerate()
         {
             let mut spans = Vec::new();
             let (prefix_len, prefix_width) = if index == 0 {

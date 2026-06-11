@@ -58,27 +58,27 @@ All notable changes to vtcode will be documented in this file.
 ### Highlights
 #### Documentation
 
-- Enhance agent and subagent documentation with primary agent details (4cb84e23) 
-- Add screenshot spotlight section with GIF and image table (2b2252a0) 
+- Enhance agent and subagent documentation with primary agent details (4cb84e23)
+- Add screenshot spotlight section with GIF and image table (2b2252a0)
 #### Features
 
-- Implement subagent lifecycle tool policy and enhance subagent controller notifications (017ca5bf) 
-- Add support for new package managers and improve version handling (9dda3341) 
+- Implement subagent lifecycle tool policy and enhance subagent controller notifications (017ca5bf)
+- Add support for new package managers and improve version handling (9dda3341)
 ### Other Changes
 #### CI
 
-- Improve Rust toolchain management with MSRV check and nightly smoke test (9909ad4b) 
+- Improve Rust toolchain management with MSRV check and nightly smoke test (9909ad4b)
 #### Other
 
-- Update TODOs (c47dd4fb) 
-- Update TODO (d41ae5ed) 
-- Refactor tool registration to use distributed slices and update README contributors script (1f1c6978) 
+- Update TODOs (c47dd4fb)
+- Update TODO (d41ae5ed)
+- Refactor tool registration to use distributed slices and update README contributors script (1f1c6978)
 #### Refactors
 
-- Update README layout and improve visual presentation (4aa9ef77) 
-- Update README layout and improve feature descriptions (04cd5e54) 
-- Reorganize contributing section and update contributor images in README (10ec98b1) 
-- Move contributing section to the end of README and update contributor images (61b61d68) 
+- Update README layout and improve visual presentation (4aa9ef77)
+- Update README layout and improve feature descriptions (04cd5e54)
+- Reorganize contributing section and update contributor images in README (10ec98b1)
+- Move contributing section to the end of README and update contributor images (61b61d68)
 ## 0.123.7 - 2026-06-08
 
 ### Highlights
@@ -88,48 +88,48 @@ All notable changes to vtcode will be documented in this file.
 ### Highlights
 #### Bug Fixes
 
-- Resolve docs.rs build failure for vtcode-config (5f722204) 
+- Resolve docs.rs build failure for vtcode-config (5f722204)
 #### Features
 
-- Enrich ast-grep structural search with metaVariables, byteOffset, and url fields (5dcbc31f) 
+- Enrich ast-grep structural search with metaVariables, byteOffset, and url fields (5dcbc31f)
 ### Other Changes
 #### Other
 
 - Feat/top level agents  (533af16b) (@kernitus)
-- Refactor file exclusion logic and enhance directory walking utilities (21119580) 
-- Enhance documentation and configuration for GhosttyCore integration; update related tests and clean up lint settings (0d210b1e) 
-- Update tree-sitter grammar handling and enhance unified search parameters for rewrite workflows (4eaa8c22) 
-- Add linting rules for Kotlin, Python, Ruby, and Rust to enforce best practices (f44d5691) 
-- Add linting rules for Python, Rust, TypeScript, and TSX to enforce best practices (e049bc14) 
-- Refactor and enhance linting rules for Python and Kotlin; add new rules for identity checks and update metadata for existing rules (acb69e45) 
-- Add rule snapshots for various code quality improvements (4ba0b8dd) 
-- Add tests for relational rule YAML generation and validation (85c1f44f) 
-- Add support for C and C++ in local parser checks; update tests accordingly (e51eceee) 
-- Refactor StructuralSearchRequest to use serde_json types directly; remove unused validation functions (cbb3d734) 
-- Add new rules and updates for various languages; enhance JSON schema for unified search parameters (db75ccf4) 
-- Remove unused dependencies, enhance documentation, and update various rules for improved code quality and consistency across languages. (3cd68c2a) 
-- Remove stale lint expectations that are now fulfilled (9aa04c7d) 
+- Refactor file exclusion logic and enhance directory walking utilities (21119580)
+- Enhance documentation and configuration for GhosttyCore integration; update related tests and clean up lint settings (0d210b1e)
+- Update tree-sitter grammar handling and enhance unified search parameters for rewrite workflows (4eaa8c22)
+- Add linting rules for Kotlin, Python, Ruby, and Rust to enforce best practices (f44d5691)
+- Add linting rules for Python, Rust, TypeScript, and TSX to enforce best practices (e049bc14)
+- Refactor and enhance linting rules for Python and Kotlin; add new rules for identity checks and update metadata for existing rules (acb69e45)
+- Add rule snapshots for various code quality improvements (4ba0b8dd)
+- Add tests for relational rule YAML generation and validation (85c1f44f)
+- Add support for C and C++ in local parser checks; update tests accordingly (e51eceee)
+- Refactor StructuralSearchRequest to use serde_json types directly; remove unused validation functions (cbb3d734)
+- Add new rules and updates for various languages; enhance JSON schema for unified search parameters (db75ccf4)
+- Remove unused dependencies, enhance documentation, and update various rules for improved code quality and consistency across languages. (3cd68c2a)
+- Remove stale lint expectations that are now fulfilled (9aa04c7d)
 #### Refactors
 
-- Remove vt100 legacy PTY backend, keep GhosttyCore only (4bd68ffe) 
+- Remove vt100 legacy PTY backend, keep GhosttyCore only (4bd68ffe)
 ## 0.123.5 - 2026-06-07
 
 ### Highlights
 #### Bug Fixes
 
-- Resolve 3 critical harness robustness bugs from session turn_364 (ebdbafb1) 
+- Resolve 3 critical harness robustness bugs from session turn_364 (ebdbafb1)
 #### Documentation
 
-- Add AGENTS.md files for various VT Code components (d56ab044) 
+- Add AGENTS.md files for various VT Code components (d56ab044)
 #### Features
 
-- Add DRY CLI messages helper and detailed clap help for agents (f37e27c8) 
-- Enhance tool permission handling and improve ANSI escape sequence detection (b6e069ce) 
+- Add DRY CLI messages helper and detailed clap help for agents (f37e27c8)
+- Enhance tool permission handling and improve ANSI escape sequence detection (b6e069ce)
 ### Other Changes
 #### Other
 
-- Remove Ghostty VT runtime integration and related tests; adjust terminal size in tests. (2218ca09) 
-- Update TODO (8f62b657) 
+- Remove Ghostty VT runtime integration and related tests; adjust terminal size in tests. (2218ca09)
+- Update TODO (8f62b657)
 ## 0.123.4 - 2026-06-07
 
 ### Highlights
@@ -141,37 +141,37 @@ All notable changes to vtcode will be documented in this file.
 
 - Add vtcode-macros to publish order before vtcode-core (55f2e4df) (@vinhnx)
 - Make crate publishing non-fatal in release.sh and add dependency validation to publish script (12ef4e7b) (@vinhnx)
-- Remove double escape functionality and update related hints (4884c153) 
-- Suppress deprecation warnings for anstyle utilities (27aa88f9) 
+- Remove double escape functionality and update related hints (4884c153)
+- Suppress deprecation warnings for anstyle utilities (27aa88f9)
 ### Other Changes
 #### Other
 
-- Refactor file operations and enhance error handling (e09bf2b5) 
-- Add unified style bridging between anstyle and ratatui (47e14082) 
+- Refactor file operations and enhance error handling (e09bf2b5)
+- Add unified style bridging between anstyle and ratatui (47e14082)
 ## 0.123.2 - 2026-06-06
 
 ### Highlights
 #### Bug Fixes
 
-- Add vtcode-ghostty-core to publish order before vtcode-core (eeb15246) 
+- Add vtcode-ghostty-core to publish order before vtcode-core (eeb15246)
 ### Other Changes
 ## 0.123.1 - 2026-06-06
 
 ### Highlights
 #### Bug Fixes
 
-- Resolve double escape functionality issue and improve response handling (da06eb28) 
-- Skip OS keyring during tests/CI to avoid Keychain prompts (a60f1721) 
-- Ensure deterministic hashing by sorting JSON object keys (38fe3afb) 
+- Resolve double escape functionality issue and improve response handling (da06eb28)
+- Skip OS keyring during tests/CI to avoid Keychain prompts (a60f1721)
+- Ensure deterministic hashing by sorting JSON object keys (38fe3afb)
 #### Documentation
 
-- Enhance README with detailed command usage and workflows (62b2a576) 
-- Add sponsorship section with links and current sponsors (46b40322) 
-- Update feature and provider tables for clarity and consistency (1bc46f46) 
-- Add allocation optimization plan to eliminate redundant heap allocations (acc0a4ba) 
+- Enhance README with detailed command usage and workflows (62b2a576)
+- Add sponsorship section with links and current sponsors (46b40322)
+- Update feature and provider tables for clarity and consistency (1bc46f46)
+- Add allocation optimization plan to eliminate redundant heap allocations (acc0a4ba)
 #### Features
 
-- Add support for Nemotron 3 Ultra and Gemma 4 models with updated configurations (16e6026d) 
+- Add support for Nemotron 3 Ultra and Gemma 4 models with updated configurations (16e6026d)
 ### Other Changes
 #### Other
 
@@ -179,23 +179,23 @@ All notable changes to vtcode will be documented in this file.
 - Update API key and image sizes in README.md (b7c60aa6) (@vinhnx)
 - Simplify quick start instructions for VT Code (3dff646f) (@vinhnx)
 - Add vtcode update command to README (974cfd25) (@vinhnx)
-- Enhance images in README with rounded corners; update TODO and configuration settings (87a81d8d) 
-- Refactor tool name handling to use CompactStr for improved memory efficiency (8c1c7a30) 
-- Add openrouter code generation and macros for string newtypes (b875258a) 
-- Implement core terminal functionality with screen management, input processing, and device reporting (ae290963) 
+- Enhance images in README with rounded corners; update TODO and configuration settings (87a81d8d)
+- Refactor tool name handling to use CompactStr for improved memory efficiency (8c1c7a30)
+- Add openrouter code generation and macros for string newtypes (b875258a)
+- Implement core terminal functionality with screen management, input processing, and device reporting (ae290963)
 #### Refactors
 
-- Improve file selection logic and scoring in file palette (8bd71623) 
-- Improve table rendering and wrapping logic (c67f9d26) 
-- Optimize table rendering logic and add space padding function (b56f3551) 
+- Improve file selection logic and scoring in file palette (8bd71623)
+- Improve table rendering and wrapping logic (c67f9d26)
+- Optimize table rendering logic and add space padding function (b56f3551)
 ## 0.123.0 - 2026-06-05
 
 ### Highlights
 #### Features
 
-- Add NVIDIA Nemotron 3 Ultra model and update provider logic (b27b6cbf) 
-- Add NVIDIA Nemotron 3 Ultra model and update related configurations (bff99dc1) 
-- Enhance JSON parsing to recover from truncated input (989d3bba) 
+- Add NVIDIA Nemotron 3 Ultra model and update provider logic (b27b6cbf)
+- Add NVIDIA Nemotron 3 Ultra model and update related configurations (bff99dc1)
+- Enhance JSON parsing to recover from truncated input (989d3bba)
 ### Other Changes
 ## 0.122.0 - 2026-06-05
 
@@ -203,17 +203,17 @@ All notable changes to vtcode will be documented in this file.
 #### Features
 
 - Add Evolink provider (OpenAI-compatible multi-model gateway)  (bdc4c753) (@EvoLinkAI)
-- Update file palette tree defaults and styling (3af4701b) 
-- Add Evolink provider support and update related documentation (e9577426) 
-- Update OpenAI function parameter sanitization and change default model in configuration (8871c397) 
-- Add new Evolink models and update configurations (8aafefb9) 
+- Update file palette tree defaults and styling (3af4701b)
+- Add Evolink provider support and update related documentation (e9577426)
+- Update OpenAI function parameter sanitization and change default model in configuration (8871c397)
+- Add new Evolink models and update configurations (8aafefb9)
 ### Other Changes
 #### Other
 
 - Update TODO (017be561) (@vinhnx)
 - Add help modal using ratatui-cheese for keyboard shortcuts (87f3630e) (@vinhnx)
 - Update UI highlight symbols and styles across multiple components; change theme to "vitesse-black". (41503473) (@vinhnx)
-- Refactor input handling and styles across various components; unify search field rendering; update theme to ciapre-blue. (33a910d6) 
+- Refactor input handling and styles across various components; unify search field rendering; update theme to ciapre-blue. (33a910d6)
 #### Refactors
 
 - Extract shared provider boilerplate and consolidate error types (5df85e50) (@vinhnx)
@@ -231,10 +231,10 @@ All notable changes to vtcode will be documented in this file.
 #### Refactors
 
 - Improve line number styling and update reasoning effort to high (7398263f) (@vinhnx)
-- Update README structure and improve formatting for clarity (4c9f5df1) 
-- Streamline README by removing outdated sections and enhancing clarity (303de2d6) 
-- Remove perg fallback and update grep_file tool documentation (703dfda2) 
-- Update tool output handling and improve user guidance for reading content (1eb305ba) 
+- Update README structure and improve formatting for clarity (4c9f5df1)
+- Streamline README by removing outdated sections and enhancing clarity (303de2d6)
+- Remove perg fallback and update grep_file tool documentation (703dfda2)
+- Update tool output handling and improve user guidance for reading content (1eb305ba)
 ## 0.121.0 - 2026-06-03
 
 ### Highlights
@@ -245,7 +245,7 @@ All notable changes to vtcode will be documented in this file.
 ### Other Changes
 #### Refactors
 
-- Update build workflows for Linux and Windows binaries (792337eb) 
+- Update build workflows for Linux and Windows binaries (792337eb)
 ## 0.119.0 - 2026-06-03
 
 ### Highlights
@@ -255,17 +255,17 @@ All notable changes to vtcode will be documented in this file.
 ### Highlights
 #### Features
 
-- Add Xiaomi MiMo V2.5 and V2.5 Pro models with updated documentation and default settings (608b7fca) 
+- Add Xiaomi MiMo V2.5 and V2.5 Pro models with updated documentation and default settings (608b7fca)
 ### Other Changes
 #### Other
 
-- Update README (f2b4202b) 
+- Update README (f2b4202b)
 ## 0.117.7 - 2026-06-03
 
 ### Highlights
 #### Bug Fixes
 
-- Skip Windows builds when targets missing, upload assets individually (ced93f5f) 
+- Skip Windows builds when targets missing, upload assets individually (ced93f5f)
 ### Other Changes
 ## 0.117.6 - 2026-06-03
 
@@ -276,21 +276,21 @@ All notable changes to vtcode will be documented in this file.
 ### Other Changes
 #### Refactors
 
-- Replace cross with cargo-zigbuild for cross-compilation and update packaging scripts (d09699ed) 
+- Replace cross with cargo-zigbuild for cross-compilation and update packaging scripts (d09699ed)
 ## 0.117.5 - 2026-06-02
 
 ### Highlights
 #### Bug Fixes
 
-- Run cross builds sequentially to avoid OOM on 16GB M4 (5ad249b4) 
+- Run cross builds sequentially to avoid OOM on 16GB M4 (5ad249b4)
 ### Other Changes
 ## 0.117.4 - 2026-06-02
 
 ### Highlights
 #### Bug Fixes
 
-- Cross-build platform compat, yanked core2 dep (a935bace) 
-- Build windows arm64 natively, cross images require ghcr auth (395c16d5) 
+- Cross-build platform compat, yanked core2 dep (a935bace)
+- Build windows arm64 natively, cross images require ghcr auth (395c16d5)
 ### Other Changes
 ## 0.117.3 - 2026-06-02
 
@@ -302,25 +302,25 @@ All notable changes to vtcode will be documented in this file.
 #### Bug Fixes
 
 - Pin compatible protocol SDK (ec6399d2) (@vinhnx)
-- Update API key and default model settings in vtcode.toml (fc4c1dd6) 
+- Update API key and default model settings in vtcode.toml (fc4c1dd6)
 #### Documentation
 
 - Add validated model pool guidance  (278975c1) (@lucaszhu-hue)
 - Document calculate_sha256 return format and use cases (c17ecad0) (@vinhnx)
-- Update contributing guide for AI and human contributors (bca21a97) 
+- Update contributing guide for AI and human contributors (bca21a97)
 #### Features
 
 - Add MiniMax-M3 cloud model and update configurations (4d8b2cd2) (@vinhnx)
 - Feat(paths): add expand_tilde function for home directory expansion (f92ab297) (@vinhnx)
-- Add support for aarch64 target in Linux and update Homebrew formula (61f9f979) 
+- Add support for aarch64 target in Linux and update Homebrew formula (61f9f979)
 ### Other Changes
 #### Refactors
 
 - Route SHA256 hashing through vtcode-commons::utils::calculate_sha256 (0b73c956) (@vinhnx)
 - Consolidate serde_json pretty-print fallback into vtcode-commons (500dca36) (@vinhnx)
 - Regroup resilience primitives into tools::resilience (eea8d9aa) (@vinhnx)
-- Improve code readability and consistency across multiple files (eb4b169c) 
-- Extract release-lib.sh, add cross-as-default with M4 tuning, optimize CI caching (9b035778) 
+- Improve code readability and consistency across multiple files (eb4b169c)
+- Extract release-lib.sh, add cross-as-default with M4 tuning, optimize CI caching (9b035778)
 #### Tests
 
 - Add regression guard for vtcode_core::safety::hitl reachability (462b4e61) (@vinhnx)
@@ -329,7 +329,7 @@ All notable changes to vtcode will be documented in this file.
 ### Highlights
 #### Features
 
-- Add help modal for keyboard shortcuts and update related tests (20b360a1) 
+- Add help modal for keyboard shortcuts and update related tests (20b360a1)
 ### Other Changes
 #### Other
 
@@ -339,54 +339,54 @@ All notable changes to vtcode will be documented in this file.
 ### Highlights
 #### Documentation
 
-- Update README with Xiaomi MiMo V2.5 promotion details and add promotional image (786fa660) 
+- Update README with Xiaomi MiMo V2.5 promotion details and add promotional image (786fa660)
 #### Features
 
-- Add MiniMax-M3 model with multimodal capabilities and update default model (64b27402) 
+- Add MiniMax-M3 model with multimodal capabilities and update default model (64b27402)
 ### Other Changes
 ## 0.116.4 - 2026-05-31
 
 ### Highlights
 #### Features
 
-- Add launch instruction after successful update installation (ce65af75) 
-- Implement Readline-style keybindings for input editing and navigation (b5572979) 
-- Enhance modal key handling and update quick help lines (08a09dad) 
+- Add launch instruction after successful update installation (ce65af75)
+- Implement Readline-style keybindings for input editing and navigation (b5572979)
+- Enhance modal key handling and update quick help lines (08a09dad)
 ### Other Changes
 #### Other
 
-- Update dependencies and enhance input management with undo/redo functionality (1b932528) 
-- Refactor LLM provider implementations to remove backend_kind method and improve code readability (fc12014f) 
+- Update dependencies and enhance input management with undo/redo functionality (1b932528)
+- Refactor LLM provider implementations to remove backend_kind method and improve code readability (fc12014f)
 ## 0.116.3 - 2026-05-31
 
 ### Highlights
 #### Features
 
-- Add rebindable keybinding system with config integration (ddc2d952) 
-- Implement environment variable for non-interactive trust management (ed395835) 
-- Add workspace trust management details to documentation (a135f12b) 
-- Enable auto-trust for workspace in non-interactive mode (895437d8) 
-- Update default model and increase max tool calls per turn (7f6c3414) 
-- Add new models for DeepInfra and Novita inference providers (65527ea4) 
-- Add support for launching external editor with draft text (932f7197) 
-- Add Next.js agent evaluation details and leaderboard status (7f2faf53) 
-- Update README for improved clarity and structure (bb4ee130) 
-- Enhance badge section in README for better visibility and organization (30515213) 
-- Update README for improved clarity and organization (33c4a589) 
-- Add release packaging automation and shell completions support (575e4449) 
+- Add rebindable keybinding system with config integration (ddc2d952)
+- Implement environment variable for non-interactive trust management (ed395835)
+- Add workspace trust management details to documentation (a135f12b)
+- Enable auto-trust for workspace during non-interactive execution (895437d8)
+- Update default model and increase max tool calls per turn (7f6c3414)
+- Add new models for DeepInfra and Novita inference providers (65527ea4)
+- Add support for launching external editor with draft text (932f7197)
+- Add Next.js agent evaluation details and leaderboard status (7f2faf53)
+- Update README for improved clarity and structure (bb4ee130)
+- Enhance badge section in README for better visibility and organization (30515213)
+- Update README for improved clarity and organization (33c4a589)
+- Add release packaging automation and shell completions support (575e4449)
 ### Other Changes
 #### Other
 
-- Update TODO (2cb0c40b) 
+- Update TODO (2cb0c40b)
 #### Refactors
 
-- Improve code formatting and readability in multiple files (a2716021) 
+- Improve code formatting and readability in multiple files (a2716021)
 ## 0.116.2 - 2026-05-31
 
 ### Highlights
 #### Bug Fixes
 
-- Update provider checks to include additional model names (52a57555) 
+- Update provider checks to include additional model names (52a57555)
 ### Other Changes
 #### Other
 
@@ -396,7 +396,7 @@ All notable changes to vtcode will be documented in this file.
 ### Highlights
 #### Features
 
-- Add start and stop event stream commands to InlineCommand (2897d600) 
+- Add start and stop event stream commands to InlineCommand (2897d600)
 ### Other Changes
 ## 0.116.0 - 2026-05-30
 
@@ -407,78 +407,78 @@ All notable changes to vtcode will be documented in this file.
 - Update TODO (c4e2d4a0) (@vinhnx)
 - Update changelog (9ba9979b) (@vinhnx)
 - Add support section with donation link in README (cfd63e1d) (@vinhnx)
-- Refactor LLM provider handling and improve error context management (b2cd624a) 
-- Remove deprecated DeepSeek V3.2 model references and update related tests (5ce314cf) 
-- Refactor model IDs and descriptions; remove deprecated models and update defaults (9b967eeb) 
-- Add LlamaCpp provider support and related configurations (12c5982c) 
-- Add support for managing local inference servers and new model integration (82ae1a5c) 
-- Add Ctrl+M shortcut to open model picker and update related tests (73538876) 
-- Add donation command and update related UI prompts (fd1a354d) 
-- Fix minimum Ollama version for Responses API and update model fields to be optional (4dc547e3) 
-- Add PR code review agent and related instructions (4f443419) 
-- Add PR code review guidelines to AGENTS.md (14d0e5cc) 
-- Add workspace structure and build guidelines to AGENTS.md (5009acb7) 
-- Refactor AGENTS.md to streamline rules and workspace structure (0ad20837) 
-- Add AGENTS.md files for new modules and update .gitignore to include memory directory (2be6f557) 
-- Update LM Studio provider to support new models and enhance API integration (86671657) 
-- Refactor file operations to use async Tokio methods for improved performance (e4582be4) 
-- Add criterion for benchmarking and improve text editing functions (dc22c528) 
+- Refactor LLM provider handling and improve error context management (b2cd624a)
+- Remove deprecated DeepSeek V3.2 model references and update related tests (5ce314cf)
+- Refactor model IDs and descriptions; remove deprecated models and update defaults (9b967eeb)
+- Add LlamaCpp provider support and related configurations (12c5982c)
+- Add support for managing local inference servers and new model integration (82ae1a5c)
+- Add Ctrl+M shortcut to open model picker and update related tests (73538876)
+- Add donation command and update related UI prompts (fd1a354d)
+- Fix minimum Ollama version for Responses API and update model fields to be optional (4dc547e3)
+- Add PR code review agent and related instructions (4f443419)
+- Add PR code review guidelines to AGENTS.md (14d0e5cc)
+- Add workspace structure and build guidelines to AGENTS.md (5009acb7)
+- Refactor AGENTS.md to streamline rules and workspace structure (0ad20837)
+- Add AGENTS.md files for new modules and update .gitignore to include memory directory (2be6f557)
+- Update LM Studio provider to support new models and enhance API integration (86671657)
+- Refactor file operations to use async Tokio methods for improved performance (e4582be4)
+- Add criterion for benchmarking and improve text editing functions (dc22c528)
 ## 0.115.0 - 2026-05-30
 
 ### Highlights
 #### Features
 
-- Enhance deserialization for optional strings and update PlannerResponse structure (3d6643d2) 
+- Enhance deserialization for optional strings and update PlannerResponse structure (3d6643d2)
 ### Other Changes
 #### Other
 
-- Add StepFun provider and model integration (c3f73b10) 
+- Add StepFun provider and model integration (c3f73b10)
 #### Refactors
 
-- Update header context handling and improve reasoning effort configuration (bb71e501) 
+- Update header context handling and improve reasoning effort configuration (bb71e501)
 ## 0.114.0 - 2026-05-29
 
 ### Highlights
 #### Bug Fixes
 
-- Remove setrlimit/getrlimit wrappers to fix type mismatch on Linux (eb2744d1) 
-- Update validation messages for structured outputs and task budget tokens in Claude Opus 4.8 (705f7def) 
-- Update API response thinking modes and configuration defaults for Anthropic provider (b814f5f5) 
-- Expose matches_model function for public use and update validation logic (4da619bf) 
-- Update model descriptions for Claude Haiku and Claude Sonnet to enhance clarity and detail (ee381fc1) 
+- Remove setrlimit/getrlimit wrappers to fix type mismatch on Linux (eb2744d1)
+- Update validation messages for structured outputs and task budget tokens in Claude Opus 4.8 (705f7def)
+- Update API response thinking modes and configuration defaults for Anthropic provider (b814f5f5)
+- Expose matches_model function for public use and update validation logic (4da619bf)
+- Update model descriptions for Claude Haiku and Claude Sonnet to enhance clarity and detail (ee381fc1)
 #### Documentation
 
-- Update LLM provider integration instructions for clarity (a3f6166b) 
+- Update LLM provider integration instructions for clarity (a3f6166b)
 #### Features
 
-- Add support for mid-conversation system messages in Claude Opus 4.8 (076d8162) 
-- Add Laguna XS.2 model support and update configurations (5782eb5b) 
+- Add support for mid-conversation system messages in Claude Opus 4.8 (076d8162)
+- Add Laguna XS.2 model support and update configurations (5782eb5b)
 ### Other Changes
 #### Other
 
-- Update Anthropic model to Claude Opus 4.8 and adjust related configurations (6ec1aecf) 
-- Add Poolside provider and models support (4b9aa40d) 
-- Add compaction support to response structures and documentation (4ad4f344) 
+- Update Anthropic model to Claude Opus 4.8 and adjust related configurations (6ec1aecf)
+- Add Poolside provider and models support (4b9aa40d)
+- Add compaction support to response structures and documentation (4ad4f344)
 #### Refactors
 
-- Remove MiMo V2 Pro and MiMo V2 Omni models from configurations and related files (6926f102) 
-- Streamline error handling and improve code readability across multiple files (966569c2) 
+- Remove MiMo V2 Pro and MiMo V2 Omni models from configurations and related files (6926f102)
+- Streamline error handling and improve code readability across multiple files (966569c2)
 ## 0.113.0 - 2026-05-28
 
 ### Highlights
 #### Bug Fixes
 
-- Update parameter types for setrlimit and getrlimit functions (700440e8) 
+- Update parameter types for setrlimit and getrlimit functions (700440e8)
 #### Features
 
-- Add HTTP headers for OpenRouter requests (66d456a9) 
+- Add HTTP headers for OpenRouter requests (66d456a9)
 ### Other Changes
 #### Other
 
-- Add support for Qwen models in the model ID system (7445df05) 
+- Add support for Qwen models in the model ID system (7445df05)
 #### Refactors
 
-- Streamline model resolution and remove error handling duplication in OpenRouterProvider (764b088b) 
+- Streamline model resolution and remove error handling duplication in OpenRouterProvider (764b088b)
 ## 0.112.0 - 2026-05-28
 
 ### Highlights
@@ -488,14 +488,14 @@ All notable changes to vtcode will be documented in this file.
 ### Other Changes
 #### Other
 
-- Add Xiaomi MiMo models and provider integration (fa121dd7) 
+- Add Xiaomi MiMo models and provider integration (fa121dd7)
 ## 0.111.1 - 2026-05-28
 
 ### Highlights
 ### Other Changes
 #### Other
 
-- Fix release script (6636c6bc) 
+- Fix release script (6636c6bc)
 ## 0.111.0 - 2026-05-28
 
 ### Highlights
@@ -509,112 +509,112 @@ All notable changes to vtcode will be documented in this file.
 ### Highlights
 #### Bug Fixes
 
-- Record approval decisions for pattern learning in handle_builtin_permission (39cc8183) 
+- Record approval decisions for pattern learning in handle_builtin_permission (39cc8183)
 #### Features
 
-- Update default model and add support for codex provider (1f361157) 
+- Update default model and add support for codex provider (1f361157)
 ### Other Changes
 #### Other
 
-- Add Mistral AI models and provider integration (81051c7a) 
+- Add Mistral AI models and provider integration (81051c7a)
 #### Refactors
 
-- Add missing crate paths for vtcode dependencies (f2c4630f) 
+- Add missing crate paths for vtcode dependencies (f2c4630f)
 ## 0.108.4 - 2026-05-27
 
 ### Highlights
 #### Features
 
-- Add DeepSeek balance retrieval and display functionality (9c6aacc8) 
-- Enhance navigation loop detection and add DeepSeek balance tracking (5e9bdf89) 
-- Update balance tracking for multiple providers and refactor related logic (d3739bd3) 
-- Improve Linux installation logic and enhance balance fetching timeout handling (8a51b9a0) 
+- Add DeepSeek balance retrieval and display functionality (9c6aacc8)
+- Enhance navigation loop detection and add DeepSeek balance tracking (5e9bdf89)
+- Update balance tracking for multiple providers and refactor related logic (d3739bd3)
+- Improve Linux installation logic and enhance balance fetching timeout handling (8a51b9a0)
 ### Other Changes
 #### Other
 
-- Update TODO (f679482a) 
-- Update vtcode (9aa12ed8) 
-- Refactor enums to derive Copy trait for improved performance and memory efficiency (bf7f239b) 
-- Optimize performance and memory usage across various modules by utilizing `Vec::with_capacity`, `entry` API, and reducing unnecessary clones. Mark cold paths with `#[cold]` for better inlining control. Refactor string manipulations for efficiency and clarity. (3950f5f7) 
-- Refactor formatting functions to use `vtcode_commons::formatting::collapse_whitespace` for whitespace handling and optimize string concatenation using `write!` for improved performance. (0273970c) 
+- Update TODO (f679482a)
+- Update vtcode (9aa12ed8)
+- Refactor enums to derive Copy trait for improved performance and memory efficiency (bf7f239b)
+- Optimize performance and memory usage across various modules by utilizing `Vec::with_capacity`, `entry` API, and reducing unnecessary clones. Mark cold paths with `#[cold]` for better inlining control. Refactor string manipulations for efficiency and clarity. (3950f5f7)
+- Refactor formatting functions to use `vtcode_commons::formatting::collapse_whitespace` for whitespace handling and optimize string concatenation using `write!` for improved performance. (0273970c)
 #### Refactors
 
-- Update documentation links to use public methods in harness and pty facades (466825fc) 
-- Simplify status line layout handling and improve auto status updates (fe1c3b85) 
-- Optimize code for better performance and readability (577415b8) 
-- Optimize tool call counting and improve string handling in loop detector (88bd10aa) 
-- Optimize diff computation and improve whitespace normalization in file helpers (91413b28) 
-- Change floating-point types from f64 to f32 for consistency and performance (b350c7d0) 
-- Implement read_exact_uninit for optimized async reading in file operations (787cea68) 
-- Enhance stack protection by capping stack size in pre-main hardening functions (3530b905) 
-- Enhance credential encryption with per-file salt and improve URL validation in WebFetch (d49e58f6) 
-- Optimize loops for width calculations in table rendering (cdad5eff) 
-- Update windows-sys dependency to 0.61.2 and add pretty_assertions for enhanced testing (b6e98c07) 
-- Improve process hardening documentation and clarify stack limit handling (0d1c310c) 
-- Implement integer overflow handling and improve safety checks across multiple modules (e8da535c) 
-- Replace `format!` with `write!` and `writeln!` for improved performance and clarity in multiple files (341a2de9) 
-- Enhance integer overflow handling documentation and clarify performance implications (05a00f9a) 
-- Integrate mimalloc for improved memory management and optimize various data structures (cd05078d) 
-- Implement process hardening functions and streamline environment variable management (42e3528e) 
+- Update documentation links to use public methods in harness and pty facades (466825fc)
+- Simplify status line layout handling and improve auto status updates (fe1c3b85)
+- Optimize code for better performance and readability (577415b8)
+- Optimize tool call counting and improve string handling in loop detector (88bd10aa)
+- Optimize diff computation and improve whitespace normalization in file helpers (91413b28)
+- Change floating-point types from f64 to f32 for consistency and performance (b350c7d0)
+- Implement read_exact_uninit for optimized async reading in file operations (787cea68)
+- Enhance stack protection by capping stack size in pre-main hardening functions (3530b905)
+- Enhance credential encryption with per-file salt and improve URL validation in WebFetch (d49e58f6)
+- Optimize loops for width calculations in table rendering (cdad5eff)
+- Update windows-sys dependency to 0.61.2 and add pretty_assertions for enhanced testing (b6e98c07)
+- Improve process hardening documentation and clarify stack limit handling (0d1c310c)
+- Implement integer overflow handling and improve safety checks across multiple modules (e8da535c)
+- Replace `format!` with `write!` and `writeln!` for improved performance and clarity in multiple files (341a2de9)
+- Enhance integer overflow handling documentation and clarify performance implications (05a00f9a)
+- Integrate mimalloc for improved memory management and optimize various data structures (cd05078d)
+- Implement process hardening functions and streamline environment variable management (42e3528e)
 ## 0.108.3 - 2026-05-24
 
 ### Highlights
 #### Bug Fixes
 
-- Update stop hook to use final text for improved response handling (24739e82) 
-- Ensure blank lines are rendered as placeholders in diff output (2395d8ea) 
+- Update stop hook to use final text for improved response handling (24739e82)
+- Ensure blank lines are rendered as placeholders in diff output (2395d8ea)
 #### Features
 
-- Enhance continuation evaluation with relaxed intent handling and add inline preview for spooled outputs (0d08141a) 
+- Enhance continuation evaluation with relaxed intent handling and add inline preview for spooled outputs (0d08141a)
 ### Other Changes
 #### Other
 
-- Update config (e95a9d64) 
+- Update config (e95a9d64)
 ## 0.108.2 - 2026-05-24
 
 ### Highlights
 #### Bug Fixes
 
-- Improve tool output rendering for command success with no output (de2f5bad) 
-- Ensure duration calculations do not exceed maximum limits (c0fecf23) 
+- Improve tool output rendering for command success with no output (de2f5bad)
+- Ensure duration calculations do not exceed maximum limits (c0fecf23)
 #### Features
 
-- Add 'file' alias for file path parameters across tools (381be8e5) 
-- Update tool policies and enhance DeepSeek provider handling (afaad984) 
-- Add new tools and update policies in tool-policy.json; refactor diff rendering to use standard ANSI colors (991d1590) 
-- Enhance tool output handling and add command summary recording (66d2691d) 
-- Add DSML parsing functionality and update reasoning effort configuration (fd749d7c) 
-- Enhance tool policy management and improve recovery handling (e4ef7275) 
-- Expose RecoveryPhase enum and improve recovery contract violation handling (30bde025) 
-- Implement DSML markup stripping and enhance navigation loop guidance (9e6b10a6) 
-- Remove tool policy JSON and enhance auto-approval logic in permission prompts (bfea75d4) 
-- Add hide header option for TUI to enhance user interface customization (b73d94fb) 
-- Improve tool policy permission management and remove auto-scroll functionality (0b833ca9) 
-- Enhance interim text continuation logic and improve conclusive marker detection (b76b7675) 
-- Refactor interim text continuation logic and enhance conclusive marker detection (2e5b96ea) 
-- Add command word splitting functionality for shell approval commands (3467ab3d) 
-- Optimize vector initializations and add #[must_use] annotations for clarity (e90ee59b) 
-- Update user message handling to use string slice for efficiency (854f732f) 
+- Add 'file' alias for file path parameters across tools (381be8e5)
+- Update tool policies and enhance DeepSeek provider handling (afaad984)
+- Add new tools and update policies in tool-policy.json; refactor diff rendering to use standard ANSI colors (991d1590)
+- Enhance tool output handling and add command summary recording (66d2691d)
+- Add DSML parsing functionality and update reasoning effort configuration (fd749d7c)
+- Enhance tool policy management and improve recovery handling (e4ef7275)
+- Expose RecoveryPhase enum and improve recovery contract violation handling (30bde025)
+- Implement DSML markup stripping and enhance navigation loop guidance (9e6b10a6)
+- Remove tool policy JSON and enhance auto-approval logic in permission prompts (bfea75d4)
+- Add hide header option for TUI to enhance user interface customization (b73d94fb)
+- Improve tool policy permission management and remove auto-scroll functionality (0b833ca9)
+- Enhance interim text continuation logic and improve conclusive marker detection (b76b7675)
+- Refactor interim text continuation logic and enhance conclusive marker detection (2e5b96ea)
+- Add command word splitting functionality for shell approval commands (3467ab3d)
+- Optimize vector initializations and add #[must_use] annotations for clarity (e90ee59b)
+- Update user message handling to use string slice for efficiency (854f732f)
 ### Other Changes
 #### Other
 
-- Update config (632d5235) 
-- Refactor completion handling and enhance tool recovery logic (ce916001) 
-- Optimize string allocations and improve performance in various modules (2300d49f) 
-- Refactor environment variable handling with env_lock; remove unsafe code in tests (407414e0) 
-- Update tool policies to allow additional actions and modify reasoning effort handling (2266862a) 
+- Update config (632d5235)
+- Refactor completion handling and enhance tool recovery logic (ce916001)
+- Optimize string allocations and improve performance in various modules (2300d49f)
+- Refactor environment variable handling with env_lock; remove unsafe code in tests (407414e0)
+- Update tool policies to allow additional actions and modify reasoning effort handling (2266862a)
 #### Refactors
 
-- Streamline tool policies and enhance DeepSeek provider error handling (9f1a794f) 
-- Update message styles for tool output rendering (63263fa1) 
-- Simplify condition checks and enhance clause intent evaluation logic (8abcbc01) 
+- Streamline tool policies and enhance DeepSeek provider error handling (9f1a794f)
+- Update message styles for tool output rendering (63263fa1)
+- Simplify condition checks and enhance clause intent evaluation logic (8abcbc01)
 ## 0.108.1 - 2026-05-22
 
 ### Highlights
 ### Other Changes
 #### Other
 
-- Update brew (36328c56) 
+- Update brew (36328c56)
 ## 0.108.0 - 2026-05-22
 
 ### Highlights
@@ -627,8 +627,8 @@ All notable changes to vtcode will be documented in this file.
 ### Other Changes
 #### Other
 
-- Refactor tool outcome handlers and improve recovery guidance (1af72c93) 
-- Refactor token usage tracking and simplify recovery logic in turn loop (a284faf9) 
+- Refactor tool outcome handlers and improve recovery guidance (1af72c93)
+- Refactor token usage tracking and simplify recovery logic in turn loop (a284faf9)
 ## scode-v0.50.14 - 2026-05-21
 
 ### Highlights
@@ -654,23 +654,23 @@ All notable changes to vtcode will be documented in this file.
 ### Other Changes
 #### Other
 
-- Implement slash command handling and associated models; add tests for command parsing and outcomes (2d07c12f) 
-- Add status line and terminal title setup commands (edca2bfb) 
-- Add support for inline loop actions and enhance diagnostics commands (34fc9261) 
-- Decompose TUI runloop and slash-command modules into smaller units (02d94320) 
-- Add interview context and payload handling for Plan Mode (d0516994) 
-- Add recovery preview and response handling for assistant interactions (d0b6e8e8) 
-- Refactor canonical_tool_name to return &str and update related usages (0dbef927) 
-- Refactor agent_type handling to use String instead of Cow and optimize message content processing (3901951c) 
-- Refactor code for readability and maintainability; streamline tool loop limit checks and enhance plan response handling (3d222d8e) 
-- Enhance Clippy lints for better safety and correctness checks (8b03a3e1) 
-- Replace #[allow(dead_code)] with #[expect(dead_code)] in multiple files to improve dead code handling (b01fb753) 
-- Add new tools to tool policy and adjust policies; update Clippy lints and test expectations (f9c6c5df) 
-- Update lints and improve code quality across multiple modules (ca987323) 
-- Add Gemini 3.5 Flash model (0509cebf) 
+- Implement slash command handling and associated models; add tests for command parsing and outcomes (2d07c12f)
+- Add status line and terminal title setup commands (edca2bfb)
+- Add support for inline loop actions and enhance diagnostics commands (34fc9261)
+- Decompose TUI runloop and slash-command modules into smaller units (02d94320)
+- Add interview context and payload handling for Planning workflow (d0516994)
+- Add recovery preview and response handling for assistant interactions (d0b6e8e8)
+- Refactor canonical_tool_name to return &str and update related usages (0dbef927)
+- Refactor agent_type handling to use String instead of Cow and optimize message content processing (3901951c)
+- Refactor code for readability and maintainability; streamline tool loop limit checks and enhance plan response handling (3d222d8e)
+- Enhance Clippy lints for better safety and correctness checks (8b03a3e1)
+- Replace #[allow(dead_code)] with #[expect(dead_code)] in multiple files to improve dead code handling (b01fb753)
+- Add new tools to tool policy and adjust policies; update Clippy lints and test expectations (f9c6c5df)
+- Update lints and improve code quality across multiple modules (ca987323)
+- Add Gemini 3.5 Flash model (0509cebf)
 #### Refactors
 
-- Optimize atomic operations and session management in PTY handling (1141a096) 
+- Optimize atomic operations and session management in PTY handling (1141a096)
 ## 0.105.13 - 2026-05-14
 
 ### Highlights
@@ -703,11 +703,11 @@ All notable changes to vtcode will be documented in this file.
 ### Other Changes
 #### Other
 
-- Update AGENTs guide (c5b71a50) 
+- Update AGENTs guide (c5b71a50)
 #### Refactors
 
 - Update installer scripts to fetch recent releases and improve error handling  (1f45415f) (@vinhnx)
-- Convert async functions to inline-delegating wrappers to reduce coroutine state machine overhead (5ea90914) 
+- Convert async functions to inline-delegating wrappers to reduce coroutine state machine overhead (5ea90914)
 ## 0.105.7 - 2026-05-07
 
 ### Highlights
@@ -718,17 +718,17 @@ All notable changes to vtcode will be documented in this file.
 ### Other Changes
 #### Other
 
-- Refactor tool execution and configuration; add tool call delay tests and enhance agent capabilities (a8ce67f7) 
+- Refactor tool execution and configuration; add tool call delay tests and enhance agent capabilities (a8ce67f7)
 ## 0.105.5 - 2026-05-01
 
 ### Highlights
 ### Other Changes
 #### Other
 
-- Remove keyring dependency and add platform-specific keyring stores (fef8f0a2) 
+- Remove keyring dependency and add platform-specific keyring stores (fef8f0a2)
 #### Refactors
 
-- Reorganize imports and improve relaunch logic (91a841e1) 
+- Reorganize imports and improve relaunch logic (91a841e1)
 ## 0.105.4 - 2026-05-01
 
 ### Highlights
@@ -742,82 +742,82 @@ All notable changes to vtcode will be documented in this file.
 ### Highlights
 #### Features
 
-- Add tempfile dependency and enhance credential file permissions handling (6c198b3a) 
-- Enhance tool execution safety and prompt alignment handling (60c35814) 
+- Add tempfile dependency and enhance credential file permissions handling (6c198b3a)
+- Enhance tool execution safety and prompt alignment handling (60c35814)
 ### Other Changes
 #### Other
 
-- Enhance OpenAI Response's API websocket provider logic and tests; clarify documentation and comments. (7368a946) 
+- Enhance OpenAI Response's API websocket provider logic and tests; clarify documentation and comments. (7368a946)
 #### Refactors
 
-- Replace direct file writes with write_private_file for secure permissions (0319c5e7) 
+- Replace direct file writes with write_private_file for secure permissions (0319c5e7)
 ## 0.105.1 - 2026-04-29
 
 ### Highlights
 ### Other Changes
 #### Other
 
-- Fix ast-grep dependencies install (21585180) 
+- Fix ast-grep dependencies install (21585180)
 ## 0.105.0 - 2026-04-27
 
 ### Highlights
 ### Other Changes
 #### Other
 
-- Add deepseek-v4-pro:cloud under Ollama provider (512f260b) 
+- Add deepseek-v4-pro:cloud under Ollama provider (512f260b)
 #### Refactors
 
-- Streamline tool handling and validation logic, remove unused code (477319a0) 
-- Update skill manifest handling and permissions to use boxed types (aab2d60c) 
+- Streamline tool handling and validation logic, remove unused code (477319a0)
+- Update skill manifest handling and permissions to use boxed types (aab2d60c)
 ## 0.104.2 - 2026-04-26
 
 ### Highlights
 #### Features
 
-- Update default model and add ast-grep tool support (d2599e7a) 
-- Enhance local agents functionality and improve demo scripts (fea4eaf2) 
-- Implement caching for lightweight skill metadata and system prompt layers (4ba51c73) 
-- Enhance ownership management and borrowing practices across tools and registries (c606e2d4) 
-- Add MCP lifecycle controls and related tool functionalities (c186f725) 
-- Update tool policies and available tools in tool-policy.json (cd016ae5) 
+- Update default model and add ast-grep tool support (d2599e7a)
+- Enhance local agents functionality and improve demo scripts (fea4eaf2)
+- Implement caching for lightweight skill metadata and system prompt layers (4ba51c73)
+- Enhance ownership management and borrowing practices across tools and registries (c606e2d4)
+- Add MCP lifecycle controls and related tool functionalities (c186f725)
+- Update tool policies and available tools in tool-policy.json (cd016ae5)
 ### Other Changes
 #### Other
 
-- Add support for spawning background subprocesses and related configurations (17665666) 
-- Refactor configuration loading and improve error handling across modules (b7be8464) 
+- Add support for spawning background subprocesses and related configurations (17665666)
+- Refactor configuration loading and improve error handling across modules (b7be8464)
 ## 0.104.1 - 2026-04-25
 
 ### Highlights
 #### Bug Fixes
 
-- Handle dated GPT-5.5 alias in model routing (34079b94) 
+- Handle dated GPT-5.5 alias in model routing (34079b94)
 ### Other Changes
 #### Other
 
 - Add DeepWiki badge to README (7b21006a) (@vinhnx)
-- Update config (59a5f22c) 
+- Update config (59a5f22c)
 ## 0.104.0 - 2026-04-25
 
 ### Highlights
 #### Features
 
-- Update tool policies and default model configuration (fea8947a) 
-- Enhance tool call safety validation and refactor permission checks (87f47eec) 
-- Add tool budget warning handling and input reset functionality (bea41f6c) 
-- Add tool call validation with session limit handling in CopilotRuntimeHost (a4d420b6) 
-- Add support for GPT-5.5 model and update related configurations (3296c4ce) 
+- Update tool policies and default model configuration (fea8947a)
+- Enhance tool call safety validation and refactor permission checks (87f47eec)
+- Add tool budget warning handling and input reset functionality (bea41f6c)
+- Add tool call validation with session limit handling in CopilotRuntimeHost (a4d420b6)
+- Add support for GPT-5.5 model and update related configurations (3296c4ce)
 ### Other Changes
 #### Refactors
 
-- Streamline tool policies and update reasoning effort defaults for OpenAI models (15e635af) 
-- Reorganize AGENTS.md for clarity and improved workflow guidance (4732382c) 
+- Streamline tool policies and update reasoning effort defaults for OpenAI models (15e635af)
+- Reorganize AGENTS.md for clarity and improved workflow guidance (4732382c)
 ## 0.103.3 - 2026-04-24
 
 ### Highlights
 #### Features
 
-- Add Ollama cloud provider support for DeepSeek V4 Flash (92908fe3) 
-- Add DeepSeek V4 Pro and Flash cloud models support (973ec7ff) 
+- Add Ollama cloud provider support for DeepSeek V4 Flash (92908fe3)
+- Add DeepSeek V4 Pro and Flash cloud models support (973ec7ff)
 ### Other Changes
 ## 0.103.2 - 2026-04-24
 
@@ -829,31 +829,31 @@ All notable changes to vtcode will be documented in this file.
 ### Other Changes
 #### Other
 
-- Update (e3590bd5) 
+- Update (e3590bd5)
 ## 0.103.0 - 2026-04-24
 
 ### Highlights
 ### Other Changes
 #### Other
 
-- Update (a4c12b76) 
+- Update (a4c12b76)
 ## 0.102.0 - 2026-04-24
 
 ### Highlights
 ### Other Changes
 #### Other
 
-- Update tests (896b1494) 
+- Update tests (896b1494)
 ## 0.101.0 - 2026-04-24
 
 ### Highlights
 ### Other Changes
 #### Other
 
-- DeepSeek V4 Models identifiers and descriptions to reflect version changes (be3638ba) 
+- DeepSeek V4 Models identifiers and descriptions to reflect version changes (be3638ba)
 #### Refactors
 
-- Change function signatures to return &str instead of &'static str (8b315ada) 
+- Change function signatures to return &str instead of &'static str (8b315ada)
 ## 0.100.3 - 2026-04-21
 
 ### Highlights
@@ -863,61 +863,61 @@ All notable changes to vtcode will be documented in this file.
 ### Highlights
 #### Features
 
-- Add Kimi K2.6 support (d0a6a254) 
-- Add Kimi K2.6 to OpenRouter presets (04ca6808) 
-- Add MoonshotAI Kimi K2.6 model support (8882cf58) 
+- Add Kimi K2.6 support (d0a6a254)
+- Add Kimi K2.6 to OpenRouter presets (04ca6808)
+- Add MoonshotAI Kimi K2.6 model support (8882cf58)
 ### Other Changes
 ## 0.100.1 - 2026-04-21
 
 ### Highlights
 #### Features
 
-- Add Kimi K2.6 model support in Ollama and Hugging Face providers (dbb69fc0) 
+- Add Kimi K2.6 model support in Ollama and Hugging Face providers (dbb69fc0)
 ### Other Changes
 ## 0.100.0 - 2026-04-20
 
 ### Highlights
 #### Bug Fixes
 
-- Simplify metadata code retrieval in tests (5c4dbd5b) 
+- Simplify metadata code retrieval in tests (5c4dbd5b)
 #### Features
 
-- Update Moonshot model references and configurations (365c522f) 
-- Update Moonshot model references to use DEFAULT_MODEL and add presets (794ee1a5) 
+- Update Moonshot model references and configurations (365c522f)
+- Update Moonshot model references to use DEFAULT_MODEL and add presets (794ee1a5)
 ### Other Changes
 ## 0.99.3 - 2026-04-20
 
 ### Highlights
 #### Features
 
-- Add request_user_input_enabled flag to system prompt context and update related logic (ad39062d) 
+- Add request_user_input_enabled flag to system prompt context and update related logic (ad39062d)
 ### Other Changes
 #### Refactors
 
-- Convert async functions to return Future for improved performance (38fc4722) 
-- Replace manual string truncation with truncate_byte_budget utility for consistency (29a6dc34) 
-- Replace eprintln with tracing for consistent logging across modules (803235eb) 
+- Convert async functions to return Future for improved performance (38fc4722)
+- Replace manual string truncation with truncate_byte_budget utility for consistency (29a6dc34)
+- Replace eprintln with tracing for consistent logging across modules (803235eb)
 ## 0.99.2 - 2026-04-19
 
 ### Highlights
 #### Bug Fixes
 
 - Upgrade rustls-webpki to 0.103.12 (#2 #3) (b53f9c9a) (@vinhnx)
-- Update default model to claude-sonnet-4-6 across configurations and documentation (13f942bb) 
+- Update default model to claude-sonnet-4-6 across configurations and documentation (13f942bb)
 #### Features
 
-- Implement memories subsystem with configuration options (021aa664) 
+- Implement memories subsystem with configuration options (021aa664)
 ### Other Changes
 #### Other
 
-- Add OpenCode Zen and OpenCode Go providers and models (42bbea49) 
-- Refactor OpenCode providers to support model ID resolution and enhance compatibility (0a5bf2c1) 
+- Add OpenCode Zen and OpenCode Go providers and models (42bbea49)
+- Refactor OpenCode providers to support model ID resolution and enhance compatibility (0a5bf2c1)
 ## 0.99.1 - 2026-04-17
 
 ### Highlights
 #### Features
 
-- Add handling for reasoning signature in UI and ACP streams (9049a09a) 
+- Add handling for reasoning signature in UI and ACP streams (9049a09a)
 ### Other Changes
 ## 0.99.0 - 2026-04-16
 
@@ -925,30 +925,30 @@ All notable changes to vtcode will be documented in this file.
 ### Other Changes
 #### Other
 
-- Update Anthropic provider to support Claude Opus 4.7 with new task budget and reasoning effort features (0a278b96) 
+- Update Anthropic provider to support Claude Opus 4.7 with new task budget and reasoning effort features (0a278b96)
 ## 0.98.7 - 2026-04-15
 
 ### Highlights
 #### Bug Fixes
 
-- Update condition for missing platform binaries in release script (3e88cd0e) 
-- Improve user prompt handling and update configuration settings (934ee662) 
+- Update condition for missing platform binaries in release script (3e88cd0e)
+- Improve user prompt handling and update configuration settings (934ee662)
 #### Features
 
-- Add checksum generation and validation to release process (6708fec0) 
-- Add generic action required status handling in overlays (6d7ffdad) 
+- Add checksum generation and validation to release process (6708fec0)
+- Add generic action required status handling in overlays (6d7ffdad)
 ### Other Changes
 #### Other
 
-- Update TODO (92336dc0) 
-- Update tool execution status display and refine UI handling (f77c7053) 
-- Implement pending user prompt handling and enhance status rendering in TUI (2c4dae7b) 
+- Update TODO (92336dc0)
+- Update tool execution status display and refine UI handling (f77c7053)
+- Implement pending user prompt handling and enhance status rendering in TUI (2c4dae7b)
 ## 0.98.6 - 2026-04-13
 
 ### Highlights
 #### Features
 
-- Add meta handling to elicitation response in LoggingClientHandler (0326ef68) 
+- Add meta handling to elicitation response in LoggingClientHandler (0326ef68)
 ### Other Changes
 ## 0.98.5 - 2026-04-13
 
@@ -956,7 +956,7 @@ All notable changes to vtcode will be documented in this file.
 ### Other Changes
 #### Other
 
-- Update deps (bd9e90ef) 
+- Update deps (bd9e90ef)
 ## 0.98.4 - 2026-04-13
 
 ### Highlights
@@ -973,100 +973,100 @@ All notable changes to vtcode will be documented in this file.
 - Refine asset selection logic to prioritize .tar.gz over .sha256 files (f113d8a6) (@vinhnx)
 #### Documentation
 
-- Update AGENTS.md and TODO.md for clarity on development workflow (bd4f0647) 
-- Remove broken copy/yank text issue description from TODO.md (29ad997b) 
+- Update AGENTS.md and TODO.md for clarity on development workflow (bd4f0647)
+- Remove broken copy/yank text issue description from TODO.md (29ad997b)
 ### Other Changes
 #### Other
 
-- Add README files for new modules and update existing ones (5c4384be) 
-- Add subagent constants, discovery, model resolution, prompt handling, and types (63230b30) 
-- Add tests for transcript rendering, Vim mode functionality, and wizard interactions (1505cbfa) 
-- Update code structure for improved readability and maintainability (39917c56) 
-- Add persistent memory tests for memory operations and classification (a0e0a343) 
-- Refactor code structure for improved readability and maintainability (3ffdf8a4) 
-- Refactor code for improved readability and consistency; update default model in configuration (d42726a2) 
-- Update theme in configuration to 'ciapre-blue' (c12bdf36) 
-- Add tool outcomes handling for response content and subagent memory (1327986f) 
-- Add session archive tests for persistence and message handling (311bd727) 
-- Refactor tool names to use constants from the tools module for consistency (44181fa5) 
-- Add runtime tests for Copilot functionality in llm_request module (d038b0cf) 
-- Add comprehensive tests for tool execution and context handling (0d3b4776) 
-- Refactor code for improved readability and consistency in copilot_runtime, components, and skills modules (b2cc57e0) 
-- Add tests for structural search functionality and request validation (f4649c89) 
-- Add tests for tool execution and sandbox runtime behavior (cbf7effb) 
-- Refactor UI command item creation for improved readability and maintainability (0db3b4d4) 
-- Update tool policies, fix keyboard shortcuts, and enhance documentation (8b91a421) 
-- Add websocket active response error handling and tests (a784ca34) 
-- Refactor tool policies and enhance lifecycle hook payloads to include tool call ID (f27a37cd) 
-- Add support for new session trigger and refactor session initialization logic (7fe243b0) 
-- Add grouping functions for MCP tools by provider and update related logic (b58a72f9) 
-- Add warning handling for session archive persistence and finalization (7341d25e) 
-- Update descriptions for agent parameters and built-in tool registrations (69e86421) 
-- Update command preview notice to include sharing instructions (4588b09c) 
-- Refactor diagnostics and UI interaction to enhance instruction context handling (f1bcb2d4) 
-- Refactor JSON schema handling and enhance tool specifications (c719871f) 
-- Add meta field to MCP elicitation request and response structures (914d59b8) 
-- Add notification condition for desktop notifications delivery (559bba94) 
-- Add default target for docs.rs in Cargo.toml files (12a5d068) 
-- Refactor code for improved readability and consistency in multiple files (7cc15514) 
-- Remove outdated TODO items from project documentation (58aec7ee) 
+- Add README files for new modules and update existing ones (5c4384be)
+- Add subagent constants, discovery, model resolution, prompt handling, and types (63230b30)
+- Add tests for transcript rendering, Vim mode functionality, and wizard interactions (1505cbfa)
+- Update code structure for improved readability and maintainability (39917c56)
+- Add persistent memory tests for memory operations and classification (a0e0a343)
+- Refactor code structure for improved readability and maintainability (3ffdf8a4)
+- Refactor code for improved readability and consistency; update default model in configuration (d42726a2)
+- Update theme in configuration to 'ciapre-blue' (c12bdf36)
+- Add tool outcomes handling for response content and subagent memory (1327986f)
+- Add session archive tests for persistence and message handling (311bd727)
+- Refactor tool names to use constants from the tools module for consistency (44181fa5)
+- Add runtime tests for Copilot functionality in llm_request module (d038b0cf)
+- Add comprehensive tests for tool execution and context handling (0d3b4776)
+- Refactor code for improved readability and consistency in copilot_runtime, components, and skills modules (b2cc57e0)
+- Add tests for structural search functionality and request validation (f4649c89)
+- Add tests for tool execution and sandbox runtime behavior (cbf7effb)
+- Refactor UI command item creation for improved readability and maintainability (0db3b4d4)
+- Update tool policies, fix keyboard shortcuts, and enhance documentation (8b91a421)
+- Add websocket active response error handling and tests (a784ca34)
+- Refactor tool policies and enhance lifecycle hook payloads to include tool call ID (f27a37cd)
+- Add support for new session trigger and refactor session initialization logic (7fe243b0)
+- Add grouping functions for MCP tools by provider and update related logic (b58a72f9)
+- Add warning handling for session archive persistence and finalization (7341d25e)
+- Update descriptions for agent parameters and built-in tool registrations (69e86421)
+- Update command preview notice to include sharing instructions (4588b09c)
+- Refactor diagnostics and UI interaction to enhance instruction context handling (f1bcb2d4)
+- Refactor JSON schema handling and enhance tool specifications (c719871f)
+- Add meta field to MCP elicitation request and response structures (914d59b8)
+- Add notification condition for desktop notifications delivery (559bba94)
+- Add default target for docs.rs in Cargo.toml files (12a5d068)
+- Refactor code for improved readability and consistency in multiple files (7cc15514)
+- Remove outdated TODO items from project documentation (58aec7ee)
 #### Refactors
 
-- Enhance scrolling behavior and selection adjustment in session management (34060deb) 
+- Enhance scrolling behavior and selection adjustment in session management (34060deb)
 #### Tests
 
-- Enhance nested directories test to filter file matches (93d8e397) 
+- Enhance nested directories test to filter file matches (93d8e397)
 ## 0.98.1 - 2026-04-09
 
 ### Highlights
 #### Bug Fixes
 
-- Prevent blocked handoff on tool-free recovery tool calls (f3d5a7ee) 
-- Make external editor opens transient and suppress escape leaks (1e8bd327) 
-- Update theme configuration to use homebrew style (4205a879) 
-- Update agent configuration and tool policies for improved functionality (f9cdc03d) 
+- Prevent blocked handoff on tool-free recovery tool calls (f3d5a7ee)
+- Make external editor opens transient and suppress escape leaks (1e8bd327)
+- Update theme configuration to use homebrew style (4205a879)
+- Update agent configuration and tool policies for improved functionality (f9cdc03d)
 #### Features
 
-- Enhance tool policies and workspace header signals for improved user experience (07910f3c) 
+- Enhance tool policies and workspace header signals for improved user experience (07910f3c)
 ### Other Changes
 #### Other
 
-- Refactor slash command messages and update guidance for installation (09028a6a) 
-- Implement status line setup and configuration, deduplicate terminal title items, and update task tracker permission in config (c4b7cb48) 
-- Implement fallback handling for failed tool-free recovery and adjust turn completion logic (4e58ac64) 
-- Implement structured timeout error handling and add tests for timeout scenarios (c214f667) 
-- Update tool policies, enhance exec command preparation, and improve documentation clarity (43c048e4) 
-- Commit (8ed8fb87) 
-- Bump version to 0.50.12 and remove chat-related commands and references (8a8efa6c) 
-- Bump version to 0.50.13 (337fe1ab) 
-- Implement subagent executors and enhance tool intent handling (c550faa2) 
-- Refactor exec session handling and add error reporting and tool search functionality (dc9e150f) 
-- Refactor tool handling and enhance session management for improved output processing (8d8c47ab) 
-- Refactor MCP provider initialization and enhance tool fetching logic (ecff001a) 
-- Refactor compaction thresholds and remove context awareness support from LLM providers (31b771d0) 
-- Update TODO (203ec0f3) 
-- Update tool policies, enhance recovery context previews, and improve structural search handling (a5db2b86) 
-- Enhance tool output handling and summary generation (c10d90fd) 
-- Refactor CLI action resolution and improve header display logic (61f15e54) 
-- Enhance CLI argument parsing and error reporting for workspace validation (77c3efbe) 
+- Refactor slash command messages and update guidance for installation (09028a6a)
+- Implement status line setup and configuration, deduplicate terminal title items, and update task tracker permission in config (c4b7cb48)
+- Implement fallback handling for failed tool-free recovery and adjust turn completion logic (4e58ac64)
+- Implement structured timeout error handling and add tests for timeout scenarios (c214f667)
+- Update tool policies, enhance exec command preparation, and improve documentation clarity (43c048e4)
+- Commit (8ed8fb87)
+- Bump version to 0.50.12 and remove chat-related commands and references (8a8efa6c)
+- Bump version to 0.50.13 (337fe1ab)
+- Implement subagent executors and enhance tool intent handling (c550faa2)
+- Refactor exec session handling and add error reporting and tool search functionality (dc9e150f)
+- Refactor tool handling and enhance session management for improved output processing (8d8c47ab)
+- Refactor MCP provider initialization and enhance tool fetching logic (ecff001a)
+- Refactor compaction thresholds and remove context awareness support from LLM providers (31b771d0)
+- Update TODO (203ec0f3)
+- Update tool policies, enhance recovery context previews, and improve structural search handling (a5db2b86)
+- Enhance tool output handling and summary generation (c10d90fd)
+- Refactor CLI action resolution and improve header display logic (61f15e54)
+- Enhance CLI argument parsing and error reporting for workspace validation (77c3efbe)
 #### Refactors
 
-- Clean up tool policies and improve CLI help output (b32129ff) 
+- Clean up tool policies and improve CLI help output (b32129ff)
 ## 0.98.0 - 2026-04-07
 
 ### Highlights
 #### Features
 
-- Add mouse pointer shape handling and link/text selection detection (3f654089) 
-- Implement clipboard copy functionality and add copy notification (5a28a4be) 
-- Strip underlines from local file links in inline UI and add related tests (728eadc6) 
-- Enhance CLI progress reporting with terminal clear functionality (a600a3b4) 
-- Add Z.AI GLM-5.1 model support across various providers and update related tests (645df2e9) 
+- Add mouse pointer shape handling and link/text selection detection (3f654089)
+- Implement clipboard copy functionality and add copy notification (5a28a4be)
+- Strip underlines from local file links in inline UI and add related tests (728eadc6)
+- Enhance CLI progress reporting with terminal clear functionality (a600a3b4)
+- Add Z.AI GLM-5.1 model support across various providers and update related tests (645df2e9)
 ### Other Changes
 #### Other
 
 - Core split  (3d12f6b6) (@poelzi)
-- Update notes (f3ebfd31) 
+- Update notes (f3ebfd31)
 ## 0.97.4 - 2026-04-07
 
 ### Highlights
@@ -1074,32 +1074,32 @@ All notable changes to vtcode will be documented in this file.
 #### Other
 
 - Fix formatting in README.md for clarity (979d991d) (@vinhnx)
-- Update note (9f327f92) 
+- Update note (9f327f92)
 #### Refactors
 
-- Unify tool execution kernel and align harness safety limits (5fbfc7a8) 
+- Unify tool execution kernel and align harness safety limits (5fbfc7a8)
 ## 0.97.3 - 2026-04-07
 
 ### Highlights
 ### Other Changes
 #### Other
 
-- Fix tool batching and runloop regressions (2593f015) 
-- Consolidate tool fallback and rate-limit parsing (02fdb3c9) 
+- Fix tool batching and runloop regressions (2593f015)
+- Consolidate tool fallback and rate-limit parsing (02fdb3c9)
 #### Refactors
 
-- Remove Vim mode command and related functionality (f3b44164) 
-- Simplify vtcode configuration (ab835726) 
-- Remove obsolete code (a55f265c) 
-- Remove contributors section from changelog template (30707f13) 
-- Remove FollowUp variant from ReplyKind and update related logic (6f12c2f7) 
-- Improve duration handling and validation in rate limiting and retry logic (3ec14baf) 
+- Remove Vim mode command and related functionality (f3b44164)
+- Simplify vtcode configuration (ab835726)
+- Remove obsolete code (a55f265c)
+- Remove contributors section from changelog template (30707f13)
+- Remove FollowUp variant from ReplyKind and update related logic (6f12c2f7)
+- Improve duration handling and validation in rate limiting and retry logic (3ec14baf)
 ## 0.97.2 - 2026-04-06
 
 ### Highlights
 #### Bug Fixes
 
-- Clear publish warnings (e5d2cb78) 
+- Clear publish warnings (e5d2cb78)
 ### Other Changes
 ### Contributors
 @vinhnx
@@ -1108,7 +1108,7 @@ All notable changes to vtcode will be documented in this file.
 ### Highlights
 #### Features
 
-- Enable ATIF trajectory export and update related configurations (47a230cc) 
+- Enable ATIF trajectory export and update related configurations (47a230cc)
 ### Other Changes
 #### Other
 
@@ -1124,41 +1124,41 @@ All notable changes to vtcode will be documented in this file.
 - Publish specs crates before core (0c1da64d) (@vinhnx)
 - Allow publishing specs crates (2f91bd14) (@vinhnx)
 - Update task_tracker permission and model version in configuration (05405f5c) (@vinhnx)
-- Harden perf baseline startup measurement (32f657dc) 
-- Animate active file operation indicator (c2baca0a) 
-- Enhance command safety checks and segment handling (d7491771) 
-- Dim top-level task tail lines in tool blocks (060ec1f5) 
-- Isolate shared state locks (0d685107) 
+- Harden perf baseline startup measurement (32f657dc)
+- Animate active file operation indicator (c2baca0a)
+- Enhance command safety checks and segment handling (d7491771)
+- Dim top-level task tail lines in tool blocks (060ec1f5)
+- Isolate shared state locks (0d685107)
 #### Documentation
 
-- Add Codex and debug startup release notes (9d24fb99) 
+- Add Codex and debug startup release notes (9d24fb99)
 #### Features
 
-- Add Anthropic native memory and tool result clearing (7b7124f2) 
-- Update notification delivery mode to desktop (80b49f12) 
-- Combine native clearing with compaction (4edb1f65) 
-- Implement orchestrated harness mode with contract evaluation (b437d588) 
-- Enhance scorecard validation and add tests for missing/invalid criteria (29e3df0a) 
-- Update tool policies and add new tools with appropriate permissions (b7e51521) 
+- Add Anthropic native memory and tool result clearing (7b7124f2)
+- Update notification delivery mode to desktop (80b49f12)
+- Combine native clearing with compaction (4edb1f65)
+- Implement orchestrated harness with contract evaluation (b437d588)
+- Enhance scorecard validation and add tests for missing/invalid criteria (29e3df0a)
+- Update tool policies and add new tools with appropriate permissions (b7e51521)
 ### Other Changes
 #### Other
 
 - Fix badge duplication in README.md (4ffc53bb) (@vinhnx)
 - Migrate to serde-saphyr  (c29cdd5d) (@Sachin-Bhat)
-- Enhance first-run wizard with startup modes and memory (199d1569) 
-- Fix check script and logging guard regressions (c6781996) 
-- Refactor system prompts and contracts for clarity and conciseness; optimize skill rendering and memory handling; enhance path policy checks; update execution kernel for unified file actions; adjust configuration formatting. (1b1d0c79) 
-- Remove sparse-checkout configuration from release workflow steps (d4be7f53) 
-- Enhance recovery handling and fallback messages; update command sharing options; adjust configuration for model and tool limits. (ebad1810) 
-- Update agent prompt for auto mode rule reviewer and adjust model settings in configuration (7ae71a83) 
-- Add permission request and stop hooks to lifecycle management (5186a3ea) 
-- Refactor permission handling and improve code readability across multiple modules (a28db433) 
-- Implement notification system with /notify command and enhance session start hooks (e1bc7e41) 
-- Add configurable desktop notification backends (bf8c51d8) 
-- Enhance pty command handling, update configuration options, and add new JSON schemas for collaboration and command execution (6cf2dd04) 
-- Refactor vtcode.toml configuration: streamline agent settings, enhance permissions, and update context management (a5e4e440) 
-- Tighten persistent memory extraction and tool policies (f15b43a5) 
-- Add Agent Trajectory Interchange Format (ATIF) support for session trajectory export (0e09ef90) 
+- Enhance first-run wizard with startup modes and memory (199d1569)
+- Fix check script and logging guard regressions (c6781996)
+- Refactor system prompts and contracts for clarity and conciseness; optimize skill rendering and memory handling; enhance path policy checks; update execution kernel for unified file actions; adjust configuration formatting. (1b1d0c79)
+- Remove sparse-checkout configuration from release workflow steps (d4be7f53)
+- Enhance recovery handling and fallback messages; update command sharing options; adjust configuration for model and tool limits. (ebad1810)
+- Update agent prompt for auto permission review rule reviewer and adjust model settings in configuration (7ae71a83)
+- Add permission request and stop hooks to lifecycle management (5186a3ea)
+- Refactor permission handling and improve code readability across multiple modules (a28db433)
+- Implement notification system with /notify command and enhance session start hooks (e1bc7e41)
+- Add configurable desktop notification backends (bf8c51d8)
+- Enhance pty command handling, update configuration options, and add new JSON schemas for collaboration and command execution (6cf2dd04)
+- Refactor vtcode.toml configuration: streamline agent settings, enhance permissions, and update context management (a5e4e440)
+- Tighten persistent memory extraction and tool policies (f15b43a5)
+- Add Agent Trajectory Interchange Format (ATIF) support for session trajectory export (0e09ef90)
 ### Contributors
 @vinhnx
 ## 0.96.15 - 2026-04-04
@@ -1167,7 +1167,7 @@ All notable changes to vtcode will be documented in this file.
 ### Other Changes
 #### Other
 
-- Update TODO (35cc8ccc) 
+- Update TODO (35cc8ccc)
 ### Contributors
 @vinhnx
 ## 0.96.13 - 2026-04-04
@@ -1176,7 +1176,7 @@ All notable changes to vtcode will be documented in this file.
 ### Other Changes
 #### Other
 
-- Update TODO (35cc8ccc) 
+- Update TODO (35cc8ccc)
 ### Contributors
 @vinhnx
 ## 0.96.12 - 2026-04-02
@@ -1184,13 +1184,13 @@ All notable changes to vtcode will be documented in this file.
 ### Highlights
 #### Bug Fixes
 
-- Encode SHA256 digest as hex manually (db7768f8) 
-- Encode config fingerprint digest as lowercase hex (4d470c5e) 
+- Encode SHA256 digest as hex manually (db7768f8)
+- Encode config fingerprint digest as lowercase hex (4d470c5e)
 ### Other Changes
 #### Other
 
-- Fix script (5655308f) 
-- Refactor mock server initialization and error handling in tests; streamline MCP parameter building; update checksum calculation; enhance session rendering in TUI tests; adjust file permissions in configuration. (03d8ccc9) 
+- Fix script (5655308f)
+- Refactor mock server initialization and error handling in tests; streamline MCP parameter building; update checksum calculation; enhance session rendering in TUI tests; adjust file permissions in configuration. (03d8ccc9)
 ### Contributors
 @vinhnx
 ## 0.96.11 - 2026-04-02
@@ -1198,7 +1198,7 @@ All notable changes to vtcode will be documented in this file.
 ### Highlights
 #### Bug Fixes
 
-- Encode SHA256 digest as hex manually (db7768f8) 
+- Encode SHA256 digest as hex manually (db7768f8)
 ### Other Changes
 ### Contributors
 @vinhnx
@@ -1208,18 +1208,18 @@ All notable changes to vtcode will be documented in this file.
 ### Other Changes
 #### Other
 
-- Fix ast-grep init (0e622cd5) 
-- Fix TUI OAuth cancel without exiting VT Code (ce034434) 
-- Enhance modal rendering with title chrome and divider styles (339be092) 
-- Improve modal list dividers and highlight styling (803a63b5) 
-- Enhance modal rendering with improved styles and background handling (0b4278fb) 
-- Refactor palette rendering to include dividers and improve header styling (a4dde38f) 
-- Add Ghostty VT integration and update dependencies (53431d41) 
-- Add clear background rendering to floating modal and improve tests (c6b1afa0) 
-- Implement reborrow method in SlashCommandContext, update agents command usage, and change OpenAI provider settings in configuration. (2fb54da2) 
-- Update example blocked patterns in vtcode.toml.example (15c69b16) 
-- Enhance /compact command functionality and update configuration settings (8c31b153) 
-- Add freeform default handling to wizard steps and update related prompts (39926d0b) 
+- Fix ast-grep init (0e622cd5)
+- Fix TUI OAuth cancel without exiting VT Code (ce034434)
+- Enhance modal rendering with title chrome and divider styles (339be092)
+- Improve modal list dividers and highlight styling (803a63b5)
+- Enhance modal rendering with improved styles and background handling (0b4278fb)
+- Refactor palette rendering to include dividers and improve header styling (a4dde38f)
+- Add Ghostty VT integration and update dependencies (53431d41)
+- Add clear background rendering to floating modal and improve tests (c6b1afa0)
+- Implement reborrow method in SlashCommandContext, update agents command usage, and change OpenAI provider settings in configuration. (2fb54da2)
+- Update example blocked patterns in vtcode.toml.example (15c69b16)
+- Enhance /compact command functionality and update configuration settings (8c31b153)
+- Add freeform default handling to wizard steps and update related prompts (39926d0b)
 ### Contributors
 @vinhnx
 ## 0.96.9 - 2026-03-31
@@ -1237,7 +1237,7 @@ All notable changes to vtcode will be documented in this file.
 ### Other Changes
 #### Other
 
-- Fix release (ad544b2c) 
+- Fix release (ad544b2c)
 ### Contributors
 @vinhnx
 ## 0.96.7 - 2026-03-31
@@ -1246,8 +1246,8 @@ All notable changes to vtcode will be documented in this file.
 ### Other Changes
 #### Other
 
-- Add zread badge (6bce27c6) 
-- Refactor tests and update tool policies for improved functionality (2bf10861) 
+- Add zread badge (6bce27c6)
+- Refactor tests and update tool policies for improved functionality (2bf10861)
 ### Contributors
 @vinhnx
 ## 0.96.6 - 2026-03-31
@@ -1261,11 +1261,11 @@ All notable changes to vtcode will be documented in this file.
 ### Highlights
 #### Bug Fixes
 
-- Correct post-release regressions (3cd9dde3) 
+- Correct post-release regressions (3cd9dde3)
 ### Other Changes
 #### Other
 
-- Update TODO (0b58348f) 
+- Update TODO (0b58348f)
 ### Contributors
 @vinhnx
 ## 0.96.4 - 2026-03-31
@@ -1273,7 +1273,7 @@ All notable changes to vtcode will be documented in this file.
 ### Highlights
 #### Bug Fixes
 
-- Pass model behavior to anthropic api provider (70944e75) 
+- Pass model behavior to anthropic api provider (70944e75)
 ### Other Changes
 ### Contributors
 @vinhnx
@@ -1283,7 +1283,7 @@ All notable changes to vtcode will be documented in this file.
 ### Other Changes
 #### Other
 
-- Update config (ce0e36d7) 
+- Update config (ce0e36d7)
 ### Contributors
 @vinhnx
 ## 0.96.2 - 2026-03-31
@@ -1291,24 +1291,24 @@ All notable changes to vtcode will be documented in this file.
 ### Highlights
 #### Bug Fixes
 
-- Unify external URL guardrails across VT Code flows (a6444c4b) 
-- Suppress loading UI for spool chunk reads (1635a52f) 
+- Unify external URL guardrails across VT Code flows (a6444c4b)
+- Suppress loading UI for spool chunk reads (1635a52f)
 #### Documentation
 
-- Update README and scripts for crate publishing process (92c4275d) 
+- Update README and scripts for crate publishing process (92c4275d)
 #### Features
 
-- Implement link click throttling and improve mouse event handling (f6746ce3) 
-- Implement ast-grep command checks and improve initialization process (11e1d04f) 
+- Implement link click throttling and improve mouse event handling (f6746ce3)
+- Implement ast-grep command checks and improve initialization process (11e1d04f)
 ### Other Changes
 #### Other
 
 - Update TODO.md (cb7ca5c1) (@vinhnx)
 - Transform Rust source files (0e4c43d8) (@codemod[bot])
-- Implement OAuth support for HTTP MCP providers and enhance CLI commands for login/logout (f6cd0c61) 
-- Add support for Codex app server integration and validation (a2a44dba) 
-- Update config (2d7bb992) 
-- Update TODO (76795760) 
+- Implement OAuth support for HTTP MCP providers and enhance CLI commands for login/logout (f6cd0c61)
+- Add support for Codex app server integration and validation (a2a44dba)
+- Update config (2d7bb992)
+- Update TODO (76795760)
 ### Contributors
 @vinhnx
 ## 0.96.1 - 2026-03-31
@@ -1316,20 +1316,20 @@ All notable changes to vtcode will be documented in this file.
 ### Highlights
 #### Bug Fixes
 
-- Unify external URL guardrails across VT Code flows (a6444c4b) 
-- Suppress loading UI for spool chunk reads (1635a52f) 
+- Unify external URL guardrails across VT Code flows (a6444c4b)
+- Suppress loading UI for spool chunk reads (1635a52f)
 #### Features
 
-- Implement link click throttling and improve mouse event handling (f6746ce3) 
-- Implement ast-grep command checks and improve initialization process (11e1d04f) 
+- Implement link click throttling and improve mouse event handling (f6746ce3)
+- Implement ast-grep command checks and improve initialization process (11e1d04f)
 ### Other Changes
 #### Other
 
 - Update TODO.md (cb7ca5c1) (@vinhnx)
 - Transform Rust source files (0e4c43d8) (@codemod[bot])
-- Implement OAuth support for HTTP MCP providers and enhance CLI commands for login/logout (f6cd0c61) 
-- Add support for Codex app server integration and validation (a2a44dba) 
-- Update config (2d7bb992) 
+- Implement OAuth support for HTTP MCP providers and enhance CLI commands for login/logout (f6cd0c61)
+- Add support for Codex app server integration and validation (a2a44dba)
+- Update config (2d7bb992)
 ### Contributors
 @vinhnx
 ## 0.96.0 - 2026-03-30
@@ -1337,45 +1337,45 @@ All notable changes to vtcode will be documented in this file.
 ### Highlights
 #### Bug Fixes
 
-- Update external editor instructions to reflect single-click behavior (7f9f0557) 
+- Update external editor instructions to reflect single-click behavior (7f9f0557)
 #### Features
 
-- Add shared lightweight model routing (4e41e088) 
-- Implement preferred lightweight model variants and update configuration settings (2112d993) 
-- Implement collect_single_response function for streamlined LLM interactions and refactor related code (a863561c) 
-- Add interactive OpenAI manual compact controls (6660de5d) 
-- Implement transcript link detection and wrapping functionality (9cfd3e01) 
+- Add shared lightweight model routing (4e41e088)
+- Implement preferred lightweight model variants and update configuration settings (2112d993)
+- Implement collect_single_response function for streamlined LLM interactions and refactor related code (a863561c)
+- Add interactive OpenAI manual compact controls (6660de5d)
+- Implement transcript link detection and wrapping functionality (9cfd3e01)
 ### Other Changes
 #### Other
 
-- Add parallel batch test for file listing and unified search; refactor list_files to avoid reentrancy (b5b2d2de) 
-- Add minimum turn limit for child agents and update documentation (97eb9a89) 
-- Update theme permissions and synchronize theme selection across components (43361475) 
-- Add theme management and accessibility features (512ad686) 
-- Add documentation for theme-related functions and improve code readability (9c387721) 
-- Enhance terminal restoration on panic and signal handling (d546487f) 
-- Implement scheduled tasks and automation framework (a0c65096) 
-- Add ast-grep integration for code quality checks and rule enforcement (a7b81d0a) 
-- Implement structural search workflows and enhance ast-grep integration (5112cdbb) 
-- Enhance ast-grep documentation and add tests for skill discovery queries (652ab8aa) 
-- Enhance ast-grep documentation and improve pattern syntax guidance (a5a71c9d) 
-- Enhance ast-grep documentation with rule cheat sheets and improve skill discovery tests (0e6a5a6c) 
-- Enhance ast-grep documentation with config cheat sheets and improve skill discovery tests (306f4ab4) 
-- Update TOOL_SPECS.md with strictness details and usage preferences; remove unused stats.rs; enhance SKILL.md and project-workflows.md with ast-grep insights; add tests for skill discovery and structural search flags; refine hints in structural_search.rs. (0cf298f6) 
-- Enhance documentation for custom language setup and tree-sitter integration; add tests for skill discovery by custom language queries. (71b6eadb) 
-- Enhance documentation on language injection and multi-language support; add tests for skill discovery by language queries. (16de0f58) 
-- Enhance ast-grep documentation and language support; add tests for new aliases and inference rules (644d908f) 
-- Enhance documentation for transformation objects and rewriters; add tests for skill discovery by new queries (211e21aa) 
-- Enhance documentation for sgconfig.yml and project workflows; add tests for skill discovery by ruleDirs, testConfigs, libraryPath, and dynamic injected queries. (4c0405d1) 
-- Enhance documentation and refine descriptions for ast-grep commands; normalize exit codes for no matches and findings in structural search. (29867cdc) 
-- Enhance documentation for Rust, TypeScript, TSX, YAML, Ruby, Python, Kotlin, Java, HTML, Go, Cpp, and C catalog examples; provide guidelines for adapting rules to repository-specific conventions. (819298a2) 
-- Enhance documentation for ast-grep project workflows and APIs; clarify project discovery behavior, scan vs run requirements, and performance optimizations (3db5c5e5) 
-- Fix typo in comments for line truncation functions (32ccac09) 
-- Add persistent memory support and enhance instruction appendix functionality (4c73f931) 
-- Refactor signal handling and improve session finalization timeout logic (47828a62) 
-- Refactor credential storage to support encrypted file storage and improve legacy migration handling (d2e97368) 
-- Add model configuration commands and lightweight model support (1458605d) 
-- Refactor transcript link handling and add URL guard feature (5463ab53) 
+- Add parallel batch test for file listing and unified search; refactor list_files to avoid reentrancy (b5b2d2de)
+- Add minimum turn limit for child agents and update documentation (97eb9a89)
+- Update theme permissions and synchronize theme selection across components (43361475)
+- Add theme management and accessibility features (512ad686)
+- Add documentation for theme-related functions and improve code readability (9c387721)
+- Enhance terminal restoration on panic and signal handling (d546487f)
+- Implement scheduled tasks and automation framework (a0c65096)
+- Add ast-grep integration for code quality checks and rule enforcement (a7b81d0a)
+- Implement structural search workflows and enhance ast-grep integration (5112cdbb)
+- Enhance ast-grep documentation and add tests for skill discovery queries (652ab8aa)
+- Enhance ast-grep documentation and improve pattern syntax guidance (a5a71c9d)
+- Enhance ast-grep documentation with rule cheat sheets and improve skill discovery tests (0e6a5a6c)
+- Enhance ast-grep documentation with config cheat sheets and improve skill discovery tests (306f4ab4)
+- Update TOOL_SPECS.md with strictness details and usage preferences; remove unused stats.rs; enhance SKILL.md and project-workflows.md with ast-grep insights; add tests for skill discovery and structural search flags; refine hints in structural_search.rs. (0cf298f6)
+- Enhance documentation for custom language setup and tree-sitter integration; add tests for skill discovery by custom language queries. (71b6eadb)
+- Enhance documentation on language injection and multi-language support; add tests for skill discovery by language queries. (16de0f58)
+- Enhance ast-grep documentation and language support; add tests for new aliases and inference rules (644d908f)
+- Enhance documentation for transformation objects and rewriters; add tests for skill discovery by new queries (211e21aa)
+- Enhance documentation for sgconfig.yml and project workflows; add tests for skill discovery by ruleDirs, testConfigs, libraryPath, and dynamic injected queries. (4c0405d1)
+- Enhance documentation and refine descriptions for ast-grep commands; normalize exit codes for no matches and findings in structural search. (29867cdc)
+- Enhance documentation for Rust, TypeScript, TSX, YAML, Ruby, Python, Kotlin, Java, HTML, Go, Cpp, and C catalog examples; provide guidelines for adapting rules to repository-specific conventions. (819298a2)
+- Enhance documentation for ast-grep project workflows and APIs; clarify project discovery behavior, scan vs run requirements, and performance optimizations (3db5c5e5)
+- Fix typo in comments for line truncation functions (32ccac09)
+- Add persistent memory support and enhance instruction appendix functionality (4c73f931)
+- Refactor signal handling and improve session finalization timeout logic (47828a62)
+- Refactor credential storage to support encrypted file storage and improve legacy migration handling (d2e97368)
+- Add model configuration commands and lightweight model support (1458605d)
+- Refactor transcript link handling and add URL guard feature (5463ab53)
 ### Contributors
 @vinhnx
 ## 0.95.0 - 2026-03-30
@@ -1383,45 +1383,45 @@ All notable changes to vtcode will be documented in this file.
 ### Highlights
 #### Bug Fixes
 
-- Update external editor instructions to reflect single-click behavior (7f9f0557) 
+- Update external editor instructions to reflect single-click behavior (7f9f0557)
 #### Features
 
-- Add shared lightweight model routing (4e41e088) 
-- Implement preferred lightweight model variants and update configuration settings (2112d993) 
-- Implement collect_single_response function for streamlined LLM interactions and refactor related code (a863561c) 
-- Add interactive OpenAI manual compact controls (6660de5d) 
-- Implement transcript link detection and wrapping functionality (9cfd3e01) 
+- Add shared lightweight model routing (4e41e088)
+- Implement preferred lightweight model variants and update configuration settings (2112d993)
+- Implement collect_single_response function for streamlined LLM interactions and refactor related code (a863561c)
+- Add interactive OpenAI manual compact controls (6660de5d)
+- Implement transcript link detection and wrapping functionality (9cfd3e01)
 ### Other Changes
 #### Other
 
-- Add parallel batch test for file listing and unified search; refactor list_files to avoid reentrancy (b5b2d2de) 
-- Add minimum turn limit for child agents and update documentation (97eb9a89) 
-- Update theme permissions and synchronize theme selection across components (43361475) 
-- Add theme management and accessibility features (512ad686) 
-- Add documentation for theme-related functions and improve code readability (9c387721) 
-- Enhance terminal restoration on panic and signal handling (d546487f) 
-- Implement scheduled tasks and automation framework (a0c65096) 
-- Add ast-grep integration for code quality checks and rule enforcement (a7b81d0a) 
-- Implement structural search workflows and enhance ast-grep integration (5112cdbb) 
-- Enhance ast-grep documentation and add tests for skill discovery queries (652ab8aa) 
-- Enhance ast-grep documentation and improve pattern syntax guidance (a5a71c9d) 
-- Enhance ast-grep documentation with rule cheat sheets and improve skill discovery tests (0e6a5a6c) 
-- Enhance ast-grep documentation with config cheat sheets and improve skill discovery tests (306f4ab4) 
-- Update TOOL_SPECS.md with strictness details and usage preferences; remove unused stats.rs; enhance SKILL.md and project-workflows.md with ast-grep insights; add tests for skill discovery and structural search flags; refine hints in structural_search.rs. (0cf298f6) 
-- Enhance documentation for custom language setup and tree-sitter integration; add tests for skill discovery by custom language queries. (71b6eadb) 
-- Enhance documentation on language injection and multi-language support; add tests for skill discovery by language queries. (16de0f58) 
-- Enhance ast-grep documentation and language support; add tests for new aliases and inference rules (644d908f) 
-- Enhance documentation for transformation objects and rewriters; add tests for skill discovery by new queries (211e21aa) 
-- Enhance documentation for sgconfig.yml and project workflows; add tests for skill discovery by ruleDirs, testConfigs, libraryPath, and dynamic injected queries. (4c0405d1) 
-- Enhance documentation and refine descriptions for ast-grep commands; normalize exit codes for no matches and findings in structural search. (29867cdc) 
-- Enhance documentation for Rust, TypeScript, TSX, YAML, Ruby, Python, Kotlin, Java, HTML, Go, Cpp, and C catalog examples; provide guidelines for adapting rules to repository-specific conventions. (819298a2) 
-- Enhance documentation for ast-grep project workflows and APIs; clarify project discovery behavior, scan vs run requirements, and performance optimizations (3db5c5e5) 
-- Fix typo in comments for line truncation functions (32ccac09) 
-- Add persistent memory support and enhance instruction appendix functionality (4c73f931) 
-- Refactor signal handling and improve session finalization timeout logic (47828a62) 
-- Refactor credential storage to support encrypted file storage and improve legacy migration handling (d2e97368) 
-- Add model configuration commands and lightweight model support (1458605d) 
-- Refactor transcript link handling and add URL guard feature (5463ab53) 
+- Add parallel batch test for file listing and unified search; refactor list_files to avoid reentrancy (b5b2d2de)
+- Add minimum turn limit for child agents and update documentation (97eb9a89)
+- Update theme permissions and synchronize theme selection across components (43361475)
+- Add theme management and accessibility features (512ad686)
+- Add documentation for theme-related functions and improve code readability (9c387721)
+- Enhance terminal restoration on panic and signal handling (d546487f)
+- Implement scheduled tasks and automation framework (a0c65096)
+- Add ast-grep integration for code quality checks and rule enforcement (a7b81d0a)
+- Implement structural search workflows and enhance ast-grep integration (5112cdbb)
+- Enhance ast-grep documentation and add tests for skill discovery queries (652ab8aa)
+- Enhance ast-grep documentation and improve pattern syntax guidance (a5a71c9d)
+- Enhance ast-grep documentation with rule cheat sheets and improve skill discovery tests (0e6a5a6c)
+- Enhance ast-grep documentation with config cheat sheets and improve skill discovery tests (306f4ab4)
+- Update TOOL_SPECS.md with strictness details and usage preferences; remove unused stats.rs; enhance SKILL.md and project-workflows.md with ast-grep insights; add tests for skill discovery and structural search flags; refine hints in structural_search.rs. (0cf298f6)
+- Enhance documentation for custom language setup and tree-sitter integration; add tests for skill discovery by custom language queries. (71b6eadb)
+- Enhance documentation on language injection and multi-language support; add tests for skill discovery by language queries. (16de0f58)
+- Enhance ast-grep documentation and language support; add tests for new aliases and inference rules (644d908f)
+- Enhance documentation for transformation objects and rewriters; add tests for skill discovery by new queries (211e21aa)
+- Enhance documentation for sgconfig.yml and project workflows; add tests for skill discovery by ruleDirs, testConfigs, libraryPath, and dynamic injected queries. (4c0405d1)
+- Enhance documentation and refine descriptions for ast-grep commands; normalize exit codes for no matches and findings in structural search. (29867cdc)
+- Enhance documentation for Rust, TypeScript, TSX, YAML, Ruby, Python, Kotlin, Java, HTML, Go, Cpp, and C catalog examples; provide guidelines for adapting rules to repository-specific conventions. (819298a2)
+- Enhance documentation for ast-grep project workflows and APIs; clarify project discovery behavior, scan vs run requirements, and performance optimizations (3db5c5e5)
+- Fix typo in comments for line truncation functions (32ccac09)
+- Add persistent memory support and enhance instruction appendix functionality (4c73f931)
+- Refactor signal handling and improve session finalization timeout logic (47828a62)
+- Refactor credential storage to support encrypted file storage and improve legacy migration handling (d2e97368)
+- Add model configuration commands and lightweight model support (1458605d)
+- Refactor transcript link handling and add URL guard feature (5463ab53)
 ### Contributors
 @vinhnx
 ## 0.94.0 - 2026-03-28
@@ -1429,37 +1429,37 @@ All notable changes to vtcode will be documented in this file.
 ### Highlights
 #### Features
 
-- Add hosted shell network policy support (def96551) 
-- Add support for OpenAI service tier "flex" and update related configurations (275f88c8) 
-- Add support for inline file inputs in OpenAI provider and enhance file handling (c07e0ac4) 
+- Add hosted shell network policy support (def96551)
+- Add support for OpenAI service tier "flex" and update related configurations (275f88c8)
+- Add support for inline file inputs in OpenAI provider and enhance file handling (c07e0ac4)
 ### Other Changes
 #### Other
 
-- Refactor skills system: update documentation, remove version and author fields, streamline validation, and enhance template structure. (e6821250) 
-- Add vtcode-check tool and update related configurations and tests (ae563671) 
-- Remove outdated documentation and improve error messaging format (3f940788) 
-- Remove outdated documentation files and finalize release notes for v0.3.0 (2c2f01d8) 
-- Remove unused dependencies and improve session ID handling in executors (b89fc354) 
-- Refactor recovery handling and improve timeout messaging in execution policy (f0d3f512) 
-- Enhance Responses API support with continuation state management and incremental history handling (0f030292) 
-- Refactor auto mode features and update related configurations (b9843702) 
-- Add diff preview functionality and related utilities (f98e7b7c) 
-- Refactor LLM request retry logic and add previous response chain error handling (0c18e268) 
-- Add support for minimax tool calls and enhance harmony tool parsing (d71bfeb7) 
-- Refactor minimax tool call parsing and add test for invocation without parameters (d50a6bae) 
-- Refactor LLM request retry logic and update provider configuration (b5e47b42) 
-- Refactor tool error handling and retry logic with structured ToolExecutionError (83e1fc97) 
-- Refactor tool error handling to use structured error context (5414b932) 
-- Refactor and consolidate code to reduce duplication across modules (deef3505) 
-- Add subagent controller management to ToolRegistry (c866f9b9) 
-- Add GLM-5.1 model with enhanced capabilities and update references (8b8882f7) 
-- Update .gitignore to include plans directory and tool-policy.json; add Codemod Skill Discovery section to AGENTS.md (67ba167f) 
-- Update TODO (1350cfe5) 
-- Add support for agent references, local agents management, and enhance sidebar rendering (cd51b91d) 
-- Refactor local agents handling and improve UI integration (f3bd979f) 
+- Refactor skills system: update documentation, remove version and author fields, streamline validation, and enhance template structure. (e6821250)
+- Add vtcode-check tool and update related configurations and tests (ae563671)
+- Remove outdated documentation and improve error messaging format (3f940788)
+- Remove outdated documentation files and finalize release notes for v0.3.0 (2c2f01d8)
+- Remove unused dependencies and improve session ID handling in executors (b89fc354)
+- Refactor recovery handling and improve timeout messaging in execution policy (f0d3f512)
+- Enhance Responses API support with continuation state management and incremental history handling (0f030292)
+- Refactor auto permission review features and update related configurations (b9843702)
+- Add diff preview functionality and related utilities (f98e7b7c)
+- Refactor LLM request retry logic and add previous response chain error handling (0c18e268)
+- Add support for minimax tool calls and enhance harmony tool parsing (d71bfeb7)
+- Refactor minimax tool call parsing and add test for invocation without parameters (d50a6bae)
+- Refactor LLM request retry logic and update provider configuration (b5e47b42)
+- Refactor tool error handling and retry logic with structured ToolExecutionError (83e1fc97)
+- Refactor tool error handling to use structured error context (5414b932)
+- Refactor and consolidate code to reduce duplication across modules (deef3505)
+- Add subagent controller management to ToolRegistry (c866f9b9)
+- Add GLM-5.1 model with enhanced capabilities and update references (8b8882f7)
+- Update .gitignore to include plans directory and tool-policy.json; add Codemod Skill Discovery section to AGENTS.md (67ba167f)
+- Update TODO (1350cfe5)
+- Add support for agent references, local agents management, and enhance sidebar rendering (cd51b91d)
+- Refactor local agents handling and improve UI integration (f3bd979f)
 #### Refactors
 
-- Unify and streamline agent harness execution (cfcf3b05) 
+- Unify and streamline agent harness execution (cfcf3b05)
 ### Contributors
 @vinhnx
 ## 0.93.3 - 2026-03-25
@@ -1467,41 +1467,41 @@ All notable changes to vtcode will be documented in this file.
 ### Highlights
 #### Bug Fixes
 
-- Preserve compaction context in prompts and summaries (b38f1877) 
+- Preserve compaction context in prompts and summaries (b38f1877)
 #### Documentation
 
-- Docs: update installation instructions for Homebrew and add troubleshooting note (0cb1c08d) 
-- Update architecture and contributing guidelines; add extension boundaries document (d17e267c) 
+- Docs: update installation instructions for Homebrew and add troubleshooting note (0cb1c08d)
+- Update architecture and contributing guidelines; add extension boundaries document (d17e267c)
 #### Features
 
-- Improve tool output handling by ensuring summary headers are always recorded and refining stdout removal logic for specific tool types. (83e59742) 
+- Improve tool output handling by ensuring summary headers are always recorded and refining stdout removal logic for specific tool types. (83e59742)
 ### Other Changes
 #### Other
 
-- Update config (02384ca5) 
-- Add support for summarized session forks and update related logic (1ddfd7fd) 
-- Add inline prompt suggestion feature to chat composer (b813647f) 
-- Add agent loop contract documentation for VT Code lifecycle and events (f85428b6) 
-- Remove LiteLLM provider and related documentation (ca8889aa) 
-- Update TODO (f7b10332) 
-- Harden agent runner tool error handling (4671b804) 
-- Refactor error handling, optimize token usage, and enhance performance metrics (48af5696) 
-- Add streaming support OpenAI models with normalized event handling (ff76d3af) 
-- Add orchestration for plan-build-evaluate workflow with harness artifacts (6968408b) 
+- Update config (02384ca5)
+- Add support for summarized session forks and update related logic (1ddfd7fd)
+- Add inline prompt suggestion feature to chat composer (b813647f)
+- Add agent loop contract documentation for VT Code lifecycle and events (f85428b6)
+- Remove LiteLLM provider and related documentation (ca8889aa)
+- Update TODO (f7b10332)
+- Harden agent runner tool error handling (4671b804)
+- Refactor error handling, optimize token usage, and enhance performance metrics (48af5696)
+- Add streaming support OpenAI models with normalized event handling (ff76d3af)
+- Add orchestration for plan-build-evaluate workflow with harness artifacts (6968408b)
 #### Refactors
 
-- Remove outdated prompt suggestion details and add subagent build task (c869b499) 
-- Enhance error handling and retry logic in tool execution (89075d3d) 
-- Improve error handling and classification in tool execution (4990c7dd) 
-- Enhance error handling and retry logic in agent execution (9f626e1e) 
-- Replace try_recv with recv for steering message handling (17edd05a) 
-- Introduce idle wake delay in inline event loop and related components (4fdec1dc) 
-- Streamline tool policy checks and improve error handling (25c11664) 
-- Replace RwLock with parking_lot::RwLock for pattern detector (278238fd) 
-- Add compact aliases for session_id and path parameters across tools (82340a2e) 
-- Enhance WebSocket handling for OpenAI provider, improve error detection, and update configuration documentation (9ae3e202) 
-- Enhance WebSocket handling and documentation for OpenAI provider (8df581c1) 
-- Streamline code structure and improve readability across multiple files (22d1fa22) 
+- Remove outdated prompt suggestion details and add subagent build task (c869b499)
+- Enhance error handling and retry logic in tool execution (89075d3d)
+- Improve error handling and classification in tool execution (4990c7dd)
+- Enhance error handling and retry logic in agent execution (9f626e1e)
+- Replace try_recv with recv for steering message handling (17edd05a)
+- Introduce idle wake delay in inline event loop and related components (4fdec1dc)
+- Streamline tool policy checks and improve error handling (25c11664)
+- Replace RwLock with parking_lot::RwLock for pattern detector (278238fd)
+- Add compact aliases for session_id and path parameters across tools (82340a2e)
+- Enhance WebSocket handling for OpenAI provider, improve error detection, and update configuration documentation (9ae3e202)
+- Enhance WebSocket handling and documentation for OpenAI provider (8df581c1)
+- Streamline code structure and improve readability across multiple files (22d1fa22)
 ### Contributors
 @vinhnx
 ## 0.93.2 - 2026-03-24
@@ -1509,30 +1509,30 @@ All notable changes to vtcode will be documented in this file.
 ### Highlights
 #### Bug Fixes
 
-- Tighten prompt cache continuity and retention handling (7afbe9f0) 
-- Update sha256 checksum for macOS ARM architecture (39e5ace9) 
-- Update macOS ARM checksum and enhance Homebrew publishing script (58d1989a) 
-- Stabilize Zed ACP startup and transcripts (72f91134) 
+- Tighten prompt cache continuity and retention handling (7afbe9f0)
+- Update sha256 checksum for macOS ARM architecture (39e5ace9)
+- Update macOS ARM checksum and enhance Homebrew publishing script (58d1989a)
+- Stabilize Zed ACP startup and transcripts (72f91134)
 #### Documentation
 
-- Add Rust style guidelines and update Clippy disallowed methods (5bedfa98) 
-- Clarify Zed ACP local development setup (266a146c) 
+- Add Rust style guidelines and update Clippy disallowed methods (5bedfa98)
+- Clarify Zed ACP local development setup (266a146c)
 #### Features
 
-- Add configurable permissions mode (358f53fe) 
-- Add Claude-style compatibility for allowed and disallowed tools in permissions (bad5ba15) 
+- Add configurable permissions policy (358f53fe)
+- Add Claude-style compatibility for allowed and disallowed tools in permissions (bad5ba15)
 ### Other Changes
 #### Other
 
-- Update system prompt to specify use of plain ASCII icons for markers and bullets (3a8993f0) 
-- Add terminal management features and enhance session handling (8b07cb90) 
-- Update screen_backend.rs (9271147d) 
+- Update system prompt to specify use of plain ASCII icons for markers and bullets (3a8993f0)
+- Add terminal management features and enhance session handling (8b07cb90)
+- Update screen_backend.rs (9271147d)
 #### Refactors
 
-- Simplify key handling in modal state (bfec2be3) 
-- Reuse shared OpenAI prompt cache key helper (68fe597f) 
-- Tighten system prompts and document accuracy tuning (450dcef2) 
-- Update tool policies and enhance prompt suggestions in TODO (36313870) 
+- Simplify key handling in modal state (bfec2be3)
+- Reuse shared OpenAI prompt cache key helper (68fe597f)
+- Tighten system prompts and document accuracy tuning (450dcef2)
+- Update tool policies and enhance prompt suggestions in TODO (36313870)
 ### Contributors
 @vinhnx
 ## 0.93.1 - 2026-03-22
@@ -1540,46 +1540,46 @@ All notable changes to vtcode will be documented in this file.
 ### Highlights
 #### Features
 
-- Add thread safety primitives including `SendWrapper` and enable optional concurrency for native plugins via a `thread_safe` flag. (86c0c612) 
+- Add thread safety primitives including `SendWrapper` and enable optional concurrency for native plugins via a `thread_safe` flag. (86c0c612)
 ### Other Changes
 #### Other
 
 - Delete checksums.txt (0d1ffdfd) (@vinhnx)
 - Delete skills-lock.json (610fc7b7) (@vinhnx)
-- Implement JSON-RPC-over-stdio transport for subprocess agents and refactor authentication methods (090bfc3f) 
-- Enhance ToolCall struct with optional namespace and update related parsing logic (ff97daba) 
-- Refactor RejectConfig documentation and update related tests for clarity (541eac42) 
-- Enhance RejectConfig documentation and update permission rejection logic (d7eb68f0) 
-- Add pod management functionality with model catalog and state handling (c029e115) 
-- Implement normalized streaming for OpenRouter provider and update response handling (b01aeb2f) 
-- Add prompt template support and enhance slash command handling (f23ff5c7) 
-- Prioritize modal key handling over copy-to-clipboard in process_key function (ff0a684a) 
-- Add MiniMax-M2.7 model support and update related configurations (70a0e776) 
-- Add tool invocation lifecycle events and refactor event recording (a67bf917) 
-- Refactor agent session controller and runtime for improved event handling and state management (9adda2cd) 
-- Refactor tool invocation handling and event recording in AgentRunner (9da2d85b) 
-- Refactor tool permission handling and streamline runtime steering integration (f91b0d32) 
-- Add run_standard_stream_attempt function and refactor streaming logic (09a5751f) 
-- Enhance tool permission handling, improve error messaging, and refine path suggestion logic (46521121) 
-- Add file read family tracking and recovery handling in tool outcomes (f88c2a3a) 
-- Implement glob pattern support for file listing and enhance related functionalities (62b7b831) 
-- Implement session mode management and approval caching for shell commands (eda2c70d) 
-- Implement transient UI components and refactor overlay handling (c7622e2d) 
-- Implement prompt cache lineage management and enhance runtime context handling (9e26d8de) 
-- Update session ID and timestamps in current_blocked.md; modify GPU type matching logic and add tests in catalog.rs; change API key and model settings in vtcode.toml (b5a2f974) 
-- Enhance system prompt handling by adding history directives and runtime context checks; add tests for new functionality (c406e88b) 
-- Refactor tool policies and update configuration for Ollama provider (eaaa2b83) 
-- Refactor logging levels from debug to trace for improved verbosity in various components (b8d75afb) 
-- Add history system directives handling and improve session configuration (d7f42900) 
-- Implement centralized logging and tracing system; add flush functionality and guidelines (8903d53c) 
-- Implement interaction support in GeminiProvider with error handling and streaming capabilities (2e1f34d8) 
-- Refactor path handling in tracing and debug logging; simplify flush logic in trace writer (2faf35a7) 
-- Refactor metrics handling to use ToolCatalogCacheMetrics struct for improved clarity and maintainability (495b5476) 
-- Refactor interrupt handling to ensure overlays are closed and improve user experience (6847f30f) 
-- Update TODO (8c9c3d55) 
+- Implement JSON-RPC-over-stdio transport for subprocess agents and refactor authentication methods (090bfc3f)
+- Enhance ToolCall struct with optional namespace and update related parsing logic (ff97daba)
+- Refactor RejectConfig documentation and update related tests for clarity (541eac42)
+- Enhance RejectConfig documentation and update permission rejection logic (d7eb68f0)
+- Add pod management functionality with model catalog and state handling (c029e115)
+- Implement normalized streaming for OpenRouter provider and update response handling (b01aeb2f)
+- Add prompt template support and enhance slash command handling (f23ff5c7)
+- Prioritize modal key handling over copy-to-clipboard in process_key function (ff0a684a)
+- Add MiniMax-M2.7 model support and update related configurations (70a0e776)
+- Add tool invocation lifecycle events and refactor event recording (a67bf917)
+- Refactor agent session controller and runtime for improved event handling and state management (9adda2cd)
+- Refactor tool invocation handling and event recording in AgentRunner (9da2d85b)
+- Refactor tool permission handling and streamline runtime steering integration (f91b0d32)
+- Add run_standard_stream_attempt function and refactor streaming logic (09a5751f)
+- Enhance tool permission handling, improve error messaging, and refine path suggestion logic (46521121)
+- Add file read family tracking and recovery handling in tool outcomes (f88c2a3a)
+- Implement glob pattern support for file listing and enhance related functionalities (62b7b831)
+- Implement session-state management and approval caching for shell commands (eda2c70d)
+- Implement transient UI components and refactor overlay handling (c7622e2d)
+- Implement prompt cache lineage management and enhance runtime context handling (9e26d8de)
+- Update session ID and timestamps in current_blocked.md; modify GPU type matching logic and add tests in catalog.rs; change API key and model settings in vtcode.toml (b5a2f974)
+- Enhance system prompt handling by adding history directives and runtime context checks; add tests for new functionality (c406e88b)
+- Refactor tool policies and update configuration for Ollama provider (eaaa2b83)
+- Refactor logging levels from debug to trace for improved verbosity in various components (b8d75afb)
+- Add history system directives handling and improve session configuration (d7f42900)
+- Implement centralized logging and tracing system; add flush functionality and guidelines (8903d53c)
+- Implement interaction support in GeminiProvider with error handling and streaming capabilities (2e1f34d8)
+- Refactor path handling in tracing and debug logging; simplify flush logic in trace writer (2faf35a7)
+- Refactor metrics handling to use ToolCatalogCacheMetrics struct for improved clarity and maintainability (495b5476)
+- Refactor interrupt handling to ensure overlays are closed and improve user experience (6847f30f)
+- Update TODO (8c9c3d55)
 #### Refactors
 
-- Remove explicit unsafe Send and Sync implementations for NativePlugin. (5c96c9d3) 
+- Remove explicit unsafe Send and Sync implementations for NativePlugin. (5c96c9d3)
 ### Contributors
 @vinhnx
 ## 0.93.0 - 2026-03-22
@@ -1587,46 +1587,46 @@ All notable changes to vtcode will be documented in this file.
 ### Highlights
 #### Features
 
-- Add thread safety primitives including `SendWrapper` and enable optional concurrency for native plugins via a `thread_safe` flag. (86c0c612) 
+- Add thread safety primitives including `SendWrapper` and enable optional concurrency for native plugins via a `thread_safe` flag. (86c0c612)
 ### Other Changes
 #### Other
 
 - Delete checksums.txt (0d1ffdfd) (@vinhnx)
 - Delete skills-lock.json (610fc7b7) (@vinhnx)
-- Implement JSON-RPC-over-stdio transport for subprocess agents and refactor authentication methods (090bfc3f) 
-- Enhance ToolCall struct with optional namespace and update related parsing logic (ff97daba) 
-- Refactor RejectConfig documentation and update related tests for clarity (541eac42) 
-- Enhance RejectConfig documentation and update permission rejection logic (d7eb68f0) 
-- Add pod management functionality with model catalog and state handling (c029e115) 
-- Implement normalized streaming for OpenRouter provider and update response handling (b01aeb2f) 
-- Add prompt template support and enhance slash command handling (f23ff5c7) 
-- Prioritize modal key handling over copy-to-clipboard in process_key function (ff0a684a) 
-- Add MiniMax-M2.7 model support and update related configurations (70a0e776) 
-- Add tool invocation lifecycle events and refactor event recording (a67bf917) 
-- Refactor agent session controller and runtime for improved event handling and state management (9adda2cd) 
-- Refactor tool invocation handling and event recording in AgentRunner (9da2d85b) 
-- Refactor tool permission handling and streamline runtime steering integration (f91b0d32) 
-- Add run_standard_stream_attempt function and refactor streaming logic (09a5751f) 
-- Enhance tool permission handling, improve error messaging, and refine path suggestion logic (46521121) 
-- Add file read family tracking and recovery handling in tool outcomes (f88c2a3a) 
-- Implement glob pattern support for file listing and enhance related functionalities (62b7b831) 
-- Implement session mode management and approval caching for shell commands (eda2c70d) 
-- Implement transient UI components and refactor overlay handling (c7622e2d) 
-- Implement prompt cache lineage management and enhance runtime context handling (9e26d8de) 
-- Update session ID and timestamps in current_blocked.md; modify GPU type matching logic and add tests in catalog.rs; change API key and model settings in vtcode.toml (b5a2f974) 
-- Enhance system prompt handling by adding history directives and runtime context checks; add tests for new functionality (c406e88b) 
-- Refactor tool policies and update configuration for Ollama provider (eaaa2b83) 
-- Refactor logging levels from debug to trace for improved verbosity in various components (b8d75afb) 
-- Add history system directives handling and improve session configuration (d7f42900) 
-- Implement centralized logging and tracing system; add flush functionality and guidelines (8903d53c) 
-- Implement interaction support in GeminiProvider with error handling and streaming capabilities (2e1f34d8) 
-- Refactor path handling in tracing and debug logging; simplify flush logic in trace writer (2faf35a7) 
-- Refactor metrics handling to use ToolCatalogCacheMetrics struct for improved clarity and maintainability (495b5476) 
-- Refactor interrupt handling to ensure overlays are closed and improve user experience (6847f30f) 
-- Update TODO (8c9c3d55) 
+- Implement JSON-RPC-over-stdio transport for subprocess agents and refactor authentication methods (090bfc3f)
+- Enhance ToolCall struct with optional namespace and update related parsing logic (ff97daba)
+- Refactor RejectConfig documentation and update related tests for clarity (541eac42)
+- Enhance RejectConfig documentation and update permission rejection logic (d7eb68f0)
+- Add pod management functionality with model catalog and state handling (c029e115)
+- Implement normalized streaming for OpenRouter provider and update response handling (b01aeb2f)
+- Add prompt template support and enhance slash command handling (f23ff5c7)
+- Prioritize modal key handling over copy-to-clipboard in process_key function (ff0a684a)
+- Add MiniMax-M2.7 model support and update related configurations (70a0e776)
+- Add tool invocation lifecycle events and refactor event recording (a67bf917)
+- Refactor agent session controller and runtime for improved event handling and state management (9adda2cd)
+- Refactor tool invocation handling and event recording in AgentRunner (9da2d85b)
+- Refactor tool permission handling and streamline runtime steering integration (f91b0d32)
+- Add run_standard_stream_attempt function and refactor streaming logic (09a5751f)
+- Enhance tool permission handling, improve error messaging, and refine path suggestion logic (46521121)
+- Add file read family tracking and recovery handling in tool outcomes (f88c2a3a)
+- Implement glob pattern support for file listing and enhance related functionalities (62b7b831)
+- Implement session-state management and approval caching for shell commands (eda2c70d)
+- Implement transient UI components and refactor overlay handling (c7622e2d)
+- Implement prompt cache lineage management and enhance runtime context handling (9e26d8de)
+- Update session ID and timestamps in current_blocked.md; modify GPU type matching logic and add tests in catalog.rs; change API key and model settings in vtcode.toml (b5a2f974)
+- Enhance system prompt handling by adding history directives and runtime context checks; add tests for new functionality (c406e88b)
+- Refactor tool policies and update configuration for Ollama provider (eaaa2b83)
+- Refactor logging levels from debug to trace for improved verbosity in various components (b8d75afb)
+- Add history system directives handling and improve session configuration (d7f42900)
+- Implement centralized logging and tracing system; add flush functionality and guidelines (8903d53c)
+- Implement interaction support in GeminiProvider with error handling and streaming capabilities (2e1f34d8)
+- Refactor path handling in tracing and debug logging; simplify flush logic in trace writer (2faf35a7)
+- Refactor metrics handling to use ToolCatalogCacheMetrics struct for improved clarity and maintainability (495b5476)
+- Refactor interrupt handling to ensure overlays are closed and improve user experience (6847f30f)
+- Update TODO (8c9c3d55)
 #### Refactors
 
-- Remove explicit unsafe Send and Sync implementations for NativePlugin. (5c96c9d3) 
+- Remove explicit unsafe Send and Sync implementations for NativePlugin. (5c96c9d3)
 ### Contributors
 @vinhnx
 ## 0.92.1 - 2026-03-21
@@ -1634,13 +1634,13 @@ All notable changes to vtcode will be documented in this file.
 ### Highlights
 #### Bug Fixes
 
-- Remove idle input notification (367e91ba) 
+- Remove idle input notification (367e91ba)
 ### Other Changes
 #### Other
 
-- Implement Ghostty VT backend for terminal emulation and snapshot rendering (2af5a11d) 
-- Refactor code for improved readability and performance; add loading indicators for better user experience (0d20012f) 
-- Add support for custom OpenAI-compatible providers in configuration (8a76debf) 
+- Implement Ghostty VT backend for terminal emulation and snapshot rendering (2af5a11d)
+- Refactor code for improved readability and performance; add loading indicators for better user experience (0d20012f)
+- Add support for custom OpenAI-compatible providers in configuration (8a76debf)
 ### Contributors
 @vinhnx
 ## 0.92.0 - 2026-03-21
@@ -1648,12 +1648,12 @@ All notable changes to vtcode will be documented in this file.
 ### Highlights
 #### Bug Fixes
 
-- Remove repeated unrelated worktree prompts (8f93b519) 
-- Remove repeated unrelated worktree prompts (1f4ea2bd) 
-- Handle already cleared oauth logout states (081e20a6) 
+- Remove repeated unrelated worktree prompts (8f93b519)
+- Remove repeated unrelated worktree prompts (1f4ea2bd)
+- Handle already cleared oauth logout states (081e20a6)
 #### Documentation
 
-- Update README and authentication guide to include GitHub Copilot support (2144d1d6) 
+- Update README and authentication guide to include GitHub Copilot support (2144d1d6)
 ### Other Changes
 #### Other
 
@@ -1661,22 +1661,22 @@ All notable changes to vtcode will be documented in this file.
 - Fix formatting in README for installation section (53fccf14) (@vinhnx)
 - Update AgentSkills to Skills in README.md (00a37fa0) (@vinhnx)
 - Update README.md (3aa6dcc2) (@vinhnx)
-- Implement GitHub Copilot authentication and command handling (40da600d) 
-- Add request permission rejection handling and enhance Copilot integration (d713178d) 
-- Fix reasoning formatting in CopilotProvider to ensure proper newline handling (565ae957) 
-- Update notes (a66b4d84) 
-- Implement StdioTransport for JSON-RPC communication and refactor CopilotAcpClient to use it (543dbca1) 
-- Update note (5e7d9492) 
-- Refactor configuration initialization and improve code readability across multiple files; update API key and model settings in configuration. (dd5221bc) 
-- Update code structure for improved readability and maintainability (952b06fe) 
-- Add turn timeout management and recovery logic (bb180e82) 
-- Update TURN timeout recovery to use configured max execution time (e8f27aae) 
-- Refactor tool permission handling and add persistent approval cache (ca53f066) 
+- Implement GitHub Copilot authentication and command handling (40da600d)
+- Add request permission rejection handling and enhance Copilot integration (d713178d)
+- Fix reasoning formatting in CopilotProvider to ensure proper newline handling (565ae957)
+- Update notes (a66b4d84)
+- Implement StdioTransport for JSON-RPC communication and refactor CopilotAcpClient to use it (543dbca1)
+- Update note (5e7d9492)
+- Refactor configuration initialization and improve code readability across multiple files; update API key and model settings in configuration. (dd5221bc)
+- Update code structure for improved readability and maintainability (952b06fe)
+- Add turn timeout management and recovery logic (bb180e82)
+- Update TURN timeout recovery to use configured max execution time (e8f27aae)
+- Refactor tool permission handling and add persistent approval cache (ca53f066)
 #### Refactors
 
-- Replace custom timing with /usr/bin/time for performance measurement (5be0c3b4) 
-- Update tool policies and improve command submission handling (890eacf0) 
-- Improve GitHub Copilot OAuth flow and update configuration settings (86b8d667) 
+- Replace custom timing with /usr/bin/time for performance measurement (5be0c3b4)
+- Update tool policies and improve command submission handling (890eacf0)
+- Improve GitHub Copilot OAuth flow and update configuration settings (86b8d667)
 ### Contributors
 @vinhnx
 ## 0.91.1 - 2026-03-20
@@ -1684,23 +1684,23 @@ All notable changes to vtcode will be documented in this file.
 ### Highlights
 #### Bug Fixes
 
-- Auto-copy highlighted TUI selections (5a33748a) 
-- Copy selected input on command-c (05a4472f) 
+- Auto-copy highlighted TUI selections (5a33748a)
+- Copy selected input on command-c (05a4472f)
 ### Other Changes
 #### Other
 
 - Update TODO.md (a96c1aca) (@vinhnx)
-- Add unrelated worktree prompt handling and related functionality (dd59dd65) 
-- Refactor model option handling and validation logic for improved performance and clarity (ed7d837a) 
-- Add OAuth authentication guide and enhance README with OAuth details (0660f149) 
-- Refactor system prompts and skills rendering for improved clarity and efficiency (7ba88e31) 
+- Add unrelated worktree prompt handling and related functionality (dd59dd65)
+- Refactor model option handling and validation logic for improved performance and clarity (ed7d837a)
+- Add OAuth authentication guide and enhance README with OAuth details (0660f149)
+- Refactor system prompts and skills rendering for improved clarity and efficiency (7ba88e31)
 #### Refactors
 
-- Improve git diff preview logic and update related enums (18a30a87) 
-- Update prompt assembly logic and enhance instruction handling (8b6f71f5) 
-- Remove unused PromptAssemblyMode and simplify related code (1f348cd4) 
-- Streamline system prompt instructions for clarity and conciseness (dcf8fa34) 
-- Enhance performance guidelines and simplify related documentation (f6259c32) 
+- Improve git diff preview logic and update related enums (18a30a87)
+- Update prompt assembly logic and enhance instruction handling (8b6f71f5)
+- Remove unused PromptAssemblyMode and simplify related code (1f348cd4)
+- Streamline system prompt instructions for clarity and conciseness (dcf8fa34)
+- Enhance performance guidelines and simplify related documentation (f6259c32)
 ### Contributors
 @vinhnx
 ## 0.91.0 - 2026-03-18
@@ -1708,23 +1708,23 @@ All notable changes to vtcode will be documented in this file.
 ### Highlights
 #### Bug Fixes
 
-- Ensure all OpenAI sessions are cleared on logout and fallback to API key (3d6cb033) 
+- Ensure all OpenAI sessions are cleared on logout and fallback to API key (3d6cb033)
 #### Features
 
-- Enhance OAuth flow with clickable URLs and improved user guidance (d5e9afa9) 
-- Implement transcript link click handling and update keyboard protocol flags (12e48c6d) 
-- Enhance mouse selection with double-click detection and clipboard functionality (25bae2b5) 
-- Implement explicit copy request for mouse selection and update Homebrew publishing process (21f2f1da) 
-- Update styling for shimmer effect and change UI theme to ayu (53ca8d5e) 
-- Add MiniMax-M2.7 model and update related configurations (3eeb3664) 
+- Enhance OAuth flow with clickable URLs and improved user guidance (d5e9afa9)
+- Implement transcript link click handling and update keyboard protocol flags (12e48c6d)
+- Enhance mouse selection with double-click detection and clipboard functionality (25bae2b5)
+- Implement explicit copy request for mouse selection and update Homebrew publishing process (21f2f1da)
+- Update styling for shimmer effect and change UI theme to ayu (53ca8d5e)
+- Add MiniMax-M2.7 model and update related configurations (3eeb3664)
 ### Other Changes
 #### Other
 
-- Update TODO (a2eeed96) 
+- Update TODO (a2eeed96)
 #### Refactors
 
-- Simplify model and provider selection entries, remove unnecessary enumerations (baea18fb) 
-- Streamline OpenAI session clearing by consolidating storage methods (23a6c55b) 
+- Simplify model and provider selection entries, remove unnecessary enumerations (baea18fb)
+- Streamline OpenAI session clearing by consolidating storage methods (23a6c55b)
 ### Contributors
 @vinhnx
 ## 0.90.0 - 2026-03-17
@@ -1732,24 +1732,24 @@ All notable changes to vtcode will be documented in this file.
 ### Highlights
 #### Features
 
-- Improve OAuth URL display by printing it on a separate line and remove related TODO item. (89d95a8a) 
-- Highlight file paths in markdown output (b50a3d62) 
+- Improve OAuth URL display by printing it on a separate line and remove related TODO item. (89d95a8a)
+- Highlight file paths in markdown output (b50a3d62)
 ### Other Changes
 #### Other
 
-- Refactor session layout and rendering logic; consolidate bottom panel handling and improve input height management (e6e93dbf) 
-- Update format (b8d5aee6) 
-- Fix url wrap line (301f62c7) 
-- Refactor session handling and options; streamline overlay requests and keyboard protocol settings (bc30728c) 
-- Refactor input handling; consolidate trigger checks and update input commands (8c46dc45) 
-- Refactor input trigger updates; consolidate trigger checks into a single method (9c7b8562) 
-- Refactor core TUI frame rendering helpers (a59920bf) 
-- Refactor panel layout functions for file palette and history picker; streamline inline area calculations (0a83dff1) 
-- Add note to explore GitHub Copilot OAuth for using Anthropic's Claude (73ed2711) 
-- Add GPT-5.4 Nano and Mini models to OpenAI configuration (982b5c37) 
-- Add OpenAI tool search configuration and implement deferred loading policy (3a56178a) 
-- Add model management documentation and scripts for LLM integration (861bef97) 
-- Add ToolCatalogSource to tool registration and update related files (9db62221) 
+- Refactor session layout and rendering logic; consolidate bottom panel handling and improve input height management (e6e93dbf)
+- Update format (b8d5aee6)
+- Fix url wrap line (301f62c7)
+- Refactor session handling and options; streamline overlay requests and keyboard protocol settings (bc30728c)
+- Refactor input handling; consolidate trigger checks and update input commands (8c46dc45)
+- Refactor input trigger updates; consolidate trigger checks into a single method (9c7b8562)
+- Refactor core TUI frame rendering helpers (a59920bf)
+- Refactor panel layout functions for file palette and history picker; streamline inline area calculations (0a83dff1)
+- Add note to explore GitHub Copilot OAuth for using Anthropic's Claude (73ed2711)
+- Add GPT-5.4 Nano and Mini models to OpenAI configuration (982b5c37)
+- Add OpenAI tool search configuration and implement deferred loading policy (3a56178a)
+- Add model management documentation and scripts for LLM integration (861bef97)
+- Add ToolCatalogSource to tool registration and update related files (9db62221)
 ### Contributors
 @vinhnx
 ## 0.89.2 - 2026-03-17
@@ -1757,33 +1757,33 @@ All notable changes to vtcode will be documented in this file.
 ### Highlights
 #### Bug Fixes
 
-- Improve plan mode entry and lifecycle tracking (13638d96) 
-- Improve argument and stderr preview truncation for safety (3a09f7c1) 
+- Improve planning workflow entry and lifecycle tracking (13638d96)
+- Improve argument and stderr preview truncation for safety (3a09f7c1)
 #### Features
 
-- Collapse large JSON outputs in TUI messages and adjust plan mode policies to allow. (80eed12d) 
+- Collapse large JSON outputs in TUI messages and adjust planning workflow policies to allow. (80eed12d)
 ### Other Changes
 #### Other
 
-- Refactor plan block parsing for safe character boundaries and add truncation for tool arguments and stderr previews (4b5a4b12) 
-- Fix read tool config issue (73f5cb6f) 
-- Update TODO (f7f2382f) 
-- Implement dynamic signature generation for task_tracker_create and add tests for payload changes (788215be) 
-- Refactor path and symbol hint extraction in research context collection (539c1ac3) 
-- Update TODO (cc9ee77d) 
-- Fix .gitignore entry for vtcode.toml and reorder configuration fields in vtcode.toml (d5e78f45) 
-- Fix plan mode loading (708b5e99) 
-- Add plan confirmation prompt after draft persistence and enhance error classification (ccd75a8f) 
-- Enhance modal list state management to retain last selection and improve overlay behavior (22f813ce) 
-- Refactor plan mode context handling and update configuration values for consistency (cc191c1d) 
-- Refactor plan validation logic to prefer more complete candidates and enhance related tests (f566129c) 
-- Enhance plan extraction and confirmation flow; add handling for incomplete drafts and improve task tracker management (7a2608f7) 
-- Refactor task tracker signature handling to use duplicate enforcement guard (f93d52a7) 
-- Update TODo (8d522e16) 
-- Update TODO (ac4b4f84) 
-- Refactor plan mode handling and improve session loop logic (86b9b95c) 
-- Update TODO (ffdee65d) 
-- Update circuit breaker configuration and tests for improved resiliency (aa92cd91) 
+- Refactor plan block parsing for safe character boundaries and add truncation for tool arguments and stderr previews (4b5a4b12)
+- Fix read tool config issue (73f5cb6f)
+- Update TODO (f7f2382f)
+- Implement dynamic signature generation for task_tracker_create and add tests for payload changes (788215be)
+- Refactor path and symbol hint extraction in research context collection (539c1ac3)
+- Update TODO (cc9ee77d)
+- Fix .gitignore entry for vtcode.toml and reorder configuration fields in vtcode.toml (d5e78f45)
+- Fix planning workflow loading (708b5e99)
+- Add plan confirmation prompt after draft persistence and enhance error classification (ccd75a8f)
+- Enhance modal list state management to retain last selection and improve overlay behavior (22f813ce)
+- Refactor planning workflow context handling and update configuration values for consistency (cc191c1d)
+- Refactor plan validation logic to prefer more complete candidates and enhance related tests (f566129c)
+- Enhance plan extraction and confirmation flow; add handling for incomplete drafts and improve task tracker management (7a2608f7)
+- Refactor task tracker signature handling to use duplicate enforcement guard (f93d52a7)
+- Update TODo (8d522e16)
+- Update TODO (ac4b4f84)
+- Refactor planning workflow handling and improve session loop logic (86b9b95c)
+- Update TODO (ffdee65d)
+- Update circuit breaker configuration and tests for improved resiliency (aa92cd91)
 ### Contributors
 @vinhnx
 ## 0.89.1 - 2026-03-16
@@ -1791,18 +1791,18 @@ All notable changes to vtcode will be documented in this file.
 ### Highlights
 #### Features
 
-- Enhance OpenAI Responses API handling and update configuration (5d5d55af) 
-- Enhance error handling by extracting human-readable messages from various JSON formats (b9d46cc2) 
+- Enhance OpenAI Responses API handling and update configuration (5d5d55af)
+- Enhance error handling by extracting human-readable messages from various JSON formats (b9d46cc2)
 ### Other Changes
 #### Other
 
-- Enhance OpenAI session handling and update UI status display (caa74f23) 
-- Implement recovery modes for empty responses and adjust tool call handling (e09d51c4) 
-- Add clipboard support for selected text and update default model and theme (439d5cd7) 
-- Refactor tool output handling to support spooled output references and improve clipboard functionality (0339abbd) 
+- Enhance OpenAI session handling and update UI status display (caa74f23)
+- Implement recovery modes for empty responses and adjust tool call handling (e09d51c4)
+- Add clipboard support for selected text and update default model and theme (439d5cd7)
+- Refactor tool output handling to support spooled output references and improve clipboard functionality (0339abbd)
 #### Refactors
 
-- Simplify error sanitization logic and preserve full error content (7a3afa95) 
+- Simplify error sanitization logic and preserve full error content (7a3afa95)
 ### Contributors
 @vinhnx
 ## 0.89.0 - 2026-03-15
@@ -1810,64 +1810,64 @@ All notable changes to vtcode will be documented in this file.
 ### Highlights
 #### Bug Fixes
 
-- Add missing environment variables for Rust compilation in Dockerfile (4a51a588) 
-- Update success message and fallback logic for OpenAI API key (3895d00d) 
-- Enhance OpenAI OAuth handling and improve error reporting (9dd80633) 
+- Add missing environment variables for Rust compilation in Dockerfile (4a51a588)
+- Update success message and fallback logic for OpenAI API key (3895d00d)
+- Enhance OpenAI OAuth handling and improve error reporting (9dd80633)
 #### Features
 
-- Add OpenAI hosted shell support and validation checks (46031529) 
-- Enhance tool permission handling with new prompt options and decision logic (d8f448ba) 
-- Add OpenAI hosted shell configuration and validation for skills (c0383c1d) 
-- Implement context-generic provider wiring and enhance provider configuration (6c5d1910) 
-- Add prompt metadata to SnapshotMetadata and enhance hydration logic (79ca0b4b) 
-- Enhance OpenAI provider with max output tokens and previous response ID handling (f4e5237e) 
-- Enhance LLM request handling with non-streaming support and structured history integration (4180821a) 
-- Update default model to gpt-5.3-codex and enhance reasoning handling in OpenAI provider (6f8b0c13) 
-- Add manual input support for OpenAI OAuth flow and enhance session handling (ad2107c2) 
+- Add OpenAI hosted shell support and validation checks (46031529)
+- Enhance tool permission handling with new prompt options and decision logic (d8f448ba)
+- Add OpenAI hosted shell configuration and validation for skills (c0383c1d)
+- Implement context-generic provider wiring and enhance provider configuration (6c5d1910)
+- Add prompt metadata to SnapshotMetadata and enhance hydration logic (79ca0b4b)
+- Enhance OpenAI provider with max output tokens and previous response ID handling (f4e5237e)
+- Enhance LLM request handling with non-streaming support and structured history integration (4180821a)
+- Update default model to gpt-5.3-codex and enhance reasoning handling in OpenAI provider (6f8b0c13)
+- Add manual input support for OpenAI OAuth flow and enhance session handling (ad2107c2)
 ### Other Changes
 #### Other
 
-- Implement auto-compaction for turn loop and enhance skill templates with routing guidance (31aef8a1) 
-- Refactor plan file template for clarity and structure (df3764eb) 
-- Add support for blocked handoff events and quiet success output in hooks (f978598b) 
-- Update AGENTS instructions (b584d382) 
-- Add fallback filenames to ProjectDocOptions and related functions; enhance clickable link handling in ANSI renderer; implement session history persistence settings; introduce new FileOpener and HistoryPersistence enums in config. (3e4f1ea1) 
-- Add request_permissions field to RejectConfig and update related logic (54430912) 
-- Add support for explicit transcript links in the TUI session (31add726) 
-- Enhance exit summary output with model and reasoning details; update configuration for new provider and model (228f5909) 
-- Implement CGP integration facade for ToolRegistry with pipeline support (68bd7f63) 
-- Add direct tool completion handling and refactor related logic (ab246cb8) 
-- Scan commits for potential bugs (c6b7ac99) 
-- Implement mouse selection and interaction for modal lists and input areas (e618c0da) 
-- Enhance observability and model validation for LLM requests and tool executions (fc5c883a) 
-- Update documentation and improve terminal setup handling (6b7b82ea) 
-- Implement Vim mode support with key handling and text operations (e77c61e5) 
-- Implement Vim-style prompt editing engine with core functionality and tests (a722f56b) 
-- Add interactive features for prompt suggestions and job management (89c79954) 
-- Update prompt suggestion docs (aa3aaaae) 
-- Update TODO (d23690fc) 
-- Add OpenAI ChatGPT authentication support and update provider configuration (860a1d65) 
-- Add new GPT-5 Codex models and update related functionality (0cc7a335) 
-- Add client request ID handling and improve responses API integration (fb3220ac) 
-- Scan recent commits for bugs (dbb30d99) 
-- Enhance LLM response processing and metrics logging; update OpenAI model handling (bc8dd6aa) 
+- Implement auto-compaction for turn loop and enhance skill templates with routing guidance (31aef8a1)
+- Refactor plan file template for clarity and structure (df3764eb)
+- Add support for blocked handoff events and quiet success output in hooks (f978598b)
+- Update AGENTS instructions (b584d382)
+- Add fallback filenames to ProjectDocOptions and related functions; enhance clickable link handling in ANSI renderer; implement session history persistence settings; introduce new FileOpener and HistoryPersistence enums in config. (3e4f1ea1)
+- Add request_permissions field to RejectConfig and update related logic (54430912)
+- Add support for explicit transcript links in the TUI session (31add726)
+- Enhance exit summary output with model and reasoning details; update configuration for new provider and model (228f5909)
+- Implement CGP integration facade for ToolRegistry with pipeline support (68bd7f63)
+- Add direct tool completion handling and refactor related logic (ab246cb8)
+- Scan commits for potential bugs (c6b7ac99)
+- Implement mouse selection and interaction for modal lists and input areas (e618c0da)
+- Enhance observability and model validation for LLM requests and tool executions (fc5c883a)
+- Update documentation and improve terminal setup handling (6b7b82ea)
+- Implement Vim mode support with key handling and text operations (e77c61e5)
+- Implement Vim-style prompt editing engine with core functionality and tests (a722f56b)
+- Add interactive features for prompt suggestions and job management (89c79954)
+- Update prompt suggestion docs (aa3aaaae)
+- Update TODO (d23690fc)
+- Add OpenAI ChatGPT authentication support and update provider configuration (860a1d65)
+- Add new GPT-5 Codex models and update related functionality (0cc7a335)
+- Add client request ID handling and improve responses API integration (fb3220ac)
+- Scan recent commits for bugs (dbb30d99)
+- Enhance LLM response processing and metrics logging; update OpenAI model handling (bc8dd6aa)
 #### Refactors
 
-- Streamline OAuth handling and improve prompt rendering logic (91a3c73d) 
-- Enhance instruction rendering and highlight extraction in project documentation (cf116dac) 
-- Improve compaction handling and documentation across multiple files (fe86c4c5) 
-- Use get_config_dir for configuration directory retrieval in DotManager (28c82ef6) 
-- Replace provider resolution logic with infer_provider_from_model in create_provider_for_model (a8c208e3) 
-- Improve command processing and rendering efficiency in drive_terminal (e33ed10d) 
-- Update provider client creation logic and add debug logging for provider usage (9c947bde) 
-- Enhance conversation handling and user guidance in agent interactions (f16808a8) 
-- Enhance tool completion replies with LLM-generated suggestions and fallback logic (1ad0b3de) 
-- Integrate InlineHeaderContext into event handling and model selection (75c6bbc0) 
-- Consolidate session archive handling and improve debug log directory management (71f0b686) 
-- Reorganize imports and improve code formatting in interactive features (20817b85) 
-- Clean up code formatting and improve readability in multiple files (dffcbdae) 
-- Remove unused content delta handling in OpenAIStreamTelemetry (44da3f56) 
-- Remove PR review status handling and optimize TUI tick rates (737a2c75) 
+- Streamline OAuth handling and improve prompt rendering logic (91a3c73d)
+- Enhance instruction rendering and highlight extraction in project documentation (cf116dac)
+- Improve compaction handling and documentation across multiple files (fe86c4c5)
+- Use get_config_dir for configuration directory retrieval in DotManager (28c82ef6)
+- Replace provider resolution logic with infer_provider_from_model in create_provider_for_model (a8c208e3)
+- Improve command processing and rendering efficiency in drive_terminal (e33ed10d)
+- Update provider client creation logic and add debug logging for provider usage (9c947bde)
+- Enhance conversation handling and user guidance in agent interactions (f16808a8)
+- Enhance tool completion replies with LLM-generated suggestions and fallback logic (1ad0b3de)
+- Integrate InlineHeaderContext into event handling and model selection (75c6bbc0)
+- Consolidate session archive handling and improve debug log directory management (71f0b686)
+- Reorganize imports and improve code formatting in interactive features (20817b85)
+- Clean up code formatting and improve readability in multiple files (dffcbdae)
+- Remove unused content delta handling in OpenAIStreamTelemetry (44da3f56)
+- Remove PR review status handling and optimize TUI tick rates (737a2c75)
 ### Contributors
 @vinhnx
 ## 0.88.5 - 2026-03-13
@@ -1875,9 +1875,9 @@ All notable changes to vtcode will be documented in this file.
 ### Highlights
 #### Features
 
-- Add context awareness support and related tests for Anthropic models (0ff5066e) 
-- Add context window size support to header context and related components (ba2faa13) 
-- Implement effective context window size handling for models (7ab580b4) 
+- Add context awareness support and related tests for Anthropic models (0ff5066e)
+- Add context window size support to header context and related components (ba2faa13)
+- Implement effective context window size handling for models (7ab580b4)
 ### Other Changes
 ### Contributors
 @vinhnx
@@ -1887,30 +1887,30 @@ All notable changes to vtcode will be documented in this file.
 ### Other Changes
 #### Other
 
-- Add support for tool-free recovery mode and enhance wait feedback mechanisms (8c9f4ca1) 
-- Refactor exit summary display for single and multi-model sessions; improve Ctrl+C signal handling for immediate exit (45558686) 
-- Enhance chat request parsing to preserve assistant phase and streamline message handling (cc3a923b) 
-- Enhance performance by optimizing vector initializations and memory allocations across multiple files (239ac831) 
-- Add 'tty' parameter for PTY execution and enhance output handling in exec responses (049c4382) 
-- Enhance error handling and output guidance for command execution failures (f1cdd4f2) 
-- Enhance error handling and recovery guidance for tool execution failures (1f3445c0) 
-- Refactor output handling to replace read_file and grep_file with unified_file and unified_search (5e094ba7) 
-- Replace read_file and grep_file references with unified_file and unified_search across multiple files (d9794cf4) 
-- Refactor unified_exec argument validation and enhance preflight checks (3d5c56c1) 
-- Refactor loop detection and recovery policies for unified execution (bb764846) 
-- Update continuation policy to default to "all" and implement pause/resume functionality in exec mode (c7b98951) 
-- Add default harness log directory and update event log path documentation (3135c322) 
-- Refactor input handling: update keybindings and queue submission logic (598a2ad5) 
-- Implement session IDE toggle (28c6a858) 
-- Add ANSI escape sequences for scroll region and insert/delete operations (339b6053) 
-- Update TODO (fe850c3d) 
-- Enhance execution flow: add non-interactive settling logic and improve test coverage (f7047954) 
-- Update TODO (45a02148) 
-- Add support for tracking and reusing successful readonly tool signatures (e97063ad) 
-- Add tool_call_id to event items and enhance usage tracking (7ab2319c) 
-- Add tool_call_correlation_id function for fallback handling in output items (134b5691) 
-- Enhance command detection: support likely typos and improve tool call correlation handling (2b64d276) 
-- Refactor ANSI handling: centralize constants, improve documentation, and enhance utility functions (d268d5c9) 
+- Add support for tool-free recovery mode and enhance wait feedback mechanisms (8c9f4ca1)
+- Refactor exit summary display for single and multi-model sessions; improve Ctrl+C signal handling for immediate exit (45558686)
+- Enhance chat request parsing to preserve assistant phase and streamline message handling (cc3a923b)
+- Enhance performance by optimizing vector initializations and memory allocations across multiple files (239ac831)
+- Add 'tty' parameter for PTY execution and enhance output handling in exec responses (049c4382)
+- Enhance error handling and output guidance for command execution failures (f1cdd4f2)
+- Enhance error handling and recovery guidance for tool execution failures (1f3445c0)
+- Refactor output handling to replace read_file and grep_file with unified_file and unified_search (5e094ba7)
+- Replace read_file and grep_file references with unified_file and unified_search across multiple files (d9794cf4)
+- Refactor unified_exec argument validation and enhance preflight checks (3d5c56c1)
+- Refactor loop detection and recovery policies for unified execution (bb764846)
+- Update continuation policy to default to "all" and implement pause/resume functionality in exec execution (c7b98951)
+- Add default harness log directory and update event log path documentation (3135c322)
+- Refactor input handling: update keybindings and queue submission logic (598a2ad5)
+- Implement session IDE toggle (28c6a858)
+- Add ANSI escape sequences for scroll region and insert/delete operations (339b6053)
+- Update TODO (fe850c3d)
+- Enhance execution flow: add non-interactive settling logic and improve test coverage (f7047954)
+- Update TODO (45a02148)
+- Add support for tracking and reusing successful readonly tool signatures (e97063ad)
+- Add tool_call_id to event items and enhance usage tracking (7ab2319c)
+- Add tool_call_correlation_id function for fallback handling in output items (134b5691)
+- Enhance command detection: support likely typos and improve tool call correlation handling (2b64d276)
+- Refactor ANSI handling: centralize constants, improve documentation, and enhance utility functions (d268d5c9)
 ### Contributors
 @vinhnx
 ## 0.88.3 - 2026-03-12
@@ -1919,24 +1919,24 @@ All notable changes to vtcode will be documented in this file.
 ### Other Changes
 #### Other
 
-- Overhaul model picker UI (b0f33444) 
-- Enhance prompt caching and telemetry metrics; update configurations for improved cache handling (3fb970ac) 
-- Update TODO (3ee104de) 
-- Implement task metadata handling and continuation logic in task tracker (96b8362a) 
-- Add effective_exec_events_path function and related tests; enhance harness_exec output normalization (05d86d58) 
-- Update notes (0664f0b9) 
-- Refactor tool output handling to remove follow-up prompts and streamline continuation logic (bd4000aa) 
-- Update note (52cdad90) 
-- Refactor execution result handling to improve metadata management and streamline output processing (a9ada48e) 
-- Add Nemotron-3-Super model support in Ollama provider and constants (2602a7fc) 
-- Enhance loop recovery hints and streamline error handling in tool execution (fabb03ed) 
-- Refactor tool output rendering to improve markdown handling and add hidden lines notice (62f7ad22) 
-- Refactor tool output rendering to streamline follow-up hints and improve output handling (51e754ac) 
-- Add support for Nemotron-3-Super model and improve terminal file path handling (33f04db1) 
-- Add exact terms match function and update default model to Nemotron-3-Super (8df4f93e) 
-- Add tests for file path handling and improve location suffix resolution (71638904) 
-- Add reference link for control sequences in TODO.md (d951810e) 
-- Remove empty code change entries from the changes log (fb89f6c2) 
+- Overhaul model picker UI (b0f33444)
+- Enhance prompt caching and telemetry metrics; update configurations for improved cache handling (3fb970ac)
+- Update TODO (3ee104de)
+- Implement task metadata handling and continuation logic in task tracker (96b8362a)
+- Add effective_exec_events_path function and related tests; enhance harness_exec output normalization (05d86d58)
+- Update notes (0664f0b9)
+- Refactor tool output handling to remove follow-up prompts and streamline continuation logic (bd4000aa)
+- Update note (52cdad90)
+- Refactor execution result handling to improve metadata management and streamline output processing (a9ada48e)
+- Add Nemotron-3-Super model support in Ollama provider and constants (2602a7fc)
+- Enhance loop recovery hints and streamline error handling in tool execution (fabb03ed)
+- Refactor tool output rendering to improve markdown handling and add hidden lines notice (62f7ad22)
+- Refactor tool output rendering to streamline follow-up hints and improve output handling (51e754ac)
+- Add support for Nemotron-3-Super model and improve terminal file path handling (33f04db1)
+- Add exact terms match function and update default model to Nemotron-3-Super (8df4f93e)
+- Add tests for file path handling and improve location suffix resolution (71638904)
+- Add reference link for control sequences in TODO.md (d951810e)
+- Remove empty code change entries from the changes log (fb89f6c2)
 ### Contributors
 @vinhnx
 ## 0.88.2 - 2026-03-12
@@ -1948,10 +1948,10 @@ All notable changes to vtcode will be documented in this file.
 - Fix install script (25a0e060) (@vinhnx)
 - Update badge colors and links in README.md (99175a26) (@vinhnx)
 - Update README.md (b433aefb) (@vinhnx)
-- Update TODO (163e9716) 
-- Refactor API key handling and update model reasoning capabilities (db0bdf03) 
-- Refactor reasoning handling in OpenRouterProvider and improve model checks (f237aa93) 
-- Refactor configuration loading to use workspace paths and remove deprecated environment variable handling (352cc9e5) 
+- Update TODO (163e9716)
+- Refactor API key handling and update model reasoning capabilities (db0bdf03)
+- Refactor reasoning handling in OpenRouterProvider and improve model checks (f237aa93)
+- Refactor configuration loading to use workspace paths and remove deprecated environment variable handling (352cc9e5)
 ### Contributors
 @vinhnx
 ## 0.88.1 - 2026-03-12
@@ -1959,15 +1959,15 @@ All notable changes to vtcode will be documented in this file.
 ### Highlights
 #### Features
 
-- Add NVIDIA Nemotron 3 Super (free) model support (c3c203a0) 
-- Add live editor context and transcript file links (c330e4b3) 
+- Add NVIDIA Nemotron 3 Super (free) model support (c3c203a0)
+- Add live editor context and transcript file links (c330e4b3)
 ### Other Changes
 #### Other
 
-- Add search tools status badge and enhance language detection (7150057d) 
+- Add search tools status badge and enhance language detection (7150057d)
 #### Tests
 
-- Add unit test for markdown table header rendering (db088ed7) 
+- Add unit test for markdown table header rendering (db088ed7)
 ### Contributors
 @vinhnx
 ## 0.88.0 - 2026-03-11
@@ -1975,55 +1975,55 @@ All notable changes to vtcode will be documented in this file.
 ### Highlights
 #### Features
 
-- Refactor pattern detection logic, improve concurrency with `parking_lot`, and optimize performance with `SmallVec` and pre-allocated buffers. (28d0d534) 
-- Optimize tool execution tracking, file path parsing, and grep result handling, while preventing memory leaks in stats. (c319aebe) 
-- Add Miri check to the `check.sh` script and update documentation for detecting undefined behavior. (15f3d5c1) 
+- Refactor pattern detection logic, improve concurrency with `parking_lot`, and optimize performance with `SmallVec` and pre-allocated buffers. (28d0d534)
+- Optimize tool execution tracking, file path parsing, and grep result handling, while preventing memory leaks in stats. (c319aebe)
+- Add Miri check to the `check.sh` script and update documentation for detecting undefined behavior. (15f3d5c1)
 ### Other Changes
 #### Other
 
-- Refactor pattern detection and command safety checks for improved efficiency and optimize tool name caching. (4abdbc6f) 
-- Review ZedAgent registry mutex (3ead1b8b) 
-- Apply async docs updates (3b75f5cf) 
-- Incorporate async docs guidance (800f1927) 
-- Enhance task listing filters (24b35cee) 
-- Improve batched request handling (e1cbedf5) 
-- Improve ANSI styles (cbe58ce9) 
-- Refactor agent loop to support initial configuration and enhance live reload functionality (7aaba845) 
-- Review vtcode PR 13090 updates (e4ee2358) 
-- Refactor SandboxPolicy to support network access and allowlisting in ReadOnly mode (89127618) 
-- Enhance Anthropic tool support with code execution and memory tools; improve validation and error handling (fac76a15) 
-- Implement referenced Rust PR updates (c43428b1) 
-- Fix @file diff lookup (183a1ec3) 
-- Refactor tool routing and ACP (c37388a6) 
-- Add headings to vtcode configs (b0f294f7) 
-- Remove forced budget stop logic (6ec74d5c) 
-- Enhance interleaved thinking model support and serialization across providers (a8e8bd27) 
-- Refactor task tracker rendering and state management (06566014) 
-- Implement workspace environment variable management and interactive selection UI (7e94f5df) 
-- Add local tool execution and session management for ZedAgent (1a460fc2) 
-- Refactor session setup and tool execution: remove unused code and improve clarity (06cc7671) 
-- Implement ast-grep installer with caching and locking mechanisms; add ripgrep installer with platform-specific installation logic; enhance debug logging capabilities. (fd0dadc9) 
-- Clean unused rust code (98f12364) 
-- Refactor agent configuration: remove unused code, enhance API key environment handling, and streamline model selection logic (89cbd68a) 
-- Add Gemini wire models and streaming processor implementation (4114e15c) 
-- Refactor approval policy handling: streamline rejection logic and enhance clarity in related modules (10630d73) 
-- Refactor sandbox policy handling and improve test coverage (8bfd4efa) 
-- Refactor error handling and add fallback mechanisms for model not found scenarios in OpenAI and OpenResponses providers (12f7a717) 
-- Refactor provider configuration: add timeout and specific OpenAI/Anthropic options (288cb188) 
-- Implement file conflict monitoring and auditing features (07e4b493) 
-- Refactor code for improved readability and consistency across file operations and conflict detection (6354965c) 
-- Refactor file conflict handling and introduce runtime execution management (e60faf6a) 
-- Refactor update handling and relaunch logic; enhance update command execution strategy (dffb89da) 
-- Enhance tool policies and follow-up prompt detection; update theme configuration (1463e225) 
-- Update notes (aefceac2) 
-- Enhance TurnLoopContext and processing logic for improved tool call handling and metadata management (327379f2) 
-- Add exhausted_tool_call_limit method and update budget handling logic (ebdc1b6f) 
-- Add LiteLLM provider support and documentation (327183cb) 
-- Enhance parameter sanitization and alias handling for tool arguments (190ee131) 
-- Update TODO (3b2e19fc) 
+- Refactor pattern detection and command safety checks for improved efficiency and optimize tool name caching. (4abdbc6f)
+- Review ZedAgent registry mutex (3ead1b8b)
+- Apply async docs updates (3b75f5cf)
+- Incorporate async docs guidance (800f1927)
+- Enhance task listing filters (24b35cee)
+- Improve batched request handling (e1cbedf5)
+- Improve ANSI styles (cbe58ce9)
+- Refactor agent loop to support initial configuration and enhance live reload functionality (7aaba845)
+- Review vtcode PR 13090 updates (e4ee2358)
+- Refactor SandboxPolicy to support network access and allowlisting in ReadOnly mode (89127618)
+- Enhance Anthropic tool support with code execution and memory tools; improve validation and error handling (fac76a15)
+- Implement referenced Rust PR updates (c43428b1)
+- Fix @file diff lookup (183a1ec3)
+- Refactor tool routing and ACP (c37388a6)
+- Add headings to vtcode configs (b0f294f7)
+- Remove forced budget stop logic (6ec74d5c)
+- Enhance interleaved thinking model support and serialization across providers (a8e8bd27)
+- Refactor task tracker rendering and state management (06566014)
+- Implement workspace environment variable management and interactive selection UI (7e94f5df)
+- Add local tool execution and session management for ZedAgent (1a460fc2)
+- Refactor session setup and tool execution: remove unused code and improve clarity (06cc7671)
+- Implement ast-grep installer with caching and locking mechanisms; add ripgrep installer with platform-specific installation logic; enhance debug logging capabilities. (fd0dadc9)
+- Clean unused rust code (98f12364)
+- Refactor agent configuration: remove unused code, enhance API key environment handling, and streamline model selection logic (89cbd68a)
+- Add Gemini wire models and streaming processor implementation (4114e15c)
+- Refactor approval policy handling: streamline rejection logic and enhance clarity in related modules (10630d73)
+- Refactor sandbox policy handling and improve test coverage (8bfd4efa)
+- Refactor error handling and add fallback mechanisms for model not found scenarios in OpenAI and OpenResponses providers (12f7a717)
+- Refactor provider configuration: add timeout and specific OpenAI/Anthropic options (288cb188)
+- Implement file conflict monitoring and auditing features (07e4b493)
+- Refactor code for improved readability and consistency across file operations and conflict detection (6354965c)
+- Refactor file conflict handling and introduce runtime execution management (e60faf6a)
+- Refactor update handling and relaunch logic; enhance update command execution strategy (dffb89da)
+- Enhance tool policies and follow-up prompt detection; update theme configuration (1463e225)
+- Update notes (aefceac2)
+- Enhance TurnLoopContext and processing logic for improved tool call handling and metadata management (327379f2)
+- Add exhausted_tool_call_limit method and update budget handling logic (ebdc1b6f)
+- Add LiteLLM provider support and documentation (327183cb)
+- Enhance parameter sanitization and alias handling for tool arguments (190ee131)
+- Update TODO (3b2e19fc)
 #### Refactors
 
-- Introduce `detect_pattern_with_guard` for improved pattern detection logic and simplify `RwLock` write guard acquisition. (5f70ca7c) 
+- Introduce `detect_pattern_with_guard` for improved pattern detection logic and simplify `RwLock` write guard acquisition. (5f70ca7c)
 ### Contributors
 @vinhnx
 ## 0.87.1 - 2026-03-08
@@ -2032,27 +2032,27 @@ All notable changes to vtcode will be documented in this file.
 ### Other Changes
 #### Other
 
-- Enhance exec command functionality with session resumption and prompt handling (d234fee7) 
-- Add review command and related functionality (ef0298c7) 
-- Refactor tool execution and safety gateway: remove legacy orchestrator and unified executor, streamline parallel execution, and enhance safety context handling. (2946fcf7) 
-- Add support for resuming and forking sessions across workspaces (32bd498f) 
-- Add structured error handling with VtCodeError and ErrorCode (93beb517) 
-- Consolidate reliability plan (47186a92) 
-- Refactor ToolRegistration to use Arc<str> for name and add unregister_tool method in ToolRegistry (cba4392f) 
-- Refactor tool policy handling and enhance safety checks for file access (2e9a9c16) 
-- Refactor command session handling and rename PTY references to unified_exec (80023410) 
-- Refactor tool execution handling to unify command names and improve compatibility (e1f3b602) 
-- Refactor tool intent handling to unify command names and improve output processing (cb0581be) 
-- Refactor tool execution handling and update command aliases to use unified_exec (097b5d85) 
-- Add support for creating and managing PTY sessions in the tool registry (8cbfcb87) 
-- Add support for optional patch input in apply_patch handler and update related schemas (29ed7b6e) 
-- Add assistant phase handling to message processing and tests (f448df1c) 
-- Add support for OpenAI service tier configuration and handling (5586bffc) 
-- Implement VT Code ast-grep installer (f8901da1) 
-- Fix build release (f9f272e9) 
+- Enhance exec command functionality with session resumption and prompt handling (d234fee7)
+- Add review command and related functionality (ef0298c7)
+- Refactor tool execution and safety gateway: remove legacy orchestrator and unified executor, streamline parallel execution, and enhance safety context handling. (2946fcf7)
+- Add support for resuming and forking sessions across workspaces (32bd498f)
+- Add structured error handling with VtCodeError and ErrorCode (93beb517)
+- Consolidate reliability plan (47186a92)
+- Refactor ToolRegistration to use Arc<str> for name and add unregister_tool method in ToolRegistry (cba4392f)
+- Refactor tool policy handling and enhance safety checks for file access (2e9a9c16)
+- Refactor command session handling and rename PTY references to unified_exec (80023410)
+- Refactor tool execution handling to unify command names and improve compatibility (e1f3b602)
+- Refactor tool intent handling to unify command names and improve output processing (cb0581be)
+- Refactor tool execution handling and update command aliases to use unified_exec (097b5d85)
+- Add support for creating and managing PTY sessions in the tool registry (8cbfcb87)
+- Add support for optional patch input in apply_patch handler and update related schemas (29ed7b6e)
+- Add assistant phase handling to message processing and tests (f448df1c)
+- Add support for OpenAI service tier configuration and handling (5586bffc)
+- Implement VT Code ast-grep installer (f8901da1)
+- Fix build release (f9f272e9)
 #### Refactors
 
-- Streamline event processing and enhance modal state management (1e7c6031) 
+- Streamline event processing and enhance modal state management (1e7c6031)
 ### Contributors
 @vinhnx
 ## 0.86.12 - 2026-03-07
@@ -2065,14 +2065,14 @@ All notable changes to vtcode will be documented in this file.
 #### Features
 
 - Add checksum for vtcode-0.86.11-aarch64-apple-darwin.tar.gz (47a2c486) (@vinhnx)
-- Implement feature gating for tools and refactor related components (5f530f6d) 
+- Implement feature gating for tools and refactor related components (5f530f6d)
 ### Other Changes
 #### Other
 
-- Refactor session mode handling and update related components (d78397ef) 
-- Update TODO (ae3651f1) 
-- Update TODO (fb5ee65f) 
-- Refactor modal handling to use overlay system and improve session state management (d6171cfc) 
+- Refactor session-state handling and update related components (d78397ef)
+- Update TODO (ae3651f1)
+- Update TODO (fb5ee65f)
+- Refactor modal handling to use overlay system and improve session state management (d6171cfc)
 ### Contributors
 @vinhnx
 ## 0.86.11 - 2026-03-06
@@ -2080,8 +2080,8 @@ All notable changes to vtcode will be documented in this file.
 ### Highlights
 #### Features
 
-- Implement thread management and session handling improvements (e775bb58) 
-- Enhance session management with loaded skills and metadata handling (cb99499b) 
+- Implement thread management and session handling improvements (e775bb58)
+- Enhance session management with loaded skills and metadata handling (cb99499b)
 ### Other Changes
 ### Contributors
 @vinhnx
@@ -2090,8 +2090,8 @@ All notable changes to vtcode will be documented in this file.
 ### Highlights
 #### Features
 
-- Implement thread management and session handling improvements (e775bb58) 
-- Enhance session management with loaded skills and metadata handling (cb99499b) 
+- Implement thread management and session handling improvements (e775bb58)
+- Enhance session management with loaded skills and metadata handling (cb99499b)
 ### Other Changes
 ### Contributors
 @vinhnx
@@ -2106,20 +2106,20 @@ All notable changes to vtcode will be documented in this file.
 ### Highlights
 #### Features
 
-- Enhance command execution tracking with arguments and output aggregation (80f4e11e) 
-- Refactor tool execution events to support new output and invocation structures (446a354c) 
-- Add tool output started event and integrate into streaming progress callback (d2551a50) 
-- Add support for OpenAI o3 and o4-mini models in Responses API (38f17b54) 
-- Enhance OpenAI Responses API support with hosted tools and validation (a17b42c8) 
-- Enhance shell execution approval process and protect writable metadata directories (74d40175) 
+- Enhance command execution tracking with arguments and output aggregation (80f4e11e)
+- Refactor tool execution events to support new output and invocation structures (446a354c)
+- Add tool output started event and integrate into streaming progress callback (d2551a50)
+- Add support for OpenAI o3 and o4-mini models in Responses API (38f17b54)
+- Enhance OpenAI Responses API support with hosted tools and validation (a17b42c8)
+- Enhance shell execution approval process and protect writable metadata directories (74d40175)
 ### Other Changes
 #### Other
 
-- Update OpenAI model references to GPT-5.4 and adjust reasoning effort defaults (38c7644a) 
-- Implement shell command approval enhancements and justification handling (3ff40170) 
+- Update OpenAI model references to GPT-5.4 and adjust reasoning effort defaults (38c7644a)
+- Implement shell command approval enhancements and justification handling (3ff40170)
 #### Refactors
 
-- Streamline ToolDefinition creation and improve serialization functions (5b3cc708) 
+- Streamline ToolDefinition creation and improve serialization functions (5b3cc708)
 ### Contributors
 @vinhnx
 ## 0.87.0 - 2026-03-06
@@ -2127,20 +2127,20 @@ All notable changes to vtcode will be documented in this file.
 ### Highlights
 #### Features
 
-- Enhance command execution tracking with arguments and output aggregation (80f4e11e) 
-- Refactor tool execution events to support new output and invocation structures (446a354c) 
-- Add tool output started event and integrate into streaming progress callback (d2551a50) 
-- Add support for OpenAI o3 and o4-mini models in Responses API (38f17b54) 
-- Enhance OpenAI Responses API support with hosted tools and validation (a17b42c8) 
-- Enhance shell execution approval process and protect writable metadata directories (74d40175) 
+- Enhance command execution tracking with arguments and output aggregation (80f4e11e)
+- Refactor tool execution events to support new output and invocation structures (446a354c)
+- Add tool output started event and integrate into streaming progress callback (d2551a50)
+- Add support for OpenAI o3 and o4-mini models in Responses API (38f17b54)
+- Enhance OpenAI Responses API support with hosted tools and validation (a17b42c8)
+- Enhance shell execution approval process and protect writable metadata directories (74d40175)
 ### Other Changes
 #### Other
 
-- Update OpenAI model references to GPT-5.4 and adjust reasoning effort defaults (38c7644a) 
-- Implement shell command approval enhancements and justification handling (3ff40170) 
+- Update OpenAI model references to GPT-5.4 and adjust reasoning effort defaults (38c7644a)
+- Implement shell command approval enhancements and justification handling (3ff40170)
 #### Refactors
 
-- Streamline ToolDefinition creation and improve serialization functions (5b3cc708) 
+- Streamline ToolDefinition creation and improve serialization functions (5b3cc708)
 ### Contributors
 @vinhnx
 ## 0.86.7 - 2026-03-06
@@ -2154,20 +2154,20 @@ All notable changes to vtcode will be documented in this file.
 ### Highlights
 #### Documentation
 
-- Update documentation structure and add Development Setup guide (7b38475a) 
+- Update documentation structure and add Development Setup guide (7b38475a)
 ### Other Changes
 #### Other
 
-- Refactor Cargo.toml files to use workspace dependencies and update versioning scheme (a7bf7eea) 
-- Add MCP requirements enforcement and update related configurations (1f39beec) 
+- Refactor Cargo.toml files to use workspace dependencies and update versioning scheme (a7bf7eea)
+- Add MCP requirements enforcement and update related configurations (1f39beec)
 #### Refactors
 
-- Modularize components in src/ for improved readability and maintainability (f405950c) 
-- Enhance plugin ABI with safety checks and optional deallocator (ef02885a) 
-- Integrate unicode-width for text display handling (f7251f5f) 
-- Implement schema command for runtime tool introspection and add input validation (8d2900a1) 
-- Improve visual distinction between assistant agent and PTY output messages (387a45c7) 
-- Update PTY fallback handling for consistent terminal output (ed0fa6c9) 
+- Modularize components in src/ for improved readability and maintainability (f405950c)
+- Enhance plugin ABI with safety checks and optional deallocator (ef02885a)
+- Integrate unicode-width for text display handling (f7251f5f)
+- Implement schema command for runtime tool introspection and add input validation (8d2900a1)
+- Improve visual distinction between assistant agent and PTY output messages (387a45c7)
+- Update PTY fallback handling for consistent terminal output (ed0fa6c9)
 ### Contributors
 @vinhnx
 ## 0.86.5 - 2026-03-04
@@ -2175,34 +2175,34 @@ All notable changes to vtcode will be documented in this file.
 ### Highlights
 #### Bug Fixes
 
-- Update terminal notification handling for ghostty to use bell-only (ca512670) 
+- Update terminal notification handling for ghostty to use bell-only (ca512670)
 #### Features
 
-- Add Windows user profile root exclusions and enhance sensitive path matching (0a024067) 
-- Add new tools and policies for cargo and git commands (110d0326) 
-- Implement continuation arguments for tool execution and enhance read chunk handling (19db1b72) 
+- Add Windows user profile root exclusions and enhance sensitive path matching (0a024067)
+- Add new tools and policies for cargo and git commands (110d0326)
+- Implement continuation arguments for tool execution and enhance read chunk handling (19db1b72)
 ### Other Changes
 #### Other
 
-- Update API key and model provider in vtcode.toml (2939fceb) 
-- Implement task guards for background operations and improve async handling in various modules (23a114ab) 
-- Implement interactive diagnostics with quick and full options in the slash command (6876ae63) 
-- Implement Markdown parsing with support for lists, links, and tables (0ded92d5) 
-- Implement prompt cache shaping mode and enhance caching strategies (5f43940d) 
-- Implement history normalization for LLM requests and enhance execution context management (ad977a32) 
-- Refactor tool output helpers and improve cache management (3c825982) 
-- Refactor configuration layer loading and error handling; add support for tracking layer origins in merges; implement API for reading and writing configuration with version checks. (5fe3d2da) 
-- Refactor shell command building, update justification messages, enhance search metrics, improve web fetch domain matching, and adjust tool policies in configuration. (3c5d7600) 
-- Refactor code for improved readability and consistency across multiple files (adb2ad30) 
+- Update API key and model provider in vtcode.toml (2939fceb)
+- Implement task guards for background operations and improve async handling in various modules (23a114ab)
+- Implement interactive diagnostics with quick and full options in the slash command (6876ae63)
+- Implement Markdown parsing with support for lists, links, and tables (0ded92d5)
+- Implement prompt cache shaping mode and enhance caching strategies (5f43940d)
+- Implement history normalization for LLM requests and enhance execution context management (ad977a32)
+- Refactor tool output helpers and improve cache management (3c825982)
+- Refactor configuration layer loading and error handling; add support for tracking layer origins in merges; implement API for reading and writing configuration with version checks. (5fe3d2da)
+- Refactor shell command building, update justification messages, enhance search metrics, improve web fetch domain matching, and adjust tool policies in configuration. (3c5d7600)
+- Refactor code for improved readability and consistency across multiple files (adb2ad30)
 #### Refactors
 
-- Streamline response handling and output printing in AgentRunner (d98a5e55) 
-- Simplify function output handling in HuggingFace and OpenAI providers (71381dd3) 
-- Enhance diff rendering styles and streamline background color handling (c85edbcf) 
-- Enhance color detection logic for terminal compatibility (af35cbf6) 
-- Update configuration section markers and adjust merging logic for user settings (79bce0e0) 
-- Enhance settings search functionality and improve nested key handling (81f799ca) 
-- Remove agent command and related logic, update slash command descriptions (d672e41a) 
+- Streamline response handling and output printing in AgentRunner (d98a5e55)
+- Simplify function output handling in HuggingFace and OpenAI providers (71381dd3)
+- Enhance diff rendering styles and streamline background color handling (c85edbcf)
+- Enhance color detection logic for terminal compatibility (af35cbf6)
+- Update configuration section markers and adjust merging logic for user settings (79bce0e0)
+- Enhance settings search functionality and improve nested key handling (81f799ca)
+- Remove agent command and related logic, update slash command descriptions (d672e41a)
 ### Contributors
 @vinhnx
 ## 0.86.4 - 2026-03-04
@@ -2210,56 +2210,56 @@ All notable changes to vtcode will be documented in this file.
 ### Highlights
 #### Bug Fixes
 
-- Remove unused OpenRouter model variants and fix panic_hook warnings (d4afaa47) 
-- Update Cargo.toml to exclude all docs except CONFIG_FIELD_REFERENCE.md (6903748b) 
+- Remove unused OpenRouter model variants and fix panic_hook warnings (d4afaa47)
+- Update Cargo.toml to exclude all docs except CONFIG_FIELD_REFERENCE.md (6903748b)
 ### Other Changes
 #### Other
 
-- Enhance reasoning detail handling across providers and improve model detection (ef1f5a59) 
-- Refactor model constants and remove deprecated models; update provider configurations and capabilities (3ba46998) 
-- Update configuration for agent provider and API key; enhance user settings guidance (b11c56e0) 
-- Refactor model constants for clarity and update provider logic for consistency (cc37511d) 
-- Enhance reasoning visibility handling and integrate detailed reasoning extraction across modules (d1d19a58) 
-- Implement interactive settings manager and refactor related components (1f2d7f2a) 
-- Update code structure for improved readability and maintainability (2ea69033) 
-- Update TODO (86150ea2) 
-- Update TODO (c0e49629) 
-- Refactor settings handling and enhance input tokenization for improved functionality (52e07688) 
-- Adjust loop detection parameters and enhance normalization for read-file tools (c651bfaf) 
-- Standardize error handling policies and improve retry logic across components (e4c248c9) 
-- Refactor recovery flow and error handling for improved diagnostics and recovery strategies (7a036885) 
-- Implement interactive skills management and enhance plan mode functionality (a0d19bc4) 
-- Implement interactive skills manager in TUI similar to MCP manager (8a518681) 
-- Enhance plan confirmation flow with TUI integration and interactive options (affa91c7) 
-- Update TODO (45cc3a6a) 
-- Enhance interactive skills management with new commands and aliases (471cd578) 
-- Refactor slash commands and improve skills management interface (f0391983) 
-- Update TODO (c7c11e12) 
-- Update TODO (f03eb648) 
-- Enhance Plan Mode interview handling and UI adjustments (77b8c823) 
-- Update MiniMax provider to use Anthropic Messages API and adjust default model configuration (b21c5509) 
-- Refactor error handling and improve code safety across multiple modules (74ee2dea) 
-- Refactor TODO items for improved clarity and remove obsolete files (3ef5c370) 
-- Refactor tool intent classification and update tests for non-destructive tools (edb8b93f) 
-- Add native plugin support and enhance skill loading (8ba9fa9e) 
-- Refactor diff algorithms and improve bounds-checking in various modules (bcdaa19b) 
-- Add native plugin system implementation and documentation (0c0c856b) 
-- Add streaming progress events and enhance plugin handling in CLI (8ecb5670) 
-- Refactor TURN module and enhance UI interaction streaming (d20cb7dc) 
-- Update Hugging Face model constants and descriptions; normalize model ID handling for Step 3.5 Flash (261a6b0f) 
-- Enhance error formatting for unsupported models in HuggingFaceProvider (7703edd7) 
-- Add model_search_value function for generating model search strings (7ba202a8) 
-- Remove production.py and version.rs files from the project (f30fa2e2) 
-- Refactor recovery flow: streamline tab handling and improve question line processing (788d5300) 
-- Update default model in vtcode.toml to Step-3.5-Flash (915a20f3) 
-- Refactor code structure for improved readability and maintainability (43dd252e) 
-- Refactor imports and update theme in configuration (a9517434) 
-- Replace std::collections::HashMap with hashbrown::HashMap across the codebase for improved performance. (aa277f68) 
-- Add memchr dependency and update usage in ANSI parser (1b16a714) 
-- Add bytes dependency and update output handling in process and pipe modules (0fe2017e) 
-- Refactor imports and update configuration settings across multiple files (05d95e7b) 
-- Refactor caching implementation: migrate to UnifiedCache and remove deprecated LruCache (ba04ef9b) 
-- Fix path (cc0eaa6a) 
+- Enhance reasoning detail handling across providers and improve model detection (ef1f5a59)
+- Refactor model constants and remove deprecated models; update provider configurations and capabilities (3ba46998)
+- Update configuration for agent provider and API key; enhance user settings guidance (b11c56e0)
+- Refactor model constants for clarity and update provider logic for consistency (cc37511d)
+- Enhance reasoning visibility handling and integrate detailed reasoning extraction across modules (d1d19a58)
+- Implement interactive settings manager and refactor related components (1f2d7f2a)
+- Update code structure for improved readability and maintainability (2ea69033)
+- Update TODO (86150ea2)
+- Update TODO (c0e49629)
+- Refactor settings handling and enhance input tokenization for improved functionality (52e07688)
+- Adjust loop detection parameters and enhance normalization for read-file tools (c651bfaf)
+- Standardize error handling policies and improve retry logic across components (e4c248c9)
+- Refactor recovery flow and error handling for improved diagnostics and recovery strategies (7a036885)
+- Implement interactive skills management and enhance planning workflow functionality (a0d19bc4)
+- Implement interactive skills manager in TUI similar to MCP manager (8a518681)
+- Enhance plan confirmation flow with TUI integration and interactive options (affa91c7)
+- Update TODO (45cc3a6a)
+- Enhance interactive skills management with new commands and aliases (471cd578)
+- Refactor slash commands and improve skills management interface (f0391983)
+- Update TODO (c7c11e12)
+- Update TODO (f03eb648)
+- Enhance Planning workflow interview handling and UI adjustments (77b8c823)
+- Update MiniMax provider to use Anthropic Messages API and adjust default model configuration (b21c5509)
+- Refactor error handling and improve code safety across multiple modules (74ee2dea)
+- Refactor TODO items for improved clarity and remove obsolete files (3ef5c370)
+- Refactor tool intent classification and update tests for non-destructive tools (edb8b93f)
+- Add native plugin support and enhance skill loading (8ba9fa9e)
+- Refactor diff algorithms and improve bounds-checking in various modules (bcdaa19b)
+- Add native plugin system implementation and documentation (0c0c856b)
+- Add streaming progress events and enhance plugin handling in CLI (8ecb5670)
+- Refactor TURN module and enhance UI interaction streaming (d20cb7dc)
+- Update Hugging Face model constants and descriptions; normalize model ID handling for Step 3.5 Flash (261a6b0f)
+- Enhance error formatting for unsupported models in HuggingFaceProvider (7703edd7)
+- Add model_search_value function for generating model search strings (7ba202a8)
+- Remove production.py and version.rs files from the project (f30fa2e2)
+- Refactor recovery flow: streamline tab handling and improve question line processing (788d5300)
+- Update default model in vtcode.toml to Step-3.5-Flash (915a20f3)
+- Refactor code structure for improved readability and maintainability (43dd252e)
+- Refactor imports and update theme in configuration (a9517434)
+- Replace std::collections::HashMap with hashbrown::HashMap across the codebase for improved performance. (aa277f68)
+- Add memchr dependency and update usage in ANSI parser (1b16a714)
+- Add bytes dependency and update output handling in process and pipe modules (0fe2017e)
+- Refactor imports and update configuration settings across multiple files (05d95e7b)
+- Refactor caching implementation: migrate to UnifiedCache and remove deprecated LruCache (ba04ef9b)
+- Fix path (cc0eaa6a)
 ### Contributors
 @vinhnx
 ## 0.86.3 - 2026-03-04
@@ -2267,55 +2267,55 @@ All notable changes to vtcode will be documented in this file.
 ### Highlights
 #### Bug Fixes
 
-- Remove unused OpenRouter model variants and fix panic_hook warnings (d4afaa47) 
+- Remove unused OpenRouter model variants and fix panic_hook warnings (d4afaa47)
 ### Other Changes
 #### Other
 
-- Enhance reasoning detail handling across providers and improve model detection (ef1f5a59) 
-- Refactor model constants and remove deprecated models; update provider configurations and capabilities (3ba46998) 
-- Update configuration for agent provider and API key; enhance user settings guidance (b11c56e0) 
-- Refactor model constants for clarity and update provider logic for consistency (cc37511d) 
-- Enhance reasoning visibility handling and integrate detailed reasoning extraction across modules (d1d19a58) 
-- Implement interactive settings manager and refactor related components (1f2d7f2a) 
-- Update code structure for improved readability and maintainability (2ea69033) 
-- Update TODO (86150ea2) 
-- Update TODO (c0e49629) 
-- Refactor settings handling and enhance input tokenization for improved functionality (52e07688) 
-- Adjust loop detection parameters and enhance normalization for read-file tools (c651bfaf) 
-- Standardize error handling policies and improve retry logic across components (e4c248c9) 
-- Refactor recovery flow and error handling for improved diagnostics and recovery strategies (7a036885) 
-- Implement interactive skills management and enhance plan mode functionality (a0d19bc4) 
-- Implement interactive skills manager in TUI similar to MCP manager (8a518681) 
-- Enhance plan confirmation flow with TUI integration and interactive options (affa91c7) 
-- Update TODO (45cc3a6a) 
-- Enhance interactive skills management with new commands and aliases (471cd578) 
-- Refactor slash commands and improve skills management interface (f0391983) 
-- Update TODO (c7c11e12) 
-- Update TODO (f03eb648) 
-- Enhance Plan Mode interview handling and UI adjustments (77b8c823) 
-- Update MiniMax provider to use Anthropic Messages API and adjust default model configuration (b21c5509) 
-- Refactor error handling and improve code safety across multiple modules (74ee2dea) 
-- Refactor TODO items for improved clarity and remove obsolete files (3ef5c370) 
-- Refactor tool intent classification and update tests for non-destructive tools (edb8b93f) 
-- Add native plugin support and enhance skill loading (8ba9fa9e) 
-- Refactor diff algorithms and improve bounds-checking in various modules (bcdaa19b) 
-- Add native plugin system implementation and documentation (0c0c856b) 
-- Add streaming progress events and enhance plugin handling in CLI (8ecb5670) 
-- Refactor TURN module and enhance UI interaction streaming (d20cb7dc) 
-- Update Hugging Face model constants and descriptions; normalize model ID handling for Step 3.5 Flash (261a6b0f) 
-- Enhance error formatting for unsupported models in HuggingFaceProvider (7703edd7) 
-- Add model_search_value function for generating model search strings (7ba202a8) 
-- Remove production.py and version.rs files from the project (f30fa2e2) 
-- Refactor recovery flow: streamline tab handling and improve question line processing (788d5300) 
-- Update default model in vtcode.toml to Step-3.5-Flash (915a20f3) 
-- Refactor code structure for improved readability and maintainability (43dd252e) 
-- Refactor imports and update theme in configuration (a9517434) 
-- Replace std::collections::HashMap with hashbrown::HashMap across the codebase for improved performance. (aa277f68) 
-- Add memchr dependency and update usage in ANSI parser (1b16a714) 
-- Add bytes dependency and update output handling in process and pipe modules (0fe2017e) 
-- Refactor imports and update configuration settings across multiple files (05d95e7b) 
-- Refactor caching implementation: migrate to UnifiedCache and remove deprecated LruCache (ba04ef9b) 
-- Fix path (cc0eaa6a) 
+- Enhance reasoning detail handling across providers and improve model detection (ef1f5a59)
+- Refactor model constants and remove deprecated models; update provider configurations and capabilities (3ba46998)
+- Update configuration for agent provider and API key; enhance user settings guidance (b11c56e0)
+- Refactor model constants for clarity and update provider logic for consistency (cc37511d)
+- Enhance reasoning visibility handling and integrate detailed reasoning extraction across modules (d1d19a58)
+- Implement interactive settings manager and refactor related components (1f2d7f2a)
+- Update code structure for improved readability and maintainability (2ea69033)
+- Update TODO (86150ea2)
+- Update TODO (c0e49629)
+- Refactor settings handling and enhance input tokenization for improved functionality (52e07688)
+- Adjust loop detection parameters and enhance normalization for read-file tools (c651bfaf)
+- Standardize error handling policies and improve retry logic across components (e4c248c9)
+- Refactor recovery flow and error handling for improved diagnostics and recovery strategies (7a036885)
+- Implement interactive skills management and enhance planning workflow functionality (a0d19bc4)
+- Implement interactive skills manager in TUI similar to MCP manager (8a518681)
+- Enhance plan confirmation flow with TUI integration and interactive options (affa91c7)
+- Update TODO (45cc3a6a)
+- Enhance interactive skills management with new commands and aliases (471cd578)
+- Refactor slash commands and improve skills management interface (f0391983)
+- Update TODO (c7c11e12)
+- Update TODO (f03eb648)
+- Enhance Planning workflow interview handling and UI adjustments (77b8c823)
+- Update MiniMax provider to use Anthropic Messages API and adjust default model configuration (b21c5509)
+- Refactor error handling and improve code safety across multiple modules (74ee2dea)
+- Refactor TODO items for improved clarity and remove obsolete files (3ef5c370)
+- Refactor tool intent classification and update tests for non-destructive tools (edb8b93f)
+- Add native plugin support and enhance skill loading (8ba9fa9e)
+- Refactor diff algorithms and improve bounds-checking in various modules (bcdaa19b)
+- Add native plugin system implementation and documentation (0c0c856b)
+- Add streaming progress events and enhance plugin handling in CLI (8ecb5670)
+- Refactor TURN module and enhance UI interaction streaming (d20cb7dc)
+- Update Hugging Face model constants and descriptions; normalize model ID handling for Step 3.5 Flash (261a6b0f)
+- Enhance error formatting for unsupported models in HuggingFaceProvider (7703edd7)
+- Add model_search_value function for generating model search strings (7ba202a8)
+- Remove production.py and version.rs files from the project (f30fa2e2)
+- Refactor recovery flow: streamline tab handling and improve question line processing (788d5300)
+- Update default model in vtcode.toml to Step-3.5-Flash (915a20f3)
+- Refactor code structure for improved readability and maintainability (43dd252e)
+- Refactor imports and update theme in configuration (a9517434)
+- Replace std::collections::HashMap with hashbrown::HashMap across the codebase for improved performance. (aa277f68)
+- Add memchr dependency and update usage in ANSI parser (1b16a714)
+- Add bytes dependency and update output handling in process and pipe modules (0fe2017e)
+- Refactor imports and update configuration settings across multiple files (05d95e7b)
+- Refactor caching implementation: migrate to UnifiedCache and remove deprecated LruCache (ba04ef9b)
+- Fix path (cc0eaa6a)
 ### Contributors
 @vinhnx
 ## 0.86.2 - 2026-03-04
@@ -2323,54 +2323,54 @@ All notable changes to vtcode will be documented in this file.
 ### Highlights
 #### Bug Fixes
 
-- Remove unused OpenRouter model variants and fix panic_hook warnings (d4afaa47) 
+- Remove unused OpenRouter model variants and fix panic_hook warnings (d4afaa47)
 ### Other Changes
 #### Other
 
-- Enhance reasoning detail handling across providers and improve model detection (ef1f5a59) 
-- Refactor model constants and remove deprecated models; update provider configurations and capabilities (3ba46998) 
-- Update configuration for agent provider and API key; enhance user settings guidance (b11c56e0) 
-- Refactor model constants for clarity and update provider logic for consistency (cc37511d) 
-- Enhance reasoning visibility handling and integrate detailed reasoning extraction across modules (d1d19a58) 
-- Implement interactive settings manager and refactor related components (1f2d7f2a) 
-- Update code structure for improved readability and maintainability (2ea69033) 
-- Update TODO (86150ea2) 
-- Update TODO (c0e49629) 
-- Refactor settings handling and enhance input tokenization for improved functionality (52e07688) 
-- Adjust loop detection parameters and enhance normalization for read-file tools (c651bfaf) 
-- Standardize error handling policies and improve retry logic across components (e4c248c9) 
-- Refactor recovery flow and error handling for improved diagnostics and recovery strategies (7a036885) 
-- Implement interactive skills management and enhance plan mode functionality (a0d19bc4) 
-- Implement interactive skills manager in TUI similar to MCP manager (8a518681) 
-- Enhance plan confirmation flow with TUI integration and interactive options (affa91c7) 
-- Update TODO (45cc3a6a) 
-- Enhance interactive skills management with new commands and aliases (471cd578) 
-- Refactor slash commands and improve skills management interface (f0391983) 
-- Update TODO (c7c11e12) 
-- Update TODO (f03eb648) 
-- Enhance Plan Mode interview handling and UI adjustments (77b8c823) 
-- Update MiniMax provider to use Anthropic Messages API and adjust default model configuration (b21c5509) 
-- Refactor error handling and improve code safety across multiple modules (74ee2dea) 
-- Refactor TODO items for improved clarity and remove obsolete files (3ef5c370) 
-- Refactor tool intent classification and update tests for non-destructive tools (edb8b93f) 
-- Add native plugin support and enhance skill loading (8ba9fa9e) 
-- Refactor diff algorithms and improve bounds-checking in various modules (bcdaa19b) 
-- Add native plugin system implementation and documentation (0c0c856b) 
-- Add streaming progress events and enhance plugin handling in CLI (8ecb5670) 
-- Refactor TURN module and enhance UI interaction streaming (d20cb7dc) 
-- Update Hugging Face model constants and descriptions; normalize model ID handling for Step 3.5 Flash (261a6b0f) 
-- Enhance error formatting for unsupported models in HuggingFaceProvider (7703edd7) 
-- Add model_search_value function for generating model search strings (7ba202a8) 
-- Remove production.py and version.rs files from the project (f30fa2e2) 
-- Refactor recovery flow: streamline tab handling and improve question line processing (788d5300) 
-- Update default model in vtcode.toml to Step-3.5-Flash (915a20f3) 
-- Refactor code structure for improved readability and maintainability (43dd252e) 
-- Refactor imports and update theme in configuration (a9517434) 
-- Replace std::collections::HashMap with hashbrown::HashMap across the codebase for improved performance. (aa277f68) 
-- Add memchr dependency and update usage in ANSI parser (1b16a714) 
-- Add bytes dependency and update output handling in process and pipe modules (0fe2017e) 
-- Refactor imports and update configuration settings across multiple files (05d95e7b) 
-- Refactor caching implementation: migrate to UnifiedCache and remove deprecated LruCache (ba04ef9b) 
+- Enhance reasoning detail handling across providers and improve model detection (ef1f5a59)
+- Refactor model constants and remove deprecated models; update provider configurations and capabilities (3ba46998)
+- Update configuration for agent provider and API key; enhance user settings guidance (b11c56e0)
+- Refactor model constants for clarity and update provider logic for consistency (cc37511d)
+- Enhance reasoning visibility handling and integrate detailed reasoning extraction across modules (d1d19a58)
+- Implement interactive settings manager and refactor related components (1f2d7f2a)
+- Update code structure for improved readability and maintainability (2ea69033)
+- Update TODO (86150ea2)
+- Update TODO (c0e49629)
+- Refactor settings handling and enhance input tokenization for improved functionality (52e07688)
+- Adjust loop detection parameters and enhance normalization for read-file tools (c651bfaf)
+- Standardize error handling policies and improve retry logic across components (e4c248c9)
+- Refactor recovery flow and error handling for improved diagnostics and recovery strategies (7a036885)
+- Implement interactive skills management and enhance planning workflow functionality (a0d19bc4)
+- Implement interactive skills manager in TUI similar to MCP manager (8a518681)
+- Enhance plan confirmation flow with TUI integration and interactive options (affa91c7)
+- Update TODO (45cc3a6a)
+- Enhance interactive skills management with new commands and aliases (471cd578)
+- Refactor slash commands and improve skills management interface (f0391983)
+- Update TODO (c7c11e12)
+- Update TODO (f03eb648)
+- Enhance Planning workflow interview handling and UI adjustments (77b8c823)
+- Update MiniMax provider to use Anthropic Messages API and adjust default model configuration (b21c5509)
+- Refactor error handling and improve code safety across multiple modules (74ee2dea)
+- Refactor TODO items for improved clarity and remove obsolete files (3ef5c370)
+- Refactor tool intent classification and update tests for non-destructive tools (edb8b93f)
+- Add native plugin support and enhance skill loading (8ba9fa9e)
+- Refactor diff algorithms and improve bounds-checking in various modules (bcdaa19b)
+- Add native plugin system implementation and documentation (0c0c856b)
+- Add streaming progress events and enhance plugin handling in CLI (8ecb5670)
+- Refactor TURN module and enhance UI interaction streaming (d20cb7dc)
+- Update Hugging Face model constants and descriptions; normalize model ID handling for Step 3.5 Flash (261a6b0f)
+- Enhance error formatting for unsupported models in HuggingFaceProvider (7703edd7)
+- Add model_search_value function for generating model search strings (7ba202a8)
+- Remove production.py and version.rs files from the project (f30fa2e2)
+- Refactor recovery flow: streamline tab handling and improve question line processing (788d5300)
+- Update default model in vtcode.toml to Step-3.5-Flash (915a20f3)
+- Refactor code structure for improved readability and maintainability (43dd252e)
+- Refactor imports and update theme in configuration (a9517434)
+- Replace std::collections::HashMap with hashbrown::HashMap across the codebase for improved performance. (aa277f68)
+- Add memchr dependency and update usage in ANSI parser (1b16a714)
+- Add bytes dependency and update output handling in process and pipe modules (0fe2017e)
+- Refactor imports and update configuration settings across multiple files (05d95e7b)
+- Refactor caching implementation: migrate to UnifiedCache and remove deprecated LruCache (ba04ef9b)
 ### Contributors
 @vinhnx
 ## 0.86.1 - 2026-03-04
@@ -2378,54 +2378,54 @@ All notable changes to vtcode will be documented in this file.
 ### Highlights
 #### Bug Fixes
 
-- Remove unused OpenRouter model variants and fix panic_hook warnings (d4afaa47) 
+- Remove unused OpenRouter model variants and fix panic_hook warnings (d4afaa47)
 ### Other Changes
 #### Other
 
-- Enhance reasoning detail handling across providers and improve model detection (ef1f5a59) 
-- Refactor model constants and remove deprecated models; update provider configurations and capabilities (3ba46998) 
-- Update configuration for agent provider and API key; enhance user settings guidance (b11c56e0) 
-- Refactor model constants for clarity and update provider logic for consistency (cc37511d) 
-- Enhance reasoning visibility handling and integrate detailed reasoning extraction across modules (d1d19a58) 
-- Implement interactive settings manager and refactor related components (1f2d7f2a) 
-- Update code structure for improved readability and maintainability (2ea69033) 
-- Update TODO (86150ea2) 
-- Update TODO (c0e49629) 
-- Refactor settings handling and enhance input tokenization for improved functionality (52e07688) 
-- Adjust loop detection parameters and enhance normalization for read-file tools (c651bfaf) 
-- Standardize error handling policies and improve retry logic across components (e4c248c9) 
-- Refactor recovery flow and error handling for improved diagnostics and recovery strategies (7a036885) 
-- Implement interactive skills management and enhance plan mode functionality (a0d19bc4) 
-- Implement interactive skills manager in TUI similar to MCP manager (8a518681) 
-- Enhance plan confirmation flow with TUI integration and interactive options (affa91c7) 
-- Update TODO (45cc3a6a) 
-- Enhance interactive skills management with new commands and aliases (471cd578) 
-- Refactor slash commands and improve skills management interface (f0391983) 
-- Update TODO (c7c11e12) 
-- Update TODO (f03eb648) 
-- Enhance Plan Mode interview handling and UI adjustments (77b8c823) 
-- Update MiniMax provider to use Anthropic Messages API and adjust default model configuration (b21c5509) 
-- Refactor error handling and improve code safety across multiple modules (74ee2dea) 
-- Refactor TODO items for improved clarity and remove obsolete files (3ef5c370) 
-- Refactor tool intent classification and update tests for non-destructive tools (edb8b93f) 
-- Add native plugin support and enhance skill loading (8ba9fa9e) 
-- Refactor diff algorithms and improve bounds-checking in various modules (bcdaa19b) 
-- Add native plugin system implementation and documentation (0c0c856b) 
-- Add streaming progress events and enhance plugin handling in CLI (8ecb5670) 
-- Refactor TURN module and enhance UI interaction streaming (d20cb7dc) 
-- Update Hugging Face model constants and descriptions; normalize model ID handling for Step 3.5 Flash (261a6b0f) 
-- Enhance error formatting for unsupported models in HuggingFaceProvider (7703edd7) 
-- Add model_search_value function for generating model search strings (7ba202a8) 
-- Remove production.py and version.rs files from the project (f30fa2e2) 
-- Refactor recovery flow: streamline tab handling and improve question line processing (788d5300) 
-- Update default model in vtcode.toml to Step-3.5-Flash (915a20f3) 
-- Refactor code structure for improved readability and maintainability (43dd252e) 
-- Refactor imports and update theme in configuration (a9517434) 
-- Replace std::collections::HashMap with hashbrown::HashMap across the codebase for improved performance. (aa277f68) 
-- Add memchr dependency and update usage in ANSI parser (1b16a714) 
-- Add bytes dependency and update output handling in process and pipe modules (0fe2017e) 
-- Refactor imports and update configuration settings across multiple files (05d95e7b) 
-- Refactor caching implementation: migrate to UnifiedCache and remove deprecated LruCache (ba04ef9b) 
+- Enhance reasoning detail handling across providers and improve model detection (ef1f5a59)
+- Refactor model constants and remove deprecated models; update provider configurations and capabilities (3ba46998)
+- Update configuration for agent provider and API key; enhance user settings guidance (b11c56e0)
+- Refactor model constants for clarity and update provider logic for consistency (cc37511d)
+- Enhance reasoning visibility handling and integrate detailed reasoning extraction across modules (d1d19a58)
+- Implement interactive settings manager and refactor related components (1f2d7f2a)
+- Update code structure for improved readability and maintainability (2ea69033)
+- Update TODO (86150ea2)
+- Update TODO (c0e49629)
+- Refactor settings handling and enhance input tokenization for improved functionality (52e07688)
+- Adjust loop detection parameters and enhance normalization for read-file tools (c651bfaf)
+- Standardize error handling policies and improve retry logic across components (e4c248c9)
+- Refactor recovery flow and error handling for improved diagnostics and recovery strategies (7a036885)
+- Implement interactive skills management and enhance planning workflow functionality (a0d19bc4)
+- Implement interactive skills manager in TUI similar to MCP manager (8a518681)
+- Enhance plan confirmation flow with TUI integration and interactive options (affa91c7)
+- Update TODO (45cc3a6a)
+- Enhance interactive skills management with new commands and aliases (471cd578)
+- Refactor slash commands and improve skills management interface (f0391983)
+- Update TODO (c7c11e12)
+- Update TODO (f03eb648)
+- Enhance Planning workflow interview handling and UI adjustments (77b8c823)
+- Update MiniMax provider to use Anthropic Messages API and adjust default model configuration (b21c5509)
+- Refactor error handling and improve code safety across multiple modules (74ee2dea)
+- Refactor TODO items for improved clarity and remove obsolete files (3ef5c370)
+- Refactor tool intent classification and update tests for non-destructive tools (edb8b93f)
+- Add native plugin support and enhance skill loading (8ba9fa9e)
+- Refactor diff algorithms and improve bounds-checking in various modules (bcdaa19b)
+- Add native plugin system implementation and documentation (0c0c856b)
+- Add streaming progress events and enhance plugin handling in CLI (8ecb5670)
+- Refactor TURN module and enhance UI interaction streaming (d20cb7dc)
+- Update Hugging Face model constants and descriptions; normalize model ID handling for Step 3.5 Flash (261a6b0f)
+- Enhance error formatting for unsupported models in HuggingFaceProvider (7703edd7)
+- Add model_search_value function for generating model search strings (7ba202a8)
+- Remove production.py and version.rs files from the project (f30fa2e2)
+- Refactor recovery flow: streamline tab handling and improve question line processing (788d5300)
+- Update default model in vtcode.toml to Step-3.5-Flash (915a20f3)
+- Refactor code structure for improved readability and maintainability (43dd252e)
+- Refactor imports and update theme in configuration (a9517434)
+- Replace std::collections::HashMap with hashbrown::HashMap across the codebase for improved performance. (aa277f68)
+- Add memchr dependency and update usage in ANSI parser (1b16a714)
+- Add bytes dependency and update output handling in process and pipe modules (0fe2017e)
+- Refactor imports and update configuration settings across multiple files (05d95e7b)
+- Refactor caching implementation: migrate to UnifiedCache and remove deprecated LruCache (ba04ef9b)
 ### Contributors
 @vinhnx
 ## 0.86.0 - 2026-03-04
@@ -2434,50 +2434,50 @@ All notable changes to vtcode will be documented in this file.
 ### Other Changes
 #### Other
 
-- Enhance reasoning detail handling across providers and improve model detection (ef1f5a59) 
-- Refactor model constants and remove deprecated models; update provider configurations and capabilities (3ba46998) 
-- Update configuration for agent provider and API key; enhance user settings guidance (b11c56e0) 
-- Refactor model constants for clarity and update provider logic for consistency (cc37511d) 
-- Enhance reasoning visibility handling and integrate detailed reasoning extraction across modules (d1d19a58) 
-- Implement interactive settings manager and refactor related components (1f2d7f2a) 
-- Update code structure for improved readability and maintainability (2ea69033) 
-- Update TODO (86150ea2) 
-- Update TODO (c0e49629) 
-- Refactor settings handling and enhance input tokenization for improved functionality (52e07688) 
-- Adjust loop detection parameters and enhance normalization for read-file tools (c651bfaf) 
-- Standardize error handling policies and improve retry logic across components (e4c248c9) 
-- Refactor recovery flow and error handling for improved diagnostics and recovery strategies (7a036885) 
-- Implement interactive skills management and enhance plan mode functionality (a0d19bc4) 
-- Implement interactive skills manager in TUI similar to MCP manager (8a518681) 
-- Enhance plan confirmation flow with TUI integration and interactive options (affa91c7) 
-- Update TODO (45cc3a6a) 
-- Enhance interactive skills management with new commands and aliases (471cd578) 
-- Refactor slash commands and improve skills management interface (f0391983) 
-- Update TODO (c7c11e12) 
-- Update TODO (f03eb648) 
-- Enhance Plan Mode interview handling and UI adjustments (77b8c823) 
-- Update MiniMax provider to use Anthropic Messages API and adjust default model configuration (b21c5509) 
-- Refactor error handling and improve code safety across multiple modules (74ee2dea) 
-- Refactor TODO items for improved clarity and remove obsolete files (3ef5c370) 
-- Refactor tool intent classification and update tests for non-destructive tools (edb8b93f) 
-- Add native plugin support and enhance skill loading (8ba9fa9e) 
-- Refactor diff algorithms and improve bounds-checking in various modules (bcdaa19b) 
-- Add native plugin system implementation and documentation (0c0c856b) 
-- Add streaming progress events and enhance plugin handling in CLI (8ecb5670) 
-- Refactor TURN module and enhance UI interaction streaming (d20cb7dc) 
-- Update Hugging Face model constants and descriptions; normalize model ID handling for Step 3.5 Flash (261a6b0f) 
-- Enhance error formatting for unsupported models in HuggingFaceProvider (7703edd7) 
-- Add model_search_value function for generating model search strings (7ba202a8) 
-- Remove production.py and version.rs files from the project (f30fa2e2) 
-- Refactor recovery flow: streamline tab handling and improve question line processing (788d5300) 
-- Update default model in vtcode.toml to Step-3.5-Flash (915a20f3) 
-- Refactor code structure for improved readability and maintainability (43dd252e) 
-- Refactor imports and update theme in configuration (a9517434) 
-- Replace std::collections::HashMap with hashbrown::HashMap across the codebase for improved performance. (aa277f68) 
-- Add memchr dependency and update usage in ANSI parser (1b16a714) 
-- Add bytes dependency and update output handling in process and pipe modules (0fe2017e) 
-- Refactor imports and update configuration settings across multiple files (05d95e7b) 
-- Refactor caching implementation: migrate to UnifiedCache and remove deprecated LruCache (ba04ef9b) 
+- Enhance reasoning detail handling across providers and improve model detection (ef1f5a59)
+- Refactor model constants and remove deprecated models; update provider configurations and capabilities (3ba46998)
+- Update configuration for agent provider and API key; enhance user settings guidance (b11c56e0)
+- Refactor model constants for clarity and update provider logic for consistency (cc37511d)
+- Enhance reasoning visibility handling and integrate detailed reasoning extraction across modules (d1d19a58)
+- Implement interactive settings manager and refactor related components (1f2d7f2a)
+- Update code structure for improved readability and maintainability (2ea69033)
+- Update TODO (86150ea2)
+- Update TODO (c0e49629)
+- Refactor settings handling and enhance input tokenization for improved functionality (52e07688)
+- Adjust loop detection parameters and enhance normalization for read-file tools (c651bfaf)
+- Standardize error handling policies and improve retry logic across components (e4c248c9)
+- Refactor recovery flow and error handling for improved diagnostics and recovery strategies (7a036885)
+- Implement interactive skills management and enhance planning workflow functionality (a0d19bc4)
+- Implement interactive skills manager in TUI similar to MCP manager (8a518681)
+- Enhance plan confirmation flow with TUI integration and interactive options (affa91c7)
+- Update TODO (45cc3a6a)
+- Enhance interactive skills management with new commands and aliases (471cd578)
+- Refactor slash commands and improve skills management interface (f0391983)
+- Update TODO (c7c11e12)
+- Update TODO (f03eb648)
+- Enhance Planning workflow interview handling and UI adjustments (77b8c823)
+- Update MiniMax provider to use Anthropic Messages API and adjust default model configuration (b21c5509)
+- Refactor error handling and improve code safety across multiple modules (74ee2dea)
+- Refactor TODO items for improved clarity and remove obsolete files (3ef5c370)
+- Refactor tool intent classification and update tests for non-destructive tools (edb8b93f)
+- Add native plugin support and enhance skill loading (8ba9fa9e)
+- Refactor diff algorithms and improve bounds-checking in various modules (bcdaa19b)
+- Add native plugin system implementation and documentation (0c0c856b)
+- Add streaming progress events and enhance plugin handling in CLI (8ecb5670)
+- Refactor TURN module and enhance UI interaction streaming (d20cb7dc)
+- Update Hugging Face model constants and descriptions; normalize model ID handling for Step 3.5 Flash (261a6b0f)
+- Enhance error formatting for unsupported models in HuggingFaceProvider (7703edd7)
+- Add model_search_value function for generating model search strings (7ba202a8)
+- Remove production.py and version.rs files from the project (f30fa2e2)
+- Refactor recovery flow: streamline tab handling and improve question line processing (788d5300)
+- Update default model in vtcode.toml to Step-3.5-Flash (915a20f3)
+- Refactor code structure for improved readability and maintainability (43dd252e)
+- Refactor imports and update theme in configuration (a9517434)
+- Replace std::collections::HashMap with hashbrown::HashMap across the codebase for improved performance. (aa277f68)
+- Add memchr dependency and update usage in ANSI parser (1b16a714)
+- Add bytes dependency and update output handling in process and pipe modules (0fe2017e)
+- Refactor imports and update configuration settings across multiple files (05d95e7b)
+- Refactor caching implementation: migrate to UnifiedCache and remove deprecated LruCache (ba04ef9b)
 ### Contributors
 @vinhnx
 # Changelog
@@ -2515,72 +2515,72 @@ All notable changes to vtcode will be documented in this file.
 ### Highlights
 #### Bug Fixes
 
-- Use RngExt trait for random_range method in slug.rs (b9b03932) 
-- Trim whitespace from custom config and data directory environment variables (179f1ef9) 
+- Use RngExt trait for random_range method in slug.rs (b9b03932)
+- Trim whitespace from custom config and data directory environment variables (179f1ef9)
 #### Documentation
 
-- Add final notes and principles for coding agents in AGENTS.md (9d2e061c) 
+- Add final notes and principles for coding agents in AGENTS.md (9d2e061c)
 #### Features
 
-- Include git version info in long_version and add tests (8a1fe108) 
-- Add snapshot files for history picker and slash widget tests (b397909d) 
-- Implement TUI log capture feature and enhance panic hook handling (89813122) 
-- Integrate color-eyre for enhanced error reporting in debug mode (05591670) 
+- Include git version info in long_version and add tests (8a1fe108)
+- Add snapshot files for history picker and slash widget tests (b397909d)
+- Implement TUI log capture feature and enhance panic hook handling (89813122)
+- Integrate color-eyre for enhanced error reporting in debug mode (05591670)
 ### Other Changes
 #### Other
 
-- Enhance skill authoring and routing logic; add response chaining support (121a8ece) 
-- Add `thiserror` integration for improved error handling across multiple modules (b5081d89) 
-- Add websocket connection limit error handling and update API versioning (6f76cfb7) 
-- Add installation scripts to release artifacts and update installation documentation (816c6d41) 
-- Refactor error log collector to use a bounded buffer and enhance link rendering in markdown (c7ef605b) 
-- Refactor line truncation logic and introduce utility module for consistent ellipsis handling (69742626) 
-- Refactor websocket header insertion and update apply_patch handler to use Arc for session and turn context (13e4b403) 
-- Add error log buffer size limit and refactor tool context for constrained policies (f8b71916) 
-- Refactor tool routing and permission handling; improve URL-aware text wrapping (564fdad7) 
-- Refactor tool permission caching and enhance error handling; improve text wrapping utilities (ed68b7fd) 
-- Add support for zsh exec wrapper and enhance PTY configuration (9d992fed) 
-- Add data-oriented design plan and optimization phases for vtcode (98175726) 
-- Enhance status line configuration and improve token extraction logic for file references (68bb39d4) 
-- Document applied default status line items pattern and outline data-oriented design plan for vtcode (db98b328) 
-- Add tests for PtyConfig validation and refactor session creation methods (8cd350ef) 
-- Refactor TODO.md to improve formatting and clarify implementation instructions (265c835a) 
-- Enhance file palette key handling to manage selection and normal submit behavior (309e8b22) 
-- Refactor process group termination logic for robust child process cleanup (bb1ab07f) 
-- Refactor WebSocket session handling and enhance incremental input validation (e874c269) 
-- Refactor sandbox permissions and enhance tool execution handling (f997edb2) 
-- Implement fine-grained rejection controls for approval prompts and update related logic (3b9a7775) 
-- Refactor caching mechanisms to use inner struct with RwLock for improved concurrency (46102de4) 
-- Refactor session initialization to encapsulate execution and metadata contexts (ef3d1020) 
-- Enhance TurnProcessingContext with new as_turn_processing_context method for improved context management (c0b47e4d) 
-- Refactor RunLoopContext and TurnProcessingContext to use constructor methods for improved clarity and maintainability (cd9d63a5) 
-- Refactor TurnProcessingContext to use parts for better modularity and readability (b133ff3d) 
-- Refactor code for improved readability and consistency in multiple files (2565bbdb) 
-- Add Clippy configuration for vtcode with custom lint settings (fac8a298) 
-- Implement theme synchronization for Alacritty, Ghostty, and Kitty terminals; remove CachedStyleParser and replace with LrMap for improved performance; add terminal color probe for enhanced theme detection; update Cargo.toml files for Rust 1.85 compatibility. (c7dd0f28) 
-- Refactor code to use `parking_lot::RwLock` instead of `std::sync::RwLock` for improved performance; update various imports and method calls across multiple files; bump Rust version to 1.88 in Cargo.toml files. (10892d08) 
-- Refactor code for improved readability and consistency across multiple files (d876e596) 
-- Refactor command processing, improve output handling, and enhance telemetry reporting (ec20b546) 
-- Refactor tests and improve code readability (2c2ade2b) 
-- Add color policy module and integrate into styling and error display (3287a044) 
-- Add fuzzing adoption plan for security parsers and initial setup (4b4d8d8f) 
-- Refactor code for consistency and readability across multiple modules (502cda47) 
-- Refactor middleware chain initialization to use push method (2368dec1) 
-- Update integration tests to replace 'cargo test' with 'cargo check' and adjust access count assertions (862c07df) 
-- Add fuzzing support for security parsers and update documentation (bd445376) 
-- Refactor command safety checks and improve loop detection tests (b8ede10b) 
-- Enhance command validation and tool execution with unified action handling (0c3d4b86) 
+- Enhance skill authoring and routing logic; add response chaining support (121a8ece)
+- Add `thiserror` integration for improved error handling across multiple modules (b5081d89)
+- Add websocket connection limit error handling and update API versioning (6f76cfb7)
+- Add installation scripts to release artifacts and update installation documentation (816c6d41)
+- Refactor error log collector to use a bounded buffer and enhance link rendering in markdown (c7ef605b)
+- Refactor line truncation logic and introduce utility module for consistent ellipsis handling (69742626)
+- Refactor websocket header insertion and update apply_patch handler to use Arc for session and turn context (13e4b403)
+- Add error log buffer size limit and refactor tool context for constrained policies (f8b71916)
+- Refactor tool routing and permission handling; improve URL-aware text wrapping (564fdad7)
+- Refactor tool permission caching and enhance error handling; improve text wrapping utilities (ed68b7fd)
+- Add support for zsh exec wrapper and enhance PTY configuration (9d992fed)
+- Add data-oriented design plan and optimization phases for vtcode (98175726)
+- Enhance status line configuration and improve token extraction logic for file references (68bb39d4)
+- Document applied default status line items pattern and outline data-oriented design plan for vtcode (db98b328)
+- Add tests for PtyConfig validation and refactor session creation methods (8cd350ef)
+- Refactor TODO.md to improve formatting and clarify implementation instructions (265c835a)
+- Enhance file palette key handling to manage selection and normal submit behavior (309e8b22)
+- Refactor process group termination logic for robust child process cleanup (bb1ab07f)
+- Refactor WebSocket session handling and enhance incremental input validation (e874c269)
+- Refactor sandbox permissions and enhance tool execution handling (f997edb2)
+- Implement fine-grained rejection controls for approval prompts and update related logic (3b9a7775)
+- Refactor caching mechanisms to use inner struct with RwLock for improved concurrency (46102de4)
+- Refactor session initialization to encapsulate execution and metadata contexts (ef3d1020)
+- Enhance TurnProcessingContext with new as_turn_processing_context method for improved context management (c0b47e4d)
+- Refactor RunLoopContext and TurnProcessingContext to use constructor methods for improved clarity and maintainability (cd9d63a5)
+- Refactor TurnProcessingContext to use parts for better modularity and readability (b133ff3d)
+- Refactor code for improved readability and consistency in multiple files (2565bbdb)
+- Add Clippy configuration for vtcode with custom lint settings (fac8a298)
+- Implement theme synchronization for Alacritty, Ghostty, and Kitty terminals; remove CachedStyleParser and replace with LrMap for improved performance; add terminal color probe for enhanced theme detection; update Cargo.toml files for Rust 1.85 compatibility. (c7dd0f28)
+- Refactor code to use `parking_lot::RwLock` instead of `std::sync::RwLock` for improved performance; update various imports and method calls across multiple files; bump Rust version to 1.88 in Cargo.toml files. (10892d08)
+- Refactor code for improved readability and consistency across multiple files (d876e596)
+- Refactor command processing, improve output handling, and enhance telemetry reporting (ec20b546)
+- Refactor tests and improve code readability (2c2ade2b)
+- Add color policy module and integrate into styling and error display (3287a044)
+- Add fuzzing adoption plan for security parsers and initial setup (4b4d8d8f)
+- Refactor code for consistency and readability across multiple modules (502cda47)
+- Refactor middleware chain initialization to use push method (2368dec1)
+- Update integration tests to replace 'cargo test' with 'cargo check' and adjust access count assertions (862c07df)
+- Add fuzzing support for security parsers and update documentation (bd445376)
+- Refactor command safety checks and improve loop detection tests (b8ede10b)
+- Enhance command validation and tool execution with unified action handling (0c3d4b86)
 #### Refactors
 
-- Remove unnecessary Clear widget calls in header and input rendering (fb1c8de7) 
-- Streamline architecture documentation and enhance clarity (565ea315) 
-- Rename color-eyre hook functions for clarity and consistency (3c555a86) 
-- Update approval policy handling to use Arc<RwLock> for thread safety (3b91595f) 
-- Create sync_mcp_approval_policy_for_context function for improved clarity (92a6cf82) 
-- Improve error handling and simplify string conversion in terminal color probe and LM Studio client (e41acb42) 
-- Update exit summary formatting and remove unused functions (7c58ff16) 
-- Streamline lint configuration and enhance exit summary output (eaca32a6) 
-- Enhance exit summary formatting and improve file indexing logic (d143fe97) 
+- Remove unnecessary Clear widget calls in header and input rendering (fb1c8de7)
+- Streamline architecture documentation and enhance clarity (565ea315)
+- Rename color-eyre hook functions for clarity and consistency (3c555a86)
+- Update approval policy handling to use Arc<RwLock> for thread safety (3b91595f)
+- Create sync_mcp_approval_policy_for_context function for improved clarity (92a6cf82)
+- Improve error handling and simplify string conversion in terminal color probe and LM Studio client (e41acb42)
+- Update exit summary formatting and remove unused functions (7c58ff16)
+- Streamline lint configuration and enhance exit summary output (eaca32a6)
+- Enhance exit summary formatting and improve file indexing logic (d143fe97)
 ### Contributors
 @vinhnx
 ## 0.85.1 - 2026-03-01
@@ -2589,33 +2589,33 @@ All notable changes to vtcode will be documented in this file.
 ### Other Changes
 #### Other
 
-- Enhance skill authoring and routing logic; add response chaining support (121a8ece) 
-- Add `thiserror` integration for improved error handling across multiple modules (b5081d89) 
-- Add websocket connection limit error handling and update API versioning (6f76cfb7) 
-- Add installation scripts to release artifacts and update installation documentation (816c6d41) 
-- Refactor error log collector to use a bounded buffer and enhance link rendering in markdown (c7ef605b) 
-- Refactor line truncation logic and introduce utility module for consistent ellipsis handling (69742626) 
-- Refactor websocket header insertion and update apply_patch handler to use Arc for session and turn context (13e4b403) 
-- Add error log buffer size limit and refactor tool context for constrained policies (f8b71916) 
-- Refactor tool routing and permission handling; improve URL-aware text wrapping (564fdad7) 
-- Refactor tool permission caching and enhance error handling; improve text wrapping utilities (ed68b7fd) 
-- Add support for zsh exec wrapper and enhance PTY configuration (9d992fed) 
-- Add data-oriented design plan and optimization phases for vtcode (98175726) 
-- Enhance status line configuration and improve token extraction logic for file references (68bb39d4) 
-- Document applied default status line items pattern and outline data-oriented design plan for vtcode (db98b328) 
-- Add tests for PtyConfig validation and refactor session creation methods (8cd350ef) 
-- Refactor TODO.md to improve formatting and clarify implementation instructions (265c835a) 
-- Enhance file palette key handling to manage selection and normal submit behavior (309e8b22) 
-- Refactor process group termination logic for robust child process cleanup (bb1ab07f) 
-- Refactor WebSocket session handling and enhance incremental input validation (e874c269) 
-- Refactor sandbox permissions and enhance tool execution handling (f997edb2) 
-- Implement fine-grained rejection controls for approval prompts and update related logic (3b9a7775) 
-- Refactor caching mechanisms to use inner struct with RwLock for improved concurrency (46102de4) 
-- Refactor session initialization to encapsulate execution and metadata contexts (ef3d1020) 
-- Enhance TurnProcessingContext with new as_turn_processing_context method for improved context management (c0b47e4d) 
-- Refactor RunLoopContext and TurnProcessingContext to use constructor methods for improved clarity and maintainability (cd9d63a5) 
-- Refactor TurnProcessingContext to use parts for better modularity and readability (b133ff3d) 
-- Refactor code for improved readability and consistency in multiple files (2565bbdb) 
+- Enhance skill authoring and routing logic; add response chaining support (121a8ece)
+- Add `thiserror` integration for improved error handling across multiple modules (b5081d89)
+- Add websocket connection limit error handling and update API versioning (6f76cfb7)
+- Add installation scripts to release artifacts and update installation documentation (816c6d41)
+- Refactor error log collector to use a bounded buffer and enhance link rendering in markdown (c7ef605b)
+- Refactor line truncation logic and introduce utility module for consistent ellipsis handling (69742626)
+- Refactor websocket header insertion and update apply_patch handler to use Arc for session and turn context (13e4b403)
+- Add error log buffer size limit and refactor tool context for constrained policies (f8b71916)
+- Refactor tool routing and permission handling; improve URL-aware text wrapping (564fdad7)
+- Refactor tool permission caching and enhance error handling; improve text wrapping utilities (ed68b7fd)
+- Add support for zsh exec wrapper and enhance PTY configuration (9d992fed)
+- Add data-oriented design plan and optimization phases for vtcode (98175726)
+- Enhance status line configuration and improve token extraction logic for file references (68bb39d4)
+- Document applied default status line items pattern and outline data-oriented design plan for vtcode (db98b328)
+- Add tests for PtyConfig validation and refactor session creation methods (8cd350ef)
+- Refactor TODO.md to improve formatting and clarify implementation instructions (265c835a)
+- Enhance file palette key handling to manage selection and normal submit behavior (309e8b22)
+- Refactor process group termination logic for robust child process cleanup (bb1ab07f)
+- Refactor WebSocket session handling and enhance incremental input validation (e874c269)
+- Refactor sandbox permissions and enhance tool execution handling (f997edb2)
+- Implement fine-grained rejection controls for approval prompts and update related logic (3b9a7775)
+- Refactor caching mechanisms to use inner struct with RwLock for improved concurrency (46102de4)
+- Refactor session initialization to encapsulate execution and metadata contexts (ef3d1020)
+- Enhance TurnProcessingContext with new as_turn_processing_context method for improved context management (c0b47e4d)
+- Refactor RunLoopContext and TurnProcessingContext to use constructor methods for improved clarity and maintainability (cd9d63a5)
+- Refactor TurnProcessingContext to use parts for better modularity and readability (b133ff3d)
+- Refactor code for improved readability and consistency in multiple files (2565bbdb)
 ### Contributors
 @vinhnx
 ## 0.85.0 - 2026-03-01
@@ -2623,32 +2623,32 @@ All notable changes to vtcode will be documented in this file.
 ### Highlights
 #### Bug Fixes
 
-- Update contributor handling in changelog template (f1ef0a2c) 
+- Update contributor handling in changelog template (f1ef0a2c)
 #### Features
 
-- Add diagnostics visibility toggle in transcript for debug builds (2b339962) 
+- Add diagnostics visibility toggle in transcript for debug builds (2b339962)
 ### Other Changes
 #### Other
 
-- Refactor diff rendering and styling for consistency and accessibility (3edcf204) 
-- Refactor token counting methods and remove unused tests across providers; update configuration for default provider and model. (55c76984) 
-- Add health check and reconnection methods to MCP provider; enhance error classification and guidance (45fcc200) 
-- Enhance error handling and logging across providers; improve session archive retention and diagnostics (ce94ca83) 
-- Refactor error recovery to use tokio::sync::RwLock; update tool outcome handling and improve cache retrieval methods (76c1789f) 
-- Add support for "show diff" command and improve tool call validation (62051691) 
-- Update color scheme for unified diff background and gutter colors; change terminal theme to improve readability (525653e9) 
-- Add diff theme configuration and improve styling for terminal output (501634f1) 
-- Enhance interactive mode with new keyboard shortcuts and shell mode indicators; update configuration to disable turn timer (87919849) 
-- Refactor input handling and padding logic; enhance shell command validation and error feedback (d520d2ea) 
-- Add file reference metadata handling and update input with aliases (91e39103) 
-- Implement postamble exit summarization with metric calculation and enhance markdown output styling (02d01e99) 
-- Implement code change tracking and exit summary reporting (5e776910) 
-- Refactor session handling to streamline resume logic and enhance message rendering (6654f328) 
+- Refactor diff rendering and styling for consistency and accessibility (3edcf204)
+- Refactor token counting methods and remove unused tests across providers; update configuration for default provider and model. (55c76984)
+- Add health check and reconnection methods to MCP provider; enhance error classification and guidance (45fcc200)
+- Enhance error handling and logging across providers; improve session archive retention and diagnostics (ce94ca83)
+- Refactor error recovery to use tokio::sync::RwLock; update tool outcome handling and improve cache retrieval methods (76c1789f)
+- Add support for "show diff" command and improve tool call validation (62051691)
+- Update color scheme for unified diff background and gutter colors; change terminal theme to improve readability (525653e9)
+- Add diff theme configuration and improve styling for terminal output (501634f1)
+- Enhance interactive mode with new keyboard shortcuts and shell mode indicators; update configuration to disable turn timer (87919849)
+- Refactor input handling and padding logic; enhance shell command validation and error feedback (d520d2ea)
+- Add file reference metadata handling and update input with aliases (91e39103)
+- Implement postamble exit summarization with metric calculation and enhance markdown output styling (02d01e99)
+- Implement code change tracking and exit summary reporting (5e776910)
+- Refactor session handling to streamline resume logic and enhance message rendering (6654f328)
 #### Refactors
 
-- Rename sessions command to resume and update related handlers (c63ab822) 
-- Enhance panic handling, optimize agent harness, and improve token efficiency (c68e7ea1) 
-- Enhance error handling and recovery mechanisms; improve error categorization and logging (43a4e099) 
+- Rename sessions command to resume and update related handlers (c63ab822)
+- Enhance panic handling, optimize agent harness, and improve token efficiency (c68e7ea1)
+- Enhance error handling and recovery mechanisms; improve error categorization and logging (43a4e099)
 ### Contributors
 @vinhnx
 ## 0.84.1 - 2026-02-28
@@ -2657,78 +2657,78 @@ All notable changes to vtcode will be documented in this file.
 ### Other Changes
 #### Other
 
-- Update code structure for improved readability and maintainability (24d81c35) 
-- Refactor themes and improve UI handling (970dadf8) 
-- Add support for native web search tools in Anthropic API (84c50dfb) 
-- Add support for file content parts in message handling and OpenAI provider (4effd39c) 
-- Update theme to "ciapre" across configurations and add new themes to the theme registry (9c8d0c16) 
-- Refactor syntax highlighting implementation and improve theme handling (a9236cfc) 
-- Enhance tool routing and UI theme accessibility (0747f3d8) 
-- Enhance diff rendering and suppress redundant recap in TUI (0f3513b1) 
-- Fix light theme rendering issues and improve accessibility; enhance theme handling and live reload functionality (371a681b) 
-- Normalize unified search arguments and enhance argument extraction logic (a732a449) 
-- Fix light theme rendering issues and improve theme handling for better accessibility (ec131237) 
+- Update code structure for improved readability and maintainability (24d81c35)
+- Refactor themes and improve UI handling (970dadf8)
+- Add support for native web search tools in Anthropic API (84c50dfb)
+- Add support for file content parts in message handling and OpenAI provider (4effd39c)
+- Update theme to "ciapre" across configurations and add new themes to the theme registry (9c8d0c16)
+- Refactor syntax highlighting implementation and improve theme handling (a9236cfc)
+- Enhance tool routing and UI theme accessibility (0747f3d8)
+- Enhance diff rendering and suppress redundant recap in TUI (0f3513b1)
+- Fix light theme rendering issues and improve accessibility; enhance theme handling and live reload functionality (371a681b)
+- Normalize unified search arguments and enhance argument extraction logic (a732a449)
+- Fix light theme rendering issues and improve theme handling for better accessibility (ec131237)
 ### Contributors
 ## 0.84.0 - 2026-02-28
 
 ### Highlights
 #### Bug Fixes
 
-- Strip x-extension fields from tool schemas and handle empty safety blocks (7ff0b66f) 
+- Strip x-extension fields from tool schemas and handle empty safety blocks (7ff0b66f)
 #### Features
 
-- Add terminal notifications for agent events and syntax highlighting for bash commands in TUI (d54ba169) 
+- Add terminal notifications for agent events and syntax highlighting for bash commands in TUI (d54ba169)
 ### Other Changes
 #### Other
 
 - Update badge links in README.md (b74377e3) (@vinhnx)
 - Merge pull request #607 from LiGoldragon/mentci-gemini-json-fix (db195063) (@vinhnx)
-- Refactor code for improved readability and performance; simplify conditionals and remove unnecessary clones (93989d58) 
-- Add notification system with configurable preferences and delivery modes (e3be6b6b) 
-- Remove deprecated tool aliases and clean up related code for user input handling (5a23ab29) 
-- Unify ModelId and Provider across vtcode-config and vtcode-core; add regression tests to prevent future drift (3bef6a4d) 
-- Remove deprecated model ID and provider configurations, streamline model handling and update references across the codebase. (ebd573ec) 
-- Improve (d8ec16e4) 
-- Refactor code for improved readability and maintainability; streamline model handling and enhance diff preview functionality. (58607c7b) 
-- Add Qwen3.5-397B-A17B model support and update related identifiers and descriptions (a9e62f9c) 
-- Add turn elapsed timer feature and configuration options (f6867385) 
-- Remove xlsx skill and related files; update turn outcome message format (c31af51e) 
-- Implement exact token counting for various LLM providers and enable token counting feature (136c1b1f) 
-- Remove unused question-related policies and enhance token usage logic in ContextManager (4e39398a) 
-- Remove xAI Grok models and related configurations from the codebase (7b069620) 
-- Enhance file reference extraction to handle npm scoped packages and improve path validation (00646152) 
-- Enhance UI styling for PTY output and improve color handling across components (36cc1ca0) 
-- Add sidebar, slash command palette, and transcript widgets; implement session options and host adapter traits (fdc70374) 
-- Add utilities for ANSI parsing, caching styles, and diff generation (a20742ed) 
-- Update configuration for agent provider and default model; adjust theme settings (465ed6e7) 
-- Enhance changelog generation with Highlights and Contributors sections (8e25479e) 
-- Enhance tool output handling and caching logic (8635f4a0) 
-- Refactor unified_exec tool to add inspect action and improve documentation (eac81276) 
-- Refactor guidance messages for clarity and conciseness; update tool output handling and error messages. (ae454f4b) 
-- Add 'continue' action to unified_exec tool; refactor related logic and documentation (b2102ff4) 
-- Refactor tool policies and enhance shell command parsing; add next_continue_args handling (327a2467) 
-- Add clear screen and copy latest assistant reply commands; update related documentation and tests (39b2d94a) 
-- Enhance command detection by normalizing natural language requests and adding support for various command patterns (bc2be0b9) 
-- Change terminal theme from 'ciapre-dark' to 'mono' (6b03347c) 
-- Add appearance configuration and improve modal handling (afd21755) 
-- Enhance external editor integration and rewind functionality (e5f722ce) 
-- Refactor code for improved readability and functionality; normalize unified search arguments; enhance validation error handling; update default model in configuration. (56adb18f) 
-- Refactor palette handling and LLM retry logic; improve error handling and tests (64f0f949) 
-- Enhance task tracker functionality and error handling (42781438) 
-- Remove XAI provider tests and related assertions from model validation (880ec280) 
-- Remove deprecated integration and workflow tests; clean up test module imports (3c9f5f42) 
-- Update model references from "gemini-3-pro-preview" to "gemini-3.1-pro-preview" across the codebase (468a0765) 
-- Refactor caching mechanisms to use Mutex instead of RwLock for improved concurrency (af7ebf32) 
-- Refactor sandbox configuration and enhance ANSI capabilities (cfb2f51a) 
-- Update default model to GPT-5.3 Codex and enhance terminal title management (9d3d7d38) 
-- Update default model to GPT-5.3 Codex, change provider to OpenAI, and enhance reasoning effort configuration (24d3af83) 
-- Remove xAI provider support and update default models in configuration files (ad6290aa) 
-- Refactor code for improved readability and consistency in function calls (91fdb43a) 
+- Refactor code for improved readability and performance; simplify conditionals and remove unnecessary clones (93989d58)
+- Add notification system with configurable preferences and delivery modes (e3be6b6b)
+- Remove deprecated tool aliases and clean up related code for user input handling (5a23ab29)
+- Unify ModelId and Provider across vtcode-config and vtcode-core; add regression tests to prevent future drift (3bef6a4d)
+- Remove deprecated model ID and provider configurations, streamline model handling and update references across the codebase. (ebd573ec)
+- Improve (d8ec16e4)
+- Refactor code for improved readability and maintainability; streamline model handling and enhance diff preview functionality. (58607c7b)
+- Add Qwen3.5-397B-A17B model support and update related identifiers and descriptions (a9e62f9c)
+- Add turn elapsed timer feature and configuration options (f6867385)
+- Remove xlsx skill and related files; update turn outcome message format (c31af51e)
+- Implement exact token counting for various LLM providers and enable token counting feature (136c1b1f)
+- Remove unused question-related policies and enhance token usage logic in ContextManager (4e39398a)
+- Remove xAI Grok models and related configurations from the codebase (7b069620)
+- Enhance file reference extraction to handle npm scoped packages and improve path validation (00646152)
+- Enhance UI styling for PTY output and improve color handling across components (36cc1ca0)
+- Add sidebar, slash command palette, and transcript widgets; implement session options and host adapter traits (fdc70374)
+- Add utilities for ANSI parsing, caching styles, and diff generation (a20742ed)
+- Update configuration for agent provider and default model; adjust theme settings (465ed6e7)
+- Enhance changelog generation with Highlights and Contributors sections (8e25479e)
+- Enhance tool output handling and caching logic (8635f4a0)
+- Refactor unified_exec tool to add inspect action and improve documentation (eac81276)
+- Refactor guidance messages for clarity and conciseness; update tool output handling and error messages. (ae454f4b)
+- Add 'continue' action to unified_exec tool; refactor related logic and documentation (b2102ff4)
+- Refactor tool policies and enhance shell command parsing; add next_continue_args handling (327a2467)
+- Add clear screen and copy latest assistant reply commands; update related documentation and tests (39b2d94a)
+- Enhance command detection by normalizing natural language requests and adding support for various command patterns (bc2be0b9)
+- Change terminal theme from 'ciapre-dark' to 'mono' (6b03347c)
+- Add appearance configuration and improve modal handling (afd21755)
+- Enhance external editor integration and rewind functionality (e5f722ce)
+- Refactor code for improved readability and functionality; normalize unified search arguments; enhance validation error handling; update default model in configuration. (56adb18f)
+- Refactor palette handling and LLM retry logic; improve error handling and tests (64f0f949)
+- Enhance task tracker functionality and error handling (42781438)
+- Remove XAI provider tests and related assertions from model validation (880ec280)
+- Remove deprecated integration and workflow tests; clean up test module imports (3c9f5f42)
+- Update model references from "gemini-3-pro-preview" to "gemini-3.1-pro-preview" across the codebase (468a0765)
+- Refactor caching mechanisms to use Mutex instead of RwLock for improved concurrency (af7ebf32)
+- Refactor sandbox configuration and enhance ANSI capabilities (cfb2f51a)
+- Update default model to GPT-5.3 Codex and enhance terminal title management (9d3d7d38)
+- Update default model to GPT-5.3 Codex, change provider to OpenAI, and enhance reasoning effort configuration (24d3af83)
+- Remove xAI provider support and update default models in configuration files (ad6290aa)
+- Refactor code for improved readability and consistency in function calls (91fdb43a)
 #### Refactors
 
-- Streamline task tracking logic and introduce TaskTrackingStatus for improved status management (3be2c784) 
+- Streamline task tracking logic and introduce TaskTrackingStatus for improved status management (3be2c784)
 ### Contributors
-@vinhnx 
+@vinhnx
 ## 0.82.6 - 2026-02-25
 
 ### Documentation
@@ -2789,7 +2789,7 @@ All notable changes to vtcode will be documented in this file.
 - Add MiniMax M2.5 model support across various providers and update related constants (968963f1) (@vinhnx)
 - Add Qwen3 Coder Next model support and update related constants (5a4303e0) (@vinhnx)
 - Add skill bundle import/export functionality with zip support (dea5b5b7) (@vinhnx)
-- Implement plan mode toggle and strip proposed plan blocks in rendering (79f0327d) (@vinhnx)
+- Implement planning workflow toggle and strip proposed plan blocks in rendering (79f0327d) (@vinhnx)
 - Implement in-process teammate runner and enhance team protocol messaging (4aff9318) (@vinhnx)
 - Add /share-log command to export session log as JSON for debugging (64305820) (@vinhnx)
 - Implement agent steering mechanism to control runloop execution, including stop, pause, resume, and input injection capabilities. (ac806e0e) (@vinhnx)
@@ -2829,7 +2829,7 @@ All notable changes to vtcode will be documented in this file.
 - Enhance documentation on grounding, uncertainty, and regression verification; improve loop detection guidance (064ea630) (@vinhnx)
 - Enhance `AskUserChoice` with freeform input, custom labels, placeholders, and default selections. (53e0e111) (@vinhnx)
 - Implement freeform text input for wizard modals, guided by system prompt and toggled by the Tab key. (9b54cdd6) (@vinhnx)
-- Refine plan mode transitions by adding more aliases, enabling contextual exit confirmations, and providing user guidance. (02bf1476) (@vinhnx)
+- Refine planning workflow transitions by adding more aliases, enabling contextual exit confirmations, and providing user guidance. (02bf1476) (@vinhnx)
 - Set custom terminal title for VT Code TUI (9459f366) (@vinhnx)
 - Migrate changelog generation to git-cliff and update related documentation (34d07804) (@vinhnx)
 - Add support for additional tree-sitter languages and make them optional (b1c01414) (@vinhnguyen2308)
@@ -2864,8 +2864,8 @@ All notable changes to vtcode will be documented in this file.
 - Add spool chunk read tracking and enforce limits per turn (c09ef6d3) (@vinhnx)
 - Increase max tool calls per turn to 48 and implement budget warning system in harness (7b6cade0) (@vinhnx)
 - Rename UpdatePlanCommand to TaskTrackerCommand and refactor related files and documentation (b4520273) (@vinhnx)
-- Add plan-mode task tracker with CRUD functionality and integrate with existing tools (56c7e3b8) (@vinhnx)
-- Add navigation loop guidance and improve plan mode handling (5d162ae6) (@vinhnx)
+- Add Planning workflow task tracker with CRUD functionality and integrate with existing tools (56c7e3b8) (@vinhnx)
+- Add navigation loop guidance and improve planning workflow handling (5d162ae6) (@vinhnx)
 - Refactor user input option generation and enhance markdown rendering in modals (a72a63c0) (@vinhnx)
 - Add reference to git-cliff for changelog generation (8dd703f1) (@vinhnx)
 - Refactor tool call handling and configuration limits (fcc783dd) (@vinhnx)
@@ -2875,8 +2875,8 @@ All notable changes to vtcode will be documented in this file.
 - Implement unified exec terminal panel and enhance PTY session handling (f8505ba9) (@vinhnx)
 - Refactor run command output handling and improve command summary rendering (59e8fab8) (@vinhnx)
 - Implement plan artifact write handling and adjust LLM timeout logic (5edb5d66) (@vinhnx)
-- Enhance timeout messages to include "continue" nudge for stalled turns in plan mode (03cd0a65) (@vinhnx)
-- Enhance plan mode interview options with recommended choices for goals, constraints, and verification (3263981c) (@vinhnx)
+- Enhance timeout messages to include "continue" nudge for stalled turns in planning workflow (03cd0a65) (@vinhnx)
+- Enhance planning workflow interview options with recommended choices for goals, constraints, and verification (3263981c) (@vinhnx)
 - Refactor tool interaction: replace `ask_user_question` with `request_user_input`, enhance error classification, and improve function declaration caching. (2af17e60) (@vinhnx)
 - Remove unified symbol extractor and related patterns; update language summarization to use file extensions; enhance README for clarity and feature descriptions; clean up unused imports in tools module. (aca4dbef) (@vinhnguyen2308)
 
@@ -2972,7 +2972,7 @@ All notable changes to vtcode will be documented in this file.
 
 - Add skill bundle import/export functionality with zip support (@vinhnx)
 
-- Implement plan mode toggle and strip proposed plan blocks in rendering (@vinhnx)
+- Implement planning workflow toggle and strip proposed plan blocks in rendering (@vinhnx)
 
 - Implement in-process teammate runner and enhance team protocol messaging (@vinhnx)
 
@@ -3052,7 +3052,7 @@ All notable changes to vtcode will be documented in this file.
 
 - Implement freeform text input for wizard modals, guided by system prompt and toggled by the Tab key. (@vinhnx)
 
-- Refine plan mode transitions by adding more aliases, enabling contextual exit confirmations, and providing user guidance. (Vinh Nguyen)
+- Refine planning workflow transitions by adding more aliases, enabling contextual exit confirmations, and providing user guidance. (Vinh Nguyen)
 
 - Set custom terminal title for VT Code TUI (Vinh Nguyen)
 
@@ -3118,8 +3118,8 @@ All notable changes to vtcode will be documented in this file.
 - Update commit (925f355d) (@vinhnx)
 - Add reference to git-cliff for changelog generation (8dd703f1) (@vinhnx)
 - Refactor user input option generation and enhance markdown rendering in modals (a72a63c0) (@vinhnx)
-- Add navigation loop guidance and improve plan mode handling (5d162ae6) (@vinhnx)
-- Add plan-mode task tracker with CRUD functionality and integrate with existing tools (56c7e3b8) (@vinhnx)
+- Add navigation loop guidance and improve planning workflow handling (5d162ae6) (@vinhnx)
+- Add Planning workflow task tracker with CRUD functionality and integrate with existing tools (56c7e3b8) (@vinhnx)
 - Rename UpdatePlanCommand to TaskTrackerCommand and refactor related files and documentation (b4520273) (@vinhnx)
 - Update commit (0642ff3b) (@vinhnx)
 
@@ -3140,8 +3140,8 @@ All notable changes to vtcode will be documented in this file.
 ### Other
 
 - Refactor user input option generation and enhance markdown rendering in modals (a72a63c0) (@vinhnx)
-- Add navigation loop guidance and improve plan mode handling (5d162ae6) (@vinhnx)
-- Add plan-mode task tracker with CRUD functionality and integrate with existing tools (56c7e3b8) (@vinhnx)
+- Add navigation loop guidance and improve planning workflow handling (5d162ae6) (@vinhnx)
+- Add Planning workflow task tracker with CRUD functionality and integrate with existing tools (56c7e3b8) (@vinhnx)
 - Rename UpdatePlanCommand to TaskTrackerCommand and refactor related files and documentation (b4520273) (@vinhnx)
 - Update commit (0642ff3b) (@vinhnx)
 
@@ -3182,7 +3182,7 @@ All notable changes to vtcode will be documented in this file.
 - Implement agent steering mechanism to control runloop execution, including stop, pause, resume, and input injection capabilities. (ac806e0e) (@vinhnx)
 - add /share-log command to export session log as JSON for debugging (64305820) (@vinhnx)
 - implement in-process teammate runner and enhance team protocol messaging (4aff9318) (@vinhnx)
-- implement plan mode toggle and strip proposed plan blocks in rendering (79f0327d) (@vinhnx)
+- implement planning workflow toggle and strip proposed plan blocks in rendering (79f0327d) (@vinhnx)
 - add skill bundle import/export functionality with zip support (dea5b5b7) (@vinhnx)
 - add Qwen3 Coder Next model support and update related constants (5a4303e0) (@vinhnx)
 - add MiniMax M2.5 model support across various providers and update related constants (968963f1) (@vinhnx)
@@ -3293,7 +3293,7 @@ All notable changes to vtcode will be documented in this file.
 - Implement agent steering mechanism to control runloop execution, including stop, pause, resume, and input injection capabilities. (ac806e0e) (@vinhnx)
 - add /share-log command to export session log as JSON for debugging (64305820) (@vinhnx)
 - implement in-process teammate runner and enhance team protocol messaging (4aff9318) (@vinhnx)
-- implement plan mode toggle and strip proposed plan blocks in rendering (79f0327d) (@vinhnx)
+- implement planning workflow toggle and strip proposed plan blocks in rendering (79f0327d) (@vinhnx)
 - add skill bundle import/export functionality with zip support (dea5b5b7) (@vinhnx)
 - add Qwen3 Coder Next model support and update related constants (5a4303e0) (@vinhnx)
 - add MiniMax M2.5 model support across various providers and update related constants (968963f1) (@vinhnx)
@@ -3392,7 +3392,7 @@ All notable changes to vtcode will be documented in this file.
 - Implement agent steering mechanism to control runloop execution, including stop, pause, resume, and input injection capabilities. (ac806e0e) (@vinhnx)
 - add /share-log command to export session log as JSON for debugging (64305820) (@vinhnx)
 - implement in-process teammate runner and enhance team protocol messaging (4aff9318) (@vinhnx)
-- implement plan mode toggle and strip proposed plan blocks in rendering (79f0327d) (@vinhnx)
+- implement planning workflow toggle and strip proposed plan blocks in rendering (79f0327d) (@vinhnx)
 - add skill bundle import/export functionality with zip support (dea5b5b7) (@vinhnx)
 - add Qwen3 Coder Next model support and update related constants (5a4303e0) (@vinhnx)
 - add MiniMax M2.5 model support across various providers and update related constants (968963f1) (@vinhnx)
@@ -3483,7 +3483,7 @@ All notable changes to vtcode will be documented in this file.
 - Implement agent steering mechanism to control runloop execution, including stop, pause, resume, and input injection capabilities. (ac806e0e) (@vinhnx)
 - add /share-log command to export session log as JSON for debugging (64305820) (@vinhnx)
 - implement in-process teammate runner and enhance team protocol messaging (4aff9318) (@vinhnx)
-- implement plan mode toggle and strip proposed plan blocks in rendering (79f0327d) (@vinhnx)
+- implement planning workflow toggle and strip proposed plan blocks in rendering (79f0327d) (@vinhnx)
 - add skill bundle import/export functionality with zip support (dea5b5b7) (@vinhnx)
 - add Qwen3 Coder Next model support and update related constants (5a4303e0) (@vinhnx)
 - add MiniMax M2.5 model support across various providers and update related constants (968963f1) (@vinhnx)
@@ -3570,7 +3570,7 @@ All notable changes to vtcode will be documented in this file.
 - Implement agent steering mechanism to control runloop execution, including stop, pause, resume, and input injection capabilities. (ac806e0e) (@vinhnx)
 - add /share-log command to export session log as JSON for debugging (64305820) (@vinhnx)
 - implement in-process teammate runner and enhance team protocol messaging (4aff9318) (@vinhnx)
-- implement plan mode toggle and strip proposed plan blocks in rendering (79f0327d) (@vinhnx)
+- implement planning workflow toggle and strip proposed plan blocks in rendering (79f0327d) (@vinhnx)
 - add skill bundle import/export functionality with zip support (dea5b5b7) (@vinhnx)
 - add Qwen3 Coder Next model support and update related constants (5a4303e0) (@vinhnx)
 - add MiniMax M2.5 model support across various providers and update related constants (968963f1) (@vinhnx)
@@ -3654,7 +3654,7 @@ All notable changes to vtcode will be documented in this file.
 - Implement agent steering mechanism to control runloop execution, including stop, pause, resume, and input injection capabilities. (ac806e0e) (@vinhnx)
 - add /share-log command to export session log as JSON for debugging (64305820) (@vinhnx)
 - implement in-process teammate runner and enhance team protocol messaging (4aff9318) (@vinhnx)
-- implement plan mode toggle and strip proposed plan blocks in rendering (79f0327d) (@vinhnx)
+- implement planning workflow toggle and strip proposed plan blocks in rendering (79f0327d) (@vinhnx)
 - add skill bundle import/export functionality with zip support (dea5b5b7) (@vinhnx)
 - add Qwen3 Coder Next model support and update related constants (5a4303e0) (@vinhnx)
 - add MiniMax M2.5 model support across various providers and update related constants (968963f1) (@vinhnx)
@@ -3736,7 +3736,7 @@ All notable changes to vtcode will be documented in this file.
 - Implement agent steering mechanism to control runloop execution, including stop, pause, resume, and input injection capabilities. (ac806e0e) (@vinhnx)
 - add /share-log command to export session log as JSON for debugging (64305820) (@vinhnx)
 - implement in-process teammate runner and enhance team protocol messaging (4aff9318) (@vinhnx)
-- implement plan mode toggle and strip proposed plan blocks in rendering (79f0327d) (@vinhnx)
+- implement planning workflow toggle and strip proposed plan blocks in rendering (79f0327d) (@vinhnx)
 - add skill bundle import/export functionality with zip support (dea5b5b7) (@vinhnx)
 - add Qwen3 Coder Next model support and update related constants (5a4303e0) (@vinhnx)
 - add MiniMax M2.5 model support across various providers and update related constants (968963f1) (@vinhnx)
@@ -3815,7 +3815,7 @@ All notable changes to vtcode will be documented in this file.
 - Implement agent steering mechanism to control runloop execution, including stop, pause, resume, and input injection capabilities. (ac806e0e) (@vinhnx)
 - add /share-log command to export session log as JSON for debugging (64305820) (@vinhnx)
 - implement in-process teammate runner and enhance team protocol messaging (4aff9318) (@vinhnx)
-- implement plan mode toggle and strip proposed plan blocks in rendering (79f0327d) (@vinhnx)
+- implement planning workflow toggle and strip proposed plan blocks in rendering (79f0327d) (@vinhnx)
 - add skill bundle import/export functionality with zip support (dea5b5b7) (@vinhnx)
 - add Qwen3 Coder Next model support and update related constants (5a4303e0) (@vinhnx)
 - add MiniMax M2.5 model support across various providers and update related constants (968963f1) (@vinhnx)
@@ -3889,7 +3889,7 @@ All notable changes to vtcode will be documented in this file.
 - Implement agent steering mechanism to control runloop execution, including stop, pause, resume, and input injection capabilities. (ac806e0e) (@vinhnx)
 - add /share-log command to export session log as JSON for debugging (64305820) (@vinhnx)
 - implement in-process teammate runner and enhance team protocol messaging (4aff9318) (@vinhnx)
-- implement plan mode toggle and strip proposed plan blocks in rendering (79f0327d) (@vinhnx)
+- implement planning workflow toggle and strip proposed plan blocks in rendering (79f0327d) (@vinhnx)
 - add skill bundle import/export functionality with zip support (dea5b5b7) (@vinhnx)
 - add Qwen3 Coder Next model support and update related constants (5a4303e0) (@vinhnx)
 - add MiniMax M2.5 model support across various providers and update related constants (968963f1) (@vinhnx)
@@ -3943,7 +3943,7 @@ All notable changes to vtcode will be documented in this file.
 
 ### Features
 
-- implement plan mode toggle and strip proposed plan blocks in rendering (79f0327d) (@vinhnx)
+- implement planning workflow toggle and strip proposed plan blocks in rendering (79f0327d) (@vinhnx)
 - add skill bundle import/export functionality with zip support (dea5b5b7) (@vinhnx)
 - add Qwen3 Coder Next model support and update related constants (5a4303e0) (@vinhnx)
 - add MiniMax M2.5 model support across various providers and update related constants (968963f1) (@vinhnx)
@@ -3996,7 +3996,7 @@ All notable changes to vtcode will be documented in this file.
 - enhance tool validation and error messaging, modularize execution logic (2f6d20f0) (@vinhnx)
 - streamline MCP event handling and enhance error content construction (9510ef79) (@vinhnx)
 - remove dead code and streamline path handling functions (35289283) (@vinhnx)
-- replace hardcoded Plan Mode strings with constants for consistency and maintainability (5d4d2407) (@vinhnx)
+- replace hardcoded Planning workflow strings with constants for consistency and maintainability (5d4d2407) (@vinhnx)
 - update TODO with comprehensive code audit and optimization guidelines (4f96ff24) (@vinhnx)
 - streamline error handling and validation logic; enhance retry safety checks (754ce484) (@vinhnx)
 - enhance IDE context flushing and user confirmation handling; improve command auditing (b00d3b7f) (@vinhnx)
@@ -4025,9 +4025,9 @@ All notable changes to vtcode will be documented in this file.
 - Update models and configurations for Gemini 3 and GLM-5; adjust tool capabilities and user confirmations (7f05b778) (@vinhnx)
 - Add GLM-5 model support and remove deprecated GLM-4.5/4.6 models (29d0992a) (@vinhnx)
 - Implement tool catalog state management and integrate into MCP tool lifecycle (18c73b54) (@vinhnx)
-- Enhance plan mode handling and tool safety validation; refactor prompt management and session loop logic (63a40249) (@vinhnx)
+- Enhance planning workflow handling and tool safety validation; refactor prompt management and session loop logic (63a40249) (@vinhnx)
 - Add prompt assembly mode and enhance tool validation (480ed33a) (@vinhnx)
-- Add safety validation and transition functions for plan mode handling (9db46b25) (@vinhnx)
+- Add safety validation and transition functions for planning workflow handling (9db46b25) (@vinhnx)
 - Refactor optimizer and tool result handling; enhance turn duration recording; update validation and state management; optimize loop detection; improve LLM request handling; remove fallback chains module; streamline tool execution checks; fix TUI modal search handling; adjust integration tests for tool usage. (9df107c3) (@vinhnx)
 
 ## v0.79.0 - 2026-02-13
@@ -4046,7 +4046,7 @@ All notable changes to vtcode will be documented in this file.
 - enhance tool validation and error messaging, modularize execution logic (2f6d20f0) (@vinhnx)
 - streamline MCP event handling and enhance error content construction (9510ef79) (@vinhnx)
 - remove dead code and streamline path handling functions (35289283) (@vinhnx)
-- replace hardcoded Plan Mode strings with constants for consistency and maintainability (5d4d2407) (@vinhnx)
+- replace hardcoded Planning workflow strings with constants for consistency and maintainability (5d4d2407) (@vinhnx)
 - update TODO with comprehensive code audit and optimization guidelines (4f96ff24) (@vinhnx)
 - streamline error handling and validation logic; enhance retry safety checks (754ce484) (@vinhnx)
 - enhance IDE context flushing and user confirmation handling; improve command auditing (b00d3b7f) (@vinhnx)
@@ -4071,9 +4071,9 @@ All notable changes to vtcode will be documented in this file.
 - Update models and configurations for Gemini 3 and GLM-5; adjust tool capabilities and user confirmations (7f05b778) (@vinhnx)
 - Add GLM-5 model support and remove deprecated GLM-4.5/4.6 models (29d0992a) (@vinhnx)
 - Implement tool catalog state management and integrate into MCP tool lifecycle (18c73b54) (@vinhnx)
-- Enhance plan mode handling and tool safety validation; refactor prompt management and session loop logic (63a40249) (@vinhnx)
+- Enhance planning workflow handling and tool safety validation; refactor prompt management and session loop logic (63a40249) (@vinhnx)
 - Add prompt assembly mode and enhance tool validation (480ed33a) (@vinhnx)
-- Add safety validation and transition functions for plan mode handling (9db46b25) (@vinhnx)
+- Add safety validation and transition functions for planning workflow handling (9db46b25) (@vinhnx)
 - Refactor optimizer and tool result handling; enhance turn duration recording; update validation and state management; optimize loop detection; improve LLM request handling; remove fallback chains module; streamline tool execution checks; fix TUI modal search handling; adjust integration tests for tool usage. (9df107c3) (@vinhnx)
 
 ## v0.78.8 - 2026-02-09
@@ -4126,7 +4126,7 @@ All notable changes to vtcode will be documented in this file.
 - improve plugin validation and enhance path resolution in PTY manager (a2ea12c1) (@vinhnx)
 - add path utilities and normalize ASCII identifiers for improved path handling (5a888daf) (@vinhnx)
 - implement command blocking during running tasks and update configuration for LLM provider (da55d7cd) (@vinhnx)
-- enhance Plan Mode with reminders and execution prompts (ba69b139) (@vinhnx)
+- enhance Planning workflow with reminders and execution prompts (ba69b139) (@vinhnx)
 
 ### Performance
 
@@ -4153,7 +4153,7 @@ All notable changes to vtcode will be documented in this file.
 
 ### Bug Fixes
 
-- add exit_plan_mode tool to planner agent and update tests (63a6835e) (@vinhnx)
+- add finish_planning tool to planner agent and update tests (63a6835e) (@vinhnx)
 
 ### Other
 
@@ -4168,7 +4168,7 @@ All notable changes to vtcode will be documented in this file.
 ### Other
 
 - Refactor CLI argument documentation for clarity and consistency (087be239) (@vinhnx)
-- Enhance user input tools to restrict usage to Plan mode only (93675177) (@vinhnx)
+- Enhance user input tools to restrict usage to Planning workflow only (93675177) (@vinhnx)
 - Improve output spooler and system prompt handling (255e0a44) (@vinhnx)
 - Add experimental agent teams feature with slash commands and configuration (b70ce06e) (@vinhnx)
 - Update script (35c8d01f) (@vinhnx)
@@ -4192,7 +4192,7 @@ All notable changes to vtcode will be documented in this file.
 - Add support for Claude Opus 4.6 model with adaptive thinking and update related configurations (77d0d485) (@vinhnx)
 - Implement tool safety checks, enhance wizard modal, and update configuration (574d60de) (@vinhnx)
 - Add skills-ref commands for skill validation, listing, and prompt generation; update skill discovery paths and manifest structure (df2919d9) (@vinhnx)
-- Enhance input widget styling with padding and background; update configuration theme and editing mode (958f7c38) (@vinhnx)
+- Enhance input widget styling with padding and background; update configuration theme and editing state (958f7c38) (@vinhnx)
 - Cleanup TODO.md by removing outdated tasks and enhancing UI transition notes (21d1d5c6) (@vinhnx)
 - Refactor spinner implementation and enhance cursor behavior during status updates (0b6828ac) (@vinhnx)
 - Refactor test assertion for compact_title method in MCP event (4f44b68a) (@vinhnx)
@@ -4213,7 +4213,7 @@ All notable changes to vtcode will be documented in this file.
 - Add support for Claude Opus 4.6 model with adaptive thinking and update related configurations (77d0d485) (@vinhnx)
 - Implement tool safety checks, enhance wizard modal, and update configuration (574d60de) (@vinhnx)
 - Add skills-ref commands for skill validation, listing, and prompt generation; update skill discovery paths and manifest structure (df2919d9) (@vinhnx)
-- Enhance input widget styling with padding and background; update configuration theme and editing mode (958f7c38) (@vinhnx)
+- Enhance input widget styling with padding and background; update configuration theme and editing state (958f7c38) (@vinhnx)
 - Cleanup TODO.md by removing outdated tasks and enhancing UI transition notes (21d1d5c6) (@vinhnx)
 - Refactor spinner implementation and enhance cursor behavior during status updates (0b6828ac) (@vinhnx)
 - Refactor test assertion for compact_title method in MCP event (4f44b68a) (@vinhnx)
@@ -4452,7 +4452,7 @@ All notable changes to vtcode will be documented in this file.
 * automation: add automatic gh auth switch and scope refresh (1b5f38ec)
 * chore(release): bump version to 0.74.3 [skip ci] (6f365d16)
 * docs: update changelog for v0.74.3 [skip ci] (d5b8110e)
-* fix: skip gh auth checks in dry-run mode (8f4f8dae)
+* fix: skip gh auth checks during dry-run execution (8f4f8dae)
 * automation: enhance release.sh with direct GitHub binary upload via gh CLI (9168134d)
 * chore: add Windows cross-platform builds to release workflow (d497cf6d)
 * feat: enhance AGENTS.md with new cargo commands and build performance tips (4df82383)
@@ -4474,7 +4474,7 @@ All notable changes to vtcode will be documented in this file.
 
 ## v0.74.3 - 2026-02-01
 
-* fix: skip gh auth checks in dry-run mode (8f4f8dae)
+* fix: skip gh auth checks during dry-run execution (8f4f8dae)
 * automation: enhance release.sh with direct GitHub binary upload via gh CLI (9168134d)
 * chore: add Windows cross-platform builds to release workflow (d497cf6d)
 * feat: enhance AGENTS.md with new cargo commands and build performance tips (4df82383)
@@ -4549,14 +4549,14 @@ All notable changes to vtcode will be documented in this file.
 * refactor: adjust tool outcome context passing and borrowing in turn processing. (a197876a)
 * refactor: centralize tool outcome handling parameters into a new `ToolOutcomeContext` struct. (73856006)
 * Refactor tool call handling by centralizing execution, permission, and safety validation logic into dedicated outcome handlers and removing the execution module. (cfb8e1d7)
-* refactor: extract metric recording and remove auto-exit plan mode logic from tool execution result handling. (5e83a3a2)
+* refactor: extract metric recording and remove auto-exit planning workflow logic from tool execution result handling. (5e83a3a2)
 * Refactor tool outcome handling in the agent runloop by introducing tool-specific retry limits, centralizing repetition tracking, and enhancing context conversion. (ce765244)
 * Refactor tool outcome handling by consolidating success, failure, and timeout handlers, and updating tool repetition tracking to only count successful calls. (33a9b664)
 * fix: enable `unified_file` tool in the sandbox and refactor diff preview styling to use a color palette. (15715b9e)
 * feat: prevent duplicate LLM reasoning output and prioritize visible alias targets for hidden tools during lookup. (c434de61)
 * feat: Implement dotfile protection with audit, backup, and guardian modules, and enhance tool registry alias resolution to prioritize LLM-visible tools. (62689a2c)
-* feat: Implement session loading and mode switching, refreshing available commands on mode change and using constants for mode IDs. (9004549c)
-* feat: Add `switch_mode` tool and update `agent-client-protocol` dependency to 0.9.3, adapting API usage. (1bdf7a7f)
+* feat: Implement session loading and controller switching, refreshing available commands on controller change and using constants for controller IDs. (9004549c)
+* feat: Add collaboration controller switching tool and update `agent-client-protocol` dependency to 0.9.3, adapting API usage. (1bdf7a7f)
 * feat: Introduce a standard Agent Client Protocol adapter and generalize ACP implementation details and tooling. (121184b5)
 * fix: refine markdown styling logic for strong, heading, and inline code elements, and enhance theme-based accent application (04278e00)
 * fix: update default theme, enable todo planning, refine tool output and display settings, and adjust tool policies for streamlined configuration (3308c57e)
@@ -4565,8 +4565,8 @@ All notable changes to vtcode will be documented in this file.
 ## v0.73.6 - 2026-01-30
 
 * fix: update default theme, enable todo planning, refine tool output and display settings, and adjust tool policies for streamlined configuration (dcc7043e)
-* fix: add persistence for editing and autonomous mode settings, and align theme with active configuration (ecacbc19)
-* fix: add persistence for editing and autonomous mode settings, and align theme with active configuration (bfea2f52)
+* fix: add persistence for editing and autonomous execution settings, and align theme with active configuration (ecacbc19)
+* fix: add persistence for editing and autonomous execution settings, and align theme with active configuration (bfea2f52)
 * fix: update default theme and reasoning effort, improve config overrides, adjust workspace trust mode, and enhance contribution docs (85c1ba7f)
 * fix: add support for VTCODE_CONFIG_PATH, enhance configuration loading logic, and remove unused `.aiignore` file (bf6547aa)
 * fix: improve shimmer animation handling, refactor spinner updates, and enhance status rendering logic (0a40ad46)
@@ -4930,7 +4930,7 @@ All notable changes to vtcode will be documented in this file.
     - feat: integrate `MCP client` with `ToolRegistry` and add functions for tool management
     - feat: add `parse_openai_tool_calls` function to handle OpenAI tool call parsing logic
     - feat: add OpenAI provider support for chat message parsing, request building, response parsing, and streaming decoder implementations
-    - feat: add human-readable slug generator for plan file naming, update TUI header editing mode handling
+    - feat: add human-readable slug generator for plan file naming, update TUI header editing-state handling
     - feat: migrate `XAIProvider` to use the new `Responses API`, improve support for tools, caching, and error handling
     - feat: migrate `XAIProvider` to use the new `Responses API`, improve support for tools, caching, and error handling
 
@@ -4985,7 +4985,7 @@ All notable changes to vtcode will be documented in this file.
     - feat: integrate `MCP client` with `ToolRegistry` and add functions for tool management
     - feat: add `parse_openai_tool_calls` function to handle OpenAI tool call parsing logic
     - feat: add OpenAI provider support for chat message parsing, request building, response parsing, and streaming decoder implementations
-    - feat: add human-readable slug generator for plan file naming, update TUI header editing mode handling
+    - feat: add human-readable slug generator for plan file naming, update TUI header editing-state handling
     - feat: migrate `XAIProvider` to use the new `Responses API`, improve support for tools, caching, and error handling
     - feat: migrate `XAIProvider` to use the new `Responses API`, improve support for tools, caching, and error handling
 
@@ -5029,7 +5029,7 @@ All notable changes to vtcode will be documented in this file.
 
 
 ### Features
-    - feat: add human-readable slug generator for plan file naming, update TUI header editing mode handling
+    - feat: add human-readable slug generator for plan file naming, update TUI header editing-state handling
     - feat: migrate `XAIProvider` to use the new `Responses API`, improve support for tools, caching, and error handling
     - feat: migrate `XAIProvider` to use the new `Responses API`, improve support for tools, caching, and error handling
     - feat: introduce `InputHistoryEntry` to manage input with attachments, enhance reverse search and history navigation
@@ -5112,7 +5112,7 @@ All notable changes to vtcode will be documented in this file.
 ### Refactors
     - refactor: update queue display to show follow-ups and improve styling
     - refactor: enhance token-efficient output handling and command parsing in executors
-    - refactor: update exit_plan_mode policy to prompt; enhance OpenResponsesProvider with version handling and reasoning content support
+    - refactor: update finish_planning policy to prompt; enhance OpenResponsesProvider with version handling and reasoning content support
 
 
 ### Documentation
@@ -5144,7 +5144,7 @@ All notable changes to vtcode will be documented in this file.
 ### Refactors
     - refactor: update queue display to show follow-ups and improve styling
     - refactor: enhance token-efficient output handling and command parsing in executors
-    - refactor: update exit_plan_mode policy to prompt; enhance OpenResponsesProvider with version handling and reasoning content support
+    - refactor: update finish_planning policy to prompt; enhance OpenResponsesProvider with version handling and reasoning content support
 
 
 ### Documentation
@@ -5170,8 +5170,8 @@ All notable changes to vtcode will be documented in this file.
 
 ### Refactors
     - refactor: enhance token-efficient output handling and command parsing in executors
-    - refactor: update exit_plan_mode policy to prompt; enhance OpenResponsesProvider with version handling and reasoning content support
-    - refactor: increase max_conversation_turns to 150 and streamline allowed_tools format; add auto_exit_plan_mode_attempted to context for improved plan mode handling
+    - refactor: update finish_planning policy to prompt; enhance OpenResponsesProvider with version handling and reasoning content support
+    - refactor: increase max_conversation_turns to 150 and streamline allowed_tools format; add auto_finish_planning_attempted to context for improved planning workflow handling
     - refactor: integrate clean_reasoning_text function to streamline reasoning text handling across multiple modules
     - refactor: rename default method to default_cache and update default implementations for various structs
 
@@ -5194,7 +5194,7 @@ All notable changes to vtcode will be documented in this file.
 
 
 ### Refactors
-    - refactor: increase max_conversation_turns to 150 and streamline allowed_tools format; add auto_exit_plan_mode_attempted to context for improved plan mode handling
+    - refactor: increase max_conversation_turns to 150 and streamline allowed_tools format; add auto_finish_planning_attempted to context for improved planning workflow handling
     - refactor: integrate clean_reasoning_text function to streamline reasoning text handling across multiple modules
     - refactor: rename default method to default_cache and update default implementations for various structs
 
@@ -5542,7 +5542,7 @@ All notable changes to vtcode will be documented in this file.
 
 ### Features
     - feat: add effort parameter for Claude Opus 4.5 to control token usage
-    - feat: implement autonomous mode with reduced HITL prompts and update related configurations
+    - feat: implement autonomous execution with reduced HITL prompts and update related configurations
     - feat: enhance output spooling for read_file and unified_file with raw content extraction
     - feat: enhance context awareness with token usage tracking and context window size
 
@@ -5563,7 +5563,7 @@ All notable changes to vtcode will be documented in this file.
 
 
 ### Features
-    - feat: implement autonomous mode with reduced HITL prompts and update related configurations
+    - feat: implement autonomous execution with reduced HITL prompts and update related configurations
     - feat: enhance output spooling for read_file and unified_file with raw content extraction
     - feat: enhance context awareness with token usage tracking and context window size
     - feat: Add max_conversation_turns configuration to various components and update tests
@@ -6064,7 +6064,7 @@ All notable changes to vtcode will be documented in this file.
 
 ### Features
     - feat: update tool policies and enhance session limit handling for tool loops
-    - feat: implement plan mode tools for managing planning workflow and enhance code block indentation normalization
+    - feat: implement planning workflow tools for managing planning workflow and enhance code block indentation normalization
     - feat: implement session limit increase prompt and safety validation enhancements
 
 
@@ -6085,11 +6085,11 @@ All notable changes to vtcode will be documented in this file.
 
 
 ### Features
-    - feat: implement plan mode tools for managing planning workflow and enhance code block indentation normalization
+    - feat: implement planning workflow tools for managing planning workflow and enhance code block indentation normalization
     - feat: implement session limit increase prompt and safety validation enhancements
     - feat: update tool policies to allow apply_patch, unified_exec, and unified_file actions
-    - feat: add editing modes and commands for toggling between Edit, Plan, and Agent modes
-    - feat: implement Plan Mode for read-only exploration and planning
+    - feat: add implementation/default-agent commands for workflow control
+    - feat: implement Planning workflow for read-only exploration and planning
 
 
 ### Documentation
@@ -6106,8 +6106,8 @@ All notable changes to vtcode will be documented in this file.
 
 ### Features
     - feat: update tool policies to allow apply_patch, unified_exec, and unified_file actions
-    - feat: add editing modes and commands for toggling between Edit, Plan, and Agent modes
-    - feat: implement Plan Mode for read-only exploration and planning
+    - feat: add implementation/default-agent commands for workflow control
+    - feat: implement Planning workflow for read-only exploration and planning
     - feat: implement sandboxing configuration and policies
     - feat: enhance dynamic context discovery and update configuration
     - feat: implement dynamic context discovery with file spooling for large outputs
@@ -7140,7 +7140,7 @@ All notable changes to vtcode will be documented in this file.
     - feat: implement Agent2Agent (A2A) Protocol support (Phase 1 & 2)
     - feat: Add async method to InlineSession for receiving next event
     - feat: Remove the `plan` tool and associated components, and update related tool and skill management logic.
-    - feat: Refactor tool permission handling for TUI-only mode and update default LLM provider configuration.
+    - feat: Refactor tool permission handling for TUI-only execution and update default LLM provider configuration.
     - feat: Add GitHub account switching and cleanup functionality in release script
 
 ### Refactors
@@ -7180,7 +7180,7 @@ All notable changes to vtcode will be documented in this file.
     - feat: implement Agent2Agent (A2A) Protocol support (Phase 1 & 2)
     - feat: Add async method to InlineSession for receiving next event
     - feat: Remove the `plan` tool and associated components, and update related tool and skill management logic.
-    - feat: Refactor tool permission handling for TUI-only mode and update default LLM provider configuration.
+    - feat: Refactor tool permission handling for TUI-only execution and update default LLM provider configuration.
     - feat: Add GitHub account switching and cleanup functionality in release script
     - feat: Introduce `EnhancedSkillLoader` and `EnhancedSkill` for unified skill and tool management, and refactor skill discovery results across the agent and CLI.
     - feat: add support for loading skill `references/` and `assets/` directories and introduce `ResourceType::Asset`
@@ -7241,7 +7241,7 @@ All notable changes to vtcode will be documented in this file.
     - feat: implement Agent2Agent (A2A) Protocol support (Phase 1 & 2)
     - feat: Add async method to InlineSession for receiving next event
     - feat: Remove the `plan` tool and associated components, and update related tool and skill management logic.
-    - feat: Refactor tool permission handling for TUI-only mode and update default LLM provider configuration.
+    - feat: Refactor tool permission handling for TUI-only execution and update default LLM provider configuration.
     - feat: Add GitHub account switching and cleanup functionality in release script
     - feat: Introduce `EnhancedSkillLoader` and `EnhancedSkill` for unified skill and tool management, and refactor skill discovery results across the agent and CLI.
     - feat: add support for loading skill `references/` and `assets/` directories and introduce `ResourceType::Asset`
@@ -7393,7 +7393,7 @@ All notable changes to vtcode will be documented in this file.
     - feat: improve error handling for create_file and update_plan methods, enhance logging for theme loading failures
     - feat: implement adaptive TUI tick rate, coalesce scroll events, and enhance session management
     - feat: implement adaptive TUI tick rate and coalesce scroll events
-    - feat: Add alias for /config command as /settings, enhance slash command descriptions, and introduce quiet mode in configuration
+    - feat: Add alias for /config command as /settings, enhance slash command descriptions, and introduce quiet output in configuration
     - feat: Improve terminal detection and configuration path resolution across operating systems, update LLM provider integrations, and refine agent slash commands and welcome flow.
     - feat: Integrate `TimeoutsConfig` into LLM provider HTTP clients and refactor OpenRouter error handling.
     - feat(llm): Introduce a centralized HTTP client factory, refactor providers to use it for consistent timeout configuration, and enhance API error parsing.
@@ -7448,7 +7448,7 @@ All notable changes to vtcode will be documented in this file.
     - feat: improve error handling for create_file and update_plan methods, enhance logging for theme loading failures
     - feat: implement adaptive TUI tick rate, coalesce scroll events, and enhance session management
     - feat: implement adaptive TUI tick rate and coalesce scroll events
-    - feat: Add alias for /config command as /settings, enhance slash command descriptions, and introduce quiet mode in configuration
+    - feat: Add alias for /config command as /settings, enhance slash command descriptions, and introduce quiet output in configuration
     - feat: Improve terminal detection and configuration path resolution across operating systems, update LLM provider integrations, and refine agent slash commands and welcome flow.
     - feat: Integrate `TimeoutsConfig` into LLM provider HTTP clients and refactor OpenRouter error handling.
     - feat(llm): Introduce a centralized HTTP client factory, refactor providers to use it for consistent timeout configuration, and enhance API error parsing.
@@ -7820,9 +7820,9 @@ All notable changes to vtcode will be documented in this file.
     - feat: add better panic handling with debug mode support
     - feat: enhance list rendering with highlight symbol and repeat option
     - feat: implement XDG Base Directory Specification for configuration and data storage
-    - feat: Enhance tool execution error handling and implement planning mode warnings
+    - feat: Enhance tool execution error handling and implement Planning workflow warnings
     - feat: Implement TUI-aware tool approval prompts and human-in-the-loop notification bell.
-    - feat: add plan phase management and update tool registry for planning mode
+    - feat: add plan phase management and update tool registry for the Planning workflow
     - feat: add HITL notification bell configuration and implement terminal bell notification for approvals
     - feat: Implement pre-flight LLM request and tool definition validation, and ensure `mark_tool_loop_limit_hit` is idempotent.
     - feat: improve release process by adding Linux build automation and related documentation.
@@ -7856,9 +7856,9 @@ All notable changes to vtcode will be documented in this file.
 
 ### Features
 
-    - feat: Enhance tool execution error handling and implement planning mode warnings
+    - feat: Enhance tool execution error handling and implement Planning workflow warnings
     - feat: Implement TUI-aware tool approval prompts and human-in-the-loop notification bell.
-    - feat: add plan phase management and update tool registry for planning mode
+    - feat: add plan phase management and update tool registry for the Planning workflow
     - feat: add HITL notification bell configuration and implement terminal bell notification for approvals
     - feat: Implement pre-flight LLM request and tool definition validation, and ensure `mark_tool_loop_limit_hit` is idempotent.
     - feat: improve release process by adding Linux build automation and related documentation.
@@ -7916,7 +7916,7 @@ All notable changes to vtcode will be documented in this file.
     - feat: extract anthropic config, reduce configuration complexity, document experimental features
     - feat: remove reinforcement learning and optimization modules and configurations.
     - feat: Add context-aware prompt enrichment (vibe coding) with new context modules and wizard modal interaction events.
-    - feat: Add full-auto mode support and update tool policies for improved automation
+    - feat: Add full-auto permission review support and update tool policies for improved automation
     - feat: Implement per-tool rate limiting and refactor agent tool execution state management.
     - feat: implement circuit breaker pattern for MCP client failures and optimize tool inventory management
     - feat: add code reviewer and commit message generator skills
@@ -7958,7 +7958,7 @@ All notable changes to vtcode will be documented in this file.
     - feat: extract anthropic config, reduce configuration complexity, document experimental features
     - feat: remove reinforcement learning and optimization modules and configurations.
     - feat: Add context-aware prompt enrichment (vibe coding) with new context modules and wizard modal interaction events.
-    - feat: Add full-auto mode support and update tool policies for improved automation
+    - feat: Add full-auto permission review support and update tool policies for improved automation
     - feat: Implement per-tool rate limiting and refactor agent tool execution state management.
     - feat: implement circuit breaker pattern for MCP client failures and optimize tool inventory management
     - feat: add code reviewer and commit message generator skills
@@ -7999,7 +7999,7 @@ All notable changes to vtcode will be documented in this file.
     - feat: extract anthropic config, reduce configuration complexity, document experimental features
     - feat: remove reinforcement learning and optimization modules and configurations.
     - feat: Add context-aware prompt enrichment (vibe coding) with new context modules and wizard modal interaction events.
-    - feat: Add full-auto mode support and update tool policies for improved automation
+    - feat: Add full-auto permission review support and update tool policies for improved automation
     - feat: Implement per-tool rate limiting and refactor agent tool execution state management.
     - feat: implement circuit breaker pattern for MCP client failures and optimize tool inventory management
     - feat: add code reviewer and commit message generator skills

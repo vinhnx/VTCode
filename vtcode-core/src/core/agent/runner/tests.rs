@@ -17,9 +17,10 @@ use crate::exec::events::{
 use crate::llm::provider::{
     FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, ToolCall,
 };
+use crate::primary_agent::ActivePrimaryAgent;
 use crate::tools::Tool;
 use crate::tools::circuit_breaker::{CircuitBreaker, CircuitBreakerConfig};
-use crate::tools::handlers::{PlanModeState, TaskTrackerTool};
+use crate::tools::handlers::{PlanningWorkflowState, TaskTrackerTool};
 use crate::tools::handlers::{SessionSurface, SessionToolsConfig, ToolModelCapabilities};
 use async_trait::async_trait;
 use parking_lot::Mutex;
@@ -31,6 +32,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tempfile::TempDir;
+use vtcode_config::core::permissions::{AgentPermissionsConfig, PermissionDefault};
 
 #[test]
 fn record_turn_duration_records_once() {
@@ -212,7 +214,7 @@ async fn build_universal_tools_matches_registry_agent_runner_snapshot() {
             surface: SessionSurface::AgentRunner,
             capability_level: CapabilityLevel::CodeSearch,
             documentation_mode: runner.config().agent.tool_documentation_mode,
-            plan_mode: runner.tool_registry.is_plan_mode(),
+            planning_active: runner.tool_registry.is_planning_active(),
             request_user_input_enabled: false,
             model_capabilities: ToolModelCapabilities::for_model_name(&runner.model),
             deferred_tool_policy: crate::tools::handlers::deferred_tool_policy_for_runtime(
@@ -285,6 +287,52 @@ async fn build_universal_tools_uses_override_when_present() {
 
     assert_eq!(tools.len(), 1);
     assert_eq!(tools[0].function_name(), "only_tool");
+}
+
+#[tokio::test]
+async fn active_primary_agent_policy_intersects_runner_tools() {
+    let temp = TempDir::new().expect("tempdir");
+    let mut runner = AgentRunner::new_with_bootstrap(
+        AgentType::Single,
+        ModelId::default(),
+        "test-key".to_string(),
+        temp.path().to_path_buf(),
+        "thread-primary-agent-policy".to_string(),
+        RunnerSettings {
+            reasoning_effort: None,
+            verbosity: None,
+        },
+        None,
+        ThreadBootstrap::new(None),
+        Some(VTCodeConfig::default()),
+        None,
+    )
+    .await
+    .expect("runner");
+
+    let mut spec = vtcode_config::builtin_primary_auto_agent();
+    spec.tools = Some(vec![tools::READ_FILE.to_string()]);
+    spec.permissions = AgentPermissionsConfig::new(PermissionDefault::Deny);
+    runner.set_active_primary_agent(ActivePrimaryAgent::from_spec(&spec));
+
+    assert!(runner.is_tool_exposed(tools::READ_FILE).await);
+    assert!(!runner.is_tool_exposed(tools::UNIFIED_EXEC).await);
+
+    let mut session_state =
+        AgentSessionState::new("thread-primary-agent-policy".to_string(), 1, 1, 8_000);
+    let denied = runner
+        .admit_tool_call(
+            tools::READ_FILE,
+            json!({ "path": "Cargo.toml" }),
+            &mut session_state,
+        )
+        .expect_err("primary-agent deny should block execution");
+
+    assert!(
+        denied
+            .to_string()
+            .contains("denied by active primary agent 'auto'")
+    );
 }
 
 #[tokio::test]
@@ -447,8 +495,7 @@ async fn review_tool_allowlist_excludes_mutating_and_plan_only_tools() {
             tools::UNIFIED_FILE.to_string(),
             tools::UNIFIED_EXEC.to_string(),
             "task_tracker".to_string(),
-            "plan_task_tracker".to_string(),
-            "enter_plan_mode".to_string(),
+            "start_planning".to_string(),
         ])
         .await;
 
@@ -700,7 +747,7 @@ async fn make_runner(temp: &TempDir, vt_cfg: VTCodeConfig, session_id: &str) -> 
 async fn seed_tracker(workspace_root: &Path, items: serde_json::Value) {
     let tool = TaskTrackerTool::new(
         workspace_root.to_path_buf(),
-        PlanModeState::new(workspace_root.to_path_buf()),
+        PlanningWorkflowState::new(workspace_root.to_path_buf()),
     );
     tool.execute(json!({
         "action": "create",
@@ -979,17 +1026,22 @@ async fn review_runs_skip_continuation_and_finish_single_pass() {
 }
 
 #[tokio::test]
-async fn plan_mode_runs_skip_continuation_and_finish_single_pass() {
+async fn planning_workflow_runs_skip_continuation_and_finish_single_pass() {
     let temp = TempDir::new().expect("tempdir");
-    let mut runner = make_runner(&temp, VTCodeConfig::default(), "thread-plan-mode-skip").await;
+    let mut runner = make_runner(
+        &temp,
+        VTCodeConfig::default(),
+        "thread-planning-workflow-skip",
+    )
+    .await;
     runner.enable_full_auto(&[]).await;
-    runner.enable_plan_mode();
+    runner.enable_planning();
     runner.provider_client = Box::new(QueuedProvider::new(vec![text_response(
         "The task is complete.",
     )]));
 
     let result = runner
-        .execute_task(&task("Plan mode task", "exec-task"), &[])
+        .execute_task(&task("Planning workflow task", "exec-task"), &[])
         .await
         .expect("task result");
 

@@ -16,6 +16,7 @@ mod checkpoints;
 mod config;
 mod create_project;
 mod dispatch;
+mod full_auto_primary_agent;
 mod init;
 mod init_project;
 mod man;
@@ -77,7 +78,13 @@ pub async fn dispatch(
             .await?;
         }
         ResolvedCliAction::FullAuto { prompt } => {
-            auto::handle_auto_task_command(core_cfg, cfg, &prompt).await?;
+            auto::handle_auto_task_command(
+                core_cfg,
+                cfg,
+                &prompt,
+                startup.primary_agent_explicitly_configured,
+            )
+            .await?;
         }
         ResolvedCliAction::Resume { mode } => {
             handle_resume_session_command(
@@ -99,7 +106,8 @@ pub async fn dispatch(
                 startup.config.clone(),
                 startup.skip_confirmations,
                 startup.full_auto_requested,
-                startup.plan_mode_entry_source,
+                startup.primary_agent_explicitly_configured,
+                startup.planning_entry_source,
             )
             .await?;
         }
@@ -166,12 +174,13 @@ mod tests {
             skip_confirmations: false,
             full_auto_requested: false,
             automation_prompt: None,
+            primary_agent_explicitly_configured: false,
             session_resume: None,
             resume_show_all: false,
             custom_session_id: None,
             summarize_fork: false,
-            plan_mode_entry_source:
-                vtcode_core::core::interfaces::session::PlanModeEntrySource::None,
+            planning_entry_source:
+                vtcode_core::core::interfaces::session::PlanningEntrySource::None,
         }
     }
 

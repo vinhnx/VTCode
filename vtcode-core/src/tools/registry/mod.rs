@@ -35,8 +35,8 @@ mod mcp_helpers;
 mod metrics_facade;
 mod optimization_facade;
 mod output_processing;
-mod plan_mode_checks;
-mod plan_mode_facade;
+mod planning_workflow_checks;
+mod planning_workflow_facade;
 mod policy;
 mod policy_facade;
 mod progress_facade;
@@ -98,7 +98,7 @@ use policy::ToolPolicyGateway;
 use utils::normalize_tool_output;
 
 use crate::tools::exec_session::ExecSessionManager;
-use crate::tools::handlers::PlanModeState;
+use crate::tools::handlers::PlanningWorkflowState;
 pub(super) use crate::tools::pty::PtyManager;
 use crate::tools::result::ToolResult as SplitToolResult;
 use crate::tools::safety_gateway::SafetyGateway;
@@ -173,10 +173,10 @@ pub struct ToolRegistry {
     /// Output spooler for dynamic context discovery (large outputs to files)
     output_spooler: Arc<super::output_spooler::ToolOutputSpooler>,
 
-    /// Shared Plan Mode state (plan file tracking, active flag) for enter/exit tools
-    /// and read-only enforcement. This is the single source of truth for plan mode;
-    /// use `is_plan_mode()` / `enable_plan_mode()` / `disable_plan_mode()` as accessors.
-    plan_mode_state: PlanModeState,
+    /// Shared Planning workflow state (plan file tracking, active flag) for enter/exit tools
+    /// and read-only enforcement. This is the single source of truth for planning workflow;
+    /// use `is_planning_active()` / `enable_planning()` / `disable_planning()` as accessors.
+    planning_workflow_state: PlanningWorkflowState,
     /// Canonical safety gateway shared across registry execution surfaces.
     safety_gateway: Arc<SafetyGateway>,
     /// Active CGP runtime mode for wrapping registrations added after startup.
@@ -901,12 +901,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn prevalidated_execution_enforces_plan_mode_guards() -> Result<()> {
+    async fn prevalidated_execution_enforces_planning_workflow_guards() -> Result<()> {
         let temp_dir = TempDir::new()?;
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
         registry.allow_all_tools().await?;
-        registry.enable_plan_mode();
-        registry.plan_mode_state().enable();
+        registry.enable_planning();
+        registry.planning_workflow_state().enable();
 
         let blocked_path = temp_dir.path().join("blocked.txt");
         let args = json!({
@@ -917,27 +917,27 @@ mod tests {
         let err = registry
             .execute_tool_ref_prevalidated(tools::WRITE_FILE, &args)
             .await
-            .expect_err("plan mode should block prevalidated mutating tool call");
-        assert!(err.to_string().contains("plan mode"));
+            .expect_err("planning workflow should block prevalidated mutating tool call");
+        assert!(err.to_string().contains("planning workflow"));
         assert!(!blocked_path.exists());
 
         Ok(())
     }
 
     #[tokio::test]
-    async fn prevalidated_execution_allows_task_tracker_in_plan_mode() -> Result<()> {
+    async fn prevalidated_execution_allows_task_tracker_in_planning_workflow() -> Result<()> {
         let temp_dir = TempDir::new()?;
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
         registry.allow_all_tools().await?;
-        registry.enable_plan_mode();
-        registry.plan_mode_state().enable();
+        registry.enable_planning();
+        registry.planning_workflow_state().enable();
 
         let plans_dir = temp_dir.path().join(".vtcode").join("plans");
         fs::create_dir_all(&plans_dir)?;
         let plan_file = plans_dir.join("adaptive-test.md");
         fs::write(&plan_file, "# Adaptive test\n")?;
         registry
-            .plan_mode_state()
+            .planning_workflow_state()
             .set_plan_file(Some(plan_file))
             .await;
 
@@ -946,7 +946,7 @@ mod tests {
         let response = registry
             .execute_tool_ref_prevalidated(tools::TASK_TRACKER, &args)
             .await
-            .expect("task_tracker should be allowed in plan mode");
+            .expect("task_tracker should be allowed in planning workflow");
         assert_eq!(response["status"], "created");
 
         Ok(())
@@ -1059,29 +1059,50 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn preflight_normalizes_plan_mode_force_on_aliases() -> Result<()> {
+    async fn preflight_rejects_removed_planning_start_aliases() -> Result<()> {
         let temp_dir = TempDir::new()?;
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
 
-        let on_outcome = registry.preflight_validate_call("plan_on", &json!({}))?;
-        assert_eq!(on_outcome.normalized_tool_name, tools::ENTER_PLAN_MODE);
+        let outcome = registry.preflight_validate_call(tools::START_PLANNING, &json!({}))?;
+        assert_eq!(outcome.normalized_tool_name, tools::START_PLANNING);
 
-        let slash_outcome = registry.preflight_validate_call("/plan", &json!({}))?;
-        assert_eq!(slash_outcome.normalized_tool_name, tools::ENTER_PLAN_MODE);
+        let tracker_outcome =
+            registry.preflight_validate_call(tools::TASK_TRACKER, &json!({"action": "list"}))?;
+        assert_eq!(tracker_outcome.normalized_tool_name, tools::TASK_TRACKER);
+
+        let old_start_name = ["enter", "plan", "mode"].join("_");
+        let old_name = registry
+            .preflight_validate_call(&old_start_name, &json!({}))
+            .expect_err("old planning tool name should be rejected");
+        assert!(old_name.to_string().contains("Unknown tool"));
+
+        let old_tracker_name = ["plan", "task", "tracker"].join("_");
+        let old_alias = registry
+            .preflight_validate_call(&old_tracker_name, &json!({"action": "list"}))
+            .expect_err("removed planning alias should be rejected");
+        assert!(old_alias.to_string().contains("Unknown tool"));
 
         Ok(())
     }
 
     #[tokio::test]
-    async fn preflight_normalizes_plan_mode_force_off_aliases() -> Result<()> {
+    async fn preflight_rejects_removed_planning_finish_aliases() -> Result<()> {
         let temp_dir = TempDir::new()?;
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
 
-        let off_outcome = registry.preflight_validate_call("mode_edit", &json!({}))?;
-        assert_eq!(off_outcome.normalized_tool_name, tools::EXIT_PLAN_MODE);
+        let outcome = registry.preflight_validate_call(tools::FINISH_PLANNING, &json!({}))?;
+        assert_eq!(outcome.normalized_tool_name, tools::FINISH_PLANNING);
 
-        let slash_outcome = registry.preflight_validate_call("/edit", &json!({}))?;
-        assert_eq!(slash_outcome.normalized_tool_name, tools::EXIT_PLAN_MODE);
+        let old_finish_name = ["exit", "plan", "mode"].join("_");
+        let old_name = registry
+            .preflight_validate_call(&old_finish_name, &json!({}))
+            .expect_err("old planning tool name should be rejected");
+        assert!(old_name.to_string().contains("Unknown tool"));
+
+        let old_alias = registry
+            .preflight_validate_call("mode_edit", &json!({}))
+            .expect_err("removed planning alias should be rejected");
+        assert!(old_alias.to_string().contains("Unknown tool"));
 
         Ok(())
     }
@@ -1561,7 +1582,7 @@ mod tests {
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
 
         registry
-            .enable_full_auto_mode(&[tools::READ_FILE.to_string()])
+            .enable_full_auto_permission(&[tools::READ_FILE.to_string()])
             .await;
 
         assert!(registry.preflight_tool_permission(tools::READ_FILE).await?);

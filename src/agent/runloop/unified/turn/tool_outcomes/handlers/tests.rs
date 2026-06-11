@@ -35,7 +35,8 @@ use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::{Notify, RwLock};
 use vtcode_config::core::PromptCachingConfig;
-use vtcode_config::{PermissionMode, SubagentSource, SubagentSpec};
+use vtcode_config::core::permissions::{AgentPermissionsConfig, PermissionDefault};
+use vtcode_config::{SubagentSource, SubagentSpec, builtin_primary_build_agent};
 use vtcode_core::acp::{PermissionGrant, ToolPermissionCache};
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::config::types::{
@@ -110,6 +111,8 @@ struct TestContextBacking {
     decision_ledger: Arc<RwLock<DecisionTracker>>,
     approval_recorder: Arc<ApprovalRecorder>,
     session_stats: SessionStats,
+    plan_session:
+        crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState,
     mcp_panel_state: McpPanelState,
     context_manager: ContextManager,
     last_forced_redraw: Instant,
@@ -127,7 +130,7 @@ struct TestContextBacking {
     autonomous_executor: Arc<vtcode_core::tools::autonomous_executor::AutonomousExecutor>,
     error_recovery: Arc<RwLock<vtcode_core::core::agent::error_recovery::ErrorRecoveryState>>,
     harness_state: HarnessTurnState,
-    auto_exit_plan_mode_attempted: bool,
+    auto_finish_planning_attempted: bool,
     working_history: Vec<uni::Message>,
     tool_catalog: Arc<ToolCatalogState>,
     default_placeholder: Option<String>,
@@ -156,6 +159,8 @@ impl TestContextBacking {
         let decision_ledger = Arc::new(RwLock::new(DecisionTracker::new()));
         let approval_recorder = Arc::new(ApprovalRecorder::new(workspace.clone()));
         let session_stats = SessionStats::default();
+        let plan_session =
+            crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState::default();
         let mcp_panel_state = McpPanelState::default();
         let loaded_skills = Arc::new(RwLock::new(HashMap::new()));
         let context_manager = ContextManager::new(String::new(), (), loaded_skills, None);
@@ -188,7 +193,7 @@ impl TestContextBacking {
             60,
             0,
         );
-        let auto_exit_plan_mode_attempted = false;
+        let auto_finish_planning_attempted = false;
         let working_history = Vec::new();
         let tool_catalog = Arc::new(ToolCatalogState::new());
         let default_placeholder = None;
@@ -229,6 +234,7 @@ impl TestContextBacking {
             decision_ledger,
             approval_recorder,
             session_stats,
+            plan_session,
             mcp_panel_state,
             context_manager,
             last_forced_redraw,
@@ -246,7 +252,7 @@ impl TestContextBacking {
             autonomous_executor,
             error_recovery,
             harness_state,
-            auto_exit_plan_mode_attempted,
+            auto_finish_planning_attempted,
             working_history,
             tool_catalog,
             default_placeholder,
@@ -299,7 +305,8 @@ impl TestContextBacking {
         };
         let state = crate::agent::runloop::unified::turn::context::TurnProcessingState {
             session_stats: &mut self.session_stats,
-            auto_exit_plan_mode_attempted: &mut self.auto_exit_plan_mode_attempted,
+            plan_session: &mut self.plan_session,
+            auto_finish_planning_attempted: &mut self.auto_finish_planning_attempted,
             mcp_panel_state: &mut self.mcp_panel_state,
             working_history: &mut self.working_history,
             turn_metadata_cache: &mut self.turn_metadata_cache,
@@ -323,6 +330,12 @@ impl TestContextBacking {
             .select_from_specs(specs, requested)
             .expect("test primary agent should resolve");
     }
+
+    fn select_build_primary_agent(&mut self) {
+        let mut spec = builtin_primary_build_agent();
+        spec.permissions = AgentPermissionsConfig::new(PermissionDefault::Allow);
+        self.select_primary_agent_from_specs(&[spec], "build");
+    }
 }
 
 fn test_primary_agent_spec(name: &str) -> SubagentSpec {
@@ -335,7 +348,7 @@ fn test_primary_agent_spec(name: &str) -> SubagentSpec {
         model: None,
         color: None,
         reasoning_effort: None,
-        permission_mode: Some(PermissionMode::Plan),
+        permissions: AgentPermissionsConfig::new(PermissionDefault::Deny),
         skills: Vec::new(),
         mcp_servers: Vec::new(),
         hooks: None,

@@ -153,7 +153,7 @@ impl ScrollManager {
     /// Computes the maximum scroll offset given total rows and viewport
     fn update_max_offset(&mut self) {
         let viewport = self.viewport_rows as usize;
-        self.max_offset = self.total_rows.saturating_sub(viewport).max(0);
+        self.max_offset = self.total_rows.saturating_sub(viewport);
     }
 
     /// Enforces scroll bounds after external changes

@@ -172,6 +172,7 @@ mod usage_tests {
             cached_prompt_tokens: Some(600),
             cache_creation_tokens: Some(150),
             cache_read_tokens: None,
+            iterations: None,
         };
 
         assert_eq!(usage.cache_read_tokens_or_fallback(), 600);
@@ -192,6 +193,7 @@ mod usage_tests {
             cached_prompt_tokens: None,
             cache_creation_tokens: None,
             cache_read_tokens: None,
+            iterations: None,
         };
 
         assert_eq!(usage.total_cache_tokens(), 0);
@@ -352,7 +354,7 @@ impl ToolCall {
                     }
                     // Validate that arguments is valid JSON for function tools
                     if let Err(e) = self.parsed_arguments() {
-                        return Err(format!("Invalid JSON in function arguments: {}", e));
+                        return Err(format!("Invalid JSON in function arguments: {e}"));
                     }
                 } else {
                     return Err("Function tool call missing function details".to_owned());
@@ -510,11 +512,8 @@ fn close_incomplete_json_prefix(prefix: &str) -> Option<String> {
             '"' => in_string = true,
             '{' => expected_closers.push('}'),
             '[' => expected_closers.push(']'),
-            '}' | ']' => {
-                if expected_closers.pop() != Some(ch) {
-                    return None;
-                }
-            }
+            '}' | ']' if expected_closers.pop() != Some(ch) => return None,
+            '}' | ']' => {}
             _ => {}
         }
     }

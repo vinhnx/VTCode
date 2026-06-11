@@ -15,10 +15,11 @@ pub use background::{
     load_archive_preview, subagent_display_label,
 };
 pub use config::{
-    build_child_config, compose_subagent_instructions, filter_child_tools,
-    normalize_background_child_max_turns, normalize_child_max_turns, prepare_child_runtime_config,
+    ResolvedAgentRuntimeView, build_child_config, compose_subagent_instructions,
+    filter_child_tools, normalize_background_child_max_turns, normalize_child_max_turns,
+    prepare_child_runtime_config,
 };
-pub use model::{agent_type_for_spec, load_memory_appendix};
+pub use model::{agent_type_for_spec, load_memory_appendix, load_primary_memory_appendix};
 pub use prompt::{
     contains_explicit_delegation_request, contains_explicit_model_request,
     delegated_task_requires_clarification, extract_explicit_agent_mentions,
@@ -117,7 +118,6 @@ impl SubagentController {
             &config.vt_cfg.hooks,
             SessionStartTrigger::Startup,
             config.parent_session_id.clone(),
-            config.vt_cfg.permissions.default_mode,
         )?;
         let background_children = load_background_state(&config.workspace_root)?
             .records
@@ -1888,7 +1888,6 @@ fn transcript_line_from_message(message: &Message) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::PermissionMode;
     use crate::config::constants::models;
     use crate::config::constants::tools;
     use crate::config::models::{ModelId, Provider};
@@ -1903,7 +1902,17 @@ mod tests {
     use std::time::Duration;
     use tempfile::TempDir;
     use tokio::sync::Notify;
-    use vtcode_config::{SubagentMcpServer, SubagentMemoryScope, SubagentSource, SubagentSpec};
+    use vtcode_config::core::permissions::{AgentPermissionsConfig, PermissionDefault};
+    use vtcode_config::{
+        HookCommandConfig, HookGroupConfig, HooksConfig, SubagentMcpServer, SubagentMemoryScope,
+        SubagentSource, SubagentSpec,
+    };
+
+    fn readonly_agent_permissions() -> AgentPermissionsConfig {
+        let mut permissions = AgentPermissionsConfig::new(PermissionDefault::Deny);
+        permissions.allow = vec![tools::READ_FILE.to_string()];
+        permissions
+    }
 
     fn test_controller_config(
         workspace_root: PathBuf,
@@ -1994,7 +2003,8 @@ Run the managed background demo.
 name: duck
 description: Discussion controller.
 mode: primary
-permissionMode: plan
+permissions:
+  default: ask
 ---
 
 Discuss before implementation.
@@ -2013,7 +2023,8 @@ name: readonly-demo
 description: Read-only test child agent.
 tools:
   - read_file
-permissionMode: plan
+permissions:
+  default: ask
 ---
 
 Inspect the repository.
@@ -2256,7 +2267,7 @@ Inspect the repository.
             model: None,
             color: None,
             reasoning_effort: None,
-            permission_mode: Some(PermissionMode::Plan),
+            permissions: readonly_agent_permissions(),
             skills: Vec::new(),
             mcp_servers: Vec::new(),
             hooks: None,
@@ -2333,7 +2344,7 @@ Inspect the repository.
             model: None,
             color: None,
             reasoning_effort: None,
-            permission_mode: None,
+            permissions: AgentPermissionsConfig::new(PermissionDefault::Ask),
             skills: Vec::new(),
             mcp_servers: Vec::new(),
             hooks: None,
@@ -2357,9 +2368,8 @@ Inspect the repository.
     }
 
     #[test]
-    fn build_child_config_clamps_permissions_and_intersects_allowed_tools() {
+    fn build_child_config_intersects_allowed_tools_and_preserves_global_denies() {
         let mut parent = VTCodeConfig::default();
-        parent.permissions.default_mode = PermissionMode::Default;
         parent.permissions.allow = vec![
             tools::READ_FILE.to_string(),
             tools::UNIFIED_SEARCH.to_string(),
@@ -2370,7 +2380,10 @@ Inspect the repository.
             .into_iter()
             .find(|spec| spec.name == "worker")
             .expect("worker");
-        spec.permission_mode = Some(PermissionMode::BypassPermissions);
+        spec.permissions = AgentPermissionsConfig {
+            auto: vec!["Bash(*)".to_string()],
+            ..AgentPermissionsConfig::new(PermissionDefault::Auto)
+        };
         spec.tools = Some(vec![
             tools::SPAWN_AGENT.to_string(),
             tools::UNIFIED_SEARCH.to_string(),
@@ -2378,7 +2391,10 @@ Inspect the repository.
         ]);
 
         let child = build_child_config(&parent, &spec, models::openai::GPT_5_4, None);
-        assert_eq!(child.permissions.default_mode, PermissionMode::Default);
+        assert_eq!(
+            child.runtime_agent_permissions.as_ref(),
+            Some(&spec.permissions)
+        );
         assert_eq!(
             child.permissions.allow,
             vec![
@@ -2397,6 +2413,110 @@ Inspect the repository.
                 .permissions
                 .deny
                 .contains(&tools::SPAWN_AGENT.to_string())
+        );
+    }
+
+    #[test]
+    fn build_child_config_preserves_subagent_lifecycle_stripping_and_hook_merging() {
+        let mut parent = VTCodeConfig::default();
+        parent.permissions.allow = vec![
+            tools::SPAWN_AGENT.to_string(),
+            tools::UNIFIED_SEARCH.to_string(),
+            tools::UNIFIED_EXEC.to_string(),
+        ];
+
+        let mut spec = vtcode_config::builtin_subagents()
+            .into_iter()
+            .find(|spec| spec.name == "worker")
+            .expect("worker");
+        spec.tools = Some(parent.permissions.allow.clone());
+        let mut hooks = HooksConfig::default();
+        hooks.lifecycle.pre_tool_use.push(HookGroupConfig {
+            matcher: Some("*".to_string()),
+            hooks: vec![HookCommandConfig {
+                command: "echo child".to_string(),
+                ..HookCommandConfig::default()
+            }],
+        });
+        spec.hooks = Some(hooks);
+
+        let child = build_child_config(&parent, &spec, models::openai::GPT_5_4, None);
+
+        assert_eq!(
+            child.permissions.allow,
+            vec![
+                tools::UNIFIED_SEARCH.to_string(),
+                tools::UNIFIED_EXEC.to_string()
+            ]
+        );
+        assert!(
+            child
+                .permissions
+                .deny
+                .contains(&tools::SPAWN_AGENT.to_string())
+        );
+        assert_eq!(child.hooks.lifecycle.pre_tool_use.len(), 1);
+        assert_eq!(
+            child.hooks.lifecycle.pre_tool_use[0].hooks[0].command,
+            "echo child"
+        );
+    }
+
+    #[test]
+    fn prepare_child_runtime_config_uses_shared_view_for_model_and_reasoning() {
+        let parent = VTCodeConfig::default();
+        let mut spec = vtcode_config::builtin_subagents()
+            .into_iter()
+            .find(|spec| spec.name == "worker")
+            .expect("worker");
+        spec.model = Some(models::openai::GPT_5_4_MINI.to_string());
+        spec.reasoning_effort = Some("high".to_string());
+
+        let (resolved_model, child_reasoning_effort, child_cfg) = prepare_child_runtime_config(
+            &parent,
+            &spec,
+            models::openai::GPT_5_4,
+            "openai",
+            ReasoningEffortLevel::Low,
+            None,
+            None,
+            None,
+            |_, parent_model, parent_provider, model_override, spec_model, agent_name| {
+                assert_eq!(parent_model, models::openai::GPT_5_4);
+                assert_eq!(parent_provider, "openai");
+                assert_eq!(model_override, None);
+                assert_eq!(spec_model, Some(models::openai::GPT_5_4_MINI));
+                assert_eq!(agent_name, "worker");
+                Ok(models::openai::GPT_5_4_MINI
+                    .parse::<ModelId>()
+                    .expect("valid model"))
+            },
+        )
+        .expect("prepared child runtime config");
+
+        assert_eq!(resolved_model.as_str(), models::openai::GPT_5_4_MINI);
+        assert_eq!(child_cfg.agent.default_model, models::openai::GPT_5_4_MINI);
+        assert_eq!(child_reasoning_effort, ReasoningEffortLevel::High);
+        assert_eq!(child_cfg.agent.reasoning_effort, ReasoningEffortLevel::High);
+    }
+
+    #[test]
+    fn subagent_instruction_composition_uses_shared_runtime_prompt_and_skill_appendix() {
+        let mut spec = vtcode_config::builtin_subagents()
+            .into_iter()
+            .find(|spec| spec.name == "worker")
+            .expect("worker");
+        spec.prompt = "Worker instructions".to_string();
+        spec.skills = vec!["rust".to_string(), "repo".to_string()];
+
+        let instructions =
+            compose_subagent_instructions(&spec, Some("Memory appendix".to_string()));
+
+        assert!(instructions.contains("Worker instructions"));
+        assert!(instructions.contains("Preloaded skill names: rust, repo."));
+        assert!(instructions.contains("Memory appendix"));
+        assert!(
+            instructions.contains("Return your final response using this exact Markdown contract")
         );
     }
 
@@ -2979,6 +3099,50 @@ Inspect the repository.
         assert!(appendix.contains("Open `MEMORY.md` when exact wording or more detail matters."));
         assert!(!appendix.contains("Current MEMORY.md excerpt"));
         assert!(!appendix.contains("## Preferences"));
+    }
+
+    #[test]
+    fn load_primary_memory_appendix_reads_existing_memory_without_write_guidance() {
+        let temp = TempDir::new().expect("tempdir");
+        let memory_dir = temp.path().join(".vtcode/agent-memory/reviewer");
+        std::fs::create_dir_all(&memory_dir).expect("memory dir");
+        std::fs::write(
+            memory_dir.join("MEMORY.md"),
+            "# Reviewer Memory\n\n## Preferences\n- Keep diffs surgical.\n- Run focused tests before broad checks.\n",
+        )
+        .expect("write memory");
+
+        let appendix = load_primary_memory_appendix(
+            temp.path(),
+            "reviewer",
+            Some(SubagentMemoryScope::Project),
+        )
+        .expect("appendix")
+        .expect("memory appendix");
+
+        assert!(appendix.contains("Primary-agent memory file:"));
+        assert!(appendix.contains("Loaded read-only for this request."));
+        assert!(appendix.contains("Key points:"));
+        assert!(appendix.contains("Keep diffs surgical."));
+        assert!(!appendix.contains("Read and maintain `MEMORY.md`"));
+        assert!(!appendix.contains("Create or update `MEMORY.md`"));
+        assert!(!appendix.contains("Open `MEMORY.md` when exact wording or more detail matters."));
+    }
+
+    #[test]
+    fn load_primary_memory_appendix_missing_memory_is_noop_without_directory_creation() {
+        let temp = TempDir::new().expect("tempdir");
+        let memory_dir = temp.path().join(".vtcode/agent-memory/reviewer");
+
+        let appendix = load_primary_memory_appendix(
+            temp.path(),
+            "reviewer",
+            Some(SubagentMemoryScope::Project),
+        )
+        .expect("appendix");
+
+        assert!(appendix.is_none());
+        assert!(!memory_dir.exists());
     }
 
     #[tokio::test]

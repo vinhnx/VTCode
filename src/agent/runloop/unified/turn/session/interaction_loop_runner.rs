@@ -389,7 +389,12 @@ pub(super) async fn run_interaction_loop_impl(
                 .collect_due_session_prompts(chrono::Utc::now())
                 .await?;
             for task in due {
-                state.queued_inputs.push_back(task.prompt);
+                state.queued_inputs.push_back(
+                    crate::agent::runloop::unified::inline_events::QueuedInput::new(
+                        task.prompt,
+                        Some(ctx.active_primary_agent.active().display_name.clone()),
+                    ),
+                );
                 ctx.renderer.line(
                     MessageStyle::Info,
                     &format!(
@@ -471,7 +476,7 @@ pub(super) async fn run_interaction_loop_impl(
 
         let turn_id = SessionId::generate().into_inner();
 
-        if let Some(hooks) = ctx.lifecycle_hooks {
+        if let Some(hooks) = ctx.lifecycle_hooks.as_ref() {
             match hooks
                 .run_user_prompt_submit(&turn_id, input_owned.as_str())
                 .await

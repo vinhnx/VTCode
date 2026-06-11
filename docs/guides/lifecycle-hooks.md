@@ -178,7 +178,7 @@ Runs only when VT Code is about to show a human approval prompt. Payload:
   "session_id": "...",
   "cwd": "/path/to/project",
   "hook_event_name": "PermissionRequest",
-  "permission_mode": "default",
+  "permission_decision": "ask",
   "tool_name": "unified_exec",
   "tool_input": { "command": "git push --force" },
   "permission_request": { "...": "normalized permission summary" },
@@ -202,7 +202,7 @@ complete. Payload:
   "session_id": "...",
   "cwd": "/path/to/project",
   "hook_event_name": "Stop",
-  "permission_mode": "default",
+  "permission_decision": "ask",
   "last_assistant_message": "draft response text",
   "stop_hook_active": false,
   "transcript_path": "..." | null

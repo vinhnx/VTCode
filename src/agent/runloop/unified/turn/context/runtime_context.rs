@@ -88,7 +88,8 @@ pub(crate) struct UIContext<'a> {
 
 pub(crate) struct TurnProcessingState<'a> {
     pub session_stats: &'a mut SessionStats,
-    pub auto_exit_plan_mode_attempted: &'a mut bool,
+    pub plan_session: &'a mut crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState,
+    pub auto_finish_planning_attempted: &'a mut bool,
     pub mcp_panel_state: &'a mut mcp_events::McpPanelState,
     pub working_history: &'a mut Vec<uni::Message>,
     pub turn_metadata_cache: &'a mut Option<Option<serde_json::Value>>,
@@ -112,7 +113,8 @@ pub(crate) struct TurnProcessingContext<'a> {
     pub renderer: &'a mut AnsiRenderer,
     pub handle: &'a InlineHandle,
     pub session_stats: &'a mut SessionStats,
-    pub auto_exit_plan_mode_attempted: &'a mut bool,
+    pub plan_session: &'a mut crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState,
+    pub auto_finish_planning_attempted: &'a mut bool,
     pub mcp_panel_state: &'a mut mcp_events::McpPanelState,
     pub tool_result_cache: &'a Arc<RwLock<vtcode_core::tools::ToolResultCache>>,
     pub approval_recorder: &'a Arc<vtcode_core::tools::ApprovalRecorder>,
@@ -169,7 +171,8 @@ impl<'a> TurnProcessingContext<'a> {
             renderer: ui.renderer,
             handle: ui.handle,
             session_stats: state.session_stats,
-            auto_exit_plan_mode_attempted: state.auto_exit_plan_mode_attempted,
+            plan_session: state.plan_session,
+            auto_finish_planning_attempted: state.auto_finish_planning_attempted,
             mcp_panel_state: state.mcp_panel_state,
             tool_result_cache: tool.tool_result_cache,
             approval_recorder: tool.approval_recorder,
@@ -250,7 +253,8 @@ impl<'a> TurnProcessingContext<'a> {
         };
         let state = TurnProcessingState {
             session_stats: self.session_stats,
-            auto_exit_plan_mode_attempted: self.auto_exit_plan_mode_attempted,
+            plan_session: self.plan_session,
+            auto_finish_planning_attempted: self.auto_finish_planning_attempted,
             mcp_panel_state: self.mcp_panel_state,
             working_history: self.working_history,
             turn_metadata_cache: self.turn_metadata_cache,
@@ -286,7 +290,8 @@ impl<'a> TurnProcessingContext<'a> {
             ui_ctx.handle,
             ui_ctx.session,
             state.session_stats,
-            state.auto_exit_plan_mode_attempted,
+            state.plan_session,
+            state.auto_finish_planning_attempted,
             state.mcp_panel_state,
             tool_ctx.tool_result_cache,
             tool_ctx.approval_recorder,
@@ -326,9 +331,7 @@ impl<'a> TurnProcessingContext<'a> {
 
     /// Creates a RunLoopContext directly from this TurnProcessingContext,
     /// skipping the intermediate TurnLoopContext conversion.
-    pub(crate) fn as_run_loop_context(
-        &mut self,
-    ) -> crate::agent::runloop::unified::run_loop_context::RunLoopContext<'_> {
+    pub(crate) fn as_run_loop_context(&mut self) -> RunLoopContext<'_> {
         let TurnProcessingContextParts {
             tool: tool_ctx,
             llm: llm_ctx,
@@ -336,8 +339,8 @@ impl<'a> TurnProcessingContext<'a> {
             state,
         } = self.parts_mut();
 
-        let auto_mode = Some(
-            crate::agent::runloop::unified::run_loop_context::AutoModeRuntimeContext {
+        let auto_permission = Some(
+            crate::agent::runloop::unified::run_loop_context::AutoPermissionRuntimeContext {
                 config: llm_ctx.config,
                 vt_cfg: llm_ctx.vt_cfg,
                 provider_client: llm_ctx.provider_client.as_mut(),
@@ -345,7 +348,7 @@ impl<'a> TurnProcessingContext<'a> {
             },
         );
 
-        crate::agent::runloop::unified::run_loop_context::RunLoopContext::new_with_auto_mode_context(
+        let mut ctx = RunLoopContext::new_with_auto_permission_context(
             ui_ctx.renderer,
             ui_ctx.handle,
             tool_ctx.tool_registry,
@@ -355,6 +358,7 @@ impl<'a> TurnProcessingContext<'a> {
             tool_ctx.permissions_state,
             llm_ctx.decision_ledger,
             state.session_stats,
+            state.plan_session,
             state.mcp_panel_state,
             tool_ctx.approval_recorder,
             ui_ctx.session,
@@ -362,7 +366,12 @@ impl<'a> TurnProcessingContext<'a> {
             llm_ctx.traj,
             state.harness_state,
             state.harness_emitter,
-            auto_mode,
-        )
+            auto_permission,
+        );
+        ctx.active_agent_permissions = llm_ctx
+            .vt_cfg
+            .and_then(|cfg| cfg.runtime_agent_permissions.as_ref())
+            .or(Some(&llm_ctx.active_primary_agent.active().permissions));
+        ctx
     }
 }

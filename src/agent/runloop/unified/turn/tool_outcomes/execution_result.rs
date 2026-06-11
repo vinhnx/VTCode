@@ -8,7 +8,7 @@
 //! - Constraints: TD-005 is active here; preserve the root as a coordinator and prefer new responsibility-named support modules over adding more inline branches.
 //! - Verify: `cargo check -p vtcode && cargo test -p vtcode --bin vtcode inline_events::tests`
 
-mod auto_mode_probe;
+mod auto_permission_probe;
 mod failure_path;
 
 use anyhow::Result;
@@ -24,7 +24,7 @@ use crate::agent::runloop::mcp_events;
 use crate::agent::runloop::unified::tool_output_handler::handle_pipeline_output_from_turn_ctx;
 use crate::agent::runloop::unified::tool_pipeline::{ToolExecutionStatus, ToolPipelineOutcome};
 
-use self::auto_mode_probe::push_tool_response_with_auto_mode_probe;
+use self::auto_permission_probe::push_tool_response_with_auto_permission_probe;
 use self::failure_path::{
     finalize_failed_tool_response, log_structured_failure, notify_structured_failure,
     record_recovery_tool_error,
@@ -87,7 +87,7 @@ fn emit_turn_metric_log(
         metric,
         run_id = %ctx.harness_state.run_id.0,
         turn_id = %ctx.harness_state.turn_id.0,
-        plan_mode = ctx.session_stats.is_plan_mode(),
+        planning_workflow = ctx.is_planning_active(),
         tool = %tool_name,
         blocked_streak,
         blocked_cap,
@@ -190,7 +190,7 @@ async fn handle_success<'a>(
     t_ctx.ctx.reset_blocked_tool_call_streak();
     let content_for_model =
         prepare_tool_response_content(t_ctx.ctx, tool_name, args_val, output).await;
-    push_tool_response_with_auto_mode_probe(
+    push_tool_response_with_auto_permission_probe(
         t_ctx,
         tool_call_id.clone(),
         tool_name,
@@ -247,22 +247,23 @@ async fn handle_failure<'a>(
     let (user_msg, hint) = format_structured_tool_error_for_user(tool_name, error);
     notify_structured_failure(tool_name, &user_msg, None).await;
 
-    let is_plan_mode_denial = matches!(error.category, ErrorCategory::PlanModeViolation)
-        || agent_execution::is_plan_mode_denial(error_str);
+    let is_planning_active_denial =
+        matches!(error.category, ErrorCategory::PlanningPolicyViolation)
+            || agent_execution::is_planning_active_denial(error_str);
     let blocked_or_denied_failure = matches!(
         error.category,
         ErrorCategory::InvalidParameters
             | ErrorCategory::PermissionDenied
             | ErrorCategory::PolicyViolation
-            | ErrorCategory::PlanModeViolation
+            | ErrorCategory::PlanningPolicyViolation
     ) || is_blocked_or_denied_failure(error_str);
     log_structured_failure(tool_name, error, hint.as_deref(), "Tool execution failed");
 
-    if is_plan_mode_denial {
+    if is_planning_active_denial {
         let consecutive_blocked_tool_calls = t_ctx.ctx.harness_state.consecutive_blocked_tool_calls;
         emit_turn_metric_log(
             t_ctx.ctx,
-            "plan_mode_denial",
+            "planning_denial",
             tool_name,
             consecutive_blocked_tool_calls,
             super::handlers::max_consecutive_blocked_tool_calls_per_turn(t_ctx.ctx),
@@ -270,7 +271,7 @@ async fn handle_failure<'a>(
     }
 
     // Record genuine tool errors for recovery diagnostics (skip policy denials)
-    if !is_plan_mode_denial && !blocked_or_denied_failure {
+    if !is_planning_active_denial && !blocked_or_denied_failure {
         record_recovery_tool_error(
             t_ctx.ctx,
             tool_name,
@@ -339,7 +340,7 @@ async fn handle_cancelled(
     t_ctx.ctx.renderer.line(MessageStyle::Info, &error_msg)?;
 
     let error_content = serde_json::json!({"error": error_msg});
-    push_tool_response_with_auto_mode_probe(
+    push_tool_response_with_auto_permission_probe(
         t_ctx,
         tool_call_id,
         tool_name,

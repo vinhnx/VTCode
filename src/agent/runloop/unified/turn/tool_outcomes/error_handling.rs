@@ -12,7 +12,7 @@ const MAX_FALLBACK_ARGS_INLINE_CHARS: usize = 240;
 
 #[cold]
 pub(super) fn is_blocked_or_denied_failure(error: &str) -> bool {
-    if agent_execution::is_plan_mode_denial(error) {
+    if agent_execution::is_planning_active_denial(error) {
         return true;
     }
 
@@ -22,9 +22,8 @@ pub(super) fn is_blocked_or_denied_failure(error: &str) -> bool {
         "policy violation:",
         "safety validation failed",
         "tool argument validation failed",
-        "not allowed in plan mode",
-        "only available when plan mode is active",
-        "compatibility alias",
+        "not allowed in planning workflow",
+        "only available when planning workflow state is active",
     ]
     .iter()
     .any(|marker| lowered.contains(marker))
@@ -114,7 +113,7 @@ fn failure_guidance(
         return (
             "policy_blocked",
             false,
-            "Switch to an allowed tool, or run `/mode auto` to enable auto-approval.",
+            "Switch to an allowed tool or mode.",
         );
     }
 
@@ -159,13 +158,13 @@ fn structured_failure_guidance(
         error.category,
         ErrorCategory::PermissionDenied
             | ErrorCategory::PolicyViolation
-            | ErrorCategory::PlanModeViolation
+            | ErrorCategory::PlanningPolicyViolation
     ) || is_blocked_or_denied_failure(&error.message)
     {
         return (
             "policy_blocked",
             false,
-            "Switch to an allowed tool, or run `/mode auto` to enable auto-approval.",
+            "Switch to an allowed tool or mode.",
         );
     }
 
@@ -484,15 +483,11 @@ pub(super) fn fallback_from_error(
         ));
     }
 
-    if matches!(
-        tool_name,
-        tool_names::TASK_TRACKER | tool_names::PLAN_TASK_TRACKER
-    ) {
+    if matches!(tool_name, tool_names::TASK_TRACKER) {
         let lower = error_msg.to_ascii_lowercase();
         if lower.contains("required for 'update'")
             || lower.contains("required for \"update\"")
             || lower.contains("invalid task_tracker arguments")
-            || lower.contains("invalid plan_task_tracker arguments")
         {
             return Some((
                 tool_name.to_string(),

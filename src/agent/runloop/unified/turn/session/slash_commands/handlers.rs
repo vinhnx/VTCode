@@ -22,10 +22,10 @@ mod interactive;
 mod local_server;
 #[path = "mcp.rs"]
 mod mcp;
-#[path = "modes.rs"]
-mod modes;
 #[path = "oauth.rs"]
 mod oauth;
+#[path = "planning.rs"]
+mod planning;
 #[path = "rewind.rs"]
 mod rewind;
 #[path = "schedule.rs"]
@@ -53,7 +53,7 @@ pub(super) use compact::handle_compact_conversation;
 pub(super) use control::{
     handle_clear_conversation, handle_clear_screen, handle_copy_latest_assistant_reply,
     handle_exit, handle_manage_loop, handle_notify, handle_show_hooks, handle_show_permissions,
-    handle_show_settings, handle_show_settings_at_path, handle_stop_agent, persist_mode_settings,
+    handle_show_settings, handle_show_settings_at_path, handle_stop_agent,
     show_settings_at_path_from_context,
 };
 pub(super) use diagnostics::{
@@ -66,13 +66,11 @@ pub(super) use interactive::{
 };
 pub(super) use local_server::handle_manage_local_server;
 pub(super) use mcp::handle_manage_mcp;
-pub(super) use modes::{
-    handle_cycle_mode, handle_set_mode, handle_start_mode_selection, handle_toggle_plan_mode,
-};
 pub(super) use oauth::{
     handle_oauth_login, handle_oauth_logout, handle_refresh_oauth, handle_show_auth_status,
     handle_start_oauth_provider_picker,
 };
+pub(super) use planning::handle_toggle_planning_workflow;
 pub(super) use rewind::{handle_open_rewind_picker, handle_rewind_latest, handle_rewind_to_turn};
 pub(super) use schedule::handle_manage_schedule;
 pub(super) use share_log::handle_share_log;

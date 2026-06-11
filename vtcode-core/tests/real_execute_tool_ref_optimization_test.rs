@@ -54,8 +54,8 @@ async fn test_execute_tool_ref_uses_optimizations() {
     assert_eq!(result1.unwrap(), result2.unwrap());
 
     println!("v execute_tool_ref optimization test passed");
-    println!("   Cache size after first call: {}", cache_size_after_first);
-    println!("   Cache capacity: {}", cache_capacity);
+    println!("   Cache size after first call: {cache_size_after_first}");
+    println!("   Cache capacity: {cache_capacity}");
 }
 
 #[tokio::test]
@@ -139,8 +139,8 @@ async fn test_execute_tool_ref_hot_cache_effectiveness() {
     assert!(cache_size_2 <= 2);
 
     println!("v execute_tool_ref hot cache effectiveness test passed");
-    println!("   Cache size after first tool: {}", cache_size_1);
-    println!("   Cache size after second tool: {}", cache_size_2);
+    println!("   Cache size after first tool: {cache_size_1}");
+    println!("   Cache size after second tool: {cache_size_2}");
 }
 
 #[tokio::test]
@@ -185,8 +185,8 @@ async fn test_execute_tool_ref_performance_comparison() {
     let optimized_duration = start.elapsed();
 
     println!("v execute_tool_ref performance comparison test completed");
-    println!("   Unoptimized: {:?}", unoptimized_duration);
-    println!("   Optimized: {:?}", optimized_duration);
+    println!("   Unoptimized: {unoptimized_duration:?}");
+    println!("   Optimized: {optimized_duration:?}");
     println!(
         "   Optimized registry has {} optimizations enabled",
         registry_optimized.has_optimizations_enabled()

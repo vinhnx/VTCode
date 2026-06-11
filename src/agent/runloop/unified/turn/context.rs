@@ -36,12 +36,12 @@ use vtcode_core::exec::events::{
 use vtcode_core::hooks::{LifecycleHookEngine, SessionEndReason};
 use vtcode_core::llm::provider as uni;
 use vtcode_core::llm::providers::ReasoningSegment;
-use vtcode_core::tools::handlers::plan_mode::{PlanLifecyclePhase, persist_plan_draft};
+use vtcode_core::tools::handlers::planning_workflow::{PlanLifecyclePhase, persist_plan_draft};
 use vtcode_core::tools::registry::ToolExecutionError;
 use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_ui::tui::app::InlineHandle;
 
-use crate::agent::runloop::unified::run_loop_context::RecoveryMode;
+use crate::agent::runloop::unified::run_loop_context::{RecoveryMode, RunLoopContext};
 use crate::agent::runloop::unified::state::CtrlCState;
 
 pub(crate) use self::runtime_context::{
@@ -143,8 +143,8 @@ impl PreparedAssistantToolCall {
 }
 
 impl<'a> TurnProcessingContext<'a> {
-    pub(crate) fn is_plan_mode(&self) -> bool {
-        self.session_stats.is_plan_mode()
+    pub(crate) fn is_planning_active(&self) -> bool {
+        self.tool_registry.is_planning_active()
     }
 
     pub(crate) fn set_phase(

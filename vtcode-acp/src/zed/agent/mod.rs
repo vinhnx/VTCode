@@ -17,6 +17,7 @@ use vtcode_core::tools::grep_file::GrepSearchManager;
 use vtcode_core::tools::handlers::{SessionSurface, SessionToolsConfig, ToolModelCapabilities};
 use vtcode_core::tools::registry::ToolRegistry as CoreToolRegistry;
 
+use super::helpers::PrimaryAgentCatalog;
 use super::types::{NotificationEnvelope, SessionHandle};
 
 mod handlers;
@@ -42,6 +43,7 @@ pub(crate) struct ZedAgent {
     thread_manager: ThreadManager,
     client_capabilities: Rc<RefCell<Option<acp::ClientCapabilities>>>,
     title: Option<String>,
+    primary_agents: PrimaryAgentCatalog,
     tool_loop_limit: usize,
     tool_call_delay: Option<Duration>,
 }
@@ -55,6 +57,7 @@ impl ZedAgent {
         system_prompt: String,
         session_update_tx: mpsc::UnboundedSender<NotificationEnvelope>,
         title: Option<String>,
+        primary_agents: PrimaryAgentCatalog,
     ) -> Self {
         let read_file_enabled = zed_config.tools.read_file;
         let workspace_root = config.workspace.clone();
@@ -70,7 +73,6 @@ impl ZedAgent {
             None
         };
         let list_files_enabled = file_ops_tool.is_some();
-
         let core_tool_registry = CoreToolRegistry::new(config.workspace.clone()).await;
         if let Err(error) = core_tool_registry
             .apply_tool_runtime_config(&commands_config, &tools_config)
@@ -109,6 +111,7 @@ impl ZedAgent {
             thread_manager: ThreadManager::new(),
             client_capabilities: Rc::new(RefCell::new(None)),
             title,
+            primary_agents,
             tool_loop_limit,
             tool_call_delay,
         }

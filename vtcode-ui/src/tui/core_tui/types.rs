@@ -21,7 +21,7 @@ pub use selection::{
     RewindAction, SecurePromptConfig, WizardModalMode, WizardStep,
 };
 pub use style::{
-    EditingMode, InlineHeaderBadge, InlineHeaderContext, InlineHeaderHighlight,
-    InlineHeaderStatusBadge, InlineHeaderStatusTone, InlineLinkRange, InlineLinkTarget,
-    InlineSegment, InlineTextStyle, InlineTheme,
+    InlineHeaderBadge, InlineHeaderContext, InlineHeaderHighlight, InlineHeaderStatusBadge,
+    InlineHeaderStatusTone, InlineLinkRange, InlineLinkTarget, InlineSegment, InlineTextStyle,
+    InlineTheme,
 };

@@ -4,8 +4,8 @@ use serde_json::{Value, json};
 use tokio::sync::Notify;
 use vtcode_core::config::constants::tools;
 use vtcode_core::config::loader::VTCodeConfig;
-use vtcode_core::core::interfaces::session::PlanModeEntrySource;
-use vtcode_core::tools::handlers::plan_mode::PlanLifecyclePhase;
+use vtcode_core::core::interfaces::session::PlanningEntrySource;
+use vtcode_core::tools::handlers::planning_workflow::PlanLifecyclePhase;
 use vtcode_core::tools::registry::ExecSettlementMode;
 use vtcode_ui::tui::app::PlanContent;
 use vtcode_ui::tui::app::{
@@ -16,8 +16,9 @@ use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_ov
 use crate::agent::runloop::unified::plan_confirmation::{
     PlanConfirmationOutcome, execute_plan_confirmation, plan_confirmation_outcome_to_json,
 };
-use crate::agent::runloop::unified::plan_mode_state::{
-    render_plan_mode_next_step_hint, transition_to_edit_mode, transition_to_plan_mode,
+use crate::agent::runloop::unified::planning_workflow_state::{
+    finish_planning_workflow, render_planning_workflow_next_step_hint,
+    transition_to_planning_workflow,
 };
 use crate::agent::runloop::unified::run_loop_context::RunLoopContext;
 use crate::agent::runloop::unified::state::CtrlCState;
@@ -26,39 +27,39 @@ use crate::agent::runloop::unified::turn::plan_content::parse_plan_content_from_
 use super::execution_attempts::execute_tool_with_timeout_ref_prevalidated;
 use super::status::{ToolExecutionStatus, ToolPipelineOutcome};
 
-const ENTER_PLAN_MODE_APPROVE_ACTION: &str = "plan_mode:enter";
-const ENTER_PLAN_MODE_STAY_ACTION: &str = "plan_mode:stay";
+const START_PLANNING_APPROVE_ACTION: &str = "planning:start";
+const START_PLANNING_STAY_ACTION: &str = "planning:stay";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum EnterPlanModeConfirmation {
+enum StartPlanningConfirmation {
     Enter,
     Stay,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ExitPlanModeDisposition {
+enum FinishPlanningDisposition {
     ConfirmReview,
     AutoAccept,
     Passthrough,
 }
 
-fn exit_plan_mode_disposition(
+fn finish_planning_disposition(
     status: Option<&str>,
     requires_confirmation_from_result: bool,
     require_confirmation: bool,
-) -> ExitPlanModeDisposition {
+) -> FinishPlanningDisposition {
     if status == Some("pending_confirmation") && requires_confirmation_from_result {
         if require_confirmation {
-            ExitPlanModeDisposition::ConfirmReview
+            FinishPlanningDisposition::ConfirmReview
         } else {
-            ExitPlanModeDisposition::AutoAccept
+            FinishPlanningDisposition::AutoAccept
         }
     } else {
-        ExitPlanModeDisposition::Passthrough
+        FinishPlanningDisposition::Passthrough
     }
 }
 
-pub(super) async fn handle_enter_plan_mode(
+pub(super) async fn handle_start_planning(
     ctx: &mut RunLoopContext<'_>,
     name: &str,
     args_val: &Value,
@@ -67,7 +68,7 @@ pub(super) async fn handle_enter_plan_mode(
     max_tool_retries: usize,
     allow_preapproved: bool,
 ) -> Option<ToolPipelineOutcome> {
-    if name != tools::ENTER_PLAN_MODE {
+    if name != tools::START_PLANNING {
         return None;
     }
 
@@ -121,21 +122,22 @@ pub(super) async fn handle_enter_plan_mode(
         }
 
         if status == Some("success") {
-            transition_to_plan_mode(
+            transition_to_planning_workflow(
                 ctx.tool_registry,
                 ctx.session_stats,
+                ctx.plan_session,
                 ctx.handle,
-                PlanModeEntrySource::UserRequest,
+                PlanningEntrySource::UserRequest,
                 false,
                 false,
             )
             .await;
-            if let Err(err) = render_plan_mode_next_step_hint(ctx.renderer) {
-                tracing::warn!("failed to render plan mode next-step hint: {}", err);
+            if let Err(err) = render_planning_workflow_next_step_hint(ctx.renderer) {
+                tracing::warn!("failed to render planning workflow next-step hint: {}", err);
             }
             tracing::info!(
-                target: "vtcode.plan_mode",
-                "Agent entered Plan Mode with planner profile (read-only, mutating tools blocked)"
+                target: "vtcode.planning_workflow",
+                "Agent entered Planning workflow with planner profile (read-only, mutating tools blocked)"
             );
         }
     }
@@ -143,7 +145,7 @@ pub(super) async fn handle_enter_plan_mode(
     Some(ToolPipelineOutcome::from_status(tool_result))
 }
 
-pub(super) async fn handle_exit_plan_mode(
+pub(super) async fn handle_finish_planning(
     ctx: &mut RunLoopContext<'_>,
     name: &str,
     args_val: &Value,
@@ -152,7 +154,7 @@ pub(super) async fn handle_exit_plan_mode(
     max_tool_retries: usize,
     vt_cfg: Option<&VTCodeConfig>,
 ) -> Option<ToolPipelineOutcome> {
-    if name != tools::EXIT_PLAN_MODE {
+    if name != tools::FINISH_PLANNING {
         return None;
     }
 
@@ -180,24 +182,24 @@ pub(super) async fn handle_exit_plan_mode(
             .and_then(|r| r.as_bool())
             .unwrap_or(false);
 
-        match exit_plan_mode_disposition(
+        match finish_planning_disposition(
             status,
             requires_confirmation_from_result,
             require_confirmation,
         ) {
-            ExitPlanModeDisposition::ConfirmReview => {
+            FinishPlanningDisposition::ConfirmReview => {
                 ctx.tool_registry
-                    .plan_mode_state()
+                    .planning_workflow_state()
                     .set_phase(PlanLifecyclePhase::ReviewPending);
                 return Some(
                     handle_pending_confirmation(ctx, output, ctrl_c_state, ctrl_c_notify).await,
                 );
             }
-            ExitPlanModeDisposition::AutoAccept => {
-                transition_to_edit_mode(ctx.tool_registry, ctx.session_stats, ctx.handle, true)
+            FinishPlanningDisposition::AutoAccept => {
+                finish_planning_workflow(ctx.tool_registry, ctx.plan_session, ctx.handle, true)
                     .await;
                 tracing::info!(
-                    target: "vtcode.plan_mode",
+                    target: "vtcode.planning_workflow",
                     "Plan confirmation disabled via config, auto-approving with coder profile (mutating tools enabled)"
                 );
                 return Some(ToolPipelineOutcome::from_status(
@@ -214,7 +216,7 @@ pub(super) async fn handle_exit_plan_mode(
                     },
                 ));
             }
-            ExitPlanModeDisposition::Passthrough => {}
+            FinishPlanningDisposition::Passthrough => {}
         }
     }
 
@@ -248,32 +250,32 @@ async fn handle_pending_confirmation(
                 outcome,
                 PlanConfirmationOutcome::Execute | PlanConfirmationOutcome::AutoAccept
             ) {
-                transition_to_edit_mode(ctx.tool_registry, ctx.session_stats, ctx.handle, true)
+                finish_planning_workflow(ctx.tool_registry, ctx.plan_session, ctx.handle, true)
                     .await;
                 ctx.handle
                     .set_skip_confirmations(matches!(outcome, PlanConfirmationOutcome::AutoAccept));
                 tracing::info!(
-                    target: "vtcode.plan_mode",
+                    target: "vtcode.planning_workflow",
                     "User approved plan execution, transitioning to coder profile (mutating tools enabled)"
                 );
             } else if matches!(outcome, PlanConfirmationOutcome::EditPlan) {
                 ctx.tool_registry
-                    .plan_mode_state()
+                    .planning_workflow_state()
                     .set_phase(PlanLifecyclePhase::DraftReady);
                 tracing::info!(
-                    target: "vtcode.plan_mode",
-                    "User requested plan edit, remaining in Plan mode"
+                    target: "vtcode.planning_workflow",
+                    "User requested plan edit, remaining in Planning workflow"
                 );
             } else {
                 ctx.tool_registry
-                    .plan_mode_state()
+                    .planning_workflow_state()
                     .set_phase(PlanLifecyclePhase::DraftReady);
             }
             plan_confirmation_outcome_to_json(&outcome)
         }
         Err(e) => {
             ctx.tool_registry
-                .plan_mode_state()
+                .planning_workflow_state()
                 .set_phase(PlanLifecyclePhase::DraftReady);
             serde_json::json!({
                 "status": "error",
@@ -318,43 +320,42 @@ async fn handle_enter_pending_confirmation(
     max_tool_retries: usize,
 ) -> ToolPipelineOutcome {
     ctx.tool_registry
-        .plan_mode_state()
+        .planning_workflow_state()
         .set_phase(PlanLifecyclePhase::EnterPendingApproval);
 
     let overlay = TransientRequest::List(ListOverlayRequest {
-        title: "Enter Plan Mode?".to_string(),
-        lines: build_enter_plan_mode_lines(output),
+        title: "Enter Planning workflow?".to_string(),
+        lines: build_start_planning_lines(output),
         footer_hint: Some(
-            "Choose whether to switch into read-only planning before the agent continues."
-                .to_string(),
+            "Choose whether to enter the Planning workflow before the agent continues.".to_string(),
         ),
         items: vec![
             InlineListItem {
-                title: "Enter Plan Mode".to_string(),
+                title: "Enter Planning workflow".to_string(),
                 subtitle: Some(
-                    "Switch to read-only planning and persist the draft under .vtcode/plans."
+                    "Enter the Planning workflow and persist the draft under .vtcode/plans."
                         .to_string(),
                 ),
                 badge: Some("Recommended".to_string()),
                 indent: 0,
                 selection: Some(InlineListSelection::ConfigAction(
-                    ENTER_PLAN_MODE_APPROVE_ACTION.to_string(),
+                    START_PLANNING_APPROVE_ACTION.to_string(),
                 )),
                 search_value: None,
             },
             InlineListItem {
-                title: "Stay in current mode".to_string(),
-                subtitle: Some("Continue without switching into planning mode.".to_string()),
+                title: "Continue without Planning workflow".to_string(),
+                subtitle: Some("Continue without entering the Planning workflow.".to_string()),
                 badge: None,
                 indent: 0,
                 selection: Some(InlineListSelection::ConfigAction(
-                    ENTER_PLAN_MODE_STAY_ACTION.to_string(),
+                    START_PLANNING_STAY_ACTION.to_string(),
                 )),
                 search_value: None,
             },
         ],
         selected: Some(InlineListSelection::ConfigAction(
-            ENTER_PLAN_MODE_APPROVE_ACTION.to_string(),
+            START_PLANNING_APPROVE_ACTION.to_string(),
         )),
         search: None,
         hotkeys: Vec::new(),
@@ -368,16 +369,16 @@ async fn handle_enter_pending_confirmation(
         ctrl_c_notify,
         |submission| match submission {
             TransientSubmission::Selection(InlineListSelection::ConfigAction(action))
-                if action == ENTER_PLAN_MODE_APPROVE_ACTION =>
+                if action == START_PLANNING_APPROVE_ACTION =>
             {
-                Some(EnterPlanModeConfirmation::Enter)
+                Some(StartPlanningConfirmation::Enter)
             }
             TransientSubmission::Selection(InlineListSelection::ConfigAction(action))
-                if action == ENTER_PLAN_MODE_STAY_ACTION =>
+                if action == START_PLANNING_STAY_ACTION =>
             {
-                Some(EnterPlanModeConfirmation::Stay)
+                Some(StartPlanningConfirmation::Stay)
             }
-            TransientSubmission::Selection(_) => Some(EnterPlanModeConfirmation::Stay),
+            TransientSubmission::Selection(_) => Some(StartPlanningConfirmation::Stay),
             _ => None,
         },
     )
@@ -388,18 +389,18 @@ async fn handle_enter_pending_confirmation(
         Ok(OverlayWaitOutcome::Cancelled)
         | Ok(OverlayWaitOutcome::Interrupted)
         | Ok(OverlayWaitOutcome::Exit)
-        | Err(_) => EnterPlanModeConfirmation::Stay,
+        | Err(_) => StartPlanningConfirmation::Stay,
     };
 
-    if decision == EnterPlanModeConfirmation::Stay {
+    if decision == StartPlanningConfirmation::Stay {
         ctx.tool_registry
-            .plan_mode_state()
+            .planning_workflow_state()
             .set_phase(PlanLifecyclePhase::Off);
         return ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
             output: json!({
                 "status": "cancelled",
-                "action": "stay_in_current_mode",
-                "message": "User declined Plan Mode entry."
+                "action": "continue_without_planning_workflow",
+                "message": "User declined Planning workflow entry."
             }),
             stdout: None,
             modified_files: vec![],
@@ -414,7 +415,7 @@ async fn handle_enter_pending_confirmation(
 
     let tool_result = execute_tool_with_timeout_ref_prevalidated(
         ctx.tool_registry,
-        tools::ENTER_PLAN_MODE,
+        tools::START_PLANNING,
         &approved_args,
         ctrl_c_state,
         ctrl_c_notify,
@@ -428,17 +429,18 @@ async fn handle_enter_pending_confirmation(
     if let ToolExecutionStatus::Success { ref output, .. } = tool_result {
         let status = output.get("status").and_then(|s| s.as_str());
         if status == Some("success") {
-            transition_to_plan_mode(
+            transition_to_planning_workflow(
                 ctx.tool_registry,
                 ctx.session_stats,
+                ctx.plan_session,
                 ctx.handle,
-                PlanModeEntrySource::UserRequest,
+                PlanningEntrySource::UserRequest,
                 false,
                 false,
             )
             .await;
-            if let Err(err) = render_plan_mode_next_step_hint(ctx.renderer) {
-                tracing::warn!("failed to render plan mode next-step hint: {}", err);
+            if let Err(err) = render_planning_workflow_next_step_hint(ctx.renderer) {
+                tracing::warn!("failed to render planning workflow next-step hint: {}", err);
             }
         }
     }
@@ -446,9 +448,9 @@ async fn handle_enter_pending_confirmation(
     ToolPipelineOutcome::from_status(tool_result)
 }
 
-fn build_enter_plan_mode_lines(output: &Value) -> Vec<String> {
+fn build_start_planning_lines(output: &Value) -> Vec<String> {
     let mut lines =
-        vec!["The agent wants to switch into read-only planning before making edits.".to_string()];
+        vec!["The agent wants to enter the Planning workflow before making edits.".to_string()];
     if let Some(description) = output.get("description").and_then(Value::as_str)
         && !description.trim().is_empty()
     {
@@ -458,7 +460,7 @@ fn build_enter_plan_mode_lines(output: &Value) -> Vec<String> {
         lines.push(format!("Plan file: {plan_file}"));
     }
     lines.push(
-        "Plan Mode keeps mutating tools disabled until you explicitly approve execution."
+        "Planning workflow keeps mutating tools disabled until you explicitly approve execution."
             .to_string(),
     );
     lines
@@ -466,29 +468,29 @@ fn build_enter_plan_mode_lines(output: &Value) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{ExitPlanModeDisposition, exit_plan_mode_disposition};
+    use super::{FinishPlanningDisposition, finish_planning_disposition};
 
     #[test]
-    fn exit_plan_mode_requires_pending_confirmation_to_auto_accept() {
+    fn finish_planning_requires_pending_confirmation_to_auto_accept() {
         assert_eq!(
-            exit_plan_mode_disposition(Some("not_ready"), false, false),
-            ExitPlanModeDisposition::Passthrough
+            finish_planning_disposition(Some("not_ready"), false, false),
+            FinishPlanningDisposition::Passthrough
         );
         assert_eq!(
-            exit_plan_mode_disposition(Some("not_ready"), true, false),
-            ExitPlanModeDisposition::Passthrough
+            finish_planning_disposition(Some("not_ready"), true, false),
+            FinishPlanningDisposition::Passthrough
         );
         assert_eq!(
-            exit_plan_mode_disposition(Some("pending_confirmation"), true, false),
-            ExitPlanModeDisposition::AutoAccept
+            finish_planning_disposition(Some("pending_confirmation"), true, false),
+            FinishPlanningDisposition::AutoAccept
         );
     }
 
     #[test]
-    fn exit_plan_mode_keeps_review_overlay_when_confirmation_enabled() {
+    fn finish_planning_keeps_review_overlay_when_confirmation_enabled() {
         assert_eq!(
-            exit_plan_mode_disposition(Some("pending_confirmation"), true, true),
-            ExitPlanModeDisposition::ConfirmReview
+            finish_planning_disposition(Some("pending_confirmation"), true, true),
+            FinishPlanningDisposition::ConfirmReview
         );
     }
 }

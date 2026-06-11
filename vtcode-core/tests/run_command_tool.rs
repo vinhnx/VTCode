@@ -31,18 +31,15 @@ async fn run_command_uses_pty_backend() -> Result<()> {
         || response.get("mode").is_some();
     assert!(
         has_pty_indicators,
-        "Response should have PTY-related fields. Response: {:?}",
-        response
+        "Response should have PTY-related fields. Response: {response:?}"
     );
 
     let output = response["output"].as_str().unwrap_or_default();
     let stdout = response["stdout"].as_str().unwrap_or_default();
-    let combined_output = format!("{} {}", output, stdout);
+    let combined_output = format!("{output} {stdout}");
     assert!(
         combined_output.contains("sample.txt"),
-        "Output should contain sample.txt. output='{}', stdout='{}'",
-        output,
-        stdout
+        "Output should contain sample.txt. output='{output}', stdout='{stdout}'"
     );
 
     Ok(())
@@ -65,16 +62,14 @@ async fn run_command_accepts_indexed_arguments_zero_based() -> Result<()> {
         )
         .await?;
 
-    eprintln!("Response: {:?}", response);
+    eprintln!("Response: {response:?}");
     assert_eq!(response["success"], true);
     let output = response["output"].as_str().unwrap_or_default();
     let stdout = response["stdout"].as_str().unwrap_or_default();
-    let combined_output = format!("{} {}", output, stdout);
+    let combined_output = format!("{output} {stdout}");
     assert!(
         combined_output.contains("sample.txt"),
-        "Output should contain sample.txt. output='{}', stdout='{}'",
-        output,
-        stdout
+        "Output should contain sample.txt. output='{output}', stdout='{stdout}'"
     );
 
     Ok(())
@@ -100,12 +95,10 @@ async fn run_command_accepts_indexed_arguments_one_based() -> Result<()> {
     assert_eq!(response["success"], true);
     let output = response["output"].as_str().unwrap_or_default();
     let stdout = response["stdout"].as_str().unwrap_or_default();
-    let combined_output = format!("{} {}", output, stdout);
+    let combined_output = format!("{output} {stdout}");
     assert!(
         combined_output.contains("sample2.txt"),
-        "Output should contain sample2.txt. output='{}', stdout='{}'",
-        output,
-        stdout
+        "Output should contain sample2.txt. output='{output}', stdout='{stdout}'"
     );
 
     Ok(())

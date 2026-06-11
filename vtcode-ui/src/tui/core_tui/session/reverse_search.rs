@@ -126,53 +126,29 @@ pub fn handle_reverse_search_key(
             }
             false
         }
-        KeyCode::Char(ch) => {
-            if reverse_search_state.active {
-                reverse_search_state.add_char(ch, history);
-                true
-            } else {
-                false
-            }
+        KeyCode::Char(ch) if reverse_search_state.active => {
+            reverse_search_state.add_char(ch, history);
+            true
         }
-        KeyCode::Backspace => {
-            if reverse_search_state.active {
-                reverse_search_state.backspace(history);
-                true
-            } else {
-                false
-            }
+        KeyCode::Backspace if reverse_search_state.active => {
+            reverse_search_state.backspace(history);
+            true
         }
-        KeyCode::Enter => {
-            if reverse_search_state.active {
-                reverse_search_state.accept_search(input_manager);
-                true
-            } else {
-                false
-            }
+        KeyCode::Enter if reverse_search_state.active => {
+            reverse_search_state.accept_search(input_manager);
+            true
         }
-        KeyCode::Esc => {
-            if reverse_search_state.active {
-                reverse_search_state.cancel_search(input_manager);
-                true
-            } else {
-                false
-            }
+        KeyCode::Esc if reverse_search_state.active => {
+            reverse_search_state.cancel_search(input_manager);
+            true
         }
-        KeyCode::Up => {
-            if reverse_search_state.active {
-                reverse_search_state.cycle_backward();
-                true
-            } else {
-                false
-            }
+        KeyCode::Up if reverse_search_state.active => {
+            reverse_search_state.cycle_backward();
+            true
         }
-        KeyCode::Down => {
-            if reverse_search_state.active {
-                reverse_search_state.cycle_forward();
-                true
-            } else {
-                false
-            }
+        KeyCode::Down if reverse_search_state.active => {
+            reverse_search_state.cycle_forward();
+            true
         }
         _ => false,
     }

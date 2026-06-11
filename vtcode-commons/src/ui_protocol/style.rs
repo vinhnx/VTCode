@@ -4,8 +4,6 @@ use std::sync::Arc;
 
 use anstyle::{Color as AnsiColorEnum, Effects, Style as AnsiStyle};
 
-use crate::ui_protocol::types::EditingMode;
-
 /// Inline text styling with foreground/background color and text effects.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct InlineTextStyle {
@@ -173,7 +171,6 @@ pub struct InlineHeaderContext {
     pub pr_review: Option<InlineHeaderStatusBadge>,
     pub editor_context: Option<String>,
     pub git: String,
-    pub mode: String,
     pub reasoning: String,
     pub reasoning_stage: Option<String>,
     pub workspace_trust: String,
@@ -182,10 +179,6 @@ pub struct InlineHeaderContext {
     pub primary_agent: Option<String>,
     pub highlights: Vec<InlineHeaderHighlight>,
     pub subagent_badges: Vec<InlineHeaderBadge>,
-    /// Current editing mode for display in header.
-    pub editing_mode: EditingMode,
-    /// Current autonomous mode status.
-    pub autonomous_mode: bool,
 }
 
 impl Default for InlineHeaderContext {
@@ -202,7 +195,6 @@ impl Default for InlineHeaderContext {
             pr_review: None,
             editor_context: None,
             git: "git: unavailable".to_string(),
-            mode: "Inline session".to_string(),
             reasoning: "Reasoning effort: unavailable".to_string(),
             reasoning_stage: None,
             workspace_trust: "Trust: unavailable".to_string(),
@@ -211,8 +203,6 @@ impl Default for InlineHeaderContext {
             primary_agent: None,
             highlights: Vec::new(),
             subagent_badges: Vec::new(),
-            editing_mode: EditingMode::default(),
-            autonomous_mode: false,
         }
     }
 }

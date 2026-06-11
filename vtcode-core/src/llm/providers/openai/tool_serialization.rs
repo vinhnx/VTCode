@@ -103,10 +103,9 @@ fn should_strip_any_of_for_builtin_tool(tool_name: &str) -> bool {
             | tools::CRON_CREATE
             | tools::CRON_LIST
             | tools::CRON_DELETE
-            | tools::ENTER_PLAN_MODE
-            | tools::EXIT_PLAN_MODE
+            | tools::START_PLANNING
+            | tools::FINISH_PLANNING
             | tools::TASK_TRACKER
-            | tools::PLAN_TASK_TRACKER
             | tools::SPAWN_AGENT
             | tools::SPAWN_BACKGROUND_SUBPROCESS
             | tools::SEND_INPUT

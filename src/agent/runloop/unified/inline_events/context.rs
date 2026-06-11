@@ -73,7 +73,11 @@ impl<'a> InlineEventContext<'a> {
     ) -> Result<InlineLoopAction> {
         let action = match event {
             InlineEvent::Submit(text) => self.input_processor().submit(text),
-            InlineEvent::QueueSubmit(text) => self.input_processor().queue_submit(text, queue),
+            InlineEvent::QueueSubmit(text) => {
+                let primary_agent = self.modal.active_primary_agent_name();
+                self.input_processor()
+                    .queue_submit(text, queue, primary_agent)
+            }
             InlineEvent::ProcessLatestQueued => {
                 self.state.reset_interrupt_state();
                 queue.prefer_latest_next();
@@ -170,6 +174,10 @@ impl<'a> InlineEventContext<'a> {
                 self.state.reset_interrupt_state();
                 InlineLoopAction::CyclePrimaryAgent
             }
+            InlineEvent::CyclePrimaryAgentPrevious => {
+                self.state.reset_interrupt_state();
+                InlineLoopAction::CyclePrimaryAgentPrevious
+            }
             InlineEvent::SelectPrimaryAgent { name } => {
                 self.state.reset_interrupt_state();
                 InlineLoopAction::SelectPrimaryAgent { name }
@@ -197,10 +205,6 @@ impl<'a> InlineEventContext<'a> {
             | InlineEvent::FileSelected(_)
             | InlineEvent::HistoryPrevious
             | InlineEvent::HistoryNext => self.input_processor().passive(),
-            InlineEvent::ToggleMode => {
-                // Shift+Tab: Cycle editing modes via /mode command
-                self.input_processor().submit("/mode".to_string())
-            }
         };
 
         Ok(action)

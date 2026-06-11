@@ -1,9 +1,9 @@
-//! Plan-mode scoped task tracker persisted next to the active plan file.
+//! Planning workflow scoped task tracker persisted next to the active plan file.
 //!
-//! This tracker is intended for Plan Mode only and writes a sidecar markdown
+//! This tracker is intended for Planning workflow only and writes a sidecar markdown
 //! file next to the active plan file (`<plan>.tasks.md`).
 
-use super::plan_mode::{PlanModeState, sync_tracker_into_plan_file};
+use super::planning_workflow::{PlanningWorkflowState, sync_tracker_into_plan_file};
 use crate::config::constants::tools;
 use crate::tools::error_helpers::deserialize_tool_args;
 use crate::tools::handlers::task_tracking::{
@@ -43,7 +43,7 @@ struct PlanTaskDocument {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PlanTaskTrackerArgs {
+pub struct PlanningTaskTrackerArgs {
     /// Action to perform: create, update, list, add
     pub action: String,
 
@@ -559,12 +559,12 @@ fn build_flat_create_lines(items: &[TaskItemInput]) -> Result<Vec<FlatTaskLine>>
         .collect()
 }
 
-pub struct PlanTaskTrackerTool {
-    state: PlanModeState,
+pub struct PlanningTaskTrackerTool {
+    state: PlanningWorkflowState,
 }
 
-impl PlanTaskTrackerTool {
-    pub fn new(state: PlanModeState) -> Self {
+impl PlanningTaskTrackerTool {
+    pub fn new(state: PlanningWorkflowState) -> Self {
         Self { state }
     }
 
@@ -578,12 +578,12 @@ impl PlanTaskTrackerTool {
 
     async fn active_plan_file(&self) -> Result<PathBuf> {
         if !self.state.is_active() {
-            bail!("plan_task_tracker is only available in Plan Mode");
+            bail!("task_tracker planning storage is only available while planning");
         }
         self.state
             .get_plan_file()
             .await
-            .context("No active plan file. Call enter_plan_mode first.")
+            .context("No active plan file. Call start_planning first.")
     }
 
     async fn tracker_file(&self) -> Result<PathBuf> {
@@ -699,7 +699,7 @@ impl PlanTaskTrackerTool {
         ))
     }
 
-    async fn handle_create(&self, args: &PlanTaskTrackerArgs) -> Result<Value> {
+    async fn handle_create(&self, args: &PlanningTaskTrackerArgs) -> Result<Value> {
         let items = args.items.as_deref().unwrap_or(&[]);
         if items.is_empty() {
             bail!(
@@ -730,7 +730,7 @@ impl PlanTaskTrackerTool {
         .await
     }
 
-    async fn handle_update(&self, args: &PlanTaskTrackerArgs) -> Result<Value> {
+    async fn handle_update(&self, args: &PlanningTaskTrackerArgs) -> Result<Value> {
         let mut document = self
             .load_document()
             .await?
@@ -823,7 +823,7 @@ impl PlanTaskTrackerTool {
         }
     }
 
-    async fn handle_add(&self, args: &PlanTaskTrackerArgs) -> Result<Value> {
+    async fn handle_add(&self, args: &PlanningTaskTrackerArgs) -> Result<Value> {
         let mut document = self
             .load_document()
             .await?
@@ -871,9 +871,9 @@ impl PlanTaskTrackerTool {
 }
 
 #[async_trait]
-impl Tool for PlanTaskTrackerTool {
+impl Tool for PlanningTaskTrackerTool {
     async fn execute(&self, args: Value) -> Result<Value> {
-        let args: PlanTaskTrackerArgs = deserialize_tool_args(&args, "plan_task_tracker")?;
+        let args: PlanningTaskTrackerArgs = deserialize_tool_args(&args, "task_tracker")?;
 
         match args.action.as_str() {
             "create" => self.handle_create(&args).await,
@@ -888,11 +888,11 @@ impl Tool for PlanTaskTrackerTool {
     }
 
     fn name(&self) -> &str {
-        tools::PLAN_TASK_TRACKER
+        tools::TASK_TRACKER
     }
 
     fn description(&self) -> &str {
-        "Plan-mode compatibility alias for adaptive task tracking. Persists hierarchical plan progress under .vtcode/plans/<plan>.tasks.md and mirrors updates to .vtcode/tasks/current_task.md. Actions: create, update, list, add."
+        "Adaptive task tracking for planning. Persists hierarchical plan progress under .vtcode/plans/<plan>.tasks.md and mirrors updates to .vtcode/tasks/current_task.md. Actions: create, update, list, add."
     }
 
     fn parameter_schema(&self) -> Option<Value> {
@@ -1038,9 +1038,10 @@ mod tests {
     use super::*;
     use tempfile::TempDir;
 
-    async fn setup_plan_mode() -> (TempDir, PlanModeState, PlanTaskTrackerTool) {
+    async fn setup_planning_workflow() -> (TempDir, PlanningWorkflowState, PlanningTaskTrackerTool)
+    {
         let temp_dir = TempDir::new().expect("temp dir");
-        let state = PlanModeState::new(temp_dir.path().to_path_buf());
+        let state = PlanningWorkflowState::new(temp_dir.path().to_path_buf());
         let plans_dir = state.plans_dir();
         std::fs::create_dir_all(&plans_dir).expect("create plans dir");
         let plan_file = plans_dir.join("test-plan.md");
@@ -1048,13 +1049,13 @@ mod tests {
         state.set_plan_file(Some(plan_file)).await;
         state.enable();
 
-        let tool = PlanTaskTrackerTool::new(state.clone());
+        let tool = PlanningTaskTrackerTool::new(state.clone());
         (temp_dir, state, tool)
     }
 
     #[tokio::test]
     async fn create_and_list_tracker_with_hierarchy() {
-        let (_temp_dir, _state, tool) = setup_plan_mode().await;
+        let (_temp_dir, _state, tool) = setup_planning_workflow().await;
 
         let created = tool
             .execute(json!({
@@ -1084,7 +1085,7 @@ mod tests {
 
     #[tokio::test]
     async fn create_accepts_metadata_and_verify_string_forms() {
-        let (_temp_dir, _state, tool) = setup_plan_mode().await;
+        let (_temp_dir, _state, tool) = setup_planning_workflow().await;
 
         let created = tool
             .execute(json!({
@@ -1129,7 +1130,7 @@ mod tests {
 
     #[tokio::test]
     async fn add_and_update_nested_item() {
-        let (_temp_dir, _state, tool) = setup_plan_mode().await;
+        let (_temp_dir, _state, tool) = setup_planning_workflow().await;
 
         tool.execute(json!({
             "action": "create",
@@ -1161,7 +1162,7 @@ mod tests {
 
     #[tokio::test]
     async fn persistence_across_instances() {
-        let (_temp_dir, state, tool) = setup_plan_mode().await;
+        let (_temp_dir, state, tool) = setup_planning_workflow().await;
 
         tool.execute(json!({
             "action": "create",
@@ -1178,7 +1179,7 @@ mod tests {
         .await
         .expect("update tracker");
 
-        let tool2 = PlanTaskTrackerTool::new(state);
+        let tool2 = PlanningTaskTrackerTool::new(state);
         let listed = tool2
             .execute(json!({"action": "list"}))
             .await
@@ -1190,7 +1191,7 @@ mod tests {
 
     #[tokio::test]
     async fn update_supports_bulk_item_sync_and_global_mirror() {
-        let (temp_dir, _state, tool) = setup_plan_mode().await;
+        let (temp_dir, _state, tool) = setup_planning_workflow().await;
 
         tool.execute(json!({
             "action": "create",
@@ -1223,7 +1224,7 @@ mod tests {
 
     #[tokio::test]
     async fn update_accepts_flat_index_fallback() {
-        let (_temp_dir, _state, tool) = setup_plan_mode().await;
+        let (_temp_dir, _state, tool) = setup_planning_workflow().await;
 
         tool.execute(json!({
             "action": "create",
@@ -1246,16 +1247,19 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn rejects_when_plan_mode_is_inactive() {
+    async fn rejects_when_planning_workflow_is_inactive() {
         let temp_dir = TempDir::new().expect("temp dir");
-        let state = PlanModeState::new(temp_dir.path().to_path_buf());
-        let tool = PlanTaskTrackerTool::new(state);
+        let state = PlanningWorkflowState::new(temp_dir.path().to_path_buf());
+        let tool = PlanningTaskTrackerTool::new(state);
 
         let err = tool
             .execute(json!({"action": "list"}))
             .await
-            .expect_err("should fail outside plan mode");
+            .expect_err("should fail outside planning workflow");
 
-        assert!(err.to_string().contains("only available in Plan Mode"));
+        assert!(
+            err.to_string()
+                .contains("only available in Planning workflow")
+        );
     }
 }

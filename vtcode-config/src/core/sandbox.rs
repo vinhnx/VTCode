@@ -12,14 +12,15 @@ use serde::{Deserialize, Serialize};
 /// Sandbox configuration
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct SandboxConfig {
     /// Enable sandboxing for command execution
     #[serde(default = "default_false")]
     pub enabled: bool,
 
-    /// Default sandbox mode
+    /// Default sandbox policy
     #[serde(default)]
-    pub default_mode: SandboxMode,
+    pub default_policy: SandboxPolicy,
 
     /// Network egress configuration
     #[serde(default)]
@@ -46,7 +47,7 @@ impl Default for SandboxConfig {
     fn default() -> Self {
         Self {
             enabled: default_false(),
-            default_mode: SandboxMode::default(),
+            default_policy: SandboxPolicy::default(),
             network: NetworkConfig::default(),
             sensitive_paths: SensitivePathsConfig::default(),
             resource_limits: ResourceLimitsConfig::default(),
@@ -56,12 +57,12 @@ impl Default for SandboxConfig {
     }
 }
 
-/// Sandbox mode following the Codex model
+/// Sandbox policy following the Codex model
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
-pub enum SandboxMode {
-    /// Read-only access - safest mode
+pub enum SandboxPolicy {
+    /// Read-only access - safest policy
     #[default]
     ReadOnly,
     /// Write access within workspace only
@@ -356,7 +357,53 @@ mod tests {
     fn test_sandbox_config_default() {
         let config = SandboxConfig::default();
         assert!(!config.enabled);
-        assert_eq!(config.default_mode, SandboxMode::ReadOnly);
+        assert_eq!(config.default_policy, SandboxPolicy::ReadOnly);
+    }
+
+    #[test]
+    fn test_sandbox_config_parses_default_policy() {
+        let config: SandboxConfig = toml::from_str(
+            r#"
+enabled = true
+default_policy = "workspace_write"
+"#,
+        )
+        .expect("sandbox config with default_policy should parse");
+
+        assert!(config.enabled);
+        assert_eq!(config.default_policy, SandboxPolicy::WorkspaceWrite);
+    }
+
+    #[test]
+    fn test_sandbox_config_serializes_default_policy() {
+        let config = SandboxConfig {
+            default_policy: SandboxPolicy::DangerFullAccess,
+            ..SandboxConfig::default()
+        };
+
+        let toml = toml::to_string(&config).expect("sandbox config should serialize");
+
+        assert!(toml.contains("default_policy = \"danger_full_access\""));
+        let removed_field = format!("default_{}", "mode");
+        assert!(!toml.contains(&removed_field));
+    }
+
+    #[test]
+    fn test_sandbox_config_rejects_removed_default_field() {
+        let removed_field = format!("default_{}", "mode");
+        let input = format!(
+            r#"
+enabled = true
+{removed_field} = "workspace_write"
+"#,
+        );
+        let err = toml::from_str::<SandboxConfig>(&input)
+            .expect_err("sandbox config should reject removed default field");
+
+        assert!(
+            err.to_string()
+                .contains(&format!("unknown field `{removed_field}`"))
+        );
     }
 
     #[test]

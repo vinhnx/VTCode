@@ -31,7 +31,7 @@ impl AgentPalette {
     pub fn load_agents(&mut self, agents: Vec<AgentEntry>) {
         self.all_agents = agents;
         self.all_agents
-            .sort_by(|left, right| left.name.to_lowercase().cmp(&right.name.to_lowercase()));
+            .sort_by_key(|entry| entry.name.to_lowercase());
         self.apply_filter();
         self.navigator.select_first();
     }

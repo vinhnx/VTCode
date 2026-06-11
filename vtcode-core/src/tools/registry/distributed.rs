@@ -5,7 +5,7 @@
 //! collects all annotated functions into a contiguous slice at load time,
 //! eliminating the need for a central enumeration in `builtins.rs`.
 
-use crate::tools::handlers::PlanModeState;
+use crate::tools::handlers::PlanningWorkflowState;
 
 use super::registration::ToolRegistration;
 
@@ -13,9 +13,9 @@ use super::registration::ToolRegistration;
 ///
 /// Each tool module defines a function matching this signature and annotates it
 /// with `#[distributed_slice(BUILTIN_TOOLS)]`. The function receives an optional
-/// `PlanModeState` reference for tools that depend on plan mode runtime state;
+/// `PlanningWorkflowState` reference for tools that depend on planning workflow runtime state;
 /// tools that do not need it simply ignore the parameter.
-pub type BuiltinToolFactory = fn(Option<&PlanModeState>) -> ToolRegistration;
+pub type BuiltinToolFactory = fn(Option<&PlanningWorkflowState>) -> ToolRegistration;
 
 /// Distributed slice of builtin tool factory functions.
 ///

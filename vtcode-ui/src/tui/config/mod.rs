@@ -442,7 +442,7 @@ mod keyboard_protocol_tests {
     }
 
     #[test]
-    fn keyboard_protocol_default_mode_keeps_standard_flags() {
+    fn keyboard_protocol_defaults_keep_standard_flags() {
         let flags = keyboard_protocol_to_flags_for_terminal(
             &default_keyboard_protocol_config(),
             false,
@@ -457,7 +457,7 @@ mod keyboard_protocol_tests {
     }
 
     #[test]
-    fn keyboard_protocol_default_mode_enables_all_keys_for_ghostty_on_macos() {
+    fn keyboard_protocol_defaults_enable_all_keys_for_ghostty_on_macos() {
         let flags = keyboard_protocol_to_flags_for_terminal(
             &default_keyboard_protocol_config(),
             true,

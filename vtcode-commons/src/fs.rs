@@ -55,18 +55,18 @@ pub fn parse_json_with_context<T: for<'de> Deserialize<'de>>(
     content: &str,
     context: &str,
 ) -> Result<T> {
-    serde_json::from_str(content).with_context(|| format!("Failed to parse JSON from {}", context))
+    serde_json::from_str(content).with_context(|| format!("Failed to parse JSON from {context}"))
 }
 
 /// Serialize JSON with context
 pub fn serialize_json_with_context<T: Serialize>(data: &T, context: &str) -> Result<String> {
-    serde_json::to_string(data).with_context(|| format!("Failed to serialize JSON for {}", context))
+    serde_json::to_string(data).with_context(|| format!("Failed to serialize JSON for {context}"))
 }
 
 /// Serialize JSON pretty with context
 pub fn serialize_json_pretty_with_context<T: Serialize>(data: &T, context: &str) -> Result<String> {
     serde_json::to_string_pretty(data)
-        .with_context(|| format!("Failed to pretty-serialize JSON for {}", context))
+        .with_context(|| format!("Failed to pretty-serialize JSON for {context}"))
 }
 
 /// Parse JSON into a typed value, returning `None` on failure.

@@ -14,7 +14,7 @@ use crate::agent::runloop::unified::state::should_enforce_safe_mode_prompts;
 use crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator;
 use crate::agent::runloop::unified::tool_catalog::ToolCatalogState;
 use crate::agent::runloop::welcome::prepare_session_bootstrap;
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use hashbrown::HashMap;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -39,7 +39,10 @@ use vtcode_core::tools::handlers::{
 };
 use vtcode_core::tools::{ApprovalRecorder, ToolRegistry, ToolResultCache};
 use vtcode_core::utils::dot_config::load_workspace_trust_level;
-use vtcode_core::{apply_global_notification_config_from_vtcode, init_global_notification_manager};
+use vtcode_core::{
+    ActivePrimaryAgent, ActivePrimaryAgentState, apply_global_notification_config_from_vtcode,
+    build_primary_agent_runtime_config, init_global_notification_manager,
+};
 
 use crate::startup::take_search_tools_bundle_notice;
 use crate::updater::{Updater, append_notice_highlight};
@@ -101,6 +104,7 @@ pub(crate) async fn initialize_session(
     config: &CoreAgentConfig,
     vt_cfg: Option<&VTCodeConfig>,
     full_auto: bool,
+    primary_agent_explicitly_configured: bool,
     resume: Option<&ResumeSession>,
     parent_session_id: &str,
 ) -> Result<SessionState> {
@@ -118,7 +122,7 @@ pub(crate) async fn initialize_session(
     let tool_documentation_mode = vt_cfg
         .map(|cfg| cfg.agent.tool_documentation_mode)
         .unwrap_or_default();
-    let async_mcp_manager = create_async_mcp_manager(vt_cfg);
+    let async_mcp_manager = create_async_mcp_manager(vt_cfg, None);
     let mcp_error = determine_mcp_bootstrap_error(async_mcp_manager.as_ref()).await;
 
     let mut session_bootstrap = prepare_session_bootstrap(config, vt_cfg, mcp_error).await;
@@ -166,7 +170,7 @@ pub(crate) async fn initialize_session(
         if full_auto {
             let automation_cfg = cfg.automation.full_auto.clone();
             tool_registry
-                .enable_full_auto_mode(&automation_cfg.allowed_tools)
+                .enable_full_auto_permission(&automation_cfg.allowed_tools)
                 .await;
             full_auto_allowlist = Some(
                 tool_registry
@@ -183,12 +187,13 @@ pub(crate) async fn initialize_session(
             .await
             .context("Failed to determine workspace trust level for tool policy")?,
     };
-    let autonomous_mode = full_auto
-        || vt_cfg.is_some_and(|cfg| {
-            cfg.permissions.default_mode == vtcode_core::config::PermissionMode::Auto
-        });
-    apply_workspace_trust_prompt_policy(&mut tool_registry, autonomous_mode, workspace_trust_level)
-        .await;
+    let auto_permission_review_active = full_auto;
+    apply_workspace_trust_prompt_policy(
+        &mut tool_registry,
+        auto_permission_review_active,
+        workspace_trust_level,
+    )
+    .await;
 
     let subagent_controller = if resume.is_none_or(ResumeSession::is_root_thread)
         && let Some(cfg) = vt_cfg
@@ -301,9 +306,12 @@ pub(crate) async fn initialize_session(
     )
     .await;
     let active_primary_agent = if let Some(controller) = subagent_controller.as_ref() {
-        vtcode_core::primary_agent::ActivePrimaryAgentState::from_specs(
+        active_primary_agent_from_specs_for_mode(
             &controller.effective_specs().await,
-        )
+            vt_cfg,
+            full_auto,
+            primary_agent_explicitly_configured,
+        )?
     } else {
         let discovered = vtcode_config::discover_subagents(
             &vtcode_config::SubagentDiscoveryInput::new(config.workspace.clone()),
@@ -314,8 +322,18 @@ pub(crate) async fn initialize_session(
                 config.workspace.display()
             )
         })?;
-        vtcode_core::primary_agent::ActivePrimaryAgentState::from_discovery(&discovered)
+        active_primary_agent_from_specs_for_mode(
+            &discovered.effective,
+            vt_cfg,
+            full_auto,
+            primary_agent_explicitly_configured,
+        )?
     };
+    if let (Some(manager), Some(cfg)) = (async_mcp_manager.as_ref(), vt_cfg) {
+        manager
+            .reconfigure(primary_agent_mcp_config(cfg, active_primary_agent.active()))
+            .await?;
+    }
 
     let tool_result_cache = Arc::new(RwLock::new(ToolResultCache::new(128)));
     let tool_permission_cache = Arc::new(RwLock::new(ToolPermissionCache::new()));
@@ -404,6 +422,39 @@ pub(crate) async fn initialize_session(
     })
 }
 
+#[cfg(test)]
+fn active_primary_agent_from_specs(
+    specs: &[vtcode_config::SubagentSpec],
+    vt_cfg: Option<&VTCodeConfig>,
+) -> Result<ActivePrimaryAgentState> {
+    active_primary_agent_from_specs_for_mode(specs, vt_cfg, false, false)
+}
+
+pub(crate) fn active_primary_agent_from_specs_for_mode(
+    specs: &[vtcode_config::SubagentSpec],
+    vt_cfg: Option<&VTCodeConfig>,
+    full_auto: bool,
+    primary_agent_explicitly_configured: bool,
+) -> Result<ActivePrimaryAgentState> {
+    if full_auto && !primary_agent_explicitly_configured {
+        let mut active = ActivePrimaryAgentState::default();
+        if active.select_from_specs(specs, "auto").is_err() {
+            bail!(
+                "Full-auto needs the defaulted 'auto' primary agent, but no effective primary agent named 'auto' was discovered. Configure default_primary_agent explicitly or add an 'auto' primary agent."
+            );
+        }
+        return Ok(active);
+    }
+
+    let default_primary_agent = vt_cfg
+        .map(|cfg| cfg.default_primary_agent.as_str())
+        .unwrap_or(vtcode_config::constants::defaults::DEFAULT_PRIMARY_AGENT_NAME);
+    Ok(ActivePrimaryAgentState::from_specs_with_default(
+        specs,
+        default_primary_agent,
+    ))
+}
+
 fn load_startup_update_check() -> crate::updater::StartupUpdateCheck {
     let updater = match Updater::new(env!("CARGO_PKG_VERSION")) {
         Ok(updater) => updater,
@@ -422,25 +473,38 @@ fn load_startup_update_check() -> crate::updater::StartupUpdateCheck {
     }
 }
 
-fn create_async_mcp_manager(vt_cfg: Option<&VTCodeConfig>) -> Option<Arc<AsyncMcpManager>> {
+fn create_async_mcp_manager(
+    vt_cfg: Option<&VTCodeConfig>,
+    active_primary_agent: Option<&ActivePrimaryAgent>,
+) -> Option<Arc<AsyncMcpManager>> {
     let cfg = vt_cfg?;
     if !cfg.mcp.enabled {
         debug!("MCP is disabled in configuration");
         return None;
     }
+    let mcp_config = active_primary_agent
+        .map(|agent| primary_agent_mcp_config(cfg, agent))
+        .unwrap_or_else(|| cfg.mcp.clone());
 
     info!(
         "Setting up async MCP client with {} providers",
-        cfg.mcp.providers.len()
+        mcp_config.providers.len()
     );
     let approval_policy = approval_policy_from_human_in_the_loop(cfg.security.human_in_the_loop);
     let manager = AsyncMcpManager::new(
-        cfg.mcp.clone(),
+        mcp_config,
         cfg.security.hitl_notification_bell,
         approval_policy,
         Arc::new(|_event: mcp_events::McpEvent| {}),
     );
     Some(Arc::new(manager))
+}
+
+fn primary_agent_mcp_config(
+    cfg: &VTCodeConfig,
+    active_primary_agent: &ActivePrimaryAgent,
+) -> vtcode_core::config::mcp::McpClientConfig {
+    build_primary_agent_runtime_config(cfg, active_primary_agent).mcp
 }
 
 async fn determine_mcp_bootstrap_error(manager: Option<&Arc<AsyncMcpManager>>) -> Option<String> {
@@ -564,12 +628,190 @@ async fn maybe_attach_mcp_client(
 
 async fn apply_workspace_trust_prompt_policy(
     tool_registry: &mut ToolRegistry,
-    autonomous_mode: bool,
+    auto_permission_review_active: bool,
     workspace_trust_level: Option<WorkspaceTrustLevel>,
 ) {
-    let enforce_safe_mode_prompts =
-        should_enforce_safe_mode_prompts(false, autonomous_mode, workspace_trust_level);
+    let enforce_safe_mode_prompts = should_enforce_safe_mode_prompts(
+        false,
+        auto_permission_review_active,
+        workspace_trust_level,
+    );
     tool_registry
         .set_enforce_safe_mode_prompts(enforce_safe_mode_prompts)
         .await;
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+
+    use serde_json::json;
+    use vtcode_config::{
+        AgentMode, SubagentMcpServer, SubagentSource, SubagentSpec,
+        core::permissions::{AgentPermissionsConfig, PermissionDefault},
+    };
+
+    use super::*;
+
+    #[test]
+    fn async_mcp_manager_uses_primary_agent_merged_mcp_config() {
+        let mut cfg = VTCodeConfig::default();
+        cfg.mcp.enabled = true;
+        cfg.mcp.providers.push(
+            serde_json::from_value(json!({
+                "name": "global",
+                "command": "global-mcp",
+                "args": []
+            }))
+            .expect("global provider"),
+        );
+
+        let mut spec = test_primary_agent_spec("mcp-primary");
+        spec.mcp_servers = vec![SubagentMcpServer::Inline(BTreeMap::from([
+            (
+                "global".to_string(),
+                json!({
+                    "type": "stdio",
+                    "command": "duplicate-mcp"
+                }),
+            ),
+            (
+                "local".to_string(),
+                json!({
+                    "type": "stdio",
+                    "command": "local-mcp"
+                }),
+            ),
+        ]))];
+        let active = ActivePrimaryAgent::from_spec(&spec);
+
+        let manager =
+            create_async_mcp_manager(Some(&cfg), Some(&active)).expect("manager should exist");
+        let manager_config = manager.config();
+        let provider_names = manager_config
+            .providers
+            .iter()
+            .map(|provider| provider.name.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(provider_names, vec!["global", "local"]);
+    }
+
+    #[test]
+    fn startup_primary_agent_defaults_to_duck_without_config() {
+        let active = active_primary_agent_from_specs(&[test_primary_agent_spec("builder")], None)
+            .expect("default primary agent");
+
+        assert_eq!(active.active().identity.name, "duck");
+        assert_eq!(active.active().identity.source, SubagentSource::Builtin);
+    }
+
+    #[test]
+    fn startup_primary_agent_uses_default_primary_agent_config() {
+        let mut cfg = VTCodeConfig {
+            default_primary_agent: "builder".to_string(),
+            ..VTCodeConfig::default()
+        };
+        let active =
+            active_primary_agent_from_specs(&[test_primary_agent_spec("builder")], Some(&cfg))
+                .expect("configured primary agent");
+
+        assert_eq!(active.active().identity.name, "builder");
+
+        cfg.default_primary_agent = "missing".to_string();
+        let fallback =
+            active_primary_agent_from_specs(&[test_primary_agent_spec("builder")], Some(&cfg))
+                .expect("fallback primary agent");
+
+        assert_eq!(fallback.active().identity.name, "duck");
+        assert_eq!(fallback.active().identity.source, SubagentSource::Builtin);
+    }
+
+    #[test]
+    fn full_auto_with_defaulted_primary_agent_selects_effective_auto() {
+        let mut auto = test_primary_agent_spec("auto");
+        auto.prompt = "Custom auto instructions".to_string();
+
+        let active =
+            active_primary_agent_from_specs_for_mode(&[auto], None, true, false).expect("auto");
+
+        assert_eq!(active.active().identity.name, "auto");
+        assert_eq!(active.active().instructions, "Custom auto instructions");
+    }
+
+    #[test]
+    fn full_auto_honours_explicit_primary_agent_config() {
+        let cfg = VTCodeConfig {
+            default_primary_agent: "builder".to_string(),
+            ..VTCodeConfig::default()
+        };
+        let specs = [
+            test_primary_agent_spec("auto"),
+            test_primary_agent_spec("builder"),
+        ];
+
+        let active = active_primary_agent_from_specs_for_mode(&specs, Some(&cfg), true, true)
+            .expect("explicit builder");
+
+        assert_eq!(active.active().identity.name, "builder");
+    }
+
+    #[test]
+    fn full_auto_honours_explicit_duck_primary_agent_config() {
+        let cfg = VTCodeConfig {
+            default_primary_agent: "duck".to_string(),
+            ..VTCodeConfig::default()
+        };
+        let specs = [test_primary_agent_spec("auto")];
+
+        let active = active_primary_agent_from_specs_for_mode(&specs, Some(&cfg), true, true)
+            .expect("explicit duck");
+
+        assert_eq!(active.active().identity.name, "duck");
+        assert_eq!(active.active().identity.source, SubagentSource::Builtin);
+    }
+
+    #[test]
+    fn full_auto_missing_defaulted_auto_fails_fast() {
+        let err = active_primary_agent_from_specs_for_mode(
+            &[test_primary_agent_spec("builder")],
+            None,
+            true,
+            false,
+        )
+        .expect_err("missing auto should fail");
+
+        assert!(
+            err.to_string()
+                .contains("no effective primary agent named 'auto' was discovered")
+        );
+    }
+
+    fn test_primary_agent_spec(name: &str) -> SubagentSpec {
+        SubagentSpec {
+            name: name.to_string(),
+            description: format!("{name} description"),
+            prompt: format!("{name} instructions"),
+            tools: None,
+            disallowed_tools: Vec::new(),
+            model: None,
+            color: None,
+            reasoning_effort: None,
+            permissions: AgentPermissionsConfig::new(PermissionDefault::Deny),
+            skills: Vec::new(),
+            mcp_servers: Vec::new(),
+            hooks: None,
+            background: false,
+            mode: AgentMode::Primary,
+            max_turns: None,
+            nickname_candidates: Vec::new(),
+            initial_prompt: None,
+            memory: None,
+            isolation: None,
+            aliases: Vec::new(),
+            source: SubagentSource::ProjectVtcode,
+            file_path: None,
+            warnings: Vec::new(),
+        }
+    }
 }

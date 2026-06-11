@@ -134,10 +134,11 @@ fn impl_string_newtype(input: &DeriveInput) -> syn::Result<TokenStream> {
 }
 
 fn is_string_type(ty: &syn::Type) -> bool {
-    if let syn::Type::Path(type_path) = ty {
-        if type_path.qself.is_none() && type_path.path.segments.len() == 1 {
-            return type_path.path.segments[0].ident == "String";
-        }
+    if let syn::Type::Path(type_path) = ty
+        && type_path.qself.is_none()
+        && type_path.path.segments.len() == 1
+    {
+        return type_path.path.segments[0].ident == "String";
     }
     false
 }

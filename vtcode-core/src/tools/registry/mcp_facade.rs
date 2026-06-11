@@ -45,6 +45,20 @@ impl ToolRegistry {
             .store(false, std::sync::atomic::Ordering::Relaxed);
     }
 
+    /// Detach the current MCP client and clear MCP tool indexes.
+    pub async fn clear_mcp_client(&self) {
+        if let Ok(mut guard) = self.mcp_client.write() {
+            *guard = None;
+        }
+        self.mcp_tool_index.write().await.clear();
+        self.mcp_reverse_index.write().await.clear();
+        if let Ok(mut cache) = self.cached_available_tools.write() {
+            *cache = None;
+        }
+        self.initialized
+            .store(false, std::sync::atomic::Ordering::Relaxed);
+    }
+
     /// Get the MCP client if available.
     pub fn mcp_client(&self) -> Option<Arc<McpClient>> {
         self.mcp_client.read().ok().and_then(|g| g.clone())

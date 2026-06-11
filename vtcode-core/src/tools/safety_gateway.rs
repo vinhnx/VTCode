@@ -4,7 +4,7 @@
 //! - Rate limiting (from runloop's tool_call_safety)
 //! - Destructive tool detection
 //! - Command policy enforcement
-//! - Plan mode restrictions
+//! - Planning workflow restrictions
 //!
 //! This provides consistent safety decisions across all tool execution paths.
 
@@ -125,8 +125,8 @@ pub enum SafetyError {
     TurnLimitReached { max: usize },
     #[error("Session tool limit reached (max: {max})")]
     SessionLimitReached { max: usize },
-    #[error("Plan mode violation: {0}")]
-    PlanModeViolation(String),
+    #[error("Planning workflow violation: {0}")]
+    PlanningPolicyViolation(String),
     #[error("Command policy denied: {0}")]
     CommandPolicyDenied(String),
     #[error("Dotfile protection violation: {0}")]
@@ -155,8 +155,8 @@ pub struct SafetyGatewayConfig {
     pub rate_limit_per_second: usize,
     /// Rate limit: calls per minute (optional burst protection)
     pub rate_limit_per_minute: Option<usize>,
-    /// Whether plan mode is active (read-only)
-    pub plan_mode_active: bool,
+    /// Whether planning workflow is active (read-only)
+    pub planning_active: bool,
     /// Workspace trust level
     pub workspace_trust: WorkspaceTrust,
     /// Risk threshold for requiring approval
@@ -175,7 +175,7 @@ impl Default for SafetyGatewayConfig {
             max_per_session: 100,
             rate_limit_per_second,
             rate_limit_per_minute: tool_calls_per_minute_from_env(),
-            plan_mode_active: false,
+            planning_active: false,
             workspace_trust: WorkspaceTrust::Trusted,
             approval_risk_threshold: RiskLevel::Medium,
             enforce_rate_limits: true,
@@ -195,7 +195,7 @@ struct RateLimiterState {
 /// Unified Safety Gateway
 ///
 /// Consolidates rate limiting, destructive tool detection, command policy
-/// enforcement, plan mode restrictions, and dotfile protection into a single
+/// enforcement, planning workflow restrictions, and dotfile protection into a single
 /// safety decision point.
 pub struct SafetyGateway {
     /// Configuration
@@ -451,9 +451,9 @@ impl SafetyGateway {
         self
     }
 
-    /// Enable or disable plan mode
-    pub fn set_plan_mode(&self, active: bool) {
-        self.config.write().plan_mode_active = active;
+    /// Enable or disable planning workflow
+    pub fn set_planning_workflow(&self, active: bool) {
+        self.config.write().planning_active = active;
     }
 
     /// Set workspace trust level
@@ -669,15 +669,15 @@ impl SafetyGateway {
             return decision;
         }
 
-        if self.config.read().plan_mode_active && self.is_mutating_call(tool_name, args) {
+        if self.config.read().planning_active && self.is_mutating_call(tool_name, args) {
             let reason = format!(
-                "Tool '{}' is blocked in plan mode (read-only). Switch to edit mode to execute.",
+                "Tool '{}' is blocked in planning workflow (read-only). Finish planning to execute.",
                 tool_name
             );
             tracing::info!(
                 invocation_id = %inv_id,
                 tool = %tool_name,
-                "SafetyGateway: plan mode violation"
+                "SafetyGateway: planning workflow violation"
             );
             return SafetyDecision::Deny(reason);
         }
@@ -1031,7 +1031,7 @@ impl SafetyGateway {
             session_count: state.session_count,
             max_per_turn: config.max_per_turn,
             max_per_session: config.max_per_session,
-            plan_mode_active: config.plan_mode_active,
+            planning_active: config.planning_active,
             preapproved_count: preapproved.len(),
         }
     }
@@ -1050,7 +1050,7 @@ pub struct SafetyStats {
     pub session_count: usize,
     pub max_per_turn: usize,
     pub max_per_session: usize,
-    pub plan_mode_active: bool,
+    pub planning_active: bool,
     pub preapproved_count: usize,
 }
 
@@ -1092,9 +1092,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_plan_mode_blocks_mutating() {
+    async fn test_planning_workflow_blocks_mutating() {
         let gateway = SafetyGateway::new();
-        gateway.set_plan_mode(true);
+        gateway.set_planning_workflow(true);
         let ctx = make_ctx();
 
         let decision = gateway
@@ -1106,7 +1106,7 @@ mod tests {
             .await;
 
         assert!(decision.is_denied());
-        assert!(decision.reason().unwrap().contains("plan mode"));
+        assert!(decision.reason().unwrap().contains("planning workflow"));
     }
 
     #[tokio::test]

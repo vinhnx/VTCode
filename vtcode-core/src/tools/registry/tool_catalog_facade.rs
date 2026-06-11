@@ -14,7 +14,7 @@ use crate::prompts::sort_tool_definitions;
 #[derive(Debug, Clone)]
 struct FilteredCacheEntry {
     version: u64,
-    plan_mode: bool,
+    planning_active: bool,
     request_user_input_enabled: bool,
     snapshot: SessionToolCatalogSnapshot,
 }
@@ -123,7 +123,7 @@ impl SessionToolCatalogState {
     pub async fn filtered_snapshot_with_stats(
         &self,
         tools: &Arc<RwLock<Vec<ToolDefinition>>>,
-        plan_mode: bool,
+        planning_active: bool,
         request_user_input_enabled: bool,
     ) -> SessionToolCatalogSnapshot {
         let version = self.current_version();
@@ -134,7 +134,7 @@ impl SessionToolCatalogState {
                 .iter()
                 .find(|entry| {
                     entry.version == version
-                        && entry.plan_mode == plan_mode
+                        && entry.planning_active == planning_active
                         && entry.request_user_input_enabled == request_user_input_enabled
                 })
                 .cloned()
@@ -144,13 +144,13 @@ impl SessionToolCatalogState {
 
         let filtered = filter_tool_definitions_for_mode(
             self.sorted_snapshot(tools).await,
-            plan_mode,
+            planning_active,
             request_user_input_enabled,
         );
         let snapshot = SessionToolCatalogSnapshot::new(
             version,
             self.current_epoch(),
-            plan_mode,
+            planning_active,
             request_user_input_enabled,
             filtered,
             false,
@@ -160,7 +160,7 @@ impl SessionToolCatalogState {
         cache_guard.retain(|entry| entry.version == version);
         cache_guard.push(FilteredCacheEntry {
             version,
-            plan_mode,
+            planning_active,
             request_user_input_enabled,
             snapshot: snapshot.clone(),
         });
@@ -170,19 +170,19 @@ impl SessionToolCatalogState {
     pub fn snapshot_for_defs(
         &self,
         defs: Vec<ToolDefinition>,
-        plan_mode: bool,
+        planning_active: bool,
         request_user_input_enabled: bool,
     ) -> SessionToolCatalogSnapshot {
         let defs = sort_snapshot_definitions(defs);
         let filtered = filter_tool_definitions_for_mode(
             (!defs.is_empty()).then(|| Arc::new(defs)),
-            plan_mode,
+            planning_active,
             request_user_input_enabled,
         );
         SessionToolCatalogSnapshot::new(
             self.current_version(),
             self.current_epoch(),
-            plan_mode,
+            planning_active,
             request_user_input_enabled,
             filtered,
             false,

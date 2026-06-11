@@ -5,6 +5,7 @@ use tempfile::TempDir;
 use tokio;
 
 use crate::config::{HookCommandConfig, HookGroupConfig, HooksConfig, LifecycleHooksConfig};
+use crate::primary_agent::{ActivePrimaryAgent, build_primary_agent_hook_config};
 
 /// Create a temporary directory for testing with sample hooks
 fn create_test_workspace() -> TempDir {
@@ -951,6 +952,53 @@ async fn test_user_prompt_submit_json_block_requires_reason() {
             .text
             .contains("decision=block without a non-empty reason")
     }));
+}
+
+#[tokio::test]
+async fn primary_agent_hooks_dispatch_after_global_hooks() {
+    let temp_dir = create_test_workspace();
+    let workspace = temp_dir.path();
+
+    let mut global = HooksConfig::default();
+    global.lifecycle.user_prompt_submit = vec![HookGroupConfig {
+        matcher: None,
+        hooks: vec![HookCommandConfig {
+            kind: Default::default(),
+            command: "printf 'global\\n' >> hook-order.txt".into(),
+            timeout_seconds: None,
+        }],
+    }];
+
+    let mut primary = HooksConfig::default();
+    primary.lifecycle.user_prompt_submit = vec![HookGroupConfig {
+        matcher: None,
+        hooks: vec![HookCommandConfig {
+            kind: Default::default(),
+            command: "printf 'primary\\n' >> hook-order.txt".into(),
+            timeout_seconds: None,
+        }],
+    }];
+
+    let mut spec = vtcode_config::builtin_primary_build_agent();
+    spec.hooks = Some(primary);
+    let active = ActivePrimaryAgent::from_spec(&spec);
+    let config = build_primary_agent_hook_config(&global, &active);
+    let engine = LifecycleHookEngine::new(
+        workspace.to_path_buf(),
+        &config,
+        SessionStartTrigger::Startup,
+    )
+    .expect("Failed to create hook engine")
+    .expect("hook engine");
+
+    engine
+        .run_user_prompt_submit("turn-1", "Test prompt")
+        .await
+        .expect("Failed to run prompt hooks");
+
+    let order = std::fs::read_to_string(workspace.join("hook-order.txt"))
+        .expect("hook order should be recorded");
+    assert_eq!(order, "global\nprimary\n");
 }
 
 mod hook_tooling;

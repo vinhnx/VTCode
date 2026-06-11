@@ -18,13 +18,13 @@ impl ProjectOverview {
     pub fn short_for_display(&self) -> String {
         let mut out = String::new();
         if let Some(name) = &self.name {
-            let _ = write!(out, "Project: {}", name);
+            let _ = write!(out, "Project: {name}");
         }
         if let Some(ver) = &self.version {
             if !out.is_empty() {
                 out.push(' ');
             }
-            let _ = write!(out, "v{}", ver);
+            let _ = write!(out, "v{ver}");
         }
         if !out.is_empty() {
             out.push('\n');
@@ -40,13 +40,13 @@ impl ProjectOverview {
     pub fn as_prompt_block(&self) -> String {
         let mut s = String::new();
         if let Some(name) = &self.name {
-            let _ = writeln!(s, "- Name: {}", name);
+            let _ = writeln!(s, "- Name: {name}");
         }
         if let Some(ver) = &self.version {
-            let _ = writeln!(s, "- Version: {}", ver);
+            let _ = writeln!(s, "- Version: {ver}");
         }
         if let Some(desc) = &self.description {
-            let _ = writeln!(s, "- Description: {}", desc);
+            let _ = writeln!(s, "- Description: {desc}");
         }
         let _ = writeln!(s, "- Workspace Root: {}", self.root.display());
         if let Some(excerpt) = &self.readme_excerpt {

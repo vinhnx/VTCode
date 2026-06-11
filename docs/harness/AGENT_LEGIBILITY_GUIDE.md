@@ -41,7 +41,7 @@ Structured information survives "context loss" better. If an agent picks up a ta
 Design outputs for human oversight, not just approval. Users should be able to monitor the "pulse" of the agent and interrupt only if necessary.
 
 1. **Step-Level Visibility**: Update your plan or task tracker after every verification step, not just at the end of a phase.
-2. **Intervention Hooks**: When performing a dangerous or high-risk operation, briefly explain the safety guard you have in place (e.g., "Running in Plan Mode first to audit the diff").
+2. **Intervention Hooks**: When performing a dangerous or high-risk operation, briefly explain the safety guard you have in place (e.g., "Using the planning agent first to audit the diff").
 3. **Loop Transparency**: If you hit a repetition guard or tool stall, explain exactly what the root cause is before attempting a pivot.
 
 **Example (Monitoring Friendly)**:

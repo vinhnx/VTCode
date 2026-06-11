@@ -151,12 +151,6 @@ impl CodexAppServerClient {
         self.request_idempotent("mcpServerStatus/list", mcp_server_status_list_params())
     }
 
-    pub(crate) fn collaboration_mode_list(
-        &self,
-    ) -> impl Future<Output = Result<CodexCollaborationModeListResponse>> + '_ {
-        self.request_idempotent("collaborationMode/list", json!({}))
-    }
-
     pub(crate) fn thread_start(
         &self,
         params: CodexThreadRequest,
@@ -659,47 +653,46 @@ impl CodexThreadRequest {
 pub(crate) struct CodexTurnRequest {
     pub(crate) thread_id: String,
     pub(crate) input: String,
+    pub(crate) instructions: Option<String>,
     pub(crate) cwd: String,
     pub(crate) model: Option<String>,
     pub(crate) approval_policy: &'static str,
     pub(crate) sandbox_policy: Value,
     pub(crate) reasoning_effort: Option<String>,
-    pub(crate) collaboration_mode: Option<CodexCollaborationMode>,
 }
 
 impl CodexTurnRequest {
     fn as_json(&self) -> Value {
-        let mut payload = json!({
+        let mut request = json!({
             "approvalPolicy": self.approval_policy,
             "approvalsReviewer": "user",
             "cwd": self.cwd,
-            "effort": self
-                .collaboration_mode
-                .as_ref()
-                .map(|_| None::<String>)
-                .unwrap_or_else(|| self.reasoning_effort.clone()),
+            "effort": self.reasoning_effort.clone(),
             "input": [
                 {
                     "type": "text",
                     "text": self.input,
                 }
             ],
-            "model": self
-                .collaboration_mode
-                .as_ref()
-                .map(|_| None::<String>)
-                .unwrap_or_else(|| self.model.clone()),
+            "model": self.model.clone(),
             "personality": "pragmatic",
             "sandboxPolicy": self.sandbox_policy,
             "summary": "concise",
             "threadId": self.thread_id,
         });
-        if let Some(collaboration_mode) = self.collaboration_mode.clone()
-            && let Some(object) = payload.as_object_mut()
+        if let Some(instructions) = self
+            .instructions
+            .as_deref()
+            .map(str::trim)
+            .filter(|instructions| !instructions.is_empty())
+            && let Some(object) = request.as_object_mut()
         {
-            object.insert("collaborationMode".to_string(), json!(collaboration_mode));
+            object.insert(
+                "instructions".to_string(),
+                Value::String(instructions.to_string()),
+            );
         }
-        payload
+        request
     }
 }
 
@@ -841,37 +834,6 @@ pub(crate) enum CodexReviewTarget {
     Custom { instructions: String },
 }
 
-#[derive(Debug, Clone, Deserialize)]
-pub(crate) struct CodexCollaborationModeListResponse {
-    pub(crate) data: Vec<CodexCollaborationModeMask>,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
-pub(crate) struct CodexCollaborationModeMask {
-    pub(crate) name: String,
-    #[serde(default)]
-    pub(crate) mode: Option<String>,
-    #[serde(default)]
-    pub(crate) model: Option<String>,
-    #[serde(rename = "reasoning_effort", default)]
-    pub(crate) reasoning_effort: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
-pub(crate) struct CodexCollaborationMode {
-    pub(crate) mode: String,
-    pub(crate) settings: CodexCollaborationModeSettings,
-}
-
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
-pub(crate) struct CodexCollaborationModeSettings {
-    #[serde(rename = "developer_instructions")]
-    pub(crate) developer_instructions: Option<String>,
-    pub(crate) model: String,
-    #[serde(rename = "reasoning_effort", skip_serializing_if = "Option::is_none")]
-    pub(crate) reasoning_effort: Option<String>,
-}
-
 #[derive(Debug, Clone, Serialize)]
 pub(crate) struct CodexCommandExecRequest {
     pub(crate) command: Vec<String>,
@@ -921,11 +883,11 @@ pub(crate) struct ChatGptAuthTokens {
 #[cfg(test)]
 mod tests {
     use super::{
-        CodexCollaborationMode, CodexCollaborationModeSettings, CodexLoginAccountResponse,
-        CodexThreadRequest, CodexTurnRequest, RequestRetryPolicy, STDIO_LISTEN_TARGET,
-        codex_sidecar_requirement_note, ensure_codex_sidecar_command_available,
-        idempotent_retry_delay, is_codex_cli_unavailable, mcp_server_status_list_params,
-        overloaded_request_error, resolve_sidecar_command_path_with_path, validate_listen_target,
+        CodexLoginAccountResponse, CodexThreadRequest, CodexTurnRequest, RequestRetryPolicy,
+        STDIO_LISTEN_TARGET, codex_sidecar_requirement_note,
+        ensure_codex_sidecar_command_available, idempotent_retry_delay, is_codex_cli_unavailable,
+        mcp_server_status_list_params, overloaded_request_error,
+        resolve_sidecar_command_path_with_path, validate_listen_target,
     };
     use anyhow::anyhow;
     use serde_json::json;
@@ -1032,12 +994,12 @@ mod tests {
         let turn = CodexTurnRequest {
             thread_id: "thread-123".to_string(),
             input: "hello".to_string(),
+            instructions: None,
             cwd: "/tmp/demo".to_string(),
             model: Some("gpt-5".to_string()),
             approval_policy: "interactive",
             sandbox_policy: json!({"type": "workspaceWrite", "networkAccess": false}),
             reasoning_effort: Some("medium".to_string()),
-            collaboration_mode: None,
         };
 
         assert_eq!(
@@ -1045,36 +1007,25 @@ mod tests {
             json!("user")
         );
         assert_eq!(turn.as_json()["approvalsReviewer"], json!("user"));
-        assert!(turn.as_json().get("collaborationMode").is_none());
     }
 
     #[test]
-    fn turn_request_serializes_collaboration_mode_with_builtin_instructions() {
+    fn turn_request_includes_instructions_when_provided() {
         let turn = CodexTurnRequest {
             thread_id: "thread-123".to_string(),
-            input: "plan this change".to_string(),
+            input: "hello".to_string(),
+            instructions: Some("Use the active primary agent constraints.".to_string()),
             cwd: "/tmp/demo".to_string(),
             model: Some("gpt-5".to_string()),
-            approval_policy: "interactive",
-            sandbox_policy: json!({"type": "readOnly", "networkAccess": false}),
+            approval_policy: "never",
+            sandbox_policy: json!({"type": "workspaceWrite", "networkAccess": false}),
             reasoning_effort: Some("medium".to_string()),
-            collaboration_mode: Some(CodexCollaborationMode {
-                mode: "plan".to_string(),
-                settings: CodexCollaborationModeSettings {
-                    developer_instructions: None,
-                    model: "gpt-5".to_string(),
-                    reasoning_effort: Some("medium".to_string()),
-                },
-            }),
         };
 
-        assert_eq!(turn.as_json()["collaborationMode"]["mode"], json!("plan"));
         assert_eq!(
-            turn.as_json()["collaborationMode"]["settings"]["developer_instructions"],
-            serde_json::Value::Null
+            turn.as_json()["instructions"],
+            json!("Use the active primary agent constraints.")
         );
-        assert_eq!(turn.as_json()["model"], serde_json::Value::Null);
-        assert_eq!(turn.as_json()["effort"], serde_json::Value::Null);
     }
 
     #[test]
@@ -1106,7 +1057,6 @@ mod tests {
         .expect("schema fixture should parse");
 
         let properties = &schema["properties"];
-        assert!(properties.get("collaborationMode").is_some());
         assert!(properties.get("sandboxPolicy").is_some());
         assert!(properties.get("approvalPolicy").is_some());
     }

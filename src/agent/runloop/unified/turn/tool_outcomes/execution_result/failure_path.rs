@@ -4,7 +4,7 @@ use vtcode_core::tools::registry::ToolExecutionError;
 
 use crate::agent::runloop::unified::turn::context::TurnProcessingContext;
 
-use super::auto_mode_probe::push_tool_response_with_auto_mode_probe;
+use super::auto_permission_probe::push_tool_response_with_auto_permission_probe;
 
 pub(super) async fn notify_structured_failure(
     tool_name: &str,
@@ -120,7 +120,8 @@ async fn push_tool_error_response(
     };
     let serialized = error_content.to_string();
     if let Err(err) =
-        push_tool_response_with_auto_mode_probe(t_ctx, tool_call_id, tool_name, serialized).await
+        push_tool_response_with_auto_permission_probe(t_ctx, tool_call_id, tool_name, serialized)
+            .await
     {
         tracing::warn!(tool = %tool_name, error = %err, "failed to push probed tool error response");
     }

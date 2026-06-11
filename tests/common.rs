@@ -61,7 +61,7 @@ impl Drop for TestEnv {
 /// Create a temporary file with given content
 pub fn create_temp_file_with_content(content: &str) -> NamedTempFile {
     let mut file = NamedTempFile::new().expect("Failed to create temp file");
-    write!(file, "{}", content).expect("Failed to write to temp file");
+    write!(file, "{content}").expect("Failed to write to temp file");
     file
 }
 
@@ -275,8 +275,7 @@ pub fn assert_error_contains<T>(result: Result<T, Box<dyn std::error::Error>>, e
             let error_msg = e.to_string();
             if !error_msg.contains(expected_msg) {
                 panic!(
-                    "Expected error message '{}' not found in '{}'",
-                    expected_msg, error_msg
+                    "Expected error message '{expected_msg}' not found in '{error_msg}'"
                 );
             }
         }
@@ -287,6 +286,6 @@ pub fn assert_error_contains<T>(result: Result<T, Box<dyn std::error::Error>>, e
 pub fn assert_success<T>(result: Result<T, Box<dyn std::error::Error>>) -> T {
     match result {
         Ok(value) => value,
-        Err(e) => panic!("Expected success but got error: {}", e),
+        Err(e) => panic!("Expected success but got error: {e}"),
     }
 }

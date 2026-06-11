@@ -184,7 +184,7 @@ impl ToolPolicyManager {
 
             println!(
                 "  {} {}",
-                style(format!("{:15}", tool)).cyan(),
+                style(format!("{tool:15}")).cyan(),
                 status_styled
             );
         }

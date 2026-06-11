@@ -5,37 +5,9 @@ use crate::config::loader::VTCodeConfig;
 use crate::config::types::AgentConfig as CoreAgentConfig;
 use crate::core::agent::steering::SteeringMessage;
 
-/// High-level mode for an interactive agent session.
+/// Source that triggered planning workflow entry.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum SessionMode {
-    Ask,
-    Architect,
-    #[default]
-    Code,
-}
-
-impl SessionMode {
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Ask => "ask",
-            Self::Architect => "architect",
-            Self::Code => "code",
-        }
-    }
-
-    pub fn parse(value: &str) -> Option<Self> {
-        match value {
-            "ask" => Some(Self::Ask),
-            "architect" => Some(Self::Architect),
-            "code" => Some(Self::Code),
-            _ => None,
-        }
-    }
-}
-
-/// Source that triggered plan mode entry.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum PlanModeEntrySource {
+pub enum PlanningEntrySource {
     #[default]
     None,
     CliFlag,
@@ -43,7 +15,7 @@ pub enum PlanModeEntrySource {
     UserRequest,
 }
 
-impl PlanModeEntrySource {
+impl PlanningEntrySource {
     pub const fn should_auto_enter(self) -> bool {
         matches!(self, Self::CliFlag)
     }
@@ -60,7 +32,8 @@ pub struct SessionRuntimeParams<'a, Resume> {
     pub vt_config: Option<VTCodeConfig>,
     pub skip_confirmations: bool,
     pub full_auto: bool,
-    pub plan_mode_entry_source: PlanModeEntrySource,
+    pub primary_agent_explicitly_configured: bool,
+    pub planning_entry_source: PlanningEntrySource,
     pub resume: Option<Resume>,
     pub steering_receiver: &'a mut Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
 }
@@ -72,7 +45,8 @@ impl<'a, Resume> SessionRuntimeParams<'a, Resume> {
         vt_config: Option<VTCodeConfig>,
         skip_confirmations: bool,
         full_auto: bool,
-        plan_mode_entry_source: PlanModeEntrySource,
+        primary_agent_explicitly_configured: bool,
+        planning_entry_source: PlanningEntrySource,
         resume: Option<Resume>,
         steering_receiver: &'a mut Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
     ) -> Self {
@@ -81,7 +55,8 @@ impl<'a, Resume> SessionRuntimeParams<'a, Resume> {
             vt_config,
             skip_confirmations,
             full_auto,
-            plan_mode_entry_source,
+            primary_agent_explicitly_configured,
+            planning_entry_source,
             resume,
             steering_receiver,
         }
@@ -92,26 +67,4 @@ impl<'a, Resume> SessionRuntimeParams<'a, Resume> {
 #[async_trait]
 pub trait SessionRuntime<Resume>: Send + Sync {
     async fn run_session(&self, params: SessionRuntimeParams<'_, Resume>) -> Result<()>;
-}
-
-#[cfg(test)]
-mod tests {
-    use super::SessionMode;
-
-    #[test]
-    fn session_mode_round_trip() {
-        assert_eq!(
-            SessionMode::parse(SessionMode::Ask.as_str()),
-            Some(SessionMode::Ask)
-        );
-        assert_eq!(
-            SessionMode::parse(SessionMode::Architect.as_str()),
-            Some(SessionMode::Architect)
-        );
-        assert_eq!(
-            SessionMode::parse(SessionMode::Code.as_str()),
-            Some(SessionMode::Code)
-        );
-        assert_eq!(SessionMode::parse("unknown"), None);
-    }
 }

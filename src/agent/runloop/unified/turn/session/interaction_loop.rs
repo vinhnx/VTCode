@@ -20,7 +20,9 @@ use crate::updater::StartupUpdateNotice;
 use vtcode_core::hooks::{LifecycleHookEngine, SessionEndReason};
 
 use crate::agent::runloop::unified::async_mcp_manager::AsyncMcpManager;
+use crate::agent::runloop::unified::inline_events::QueuedInput;
 use crate::agent::runloop::unified::palettes::ActivePalette;
+use crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState;
 use crate::agent::runloop::unified::session_setup::IdeContextBridge;
 use crate::agent::runloop::unified::state::{CtrlCState, SessionStats};
 use crate::agent::runloop::unified::tool_catalog::ToolCatalogState;
@@ -56,10 +58,11 @@ pub(crate) struct InteractionLoopContext<'a> {
     pub context_manager: &'a mut crate::agent::runloop::unified::context_manager::ContextManager,
     pub active_primary_agent: &'a mut ActivePrimaryAgentState,
     pub session_stats: &'a mut SessionStats,
+    pub plan_session: &'a mut PlanningWorkflowSessionState,
     pub mcp_panel_state: &'a mut crate::agent::runloop::mcp_events::McpPanelState,
     pub linked_directories:
         &'a mut Vec<crate::agent::runloop::unified::workspace_links::LinkedDirectory>,
-    pub lifecycle_hooks: Option<&'a LifecycleHookEngine>,
+    pub lifecycle_hooks: &'a mut Option<LifecycleHookEngine>,
     pub full_auto: bool,
     pub skip_confirmations: bool,
     pub approval_recorder: &'a Arc<vtcode_core::tools::ApprovalRecorder>,
@@ -95,7 +98,7 @@ impl<'a> InteractionLoopContext<'a> {
     pub fn as_turn_processing_context<'b>(
         &'b mut self,
         harness_state: &'b mut crate::agent::runloop::unified::run_loop_context::HarnessTurnState,
-        auto_exit_plan_mode_attempted: &'b mut bool,
+        auto_finish_planning_attempted: &'b mut bool,
         input_status_state: &'b mut crate::agent::runloop::unified::status_line::InputStatusState,
         direct_skip_confirmations: bool,
     ) -> crate::agent::runloop::unified::turn::context::TurnProcessingContext<'b> {
@@ -131,14 +134,15 @@ impl<'a> InteractionLoopContext<'a> {
             active_thread_label: self.active_thread_label,
             ctrl_c_state: self.ctrl_c_state,
             ctrl_c_notify: self.ctrl_c_notify,
-            lifecycle_hooks: self.lifecycle_hooks,
+            lifecycle_hooks: self.lifecycle_hooks.as_ref(),
             default_placeholder: self.default_placeholder,
             last_forced_redraw: self.last_forced_redraw,
             input_status_state,
         };
         let state = crate::agent::runloop::unified::turn::context::TurnProcessingState {
             session_stats: self.session_stats,
-            auto_exit_plan_mode_attempted,
+            plan_session: self.plan_session,
+            auto_finish_planning_attempted,
             mcp_panel_state: self.mcp_panel_state,
             working_history: self.conversation_history,
             turn_metadata_cache: self.turn_metadata_cache,
@@ -163,7 +167,7 @@ impl<'a> InteractionLoopContext<'a> {
 pub(crate) struct InteractionState<'a> {
     pub input_status_state: &'a mut crate::agent::runloop::unified::status_line::InputStatusState,
     pub dismissed_memory_cleanup_fingerprint: &'a mut Option<(usize, usize)>,
-    pub queued_inputs: &'a mut VecDeque<String>,
+    pub queued_inputs: &'a mut VecDeque<QueuedInput>,
     pub prefer_latest_queued_input_once: &'a mut bool,
     pub model_picker_state: &'a mut Option<ModelPickerState>,
     pub palette_state: &'a mut Option<ActivePalette>,
@@ -190,7 +194,7 @@ pub(crate) enum InteractionOutcome {
     Resume {
         resume_session: Box<ResumeSession>,
     },
-    /// Plan approved by user (Claude Code style HITL) - transition from Plan to Edit mode
+    /// Plan approved by user (Claude Code style HITL) - continue with implementation
     PlanApproved {
         /// If true, auto-accept file edits without prompting
         auto_accept: bool,

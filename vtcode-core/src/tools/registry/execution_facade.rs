@@ -212,9 +212,9 @@ impl ToolRegistry {
                 error.retryable = false;
                 error.is_recoverable = false;
             }
-            Some(GatewaySafetyError::PlanModeViolation(_)) => {
+            Some(GatewaySafetyError::PlanningPolicyViolation(_)) => {
                 error.error_type = ToolErrorType::PolicyViolation;
-                error.category = ErrorCategory::PlanModeViolation;
+                error.category = ErrorCategory::PlanningPolicyViolation;
                 error.retryable = false;
                 error.is_recoverable = true;
             }
@@ -829,7 +829,7 @@ impl ToolRegistry {
             {
                 if let Err(err) =
                     execution_kernel::preflight_validate_resolved_call(self, &tool_name, args)
-                    && !agent_execution::is_plan_mode_denial(&err.to_string())
+                    && !agent_execution::is_planning_active_denial(&err.to_string())
                 {
                     debug_assert!(
                         false,
@@ -865,10 +865,10 @@ impl ToolRegistry {
             trace!(tool = %tool_name, "Validation classified tool as read-only");
         }
 
-        // Defense-in-depth: prevalidated fast path skips full preflight, but plan-mode
+        // Defense-in-depth: prevalidated fast path skips full preflight, but planning workflow
         // mutating-tool enforcement remains a hard safety invariant.
-        if self.is_plan_mode() && !self.is_plan_mode_allowed(&tool_name, args) {
-            let error_msg = agent_execution::plan_mode_denial_message(&display_name);
+        if self.is_planning_active() && !self.is_planning_active_allowed(&tool_name, args) {
+            let error_msg = agent_execution::planning_workflow_denial_message(&display_name);
             record_failure(
                 tool_name_owned.clone(),
                 false,
@@ -881,7 +881,7 @@ impl ToolRegistry {
                 None,
                 false,
             );
-            return Err(anyhow!(error_msg).context(agent_execution::PLAN_MODE_DENIED_CONTEXT));
+            return Err(anyhow!(error_msg).context(agent_execution::PLANNING_DENIED_CONTEXT));
         }
 
         let shared_circuit_breaker = self.shared_circuit_breaker();
@@ -1104,7 +1104,7 @@ impl ToolRegistry {
                 tool_name_owned.clone(),
                 ToolErrorType::PolicyViolation,
                 format!(
-                    "Tool '{}' is not permitted while full-auto mode is active",
+                    "Tool '{}' is not permitted while full-auto permission review is active",
                     display_name
                 ),
             );
@@ -1123,7 +1123,7 @@ impl ToolRegistry {
             );
 
             return Err(anyhow!(
-                "Tool '{}' is not permitted while full-auto mode is active",
+                "Tool '{}' is not permitted while full-auto permission review is active",
                 display_name
             )
             .context("tool denied by full-auto allowlist"));

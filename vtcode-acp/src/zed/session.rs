@@ -9,6 +9,7 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 use tracing::{error, info, warn};
+use vtcode_config::{SubagentDiscoveryInput, discover_subagents};
 use vtcode_core::config::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::prompts::system::generate_system_instruction_with_config;
@@ -18,6 +19,7 @@ use super::constants::{
     WORKSPACE_TRUST_ALREADY_SATISFIED_LOG, WORKSPACE_TRUST_DOWNGRADE_SKIPPED_LOG,
     WORKSPACE_TRUST_UPGRADE_LOG,
 };
+use super::helpers::PrimaryAgentCatalog;
 use super::types::NotificationEnvelope;
 
 pub async fn run_acp_agent(
@@ -64,6 +66,12 @@ pub async fn run_acp_agent(
     };
     let tools_config = vt_cfg.tools.clone();
     let commands_config = vt_cfg.commands.clone();
+    let discovered = discover_subagents(&SubagentDiscoveryInput::new(config.workspace.clone()))
+        .context("Failed to discover primary agents for ACP bridge")?;
+    let primary_agents = PrimaryAgentCatalog::from_specs_with_default(
+        &discovered.effective,
+        &vt_cfg.default_primary_agent,
+    );
 
     let local_set = tokio::task::LocalSet::new();
     let config_clone = config.clone();
@@ -83,6 +91,7 @@ pub async fn run_acp_agent(
                 system_prompt,
                 tx,
                 title_clone,
+                primary_agents,
             )
             .await;
             let (raw_conn, io_task) =

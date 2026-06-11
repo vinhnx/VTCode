@@ -99,7 +99,7 @@ includes:
 These VT Code settings line up with common agent-loop controls:
 
 - Tool allow and deny rules: `[permissions].allow`, `[permissions].deny`, tool policy config
-- Permission mode: workspace trust, human-in-the-loop settings, full-auto allowlists
+- Permission policy: workspace trust, human-in-the-loop settings, granular agent rules, and full automation allow-lists
 - Effort: provider/model reasoning settings
 - Tool discovery: MCP and tool catalog flows
 - Resume and fork continuity: session archives, thread bootstrap, and compaction envelopes

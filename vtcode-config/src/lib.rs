@@ -63,17 +63,17 @@ pub use api_keys::ApiKeySources;
 pub use context::{ContextFeaturesConfig, DynamicContextConfig, LedgerConfig};
 pub use core::{
     AgentCodexAppServerConfig, AgentConfig, AgentOnboardingConfig, AgentPromptSuggestionsConfig,
-    AuthConfig, AutoModeConfig, AutoModeEnvironmentConfig, AutomationConfig, BundledSkillsConfig,
-    CommandsConfig, CopilotAuthConfig, CustomProviderCommandAuthConfig, DockerSandboxConfig,
-    EditorToolConfig, ExternalSandboxConfig, ExternalSandboxType, FullAutoConfig, GatekeeperConfig,
-    MemoriesConfig, MicroVMSandboxConfig, ModelConfig, NetworkAllowlistEntryConfig, NetworkConfig,
-    OpenAIAuthConfig, OpenAIConfig, OpenAIHostedShellConfig, OpenAIHostedShellDomainSecret,
-    OpenAIHostedShellEnvironment, OpenAIHostedShellNetworkPolicy,
-    OpenAIHostedShellNetworkPolicyType, OpenAIHostedSkill, OpenAIManualCompactionConfig,
-    OpenAIPreferredMethod, OpenAIServiceTier, OpenResponsesConfig, OpenRouterAuthConfig,
-    PermissionMode, PluginRuntimeConfig, PluginTrustLevel, PromptCachingConfig,
+    AuthConfig, AutoPermissionConfig, AutoPermissionEnvironmentConfig, AutomationConfig,
+    BundledSkillsConfig, CommandsConfig, CopilotAuthConfig, CustomProviderCommandAuthConfig,
+    DockerSandboxConfig, EditorToolConfig, ExternalSandboxConfig, ExternalSandboxType,
+    FullAutoConfig, GatekeeperConfig, MemoriesConfig, MicroVMSandboxConfig, ModelConfig,
+    NetworkAllowlistEntryConfig, NetworkConfig, OpenAIAuthConfig, OpenAIConfig,
+    OpenAIHostedShellConfig, OpenAIHostedShellDomainSecret, OpenAIHostedShellEnvironment,
+    OpenAIHostedShellNetworkPolicy, OpenAIHostedShellNetworkPolicyType, OpenAIHostedSkill,
+    OpenAIManualCompactionConfig, OpenAIPreferredMethod, OpenAIServiceTier, OpenResponsesConfig,
+    OpenRouterAuthConfig, PluginRuntimeConfig, PluginTrustLevel, PromptCachingConfig,
     ProviderPromptCachingConfig, ResourceLimitsConfig, ResourceLimitsPreset, SandboxConfig,
-    SandboxMode, SeccompConfig, SeccompProfilePreset, SecurityConfig, SensitivePathsConfig,
+    SandboxPolicy, SeccompConfig, SeccompProfilePreset, SecurityConfig, SensitivePathsConfig,
     SkillsConfig, SkillsRenderMode, ToolPolicy, ToolsConfig, WebFetchConfig,
 };
 pub use debug::{DebugConfig, TraceLevel};
@@ -121,15 +121,15 @@ pub use status_line::{StatusLineConfig, StatusLineMode};
 pub use subagents::{
     AgentMode, DiscoveredSubagents, SubagentDiscoveryInput, SubagentMcpServer, SubagentMemoryScope,
     SubagentRuntimeLimits, SubagentSource, SubagentSpec, builtin_plan_agent,
-    builtin_primary_build_agent, builtin_primary_duck_agent, builtin_subagents, discover_subagents,
-    load_subagent_from_file,
+    builtin_primary_auto_agent, builtin_primary_build_agent, builtin_primary_duck_agent,
+    builtin_subagents, discover_subagents, load_subagent_from_file,
 };
 pub use telemetry::TelemetryConfig;
 pub use terminal_title::{DEFAULT_TERMINAL_TITLE_ITEMS, TerminalTitleConfig};
 pub use timeouts::{TimeoutsConfig, resolve_timeout};
 pub use types::{
-    EditingMode, ReasoningEffortLevel, SystemPromptMode, ToolDocumentationMode,
-    UiSurfacePreference, VerbosityLevel,
+    ReasoningEffortLevel, SystemPromptMode, ToolDocumentationMode, UiSurfacePreference,
+    VerbosityLevel,
 };
 pub use workspace_env::{read_workspace_env_value, write_workspace_env_value};
 

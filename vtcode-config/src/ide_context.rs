@@ -128,7 +128,7 @@ mod tests {
     };
 
     #[test]
-    fn default_config_allows_enabled_providers_in_auto_mode() {
+    fn default_config_allows_enabled_providers_in_auto_permission() {
         let config = IdeContextConfig::default();
         assert!(config.allows_provider_family(IdeContextProviderFamily::VscodeCompatible));
         assert!(config.allows_provider_family(IdeContextProviderFamily::Zed));

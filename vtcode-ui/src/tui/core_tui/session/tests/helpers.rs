@@ -583,7 +583,7 @@ pub fn show_plan_confirmation_overlay(session: &mut Session, plan: app_types::Pl
                 },
                 InlineListItem {
                     title: "Type feedback to revise the plan".to_string(),
-                    subtitle: Some("Return to plan mode and refine the plan.".to_string()),
+                    subtitle: Some("Return to planning workflow and refine the plan.".to_string()),
                     badge: None,
                     indent: 0,
                     selection: Some(InlineListSelection::PlanApprovalEditPlan),

@@ -91,23 +91,23 @@ pub(super) fn compact_tool_messages_for_retry(messages: &[uni::Message]) -> Vec<
 
 pub(crate) fn llm_attempt_timeout_secs(
     turn_timeout_secs: u64,
-    plan_mode: bool,
+    planning_active: bool,
     provider_name: &str,
 ) -> u64 {
     let baseline = (turn_timeout_secs / 5).clamp(30, 120);
-    if !plan_mode {
+    if !planning_active {
         return baseline;
     }
 
-    // Plan Mode requests usually include heavier context and can need
+    // Planning workflow requests usually include heavier context and can need
     // extra first-token latency budget before retries are useful.
-    let plan_mode_floor = if supports_streaming_timeout_fallback(provider_name) {
+    let planning_floor = if supports_streaming_timeout_fallback(provider_name) {
         90
     } else {
         60
     };
-    let plan_mode_budget = (turn_timeout_secs / 2).clamp(plan_mode_floor, 120);
-    baseline.max(plan_mode_budget)
+    let planning_budget = (turn_timeout_secs / 2).clamp(planning_floor, 120);
+    baseline.max(planning_budget)
 }
 
 pub(super) const DEFAULT_LLM_RETRY_ATTEMPTS: usize = 3;

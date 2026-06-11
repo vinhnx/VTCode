@@ -56,7 +56,8 @@ pub(crate) async fn dispatch_command(
                 startup.config.clone(),
                 skip_confirmations,
                 full_auto_requested,
-                startup.plan_mode_entry_source,
+                startup.primary_agent_explicitly_configured,
+                startup.planning_entry_source,
             )
             .await?;
         }
@@ -87,6 +88,7 @@ pub(crate) async fn dispatch_command(
                 events_path: events,
                 last_message_file,
                 command,
+                primary_agent_explicitly_configured: startup.primary_agent_explicitly_configured,
             };
             exec::handle_exec_command(core_cfg, cfg, options).await?;
         }
@@ -114,6 +116,7 @@ pub(crate) async fn dispatch_command(
                 events_path: review.events.clone(),
                 last_message_file: review.last_message_file.clone(),
                 spec,
+                primary_agent_explicitly_configured: startup.primary_agent_explicitly_configured,
             };
             review::handle_review_command(core_cfg, cfg, options).await?;
         }

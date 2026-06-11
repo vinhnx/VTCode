@@ -48,7 +48,7 @@ impl ToolRegistry {
             tools::UNIFIED_FILE | tools::APPLY_PATCH => &[tools::UNIFIED_SEARCH],
             // Task trackers require action-specific arguments; generic fallback names
             // create low-signal retries.
-            tools::TASK_TRACKER | tools::PLAN_TASK_TRACKER => &[],
+            tools::TASK_TRACKER => &[],
             // Unknown tools: prefer no fallback over noisy generic suggestions.
             _ => &[],
         };

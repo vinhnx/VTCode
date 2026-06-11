@@ -11,11 +11,9 @@ pub(crate) async fn discover_controller_subagents(
     workspace_root: &Path,
 ) -> Result<DiscoveredSubagents> {
     let plugin_agent_files = discover_plugin_agent_files(workspace_root).await?;
-    discover_subagents(&SubagentDiscoveryInput {
-        workspace_root: workspace_root.to_path_buf(),
-        cli_agents: None,
-        plugin_agent_files,
-    })
+    let mut input = SubagentDiscoveryInput::new(workspace_root.to_path_buf());
+    input.plugin_agent_files = plugin_agent_files;
+    discover_subagents(&input)
 }
 
 async fn discover_plugin_agent_files(workspace_root: &Path) -> Result<Vec<(String, PathBuf)>> {

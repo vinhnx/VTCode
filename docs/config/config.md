@@ -137,7 +137,7 @@ experimental_features = false
 
 - `command = "codex"` means the local `codex` CLI must be installed and available on `$PATH`.
 - If your Codex binary lives elsewhere, set `command` to that executable path instead.
-- `experimental_features = false` keeps collaboration-mode discovery and native `review/start` routing disabled unless you explicitly opt in.
+- `experimental_features = false` keeps experimental Codex app-server discovery and native `review/start` routing disabled unless you explicitly opt in.
 - If the sidecar command is missing, VT Code disables the Codex runtime path early and falls back to another authenticated provider when available.
 - In the interactive UI you can open this section directly with `/config codex` or `/config agent.codex_app_server`.
 
@@ -902,12 +902,13 @@ turn limits, and context reuse for long-running exec sessions.
 | `participants.enabled`                  | boolean                                           | Enable participant system (default: true).                                                                                                                                    |
 | `participants.default_participants`     | array                                             | Default participants to include.                                                                                                                                              |
 | `participants.timeout`                  | number                                            | Timeout for participant context (seconds).                                                                                                                                    |
-| `automation.full_auto.enabled`          | boolean                                           | Enable full automation mode.                                                                                                                                                  |
-| `automation.full_auto.allowed_tools`    | array                                             | Tools allowed in automation mode.                                                                                                                                             |
+| `automation.full_auto.enabled`          | boolean                                           | Enable full automation.                                                                                                                                                  |
+| `automation.full_auto.allowed_tools`    | array                                             | Tools allowed during full automation.                                                                                                                                             |
 | `automation.full_auto.max_turns`        | integer                                           | Upper bound for autonomous turns before exec pauses.                                                                                                                          |
 | `automation.scheduled_tasks.enabled`    | boolean                                           | Enable VT Code's internal scheduler for `/loop`, reminders, cron tools, and `vtcode schedule`. Can still be force-disabled with `VTCODE_DISABLE_CRON=1`.                      |
 | `agent.harness.continuation_policy`     | `off` \| `exec_only` \| `all`                     | Controls when the harness may auto-continue after a completion attempt. Default: `all` in interactive and exec sessions; use `exec_only` to keep interactive sessions manual. |
 | `agent.harness.event_log_path`          | string \| null                                    | Optional JSONL sink for harness events in interactive and exec flows.                                                                                                         |
+| `sandbox.default_policy`                | `read_only` \| `workspace_write` \| `danger_full_access` \| `external` | Default sandbox policy.                                                                                                                                                      |
 | `workspace.include_context`             | boolean                                           | Include workspace context.                                                                                                                                                    |
 | `workspace.max_context_size`            | number                                            | Max size of workspace context (bytes).                                                                                                                                        |
 | `execution.tool_timeout`                | number                                            | Timeout for tool executions (seconds).                                                                                                                                        |

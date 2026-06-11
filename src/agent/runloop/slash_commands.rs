@@ -18,8 +18,8 @@ pub(crate) use dispatch::{execute_command_skill_by_name, handle_slash_command};
 pub(crate) use models::{
     AgentDefinitionScope, AgentManagerAction, CompactConversationCommand, LocalServerAction,
     McpCommandAction, OAuthProviderAction, ScheduleCommandAction, SessionLogExportFormat,
-    SessionModeCommand, SessionPaletteMode, SlashCommandOutcome, StatuslineTargetMode,
-    SubprocessManagerAction, ThemePaletteMode,
+    SessionPaletteMode, SlashCommandOutcome, StatuslineTargetMode, SubprocessManagerAction,
+    ThemePaletteMode,
 };
 
 #[cfg(test)]

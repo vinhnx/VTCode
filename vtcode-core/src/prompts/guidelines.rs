@@ -14,7 +14,6 @@ const TOOL_LIST_FILES: &str = tools::LIST_FILES;
 const TOOL_APPLY_PATCH: &str = tools::APPLY_PATCH;
 const TOOL_REQUEST_USER_INPUT: &str = tools::REQUEST_USER_INPUT;
 const TOOL_TASK_TRACKER: &str = tools::TASK_TRACKER;
-const TOOL_PLAN_TASK_TRACKER: &str = tools::PLAN_TASK_TRACKER;
 
 /// Generate compact cross-tool guidance based on the tools available in the session.
 pub fn generate_tool_guidelines(
@@ -89,7 +88,8 @@ pub fn append_runtime_tool_prompt_sections(
     }
 
     let available_tools = snapshot_tool_names(tool_snapshot);
-    let guidelines = generate_runtime_tool_guidelines(&available_tools, tool_snapshot.plan_mode);
+    let guidelines =
+        generate_runtime_tool_guidelines(&available_tools, tool_snapshot.planning_active);
     if !guidelines.is_empty() {
         append_prompt_block(prompt, guidelines.trim_start_matches('\n'));
     }
@@ -134,8 +134,8 @@ fn find_prompt_section_bounds(prompt: &str, section_header: &str) -> Option<(usi
     )
 }
 
-fn generate_runtime_tool_guidelines(available_tools: &[String], plan_mode: bool) -> String {
-    if !plan_mode {
+fn generate_runtime_tool_guidelines(available_tools: &[String], planning_active: bool) -> String {
+    if !planning_active {
         return generate_tool_guidelines(available_tools, None);
     }
 
@@ -151,23 +151,23 @@ fn generate_runtime_tool_guidelines(available_tools: &[String], plan_mode: bool)
         .any(|tool| tool == TOOL_REQUEST_USER_INPUT);
     let has_task_tracker = available_tools
         .iter()
-        .any(|tool| matches!(tool.as_str(), TOOL_TASK_TRACKER | TOOL_PLAN_TASK_TRACKER));
+        .any(|tool| matches!(tool.as_str(), TOOL_TASK_TRACKER));
 
-    let mut lines = vec![
-        "- Mode: read-only. Stay within the plan-mode tool list and use only read-safe actions."
-            .to_string(),
-    ];
+    let mut lines =
+        vec!["- Planning workflow active: stay within the read-safe tool list.".to_string()];
     if let Some(browse_guidance) =
         browse_tool_guidance(has_search, has_file, has_list_files, has_read_file)
     {
         lines.push(browse_guidance);
     }
     if has_file {
-        lines.push("- In Plan Mode, use `unified_file` only for read-style access.".to_string());
+        lines.push(
+            "- In Planning workflow, use `unified_file` only for read-style access.".to_string(),
+        );
     }
     if has_exec {
         lines.push(
-            "- In Plan Mode, use `unified_exec` only for read-only verification, poll, or inspect actions."
+            "- In Planning workflow, use `unified_exec` only for read-only verification, poll, or inspect actions."
                 .to_string(),
         );
     }
@@ -240,13 +240,13 @@ fn capability_mode_line(
 ) -> Option<&'static str> {
     match capability_level {
         Some(CapabilityLevel::Basic) => Some(
-            "- Mode: limited. Ask the user to enable more capabilities if file work is required.",
+            "- Capabilities: limited. Ask the user to enable more capabilities if file work is required.",
         ),
         Some(CapabilityLevel::FileReading | CapabilityLevel::FileListing) => Some(
-            "- Mode: read-only. Analyze and search, but do not modify files or run shell commands.",
+            "- Capabilities: read-only. Analyze and search, but do not modify files or run shell commands.",
         ),
         _ if !has_exec && !has_file => Some(
-            "- Mode: read-only. Analyze and search, but do not modify files or run shell commands.",
+            "- Capabilities: read-only. Analyze and search, but do not modify files or run shell commands.",
         ),
         _ => None,
     }
@@ -280,10 +280,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_read_only_mode_detection() {
+    fn test_read_only_capability_detection() {
         let tools = vec!["unified_search".to_string()];
         let guidelines = generate_tool_guidelines(&tools, None);
-        assert!(guidelines.contains("Mode: read-only"));
+        assert!(guidelines.contains("Capabilities: read-only"));
         assert!(guidelines.contains("do not modify files"));
     }
 
@@ -331,7 +331,7 @@ mod tests {
     fn test_capability_basic_guidance() {
         let tools = vec![];
         let guidelines = generate_tool_guidelines(&tools, Some(CapabilityLevel::Basic));
-        assert!(guidelines.contains("Mode: limited"));
+        assert!(guidelines.contains("Capabilities: limited"));
         assert!(guidelines.contains("enable more capabilities"));
     }
 
@@ -339,7 +339,7 @@ mod tests {
     fn test_capability_file_reading_guidance() {
         let tools = vec!["unified_file".to_string()];
         let guidelines = generate_tool_guidelines(&tools, Some(CapabilityLevel::FileReading));
-        assert!(guidelines.contains("Mode: read-only"));
+        assert!(guidelines.contains("Capabilities: read-only"));
         assert!(guidelines.contains("do not modify"));
     }
 
@@ -352,19 +352,19 @@ mod tests {
         ];
         let guidelines = generate_tool_guidelines(&tools, Some(CapabilityLevel::Editing));
 
-        assert!(!guidelines.contains("Mode: limited"));
-        assert!(!guidelines.contains("Mode: read-only"));
+        assert!(!guidelines.contains("Capabilities: limited"));
+        assert!(!guidelines.contains("Capabilities: read-only"));
     }
 
     #[test]
-    fn test_empty_tools_shows_read_only_mode() {
+    fn test_empty_tools_shows_read_only_capabilities() {
         let tools = vec![];
         let guidelines = generate_tool_guidelines(&tools, None);
-        assert!(guidelines.contains("Mode: read-only"));
+        assert!(guidelines.contains("Capabilities: read-only"));
     }
 
     #[test]
-    fn test_plan_mode_guidance_keeps_verification_open() {
+    fn test_planning_workflow_guidance_keeps_verification_open() {
         let tools = vec![
             TOOL_UNIFIED_EXEC.to_string(),
             TOOL_TASK_TRACKER.to_string(),
@@ -439,7 +439,7 @@ mod tests {
     }
 
     #[test]
-    fn plan_mode_runtime_guidance_keeps_unified_file_read_only() {
+    fn planning_workflow_runtime_guidance_keeps_unified_file_read_only() {
         let tools = vec![
             TOOL_UNIFIED_FILE.to_string(),
             TOOL_UNIFIED_EXEC.to_string(),
@@ -447,7 +447,7 @@ mod tests {
         ];
         let guidelines = generate_runtime_tool_guidelines(&tools, true);
 
-        assert!(guidelines.contains("Mode: read-only"));
+        assert!(guidelines.contains("Planning workflow active"));
         assert!(guidelines.contains("`unified_file` only for read-style access"));
         assert!(guidelines.contains("`unified_exec` only for read-only verification"));
         assert!(!guidelines.contains("Read before edit"));

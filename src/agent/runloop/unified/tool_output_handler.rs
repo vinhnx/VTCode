@@ -154,7 +154,7 @@ fn has_renderable_stream_content(output: &serde_json::Value) -> bool {
 }
 
 fn is_task_tracker_tool(name: &str) -> bool {
-    matches!(name, tools::TASK_TRACKER | tools::PLAN_TASK_TRACKER)
+    matches!(name, tools::TASK_TRACKER)
 }
 
 fn task_tracker_item_preview(item: &serde_json::Value) -> Option<String> {
@@ -797,6 +797,8 @@ mod tests {
 
         let decision_ledger = Arc::new(RwLock::new(DecisionTracker::new()));
         let mut session_stats = SessionStats::default();
+        let mut plan_session =
+            crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState::default();
         let mut mcp_panel = McpPanelState::new(10, true);
         let approval_recorder = ApprovalRecorder::new(workspace.clone());
         let traj = TrajectoryLogger::new(&workspace);
@@ -813,6 +815,7 @@ mod tests {
             &permissions_state,
             &decision_ledger,
             &mut session_stats,
+            &mut plan_session,
             &mut mcp_panel,
             &approval_recorder,
             &mut session,
@@ -989,6 +992,8 @@ mod tests {
         let cache = Arc::new(RwLock::new(ToolResultCache::new(8)));
         let decision_ledger = Arc::new(RwLock::new(DecisionTracker::new()));
         let mut session_stats = SessionStats::default();
+        let mut plan_session =
+            crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState::default();
         let mut mcp_panel = McpPanelState::new(10, true);
         let approval_recorder = ApprovalRecorder::new(workspace.clone());
         let traj = TrajectoryLogger::new(&workspace);
@@ -1005,6 +1010,7 @@ mod tests {
             &permissions_state,
             &decision_ledger,
             &mut session_stats,
+            &mut plan_session,
             &mut mcp_panel,
             &approval_recorder,
             &mut session,

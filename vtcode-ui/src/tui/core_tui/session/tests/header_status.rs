@@ -215,7 +215,7 @@ fn set_primary_agent_command_updates_header_badge() {
 
     session.handle_command(InlineCommand::SetPrimaryAgent { name: None });
     let text = header_line_text(&mut session);
-    assert!(text.contains("Build"));
+    assert!(text.contains("Duck"));
     assert!(!text.contains("Reviewer"));
 }
 
@@ -404,9 +404,8 @@ fn header_shows_full_auto_trust_badge_for_full_auto_trust() {
 }
 
 #[test]
-fn header_shows_auto_badge() {
+fn header_omits_auto_permission_badge() {
     let mut session = fresh_session();
-    session.header_context.autonomous_mode = true;
     session.header_context.workspace_trust = format!("{}tools policy", ui::HEADER_TRUST_PREFIX);
     session.input_manager.set_content("test".to_string());
     session
@@ -414,8 +413,8 @@ fn header_shows_auto_badge() {
         .set_cursor(session.input_manager.content().len());
 
     let text = header_line_text(&mut session);
-    assert!(text.contains("Auto"));
     assert!(text.contains("Safe"));
+    assert!(!text.contains("Auto"));
 }
 
 #[test]
@@ -498,30 +497,6 @@ fn hidden_header_summary_combines_provider_model_and_styles_effort_label() {
     assert!(effort_label.style.add_modifier.contains(Modifier::DIM));
 }
 
-#[test]
-fn hidden_header_summary_live_reloads_mode_changes() {
-    let mut session = fresh_session();
-    session.appearance.hide_header = true;
-    session.apply_transcript_width(VIEW_WIDTH);
-
-    let initial = header_line_text(&mut session);
-    assert!(initial.contains("Edit"));
-
-    session.handle_command(InlineCommand::SetAutonomousMode(true));
-    let auto = header_line_text(&mut session);
-    assert!(auto.contains("Auto"));
-    assert!(!auto.contains("Edit"));
-
-    session.handle_command(InlineCommand::SetAutonomousMode(false));
-    session.handle_command(InlineCommand::SetEditingMode(
-        crate::tui::core_tui::EditingMode::Plan,
-    ));
-    let plan = header_line_text(&mut session);
-    assert!(plan.contains("Plan"));
-    assert!(!plan.contains("Auto"));
-}
-
-#[test]
 fn hidden_header_summary_live_reloads_model_changes() {
     let mut session = fresh_session();
     session.appearance.hide_header = true;
@@ -557,47 +532,31 @@ fn hidden_header_summary_renders_active_primary_agent() {
     let line = header_line_text(&mut session);
 
     assert!(line.contains("Duck"));
-    assert!(line.contains("Edit"));
+    assert!(!line.contains("Edit"));
+    assert!(!line.contains("Auto"));
+    assert!(!line.contains("Plan"));
 }
 
 #[test]
-fn header_context_updates_preserve_live_mode_state() {
+fn header_context_updates_preserve_active_primary_agent_without_mode_badges() {
     let mut session = fresh_session();
     session.appearance.hide_header = true;
     session.apply_transcript_width(VIEW_WIDTH);
+    session.header_context.primary_agent = Some("duck".to_string());
 
-    session.handle_command(InlineCommand::SetAutonomousMode(true));
     let mut replacement = session.header_context.clone();
     replacement.provider = format!("{}mimo", ui::HEADER_PROVIDER_PREFIX);
     replacement.model = format!("{}mimo-v2-flash", ui::HEADER_MODEL_PREFIX);
     replacement.reasoning = format!("{}low", ui::HEADER_REASONING_PREFIX);
-    replacement.editing_mode = crate::tui::core_tui::EditingMode::Edit;
-    replacement.autonomous_mode = false;
     session.handle_command(InlineCommand::SetHeaderContext {
         context: Box::new(replacement),
     });
 
-    let auto = header_line_text(&mut session);
-    assert!(auto.contains("Auto"));
-    assert!(!auto.contains("Edit ·"));
-
-    session.handle_command(InlineCommand::SetAutonomousMode(false));
-    session.handle_command(InlineCommand::SetEditingMode(
-        crate::tui::core_tui::EditingMode::Plan,
-    ));
-    let mut replacement = session.header_context.clone();
-    replacement.provider = format!("{}moonshot", ui::HEADER_PROVIDER_PREFIX);
-    replacement.model = format!("{}kimi-k2", ui::HEADER_MODEL_PREFIX);
-    replacement.reasoning = format!("{}high", ui::HEADER_REASONING_PREFIX);
-    replacement.editing_mode = crate::tui::core_tui::EditingMode::Edit;
-    replacement.autonomous_mode = false;
-    session.handle_command(InlineCommand::SetHeaderContext {
-        context: Box::new(replacement),
-    });
-
-    let plan = header_line_text(&mut session);
-    assert!(plan.contains("Plan"));
-    assert!(!plan.contains("Edit ·"));
+    let line = header_line_text(&mut session);
+    assert!(line.contains("Duck"));
+    assert!(!line.contains("Edit"));
+    assert!(!line.contains("Auto"));
+    assert!(!line.contains("Plan"));
 }
 
 #[test]
@@ -701,7 +660,6 @@ fn header_height_expands_when_wrapping_required() {
         ui::HEADER_MODEL_PREFIX
     );
     session.header_context.reasoning = format!("{}medium", ui::HEADER_REASONING_PREFIX);
-    session.header_context.mode = ui::HEADER_MODE_AUTO.to_string();
     session.header_context.workspace_trust = format!("{}full auto", ui::HEADER_TRUST_PREFIX);
     session.header_context.tools = format!(
         "{}allow 11 · prompt 7 · deny 0 · extras extras extras",

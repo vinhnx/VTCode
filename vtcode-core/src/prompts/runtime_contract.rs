@@ -1,15 +1,16 @@
 use std::fmt::Write as _;
 
 use super::system::{
-    PLAN_MODE_EXIT_INSTRUCTION_LINE, PLAN_MODE_INTERVIEW_POLICY_LINE, PLAN_MODE_NO_AUTO_EXIT_LINE,
-    PLAN_MODE_NO_REQUEST_USER_INPUT_POLICY_LINE, PLAN_MODE_PLAN_QUALITY_LINE,
-    PLAN_MODE_READ_ONLY_HEADER, PLAN_MODE_READ_ONLY_NOTICE_LINE, PLAN_MODE_TASK_TRACKER_LINE,
+    PLANNING_WORKFLOW_EXIT_INSTRUCTION_LINE, PLANNING_WORKFLOW_INTERVIEW_POLICY_LINE,
+    PLANNING_WORKFLOW_NO_AUTO_EXIT_LINE, PLANNING_WORKFLOW_NO_REQUEST_USER_INPUT_POLICY_LINE,
+    PLANNING_WORKFLOW_PLAN_QUALITY_LINE, PLANNING_WORKFLOW_READ_ONLY_HEADER,
+    PLANNING_WORKFLOW_READ_ONLY_NOTICE_LINE, PLANNING_WORKFLOW_TASK_TRACKER_LINE,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct RuntimePromptContract {
     pub full_auto: bool,
-    pub plan_mode: bool,
+    pub planning_active: bool,
     pub request_user_input_enabled: bool,
 }
 
@@ -18,14 +19,14 @@ pub fn append_runtime_mode_sections(prompt: &mut String, contract: RuntimePrompt
         append_full_auto_notice(prompt, contract);
     }
 
-    if contract.plan_mode {
-        append_plan_mode_notice(prompt, contract.request_user_input_enabled);
+    if contract.planning_active {
+        append_planning_workflow_notice(prompt, contract.request_user_input_enabled);
     }
 }
 
 fn append_full_auto_notice(prompt: &mut String, contract: RuntimePromptContract) {
-    let header = if contract.plan_mode {
-        "# FULL-AUTO (PLAN MODE): Work autonomously within Plan Mode constraints."
+    let header = if contract.planning_active {
+        "# FULL-AUTO (PLANNING WORKFLOW): Work autonomously within planning workflow constraints."
     } else {
         "# FULL-AUTO: Complete task autonomously until done or blocked."
     };
@@ -51,29 +52,29 @@ fn append_full_auto_notice(prompt: &mut String, contract: RuntimePromptContract)
     }
 }
 
-fn append_plan_mode_notice(prompt: &mut String, request_user_input_enabled: bool) {
-    if prompt.contains(PLAN_MODE_READ_ONLY_HEADER) {
+fn append_planning_workflow_notice(prompt: &mut String, request_user_input_enabled: bool) {
+    if prompt.contains(PLANNING_WORKFLOW_READ_ONLY_HEADER) {
         return;
     }
 
     prompt.push('\n');
-    prompt.push_str(PLAN_MODE_READ_ONLY_HEADER);
+    prompt.push_str(PLANNING_WORKFLOW_READ_ONLY_HEADER);
     prompt.push('\n');
-    prompt.push_str(PLAN_MODE_READ_ONLY_NOTICE_LINE);
+    prompt.push_str(PLANNING_WORKFLOW_READ_ONLY_NOTICE_LINE);
     prompt.push('\n');
-    prompt.push_str(PLAN_MODE_EXIT_INSTRUCTION_LINE);
+    prompt.push_str(PLANNING_WORKFLOW_EXIT_INSTRUCTION_LINE);
     prompt.push('\n');
-    prompt.push_str(PLAN_MODE_PLAN_QUALITY_LINE);
+    prompt.push_str(PLANNING_WORKFLOW_PLAN_QUALITY_LINE);
     prompt.push('\n');
     prompt.push_str(if request_user_input_enabled {
-        PLAN_MODE_INTERVIEW_POLICY_LINE
+        PLANNING_WORKFLOW_INTERVIEW_POLICY_LINE
     } else {
-        PLAN_MODE_NO_REQUEST_USER_INPUT_POLICY_LINE
+        PLANNING_WORKFLOW_NO_REQUEST_USER_INPUT_POLICY_LINE
     });
     prompt.push('\n');
-    prompt.push_str(PLAN_MODE_NO_AUTO_EXIT_LINE);
+    prompt.push_str(PLANNING_WORKFLOW_NO_AUTO_EXIT_LINE);
     prompt.push('\n');
-    prompt.push_str(PLAN_MODE_TASK_TRACKER_LINE);
+    prompt.push_str(PLANNING_WORKFLOW_TASK_TRACKER_LINE);
     prompt.push('\n');
 }
 
@@ -81,44 +82,44 @@ fn append_plan_mode_notice(prompt: &mut String, request_user_input_enabled: bool
 mod tests {
     use super::{RuntimePromptContract, append_runtime_mode_sections};
     use crate::prompts::system::{
-        PLAN_MODE_INTERVIEW_POLICY_LINE, PLAN_MODE_NO_REQUEST_USER_INPUT_POLICY_LINE,
-        PLAN_MODE_READ_ONLY_HEADER,
+        PLANNING_WORKFLOW_INTERVIEW_POLICY_LINE,
+        PLANNING_WORKFLOW_NO_REQUEST_USER_INPUT_POLICY_LINE, PLANNING_WORKFLOW_READ_ONLY_HEADER,
     };
 
     #[test]
-    fn plan_mode_uses_interview_policy_when_request_user_input_is_enabled() {
+    fn planning_workflow_uses_interview_policy_when_request_user_input_is_enabled() {
         let mut prompt = "Base prompt".to_string();
 
         append_runtime_mode_sections(
             &mut prompt,
             RuntimePromptContract {
-                plan_mode: true,
+                planning_active: true,
                 request_user_input_enabled: true,
                 ..RuntimePromptContract::default()
             },
         );
 
-        assert!(prompt.contains(PLAN_MODE_READ_ONLY_HEADER));
-        assert!(prompt.contains(PLAN_MODE_INTERVIEW_POLICY_LINE));
-        assert!(!prompt.contains(PLAN_MODE_NO_REQUEST_USER_INPUT_POLICY_LINE));
+        assert!(prompt.contains(PLANNING_WORKFLOW_READ_ONLY_HEADER));
+        assert!(prompt.contains(PLANNING_WORKFLOW_INTERVIEW_POLICY_LINE));
+        assert!(!prompt.contains(PLANNING_WORKFLOW_NO_REQUEST_USER_INPUT_POLICY_LINE));
     }
 
     #[test]
-    fn plan_mode_uses_noninteractive_policy_when_request_user_input_is_disabled() {
+    fn planning_workflow_uses_noninteractive_policy_when_request_user_input_is_disabled() {
         let mut prompt = "Base prompt".to_string();
 
         append_runtime_mode_sections(
             &mut prompt,
             RuntimePromptContract {
-                plan_mode: true,
+                planning_active: true,
                 request_user_input_enabled: false,
                 ..RuntimePromptContract::default()
             },
         );
 
-        assert!(prompt.contains(PLAN_MODE_READ_ONLY_HEADER));
-        assert!(prompt.contains(PLAN_MODE_NO_REQUEST_USER_INPUT_POLICY_LINE));
-        assert!(!prompt.contains(PLAN_MODE_INTERVIEW_POLICY_LINE));
+        assert!(prompt.contains(PLANNING_WORKFLOW_READ_ONLY_HEADER));
+        assert!(prompt.contains(PLANNING_WORKFLOW_NO_REQUEST_USER_INPUT_POLICY_LINE));
+        assert!(!prompt.contains(PLANNING_WORKFLOW_INTERVIEW_POLICY_LINE));
     }
 
     #[test]

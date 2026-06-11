@@ -11,13 +11,16 @@ use vtcode_core::config::EditorToolConfig;
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::core::threads::ArchivedSessionIntent;
+use vtcode_core::hooks::{LifecycleHookEngine, SessionStartTrigger};
 use vtcode_core::llm::provider as uni;
+use vtcode_core::notifications::set_global_notification_hook_engine;
 use vtcode_core::scheduler::{DurableTaskStore, SchedulerDaemon};
 use vtcode_core::tools::continuation::{PtyContinuationArgs, ReadChunkContinuationArgs};
 use vtcode_core::tools::terminal_app::{EditorLaunchConfig, TerminalAppLauncher};
 use vtcode_core::ui::theme;
 use vtcode_core::ui::{inline_theme_from_core_styles, to_tui_appearance};
 use vtcode_core::utils::ansi::MessageStyle;
+use vtcode_core::{build_primary_agent_hook_config, build_primary_agent_runtime_config};
 
 use crate::agent::runloop::prompt::refine_and_enrich_prompt;
 use crate::agent::runloop::unified::async_mcp_manager::{
@@ -28,7 +31,8 @@ use crate::agent::runloop::unified::interactive_features::{
     PromptSuggestionSource, generate_inline_prompt_suggestion,
 };
 use crate::agent::runloop::unified::session_setup::{
-    apply_ide_context_snapshot, ide_context_status_label_from_bridge,
+    active_deferred_tool_policy, apply_ide_context_snapshot, ide_context_status_label_from_bridge,
+    refresh_tool_snapshot,
 };
 use crate::agent::runloop::unified::status_line::InputStatusState;
 use crate::agent::runloop::unified::turn::session::slash_commands::run_with_event_loop_suspended;
@@ -729,12 +733,22 @@ pub(super) async fn resolve_inline_loop_action(
     let resolution = match inline_action {
         InlineLoopAction::Continue => InlineLoopActionResolution::ContinueLoop,
         InlineLoopAction::Submit(text) => InlineLoopActionResolution::Submit(text),
+        InlineLoopAction::SubmitQueued(queued) => {
+            if let Some(primary_agent) = queued.primary_agent {
+                handle_select_primary_agent(ctx, state, Some(primary_agent)).await?;
+            }
+            InlineLoopActionResolution::Submit(queued.text)
+        }
         InlineLoopAction::CyclePrimaryAgent => {
-            handle_cycle_primary_agent(ctx).await?;
+            handle_cycle_primary_agent(ctx, state).await?;
+            InlineLoopActionResolution::ContinueLoop
+        }
+        InlineLoopAction::CyclePrimaryAgentPrevious => {
+            handle_cycle_primary_agent_previous(ctx, state).await?;
             InlineLoopActionResolution::ContinueLoop
         }
         InlineLoopAction::SelectPrimaryAgent { name } => {
-            handle_select_primary_agent(ctx, name).await?;
+            handle_select_primary_agent(ctx, state, name).await?;
             InlineLoopActionResolution::ContinueLoop
         }
         InlineLoopAction::RequestInlinePromptSuggestion(draft) => {
@@ -758,15 +772,14 @@ pub(super) async fn resolve_inline_loop_action(
             } else {
                 "manual edit approvals"
             };
-            let message =
-                format!("Plan approved. Switching to Edit Mode and starting execution ({mode}).");
+            let message = format!("Plan approved. Starting execution ({mode}).");
             ctx.renderer.line(MessageStyle::Info, &message)?;
             InlineLoopActionResolution::Outcome(InteractionOutcome::PlanApproved { auto_accept })
         }
         InlineLoopAction::PlanEditRequested => {
             ctx.renderer.line(
                 MessageStyle::Info,
-                "Staying in Plan Mode. Continue refining the plan.",
+                "Continuing the planning workflow. Refine the plan before execution.",
             )?;
             InlineLoopActionResolution::ContinueLoop
         }
@@ -817,12 +830,32 @@ pub(super) async fn resolve_inline_loop_action(
     Ok(resolution)
 }
 
-async fn handle_cycle_primary_agent(ctx: &mut InteractionLoopContext<'_>) -> Result<()> {
+async fn handle_cycle_primary_agent(
+    ctx: &mut InteractionLoopContext<'_>,
+    state: &mut InteractionState<'_>,
+) -> Result<()> {
     let Some(specs) = load_primary_agent_specs_or_report(ctx).await? else {
         return Ok(());
     };
     match next_primary_agent_name(ctx.active_primary_agent.active(), &specs) {
-        Some(name) => handle_select_primary_agent(ctx, Some(name)).await,
+        Some(name) => handle_select_primary_agent(ctx, state, Some(name)).await,
+        None => {
+            ctx.renderer
+                .line(MessageStyle::Error, "No primary agents are available.")?;
+            Ok(())
+        }
+    }
+}
+
+async fn handle_cycle_primary_agent_previous(
+    ctx: &mut InteractionLoopContext<'_>,
+    state: &mut InteractionState<'_>,
+) -> Result<()> {
+    let Some(specs) = load_primary_agent_specs_or_report(ctx).await? else {
+        return Ok(());
+    };
+    match previous_primary_agent_name(ctx.active_primary_agent.active(), &specs) {
+        Some(name) => handle_select_primary_agent(ctx, state, Some(name)).await,
         None => {
             ctx.renderer
                 .line(MessageStyle::Error, "No primary agents are available.")?;
@@ -833,6 +866,7 @@ async fn handle_cycle_primary_agent(ctx: &mut InteractionLoopContext<'_>) -> Res
 
 async fn handle_select_primary_agent(
     ctx: &mut InteractionLoopContext<'_>,
+    state: &mut InteractionState<'_>,
     name: Option<String>,
 ) -> Result<()> {
     let Some(name) = name else {
@@ -844,6 +878,8 @@ async fn handle_select_primary_agent(
             .reset_to_default_from_specs(&specs)
             .display_name
             .clone();
+        sync_primary_agent_hook_runtime(ctx).await?;
+        sync_primary_agent_mcp_runtime(ctx, state).await?;
         set_primary_agent_display(ctx, display_name);
         return Ok(());
     };
@@ -854,6 +890,8 @@ async fn handle_select_primary_agent(
     match ctx.active_primary_agent.select_from_specs(&specs, &name) {
         Ok(active) => {
             let display_name = active.display_name.clone();
+            sync_primary_agent_hook_runtime(ctx).await?;
+            sync_primary_agent_mcp_runtime(ctx, state).await?;
             set_primary_agent_display(ctx, display_name);
         }
         Err(vtcode_core::primary_agent::PrimaryAgentResolutionError::UnknownAgent {
@@ -864,6 +902,74 @@ async fn handle_select_primary_agent(
                 &format!("Unknown primary agent '{requested}'."),
             )?;
         }
+    }
+
+    Ok(())
+}
+
+async fn sync_primary_agent_hook_runtime(ctx: &mut InteractionLoopContext<'_>) -> Result<()> {
+    let Some(cfg) = ctx.vt_cfg.as_ref() else {
+        *ctx.lifecycle_hooks = None;
+        set_global_notification_hook_engine(None);
+        return Ok(());
+    };
+
+    let transcript_path = match ctx.lifecycle_hooks.as_ref() {
+        Some(hooks) => hooks.transcript_path().await,
+        None => None,
+    };
+    let hooks_config =
+        build_primary_agent_hook_config(&cfg.hooks, ctx.active_primary_agent.active());
+    let next = LifecycleHookEngine::new_with_session(
+        ctx.config.workspace.clone(),
+        &hooks_config,
+        SessionStartTrigger::Startup,
+        ctx.thread_id,
+    )?;
+    if let (Some(hooks), Some(path)) = (next.as_ref(), transcript_path) {
+        hooks.update_transcript_path(Some(path)).await;
+    }
+
+    set_global_notification_hook_engine(next.clone());
+    *ctx.lifecycle_hooks = next;
+    Ok(())
+}
+
+async fn sync_primary_agent_mcp_runtime(
+    ctx: &mut InteractionLoopContext<'_>,
+    state: &mut InteractionState<'_>,
+) -> Result<()> {
+    let (Some(manager), Some(cfg)) = (ctx.async_mcp_manager.as_ref(), ctx.vt_cfg.as_ref()) else {
+        return Ok(());
+    };
+    if !cfg.mcp.enabled {
+        return Ok(());
+    }
+
+    let merged_mcp = build_primary_agent_runtime_config(cfg, ctx.active_primary_agent.active()).mcp;
+    let restarted_mcp_runtime = manager.reconfigure_active_runtime(merged_mcp).await?;
+    ctx.tool_registry.clear_mcp_client().await;
+    *state.mcp_catalog_initialized = false;
+    *state.pending_mcp_refresh = true;
+
+    let tool_documentation_mode = cfg.agent.tool_documentation_mode;
+    let deferred_tool_policy =
+        active_deferred_tool_policy(ctx.config, ctx.vt_cfg.as_ref(), &**ctx.provider_client);
+    refresh_tool_snapshot(
+        ctx.tool_registry,
+        ctx.tools,
+        ctx.tool_catalog,
+        ctx.config,
+        ctx.vt_cfg.as_ref(),
+        tool_documentation_mode,
+        &deferred_tool_policy,
+    )
+    .await;
+    ctx.tool_catalog
+        .mark_pending_refresh("primary_agent_mcp_reconfigure");
+
+    if restarted_mcp_runtime {
+        tracing::debug!("Restarted active MCP runtime after primary agent switch");
     }
 
     Ok(())
@@ -924,15 +1030,7 @@ fn next_primary_agent_name(
     active: &vtcode_core::primary_agent::ActivePrimaryAgent,
     specs: &[vtcode_config::SubagentSpec],
 ) -> Option<String> {
-    let mut names = specs
-        .iter()
-        .filter(|spec| spec.is_primary())
-        .map(|spec| spec.name.trim())
-        .filter(|name| !name.is_empty())
-        .map(str::to_string)
-        .collect::<Vec<_>>();
-    names.sort_by_key(|name| name.to_ascii_lowercase());
-    names.dedup_by(|left, right| left.eq_ignore_ascii_case(right));
+    let names = primary_agent_names(specs);
 
     if names.is_empty() {
         return None;
@@ -946,6 +1044,37 @@ fn next_primary_agent_name(
     )
 }
 
+fn previous_primary_agent_name(
+    active: &vtcode_core::primary_agent::ActivePrimaryAgent,
+    specs: &[vtcode_config::SubagentSpec],
+) -> Option<String> {
+    let names = primary_agent_names(specs);
+
+    if names.is_empty() {
+        return None;
+    }
+
+    Some(
+        match names.iter().position(|name| name == &active.identity.name) {
+            Some(0) | None => names[names.len() - 1].clone(),
+            Some(index) => names[index - 1].clone(),
+        },
+    )
+}
+
+fn primary_agent_names(specs: &[vtcode_config::SubagentSpec]) -> Vec<String> {
+    let mut names = specs
+        .iter()
+        .filter(|spec| spec.is_primary())
+        .map(|spec| spec.name.trim())
+        .filter(|name| !name.is_empty())
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    names.sort_by_key(|name| name.to_ascii_lowercase());
+    names.dedup_by(|left, right| left.eq_ignore_ascii_case(right));
+    names
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -957,6 +1086,7 @@ mod tests {
     use std::sync::Arc;
     use tempfile::TempDir;
     use tokio::sync::RwLock;
+    use vtcode_config::core::permissions::{AgentPermissionsConfig, PermissionDefault};
     use vtcode_config::{SubagentSource, SubagentSpec};
 
     #[test]
@@ -1019,7 +1149,7 @@ mod tests {
             model: None,
             color: None,
             reasoning_effort: None,
-            permission_mode: None,
+            permissions: AgentPermissionsConfig::new(PermissionDefault::Ask),
             skills: Vec::new(),
             mcp_servers: Vec::new(),
             hooks: None,

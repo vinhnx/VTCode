@@ -36,9 +36,9 @@ pub use api::{
 pub use api_keys::ApiKeySources;
 pub use context::{ContextFeaturesConfig, LedgerConfig};
 pub use core::{
-    AgentConfig, AgentOnboardingConfig, AgentPromptSuggestionsConfig, AutoModeConfig,
-    AutoModeEnvironmentConfig, AutomationConfig, CommandsConfig, EditorToolConfig, FullAutoConfig,
-    GatekeeperConfig, ModelConfig, OpenAIPromptCacheKeyMode, PermissionMode, PermissionsConfig,
+    AgentConfig, AgentOnboardingConfig, AgentPromptSuggestionsConfig, AutoPermissionConfig,
+    AutoPermissionEnvironmentConfig, AutomationConfig, CommandsConfig, EditorToolConfig,
+    FullAutoConfig, GatekeeperConfig, ModelConfig, OpenAIPromptCacheKeyMode, PermissionsConfig,
     PersistentMemoryConfig, PromptCachingConfig, ProviderPromptCachingConfig, ScheduledTasksConfig,
     SecurityConfig, ToolPolicy, ToolsConfig, build_openai_prompt_cache_key,
     tool_call_delay_for_rate, tool_loop_limit_reached,
@@ -189,7 +189,7 @@ mod keyboard_protocol_tests {
     }
 
     #[test]
-    fn test_keyboard_protocol_default_mode() {
+    fn test_keyboard_protocol_defaults() {
         let flags = keyboard_protocol_to_flags_for_terminal(
             &default_keyboard_protocol_config(),
             false,
@@ -204,7 +204,7 @@ mod keyboard_protocol_tests {
     }
 
     #[test]
-    fn test_keyboard_protocol_default_mode_enables_all_keys_for_ghostty_on_macos() {
+    fn test_keyboard_protocol_defaults_enable_all_keys_for_ghostty_on_macos() {
         let flags = keyboard_protocol_to_flags_for_terminal(
             &default_keyboard_protocol_config(),
             true,

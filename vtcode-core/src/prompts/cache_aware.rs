@@ -7,9 +7,8 @@ const PRIORITY_TOOLS: &[&str] = &[
     tools::UNIFIED_FILE,
     tools::UNIFIED_EXEC,
     tools::REQUEST_USER_INPUT,
-    tools::PLAN_TASK_TRACKER,
     tools::TASK_TRACKER,
-    tools::EXIT_PLAN_MODE,
+    tools::FINISH_PLANNING,
 ];
 
 /// Sort tool definitions with priority grouping to improve LLM attention.

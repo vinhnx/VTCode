@@ -110,34 +110,6 @@ pub enum ReasoningDisplayMode {
     Hidden,
 }
 
-/// Editing mode for the agent session.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum EditingMode {
-    /// Full tool access -- can edit files and run commands.
-    #[default]
-    Edit,
-    /// Read-only mode -- produces implementation plans without executing.
-    Plan,
-}
-
-impl EditingMode {
-    /// Cycle to the next mode: Edit -> Plan -> Edit.
-    pub fn next(self) -> Self {
-        match self {
-            Self::Edit => Self::Plan,
-            Self::Plan => Self::Edit,
-        }
-    }
-
-    /// Get display name for the mode.
-    pub fn display_name(&self) -> &'static str {
-        match self {
-            Self::Edit => "Edit",
-            Self::Plan => "Plan",
-        }
-    }
-}
-
 /// Wizard modal behavior variant.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WizardModalMode {

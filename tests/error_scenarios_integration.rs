@@ -41,8 +41,7 @@ mod error_scenarios {
             // Some categories collapse (e.g. RateLimit → NetworkError → Network).
             assert!(
                 !back.user_label().is_empty(),
-                "Round-trip for {:?} produced empty label",
-                cat
+                "Round-trip for {cat:?} produced empty label"
             );
         }
     }
@@ -64,8 +63,7 @@ mod error_scenarios {
             let back: ErrorCategory = ErrorCategory::from(kind);
             assert!(
                 !back.user_label().is_empty(),
-                "Round-trip for {:?} via UnifiedErrorKind produced empty label",
-                cat
+                "Round-trip for {cat:?} via UnifiedErrorKind produced empty label"
             );
         }
     }
@@ -100,8 +98,7 @@ mod error_scenarios {
             let actual = vtcode_commons::classify_error_message(msg);
             assert_eq!(
                 actual, expected,
-                "classify_error_message({:?}) = {:?}, expected {:?}",
-                msg, actual, expected
+                "classify_error_message({msg:?}) = {actual:?}, expected {expected:?}"
             );
         }
     }
@@ -127,16 +124,14 @@ mod error_scenarios {
                 } => {
                     assert!(
                         (1..=10).contains(&max_attempts),
-                        "{:?} has unreasonable max_attempts={}",
-                        cat,
-                        max_attempts
+                        "{cat:?} has unreasonable max_attempts={max_attempts}"
                     );
                     // Verify backoff strategy is set
                     match backoff {
                         BackoffStrategy::Exponential { .. } | BackoffStrategy::Fixed { .. } => {}
                     }
                 }
-                other => panic!("{:?} should be retryable, got {:?}", cat, other),
+                other => panic!("{cat:?} should be retryable, got {other:?}"),
             }
         }
     }
@@ -148,11 +143,11 @@ mod error_scenarios {
             ErrorCategory::InvalidParameters,
             ErrorCategory::ToolNotFound,
             ErrorCategory::PolicyViolation,
-            ErrorCategory::PlanModeViolation,
+            ErrorCategory::PlanningPolicyViolation,
         ];
 
         for cat in &non_retryable {
-            assert!(!cat.is_retryable(), "{:?} should be non-retryable", cat);
+            assert!(!cat.is_retryable(), "{cat:?} should be non-retryable");
         }
     }
 
@@ -176,14 +171,12 @@ mod error_scenarios {
             let suggestions = cat.recovery_suggestions();
             assert!(
                 !suggestions.is_empty(),
-                "{:?} should have recovery suggestions",
-                cat
+                "{cat:?} should have recovery suggestions"
             );
             for s in &suggestions {
                 assert!(
                     !s.trim().is_empty(),
-                    "{:?} has an empty suggestion string",
-                    cat
+                    "{cat:?} has an empty suggestion string"
                 );
             }
         }
@@ -207,7 +200,7 @@ mod error_scenarios {
             ErrorCategory::ResourceNotFound,
             ErrorCategory::PermissionDenied,
             ErrorCategory::PolicyViolation,
-            ErrorCategory::PlanModeViolation,
+            ErrorCategory::PlanningPolicyViolation,
             ErrorCategory::SandboxFailure,
             ErrorCategory::ResourceExhausted,
             ErrorCategory::Cancelled,
@@ -216,13 +209,11 @@ mod error_scenarios {
 
         for cat in &all_categories {
             let label = cat.user_label();
-            assert!(!label.is_empty(), "{:?} has empty user_label", cat);
-            assert!(label.len() <= 40, "{:?} label too long: {:?}", cat, label);
+            assert!(!label.is_empty(), "{cat:?} has empty user_label");
+            assert!(label.len() <= 40, "{cat:?} label too long: {label:?}");
             assert!(
                 label.contains(' ') || label.len() >= 6,
-                "{:?} label should be descriptive: {:?}",
-                cat,
-                label
+                "{cat:?} label should be descriptive: {label:?}"
             );
         }
     }
@@ -284,15 +275,12 @@ mod error_scenarios {
             let guidance = code.user_guidance();
             assert!(
                 !guidance.is_empty(),
-                "{:?} should have non-empty user_guidance",
-                code
+                "{code:?} should have non-empty user_guidance"
             );
             // Guidance should be a complete sentence or phrase.
             assert!(
                 guidance.len() > 10,
-                "{:?} guidance too short to be helpful: {:?}",
-                code,
-                guidance
+                "{code:?} guidance too short to be helpful: {guidance:?}"
             );
         }
     }
@@ -315,16 +303,13 @@ mod error_scenarios {
         for msg in &retryable_messages {
             assert!(
                 vtcode_commons::is_retryable_llm_error_message(msg),
-                "is_retryable_llm_error_message({:?}) should be true",
-                msg
+                "is_retryable_llm_error_message({msg:?}) should be true"
             );
 
             let cat = vtcode_commons::classify_error_message(msg);
             assert!(
                 cat.is_retryable(),
-                "classify_error_message({:?}) = {:?} should be retryable",
-                msg,
-                cat
+                "classify_error_message({msg:?}) = {cat:?} should be retryable"
             );
         }
     }
@@ -340,16 +325,13 @@ mod error_scenarios {
         for msg in &non_retryable_messages {
             assert!(
                 !vtcode_commons::is_retryable_llm_error_message(msg),
-                "is_retryable_llm_error_message({:?}) should be false",
-                msg
+                "is_retryable_llm_error_message({msg:?}) should be false"
             );
 
             let cat = vtcode_commons::classify_error_message(msg);
             assert!(
                 !cat.is_retryable(),
-                "classify_error_message({:?}) = {:?} should be non-retryable",
-                msg,
-                cat
+                "classify_error_message({msg:?}) = {cat:?} should be non-retryable"
             );
         }
     }
@@ -368,8 +350,7 @@ mod error_scenarios {
         assert_eq!(
             cat,
             ErrorCategory::Timeout,
-            "Expected Timeout, got {:?}",
-            cat
+            "Expected Timeout, got {cat:?}"
         );
     }
 
@@ -382,8 +363,7 @@ mod error_scenarios {
         assert_eq!(
             cat,
             ErrorCategory::PermissionDenied,
-            "Expected PermissionDenied, got {:?}",
-            cat
+            "Expected PermissionDenied, got {cat:?}"
         );
     }
 }

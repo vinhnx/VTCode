@@ -6,7 +6,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::constants::tools;
-use crate::core::PermissionMode;
+use crate::core::permissions::{AgentPermissionsConfig, PermissionDefault};
 use crate::hooks::{HookCommandConfig, HookCommandKind, HookGroupConfig, HooksConfig};
 
 const BUILTIN_DEFAULT_AGENT: &str = r#"You are the default VT Code execution subagent.
@@ -46,6 +46,13 @@ When planning is needed, state the plan briefly before implementation. When the 
 discussion or review, do not edit files.
 Report changed files, validation, and remaining risks clearly."#;
 
+const BUILTIN_AUTO_PRIMARY_AGENT: &str = r#"You are the auto agent.
+
+Work autonomously within the active permission policy, taking direct action when the request is clear.
+Inspect the relevant repository context before editing, keep changes focused, and verify with the
+narrowest useful checks before reporting completion.
+Pause for user input when the scope is ambiguous, risky, or outside the requested work."#;
+
 const BUILTIN_PLAN_AGENT: &str = r#"You are a read-only planning agent.
 
 Gather the minimum repository context needed to support a plan or design decision.
@@ -58,7 +65,8 @@ Ground your recommendations in specific code references and file paths."#;
 const BUILTIN_DUCK_PRIMARY_AGENT: &str = r#"You are the duck agent.
 
 Be discussion-first. Help the user clarify scope, constraints, contradictions, and options before implementation.
-Do not edit files, you are for rubber-ducking only."#;
+Do not edit files, you are for rubber-ducking only.
+If the user asks for edits, suggest pressing Tab to switch to the Build agent for implementation."#;
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
@@ -140,6 +148,17 @@ pub enum SubagentMcpServer {
 }
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentSpecFieldClass {
+    Shared,
+    PrimaryMetadata,
+    PrimaryRuntime,
+    SubagentOnly,
+    Availability,
+}
+
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct SubagentSpec {
     pub name: String,
@@ -156,8 +175,7 @@ pub struct SubagentSpec {
     pub color: Option<String>,
     #[serde(default)]
     pub reasoning_effort: Option<String>,
-    #[serde(default)]
-    pub permission_mode: Option<PermissionMode>,
+    pub permissions: AgentPermissionsConfig,
     #[serde(default)]
     pub skills: Vec<String>,
     #[serde(default)]
@@ -200,7 +218,7 @@ impl SubagentSpec {
 
     #[must_use]
     pub fn is_read_only(&self) -> bool {
-        if matches!(self.permission_mode, Some(PermissionMode::Plan)) {
+        if !self.permissions_allows_mutation() {
             return true;
         }
 
@@ -230,12 +248,50 @@ impl SubagentSpec {
     }
 
     #[must_use]
+    pub fn permissions_allows_mutation(&self) -> bool {
+        if matches!(
+            self.permissions.default,
+            PermissionDefault::Ask | PermissionDefault::Allow | PermissionDefault::Auto
+        ) {
+            return true;
+        }
+
+        self.permissions
+            .allow
+            .iter()
+            .chain(self.permissions.auto.iter())
+            .map(|rule| rule.to_ascii_lowercase())
+            .any(|rule| is_mutating_tool_name(rule.as_str()))
+    }
+
+    #[must_use]
     pub fn matches_name(&self, candidate: &str) -> bool {
         self.name.eq_ignore_ascii_case(candidate)
             || self
                 .aliases
                 .iter()
                 .any(|alias| alias.eq_ignore_ascii_case(candidate))
+    }
+}
+
+#[must_use]
+pub fn classify_agent_spec_field(field: &str) -> Option<AgentSpecFieldClass> {
+    match field.trim() {
+        "name" | "prompt" => Some(AgentSpecFieldClass::Shared),
+        "description" | "color" | "aliases" => Some(AgentSpecFieldClass::PrimaryMetadata),
+        "tools" | "disallowed_tools" | "disallowedTools" | "permissions" | "model"
+        | "reasoning_effort" | "skills" | "mcp_servers" | "mcpServers" | "hooks" | "memory" => {
+            Some(AgentSpecFieldClass::PrimaryRuntime)
+        }
+        "background"
+        | "max_turns"
+        | "maxTurns"
+        | "initial_prompt"
+        | "initialPrompt"
+        | "nickname_candidates"
+        | "isolation" => Some(AgentSpecFieldClass::SubagentOnly),
+        "mode" => Some(AgentSpecFieldClass::Availability),
+        _ => None,
     }
 }
 
@@ -302,11 +358,12 @@ pub struct DiscoveredSubagents {
     pub shadowed: Vec<SubagentSpec>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct SubagentDiscoveryInput {
     pub workspace_root: PathBuf,
     pub cli_agents: Option<JsonValue>,
     pub plugin_agent_files: Vec<(String, PathBuf)>,
+    pub include_user_agents: bool,
 }
 
 impl SubagentDiscoveryInput {
@@ -316,7 +373,14 @@ impl SubagentDiscoveryInput {
             workspace_root,
             cli_agents: None,
             plugin_agent_files: Vec::new(),
+            include_user_agents: true,
         }
+    }
+}
+
+impl Default for SubagentDiscoveryInput {
+    fn default() -> Self {
+        Self::new(PathBuf::new())
     }
 }
 
@@ -324,7 +388,9 @@ pub fn discover_subagents(input: &SubagentDiscoveryInput) -> Result<DiscoveredSu
     let mut discovered = Vec::new();
     discovered.extend(builtin_subagents());
 
-    if let Some(home) = dirs::home_dir() {
+    if input.include_user_agents
+        && let Some(home) = dirs::home_dir()
+    {
         discovered.extend(load_subagents_from_dir(
             &home.join(".codex/agents"),
             SubagentSource::UserCodex,
@@ -393,6 +459,7 @@ pub fn discover_subagents(input: &SubagentDiscoveryInput) -> Result<DiscoveredSu
 pub fn builtin_subagents() -> Vec<SubagentSpec> {
     vec![
         builtin_primary_build_agent(),
+        builtin_primary_auto_agent(),
         builtin_primary_duck_agent(),
         builtin_plan_agent(),
         SubagentSpec {
@@ -404,7 +471,7 @@ pub fn builtin_subagents() -> Vec<SubagentSpec> {
             model: Some("inherit".to_string()),
             color: Some("blue".to_string()),
             reasoning_effort: None,
-            permission_mode: None,
+            permissions: mutating_agent_permissions(),
             skills: Vec::new(),
             mcp_servers: Vec::new(),
             hooks: None,
@@ -429,7 +496,7 @@ pub fn builtin_subagents() -> Vec<SubagentSpec> {
             model: Some("small".to_string()),
             color: Some("cyan".to_string()),
             reasoning_effort: Some("low".to_string()),
-            permission_mode: Some(PermissionMode::Plan),
+            permissions: readonly_agent_permissions(),
             skills: Vec::new(),
             mcp_servers: Vec::new(),
             hooks: None,
@@ -454,7 +521,7 @@ pub fn builtin_subagents() -> Vec<SubagentSpec> {
             model: Some("inherit".to_string()),
             color: Some("magenta".to_string()),
             reasoning_effort: None,
-            permission_mode: None,
+            permissions: mutating_agent_permissions(),
             skills: Vec::new(),
             mcp_servers: Vec::new(),
             hooks: None,
@@ -483,7 +550,7 @@ pub fn builtin_primary_build_agent() -> SubagentSpec {
         model: Some("inherit".to_string()),
         color: Some("magenta".to_string()),
         reasoning_effort: None,
-        permission_mode: None,
+        permissions: mutating_agent_permissions(),
         skills: Vec::new(),
         mcp_servers: Vec::new(),
         hooks: None,
@@ -501,6 +568,34 @@ pub fn builtin_primary_build_agent() -> SubagentSpec {
     }
 }
 
+pub fn builtin_primary_auto_agent() -> SubagentSpec {
+    SubagentSpec {
+        name: "auto".to_string(),
+        description: "Built-in autonomous implementation agent for the main session.".to_string(),
+        prompt: BUILTIN_AUTO_PRIMARY_AGENT.to_string(),
+        tools: None,
+        disallowed_tools: Vec::new(),
+        model: Some("inherit".to_string()),
+        color: Some("green".to_string()),
+        reasoning_effort: None,
+        permissions: auto_agent_permissions(),
+        skills: Vec::new(),
+        mcp_servers: Vec::new(),
+        hooks: None,
+        background: false,
+        mode: AgentMode::Primary,
+        max_turns: None,
+        nickname_candidates: vec!["auto".to_string()],
+        initial_prompt: None,
+        memory: None,
+        isolation: None,
+        aliases: vec!["autonomous".to_string()],
+        source: SubagentSource::Builtin,
+        file_path: None,
+        warnings: Vec::new(),
+    }
+}
+
 pub fn builtin_plan_agent() -> SubagentSpec {
     SubagentSpec {
         name: "plan".to_string(),
@@ -511,7 +606,7 @@ pub fn builtin_plan_agent() -> SubagentSpec {
         model: Some("inherit".to_string()),
         color: Some("yellow".to_string()),
         reasoning_effort: Some("medium".to_string()),
-        permission_mode: Some(PermissionMode::Plan),
+        permissions: readonly_agent_permissions(),
         skills: Vec::new(),
         mcp_servers: Vec::new(),
         hooks: None,
@@ -539,7 +634,7 @@ pub fn builtin_primary_duck_agent() -> SubagentSpec {
         model: Some("inherit".to_string()),
         color: Some("cyan".to_string()),
         reasoning_effort: Some("low".to_string()),
-        permission_mode: Some(PermissionMode::Plan),
+        permissions: readonly_agent_permissions(),
         skills: Vec::new(),
         mcp_servers: Vec::new(),
         hooks: None,
@@ -567,6 +662,24 @@ fn builtin_readonly_tool_ids() -> Vec<String> {
 
 fn builtin_readonly_disallowed_tool_ids() -> Vec<String> {
     vec![tools::UNIFIED_FILE.to_string()]
+}
+
+fn mutating_agent_permissions() -> AgentPermissionsConfig {
+    AgentPermissionsConfig::new(PermissionDefault::Ask)
+}
+
+fn auto_agent_permissions() -> AgentPermissionsConfig {
+    AgentPermissionsConfig::new(PermissionDefault::Auto)
+}
+
+fn readonly_agent_permissions() -> AgentPermissionsConfig {
+    let mut permissions = AgentPermissionsConfig::new(PermissionDefault::Deny);
+    permissions.allow = vec![
+        tools::READ_FILE.to_string(),
+        tools::LIST_FILES.to_string(),
+        tools::UNIFIED_SEARCH.to_string(),
+    ];
+    permissions
 }
 
 fn should_replace(existing: &SubagentSpec, candidate: &SubagentSpec) -> bool {
@@ -655,12 +768,7 @@ fn load_cli_agents(value: &JsonValue) -> Result<Vec<SubagentSpec>> {
             .or_else(|| config.get("effort"))
             .and_then(JsonValue::as_str)
             .map(ToString::to_string);
-        let permission_mode = config
-            .get("permissionMode")
-            .or_else(|| config.get("permission_mode"))
-            .and_then(JsonValue::as_str)
-            .map(parse_permission_mode)
-            .transpose()?;
+        let permissions = parse_required_permissions(config)?;
         let skills = optional_string_list(config.get("skills"))?.unwrap_or_default();
         let mcp_servers = optional_mcp_servers(
             config
@@ -699,6 +807,8 @@ fn load_cli_agents(value: &JsonValue) -> Result<Vec<SubagentSpec>> {
             .get("isolation")
             .and_then(JsonValue::as_str)
             .map(ToString::to_string);
+        let aliases = optional_string_list(config.get("aliases"))?.unwrap_or_default();
+        let warnings = primary_agent_subagent_only_field_warnings(config, mode);
 
         specs.push(SubagentSpec {
             name: name.clone(),
@@ -709,7 +819,7 @@ fn load_cli_agents(value: &JsonValue) -> Result<Vec<SubagentSpec>> {
             model,
             color,
             reasoning_effort,
-            permission_mode,
+            permissions,
             skills,
             mcp_servers,
             hooks,
@@ -720,10 +830,10 @@ fn load_cli_agents(value: &JsonValue) -> Result<Vec<SubagentSpec>> {
             initial_prompt,
             memory,
             isolation,
-            aliases: Vec::new(),
+            aliases,
             source: SubagentSource::Cli,
             file_path: None,
-            warnings: Vec::new(),
+            warnings,
         });
     }
 
@@ -739,11 +849,20 @@ fn parse_markdown_subagent(content: &str, source: SubagentSource) -> Result<Suba
         bail!("markdown subagent is missing closing frontmatter delimiter");
     };
     let frontmatter_text = rest[..end_idx].trim();
-    let prompt = rest[end_idx + 4..].trim().to_string();
+    let prompt_body = rest[end_idx + 4..].trim().to_string();
     let frontmatter = serde_saphyr::from_str::<JsonValue>(frontmatter_text)
         .context("failed to parse subagent YAML frontmatter")?;
     let Some(object) = frontmatter.as_object() else {
         bail!("subagent frontmatter must be a YAML mapping");
+    };
+    let prompt = if prompt_body.is_empty() {
+        object
+            .get("prompt")
+            .and_then(JsonValue::as_str)
+            .unwrap_or_default()
+            .to_string()
+    } else {
+        prompt_body
     };
 
     let mut spec = subagent_spec_from_json_map(object, prompt, source.clone())?;
@@ -760,7 +879,8 @@ fn parse_codex_toml_subagent(content: &str, source: SubagentSource) -> Result<Su
     };
     let object = toml_table_to_json_object(table)?;
     let prompt = object
-        .get("developer_instructions")
+        .get("prompt")
+        .or_else(|| object.get("developer_instructions"))
         .or_else(|| object.get("instructions"))
         .and_then(JsonValue::as_str)
         .unwrap_or_default()
@@ -814,12 +934,7 @@ fn subagent_spec_from_json_map(
         .or_else(|| object.get("effort"))
         .and_then(JsonValue::as_str)
         .map(ToString::to_string);
-    let permission_mode = object
-        .get("permissionMode")
-        .or_else(|| object.get("permission_mode"))
-        .and_then(JsonValue::as_str)
-        .map(parse_permission_mode)
-        .transpose()?;
+    let permissions = parse_required_permissions(object)?;
     let skills = optional_string_list(object.get("skills"))?.unwrap_or_default();
     let mcp_servers = optional_mcp_servers(
         object
@@ -858,6 +973,8 @@ fn subagent_spec_from_json_map(
         .get("isolation")
         .and_then(JsonValue::as_str)
         .map(ToString::to_string);
+    let aliases = optional_string_list(object.get("aliases"))?.unwrap_or_default();
+    let warnings = primary_agent_subagent_only_field_warnings(object, mode);
 
     Ok(SubagentSpec {
         name,
@@ -868,7 +985,7 @@ fn subagent_spec_from_json_map(
         model,
         color,
         reasoning_effort,
-        permission_mode,
+        permissions,
         skills,
         mcp_servers,
         hooks,
@@ -879,11 +996,34 @@ fn subagent_spec_from_json_map(
         initial_prompt,
         memory,
         isolation,
-        aliases: Vec::new(),
+        aliases,
         source,
         file_path: None,
-        warnings: Vec::new(),
+        warnings,
     })
+}
+
+fn primary_agent_subagent_only_field_warnings(
+    object: &JsonMap<String, JsonValue>,
+    mode: AgentMode,
+) -> Vec<String> {
+    if !matches!(mode, AgentMode::Primary | AgentMode::All) {
+        return Vec::new();
+    }
+
+    [
+        ("background", &["background"][..]),
+        ("max_turns", &["max_turns", "maxTurns"][..]),
+        ("initial_prompt", &["initial_prompt", "initialPrompt"][..]),
+        ("nickname_candidates", &["nickname_candidates"][..]),
+        ("isolation", &["isolation"][..]),
+    ]
+    .into_iter()
+    .filter(|(_, aliases)| aliases.iter().any(|field| object.contains_key(*field)))
+    .map(|(field, _)| {
+        format!("field '{field}' is for subagents only and is ignored by primary agents")
+    })
+    .collect()
 }
 
 fn normalize_subagent_tool_list(tools: Option<Vec<String>>) -> Option<Vec<String>> {
@@ -934,6 +1074,9 @@ fn normalize_subagent_tool_name(tool: &str) -> &'static [&'static str] {
 
 fn is_mutating_tool_name(tool: &str) -> bool {
     tool == "edit"
+        || tool == "bash"
+        || tool == "shell"
+        || tool == "command"
         || tool == "write"
         || tool == tools::UNIFIED_EXEC
         || tool == tools::EDIT_FILE
@@ -947,6 +1090,28 @@ fn is_mutating_tool_name(tool: &str) -> bool {
         || tool == tools::SEARCH_REPLACE
 }
 
+fn permission_rule_allows_mutation(rule: &str) -> bool {
+    let tool_name = permission_rule_tool_name(rule);
+    let normalized = tool_name.to_ascii_lowercase();
+    if is_mutating_tool_name(normalized.as_str()) {
+        return true;
+    }
+
+    normalize_subagent_tool_name(tool_name)
+        .iter()
+        .any(|tool| is_mutating_tool_name(tool))
+}
+
+fn permission_rule_tool_name(rule: &str) -> &str {
+    let trimmed = rule.trim();
+    if let Some((tool_name, specifier)) = trimmed.split_once('(')
+        && specifier.trim_end().ends_with(')')
+    {
+        return tool_name.trim();
+    }
+    trimmed
+}
+
 fn apply_plugin_restrictions(spec: &mut SubagentSpec) {
     if spec.hooks.take().is_some() {
         spec.warnings
@@ -957,10 +1122,54 @@ fn apply_plugin_restrictions(spec: &mut SubagentSpec) {
         spec.warnings
             .push("plugin subagent mcp_servers are ignored for safety".to_string());
     }
-    if spec.permission_mode.take().is_some() {
-        spec.warnings
-            .push("plugin subagent permission_mode is ignored for safety".to_string());
+    let default_restricted = matches!(
+        spec.permissions.default,
+        PermissionDefault::Allow | PermissionDefault::Auto
+    );
+    if default_restricted {
+        spec.permissions.default = PermissionDefault::Ask;
     }
+
+    let allow_len = spec.permissions.allow.len();
+    spec.permissions
+        .allow
+        .retain(|rule| !permission_rule_allows_mutation(rule));
+    let auto_len = spec.permissions.auto.len();
+    spec.permissions
+        .auto
+        .retain(|rule| !permission_rule_allows_mutation(rule));
+
+    if default_restricted
+        || spec.permissions.allow.len() != allow_len
+        || spec.permissions.auto.len() != auto_len
+    {
+        spec.warnings
+            .push("plugin subagent permission overrides are restricted for safety".to_string());
+    }
+}
+
+fn parse_required_permissions(
+    object: &JsonMap<String, JsonValue>,
+) -> Result<AgentPermissionsConfig> {
+    if let Some(legacy_field) = object
+        .keys()
+        .find(|field| is_legacy_permission_field(field))
+    {
+        bail!("unsupported legacy subagent field '{legacy_field}'; use 'permissions.default'");
+    }
+
+    let Some(value) = object.get("permissions") else {
+        return Ok(AgentPermissionsConfig::new(PermissionDefault::Ask));
+    };
+
+    serde_json::from_value::<AgentPermissionsConfig>(value.clone())
+        .context("failed to parse subagent permissions")
+}
+
+fn is_legacy_permission_field(field: &str) -> bool {
+    field
+        .strip_prefix("permission")
+        .is_some_and(|suffix| matches!(suffix, "Mode" | "_mode"))
 }
 
 fn required_string(object: &JsonMap<String, JsonValue>, key: &str) -> Result<String> {
@@ -1120,20 +1329,6 @@ fn parse_hook_command(value: &JsonValue) -> Result<HookCommandConfig> {
     })
 }
 
-fn parse_permission_mode(value: &str) -> Result<PermissionMode> {
-    match value.trim().to_ascii_lowercase().as_str() {
-        "default" => Ok(PermissionMode::Default),
-        "acceptedits" | "accept_edits" | "accept-edits" => Ok(PermissionMode::AcceptEdits),
-        "dontask" | "dont_ask" | "dont-ask" => Ok(PermissionMode::DontAsk),
-        "bypasspermissions" | "bypass_permissions" | "bypass-permissions" => {
-            Ok(PermissionMode::BypassPermissions)
-        }
-        "plan" => Ok(PermissionMode::Plan),
-        "auto" => Ok(PermissionMode::Auto),
-        other => bail!("unsupported subagent permission mode '{other}'"),
-    }
-}
-
 fn parse_memory_scope(value: &str) -> Result<SubagentMemoryScope> {
     match value.trim().to_ascii_lowercase().as_str() {
         "user" => Ok(SubagentMemoryScope::User),
@@ -1201,13 +1396,376 @@ fn default_background_toggle_shortcut() -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        AgentMode, BackgroundSubagentConfig, SubagentDiscoveryInput, SubagentRuntimeLimits,
-        SubagentSource, builtin_subagents, discover_subagents, load_subagent_from_file,
+        AgentMode, AgentSpecFieldClass, BackgroundSubagentConfig, SubagentDiscoveryInput,
+        SubagentMcpServer, SubagentMemoryScope, SubagentRuntimeLimits, SubagentSource,
+        builtin_subagents, classify_agent_spec_field, discover_subagents, load_cli_agents,
+        load_subagent_from_file,
     };
     use crate::constants::tools;
+    use crate::core::permissions::PermissionDefault;
     use anyhow::Result;
+    use serde_json::json;
     use std::fs;
     use tempfile::TempDir;
+
+    #[test]
+    fn classifies_agent_spec_fields_for_primary_and_subagent_roles() {
+        assert_eq!(
+            classify_agent_spec_field("name"),
+            Some(AgentSpecFieldClass::Shared)
+        );
+        assert_eq!(
+            classify_agent_spec_field("description"),
+            Some(AgentSpecFieldClass::PrimaryMetadata)
+        );
+        assert_eq!(
+            classify_agent_spec_field("aliases"),
+            Some(AgentSpecFieldClass::PrimaryMetadata)
+        );
+        assert_eq!(
+            classify_agent_spec_field("disallowedTools"),
+            Some(AgentSpecFieldClass::PrimaryRuntime)
+        );
+        assert_eq!(
+            classify_agent_spec_field("permissions"),
+            Some(AgentSpecFieldClass::PrimaryRuntime)
+        );
+        assert_eq!(
+            classify_agent_spec_field("mcpServers"),
+            Some(AgentSpecFieldClass::PrimaryRuntime)
+        );
+        assert_eq!(
+            classify_agent_spec_field("maxTurns"),
+            Some(AgentSpecFieldClass::SubagentOnly)
+        );
+        assert_eq!(
+            classify_agent_spec_field("initial_prompt"),
+            Some(AgentSpecFieldClass::SubagentOnly)
+        );
+        assert_eq!(
+            classify_agent_spec_field("mode"),
+            Some(AgentSpecFieldClass::Availability)
+        );
+        assert_eq!(classify_agent_spec_field("unknown"), None);
+    }
+
+    #[test]
+    fn parses_agent_availability_modes() -> Result<()> {
+        let temp = TempDir::new()?;
+        for (name, mode, expected) in [
+            ("primary", "primary", AgentMode::Primary),
+            ("subagent", "subagent", AgentMode::Subagent),
+            ("all", "all", AgentMode::All),
+        ] {
+            let path = temp.path().join(format!("{name}.md"));
+            fs::write(
+                &path,
+                format!(
+                    r#"---
+name: {name}
+description: {name} agent
+mode: {mode}
+permissions:
+  default: ask
+---
+Prompt."#
+                ),
+            )?;
+
+            let spec = load_subagent_from_file(&path, SubagentSource::ProjectVtcode)?;
+            assert_eq!(spec.mode, expected);
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn defaults_missing_permissions_to_ask() -> Result<()> {
+        let temp = TempDir::new()?;
+        let path = temp.path().join("missing-permissions.md");
+        fs::write(
+            &path,
+            r#"---
+name: missing-permissions
+description: Missing permissions
+---
+Prompt."#,
+        )?;
+
+        let spec = load_subagent_from_file(&path, SubagentSource::ProjectVtcode)?;
+        assert_eq!(spec.permissions.default, PermissionDefault::Ask);
+        assert!(spec.permissions.allow.is_empty());
+        assert!(spec.permissions.ask.is_empty());
+        assert!(spec.permissions.auto.is_empty());
+        assert!(spec.permissions.deny.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn rejects_invalid_permissions_default() -> Result<()> {
+        let temp = TempDir::new()?;
+        let path = temp.path().join("invalid-permissions.md");
+        fs::write(
+            &path,
+            r#"---
+name: invalid-permissions
+description: Invalid permissions
+permissions:
+  default: plan
+---
+Prompt."#,
+        )?;
+
+        let err = load_subagent_from_file(&path, SubagentSource::ProjectVtcode).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("failed to parse subagent permissions")
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn rejects_legacy_top_level_permission_fields() -> Result<()> {
+        let temp = TempDir::new()?;
+
+        for legacy_field in ["permissionMode", "permission_mode"] {
+            let markdown_path = temp.path().join(format!("{legacy_field}.md"));
+            fs::write(
+                &markdown_path,
+                format!(
+                    r#"---
+name: {legacy_field}
+description: Legacy frontmatter permissions
+permissions:
+  default: ask
+{legacy_field}: allow
+---
+Prompt."#
+                ),
+            )?;
+
+            let markdown_err =
+                load_subagent_from_file(&markdown_path, SubagentSource::ProjectVtcode).unwrap_err();
+            assert!(markdown_err.to_string().contains(legacy_field));
+
+            let toml_path = temp.path().join(format!("{legacy_field}.toml"));
+            fs::write(
+                &toml_path,
+                format!(
+                    r#"name = "{legacy_field}"
+description = "Legacy TOML permissions"
+prompt = "Prompt."
+permissions = {{ default = "ask" }}
+{legacy_field} = "allow"
+"#
+                ),
+            )?;
+
+            let toml_err =
+                load_subagent_from_file(&toml_path, SubagentSource::ProjectCodex).unwrap_err();
+            assert!(toml_err.to_string().contains(legacy_field));
+
+            let cli_payload = json!({
+                legacy_field: {
+                    "description": "Legacy CLI permissions",
+                    "permissions": { "default": "ask" },
+                    legacy_field: "allow"
+                }
+            });
+
+            let cli_err = load_cli_agents(&cli_payload).unwrap_err();
+            assert!(cli_err.to_string().contains(legacy_field));
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn primary_agent_parser_accepts_supported_fields() -> Result<()> {
+        let temp = TempDir::new()?;
+        let path = temp.path().join("build.md");
+        fs::write(
+            &path,
+            r#"---
+name: build
+description: Primary build agent
+tools: [Read, Bash]
+disallowedTools: [Write]
+model: gpt-5.4
+color: blue
+reasoning_effort: high
+permissions:
+  default: ask
+  allow: [read_file]
+  ask: [unified_exec]
+  auto: [unified_search]
+  deny: [write_file]
+skills: [rust, repo]
+mcpServers:
+  - filesystem
+  - demo:
+      command: demo-mcp
+hooks:
+  PreToolUse:
+    - matcher: Bash
+      hooks:
+        - command: echo pre
+memory: project
+aliases: [builder, implementer]
+mode: primary
+---
+Primary prompt."#,
+        )?;
+
+        let spec = load_subagent_from_file(&path, SubagentSource::ProjectVtcode)?;
+
+        assert_eq!(spec.name, "build");
+        assert_eq!(spec.description, "Primary build agent");
+        assert_eq!(spec.prompt, "Primary prompt.");
+        assert_eq!(
+            spec.tools,
+            Some(vec![
+                tools::READ_FILE.to_string(),
+                tools::UNIFIED_EXEC.to_string(),
+            ])
+        );
+        assert_eq!(spec.disallowed_tools, vec![tools::WRITE_FILE.to_string()]);
+        assert_eq!(spec.permissions.default, PermissionDefault::Ask);
+        assert_eq!(spec.permissions.allow, vec![tools::READ_FILE.to_string()]);
+        assert_eq!(spec.permissions.ask, vec![tools::UNIFIED_EXEC.to_string()]);
+        assert_eq!(
+            spec.permissions.auto,
+            vec![tools::UNIFIED_SEARCH.to_string()]
+        );
+        assert_eq!(spec.permissions.deny, vec![tools::WRITE_FILE.to_string()]);
+        assert_eq!(spec.model.as_deref(), Some("gpt-5.4"));
+        assert_eq!(spec.reasoning_effort.as_deref(), Some("high"));
+        assert_eq!(spec.skills, vec!["rust".to_string(), "repo".to_string()]);
+        assert_eq!(spec.mcp_servers.len(), 2);
+        assert!(matches!(spec.mcp_servers[0], SubagentMcpServer::Named(_)));
+        assert!(matches!(spec.mcp_servers[1], SubagentMcpServer::Inline(_)));
+        assert_eq!(spec.memory, Some(SubagentMemoryScope::Project));
+        assert_eq!(spec.color.as_deref(), Some("blue"));
+        assert_eq!(
+            spec.aliases,
+            vec!["builder".to_string(), "implementer".to_string()]
+        );
+        assert_eq!(spec.mode, AgentMode::Primary);
+        assert!(spec.hooks.is_some());
+        assert!(spec.warnings.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn primary_agent_specs_warn_for_subagent_only_fields() -> Result<()> {
+        let temp = TempDir::new()?;
+        let path = temp.path().join("primary.md");
+        fs::write(
+            &path,
+            r#"---
+name: primary
+description: Primary with child-only fields
+mode: primary
+permissions:
+  default: ask
+background: true
+maxTurns: 4
+initialPrompt: Start here
+nickname_candidates: [helper]
+isolation: full
+---
+Prompt."#,
+        )?;
+
+        let spec = load_subagent_from_file(&path, SubagentSource::ProjectVtcode)?;
+
+        assert!(spec.background);
+        assert_eq!(spec.max_turns, Some(4));
+        assert_eq!(spec.initial_prompt.as_deref(), Some("Start here"));
+        assert_eq!(spec.nickname_candidates, vec!["helper".to_string()]);
+        assert_eq!(spec.isolation.as_deref(), Some("full"));
+        assert_eq!(
+            spec.warnings,
+            vec![
+                "field 'background' is for subagents only and is ignored by primary agents"
+                    .to_string(),
+                "field 'max_turns' is for subagents only and is ignored by primary agents"
+                    .to_string(),
+                "field 'initial_prompt' is for subagents only and is ignored by primary agents"
+                    .to_string(),
+                "field 'nickname_candidates' is for subagents only and is ignored by primary agents"
+                    .to_string(),
+                "field 'isolation' is for subagents only and is ignored by primary agents"
+                    .to_string(),
+            ]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn aliases_do_not_replace_canonical_agent_names() -> Result<()> {
+        let temp = TempDir::new()?;
+        let path = temp.path().join("canonical.md");
+        fs::write(
+            &path,
+            r#"---
+name: canonical
+description: Canonical primary
+mode: primary
+permissions:
+  default: ask
+aliases: [alias]
+---
+Prompt."#,
+        )?;
+
+        let spec = load_subagent_from_file(&path, SubagentSource::ProjectVtcode)?;
+
+        assert_eq!(spec.name, "canonical");
+        assert!(spec.matches_name("alias"));
+        assert!(spec.matches_name("canonical"));
+        Ok(())
+    }
+
+    #[test]
+    fn primary_agent_parser_preserves_baseline_runtime_fields() -> Result<()> {
+        let temp = TempDir::new()?;
+        let path = temp.path().join("baseline.toml");
+        fs::write(
+            &path,
+            r#"name = "baseline"
+description = "Baseline primary"
+prompt = "Baseline prompt"
+mode = "primary"
+tools = ["unified_search", "unified_exec"]
+disallowed_tools = ["unified_exec"]
+permissions = { default = "allow" }
+model = "gpt-5.4"
+reasoning_effort = "medium"
+"#,
+        )?;
+
+        let spec = load_subagent_from_file(&path, SubagentSource::ProjectCodex)?;
+
+        assert_eq!(
+            spec.tools,
+            Some(vec![
+                tools::UNIFIED_SEARCH.to_string(),
+                tools::UNIFIED_EXEC.to_string(),
+            ])
+        );
+        assert_eq!(spec.disallowed_tools, vec![tools::UNIFIED_EXEC.to_string()]);
+        assert_eq!(spec.permissions.default, PermissionDefault::Allow);
+        assert!(spec.permissions.allow.is_empty());
+        assert!(spec.permissions.ask.is_empty());
+        assert!(spec.permissions.auto.is_empty());
+        assert!(spec.permissions.deny.is_empty());
+        assert_eq!(spec.model.as_deref(), Some("gpt-5.4"));
+        assert_eq!(spec.reasoning_effort.as_deref(), Some("medium"));
+        assert_eq!(spec.prompt, "Baseline prompt");
+        assert!(spec.warnings.is_empty());
+        Ok(())
+    }
 
     #[test]
     fn parses_claude_markdown_frontmatter() -> Result<()> {
@@ -1222,7 +1780,9 @@ tools: [Read, Grep, Glob]
 disallowedTools: [Write]
 model: sonnet
 color: blue
-permissionMode: plan
+permissions:
+  default: deny
+  allow: [read_file, unified_search, list_files]
 skills: [rust]
 memory: project
 background: true
@@ -1264,6 +1824,8 @@ Review the target changes."#,
             r#"---
 name: debugger
 description: Debug agent
+permissions:
+  default: allow
 tools: [Read, Bash, Edit, Write, Glob, Grep]
 disallowedTools: [Task]
 ---
@@ -1296,6 +1858,8 @@ Debug the issue."#,
             r#"---
 name: shell
 description: Shell-capable agent
+permissions:
+  default: allow
 tools: [Bash]
 ---
 Run shell commands."#,
@@ -1320,6 +1884,7 @@ model = "gpt-5.4"
 color = "#4f8fd8"
 model_reasoning_effort = "high"
 nickname_candidates = ["builder"]
+permissions = { default = "ask" }
 "##,
         )?;
 
@@ -1346,6 +1911,7 @@ nickname_candidates = ["builder"]
             r#"name = "example"
 description = "codex"
 developer_instructions = "codex"
+permissions = { default = "ask" }
 "#,
         )?;
         fs::write(
@@ -1353,6 +1919,8 @@ developer_instructions = "codex"
             r#"---
 name: example
 description: claude
+permissions:
+  default: ask
 ---
 claude"#,
         )?;
@@ -1361,12 +1929,15 @@ claude"#,
             r#"---
 name: example
 description: vtcode
+permissions:
+  default: ask
 ---
 vtcode"#,
         )?;
 
-        let discovered =
-            discover_subagents(&SubagentDiscoveryInput::new(temp.path().to_path_buf()))?;
+        let mut input = SubagentDiscoveryInput::new(temp.path().to_path_buf());
+        input.include_user_agents = false;
+        let discovered = discover_subagents(&input)?;
         let effective = discovered
             .effective
             .into_iter()
@@ -1389,6 +1960,8 @@ vtcode"#,
             r#"---
 name: plan
 description: Project delegated plan child
+permissions:
+  default: ask
 ---
 Project child plan."#,
         )?;
@@ -1398,12 +1971,15 @@ Project child plan."#,
 name: plan
 description: Project primary plan
 mode: primary
+permissions:
+  default: ask
 ---
 Project primary plan."#,
         )?;
 
-        let discovered =
-            discover_subagents(&SubagentDiscoveryInput::new(temp.path().to_path_buf()))?;
+        let mut input = SubagentDiscoveryInput::new(temp.path().to_path_buf());
+        input.include_user_agents = false;
+        let discovered = discover_subagents(&input)?;
         let project_plan_specs = discovered
             .effective
             .iter()
@@ -1426,7 +2002,8 @@ Project primary plan."#,
             r#"---
 name: plugin-agent
 description: Plugin agent
-permissionMode: bypassPermissions
+permissions:
+  default: ask
 mcpServers:
   - github
 hooks:
@@ -1445,10 +2022,53 @@ Plugin prompt"#,
                 plugin: "demo".to_string(),
             },
         )?;
-        assert!(spec.permission_mode.is_none());
         assert!(spec.mcp_servers.is_empty());
         assert!(spec.hooks.is_none());
-        assert_eq!(spec.warnings.len(), 3);
+        assert_eq!(spec.warnings.len(), 2);
+        Ok(())
+    }
+
+    #[test]
+    fn plugin_restrictions_normalize_permission_overrides() -> Result<()> {
+        let temp = TempDir::new()?;
+        let path = temp.path().join("plugin-agent.md");
+        fs::write(
+            &path,
+            r#"---
+name: plugin-agent
+description: Plugin agent
+permissions:
+  default: auto
+  allow: [read_file, "Read(*)", Bash, "Bash(*)", edit_file, "Edit(/src/**)"]
+  ask: [unified_exec]
+  auto: [unified_search, "Glob(**/*.rs)", Write, "Write(*)", apply_patch, "apply_patch(*)"]
+---
+Plugin prompt"#,
+        )?;
+
+        let spec = load_subagent_from_file(
+            &path,
+            SubagentSource::Plugin {
+                plugin: "demo".to_string(),
+            },
+        )?;
+
+        assert_eq!(spec.permissions.default, PermissionDefault::Ask);
+        assert_eq!(
+            spec.permissions.allow,
+            vec![tools::READ_FILE.to_string(), "Read(*)".to_string()]
+        );
+        assert_eq!(spec.permissions.ask, vec![tools::UNIFIED_EXEC.to_string()]);
+        assert_eq!(
+            spec.permissions.auto,
+            vec![
+                tools::UNIFIED_SEARCH.to_string(),
+                "Glob(**/*.rs)".to_string(),
+            ]
+        );
+        assert!(spec.warnings.iter().any(|warning| {
+            warning == "plugin subagent permission overrides are restricted for safety"
+        }));
         Ok(())
     }
 
@@ -1461,6 +2081,8 @@ Plugin prompt"#,
             r#"---
 name: hook-agent
 description: Hooked agent
+permissions:
+  default: ask
 hooks:
   SubagentStart:
     - matcher: worker
@@ -1505,18 +2127,83 @@ Hook prompt"#,
     #[test]
     fn builtin_primary_agents_are_available() {
         let builtins = builtin_subagents();
-        for name in ["build", "duck"] {
+        let default = builtins
+            .iter()
+            .find(|spec| spec.name == "default")
+            .expect("missing default built-in");
+        assert_eq!(default.permissions.default, PermissionDefault::Ask);
+        let explorer = builtins
+            .iter()
+            .find(|spec| spec.name == "explorer")
+            .expect("missing explorer built-in");
+        assert_eq!(explorer.permissions.default, PermissionDefault::Deny);
+        assert!(
+            explorer
+                .permissions
+                .allow
+                .contains(&tools::READ_FILE.to_string())
+        );
+
+        for name in ["build", "auto", "duck", "plan"] {
             let spec = builtins
                 .iter()
-                .find(|spec| spec.name == name && spec.mode == AgentMode::Primary)
+                .find(|spec| spec.name == name && spec.is_primary())
                 .unwrap_or_else(|| panic!("missing built-in primary agent {name}"));
             assert_eq!(spec.source, SubagentSource::Builtin);
+            let expected_default = match name {
+                "build" => PermissionDefault::Ask,
+                "auto" => PermissionDefault::Auto,
+                "duck" | "plan" => PermissionDefault::Deny,
+                _ => unreachable!("unexpected built-in primary agent"),
+            };
+            assert_eq!(spec.permissions.default, expected_default);
         }
         let plan = builtins
             .iter()
             .find(|spec| spec.name == "plan" && spec.mode == AgentMode::All)
             .expect("missing built-in all-mode plan agent");
         assert_eq!(plan.source, SubagentSource::Builtin);
+        assert_eq!(plan.permissions.default, PermissionDefault::Deny);
+
+        let auto = builtins
+            .iter()
+            .find(|spec| spec.name == "auto" && spec.mode == AgentMode::Primary)
+            .expect("missing built-in auto primary agent");
+        assert_eq!(auto.permissions.default, PermissionDefault::Auto);
+        assert!(
+            builtins.iter().all(|spec| spec.name != "review"),
+            "review must not be a built-in primary or subagent"
+        );
+    }
+
+    #[test]
+    fn ask_default_mutating_builtins_are_not_read_only() {
+        let builtins = builtin_subagents();
+
+        for name in ["default", "worker", "build"] {
+            let spec = builtins
+                .iter()
+                .find(|spec| spec.name == name)
+                .unwrap_or_else(|| panic!("missing built-in mutating agent {name}"));
+            assert_eq!(spec.permissions.default, PermissionDefault::Ask);
+            assert!(!spec.is_read_only());
+        }
+
+        let auto = builtins
+            .iter()
+            .find(|spec| spec.name == "auto")
+            .expect("missing built-in auto agent");
+        assert_eq!(auto.permissions.default, PermissionDefault::Auto);
+        assert!(!auto.is_read_only());
+
+        for name in ["duck", "explorer", "plan"] {
+            let spec = builtins
+                .iter()
+                .find(|spec| spec.name == name)
+                .unwrap_or_else(|| panic!("missing built-in read-only agent {name}"));
+            assert_eq!(spec.permissions.default, PermissionDefault::Deny);
+            assert!(spec.is_read_only());
+        }
     }
 
     #[test]

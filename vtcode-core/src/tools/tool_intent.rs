@@ -135,13 +135,12 @@ fn builtin_tool_behavior_canonical(tool: &str) -> Option<ToolBehavior> {
         )),
         tools::REQUEST_USER_INPUT
         | tools::MEMORY
-        | tools::ENTER_PLAN_MODE
-        | tools::EXIT_PLAN_MODE
+        | tools::START_PLANNING
+        | tools::FINISH_PLANNING
         | tools::LIST_SKILLS
         | tools::LOAD_SKILL
         | tools::LOAD_SKILL_RESOURCE
         | tools::TASK_TRACKER
-        | tools::PLAN_TASK_TRACKER
         | tools::GET_ERRORS
         | tools::SEARCH_TOOLS
         | tools::MCP_SEARCH_TOOLS
@@ -889,7 +888,7 @@ mod tests {
     fn unified_exec_run_allowlisted_is_read_only() {
         let intent = classify_tool_intent(
             tools::UNIFIED_EXEC,
-            &json!({"action": "run", "command": "rg plan_mode src"}),
+            &json!({"action": "run", "command": "rg planning_active src"}),
         );
         assert!(!intent.mutating);
         assert!(intent.readonly_unified_action);

@@ -374,7 +374,7 @@ impl<'a> SessionWidget<'a> {
 
         let mut footer = FooterWidget::new(&self.session.styles)
             .left_status(left_status)
-            .right_status(&right_status)
+            .right_status(right_status)
             .hint(hint)
             .mode(mode);
 

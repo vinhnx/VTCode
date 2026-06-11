@@ -185,7 +185,7 @@ impl FilePalette {
         let mut group_entries = Vec::new();
 
         let mut dir_iter: Vec<_> = dir_children.into_iter().collect();
-        dir_iter.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()));
+        dir_iter.sort_by_key(|entry| entry.0.to_lowercase());
 
         for (dir_name, mut children) in dir_iter {
             children.sort_by(|a, b| {

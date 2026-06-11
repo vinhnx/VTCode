@@ -15,11 +15,16 @@ vtcode exec "count the total number of lines of code in this project"
 ```
 
 Exec mode enforces the same workspace trust checks as the interactive UI. The workspace must be marked as `full_auto`, and the
-configured `automation.full_auto` section must enable autonomous execution. When the command starts it automatically activates the
-full-auto tool allow list and assumes no human is present to grant additional approvals. The agent will not prompt for user input
-allowances or confirmation dialogs, so ensure the allow list covers every tool it may need. You can capture the final summary separately with
-`--last-message-file` or persist the raw JSON stream with `--events`. Use `--json` when you want to see the live JSONL feed on
-stdout.
+configured `automation.full_auto` section must enable autonomous execution. When the command starts it activates full-auto as an
+execution and permission layer on top of the active primary agent; full-auto is not a primary agent itself. Explicit primary-agent
+choices, including `duck`, are honoured. If no primary agent is explicitly selected or configured, VT Code selects the effective
+`auto` primary agent, and the run fails fast if no effective `auto` exists.
+
+Full-auto treats `[automation.full_auto].allowed_tools` as a hard gate: tools outside the allow-list are denied, and tools inside
+the allow-list still pass explicit deny and policy checks. Promptable outcomes that remain inside the allow-list are routed through
+automatic permission review instead of asking. `--dangerously-skip-permissions` similarly auto-approves promptable actions while
+still respecting explicit denies and policy blocks. You can capture the final summary separately with `--last-message-file` or
+persist the raw JSON stream with `--events`. Use `--json` when you want to see the live JSONL feed on stdout.
 
 ### Granting workspace trust
 

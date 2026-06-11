@@ -21,16 +21,17 @@ use super::event_output::{
 };
 use super::{ExecCommandKind, ExecCommandOptions, prep};
 use crate::codex_app_server::{
-    CODEX_PROVIDER, CodexNonInteractiveRun, CodexReviewTarget, run_codex_noninteractive,
+    CODEX_PROVIDER, CodexNonInteractiveRun, CodexReviewTarget,
+    run_codex_noninteractive_with_instructions,
 };
 
 const EXEC_TASK_ID: &str = "exec-task";
 const EXEC_TASK_TITLE: &str = "Exec Task";
 const EXEC_TASK_INSTRUCTIONS: &str = "You are running vtcode in non-interactive exec mode. Complete the task autonomously using the configured full-auto tool allowlist. Do not request additional user input, confirmations, or allowances—operate solely with the provided information and available tools. Provide a concise summary of the outcome when finished.";
-const EXEC_TASK_INSTRUCTIONS_DRY_RUN: &str = "You are running vtcode in non-interactive exec dry-run mode. Plan and validate the approach in read-only mode without mutating files, running mutating commands, or requesting additional user input. If the task requires mutations, explain what would be changed and why.";
+const EXEC_TASK_INSTRUCTIONS_DRY_RUN: &str = "You are running vtcode as a non-interactive dry-run execution. Plan and validate the approach with read-only permissions, without mutating files, running mutating commands, or requesting additional user input. If the task requires mutations, explain what would be changed and why.";
 pub(super) const REVIEW_TASK_ID: &str = "review-task";
 const REVIEW_TASK_TITLE: &str = "Review Task";
-const REVIEW_TASK_INSTRUCTIONS: &str = "You are running vtcode in non-interactive review mode. Review the requested target in read-only mode. Do not modify files, do not run mutating commands, and do not request user input. Return findings first, ordered by severity, with concrete file and line references when possible. If there are no findings, state that explicitly.";
+const REVIEW_TASK_INSTRUCTIONS: &str = "You are running vtcode through the non-interactive review command. Review the requested target with read-only permissions. Do not modify files, do not run mutating commands, and do not request user input. Return findings first, ordered by severity, with concrete file and line references when possible. If there are no findings, state that explicitly.";
 
 pub(super) struct TaskSpec {
     pub(super) id: &'static str,
@@ -123,6 +124,7 @@ pub(super) async fn handle_exec_command_impl(
         config: run_config,
         vt_cfg: run_vt_cfg,
         model_id,
+        active_primary_agent,
         prompt,
         session_id,
         archive,
@@ -148,6 +150,7 @@ pub(super) async fn handle_exec_command_impl(
         run_config.openai_chatgpt_auth.clone(),
     )
     .await?;
+    runner.set_active_primary_agent(active_primary_agent);
 
     if let Some(archive) = archive.as_ref() {
         let initial_session_messages = runner.session_messages();
@@ -164,7 +167,7 @@ pub(super) async fn handle_exec_command_impl(
     };
     runner.enable_full_auto(&allowed_tools).await;
     if options.dry_run {
-        runner.enable_plan_mode();
+        runner.enable_planning();
     }
     runner.set_quiet(true);
     let events_path = effective_exec_events_path(
@@ -254,11 +257,13 @@ async fn handle_codex_exec_command_impl(
         config: run_config,
         vt_cfg: run_vt_cfg,
         model_id: _,
+        active_primary_agent,
         prompt,
         session_id: _,
         archive,
         thread_bootstrap,
     } = prepared;
+    let task_spec = task_spec(&options.command, options.dry_run);
 
     if options.events_path.is_some() || run_vt_cfg.agent.harness.event_log_path.is_some() {
         eprintln!(
@@ -266,13 +271,12 @@ async fn handle_codex_exec_command_impl(
         );
     }
 
-    let completed = run_codex_noninteractive(
+    let completed = run_codex_noninteractive_with_instructions(
         &run_config,
         Some(&run_vt_cfg),
         CodexNonInteractiveRun {
             prompt,
             read_only: options.dry_run || matches!(options.command, ExecCommandKind::Review { .. }),
-            plan_mode: options.dry_run,
             skip_confirmations: true,
             ephemeral: archive.is_none(),
             resume_thread_id: external_thread_id_from_bootstrap(&thread_bootstrap),
@@ -284,6 +288,7 @@ async fn handle_codex_exec_command_impl(
             review_target: native_review_target(&options.command, run_config.workspace.as_path())
                 .await?,
         },
+        codex_exec_turn_instructions(&active_primary_agent, task_spec.instructions),
     )
     .await?;
 
@@ -343,6 +348,23 @@ async fn handle_codex_exec_command_impl(
     }
 
     Ok(())
+}
+
+fn codex_exec_turn_instructions(
+    active_primary_agent: &vtcode_core::ActivePrimaryAgent,
+    task_instructions: &str,
+) -> Option<String> {
+    let mut sections = Vec::new();
+    let active_instructions = active_primary_agent.instructions.trim();
+    if !active_instructions.is_empty() {
+        sections.push(active_instructions);
+    }
+    let task_instructions = task_instructions.trim();
+    if !task_instructions.is_empty() {
+        sections.push(task_instructions);
+    }
+
+    (!sections.is_empty()).then(|| sections.join("\n\n"))
 }
 
 fn external_thread_id_from_bootstrap(

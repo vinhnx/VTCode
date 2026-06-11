@@ -477,12 +477,13 @@ impl Session {
                 }
 
                 match mouse_event.kind {
-                    MouseEventKind::Moved => {
-                        if self
-                            .update_transcript_file_link_hover(mouse_event.column, mouse_event.row)
-                        {
-                            self.mark_dirty();
-                        }
+                    MouseEventKind::Moved
+                        if self.update_transcript_file_link_hover(
+                            mouse_event.column,
+                            mouse_event.row,
+                        ) =>
+                    {
+                        self.mark_dirty();
                     }
                     MouseEventKind::ScrollDown => {
                         self.core.clear_pending_link_click();

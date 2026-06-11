@@ -300,6 +300,8 @@ async fn observed_tool_calls_emit_incremental_output_updates() {
     let ctrl_c_notify = Arc::new(Notify::new());
     let traj = TrajectoryLogger::new(&workspace);
     let mut session_stats = SessionStats::default();
+    let mut plan_session =
+        crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState::default();
     let mut mcp_panel_state = McpPanelState::default();
     let mut harness_state = HarnessTurnState::new(
         TurnRunId("run-test".to_string()),
@@ -315,6 +317,7 @@ async fn observed_tool_calls_emit_incremental_output_updates() {
         &tool_result_cache,
         &mut session,
         &mut session_stats,
+        &mut plan_session,
         &mut mcp_panel_state,
         &handle,
         &ctrl_c_state,
@@ -400,6 +403,8 @@ async fn observed_shell_tool_calls_stream_into_inline_pty_ui() {
     let ctrl_c_notify = Arc::new(Notify::new());
     let traj = TrajectoryLogger::new(&workspace);
     let mut session_stats = SessionStats::default();
+    let mut plan_session =
+        crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState::default();
     let mut mcp_panel_state = McpPanelState::default();
     let mut harness_state = HarnessTurnState::new(
         TurnRunId("run-test".to_string()),
@@ -414,6 +419,7 @@ async fn observed_shell_tool_calls_stream_into_inline_pty_ui() {
         &tool_result_cache,
         &mut session,
         &mut session_stats,
+        &mut plan_session,
         &mut mcp_panel_state,
         &handle,
         &ctrl_c_state,
@@ -492,6 +498,8 @@ async fn copilot_terminal_sessions_bind_local_pty_output_and_release_cleanly() {
     let ctrl_c_notify = Arc::new(Notify::new());
     let traj = TrajectoryLogger::new(&workspace);
     let mut session_stats = SessionStats::default();
+    let mut plan_session =
+        crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState::default();
     let mut mcp_panel_state = McpPanelState::default();
     let mut harness_state = HarnessTurnState::new(
         TurnRunId("run-test".to_string()),
@@ -507,6 +515,7 @@ async fn copilot_terminal_sessions_bind_local_pty_output_and_release_cleanly() {
         &tool_result_cache,
         &mut session,
         &mut session_stats,
+        &mut plan_session,
         &mut mcp_panel_state,
         &handle,
         &ctrl_c_state,
@@ -612,6 +621,8 @@ async fn vtcode_tool_calls_render_transcript_output_via_shared_pipeline() {
     let handle = session.clone_inline_handle();
     let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
     let mut session_stats = SessionStats::default();
+    let mut plan_session =
+        crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState::default();
     let mut mcp_panel_state = McpPanelState::default();
     let ctrl_c_state = Arc::new(CtrlCState::new());
     let ctrl_c_notify = Arc::new(Notify::new());
@@ -643,6 +654,7 @@ async fn vtcode_tool_calls_render_transcript_output_via_shared_pipeline() {
         &tool_result_cache,
         &mut session,
         &mut session_stats,
+        &mut plan_session,
         &mut mcp_panel_state,
         &handle,
         &ctrl_c_state,

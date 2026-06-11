@@ -19,7 +19,7 @@ pub mod widgets;
 pub use style::{convert_style, theme_from_styles};
 pub use theme_parser::ThemeConfigParser;
 pub use types::{
-    ContentPart, EditingMode, FocusChangeCallback, InlineCommand, InlineEvent, InlineEventCallback,
+    ContentPart, FocusChangeCallback, InlineCommand, InlineEvent, InlineEventCallback,
     InlineHandle, InlineHeaderBadge, InlineHeaderContext, InlineHeaderHighlight,
     InlineHeaderStatusBadge, InlineHeaderStatusTone, InlineLinkRange, InlineLinkTarget,
     InlineListItem, InlineListSearchConfig, InlineListSelection, InlineMessageKind, InlineSegment,

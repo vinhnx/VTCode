@@ -205,10 +205,12 @@ impl AgentRunner {
         let mut system_prompt = self
             .compose_task_system_prompt(prompt_tools, is_simple_task)
             .await?;
+        self.append_active_primary_agent_context(&mut system_prompt);
 
-        let plan_mode = self.tool_registry.is_plan_mode();
-        let request_user_input_enabled =
-            self.features().request_user_input_enabled(plan_mode, false);
+        let planning_active = self.tool_registry.is_planning_active();
+        let request_user_input_enabled = self
+            .features()
+            .request_user_input_enabled(planning_active, false);
         let full_auto_active = self
             .tool_registry
             .current_full_auto_allowlist()
@@ -219,7 +221,7 @@ impl AgentRunner {
             &mut system_prompt,
             RuntimePromptContract {
                 full_auto: full_auto_active,
-                plan_mode,
+                planning_active,
                 request_user_input_enabled,
             },
         );
@@ -238,6 +240,38 @@ impl AgentRunner {
         })
     }
 
+    fn append_active_primary_agent_context(&self, system_prompt: &mut String) {
+        let Some(active_primary_agent) = self.active_primary_agent.as_ref() else {
+            return;
+        };
+
+        system_prompt.push_str("\n\n## Active Primary Agent Runtime State\n");
+        system_prompt.push_str("- Active agent: ");
+        system_prompt.push_str(&active_primary_agent.display_name);
+        system_prompt.push_str("\n- Spec name: ");
+        system_prompt.push_str(&active_primary_agent.identity.name);
+        if let Some(model) = active_primary_agent
+            .model
+            .as_deref()
+            .map(str::trim)
+            .filter(|model| !model.is_empty() && !model.eq_ignore_ascii_case("inherit"))
+        {
+            system_prompt.push_str("\n- Agent model: ");
+            system_prompt.push_str(model);
+        }
+        if let Some(reasoning_effort) = active_primary_agent
+            .reasoning_effort
+            .as_deref()
+            .map(str::trim)
+            .filter(|reasoning_effort| !reasoning_effort.is_empty())
+        {
+            system_prompt.push_str("\n- Agent reasoning effort: ");
+            system_prompt.push_str(reasoning_effort);
+        }
+        system_prompt.push_str("\n\n## Active Primary Agent Instructions\n");
+        system_prompt.push_str(active_primary_agent.instructions.trim());
+    }
+
     async fn build_validated_runtime_prompt_bundle(
         &self,
         is_simple_task: bool,
@@ -249,14 +283,14 @@ impl AgentRunner {
             bundle,
             |runner| Box::pin((*runner).build_runtime_prompt_bundle(is_simple_task)),
             |runner, bundle| {
-                let plan_mode = runner.tool_registry.is_plan_mode();
+                let planning_active = runner.tool_registry.is_planning_active();
                 let request_user_input_enabled = runner
                     .features()
-                    .request_user_input_enabled(plan_mode, false);
+                    .request_user_input_enabled(planning_active, false);
                 prompt_alignment::validate_prompt_catalog_alignment(
                     &bundle.system_instruction,
                     &bundle.tool_snapshot,
-                    plan_mode,
+                    planning_active,
                     request_user_input_enabled,
                 )
             },
@@ -474,10 +508,10 @@ impl AgentRunner {
 
             let mut continuation_controller = ContinuationController::new(
                 self._workspace.clone(),
-                self.tool_registry.plan_mode_state(),
+                self.tool_registry.planning_workflow_state(),
                 self.config().agent.harness.continuation_policy.clone(),
                 full_auto_active,
-                self.tool_registry.is_plan_mode(),
+                self.tool_registry.is_planning_active(),
                 review_like,
             );
             continuation_controller.prepare(&effective_task).await?;

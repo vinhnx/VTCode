@@ -13,17 +13,17 @@ mod theme;
 mod validation;
 mod workspace_trust;
 
+pub(crate) use config_loading::has_explicit_default_primary_agent;
 use config_loading::load_startup_config;
 pub(crate) use dependency_advisories::{SearchToolsBundleNotice, take_search_tools_bundle_notice};
 use resume::{resolve_session_resume, validate_resume_all_usage};
 use theme::determine_theme;
 use validation::{
-    apply_cli_permission_overrides, apply_permission_mode_override,
-    validate_full_auto_configuration, validate_startup_configuration,
+    apply_cli_permission_overrides, validate_full_auto_configuration,
+    validate_startup_configuration,
 };
 use vtcode_config::auth::{OpenAIChatGptAuthHandle, resolve_openai_auth};
 use vtcode_core::cli::args::{Cli, Commands};
-use vtcode_core::config::PermissionMode;
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::models::{Provider, model_catalog_entry};
@@ -36,7 +36,7 @@ use vtcode_core::core::agent::config::{
     RuntimeModelSelection, api_key_env_var, build_runtime_agent_config, provider_label,
     resolve_runtime_model_selection,
 };
-use vtcode_core::core::interfaces::session::PlanModeEntrySource;
+use vtcode_core::core::interfaces::session::PlanningEntrySource;
 use vtcode_core::{initialize_dot_folder, update_model_preference, update_theme_preference};
 pub(crate) use workspace_trust::{
     ensure_full_auto_workspace_trust, require_full_auto_workspace_trust,
@@ -51,11 +51,12 @@ pub(crate) struct StartupContext {
     pub(crate) skip_confirmations: bool,
     pub(crate) full_auto_requested: bool,
     pub(crate) automation_prompt: Option<String>,
+    pub(crate) primary_agent_explicitly_configured: bool,
     pub(crate) session_resume: Option<SessionResumeMode>,
     pub(crate) resume_show_all: bool,
     pub(crate) custom_session_id: Option<String>,
     pub(crate) summarize_fork: bool,
-    pub(crate) plan_mode_entry_source: PlanModeEntrySource,
+    pub(crate) planning_entry_source: PlanningEntrySource,
 }
 
 #[derive(Debug, Clone)]
@@ -79,26 +80,7 @@ impl StartupContext {
         let mut config = loaded.config;
         apply_codex_experimental_override(&mut config, args.codex_experimental_override());
 
-        // Determine plan mode: CLI flag takes precedence, then config default_mode.
-        let plan_mode_from_cli = args
-            .permission_mode
-            .as_ref()
-            .is_some_and(|m| m.eq_ignore_ascii_case("plan"));
-
-        let plan_mode_from_config =
-            !plan_mode_from_cli && config.permissions.default_mode == PermissionMode::Plan;
-
-        let plan_mode_entry_source = if plan_mode_from_cli {
-            PlanModeEntrySource::CliFlag
-        } else if plan_mode_from_config {
-            PlanModeEntrySource::ConfigDefault
-        } else {
-            PlanModeEntrySource::None
-        };
-
-        if let Some(ref permission_mode) = args.permission_mode {
-            apply_permission_mode_override(&mut config, permission_mode)?;
-        }
+        let planning_entry_source = PlanningEntrySource::None;
         apply_cli_permission_overrides(&mut config, &args.allowed_tools, &args.disallowed_tools);
 
         // Validate configuration against models database
@@ -170,7 +152,7 @@ impl StartupContext {
         );
         agent_config.openai_chatgpt_auth = openai_chatgpt_auth;
 
-        let skip_confirmations = args.skip_confirmations || loaded.full_auto_requested;
+        let skip_confirmations = args.dangerously_skip_permissions || args.skip_confirmations;
 
         // CLI validation: warn if prompt_cache_retention is set but model does not use Responses API
         if agent_config.provider.eq_ignore_ascii_case("openai")
@@ -217,14 +199,15 @@ impl StartupContext {
             workspace: loaded.workspace,
             config,
             agent_config,
-            skip_confirmations: args.dangerously_skip_permissions || skip_confirmations,
+            skip_confirmations,
             full_auto_requested: loaded.full_auto_requested,
             automation_prompt: loaded.automation_prompt,
+            primary_agent_explicitly_configured: loaded.primary_agent_explicitly_configured,
             session_resume,
             resume_show_all: args.all,
             custom_session_id,
             summarize_fork: args.summarize,
-            plan_mode_entry_source,
+            planning_entry_source,
         })
     }
 }
@@ -822,6 +805,35 @@ mod validation_tests {
         );
 
         assert!(maybe_warning.is_none());
+    }
+
+    #[tokio::test]
+    async fn full_auto_preserves_separate_state_without_skip_confirmations() {
+        let env_guard = env_lock::lock();
+        let temp = TempDir::new().expect("temp dir");
+        let workspace = temp.path().to_path_buf();
+        let mut config = VTCodeConfig::default();
+        config.agent.provider = "openai".to_string();
+        config.agent.default_model =
+            vtcode_core::config::constants::models::openai::GPT_5.to_string();
+        config.automation.full_auto.enabled = true;
+        config.automation.full_auto.require_profile_ack = false;
+        save_workspace_config(&workspace, &config);
+
+        env_guard.set_var("OPENAI_API_KEY", "test");
+        let args = Cli::parse_from([
+            "vtcode",
+            "--workspace",
+            workspace.to_str().expect("workspace path"),
+            "--full-auto",
+        ]);
+
+        let ctx = StartupContext::from_cli_args(&args)
+            .await
+            .expect("startup success");
+
+        assert!(ctx.full_auto_requested);
+        assert!(!ctx.skip_confirmations);
     }
 
     #[test]

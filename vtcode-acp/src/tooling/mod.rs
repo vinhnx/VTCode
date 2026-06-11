@@ -44,8 +44,7 @@ mod tests {
         let registry =
             AcpToolRegistry::new(Path::new("/tmp/workspace"), true, true, local_definitions);
 
-        let definitions =
-            registry.definitions_for(&[SupportedTool::ReadFile, SupportedTool::SwitchMode], true);
+        let definitions = registry.definitions_for(&[SupportedTool::ReadFile], true);
         let names = definitions
             .into_iter()
             .map(|definition| definition.function_name().to_string())
@@ -55,7 +54,6 @@ mod tests {
             names,
             vec![
                 tools::READ_FILE.to_string(),
-                "switch_mode".to_string(),
                 tools::UNIFIED_FILE.to_string(),
                 tools::UNIFIED_EXEC.to_string(),
                 tools::UNIFIED_SEARCH.to_string(),

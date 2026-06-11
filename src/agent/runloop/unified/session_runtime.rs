@@ -18,7 +18,8 @@ impl SessionRuntime<ResumeSession> for UnifiedSessionRuntime {
             params.vt_config,
             params.skip_confirmations,
             params.full_auto,
-            params.plan_mode_entry_source,
+            params.primary_agent_explicitly_configured,
+            params.planning_entry_source,
             params.resume,
             params.steering_receiver.take(),
         );

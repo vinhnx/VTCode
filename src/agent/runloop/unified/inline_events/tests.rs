@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use crate::agent::runloop::model_picker::ModelPickerState;
 use crate::agent::runloop::unified::inline_events::{
-    InlineEventContext, InlineInterruptCoordinator, InlineLoopAction, InlineQueueState,
+    InlineEventContext, InlineInterruptCoordinator, InlineLoopAction, InlineQueueState, QueuedInput,
 };
 use crate::agent::runloop::unified::palettes::ActivePalette;
 use crate::agent::runloop::unified::settings_interactive::{
@@ -473,7 +473,7 @@ async fn cancelling_url_guard_restores_previous_palette() {
 }
 
 #[tokio::test]
-async fn toggle_mode_event_submits_mode_command() {
+async fn previous_agent_event_cycles_primary_agent_backward() {
     let (handle, mut renderer) = renderer_with_handle();
     let (ctrl_c_state, ctrl_c_notify) = ctrl_c_handles();
     let interrupts = InlineInterruptCoordinator::new(ctrl_c_state.as_ref());
@@ -507,12 +507,12 @@ async fn toggle_mode_event_submits_mode_command() {
     let mut queue = InlineQueueState::new(&handle, &mut queued_inputs, &mut prefer_latest_once);
 
     let action = context
-        .process_event(InlineEvent::ToggleMode, &mut queue)
+        .process_event(InlineEvent::CyclePrimaryAgentPrevious, &mut queue)
         .await
-        .expect("process toggle mode");
+        .expect("process previous primary agent");
     assert!(matches!(
         action,
-        InlineLoopAction::Submit(ref command) if command == "/mode"
+        InlineLoopAction::CyclePrimaryAgentPrevious
     ));
 }
 
@@ -779,7 +779,10 @@ async fn process_latest_queued_event_primes_newest_queue_priority() {
         false,
         0,
     );
-    let mut queued_inputs = VecDeque::from(["first".to_string(), "latest".to_string()]);
+    let mut queued_inputs = VecDeque::from([
+        QueuedInput::new("first".to_string(), Some("duck".to_string())),
+        QueuedInput::new("latest".to_string(), Some("builder".to_string())),
+    ]);
     let mut prefer_latest_once = false;
     let mut queue = InlineQueueState::new(&handle, &mut queued_inputs, &mut prefer_latest_once);
 
@@ -877,8 +880,6 @@ fn other_name(command: &InlineCommand) -> &'static str {
         InlineCommand::SuspendEventLoop => "SuspendEventLoop",
         InlineCommand::ResumeEventLoop => "ResumeEventLoop",
         InlineCommand::ClearInputQueue => "ClearInputQueue",
-        InlineCommand::SetEditingMode(_) => "SetEditingMode",
-        InlineCommand::SetAutonomousMode(_) => "SetAutonomousMode",
         InlineCommand::SetSkipConfirmations(_) => "SetSkipConfirmations",
         InlineCommand::Shutdown => "Shutdown",
         InlineCommand::SetReasoningStage(_) => "SetReasoningStage",

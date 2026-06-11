@@ -11,7 +11,6 @@ use serde_json::{Value, json};
 use std::sync::Arc;
 use tokio::time::Instant;
 use vtcode_core::config::constants::tools;
-use vtcode_core::core::interfaces::SessionMode;
 use vtcode_core::llm::provider::ToolCall as ProviderToolCall;
 use vtcode_core::tools::tool_intent;
 
@@ -364,49 +363,7 @@ impl ZedAgent {
             SupportedTool::ListFiles => self.run_list_files(args).await.unwrap_or_else(|message| {
                 ToolExecutionReport::failure(tools::LIST_FILES, &message)
             }),
-            SupportedTool::SwitchMode => self
-                .run_switch_mode(session_id, args)
-                .await
-                .unwrap_or_else(|message| ToolExecutionReport::failure("switch_mode", &message)),
         }
-    }
-
-    pub(crate) async fn run_switch_mode(
-        &self,
-        session_id: &acp::SessionId,
-        args: &Value,
-    ) -> Result<ToolExecutionReport, String> {
-        let mode_id = args
-            .get("mode_id")
-            .and_then(Value::as_str)
-            .ok_or_else(|| "missing mode_id".to_string())?;
-        let mode =
-            SessionMode::parse(mode_id).ok_or_else(|| format!("unknown mode_id: {mode_id}"))?;
-
-        let session = self
-            .session_handle(session_id)
-            .ok_or_else(|| "unknown session".to_string())?;
-
-        let _ = self
-            .apply_session_mode(session_id, &session, mode)
-            .await
-            .map_err(|e| format!("Failed to apply mode update: {e}"))?;
-
-        let payload = json!({
-            TOOL_RESPONSE_KEY_STATUS: TOOL_SUCCESS_LABEL,
-            TOOL_RESPONSE_KEY_TOOL: "switch_mode",
-            "result": {
-                "mode_id": mode_id,
-            }
-        });
-
-        Ok(ToolExecutionReport::success(
-            vec![acp::ToolCallContent::from(format!(
-                "Successfully switched to mode: {mode_id}"
-            ))],
-            Vec::new(),
-            payload,
-        ))
     }
 }
 

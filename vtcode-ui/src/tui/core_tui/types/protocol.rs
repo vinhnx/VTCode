@@ -7,7 +7,7 @@ use super::selection::{
     InlineListItem, InlineListSearchConfig, InlineListSelection, SecurePromptConfig,
 };
 use super::style::{
-    EditingMode, InlineHeaderContext, InlineLinkRange, InlineSegment, InlineTextStyle, InlineTheme,
+    InlineHeaderContext, InlineLinkRange, InlineSegment, InlineTextStyle, InlineTheme,
 };
 use crate::tui::core_tui::session::config::AppearanceConfig;
 
@@ -102,10 +102,6 @@ pub enum InlineCommand {
     ClearInputQueue,
     StopEventStream,
     StartEventStream,
-    /// Update editing mode state in header context
-    SetEditingMode(EditingMode),
-    /// Update autonomous mode state in header context
-    SetAutonomousMode(bool),
     SetSkipConfirmations(bool),
     Shutdown,
     /// Update reasoning stage in header context
@@ -139,11 +135,10 @@ pub enum InlineEvent {
     ForceCancelPtySession,
     RequestInlinePromptSuggestion(String),
     CyclePrimaryAgent,
+    CyclePrimaryAgentPrevious,
     SelectPrimaryAgent {
         name: Option<String>,
     },
-    /// Toggle editing mode (Shift+Tab cycles through Edit -> Auto -> Plan -> Edit).
-    ToggleMode,
     HistoryPrevious,
     HistoryNext,
 }
@@ -336,16 +331,6 @@ impl InlineHandle {
 
     pub fn shutdown(&self) {
         self.send_command(InlineCommand::Shutdown);
-    }
-
-    /// Update editing mode state in the header display
-    pub fn set_editing_mode(&self, mode: EditingMode) {
-        self.send_command(InlineCommand::SetEditingMode(mode));
-    }
-
-    /// Update autonomous mode state in the header display
-    pub fn set_autonomous_mode(&self, enabled: bool) {
-        self.send_command(InlineCommand::SetAutonomousMode(enabled));
     }
 
     pub fn show_overlay(&self, request: OverlayRequest) {

@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 /// Top-level configuration for automation hooks and lifecycle events
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+#[derive(Debug, Clone, Deserialize, Serialize, Default, PartialEq, Eq)]
 pub struct HooksConfig {
     /// Configuration for lifecycle-based shell command execution
     #[serde(default)]
@@ -14,7 +14,7 @@ pub struct HooksConfig {
 /// Configuration for hooks triggered during distinct agent lifecycle events.
 /// Each event supports a list of groups with optional matchers.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+#[derive(Debug, Clone, Deserialize, Serialize, Default, PartialEq, Eq)]
 pub struct LifecycleHooksConfig {
     /// Suppress plain stdout from successful hooks unless they emit structured fields
     #[serde(default)]
@@ -102,7 +102,7 @@ impl LifecycleHooksConfig {
 
 /// A group of hooks sharing a common execution matcher
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+#[derive(Debug, Clone, Deserialize, Serialize, Default, PartialEq, Eq)]
 pub struct HookGroupConfig {
     /// Optional regex matcher to filter when this group runs.
     /// Matched against context strings (e.g. tool name, project path).
@@ -125,7 +125,7 @@ pub enum HookCommandKind {
 
 /// Configuration for a single shell command hook
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+#[derive(Debug, Clone, Deserialize, Serialize, Default, PartialEq, Eq)]
 pub struct HookCommandConfig {
     /// Type of hook command (currently only 'command' is supported)
     #[serde(default)]

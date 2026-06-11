@@ -10,7 +10,7 @@ use super::overlay::{
 };
 use crate::tui::core_tui::session::config::AppearanceConfig;
 use crate::tui::core_tui::types::{
-    EditingMode, InlineHeaderContext, InlineLinkRange, InlineListItem, InlineListSearchConfig,
+    InlineHeaderContext, InlineLinkRange, InlineListItem, InlineListSearchConfig,
     InlineListSelection, InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme,
     LocalAgentEntry, SecurePromptConfig,
 };
@@ -118,10 +118,6 @@ pub enum InlineCommand {
     ClearInputQueue,
     StopEventStream,
     StartEventStream,
-    /// Update editing mode state in header context
-    SetEditingMode(EditingMode),
-    /// Update autonomous mode state in header context
-    SetAutonomousMode(bool),
     SetSkipConfirmations(bool),
     Shutdown,
     /// Update reasoning stage in header context
@@ -158,11 +154,10 @@ pub enum InlineEvent {
     ForceCancelPtySession,
     RequestInlinePromptSuggestion(String),
     CyclePrimaryAgent,
+    CyclePrimaryAgentPrevious,
     SelectPrimaryAgent {
         name: Option<String>,
     },
-    /// Toggle editing mode (Shift+Tab cycles through Edit -> Auto -> Plan -> Edit).
-    ToggleMode,
     HistoryPrevious,
     HistoryNext,
 }
@@ -208,10 +203,12 @@ impl From<crate::tui::core_tui::types::InlineEvent> for InlineEvent {
                 Self::RequestInlinePromptSuggestion(draft)
             }
             crate::tui::core_tui::types::InlineEvent::CyclePrimaryAgent => Self::CyclePrimaryAgent,
+            crate::tui::core_tui::types::InlineEvent::CyclePrimaryAgentPrevious => {
+                Self::CyclePrimaryAgentPrevious
+            }
             crate::tui::core_tui::types::InlineEvent::SelectPrimaryAgent { name } => {
                 Self::SelectPrimaryAgent { name }
             }
-            crate::tui::core_tui::types::InlineEvent::ToggleMode => Self::ToggleMode,
             crate::tui::core_tui::types::InlineEvent::HistoryPrevious => Self::HistoryPrevious,
             crate::tui::core_tui::types::InlineEvent::HistoryNext => Self::HistoryNext,
         }
@@ -411,16 +408,6 @@ impl InlineHandle {
 
     pub fn shutdown(&self) {
         self.send_command(InlineCommand::Shutdown);
-    }
-
-    /// Update editing mode state in the header display
-    pub fn set_editing_mode(&self, mode: EditingMode) {
-        self.send_command(InlineCommand::SetEditingMode(mode));
-    }
-
-    /// Update autonomous mode state in the header display
-    pub fn set_autonomous_mode(&self, enabled: bool) {
-        self.send_command(InlineCommand::SetAutonomousMode(enabled));
     }
 
     pub fn show_transient(&self, request: TransientRequest) {

@@ -14,7 +14,6 @@ pub enum Action {
     BackgroundOperation,
     OpenModelPicker,
     ClearScreen,
-    ToggleMode,
     ScrollPageUp,
     ScrollPageDown,
     EditQueue,
@@ -33,7 +32,6 @@ impl Action {
             Action::BackgroundOperation => "background_operation",
             Action::OpenModelPicker => "open_model_picker",
             Action::ClearScreen => "clear_screen",
-            Action::ToggleMode => "toggle_mode",
             Action::ScrollPageUp => "scroll_page_up",
             Action::ScrollPageDown => "scroll_page_down",
             Action::EditQueue => "edit_queue",
@@ -52,7 +50,6 @@ impl Action {
             Action::BackgroundOperation,
             Action::OpenModelPicker,
             Action::ClearScreen,
-            Action::ToggleMode,
             Action::ScrollPageUp,
             Action::ScrollPageDown,
             Action::EditQueue,
@@ -197,7 +194,6 @@ fn default_bindings() -> HashMap<Action, Vec<(KeyCode, KeyModifiers)>> {
             (KeyCode::Char('L'), KeyModifiers::CONTROL),
         ],
     );
-    m.insert(ToggleMode, vec![(KeyCode::BackTab, KeyModifiers::empty())]);
     m.insert(ScrollPageUp, vec![(KeyCode::PageUp, KeyModifiers::empty())]);
     m.insert(
         ScrollPageDown,

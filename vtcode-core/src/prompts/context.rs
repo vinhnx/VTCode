@@ -131,6 +131,11 @@ impl PromptContext {
         self.load_available_skills_with_home_dir(home_dir.as_deref());
     }
 
+    pub fn replace_available_skills_with_named(&mut self, names: &[String]) {
+        let home_dir = default_codex_home_dir();
+        self.replace_available_skills_with_named_and_home_dir(names, home_dir.as_deref());
+    }
+
     pub(crate) fn load_available_skills_with_home_dir(&mut self, home_dir: Option<&Path>) {
         let Some(workspace) = self.workspace.as_deref() else {
             return;
@@ -152,6 +157,52 @@ impl PromptContext {
                 .skills
                 .into_iter()
                 .filter(is_model_catalog_eligible)
+                .collect(),
+        );
+    }
+
+    pub(crate) fn replace_available_skills_with_named_and_home_dir(
+        &mut self,
+        names: &[String],
+        home_dir: Option<&Path>,
+    ) {
+        self.available_skills.clear();
+        self.available_skill_metadata.clear();
+
+        if names.is_empty() {
+            return;
+        }
+
+        let Some(workspace) = self.workspace.as_deref() else {
+            return;
+        };
+        let Some(home_dir) = home_dir else {
+            return;
+        };
+
+        let requested = names
+            .iter()
+            .map(|name| name.trim().to_ascii_lowercase())
+            .filter(|name| !name.is_empty())
+            .collect::<std::collections::HashSet<_>>();
+        if requested.is_empty() {
+            return;
+        }
+
+        let bundled_skills_enabled = ConfigManager::load_from_workspace(workspace)
+            .map(|manager| manager.config().skills.bundled.enabled)
+            .unwrap_or(true);
+        let manager = SkillsManager::new_with_bundled_skills_enabled(
+            home_dir.to_path_buf(),
+            bundled_skills_enabled,
+        );
+        let outcome = manager.skills_metadata_lightweight(workspace);
+        self.add_skill_metadata_entries(
+            outcome
+                .skills
+                .into_iter()
+                .filter(is_model_catalog_eligible)
+                .filter(|skill| requested.contains(&skill.name.to_ascii_lowercase()))
                 .collect(),
         );
     }
@@ -269,5 +320,54 @@ mod tests {
         assert!(skill_names.contains(&"repo-skill"));
         assert!(skill_names.contains(&"skill-creator"));
         assert!(!skill_names.contains(&"cmd-review"));
+    }
+
+    #[test]
+    fn replace_available_skills_with_named_recomputes_scope() {
+        let workspace = TempDir::new().expect("workspace tempdir");
+        fs::create_dir(workspace.path().join(".git")).expect("create git dir");
+        write_skill(
+            &workspace.path().join(".agents/skills/alpha"),
+            "alpha",
+            "Alpha skill",
+        );
+        write_skill(
+            &workspace.path().join(".agents/skills/beta"),
+            "beta",
+            "Beta skill",
+        );
+
+        let home = TempDir::new().expect("home tempdir");
+        let mut context = PromptContext::from_workspace_tools(workspace.path(), ["unified_search"]);
+
+        context.replace_available_skills_with_named_and_home_dir(
+            &["alpha".to_string()],
+            Some(home.path()),
+        );
+        assert_eq!(
+            context
+                .available_skill_metadata
+                .iter()
+                .map(|skill| skill.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["alpha"]
+        );
+
+        context.replace_available_skills_with_named_and_home_dir(
+            &["beta".to_string()],
+            Some(home.path()),
+        );
+        assert_eq!(
+            context
+                .available_skill_metadata
+                .iter()
+                .map(|skill| skill.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["beta"]
+        );
+
+        context.replace_available_skills_with_named_and_home_dir(&[], Some(home.path()));
+        assert!(context.available_skill_metadata.is_empty());
+        assert!(context.available_skills.is_empty());
     }
 }

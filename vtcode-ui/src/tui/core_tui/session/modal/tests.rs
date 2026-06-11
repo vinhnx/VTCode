@@ -788,12 +788,12 @@ fn list_modal_space_no_longer_submits_config_action() {
         hotkeys: Vec::new(),
         list: Some(ModalListState::new(
             vec![InlineListItem {
-                title: "Permission mode".to_owned(),
-                subtitle: Some("permissions.default_mode = auto".to_owned()),
+                title: "Permission default".to_owned(),
+                subtitle: Some("permissions.default = ask".to_owned()),
                 badge: Some("Toggle".to_owned()),
                 indent: 0,
                 selection: Some(InlineListSelection::ConfigAction(
-                    "permissions.default_mode:cycle".to_owned(),
+                    "permissions.default:cycle".to_owned(),
                 )),
                 search_value: None,
             }],
@@ -821,12 +821,12 @@ fn list_modal_alt_d_does_not_toggle_density_for_config_actions() {
         hotkeys: Vec::new(),
         list: Some(ModalListState::new(
             vec![InlineListItem {
-                title: "Permission mode".to_owned(),
-                subtitle: Some("permissions.default_mode = auto".to_owned()),
+                title: "Permission default".to_owned(),
+                subtitle: Some("permissions.default = ask".to_owned()),
                 badge: Some("Toggle".to_owned()),
                 indent: 0,
                 selection: Some(InlineListSelection::ConfigAction(
-                    "permissions.default_mode:cycle".to_owned(),
+                    "permissions.default:cycle".to_owned(),
                 )),
                 search_value: None,
             }],

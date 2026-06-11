@@ -174,7 +174,7 @@ pub fn validate_path_safety(path: &str) -> Result<()> {
                     || path == "/var/tmp");
 
             if !is_var_temp_exception && matches_critical_prefix(path, prefix) {
-                bail!("Access to system directory denied: {}", prefix);
+                bail!("Access to system directory denied: {prefix}");
             }
         }
     }

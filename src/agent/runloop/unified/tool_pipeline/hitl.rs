@@ -18,7 +18,7 @@ pub(crate) async fn execute_hitl_tool(
     request_user_input_enabled: bool,
 ) -> Option<Result<Value>> {
     if tool_name == tools::REQUEST_USER_INPUT && !request_user_input_enabled {
-        let message = "request_user_input is unavailable in the current session mode";
+        let message = "request_user_input is unavailable in the current runtime";
         return Some(Err(anyhow!(message)));
     }
 

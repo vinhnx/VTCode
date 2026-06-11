@@ -9,19 +9,30 @@ use crate::config::constants::tools;
 use crate::tools::command_args;
 use crate::tools::mcp::{MCP_QUALIFIED_TOOL_PREFIX, parse_canonical_mcp_tool_name};
 use crate::tools::tool_intent;
+use vtcode_config::core::permissions::{AgentPermissionsConfig, PermissionDefault};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PermissionRuleDecision {
     Allow,
+    Auto,
     Ask,
     Deny,
     NoMatch,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ResolvedPermissionDecision {
+    Allow,
+    Auto,
+    Ask,
+    Deny,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct PermissionRuleMatches {
     pub deny: bool,
     pub ask: bool,
+    pub auto: bool,
     pub allow: bool,
 }
 
@@ -31,6 +42,8 @@ impl PermissionRuleMatches {
             PermissionRuleDecision::Deny
         } else if self.ask {
             PermissionRuleDecision::Ask
+        } else if self.auto {
+            PermissionRuleDecision::Auto
         } else if self.allow {
             PermissionRuleDecision::Allow
         } else {
@@ -91,30 +104,113 @@ pub fn evaluate_permissions(
     current_dir: &Path,
     request: &PermissionRequest,
 ) -> PermissionRuleMatches {
-    let evaluator = PermissionEvaluator::new(config, workspace_root, current_dir);
-    evaluator.evaluate(request)
+    let evaluator = PermissionRuleSet::from_global_config(config, workspace_root, current_dir);
+    evaluator.evaluate_matches(request)
 }
 
-struct PermissionEvaluator {
+pub fn evaluate_agent_permissions(
+    agent_permissions: &AgentPermissionsConfig,
+    workspace_root: &Path,
+    current_dir: &Path,
+    request: &PermissionRequest,
+) -> ResolvedPermissionDecision {
+    let evaluator =
+        PermissionRuleSet::from_agent_config(agent_permissions, workspace_root, current_dir);
+    evaluator.resolve(request, agent_permissions.default)
+}
+
+pub fn evaluate_effective_permissions(
+    global_config: &PermissionsConfig,
+    agent_permissions: &AgentPermissionsConfig,
+    workspace_root: &Path,
+    current_dir: &Path,
+    request: &PermissionRequest,
+) -> ResolvedPermissionDecision {
+    let global = PermissionRuleSet::from_global_config(global_config, workspace_root, current_dir);
+    let global_matches = global.evaluate_matches(request);
+    if global_matches.deny {
+        return ResolvedPermissionDecision::Deny;
+    }
+
+    let agent_decision =
+        evaluate_agent_permissions(agent_permissions, workspace_root, current_dir, request);
+    if global_matches.ask && agent_decision != ResolvedPermissionDecision::Deny {
+        return ResolvedPermissionDecision::Ask;
+    }
+
+    agent_decision
+}
+
+struct PermissionRuleSet {
     deny: Vec<CompiledPermissionRule>,
     ask: Vec<CompiledPermissionRule>,
+    auto: Vec<CompiledPermissionRule>,
     allow: Vec<CompiledPermissionRule>,
 }
 
-impl PermissionEvaluator {
-    fn new(config: &PermissionsConfig, workspace_root: &Path, current_dir: &Path) -> Self {
+impl PermissionRuleSet {
+    fn from_global_config(
+        config: &PermissionsConfig,
+        workspace_root: &Path,
+        current_dir: &Path,
+    ) -> Self {
         Self {
             deny: compile_rules(&config.deny, workspace_root, current_dir),
             ask: compile_rules(&config.ask, workspace_root, current_dir),
+            auto: Vec::new(),
             allow: compile_rules(&config.allow, workspace_root, current_dir),
         }
     }
 
-    fn evaluate(&self, request: &PermissionRequest) -> PermissionRuleMatches {
+    fn from_agent_config(
+        config: &AgentPermissionsConfig,
+        workspace_root: &Path,
+        current_dir: &Path,
+    ) -> Self {
+        Self {
+            deny: compile_rules(&config.deny, workspace_root, current_dir),
+            ask: compile_rules(&config.ask, workspace_root, current_dir),
+            auto: compile_rules(&config.auto, workspace_root, current_dir),
+            allow: compile_rules(&config.allow, workspace_root, current_dir),
+        }
+    }
+
+    fn evaluate_matches(&self, request: &PermissionRequest) -> PermissionRuleMatches {
         PermissionRuleMatches {
             deny: self.deny.iter().any(|rule| rule.matches(request)),
             ask: self.ask.iter().any(|rule| rule.matches(request)),
+            auto: self.auto.iter().any(|rule| rule.matches(request)),
             allow: self.allow.iter().any(|rule| rule.matches(request)),
+        }
+    }
+
+    fn resolve(
+        &self,
+        request: &PermissionRequest,
+        default: PermissionDefault,
+    ) -> ResolvedPermissionDecision {
+        let matches = self.evaluate_matches(request);
+        if matches.deny {
+            ResolvedPermissionDecision::Deny
+        } else if matches.ask {
+            ResolvedPermissionDecision::Ask
+        } else if matches.auto {
+            ResolvedPermissionDecision::Auto
+        } else if matches.allow {
+            ResolvedPermissionDecision::Allow
+        } else {
+            default.into()
+        }
+    }
+}
+
+impl From<PermissionDefault> for ResolvedPermissionDecision {
+    fn from(default: PermissionDefault) -> Self {
+        match default {
+            PermissionDefault::Ask => Self::Ask,
+            PermissionDefault::Allow => Self::Allow,
+            PermissionDefault::Auto => Self::Auto,
+            PermissionDefault::Deny => Self::Deny,
         }
     }
 }
@@ -572,12 +668,14 @@ fn domain_matches_allowed(domain: &str, allowed: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        PermissionRequest, PermissionRequestKind, PermissionRuleDecision, build_permission_request,
-        evaluate_permissions,
+        PermissionRequest, PermissionRequestKind, PermissionRuleDecision,
+        ResolvedPermissionDecision, build_permission_request, evaluate_agent_permissions,
+        evaluate_effective_permissions, evaluate_permissions,
     };
-    use crate::config::{PermissionMode, PermissionsConfig};
+    use crate::config::PermissionsConfig;
     use serde_json::json;
     use tempfile::TempDir;
+    use vtcode_config::core::permissions::{AgentPermissionsConfig, PermissionDefault};
 
     fn workspace_roots() -> (TempDir, std::path::PathBuf, std::path::PathBuf) {
         let temp = TempDir::new().expect("temp dir");
@@ -585,6 +683,19 @@ mod tests {
         let cwd = workspace.join("nested");
         std::fs::create_dir_all(&cwd).expect("create dirs");
         (temp, workspace, cwd)
+    }
+
+    fn agent_permissions(default: PermissionDefault) -> AgentPermissionsConfig {
+        AgentPermissionsConfig::new(default)
+    }
+
+    fn exact_tool_request(tool_name: &str) -> PermissionRequest {
+        PermissionRequest {
+            exact_tool_name: tool_name.to_string(),
+            kind: PermissionRequestKind::Other,
+            builtin_file_mutation: false,
+            protected_write_paths: Vec::new(),
+        }
     }
 
     #[test]
@@ -727,11 +838,6 @@ mod tests {
     }
 
     #[test]
-    fn mode_defaults_to_standard_behavior() {
-        assert_eq!(PermissionMode::default(), PermissionMode::Default);
-    }
-
-    #[test]
     fn relative_paths_resolve_from_current_directory() {
         let (_temp, workspace, cwd) = workspace_roots();
         let config = PermissionsConfig {
@@ -775,5 +881,190 @@ mod tests {
 
         assert!(evaluate_permissions(&config, &workspace, &cwd, &read_request).allow);
         assert!(evaluate_permissions(&config, &workspace, &cwd, &exec_request).deny);
+    }
+
+    #[test]
+    fn agent_deny_wins_over_ask_auto_allow_and_default() {
+        let (_temp, workspace, cwd) = workspace_roots();
+        let request = exact_tool_request("unified_exec");
+        let mut permissions = agent_permissions(PermissionDefault::Allow);
+        permissions.allow = vec!["unified_exec".to_string()];
+        permissions.auto = vec!["unified_exec".to_string()];
+        permissions.ask = vec!["unified_exec".to_string()];
+        permissions.deny = vec!["unified_exec".to_string()];
+
+        assert_eq!(
+            evaluate_agent_permissions(&permissions, &workspace, &cwd, &request),
+            ResolvedPermissionDecision::Deny
+        );
+    }
+
+    #[test]
+    fn agent_ask_wins_over_auto_allow_and_default() {
+        let (_temp, workspace, cwd) = workspace_roots();
+        let request = exact_tool_request("unified_exec");
+        let mut permissions = agent_permissions(PermissionDefault::Deny);
+        permissions.allow = vec!["unified_exec".to_string()];
+        permissions.auto = vec!["unified_exec".to_string()];
+        permissions.ask = vec!["unified_exec".to_string()];
+
+        assert_eq!(
+            evaluate_agent_permissions(&permissions, &workspace, &cwd, &request),
+            ResolvedPermissionDecision::Ask
+        );
+    }
+
+    #[test]
+    fn agent_auto_wins_over_allow_and_default() {
+        let (_temp, workspace, cwd) = workspace_roots();
+        let request = exact_tool_request("unified_exec");
+        let mut permissions = agent_permissions(PermissionDefault::Deny);
+        permissions.allow = vec!["unified_exec".to_string()];
+        permissions.auto = vec!["unified_exec".to_string()];
+
+        assert_eq!(
+            evaluate_agent_permissions(&permissions, &workspace, &cwd, &request),
+            ResolvedPermissionDecision::Auto
+        );
+    }
+
+    #[test]
+    fn agent_allow_wins_over_default() {
+        let (_temp, workspace, cwd) = workspace_roots();
+        let request = exact_tool_request("read_file");
+        let mut permissions = agent_permissions(PermissionDefault::Deny);
+        permissions.allow = vec!["read_file".to_string()];
+
+        assert_eq!(
+            evaluate_agent_permissions(&permissions, &workspace, &cwd, &request),
+            ResolvedPermissionDecision::Allow
+        );
+    }
+
+    #[test]
+    fn unmatched_agent_calls_use_permissions_default() {
+        let (_temp, workspace, cwd) = workspace_roots();
+        let request = exact_tool_request("read_file");
+        let permissions = agent_permissions(PermissionDefault::Auto);
+
+        assert_eq!(
+            evaluate_agent_permissions(&permissions, &workspace, &cwd, &request),
+            ResolvedPermissionDecision::Auto
+        );
+    }
+
+    #[test]
+    fn missing_permissions_default_is_invalid_before_evaluation() {
+        let err = toml::from_str::<AgentPermissionsConfig>(r#"allow = ["read_file"]"#).unwrap_err();
+
+        assert!(err.to_string().contains("missing field `default`"));
+    }
+
+    #[test]
+    fn global_deny_is_hard_ceiling() {
+        let (_temp, workspace, cwd) = workspace_roots();
+        let request = exact_tool_request("unified_exec");
+        let global = PermissionsConfig {
+            deny: vec!["unified_exec".to_string()],
+            ..PermissionsConfig::default()
+        };
+        let permissions = agent_permissions(PermissionDefault::Allow);
+
+        assert_eq!(
+            evaluate_effective_permissions(&global, &permissions, &workspace, &cwd, &request),
+            ResolvedPermissionDecision::Deny
+        );
+    }
+
+    #[test]
+    fn global_ask_forces_prompt_over_agent_allow_or_auto() {
+        let (_temp, workspace, cwd) = workspace_roots();
+        let request = exact_tool_request("unified_exec");
+        let global = PermissionsConfig {
+            ask: vec!["unified_exec".to_string()],
+            ..PermissionsConfig::default()
+        };
+
+        assert_eq!(
+            evaluate_effective_permissions(
+                &global,
+                &agent_permissions(PermissionDefault::Allow),
+                &workspace,
+                &cwd,
+                &request,
+            ),
+            ResolvedPermissionDecision::Ask
+        );
+        assert_eq!(
+            evaluate_effective_permissions(
+                &global,
+                &agent_permissions(PermissionDefault::Auto),
+                &workspace,
+                &cwd,
+                &request,
+            ),
+            ResolvedPermissionDecision::Ask
+        );
+    }
+
+    #[test]
+    fn global_allow_cannot_override_agent_deny_or_auto() {
+        let (_temp, workspace, cwd) = workspace_roots();
+        let request = exact_tool_request("unified_exec");
+        let global = PermissionsConfig {
+            allow: vec!["unified_exec".to_string()],
+            ..PermissionsConfig::default()
+        };
+
+        assert_eq!(
+            evaluate_effective_permissions(
+                &global,
+                &agent_permissions(PermissionDefault::Deny),
+                &workspace,
+                &cwd,
+                &request,
+            ),
+            ResolvedPermissionDecision::Deny
+        );
+        assert_eq!(
+            evaluate_effective_permissions(
+                &global,
+                &agent_permissions(PermissionDefault::Auto),
+                &workspace,
+                &cwd,
+                &request,
+            ),
+            ResolvedPermissionDecision::Auto
+        );
+    }
+
+    #[test]
+    fn agent_specific_deny_wins_within_agent_scope() {
+        let (_temp, workspace, cwd) = workspace_roots();
+        let request = exact_tool_request("write_file");
+        let global = PermissionsConfig {
+            allow: vec!["write_file".to_string()],
+            ..PermissionsConfig::default()
+        };
+        let mut permissions = agent_permissions(PermissionDefault::Allow);
+        permissions.deny = vec!["write_file".to_string()];
+
+        assert_eq!(
+            evaluate_effective_permissions(&global, &permissions, &workspace, &cwd, &request),
+            ResolvedPermissionDecision::Deny
+        );
+    }
+
+    #[test]
+    fn auto_bucket_resolves_to_classifier_backed_decision() {
+        let (_temp, workspace, cwd) = workspace_roots();
+        let request = exact_tool_request("unified_exec");
+        let mut permissions = agent_permissions(PermissionDefault::Ask);
+        permissions.auto = vec!["unified_exec".to_string()];
+
+        assert_eq!(
+            evaluate_agent_permissions(&permissions, &workspace, &cwd, &request),
+            ResolvedPermissionDecision::Auto
+        );
     }
 }

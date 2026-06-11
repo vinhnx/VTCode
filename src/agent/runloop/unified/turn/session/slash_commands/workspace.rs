@@ -656,6 +656,7 @@ fn selection_to_answer(selection: InlineListSelection) -> Option<GuidedInitAnswe
 #[cfg(test)]
 mod tests {
     use super::*;
+    use vtcode_config::core::permissions::{AgentPermissionsConfig, PermissionDefault};
     use vtcode_core::llm::provider::{AssistantPhase, Message};
 
     #[test]
@@ -683,7 +684,7 @@ mod tests {
             model: Some("inherit".to_string()),
             color: Some("green".to_string()),
             reasoning_effort: Some("medium".to_string()),
-            permission_mode: Some(vtcode_core::config::PermissionMode::Plan),
+            permissions: AgentPermissionsConfig::new(PermissionDefault::Deny),
             skills: vec!["repo-skill".to_string()],
             mcp_servers: Vec::new(),
             hooks: None,

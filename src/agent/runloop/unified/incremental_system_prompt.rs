@@ -7,12 +7,12 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-fn append_auto_mode_notice(prompt: &mut String) {
-    if prompt.contains("## Auto Mode Active") {
+fn append_auto_permission_notice(prompt: &mut String) {
+    if prompt.contains("## Auto Permission Review Active") {
         return;
     }
     prompt.push('\n');
-    prompt.push_str(crate::agent::runloop::unified::auto_mode::system_prompt_addendum());
+    prompt.push_str(crate::agent::runloop::unified::auto_permission::system_prompt_addendum());
     prompt.push('\n');
 }
 
@@ -138,8 +138,8 @@ impl IncrementalSystemPrompt {
     /// Assembly order:
     /// 1. Base system prompt (from `vtcode_core::prompts::system`)
     /// 2. Instruction appendix (from AGENTS.md / project docs)
-    /// 3. Runtime mode sections (plan mode, auto mode, request_user_input)
-    /// 4. Auto-mode notice (if auto_mode && !plan_mode)
+    /// 3. Runtime prompt contract sections
+    /// 4. Auto permission review notice when applicable
     async fn build_prompt_content(
         &self,
         base_system_prompt: &str,
@@ -174,13 +174,13 @@ impl IncrementalSystemPrompt {
             &mut prompt,
             vtcode_core::prompts::RuntimePromptContract {
                 full_auto: context.full_auto,
-                plan_mode: context.plan_mode,
+                planning_active: context.planning_active,
                 request_user_input_enabled: context.request_user_input_enabled,
             },
         );
 
-        if context.auto_mode && !context.plan_mode {
-            append_auto_mode_notice(&mut prompt);
+        if context.auto_permission && !context.planning_active {
+            append_auto_permission_notice(&mut prompt);
         }
 
         prompt
@@ -204,9 +204,9 @@ impl Default for IncrementalSystemPrompt {
 #[derive(Debug, Clone)]
 pub(crate) struct SystemPromptContext {
     pub(crate) full_auto: bool,
-    pub(crate) auto_mode: bool,
-    /// Plan mode: read-only mode for exploration and planning.
-    pub(crate) plan_mode: bool,
+    pub(crate) auto_permission: bool,
+    /// Planning workflow with read-only permissions for exploration and planning.
+    pub(crate) planning_active: bool,
     /// Whether `request_user_input` can be called in the current runtime.
     pub(crate) request_user_input_enabled: bool,
     /// Discovered skills for immediate awareness
@@ -224,8 +224,8 @@ impl SystemPromptContext {
 
         let mut hasher = DefaultHasher::new();
         self.full_auto.hash(&mut hasher);
-        self.auto_mode.hash(&mut hasher);
-        self.plan_mode.hash(&mut hasher);
+        self.auto_permission.hash(&mut hasher);
+        self.planning_active.hash(&mut hasher);
         self.request_user_input_enabled.hash(&mut hasher);
         self.active_instruction_directory.hash(&mut hasher);
         for path in &self.instruction_context_paths {

@@ -27,7 +27,8 @@ pub use custom_provider::{CustomProviderCommandAuthConfig, CustomProviderConfig}
 pub use dotfile_protection::DotfileProtectionConfig;
 pub use model::ModelConfig;
 pub use permissions::{
-    AutoModeConfig, AutoModeEnvironmentConfig, PermissionMode, PermissionsConfig,
+    AgentPermissionsConfig, AutoPermissionConfig, AutoPermissionEnvironmentConfig,
+    PermissionsConfig,
 };
 pub use plugins::{PluginRuntimeConfig, PluginTrustLevel};
 pub use prompt_cache::{
@@ -45,7 +46,7 @@ pub use provider::{
 pub use sandbox::{
     DockerSandboxConfig, ExternalSandboxConfig, ExternalSandboxType, MicroVMSandboxConfig,
     NetworkAllowlistEntryConfig, NetworkConfig, ResourceLimitsConfig, ResourceLimitsPreset,
-    SandboxConfig, SandboxMode, SeccompConfig, SeccompProfilePreset, SensitivePathsConfig,
+    SandboxConfig, SandboxPolicy, SeccompConfig, SeccompProfilePreset, SensitivePathsConfig,
 };
 pub use security::{GatekeeperConfig, SecurityConfig};
 pub use skills::{BundledSkillsConfig, PromptFormat, SkillsConfig, SkillsRenderMode};

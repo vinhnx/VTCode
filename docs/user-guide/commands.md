@@ -138,8 +138,9 @@ Configure the behaviour under **Settings › Extensions › VT Code**:
 - `/resume` opens archived sessions when the current run is idle.
 - `/fork` opens the session picker and then lets you choose between a full-copy fork and a summarized fork.
 - `/compact` manually compacts the current conversation context immediately. Use `/compact edit-prompt` or `/compact reset-prompt` to manage the saved default prompt for manual compaction requests. On the local fallback path, VT Code keeps a structured summary plus retained user prompts instead of a mixed recent tail.
-- `/agent` and `/agents` inspect agent definitions and delegated child runs. `@agent-name` remains a delegated child-agent control. Primary agents are switched from the TUI with `Tab` on an empty idle composer. The active primary agent is shown in the session header badge and influences the session's instructions, model, permission mode, and tool access.
-- `/agents list` shows all agent definitions with their mode (`primary`, `subagent`, or `all`). `/agents create` scaffolds a new agent definition in `.vtcode/agents/`.
+- `/agent` and `/agents` inspect agent definitions and delegated child runs. `@agent-name` remains a delegated child-agent control. Primary agents are switched from the TUI with `Tab` on an empty idle composer. The active primary agent is shown in the session header badge and influences the session's instructions, model, granular permission policy, and tool access.
+- `/agents list` shows all agent definitions with their availability (`mode: primary`, `mode: subagent`, or `mode: all`). `/agents create` scaffolds a new agent definition in `.vtcode/agents/`.
+- `/plan` starts or continues the planning workflow. It is a workflow command, not a state selector.
 - `/loop` schedules a session-scoped prompt that re-enters the chat only when the current turn is idle.
 - `/schedule` manages durable scheduled tasks. They are polled while VT Code is open, and the local scheduler daemon keeps them running in the background.
 

@@ -138,10 +138,8 @@ The original "three fragmented builders" claim does not hold:
     (or, for simple tasks, calls the shared
     `runner/helpers.rs:50 compose_system_prompt_with_appendix`).
   - Unified: `IncrementalSystemPrompt` takes that base and appends runtime
-    addenda via the **shared** `vtcode_core::prompts::append_runtime_mode_sections`
-    (`incremental_system_prompt.rs:165`).
-  - Plan-mode / contract text is already centralized as `pub const PLAN_MODE_*`
-    and `*_CONTRACT_LINES` in `prompts/system.rs`. No duplicated section text.
+    addenda via the shared prompt composition helpers.
+  - Planning workflow and contract text is centralized in `prompts/system.rs`. No duplicated section text.
 
 - **`SystemPromptGenerator` (`prompts/generator.rs`) was dead code.** Its entire
   public surface (`SystemPromptGenerator`, `::new`, `::generate`, and the *sync*

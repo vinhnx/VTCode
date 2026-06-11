@@ -1,9 +1,9 @@
-//! Plan Mode interview context and draft-loading helpers.
+//! Planning workflow interview context and draft-loading helpers.
 
 use vtcode_core::config::constants::tools;
 use vtcode_core::llm::provider as uni;
-use vtcode_core::tools::handlers::plan_mode::{
-    PlanModeState, PlanValidationReport, tracker_file_for_plan_file, validate_plan_content,
+use vtcode_core::tools::handlers::planning_workflow::{
+    PlanValidationReport, PlanningWorkflowState, tracker_file_for_plan_file, validate_plan_content,
 };
 
 use super::{
@@ -252,7 +252,7 @@ pub(super) fn collect_interview_research_context(
 }
 
 pub(super) async fn load_plan_draft_context(
-    plan_state: Option<PlanModeState>,
+    plan_state: Option<PlanningWorkflowState>,
 ) -> Option<PlanDraftContext> {
     let plan_state = plan_state?;
     let plan_file = plan_state.get_plan_file().await?;

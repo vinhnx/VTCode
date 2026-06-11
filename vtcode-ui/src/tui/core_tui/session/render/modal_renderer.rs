@@ -381,8 +381,8 @@ pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
                 Binding::new("Enter", "submit"),
                 Binding::new("Ctrl+C", "interrupt"),
                 Binding::new("Esc", "clear/cancel"),
-                Binding::new("Tab", "accept/queue"),
-                Binding::new("Shift+Tab", "mode picker"),
+                Binding::new("Tab", "next agent"),
+                Binding::new("Shift+Tab", "previous agent"),
             ])
             .binding_groups(vec![
                 vec![
@@ -413,8 +413,8 @@ pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
                 vec![
                     Binding::new("/", "commands"),
                     Binding::new("?", "shortcuts"),
-                    Binding::new("Shift+Tab", "mode picker"),
-                    Binding::new("Tab", "accept/queue"),
+                    Binding::new("Shift+Tab", "previous agent"),
+                    Binding::new("Tab", "next agent"),
                     Binding::new("Ctrl+L", "clear screen"),
                     Binding::new("Ctrl+M", "model picker"),
                     Binding::new("Ctrl+O", "copy response"),

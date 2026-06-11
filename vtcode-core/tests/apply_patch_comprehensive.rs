@@ -51,8 +51,7 @@ async fn test_multiple_chunks_precision() {
 
     assert!(
         result["success"].as_bool().unwrap_or(false),
-        "Tool failed: {:?}",
-        result
+        "Tool failed: {result:?}"
     );
 
     let new_content = fs::read_to_string(&file_path).unwrap();
@@ -86,8 +85,7 @@ async fn test_fuzzy_matching_whitespace() {
 
     assert!(
         result["success"].as_bool().unwrap_or(false),
-        "Tool failed: {:?}",
-        result
+        "Tool failed: {result:?}"
     );
 
     let new_content = fs::read_to_string(&file_path).unwrap();
@@ -115,8 +113,7 @@ async fn test_delete_file_operation() {
 
     assert!(
         result["success"].as_bool().unwrap_or(false),
-        "Tool failed: {:?}",
-        result
+        "Tool failed: {result:?}"
     );
     assert!(!file_path.exists());
 }
@@ -150,8 +147,7 @@ async fn test_mixed_operations() {
 
     assert!(
         result["success"].as_bool().unwrap_or(false),
-        "Tool failed: {:?}",
-        result
+        "Tool failed: {result:?}"
     );
 
     assert!(temp_dir.path().join("new.txt").exists());
@@ -185,8 +181,7 @@ async fn test_eof_handling_no_newline() {
 
     assert!(
         result["success"].as_bool().unwrap_or(false),
-        "Tool failed: {:?}",
-        result
+        "Tool failed: {result:?}"
     );
 
     let new_content = fs::read_to_string(&file_path).unwrap();
@@ -216,15 +211,13 @@ async fn test_context_not_found_error() {
 
     assert!(
         result["error"].is_object(),
-        "Expected error object, got: {:?}",
-        result
+        "Expected error object, got: {result:?}"
     );
     // Check if it's a SegmentNotFound error
     let error_msg = result["error"]["message"].as_str().unwrap();
     assert!(
         error_msg.contains("expected lines") || error_msg.contains("context"),
-        "Unexpected error message: {}",
-        error_msg
+        "Unexpected error message: {error_msg}"
     );
 }
 
@@ -241,14 +234,12 @@ async fn test_empty_patch_error() {
 
     assert!(
         result["error"].is_object(),
-        "Expected error object: {:?}",
-        result
+        "Expected error object: {result:?}"
     );
     let error_msg = combined_error_message(&result).to_lowercase();
     assert!(
         error_msg.contains("empty") || error_msg.contains("patch input"),
-        "Unexpected error message: {}",
-        error_msg
+        "Unexpected error message: {error_msg}"
     );
 }
 
@@ -265,16 +256,14 @@ async fn test_invalid_format_error() {
 
     assert!(
         result["error"].is_object(),
-        "Expected error object: {:?}",
-        result
+        "Expected error object: {result:?}"
     );
     let error_msg = combined_error_message(&result).to_lowercase();
     assert!(
         error_msg.contains("invalid patch")
             || error_msg.contains("begin patch")
             || error_msg.contains("invalid hunk"),
-        "Unexpected error message: {}",
-        error_msg
+        "Unexpected error message: {error_msg}"
     );
 }
 
@@ -350,8 +339,7 @@ async fn test_crlf_handling() {
 
     assert!(
         result["success"].as_bool().unwrap_or(false),
-        "Tool failed: {:?}",
-        result
+        "Tool failed: {result:?}"
     );
 
     let new_content = fs::read_to_string(&file_path).unwrap();
@@ -390,8 +378,7 @@ async fn test_diff_preview_correctness() {
         .join("\n");
     assert!(
         applied_lines.contains("Updated file: preview.txt"),
-        "Expected update entry in applied list: {:?}",
-        result
+        "Expected update entry in applied list: {result:?}"
     );
     assert_eq!(
         fs::read_to_string(&file_path).unwrap(),

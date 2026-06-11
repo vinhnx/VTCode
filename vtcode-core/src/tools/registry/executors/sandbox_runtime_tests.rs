@@ -14,7 +14,7 @@ use std::path::PathBuf;
 fn runtime_sandbox_config_maps_workspace_policy_overrides() {
     let mut config = vtcode_config::SandboxConfig {
         enabled: true,
-        default_mode: vtcode_config::SandboxMode::WorkspaceWrite,
+        default_policy: vtcode_config::SandboxPolicy::WorkspaceWrite,
         ..Default::default()
     };
     config.network.allow_all = false;
@@ -41,7 +41,7 @@ fn runtime_sandbox_config_maps_workspace_policy_overrides() {
 fn read_only_mutating_command_requires_approval_and_workspace_write() {
     let config = vtcode_config::SandboxConfig {
         enabled: true,
-        default_mode: vtcode_config::SandboxMode::ReadOnly,
+        default_policy: vtcode_config::SandboxPolicy::ReadOnly,
         ..Default::default()
     };
 
@@ -65,7 +65,7 @@ fn read_only_mutating_command_requires_approval_and_workspace_write() {
 fn read_only_non_mutating_command_stays_read_only_without_prompt() {
     let config = vtcode_config::SandboxConfig {
         enabled: true,
-        default_mode: vtcode_config::SandboxMode::ReadOnly,
+        default_policy: vtcode_config::SandboxPolicy::ReadOnly,
         ..Default::default()
     };
 
@@ -98,7 +98,7 @@ fn preflight_blocks_network_commands_when_network_disabled() {
 fn workspace_write_allow_all_network_is_not_blocked() {
     let mut config = vtcode_config::SandboxConfig {
         enabled: true,
-        default_mode: vtcode_config::SandboxMode::WorkspaceWrite,
+        default_policy: vtcode_config::SandboxPolicy::WorkspaceWrite,
         ..Default::default()
     };
     config.network.allow_all = true;
@@ -117,7 +117,7 @@ fn workspace_write_allow_all_network_is_not_blocked() {
 fn read_only_allow_all_network_is_not_blocked() {
     let mut config = vtcode_config::SandboxConfig {
         enabled: true,
-        default_mode: vtcode_config::SandboxMode::ReadOnly,
+        default_policy: vtcode_config::SandboxPolicy::ReadOnly,
         ..Default::default()
     };
     config.network.allow_all = true;
@@ -136,7 +136,7 @@ fn read_only_allow_all_network_is_not_blocked() {
 fn read_only_allowlist_network_is_not_blocked() {
     let mut config = vtcode_config::SandboxConfig {
         enabled: true,
-        default_mode: vtcode_config::SandboxMode::ReadOnly,
+        default_policy: vtcode_config::SandboxPolicy::ReadOnly,
         ..Default::default()
     };
     config.network.allow_all = false;
@@ -184,7 +184,7 @@ fn preflight_blocks_writes_to_protected_workspace_metadata() {
 fn external_mode_is_rejected_for_local_pty_execution() {
     let config = vtcode_config::SandboxConfig {
         enabled: true,
-        default_mode: vtcode_config::SandboxMode::External,
+        default_policy: vtcode_config::SandboxPolicy::External,
         ..Default::default()
     };
 
@@ -220,7 +220,7 @@ fn additional_permissions_validation_requires_with_additional_permissions() {
 }
 
 #[test]
-fn empty_additional_permissions_are_ignored_for_default_sandbox_mode() {
+fn empty_additional_permissions_are_ignored_for_default_sandbox_policy() {
     let payload = json!({
         "sandbox_permissions": "use_default",
         "additional_permissions": {
@@ -256,7 +256,7 @@ fn with_additional_permissions_requires_non_empty_permissions() {
 fn with_additional_permissions_widens_read_only_for_write_roots() {
     let config = vtcode_config::SandboxConfig {
         enabled: true,
-        default_mode: vtcode_config::SandboxMode::ReadOnly,
+        default_policy: vtcode_config::SandboxPolicy::ReadOnly,
         ..Default::default()
     };
 
@@ -436,7 +436,7 @@ fn prepare_exec_command_keeps_existing_shell_invocation() {
 fn require_escalated_bypasses_runtime_sandbox_enforcement() {
     let config = vtcode_config::SandboxConfig {
         enabled: true,
-        default_mode: vtcode_config::SandboxMode::External,
+        default_policy: vtcode_config::SandboxPolicy::External,
         ..Default::default()
     };
 
