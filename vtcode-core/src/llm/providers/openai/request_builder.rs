@@ -12,11 +12,14 @@ use crate::llm::providers::common::serialize_message_content_openai_for_model;
 use crate::llm::rig_adapter::RigProviderCapabilities;
 use crate::prompts::system::{default_system_prompt, openai_gpt55_contract_addendum};
 use hashbrown::HashSet;
+use rig::providers::openai::responses_api::{
+    AdditionalParameters as RigResponsesAdditionalParameters, Include as RigResponsesInclude,
+};
 use serde_json::{Value, json};
 
 use super::responses_api::build_standard_responses_payload;
 use super::tool_serialization;
-use super::types::MAX_COMPLETION_TOKENS_FIELD;
+use super::types::{MAX_COMPLETION_TOKENS_FIELD, OpenAIResponsesPayload};
 
 const NONE_REASONING_EFFORT_MODELS: &[&str] = &[
     openai_models::GPT,
@@ -154,6 +157,39 @@ fn push_unique_include(include_values: &mut Vec<String>, field: &str) {
     }
 
     include_values.push(field.to_string());
+}
+
+fn rig_include_for_field(field: &str) -> Option<RigResponsesInclude> {
+    match field {
+        "file_search_call.results" => Some(RigResponsesInclude::FileSearchCallResults),
+        "message.input_image.image_url" => Some(RigResponsesInclude::MessageInputImageImageUrl),
+        "computer_call.output.image_url" => {
+            Some(RigResponsesInclude::ComputerCallOutputOutputImageUrl)
+        }
+        "reasoning.encrypted_content" => Some(RigResponsesInclude::ReasoningEncryptedContent),
+        "code_interpreter_call.outputs" => Some(RigResponsesInclude::CodeInterpreterCallOutputs),
+        _ => None,
+    }
+}
+
+fn responses_include_value(field: &str) -> Value {
+    rig_include_for_field(field)
+        .and_then(|include| serde_json::to_value(include).ok())
+        .unwrap_or_else(|| json!(field))
+}
+
+fn merge_typed_responses_parameters(
+    openai_request: &mut Value,
+    params: RigResponsesAdditionalParameters,
+) {
+    let Ok(Value::Object(fields)) = serde_json::to_value(params) else {
+        return;
+    };
+    let Some(request) = openai_request.as_object_mut() else {
+        return;
+    };
+
+    request.extend(fields);
 }
 
 fn default_text_verbosity_for_model(model: &str) -> Option<VerbosityLevel> {
@@ -361,6 +397,24 @@ pub(crate) fn build_responses_request(
     request: &provider::LLMRequest,
     ctx: &ResponsesRequestContext<'_>,
 ) -> Result<Value, provider::LLMError> {
+    let responses_payload = build_responses_item_history(request, ctx)?;
+    build_responses_request_from_history(request, ctx, responses_payload)
+}
+
+/// Retained custom Responses item/history boundary.
+///
+/// Rig 0.38.2 has typed Responses input items, but does not preserve VTCode's
+/// assistant `phase` replay field, open-ended include strings such as
+/// `output_text.annotations`, synthetic missing tool outputs, or the exact
+/// instruction fallback used for ChatGPT replay parity. Protective tests:
+/// `api_key_and_chatgpt_subscription_share_responses_item_history_builder`,
+/// `openai_request_builder_preserves_custom_include_strings_around_typed_include`,
+/// and the `responses_api` history tests. Remove this boundary once Rig exposes
+/// open custom include values and VTCode-compatible structured history hooks.
+fn build_responses_item_history(
+    request: &provider::LLMRequest,
+    ctx: &ResponsesRequestContext<'_>,
+) -> Result<OpenAIResponsesPayload, provider::LLMError> {
     let preserve_structured_history = ctx.include_structured_history_in_input
         || (ctx.preserve_structured_history_on_replay
             && is_openai_gpt_responses_model(&request.model));
@@ -378,15 +432,35 @@ pub(crate) fn build_responses_request(
         .take()
         .map(|instructions| augment_openai_instructions(&request.model, instructions));
 
-    let mut input = responses_payload.input;
-    let instructions = responses_payload.instructions;
     if !(ctx.include_assistant_phase
         || ctx.preserve_assistant_phase_on_replay
             && supports_assistant_phase_replay(&request.model))
     {
-        strip_non_native_assistant_phase(&mut input);
+        strip_non_native_assistant_phase(&mut responses_payload.input);
     }
 
+    Ok(responses_payload)
+}
+
+/// Retained custom Responses JSON boundary.
+///
+/// Rig 0.38.2 typed request fields are used here for compatible state such as
+/// `store`, `previous_response_id`, and known `include` enum values. The final
+/// JSON remains custom because Rig lacks typed coverage for VTCode's
+/// `output_types`, nested `sampling_parameters`, prompt-cache overlay fields,
+/// `context_management`, text verbosity, and provider-specific tool payloads.
+/// Protective tests: `openai_request_builder_serialises_rig_typed_state_fields`,
+/// `chatgpt_backend_forces_store_false_and_omits_output_sampling_cache`, and
+/// `responses_payload_includes_prompt_cache_retention_for_native_openai`.
+/// Remove this boundary when Rig exposes those fields with identical streaming
+/// and request JSON parity.
+fn build_responses_request_from_history(
+    request: &provider::LLMRequest,
+    ctx: &ResponsesRequestContext<'_>,
+    responses_payload: OpenAIResponsesPayload,
+) -> Result<Value, provider::LLMError> {
+    let input = responses_payload.input;
+    let instructions = responses_payload.instructions;
     if input.is_empty() {
         let formatted_error =
             error_display::format_llm_error("OpenAI", "No messages provided for Responses API");
@@ -426,11 +500,12 @@ pub(crate) fn build_responses_request(
         openai_request["instructions"] = json!(instructions);
     }
 
+    let mut typed_parameters = RigResponsesAdditionalParameters::default();
     if ctx.include_previous_response_id
         && let Some(previous_response_id) =
             trimmed_non_empty(request.previous_response_id.as_deref())
     {
-        openai_request["previous_response_id"] = json!(previous_response_id);
+        typed_parameters.previous_response_id = Some(previous_response_id.to_string());
     }
 
     if ModelProvider::OpenAI.supports_service_tier(&request.model)
@@ -441,10 +516,11 @@ pub(crate) fn build_responses_request(
     }
 
     if ctx.force_response_store_false {
-        openai_request["store"] = json!(false);
+        typed_parameters.store = Some(false);
     } else if let Some(store) = request.response_store.or(ctx.default_response_store) {
-        openai_request["store"] = json!(store);
+        typed_parameters.store = Some(store);
     }
+    merge_typed_responses_parameters(&mut openai_request, typed_parameters);
 
     let mut include_values = Vec::new();
     if let Some(include_fields) = request
@@ -460,7 +536,12 @@ pub(crate) fn build_responses_request(
         push_unique_include(&mut include_values, "reasoning.encrypted_content");
     }
     if !include_values.is_empty() {
-        openai_request["include"] = json!(include_values);
+        openai_request["include"] = Value::Array(
+            include_values
+                .iter()
+                .map(|field| responses_include_value(field))
+                .collect(),
+        );
     }
 
     if let Some(context_management) = &request.context_management {
@@ -626,4 +707,85 @@ pub(crate) fn build_responses_request(
     }
 
     Ok(openai_request)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ResponsesRequestContext, build_responses_request};
+    use crate::config::constants::models;
+    use crate::llm::provider;
+    use serde_json::{Value, json};
+
+    fn base_context<'a>(
+        default_responses_include: Option<&'a [String]>,
+    ) -> ResponsesRequestContext<'a> {
+        ResponsesRequestContext {
+            supports_tools: false,
+            supports_parallel_tool_config: false,
+            supports_temperature: true,
+            supports_reasoning_effort: true,
+            supports_reasoning: true,
+            is_responses_api_model: true,
+            include_max_output_tokens: true,
+            include_previous_response_id: true,
+            include_output_types: true,
+            include_sampling_parameters: true,
+            force_response_store_false: false,
+            include_assistant_phase: true,
+            prompt_cache_key: None,
+            include_prompt_cache_retention: false,
+            prompt_cache_retention: None,
+            default_service_tier: None,
+            default_response_store: None,
+            default_responses_include,
+            include_encrypted_reasoning: false,
+            hosted_shell: None,
+            include_structured_history_in_input: true,
+            preserve_structured_history_on_replay: false,
+            preserve_assistant_phase_on_replay: false,
+        }
+    }
+
+    fn request() -> provider::LLMRequest {
+        provider::LLMRequest {
+            messages: vec![provider::Message::user("Hello".to_owned())],
+            model: models::openai::GPT_5.to_string(),
+            stream: true,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn openai_request_builder_serialises_rig_typed_state_fields() {
+        let mut request = request();
+        request.previous_response_id = Some("resp_previous".to_owned());
+        request.response_store = Some(false);
+
+        let payload = build_responses_request(&request, &base_context(None))
+            .expect("responses request should build");
+
+        assert_eq!(
+            payload.get("previous_response_id").and_then(Value::as_str),
+            Some("resp_previous")
+        );
+        assert_eq!(payload.get("store").and_then(Value::as_bool), Some(false));
+    }
+
+    #[test]
+    fn openai_request_builder_preserves_custom_include_strings_around_typed_include() {
+        let default_include = vec!["output_text.annotations".to_owned()];
+        let mut ctx = base_context(Some(default_include.as_slice()));
+        ctx.include_encrypted_reasoning = true;
+
+        let payload =
+            build_responses_request(&request(), &ctx).expect("responses request should build");
+
+        assert_eq!(
+            payload.get("include").and_then(Value::as_array),
+            Some(&vec![
+                json!("output_text.annotations"),
+                json!("reasoning.encrypted_content"),
+            ])
+        );
+    }
 }

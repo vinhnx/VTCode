@@ -304,6 +304,23 @@ fn assert_absent(value: &Value, key: &str) {
     assert!(value.get(key).is_none(), "field '{key}' should be absent");
 }
 
+fn without_responses_backend_fields(mut payload: Value) -> Value {
+    let map = payload
+        .as_object_mut()
+        .expect("responses payload should be an object");
+    for field in [
+        "include",
+        "output_types",
+        "previous_response_id",
+        "prompt_cache_retention",
+        "sampling_parameters",
+        "store",
+    ] {
+        map.remove(field);
+    }
+    payload
+}
+
 fn get_input_array(payload: &Value) -> &[Value] {
     payload
         .get("input")
@@ -550,6 +567,69 @@ fn chatgpt_auth_backend_setup_applies_account_and_session_headers() {
             .get("originator")
             .and_then(|v| v.to_str().ok()),
         Some("codex_cli_rs")
+    );
+}
+
+#[test]
+fn api_key_and_chatgpt_subscription_share_responses_item_history_builder() {
+    let native_provider = native_openai_provider(models::openai::GPT_5_2);
+    let chatgpt_provider = chatgpt_backend_provider(models::openai::GPT_5_2);
+    let mut request = provider::LLMRequest {
+        messages: vec![
+            provider::Message::system("Follow the local policy.".to_owned()),
+            provider::Message::user("Summarise the repository state.".to_owned()),
+            provider::Message::assistant("There is one modified file.".to_owned()),
+            provider::Message::user("Continue.".to_owned()),
+        ],
+        model: models::openai::GPT_5_2.to_string(),
+        stream: true,
+        tools: Some(Arc::new(vec![sample_tool()])),
+        ..Default::default()
+    };
+    request.previous_response_id = Some("resp_previous_123".to_owned());
+    request.response_store = Some(true);
+    request.responses_include = Some(vec!["output_text.annotations".to_owned()]);
+
+    let native_payload = native_provider
+        .convert_to_openai_responses_format(&request)
+        .expect("native payload should build");
+    let chatgpt_payload = chatgpt_provider
+        .convert_to_openai_responses_format(&request)
+        .expect("chatgpt payload should build");
+
+    assert_eq!(
+        native_payload.get("input"),
+        chatgpt_payload.get("input"),
+        "API-key and ChatGPT paths must share the same Responses item/history builder"
+    );
+    assert_eq!(
+        native_payload.get("instructions"),
+        chatgpt_payload.get("instructions")
+    );
+    assert_eq!(
+        without_responses_backend_fields(native_payload.clone()),
+        without_responses_backend_fields(chatgpt_payload.clone())
+    );
+
+    assert_eq!(
+        native_payload
+            .get("previous_response_id")
+            .and_then(Value::as_str),
+        Some("resp_previous_123")
+    );
+    assert_eq!(
+        chatgpt_payload.get("previous_response_id"),
+        None,
+        "ChatGPT backend does not use VTCode's Responses continuation state"
+    );
+    assert_eq!(
+        native_payload.get("store").and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        chatgpt_payload.get("store").and_then(Value::as_bool),
+        Some(false),
+        "ChatGPT subscription requests must force store=false"
     );
 }
 
