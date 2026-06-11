@@ -40,6 +40,7 @@ pulldown-cmark   = { version = "0.13", default-features = false, features = ["ht
 ratatui          = { workspace = true, features = ["crossterm", "unstable-rendered-line-info", "unstable-widget-ref"] }
 ratatui-cheese   = { workspace = true }
 ratatui-textarea = { version = "0.9", default-features = false, features = ["crossterm"] }
+ratatui-widgets = { workspace = true }
 regex            = { workspace = true }
 serde            = { workspace = true }
 signal-hook      = "0.4"
