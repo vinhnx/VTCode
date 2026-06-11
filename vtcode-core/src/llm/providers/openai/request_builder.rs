@@ -86,6 +86,7 @@ pub(crate) struct ResponsesRequestContext<'a> {
     pub default_service_tier: Option<&'a str>,
     pub default_response_store: Option<bool>,
     pub default_responses_include: Option<&'a [String]>,
+    pub include_encrypted_reasoning: bool,
     pub hosted_shell: Option<&'a OpenAIHostedShellConfig>,
     pub include_structured_history_in_input: bool,
     pub preserve_structured_history_on_replay: bool,
@@ -144,6 +145,15 @@ fn default_reasoning_effort_for_model(model: &str) -> Option<ReasoningEffortLeve
 
 fn supports_text_verbosity(model: &str) -> bool {
     TEXT_VERBOSITY_MODELS.contains(&model)
+}
+
+fn push_unique_include(include_values: &mut Vec<String>, field: &str) {
+    let field = field.trim();
+    if field.is_empty() || include_values.iter().any(|value| value == field) {
+        return;
+    }
+
+    include_values.push(field.to_string());
 }
 
 fn default_text_verbosity_for_model(model: &str) -> Option<VerbosityLevel> {
@@ -436,20 +446,21 @@ pub(crate) fn build_responses_request(
         openai_request["store"] = json!(store);
     }
 
+    let mut include_values = Vec::new();
     if let Some(include_fields) = request
         .responses_include
         .as_deref()
         .or(ctx.default_responses_include)
     {
-        let include_values: Vec<String> = include_fields
-            .iter()
-            .map(|field| field.trim())
-            .filter(|field| !field.is_empty())
-            .map(ToOwned::to_owned)
-            .collect();
-        if !include_values.is_empty() {
-            openai_request["include"] = json!(include_values);
+        for field in include_fields {
+            push_unique_include(&mut include_values, field);
         }
+    }
+    if ctx.include_encrypted_reasoning {
+        push_unique_include(&mut include_values, "reasoning.encrypted_content");
+    }
+    if !include_values.is_empty() {
+        openai_request["include"] = json!(include_values);
     }
 
     if let Some(context_management) = &request.context_management {

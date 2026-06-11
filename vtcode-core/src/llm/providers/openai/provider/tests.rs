@@ -460,6 +460,87 @@ async fn chatgpt_backend_uses_oauth_access_token_and_account_header() {
 }
 
 #[tokio::test]
+async fn chatgpt_responses_stream_accepts_empty_final_output_after_text_delta() {
+    let Some(server) = start_mock_server_or_skip().await else {
+        return;
+    };
+    let captured = Arc::new(Mutex::new(None::<Value>));
+    let captured_for_mock = Arc::clone(&captured);
+    let stream_body = concat!(
+        "data: {\"type\":\"response.output_text.delta\",\"delta\":\"hello from stream\"}\n\n",
+        "data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_chatgpt_stream\",\"output\":[],\"usage\":{\"input_tokens\":13,\"output_tokens\":4,\"total_tokens\":17}}}\n\n",
+    );
+
+    Mock::given(method("POST"))
+        .and(path("/responses"))
+        .respond_with(move |req: &wiremock::Request| {
+            *captured_for_mock.lock().expect("not poisoned") =
+                Some(serde_json::from_slice(&req.body).expect("valid json"));
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                .set_body_string(stream_body)
+        })
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let provider = OpenAIProvider::new_with_client(
+        String::new(),
+        Some(sample_chatgpt_auth_handle()),
+        models::openai::GPT_5_5.to_string(),
+        reqwest::Client::builder()
+            .no_proxy()
+            .build()
+            .expect("test client"),
+        chatgpt_mock_base_url(&server),
+        TimeoutsConfig::default(),
+    );
+
+    let mut stream = provider
+        .stream(provider::LLMRequest {
+            messages: vec![provider::Message::user("Hello".to_string())],
+            model: models::openai::GPT_5_5.to_string(),
+            ..Default::default()
+        })
+        .await
+        .expect("stream should start");
+    let mut text = String::new();
+    let mut completed = None;
+    while let Some(event) = stream.next().await {
+        match event.expect("stream event should parse") {
+            provider::LLMStreamEvent::Token { delta } => text.push_str(&delta),
+            provider::LLMStreamEvent::Completed { response } => {
+                completed = Some(*response);
+                break;
+            }
+            provider::LLMStreamEvent::Reasoning { .. }
+            | provider::LLMStreamEvent::ReasoningSignature { .. }
+            | provider::LLMStreamEvent::ReasoningStage { .. } => {}
+        }
+    }
+
+    let response = completed.expect("completion event should be emitted");
+    assert_eq!(text, "hello from stream");
+    assert_eq!(response.content.as_deref(), Some("hello from stream"));
+    assert_eq!(response.request_id.as_deref(), Some("resp_chatgpt_stream"));
+    let usage = response.usage.expect("final usage should be preserved");
+    assert_eq!(usage.prompt_tokens, 13);
+    assert_eq!(usage.completion_tokens, 4);
+    assert_eq!(usage.total_tokens, 17);
+
+    let payload = captured
+        .lock()
+        .expect("not poisoned")
+        .clone()
+        .expect("payload captured");
+    assert_eq!(payload.get("store").and_then(Value::as_bool), Some(false));
+    assert_eq!(
+        payload.get("include").and_then(Value::as_array),
+        Some(&vec![json!("reasoning.encrypted_content")])
+    );
+}
+
+#[tokio::test]
 async fn external_chatgpt_auth_retries_with_refreshed_tokens_after_401() {
     let Some(server) = start_mock_server_or_skip().await else {
         return;
@@ -2191,6 +2272,42 @@ fn chatgpt_backend_forces_store_false_and_omits_output_sampling_cache() {
         .convert_to_openai_responses_format(&request)
         .expect("should succeed");
     assert_absent(&payload2, "sampling_parameters");
+}
+
+#[test]
+fn chatgpt_backend_includes_encrypted_reasoning_and_preserves_configured_includes() {
+    let provider = chatgpt_backend_provider(models::openai::GPT_5_5);
+    let payload = responses_payload_for(models::openai::GPT_5_5, &provider);
+    assert_eq!(
+        payload.get("include").and_then(Value::as_array),
+        Some(&vec![json!("reasoning.encrypted_content")])
+    );
+
+    let provider = OpenAIProvider::from_config(
+        Some(String::new()),
+        Some(sample_chatgpt_auth_handle()),
+        Some(models::openai::GPT_5_5.to_string()),
+        None,
+        None,
+        None,
+        None,
+        Some(OpenAIConfig {
+            responses_include: vec![
+                "output_text.annotations".to_string(),
+                " reasoning.encrypted_content ".to_string(),
+            ],
+            ..Default::default()
+        }),
+        None,
+    );
+    let payload = responses_payload_for(models::openai::GPT_5_5, &provider);
+    assert_eq!(
+        payload.get("include").and_then(Value::as_array),
+        Some(&vec![
+            json!("output_text.annotations"),
+            json!("reasoning.encrypted_content"),
+        ])
+    );
 }
 
 #[test]

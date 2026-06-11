@@ -1,5 +1,6 @@
 use anyhow::Result;
 use serde_json::json;
+use std::fs;
 use tempfile::TempDir;
 use vtcode_core::config::constants::tools;
 use vtcode_core::tools::ToolRegistry;
@@ -109,5 +110,35 @@ async fn preflight_accepts_unified_search_with_case_variant_keys() -> Result<()>
     )?;
 
     assert_eq!(outcome.normalized_tool_name, tools::UNIFIED_SEARCH);
+    Ok(())
+}
+
+#[tokio::test]
+async fn unified_search_list_with_blank_mode_executes_default_list() -> Result<()> {
+    let temp_dir = TempDir::new()?;
+    fs::create_dir_all(temp_dir.path().join("src"))?;
+    fs::write(temp_dir.path().join("src/lib.rs"), "pub fn lib() {}\n")?;
+    fs::write(temp_dir.path().join("src/readme.md"), "# readme\n")?;
+    let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+
+    let args = json!({
+        "action": "list",
+        "mode": "",
+        "path": "src",
+        "pattern": "*.rs"
+    });
+
+    let outcome = registry.preflight_validate_call(tools::UNIFIED_SEARCH, &args)?;
+    assert_eq!(outcome.normalized_tool_name, tools::UNIFIED_SEARCH);
+
+    let result = registry
+        .execute_tool_ref(tools::UNIFIED_SEARCH, &args)
+        .await?;
+    assert_eq!(result["mode"], json!("list"));
+    assert_eq!(result["pattern"], json!("*.rs"));
+
+    let items = result["items"].as_array().expect("items array");
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0]["path"], json!("src/lib.rs"));
     Ok(())
 }

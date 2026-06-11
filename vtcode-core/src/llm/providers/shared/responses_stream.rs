@@ -171,7 +171,18 @@ where
     fn finish(self) -> Result<Vec<NormalizedStreamEvent>, LLMError> {
         let streamed = self.aggregator.finalize();
         let mut response = if let Some(final_response) = self.final_response {
-            (self.parse_final_response)(final_response)?
+            match (self.parse_final_response)(final_response.clone()) {
+                Ok(response) => response,
+                Err(_)
+                    if final_response_output_is_empty(&final_response)
+                        && streamed_response_is_usable(&streamed) =>
+                {
+                    let mut response = streamed.clone();
+                    merge_final_response_metadata(&mut response, &final_response);
+                    response
+                }
+                Err(err) => return Err(err),
+            }
         } else {
             streamed.clone()
         };
@@ -313,6 +324,32 @@ where
     Box::pin(stream)
 }
 
+fn streamed_response_is_usable(response: &LLMResponse) -> bool {
+    response
+        .content
+        .as_deref()
+        .is_some_and(|content| !content.is_empty())
+        || response
+            .tool_calls
+            .as_ref()
+            .is_some_and(|tool_calls| !tool_calls.is_empty())
+        || response
+            .reasoning
+            .as_deref()
+            .is_some_and(|reasoning| !reasoning.is_empty())
+        || response
+            .reasoning_details
+            .as_ref()
+            .is_some_and(|details| !details.is_empty())
+}
+
+fn final_response_output_is_empty(final_response: &Value) -> bool {
+    final_response
+        .get("output")
+        .and_then(Value::as_array)
+        .is_some_and(Vec::is_empty)
+}
+
 fn merge_streamed_response(response: &mut LLMResponse, streamed: LLMResponse) {
     if response.content.as_deref().unwrap_or_default().is_empty() {
         response.content = streamed.content;
@@ -351,6 +388,47 @@ fn merge_streamed_response(response: &mut LLMResponse, streamed: LLMResponse) {
     if response.organization_id.is_none() {
         response.organization_id = streamed.organization_id;
     }
+}
+
+fn merge_final_response_metadata(response: &mut LLMResponse, final_response: &Value) {
+    if let Some(usage) = parse_responses_usage(final_response) {
+        response.usage = Some(usage);
+    }
+
+    if let Some(request_id) = final_response
+        .get("id")
+        .and_then(Value::as_str)
+        .or_else(|| final_response.get("request_id").and_then(Value::as_str))
+    {
+        response.request_id = Some(request_id.to_string());
+    }
+}
+
+fn parse_responses_usage(final_response: &Value) -> Option<crate::llm::provider::Usage> {
+    let usage_value = final_response.get("usage")?;
+    Some(crate::llm::provider::Usage {
+        prompt_tokens: usage_value
+            .get("input_tokens")
+            .or_else(|| usage_value.get("prompt_tokens"))
+            .and_then(Value::as_u64)
+            .and_then(|value| u32::try_from(value).ok())
+            .unwrap_or(0),
+        completion_tokens: usage_value
+            .get("output_tokens")
+            .or_else(|| usage_value.get("completion_tokens"))
+            .and_then(Value::as_u64)
+            .and_then(|value| u32::try_from(value).ok())
+            .unwrap_or(0),
+        total_tokens: usage_value
+            .get("total_tokens")
+            .and_then(Value::as_u64)
+            .and_then(|value| u32::try_from(value).ok())
+            .unwrap_or(0),
+        cached_prompt_tokens: None,
+        cache_creation_tokens: None,
+        cache_read_tokens: None,
+        iterations: None,
+    })
 }
 
 fn extract_error_message(payload: &Value) -> Option<String> {
@@ -447,6 +525,55 @@ mod tests {
             [NormalizedStreamEvent::Done { response }]
                 if response.content.as_deref() == Some("hello")
         ));
+    }
+
+    #[test]
+    fn empty_final_response_uses_streamed_text_and_preserves_metadata() {
+        let mut processor = ResponsesNormalizedStreamProcessor::new(options(), |value| {
+            let output = value
+                .get("output")
+                .and_then(Value::as_array)
+                .ok_or_else(|| provider_error("TestProvider", "missing output"))?;
+            if output.is_empty() {
+                return Err(provider_error("TestProvider", "No output in response"));
+            }
+            parse_response(value)
+        });
+
+        processor
+            .handle_payload(json!({
+                "type": "response.output_text.delta",
+                "delta": "streamed answer"
+            }))
+            .expect("text delta should parse");
+        processor
+            .handle_payload(json!({
+                "type": "response.completed",
+                "response": {
+                    "id": "resp_streamed",
+                    "output": [],
+                    "usage": {
+                        "input_tokens": 11,
+                        "output_tokens": 7,
+                        "total_tokens": 18
+                    }
+                }
+            }))
+            .expect("completed event should parse");
+
+        let finished = processor.finish().expect("finish should succeed");
+        let [
+            NormalizedStreamEvent::Usage { usage },
+            NormalizedStreamEvent::Done { response },
+        ] = finished.as_slice()
+        else {
+            panic!("expected usage then done");
+        };
+        assert_eq!(usage.prompt_tokens, 11);
+        assert_eq!(usage.completion_tokens, 7);
+        assert_eq!(usage.total_tokens, 18);
+        assert_eq!(response.content.as_deref(), Some("streamed answer"));
+        assert_eq!(response.request_id.as_deref(), Some("resp_streamed"));
     }
 
     #[test]

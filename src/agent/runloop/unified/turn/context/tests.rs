@@ -102,3 +102,14 @@ fn push_assistant_message_keeps_different_phases_separate() {
     assert_eq!(history[0].phase, Some(uni::AssistantPhase::Commentary));
     assert_eq!(history[1].phase, Some(uni::AssistantPhase::FinalAnswer));
 }
+
+#[test]
+fn interim_continuation_handles_multibyte_clause_boundaries() {
+    let text =
+        "hello! what are we ducking through today—debugging, design, scope clarification, or planning a change?";
+
+    let decision = evaluate_interim_text_continuation(false, false, &[], text);
+
+    assert!(!decision.should_continue);
+    assert_eq!(decision.reason, "non_interim_text");
+}
