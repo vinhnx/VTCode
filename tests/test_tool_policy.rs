@@ -182,11 +182,7 @@ impl ToolPolicyManager {
                 _ => style(status),
             };
 
-            println!(
-                "  {} {}",
-                style(format!("{tool:15}")).cyan(),
-                status_styled
-            );
+            println!("  {} {}", style(format!("{tool:15}")).cyan(), status_styled);
         }
 
         println!();

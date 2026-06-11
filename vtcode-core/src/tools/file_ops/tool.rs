@@ -339,8 +339,11 @@ mod tests {
     async fn blank_mode_allows_recursive_glob_promotion() {
         let temp_dir = TempDir::new().expect("workspace tempdir");
         fs::create_dir_all(temp_dir.path().join("src/nested")).expect("create nested src");
-        fs::write(temp_dir.path().join("src/nested/lib.rs"), "pub fn lib() {}\n")
-            .expect("write lib");
+        fs::write(
+            temp_dir.path().join("src/nested/lib.rs"),
+            "pub fn lib() {}\n",
+        )
+        .expect("write lib");
 
         let grep_manager = Arc::new(GrepSearchManager::new(temp_dir.path().to_path_buf()));
         let file_ops = FileOpsTool::new(temp_dir.path().to_path_buf(), grep_manager);

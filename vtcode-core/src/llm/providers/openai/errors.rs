@@ -8,6 +8,7 @@ use reqwest::header::HeaderMap;
 use serde_json::Value;
 
 use crate::config::constants::models;
+use crate::llm::providers::common::extract_header;
 
 #[derive(Debug, Default, PartialEq, Eq)]
 struct OpenAIErrorDetails {
@@ -15,15 +16,6 @@ struct OpenAIErrorDetails {
     code: Option<String>,
     error_type: Option<String>,
     param: Option<String>,
-}
-
-fn extract_header(headers: &HeaderMap, names: &[&str]) -> Option<String> {
-    names.iter().find_map(|name| {
-        headers
-            .get(*name)
-            .and_then(|value| value.to_str().ok())
-            .map(ToOwned::to_owned)
-    })
 }
 
 fn parse_openai_error_details(body: &str) -> OpenAIErrorDetails {

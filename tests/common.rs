@@ -274,9 +274,7 @@ pub fn assert_error_contains<T>(result: Result<T, Box<dyn std::error::Error>>, e
         Err(e) => {
             let error_msg = e.to_string();
             if !error_msg.contains(expected_msg) {
-                panic!(
-                    "Expected error message '{expected_msg}' not found in '{error_msg}'"
-                );
+                panic!("Expected error message '{expected_msg}' not found in '{error_msg}'");
             }
         }
     }

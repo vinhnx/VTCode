@@ -10,6 +10,16 @@ use serde_json::{Value, json};
 
 use super::openai::tool_serialization::sanitize_openai_function_parameters;
 
+/// Returns the first present header among `names`, as an owned string.
+pub fn extract_header(headers: &reqwest::header::HeaderMap, names: &[&str]) -> Option<String> {
+    names.iter().find_map(|name| {
+        headers
+            .get(*name)
+            .and_then(|value| value.to_str().ok())
+            .map(ToOwned::to_owned)
+    })
+}
+
 /// Converts a float parameter (temperature, top_p, …) into a JSON number,
 /// rejecting NaN and infinity with an `LLMError::InvalidRequest`.
 pub fn float_to_json_number(value: f32) -> Result<serde_json::Number, LLMError> {

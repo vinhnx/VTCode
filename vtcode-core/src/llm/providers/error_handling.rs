@@ -3,6 +3,7 @@
 
 use crate::llm::error_display;
 use crate::llm::provider::{LLMError, LLMErrorMetadata};
+use crate::llm::providers::common::extract_header;
 use reqwest::Response;
 use serde_json::Value;
 
@@ -372,31 +373,22 @@ pub fn extract_human_error_message(body: &str) -> String {
 }
 
 fn extract_response_metadata(response: &Response) -> ApiResponseMetadata {
+    let headers = response.headers();
     ApiResponseMetadata {
         request_id: extract_header(
-            response,
+            headers,
             &["request-id", "x-request-id", "openai-request-id"],
         ),
         organization_id: extract_header(
-            response,
+            headers,
             &[
                 "anthropic-organization-id",
                 "openai-organization",
                 "x-organization-id",
             ],
         ),
-        retry_after: extract_header(response, &["retry-after"]),
+        retry_after: extract_header(headers, &["retry-after"]),
     }
-}
-
-fn extract_header(response: &Response, names: &[&str]) -> Option<String> {
-    names.iter().find_map(|name| {
-        response
-            .headers()
-            .get(*name)
-            .and_then(|value| value.to_str().ok())
-            .map(ToOwned::to_owned)
-    })
 }
 
 #[cfg(test)]

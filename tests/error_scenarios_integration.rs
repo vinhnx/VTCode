@@ -347,11 +347,7 @@ mod error_scenarios {
             anyhow::Error::new(inner).context("request timed out while fetching resource");
 
         let cat = vtcode_commons::classify_anyhow_error(&anyhow_err);
-        assert_eq!(
-            cat,
-            ErrorCategory::Timeout,
-            "Expected Timeout, got {cat:?}"
-        );
+        assert_eq!(cat, ErrorCategory::Timeout, "Expected Timeout, got {cat:?}");
     }
 
     #[test]

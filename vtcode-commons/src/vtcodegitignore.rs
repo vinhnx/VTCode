@@ -23,8 +23,8 @@ pub struct VTCodeGitignore {
 impl VTCodeGitignore {
     /// Create a new VTCodeGitignore instance by looking for .vtcodegitignore in the current directory
     pub async fn new() -> Result<Self> {
-        let current_dir = std::env::current_dir()
-            .map_err(|e| anyhow!("Failed to get current directory: {e}"))?;
+        let current_dir =
+            std::env::current_dir().map_err(|e| anyhow!("Failed to get current directory: {e}"))?;
 
         Self::from_directory(&current_dir).await
     }

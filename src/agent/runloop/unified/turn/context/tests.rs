@@ -105,8 +105,7 @@ fn push_assistant_message_keeps_different_phases_separate() {
 
 #[test]
 fn interim_continuation_handles_multibyte_clause_boundaries() {
-    let text =
-        "hello! what are we ducking through today—debugging, design, scope clarification, or planning a change?";
+    let text = "hello! what are we ducking through today—debugging, design, scope clarification, or planning a change?";
 
     let decision = evaluate_interim_text_continuation(false, false, &[], text);
 
