@@ -25,6 +25,83 @@ fn strip_reasoning_for_model(
     response
 }
 
+fn streamed_response_is_usable(response: &provider::LLMResponse) -> bool {
+    response
+        .content
+        .as_deref()
+        .is_some_and(|content| !content.is_empty())
+        || response
+            .tool_calls
+            .as_ref()
+            .is_some_and(|tool_calls| !tool_calls.is_empty())
+        || response
+            .reasoning
+            .as_deref()
+            .is_some_and(|reasoning| !reasoning.is_empty())
+        || response
+            .reasoning_details
+            .as_ref()
+            .is_some_and(|details| !details.is_empty())
+}
+
+fn final_response_output_is_empty(final_response: &Value) -> bool {
+    final_response
+        .get("output")
+        .and_then(Value::as_array)
+        .is_some_and(Vec::is_empty)
+}
+
+fn merge_final_response_metadata(
+    response: &mut provider::LLMResponse,
+    final_response: &Value,
+    include_cached_prompt_metrics: bool,
+) {
+    if let Some(usage_value) = final_response.get("usage") {
+        let cached_prompt_tokens = if include_cached_prompt_metrics {
+            usage_value
+                .get("prompt_tokens_details")
+                .and_then(|details| details.get("cached_tokens"))
+                .or_else(|| usage_value.get("prompt_cache_hit_tokens"))
+                .and_then(Value::as_u64)
+                .and_then(|value| u32::try_from(value).ok())
+        } else {
+            None
+        };
+
+        response.usage = Some(provider::Usage {
+            prompt_tokens: usage_value
+                .get("input_tokens")
+                .or_else(|| usage_value.get("prompt_tokens"))
+                .and_then(Value::as_u64)
+                .and_then(|value| u32::try_from(value).ok())
+                .unwrap_or(0),
+            completion_tokens: usage_value
+                .get("output_tokens")
+                .or_else(|| usage_value.get("completion_tokens"))
+                .and_then(Value::as_u64)
+                .and_then(|value| u32::try_from(value).ok())
+                .unwrap_or(0),
+            total_tokens: usage_value
+                .get("total_tokens")
+                .and_then(Value::as_u64)
+                .and_then(|value| u32::try_from(value).ok())
+                .unwrap_or(0),
+            cached_prompt_tokens,
+            cache_creation_tokens: None,
+            cache_read_tokens: None,
+            iterations: None,
+        });
+    }
+
+    if let Some(request_id) = final_response
+        .get("id")
+        .and_then(Value::as_str)
+        .or_else(|| final_response.get("request_id").and_then(Value::as_str))
+    {
+        response.request_id = Some(request_id.to_string());
+    }
+}
+
 pub(crate) fn create_chat_stream(
     response: reqwest::Response,
     model: String,
@@ -255,9 +332,19 @@ pub(crate) fn create_responses_stream(
             }
         };
 
-        let mut response = parse_responses_payload(response_value, model.clone(), include_metrics)?;
-
         let final_aggregator_response = aggregator.finalize();
+        let mut response = match parse_responses_payload(response_value.clone(), model.clone(), include_metrics) {
+            Ok(response) => response,
+            Err(_)
+                if final_response_output_is_empty(&response_value)
+                    && streamed_response_is_usable(&final_aggregator_response) =>
+            {
+                let mut response = final_aggregator_response.clone();
+                merge_final_response_metadata(&mut response, &response_value, include_metrics);
+                response
+            }
+            Err(err) => Err(err)?,
+        };
 
         if response.content.is_none() {
             response.content = final_aggregator_response.content;

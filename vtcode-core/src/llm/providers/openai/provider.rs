@@ -830,6 +830,7 @@ impl OpenAIProvider {
             default_response_store: self.responses_store,
             default_responses_include: (!self.responses_include.is_empty())
                 .then_some(self.responses_include.as_slice()),
+            include_encrypted_reasoning: is_chatgpt_backend,
             hosted_shell: self.hosted_shell_for_model(&request.model),
             include_structured_history_in_input: !is_chatgpt_backend,
             preserve_structured_history_on_replay: is_chatgpt_backend,
