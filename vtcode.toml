@@ -23,7 +23,7 @@ enabled = true
 # Default model to use
 # Default: "gpt-5.3-codex"
 # Type: `string`
-default_model = "claude-fable-5"
+default_model = "nemotron-3-ultra:cloud"
 
 # Reasoning effort level for models that support it (none, minimal, low, medium, high, xhigh, max)
 # Applies to: Claude, GPT-5 family, Gemini, Qwen3, DeepSeek with reasoning capability. `max` is
@@ -32,8 +32,8 @@ default_model = "claude-fable-5"
 # Default: "none"
 # Type: `string`
 reasoning_effort = "medium"
-api_key_env = "ANTHROPIC_API_KEY"
-provider = "anthropic"
+api_key_env = "OLLAMA_API_KEY"
+provider = "ollama"
 theme = "mono"
 
 # Persistent Memory
