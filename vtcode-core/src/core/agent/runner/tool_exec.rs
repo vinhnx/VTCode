@@ -676,7 +676,8 @@ impl AgentRunner {
                         )?;
                     } else {
                         let category = e.category;
-                        let should_halt = apply_tool_failure_halt_policy(&mut runtime.state, category);
+                        let should_halt =
+                            apply_tool_failure_halt_policy(&mut runtime.state, category);
                         complete_tool_invocation(
                             runtime,
                             event_recorder,
