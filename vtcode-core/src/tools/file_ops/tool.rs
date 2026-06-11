@@ -97,6 +97,13 @@ impl FileOpsTool {
 impl Tool for FileOpsTool {
     async fn execute(&self, args: Value) -> Result<Value> {
         let mut input: ListInput = deserialize_tool_args(&args, "list_files")?;
+        if input
+            .mode
+            .as_deref()
+            .is_some_and(|mode| mode.trim().is_empty())
+        {
+            input.mode = None;
+        }
 
         // Standard path extraction from args (handles aliases)
         let path_args: PathArgs = serde_json::from_value(args).unwrap_or(PathArgs {
@@ -127,7 +134,13 @@ impl Tool for FileOpsTool {
             input.mode = Some("recursive".to_string());
         }
 
-        let raw_mode = input.mode.as_deref().unwrap_or("list").trim().to_string();
+        let raw_mode = input
+            .mode
+            .as_deref()
+            .map(str::trim)
+            .filter(|mode| !mode.is_empty())
+            .unwrap_or("list")
+            .to_string();
         let mode = Self::normalize_list_mode(&raw_mode).unwrap_or(raw_mode.as_str());
         input.mode = Some(mode.to_string());
 
@@ -296,5 +309,54 @@ mod tests {
         let items = result["items"].as_array().expect("items array");
         assert_eq!(items.len(), 1);
         assert_eq!(items[0]["path"], json!("src/lib.rs"));
+    }
+
+    #[tokio::test]
+    async fn blank_mode_defaults_to_basic_list() {
+        let temp_dir = TempDir::new().expect("workspace tempdir");
+        fs::create_dir_all(temp_dir.path().join("src")).expect("create src");
+        fs::write(temp_dir.path().join("src/lib.rs"), "pub fn lib() {}\n").expect("write lib");
+
+        let grep_manager = Arc::new(GrepSearchManager::new(temp_dir.path().to_path_buf()));
+        let file_ops = FileOpsTool::new(temp_dir.path().to_path_buf(), grep_manager);
+
+        let result = file_ops
+            .execute(json!({
+                "path": "src",
+                "mode": "",
+                "pattern": "*.rs"
+            }))
+            .await
+            .expect("blank mode should behave like missing mode");
+
+        assert_eq!(result["mode"], json!("list"));
+        let items = result["items"].as_array().expect("items array");
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0]["path"], json!("src/lib.rs"));
+    }
+
+    #[tokio::test]
+    async fn blank_mode_allows_recursive_glob_promotion() {
+        let temp_dir = TempDir::new().expect("workspace tempdir");
+        fs::create_dir_all(temp_dir.path().join("src/nested")).expect("create nested src");
+        fs::write(temp_dir.path().join("src/nested/lib.rs"), "pub fn lib() {}\n")
+            .expect("write lib");
+
+        let grep_manager = Arc::new(GrepSearchManager::new(temp_dir.path().to_path_buf()));
+        let file_ops = FileOpsTool::new(temp_dir.path().to_path_buf(), grep_manager);
+
+        let result = file_ops
+            .execute(json!({
+                "path": "src",
+                "mode": "",
+                "pattern": "**/*.rs"
+            }))
+            .await
+            .expect("blank mode should still allow recursive glob promotion");
+
+        assert_eq!(result["mode"], json!("recursive"));
+        let items = result["items"].as_array().expect("items array");
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0]["path"], json!("src/nested/lib.rs"));
     }
 }
