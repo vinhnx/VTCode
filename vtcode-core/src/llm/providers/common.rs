@@ -10,6 +10,15 @@ use serde_json::{Value, json};
 
 use super::openai::tool_serialization::sanitize_openai_function_parameters;
 
+/// Converts a float parameter (temperature, top_p, …) into a JSON number,
+/// rejecting NaN and infinity with an `LLMError::InvalidRequest`.
+pub fn float_to_json_number(value: f32) -> Result<serde_json::Number, LLMError> {
+    serde_json::Number::from_f64(f64::from(value)).ok_or_else(|| LLMError::InvalidRequest {
+        message: "invalid numeric parameter value (NaN or infinity)".to_string(),
+        metadata: None,
+    })
+}
+
 /// Collects non-empty history system directives that should be preserved when a
 /// provider accepts a separate top-level system prompt but cannot reliably
 /// consume follow-up `system` chat messages.

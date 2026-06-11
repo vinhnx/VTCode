@@ -132,13 +132,6 @@ impl QwenProvider {
             .is_some_and(|e| e != crate::config::types::ReasoningEffortLevel::None)
     }
 
-    fn float_to_json_number(value: f32) -> Result<serde_json::Number, LLMError> {
-        serde_json::Number::from_f64(value as f64).ok_or_else(|| LLMError::InvalidRequest {
-            message: "invalid numeric parameter value (NaN or infinity)".to_string(),
-            metadata: None,
-        })
-    }
-
     fn convert_to_qwen_format(&self, request: &LLMRequest) -> Result<Value, LLMError> {
         let mut payload = Map::with_capacity(12);
 
@@ -168,14 +161,14 @@ impl QwenProvider {
             if let Some(temperature) = request.temperature {
                 payload.insert(
                     "temperature".to_owned(),
-                    Value::Number(Self::float_to_json_number(temperature)?),
+                    Value::Number(super::common::float_to_json_number(temperature)?),
                 );
             }
 
             if let Some(top_p) = request.top_p {
                 payload.insert(
                     "top_p".to_owned(),
-                    Value::Number(Self::float_to_json_number(top_p)?),
+                    Value::Number(super::common::float_to_json_number(top_p)?),
                 );
             }
         }
