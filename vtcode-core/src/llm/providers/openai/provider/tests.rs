@@ -1,7 +1,12 @@
 use super::super::CustomProviderAuthHandle;
+use super::super::backend_setup::{
+    CHATGPT_CODEX_BASE, ChatGptSubscriptionAuthSource, OpenAIBackendKind,
+    OpenAIBackendRefreshBehaviour, OpenAIBackendSetup,
+};
 use super::super::tool_serialization;
 use super::*;
 use crate::config::TimeoutsConfig;
+use crate::config::constants::urls;
 use crate::config::core::{
     OpenAIHostedShellConfig, OpenAIHostedShellDomainSecret, OpenAIHostedShellEnvironment,
     OpenAIHostedShellNetworkPolicy, OpenAIHostedShellNetworkPolicyType, OpenAIHostedSkill,
@@ -13,6 +18,7 @@ use crate::tools::handlers::task_tracker::TaskTrackerTool;
 use crate::tools::traits::Tool;
 use futures::StreamExt;
 use reqwest::StatusCode;
+use rig::providers::chatgpt::ChatGPTAuth as RigChatGptAuth;
 use serde_json::{Value, json};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -407,6 +413,146 @@ fn schema_keyword_path(value: &Value, keywords: &[&str], path: &str) -> Option<S
 
 // ─── Auth & Retry Tests ──────────────────────────────────────────────────────
 
+#[test]
+fn openai_auth_backend_setup_uses_api_key_base_url_and_static_auth() {
+    let setup = OpenAIBackendSetup::from_api_key_config(None);
+    let transport = setup.transport();
+    let responses = setup.responses_defaults();
+
+    assert_eq!(setup.base_url(), urls::OPENAI_API_BASE);
+    assert!(matches!(setup.kind(), OpenAIBackendKind::ApiKey));
+    assert_eq!(
+        setup.refresh_behaviour(),
+        OpenAIBackendRefreshBehaviour::StaticBearer
+    );
+    assert!(transport.websocket);
+    assert!(transport.chat_completions_fallback);
+    assert!(transport.responses_compaction_endpoint);
+    assert!(!responses.force_store_false);
+    assert!(responses.include_prompt_cache_retention);
+    assert!(!responses.include_encrypted_reasoning);
+}
+
+#[test]
+fn chatgpt_auth_backend_setup_uses_rig_chatgpt_by_default() {
+    let setup = OpenAIBackendSetup::from_chatgpt_subscription_config(None);
+    let transport = setup.transport();
+    let responses = setup.responses_defaults();
+
+    assert_eq!(setup.base_url(), CHATGPT_CODEX_BASE);
+    assert!(matches!(
+        setup.kind(),
+        OpenAIBackendKind::ChatGptSubscription(ChatGptSubscriptionAuthSource::RigChatGpt)
+    ));
+    assert_eq!(
+        setup.refresh_behaviour(),
+        OpenAIBackendRefreshBehaviour::RefreshableChatGptSession
+    );
+    assert!(!transport.websocket);
+    assert!(!transport.chat_completions_fallback);
+    assert!(!transport.responses_compaction_endpoint);
+    assert!(responses.force_store_false);
+    assert!(!responses.include_prompt_cache_retention);
+    assert!(responses.include_encrypted_reasoning);
+    assert!(!responses.include_structured_history_in_input);
+    assert!(responses.preserve_structured_history_on_replay);
+}
+
+#[test]
+fn chatgpt_auth_backend_setup_keeps_compatibility_auth_behind_boundary() {
+    let setup =
+        OpenAIBackendSetup::chatgpt_subscription_compatibility(CHATGPT_CODEX_BASE.to_string());
+
+    assert_eq!(
+        setup.kind(),
+        &OpenAIBackendKind::ChatGptSubscription(
+            ChatGptSubscriptionAuthSource::CodexAppServerCompatibility
+        )
+    );
+    assert!(
+        setup.uses_refreshable_auth(),
+        "ChatGPT compatibility auth must remain refreshable behind the backend setup boundary"
+    );
+
+    let auth = setup.request_auth_from_session(OpenAIChatGptSession {
+        openai_api_key: "exchanged-api-key".to_string(),
+        id_token: "id-token".to_string(),
+        access_token: "oauth-access".to_string(),
+        refresh_token: "refresh-token".to_string(),
+        account_id: Some("acc_123".to_string()),
+        email: Some("test@example.com".to_string()),
+        plan: Some("plus".to_string()),
+        obtained_at: 1,
+        refreshed_at: 1,
+        expires_at: None,
+    });
+    assert_eq!(auth.bearer_token, "oauth-access");
+    assert!(
+        auth.rig_chatgpt_auth.is_none(),
+        "compatibility fallback should not masquerade as Rig-backed auth"
+    );
+}
+
+#[test]
+fn chatgpt_auth_backend_setup_applies_account_and_session_headers() {
+    let setup = OpenAIBackendSetup::from_chatgpt_subscription_config(None);
+    let auth = setup.request_auth_from_session(OpenAIChatGptSession {
+        openai_api_key: "exchanged-api-key".to_string(),
+        id_token: "id-token".to_string(),
+        access_token: "oauth-access".to_string(),
+        refresh_token: "refresh-token".to_string(),
+        account_id: Some("acc_123".to_string()),
+        email: Some("test@example.com".to_string()),
+        plan: Some("plus".to_string()),
+        obtained_at: 1,
+        refreshed_at: 1,
+        expires_at: None,
+    });
+    assert_eq!(auth.bearer_token, "oauth-access");
+    assert_eq!(auth.chatgpt_account_id.as_deref(), Some("acc_123"));
+    assert!(matches!(
+        auth.rig_chatgpt_auth.as_ref(),
+        Some(RigChatGptAuth::AccessToken {
+            access_token,
+            account_id: Some(account_id),
+        }) if access_token == "oauth-access" && account_id.as_str() == "acc_123"
+    ));
+
+    let request = setup
+        .authorize_request(
+            reqwest::Client::builder()
+                .no_proxy()
+                .build()
+                .expect("test client")
+                .get("http://example.com"),
+            &auth,
+        )
+        .build()
+        .expect("request should build");
+
+    assert_eq!(
+        request
+            .headers()
+            .get("authorization")
+            .and_then(|v| v.to_str().ok()),
+        Some("Bearer oauth-access")
+    );
+    assert_eq!(
+        request
+            .headers()
+            .get("ChatGPT-Account-Id")
+            .and_then(|v| v.to_str().ok()),
+        Some("acc_123")
+    );
+    assert_eq!(
+        request
+            .headers()
+            .get("originator")
+            .and_then(|v| v.to_str().ok()),
+        Some("codex_cli_rs")
+    );
+}
+
 #[tokio::test]
 async fn chatgpt_backend_uses_oauth_access_token_and_account_header() {
     let Some(server) = start_mock_server_or_skip().await else {
@@ -423,6 +569,10 @@ async fn chatgpt_backend_uses_oauth_access_token_and_account_header() {
         chatgpt_mock_base_url(&server),
         TimeoutsConfig::default(),
     );
+    assert!(matches!(
+        provider.backend_setup.kind(),
+        OpenAIBackendKind::ChatGptSubscription(ChatGptSubscriptionAuthSource::RigChatGpt)
+    ));
 
     let auth = provider.request_auth_from_session(OpenAIChatGptSession {
         openai_api_key: "exchanged-api-key".to_string(),

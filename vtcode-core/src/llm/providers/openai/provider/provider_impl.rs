@@ -171,8 +171,7 @@ impl provider::LLMProvider for OpenAIProvider {
     }
 
     fn validate_request(&self, request: &provider::LLMRequest) -> Result<(), provider::LLMError> {
-        let supported_models =
-            (!self.base_url.contains("api.openai.com")).then(|| self.supported_models());
+        let supported_models = (!self.is_native_openai_api()).then(|| self.supported_models());
 
         let display_name = self
             .provider_display_override

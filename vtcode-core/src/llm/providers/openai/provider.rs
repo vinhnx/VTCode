@@ -7,7 +7,7 @@
 )]
 
 use crate::config::TimeoutsConfig;
-use crate::config::constants::{env_vars, models, urls};
+use crate::config::constants::models;
 use crate::config::core::{
     AnthropicConfig, ModelConfig, OpenAIConfig, OpenAIHostedShellConfig, OpenAIPromptCacheSettings,
     OpenAIServiceTier, PromptCachingConfig,
@@ -22,7 +22,6 @@ use reqwest::Client as HttpClient;
 use reqwest::StatusCode;
 use reqwest::header::HeaderMap;
 use serde_json::{Value, json};
-use std::env;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
@@ -35,6 +34,7 @@ use vtcode_config::auth::{OpenAIChatGptAuthHandle, OpenAIChatGptSession};
 
 // Import from extracted modules
 use super::CustomProviderAuthHandle;
+use super::backend_setup::{OpenAIBackendSetup, OpenAIRequestAuth};
 use super::harmony;
 use super::request_builder;
 use super::response_parser;
@@ -47,27 +47,13 @@ mod websocket;
 
 use self::websocket::{OpenAIResponsesWebSocketContinuationCache, OpenAIResponsesWebSocketSession};
 use super::super::{
-    common::{
-        extract_prompt_cache_settings, override_base_url, parse_client_prompt_common, resolve_model,
-    },
+    common::{extract_prompt_cache_settings, parse_client_prompt_common, resolve_model},
     extract_reasoning_trace,
 };
 use crate::prompts::system::default_system_prompt;
 
-const CHATGPT_CODEX_BASE: &str = "https://chatgpt.com/backend-api/codex";
-const CHATGPT_ACCOUNT_HEADER: &str = "ChatGPT-Account-Id";
-const CHATGPT_ORIGINATOR_HEADER: &str = "originator";
-const CHATGPT_ORIGINATOR_VALUE: &str = "codex_cli_rs";
-const CHATGPT_SESSION_HEADER: &str = "session_id";
-const CHATGPT_USER_AGENT: &str = "VT Code/1.0";
 const INLINE_FILE_LIMIT_ERROR_PREFIX: &str =
     "Inline OpenAI input_file payload exceeds the 50 MB request limit";
-
-#[derive(Clone, Debug)]
-struct OpenAIRequestAuth {
-    bearer_token: String,
-    chatgpt_account_id: Option<String>,
-}
 
 pub struct OpenAIProvider {
     api_key: Arc<str>,
@@ -81,6 +67,7 @@ pub struct OpenAIProvider {
     openai_chatgpt_auth: Option<OpenAIChatGptAuthHandle>,
     http_client: HttpClient,
     base_url: Arc<str>,
+    backend_setup: OpenAIBackendSetup,
     model: Arc<str>,
     supported_models_override: Option<Vec<String>>,
     responses_api_modes: Mutex<HashMap<String, ResponsesApiState>>,
@@ -180,6 +167,12 @@ impl OpenAIProvider {
         use std::sync::Arc;
         use std::sync::Mutex;
 
+        let backend_setup = if openai_chatgpt_auth.is_some() {
+            OpenAIBackendSetup::chatgpt_subscription_rig(base_url.clone())
+        } else {
+            OpenAIBackendSetup::api_key(base_url.clone())
+        };
+
         Self {
             api_key: Arc::from(api_key.as_str()),
             provider_key_override: None,
@@ -188,6 +181,7 @@ impl OpenAIProvider {
             openai_chatgpt_auth,
             http_client,
             base_url: Arc::from(base_url.as_str()),
+            backend_setup,
             model: Arc::from(model.as_str()),
             supported_models_override: None,
             prompt_cache_enabled: false,
@@ -260,6 +254,9 @@ impl OpenAIProvider {
         provider.provider_key_override = Some(Arc::from(provider_key.as_str()));
         provider.provider_display_override = Some(Arc::from(display_name.as_str()));
         provider.custom_provider_auth = custom_provider_auth;
+        if provider.custom_provider_auth.is_some() {
+            provider.backend_setup = provider.backend_setup.clone().with_custom_command_auth();
+        }
         provider.supported_models_override = supported_models_override;
         provider
     }
@@ -280,20 +277,16 @@ impl OpenAIProvider {
             |cfg, provider_settings| cfg.enabled && provider_settings.enabled,
         );
 
-        let using_chatgpt_auth = openai_chatgpt_auth.is_some();
-        let resolved_base_url = override_base_url(
-            if using_chatgpt_auth {
-                CHATGPT_CODEX_BASE
-            } else {
-                urls::OPENAI_API_BASE
-            },
-            base_url,
-            Some(env_vars::OPENAI_BASE_URL),
-        );
+        let backend_setup = if openai_chatgpt_auth.is_some() {
+            OpenAIBackendSetup::from_chatgpt_subscription_config(base_url)
+        } else {
+            OpenAIBackendSetup::from_api_key_config(base_url)
+        };
+        let resolved_base_url = backend_setup.base_url().to_string();
 
         let mut responses_api_modes = HashMap::new();
         let default_state = Self::default_responses_state(&model);
-        let is_chatgpt_backend = using_chatgpt_auth && resolved_base_url.contains("chatgpt.com");
+        let is_chatgpt_backend = backend_setup.is_chatgpt_codex_backend();
         let is_xai = resolved_base_url.contains("api.x.ai");
         let websocket_mode = openai
             .as_ref()
@@ -340,6 +333,7 @@ impl OpenAIProvider {
             openai_chatgpt_auth,
             http_client,
             base_url: Arc::from(resolved_base_url.as_str()),
+            backend_setup,
             model: Arc::from(model.as_str()),
             supported_models_override: None,
             responses_api_modes: Mutex::new(responses_api_modes),
@@ -357,7 +351,7 @@ impl OpenAIProvider {
     }
 
     fn is_native_openai_api(&self) -> bool {
-        self.provider_key_override.is_none() && self.base_url.contains("api.openai.com")
+        self.provider_key_override.is_none() && self.backend_setup.is_native_openai_api()
     }
 
     pub(crate) fn supports_manual_openai_compaction_for_model(&self, model: &str) -> bool {
@@ -411,7 +405,7 @@ impl OpenAIProvider {
 
     fn websocket_mode_enabled(&self, model: &str) -> bool {
         self.websocket_mode
-            && !self.is_chatgpt_backend()
+            && self.backend_setup.transport().websocket
             && !matches!(self.responses_api_state(model), ResponsesApiState::Disabled)
     }
 
@@ -428,48 +422,23 @@ impl OpenAIProvider {
         builder: reqwest::RequestBuilder,
         auth: &OpenAIRequestAuth,
     ) -> reqwest::RequestBuilder {
-        let mut builder = if auth.bearer_token.trim().is_empty() {
-            builder
-        } else {
-            builder.bearer_auth(&auth.bearer_token)
-        };
-
-        if self.is_chatgpt_backend() {
-            if let Some(account_id) = auth
-                .chatgpt_account_id
-                .as_deref()
-                .map(str::trim)
-                .filter(|value| !value.is_empty())
-            {
-                builder = builder.header(CHATGPT_ACCOUNT_HEADER, account_id);
-            }
-            builder = builder
-                .header(CHATGPT_ORIGINATOR_HEADER, CHATGPT_ORIGINATOR_VALUE)
-                .header("User-Agent", CHATGPT_USER_AGENT);
-            if let Ok(session_id) = env::var("VT_SESSION_ID")
-                && !session_id.trim().is_empty()
-            {
-                builder = builder.header(CHATGPT_SESSION_HEADER, session_id);
-            }
-        }
-
-        builder
+        self.backend_setup.authorize_request(builder, auth)
     }
 
     fn uses_chatgpt_auth(&self) -> bool {
-        self.openai_chatgpt_auth.is_some()
+        self.backend_setup.uses_chatgpt_subscription_auth()
     }
 
     fn uses_refreshable_auth(&self) -> bool {
-        self.openai_chatgpt_auth.is_some() || self.custom_provider_auth.is_some()
+        self.backend_setup.uses_refreshable_auth() || self.custom_provider_auth.is_some()
     }
 
     fn is_chatgpt_backend(&self) -> bool {
-        self.uses_chatgpt_auth() && self.base_url.contains("chatgpt.com")
+        self.backend_setup.is_chatgpt_codex_backend()
     }
 
     fn allows_chat_completions_fallback(&self) -> bool {
-        !self.is_chatgpt_backend()
+        self.backend_setup.transport().chat_completions_fallback
     }
 
     fn auth_retryable_status(status: StatusCode) -> bool {
@@ -527,35 +496,21 @@ impl OpenAIProvider {
     }
 
     fn request_auth_from_session(&self, session: OpenAIChatGptSession) -> OpenAIRequestAuth {
-        let bearer_token = if self.is_chatgpt_backend() || session.openai_api_key.trim().is_empty()
-        {
-            session.access_token
-        } else {
-            session.openai_api_key
-        };
-
-        OpenAIRequestAuth {
-            bearer_token,
-            chatgpt_account_id: session.account_id,
-        }
+        self.backend_setup.request_auth_from_session(session)
     }
 
     async fn current_request_auth(&self) -> Result<OpenAIRequestAuth, provider::LLMError> {
         if let Some(handle) = &self.custom_provider_auth {
-            return Ok(OpenAIRequestAuth {
-                bearer_token: handle
+            return Ok(OpenAIRequestAuth::bearer_token(
+                handle
                     .current_token()
                     .await
                     .map_err(|e| self.format_auth_error(e))?,
-                chatgpt_account_id: None,
-            });
+            ));
         }
 
         let Some(handle) = &self.openai_chatgpt_auth else {
-            return Ok(OpenAIRequestAuth {
-                bearer_token: self.api_key.to_string(),
-                chatgpt_account_id: None,
-            });
+            return Ok(OpenAIRequestAuth::bearer_token(self.api_key.to_string()));
         };
 
         handle
@@ -570,20 +525,16 @@ impl OpenAIProvider {
         &self,
     ) -> Result<OpenAIRequestAuth, provider::LLMError> {
         if let Some(handle) = &self.custom_provider_auth {
-            return Ok(OpenAIRequestAuth {
-                bearer_token: handle
+            return Ok(OpenAIRequestAuth::bearer_token(
+                handle
                     .force_refresh()
                     .await
                     .map_err(|e| self.format_auth_error(e))?,
-                chatgpt_account_id: None,
-            });
+            ));
         }
 
         let Some(handle) = &self.openai_chatgpt_auth else {
-            return Ok(OpenAIRequestAuth {
-                bearer_token: self.api_key.to_string(),
-                chatgpt_account_id: None,
-            });
+            return Ok(OpenAIRequestAuth::bearer_token(self.api_key.to_string()));
         };
 
         handle
@@ -762,7 +713,7 @@ impl OpenAIProvider {
         &self,
         request: &provider::LLMRequest,
     ) -> Result<Value, provider::LLMError> {
-        let is_native_openai = self.base_url.contains("api.openai.com");
+        let is_native_openai = self.is_native_openai_api();
         let prompt_cache_key = if is_native_openai {
             request.prompt_cache_key.as_deref()
         } else {
@@ -804,6 +755,7 @@ impl OpenAIProvider {
             None
         };
         let is_chatgpt_backend = self.is_chatgpt_backend();
+        let backend_defaults = self.backend_setup.responses_defaults();
         let supports_responses_continuation = !is_chatgpt_backend
             && !matches!(
                 self.responses_api_state(&request.model),
@@ -818,22 +770,23 @@ impl OpenAIProvider {
             is_responses_api_model: Self::is_responses_api_model(&request.model),
             include_max_output_tokens: is_native_openai,
             include_previous_response_id: supports_responses_continuation,
-            include_output_types: !self.is_chatgpt_backend(),
-            include_sampling_parameters: !self.is_chatgpt_backend(),
-            force_response_store_false: self.uses_chatgpt_auth()
-                && self.base_url.contains("chatgpt.com"),
+            include_output_types: backend_defaults.include_output_types,
+            include_sampling_parameters: backend_defaults.include_sampling_parameters,
+            force_response_store_false: backend_defaults.force_store_false,
             include_assistant_phase: is_native_openai,
             prompt_cache_key,
-            include_prompt_cache_retention: !self.is_chatgpt_backend(),
+            include_prompt_cache_retention: backend_defaults.include_prompt_cache_retention,
             prompt_cache_retention: self.prompt_cache_settings.prompt_cache_retention.as_deref(),
             default_service_tier,
             default_response_store: self.responses_store,
             default_responses_include: (!self.responses_include.is_empty())
                 .then_some(self.responses_include.as_slice()),
-            include_encrypted_reasoning: is_chatgpt_backend,
+            include_encrypted_reasoning: backend_defaults.include_encrypted_reasoning,
             hosted_shell: self.hosted_shell_for_model(&request.model),
-            include_structured_history_in_input: !is_chatgpt_backend,
-            preserve_structured_history_on_replay: is_chatgpt_backend,
+            include_structured_history_in_input: backend_defaults
+                .include_structured_history_in_input,
+            preserve_structured_history_on_replay: backend_defaults
+                .preserve_structured_history_on_replay,
             preserve_assistant_phase_on_replay: false,
         };
 

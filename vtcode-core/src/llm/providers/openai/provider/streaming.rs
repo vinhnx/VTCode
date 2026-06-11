@@ -253,7 +253,7 @@ impl OpenAIProvider {
         openai_request["stream"] = Value::Bool(true);
         // Request usage stats in the stream (compatible with newer OpenAI models)
         // Note: Some proxies do not support stream_options and will return 400.
-        let is_native_openai = self.base_url.contains("api.openai.com");
+        let is_native_openai = self.is_native_openai_api();
         if is_native_openai {
             openai_request["stream_options"] = json!({ "include_usage": true });
         }
