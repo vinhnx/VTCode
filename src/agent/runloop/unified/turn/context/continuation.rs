@@ -131,8 +131,9 @@ fn last_clause_contains_conclusive_marker(lower: &str) -> bool {
         "all set",
     ];
     let last_clause = lower
-        .rfind(|ch| ['.', '!', '\n', '—', '…'].contains(&ch))
-        .map(|idx| lower[idx + 1..].trim_start())
+        .char_indices()
+        .rfind(|(_, ch)| ['.', '!', '\n', '—', '…'].contains(ch))
+        .map(|(idx, ch)| lower[idx + ch.len_utf8()..].trim_start())
         .unwrap_or(lower);
     conclusive_markers
         .iter()
