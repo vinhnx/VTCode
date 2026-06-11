@@ -1,6 +1,6 @@
 use crate::config::models::Provider;
 use crate::config::types::ReasoningEffortLevel;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use rig::client::CompletionClient;
 use rig::providers::gemini::completion::gemini_api_types::ThinkingConfig;
 use rig::providers::{anthropic, deepseek, gemini, openai, openrouter};
@@ -36,15 +36,18 @@ impl RigProviderCapabilities {
     pub fn validate_model(&self, api_key: &str) -> Result<RigValidationSummary> {
         match self.provider {
             Provider::Gemini => {
-                let client = gemini::Client::new(api_key);
+                let client = gemini::Client::new(api_key)
+                    .context("failed to initialise Rig Gemini client")?;
                 let _ = client.completion_model(&self.model);
             }
             Provider::OpenAI => {
-                let client = openai::Client::new(api_key);
+                let client = openai::Client::new(api_key)
+                    .context("failed to initialise Rig OpenAI client")?;
                 let _ = client.completion_model(&self.model);
             }
             Provider::Anthropic => {
-                let client = anthropic::Client::new(api_key);
+                let client = anthropic::Client::new(api_key)
+                    .context("failed to initialise Rig Anthropic client")?;
                 let _ = client.completion_model(&self.model);
             }
             Provider::Copilot => {
@@ -54,14 +57,16 @@ impl RigProviderCapabilities {
                 // MiniMax uses an Anthropic-compatible API; rig has no direct client.
             }
             Provider::DeepSeek => {
-                let client = deepseek::Client::new(api_key);
+                let client = deepseek::Client::new(api_key)
+                    .context("failed to initialise Rig DeepSeek client")?;
                 let _ = client.completion_model(&self.model);
             }
             Provider::HuggingFace => {
                 // Hugging Face exposes an OpenAI-compatible router; rig does not ship a dedicated client.
             }
             Provider::OpenRouter => {
-                let client = openrouter::Client::new(api_key);
+                let client = openrouter::Client::new(api_key)
+                    .context("failed to initialise Rig OpenRouter client")?;
                 let _ = client.completion_model(&self.model);
             }
             Provider::Ollama => {
@@ -153,7 +158,8 @@ impl RigProviderCapabilities {
                     | ReasoningEffortLevel::Max => 256,
                 };
                 let config = ThinkingConfig {
-                    thinking_budget: budget,
+                    thinking_budget: Some(budget),
+                    thinking_level: None,
                     include_thoughts: Some(include_thoughts),
                 };
                 serde_json::to_value(config)
@@ -265,6 +271,66 @@ mod tests {
 
         assert_eq!(payload["thinking"]["type"], "enabled");
         assert_eq!(payload["thinking_effort"], "medium");
+    }
+
+    #[test]
+    fn rig_capabilities_preserve_reasoning_payload_for_openai() {
+        let payload = RigProviderCapabilities::new(Provider::OpenAI, "gpt-5")
+            .reasoning_parameters(ReasoningEffortLevel::Medium)
+            .expect("reasoning payload");
+
+        assert_eq!(payload["effort"], "medium");
+
+        let codex_payload = RigProviderCapabilities::new(Provider::OpenAI, "gpt-5-codex")
+            .reasoning_parameters(ReasoningEffortLevel::Minimal)
+            .expect("reasoning payload");
+
+        assert_eq!(codex_payload["effort"], "low");
+    }
+
+    #[test]
+    fn rig_capabilities_preserve_reasoning_payload_for_gemini() {
+        let payload = RigProviderCapabilities::new(Provider::Gemini, "gemini-2.5-pro")
+            .reasoning_parameters(ReasoningEffortLevel::High)
+            .expect("reasoning payload");
+
+        assert_eq!(payload["thinking_config"]["thinkingBudget"], 256);
+        assert_eq!(payload["thinking_config"]["includeThoughts"], true);
+    }
+
+    #[test]
+    fn rig_capabilities_preserve_reasoning_payload_for_anthropic() {
+        assert!(
+            RigProviderCapabilities::new(Provider::Anthropic, "claude-sonnet-4-5")
+                .reasoning_parameters(ReasoningEffortLevel::High)
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn rig_capabilities_preserve_reasoning_payload_for_deepseek() {
+        let high_payload = RigProviderCapabilities::new(Provider::DeepSeek, "deepseek-chat")
+            .reasoning_parameters(ReasoningEffortLevel::Medium)
+            .expect("reasoning payload");
+
+        assert_eq!(high_payload["thinking"]["type"], "enabled");
+        assert_eq!(high_payload["reasoning_effort"], "high");
+
+        let max_payload = RigProviderCapabilities::new(Provider::DeepSeek, "deepseek-chat")
+            .reasoning_parameters(ReasoningEffortLevel::XHigh)
+            .expect("reasoning payload");
+
+        assert_eq!(max_payload["thinking"]["type"], "enabled");
+        assert_eq!(max_payload["reasoning_effort"], "max");
+    }
+
+    #[test]
+    fn rig_capabilities_preserve_reasoning_payload_for_openrouter() {
+        assert!(
+            RigProviderCapabilities::new(Provider::OpenRouter, "openai/gpt-5")
+                .reasoning_parameters(ReasoningEffortLevel::High)
+                .is_none()
+        );
     }
 
     #[test]
