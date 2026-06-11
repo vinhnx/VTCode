@@ -10,7 +10,7 @@ use futures::StreamExt;
 use serde_json::Value;
 use std::time::Instant;
 
-use super::responses_api::parse_responses_payload;
+use super::responses_api::{parse_cached_prompt_tokens_from_usage, parse_responses_payload};
 use super::streaming::OpenAIStreamTelemetry;
 
 fn strip_reasoning_for_model(
@@ -57,16 +57,8 @@ fn merge_final_response_metadata(
     include_cached_prompt_metrics: bool,
 ) {
     if let Some(usage_value) = final_response.get("usage") {
-        let cached_prompt_tokens = if include_cached_prompt_metrics {
-            usage_value
-                .get("prompt_tokens_details")
-                .and_then(|details| details.get("cached_tokens"))
-                .or_else(|| usage_value.get("prompt_cache_hit_tokens"))
-                .and_then(Value::as_u64)
-                .and_then(|value| u32::try_from(value).ok())
-        } else {
-            None
-        };
+        let cached_prompt_tokens =
+            parse_cached_prompt_tokens_from_usage(usage_value, include_cached_prompt_metrics);
 
         response.usage = Some(provider::Usage {
             prompt_tokens: usage_value

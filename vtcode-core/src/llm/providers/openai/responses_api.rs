@@ -269,6 +269,38 @@ fn append_tool_result_to_instructions(
     instructions_segments.push(s);
 }
 
+pub(crate) fn parse_cached_prompt_tokens_from_usage(
+    usage_value: &Value,
+    include_cached_prompt_metrics: bool,
+) -> Option<u32> {
+    if !include_cached_prompt_metrics {
+        return None;
+    }
+
+    let cached_prompt_tokens = usage_value
+        .get("input_tokens_details")
+        .and_then(|details| details.get("cached_tokens"))
+        .or_else(|| {
+            usage_value
+                .get("prompt_tokens_details")
+                .and_then(|details| details.get("cached_tokens"))
+        })
+        .or_else(|| usage_value.get("prompt_cache_hit_tokens"))
+        .or_else(|| usage_value.get("cached_tokens"))
+        .and_then(Value::as_u64)
+        .and_then(|value| u32::try_from(value).ok());
+
+    if let Some(cached_prompt_tokens) = cached_prompt_tokens {
+        tracing::debug!(
+            target = "vtcode::llm::openai::prompt_cache",
+            cached_prompt_tokens,
+            "OpenAI Responses cached prompt token usage"
+        );
+    }
+
+    cached_prompt_tokens
+}
+
 pub fn parse_responses_payload(
     response_json: Value,
     model: String,
@@ -431,16 +463,8 @@ pub fn parse_responses_payload(
     };
 
     let usage = response_json.get("usage").map(|usage_value| {
-        let cached_prompt_tokens = if include_cached_prompt_metrics {
-            usage_value
-                .get("prompt_tokens_details")
-                .and_then(|details| details.get("cached_tokens"))
-                .or_else(|| usage_value.get("prompt_cache_hit_tokens"))
-                .and_then(|value| value.as_u64())
-                .and_then(|value| u32::try_from(value).ok())
-        } else {
-            None
-        };
+        let cached_prompt_tokens =
+            parse_cached_prompt_tokens_from_usage(usage_value, include_cached_prompt_metrics);
 
         Usage {
             prompt_tokens: usage_value
@@ -673,7 +697,10 @@ pub fn build_standard_responses_payload(
 
 #[cfg(test)]
 mod tests {
-    use super::{build_standard_responses_payload, parse_responses_payload};
+    use super::{
+        build_standard_responses_payload, parse_cached_prompt_tokens_from_usage,
+        parse_responses_payload,
+    };
     use crate::llm::provider::{LLMRequest, Message, ToolCall};
     use serde_json::{Value, json};
 
@@ -1179,5 +1206,88 @@ mod tests {
 
         assert_eq!(parsed.content.as_deref(), Some("Done."));
         assert!(parsed.tool_calls.unwrap_or_default().is_empty());
+    }
+
+    #[test]
+    fn parse_responses_payload_extracts_cached_prompt_tokens_from_input_details() {
+        let response = json!({
+            "output": [
+                {
+                    "type": "message",
+                    "content": [
+                        {"type": "output_text", "text": "hello"}
+                    ]
+                }
+            ],
+            "usage": {
+                "input_tokens": 100,
+                "output_tokens": 5,
+                "total_tokens": 105,
+                "input_tokens_details": {
+                    "cached_tokens": 42
+                }
+            }
+        });
+
+        let parsed = parse_responses_payload(response, "gpt-5".to_string(), true)
+            .expect("payload should parse");
+
+        assert_eq!(
+            parsed.usage.and_then(|usage| usage.cached_prompt_tokens),
+            Some(42)
+        );
+    }
+
+    #[test]
+    fn parse_responses_payload_treats_missing_cached_prompt_tokens_as_normal() {
+        let response = json!({
+            "output": [
+                {
+                    "type": "message",
+                    "content": [
+                        {"type": "output_text", "text": "hello"}
+                    ]
+                }
+            ],
+            "usage": {
+                "input_tokens": 100,
+                "output_tokens": 5,
+                "total_tokens": 105
+            }
+        });
+
+        let parsed = parse_responses_payload(response, "gpt-5".to_string(), true)
+            .expect("payload should parse");
+
+        assert_eq!(
+            parsed.usage.and_then(|usage| usage.cached_prompt_tokens),
+            None
+        );
+    }
+
+    #[test]
+    fn parse_cached_prompt_tokens_supports_responses_fallback_shapes() {
+        assert_eq!(
+            parse_cached_prompt_tokens_from_usage(
+                &json!({"prompt_tokens_details": {"cached_tokens": 17}}),
+                true
+            ),
+            Some(17)
+        );
+        assert_eq!(
+            parse_cached_prompt_tokens_from_usage(&json!({"prompt_cache_hit_tokens": 23}), true),
+            Some(23)
+        );
+        assert_eq!(
+            parse_cached_prompt_tokens_from_usage(&json!({"cached_tokens": 29}), true),
+            Some(29)
+        );
+        assert_eq!(
+            parse_cached_prompt_tokens_from_usage(
+                &json!({"input_tokens_details": {"cached_tokens": 31}}),
+                false
+            ),
+            None
+        );
     }
 }

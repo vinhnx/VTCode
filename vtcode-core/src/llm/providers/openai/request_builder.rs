@@ -192,6 +192,27 @@ fn merge_typed_responses_parameters(
     request.extend(fields);
 }
 
+fn apply_prompt_cache_overlay(openai_request: &mut Value, ctx: &ResponsesRequestContext<'_>) {
+    let Some(request) = openai_request.as_object_mut() else {
+        return;
+    };
+
+    if let Some(prompt_cache_key) = trimmed_non_empty(ctx.prompt_cache_key) {
+        request
+            .entry("prompt_cache_key".to_string())
+            .or_insert_with(|| json!(prompt_cache_key));
+    }
+
+    if ctx.include_prompt_cache_retention
+        && ctx.is_responses_api_model
+        && let Some(retention) = trimmed_non_empty(ctx.prompt_cache_retention)
+    {
+        request
+            .entry("prompt_cache_retention".to_string())
+            .or_insert_with(|| json!(retention));
+    }
+}
+
 fn default_text_verbosity_for_model(model: &str) -> Option<VerbosityLevel> {
     if LOW_VERBOSITY_MODELS.contains(&model) {
         Some(VerbosityLevel::Low)
@@ -689,29 +710,17 @@ fn build_responses_request_from_history(
         openai_request["text"] = text_format;
     }
 
-    if let Some(prompt_cache_key) = trimmed_non_empty(ctx.prompt_cache_key) {
-        openai_request["prompt_cache_key"] = json!(prompt_cache_key);
-    }
-
-    // If configured, include the `prompt_cache_retention` value in the Responses API
-    // request. This allows the user to extend the server-side prompt cache window
-    // (e.g., "24h") to increase cache reuse and reduce cost/latency on GPT-5.
-    // Only include prompt_cache_retention when both configured and when the selected
-    // model uses the OpenAI Responses API.
-    if ctx.include_prompt_cache_retention
-        && ctx.is_responses_api_model
-        && let Some(retention) = ctx.prompt_cache_retention
-        && !retention.trim().is_empty()
-    {
-        openai_request["prompt_cache_retention"] = json!(retention);
-    }
+    // Rig 0.38.2 lacks typed prompt-cache fields. Keep this overlay at the
+    // final JSON boundary so future Rig typed support wins without being
+    // overwritten by VTCode's compatibility injection.
+    apply_prompt_cache_overlay(&mut openai_request, ctx);
 
     Ok(openai_request)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{ResponsesRequestContext, build_responses_request};
+    use super::{ResponsesRequestContext, apply_prompt_cache_overlay, build_responses_request};
     use crate::config::constants::models;
     use crate::llm::provider;
     use serde_json::{Value, json};
@@ -786,6 +795,53 @@ mod tests {
                 json!("output_text.annotations"),
                 json!("reasoning.encrypted_content"),
             ])
+        );
+    }
+
+    #[test]
+    fn prompt_cache_overlay_inserts_fields_at_final_json_boundary() {
+        let mut ctx = base_context(None);
+        ctx.prompt_cache_key = Some("vtcode:openai:session-123");
+        ctx.include_prompt_cache_retention = true;
+        ctx.prompt_cache_retention = Some("24h");
+
+        let payload =
+            build_responses_request(&request(), &ctx).expect("responses request should build");
+
+        assert_eq!(
+            payload.get("prompt_cache_key").and_then(Value::as_str),
+            Some("vtcode:openai:session-123")
+        );
+        assert_eq!(
+            payload
+                .get("prompt_cache_retention")
+                .and_then(Value::as_str),
+            Some("24h")
+        );
+    }
+
+    #[test]
+    fn prompt_cache_overlay_does_not_overwrite_existing_fields() {
+        let mut ctx = base_context(None);
+        ctx.prompt_cache_key = Some("vtcode:openai:session-123");
+        ctx.include_prompt_cache_retention = true;
+        ctx.prompt_cache_retention = Some("24h");
+        let mut payload = json!({
+            "prompt_cache_key": "typed-key",
+            "prompt_cache_retention": "in_memory"
+        });
+
+        apply_prompt_cache_overlay(&mut payload, &ctx);
+
+        assert_eq!(
+            payload.get("prompt_cache_key").and_then(Value::as_str),
+            Some("typed-key")
+        );
+        assert_eq!(
+            payload
+                .get("prompt_cache_retention")
+                .and_then(Value::as_str),
+            Some("in_memory")
         );
     }
 }
