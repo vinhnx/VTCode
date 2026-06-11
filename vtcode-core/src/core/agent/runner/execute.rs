@@ -26,7 +26,7 @@ use crate::core::agent::task::{ContextItem, Task, TaskOutcome, TaskResults};
 use crate::exec::events::HarnessEventKind;
 use crate::llm::model_resolver::ModelResolver;
 use crate::llm::provider::{
-    FinishReason, Message, ResponsesContinuationState, ToolCall, ToolDefinition,
+    FinishReason, Message, ResponsesContinuationState, ToolCall, ToolChoice, ToolDefinition,
     prepare_responses_continuation_request, responses_continuation_key,
     supports_responses_chaining,
 };
@@ -706,7 +706,17 @@ impl AgentRunner {
                     max_tokens,
                     temperature,
                     stream: self.provider_client.supports_streaming(),
-                    tool_choice: None,
+                    tool_choice: (provider_name.eq_ignore_ascii_case("openai")
+                        && !prompt_bundle.tool_snapshot.active_tool_names.is_empty())
+                    .then(|| {
+                        ToolChoice::allowed_tools_auto(
+                            prompt_bundle
+                                .tool_snapshot
+                                .active_tool_names
+                                .as_ref()
+                                .clone(),
+                        )
+                    }),
                     parallel_tool_config,
                     reasoning_effort,
                     verbosity: turn_verbosity,

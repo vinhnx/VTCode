@@ -417,6 +417,13 @@ impl OpenAIProvider {
         .then_some(&self.hosted_shell)
     }
 
+    fn supports_responses_allowed_tools(&self, model: &str) -> bool {
+        self.supports_tools(model)
+            && Self::is_responses_api_model(model)
+            && !matches!(self.responses_api_state(model), ResponsesApiState::Disabled)
+            && (self.is_native_openai_api() || self.is_chatgpt_backend())
+    }
+
     fn authorize_with_api_key(
         &self,
         builder: reqwest::RequestBuilder,
@@ -763,6 +770,7 @@ impl OpenAIProvider {
             );
         let ctx = request_builder::ResponsesRequestContext {
             supports_tools: self.supports_tools(&request.model),
+            supports_allowed_tools: self.supports_responses_allowed_tools(&request.model),
             supports_parallel_tool_config: self.supports_parallel_tool_config(&request.model),
             supports_temperature: Self::supports_temperature_parameter(&request.model),
             supports_reasoning_effort: self.supports_reasoning_effort(&request.model),

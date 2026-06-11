@@ -95,11 +95,18 @@ pub fn append_runtime_tool_prompt_sections(
     }
 
     if include_catalog_metadata && tool_snapshot.snapshot.is_some() {
+        let active_tools = if tool_snapshot.active_tool_names.is_empty() {
+            "none".to_string()
+        } else {
+            tool_snapshot.active_tool_names.join(", ")
+        };
         let catalog_metadata = format!(
-            "[Runtime Tool Catalog]\n- version: {}\n- epoch: {}\n- available_tools: {}\n- request_user_input_enabled: {}",
+            "[Runtime Tool Catalog]\n- version: {}\n- epoch: {}\n- catalog_tools: {}\n- available_tools: {}\n- currently_available_tools: {}\n- request_user_input_enabled: {}",
             tool_snapshot.version,
             tool_snapshot.epoch,
+            tool_snapshot.catalog_tools(),
             tool_snapshot.available_tools(),
+            active_tools,
             tool_snapshot.request_user_input_enabled,
         );
         append_prompt_block(prompt, &catalog_metadata);
@@ -194,13 +201,10 @@ fn generate_runtime_tool_guidelines(available_tools: &[String], planning_active:
 }
 
 fn snapshot_tool_names(tool_snapshot: &SessionToolCatalogSnapshot) -> Vec<String> {
-    let Some(snapshot) = tool_snapshot.snapshot.as_ref() else {
-        return Vec::new();
-    };
-
-    snapshot
+    tool_snapshot
+        .active_tool_names
         .iter()
-        .map(|tool| tool.function_name().to_string())
+        .cloned()
         .collect::<BTreeSet<_>>()
         .into_iter()
         .collect()
@@ -480,6 +484,8 @@ mod tests {
 
         assert!(prompt.contains("## Active Tools"));
         assert!(prompt.contains("[Runtime Tool Catalog]"));
+        assert!(prompt.contains("catalog_tools: 2"));
+        assert!(prompt.contains("currently_available_tools: unified_search, unified_file"));
         assert!(prompt.contains("request_user_input_enabled: false"));
     }
 

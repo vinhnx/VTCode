@@ -19,6 +19,7 @@ pub struct SessionToolCatalogSnapshot {
     pub planning_active: bool,
     pub request_user_input_enabled: bool,
     pub snapshot: Option<Arc<Vec<ToolDefinition>>>,
+    pub active_tool_names: Arc<Vec<String>>,
     pub cache_hit: bool,
     pub tool_catalog_hash: Option<u64>,
 }
@@ -32,6 +33,27 @@ impl SessionToolCatalogSnapshot {
         snapshot: Option<Arc<Vec<ToolDefinition>>>,
         cache_hit: bool,
     ) -> Self {
+        let active_tool_names = Arc::new(tool_names_from_definitions(snapshot.as_deref()));
+        Self::with_active_tool_names(
+            version,
+            epoch,
+            planning_active,
+            request_user_input_enabled,
+            snapshot,
+            active_tool_names,
+            cache_hit,
+        )
+    }
+
+    pub fn with_active_tool_names(
+        version: u64,
+        epoch: u64,
+        planning_active: bool,
+        request_user_input_enabled: bool,
+        snapshot: Option<Arc<Vec<ToolDefinition>>>,
+        active_tool_names: Arc<Vec<String>>,
+        cache_hit: bool,
+    ) -> Self {
         let tool_catalog_hash = hash_tool_definitions(snapshot.as_deref().map(Vec::as_slice));
         Self {
             version,
@@ -39,12 +61,17 @@ impl SessionToolCatalogSnapshot {
             planning_active,
             request_user_input_enabled,
             snapshot,
+            active_tool_names,
             cache_hit,
             tool_catalog_hash,
         }
     }
 
     pub fn available_tools(&self) -> usize {
+        self.active_tool_names.len()
+    }
+
+    pub fn catalog_tools(&self) -> usize {
         self.snapshot.as_ref().map_or(0, |defs| defs.len())
     }
 
@@ -56,6 +83,17 @@ impl SessionToolCatalogSnapshot {
         self.cache_hit = cache_hit;
         self
     }
+}
+
+fn tool_names_from_definitions(tools: Option<&Vec<ToolDefinition>>) -> Vec<String> {
+    let Some(tools) = tools else {
+        return Vec::new();
+    };
+
+    tools
+        .iter()
+        .map(|tool| tool.function_name().to_string())
+        .collect()
 }
 
 #[derive(Debug, Clone)]

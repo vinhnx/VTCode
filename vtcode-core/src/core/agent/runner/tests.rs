@@ -336,6 +336,68 @@ async fn active_primary_agent_policy_intersects_runner_tools() {
 }
 
 #[tokio::test]
+async fn active_primary_agent_policy_preserves_stable_catalogue_with_active_subset() {
+    let temp = TempDir::new().expect("tempdir");
+    let mut runner = AgentRunner::new_with_bootstrap(
+        AgentType::Single,
+        ModelId::default(),
+        "test-key".to_string(),
+        temp.path().to_path_buf(),
+        "thread-primary-agent-stable-catalogue".to_string(),
+        RunnerSettings {
+            reasoning_effort: None,
+            verbosity: None,
+        },
+        None,
+        ThreadBootstrap::new(None),
+        Some(VTCodeConfig::default()),
+        None,
+    )
+    .await
+    .expect("runner");
+
+    let baseline = runner
+        .build_universal_tool_snapshot()
+        .await
+        .expect("baseline snapshot");
+    let baseline_names = baseline
+        .snapshot
+        .as_ref()
+        .expect("stable catalogue")
+        .iter()
+        .map(|tool| tool.function_name().to_string())
+        .collect::<Vec<_>>();
+
+    let mut spec = vtcode_config::builtin_primary_auto_agent();
+    spec.tools = Some(vec![tools::READ_FILE.to_string()]);
+    runner.set_active_primary_agent(ActivePrimaryAgent::from_spec(&spec));
+
+    let restricted = runner
+        .build_universal_tool_snapshot()
+        .await
+        .expect("restricted snapshot");
+    let restricted_names = restricted
+        .snapshot
+        .as_ref()
+        .expect("stable catalogue")
+        .iter()
+        .map(|tool| tool.function_name().to_string())
+        .collect::<Vec<_>>();
+
+    assert_eq!(restricted_names, baseline_names);
+    assert!(
+        restricted
+            .active_tool_names
+            .contains(&tools::READ_FILE.to_string())
+    );
+    assert!(
+        !restricted
+            .active_tool_names
+            .contains(&tools::UNIFIED_EXEC.to_string())
+    );
+}
+
+#[tokio::test]
 async fn normalize_tool_args_applies_transform_after_defaults() {
     let temp = TempDir::new().expect("tempdir");
     let mut runner = AgentRunner::new_with_bootstrap(

@@ -72,6 +72,7 @@ pub(crate) struct ChatRequestContext<'a> {
 
 pub(crate) struct ResponsesRequestContext<'a> {
     pub supports_tools: bool,
+    pub supports_allowed_tools: bool,
     pub supports_parallel_tool_config: bool,
     pub supports_temperature: bool,
     pub supports_reasoning_effort: bool,
@@ -211,6 +212,36 @@ fn apply_prompt_cache_overlay(openai_request: &mut Value, ctx: &ResponsesRequest
             .entry("prompt_cache_retention".to_string())
             .or_insert_with(|| json!(retention));
     }
+}
+
+fn openai_responses_allowed_tools_choice(
+    tool_choice: &provider::ToolChoice,
+    stable_tools: &[provider::ToolDefinition],
+) -> Option<Value> {
+    let provider::ToolChoice::AllowedTools(choice) = tool_choice else {
+        return None;
+    };
+    if choice.tools.is_empty() {
+        return None;
+    }
+
+    let active_names: HashSet<&str> = choice.tools.iter().map(String::as_str).collect();
+    let tools = stable_tools
+        .iter()
+        .filter_map(|tool| {
+            let name = tool.function_name();
+            active_names.contains(name).then(|| json!(name))
+        })
+        .collect::<Vec<_>>();
+    if tools.is_empty() {
+        return None;
+    }
+
+    Some(json!({
+        "type": "allowed_tools",
+        "mode": choice.mode.as_str(),
+        "tools": tools,
+    }))
 }
 
 fn default_text_verbosity_for_model(model: &str) -> Option<VerbosityLevel> {
@@ -616,9 +647,17 @@ fn build_responses_request_from_history(
             openai_request["parallel_tool_calls"] = Value::Bool(false);
         }
 
-        // Only add tool_choice when tools are present
+        // Only add tool_choice when tools are present. Native allowed-tools
+        // filtering is advisory and derives its subset from the stable
+        // catalogue above; unsupported backends/models degrade to regular
+        // provider tool_choice values.
         if let Some(tool_choice) = &request.tool_choice {
-            openai_request["tool_choice"] = tool_choice.to_provider_format("openai");
+            openai_request["tool_choice"] = if ctx.supports_allowed_tools {
+                openai_responses_allowed_tools_choice(tool_choice, tools)
+                    .unwrap_or_else(|| tool_choice.to_provider_format("openai"))
+            } else {
+                tool_choice.to_provider_format("openai")
+            };
         }
 
         // Only set parallel tool calls if not overridden due to custom tools
@@ -730,6 +769,7 @@ mod tests {
     ) -> ResponsesRequestContext<'a> {
         ResponsesRequestContext {
             supports_tools: false,
+            supports_allowed_tools: false,
             supports_parallel_tool_config: false,
             supports_temperature: true,
             supports_reasoning_effort: true,

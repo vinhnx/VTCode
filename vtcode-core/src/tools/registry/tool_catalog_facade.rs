@@ -189,6 +189,26 @@ impl SessionToolCatalogState {
         )
     }
 
+    pub fn snapshot_for_stable_defs_with_active_names(
+        &self,
+        defs: Vec<ToolDefinition>,
+        active_tool_names: Vec<String>,
+        planning_active: bool,
+        request_user_input_enabled: bool,
+    ) -> SessionToolCatalogSnapshot {
+        let defs = sort_snapshot_definitions(defs);
+        let active_tool_names = Arc::new(active_tool_names);
+        SessionToolCatalogSnapshot::with_active_tool_names(
+            self.current_version(),
+            self.current_epoch(),
+            planning_active,
+            request_user_input_enabled,
+            (!defs.is_empty()).then(|| Arc::new(defs)),
+            active_tool_names,
+            false,
+        )
+    }
+
     async fn sorted_snapshot(
         &self,
         tools: &Arc<RwLock<Vec<ToolDefinition>>>,
@@ -296,5 +316,36 @@ mod tests {
             .collect();
 
         assert_eq!(names, vec![tools::UNIFIED_FILE, "a_tool", "z_tool"]);
+    }
+
+    #[test]
+    fn snapshot_for_stable_defs_preserves_full_order_with_active_subset() {
+        let state = SessionToolCatalogState::new();
+        let snapshot = state.snapshot_for_stable_defs_with_active_names(
+            vec![
+                function_tool("z_tool"),
+                function_tool(tools::UNIFIED_EXEC),
+                function_tool("a_tool"),
+            ],
+            vec!["a_tool".to_string()],
+            false,
+            false,
+        );
+
+        let names: Vec<&str> = snapshot
+            .snapshot
+            .as_ref()
+            .expect("stable snapshot")
+            .iter()
+            .map(|tool| tool.function_name())
+            .collect();
+
+        assert_eq!(names, vec![tools::UNIFIED_EXEC, "a_tool", "z_tool"]);
+        assert_eq!(
+            snapshot.active_tool_names.as_ref(),
+            &vec!["a_tool".to_string()]
+        );
+        assert_eq!(snapshot.catalog_tools(), 3);
+        assert_eq!(snapshot.available_tools(), 1);
     }
 }

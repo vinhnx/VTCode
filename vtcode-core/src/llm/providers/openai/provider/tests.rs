@@ -355,6 +355,23 @@ fn responses_payload_for(model: &str, provider: &OpenAIProvider) -> Value {
         .expect("conversion should succeed")
 }
 
+fn responses_allowed_tools_request(model: &str) -> provider::LLMRequest {
+    provider::LLMRequest {
+        messages: vec![provider::Message::user("Hello".to_owned())],
+        tools: Some(Arc::new(vec![
+            sample_tool(),
+            provider::ToolDefinition::web_search(json!({})),
+            provider::ToolDefinition::file_search(json!({"vector_store_ids":["vs_123"]})),
+        ])),
+        tool_choice: Some(provider::ToolChoice::allowed_tools_auto(vec![
+            "web_search".to_string(),
+            "search_workspace".to_string(),
+        ])),
+        model: model.to_string(),
+        ..Default::default()
+    }
+}
+
 fn chat_payload_for(model: &str, provider: &OpenAIProvider) -> Value {
     provider
         .convert_to_openai_format(&sample_request(model))
@@ -989,6 +1006,79 @@ fn responses_payload_serializes_hosted_tool_search_and_deferred_function() {
         .find(|t| t.get("name").and_then(Value::as_str) == Some("search_docs"))
         .expect("deferred function should be present");
     assert_eq!(deferred["defer_loading"], json!(true));
+}
+
+#[test]
+fn responses_payload_emits_allowed_tools_for_native_openai_from_stable_catalogue() {
+    let provider = native_openai_provider(models::openai::GPT_5);
+    let request = responses_allowed_tools_request(models::openai::GPT_5);
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+
+    let full_tools = payload["tools"]
+        .as_array()
+        .expect("tools should be present");
+    assert_eq!(full_tools.len(), 3, "full stable catalogue should remain");
+    assert_eq!(
+        full_tools
+            .iter()
+            .filter_map(|tool| tool.get("name").and_then(Value::as_str))
+            .collect::<Vec<_>>(),
+        vec!["search_workspace"]
+    );
+    assert!(
+        full_tools
+            .iter()
+            .any(|tool| tool.get("type").and_then(Value::as_str) == Some("web_search")),
+        "hosted web_search should remain in full catalogue"
+    );
+
+    let choice = payload["tool_choice"]
+        .as_object()
+        .expect("allowed_tools choice should be an object");
+    assert_str_field_obj(choice, "type", "allowed_tools");
+    assert_str_field_obj(choice, "mode", "auto");
+    assert_eq!(
+        choice["tools"].as_array().expect("allowed tools array"),
+        &vec![json!("search_workspace"), json!("web_search")]
+    );
+}
+
+#[test]
+fn responses_payload_emits_allowed_tools_for_chatgpt_backend() {
+    let provider = chatgpt_backend_provider(models::openai::GPT_5);
+    let request = responses_allowed_tools_request(models::openai::GPT_5);
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+
+    assert_eq!(
+        payload["tool_choice"]["type"].as_str(),
+        Some("allowed_tools")
+    );
+}
+
+#[test]
+fn responses_payload_omits_allowed_tools_for_compatible_endpoint() {
+    let provider = compatible_endpoint_provider(models::openai::GPT_5, "https://example.test/v1");
+    let request = responses_allowed_tools_request(models::openai::GPT_5);
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+
+    assert_eq!(payload["tool_choice"].as_str(), Some("auto"));
+}
+
+#[test]
+fn responses_payload_omits_allowed_tools_for_non_responses_model() {
+    let provider = native_openai_provider(models::openai::GPT_OSS_20B);
+    let request = responses_allowed_tools_request(models::openai::GPT_OSS_20B);
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+
+    assert_eq!(payload["tool_choice"].as_str(), Some("auto"));
 }
 
 #[test]
