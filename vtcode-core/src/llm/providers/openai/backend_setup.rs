@@ -51,6 +51,13 @@ pub(crate) enum OpenAIBackendRefreshBehaviour {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct OpenAIBackendTransportCapabilities {
+    /// VTCode transport gate retained until Rig transport parity is proven.
+    /// API-key/custom endpoints may use the custom Responses WebSocket path;
+    /// ChatGPT Codex keeps SSE only because the custom stream path preserves
+    /// `store=false` and encrypted reasoning includes. Protected by
+    /// `provider_from_config_respects_prompt_cache_and_websocket_gating` and
+    /// the API-key/ChatGPT streaming metadata tests. Remove once Rig can expose
+    /// matching per-backend transport capabilities.
     pub websocket: bool,
     pub chat_completions_fallback: bool,
     pub responses_compaction_endpoint: bool,

@@ -8,6 +8,13 @@ use serde_json::{Value, json};
 
 use super::StreamAggregator;
 
+// Retained shared Responses stream processor.
+// Rig 0.38.2 can consume SSE, but VTCode needs a provider-agnostic
+// NormalizedStreamEvent contract: text/refusal/reasoning deltas, tool-call
+// start and argument deltas, tolerant empty-final-response recovery, and
+// backend error text. Protected by this module's `responses_stream` tests.
+// Remove only when Rig exposes an event adapter with the same normalised
+// surface for all VTCode providers that use Responses-style streaming.
 pub struct ResponsesNormalizedStreamOptions {
     pub provider_name: &'static str,
     pub model: String,

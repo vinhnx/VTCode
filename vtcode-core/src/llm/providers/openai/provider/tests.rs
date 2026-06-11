@@ -707,6 +707,114 @@ async fn chatgpt_backend_uses_oauth_access_token_and_account_header() {
 }
 
 #[tokio::test]
+async fn api_key_responses_stream_sends_metadata_and_preserves_usage() {
+    let Some(server) = start_mock_server_or_skip().await else {
+        return;
+    };
+    let captured = Arc::new(Mutex::new(None::<Value>));
+    let captured_for_mock = Arc::clone(&captured);
+    let stream_body = concat!(
+        "data: {\"type\":\"response.output_text.delta\",\"delta\":\"hello from api key stream\"}\n\n",
+        "data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_api_stream\",\"output\":[],\"usage\":{\"input_tokens\":21,\"output_tokens\":6,\"total_tokens\":27,\"input_tokens_details\":{\"cached_tokens\":8}}}}\n\n",
+    );
+
+    Mock::given(method("POST"))
+        .and(path("/responses"))
+        .respond_with(move |req: &wiremock::Request| {
+            let body: Value = serde_json::from_slice(&req.body).expect("valid json");
+            *captured_for_mock.lock().expect("not poisoned") = Some(json!({
+                "body": body,
+                "beta": req.headers.get("openai-beta").and_then(|v| v.to_str().ok()),
+                "client_request_id": req.headers.get("x-client-request-id").and_then(|v| v.to_str().ok()),
+                "turn_metadata": req.headers.get("x-turn-metadata").and_then(|v| v.to_str().ok()),
+            }));
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                .set_body_string(stream_body)
+        })
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let provider = OpenAIProvider::new_with_client(
+        "test-key".to_string(),
+        None,
+        models::openai::GPT_5.to_string(),
+        reqwest::Client::builder()
+            .no_proxy()
+            .build()
+            .expect("test client"),
+        native_openai_mock_base_url(&server),
+        TimeoutsConfig::default(),
+    );
+
+    let mut stream = provider
+        .stream(provider::LLMRequest {
+            messages: vec![provider::Message::user("Hello".to_string())],
+            model: models::openai::GPT_5.to_string(),
+            response_store: Some(true),
+            metadata: Some(json!({"commit": "abc123"})),
+            ..Default::default()
+        })
+        .await
+        .expect("stream should start");
+    let mut text = String::new();
+    let mut completed = None;
+    while let Some(event) = stream.next().await {
+        match event.expect("stream event should parse") {
+            provider::LLMStreamEvent::Token { delta } => text.push_str(&delta),
+            provider::LLMStreamEvent::Completed { response } => {
+                completed = Some(*response);
+                break;
+            }
+            provider::LLMStreamEvent::Reasoning { .. }
+            | provider::LLMStreamEvent::ReasoningSignature { .. }
+            | provider::LLMStreamEvent::ReasoningStage { .. } => {}
+        }
+    }
+
+    let response = completed.expect("completion event should be emitted");
+    assert_eq!(text, "hello from api key stream");
+    assert_eq!(
+        response.content.as_deref(),
+        Some("hello from api key stream")
+    );
+    assert_eq!(response.request_id.as_deref(), Some("resp_api_stream"));
+    let usage = response.usage.expect("final usage should be preserved");
+    assert_eq!(usage.prompt_tokens, 21);
+    assert_eq!(usage.completion_tokens, 6);
+    assert_eq!(usage.total_tokens, 27);
+    assert_eq!(usage.cached_prompt_tokens, None);
+
+    let captured = captured
+        .lock()
+        .expect("not poisoned")
+        .clone()
+        .expect("request captured");
+    assert_eq!(
+        captured.get("beta").and_then(Value::as_str),
+        Some("responses=v1")
+    );
+    assert!(
+        captured
+            .get("client_request_id")
+            .and_then(Value::as_str)
+            .is_some_and(|value| value.starts_with("vtcode-"))
+    );
+    assert_eq!(
+        captured.get("turn_metadata").and_then(Value::as_str),
+        Some(r#"{"commit":"abc123"}"#)
+    );
+    let payload = captured.get("body").expect("body captured");
+    assert_eq!(payload.get("stream").and_then(Value::as_bool), Some(true));
+    assert_eq!(payload.get("store").and_then(Value::as_bool), Some(true));
+    assert_ne!(
+        payload.get("include").and_then(Value::as_array),
+        Some(&vec![json!("reasoning.encrypted_content")])
+    );
+}
+
+#[tokio::test]
 async fn chatgpt_responses_stream_accepts_empty_final_output_after_text_delta() {
     let Some(server) = start_mock_server_or_skip().await else {
         return;
@@ -721,8 +829,13 @@ async fn chatgpt_responses_stream_accepts_empty_final_output_after_text_delta() 
     Mock::given(method("POST"))
         .and(path("/responses"))
         .respond_with(move |req: &wiremock::Request| {
-            *captured_for_mock.lock().expect("not poisoned") =
-                Some(serde_json::from_slice(&req.body).expect("valid json"));
+            let body: Value = serde_json::from_slice(&req.body).expect("valid json");
+            *captured_for_mock.lock().expect("not poisoned") = Some(json!({
+                "body": body,
+                "account": req.headers.get("chatgpt-account-id").and_then(|v| v.to_str().ok()),
+                "originator": req.headers.get("originator").and_then(|v| v.to_str().ok()),
+                "beta": req.headers.get("openai-beta").and_then(|v| v.to_str().ok()),
+            }));
             ResponseTemplate::new(200)
                 .insert_header("content-type", "text/event-stream")
                 .set_body_string(stream_body)
@@ -780,6 +893,19 @@ async fn chatgpt_responses_stream_accepts_empty_final_output_after_text_delta() 
         .expect("not poisoned")
         .clone()
         .expect("payload captured");
+    assert_eq!(
+        payload.get("account").and_then(Value::as_str),
+        Some("acc_123")
+    );
+    assert_eq!(
+        payload.get("originator").and_then(Value::as_str),
+        Some("codex_cli_rs")
+    );
+    assert_eq!(
+        payload.get("beta").and_then(Value::as_str),
+        Some("responses=v1")
+    );
+    let payload = payload.get("body").expect("body captured");
     assert_eq!(payload.get("store").and_then(Value::as_bool), Some(false));
     assert_eq!(
         payload.get("include").and_then(Value::as_array),
