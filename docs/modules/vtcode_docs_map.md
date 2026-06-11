@@ -731,7 +731,8 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 - **File**: `docs/project/TODO.md`
   - **Content**: TODO.md
-  - **User Questions**: "What can you tell me about TODO.md?"
+  - **Topics**: Counting method, Corrected ranked findings, Turn-delta summary, Deep-dive root cause notes, Docs-first fix plan
+  - **User Questions**: "What can you tell me about TODO.md?", "How does Counting method work?", "How does Corrected ranked findings work?"
 
 - **File**: `docs/harness/TECH_DEBT_TRACKER.md`
   - **Content**: Tech Debt Tracker
