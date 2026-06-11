@@ -15,9 +15,10 @@ use crate::exec::events::{
     HarnessEventKind, ItemCompletedEvent, ThreadEvent, ThreadItemDetails, ToolCallStatus,
 };
 use crate::llm::provider::{
-    FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, ToolCall,
+    FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, ToolCall, ToolChoice,
 };
 use crate::primary_agent::ActivePrimaryAgent;
+use crate::tool_policy::ToolPolicy;
 use crate::tools::Tool;
 use crate::tools::circuit_breaker::{CircuitBreaker, CircuitBreakerConfig};
 use crate::tools::handlers::{PlanningWorkflowState, TaskTrackerTool};
@@ -159,6 +160,21 @@ async fn full_auto_allowlist_hides_tools_from_exposure() {
 
     assert!(runner.is_tool_exposed(tools::UNIFIED_FILE).await);
     assert!(!runner.is_tool_exposed(tools::UNIFIED_EXEC).await);
+
+    let snapshot = runner
+        .build_universal_tool_snapshot()
+        .await
+        .expect("full-auto snapshot");
+    assert!(
+        snapshot
+            .active_tool_names
+            .contains(&tools::UNIFIED_FILE.to_string())
+    );
+    assert!(
+        !snapshot
+            .active_tool_names
+            .contains(&tools::UNIFIED_EXEC.to_string())
+    );
 }
 
 #[tokio::test]
@@ -315,8 +331,28 @@ async fn active_primary_agent_policy_intersects_runner_tools() {
     spec.permissions = AgentPermissionsConfig::new(PermissionDefault::Deny);
     runner.set_active_primary_agent(ActivePrimaryAgent::from_spec(&spec));
 
-    assert!(runner.is_tool_exposed(tools::READ_FILE).await);
+    assert!(!runner.is_tool_exposed(tools::READ_FILE).await);
     assert!(!runner.is_tool_exposed(tools::UNIFIED_EXEC).await);
+
+    let snapshot = runner
+        .build_universal_tool_snapshot()
+        .await
+        .expect("permission-filtered snapshot");
+    assert!(
+        snapshot
+            .snapshot
+            .as_ref()
+            .expect("stable catalogue")
+            .iter()
+            .any(|tool| tool.function_name() == tools::READ_FILE),
+        "permissions must not mutate the stable catalogue"
+    );
+    assert!(
+        !snapshot
+            .active_tool_names
+            .contains(&tools::READ_FILE.to_string()),
+        "active permissions deny should be reflected in the advertised subset"
+    );
 
     let mut session_state =
         AgentSessionState::new("thread-primary-agent-policy".to_string(), 1, 1, 8_000);
@@ -332,6 +368,320 @@ async fn active_primary_agent_policy_intersects_runner_tools() {
         denied
             .to_string()
             .contains("denied by active primary agent 'auto'")
+    );
+}
+
+#[tokio::test]
+async fn explicit_tool_policy_deny_filters_runtime_state_and_allowed_tools() {
+    let temp = TempDir::new().expect("tempdir");
+    let runner = AgentRunner::new_with_bootstrap(
+        AgentType::Single,
+        ModelId::default(),
+        "test-key".to_string(),
+        temp.path().to_path_buf(),
+        "thread-explicit-policy-deny".to_string(),
+        RunnerSettings {
+            reasoning_effort: None,
+            verbosity: None,
+        },
+        None,
+        ThreadBootstrap::new(None),
+        Some(VTCodeConfig::default()),
+        None,
+    )
+    .await
+    .expect("runner");
+
+    runner
+        .tool_registry
+        .set_tool_policy(tools::UNIFIED_EXEC, ToolPolicy::Deny)
+        .await
+        .expect("set policy");
+
+    let snapshot = runner
+        .build_universal_tool_snapshot()
+        .await
+        .expect("snapshot");
+    let stable_names = snapshot
+        .snapshot
+        .as_ref()
+        .expect("stable catalogue")
+        .iter()
+        .map(|tool| tool.function_name())
+        .collect::<Vec<_>>();
+    assert!(stable_names.contains(&tools::UNIFIED_EXEC));
+    assert!(
+        !snapshot
+            .active_tool_names
+            .contains(&tools::UNIFIED_EXEC.to_string())
+    );
+
+    let choice = ToolChoice::allowed_tools_auto(snapshot.active_tool_names.as_ref().clone());
+    let ToolChoice::AllowedTools(choice) = choice else {
+        panic!("expected allowed-tools choice");
+    };
+    assert!(
+        !choice.tools.contains(&tools::UNIFIED_EXEC.to_string()),
+        "provider-native advisory allowed_tools must use the policy-filtered subset"
+    );
+}
+
+#[tokio::test]
+async fn category_read_deny_filters_advertised_active_tools() {
+    let temp = TempDir::new().expect("tempdir");
+    let mut config = VTCodeConfig::default();
+    config.permissions.deny = vec!["read".to_string()];
+    let runner = AgentRunner::new_with_bootstrap(
+        AgentType::Single,
+        ModelId::default(),
+        "test-key".to_string(),
+        temp.path().to_path_buf(),
+        "thread-read-category-deny".to_string(),
+        RunnerSettings {
+            reasoning_effort: None,
+            verbosity: None,
+        },
+        None,
+        ThreadBootstrap::new(None),
+        Some(config),
+        None,
+    )
+    .await
+    .expect("runner");
+
+    let snapshot = runner
+        .build_universal_tool_snapshot()
+        .await
+        .expect("snapshot");
+    assert!(
+        snapshot
+            .snapshot
+            .as_ref()
+            .expect("stable catalogue")
+            .iter()
+            .any(|tool| tool.function_name() == tools::READ_FILE)
+    );
+    assert!(
+        !snapshot
+            .active_tool_names
+            .contains(&tools::READ_FILE.to_string())
+    );
+}
+
+#[tokio::test]
+async fn category_bash_deny_filters_advertised_active_tools_and_allowed_tools() {
+    let temp = TempDir::new().expect("tempdir");
+    let mut config = VTCodeConfig::default();
+    config.permissions.deny = vec!["bash".to_string()];
+    let runner = AgentRunner::new_with_bootstrap(
+        AgentType::Single,
+        ModelId::default(),
+        "test-key".to_string(),
+        temp.path().to_path_buf(),
+        "thread-bash-category-deny".to_string(),
+        RunnerSettings {
+            reasoning_effort: None,
+            verbosity: None,
+        },
+        None,
+        ThreadBootstrap::new(None),
+        Some(config),
+        None,
+    )
+    .await
+    .expect("runner");
+
+    let snapshot = runner
+        .build_universal_tool_snapshot()
+        .await
+        .expect("snapshot");
+    assert!(
+        snapshot
+            .snapshot
+            .as_ref()
+            .expect("stable catalogue")
+            .iter()
+            .any(|tool| tool.function_name() == tools::UNIFIED_EXEC)
+    );
+    assert!(
+        !snapshot
+            .active_tool_names
+            .contains(&tools::UNIFIED_EXEC.to_string())
+    );
+
+    let choice = ToolChoice::allowed_tools_auto(snapshot.active_tool_names.as_ref().clone());
+    let ToolChoice::AllowedTools(choice) = choice else {
+        panic!("expected allowed-tools choice");
+    };
+    assert!(!choice.tools.contains(&tools::UNIFIED_EXEC.to_string()));
+}
+
+#[tokio::test]
+async fn category_edit_deny_filters_advertised_file_tool_conservatively() {
+    let temp = TempDir::new().expect("tempdir");
+    let mut config = VTCodeConfig::default();
+    config.permissions.deny = vec!["edit".to_string()];
+    let runner = AgentRunner::new_with_bootstrap(
+        AgentType::Single,
+        ModelId::default(),
+        "test-key".to_string(),
+        temp.path().to_path_buf(),
+        "thread-edit-category-deny".to_string(),
+        RunnerSettings {
+            reasoning_effort: None,
+            verbosity: None,
+        },
+        None,
+        ThreadBootstrap::new(None),
+        Some(config),
+        None,
+    )
+    .await
+    .expect("runner");
+
+    let snapshot = runner
+        .build_universal_tool_snapshot()
+        .await
+        .expect("snapshot");
+    assert!(
+        snapshot
+            .snapshot
+            .as_ref()
+            .expect("stable catalogue")
+            .iter()
+            .any(|tool| tool.function_name() == tools::UNIFIED_FILE)
+    );
+    assert!(
+        !snapshot
+            .active_tool_names
+            .contains(&tools::UNIFIED_FILE.to_string())
+    );
+}
+
+#[tokio::test]
+async fn category_write_deny_filters_advertised_file_tool_conservatively() {
+    let temp = TempDir::new().expect("tempdir");
+    let mut config = VTCodeConfig::default();
+    config.permissions.deny = vec!["write".to_string()];
+    let runner = AgentRunner::new_with_bootstrap(
+        AgentType::Single,
+        ModelId::default(),
+        "test-key".to_string(),
+        temp.path().to_path_buf(),
+        "thread-write-category-deny".to_string(),
+        RunnerSettings {
+            reasoning_effort: None,
+            verbosity: None,
+        },
+        None,
+        ThreadBootstrap::new(None),
+        Some(config),
+        None,
+    )
+    .await
+    .expect("runner");
+
+    let snapshot = runner
+        .build_universal_tool_snapshot()
+        .await
+        .expect("snapshot");
+    assert!(
+        snapshot
+            .snapshot
+            .as_ref()
+            .expect("stable catalogue")
+            .iter()
+            .any(|tool| tool.function_name() == tools::UNIFIED_FILE)
+    );
+    assert!(
+        !snapshot
+            .active_tool_names
+            .contains(&tools::UNIFIED_FILE.to_string())
+    );
+}
+
+#[tokio::test]
+async fn webfetch_domain_deny_filters_representative_unified_search_tool() {
+    let temp = TempDir::new().expect("tempdir");
+    let mut config = VTCodeConfig::default();
+    config.permissions.deny = vec!["webfetch(domain:example.com)".to_string()];
+    let runner = AgentRunner::new_with_bootstrap(
+        AgentType::Single,
+        ModelId::default(),
+        "test-key".to_string(),
+        temp.path().to_path_buf(),
+        "thread-webfetch-domain-deny".to_string(),
+        RunnerSettings {
+            reasoning_effort: None,
+            verbosity: None,
+        },
+        None,
+        ThreadBootstrap::new(None),
+        Some(config),
+        None,
+    )
+    .await
+    .expect("runner");
+
+    let snapshot = runner
+        .build_universal_tool_snapshot()
+        .await
+        .expect("snapshot");
+    assert!(
+        snapshot
+            .snapshot
+            .as_ref()
+            .expect("stable catalogue")
+            .iter()
+            .any(|tool| tool.function_name() == tools::UNIFIED_SEARCH)
+    );
+    assert!(
+        !snapshot
+            .active_tool_names
+            .contains(&tools::UNIFIED_SEARCH.to_string())
+    );
+}
+
+#[tokio::test]
+async fn planning_mode_filters_advertised_mutating_tools_without_catalogue_mutation() {
+    let temp = TempDir::new().expect("tempdir");
+    let runner = AgentRunner::new_with_bootstrap(
+        AgentType::Single,
+        ModelId::default(),
+        "test-key".to_string(),
+        temp.path().to_path_buf(),
+        "thread-planning-mode-tools".to_string(),
+        RunnerSettings {
+            reasoning_effort: None,
+            verbosity: None,
+        },
+        None,
+        ThreadBootstrap::new(None),
+        Some(VTCodeConfig::default()),
+        None,
+    )
+    .await
+    .expect("runner");
+
+    runner.tool_registry.enable_planning();
+
+    let snapshot = runner
+        .build_universal_tool_snapshot()
+        .await
+        .expect("snapshot");
+    let stable_names = snapshot
+        .snapshot
+        .as_ref()
+        .expect("stable catalogue")
+        .iter()
+        .map(|tool| tool.function_name())
+        .collect::<Vec<_>>();
+
+    assert!(stable_names.contains(&tools::APPLY_PATCH));
+    assert!(
+        !snapshot
+            .active_tool_names
+            .contains(&tools::APPLY_PATCH.to_string())
     );
 }
 
