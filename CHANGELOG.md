@@ -2,6 +2,25 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.125.1 - 2026-06-11
+
+### Highlights
+#### Bug Fixes
+
+- Use token-based auth for homebrew-tap push instead of gh credential (66ac78b3) (@vinhnx)
+### Other Changes
+#### Other
+
+- Update TODO (b7d216f1) (@vinhnx)
+- Fable (8781f2a4) (@vinhnx)
+- Update README (7565cbac) (@vinhnx)
+- Update README (7f4186dd) (@vinhnx)
+- Ignore vtcode plan artifact (20736d87) (@vinhnx)
+- Feat/merge modes & agents  (3e743390) (@kernitus)
+#### Refactors
+
+- Streamline tool execution success handling and error reporting (69ee6119) (@vinhnx)
+- Remove obsolete core agent loop exploration plans and tasks (3edf5e1d) (@vinhnx)
 ## 0.125.0 - 2026-06-10
 
 ### Highlights
