@@ -733,7 +733,7 @@ impl OpenAIProvider {
         };
         let ctx = request_builder::ChatRequestContext {
             model: &self.model,
-            base_url: &self.base_url,
+            is_native_openai,
             supports_tools: self.supports_tools(&request.model),
             supports_parallel_tool_config: self.supports_parallel_tool_config(&request.model),
             supports_temperature: Self::supports_temperature_parameter(&request.model),

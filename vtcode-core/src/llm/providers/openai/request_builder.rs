@@ -62,7 +62,7 @@ const SAMPLING_DISABLED_MODELS: &[&str] = &[
 
 pub(crate) struct ChatRequestContext<'a> {
     pub model: &'a str,
-    pub base_url: &'a str,
+    pub is_native_openai: bool,
     pub supports_tools: bool,
     pub supports_parallel_tool_config: bool,
     pub supports_temperature: bool,
@@ -383,8 +383,7 @@ pub(crate) fn build_chat_request(
         .reasoning_effort
         .or_else(|| default_reasoning_effort_for_model(&request.model));
 
-    let is_native_openai = ctx.base_url.contains("api.openai.com");
-    let max_tokens_field = if !is_native_openai {
+    let max_tokens_field = if !ctx.is_native_openai {
         "max_tokens"
     } else {
         MAX_COMPLETION_TOKENS_FIELD

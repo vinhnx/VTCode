@@ -1348,6 +1348,32 @@ fn chat_completions_uses_max_completion_tokens_field() {
 }
 
 #[test]
+fn custom_openai_provider_uses_compatible_max_tokens_field_even_on_openai_url() {
+    let provider = OpenAIProvider::from_custom_config(
+        "openai-compatible".to_string(),
+        "OpenAI-compatible".to_string(),
+        Some(String::new()),
+        Some(models::openai::DEFAULT_MODEL.to_string()),
+        Some("https://api.openai.com/v1".to_string()),
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    );
+    let mut request = sample_request(models::openai::DEFAULT_MODEL);
+    request.max_tokens = Some(512);
+
+    let payload = provider
+        .convert_to_openai_format(&request)
+        .expect("conversion should succeed");
+
+    assert_eq!(payload.get("max_tokens").and_then(Value::as_u64), Some(512));
+    assert!(payload.get("max_completion_tokens").is_none());
+}
+
+#[test]
 fn chat_completions_applies_temperature_independent_of_max_tokens() {
     let provider = native_openai_provider(models::openai::GPT_5_2);
     let mut request = sample_request(models::openai::GPT_5_2);
