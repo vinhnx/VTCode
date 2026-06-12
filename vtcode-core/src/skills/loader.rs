@@ -1102,22 +1102,23 @@ fn skill_routing_keywords(skill: &SkillManifest) -> HashSet<String> {
     let Some(metadata) = &skill.metadata else {
         return keywords;
     };
-    let Some(metadata_keywords) = metadata.get("keywords").or_else(|| metadata.get("tags")) else {
-        return keywords;
-    };
-
-    match metadata_keywords {
-        serde_json::Value::Array(values) => {
-            for value in values {
-                if let Some(keyword) = value.as_str() {
-                    keywords.extend(extract_keywords(keyword));
+    for metadata_keywords in [metadata.get("keywords"), metadata.get("tags")]
+        .into_iter()
+        .flatten()
+    {
+        match metadata_keywords {
+            serde_json::Value::Array(values) => {
+                for value in values {
+                    if let Some(keyword) = value.as_str() {
+                        keywords.extend(extract_keywords(keyword));
+                    }
                 }
             }
+            serde_json::Value::String(value) => {
+                keywords.extend(extract_keywords(value));
+            }
+            _ => {}
         }
-        serde_json::Value::String(value) => {
-            keywords.extend(extract_keywords(value));
-        }
-        _ => {}
     }
 
     keywords
@@ -1198,13 +1199,15 @@ mod tests {
     #[test]
     fn metadata_keywords_drive_implicit_matches() {
         let mut ast_grep = manifest("ast-grep", "Structural search workflows");
-        ast_grep.metadata = Some(HashMap::from([(
-            "keywords".to_string(),
-            serde_json::json!(["tree-sitter parser", "optional chaining"]),
-        )]));
+        ast_grep.metadata = Some(HashMap::from([
+            (
+                "keywords".to_string(),
+                serde_json::json!(["tree-sitter parser"]),
+            ),
+            ("tags".to_string(), serde_json::json!(["optional chaining"])),
+        ]));
 
-        let mentions =
-            detect_skill_mentions("Debug an optional chaining tree-sitter rule", &[ast_grep]);
+        let mentions = detect_skill_mentions("Debug an optional chaining rewrite", &[ast_grep]);
         assert_eq!(mentions, vec!["ast-grep".to_string()]);
     }
 
