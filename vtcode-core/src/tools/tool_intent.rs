@@ -257,6 +257,10 @@ pub fn should_use_spool_reference_only(tool_name: Option<&str>, output: &Value) 
         return true;
     }
 
+    if tool_name.is_some_and(|name| canonical_tool_name(name) == tools::UNIFIED_SEARCH) {
+        return true;
+    }
+
     if obj
         .get("content_type")
         .and_then(Value::as_str)
@@ -1281,6 +1285,17 @@ mod tests {
         assert!(should_use_spool_reference_only(
             Some(tools::RUN_PTY_CMD),
             &json!({"spool_path": ".vtcode/context/tool_outputs/run-1.txt"})
+        ));
+    }
+
+    #[test]
+    fn spool_reference_only_detects_unified_search_payloads() {
+        assert!(should_use_spool_reference_only(
+            Some(tools::UNIFIED_SEARCH),
+            &json!({
+                "spool_path": ".vtcode/context/tool_outputs/unified_search_1.txt",
+                "matches": []
+            })
         ));
     }
 

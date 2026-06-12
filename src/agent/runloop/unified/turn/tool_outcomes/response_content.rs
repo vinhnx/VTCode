@@ -163,6 +163,10 @@ fn apply_spool_reference_only(compacted: &mut serde_json::Value, original: &serd
     obj.remove("content");
     obj.remove("stdout");
     obj.remove("stderr");
+    obj.remove("matches");
+    obj.remove("results");
+    obj.remove("files");
+    obj.remove("entries");
 
     if let Some(stderr) = original.get("stderr").and_then(serde_json::Value::as_str)
         && !stderr.trim().is_empty()
