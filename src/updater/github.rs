@@ -28,6 +28,60 @@ fn github_client() -> Result<reqwest::Client> {
     builder.build().context("Failed to create HTTP client")
 }
 
+/// Returns `true` if the error came from a 401 Unauthorized response.
+fn is_auth_error(err: &anyhow::Error) -> bool {
+    err.chain().any(|cause| {
+        cause
+            .downcast_ref::<reqwest::Error>()
+            .is_some_and(|e| e.status() == Some(reqwest::StatusCode::UNAUTHORIZED))
+    })
+}
+
+/// Strip the `Authorization` header and rebuild the client for unauthenticated
+/// requests.  Used as a fallback when a configured token is rejected.
+fn unauthenticated_client() -> Result<reqwest::Client> {
+    reqwest::Client::builder()
+        .user_agent("vtcode-updater")
+        .build()
+        .context("Failed to create HTTP client")
+}
+
+/// Fetch JSON from `url` using the configured (possibly authenticated) client.
+/// If the request fails with a 401, retry without authentication -- public
+/// repos work fine unauthenticated.
+async fn try_fetch_json_with_auth_fallback(
+    url: &str,
+    timeout: Duration,
+) -> Result<serde_json::Value> {
+    let result = github_client()?
+        .get(url)
+        .timeout(timeout)
+        .send()
+        .await
+        .context("Failed to fetch from GitHub API")?
+        .error_for_status()
+        .context("GitHub API returned non-success status")?
+        .json::<serde_json::Value>()
+        .await
+        .context("Failed to parse GitHub API response");
+
+    match result {
+        Ok(json) => Ok(json),
+        Err(err) if is_auth_error(&err) => unauthenticated_client()?
+            .get(url)
+            .timeout(timeout)
+            .send()
+            .await
+            .context("Failed to fetch from GitHub API")?
+            .error_for_status()
+            .context("GitHub API returned non-success status")?
+            .json::<serde_json::Value>()
+            .await
+            .context("Failed to parse GitHub API response"),
+        Err(err) => Err(err),
+    }
+}
+
 /// Clamp the timeout to at least 1 second to prevent a zero-duration timeout
 /// from immediately failing every request.
 fn effective_timeout(timeout_secs: u64) -> Duration {
@@ -58,22 +112,8 @@ pub(super) async fn fetch_latest_release(
 
 pub(super) async fn fetch_latest_release_info(timeout_secs: u64) -> Result<UpdateInfo> {
     let url = format!("https://api.github.com/repos/{REPO_SLUG}/releases/latest");
-
-    let client = github_client()?;
-
-    let response = client
-        .get(&url)
-        .timeout(effective_timeout(timeout_secs))
-        .send()
-        .await
-        .context("Failed to fetch latest release from GitHub")?
-        .error_for_status()
-        .context("GitHub API returned non-success status")?;
-
-    let json = response
-        .json::<serde_json::Value>()
-        .await
-        .context("Failed to parse GitHub API response")?;
+    let timeout = effective_timeout(timeout_secs);
+    let json = try_fetch_json_with_auth_fallback(&url, timeout).await?;
 
     let tag_name = json
         .get("tag_name")
@@ -107,23 +147,9 @@ async fn fetch_latest_prerelease_info(
     channel: &ReleaseChannel,
 ) -> Result<UpdateInfo> {
     let url = format!("https://api.github.com/repos/{REPO_SLUG}/releases?per_page=20");
+    let timeout = effective_timeout(timeout_secs);
 
-    let client = github_client()?;
-
-    let response = client
-        .get(&url)
-        .timeout(effective_timeout(timeout_secs))
-        .send()
-        .await
-        .context("Failed to fetch releases from GitHub")?
-        .error_for_status()
-        .context("GitHub API returned non-success status")?;
-
-    let json = response
-        .json::<serde_json::Value>()
-        .await
-        .context("Failed to parse GitHub API response")?;
-
+    let json = try_fetch_json_with_auth_fallback(&url, timeout).await?;
     let releases = json.as_array().context("Expected array of releases")?;
 
     let mut best: Option<(Version, String)> = None;
@@ -182,23 +208,9 @@ pub(super) async fn list_versions(limit: usize, timeout_secs: u64) -> Result<Vec
         "https://api.github.com/repos/{REPO_SLUG}/releases?per_page={}",
         limit
     );
+    let timeout = effective_timeout(timeout_secs);
 
-    let client = github_client()?;
-
-    let response = client
-        .get(&url)
-        .timeout(effective_timeout(timeout_secs))
-        .send()
-        .await
-        .context("Failed to fetch releases from GitHub")?
-        .error_for_status()
-        .context("GitHub API returned non-success status")?;
-
-    let json = response
-        .json::<serde_json::Value>()
-        .await
-        .context("Failed to parse GitHub API response")?;
-
+    let json = try_fetch_json_with_auth_fallback(&url, timeout).await?;
     let versions = json
         .as_array()
         .context("Expected array of releases")?
