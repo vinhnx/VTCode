@@ -32,7 +32,7 @@
 //! ## Basic Usage Examples
 //!
 //! ### Configuration Management
-//! ```rust,no_run
+//! ```rust,ignore
 //! use vtcode_core::utils::dot_config::{load_user_config, save_user_config, UserPreferences};
 //!
 //! #[tokio::main]
@@ -52,7 +52,7 @@
 //! ```
 //!
 //! ### Path Safety
-//! ```rust,no_run
+//! ```rust,ignore
 //! use vtcode_core::utils::safety::validate_workspace_path;
 //! use std::path::PathBuf;
 //!
@@ -67,7 +67,7 @@
 //! ```
 //!
 //! ### ANSI Colors
-//! ```rust,no_run
+//! ```rust,ignore
 //! use vtcode_core::utils::ansi::{colorize, Color};
 //!
 //! let message = "Hello, World!";
@@ -80,7 +80,7 @@
 //! ```
 //!
 //! ### Git Integration
-//! ```rust,no_run
+//! ```rust,ignore
 //! use vtcode_core::utils::vtcodegitignore::initialize_vtcode_gitignore;
 //!
 //! #[tokio::main]

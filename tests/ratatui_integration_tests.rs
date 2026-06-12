@@ -26,7 +26,31 @@ fn test_basic_terminal_rendering() {
 
     // Take a snapshot of the terminal backend - this captures the rendered output
     // The snapshot will show an empty terminal with the given dimensions
-    assert_snapshot!(format!("{}", terminal.backend()));
+    assert_snapshot!(
+        format!("{}", terminal.backend()),
+        @r###"
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "###
+    );
 }
 
 /// Test terminal rendering with basic content
@@ -44,5 +68,19 @@ fn test_terminal_rendering_with_content() {
         })
         .unwrap();
 
-    assert_snapshot!(format!("{}", terminal.backend()));
+    assert_snapshot!(
+        format!("{}", terminal.backend()),
+        @r###"
+    "                                        "
+    "                                        "
+    "                                        "
+    "                                        "
+    "                                        "
+    "                                        "
+    "                                        "
+    "                                        "
+    "                                        "
+    "                                        "
+    "###
+    );
 }

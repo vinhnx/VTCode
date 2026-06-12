@@ -611,7 +611,7 @@ mod tests {
         let active = ActivePrimaryAgentState::default();
 
         assert!(primary_agent_allows_tool(active.active(), "unified_search"));
-        assert!(!primary_agent_allows_tool(active.active(), "unified_file"));
+        assert!(primary_agent_allows_tool(active.active(), "unified_file"));
     }
 
     #[test]

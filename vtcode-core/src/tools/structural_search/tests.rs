@@ -2020,6 +2020,8 @@ fn deserialize_scan_finding_without_labels() {
 #[serial]
 async fn structural_scan_reports_missing_default_config_with_actionable_guidance() {
     let temp = TempDir::new().expect("workspace tempdir");
+    let (_script_dir, script_path) = write_fake_sg("#!/bin/sh\nprintf ''\n");
+    let _override = set_ast_grep_binary_override_for_tests(Some(script_path));
 
     let err = execute_structural_search(
         temp.path(),
@@ -2043,6 +2045,8 @@ async fn structural_scan_reports_missing_default_config_with_actionable_guidance
 #[serial]
 async fn structural_test_reports_missing_default_config_with_actionable_guidance() {
     let temp = TempDir::new().expect("workspace tempdir");
+    let (_script_dir, script_path) = write_fake_sg("#!/bin/sh\nprintf ''\n");
+    let _override = set_ast_grep_binary_override_for_tests(Some(script_path));
 
     let err = execute_structural_search(
         temp.path(),
@@ -2063,6 +2067,8 @@ async fn structural_test_reports_missing_default_config_with_actionable_guidance
 #[serial]
 async fn structural_scan_reports_missing_custom_config_with_specific_path() {
     let temp = TempDir::new().expect("workspace tempdir");
+    let (_script_dir, script_path) = write_fake_sg("#!/bin/sh\nprintf ''\n");
+    let _override = set_ast_grep_binary_override_for_tests(Some(script_path));
 
     let err = execute_structural_search(
         temp.path(),
@@ -2089,6 +2095,8 @@ async fn structural_scan_discovers_config_in_parent_directory() {
     let child = parent.path().join("subdir");
     fs::create_dir_all(&child).expect("create subdir");
     fs::write(parent.path().join("sgconfig.yml"), "ruleDirs: []\n").expect("write config");
+    let (_script_dir, script_path) = write_fake_sg("#!/bin/sh\nprintf ''\n");
+    let _override = set_ast_grep_binary_override_for_tests(Some(script_path));
 
     let err = execute_structural_search(
         &child,

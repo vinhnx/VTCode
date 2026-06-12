@@ -1257,9 +1257,6 @@ mod tests {
             .await
             .expect_err("should fail outside planning workflow");
 
-        assert!(
-            err.to_string()
-                .contains("only available in Planning workflow")
-        );
+        assert!(err.to_string().contains("only available while planning"));
     }
 }

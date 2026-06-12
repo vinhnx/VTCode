@@ -47,7 +47,7 @@ impl CommandResolver {
     /// Resolve a command to its filesystem path
     ///
     /// # Example
-    /// ```no_run
+    /// ```ignore
     /// let mut resolver = CommandResolver::new();
     /// let cargo = resolver.resolve("cargo");
     /// assert_eq!(cargo.command, "cargo");

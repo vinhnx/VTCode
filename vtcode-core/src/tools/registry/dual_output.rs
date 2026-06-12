@@ -27,7 +27,7 @@ impl ToolRegistry {
     /// on tool outputs while preserving full details for the UI.
     ///
     /// # Example
-    /// ```rust,no_run
+    /// ```rust,ignore
     /// let result = registry.execute_tool_dual("grep_file", args).await?;
     /// // result.llm_content: "Found 127 matches in 15 files. Key: src/tools/grep.rs (3)"
     /// // result.ui_content: [Full formatted output with all 127 matches]

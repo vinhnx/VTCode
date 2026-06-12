@@ -30,7 +30,31 @@ fn test_tui_with_conversation_history() {
         })
         .unwrap();
 
-    assert_snapshot!(format!("{}", terminal.backend()));
+    assert_snapshot!(
+        format!("{}", terminal.backend()),
+        @r###"
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "###
+    );
 }
 
 /// Test actual UI state with populated content using the command system
@@ -88,10 +112,7 @@ async fn test_real_ui_scenario_with_commands() {
     assert!(!session.events.is_closed());
 
     // Snapshot the session state
-    assert_snapshot!(
-        "real_ui_scenario_session",
-        format!("Session created with messages: 4")
-    );
+    assert_snapshot!("Session created with messages: 4", @"Session created with messages: 4");
 }
 
 /// Test TUI with various header contexts that represent different states
@@ -129,7 +150,19 @@ fn test_tui_with_different_header_contexts() {
     ];
 
     for (name, context) in contexts {
-        assert_snapshot!(format!("header_context_{}", name), format!("{:?}", context));
+        let expected = match name {
+            "basic_context" => {
+                r#"InlineHeaderContext { app_name: "App", provider: "openai", model: "gpt-oss-20b", context_window_size: None, version: "test-version", search_tools: None, persistent_memory: None, pr_review: None, editor_context: None, git: "git: unavailable", reasoning: "Reasoning effort: unavailable", reasoning_stage: None, workspace_trust: "Trust: unavailable", tools: "Tools: unavailable", mcp: "MCP: unavailable", primary_agent: None, highlights: [], subagent_badges: [] }"#
+            }
+            "advanced_context" => {
+                r#"InlineHeaderContext { app_name: "App", provider: "anthropic", model: "claude-3", context_window_size: None, version: "test-version", search_tools: None, persistent_memory: None, pr_review: None, editor_context: None, git: "git: unavailable", reasoning: "analytical", reasoning_stage: None, workspace_trust: "Trust: unavailable", tools: "Tools: unavailable", mcp: "MCP: unavailable", primary_agent: None, highlights: [], subagent_badges: [] }"#
+            }
+            "minimal_context" => {
+                r#"InlineHeaderContext { app_name: "App", provider: "local", model: "llama3", context_window_size: None, version: "test-version", search_tools: None, persistent_memory: None, pr_review: None, editor_context: None, git: "git: unavailable", reasoning: "Reasoning effort: unavailable", reasoning_stage: None, workspace_trust: "Trust: unavailable", tools: "Tools: unavailable", mcp: "MCP: unavailable", primary_agent: None, highlights: [], subagent_badges: [] }"#
+            }
+            _ => unreachable!("unexpected context fixture"),
+        };
+        assert_eq!(format!("{context:?}"), expected);
     }
 }
 
@@ -180,10 +213,17 @@ fn test_ui_message_combinations() {
             .iter()
             .map(|(kind, text)| format!("{kind:?}: {text}"))
             .collect();
-        assert_snapshot!(
-            format!("message_combo_{}", name),
-            format!("{:?}", message_repr)
-        );
+        let expected = match name {
+            "user_agent_exchange" => r#"["User: Hello!", "Agent: Hi there! How can I help you?"]"#,
+            "error_scenario" => {
+                r#"["User: Run this command", "Error: Command failed with error: Permission denied", "Agent: I encountered an error. Would you like me to try again with sudo?"]"#
+            }
+            "tool_usage" => {
+                r#"["User: Show me files in current directory", "Tool: run_pty_cmd([\"ls\", \"-la\"])", "Pty: file1.txt  file2.rs  src/", "Agent: I've listed the files in the current directory for you."]"#
+            }
+            _ => unreachable!("unexpected message fixture"),
+        };
+        assert_eq!(format!("{message_repr:?}"), expected);
     }
 }
 
@@ -242,6 +282,21 @@ fn test_ui_styling_variations() {
     ];
 
     for (name, segment) in styled_segments {
-        assert_snapshot!(format!("styled_segment_{}", name), format!("{:?}", segment));
+        let expected = match name {
+            "plain_text" => {
+                r#"InlineSegment { text: "This is plain text", style: InlineTextStyle { color: None, bg_color: None, effects: Effects() } }"#
+            }
+            "bold_text" => {
+                r#"InlineSegment { text: "This is bold text", style: InlineTextStyle { color: None, bg_color: None, effects: Effects(BOLD) } }"#
+            }
+            "italic_text" => {
+                r#"InlineSegment { text: "This is italic text", style: InlineTextStyle { color: None, bg_color: None, effects: Effects(ITALIC) } }"#
+            }
+            "bold_italic_text" => {
+                r#"InlineSegment { text: "This is bold and italic text", style: InlineTextStyle { color: None, bg_color: None, effects: Effects(BOLD | ITALIC) } }"#
+            }
+            _ => unreachable!("unexpected style fixture"),
+        };
+        assert_eq!(format!("{segment:?}"), expected);
     }
 }

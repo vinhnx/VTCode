@@ -308,7 +308,7 @@ async fn semantic_anchor_fails_when_multiple_locations_match() {
 #[serial]
 async fn semantic_anchor_falls_back_to_exact_match_for_unsupported_language() {
     let temp_dir = TempDir::new().unwrap();
-    let source = temp_dir.path().join("service.rb");
+    let source = temp_dir.path().join("service.txt");
     fs::write(
         &source,
         "class Service\n  def greet(name)\n    \"hi #{name}\"\n  end\nend\n",
@@ -316,7 +316,7 @@ async fn semantic_anchor_falls_back_to_exact_match_for_unsupported_language() {
     .unwrap();
 
     let patch = r#"*** Begin Patch
-*** Update File: service.rb
+*** Update File: service.txt
 @@ def greet(...)
 -    "hi #{name}"
 +    "hello #{name}"

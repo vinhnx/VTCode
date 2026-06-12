@@ -231,7 +231,7 @@ async fn build_universal_tools_matches_registry_agent_runner_snapshot() {
             capability_level: CapabilityLevel::CodeSearch,
             documentation_mode: runner.config().agent.tool_documentation_mode,
             planning_active: runner.tool_registry.is_planning_active(),
-            request_user_input_enabled: false,
+            request_user_input_enabled: true,
             model_capabilities: ToolModelCapabilities::for_model_name(&runner.model),
             deferred_tool_policy: crate::tools::handlers::deferred_tool_policy_for_runtime(
                 crate::llm::factory::infer_provider(
@@ -260,6 +260,7 @@ async fn build_universal_tools_matches_registry_agent_runner_snapshot() {
             expected.push(tool.function_name().to_string());
         }
     }
+    expected.insert(3, "request_user_input".to_string());
 
     let actual = runner
         .build_universal_tools()

@@ -149,6 +149,10 @@ pub(crate) fn queued_input_edit_hint() -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::{LazyLock, Mutex};
+
+    static TERMINAL_ENV_TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
     #[inline]
     fn set_var(key: &str, value: &str) {
         test_env_overrides::set(key, Some(value));
@@ -164,14 +168,12 @@ mod tests {
 
     #[test]
     fn test_supports_unicode_box_drawing() {
-        // Test with different environment variable combinations
-
-        // Save original values
-        let original_term = env::var("TERM").ok();
-        let original_lang = env::var("LANG").ok();
-        let original_lc_all = env::var("LC_ALL").ok();
-        let original_lc_ctype = env::var("LC_CTYPE").ok();
-        let original_no_unicode = env::var("VTCODE_NO_UNICODE").ok();
+        let _guard = TERMINAL_ENV_TEST_LOCK
+            .lock()
+            .expect("terminal env test lock");
+        for key in ["TERM", "LANG", "LC_ALL", "LC_CTYPE", "VTCODE_NO_UNICODE"] {
+            clear_var(key);
+        }
 
         // Test with VTCODE_NO_UNICODE set (should disable Unicode)
         set_var("VTCODE_NO_UNICODE", "1");
@@ -197,33 +199,17 @@ mod tests {
         remove_var("LC_CTYPE");
         assert!(!supports_unicode_box_drawing());
 
-        // Restore original values
-        match original_term {
-            Some(val) => set_var("TERM", &val),
-            None => clear_var("TERM"),
-        }
-        match original_lang {
-            Some(val) => set_var("LANG", &val),
-            None => clear_var("LANG"),
-        }
-        match original_lc_all {
-            Some(val) => set_var("LC_ALL", &val),
-            None => clear_var("LC_ALL"),
-        }
-        match original_lc_ctype {
-            Some(val) => set_var("LC_CTYPE", &val),
-            None => clear_var("LC_CTYPE"),
-        }
-        match original_no_unicode {
-            Some(val) => set_var("VTCODE_NO_UNICODE", &val),
-            None => clear_var("VTCODE_NO_UNICODE"),
+        for key in ["TERM", "LANG", "LC_ALL", "LC_CTYPE", "VTCODE_NO_UNICODE"] {
+            clear_var(key);
         }
     }
 
     #[test]
     fn test_get_border_type() {
-        // Save original TERM
-        let original_term = env::var("TERM").ok();
+        let _guard = TERMINAL_ENV_TEST_LOCK
+            .lock()
+            .expect("terminal env test lock");
+        clear_var("TERM");
 
         // Test with Unicode-supporting terminal
         set_var("TERM", "xterm-256color");
@@ -235,19 +221,16 @@ mod tests {
         let border_type = get_border_type();
         assert!(matches!(border_type, ratatui::widgets::BorderType::Plain));
 
-        // Restore original TERM
-        match original_term {
-            Some(val) => set_var("TERM", &val),
-            None => clear_var("TERM"),
-        }
+        clear_var("TERM");
     }
 
     #[test]
     fn queued_input_edit_binding_switches_for_tmux() {
-        let original_tmux = env::var("TMUX").ok();
-        let original_term = env::var("TERM").ok();
-
-        remove_var("TMUX");
+        let _guard = TERMINAL_ENV_TEST_LOCK
+            .lock()
+            .expect("terminal env test lock");
+        clear_var("TMUX");
+        clear_var("TERM");
         set_var("TERM", "xterm-256color");
         assert!(!queued_input_edit_uses_shift_left());
 
@@ -258,13 +241,7 @@ mod tests {
         set_var("TERM", "tmux-256color");
         assert!(queued_input_edit_uses_shift_left());
 
-        match original_tmux {
-            Some(val) => set_var("TMUX", &val),
-            None => clear_var("TMUX"),
-        }
-        match original_term {
-            Some(val) => set_var("TERM", &val),
-            None => clear_var("TERM"),
-        }
+        clear_var("TMUX");
+        clear_var("TERM");
     }
 }

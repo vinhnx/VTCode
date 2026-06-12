@@ -253,7 +253,17 @@ fn with_additional_permissions_requires_non_empty_permissions() {
 }
 
 #[test]
+#[serial_test::serial(linux_sandbox_executable)]
 fn with_additional_permissions_widens_read_only_for_write_roots() {
+    #[cfg(target_os = "linux")]
+    let (_temp_dir, _sandbox_helper_guard) = {
+        let temp_dir = tempfile::tempdir().expect("temp sandbox helper dir");
+        let helper = temp_dir.path().join("vtcode-linux-sandbox");
+        std::fs::write(&helper, "").expect("write fake sandbox helper");
+        let guard = super::set_linux_sandbox_executable_override_for_tests(helper);
+        (temp_dir, guard)
+    };
+
     let config = vtcode_config::SandboxConfig {
         enabled: true,
         default_policy: vtcode_config::SandboxPolicy::ReadOnly,

@@ -278,7 +278,15 @@ mod tests {
 
     #[tokio::test]
     async fn test_shell_scoped_history_does_not_reuse_tool_level_key() {
-        let temp_dir = std::env::temp_dir().join(format!("vtcode_test_{}", std::process::id()));
+        let temp_dir = std::env::temp_dir().join(format!(
+            "vtcode_test_shell_scoped_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or_default()
+        ));
+        let _ = std::fs::remove_dir_all(&temp_dir);
         let recorder = ApprovalRecorder::new(temp_dir.clone());
 
         for _ in 0..5 {

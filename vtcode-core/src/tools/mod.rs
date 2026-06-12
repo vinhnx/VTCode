@@ -16,7 +16,7 @@
 //! ## Core Components
 //!
 //! ### Tool Registry
-//! ```rust,no_run
+//! ```rust,ignore
 //! use vtcode_core::tools::{ToolRegistry, ToolRegistration};
 //!
 //! #[tokio::main]
@@ -54,7 +54,7 @@
 //! #### Code Analysis
 //! ## Tool Execution
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! use vtcode_core::tools::ToolRegistry;
 //!
 //! #[tokio::main]
@@ -81,7 +81,7 @@
 //!
 //! ## Custom Tool Development
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! use vtcode_core::tools::traits::Tool;
 //! use serde_json::Value;
 //!

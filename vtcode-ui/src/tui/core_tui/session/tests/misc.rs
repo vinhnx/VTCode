@@ -216,11 +216,13 @@ fn active_file_operation_indicator_renders_spinner_frame() {
         right: None,
     });
     let rendered = rendered_transcript_widget_lines(&mut session, VIEW_WIDTH, VIEW_ROWS);
+    let expected = format!(
+        "{} Editing vtcode.toml...",
+        pulse_spinner_frame_for_phase(0.0)
+    );
 
     assert!(
-        rendered
-            .iter()
-            .any(|line| line.contains("⠋ Editing vtcode.toml...")),
+        rendered.iter().any(|line| line.contains(&expected)),
         "active file operation indicator should show a spinner frame"
     );
     assert!(

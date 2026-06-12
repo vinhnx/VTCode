@@ -424,9 +424,12 @@ fn mock_service_tier_fallback(
 fn schema_keyword_path(value: &Value, keywords: &[&str], path: &str) -> Option<String> {
     match value {
         Value::Object(map) => {
-            for keyword in keywords {
-                if map.contains_key(*keyword) {
-                    return Some(format!("{path}.{keyword}"));
+            let properties_object = path.ends_with(".properties");
+            if !properties_object {
+                for keyword in keywords {
+                    if map.contains_key(*keyword) {
+                        return Some(format!("{path}.{keyword}"));
+                    }
                 }
             }
             for (key, nested) in map {

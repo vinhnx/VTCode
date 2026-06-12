@@ -6,6 +6,8 @@ use crate::sandboxing::{
 use crate::tools::tool_intent;
 use anyhow::{Context, Result, anyhow};
 use serde_json::Value;
+#[cfg(test)]
+use std::sync::{LazyLock, Mutex};
 use std::{
     collections::BTreeSet,
     path::{Path, PathBuf},
@@ -807,10 +809,45 @@ fn resolve_argument_path(argument: &str, working_dir: &Path) -> Option<PathBuf> 
 
 #[cfg(target_os = "linux")]
 fn resolve_linux_sandbox_executable() -> Option<PathBuf> {
+    #[cfg(test)]
+    if let Some(path) = LINUX_SANDBOX_EXECUTABLE_OVERRIDE
+        .lock()
+        .ok()
+        .and_then(|guard| guard.clone())
+    {
+        return Some(path);
+    }
+
     std::env::var_os("VTCODE_LINUX_SANDBOX_EXECUTABLE").map(PathBuf::from)
 }
 
 #[cfg(not(target_os = "linux"))]
 fn resolve_linux_sandbox_executable() -> Option<PathBuf> {
     None
+}
+
+#[cfg(all(test, target_os = "linux"))]
+static LINUX_SANDBOX_EXECUTABLE_OVERRIDE: LazyLock<Mutex<Option<PathBuf>>> =
+    LazyLock::new(|| Mutex::new(None));
+
+#[cfg(all(test, target_os = "linux"))]
+pub(super) struct LinuxSandboxExecutableOverrideGuard;
+
+#[cfg(all(test, target_os = "linux"))]
+impl Drop for LinuxSandboxExecutableOverrideGuard {
+    fn drop(&mut self) {
+        if let Ok(mut guard) = LINUX_SANDBOX_EXECUTABLE_OVERRIDE.lock() {
+            *guard = None;
+        }
+    }
+}
+
+#[cfg(all(test, target_os = "linux"))]
+pub(super) fn set_linux_sandbox_executable_override_for_tests(
+    path: PathBuf,
+) -> LinuxSandboxExecutableOverrideGuard {
+    if let Ok(mut guard) = LINUX_SANDBOX_EXECUTABLE_OVERRIDE.lock() {
+        *guard = Some(path);
+    }
+    LinuxSandboxExecutableOverrideGuard
 }

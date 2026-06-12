@@ -452,6 +452,7 @@ fn command_skips_provider_auth(command: Option<&Commands>) -> bool {
                 | Commands::Auth { .. }
                 | Commands::AppServer { .. }
                 | Commands::Notify { .. }
+                | Commands::Pods { .. }
                 | Commands::Schedule { .. }
         )
     )
@@ -465,6 +466,7 @@ fn can_start_without_provider_auth(command: Option<&Commands>) -> bool {
                 | Commands::AgentClientProtocol { .. }
                 | Commands::AppServer { .. }
                 | Commands::Notify { .. }
+                | Commands::Pods { .. }
                 | Commands::Schedule { .. }
         )
     )
@@ -559,6 +561,16 @@ mod validation_tests {
         let command = Commands::Notify {
             title: Some("VT Code".to_string()),
             message: "Session started".to_string(),
+        };
+
+        assert!(command_skips_provider_auth(Some(&command)));
+        assert!(can_start_without_provider_auth(Some(&command)));
+    }
+
+    #[test]
+    fn pods_can_start_without_provider_auth() {
+        let command = Commands::Pods {
+            command: vtcode_core::cli::args::PodsCommands::List,
         };
 
         assert!(command_skips_provider_auth(Some(&command)));

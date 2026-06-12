@@ -692,7 +692,7 @@ mod tests {
         let response = registry
             .execute_public_tool_ref_prevalidated_with_mode(
                 tools::UNIFIED_EXEC,
-                &delayed_exec_args(true, 50),
+                &long_running_exec_args(true, 50),
                 ExecSettlementMode::SettleNonInteractive,
             )
             .await?;

@@ -144,11 +144,14 @@ enable_tracing = true
 
     #[test]
     fn detects_explicit_default_primary_agent_key() {
-        let with_key: toml::Value = r#"default_primary_agent = "duck""#.parse().expect("toml");
-        let without_key: toml::Value = r#"[agent]
+        let with_key =
+            toml::Value::Table(r#"default_primary_agent = "duck""#.parse().expect("toml"));
+        let without_key = toml::Value::Table(
+            r#"[agent]
 provider = "openai""#
-            .parse()
-            .expect("toml");
+                .parse()
+                .expect("toml"),
+        );
 
         assert!(has_explicit_default_primary_agent(&with_key));
         assert!(!has_explicit_default_primary_agent(&without_key));

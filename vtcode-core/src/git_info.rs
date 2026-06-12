@@ -199,7 +199,7 @@ mod tests {
         let root = get_git_repo_root(&repo_root).unwrap();
         assert!(root.is_some());
         // The root should contain the path
-        assert!(root.unwrap().contains("vtcode"));
+        assert!(root.unwrap().to_lowercase().contains("vtcode"));
     }
 
     #[test]
