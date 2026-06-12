@@ -195,11 +195,18 @@ mod tests {
 
     #[test]
     fn test_get_git_repo_root() {
-        let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let root = get_git_repo_root(&repo_root).unwrap();
+        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .canonicalize()
+            .unwrap();
+        let root = get_git_repo_root(&manifest_dir).unwrap();
         assert!(root.is_some());
-        // The root should contain the path
-        assert!(root.unwrap().to_lowercase().contains("vtcode"));
+        let root = PathBuf::from(root.unwrap()).canonicalize().unwrap();
+        assert!(
+            manifest_dir == root || manifest_dir.starts_with(&root),
+            "repo root {} should be an ancestor of manifest dir {}",
+            root.display(),
+            manifest_dir.display()
+        );
     }
 
     #[test]

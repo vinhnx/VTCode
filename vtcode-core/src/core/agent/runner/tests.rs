@@ -4,6 +4,7 @@ use crate::config::constants::tools;
 use crate::config::models::ModelId;
 use crate::config::types::CapabilityLevel;
 use crate::core::agent::events::ExecEventRecorder;
+use crate::core::agent::harness_kernel::SessionToolCatalogSnapshot;
 use crate::core::agent::runtime::AgentRuntime;
 use crate::core::agent::session::AgentSessionState;
 use crate::core::agent::state::record_turn_duration;
@@ -34,6 +35,44 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tempfile::TempDir;
 use vtcode_config::core::permissions::{AgentPermissionsConfig, PermissionDefault};
+
+fn provider_tool_names(snapshot: &SessionToolCatalogSnapshot) -> Vec<&str> {
+    snapshot
+        .snapshot
+        .as_ref()
+        .map(|tools| tools.iter().map(|tool| tool.function_name()).collect())
+        .unwrap_or_default()
+}
+
+fn assert_provider_exposes_tool(snapshot: &SessionToolCatalogSnapshot, tool_name: &str) {
+    let names = provider_tool_names(snapshot);
+    assert!(
+        names.contains(&tool_name),
+        "provider-facing snapshot should include {tool_name}; got {names:?}"
+    );
+    assert!(
+        snapshot
+            .active_tool_names
+            .iter()
+            .any(|active_name| active_name == tool_name),
+        "active tool names should include {tool_name}"
+    );
+}
+
+fn assert_provider_hides_tool(snapshot: &SessionToolCatalogSnapshot, tool_name: &str) {
+    let names = provider_tool_names(snapshot);
+    assert!(
+        !names.contains(&tool_name),
+        "provider-facing snapshot should hide {tool_name}; got {names:?}"
+    );
+    assert!(
+        !snapshot
+            .active_tool_names
+            .iter()
+            .any(|active_name| active_name == tool_name),
+        "active tool names should hide {tool_name}"
+    );
+}
 
 #[test]
 fn record_turn_duration_records_once() {
@@ -231,7 +270,7 @@ async fn build_universal_tools_matches_registry_agent_runner_snapshot() {
             capability_level: CapabilityLevel::CodeSearch,
             documentation_mode: runner.config().agent.tool_documentation_mode,
             planning_active: runner.tool_registry.is_planning_active(),
-            request_user_input_enabled: true,
+            request_user_input_enabled: false,
             model_capabilities: ToolModelCapabilities::for_model_name(&runner.model),
             deferred_tool_policy: crate::tools::handlers::deferred_tool_policy_for_runtime(
                 crate::llm::factory::infer_provider(
@@ -260,8 +299,6 @@ async fn build_universal_tools_matches_registry_agent_runner_snapshot() {
             expected.push(tool.function_name().to_string());
         }
     }
-    expected.insert(3, "request_user_input".to_string());
-
     let actual = runner
         .build_universal_tools()
         .await
@@ -307,7 +344,7 @@ async fn build_universal_tools_uses_override_when_present() {
 }
 
 #[tokio::test]
-async fn active_primary_agent_policy_intersects_runner_tools() {
+async fn active_primary_agent_policy_filters_provider_exposure_and_execution() {
     let temp = TempDir::new().expect("tempdir");
     let mut runner = AgentRunner::new_with_bootstrap(
         AgentType::Single,
@@ -339,21 +376,8 @@ async fn active_primary_agent_policy_intersects_runner_tools() {
         .build_universal_tool_snapshot()
         .await
         .expect("permission-filtered snapshot");
-    assert!(
-        snapshot
-            .snapshot
-            .as_ref()
-            .expect("stable catalogue")
-            .iter()
-            .any(|tool| tool.function_name() == tools::READ_FILE),
-        "permissions must not mutate the stable catalogue"
-    );
-    assert!(
-        !snapshot
-            .active_tool_names
-            .contains(&tools::READ_FILE.to_string()),
-        "active permissions deny should be reflected in the advertised subset"
-    );
+    assert_provider_hides_tool(&snapshot, tools::READ_FILE);
+    assert_provider_hides_tool(&snapshot, tools::UNIFIED_EXEC);
 
     let mut session_state =
         AgentSessionState::new("thread-primary-agent-policy".to_string(), 1, 1, 8_000);
@@ -403,19 +427,8 @@ async fn explicit_tool_policy_deny_filters_runtime_state_and_allowed_tools() {
         .build_universal_tool_snapshot()
         .await
         .expect("snapshot");
-    let stable_names = snapshot
-        .snapshot
-        .as_ref()
-        .expect("stable catalogue")
-        .iter()
-        .map(|tool| tool.function_name())
-        .collect::<Vec<_>>();
-    assert!(stable_names.contains(&tools::UNIFIED_EXEC));
-    assert!(
-        !snapshot
-            .active_tool_names
-            .contains(&tools::UNIFIED_EXEC.to_string())
-    );
+    assert_provider_hides_tool(&snapshot, tools::UNIFIED_EXEC);
+    assert_provider_exposes_tool(&snapshot, tools::READ_FILE);
 
     let choice = ToolChoice::allowed_tools_auto(snapshot.active_tool_names.as_ref().clone());
     let ToolChoice::AllowedTools(choice) = choice else {
@@ -454,19 +467,8 @@ async fn category_read_deny_filters_advertised_active_tools() {
         .build_universal_tool_snapshot()
         .await
         .expect("snapshot");
-    assert!(
-        snapshot
-            .snapshot
-            .as_ref()
-            .expect("stable catalogue")
-            .iter()
-            .any(|tool| tool.function_name() == tools::READ_FILE)
-    );
-    assert!(
-        !snapshot
-            .active_tool_names
-            .contains(&tools::READ_FILE.to_string())
-    );
+    assert_provider_hides_tool(&snapshot, tools::READ_FILE);
+    assert_provider_exposes_tool(&snapshot, tools::UNIFIED_EXEC);
 }
 
 #[tokio::test]
@@ -496,19 +498,8 @@ async fn category_bash_deny_filters_advertised_active_tools_and_allowed_tools() 
         .build_universal_tool_snapshot()
         .await
         .expect("snapshot");
-    assert!(
-        snapshot
-            .snapshot
-            .as_ref()
-            .expect("stable catalogue")
-            .iter()
-            .any(|tool| tool.function_name() == tools::UNIFIED_EXEC)
-    );
-    assert!(
-        !snapshot
-            .active_tool_names
-            .contains(&tools::UNIFIED_EXEC.to_string())
-    );
+    assert_provider_hides_tool(&snapshot, tools::UNIFIED_EXEC);
+    assert_provider_exposes_tool(&snapshot, tools::READ_FILE);
 
     let choice = ToolChoice::allowed_tools_auto(snapshot.active_tool_names.as_ref().clone());
     let ToolChoice::AllowedTools(choice) = choice else {
@@ -544,19 +535,8 @@ async fn category_edit_deny_filters_advertised_file_tool_conservatively() {
         .build_universal_tool_snapshot()
         .await
         .expect("snapshot");
-    assert!(
-        snapshot
-            .snapshot
-            .as_ref()
-            .expect("stable catalogue")
-            .iter()
-            .any(|tool| tool.function_name() == tools::UNIFIED_FILE)
-    );
-    assert!(
-        !snapshot
-            .active_tool_names
-            .contains(&tools::UNIFIED_FILE.to_string())
-    );
+    assert_provider_hides_tool(&snapshot, tools::UNIFIED_FILE);
+    assert_provider_exposes_tool(&snapshot, tools::UNIFIED_EXEC);
 }
 
 #[tokio::test]
@@ -586,19 +566,8 @@ async fn category_write_deny_filters_advertised_file_tool_conservatively() {
         .build_universal_tool_snapshot()
         .await
         .expect("snapshot");
-    assert!(
-        snapshot
-            .snapshot
-            .as_ref()
-            .expect("stable catalogue")
-            .iter()
-            .any(|tool| tool.function_name() == tools::UNIFIED_FILE)
-    );
-    assert!(
-        !snapshot
-            .active_tool_names
-            .contains(&tools::UNIFIED_FILE.to_string())
-    );
+    assert_provider_hides_tool(&snapshot, tools::UNIFIED_FILE);
+    assert_provider_exposes_tool(&snapshot, tools::UNIFIED_EXEC);
 }
 
 #[tokio::test]
@@ -628,23 +597,12 @@ async fn webfetch_domain_deny_filters_representative_unified_search_tool() {
         .build_universal_tool_snapshot()
         .await
         .expect("snapshot");
-    assert!(
-        snapshot
-            .snapshot
-            .as_ref()
-            .expect("stable catalogue")
-            .iter()
-            .any(|tool| tool.function_name() == tools::UNIFIED_SEARCH)
-    );
-    assert!(
-        !snapshot
-            .active_tool_names
-            .contains(&tools::UNIFIED_SEARCH.to_string())
-    );
+    assert_provider_hides_tool(&snapshot, tools::UNIFIED_SEARCH);
+    assert_provider_exposes_tool(&snapshot, tools::UNIFIED_EXEC);
 }
 
 #[tokio::test]
-async fn planning_mode_filters_advertised_mutating_tools_without_catalogue_mutation() {
+async fn planning_mode_filters_provider_facing_mutating_tools() {
     let temp = TempDir::new().expect("tempdir");
     let runner = AgentRunner::new_with_bootstrap(
         AgentType::Single,
@@ -670,24 +628,12 @@ async fn planning_mode_filters_advertised_mutating_tools_without_catalogue_mutat
         .build_universal_tool_snapshot()
         .await
         .expect("snapshot");
-    let stable_names = snapshot
-        .snapshot
-        .as_ref()
-        .expect("stable catalogue")
-        .iter()
-        .map(|tool| tool.function_name())
-        .collect::<Vec<_>>();
-
-    assert!(stable_names.contains(&tools::APPLY_PATCH));
-    assert!(
-        !snapshot
-            .active_tool_names
-            .contains(&tools::APPLY_PATCH.to_string())
-    );
+    assert_provider_hides_tool(&snapshot, tools::APPLY_PATCH);
+    assert_provider_exposes_tool(&snapshot, tools::READ_FILE);
 }
 
 #[tokio::test]
-async fn active_primary_agent_policy_preserves_stable_catalogue_with_active_subset() {
+async fn active_primary_agent_policy_filters_provider_snapshot_to_allowed_tools() {
     let temp = TempDir::new().expect("tempdir");
     let mut runner = AgentRunner::new_with_bootstrap(
         AgentType::Single,
@@ -711,13 +657,8 @@ async fn active_primary_agent_policy_preserves_stable_catalogue_with_active_subs
         .build_universal_tool_snapshot()
         .await
         .expect("baseline snapshot");
-    let baseline_names = baseline
-        .snapshot
-        .as_ref()
-        .expect("stable catalogue")
-        .iter()
-        .map(|tool| tool.function_name().to_string())
-        .collect::<Vec<_>>();
+    assert_provider_exposes_tool(&baseline, tools::READ_FILE);
+    assert_provider_exposes_tool(&baseline, tools::UNIFIED_EXEC);
 
     let mut spec = vtcode_config::builtin_primary_auto_agent();
     spec.tools = Some(vec![tools::READ_FILE.to_string()]);
@@ -727,25 +668,11 @@ async fn active_primary_agent_policy_preserves_stable_catalogue_with_active_subs
         .build_universal_tool_snapshot()
         .await
         .expect("restricted snapshot");
-    let restricted_names = restricted
-        .snapshot
-        .as_ref()
-        .expect("stable catalogue")
-        .iter()
-        .map(|tool| tool.function_name().to_string())
-        .collect::<Vec<_>>();
-
-    assert_eq!(restricted_names, baseline_names);
-    assert!(
-        restricted
-            .active_tool_names
-            .contains(&tools::READ_FILE.to_string())
-    );
-    assert!(
-        !restricted
-            .active_tool_names
-            .contains(&tools::UNIFIED_EXEC.to_string())
-    );
+    let baseline_names = provider_tool_names(&baseline);
+    let restricted_names = provider_tool_names(&restricted);
+    assert_ne!(restricted_names, baseline_names);
+    assert_provider_exposes_tool(&restricted, tools::READ_FILE);
+    assert_provider_hides_tool(&restricted, tools::UNIFIED_EXEC);
 }
 
 #[tokio::test]

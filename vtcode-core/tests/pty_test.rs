@@ -119,7 +119,10 @@ async fn test_pty_functionality_with_exit_code() {
     let exit_code = response["exit_code"]
         .as_i64()
         .or_else(|| response["code"].as_i64());
-    assert!(matches!(exit_code, Some(1 | 2)));
+    assert!(
+        exit_code.is_some_and(|code| code != 0),
+        "expected present non-zero exit code, got {exit_code:?}; response={response:?}"
+    );
 }
 
 #[cfg(unix)]

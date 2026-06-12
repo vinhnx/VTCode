@@ -131,11 +131,16 @@ impl ApprovalRecorder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::TempDir;
+
+    fn temp_cache_dir() -> TempDir {
+        TempDir::new().expect("temp approval cache")
+    }
 
     #[tokio::test]
     async fn test_approval_recording() {
-        let temp_dir = std::env::temp_dir().join(format!("vtcode_test_{}", std::process::id()));
-        let recorder = ApprovalRecorder::new(temp_dir.clone());
+        let temp_dir = temp_cache_dir();
+        let recorder = ApprovalRecorder::new(temp_dir.path().to_path_buf());
 
         // Record some approvals
         recorder
@@ -155,15 +160,12 @@ mod tests {
         let pattern = recorder.get_pattern("read_file").await;
         assert!(pattern.is_some());
         assert_eq!(pattern.unwrap().approval_count(), 2);
-
-        // Cleanup
-        let _ = std::fs::remove_dir_all(&temp_dir);
     }
 
     #[tokio::test]
     async fn test_auto_approval_suggestion() {
-        let temp_dir = std::env::temp_dir().join(format!("vtcode_test_{}", std::process::id()));
-        let recorder = ApprovalRecorder::new(temp_dir.clone());
+        let temp_dir = temp_cache_dir();
+        let recorder = ApprovalRecorder::new(temp_dir.path().to_path_buf());
 
         // Not enough approvals initially
         assert!(
@@ -186,15 +188,12 @@ mod tests {
             .await;
         assert!(suggestion.is_some());
         assert!(suggestion.unwrap().contains("100%"));
-
-        // Cleanup
-        let _ = std::fs::remove_dir_all(&temp_dir);
     }
 
     #[tokio::test]
     async fn test_should_auto_approve() {
-        let temp_dir = std::env::temp_dir().join(format!("vtcode_test_{}", std::process::id()));
-        let recorder = ApprovalRecorder::new(temp_dir.clone());
+        let temp_dir = temp_cache_dir();
+        let recorder = ApprovalRecorder::new(temp_dir.path().to_path_buf());
 
         // Not approved initially
         assert!(!recorder.should_auto_approve("run_command").await);
@@ -208,15 +207,12 @@ mod tests {
 
         // Now should auto-approve
         assert!(recorder.should_auto_approve("run_command").await);
-
-        // Cleanup
-        let _ = std::fs::remove_dir_all(&temp_dir);
     }
 
     #[tokio::test]
     async fn test_auto_approval_suggestion_uses_display_name() {
-        let temp_dir = std::env::temp_dir().join(format!("vtcode_test_{}", std::process::id()));
-        let recorder = ApprovalRecorder::new(temp_dir.clone());
+        let temp_dir = temp_cache_dir();
+        let recorder = ApprovalRecorder::new(temp_dir.path().to_path_buf());
 
         for _ in 0..5 {
             let _ = recorder
@@ -237,8 +233,6 @@ mod tests {
             .await
             .expect("suggestion");
         assert!(suggestion.contains("commands starting with `cargo test`"));
-
-        let _ = std::fs::remove_dir_all(&temp_dir);
     }
 
     #[tokio::test]
@@ -246,22 +240,14 @@ mod tests {
         // Simulates a second vtcode session: one ApprovalRecorder records
         // approvals to disk, then a separately constructed recorder must
         // observe them on the next auto-approve check without restart.
-        let temp_dir = std::env::temp_dir().join(format!(
-            "vtcode_test_refresh_{}_{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_nanos())
-                .unwrap_or_default()
-        ));
-        let _ = std::fs::remove_dir_all(&temp_dir);
+        let temp_dir = temp_cache_dir();
 
         let key = "find src -type f -name '*.rs' '|' sort|sandbox_permissions=\"use_default\"|additional_permissions=null";
 
-        let reader = ApprovalRecorder::new(temp_dir.clone());
+        let reader = ApprovalRecorder::new(temp_dir.path().to_path_buf());
         assert!(!reader.should_auto_approve(key).await);
 
-        let writer = ApprovalRecorder::new(temp_dir.clone());
+        let writer = ApprovalRecorder::new(temp_dir.path().to_path_buf());
         for _ in 0..3 {
             writer
                 .record_approval(key, Some("find src"), true, None)
@@ -272,22 +258,12 @@ mod tests {
         // Without the disk refresh in should_auto_approve, the reader's
         // in-memory map would still be empty and this assertion would fail.
         assert!(reader.should_auto_approve(key).await);
-
-        let _ = std::fs::remove_dir_all(&temp_dir);
     }
 
     #[tokio::test]
     async fn test_shell_scoped_history_does_not_reuse_tool_level_key() {
-        let temp_dir = std::env::temp_dir().join(format!(
-            "vtcode_test_shell_scoped_{}_{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_nanos())
-                .unwrap_or_default()
-        ));
-        let _ = std::fs::remove_dir_all(&temp_dir);
-        let recorder = ApprovalRecorder::new(temp_dir.clone());
+        let temp_dir = temp_cache_dir();
+        let recorder = ApprovalRecorder::new(temp_dir.path().to_path_buf());
 
         for _ in 0..5 {
             let _ = recorder
@@ -312,7 +288,5 @@ mod tests {
                 .await
                 .is_none()
         );
-
-        let _ = std::fs::remove_dir_all(&temp_dir);
     }
 }

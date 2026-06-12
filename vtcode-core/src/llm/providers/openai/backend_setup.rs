@@ -192,8 +192,7 @@ impl OpenAIBackendSetup {
         base_url: String,
         refresh_behaviour: OpenAIBackendRefreshBehaviour,
     ) -> Self {
-        let is_chatgpt_codex_backend = matches!(kind, OpenAIBackendKind::ChatGptSubscription(_))
-            && base_url.contains("chatgpt.com");
+        let is_chatgpt_codex_backend = matches!(kind, OpenAIBackendKind::ChatGptSubscription(_));
         Self {
             kind,
             base_url: Arc::from(base_url.as_str()),
@@ -244,7 +243,7 @@ impl OpenAIBackendSetup {
     }
 
     pub(crate) fn is_chatgpt_codex_backend(&self) -> bool {
-        self.uses_chatgpt_subscription_auth() && self.base_url.contains("chatgpt.com")
+        self.uses_chatgpt_subscription_auth()
     }
 
     pub(crate) fn uses_refreshable_auth(&self) -> bool {

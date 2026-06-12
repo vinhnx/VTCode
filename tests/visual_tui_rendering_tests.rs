@@ -1,9 +1,8 @@
-//! Visual TUI snapshot tests with actual terminal output rendering
+//! TUI backend smoke tests.
 //!
-//! These tests create actual terminal outputs using TestBackend to verify
-//! the visual rendering of the TUI with different content types and states.
-//!
-//! To update snapshots, run: `cargo insta review`
+//! These tests exercise `TestBackend` sizing and session command plumbing.
+//! They intentionally do not render the session widget, so the backend remains
+//! blank after each draw.
 
 use ratatui::{Terminal, backend::TestBackend};
 use vtcode_core::ui::{
@@ -20,17 +19,17 @@ fn blank_terminal(width: usize, height: usize) -> String {
     output
 }
 
-/// Test visual rendering of a simple user-agent exchange
+/// Smoke test backend sizing while a simple user-agent exchange is queued.
 #[tokio::test]
-async fn test_visual_user_agent_exchange() {
+async fn test_tui_backend_smoke_user_agent_exchange() {
     let backend = TestBackend::new(80, 20);
     let mut terminal = Terminal::new(backend).unwrap();
 
-    // Snapshot the initial clear terminal state
+    // Snapshot the initial clear terminal state.
     terminal
         .draw(|f| {
             let _area = f.area();
-            // This would be where the TUI would render, for testing purposes we verify area
+            // This smoke path verifies backend sizing only.
             assert!(_area.width == 80);
             assert!(_area.height == 20);
         })
@@ -38,7 +37,7 @@ async fn test_visual_user_agent_exchange() {
 
     assert_eq!(format!("{}", terminal.backend()), blank_terminal(80, 20));
 
-    // Create a session to populate with content
+    // Create a session and queue content without rendering the session widget.
     let session = spawn_session_with_options(
         InlineTheme::default(),
         SessionOptions {
@@ -48,7 +47,7 @@ async fn test_visual_user_agent_exchange() {
         },
     );
 
-    // Add content that would render visually
+    // Add content that a full session widget render would display.
     if let Ok(sess) = session {
         sess.handle.append_line(
             InlineMessageKind::User,
@@ -67,21 +66,19 @@ async fn test_visual_user_agent_exchange() {
         );
     }
 
-    // Draw a representation of what the terminal would look like
+    // Draw without the session widget; the backend should remain blank.
     terminal
         .draw(|f| {
-            // This simulates what would be rendered after content is added
             let _area = f.area();
-            // Render operations would happen here in a real scenario
         })
         .unwrap();
 
     assert_eq!(format!("{}", terminal.backend()), blank_terminal(80, 20));
 }
 
-/// Test visual rendering with code blocks and syntax highlighting representation
+/// Smoke test backend sizing while code-related session content is queued.
 #[tokio::test]
-async fn test_visual_code_rendering() {
+async fn test_tui_backend_smoke_code_content() {
     let backend = TestBackend::new(100, 25);
     let mut terminal = Terminal::new(backend).unwrap();
 
@@ -95,7 +92,7 @@ async fn test_visual_code_rendering() {
     );
 
     if let Ok(sess) = session {
-        // Add code-related content
+        // Add code-related content that is not rendered in this backend smoke test.
         sess.handle.append_line(
             InlineMessageKind::User,
             vec![InlineSegment {
@@ -124,9 +121,9 @@ async fn test_visual_code_rendering() {
     assert_eq!(format!("{}", terminal.backend()), blank_terminal(100, 25));
 }
 
-/// Test visual rendering with tool output
+/// Smoke test backend sizing while tool output content is queued.
 #[tokio::test]
-async fn test_visual_tool_output() {
+async fn test_tui_backend_smoke_tool_output() {
     let backend = TestBackend::new(80, 20);
     let mut terminal = Terminal::new(backend).unwrap();
 
@@ -140,7 +137,7 @@ async fn test_visual_tool_output() {
     );
 
     if let Ok(sess) = session {
-        // Simulate tool usage
+        // Simulate tool usage without rendering the session widget.
         sess.handle.append_line(
             InlineMessageKind::User,
             vec![InlineSegment {
@@ -185,9 +182,9 @@ async fn test_visual_tool_output() {
     assert_eq!(format!("{}", terminal.backend()), blank_terminal(80, 20));
 }
 
-/// Test visual rendering with error messages
+/// Smoke test backend sizing while error content is queued.
 #[tokio::test]
-async fn test_visual_error_handling() {
+async fn test_tui_backend_smoke_error_content() {
     let backend = TestBackend::new(80, 20);
     let mut terminal = Terminal::new(backend).unwrap();
 
@@ -201,7 +198,7 @@ async fn test_visual_error_handling() {
     );
 
     if let Ok(sess) = session {
-        // Simulate an error scenario
+        // Simulate an error scenario without rendering the session widget.
         sess.handle.append_line(
             InlineMessageKind::User,
             vec![InlineSegment {
@@ -246,10 +243,10 @@ async fn test_visual_error_handling() {
     assert_eq!(format!("{}", terminal.backend()), blank_terminal(80, 20));
 }
 
-/// Test visual rendering with different header contexts
+/// Smoke test backend sizing while different header contexts are queued.
 #[tokio::test]
-async fn test_visual_header_variations() {
-    // Test different header contexts that would appear visually different
+async fn test_tui_backend_smoke_header_variations() {
+    // Test different header contexts without rendering the session widget.
     let contexts_and_snapshots = vec![
         (
             "openai_gpt5",
@@ -284,7 +281,7 @@ async fn test_visual_header_variations() {
         let backend = TestBackend::new(80, 15);
         let mut terminal = Terminal::new(backend).unwrap();
 
-        // Create session with specific header context
+        // Create session with specific header context.
         let session = spawn_session_with_options(
             InlineTheme::default(),
             SessionOptions {
