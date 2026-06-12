@@ -44,10 +44,6 @@ VT Code is a local-first coding agent built in Rust, the only one with defense-i
 curl -fsSL https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.sh | bash   # macOS / Linux (recommended)
 ```
 
-```shell
-brew install vinhnx/tap/vtcode    # via Homebrew (custom tap)
-```
-
 Then run `vtcode` to get started.
 
 ### Common commands
@@ -88,7 +84,7 @@ VT Code supports 21 LLM providers out of the box, plus any OpenAI-compatible API
 
 <table style="border: none; border-collapse: collapse;">
   <tr>
-    <td style="border: none; vertical-align: top; padding-right: 20px;"><strong>Cloud LLMs</strong><br><a href="./docs/providers/PROVIDER_GUIDES.md#anthropic-claude"><strong>Anthropic Claude</strong></a> · <a href="./docs/providers/PROVIDER_GUIDES.md#openai-gpt"><strong>OpenAI</strong></a> · <a href="./docs/providers/PROVIDER_GUIDES.md#google-gemini">Gemini</a></td>
+    <td style="border: none; vertical-align: top; padding-right: 20px;"><strong>Cloud LLMs</strong><br><a href="./docs/providers/PROVIDER_GUIDES.md#anthropic-claude"><strong>Anthropic</strong></a> · <a href="./docs/providers/PROVIDER_GUIDES.md#openai-gpt"><strong>OpenAI</strong></a> · <a href="./docs/providers/PROVIDER_GUIDES.md#google-gemini">Gemini</a></td>
     <td style="border: none; vertical-align: top; padding-right: 20px;"><strong>Gateways</strong><br><a href="./docs/providers/PROVIDER_GUIDES.md#openrouter-marketplace">OpenRouter</a> · <a href="./docs/providers/PROVIDER_GUIDES.md#atlas-cloud">Atlas Cloud</a> · <a href="./docs/providers/PROVIDER_GUIDES.md#evolink-multi-model-gateway">Evolink</a></td>
     <td style="border: none; vertical-align: top; padding-right: 20px;"><strong>Local inference</strong><br><a href="./docs/providers/PROVIDER_GUIDES.md#ollama-local--cloud-models">Ollama</a> · <a href="./docs/providers/PROVIDER_GUIDES.md#lm-studio-local-server">LM Studio</a> · <a href="./docs/providers/PROVIDER_GUIDES.md#llamacpp-local-server">llama.cpp</a></td>
     <td style="border: none; vertical-align: top;"><strong>Other</strong><br><a href="./docs/providers/PROVIDER_GUIDES.md#github-copilot">GitHub Copilot</a> · <a href="./docs/providers/PROVIDER_GUIDES.md#anthropic-api-compatibility-server">Anthropic API Compat</a></td>
