@@ -13,6 +13,51 @@ use vtcode_core::ui::{
     InlineTextStyle,
 };
 
+fn inline_command_variant_name(command: &InlineCommand) -> &'static str {
+    match command {
+        InlineCommand::AppendLine { .. } => "AppendLine",
+        InlineCommand::AppendPastedMessage { .. } => "AppendPastedMessage",
+        InlineCommand::Inline { .. } => "Inline",
+        InlineCommand::ReplaceLast { .. } => "ReplaceLast",
+        InlineCommand::SetPrompt { .. } => "SetPrompt",
+        InlineCommand::SetPlaceholder { .. } => "SetPlaceholder",
+        InlineCommand::SetMessageLabels { .. } => "SetMessageLabels",
+        InlineCommand::SetHeaderContext { .. } => "SetHeaderContext",
+        InlineCommand::SetInputStatus { .. } => "SetInputStatus",
+        InlineCommand::SetTerminalTitleItems { .. } => "SetTerminalTitleItems",
+        InlineCommand::SetTerminalTitleThreadLabel { .. } => "SetTerminalTitleThreadLabel",
+        InlineCommand::SetTerminalTitleGitBranch { .. } => "SetTerminalTitleGitBranch",
+        InlineCommand::SetTheme { .. } => "SetTheme",
+        InlineCommand::SetAppearance { .. } => "SetAppearance",
+        InlineCommand::SetVimModeEnabled(_) => "SetVimModeEnabled",
+        InlineCommand::SetQueuedInputs { .. } => "SetQueuedInputs",
+        InlineCommand::SetSubprocessEntries { .. } => "SetSubprocessEntries",
+        InlineCommand::SetSubagentPreview { .. } => "SetSubagentPreview",
+        InlineCommand::SetLocalAgents { .. } => "SetLocalAgents",
+        InlineCommand::SetArchivedHistory { .. } => "SetArchivedHistory",
+        InlineCommand::SetPrimaryAgent { .. } => "SetPrimaryAgent",
+        InlineCommand::SetCursorVisible(_) => "SetCursorVisible",
+        InlineCommand::SetInputEnabled(_) => "SetInputEnabled",
+        InlineCommand::SetInput(_) => "SetInput",
+        InlineCommand::ApplySuggestedPrompt(_) => "ApplySuggestedPrompt",
+        InlineCommand::SetInlinePromptSuggestion { .. } => "SetInlinePromptSuggestion",
+        InlineCommand::ClearInlinePromptSuggestion => "ClearInlinePromptSuggestion",
+        InlineCommand::ClearInput => "ClearInput",
+        InlineCommand::ForceRedraw => "ForceRedraw",
+        InlineCommand::ShowTransient { .. } => "ShowTransient",
+        InlineCommand::CloseTransient => "CloseTransient",
+        InlineCommand::ClearScreen => "ClearScreen",
+        InlineCommand::SuspendEventLoop => "SuspendEventLoop",
+        InlineCommand::ResumeEventLoop => "ResumeEventLoop",
+        InlineCommand::ClearInputQueue => "ClearInputQueue",
+        InlineCommand::StopEventStream => "StopEventStream",
+        InlineCommand::StartEventStream => "StartEventStream",
+        InlineCommand::SetSkipConfirmations(_) => "SetSkipConfirmations",
+        InlineCommand::Shutdown => "Shutdown",
+        InlineCommand::SetReasoningStage(_) => "SetReasoningStage",
+    }
+}
+
 /// Test TUI with actual conversation history
 #[test]
 fn test_tui_with_conversation_history() {
@@ -98,8 +143,12 @@ fn test_real_ui_scenario_with_commands() {
 
     let mut appended = Vec::new();
     while let Ok(command) = command_rx.try_recv() {
-        if let InlineCommand::AppendLine { kind, segments } = command {
-            appended.push((kind, segments));
+        match command {
+            InlineCommand::AppendLine { kind, segments } => appended.push((kind, segments)),
+            unexpected => panic!(
+                "unexpected inline command variant: {}",
+                inline_command_variant_name(&unexpected)
+            ),
         }
     }
 
