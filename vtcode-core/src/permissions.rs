@@ -744,7 +744,7 @@ mod tests {
         ResolvedPermissionDecision, build_permission_request, evaluate_agent_permissions,
         evaluate_effective_permissions, evaluate_permissions,
     };
-    use crate::config::PermissionsConfig;
+    use crate::config::{PermissionsConfig, constants::tools};
     use serde_json::json;
     use tempfile::TempDir;
     use vtcode_config::core::permissions::{AgentPermissionsConfig, PermissionDefault};
@@ -1010,6 +1010,35 @@ mod tests {
         assert_eq!(
             evaluate_agent_permissions(&permissions, &workspace, &cwd, &request),
             ResolvedPermissionDecision::Allow
+        );
+    }
+
+    #[test]
+    fn agent_read_permission_allows_unified_file_read_only() {
+        let (_temp, workspace, cwd) = workspace_roots();
+        let mut permissions = agent_permissions(PermissionDefault::Deny);
+        permissions.allow = vec!["read".to_string()];
+
+        let read_request = build_permission_request(
+            &workspace,
+            &cwd,
+            tools::UNIFIED_FILE,
+            Some(&json!({"action": "read", "path": "README.md"})),
+        );
+        let write_request = build_permission_request(
+            &workspace,
+            &cwd,
+            tools::UNIFIED_FILE,
+            Some(&json!({"action": "write", "path": "README.md", "content": "x"})),
+        );
+
+        assert_eq!(
+            evaluate_agent_permissions(&permissions, &workspace, &cwd, &read_request),
+            ResolvedPermissionDecision::Allow
+        );
+        assert_eq!(
+            evaluate_agent_permissions(&permissions, &workspace, &cwd, &write_request),
+            ResolvedPermissionDecision::Deny
         );
     }
 
