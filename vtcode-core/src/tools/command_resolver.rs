@@ -47,12 +47,13 @@ impl CommandResolver {
     /// Resolve a command to its filesystem path
     ///
     /// # Example
-    /// ```ignore
+    /// ```no_run
+    /// use vtcode_core::tools::CommandResolver;
+    ///
     /// let mut resolver = CommandResolver::new();
     /// let cargo = resolver.resolve("cargo");
     /// assert_eq!(cargo.command, "cargo");
-    /// assert!(cargo.found);
-    /// assert_eq!(cargo.resolved_path, Some("/Users/user/.cargo/bin/cargo".into()));
+    /// // `cargo.found` and `cargo.resolved_path` depend on the current PATH.
     /// ```
     pub fn resolve(&mut self, cmd: &str) -> CommandResolution {
         // Extract base command (first word only)

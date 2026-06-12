@@ -1,8 +1,63 @@
 ---
 name: ast-grep
-description: "Use for ast-grep: inline-rules, new rule, expandEnd, fix config, string fix, nthChild stopBy, range field, metadata url, severity off, include metadata, caseInsensitive glob, rule order, kind pattern, positive rule, kind esquery, static analysis, tree-sitter parser, pattern yaml api, search rewrite lint analyze, textual structural, ast cst, named unnamed, kind field, ambiguous pattern, effective selector, meta variable detection, lazy multi, strictness smart, relaxed signature, find patch, rewrite joinBy, replace substring, toCase separatedBy, rewriter, ruleDirs testConfigs, libraryPath languageSymbol, dynamic injected, barrel import, custom language, TREE_SITTER_LIBDIR, language injection, styled components, language alias, stdin, programmatic API, napi parse, python api, meta variables, optional chaining, rule catalog, walrus operator, list comprehension, isinstance tuple."
+description: "Use for ast-grep project setup, rule authoring, rule debugging, and structural search workflows."
 metadata:
     short-description: Ast-grep project workflows
+    keywords:
+        - inline-rules
+        - new-rule
+        - expandEnd
+        - fix-config
+        - string-fix
+        - nthChild
+        - stopBy
+        - range-field
+        - metadata-url
+        - severity-off
+        - include-metadata
+        - caseInsensitive-glob
+        - rule-order
+        - kind-pattern
+        - positive-rule
+        - kind-esquery
+        - static-analysis
+        - tree-sitter-parser
+        - pattern-yaml-api
+        - search-rewrite-lint-analyze
+        - textual-structural
+        - ast-cst
+        - named-unnamed
+        - kind-field
+        - ambiguous-pattern
+        - effective-selector
+        - meta-variable-detection
+        - lazy-multi
+        - strictness-smart
+        - relaxed-signature
+        - find-patch
+        - rewrite-joinBy
+        - replace-substring
+        - toCase-separatedBy
+        - rewriter
+        - ruleDirs-testConfigs
+        - libraryPath-languageSymbol
+        - dynamic-injected
+        - barrel-import
+        - custom-language
+        - TREE_SITTER_LIBDIR
+        - language-injection
+        - styled-components
+        - language-alias
+        - stdin
+        - programmatic-API
+        - napi-parse
+        - python-api
+        - meta-variables
+        - optional-chaining
+        - rule-catalog
+        - walrus-operator
+        - list-comprehension
+        - isinstance-tuple
 ---
 
 # Ast-Grep

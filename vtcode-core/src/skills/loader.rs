@@ -1053,7 +1053,7 @@ pub fn detect_skill_mentions(user_input: &str, available_skills: &[SkillManifest
 ///
 /// Routing policy:
 /// - Explicit `$skill-name` mentions always win.
-/// - Description keywords provide the only implicit signal.
+/// - Description and manifest metadata keywords provide the only implicit signals.
 pub fn detect_skill_mentions_with_options(
     user_input: &str,
     available_skills: &[SkillManifest],
@@ -1080,9 +1080,9 @@ pub fn detect_skill_mentions_with_options(
             continue;
         }
 
-        let description_keywords = extract_keywords(&skill.description);
-        let description_matches = overlap_count(&input_keywords, &description_keywords);
-        if description_matches >= min_matches {
+        let skill_keywords = skill_routing_keywords(skill);
+        let keyword_matches = overlap_count(&input_keywords, &skill_keywords);
+        if keyword_matches >= min_matches {
             mentions.push(skill.name.clone());
         }
     }
@@ -1094,6 +1094,33 @@ pub fn detect_skill_mentions_with_options(
 
 fn overlap_count(input_keywords: &HashSet<String>, skill_keywords: &HashSet<String>) -> usize {
     input_keywords.intersection(skill_keywords).count()
+}
+
+fn skill_routing_keywords(skill: &SkillManifest) -> HashSet<String> {
+    let mut keywords = extract_keywords(&skill.description);
+
+    let Some(metadata) = &skill.metadata else {
+        return keywords;
+    };
+    let Some(metadata_keywords) = metadata.get("keywords").or_else(|| metadata.get("tags")) else {
+        return keywords;
+    };
+
+    match metadata_keywords {
+        serde_json::Value::Array(values) => {
+            for value in values {
+                if let Some(keyword) = value.as_str() {
+                    keywords.extend(extract_keywords(keyword));
+                }
+            }
+        }
+        serde_json::Value::String(value) => {
+            keywords.extend(extract_keywords(value));
+        }
+        _ => {}
+    }
+
+    keywords
 }
 
 fn extract_keywords(text: &str) -> HashSet<String> {
@@ -1166,6 +1193,19 @@ mod tests {
             &skills,
         );
         assert_eq!(mentions, vec!["api-fetcher".to_string()]);
+    }
+
+    #[test]
+    fn metadata_keywords_drive_implicit_matches() {
+        let mut ast_grep = manifest("ast-grep", "Structural search workflows");
+        ast_grep.metadata = Some(HashMap::from([(
+            "keywords".to_string(),
+            serde_json::json!(["tree-sitter parser", "optional chaining"]),
+        )]));
+
+        let mentions =
+            detect_skill_mentions("Debug an optional chaining tree-sitter rule", &[ast_grep]);
+        assert_eq!(mentions, vec!["ast-grep".to_string()]);
     }
 
     #[test]
