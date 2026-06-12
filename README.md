@@ -96,6 +96,8 @@ Xiaomi MiMo V2.5 Pro ships as the default model in VT Code, available both nativ
 
 Pricing: [Pay-as-you-go](https://platform.xiaomimimo.com/docs/en-US/price/pay-as-you-go) · [Subscription](https://platform.xiaomimimo.com/docs/en-US/price/tokenplan/subscription) · [Quick Access](https://platform.xiaomimimo.com/docs/en-US/price/tokenplan/quick-access) · [Docs](https://platform.xiaomimimo.com/docs/en-US/welcome) · [OpenRouter](https://openrouter.ai/xiaomi/mimo-v2.5-pro)
 
+> **Get started with MiMo Open Platform** — Xiaomi's most powerful AI. [Sign up with invite code **K5BCAP**](https://platform.xiaomimimo.com?ref=K5BCAP): both get **$2 API credits + 10% off** your first plan. *(Auto-filled on sign-up · Credits valid for 40 days)*
+
 ## Development
 
 ```shell
