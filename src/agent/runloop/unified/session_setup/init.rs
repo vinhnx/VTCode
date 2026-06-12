@@ -131,6 +131,10 @@ pub(crate) async fn initialize_session(
     if let Some(notice) = startup_update_check.cached_notice.as_ref() {
         append_notice_highlight(&mut session_bootstrap.header_highlights, notice);
     }
+
+    // Load release highlights for first-launch-after-update display
+    session_bootstrap.release_highlights = load_release_highlights_for_startup().await;
+
     // Register custom OpenAI-compatible providers from config
     if let Some(cfg) = vt_cfg {
         vtcode_core::llm::factory::register_custom_providers(&cfg.custom_providers);
@@ -471,6 +475,41 @@ fn load_startup_update_check() -> crate::updater::StartupUpdateCheck {
             crate::updater::StartupUpdateCheck::default()
         }
     }
+}
+
+async fn load_release_highlights_for_startup() -> Option<(semver::Version, Vec<String>)> {
+    use crate::updater::parse_release_highlights;
+
+    if !crate::updater::should_show_release_notes_for_current_version() {
+        return None;
+    }
+
+    let current_version = semver::Version::parse(env!("CARGO_PKG_VERSION")).ok()?;
+    let updater = Updater::new(env!("CARGO_PKG_VERSION")).ok()?;
+
+    let info = match updater.fetch_current_release_info().await {
+        Ok(info) => info,
+        Err(_) => {
+            // Record seen on fetch failure to avoid retrying every startup
+            crate::updater::record_current_version_seen();
+            return None;
+        }
+    };
+
+    // Only show if the fetched version matches current (we just updated to it).
+    // Record as seen either way to avoid repeated API calls on every startup.
+    if info.version != current_version {
+        crate::updater::record_current_version_seen();
+        return None;
+    }
+
+    let parsed = parse_release_highlights(&info.version, &info.release_notes);
+    if parsed.items.is_empty() {
+        crate::updater::record_current_version_seen();
+        return None;
+    }
+
+    Some((info.version, parsed.items))
 }
 
 fn create_async_mcp_manager(

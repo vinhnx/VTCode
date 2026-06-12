@@ -174,6 +174,104 @@ pub(crate) async fn handle_open_donate_links(
     Ok(SlashCommandControl::Continue)
 }
 
+pub(crate) async fn handle_release_notes(
+    ctx: SlashCommandContext<'_>,
+) -> Result<SlashCommandControl> {
+    use crate::updater::Updater;
+    use crate::updater::parse_release_highlights;
+
+    let current_version = env!("CARGO_PKG_VERSION");
+    let updater = Updater::new(current_version)?;
+
+    match updater.fetch_current_release_info().await {
+        Ok(info) => {
+            let parsed = parse_release_highlights(&info.version, &info.release_notes);
+            let release_url = Updater::release_url(&info.version);
+
+            let mut items: Vec<InlineListItem> = parsed
+                .items
+                .iter()
+                .map(|item: &String| InlineListItem {
+                    title: format!(" {}", item),
+                    subtitle: None,
+                    badge: None,
+                    indent: 0,
+                    selection: None,
+                    search_value: Some(item.clone()),
+                })
+                .collect();
+
+            items.push(InlineListItem {
+                title: "Open full release notes on GitHub".to_string(),
+                subtitle: Some(release_url.clone()),
+                badge: Some("Link".to_string()),
+                indent: 0,
+                selection: Some(InlineListSelection::ConfigAction(release_url.clone())),
+                search_value: Some("open github release notes link".to_string()),
+            });
+
+            let request = TransientRequest::List(ListOverlayRequest {
+                title: format!("VT Code v{}", info.version),
+                lines: vec!["Highlights from the latest release".to_string()],
+                footer_hint: Some(
+                    "Select to open release page in browser, Esc to dismiss.".to_string(),
+                ),
+                items,
+                selected: Some(InlineListSelection::ConfigAction(release_url.clone())),
+                search: None,
+                hotkeys: Vec::new(),
+            });
+
+            let outcome = show_overlay_and_wait(
+                ctx.handle,
+                ctx.session,
+                request,
+                ctx.ctrl_c_state,
+                ctx.ctrl_c_notify,
+                |submission| match submission {
+                    TransientSubmission::Selection(InlineListSelection::ConfigAction(url)) => {
+                        Some(url)
+                    }
+                    _ => None,
+                },
+            )
+            .await?;
+
+            ctx.handle.close_modal();
+            ctx.handle.force_redraw();
+
+            match outcome {
+                OverlayWaitOutcome::Submitted(url) => match open_external_url(&url) {
+                    Ok(()) => ctx.renderer.line(
+                        MessageStyle::Info,
+                        &format!("Opening release notes in browser: {}", url),
+                    )?,
+                    Err(err) => ctx.renderer.line(
+                        MessageStyle::Error,
+                        &format!("Failed to open browser: {}", err),
+                    )?,
+                },
+                OverlayWaitOutcome::Exit => {
+                    return Ok(SlashCommandControl::BreakWithReason(SessionEndReason::Exit));
+                }
+                OverlayWaitOutcome::Cancelled | OverlayWaitOutcome::Interrupted => {
+                    ctx.renderer
+                        .line(MessageStyle::Info, "Dismissed release notes.")?;
+                }
+            }
+        }
+        Err(err) => {
+            ctx.renderer.line(
+                MessageStyle::Error,
+                &format!("Failed to fetch release notes: {}", err),
+            )?;
+        }
+    }
+
+    ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
+    Ok(SlashCommandControl::Continue)
+}
+
 pub(crate) async fn handle_launch_editor(
     ctx: SlashCommandContext<'_>,
     file: Option<String>,

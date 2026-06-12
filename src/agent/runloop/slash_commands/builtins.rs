@@ -35,6 +35,7 @@ pub(in crate::agent::runloop::slash_commands) async fn execute_built_in_command_
             )?;
             Ok(SlashCommandOutcome::OpenDonateLinks)
         }
+        "release-notes" => Ok(SlashCommandOutcome::ShowReleaseNotes),
         "theme" => {
             let mut tokens = args.split_whitespace();
             if let Some(next_theme) = tokens.next() {

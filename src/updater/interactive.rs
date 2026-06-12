@@ -90,6 +90,33 @@ pub(crate) fn display_update_notice(
     handle.force_redraw();
 }
 
+pub(crate) fn display_release_notes(
+    handle: &InlineHandle,
+    version: &semver::Version,
+    highlights: &[String],
+) {
+    let text = format_release_notes_text(version, highlights);
+    handle.append_pasted_message(InlineMessageKind::Info, text.clone(), line_count(&text));
+    handle.force_redraw();
+}
+
+fn format_release_notes_text(version: &semver::Version, highlights: &[String]) -> String {
+    if highlights.is_empty() {
+        return format!(
+            "VT Code v{}\n\nSee full release notes:\n{}",
+            version,
+            Updater::release_url(version)
+        );
+    }
+
+    let mut lines = vec![format!("VT Code v{}", version)];
+    lines.push(String::new());
+    for item in highlights {
+        lines.push(format!(" {}", item));
+    }
+    lines.join("\n")
+}
+
 fn build_update_prompt_request(notice: &StartupUpdateNotice) -> TransientRequest {
     TransientRequest::List(ListOverlayRequest {
         title: "Update available".to_string(),

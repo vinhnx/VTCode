@@ -510,6 +510,14 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             session_end_reason = SessionEndReason::Completed;
         }
 
+        // Show release notes on first launch after update
+        if !startup_update_requested_restart {
+            if let Some((ref version, ref highlights)) = session_bootstrap.release_highlights {
+                crate::updater::display_release_notes(&handle, version, highlights);
+                crate::updater::record_current_version_seen();
+            }
+        }
+
         if !startup_update_requested_restart {
             loop {
                 use crate::agent::runloop::unified::turn::session::interaction_loop::InteractionOutcome;

@@ -80,20 +80,3 @@ implement double escape to rewind, reference.
 
 1. show rewind history, reference. '/Users/vinhnguyenxuan/Documents/vtcode-resources/idea/Screenshot 2026-06-07 at 9.15.02 AM.png'
 2. when user select a history. show 4 options. implement actual logic you see from the screenshot. reference. ''/Users/vinhnguyenxuan/Documents/vtcode-resources/idea/Screenshot 2026-06-07 at 9.15.35 AM.png'
-
---
-
-idea: build a new version release note TUI (use Info tui component). showing only when user first update to a new version, and can be accessed later in the help menu. show a note with top "# Highlight" items on release note, on click. open the latest release tag in github.
-
-example
-
-```
-
-> VT Code  v2.1.170
-
- ▎ Meet Fable 5, our newest model for complex, long-running work. Try anytime with /model.
- ▎ Included in your plan limits for a limited time, then switch to usage credits to continue.
-
-```
-
----
