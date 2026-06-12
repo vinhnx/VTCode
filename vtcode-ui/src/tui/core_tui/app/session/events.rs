@@ -458,22 +458,37 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         }
         KeyCode::Esc => {
             if session.has_active_overlay() {
+                session.core.last_esc_press = None;
                 session.close_overlay();
                 None
             } else if session.is_running_activity() || session.active_pty_session_count() > 0 {
+                session.core.last_esc_press = None;
                 session.mark_dirty();
                 Some(InlineEvent::Interrupt)
             } else if !session.core.input_manager.content().is_empty() {
                 // Escape with content: clear input
+                session.core.last_esc_press = None;
                 session
                     .core
                     .handle_command(crate::tui::core_tui::types::InlineCommand::ClearInput);
                 session.mark_dirty();
                 None
             } else {
-                // Escape with no content: cancel
-                session.mark_dirty();
-                Some(InlineEvent::Cancel)
+                // Escape with no content: detect double-Esc for rewind
+                let now = std::time::Instant::now();
+                let is_double_esc = session
+                    .core
+                    .last_esc_press
+                    .is_some_and(|last| now.duration_since(last).as_millis() < 500);
+                if is_double_esc {
+                    session.core.last_esc_press = None;
+                    session.mark_dirty();
+                    Some(InlineEvent::Submit("/rewind".to_string()))
+                } else {
+                    session.core.last_esc_press = Some(now);
+                    session.mark_dirty();
+                    Some(InlineEvent::Cancel)
+                }
             }
         }
         KeyCode::PageUp => {

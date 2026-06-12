@@ -18,3 +18,4 @@ pub(crate) use ui::{
     SessionUiLaunchOptions, apply_ide_context_snapshot, ide_context_status_label_from_bridge,
     initialize_session_ui, refresh_local_agents,
 };
+pub(crate) use ui::{build_structured_resume_lines, render_resume_lines};

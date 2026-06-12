@@ -338,4 +338,8 @@ pub struct Session {
     /// When true, user input should be queued instead of submitted immediately
     /// to prevent race conditions with turn completion (see GitHub #12569).
     pub(crate) is_streaming_final_answer: bool,
+
+    // --- Double-Esc Detection ---
+    /// Timestamp of the last Escape key press for double-Esc detection.
+    pub(crate) last_esc_press: Option<Instant>,
 }

@@ -221,6 +221,9 @@ impl Session {
 
             // --- Streaming State ---
             is_streaming_final_answer: false,
+
+            // --- Double-Esc Detection ---
+            last_esc_press: None,
         };
         session.ensure_prompt_style_color();
         session

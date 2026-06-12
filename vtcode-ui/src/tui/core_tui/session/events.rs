@@ -452,20 +452,34 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         // --- Context-sensitive keys (too complex to rebind) ---
         KeyCode::Esc => {
             if session.has_active_overlay() {
+                session.last_esc_press = None;
                 session.close_overlay();
                 None
             } else if session.is_running_activity() || session.active_pty_session_count() > 0 {
+                session.last_esc_press = None;
                 session.mark_dirty();
                 Some(InlineEvent::Interrupt)
             } else if !session.input_manager.content().is_empty() {
                 // Escape with content: clear input
+                session.last_esc_press = None;
                 command::clear_input(session);
                 session.mark_dirty();
                 None
             } else {
-                // Escape with no content: cancel
-                session.mark_dirty();
-                Some(InlineEvent::Cancel)
+                // Escape with no content: detect double-Esc for rewind
+                let now = Instant::now();
+                let is_double_esc = session
+                    .last_esc_press
+                    .is_some_and(|last| now.duration_since(last).as_millis() < 500);
+                if is_double_esc {
+                    session.last_esc_press = None;
+                    session.mark_dirty();
+                    Some(InlineEvent::Submit("/rewind".to_string()))
+                } else {
+                    session.last_esc_press = Some(now);
+                    session.mark_dirty();
+                    Some(InlineEvent::Cancel)
+                }
             }
         }
         KeyCode::Enter => {

@@ -59,7 +59,7 @@ pub(super) fn render_resume_state_if_present(
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) struct ResumeRenderLine {
+pub(crate) struct ResumeRenderLine {
     pub(super) style: MessageStyle,
     pub(super) text: String,
 }
@@ -73,14 +73,17 @@ impl ResumeRenderLine {
     }
 }
 
-fn render_resume_lines(renderer: &mut AnsiRenderer, lines: &[ResumeRenderLine]) -> Result<()> {
+pub(crate) fn render_resume_lines(
+    renderer: &mut AnsiRenderer,
+    lines: &[ResumeRenderLine],
+) -> Result<()> {
     for line in lines {
         renderer.line(line.style, &line.text)?;
     }
     Ok(())
 }
 
-pub(super) fn build_structured_resume_lines(
+pub(crate) fn build_structured_resume_lines(
     history: &[uni::Message],
     supports_reasoning: bool,
 ) -> Vec<ResumeRenderLine> {

@@ -62,6 +62,7 @@ pub(crate) use self::header_context::{
 };
 pub(crate) use self::local_agents::refresh_local_agents;
 use self::resume_render::render_resume_state_if_present;
+pub(crate) use self::resume_render::{build_structured_resume_lines, render_resume_lines};
 
 #[cfg(test)]
 use self::header_context::ide_context_status_label;
@@ -75,7 +76,7 @@ use self::persistent_memory::apply_persistent_memory_header_guide;
 #[cfg(test)]
 use self::persistent_memory::{persistent_memory_guide_lines, persistent_memory_header_badge};
 #[cfg(test)]
-use self::resume_render::{build_structured_resume_lines, infer_legacy_line_style};
+use self::resume_render::infer_legacy_line_style;
 #[cfg(test)]
 use vtcode_core::llm::provider as uni;
 #[cfg(test)]
