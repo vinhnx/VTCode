@@ -9,9 +9,9 @@ use anstyle::Effects;
 use insta::assert_snapshot;
 use ratatui::{Terminal, backend::TestBackend};
 use vtcode_core::ui::{
-    InlineHeaderContext, InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme,
+    InlineCommand, InlineHandle, InlineHeaderContext, InlineMessageKind, InlineSegment,
+    InlineTextStyle,
 };
-use vtcode_core::ui::{SessionOptions, spawn_session_with_options};
 
 /// Test TUI with actual conversation history
 #[test]
@@ -58,25 +58,13 @@ fn test_tui_with_conversation_history() {
 }
 
 /// Test actual UI state with populated content using the command system
-#[tokio::test]
-#[ignore] // Requires interactive terminal (stdin must be a TTY)
-async fn test_real_ui_scenario_with_commands() {
-    // Create a session with initial parameters
-    let session = spawn_session_with_options(
-        InlineTheme::default(),
-        SessionOptions {
-            placeholder: Some("Type your message here...".to_string()),
-            inline_rows: 12,
-            ..SessionOptions::default()
-        },
-    );
-
-    // Verify session was created
-    assert!(session.is_ok());
-    let session = session.unwrap();
+#[test]
+fn test_real_ui_scenario_with_commands() {
+    let (command_tx, mut command_rx) = tokio::sync::mpsc::unbounded_channel();
+    let handle = InlineHandle::new_for_tests(command_tx);
 
     // Send some commands to populate the UI with real content
-    session.handle.append_line(
+    handle.append_line(
         InlineMessageKind::User,
         vec![InlineSegment {
             text: "Can you help me refactor this Rust code?".to_string(),
@@ -84,7 +72,7 @@ async fn test_real_ui_scenario_with_commands() {
         }],
     );
 
-    session.handle.append_line(
+    handle.append_line(
         InlineMessageKind::Agent,
         vec![InlineSegment {
             text: "Sure! I can help you refactor your Rust code. Could you share the code you'd like to refactor?".to_string(),
@@ -92,7 +80,7 @@ async fn test_real_ui_scenario_with_commands() {
         }],
     );
 
-    session.handle.append_line(
+    handle.append_line(
         InlineMessageKind::User,
         vec![InlineSegment {
             text: "Here's the code I want to refactor:\n```rust\nfn calculate_sum(numbers: Vec<i32>) -> i32 {\n    let mut sum = 0;\n    for i in 0..numbers.len() {\n        sum += numbers[i];\n    }\n    sum\n}\n```".to_string(),
@@ -100,7 +88,7 @@ async fn test_real_ui_scenario_with_commands() {
         }],
     );
 
-    session.handle.append_line(
+    handle.append_line(
         InlineMessageKind::Agent,
         vec![InlineSegment {
             text: "I can help refactor this code to be more idiomatic Rust. Here's an improved version:\n```rust\nfn calculate_sum(numbers: &[i32]) -> i32 {\n    numbers.iter().sum()\n}\n```\nThis version: 1) Takes a slice instead of moving the Vec, 2) Uses iterator methods for better performance, 3) Is more idiomatic Rust.".to_string(),
@@ -108,11 +96,28 @@ async fn test_real_ui_scenario_with_commands() {
         }],
     );
 
-    // Verify the session handle still works
-    assert!(!session.events.is_closed());
+    let mut appended = Vec::new();
+    while let Ok(command) = command_rx.try_recv() {
+        if let InlineCommand::AppendLine { kind, segments } = command {
+            appended.push((kind, segments));
+        }
+    }
 
-    // Snapshot the session state
-    assert_snapshot!("Session created with messages: 4", @"Session created with messages: 4");
+    assert_eq!(appended.len(), 4);
+    assert_eq!(appended[0].0, InlineMessageKind::User);
+    assert_eq!(appended[1].0, InlineMessageKind::Agent);
+    assert_eq!(appended[2].0, InlineMessageKind::User);
+    assert_eq!(appended[3].0, InlineMessageKind::Agent);
+    assert_eq!(
+        appended[0].1.first().map(|segment| segment.text.as_str()),
+        Some("Can you help me refactor this Rust code?")
+    );
+    assert!(
+        appended[3]
+            .1
+            .first()
+            .is_some_and(|segment| segment.text.contains("numbers.iter().sum()"))
+    );
 }
 
 /// Test TUI with various header contexts that represent different states
