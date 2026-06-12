@@ -197,6 +197,16 @@ impl SessionToolCatalogState {
         request_user_input_enabled: bool,
     ) -> SessionToolCatalogSnapshot {
         let defs = sort_snapshot_definitions(defs);
+        let requested_active_tool_names: BTreeSet<String> = active_tool_names.into_iter().collect();
+        let active_tool_names = defs
+            .iter()
+            .filter_map(|def| {
+                let name = def.function_name();
+                requested_active_tool_names
+                    .contains(name)
+                    .then(|| name.to_string())
+            })
+            .collect();
         let active_tool_names = Arc::new(active_tool_names);
         SessionToolCatalogSnapshot::with_active_tool_names(
             self.current_version(),
@@ -319,7 +329,7 @@ mod tests {
     }
 
     #[test]
-    fn snapshot_for_stable_defs_preserves_full_order_with_active_subset() {
+    fn snapshot_for_stable_defs_preserves_full_order_with_normalized_active_subset() {
         let state = SessionToolCatalogState::new();
         let snapshot = state.snapshot_for_stable_defs_with_active_names(
             vec![
@@ -327,7 +337,12 @@ mod tests {
                 function_tool(tools::UNIFIED_EXEC),
                 function_tool("a_tool"),
             ],
-            vec!["a_tool".to_string()],
+            vec![
+                "phantom_tool".to_string(),
+                "z_tool".to_string(),
+                "a_tool".to_string(),
+                "a_tool".to_string(),
+            ],
             false,
             false,
         );
@@ -343,9 +358,9 @@ mod tests {
         assert_eq!(names, vec![tools::UNIFIED_EXEC, "a_tool", "z_tool"]);
         assert_eq!(
             snapshot.active_tool_names.as_ref(),
-            &vec!["a_tool".to_string()]
+            &vec!["a_tool".to_string(), "z_tool".to_string()]
         );
         assert_eq!(snapshot.catalog_tools(), 3);
-        assert_eq!(snapshot.available_tools(), 1);
+        assert_eq!(snapshot.available_tools(), 2);
     }
 }
