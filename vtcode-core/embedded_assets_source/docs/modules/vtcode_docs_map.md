@@ -564,11 +564,6 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: Overview, Architecture, Usage, JSON-RPC API Reference, Error Handling
   - **User Questions**: "What can you tell me about Agent2Agent (A2A) Protocol Support?", "How does Overview work?", "How does Architecture work?"
 
-- **File**: `docs/project/allocation-optimization-plan.md`
-  - **Content**: Allocation Optimization Plan
-  - **Topics**: Change 1: Eliminate Double Message Clone Per Turn, Change 2: Pass `Value` Through Tool Result Pipeline, Change 3: Remove Redundant Clones in Parallel Tool Batch, Change 4: Make `normalize_tool_args` Mutate In-Place, Implementation Order
-  - **User Questions**: "What can you tell me about Allocation Optimization Plan?", "How does Change 1: Eliminate Double Message Clone Per Turn work?", "How does Change 2: Pass `Value` Through Tool Result Pipeline work?"
-
 - **File**: `docs/styling/anstyle-crates-research.md`
   - **Content**: Anstyle Git/LS Crates Research & Vtcode Styling Improvements
   - **Topics**: Overview, Crate Analysis, Current Vtcode Styling Architecture, Recommended Improvements, Implementation Priority
@@ -757,11 +752,6 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Content**: VT Code Integration of Ratatui FAQ Best Practices
   - **Topics**: Overview, FAQ Topics Applied, New Documentation, Code Comments, Testing Improvements
   - **User Questions**: "What can you tell me about VT Code Integration of Ratatui FAQ Best Practices?", "How does Overview work?", "How does FAQ Topics Applied work?"
-
-- **File**: `docs/project/project_analysis.md`
-  - **Content**: VT Code Project Analysis
-  - **Topics**: Executive Summary, Architecture Overview, Codebase Health Snapshot, Maintainability Hotspots, Targeted Improvements
-  - **User Questions**: "What can you tell me about VT Code Project Analysis?", "How does Executive Summary work?", "How does Architecture Overview work?"
 
 - **File**: `docs/project/vtcode-project-info.md`
   - **Content**: VT Code Project Info

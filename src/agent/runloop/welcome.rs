@@ -24,6 +24,7 @@ pub(crate) struct SessionBootstrap {
     pub search_tools_notice: Option<crate::startup::SearchToolsBundleNotice>,
     pub header_highlights: Vec<InlineHeaderHighlight>,
     pub acp_workspace_trust: Option<AgentClientProtocolZedWorkspaceTrustMode>,
+    pub release_highlights: Option<(semver::Version, Vec<String>)>,
 }
 
 pub(crate) async fn prepare_session_bootstrap(
@@ -108,6 +109,7 @@ pub(crate) async fn prepare_session_bootstrap(
         // ACP-specific workspace trust must not leak into the runtime header or
         // tool prompt policy.
         acp_workspace_trust: None,
+        release_highlights: None,
     }
 }
 

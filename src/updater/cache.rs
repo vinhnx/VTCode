@@ -10,6 +10,7 @@ pub(super) struct UpdateCacheSnapshot {
     pub(super) last_checked: Option<SystemTime>,
     pub(super) latest_version: Option<Version>,
     pub(super) latest_was_newer: bool,
+    pub(super) last_seen_version: Option<Version>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -19,6 +20,8 @@ struct UpdateCachePayload {
     latest_version: Option<String>,
     #[serde(default)]
     latest_was_newer: bool,
+    #[serde(default)]
+    last_seen_version: Option<String>,
 }
 
 pub(super) fn read_snapshot() -> Result<UpdateCacheSnapshot> {
@@ -40,6 +43,7 @@ pub(super) fn read_snapshot() -> Result<UpdateCacheSnapshot> {
             last_checked: modified,
             latest_version: None,
             latest_was_newer: false,
+            last_seen_version: None,
         });
     };
 
@@ -49,6 +53,7 @@ pub(super) fn read_snapshot() -> Result<UpdateCacheSnapshot> {
             last_checked: modified,
             latest_version: None,
             latest_was_newer: false,
+            last_seen_version: None,
         });
     }
 
@@ -57,6 +62,7 @@ pub(super) fn read_snapshot() -> Result<UpdateCacheSnapshot> {
             last_checked: modified,
             latest_version: None,
             latest_was_newer: false,
+            last_seen_version: None,
         });
     };
 
@@ -70,6 +76,10 @@ pub(super) fn read_snapshot() -> Result<UpdateCacheSnapshot> {
             .as_deref()
             .and_then(|value| Version::parse(value).ok()),
         latest_was_newer: payload.latest_was_newer,
+        last_seen_version: payload
+            .last_seen_version
+            .as_deref()
+            .and_then(|value| Version::parse(value).ok()),
     })
 }
 
@@ -77,16 +87,24 @@ pub(super) fn record_successful_check(
     latest_version: Option<&Version>,
     latest_was_newer: bool,
 ) -> Result<()> {
+    let existing = read_snapshot().unwrap_or_default();
     write_snapshot(UpdateCacheSnapshot {
         last_checked: Some(SystemTime::now()),
         latest_version: latest_version.cloned(),
         latest_was_newer,
+        last_seen_version: existing.last_seen_version,
     })
 }
 
 pub(super) fn record_failed_check() -> Result<()> {
     let mut snapshot = read_snapshot()?;
     snapshot.last_checked = Some(SystemTime::now());
+    write_snapshot(snapshot)
+}
+
+pub(super) fn record_seen_version(version: &Version) -> Result<()> {
+    let mut snapshot = read_snapshot()?;
+    snapshot.last_seen_version = Some(version.clone());
     write_snapshot(snapshot)
 }
 
@@ -100,6 +118,9 @@ fn write_snapshot(snapshot: UpdateCacheSnapshot) -> Result<()> {
         last_checked_unix_secs,
         latest_version: snapshot.latest_version.map(|version| version.to_string()),
         latest_was_newer: snapshot.latest_was_newer,
+        last_seen_version: snapshot
+            .last_seen_version
+            .map(|version| version.to_string()),
     };
     let serialized =
         serde_json::to_string(&payload).context("Failed to serialize update cache payload")?;

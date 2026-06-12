@@ -47,7 +47,7 @@ pub(super) use agents::{handle_manage_agents, handle_manage_subprocesses};
 pub(crate) use apps::run_with_event_loop_suspended;
 pub(super) use apps::{
     handle_launch_editor, handle_launch_git, handle_new_session, handle_open_docs,
-    handle_open_donate_links,
+    handle_open_donate_links, handle_release_notes,
 };
 pub(super) use compact::handle_compact_conversation;
 pub(super) use control::{

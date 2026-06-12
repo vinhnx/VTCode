@@ -2,6 +2,7 @@ mod cache;
 mod github;
 mod install_source;
 mod interactive;
+mod release_notes;
 mod types;
 
 use anyhow::{Context, Result, bail};
@@ -11,9 +12,10 @@ use vtcode_config::update::UpdateConfig;
 
 pub(crate) use install_source::InstallSource;
 pub(crate) use interactive::{
-    InlineUpdateOutcome, append_notice_highlight, display_update_notice, execute_inline_update,
-    run_inline_update_prompt,
+    InlineUpdateOutcome, append_notice_highlight, display_release_notes, display_update_notice,
+    execute_inline_update, run_inline_update_prompt,
 };
+pub(crate) use release_notes::parse_highlights as parse_release_highlights;
 pub(crate) use types::{
     InstallOutcome, StartupUpdateCheck, StartupUpdateNotice, UpdateExecutionStrategy,
     UpdateGuidance, UpdateInfo, VersionInfo,
@@ -268,6 +270,36 @@ impl Updater {
             latest_version,
             guidance: self.update_guidance(),
         }
+    }
+
+    /// Fetch the latest release info from GitHub for the current release channel.
+    pub(crate) async fn fetch_current_release_info(&self) -> Result<UpdateInfo> {
+        github::fetch_latest_release_info(self.config.download_timeout_secs).await
+    }
+}
+
+/// Check whether release notes should be shown for the current version.
+///
+/// Returns `true` if the current version has not been recorded as "seen" in the
+/// update cache.
+pub(crate) fn should_show_release_notes_for_current_version() -> bool {
+    let current = match Version::parse(env!("CARGO_PKG_VERSION")) {
+        Ok(v) => v,
+        Err(_) => return false,
+    };
+    match cache::read_snapshot() {
+        Ok(snapshot) => snapshot.last_seen_version.as_ref() != Some(&current),
+        Err(err) => {
+            debug!("Failed to read update cache for release notes check: {err}");
+            false
+        }
+    }
+}
+
+/// Record that the current version's release notes have been shown.
+pub(crate) fn record_current_version_seen() {
+    if let Ok(current) = Version::parse(env!("CARGO_PKG_VERSION")) {
+        let _ = cache::record_seen_version(&current);
     }
 }
 
