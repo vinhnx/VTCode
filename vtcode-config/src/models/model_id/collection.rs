@@ -49,6 +49,7 @@ impl ModelId {
             ModelId::MiMoV25Pro,
             ModelId::MiMoV25,
             // Moonshot models
+            ModelId::MoonshotKimiK27Code,
             ModelId::MoonshotKimiK26,
             // OpenCode Zen models
             ModelId::OpenCodeZenGPT54,
@@ -130,6 +131,7 @@ impl ModelId {
             ModelId::OpenRouterMinimaxM25,
             ModelId::OpenRouterQwen3CoderNext,
             ModelId::OpenRouterMoonshotaiKimiK26,
+            ModelId::OpenRouterMoonshotaiKimiK27Code,
             ModelId::OpenRouterZaiGlm51,
             // Poolside models
             ModelId::PoolsideLagunaM1,

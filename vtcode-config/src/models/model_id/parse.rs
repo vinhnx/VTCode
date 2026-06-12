@@ -102,6 +102,7 @@ impl FromStr for ModelId {
             s if s == models::zai::GLM_5 || s == models::zai::GLM_5_LEGACY => Ok(ModelId::ZaiGlm5),
             s if s == models::zai::GLM_5_1 => Ok(ModelId::ZaiGlm51),
             // Moonshot models
+            s if s == models::moonshot::KIMI_K2_7_CODE => Ok(ModelId::MoonshotKimiK27Code),
             s if s == models::moonshot::KIMI_K2_6 => Ok(ModelId::MoonshotKimiK26),
             s if s == models::ollama::GPT_OSS_20B => Ok(ModelId::OllamaGptOss20b),
             s if s == models::ollama::GPT_OSS_20B_CLOUD => Ok(ModelId::OllamaGptOss20bCloud),
@@ -208,6 +209,7 @@ impl FromStr for ModelId {
             "minimax/minimax-m2.5" => Ok(ModelId::OpenRouterMinimaxM25),
             "qwen/qwen3-coder-next" => Ok(ModelId::OpenRouterQwen3CoderNext),
             "moonshotai/kimi-k2.6" => Ok(ModelId::OpenRouterMoonshotaiKimiK26),
+            "moonshotai/kimi-k2.7-code" => Ok(ModelId::OpenRouterMoonshotaiKimiK27Code),
             "z-ai/glm-5.1" => Ok(ModelId::OpenRouterZaiGlm51),
             _ => {
                 if let Some(model) = Self::parse_openrouter_model(s) {

@@ -73,10 +73,3 @@ similar to subagents system design and UI design
 implement control+r to search all prompts with actual logic, reference.
 
 /Users/vinhnguyenxuan/Documents/vtcode-resources/idea/search_prompts.png
-
----
-
-implement double escape to rewind, reference.
-
-1. show rewind history, reference. '/Users/vinhnguyenxuan/Documents/vtcode-resources/idea/Screenshot 2026-06-07 at 9.15.02 AM.png'
-2. when user select a history. show 4 options. implement actual logic you see from the screenshot. reference. ''/Users/vinhnguyenxuan/Documents/vtcode-resources/idea/Screenshot 2026-06-07 at 9.15.35 AM.png'

@@ -186,8 +186,11 @@ impl ModelId {
             ModelId::PoolsideLagunaXs2 => {
                 "Poolside's efficient MoE coding agent model with 128K context, optimized for fast agentic coding with lower resource requirements"
             }
+            ModelId::MoonshotKimiK27Code => {
+                "Kimi K2.7 Code - Moonshot.ai's most capable coding model with long-horizon coding breakthrough, 256K context, and strong reasoning"
+            }
             ModelId::MoonshotKimiK26 => {
-                "Kimi K2.6 - Moonshot.ai's latest 1T MoE flagship with 32B active parameters, MLA attention, and MoonViT vision"
+                "Kimi K2.6 - Moonshot.ai's 1T MoE flagship with 32B active parameters, MLA attention, and MoonViT vision"
             }
             ModelId::OpenCodeZenGPT54 => {
                 "OpenCode Zen flagship GPT-5.4 route using OpenCode's curated pay-as-you-go gateway"
@@ -313,6 +316,9 @@ impl ModelId {
             }
             ModelId::OpenRouterMoonshotaiKimiK26 => {
                 "Kimi K2.6 multimodal agentic model for long-horizon coding and design via OpenRouter"
+            }
+            ModelId::OpenRouterMoonshotaiKimiK27Code => {
+                "Kimi K2.7 Code most capable coding model with long-horizon coding breakthrough via OpenRouter"
             }
             ModelId::OpenRouterZaiGlm51 => "Z.AI GLM-5.1 next-gen foundation model via OpenRouter",
             ModelId::OpenRouterOpenAIGpt55 => "OpenAI GPT-5.5 model accessed through OpenRouter",

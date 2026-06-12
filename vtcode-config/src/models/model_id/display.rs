@@ -110,6 +110,7 @@ impl ModelId {
             ModelId::OpenRouterMinimaxM25 => "MiniMax-M2.5 (OpenRouter)",
             ModelId::OpenRouterQwen3CoderNext => "Qwen3-Coder-Next (OpenRouter)",
             ModelId::OpenRouterMoonshotaiKimiK26 => "Kimi K2.6 (OpenRouter)",
+            ModelId::OpenRouterMoonshotaiKimiK27Code => "Kimi K2.7 Code (OpenRouter)",
             ModelId::OpenRouterZaiGlm51 => "GLM-5.1 (OpenRouter)",
             ModelId::OpenRouterOpenAIGpt55 => "OpenAI GPT-5.5 (OpenRouter)",
             // MiniMax models
@@ -120,6 +121,7 @@ impl ModelId {
             ModelId::PoolsideLagunaM1 => "Laguna M.1",
             ModelId::PoolsideLagunaXs2 => "Laguna XS.2",
             // Moonshot models
+            ModelId::MoonshotKimiK27Code => "Kimi K2.7 Code (Moonshot)",
             ModelId::MoonshotKimiK26 => "Kimi K2.6 (Moonshot)",
             // OpenCode Zen models
             ModelId::OpenCodeZenGPT54 => "GPT-5.4 (OpenCode Zen)",

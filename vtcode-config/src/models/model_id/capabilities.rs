@@ -323,6 +323,8 @@ impl ModelId {
                 | ModelId::HuggingFaceDeepseekV4ProNovita
                 | ModelId::HuggingFaceNvidiaNemotron3Ultra550bA55bNvfp4Together
                 | ModelId::OpenRouterMoonshotaiKimiK26
+                | ModelId::OpenRouterMoonshotaiKimiK27Code
+                | ModelId::MoonshotKimiK27Code
                 | ModelId::PoolsideLagunaM1
         )
     }
@@ -385,6 +387,8 @@ impl ModelId {
                 | ModelId::HuggingFaceDeepseekV4ProNovita
                 | ModelId::HuggingFaceNvidiaNemotron3Ultra550bA55bNvfp4Together
                 | ModelId::OpenRouterMoonshotaiKimiK26
+                | ModelId::OpenRouterMoonshotaiKimiK27Code
+                | ModelId::MoonshotKimiK27Code
                 | ModelId::PoolsideLagunaM1
         )
     }
@@ -474,6 +478,7 @@ impl ModelId {
             ModelId::MinimaxM27 => "M2.7",
             ModelId::MinimaxM25 => "M2.5",
             // Moonshot models
+            ModelId::MoonshotKimiK27Code => "k2.7",
             ModelId::MoonshotKimiK26 => "k2.6",
             // Hugging Face generations
             ModelId::HuggingFaceOpenAIGptOss20b => "oss",

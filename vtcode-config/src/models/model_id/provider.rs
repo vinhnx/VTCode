@@ -64,7 +64,7 @@ impl ModelId {
             | ModelId::EvolinkClaudeOpus48
             | ModelId::EvolinkClaudeHaiku45 => Provider::Evolink,
             ModelId::ZaiGlm5 | ModelId::ZaiGlm51 => Provider::ZAI,
-            ModelId::MoonshotKimiK26 => Provider::Moonshot,
+            ModelId::MoonshotKimiK27Code | ModelId::MoonshotKimiK26 => Provider::Moonshot,
             ModelId::OpenCodeZenGPT54
             | ModelId::OpenCodeZenGPT54Mini
             | ModelId::OpenCodeZenClaudeSonnet46
@@ -142,6 +142,7 @@ impl ModelId {
             | ModelId::OpenRouterZaiGlm5
             | ModelId::OpenRouterZaiGlm51
             | ModelId::OpenRouterMoonshotaiKimiK26
+            | ModelId::OpenRouterMoonshotaiKimiK27Code
             | ModelId::OpenRouterQwenQwen37Max
             | ModelId::OpenRouterTencentHy3Preview
             | ModelId::OpenRouterXAiGrokBuild01

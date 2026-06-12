@@ -958,6 +958,39 @@
         "doc_comment": "Kimi K2.6 - Moonshot AI's next-generation multimodal model for long-horizon coding and design via OpenRouter"
       }
     },
+    "moonshotai/kimi-k2.7-code": {
+      "id": "moonshotai/kimi-k2.7-code",
+      "name": "MoonshotAI: Kimi K2.7 Code",
+      "description": "Kimi K2.7 Code is Moonshot AI's most capable coding model, with a breakthrough in long-horizon coding tasks across Rust, Go, Python and more. Supports 256K context, multi-step tool invocation, and strong reasoning capabilities.",
+      "reasoning": true,
+      "tool_call": true,
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "context": 262144,
+      "max_output_tokens": 32768,
+      "cost": {
+        "input": 9.5e-07,
+        "output": 4e-06
+      },
+      "vtcode": {
+        "variant": "OpenRouterMoonshotaiKimiK27Code",
+        "constant": "MOONSHOTAI_KIMI_K2_7_CODE",
+        "vendor": "moonshotai",
+        "display": "Kimi K2.7 Code",
+        "description": "Kimi K2.7 Code most capable coding model with long-horizon coding breakthrough via OpenRouter",
+        "efficient": false,
+        "top_tier": true,
+        "generation": "K2.7",
+        "doc_comment": "Kimi K2.7 Code - Moonshot AI's most capable coding model with long-horizon coding breakthrough via OpenRouter"
+      }
+    },
     "xiaomi/mimo-v2.5-pro": {
       "id": "xiaomi/mimo-v2.5-pro",
       "name": "Xiaomi: MiMo-V2.5-Pro",

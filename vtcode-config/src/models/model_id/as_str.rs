@@ -137,10 +137,13 @@ impl ModelId {
             // Poolside models
             ModelId::PoolsideLagunaM1 => models::poolside::LAGUNA_M1,
             ModelId::PoolsideLagunaXs2 => models::poolside::LAGUNA_XS2,
+            // Moonshot models
+            ModelId::MoonshotKimiK27Code => models::moonshot::KIMI_K2_7_CODE,
             // OpenRouter models
             ModelId::OpenRouterMinimaxM25 => "minimax/minimax-m2.5",
             ModelId::OpenRouterQwen3CoderNext => "qwen/qwen3-coder-next",
             ModelId::OpenRouterMoonshotaiKimiK26 => "moonshotai/kimi-k2.6",
+            ModelId::OpenRouterMoonshotaiKimiK27Code => "moonshotai/kimi-k2.7-code",
             ModelId::OpenRouterZaiGlm51 => "z-ai/glm-5.1",
             model => {
                 model

@@ -152,7 +152,9 @@ pub enum ModelId {
     MiMoV25,
 
     // Moonshot models
-    /// Kimi K2.6 - Moonshot.ai's latest 1T MoE flagship (32B active, MLA, MoonViT vision)
+    /// Kimi K2.7 Code - Moonshot.ai's most capable coding model with long-horizon coding breakthrough
+    MoonshotKimiK27Code,
+    /// Kimi K2.6 - Moonshot.ai's 1T MoE flagship (32B active, MLA, MoonViT vision)
     MoonshotKimiK26,
 
     // OpenCode Zen models
@@ -324,6 +326,8 @@ pub enum ModelId {
     OpenRouterMinimaxM25,
     /// Kimi K2.6 - Moonshot AI's next-generation multimodal model via OpenRouter
     OpenRouterMoonshotaiKimiK26,
+    /// Kimi K2.7 Code - Moonshot AI's most capable coding model via OpenRouter
+    OpenRouterMoonshotaiKimiK27Code,
     /// Qwen3.7 Max - Alibaba's flagship Qwen3.7 model for coding and agentic workloads via OpenRouter
     OpenRouterQwenQwen37Max,
     /// Hy3 Preview - Tencent's high-efficiency MoE model for agentic workflows via OpenRouter
