@@ -261,6 +261,10 @@ pub fn should_use_spool_reference_only(tool_name: Option<&str>, output: &Value) 
         return true;
     }
 
+    if looks_like_unified_search_output(obj) {
+        return true;
+    }
+
     if obj
         .get("content_type")
         .and_then(Value::as_str)
@@ -279,6 +283,18 @@ pub fn should_use_spool_reference_only(tool_name: Option<&str>, output: &Value) 
     ]
     .iter()
     .any(|key| obj.contains_key(*key))
+}
+
+fn looks_like_unified_search_output(obj: &serde_json::Map<String, Value>) -> bool {
+    ["matches", "results", "files", "entries"]
+        .iter()
+        .any(|key| obj.contains_key(*key))
+        || obj
+            .get("tool")
+            .or_else(|| obj.get("tool_name"))
+            .or_else(|| obj.get("name"))
+            .and_then(Value::as_str)
+            .is_some_and(|name| canonical_tool_name(name) == tools::UNIFIED_SEARCH)
 }
 
 pub fn is_command_run_tool_call(tool_name: &str, args: &Value) -> bool {
@@ -1292,6 +1308,17 @@ mod tests {
     fn spool_reference_only_detects_unified_search_payloads() {
         assert!(should_use_spool_reference_only(
             Some(tools::UNIFIED_SEARCH),
+            &json!({
+                "spool_path": ".vtcode/context/tool_outputs/unified_search_1.txt",
+                "matches": []
+            })
+        ));
+    }
+
+    #[test]
+    fn spool_reference_only_detects_unified_search_payload_without_tool_name() {
+        assert!(should_use_spool_reference_only(
+            None,
             &json!({
                 "spool_path": ".vtcode/context/tool_outputs/unified_search_1.txt",
                 "matches": []
