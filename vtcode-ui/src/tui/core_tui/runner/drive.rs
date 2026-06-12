@@ -162,9 +162,9 @@ fn handle_inline_command<S: TuiSessionDriver>(
         return Ok(EventStreamAction::Start);
     }
     if command.is_force_redraw() {
-        terminal
-            .clear()
-            .map_err(|e| anyhow::anyhow!("failed to clear terminal for redraw: {}", e))?;
+        if let Err(err) = terminal.clear() {
+            tracing::warn!(%err, "ForceRedraw: terminal clear failed, continuing");
+        }
         session.handle_command(command);
         return Ok(EventStreamAction::None);
     }
