@@ -67,9 +67,3 @@ similar to subagents system design and UI design
 
   ← to go back · Esc/Enter/Space to close · x to stop
 ```
-
----
-
-implement control+r to search all prompts with actual logic, reference.
-
-/Users/vinhnguyenxuan/Documents/vtcode-resources/idea/search_prompts.png

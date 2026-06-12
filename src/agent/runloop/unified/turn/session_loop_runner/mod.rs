@@ -1316,10 +1316,6 @@ pub(super) async fn run_single_agent_loop_unified_impl(
 /// Load user prompts from recent session archives (last 24 hours) and inject
 /// them into the history picker so Ctrl+R can search across sessions.
 async fn load_archived_prompts_for_history(handle: &vtcode_ui::tui::app::InlineHandle) {
-    use chrono::{Duration, Utc};
-
-    let cutoff = Utc::now() - Duration::hours(24);
-
     let listings = match session_archive::list_recent_sessions(50).await {
         Ok(listings) => listings,
         Err(_) => return,
@@ -1327,11 +1323,6 @@ async fn load_archived_prompts_for_history(handle: &vtcode_ui::tui::app::InlineH
 
     let mut entries = Vec::new();
     for listing in &listings {
-        // Skip sessions older than 24 hours
-        if listing.snapshot.started_at < cutoff {
-            continue;
-        }
-
         let session_label = listing.identifier();
         for msg in &listing.snapshot.messages {
             if msg.role != MessageRole::User {
@@ -1360,6 +1351,8 @@ async fn load_archived_prompts_for_history(handle: &vtcode_ui::tui::app::InlineH
             });
         }
     }
+
+    entries.truncate(20);
 
     if !entries.is_empty() {
         handle.set_archived_history(entries);
