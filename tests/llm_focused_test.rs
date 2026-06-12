@@ -52,7 +52,7 @@ fn test_provider_auto_detection() {
         Some("gemini".to_string())
     );
     assert_eq!(
-        factory.provider_from_model(models::OPENROUTER_QWEN3_CODER),
+        factory.provider_from_model(models::openrouter::DEEPSEEK_V4_PRO),
         Some("openrouter".to_string())
     );
     assert_eq!(
@@ -85,7 +85,7 @@ fn test_unified_client_creation() {
     anthropic.unwrap();
 
     let openrouter = create_provider_for_model(
-        models::OPENROUTER_QWEN3_CODER,
+        models::openrouter::DEEPSEEK_V4_PRO,
         "test_key".to_string(),
         None,
         None,

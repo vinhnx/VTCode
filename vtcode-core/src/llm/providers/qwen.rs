@@ -285,9 +285,6 @@ impl LLMProvider for QwenProvider {
             .as_ref()
             .and_then(|b| b.model_supports_reasoning)
             .unwrap_or(false)
-            || requested == models::qwen::QWEN3_7_MAX
-            || requested == models::qwen::QWEN3_6_FLASH
-            || requested == models::qwen::QWEN3_6_PLUS
             || requested == models::qwen::DEEPSEEK_V4_FLASH
             || requested == models::qwen::DEEPSEEK_V4_PRO
             || requested == models::qwen::GLM_5_1
@@ -307,10 +304,9 @@ impl LLMProvider for QwenProvider {
             model
         };
         match requested {
-            models::qwen::QWEN3_6_FLASH
-            | models::qwen::DEEPSEEK_V4_FLASH
+            models::qwen::DEEPSEEK_V4_FLASH
             | models::qwen::DEEPSEEK_V4_PRO => 1_048_576,
-            models::qwen::QWEN3_7_MAX | models::qwen::QWEN3_6_PLUS | models::qwen::GLM_5_1 => {
+            models::qwen::GLM_5_1 => {
                 131_072
             }
             _ => 131_072,

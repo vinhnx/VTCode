@@ -82,7 +82,7 @@ fn test_provider_auto_detection() {
 
     // Test OpenRouter models
     assert_eq!(
-        factory.provider_from_model(models::OPENROUTER_QWEN3_CODER),
+        factory.provider_from_model(models::openrouter::DEEPSEEK_V4_PRO),
         Some("openrouter".to_string())
     );
     assert_eq!(
@@ -144,7 +144,7 @@ fn test_provider_creation() {
     anthropic.unwrap();
 
     let openrouter = create_provider_for_model(
-        models::OPENROUTER_QWEN3_CODER,
+        models::openrouter::DEEPSEEK_V4_PRO,
         "test_key".to_string(),
         None,
         None,
@@ -197,7 +197,7 @@ fn test_unified_client_creation() {
     }
 
     let openrouter_client = create_provider_for_model(
-        models::OPENROUTER_QWEN3_CODER,
+        models::openrouter::DEEPSEEK_V4_PRO,
         "test_key".to_string(),
         None,
         None,
@@ -288,7 +288,7 @@ fn test_provider_supported_models() {
 
     let openrouter = OpenRouterProvider::new("test_key".to_string());
     let openrouter_models = openrouter.supported_models();
-    assert!(openrouter_models.contains(&models::OPENROUTER_QWEN3_CODER.to_string()));
+    assert!(openrouter_models.contains(&models::openrouter::DEEPSEEK_V4_PRO.to_string()));
     assert!(openrouter_models.contains(&"anthropic/claude-sonnet-4.6".to_string()));
     assert!(openrouter_models.len() >= 2);
 

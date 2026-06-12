@@ -31,24 +31,16 @@ fn test_model_string_conversion() {
         models::deepseek::DEEPSEEK_V4_FLASH
     );
     // Hugging Face models
-    assert_eq!(
-        ModelId::HuggingFaceGlm5Novita.as_str(),
-        models::huggingface::ZAI_GLM_5_NOVITA
-    );
-    assert_eq!(
-        ModelId::HuggingFaceQwen3CoderNextNovita.as_str(),
-        models::huggingface::QWEN3_CODER_NEXT_NOVITA
-    );
     // Z.AI models
-    assert_eq!(ModelId::ZaiGlm5.as_str(), models::zai::GLM_5);
+    assert_eq!(ModelId::ZaiGlm51.as_str(), models::zai::GLM_5_1);
     // OpenCode models
     assert_eq!(
         ModelId::OpenCodeZenGPT54.as_str(),
         models::opencode_zen::GPT_5_4
     );
     assert_eq!(
-        ModelId::OpenCodeGoMinimaxM25.as_str(),
-        models::opencode_go::MINIMAX_M2_5
+        ModelId::OpenCodeGoMinimaxM27.as_str(),
+        models::opencode_go::MINIMAX_M2_7
     );
 }
 
@@ -117,35 +109,18 @@ fn test_model_from_string() {
             .unwrap(),
         ModelId::DeepSeekV4Flash
     );
-    // Hugging Face models
-    assert_eq!(
-        models::huggingface::ZAI_GLM_5_NOVITA
-            .parse::<ModelId>()
-            .unwrap(),
-        ModelId::HuggingFaceGlm5Novita
-    );
-    assert_eq!(
-        models::huggingface::QWEN3_CODER_NEXT_NOVITA
-            .parse::<ModelId>()
-            .unwrap(),
-        ModelId::HuggingFaceQwen3CoderNextNovita
-    );
     // Z.AI models
     assert_eq!(
-        models::zai::GLM_5.parse::<ModelId>().unwrap(),
-        ModelId::ZaiGlm5
-    );
-    assert_eq!(
-        models::zai::GLM_5_LEGACY.parse::<ModelId>().unwrap(),
-        ModelId::ZaiGlm5
+        models::zai::GLM_5_1.parse::<ModelId>().unwrap(),
+        ModelId::ZaiGlm51
     );
     assert_eq!(
         "opencode/gpt-5.4".parse::<ModelId>().unwrap(),
         ModelId::OpenCodeZenGPT54
     );
     assert_eq!(
-        "opencode-go/minimax-m2.5".parse::<ModelId>().unwrap(),
-        ModelId::OpenCodeGoMinimaxM25
+        "opencode-go/minimax-m2.7".parse::<ModelId>().unwrap(),
+        ModelId::OpenCodeGoMinimaxM27
     );
     // Invalid model
     "invalid-model".parse::<ModelId>().unwrap_err();
@@ -187,15 +162,14 @@ fn test_model_providers() {
     assert_eq!(ModelId::ClaudeSonnet46.provider(), Provider::Anthropic);
     assert_eq!(ModelId::ClaudeHaiku45.provider(), Provider::Anthropic);
     assert_eq!(ModelId::DeepSeekV4Pro.provider(), Provider::DeepSeek);
-    assert_eq!(ModelId::ZaiGlm5.provider(), Provider::ZAI);
+    assert_eq!(ModelId::ZaiGlm51.provider(), Provider::ZAI);
     assert_eq!(ModelId::OpenCodeZenGPT54.provider(), Provider::OpenCodeZen);
     assert_eq!(
-        ModelId::OpenCodeGoMinimaxM25.provider(),
+        ModelId::OpenCodeGoMinimaxM27.provider(),
         Provider::OpenCodeGo
     );
     assert_eq!(ModelId::OllamaGptOss20b.provider(), Provider::Ollama);
     assert_eq!(ModelId::OllamaGptOss120bCloud.provider(), Provider::Ollama);
-    assert_eq!(ModelId::OllamaQwen317b.provider(), Provider::Ollama);
 }
 
 #[test]
@@ -222,7 +196,7 @@ fn test_provider_defaults() {
     );
     assert_eq!(
         ModelId::default_orchestrator_for_provider(Provider::ZAI),
-        ModelId::ZaiGlm5
+        ModelId::ZaiGlm51
     );
     assert_eq!(
         ModelId::default_orchestrator_for_provider(Provider::OpenCodeZen),
@@ -243,7 +217,7 @@ fn test_provider_defaults() {
     );
     assert_eq!(
         ModelId::default_single_for_provider(Provider::ZAI),
-        ModelId::ZaiGlm5
+        ModelId::ZaiGlm51
     );
     assert_eq!(
         ModelId::default_single_for_provider(Provider::OpenCodeZen),
@@ -281,7 +255,7 @@ fn test_model_variants() {
     assert!(ModelId::ClaudeOpus48.is_pro_variant());
     assert!(ModelId::ClaudeSonnet46.is_pro_variant());
     assert!(ModelId::DeepSeekV4Pro.is_pro_variant());
-    assert!(ModelId::ZaiGlm5.is_pro_variant());
+    assert!(ModelId::ZaiGlm51.is_pro_variant());
     assert!(!ModelId::Gemini35Flash.is_pro_variant());
 
     // Efficient variants
@@ -297,7 +271,7 @@ fn test_model_variants() {
     assert!(ModelId::ClaudeOpus48.is_top_tier());
     assert!(ModelId::ClaudeSonnet46.is_top_tier());
     assert!(ModelId::DeepSeekV4Pro.is_top_tier());
-    assert!(ModelId::ZaiGlm5.is_top_tier());
+    assert!(ModelId::ZaiGlm51.is_top_tier());
     assert!(ModelId::Gemini35Flash.is_top_tier());
     assert!(!ModelId::ClaudeHaiku45.is_top_tier());
 }
@@ -323,7 +297,7 @@ fn test_model_generation() {
     assert_eq!(ModelId::DeepSeekV4Flash.generation(), "4");
 
     // Z.AI generations
-    assert_eq!(ModelId::ZaiGlm5.generation(), "5");
+    assert_eq!(ModelId::ZaiGlm51.generation(), "5.1");
 }
 
 #[test]
@@ -348,13 +322,12 @@ fn test_models_for_provider() {
     assert!(deepseek_models.contains(&ModelId::DeepSeekV4Flash));
 
     let zai_models = ModelId::models_for_provider(Provider::ZAI);
-    assert!(zai_models.contains(&ModelId::ZaiGlm5));
+    assert!(zai_models.contains(&ModelId::ZaiGlm51));
 
     let ollama_models = ModelId::models_for_provider(Provider::Ollama);
     assert!(ollama_models.contains(&ModelId::OllamaGptOss20b));
     assert!(ollama_models.contains(&ModelId::OllamaGptOss20bCloud));
     assert!(ollama_models.contains(&ModelId::OllamaGptOss120bCloud));
-    assert!(ollama_models.contains(&ModelId::OllamaQwen317b));
 }
 
 #[test]
@@ -368,7 +341,7 @@ fn test_fallback_models() {
     assert!(fallbacks.contains(&ModelId::ClaudeOpus48));
     assert!(fallbacks.contains(&ModelId::ClaudeSonnet46));
     assert!(fallbacks.contains(&ModelId::DeepSeekV4Pro));
-    assert!(fallbacks.contains(&ModelId::ZaiGlm5));
+    assert!(fallbacks.contains(&ModelId::ZaiGlm51));
 }
 
 #[test]
@@ -385,13 +358,5 @@ fn test_moonshot_and_openrouter_minimax_variants() {
         models::moonshot::KIMI_K2_6.parse::<ModelId>().unwrap(),
         ModelId::MoonshotKimiK26
     );
-    assert_eq!(
-        "minimax/minimax-m2.5".parse::<ModelId>().unwrap(),
-        ModelId::OpenRouterMinimaxM25
-    );
     assert_eq!(ModelId::MoonshotKimiK26.provider(), Provider::Moonshot);
-    assert_eq!(
-        ModelId::OpenRouterMinimaxM25.provider(),
-        Provider::OpenRouter
-    );
 }

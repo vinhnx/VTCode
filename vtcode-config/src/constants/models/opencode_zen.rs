@@ -24,8 +24,6 @@ pub const CLAUDE_SONNET_4: &str = "claude-sonnet-4";
 pub const CLAUDE_HAIKU_4_5: &str = "claude-haiku-4-5";
 pub const CLAUDE_3_5_HAIKU: &str = "claude-3-5-haiku";
 
-pub const QWEN3_6_PLUS: &str = "qwen3.6-plus";
-pub const QWEN3_5_PLUS: &str = "qwen3.5-plus";
 pub const MINIMAX_M2_5: &str = "minimax-m2.5";
 pub const MINIMAX_M2_5_FREE: &str = "minimax-m2.5-free";
 pub const GLM_5_1: &str = "glm-5.1";
@@ -61,8 +59,6 @@ pub const ANTHROPIC_MODELS: &[&str] = &[
 ];
 
 pub const OPENAI_COMPATIBLE_MODELS: &[&str] = &[
-    QWEN3_6_PLUS,
-    QWEN3_5_PLUS,
     MINIMAX_M2_5,
     MINIMAX_M2_5_FREE,
     GLM_5_1,
@@ -97,8 +93,6 @@ pub const SUPPORTED_MODELS: &[&str] = &[
     CLAUDE_SONNET_4,
     CLAUDE_HAIKU_4_5,
     CLAUDE_3_5_HAIKU,
-    QWEN3_6_PLUS,
-    QWEN3_5_PLUS,
     MINIMAX_M2_5,
     MINIMAX_M2_5_FREE,
     GLM_5_1,

@@ -9,9 +9,7 @@ impl ModelId {
             return Provider::OpenRouter;
         }
         match self {
-            ModelId::Gemini31ProPreview
-            | ModelId::Gemini31ProPreviewCustomTools
-            | ModelId::Gemini31FlashLitePreview
+            ModelId::Gemini31ProPreview | ModelId::Gemini31ProPreviewCustomTools
             | ModelId::Gemini35Flash => Provider::Gemini,
             ModelId::GPT55
             | ModelId::GPT54
@@ -36,11 +34,7 @@ impl ModelId {
             ModelId::MiMoV25Pro | ModelId::MiMoV25 => Provider::MiMo,
             ModelId::HuggingFaceOpenAIGptOss20b
             | ModelId::HuggingFaceOpenAIGptOss120b
-            | ModelId::HuggingFaceMinimaxM25Novita
-            | ModelId::HuggingFaceGlm5Novita
             | ModelId::HuggingFaceGlm51ZaiOrg
-            | ModelId::HuggingFaceQwen3CoderNextNovita
-            | ModelId::HuggingFaceQwen35397BA17BTogether
             | ModelId::HuggingFaceKimiK26Novita
             | ModelId::HuggingFaceDeepseekV4FlashNovita
             | ModelId::HuggingFaceDeepseekV4ProTogether
@@ -48,10 +42,7 @@ impl ModelId {
             | ModelId::HuggingFaceGlm51Deepinfra
             | ModelId::HuggingFaceMinimaxM27Novita
             | ModelId::HuggingFaceMinimaxM3Novita
-            | ModelId::HuggingFaceDeepseekV4ProNovita
-            | ModelId::HuggingFaceNvidiaNemotron3Ultra550bA55bNvfp4Together => {
-                Provider::HuggingFace
-            }
+            | ModelId::HuggingFaceDeepseekV4ProNovita => Provider::HuggingFace,
             ModelId::StepFun37Flash => Provider::StepFun,
             ModelId::EvolinkGpt52
             | ModelId::EvolinkGpt55
@@ -64,66 +55,36 @@ impl ModelId {
             | ModelId::EvolinkClaudeSonnet46
             | ModelId::EvolinkClaudeOpus48
             | ModelId::EvolinkClaudeHaiku45 => Provider::Evolink,
-            ModelId::ZaiGlm5 | ModelId::ZaiGlm51 => Provider::ZAI,
+            ModelId::ZaiGlm51 => Provider::ZAI,
             ModelId::MoonshotKimiK27Code | ModelId::MoonshotKimiK26 => Provider::Moonshot,
             ModelId::OpenCodeZenGPT54
             | ModelId::OpenCodeZenGPT54Mini
             | ModelId::OpenCodeZenClaudeSonnet46
             | ModelId::OpenCodeZenGlm51 => Provider::OpenCodeZen,
             ModelId::OpenCodeGoGlm51
-            | ModelId::OpenCodeGoMinimaxM25
             | ModelId::OpenCodeGoMinimaxM27 => Provider::OpenCodeGo,
-            ModelId::Qwen37Max
-            | ModelId::Qwen36Flash
-            | ModelId::Qwen36Plus
-            | ModelId::QwenDeepSeekV4Flash
+            ModelId::QwenDeepSeekV4Flash
             | ModelId::QwenDeepSeekV4Pro
             | ModelId::QwenGlm51 => Provider::Qwen,
             ModelId::OllamaGptOss20b
             | ModelId::OllamaGptOss20bCloud
             | ModelId::OllamaGptOss120bCloud
-            | ModelId::OllamaQwen317b
-            | ModelId::OllamaQwen3CoderNext
             | ModelId::OllamaDeepseekV4FlashCloud
             | ModelId::OllamaDeepseekV4ProCloud
-            | ModelId::OllamaQwen3Next80bCloud
-            | ModelId::OllamaGemini3FlashPreviewCloud
-            | ModelId::OllamaMinimaxM2Cloud
+            | ModelId::OllamaGlm51Cloud
             | ModelId::OllamaMinimaxM27Cloud
             | ModelId::OllamaMinimaxM3Cloud
-            | ModelId::OllamaMinimaxM25Cloud
             | ModelId::OllamaNemotron3SuperCloud
-            | ModelId::OllamaNemotron3UltraCloud
             | ModelId::OllamaKimiK26Cloud
-            | ModelId::OllamaGlm5Cloud
-            | ModelId::OllamaGlm51Cloud
             | ModelId::OllamaGemma4
             | ModelId::OllamaLagunaXs2 => Provider::Ollama,
-            ModelId::LlamaCppQwen3627b
-            | ModelId::LlamaCppQwen3635bA3b
-            | ModelId::LlamaCppGemma426bA4b
+            ModelId::LlamaCppGemma426bA4b
             | ModelId::LlamaCppGemma4E4b
             | ModelId::LlamaCppGptOss20b
             | ModelId::LlamaCppStep35Flash => Provider::LlamaCpp,
-            ModelId::MinimaxM3 | ModelId::MinimaxM27 | ModelId::MinimaxM25 => Provider::Minimax,
-            ModelId::OpenRouterMinimaxM25 | ModelId::OpenRouterQwen3CoderNext => {
-                Provider::OpenRouter
-            }
+            ModelId::MinimaxM3 | ModelId::MinimaxM27 => Provider::Minimax,
             // OpenRouter models - explicitly handled even if openrouter_metadata() returns Some
-            ModelId::OpenRouterQwen332b
-            | ModelId::OpenRouterQwen330bA3b
-            | ModelId::OpenRouterQwen330bA3bInstruct2507
-            | ModelId::OpenRouterQwen330bA3bThinking2507
-            | ModelId::OpenRouterQwen314b
-            | ModelId::OpenRouterQwen38b
-            | ModelId::OpenRouterQwen3Next80bA3bInstruct
-            | ModelId::OpenRouterQwen3Next80bA3bThinking
-            | ModelId::OpenRouterQwen35Plus0215
-            | ModelId::OpenRouterQwen3Coder
-            | ModelId::OpenRouterQwen3CoderPlus
-            | ModelId::OpenRouterQwen3CoderFlash
-            | ModelId::OpenRouterQwen3Coder30bA3bInstruct
-            | ModelId::OpenRouterDeepSeekV4Pro
+            ModelId::OpenRouterDeepSeekV4Pro
             | ModelId::OpenRouterDeepSeekV4Flash
             | ModelId::OpenRouterDeepSeekR1
             | ModelId::OpenRouterOpenAIGptOss120b
@@ -139,12 +100,9 @@ impl ModelId {
             | ModelId::OpenRouterNexAgiDeepseekV31NexN1
             | ModelId::OpenRouterStepfunStep35FlashFree
             | ModelId::OpenRouterNvidiaNemotron3Super120bA12bFree
-            | ModelId::OpenRouterNvidiaNemotron3Ultra550bA55b
-            | ModelId::OpenRouterZaiGlm5
             | ModelId::OpenRouterZaiGlm51
             | ModelId::OpenRouterMoonshotaiKimiK26
             | ModelId::OpenRouterMoonshotaiKimiK27Code
-            | ModelId::OpenRouterQwenQwen37Max
             | ModelId::OpenRouterTencentHy3Preview
             | ModelId::OpenRouterXAiGrokBuild01
             | ModelId::OpenRouterXiaomiMimoV25

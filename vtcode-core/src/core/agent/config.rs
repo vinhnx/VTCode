@@ -169,7 +169,7 @@ mod tests {
         let mut config = VTCodeConfig::default();
         config.agent.provider = "zai".to_owned();
         config.agent.default_model =
-            crate::config::constants::models::ollama::MINIMAX_M25_CLOUD.to_owned();
+            crate::config::constants::models::ollama::MINIMAX_M27_CLOUD.to_owned();
 
         let args = Cli::parse_from(["vtcode"]);
         let selection = resolve_runtime_model_selection(&args, &config);
@@ -189,7 +189,7 @@ mod tests {
         let args = Cli::parse_from([
             "vtcode",
             "--model",
-            crate::config::constants::models::ollama::MINIMAX_M25_CLOUD,
+            crate::config::constants::models::ollama::MINIMAX_M27_CLOUD,
         ]);
         let selection = resolve_runtime_model_selection(&args, &config);
 
@@ -205,7 +205,7 @@ mod tests {
         let args = Cli::parse_from([
             "vtcode",
             "--model",
-            crate::config::constants::models::ollama::MINIMAX_M25_CLOUD,
+            crate::config::constants::models::ollama::MINIMAX_M27_CLOUD,
             "--provider",
             "minimax",
         ]);

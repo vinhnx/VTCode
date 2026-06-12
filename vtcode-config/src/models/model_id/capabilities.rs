@@ -143,7 +143,7 @@ impl ModelId {
     pub fn preferred_lightweight_variant(&self) -> Option<Self> {
         match self {
             ModelId::Gemini31ProPreview | ModelId::Gemini31ProPreviewCustomTools => {
-                Some(ModelId::Gemini31FlashLitePreview)
+                Some(ModelId::Gemini35Flash)
             }
             ModelId::GPT55 | ModelId::GPT54 | ModelId::GPT54Pro => Some(ModelId::GPT54Mini),
             ModelId::OpenCodeZenGPT54 => Some(ModelId::OpenCodeZenGPT54Mini),
@@ -163,9 +163,6 @@ impl ModelId {
                 Some(ModelId::HuggingFaceDeepseekV4FlashNovita)
             }
             ModelId::OllamaDeepseekV4ProCloud => Some(ModelId::OllamaDeepseekV4FlashCloud),
-            ModelId::ZaiGlm51 => Some(ModelId::ZaiGlm5),
-            ModelId::MinimaxM27 => Some(ModelId::MinimaxM25),
-            ModelId::OpenCodeGoMinimaxM27 => Some(ModelId::OpenCodeGoMinimaxM25),
             ModelId::StepFun37Flash => None,
             ModelId::EvolinkGpt52
             | ModelId::EvolinkGpt55
@@ -224,9 +221,9 @@ impl ModelId {
         }
 
         let direct = match self {
-            ModelId::Gemini31ProPreview
-            | ModelId::Gemini31ProPreviewCustomTools
-            | ModelId::Gemini31FlashLitePreview => Some(ModelId::Gemini35Flash),
+            ModelId::Gemini31ProPreview | ModelId::Gemini31ProPreviewCustomTools => {
+                Some(ModelId::Gemini35Flash)
+            }
             ModelId::GPT55
             | ModelId::GPT54
             | ModelId::GPT54Pro
@@ -243,11 +240,9 @@ impl ModelId {
                 Some(ModelId::HuggingFaceDeepseekV4FlashNovita)
             }
             ModelId::OllamaDeepseekV4ProCloud => Some(ModelId::OllamaDeepseekV4FlashCloud),
-            ModelId::ZaiGlm5 | ModelId::ZaiGlm51 => Some(ModelId::OllamaGlm5Cloud),
-            ModelId::ClaudeFable5 => None, // Always-on adaptive thinking, no non-reasoning variant
+            ModelId::ClaudeFable5 => None,
             ModelId::ClaudeOpus48 | ModelId::ClaudeSonnet46 => Some(ModelId::ClaudeSonnet46),
-            ModelId::OpenCodeGoMinimaxM27 => Some(ModelId::OpenCodeGoMinimaxM25),
-            ModelId::MinimaxM27 | ModelId::MinimaxM25 => None,
+            ModelId::MinimaxM27 => None,
             _ => None,
         };
 
@@ -264,8 +259,7 @@ impl ModelId {
     pub fn is_flash_variant(&self) -> bool {
         matches!(
             self,
-            ModelId::Gemini31FlashLitePreview
-                | ModelId::Gemini35Flash
+            ModelId::Gemini35Flash
                 | ModelId::EvolinkGemini35Flash
                 | ModelId::EvolinkDeepseekV4Flash
                 | ModelId::OpenRouterStepfunStep35FlashFree
@@ -301,28 +295,17 @@ impl ModelId {
                 | ModelId::OpenCodeGoMinimaxM27
                 | ModelId::DeepSeekV4Pro
                 | ModelId::EvolinkDeepseekV4Pro
-                | ModelId::EvolinkGemini31Pro
-                | ModelId::ZaiGlm5
                 | ModelId::ZaiGlm51
                 | ModelId::OpenRouterStepfunStep35FlashFree
                 | ModelId::OpenRouterNvidiaNemotron3Super120bA12bFree
                 | ModelId::MinimaxM27
-                | ModelId::MinimaxM25
-                | ModelId::OpenCodeGoMinimaxM25
-                | ModelId::OllamaGlm5Cloud
                 | ModelId::OllamaGlm51Cloud
                 | ModelId::OllamaNemotron3SuperCloud
-                | ModelId::OllamaNemotron3UltraCloud
-                | ModelId::OllamaMinimaxM25Cloud
-                | ModelId::OllamaMinimaxM3Cloud
-                | ModelId::HuggingFaceQwen3CoderNextNovita
-                | ModelId::HuggingFaceQwen35397BA17BTogether
                 | ModelId::HuggingFaceDeepseekV4ProTogether
                 | ModelId::HuggingFaceGlm51Deepinfra
                 | ModelId::HuggingFaceMinimaxM27Novita
                 | ModelId::HuggingFaceMinimaxM3Novita
                 | ModelId::HuggingFaceDeepseekV4ProNovita
-                | ModelId::HuggingFaceNvidiaNemotron3Ultra550bA55bNvfp4Together
                 | ModelId::OpenRouterMoonshotaiKimiK26
                 | ModelId::OpenRouterMoonshotaiKimiK27Code
                 | ModelId::MoonshotKimiK27Code
@@ -337,13 +320,11 @@ impl ModelId {
         }
         matches!(
             self,
-            ModelId::Gemini31FlashLitePreview
-                | ModelId::Gemini35Flash
+            ModelId::Gemini35Flash
                 | ModelId::GPT54Mini
                 | ModelId::CopilotGPT54Mini
                 | ModelId::ClaudeHaiku45
                 | ModelId::OpenCodeZenGPT54Mini
-                | ModelId::OpenCodeGoMinimaxM25
                 | ModelId::DeepSeekV4Flash
                 | ModelId::HuggingFaceStep35Flash
                 | ModelId::HuggingFaceDeepseekV4FlashNovita
@@ -361,7 +342,6 @@ impl ModelId {
             ModelId::Gemini31ProPreview
                 | ModelId::Gemini31ProPreviewCustomTools
                 | ModelId::OpenRouterGoogleGemini31ProPreview
-                | ModelId::Gemini31FlashLitePreview
                 | ModelId::Gemini35Flash
                 | ModelId::GPT55
                 | ModelId::GPT54
@@ -376,18 +356,14 @@ impl ModelId {
                 | ModelId::OpenCodeGoGlm51
                 | ModelId::OpenCodeGoMinimaxM27
                 | ModelId::DeepSeekV4Pro
-                | ModelId::ZaiGlm5
                 | ModelId::ZaiGlm51
                 | ModelId::OpenRouterStepfunStep35FlashFree
-                | ModelId::HuggingFaceQwen3CoderNextNovita
-                | ModelId::HuggingFaceQwen35397BA17BTogether
                 | ModelId::HuggingFaceDeepseekV4FlashNovita
                 | ModelId::HuggingFaceDeepseekV4ProTogether
                 | ModelId::HuggingFaceGlm51Deepinfra
                 | ModelId::HuggingFaceMinimaxM27Novita
                 | ModelId::HuggingFaceMinimaxM3Novita
                 | ModelId::HuggingFaceDeepseekV4ProNovita
-                | ModelId::HuggingFaceNvidiaNemotron3Ultra550bA55bNvfp4Together
                 | ModelId::OpenRouterMoonshotaiKimiK26
                 | ModelId::OpenRouterMoonshotaiKimiK27Code
                 | ModelId::MoonshotKimiK27Code
@@ -429,7 +405,6 @@ impl ModelId {
         match self {
             // Gemini generations
             ModelId::Gemini31ProPreview | ModelId::Gemini31ProPreviewCustomTools => "3.1",
-            ModelId::Gemini31FlashLitePreview => "3.1-lite",
             // OpenAI generations
             ModelId::GPT55 => "5.5",
             ModelId::GPT54 | ModelId::GPT54Pro | ModelId::GPT54Nano | ModelId::GPT54Mini => "5.4",
@@ -443,34 +418,24 @@ impl ModelId {
             // DeepSeek generations
             ModelId::DeepSeekV4Pro | ModelId::DeepSeekV4Flash => "4",
             // Z.AI generations
-            ModelId::ZaiGlm5 => "5",
             ModelId::ZaiGlm51 => "5.1",
             ModelId::Gemini35Flash => "3.5",
             ModelId::OpenCodeZenGPT54 | ModelId::OpenCodeZenGPT54Mini => "5.4",
             ModelId::OpenCodeZenClaudeSonnet46 => "4.6",
             ModelId::OpenCodeZenGlm51 | ModelId::OpenCodeGoGlm51 => "5.1",
-            ModelId::OpenCodeGoMinimaxM25 => "m2.5",
             ModelId::OpenCodeGoMinimaxM27 => "m2.7",
             ModelId::OllamaGptOss20b => "oss",
             ModelId::OllamaGptOss20bCloud => "oss-cloud",
             ModelId::OllamaGptOss120bCloud => "oss-cloud",
-            ModelId::OllamaQwen317b => "oss",
-            ModelId::OllamaQwen3CoderNext => "qwen3-coder-next:cloud",
             ModelId::OllamaDeepseekV4FlashCloud => "deepseek-v4-flash",
             ModelId::OllamaDeepseekV4ProCloud => "deepseek-v4-pro",
-            ModelId::OllamaQwen3Next80bCloud => "qwen3-next",
-            ModelId::OllamaMinimaxM2Cloud => "minimax-m2",
             ModelId::OllamaMinimaxM27Cloud => "minimax-m2.7",
             ModelId::OllamaMinimaxM3Cloud => "minimax-m3",
-            ModelId::OllamaGlm5Cloud => "glm-5",
             ModelId::OllamaGlm51Cloud => "glm-5.1",
-            ModelId::OllamaMinimaxM25Cloud => "minimax-m2.5",
             ModelId::OllamaKimiK26Cloud => "kimi-k2.6",
-            ModelId::OllamaNemotron3SuperCloud | ModelId::OllamaNemotron3UltraCloud => "nemotron-3",
+            ModelId::OllamaNemotron3SuperCloud => "nemotron-3",
             ModelId::OllamaLagunaXs2 => "laguna-xs.2",
             ModelId::OllamaGemma4 => "gemma-4",
-            ModelId::LlamaCppQwen3627b => "3.6",
-            ModelId::LlamaCppQwen3635bA3b => "3.6",
             ModelId::LlamaCppGemma426bA4b => "4",
             ModelId::LlamaCppGemma4E4b => "4",
             ModelId::LlamaCppGptOss20b => "oss",
@@ -478,17 +443,14 @@ impl ModelId {
             // MiniMax models
             ModelId::MinimaxM3 => "M3",
             ModelId::MinimaxM27 => "M2.7",
-            ModelId::MinimaxM25 => "M2.5",
             // Moonshot models
             ModelId::MoonshotKimiK27Code => "k2.7",
             ModelId::MoonshotKimiK26 => "k2.6",
             // Hugging Face generations
             ModelId::HuggingFaceOpenAIGptOss20b => "oss",
             ModelId::HuggingFaceOpenAIGptOss120b => "oss",
-            ModelId::HuggingFaceMinimaxM25Novita => "m2.5",
             ModelId::HuggingFaceMinimaxM27Novita => "m2.7",
             ModelId::HuggingFaceMinimaxM3Novita => "m3",
-            ModelId::HuggingFaceGlm5Novita => "5",
             ModelId::HuggingFaceGlm51ZaiOrg => "5.1",
             ModelId::HuggingFaceGlm51Deepinfra => "5.1",
             ModelId::HuggingFaceKimiK26Novita => "k2.6",
@@ -496,16 +458,10 @@ impl ModelId {
             ModelId::HuggingFaceDeepseekV4ProTogether => "v4-pro",
             ModelId::HuggingFaceDeepseekV4ProNovita => "v4-pro",
             ModelId::HuggingFaceStep35Flash => "3.5",
-            ModelId::HuggingFaceNvidiaNemotron3Ultra550bA55bNvfp4Together => "nemotron-3-ultra",
-            ModelId::HuggingFaceQwen3CoderNextNovita | ModelId::OpenRouterQwen3CoderNext => {
-                "qwen3-coder-next"
-            }
             // Poolside models
             ModelId::PoolsideLagunaM1 => "laguna-m.1",
             ModelId::PoolsideLagunaXs2 => "laguna-xs.2",
             // Qwen models
-            ModelId::Qwen37Max => "3.7",
-            ModelId::Qwen36Flash | ModelId::Qwen36Plus => "3.6",
             ModelId::QwenDeepSeekV4Flash | ModelId::QwenDeepSeekV4Pro => "v4",
             ModelId::QwenGlm51 => "5.1",
             _ => "unknown",
@@ -522,6 +478,6 @@ impl ModelId {
 
     /// Determine if this model supports optimized apply_patch tool
     pub fn supports_apply_patch_tool(&self) -> bool {
-        false // Placeholder for future optimization
+        false
     }
 }

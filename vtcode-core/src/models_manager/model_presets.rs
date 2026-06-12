@@ -755,30 +755,6 @@ fn deepseek_presets() -> Vec<ModelPreset> {
 fn zai_presets() -> Vec<ModelPreset> {
     vec![
         ModelPreset {
-            id: "glm-5".to_string(),
-            model: "glm-5".to_string(),
-            display_name: "GLM-5".to_string(),
-            description: "Z.ai's flagship open-source foundation model for complex systems"
-                .to_string(),
-            provider: Provider::ZAI,
-            default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Medium,
-                    description: "Balanced".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::High,
-                    description: "Deep thinking".to_string(),
-                },
-            ],
-            is_default: false,
-            upgrade: None,
-            show_in_picker: true,
-            supported_in_api: true,
-            context_window: Some(200_000),
-        },
-        ModelPreset {
             id: "glm-5.1".to_string(),
             model: "glm-5.1".to_string(),
             display_name: "GLM-5.1".to_string(),
@@ -940,29 +916,6 @@ fn minimax_presets() -> Vec<ModelPreset> {
             show_in_picker: true,
             supported_in_api: true,
             context_window: Some(1_000_000),
-        },
-        ModelPreset {
-            id: "minimax-m2.5".to_string(),
-            model: "MiniMax-M2.5".to_string(),
-            display_name: "MiniMax M2.5".to_string(),
-            description: "Enhanced code understanding and reasoning".to_string(),
-            provider: Provider::Minimax,
-            default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Medium,
-                    description: "Balanced".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::High,
-                    description: "Deep".to_string(),
-                },
-            ],
-            is_default: false,
-            upgrade: None,
-            show_in_picker: true,
-            supported_in_api: true,
-            context_window: Some(128_000),
         },
     ]
 }
@@ -1252,41 +1205,6 @@ fn lmstudio_presets() -> Vec<ModelPreset> {
     use crate::config::constants::models::lmstudio as lmstudio_models;
     vec![
         ModelPreset {
-            id: format!("lmstudio/{}", lmstudio_models::DEEPSEEK_R1_0528_QWEN3_8B),
-            model: lmstudio_models::DEEPSEEK_R1_0528_QWEN3_8B.to_string(),
-            display_name: "DeepSeek R1 0528 Qwen3 8B (LM Studio)".to_string(),
-            description: "DeepSeek R1 distill on Qwen3 8B, reasoning-capable local model"
-                .to_string(),
-            provider: Provider::LmStudio,
-            default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![ReasoningEffortPreset {
-                effort: ReasoningEffortLevel::Medium,
-                description: "Balanced".to_string(),
-            }],
-            is_default: false,
-            upgrade: None,
-            show_in_picker: true,
-            supported_in_api: true,
-            context_window: Some(131_072),
-        },
-        ModelPreset {
-            id: format!("lmstudio/{}", lmstudio_models::QWEN3_8B),
-            model: lmstudio_models::QWEN3_8B.to_string(),
-            display_name: "Qwen 3 8B (LM Studio)".to_string(),
-            description: "Qwen 3 8B with thinking mode support for local inference".to_string(),
-            provider: Provider::LmStudio,
-            default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![ReasoningEffortPreset {
-                effort: ReasoningEffortLevel::Medium,
-                description: "Balanced".to_string(),
-            }],
-            is_default: true,
-            upgrade: None,
-            show_in_picker: true,
-            supported_in_api: true,
-            context_window: Some(131_072),
-        },
-        ModelPreset {
             id: format!("lmstudio/{}", lmstudio_models::OPENAI_GPT_OSS_20B),
             model: lmstudio_models::OPENAI_GPT_OSS_20B.to_string(),
             display_name: "GPT-OSS 20B (LM Studio)".to_string(),
@@ -1321,23 +1239,6 @@ fn lmstudio_presets() -> Vec<ModelPreset> {
             show_in_picker: true,
             supported_in_api: true,
             context_window: Some(131_072),
-        },
-        ModelPreset {
-            id: format!("lmstudio/{}", lmstudio_models::QWEN25_7B_INSTRUCT),
-            model: lmstudio_models::QWEN25_7B_INSTRUCT.to_string(),
-            display_name: "Qwen 2.5 7B (LM Studio)".to_string(),
-            description: "Qwen 2.5 7B Instruct with tool calling support".to_string(),
-            provider: Provider::LmStudio,
-            default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![ReasoningEffortPreset {
-                effort: ReasoningEffortLevel::Medium,
-                description: "Balanced".to_string(),
-            }],
-            is_default: false,
-            upgrade: None,
-            show_in_picker: true,
-            supported_in_api: true,
-            context_window: Some(32_768),
         },
         ModelPreset {
             id: format!("lmstudio/{}", lmstudio_models::GEMMA_3_12B_IT),
@@ -1378,40 +1279,6 @@ fn llamacpp_presets() -> Vec<ModelPreset> {
             show_in_picker: true,
             supported_in_api: true,
             context_window: Some(131_072),
-        },
-        ModelPreset {
-            id: format!("llamacpp/{}", llamacpp_models::QWEN36_27B),
-            model: llamacpp_models::QWEN36_27B.to_string(),
-            display_name: "Qwen 3.6 27B (llama.cpp)".to_string(),
-            description: "Dense Qwen 3.6 local model served through llama.cpp".to_string(),
-            provider: Provider::LlamaCpp,
-            default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![ReasoningEffortPreset {
-                effort: ReasoningEffortLevel::Medium,
-                description: "Balanced".to_string(),
-            }],
-            is_default: false,
-            upgrade: None,
-            show_in_picker: true,
-            supported_in_api: true,
-            context_window: Some(262_144),
-        },
-        ModelPreset {
-            id: format!("llamacpp/{}", llamacpp_models::QWEN36_35B_A3B),
-            model: llamacpp_models::QWEN36_35B_A3B.to_string(),
-            display_name: "Qwen 3.6 35B A3B (llama.cpp)".to_string(),
-            description: "Qwen 3.6 MoE local model served through llama.cpp".to_string(),
-            provider: Provider::LlamaCpp,
-            default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![ReasoningEffortPreset {
-                effort: ReasoningEffortLevel::Medium,
-                description: "Balanced".to_string(),
-            }],
-            is_default: false,
-            upgrade: None,
-            show_in_picker: true,
-            supported_in_api: true,
-            context_window: Some(262_144),
         },
         ModelPreset {
             id: format!("llamacpp/{}", llamacpp_models::GEMMA_4_26B_A4B),
@@ -1489,9 +1356,9 @@ fn opencode_zen_presets() -> Vec<ModelPreset> {
 
 fn opencode_go_presets() -> Vec<ModelPreset> {
     vec![ModelPreset {
-        id: "opencode-go/kimi-k2.5".to_string(),
-        model: "kimi-k2.5".to_string(),
-        display_name: "Kimi K2.5 (OpenCode Go)".to_string(),
+        id: "opencode-go/glm-5.1".to_string(),
+        model: "glm-5.1".to_string(),
+        display_name: "GLM-5.1 (OpenCode Go)".to_string(),
         description: "OpenCode Go — affordable subscription for open coding models".to_string(),
         provider: Provider::OpenCodeGo,
         default_reasoning_effort: ReasoningEffortLevel::Medium,
@@ -1583,86 +1450,12 @@ fn mimo_presets() -> Vec<ModelPreset> {
             supported_in_api: true,
             context_window: Some(1_048_576),
         },
-        ModelPreset {
-            id: mimo_models::MIMO_V2_FLASH.to_string(),
-            model: mimo_models::MIMO_V2_FLASH.to_string(),
-            display_name: "MiMo V2 Flash".to_string(),
-            description: "Xiaomi's lightweight fast model for high-throughput tasks (256K context)"
-                .to_string(),
-            provider: Provider::MiMo,
-            default_reasoning_effort: ReasoningEffortLevel::Low,
-            supported_reasoning_efforts: vec![ReasoningEffortPreset {
-                effort: ReasoningEffortLevel::Low,
-                description: "Fast".to_string(),
-            }],
-            is_default: false,
-            upgrade: None,
-            show_in_picker: true,
-            supported_in_api: true,
-            context_window: Some(262_144),
-        },
+
     ]
 }
 
 fn qwen_presets() -> Vec<ModelPreset> {
     vec![
-        ModelPreset {
-            id: qwen_models::QWEN3_7_MAX.to_string(),
-            model: qwen_models::QWEN3_7_MAX.to_string(),
-            display_name: "Qwen 3.7 Max".to_string(),
-            description:
-                "Alibaba Cloud's flagship reasoning model with 131K context and advanced thinking"
-                    .to_string(),
-            provider: Provider::Qwen,
-            default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![ReasoningEffortPreset {
-                effort: ReasoningEffortLevel::Medium,
-                description: "Balanced".to_string(),
-            }],
-            is_default: true,
-            upgrade: None,
-            show_in_picker: true,
-            supported_in_api: true,
-            context_window: Some(131_072),
-        },
-        ModelPreset {
-            id: qwen_models::QWEN3_6_FLASH.to_string(),
-            model: qwen_models::QWEN3_6_FLASH.to_string(),
-            display_name: "Qwen 3.6 Flash".to_string(),
-            description:
-                "Alibaba Cloud's fast inference model with 1M context, optimized for speed and cost-efficiency"
-                    .to_string(),
-            provider: Provider::Qwen,
-            default_reasoning_effort: ReasoningEffortLevel::Low,
-            supported_reasoning_efforts: vec![ReasoningEffortPreset {
-                effort: ReasoningEffortLevel::Low,
-                description: "Fast".to_string(),
-            }],
-            is_default: false,
-            upgrade: None,
-            show_in_picker: true,
-            supported_in_api: true,
-            context_window: Some(1_048_576),
-        },
-        ModelPreset {
-            id: qwen_models::QWEN3_6_PLUS.to_string(),
-            model: qwen_models::QWEN3_6_PLUS.to_string(),
-            display_name: "Qwen 3.6 Plus".to_string(),
-            description:
-                "Alibaba Cloud's balanced model with 131K context, strong reasoning and coding performance"
-                    .to_string(),
-            provider: Provider::Qwen,
-            default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![ReasoningEffortPreset {
-                effort: ReasoningEffortLevel::Medium,
-                description: "Balanced".to_string(),
-            }],
-            is_default: false,
-            upgrade: None,
-            show_in_picker: true,
-            supported_in_api: true,
-            context_window: Some(131_072),
-        },
         ModelPreset {
             id: qwen_models::DEEPSEEK_V4_FLASH.to_string(),
             model: qwen_models::DEEPSEEK_V4_FLASH.to_string(),
@@ -1991,23 +1784,6 @@ fn moonshot_presets() -> Vec<ModelPreset> {
             supported_in_api: true,
             context_window: Some(256_000),
         },
-        ModelPreset {
-            id: "kimi-k2.5".to_string(),
-            model: "kimi-k2.5".to_string(),
-            display_name: "Kimi K2.5 (Moonshot)".to_string(),
-            description: "Moonshot's previous flagship model for long-context coding.".to_string(),
-            provider: Provider::Moonshot,
-            default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![reasoning_preset(
-                ReasoningEffortLevel::Medium,
-                "Balanced",
-            )],
-            is_default: false,
-            upgrade: None,
-            show_in_picker: true,
-            supported_in_api: true,
-            context_window: Some(256_000),
-        },
     ]
 }
 
@@ -2191,7 +1967,6 @@ mod tests {
     fn moonshot_presets_exist_and_default_to_kimi_k26() {
         let presets = moonshot_presets();
         assert_eq!(presets.len(), 2);
-        assert!(presets.iter().any(|preset| preset.id == "kimi-k2.5"));
 
         let default = presets
             .iter()

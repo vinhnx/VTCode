@@ -179,10 +179,7 @@ impl Provider {
                     {
                         return meta.reasoning;
                     }
-                    return matches!(
-                        model_id,
-                        ModelId::OpenRouterMinimaxM25 | ModelId::OpenRouterQwen3CoderNext
-                    );
+                    return false;
                 }
                 models::openrouter::REASONING_MODELS.contains(&model)
             }

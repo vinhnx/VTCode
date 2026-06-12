@@ -365,7 +365,7 @@ fn preferred_lightweight_model_slug(provider: Provider, active_model: &str) -> O
                 return Some(trimmed_model.to_string());
             }
             if lower.contains("3.1") {
-                return Some(ModelId::Gemini31FlashLitePreview.as_str().to_string());
+                return Some(ModelId::Gemini35Flash.as_str().to_string());
             }
             if lower.contains("gemini-3") || lower.contains("gemini 3") {
                 return Some(ModelId::Gemini35Flash.as_str().to_string());
@@ -374,19 +374,13 @@ fn preferred_lightweight_model_slug(provider: Provider, active_model: &str) -> O
         }
         Provider::ZAI => {
             if lower.contains("glm-5.1") {
-                return Some(ModelId::ZaiGlm5.as_str().to_string());
-            }
-            if lower.contains("glm-5") {
-                return Some(ModelId::ZaiGlm5.as_str().to_string());
+                return Some(ModelId::ZaiGlm51.as_str().to_string());
             }
             None
         }
         Provider::Minimax => {
-            if lower.contains("m2.5") {
-                return Some(trimmed_model.to_string());
-            }
             if lower.contains("m2.7") {
-                return Some(ModelId::MinimaxM25.as_str().to_string());
+                return Some(ModelId::MinimaxM3.as_str().to_string());
             }
             None
         }
@@ -403,8 +397,8 @@ fn provider_default_lightweight_model(provider: Provider) -> Option<&'static str
         Provider::Copilot => Some(ModelId::CopilotGPT54Mini.as_str()),
         Provider::DeepSeek => Some(ModelId::DeepSeekV4Flash.as_str()),
         Provider::Gemini => Some(ModelId::Gemini35Flash.as_str()),
-        Provider::ZAI => Some(ModelId::ZaiGlm5.as_str()),
-        Provider::Minimax => Some(ModelId::MinimaxM25.as_str()),
+        Provider::ZAI => Some(ModelId::ZaiGlm51.as_str()),
+        Provider::Minimax => Some(ModelId::MinimaxM3.as_str()),
         Provider::StepFun => Some(ModelId::StepFun37Flash.as_str()),
         Provider::Evolink => Some(ModelId::EvolinkGpt52.as_str()),
         _ => None,
@@ -498,7 +492,7 @@ mod tests {
     fn auto_lightweight_model_uses_lower_generation_glm_pair() {
         assert_eq!(
             auto_lightweight_model("zai", ModelId::ZaiGlm51.as_str()),
-            ModelId::ZaiGlm5.as_str()
+            ModelId::ZaiGlm51.as_str()
         );
     }
 
@@ -506,7 +500,7 @@ mod tests {
     fn auto_lightweight_model_prefers_same_generation_gemini_flash_lite() {
         assert_eq!(
             auto_lightweight_model("gemini", ModelId::Gemini31ProPreview.as_str()),
-            ModelId::Gemini31FlashLitePreview.as_str()
+            ModelId::Gemini35Flash.as_str()
         );
     }
 

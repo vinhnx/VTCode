@@ -25,8 +25,6 @@ pub enum ModelId {
     Gemini31ProPreview,
     /// Gemini 3.1 Pro Preview Custom Tools - Optimized for custom tools & bash
     Gemini31ProPreviewCustomTools,
-    /// Gemini 3.1 Flash Lite Preview - Most cost-efficient model, offering fastest performance for high-frequency, lightweight tasks
-    Gemini31FlashLitePreview,
     /// Gemini 3.5 Flash - High-efficiency frontier model for fast inference
     #[default]
     Gemini35Flash,
@@ -85,16 +83,8 @@ pub enum ModelId {
     HuggingFaceOpenAIGptOss20b,
     /// OpenAI GPT-OSS 120B via Hugging Face router
     HuggingFaceOpenAIGptOss120b,
-    /// MiniMax M2.5 via Novita on Hugging Face router
-    HuggingFaceMinimaxM25Novita,
-    /// Z.AI GLM-5 via Novita on Hugging Face router
-    HuggingFaceGlm5Novita,
     /// Z.AI GLM-5.1 via zai-org provider on Hugging Face router
     HuggingFaceGlm51ZaiOrg,
-    /// Qwen3-Coder-Next via Novita inference provider on Hugging Face router
-    HuggingFaceQwen3CoderNextNovita,
-    /// Qwen3.5-397B-A17B via Together inference provider on Hugging Face router
-    HuggingFaceQwen35397BA17BTogether,
     /// Kimi K2.6 via Novita on Hugging Face router
     HuggingFaceKimiK26Novita,
     /// DeepSeek V4 Flash via Novita on Hugging Face router
@@ -111,8 +101,6 @@ pub enum ModelId {
     HuggingFaceMinimaxM3Novita,
     /// DeepSeek V4 Pro via Novita on Hugging Face router
     HuggingFaceDeepseekV4ProNovita,
-    /// NVIDIA Nemotron 3 Ultra 550B via Together on Hugging Face router
-    HuggingFaceNvidiaNemotron3Ultra550bA55bNvfp4Together,
 
     // StepFun models
     /// Step 3.7 Flash - StepFun's flagship multimodal reasoning model with tool calling
@@ -142,8 +130,6 @@ pub enum ModelId {
     /// Claude Haiku 4.5 served through the Evolink gateway (Anthropic Messages API)
     EvolinkClaudeHaiku45,
 
-    /// GLM-5 - Flagship Z.ai foundation model for complex systems
-    ZaiGlm5,
     /// GLM-5.1 - Next-gen Z.ai foundation model with improved reasoning
     ZaiGlm51,
 
@@ -172,18 +158,10 @@ pub enum ModelId {
     // OpenCode Go models
     /// GLM-5.1 - Z.AI model included with OpenCode Go
     OpenCodeGoGlm51,
-    /// MiniMax M2.5 - OpenCode Go subscription model
-    OpenCodeGoMinimaxM25,
     /// MiniMax M2.7 - Higher-tier OpenCode Go subscription model
     OpenCodeGoMinimaxM27,
 
-    // Qwen models
-    /// Qwen 3.7 Max - Alibaba Cloud's flagship reasoning model with 131K context
-    Qwen37Max,
-    /// Qwen 3.6 Flash - Alibaba Cloud's fast inference model with 1M context
-    Qwen36Flash,
-    /// Qwen 3.6 Plus - Alibaba Cloud's balanced model with 131K context
-    Qwen36Plus,
+    // Qwen models (non-Qwen3 only)
     /// DeepSeek V4 Flash via Qwen Cloud API
     QwenDeepSeekV4Flash,
     /// DeepSeek V4 Pro via Qwen Cloud API
@@ -198,46 +176,26 @@ pub enum ModelId {
     OllamaGptOss20bCloud,
     /// GPT-OSS 120B Cloud - Cloud-hosted GPT-OSS 120B served via Ollama Cloud
     OllamaGptOss120bCloud,
-    /// Qwen3 1.7B - Qwen3 1.7B model served via Ollama
-    OllamaQwen317b,
-    /// Qwen3 Coder Next - Coding-optimized Qwen3 Next model served via Ollama locally
-    OllamaQwen3CoderNext,
     /// DeepSeek V4 Flash Cloud - Fast inference DeepSeek V4 Flash model via Ollama Cloud
     OllamaDeepseekV4FlashCloud,
     /// DeepSeek V4 Pro Cloud - High-performance DeepSeek V4 Pro model via Ollama Cloud
     OllamaDeepseekV4ProCloud,
-    /// Qwen3 Next 80B Cloud - Next-generation Qwen3 80B via Ollama Cloud
-    OllamaQwen3Next80bCloud,
-    /// MiniMax-M2 Cloud - Cloud-hosted MiniMax-M2 model served via Ollama Cloud
-    OllamaMinimaxM2Cloud,
     /// MiniMax-M2.7 Cloud - Cloud-hosted MiniMax-M2.7 model served via Ollama Cloud
     OllamaMinimaxM27Cloud,
     /// MiniMax-M3 Cloud - Cloud-hosted MiniMax-M3 model served via Ollama Cloud
     OllamaMinimaxM3Cloud,
-    /// GLM-5 Cloud - Cloud-hosted GLM-5 model served via Ollama Cloud
-    OllamaGlm5Cloud,
     /// GLM-5.1 Cloud - Cloud-hosted GLM-5.1 model served via Ollama Cloud
     OllamaGlm51Cloud,
-    /// MiniMax-M2.5 Cloud - Cloud-hosted MiniMax-M2.5 model served via Ollama Cloud
-    OllamaMinimaxM25Cloud,
-    /// Gemini 3 Flash Preview Cloud - Google Gemini 3 Flash Preview via Ollama Cloud
-    OllamaGemini3FlashPreviewCloud,
     /// Kimi K2.6 Cloud - Moonshot Kimi K2.6 via Ollama Cloud
     OllamaKimiK26Cloud,
     /// Nemotron 3 Super Cloud - NVIDIA Nemotron 3 Super 120B via Ollama Cloud
     OllamaNemotron3SuperCloud,
-    /// Nemotron 3 Ultra Cloud - NVIDIA Nemotron 3 Ultra 550B via Ollama Cloud
-    OllamaNemotron3UltraCloud,
     /// Gemma 4 - Google Gemma 4 model served via Ollama
     OllamaGemma4,
     /// Laguna XS.2 - Poolside's 33B MoE model (3B activated) for agentic coding via Ollama
     OllamaLagunaXs2,
 
     // llama.cpp models
-    /// Qwen 3.6 27B - Dense Qwen 3.6 local model served through llama.cpp
-    LlamaCppQwen3627b,
-    /// Qwen 3.6 35B A3B - MoE Qwen 3.6 local model served through llama.cpp
-    LlamaCppQwen3635bA3b,
     /// Gemma 4 26B A4B - Desktop Gemma 4 MoE model served through llama.cpp
     LlamaCppGemma426bA4b,
     /// Gemma 4 E4B - Tiny-footprint Gemma 4 model served through llama.cpp
@@ -252,38 +210,8 @@ pub enum ModelId {
     MinimaxM3,
     /// MiniMax-M2.7 - Recursive self-improvement flagship with 204.8K context
     MinimaxM27,
-    /// MiniMax-M2.5 - Latest MiniMax model with further improvements in reasoning and coding
-    MinimaxM25,
 
     // OpenRouter models
-    /// Qwen3 32B - Dense 32B Qwen3 deployment
-    OpenRouterQwen332b,
-    /// Qwen3 30B A3B - Active-parameter 30B Qwen3 model
-    OpenRouterQwen330bA3b,
-    /// Qwen3 30B A3B Instruct 2507 - Instruction-tuned Qwen3 30B A3B
-    OpenRouterQwen330bA3bInstruct2507,
-    /// Qwen3 30B A3B Thinking 2507 - Deliberative Qwen3 30B A3B release
-    OpenRouterQwen330bA3bThinking2507,
-    /// Qwen3 14B - Lightweight Qwen3 14B model
-    OpenRouterQwen314b,
-    /// Qwen3 8B - Compact Qwen3 8B deployment
-    OpenRouterQwen38b,
-    /// Qwen3 Next 80B A3B Instruct - Next-generation Qwen3 instruction model
-    OpenRouterQwen3Next80bA3bInstruct,
-    /// Qwen3 Next 80B A3B Thinking - Next-generation Qwen3 reasoning release
-    OpenRouterQwen3Next80bA3bThinking,
-    /// Qwen3.5-397B-A17B - Native vision-language model with linear attention and sparse MoE, 1M context window
-    OpenRouterQwen35Plus0215,
-    /// Qwen3 Coder - Qwen3-based coding model tuned for IDE workflows
-    OpenRouterQwen3Coder,
-    /// Qwen3 Coder Plus - Premium Qwen3 coding model with long context
-    OpenRouterQwen3CoderPlus,
-    /// Qwen3 Coder Flash - Latency optimised Qwen3 coding model
-    OpenRouterQwen3CoderFlash,
-    /// Qwen3 Coder 30B A3B Instruct - Large Mixture-of-Experts coding deployment
-    OpenRouterQwen3Coder30bA3bInstruct,
-    /// Qwen3 Coder Next - Next-generation Qwen3 coding model with enhanced reasoning
-    OpenRouterQwen3CoderNext,
     /// DeepSeek V4 Pro - High-performance reasoning model via OpenRouter
     OpenRouterDeepSeekV4Pro,
     /// DeepSeek V4 Flash - Fast inference model via OpenRouter
@@ -318,20 +246,12 @@ pub enum ModelId {
     OpenRouterStepfunStep35FlashFree,
     /// Nemotron 3 Super (free) - NVIDIA's 120B hybrid MoE model via OpenRouter
     OpenRouterNvidiaNemotron3Super120bA12bFree,
-    /// Nemotron 3 Ultra - NVIDIA's open frontier-reasoning and orchestration model via OpenRouter
-    OpenRouterNvidiaNemotron3Ultra550bA55b,
-    /// GLM-5 - Z.AI GLM-5 flagship foundation model via OpenRouter
-    OpenRouterZaiGlm5,
     /// GLM-5.1 - Z.AI GLM-5.1 next-gen foundation model via OpenRouter
     OpenRouterZaiGlm51,
-    /// MiniMax-M2.5 - MiniMax flagship model via OpenRouter
-    OpenRouterMinimaxM25,
     /// Kimi K2.6 - Moonshot AI's next-generation multimodal model via OpenRouter
     OpenRouterMoonshotaiKimiK26,
     /// Kimi K2.7 Code - Moonshot AI's most capable coding model via OpenRouter
     OpenRouterMoonshotaiKimiK27Code,
-    /// Qwen3.7 Max - Alibaba's flagship Qwen3.7 model for coding and agentic workloads via OpenRouter
-    OpenRouterQwenQwen37Max,
     /// Hy3 Preview - Tencent's high-efficiency MoE model for agentic workflows via OpenRouter
     OpenRouterTencentHy3Preview,
     /// Grok Build 0.1 - xAI's fast coding model for agentic software engineering via OpenRouter

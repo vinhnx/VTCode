@@ -52,7 +52,7 @@ fn model_picker_lists_new_nvidia_models() {
 #[test]
 fn model_picker_lists_new_zai_models() {
     let options = MODEL_OPTIONS.as_slice();
-    assert!(has_model(options, ModelId::ZaiGlm5));
+    assert!(has_model(options, ModelId::ZaiGlm51));
 }
 
 #[test]
@@ -60,15 +60,10 @@ fn model_picker_lists_new_ollama_cloud_models() {
     let options = MODEL_OPTIONS.as_slice();
     assert!(has_model(options, ModelId::OllamaGptOss20b));
     assert!(has_model(options, ModelId::OllamaGptOss120bCloud));
-    assert!(has_model(options, ModelId::OllamaQwen3CoderNext));
     assert!(has_model(options, ModelId::OllamaDeepseekV4FlashCloud));
     assert!(has_model(options, ModelId::OllamaDeepseekV4ProCloud));
-    assert!(has_model(options, ModelId::OllamaQwen3Next80bCloud));
-    assert!(has_model(options, ModelId::OllamaGlm5Cloud));
-    assert!(has_model(options, ModelId::OllamaMinimaxM25Cloud));
+    assert!(has_model(options, ModelId::OllamaGlm51Cloud));
     assert!(has_model(options, ModelId::OllamaMinimaxM3Cloud));
-    assert!(has_model(options, ModelId::OllamaGemini3FlashPreviewCloud));
-    assert!(has_model(options, ModelId::MinimaxM25));
 }
 
 #[test]

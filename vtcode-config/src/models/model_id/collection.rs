@@ -15,7 +15,6 @@ impl ModelId {
             // Gemini models
             ModelId::Gemini31ProPreview,
             ModelId::Gemini31ProPreviewCustomTools,
-            ModelId::Gemini31FlashLitePreview,
             ModelId::Gemini35Flash,
             // OpenAI models
             ModelId::GPT55,
@@ -43,7 +42,6 @@ impl ModelId {
             // Mistral models
             ModelId::MistralLarge3,
             // Z.AI models
-            ModelId::ZaiGlm5,
             ModelId::ZaiGlm51,
             // MiMo models
             ModelId::MiMoV25Pro,
@@ -58,12 +56,8 @@ impl ModelId {
             ModelId::OpenCodeZenGlm51,
             // OpenCode Go models
             ModelId::OpenCodeGoGlm51,
-            ModelId::OpenCodeGoMinimaxM25,
             ModelId::OpenCodeGoMinimaxM27,
             // Qwen models
-            ModelId::Qwen37Max,
-            ModelId::Qwen36Flash,
-            ModelId::Qwen36Plus,
             ModelId::QwenDeepSeekV4Flash,
             ModelId::QwenDeepSeekV4Pro,
             ModelId::QwenGlm51,
@@ -71,26 +65,16 @@ impl ModelId {
             ModelId::OllamaGptOss20b,
             ModelId::OllamaGptOss20bCloud,
             ModelId::OllamaGptOss120bCloud,
-            ModelId::OllamaQwen317b,
-            ModelId::OllamaQwen3CoderNext,
             ModelId::OllamaDeepseekV4FlashCloud,
-            ModelId::OllamaQwen3Next80bCloud,
             ModelId::OllamaDeepseekV4ProCloud,
-            ModelId::OllamaGlm5Cloud,
             ModelId::OllamaGlm51Cloud,
-            ModelId::OllamaGemini3FlashPreviewCloud,
-            ModelId::OllamaMinimaxM2Cloud,
             ModelId::OllamaMinimaxM27Cloud,
             ModelId::OllamaMinimaxM3Cloud,
-            ModelId::OllamaMinimaxM25Cloud,
             ModelId::OllamaKimiK26Cloud,
             ModelId::OllamaNemotron3SuperCloud,
-            ModelId::OllamaNemotron3UltraCloud,
             ModelId::OllamaGemma4,
             ModelId::OllamaLagunaXs2,
             // llama.cpp models
-            ModelId::LlamaCppQwen3627b,
-            ModelId::LlamaCppQwen3635bA3b,
             ModelId::LlamaCppGemma426bA4b,
             ModelId::LlamaCppGemma4E4b,
             ModelId::LlamaCppGptOss20b,
@@ -98,15 +82,10 @@ impl ModelId {
             // MiniMax models
             ModelId::MinimaxM3,
             ModelId::MinimaxM27,
-            ModelId::MinimaxM25,
             // Hugging Face models
             ModelId::HuggingFaceOpenAIGptOss20b,
             ModelId::HuggingFaceOpenAIGptOss120b,
-            ModelId::HuggingFaceMinimaxM25Novita,
-            ModelId::HuggingFaceGlm5Novita,
             ModelId::HuggingFaceGlm51ZaiOrg,
-            ModelId::HuggingFaceQwen3CoderNextNovita,
-            ModelId::HuggingFaceQwen35397BA17BTogether,
             ModelId::HuggingFaceKimiK26Novita,
             ModelId::HuggingFaceDeepseekV4FlashNovita,
             ModelId::HuggingFaceDeepseekV4ProTogether,
@@ -115,7 +94,6 @@ impl ModelId {
             ModelId::HuggingFaceMinimaxM27Novita,
             ModelId::HuggingFaceMinimaxM3Novita,
             ModelId::HuggingFaceDeepseekV4ProNovita,
-            ModelId::HuggingFaceNvidiaNemotron3Ultra550bA55bNvfp4Together,
             ModelId::StepFun37Flash,
             ModelId::EvolinkGpt52,
             ModelId::EvolinkGpt55,
@@ -129,8 +107,6 @@ impl ModelId {
             ModelId::EvolinkClaudeOpus48,
             ModelId::EvolinkClaudeHaiku45,
             ModelId::OpenRouterNvidiaNemotron3Super120bA12bFree,
-            ModelId::OpenRouterMinimaxM25,
-            ModelId::OpenRouterQwen3CoderNext,
             ModelId::OpenRouterMoonshotaiKimiK26,
             ModelId::OpenRouterMoonshotaiKimiK27Code,
             ModelId::OpenRouterZaiGlm51,

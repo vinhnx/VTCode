@@ -12,7 +12,6 @@ impl ModelId {
             // Gemini models
             ModelId::Gemini31ProPreview => models::GEMINI_3_1_PRO_PREVIEW,
             ModelId::Gemini31ProPreviewCustomTools => models::GEMINI_3_1_PRO_PREVIEW_CUSTOMTOOLS,
-            ModelId::Gemini31FlashLitePreview => models::GEMINI_3_1_FLASH_LITE_PREVIEW,
             ModelId::Gemini35Flash => models::GEMINI_3_5_FLASH,
             // OpenAI models
             ModelId::GPT55 => models::openai::GPT_5_5,
@@ -43,7 +42,6 @@ impl ModelId {
             ModelId::MiMoV25Pro => models::mimo::MIMO_V2_5_PRO,
             ModelId::MiMoV25 => models::mimo::MIMO_V2_5,
             // Z.AI models
-            ModelId::ZaiGlm5 => models::zai::GLM_5,
             ModelId::ZaiGlm51 => models::zai::GLM_5_1,
             // Moonshot models
             ModelId::MoonshotKimiK26 => models::moonshot::KIMI_K2_6,
@@ -54,32 +52,21 @@ impl ModelId {
             ModelId::OpenCodeZenGlm51 => models::opencode_zen::GLM_5_1,
             // OpenCode Go models
             ModelId::OpenCodeGoGlm51 => models::opencode_go::GLM_5_1,
-            ModelId::OpenCodeGoMinimaxM25 => models::opencode_go::MINIMAX_M2_5,
             ModelId::OpenCodeGoMinimaxM27 => models::opencode_go::MINIMAX_M2_7,
             // Ollama models
             ModelId::OllamaGptOss20b => models::ollama::GPT_OSS_20B,
             ModelId::OllamaGptOss20bCloud => models::ollama::GPT_OSS_20B_CLOUD,
             ModelId::OllamaGptOss120bCloud => models::ollama::GPT_OSS_120B_CLOUD,
-            ModelId::OllamaQwen317b => models::ollama::QWEN3_1_7B,
-            ModelId::OllamaQwen3CoderNext => models::ollama::QWEN3_CODER_NEXT,
             ModelId::OllamaDeepseekV4FlashCloud => models::ollama::DEEPSEEK_V4_FLASH_CLOUD,
             ModelId::OllamaDeepseekV4ProCloud => models::ollama::DEEPSEEK_V4_PRO_CLOUD,
-            ModelId::OllamaQwen3Next80bCloud => models::ollama::QWEN3_NEXT_80B_CLOUD,
-            ModelId::OllamaGlm5Cloud => models::ollama::GLM_5_CLOUD,
             ModelId::OllamaGlm51Cloud => models::ollama::GLM_5_1_CLOUD,
-            ModelId::OllamaGemini3FlashPreviewCloud => models::ollama::GEMINI_3_FLASH_PREVIEW_CLOUD,
-            ModelId::OllamaMinimaxM2Cloud => models::ollama::MINIMAX_M2_CLOUD,
             ModelId::OllamaMinimaxM27Cloud => models::ollama::MINIMAX_M27_CLOUD,
             ModelId::OllamaMinimaxM3Cloud => models::ollama::MINIMAX_M3_CLOUD,
-            ModelId::OllamaMinimaxM25Cloud => models::ollama::MINIMAX_M25_CLOUD,
             ModelId::OllamaKimiK26Cloud => models::ollama::KIMI_K2_6_CLOUD,
             ModelId::OllamaNemotron3SuperCloud => models::ollama::NEMOTRON_3_SUPER_CLOUD,
-            ModelId::OllamaNemotron3UltraCloud => models::ollama::NEMOTRON_3_ULTRA_CLOUD,
             ModelId::OllamaGemma4 => models::ollama::GEMMA_4,
             ModelId::OllamaLagunaXs2 => models::ollama::LAGUNA_XS_2,
             // llama.cpp models
-            ModelId::LlamaCppQwen3627b => models::llamacpp::QWEN36_27B,
-            ModelId::LlamaCppQwen3635bA3b => models::llamacpp::QWEN36_35B_A3B,
             ModelId::LlamaCppGemma426bA4b => models::llamacpp::GEMMA_4_26B_A4B,
             ModelId::LlamaCppGemma4E4b => models::llamacpp::GEMMA_4_E4B,
             ModelId::LlamaCppGptOss20b => models::llamacpp::GPT_OSS_20B,
@@ -87,15 +74,7 @@ impl ModelId {
             // Hugging Face models
             ModelId::HuggingFaceOpenAIGptOss20b => models::huggingface::OPENAI_GPT_OSS_20B,
             ModelId::HuggingFaceOpenAIGptOss120b => models::huggingface::OPENAI_GPT_OSS_120B,
-            ModelId::HuggingFaceMinimaxM25Novita => models::huggingface::MINIMAX_M2_5_NOVITA,
-            ModelId::HuggingFaceGlm5Novita => models::huggingface::ZAI_GLM_5_NOVITA,
             ModelId::HuggingFaceGlm51ZaiOrg => models::huggingface::ZAI_GLM_5_1_ZAI_ORG,
-            ModelId::HuggingFaceQwen3CoderNextNovita => {
-                models::huggingface::QWEN3_CODER_NEXT_NOVITA
-            }
-            ModelId::HuggingFaceQwen35397BA17BTogether => {
-                models::huggingface::QWEN3_5_397B_A17B_TOGETHER
-            }
             ModelId::HuggingFaceKimiK26Novita => models::huggingface::KIMI_K2_6_NOVITA,
             ModelId::HuggingFaceDeepseekV4FlashNovita => {
                 models::huggingface::DEEPSEEK_V4_FLASH_NOVITA
@@ -108,9 +87,6 @@ impl ModelId {
             ModelId::HuggingFaceMinimaxM27Novita => models::huggingface::MINIMAX_M2_7_NOVITA,
             ModelId::HuggingFaceMinimaxM3Novita => models::huggingface::MINIMAX_M3_NOVITA,
             ModelId::HuggingFaceDeepseekV4ProNovita => models::huggingface::DEEPSEEK_V4_PRO_NOVITA,
-            ModelId::HuggingFaceNvidiaNemotron3Ultra550bA55bNvfp4Together => {
-                models::huggingface::NVIDIA_NEMOTRON_3_ULTRA_550B_A55B_NVFP4_TOGETHER
-            }
             ModelId::StepFun37Flash => models::stepfun::STEP_3_7_FLASH,
             // Evolink gateway models (namespaced; the provider strips the `evolink/` prefix)
             ModelId::EvolinkGpt52 => "evolink/gpt-5.2",
@@ -125,24 +101,18 @@ impl ModelId {
             ModelId::EvolinkClaudeOpus48 => "evolink/claude-opus-4-8",
             ModelId::EvolinkClaudeHaiku45 => "evolink/claude-haiku-4-5-20251001",
             // Qwen models
-            ModelId::Qwen37Max => models::qwen::QWEN3_7_MAX,
-            ModelId::Qwen36Flash => models::qwen::QWEN3_6_FLASH,
-            ModelId::Qwen36Plus => models::qwen::QWEN3_6_PLUS,
             ModelId::QwenDeepSeekV4Flash => models::qwen::DEEPSEEK_V4_FLASH,
             ModelId::QwenDeepSeekV4Pro => models::qwen::DEEPSEEK_V4_PRO,
             ModelId::QwenGlm51 => models::qwen::GLM_5_1,
             // MiniMax models
             ModelId::MinimaxM3 => models::minimax::MINIMAX_M3,
             ModelId::MinimaxM27 => models::minimax::MINIMAX_M2_7,
-            ModelId::MinimaxM25 => models::minimax::MINIMAX_M2_5,
             // Poolside models
             ModelId::PoolsideLagunaM1 => models::poolside::LAGUNA_M1,
             ModelId::PoolsideLagunaXs2 => models::poolside::LAGUNA_XS2,
             // Moonshot models
             ModelId::MoonshotKimiK27Code => models::moonshot::KIMI_K2_7_CODE,
             // OpenRouter models
-            ModelId::OpenRouterMinimaxM25 => "minimax/minimax-m2.5",
-            ModelId::OpenRouterQwen3CoderNext => "qwen/qwen3-coder-next",
             ModelId::OpenRouterMoonshotaiKimiK26 => "moonshotai/kimi-k2.6",
             ModelId::OpenRouterMoonshotaiKimiK27Code => "moonshotai/kimi-k2.7-code",
             ModelId::OpenRouterZaiGlm51 => "z-ai/glm-5.1",

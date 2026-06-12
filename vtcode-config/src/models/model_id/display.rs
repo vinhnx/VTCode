@@ -10,7 +10,6 @@ impl ModelId {
             // Gemini models
             ModelId::Gemini31ProPreview => "Gemini 3.1 Pro Preview",
             ModelId::Gemini31ProPreviewCustomTools => "Gemini 3.1 Pro Preview (Custom Tools)",
-            ModelId::Gemini31FlashLitePreview => "Gemini 3.1 Flash Lite Preview",
             ModelId::Gemini35Flash => "Gemini 3.5 Flash",
             // OpenAI models
             ModelId::GPT55 => "GPT-5.5",
@@ -41,12 +40,8 @@ impl ModelId {
             ModelId::MiMoV25Pro => "MiMo V2.5 Pro",
             ModelId::MiMoV25 => "MiMo V2.5",
             // Z.AI models
-            ModelId::ZaiGlm5 => "GLM 5",
             ModelId::ZaiGlm51 => "GLM 5.1",
             // Qwen models
-            ModelId::Qwen37Max => "Qwen 3.7 Max",
-            ModelId::Qwen36Flash => "Qwen 3.6 Flash",
-            ModelId::Qwen36Plus => "Qwen 3.6 Plus",
             ModelId::QwenDeepSeekV4Flash => "DeepSeek V4 Flash (Qwen)",
             ModelId::QwenDeepSeekV4Pro => "DeepSeek V4 Pro (Qwen)",
             ModelId::QwenGlm51 => "GLM-5.1 (Qwen)",
@@ -54,25 +49,15 @@ impl ModelId {
             ModelId::OllamaGptOss20b => "GPT-OSS 20B (local)",
             ModelId::OllamaGptOss20bCloud => "GPT-OSS 20B (cloud)",
             ModelId::OllamaGptOss120bCloud => "GPT-OSS 120B (cloud)",
-            ModelId::OllamaQwen317b => "Qwen3 1.7B (local)",
-            ModelId::OllamaQwen3CoderNext => "Qwen3-Coder-Next (cloud)",
             ModelId::OllamaDeepseekV4FlashCloud => "DeepSeek V4 Flash (cloud)",
             ModelId::OllamaDeepseekV4ProCloud => "DeepSeek V4 Pro (cloud)",
-            ModelId::OllamaQwen3Next80bCloud => "Qwen3 Next 80B (cloud)",
-            ModelId::OllamaGemini3FlashPreviewCloud => "Gemini 3 Flash Preview (cloud)",
-            ModelId::OllamaMinimaxM2Cloud => "MiniMax-M2 (cloud)",
+            ModelId::OllamaGlm51Cloud => "GLM-5.1 (cloud)",
             ModelId::OllamaMinimaxM27Cloud => "MiniMax-M2.7 (cloud)",
             ModelId::OllamaMinimaxM3Cloud => "MiniMax-M3 (cloud)",
-            ModelId::OllamaGlm5Cloud => "GLM-5 (cloud)",
-            ModelId::OllamaGlm51Cloud => "GLM-5.1 (cloud)",
-            ModelId::OllamaMinimaxM25Cloud => "MiniMax-M2.5 (cloud)",
             ModelId::OllamaKimiK26Cloud => "Kimi-K2.6 (cloud)",
             ModelId::OllamaNemotron3SuperCloud => "Nemotron-3-Super (cloud)",
-            ModelId::OllamaNemotron3UltraCloud => "Nemotron-3-Ultra (cloud)",
             ModelId::OllamaGemma4 => "Gemma 4",
             ModelId::OllamaLagunaXs2 => "Laguna XS.2 (local)",
-            ModelId::LlamaCppQwen3627b => "Qwen 3.6 27B (llama.cpp)",
-            ModelId::LlamaCppQwen3635bA3b => "Qwen 3.6 35B A3B (llama.cpp)",
             ModelId::LlamaCppGemma426bA4b => "Gemma 4 26B A4B (llama.cpp)",
             ModelId::LlamaCppGemma4E4b => "Gemma 4 E4B (llama.cpp)",
             ModelId::LlamaCppGptOss20b => "GPT-OSS 20B (llama.cpp)",
@@ -80,11 +65,7 @@ impl ModelId {
             // Hugging Face models
             ModelId::HuggingFaceOpenAIGptOss20b => "GPT-OSS 20B (HF)",
             ModelId::HuggingFaceOpenAIGptOss120b => "GPT-OSS 120B (HF)",
-            ModelId::HuggingFaceMinimaxM25Novita => "MiniMax-M2.5 (Novita)",
-            ModelId::HuggingFaceGlm5Novita => "GLM-5 (Novita)",
             ModelId::HuggingFaceGlm51ZaiOrg => "GLM-5.1 (zai-org)",
-            ModelId::HuggingFaceQwen3CoderNextNovita => "Qwen3-Coder-Next (Novita)",
-            ModelId::HuggingFaceQwen35397BA17BTogether => "Qwen3.5-397B-A17B (Together)",
             ModelId::HuggingFaceKimiK26Novita => "Kimi K2.6 (Novita)",
             ModelId::HuggingFaceDeepseekV4FlashNovita => "DeepSeek V4 Flash (Novita)",
             ModelId::HuggingFaceDeepseekV4ProTogether => "DeepSeek V4 Pro (Together)",
@@ -93,9 +74,6 @@ impl ModelId {
             ModelId::HuggingFaceMinimaxM27Novita => "MiniMax-M2.7 (Novita)",
             ModelId::HuggingFaceMinimaxM3Novita => "MiniMax-M3 (Novita)",
             ModelId::HuggingFaceDeepseekV4ProNovita => "DeepSeek V4 Pro (Novita)",
-            ModelId::HuggingFaceNvidiaNemotron3Ultra550bA55bNvfp4Together => {
-                "NVIDIA-Nemotron-3-Ultra-550B (Together)"
-            }
             ModelId::StepFun37Flash => "Step 3.7 Flash",
             ModelId::EvolinkGpt52 => "GPT-5.2 (Evolink)",
             ModelId::EvolinkGpt55 => "GPT-5.5 (Evolink)",
@@ -108,8 +86,6 @@ impl ModelId {
             ModelId::EvolinkClaudeSonnet46 => "Claude Sonnet 4.6 (Evolink)",
             ModelId::EvolinkClaudeOpus48 => "Claude Opus 4.8 (Evolink)",
             ModelId::EvolinkClaudeHaiku45 => "Claude Haiku 4.5 (Evolink)",
-            ModelId::OpenRouterMinimaxM25 => "MiniMax-M2.5 (OpenRouter)",
-            ModelId::OpenRouterQwen3CoderNext => "Qwen3-Coder-Next (OpenRouter)",
             ModelId::OpenRouterMoonshotaiKimiK26 => "Kimi K2.6 (OpenRouter)",
             ModelId::OpenRouterMoonshotaiKimiK27Code => "Kimi K2.7 Code (OpenRouter)",
             ModelId::OpenRouterZaiGlm51 => "GLM-5.1 (OpenRouter)",
@@ -117,7 +93,6 @@ impl ModelId {
             // MiniMax models
             ModelId::MinimaxM3 => "MiniMax-M3",
             ModelId::MinimaxM27 => "MiniMax-M2.7",
-            ModelId::MinimaxM25 => "MiniMax-M2.5",
             // Poolside models
             ModelId::PoolsideLagunaM1 => "Laguna M.1",
             ModelId::PoolsideLagunaXs2 => "Laguna XS.2",
@@ -131,7 +106,6 @@ impl ModelId {
             ModelId::OpenCodeZenGlm51 => "GLM-5.1 (OpenCode Zen)",
             // OpenCode Go models
             ModelId::OpenCodeGoGlm51 => "GLM-5.1 (OpenCode Go)",
-            ModelId::OpenCodeGoMinimaxM25 => "MiniMax-M2.5 (OpenCode Go)",
             ModelId::OpenCodeGoMinimaxM27 => "MiniMax-M2.7 (OpenCode Go)",
             // OpenRouter models
             model => {

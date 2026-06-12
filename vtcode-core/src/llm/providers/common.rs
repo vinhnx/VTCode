@@ -238,13 +238,14 @@ pub fn serialize_message_content_openai_for_model(message: &Message, model: &str
 /// Works across direct model ids and provider-qualified ids.
 #[inline]
 pub fn is_minimax_m2_model(model: &str) -> bool {
-    model.to_ascii_lowercase().contains("minimax-m2")
+    let lower = model.to_ascii_lowercase();
+    lower.contains("minimax-m2.7") || lower.contains("minimax-m3")
 }
 
 #[inline]
 fn is_glm_interleaved_thinking_model(model: &str) -> bool {
     let lower = model.to_ascii_lowercase();
-    lower.contains("glm-5") || lower.contains("glm45") || lower.contains("glm-4.5")
+    lower.contains("glm-5.1") || lower.contains("glm45") || lower.contains("glm-4.5")
 }
 
 /// Returns true when the model family relies on interleaved `<think>...</think>`
@@ -1400,17 +1401,17 @@ mod tests {
 
     #[test]
     fn minimax_m2_model_detection_handles_variants() {
-        assert!(is_minimax_m2_model("MiniMax-M2.5"));
-        assert!(is_minimax_m2_model("minimax/minimax-m2.5"));
-        assert!(is_minimax_m2_model("MiniMaxAI/MiniMax-M2.5:novita"));
+        assert!(is_minimax_m2_model("MiniMax-M2.7"));
+        assert!(is_minimax_m2_model("MiniMax-M3"));
+        assert!(is_minimax_m2_model("minimax/minimax-m2.7"));
         assert!(!is_minimax_m2_model("gpt-5"));
     }
 
     #[test]
     fn interleaved_thinking_model_detection_handles_glm5() {
-        assert!(is_interleaved_thinking_model("glm-5"));
-        assert!(is_interleaved_thinking_model("zai-org/GLM-5:novita"));
-        assert!(is_interleaved_thinking_model("MiniMax-M2.5"));
+        assert!(is_interleaved_thinking_model("glm-5.1"));
+        assert!(is_interleaved_thinking_model("zai-org/GLM-5.1:novita"));
+        assert!(is_interleaved_thinking_model("MiniMax-M2.7"));
         assert!(!is_interleaved_thinking_model("deepseek-r1"));
     }
 
@@ -1435,7 +1436,7 @@ mod tests {
             .with_reasoning_details(Some(vec![json!("<think>raw trace</think>answer")]));
 
         assert_eq!(
-            assistant_interleaved_history_text(&message, "glm-5").as_deref(),
+            assistant_interleaved_history_text(&message, "glm-5.1").as_deref(),
             Some("<think>raw trace</think>answer")
         );
     }
@@ -1446,7 +1447,7 @@ mod tests {
             Message::assistant("answer".to_string()).with_reasoning(Some("trace".to_string()));
 
         assert_eq!(
-            assistant_interleaved_history_text(&message, "MiniMax-M2.5").as_deref(),
+            assistant_interleaved_history_text(&message, "MiniMax-M2.7").as_deref(),
             Some("<think>trace</think>answer")
         );
     }
@@ -1511,7 +1512,7 @@ mod tests {
         let parsed = parse_response_openai_format::<fn(&Value, &Value) -> Option<String>>(
             response_json,
             "test",
-            "glm-5".to_string(),
+            "glm-5.1".to_string(),
             false,
             None,
         )

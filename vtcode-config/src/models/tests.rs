@@ -29,32 +29,18 @@ fn test_model_string_conversion() {
         models::deepseek::DEEPSEEK_V4_FLASH
     );
     assert_eq!(
-        ModelId::OllamaDeepseekV4ProCloud.as_str(),
-        models::ollama::DEEPSEEK_V4_PRO_CLOUD
+        ModelId::DeepSeekV4Flash.as_str(),
+        models::deepseek::DEEPSEEK_V4_FLASH
     );
     // Hugging Face models
-    assert_eq!(
-        ModelId::HuggingFaceGlm5Novita.as_str(),
-        models::huggingface::ZAI_GLM_5_NOVITA
-    );
     assert_eq!(
         ModelId::HuggingFaceGlm51ZaiOrg.as_str(),
         models::huggingface::ZAI_GLM_5_1_ZAI_ORG
     );
-    assert_eq!(
-        ModelId::HuggingFaceQwen3CoderNextNovita.as_str(),
-        models::huggingface::QWEN3_CODER_NEXT_NOVITA
-    );
-    // Z.AI models
-    assert_eq!(ModelId::ZaiGlm5.as_str(), models::zai::GLM_5);
     // OpenCode models
     assert_eq!(
         ModelId::OpenCodeZenGPT54.as_str(),
         models::opencode_zen::GPT_5_4
-    );
-    assert_eq!(
-        ModelId::OpenCodeGoMinimaxM25.as_str(),
-        models::opencode_go::MINIMAX_M2_5
     );
     for entry in openrouter_generated::ENTRIES {
         assert_eq!(entry.variant.as_str(), entry.id);
@@ -128,31 +114,10 @@ fn test_model_from_string() {
     );
     // Hugging Face models
     assert_eq!(
-        models::huggingface::ZAI_GLM_5_NOVITA
-            .parse::<ModelId>()
-            .unwrap(),
-        ModelId::HuggingFaceGlm5Novita
-    );
-    assert_eq!(
         models::huggingface::ZAI_GLM_5_1_ZAI_ORG
             .parse::<ModelId>()
             .unwrap(),
         ModelId::HuggingFaceGlm51ZaiOrg
-    );
-    assert_eq!(
-        models::huggingface::QWEN3_CODER_NEXT_NOVITA
-            .parse::<ModelId>()
-            .unwrap(),
-        ModelId::HuggingFaceQwen3CoderNextNovita
-    );
-    // Z.AI models
-    assert_eq!(
-        models::zai::GLM_5.parse::<ModelId>().unwrap(),
-        ModelId::ZaiGlm5
-    );
-    assert_eq!(
-        models::zai::GLM_5_LEGACY.parse::<ModelId>().unwrap(),
-        ModelId::ZaiGlm5
     );
     assert_eq!(
         "opencode/gpt-5.4".parse::<ModelId>().unwrap(),
@@ -162,15 +127,7 @@ fn test_model_from_string() {
         "opencode-zen/claude-sonnet-4-6".parse::<ModelId>().unwrap(),
         ModelId::OpenCodeZenClaudeSonnet46
     );
-    assert_eq!(
-        "opencode-go/minimax-m2.5".parse::<ModelId>().unwrap(),
-        ModelId::OpenCodeGoMinimaxM25
-    );
     for entry in openrouter_generated::ENTRIES {
-        // Skip models that are shadowed by built-in variants with the same ID
-        if entry.id == models::zai::GLM_5 || entry.id == models::zai::GLM_5_LEGACY {
-            continue;
-        }
         assert_eq!(entry.id.parse::<ModelId>().unwrap(), entry.variant);
     }
     // Invalid model
@@ -212,15 +169,14 @@ fn test_model_providers() {
     assert_eq!(ModelId::ClaudeSonnet46.provider(), Provider::Anthropic);
     assert_eq!(ModelId::ClaudeHaiku45.provider(), Provider::Anthropic);
     assert_eq!(ModelId::DeepSeekV4Pro.provider(), Provider::DeepSeek);
-    assert_eq!(ModelId::ZaiGlm5.provider(), Provider::ZAI);
+    assert_eq!(ModelId::ZaiGlm51.provider(), Provider::ZAI);
     assert_eq!(ModelId::OpenCodeZenGPT54.provider(), Provider::OpenCodeZen);
     assert_eq!(
-        ModelId::OpenCodeGoMinimaxM25.provider(),
+        ModelId::OpenCodeGoMinimaxM27.provider(),
         Provider::OpenCodeGo
     );
     assert_eq!(ModelId::OllamaGptOss20b.provider(), Provider::Ollama);
     assert_eq!(ModelId::OllamaGptOss120bCloud.provider(), Provider::Ollama);
-    assert_eq!(ModelId::OllamaQwen317b.provider(), Provider::Ollama);
     assert_eq!(
         ModelId::OpenRouterAnthropicClaudeSonnet46.provider(),
         Provider::OpenRouter
@@ -259,7 +215,7 @@ fn test_provider_defaults() {
     );
     assert_eq!(
         ModelId::default_orchestrator_for_provider(Provider::ZAI),
-        ModelId::ZaiGlm5
+        ModelId::ZaiGlm51
     );
     assert_eq!(
         ModelId::default_orchestrator_for_provider(Provider::OpenCodeZen),
@@ -291,7 +247,7 @@ fn test_model_variants() {
     assert!(ModelId::ClaudeSonnet46.is_pro_variant());
     assert!(ModelId::OpenCodeZenGPT54.is_pro_variant());
     assert!(ModelId::DeepSeekV4Pro.is_pro_variant());
-    assert!(ModelId::ZaiGlm5.is_pro_variant());
+    assert!(ModelId::ZaiGlm51.is_pro_variant());
     assert!(!ModelId::Gemini35Flash.is_pro_variant());
 
     // Efficient variants
@@ -312,7 +268,7 @@ fn test_model_variants() {
     assert!(ModelId::ClaudeOpus48.is_top_tier());
     assert!(ModelId::ClaudeSonnet46.is_top_tier());
     assert!(ModelId::DeepSeekV4Pro.is_top_tier());
-    assert!(ModelId::ZaiGlm5.is_top_tier());
+    assert!(ModelId::ZaiGlm51.is_top_tier());
     assert!(ModelId::Gemini35Flash.is_top_tier());
     assert!(!ModelId::ClaudeHaiku45.is_top_tier());
 
@@ -333,11 +289,11 @@ fn test_preferred_lightweight_variant() {
     );
     assert_eq!(
         ModelId::Gemini31ProPreview.preferred_lightweight_variant(),
-        Some(ModelId::Gemini31FlashLitePreview)
+        Some(ModelId::Gemini35Flash)
     );
     assert_eq!(
         ModelId::ZaiGlm51.preferred_lightweight_variant(),
-        Some(ModelId::ZaiGlm5)
+        None
     );
     assert_eq!(
         ModelId::OpenCodeZenGPT54.preferred_lightweight_variant(),
@@ -367,9 +323,9 @@ fn test_model_generation() {
     assert_eq!(ModelId::DeepSeekV4Flash.generation(), "4");
 
     // Z.AI generations
-    assert_eq!(ModelId::ZaiGlm5.generation(), "5");
+    assert_eq!(ModelId::ZaiGlm51.generation(), "5.1");
     assert_eq!(ModelId::OpenCodeZenGPT54.generation(), "5.4");
-    assert_eq!(ModelId::OpenCodeGoMinimaxM25.generation(), "m2.5");
+    assert_eq!(ModelId::OpenCodeGoMinimaxM27.generation(), "m2.7");
 
     for entry in openrouter_generated::ENTRIES {
         assert_eq!(entry.variant.generation(), entry.generation);
@@ -404,37 +360,27 @@ fn test_models_for_provider() {
     }
 
     let zai_models = ModelId::models_for_provider(Provider::ZAI);
-    assert!(zai_models.contains(&ModelId::ZaiGlm5));
+    assert!(zai_models.contains(&ModelId::ZaiGlm51));
 
     let opencode_zen_models = ModelId::models_for_provider(Provider::OpenCodeZen);
     assert!(opencode_zen_models.contains(&ModelId::OpenCodeZenGPT54));
     assert!(opencode_zen_models.contains(&ModelId::OpenCodeZenClaudeSonnet46));
 
     let opencode_go_models = ModelId::models_for_provider(Provider::OpenCodeGo);
-    assert!(opencode_go_models.contains(&ModelId::OpenCodeGoMinimaxM25));
     assert!(opencode_go_models.contains(&ModelId::OpenCodeGoMinimaxM27));
 
     let ollama_models = ModelId::models_for_provider(Provider::Ollama);
     assert!(ollama_models.contains(&ModelId::OllamaGptOss20b));
     assert!(ollama_models.contains(&ModelId::OllamaGptOss20bCloud));
     assert!(ollama_models.contains(&ModelId::OllamaGptOss120bCloud));
-    assert!(ollama_models.contains(&ModelId::OllamaQwen317b));
-    assert!(ollama_models.contains(&ModelId::OllamaQwen3CoderNext));
     assert!(ollama_models.contains(&ModelId::OllamaDeepseekV4FlashCloud));
     assert!(ollama_models.contains(&ModelId::OllamaDeepseekV4ProCloud));
-    assert!(ollama_models.contains(&ModelId::OllamaQwen3Next80bCloud));
-    assert!(ollama_models.contains(&ModelId::OllamaGemini3FlashPreviewCloud));
-    assert!(ollama_models.contains(&ModelId::OllamaMinimaxM2Cloud));
     assert!(ollama_models.contains(&ModelId::OllamaMinimaxM27Cloud));
     assert!(ollama_models.contains(&ModelId::OllamaMinimaxM3Cloud));
-    assert!(ollama_models.contains(&ModelId::OllamaMinimaxM25Cloud));
-    assert!(ollama_models.contains(&ModelId::OllamaGlm5Cloud));
     assert!(ollama_models.contains(&ModelId::OllamaGlm51Cloud));
 
     let hf_models = ModelId::models_for_provider(Provider::HuggingFace);
     assert!(hf_models.contains(&ModelId::HuggingFaceGlm51ZaiOrg));
-    assert!(hf_models.contains(&ModelId::HuggingFaceQwen3CoderNextNovita));
-    assert!(hf_models.contains(&ModelId::HuggingFaceMinimaxM25Novita));
 }
 
 #[test]
@@ -460,18 +406,6 @@ fn test_ollama_cloud_models() {
             models::ollama::DEEPSEEK_V4_PRO_CLOUD,
         ),
         (
-            ModelId::OllamaQwen3CoderNext,
-            models::ollama::QWEN3_CODER_NEXT,
-        ),
-        (
-            ModelId::OllamaQwen3Next80bCloud,
-            models::ollama::QWEN3_NEXT_80B_CLOUD,
-        ),
-        (
-            ModelId::OllamaMinimaxM2Cloud,
-            models::ollama::MINIMAX_M2_CLOUD,
-        ),
-        (
             ModelId::OllamaMinimaxM27Cloud,
             models::ollama::MINIMAX_M27_CLOUD,
         ),
@@ -479,7 +413,6 @@ fn test_ollama_cloud_models() {
             ModelId::OllamaMinimaxM3Cloud,
             models::ollama::MINIMAX_M3_CLOUD,
         ),
-        (ModelId::OllamaGlm5Cloud, models::ollama::GLM_5_CLOUD),
         (ModelId::OllamaGlm51Cloud, models::ollama::GLM_5_1_CLOUD),
     ];
 
@@ -509,7 +442,7 @@ fn test_fallback_models() {
     assert!(fallbacks.contains(&ModelId::ClaudeOpus48));
     assert!(fallbacks.contains(&ModelId::ClaudeSonnet46));
     assert!(fallbacks.contains(&ModelId::DeepSeekV4Pro));
-    assert!(fallbacks.contains(&ModelId::ZaiGlm5));
+    assert!(fallbacks.contains(&ModelId::ZaiGlm51));
 }
 
 #[test]
@@ -562,7 +495,7 @@ fn test_generated_model_capability_lookup() {
     assert!(opencode_zen_models.contains(&models::opencode_zen::GPT_5_4));
     let opencode_go_models =
         supported_models_for_provider("opencode-go").expect("opencode go models");
-    assert!(opencode_go_models.contains(&models::opencode_go::MINIMAX_M2_5));
+    assert!(opencode_go_models.contains(&models::opencode_go::MINIMAX_M2_7));
 
     assert_eq!(ModelId::GPT54.input_modalities(), &["text", "image"]);
     assert_eq!(
@@ -619,9 +552,8 @@ fn test_model_helpers_include_curated_opencode_models() {
     );
 
     let go_models = model_helpers::supported_for("opencode-go").expect("opencode go helpers");
-    assert!(go_models.contains(&models::opencode_go::KIMI_K2_5));
     assert!(go_models.contains(&models::opencode_go::MINIMAX_M2_7));
-    assert!(!go_models.contains(&models::opencode_go::GLM_5));
+    assert!(go_models.contains(&models::opencode_go::GLM_5_1));
     assert_eq!(
         model_helpers::default_for("opencode-go"),
         Some(models::opencode_go::DEFAULT_MODEL)
@@ -683,10 +615,7 @@ fn test_all_models_have_non_empty_metadata_and_parse() {
             ModelId::OpenCodeZenClaudeSonnet46 => ModelId::from_str("opencode/claude-sonnet-4-6"),
             ModelId::OpenCodeZenGlm51 => ModelId::from_str("opencode/glm-5.1"),
             ModelId::OpenCodeGoGlm51 => ModelId::from_str("opencode-go/glm-5.1"),
-            ModelId::OpenCodeGoMinimaxM25 => ModelId::from_str("opencode-go/minimax-m2.5"),
             ModelId::OpenCodeGoMinimaxM27 => ModelId::from_str("opencode-go/minimax-m2.7"),
-            // `z-ai/glm-5` intentionally resolves to the native Z.AI model alias first.
-            ModelId::OpenRouterZaiGlm5 => continue,
             // Qwen third-party variants share model strings with their native providers;
             // `deepseek-v4-flash`, `deepseek-v4-pro`, `glm-5.1` resolve to native variants.
             ModelId::QwenDeepSeekV4Flash | ModelId::QwenDeepSeekV4Pro | ModelId::QwenGlm51 => {

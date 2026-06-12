@@ -1,25 +1,14 @@
 pub const DEFAULT_MODEL: &str = OPENAI_GPT_OSS_120B;
 pub const SUPPORTED_MODELS: &[&str] = &[
-    // Recommended conversational LLMs from HF docs
-    GOOGLE_GEMMA_2_2B_IT,
-    QWEN3_CODER_480B_A35B_INSTRUCT,
     OPENAI_GPT_OSS_120B,
-    QWEN3_4B_THINKING_2507,
-    QWEN25_7B_INSTRUCT_1M,
-    QWEN25_CODER_32B_INSTRUCT,
     DEEPSEEK_R1,
     // Additional supported models
     OPENAI_GPT_OSS_20B,
     // Novita inference provider models
-    MINIMAX_M2_5_NOVITA,
-    XIAOMI_MIMO_V2_FLASH_NOVITA,
-    QWEN3_CODER_NEXT_NOVITA,
-    ZAI_GLM_5_NOVITA,
     ZAI_GLM_5_1_ZAI_ORG,
     // Moonshot inference provider models
     KIMI_K2_6_NOVITA,
     // Together inference provider models
-    QWEN3_5_397B_A17B_TOGETHER,
     DEEPSEEK_V4_PRO_TOGETHER,
     STEP_3_5_FLASH,
     // DeepInfra inference provider models
@@ -27,17 +16,10 @@ pub const SUPPORTED_MODELS: &[&str] = &[
     // Additional Novita models
     MINIMAX_M2_7_NOVITA,
     DEEPSEEK_V4_PRO_NOVITA,
-    NVIDIA_NEMOTRON_3_ULTRA_550B_A55B_NVFP4_TOGETHER,
     MINIMAX_M3_NOVITA,
 ];
 
-// Recommended conversational LLMs
-pub const GOOGLE_GEMMA_2_2B_IT: &str = "google/gemma-2-2b-it";
-pub const QWEN3_CODER_480B_A35B_INSTRUCT: &str = "Qwen/Qwen3-Coder-480B-A35B-Instruct";
 pub const OPENAI_GPT_OSS_120B: &str = "openai/gpt-oss-120b:huggingface";
-pub const QWEN3_4B_THINKING_2507: &str = "Qwen/Qwen3-4B-Thinking-2507";
-pub const QWEN25_7B_INSTRUCT_1M: &str = "Qwen/Qwen2.5-7B-Instruct-1M";
-pub const QWEN25_CODER_32B_INSTRUCT: &str = "Qwen/Qwen2.5-Coder-32B-Instruct";
 pub const DEEPSEEK_R1: &str = "deepseek-ai/DeepSeek-R1";
 pub const STEP_3_5_FLASH_BASE: &str = "stepfun-ai/Step-3.5-Flash";
 pub const STEP_3_5_FLASH_PROVIDER: &str = "featherless-ai";
@@ -47,22 +29,13 @@ pub const STEP_3_5_FLASH_LEGACY_FASTEST: &str = "stepfun-ai/Step-3.5-Flash:faste
 // Additional supported models
 pub const OPENAI_GPT_OSS_20B: &str = "openai/gpt-oss-20b:huggingface";
 
-pub const MINIMAX_M2_5_NOVITA: &str = "MiniMaxAI/MiniMax-M2.5:novita";
-pub const XIAOMI_MIMO_V2_FLASH_NOVITA: &str = "XiaomiMiMo/MiMo-V2-Flash:novita";
-pub const QWEN3_CODER_NEXT_NOVITA: &str = "Qwen/Qwen3-Coder-Next:novita";
-pub const ZAI_GLM_5_NOVITA: &str = "zai-org/GLM-5:novita";
 pub const ZAI_GLM_5_1_ZAI_ORG: &str = "zai-org/GLM-5.1:zai-org";
 pub const KIMI_K2_6_NOVITA: &str = "moonshotai/Kimi-K2.6:novita";
-pub const QWEN3_5_397B_A17B_TOGETHER: &str = "Qwen/Qwen3.5-397B-A17B:together";
 
 // DeepSeek V4 models via HF router
 pub const DEEPSEEK_V4_FLASH_NOVITA: &str = "deepseek-ai/DeepSeek-V4-Flash:novita";
 pub const DEEPSEEK_V4_PRO_TOGETHER: &str = "deepseek-ai/DeepSeek-V4-Pro:together";
 pub const DEEPSEEK_V4_PRO_NOVITA: &str = "deepseek-ai/DeepSeek-V4-Pro:novita";
-
-// NVIDIA models via HF router
-pub const NVIDIA_NEMOTRON_3_ULTRA_550B_A55B_NVFP4_TOGETHER: &str =
-    "nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4:together";
 
 // DeepInfra inference provider models
 pub const ZAI_GLM_5_1_DEEPINFRA: &str = "zai-org/GLM-5.1:deepinfra";
@@ -74,24 +47,16 @@ pub const MINIMAX_M2_7_NOVITA: &str = "MiniMaxAI/MiniMax-M2.7:novita";
 pub const MINIMAX_M3_NOVITA: &str = "MiniMaxAI/MiniMax-M3:novita";
 
 pub const REASONING_MODELS: &[&str] = &[
-    // All recommended conversational LLMs support reasoning
-    QWEN3_CODER_480B_A35B_INSTRUCT,
     OPENAI_GPT_OSS_120B,
-    QWEN3_4B_THINKING_2507,
     DEEPSEEK_R1,
     // Additional reasoning models
     OPENAI_GPT_OSS_20B,
-    MINIMAX_M2_5_NOVITA,
-    XIAOMI_MIMO_V2_FLASH_NOVITA,
-    QWEN3_CODER_NEXT_NOVITA,
     ZAI_GLM_5_1_ZAI_ORG,
     ZAI_GLM_5_1_DEEPINFRA,
     MINIMAX_M2_7_NOVITA,
     MINIMAX_M3_NOVITA,
-    QWEN3_5_397B_A17B_TOGETHER,
     DEEPSEEK_V4_PRO_TOGETHER,
     DEEPSEEK_V4_PRO_NOVITA,
     DEEPSEEK_V4_FLASH_NOVITA,
     STEP_3_5_FLASH,
-    NVIDIA_NEMOTRON_3_ULTRA_550B_A55B_NVFP4_TOGETHER,
 ];
