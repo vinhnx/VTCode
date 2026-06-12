@@ -2,6 +2,35 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.126.0 - 2026-06-12
+
+### Highlights
+#### Bug Fixes
+
+- Pin ratatui-widgets to =0.3.0 to fix cargo install (c60e1663) (@vinhnx)
+- Fallback to unauthenticated GitHub API on 401 (fdc666f9) 
+- Handle terminal clear failure during force redraw (b85bec6e) 
+#### Documentation
+
+- Remove Homebrew installation instruction and update provider link text (db9e269c) (@vinhnx)
+- Update README to replace tables with bullet points for features and documentation (2e9081a3) (@vinhnx)
+#### Features
+
+- Add Kimi K2.7 Code model and update related configurations (5f74a144) 
+- Implement double-Esc detection for rewind functionality (ca7a521b) 
+- Add MiniMax-M3 model via Novita inference provider and update related configurations (ecdd32f4) 
+### Other Changes
+#### Other
+
+- Update TODO (d54a296f) (@vinhnx)
+- Update README (27a96ce8) (@vinhnx)
+- Add release notes command and display on startup after updates (8f6848fd) 
+- Refactor model provider mappings and remove deprecated models (9ead7f9c) 
+#### Refactors
+
+- Move float_to_json_number to common module and update usages (98032959) (@vinhnx)
+- Simplify string formatting in tests and error handling (802e06ad) (@vinhnx)
+- Simplify archived prompts loading and adjust reasoning effort level (c6966b04) 
 ## 0.125.3 - 2026-06-11
 
 ### Highlights
