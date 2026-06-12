@@ -7,7 +7,7 @@ use crate::llm::providers::common::append_normalized_reasoning_detail_items;
 use crate::llm::providers::openai::types::OpenAIResponsesPayload;
 use crate::llm::providers::shared::{
     collect_tool_references_from_tool_search_output, function_output_value_from_message_content,
-    tool_result_content_from_message_content,
+    parse_cached_prompt_tokens_from_usage, tool_result_content_from_message_content,
 };
 use hashbrown::HashMap;
 use serde_json::{Value, json};
@@ -267,38 +267,6 @@ fn append_tool_result_to_instructions(
     s.push('\n');
     s.push_str(&text);
     instructions_segments.push(s);
-}
-
-pub(crate) fn parse_cached_prompt_tokens_from_usage(
-    usage_value: &Value,
-    include_cached_prompt_metrics: bool,
-) -> Option<u32> {
-    if !include_cached_prompt_metrics {
-        return None;
-    }
-
-    let cached_prompt_tokens = usage_value
-        .get("input_tokens_details")
-        .and_then(|details| details.get("cached_tokens"))
-        .or_else(|| {
-            usage_value
-                .get("prompt_tokens_details")
-                .and_then(|details| details.get("cached_tokens"))
-        })
-        .or_else(|| usage_value.get("prompt_cache_hit_tokens"))
-        .or_else(|| usage_value.get("cached_tokens"))
-        .and_then(Value::as_u64)
-        .and_then(|value| u32::try_from(value).ok());
-
-    if let Some(cached_prompt_tokens) = cached_prompt_tokens {
-        tracing::debug!(
-            target = "vtcode::llm::openai::prompt_cache",
-            cached_prompt_tokens,
-            "OpenAI Responses cached prompt token usage"
-        );
-    }
-
-    cached_prompt_tokens
 }
 
 pub fn parse_responses_payload(
@@ -697,11 +665,9 @@ pub fn build_standard_responses_payload(
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        build_standard_responses_payload, parse_cached_prompt_tokens_from_usage,
-        parse_responses_payload,
-    };
+    use super::{build_standard_responses_payload, parse_responses_payload};
     use crate::llm::provider::{LLMRequest, Message, ToolCall};
+    use crate::llm::providers::shared::parse_cached_prompt_tokens_from_usage;
     use serde_json::{Value, json};
 
     fn assert_multimodal_tool_result(payload: super::OpenAIResponsesPayload) {

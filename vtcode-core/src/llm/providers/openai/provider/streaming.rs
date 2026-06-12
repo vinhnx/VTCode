@@ -80,6 +80,7 @@ impl OpenAIProvider {
                         provider_name: "OpenAI",
                         model: model.clone(),
                         emit_reasoning,
+                        include_cached_prompt_metrics: include_metrics,
                     },
                     move |value| {
                         let response =

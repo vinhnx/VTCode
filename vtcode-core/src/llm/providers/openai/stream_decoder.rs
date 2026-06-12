@@ -11,6 +11,7 @@
 use crate::llm::error_display;
 use crate::llm::provider;
 use crate::llm::providers::shared::StreamTelemetry;
+use crate::llm::providers::shared::parse_cached_prompt_tokens_from_usage;
 use crate::llm::providers::shared::{StreamAssemblyError, extract_data_payload, find_sse_boundary};
 use crate::models_manager::model_family::find_family_for_model;
 use async_stream::try_stream;
@@ -18,7 +19,7 @@ use futures::StreamExt;
 use serde_json::Value;
 use std::time::Instant;
 
-use super::responses_api::{parse_cached_prompt_tokens_from_usage, parse_responses_payload};
+use super::responses_api::parse_responses_payload;
 use super::streaming::OpenAIStreamTelemetry;
 
 fn strip_reasoning_for_model(

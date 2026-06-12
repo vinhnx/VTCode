@@ -14,6 +14,38 @@ pub use responses_stream::{ResponsesNormalizedStreamOptions, create_responses_no
 use serde_json::{Map, Value};
 pub use tag_sanitizer::TagStreamSanitizer;
 
+pub(crate) fn parse_cached_prompt_tokens_from_usage(
+    usage_value: &Value,
+    include_cached_prompt_metrics: bool,
+) -> Option<u32> {
+    if !include_cached_prompt_metrics {
+        return None;
+    }
+
+    let cached_prompt_tokens = usage_value
+        .get("input_tokens_details")
+        .and_then(|details| details.get("cached_tokens"))
+        .or_else(|| {
+            usage_value
+                .get("prompt_tokens_details")
+                .and_then(|details| details.get("cached_tokens"))
+        })
+        .or_else(|| usage_value.get("prompt_cache_hit_tokens"))
+        .or_else(|| usage_value.get("cached_tokens"))
+        .and_then(Value::as_u64)
+        .and_then(|value| u32::try_from(value).ok());
+
+    if let Some(cached_prompt_tokens) = cached_prompt_tokens {
+        tracing::debug!(
+            target = "vtcode::llm::responses::prompt_cache",
+            cached_prompt_tokens,
+            "Responses cached prompt token usage"
+        );
+    }
+
+    cached_prompt_tokens
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum StreamAssemblyError {
     #[error("missing field `{0}` in stream payload")]
