@@ -28,6 +28,7 @@ pub const SUPPORTED_MODELS: &[&str] = &[
     MINIMAX_M2_7_NOVITA,
     DEEPSEEK_V4_PRO_NOVITA,
     NVIDIA_NEMOTRON_3_ULTRA_550B_A55B_NVFP4_TOGETHER,
+    MINIMAX_M3_NOVITA,
 ];
 
 // Recommended conversational LLMs
@@ -69,6 +70,9 @@ pub const ZAI_GLM_5_1_DEEPINFRA: &str = "zai-org/GLM-5.1:deepinfra";
 // Additional Novita models
 pub const MINIMAX_M2_7_NOVITA: &str = "MiniMaxAI/MiniMax-M2.7:novita";
 
+// MiniMax M3 via Novita
+pub const MINIMAX_M3_NOVITA: &str = "MiniMaxAI/MiniMax-M3:novita";
+
 pub const REASONING_MODELS: &[&str] = &[
     // All recommended conversational LLMs support reasoning
     QWEN3_CODER_480B_A35B_INSTRUCT,
@@ -83,6 +87,7 @@ pub const REASONING_MODELS: &[&str] = &[
     ZAI_GLM_5_1_ZAI_ORG,
     ZAI_GLM_5_1_DEEPINFRA,
     MINIMAX_M2_7_NOVITA,
+    MINIMAX_M3_NOVITA,
     QWEN3_5_397B_A17B_TOGETHER,
     DEEPSEEK_V4_PRO_TOGETHER,
     DEEPSEEK_V4_PRO_NOVITA,

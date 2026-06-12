@@ -1476,6 +1476,26 @@
           "structured_output": true
         }
       },
+      "MiniMaxAI/MiniMax-M3:novita": {
+        "id": "MiniMaxAI/MiniMax-M3:novita",
+        "name": "MiniMax-M3 (Novita)",
+        "description": "MiniMax-M3 model via Novita inference provider on HuggingFace router. Frontier multimodal coding model with 1M context window.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1000000,
+        "capabilities": {
+          "structured_output": true
+        }
+      },
       "deepseek-ai/DeepSeek-V4-Pro:novita": {
         "id": "deepseek-ai/DeepSeek-V4-Pro:novita",
         "name": "DeepSeek V4 Pro (Novita)",

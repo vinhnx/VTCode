@@ -106,6 +106,7 @@ impl ModelId {
             ModelId::HuggingFaceStep35Flash => models::huggingface::STEP_3_5_FLASH,
             ModelId::HuggingFaceGlm51Deepinfra => models::huggingface::ZAI_GLM_5_1_DEEPINFRA,
             ModelId::HuggingFaceMinimaxM27Novita => models::huggingface::MINIMAX_M2_7_NOVITA,
+            ModelId::HuggingFaceMinimaxM3Novita => models::huggingface::MINIMAX_M3_NOVITA,
             ModelId::HuggingFaceDeepseekV4ProNovita => models::huggingface::DEEPSEEK_V4_PRO_NOVITA,
             ModelId::HuggingFaceNvidiaNemotron3Ultra550bA55bNvfp4Together => {
                 models::huggingface::NVIDIA_NEMOTRON_3_ULTRA_550B_A55B_NVFP4_TOGETHER

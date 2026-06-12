@@ -320,6 +320,7 @@ impl ModelId {
                 | ModelId::HuggingFaceDeepseekV4ProTogether
                 | ModelId::HuggingFaceGlm51Deepinfra
                 | ModelId::HuggingFaceMinimaxM27Novita
+                | ModelId::HuggingFaceMinimaxM3Novita
                 | ModelId::HuggingFaceDeepseekV4ProNovita
                 | ModelId::HuggingFaceNvidiaNemotron3Ultra550bA55bNvfp4Together
                 | ModelId::OpenRouterMoonshotaiKimiK26
@@ -384,6 +385,7 @@ impl ModelId {
                 | ModelId::HuggingFaceDeepseekV4ProTogether
                 | ModelId::HuggingFaceGlm51Deepinfra
                 | ModelId::HuggingFaceMinimaxM27Novita
+                | ModelId::HuggingFaceMinimaxM3Novita
                 | ModelId::HuggingFaceDeepseekV4ProNovita
                 | ModelId::HuggingFaceNvidiaNemotron3Ultra550bA55bNvfp4Together
                 | ModelId::OpenRouterMoonshotaiKimiK26
@@ -485,6 +487,7 @@ impl ModelId {
             ModelId::HuggingFaceOpenAIGptOss120b => "oss",
             ModelId::HuggingFaceMinimaxM25Novita => "m2.5",
             ModelId::HuggingFaceMinimaxM27Novita => "m2.7",
+            ModelId::HuggingFaceMinimaxM3Novita => "m3",
             ModelId::HuggingFaceGlm5Novita => "5",
             ModelId::HuggingFaceGlm51ZaiOrg => "5.1",
             ModelId::HuggingFaceGlm51Deepinfra => "5.1",

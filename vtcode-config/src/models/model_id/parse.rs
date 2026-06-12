@@ -188,6 +188,9 @@ impl FromStr for ModelId {
             s if s == models::huggingface::MINIMAX_M2_7_NOVITA => {
                 Ok(ModelId::HuggingFaceMinimaxM27Novita)
             }
+            s if s == models::huggingface::MINIMAX_M3_NOVITA => {
+                Ok(ModelId::HuggingFaceMinimaxM3Novita)
+            }
             s if s == models::huggingface::DEEPSEEK_V4_PRO_NOVITA => {
                 Ok(ModelId::HuggingFaceDeepseekV4ProNovita)
             }

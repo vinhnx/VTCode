@@ -2088,6 +2088,31 @@ fn huggingface_presets() -> Vec<ModelPreset> {
             supported_in_api: true,
             context_window: Some(128_000),
         },
+        ModelPreset {
+            id: "huggingface/minimax-m3".to_string(),
+            model: "MiniMaxAI/MiniMax-M3:novita".to_string(),
+            display_name: "MiniMax-M3 (HF/Novita)".to_string(),
+            description:
+                "Frontier multimodal coding model with 1M context window via Novita inference provider"
+                    .to_string(),
+            provider: Provider::HuggingFace,
+            default_reasoning_effort: ReasoningEffortLevel::High,
+            supported_reasoning_efforts: vec![
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::High,
+                    description: "Balanced".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::Max,
+                    description: "Maximum thinking".to_string(),
+                },
+            ],
+            is_default: false,
+            upgrade: None,
+            show_in_picker: true,
+            supported_in_api: true,
+            context_window: Some(1_000_000),
+        },
     ]
 }
 

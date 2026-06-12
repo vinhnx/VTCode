@@ -107,6 +107,8 @@ pub enum ModelId {
     HuggingFaceGlm51Deepinfra,
     /// MiniMax M2.7 via Novita on Hugging Face router
     HuggingFaceMinimaxM27Novita,
+    /// MiniMax M3 via Novita on Hugging Face router
+    HuggingFaceMinimaxM3Novita,
     /// DeepSeek V4 Pro via Novita on Hugging Face router
     HuggingFaceDeepseekV4ProNovita,
     /// NVIDIA Nemotron 3 Ultra 550B via Together on Hugging Face router

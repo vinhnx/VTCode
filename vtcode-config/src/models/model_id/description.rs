@@ -248,6 +248,9 @@ impl ModelId {
             ModelId::HuggingFaceMinimaxM27Novita => {
                 "MiniMax-M2.7 model via Novita inference provider on HuggingFace router. Recursive self-improvement with enhanced reasoning."
             }
+            ModelId::HuggingFaceMinimaxM3Novita => {
+                "MiniMax-M3 model via Novita inference provider on HuggingFace router. Frontier multimodal coding model with 1M context window."
+            }
             ModelId::HuggingFaceDeepseekV4ProNovita => {
                 "DeepSeek V4 Pro via Novita inference provider on HuggingFace router. High-performance reasoning model with advanced thinking capabilities (1M context, 1.6T params)."
             }
