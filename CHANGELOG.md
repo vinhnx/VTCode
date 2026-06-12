@@ -2,6 +2,13 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.127.0 - 2026-06-12
+
+### Highlights
+### Other Changes
+#### Refactors
+
+- Remove deprecated Qwen models from openrouter_models.json (d0c22c32) 
 ## 0.126.0 - 2026-06-12
 
 ### Highlights
