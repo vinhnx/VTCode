@@ -38,6 +38,10 @@ pub struct ProviderConfig {
     /// Anthropic provider configuration
     #[serde(default)]
     pub anthropic: AnthropicConfig,
+
+    /// Xiaomi MiMo auth method: "payg" or "token-plan"
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mimo_auth_method: Option<String>,
 }
 
 /// Codex-compatible top-level feature flags.

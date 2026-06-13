@@ -104,7 +104,7 @@ pub use mcp::{
     McpLifecycleConfig, McpProviderConfig, McpStdioServerConfig, McpTransportConfig, McpUiConfig,
     McpUiMode,
 };
-pub use models::{ModelId, OpenRouterMetadata};
+pub use models::{MiMoAuthMethod, ModelId, OpenRouterMetadata};
 pub use optimization::{
     AgentExecutionConfig, AsyncPipelineConfig, CommandCacheConfig, FileReadCacheConfig,
     LLMClientConfig, MemoryPoolConfig, OptimizationConfig, ProfilingConfig, ToolRegistryConfig,

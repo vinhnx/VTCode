@@ -1,9 +1,9 @@
 // Claude 4.x series - Latest Anthropic models
 pub const DEFAULT_MODEL: &str = "claude-opus-4-8";
 pub const SUPPORTED_MODELS: &[&str] = &[
-    "claude-opus-4-8", // Latest premium flagship with adaptive thinking
-    "claude-sonnet-4-6", // Latest balanced flagship for complex agents and coding
-    "claude-haiku-4-5", // Fastest model with near-frontier intelligence
+    "claude-opus-4-8",           // Latest premium flagship with adaptive thinking
+    "claude-sonnet-4-6",         // Latest balanced flagship for complex agents and coding
+    "claude-haiku-4-5",          // Fastest model with near-frontier intelligence
     "claude-haiku-4-5-20251001", // Haiku 4.5 versioned
 ];
 
@@ -22,4 +22,3 @@ pub const REASONING_MODELS: &[&str] = &[
     CLAUDE_HAIKU_4_5,
     CLAUDE_HAIKU_4_5_20251001,
 ];
-

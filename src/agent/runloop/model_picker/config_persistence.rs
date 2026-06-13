@@ -27,6 +27,11 @@ pub(super) async fn persist_selection(
     config.agent.reasoning_effort = selection.reasoning;
     config.provider.openai.service_tier = synced_openai_service_tier(selection);
 
+    // Store MiMo auth method when provider is MiMo
+    if selection.provider_enum == Some(Provider::MiMo) {
+        config.provider.mimo_auth_method = selection.mimo_auth_method.map(|m| m.to_string());
+    }
+
     manager.save_config(&config)?;
     update_model_preference(&selection.provider, &selection.model)
         .await
@@ -153,6 +158,7 @@ mod tests {
             env_key: "TEST_API_KEY".to_string(),
             requires_api_key: false,
             uses_chatgpt_auth: false,
+            mimo_auth_method: None,
         }
     }
 

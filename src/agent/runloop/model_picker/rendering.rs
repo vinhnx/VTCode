@@ -13,9 +13,9 @@ use super::selection::SelectionDetail;
 
 mod prompts;
 pub(super) use prompts::{
-    prompt_api_key_plain, prompt_custom_model_entry, prompt_reasoning_plain,
-    prompt_service_tier_plain, render_reasoning_inline, render_service_tier_inline,
-    show_secure_api_modal,
+    prompt_api_key_plain, prompt_custom_model_entry, prompt_mimo_auth_method_plain,
+    prompt_reasoning_plain, prompt_service_tier_plain, render_mimo_auth_method_inline,
+    render_reasoning_inline, render_service_tier_inline, show_secure_api_modal,
 };
 
 pub(super) const CLOSE_THEME_MESSAGE: &str =
