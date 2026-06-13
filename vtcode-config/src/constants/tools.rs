@@ -118,3 +118,120 @@ pub const CLOSE_AGENT: &str = "close_agent";
 
 // Special wildcard for full access
 pub const WILDCARD_ALL: &str = "*";
+
+// ===========================================================================
+// Compile-time validation
+//
+// All tool name constants are validated at compile time. These assertions
+// ensure every name is non-empty, uses only [a-z0-9_], and contains no
+// leading/trailing underscores (which would signal a naming convention
+// violation). The wildcard "*" is exempt from character checks.
+// ===========================================================================
+
+const _: () = {
+    /// Validate a tool name at compile time. Panics with a clear message
+    /// if the name is empty, contains invalid characters, or has leading/
+    /// trailing underscores (except for the wildcard "*").
+    const fn validate_tool_name(name: &str) {
+        assert!(!name.is_empty(), "tool name must not be empty");
+        let bytes = name.as_bytes();
+        // Wildcard "*" is the only name allowed to bypass character checks
+        if bytes.len() == 1 && bytes[0] == b'*' {
+            return;
+        }
+        assert!(
+            bytes[0] != b'_' && bytes[bytes.len() - 1] != b'_',
+            "tool name must not have leading/trailing underscores"
+        );
+        let mut i = 0;
+        while i < bytes.len() {
+            let b = bytes[i];
+            assert!(
+                b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_',
+                "tool name must contain only [a-z0-9_]"
+            );
+            i += 1;
+        }
+    }
+
+    // Unified tools
+    validate_tool_name(UNIFIED_SEARCH);
+    validate_tool_name(UNIFIED_EXEC);
+    validate_tool_name(UNIFIED_FILE);
+
+    // Tool IDs
+    validate_tool_name(THINK);
+    validate_tool_name(SEARCH_TOOLS);
+    validate_tool_name(MCP_SEARCH_TOOLS);
+    validate_tool_name(MCP_GET_TOOL_DETAILS);
+    validate_tool_name(MCP_LIST_SERVERS);
+    validate_tool_name(MCP_CONNECT_SERVER);
+    validate_tool_name(MCP_DISCONNECT_SERVER);
+    validate_tool_name(WEB_SEARCH);
+    validate_tool_name(WEB_FETCH);
+    validate_tool_name(FETCH_URL);
+    validate_tool_name(LIST);
+    validate_tool_name(GREP);
+    validate_tool_name(FETCH);
+    validate_tool_name(EXEC_PTY_CMD);
+    validate_tool_name(SHELL);
+    validate_tool_name(GREP_FILE);
+    validate_tool_name(LIST_FILES);
+
+    // Skill management
+    validate_tool_name(LIST_SKILLS);
+    validate_tool_name(LOAD_SKILL);
+    validate_tool_name(LOAD_SKILL_RESOURCE);
+
+    // Legacy execution aliases
+    validate_tool_name(EXEC_COMMAND);
+    validate_tool_name(WRITE_STDIN);
+    validate_tool_name(RUN_PTY_CMD);
+    validate_tool_name(CREATE_PTY_SESSION);
+    validate_tool_name(LIST_PTY_SESSIONS);
+    validate_tool_name(CLOSE_PTY_SESSION);
+    validate_tool_name(SEND_PTY_INPUT);
+    validate_tool_name(READ_PTY_SESSION);
+    validate_tool_name(RESIZE_PTY_SESSION);
+    validate_tool_name(EXECUTE_CODE);
+
+    // Legacy file operation aliases
+    validate_tool_name(READ_FILE);
+    validate_tool_name(WRITE_FILE);
+    validate_tool_name(EDIT_FILE);
+    validate_tool_name(DELETE_FILE);
+    validate_tool_name(CREATE_FILE);
+    validate_tool_name(APPLY_PATCH);
+    validate_tool_name(SEARCH_REPLACE);
+    validate_tool_name(FILE_OP);
+    validate_tool_name(MOVE_FILE);
+    validate_tool_name(COPY_FILE);
+
+    // Error & diagnostics
+    validate_tool_name(GET_ERRORS);
+
+    // HITL
+    validate_tool_name(REQUEST_USER_INPUT);
+    validate_tool_name(MEMORY);
+    validate_tool_name(ASK_QUESTIONS);
+    validate_tool_name(ASK_USER_QUESTION);
+    validate_tool_name(CRON_CREATE);
+    validate_tool_name(CRON_LIST);
+    validate_tool_name(CRON_DELETE);
+
+    // Planning workflow
+    validate_tool_name(START_PLANNING);
+    validate_tool_name(FINISH_PLANNING);
+    validate_tool_name(TASK_TRACKER);
+
+    // Subagent collaboration
+    validate_tool_name(SPAWN_AGENT);
+    validate_tool_name(SPAWN_BACKGROUND_SUBPROCESS);
+    validate_tool_name(SEND_INPUT);
+    validate_tool_name(WAIT_AGENT);
+    validate_tool_name(RESUME_AGENT);
+    validate_tool_name(CLOSE_AGENT);
+
+    // Wildcard
+    validate_tool_name(WILDCARD_ALL);
+};

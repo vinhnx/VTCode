@@ -3,6 +3,8 @@ use std::ffi::OsString;
 #[cfg(unix)]
 use std::os::unix::ffi::OsStrExt;
 
+use ctor::ctor;
+
 #[cfg(any(target_os = "linux", target_os = "android"))]
 #[allow(unsafe_code)]
 fn prctl_set_dumpable() -> i32 {
@@ -204,6 +206,104 @@ pub(crate) fn pre_main_hardening_windows() {
     // Windows process hardening would involve using Job Objects to limit
     // resource usage and restrict UI access, or using restricted tokens.
     // This is currently a future enhancement.
+}
+
+// ===========================================================================
+// Pre-main constructors (life before main)
+//
+// These run before main() via linker-section constructor tables. Priority
+// 0-100 is reserved for the C runtime; we use 101+ to run after libc init.
+// Constraints: no heap allocation, no locks, no panics, no stdio.
+// ===========================================================================
+
+/// Post-hardening sanity: verify that core dumps are disabled on Unix.
+///
+/// Runs at priority 101 — after C runtime init but before `main()`.
+/// This is a lightweight check that catches misconfigurations early.
+#[cfg(unix)]
+#[ctor(unsafe, priority = 101)]
+fn verify_hardening_effectiveness() {
+    use std::mem::MaybeUninit;
+
+    // SAFETY: getrlimit is a pure syscall that fills the output struct.
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "android",
+        target_os = "macos",
+        target_os = "freebsd",
+        target_os = "netbsd",
+        target_os = "openbsd"
+    ))]
+    {
+        // SAFETY: rlim is zeroed and passed by mutable ref to getrlimit which
+        // fills it. The syscall is infallible on valid pointers.
+        #[allow(unsafe_code)]
+        let mut rlim: libc::rlimit = unsafe { MaybeUninit::zeroed().assume_init() };
+        // SAFETY: getrlimit fills rlim via mutable pointer; the struct is
+        // zeroed above so no uninitialized memory is exposed.
+        #[allow(unsafe_code)]
+        let ret = unsafe { libc::getrlimit(libc::RLIMIT_CORE, &mut rlim) };
+        if ret == 0 && rlim.rlim_cur != 0 {
+            // Core dumps are not disabled. Write a warning directly to stderr
+            // using libc (stdio may not be initialized yet).
+            // SAFETY: msg is a static byte string; write is a POSIX syscall
+            // that does not dereference the pointer beyond msg.len() bytes.
+            #[allow(unsafe_code)]
+            unsafe {
+                let msg =
+                    b"warning: vtcode-process-hardening: RLIMIT_CORE is not zero after hardening\n";
+                libc::write(
+                    libc::STDERR_FILENO,
+                    msg.as_ptr() as *const libc::c_void,
+                    msg.len(),
+                );
+            }
+        }
+    }
+}
+
+/// Environment sanity: warn if essential env vars are missing.
+///
+/// Runs at priority 102. Checks that `HOME` (and on Unix, `USER`) are set,
+/// which are required for config resolution. Uses raw libc writes because
+/// stdio may not be initialized yet.
+#[cfg(unix)]
+#[ctor(unsafe, priority = 102)]
+fn check_environment_sanity() {
+    let home_set = std::env::var_os("HOME").is_some();
+    if !home_set {
+        // SAFETY: msg is a static byte string; write is a POSIX syscall
+        // that does not dereference the pointer beyond msg.len() bytes.
+        #[allow(unsafe_code)]
+        unsafe {
+            let msg =
+                b"warning: HOME environment variable is not set; config resolution may fail\n";
+            libc::write(
+                libc::STDERR_FILENO,
+                msg.as_ptr() as *const libc::c_void,
+                msg.len(),
+            );
+        }
+    }
+
+    // USER is not strictly required on all platforms but is a strong signal.
+    #[cfg(not(target_os = "windows"))]
+    {
+        let user_set = std::env::var_os("USER").is_some();
+        if !user_set {
+            // SAFETY: msg is a static byte string; write is a POSIX syscall
+            // that does not dereference the pointer beyond msg.len() bytes.
+            #[allow(unsafe_code)]
+            unsafe {
+                let msg = b"warning: USER environment variable is not set; some features may not work correctly\n";
+                libc::write(
+                    libc::STDERR_FILENO,
+                    msg.as_ptr() as *const libc::c_void,
+                    msg.len(),
+                );
+            }
+        }
+    }
 }
 
 #[cfg(unix)]

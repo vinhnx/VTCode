@@ -1408,6 +1408,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "ctor"
+version = "0.2.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32a2785755761f3ddc1492979ce1e48d2c00d09311c39e4466429188f3dd6501"
+dependencies = [
+ "quote",
+ "syn 2.0.117",
+]
+
+[[package]]
 name = "curve25519-dalek"
 version = "4.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7408,6 +7418,7 @@ dependencies = [
 name = "vtcode-process-hardening"
 version = "0.127.0"
 dependencies = [
+ "ctor",
  "libc",
  "pretty_assertions",
 ]
