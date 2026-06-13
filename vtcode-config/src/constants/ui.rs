@@ -92,12 +92,12 @@ pub const HEADER_INPUT_ENABLED: &str = "Enabled";
 pub const HEADER_INPUT_DISABLED: &str = "Disabled";
 pub const INLINE_USER_PREFIX: &str = " ";
 pub const CHAT_INPUT_PLACEHOLDER_BOOTSTRAP: &str =
-    "Type a request… @files /commands • Ctrl+Enter run • Enter queue";
+    "Type a request… Tab switch agent • @files /commands • Ctrl+Enter run • Enter queue";
 pub const CHAT_INPUT_PLACEHOLDER_FOLLOW_UP: &str =
-    "Continue… @files /commands • Ctrl+Enter run • Enter queue";
+    "Continue… Tab switch agent • @files /commands • Ctrl+Enter run • Enter queue";
 pub const CHAT_INPUT_PLACEHOLDER_INTERRUPTED: &str =
-    "Interrupted · What should VT Code do instead?";
-pub const HEADER_SHORTCUT_HINT: &str = "? help • / command • @ file • Ctrl+Enter run • Enter queue";
+    "Interrupted · What should VT Code do instead? • Esc cancel • Ctrl+C interrupt • Ctrl+D exit";
+pub const HEADER_SHORTCUT_HINT: &str = "? help • / command • @ file • Tab agent • Ctrl+Enter run • Enter queue • Esc cancel • Ctrl+C interrupt";
 pub const HEADER_META_SEPARATOR: &str = "   ";
 pub const WELCOME_TEXT_WIDTH: usize = 80;
 pub const WELCOME_SHORTCUT_SECTION_TITLE: &str = "Keyboard Shortcuts";
