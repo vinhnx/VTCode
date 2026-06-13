@@ -9,9 +9,54 @@ use anstyle::Effects;
 use insta::assert_snapshot;
 use ratatui::{Terminal, backend::TestBackend};
 use vtcode_core::ui::{
-    InlineHeaderContext, InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme,
+    InlineCommand, InlineHandle, InlineHeaderContext, InlineMessageKind, InlineSegment,
+    InlineTextStyle,
 };
-use vtcode_core::ui::{SessionOptions, spawn_session_with_options};
+
+fn inline_command_variant_name(command: &InlineCommand) -> &'static str {
+    match command {
+        InlineCommand::AppendLine { .. } => "AppendLine",
+        InlineCommand::AppendPastedMessage { .. } => "AppendPastedMessage",
+        InlineCommand::Inline { .. } => "Inline",
+        InlineCommand::ReplaceLast { .. } => "ReplaceLast",
+        InlineCommand::SetPrompt { .. } => "SetPrompt",
+        InlineCommand::SetPlaceholder { .. } => "SetPlaceholder",
+        InlineCommand::SetMessageLabels { .. } => "SetMessageLabels",
+        InlineCommand::SetHeaderContext { .. } => "SetHeaderContext",
+        InlineCommand::SetInputStatus { .. } => "SetInputStatus",
+        InlineCommand::SetTerminalTitleItems { .. } => "SetTerminalTitleItems",
+        InlineCommand::SetTerminalTitleThreadLabel { .. } => "SetTerminalTitleThreadLabel",
+        InlineCommand::SetTerminalTitleGitBranch { .. } => "SetTerminalTitleGitBranch",
+        InlineCommand::SetTheme { .. } => "SetTheme",
+        InlineCommand::SetAppearance { .. } => "SetAppearance",
+        InlineCommand::SetVimModeEnabled(_) => "SetVimModeEnabled",
+        InlineCommand::SetQueuedInputs { .. } => "SetQueuedInputs",
+        InlineCommand::SetSubprocessEntries { .. } => "SetSubprocessEntries",
+        InlineCommand::SetSubagentPreview { .. } => "SetSubagentPreview",
+        InlineCommand::SetLocalAgents { .. } => "SetLocalAgents",
+        InlineCommand::SetArchivedHistory { .. } => "SetArchivedHistory",
+        InlineCommand::SetPrimaryAgent { .. } => "SetPrimaryAgent",
+        InlineCommand::SetCursorVisible(_) => "SetCursorVisible",
+        InlineCommand::SetInputEnabled(_) => "SetInputEnabled",
+        InlineCommand::SetInput(_) => "SetInput",
+        InlineCommand::ApplySuggestedPrompt(_) => "ApplySuggestedPrompt",
+        InlineCommand::SetInlinePromptSuggestion { .. } => "SetInlinePromptSuggestion",
+        InlineCommand::ClearInlinePromptSuggestion => "ClearInlinePromptSuggestion",
+        InlineCommand::ClearInput => "ClearInput",
+        InlineCommand::ForceRedraw => "ForceRedraw",
+        InlineCommand::ShowTransient { .. } => "ShowTransient",
+        InlineCommand::CloseTransient => "CloseTransient",
+        InlineCommand::ClearScreen => "ClearScreen",
+        InlineCommand::SuspendEventLoop => "SuspendEventLoop",
+        InlineCommand::ResumeEventLoop => "ResumeEventLoop",
+        InlineCommand::ClearInputQueue => "ClearInputQueue",
+        InlineCommand::StopEventStream => "StopEventStream",
+        InlineCommand::StartEventStream => "StartEventStream",
+        InlineCommand::SetSkipConfirmations(_) => "SetSkipConfirmations",
+        InlineCommand::Shutdown => "Shutdown",
+        InlineCommand::SetReasoningStage(_) => "SetReasoningStage",
+    }
+}
 
 /// Test TUI with actual conversation history
 #[test]
@@ -30,29 +75,41 @@ fn test_tui_with_conversation_history() {
         })
         .unwrap();
 
-    assert_snapshot!(format!("{}", terminal.backend()));
+    assert_snapshot!(
+        format!("{}", terminal.backend()),
+        @r###"
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "###
+    );
 }
 
 /// Test actual UI state with populated content using the command system
-#[tokio::test]
-#[ignore] // Requires interactive terminal (stdin must be a TTY)
-async fn test_real_ui_scenario_with_commands() {
-    // Create a session with initial parameters
-    let session = spawn_session_with_options(
-        InlineTheme::default(),
-        SessionOptions {
-            placeholder: Some("Type your message here...".to_string()),
-            inline_rows: 12,
-            ..SessionOptions::default()
-        },
-    );
-
-    // Verify session was created
-    assert!(session.is_ok());
-    let session = session.unwrap();
+#[test]
+fn test_real_ui_scenario_with_commands() {
+    let (command_tx, mut command_rx) = tokio::sync::mpsc::unbounded_channel();
+    let handle = InlineHandle::new_for_tests(command_tx);
 
     // Send some commands to populate the UI with real content
-    session.handle.append_line(
+    handle.append_line(
         InlineMessageKind::User,
         vec![InlineSegment {
             text: "Can you help me refactor this Rust code?".to_string(),
@@ -60,7 +117,7 @@ async fn test_real_ui_scenario_with_commands() {
         }],
     );
 
-    session.handle.append_line(
+    handle.append_line(
         InlineMessageKind::Agent,
         vec![InlineSegment {
             text: "Sure! I can help you refactor your Rust code. Could you share the code you'd like to refactor?".to_string(),
@@ -68,7 +125,7 @@ async fn test_real_ui_scenario_with_commands() {
         }],
     );
 
-    session.handle.append_line(
+    handle.append_line(
         InlineMessageKind::User,
         vec![InlineSegment {
             text: "Here's the code I want to refactor:\n```rust\nfn calculate_sum(numbers: Vec<i32>) -> i32 {\n    let mut sum = 0;\n    for i in 0..numbers.len() {\n        sum += numbers[i];\n    }\n    sum\n}\n```".to_string(),
@@ -76,7 +133,7 @@ async fn test_real_ui_scenario_with_commands() {
         }],
     );
 
-    session.handle.append_line(
+    handle.append_line(
         InlineMessageKind::Agent,
         vec![InlineSegment {
             text: "I can help refactor this code to be more idiomatic Rust. Here's an improved version:\n```rust\nfn calculate_sum(numbers: &[i32]) -> i32 {\n    numbers.iter().sum()\n}\n```\nThis version: 1) Takes a slice instead of moving the Vec, 2) Uses iterator methods for better performance, 3) Is more idiomatic Rust.".to_string(),
@@ -84,13 +141,31 @@ async fn test_real_ui_scenario_with_commands() {
         }],
     );
 
-    // Verify the session handle still works
-    assert!(!session.events.is_closed());
+    let mut appended = Vec::new();
+    while let Ok(command) = command_rx.try_recv() {
+        match command {
+            InlineCommand::AppendLine { kind, segments } => appended.push((kind, segments)),
+            unexpected => panic!(
+                "unexpected inline command variant: {}",
+                inline_command_variant_name(&unexpected)
+            ),
+        }
+    }
 
-    // Snapshot the session state
-    assert_snapshot!(
-        "real_ui_scenario_session",
-        format!("Session created with messages: 4")
+    assert_eq!(appended.len(), 4);
+    assert_eq!(appended[0].0, InlineMessageKind::User);
+    assert_eq!(appended[1].0, InlineMessageKind::Agent);
+    assert_eq!(appended[2].0, InlineMessageKind::User);
+    assert_eq!(appended[3].0, InlineMessageKind::Agent);
+    assert_eq!(
+        appended[0].1.first().map(|segment| segment.text.as_str()),
+        Some("Can you help me refactor this Rust code?")
+    );
+    assert!(
+        appended[3]
+            .1
+            .first()
+            .is_some_and(|segment| segment.text.contains("numbers.iter().sum()"))
     );
 }
 
@@ -129,7 +204,19 @@ fn test_tui_with_different_header_contexts() {
     ];
 
     for (name, context) in contexts {
-        assert_snapshot!(format!("header_context_{}", name), format!("{:?}", context));
+        let expected = match name {
+            "basic_context" => {
+                r#"InlineHeaderContext { app_name: "App", provider: "openai", model: "gpt-oss-20b", context_window_size: None, version: "test-version", search_tools: None, persistent_memory: None, pr_review: None, editor_context: None, git: "git: unavailable", reasoning: "Reasoning effort: unavailable", reasoning_stage: None, workspace_trust: "Trust: unavailable", tools: "Tools: unavailable", mcp: "MCP: unavailable", primary_agent: None, highlights: [], subagent_badges: [] }"#
+            }
+            "advanced_context" => {
+                r#"InlineHeaderContext { app_name: "App", provider: "anthropic", model: "claude-3", context_window_size: None, version: "test-version", search_tools: None, persistent_memory: None, pr_review: None, editor_context: None, git: "git: unavailable", reasoning: "analytical", reasoning_stage: None, workspace_trust: "Trust: unavailable", tools: "Tools: unavailable", mcp: "MCP: unavailable", primary_agent: None, highlights: [], subagent_badges: [] }"#
+            }
+            "minimal_context" => {
+                r#"InlineHeaderContext { app_name: "App", provider: "local", model: "llama3", context_window_size: None, version: "test-version", search_tools: None, persistent_memory: None, pr_review: None, editor_context: None, git: "git: unavailable", reasoning: "Reasoning effort: unavailable", reasoning_stage: None, workspace_trust: "Trust: unavailable", tools: "Tools: unavailable", mcp: "MCP: unavailable", primary_agent: None, highlights: [], subagent_badges: [] }"#
+            }
+            _ => unreachable!("unexpected context fixture"),
+        };
+        assert_eq!(format!("{context:?}"), expected);
     }
 }
 
@@ -180,10 +267,17 @@ fn test_ui_message_combinations() {
             .iter()
             .map(|(kind, text)| format!("{kind:?}: {text}"))
             .collect();
-        assert_snapshot!(
-            format!("message_combo_{}", name),
-            format!("{:?}", message_repr)
-        );
+        let expected = match name {
+            "user_agent_exchange" => r#"["User: Hello!", "Agent: Hi there! How can I help you?"]"#,
+            "error_scenario" => {
+                r#"["User: Run this command", "Error: Command failed with error: Permission denied", "Agent: I encountered an error. Would you like me to try again with sudo?"]"#
+            }
+            "tool_usage" => {
+                r#"["User: Show me files in current directory", "Tool: run_pty_cmd([\"ls\", \"-la\"])", "Pty: file1.txt  file2.rs  src/", "Agent: I've listed the files in the current directory for you."]"#
+            }
+            _ => unreachable!("unexpected message fixture"),
+        };
+        assert_eq!(format!("{message_repr:?}"), expected);
     }
 }
 
@@ -242,6 +336,21 @@ fn test_ui_styling_variations() {
     ];
 
     for (name, segment) in styled_segments {
-        assert_snapshot!(format!("styled_segment_{}", name), format!("{:?}", segment));
+        let expected = match name {
+            "plain_text" => {
+                r#"InlineSegment { text: "This is plain text", style: InlineTextStyle { color: None, bg_color: None, effects: Effects() } }"#
+            }
+            "bold_text" => {
+                r#"InlineSegment { text: "This is bold text", style: InlineTextStyle { color: None, bg_color: None, effects: Effects(BOLD) } }"#
+            }
+            "italic_text" => {
+                r#"InlineSegment { text: "This is italic text", style: InlineTextStyle { color: None, bg_color: None, effects: Effects(ITALIC) } }"#
+            }
+            "bold_italic_text" => {
+                r#"InlineSegment { text: "This is bold and italic text", style: InlineTextStyle { color: None, bg_color: None, effects: Effects(BOLD | ITALIC) } }"#
+            }
+            _ => unreachable!("unexpected style fixture"),
+        };
+        assert_eq!(format!("{segment:?}"), expected);
     }
 }

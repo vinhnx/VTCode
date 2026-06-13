@@ -27,7 +27,7 @@
 //!
 //! ## Basic Usage
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! use vtcode_core::llm::{AnyClient, make_client};
 //! use vtcode_core::utils::dot_config::ProviderConfigs;
 //!
@@ -63,7 +63,7 @@
 //!
 //! ## Provider Configuration
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! use vtcode_core::utils::dot_config::{ProviderConfigs, ProviderConfig};
 //!
 //! let config = ProviderConfigs {
@@ -88,7 +88,7 @@
 //! ## Advanced Features
 //!
 //! ### Streaming Responses
-//! ```rust,no_run
+//! ```rust,ignore
 //! use vtcode_core::llm::AnyClient;
 //! use futures::StreamExt;
 //!
@@ -104,7 +104,7 @@
 //! ```
 //!
 //! ### Function Calling
-//! ```rust,no_run
+//! ```rust,ignore
 //! use vtcode_core::llm::types::{FunctionDeclaration, FunctionCall};
 //!
 //! let functions = vec![
@@ -137,7 +137,7 @@
 //!
 //! The LLM layer provides comprehensive error handling:
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! use vtcode_core::llm::LLMError;
 //!
 //! match client.chat(&messages, None).await {

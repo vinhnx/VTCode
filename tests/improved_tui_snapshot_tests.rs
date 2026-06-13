@@ -32,7 +32,31 @@ fn test_actual_tui_rendering() {
         .unwrap();
 
     // Capture the actual terminal output as a snapshot
-    assert_snapshot!(format!("{}", terminal.backend()));
+    assert_snapshot!(
+        format!("{}", terminal.backend()),
+        @r###"
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "###
+    );
 }
 
 /// Test that UI components are properly serializable for debugging
@@ -41,7 +65,10 @@ fn test_ui_component_serialization() {
     // Test InlineTheme serialization
     let theme = InlineTheme::default();
     let theme_repr = format!("{theme:?}");
-    assert_snapshot!("theme_representation", theme_repr);
+    assert_snapshot!(
+        &theme_repr,
+        @"InlineTheme { foreground: None, background: None, primary: None, secondary: None, tool_accent: None, tool_body: None, pty_body: None }"
+    );
 
     // Test InlineSegment serialization with different styles
     let normal_segment = InlineSegment {
@@ -53,7 +80,10 @@ fn test_ui_component_serialization() {
         }
         .into(),
     };
-    assert_snapshot!("normal_segment", format!("{:?}", normal_segment));
+    assert_snapshot!(
+        &format!("{:?}", normal_segment),
+        @"InlineSegment { text: \"Normal text\", style: InlineTextStyle { color: None, bg_color: None, effects: Effects() } }"
+    );
 
     let bold_segment = InlineSegment {
         text: "Bold text".to_string(),
@@ -64,7 +94,10 @@ fn test_ui_component_serialization() {
         }
         .into(),
     };
-    assert_snapshot!("bold_segment", format!("{:?}", bold_segment));
+    assert_snapshot!(
+        &format!("{:?}", bold_segment),
+        @"InlineSegment { text: \"Bold text\", style: InlineTextStyle { color: None, bg_color: None, effects: Effects(BOLD) } }"
+    );
 
     let italic_segment = InlineSegment {
         text: "Italic text".to_string(),
@@ -75,7 +108,10 @@ fn test_ui_component_serialization() {
         }
         .into(),
     };
-    assert_snapshot!("italic_segment", format!("{:?}", italic_segment));
+    assert_snapshot!(
+        &format!("{:?}", italic_segment),
+        @"InlineSegment { text: \"Italic text\", style: InlineTextStyle { color: None, bg_color: None, effects: Effects(ITALIC) } }"
+    );
 }
 
 /// Test header context rendering simulation
@@ -104,25 +140,43 @@ fn test_header_context_rendering() {
 
     // Test that the context can be properly represented
     let context_repr = format!("{context:?}");
-    assert_snapshot!("header_context_representation", context_repr);
+    assert_snapshot!(
+        &context_repr,
+        @"InlineHeaderContext { app_name: \"VT Code\", provider: \"openai\", model: \"gpt-oss-20b\", context_window_size: None, version: \"0.37.1\", search_tools: None, persistent_memory: None, pr_review: None, editor_context: None, git: \"main branch\", reasoning: \"creative\", reasoning_stage: None, workspace_trust: \"trusted\", tools: \"enabled\", mcp: \"available\", primary_agent: None, highlights: [], subagent_badges: [] }"
+    );
 }
 
 /// Test message kind representations
 #[test]
 fn test_message_kind_representations() {
-    let kinds = vec![
-        (InlineMessageKind::Agent, "agent"),
-        (InlineMessageKind::User, "user"),
-        (InlineMessageKind::Error, "error"),
-        (InlineMessageKind::Info, "info"),
-        (InlineMessageKind::Policy, "policy"),
-        (InlineMessageKind::Tool, "tool"),
-        (InlineMessageKind::Pty, "pty"),
-    ];
-
-    for (kind, name) in kinds {
-        assert_snapshot!(format!("message_kind_{}", name), format!("{:?}", kind));
-    }
+    assert_snapshot!(
+        &format!("{:?}", InlineMessageKind::Agent),
+        @"Agent"
+    );
+    assert_snapshot!(
+        &format!("{:?}", InlineMessageKind::User),
+        @"User"
+    );
+    assert_snapshot!(
+        &format!("{:?}", InlineMessageKind::Error),
+        @"Error"
+    );
+    assert_snapshot!(
+        &format!("{:?}", InlineMessageKind::Info),
+        @"Info"
+    );
+    assert_snapshot!(
+        &format!("{:?}", InlineMessageKind::Policy),
+        @"Policy"
+    );
+    assert_snapshot!(
+        &format!("{:?}", InlineMessageKind::Tool),
+        @"Tool"
+    );
+    assert_snapshot!(
+        &format!("{:?}", InlineMessageKind::Pty),
+        @"Pty"
+    );
 }
 
 /// Test TUI session creation and basic functionality
@@ -145,5 +199,8 @@ async fn test_tui_session_creation() {
     assert!(startup_ok);
 
     // Snapshot the creation result
-    assert_snapshot!("session_creation_success", format!("{:?}", startup_ok));
+    assert_snapshot!(
+        &format!("{:?}", startup_ok),
+        @"true"
+    );
 }

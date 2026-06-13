@@ -521,6 +521,7 @@ impl ToolRegistry {
 
         match action {
             UnifiedSearchAction::Grep => {
+                ensure_unified_search_grep_pattern(&args)?;
                 let manager = self.inventory.grep_file_manager();
                 manager
                     .perform_search(serde_json::from_value(args)?)
@@ -813,6 +814,22 @@ impl ToolRegistry {
     // ============================================================
     // INTERNAL IMPLEMENTATIONS
     // ============================================================
+}
+
+fn ensure_unified_search_grep_pattern(args: &Value) -> Result<()> {
+    let pattern = args
+        .get("pattern")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .unwrap_or_default();
+
+    if pattern.is_empty() {
+        bail!(
+            "unified_search action='grep' requires a non-empty pattern. Use unified_file action='read' to read file contents, or provide specific text/regex to search for."
+        );
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -1195,9 +1212,9 @@ mod unified_action_error_tests {
         attach_exec_recovery_guidance, attach_failure_diagnostics_metadata,
         build_exec_output_preview, build_exec_response, build_head_tail_preview,
         cargo_selector_error_diagnostics, cargo_test_failure_diagnostics, cargo_test_rerun_hint,
-        clamp_inspect_lines, clamp_max_matches, extract_run_session_id_from_read_file_error,
-        extract_run_session_id_from_tool_output_path, filter_lines,
-        missing_unified_exec_action_error, missing_unified_search_action_error,
+        clamp_inspect_lines, clamp_max_matches, ensure_unified_search_grep_pattern,
+        extract_run_session_id_from_read_file_error, extract_run_session_id_from_tool_output_path,
+        filter_lines, missing_unified_exec_action_error, missing_unified_search_action_error,
         resolve_exec_run_session_id, summarized_arg_keys,
     };
     use crate::tools::types::VTCodeExecSession;
@@ -1231,6 +1248,30 @@ mod unified_action_error_tests {
         let text = err.to_string();
         assert!(text.contains("Missing unified_search action"));
         assert!(text.contains("unexpected"));
+    }
+
+    #[test]
+    fn unified_search_grep_rejects_empty_patterns() {
+        let err = ensure_unified_search_grep_pattern(&json!({
+            "action": "grep",
+            "pattern": "   ",
+            "path": "README.md"
+        }))
+        .expect_err("empty grep pattern should be rejected");
+
+        let text = err.to_string();
+        assert!(text.contains("requires a non-empty pattern"));
+        assert!(text.contains("unified_file"));
+    }
+
+    #[test]
+    fn unified_search_grep_accepts_non_empty_patterns() {
+        ensure_unified_search_grep_pattern(&json!({
+            "action": "grep",
+            "pattern": "VT Code",
+            "path": "README.md"
+        }))
+        .expect("specific grep pattern should be accepted");
     }
 
     #[test]

@@ -270,6 +270,50 @@ pub enum ToolChoice {
     /// Force the model to call a specific tool
     /// Useful for directing model to use particular functionality
     Specific(SpecificToolChoice),
+
+    /// OpenAI Responses native allowed-tools filtering.
+    ///
+    /// This is advisory provider-side filtering only; runtime dispatch remains
+    /// authoritative. Providers without native support should degrade this to
+    /// the equivalent auto/required tool choice while keeping the full
+    /// catalogue visible.
+    AllowedTools(AllowedToolsChoice),
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum AllowedToolsMode {
+    Auto,
+    Required,
+}
+
+impl AllowedToolsMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::Required => "required",
+        }
+    }
+
+    fn anthropic_mode(self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::Required => "any",
+        }
+    }
+
+    fn gemini_mode(self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::Required => "any",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AllowedToolsChoice {
+    pub mode: AllowedToolsMode,
+    pub tools: Vec<String>,
 }
 
 /// Specific tool choice for forcing a particular function call
@@ -311,6 +355,13 @@ impl ToolChoice {
         })
     }
 
+    pub fn allowed_tools_auto(tools: Vec<String>) -> Self {
+        Self::AllowedTools(AllowedToolsChoice {
+            mode: AllowedToolsMode::Auto,
+            tools,
+        })
+    }
+
     /// Check if this tool choice allows parallel tool use
     /// Based on Anthropic's parallel tool use guidelines
     pub fn allows_parallel_tools(&self) -> bool {
@@ -319,6 +370,7 @@ impl ToolChoice {
             Self::Auto => true,
             // Any forces at least one tool, may allow parallel
             Self::Any => true,
+            Self::AllowedTools(choice) => matches!(choice.mode, AllowedToolsMode::Auto),
             // Specific forces one particular tool, typically no parallel
             Self::Specific(_) => false,
             // None disables tools entirely
@@ -332,6 +384,7 @@ impl ToolChoice {
             Self::Auto => "Model decides when to use tools (allows parallel)",
             Self::None => "No tools will be used",
             Self::Any => "At least one tool must be used (allows parallel)",
+            Self::AllowedTools(_) => "Model decides when to use the currently allowed tool subset",
             Self::Specific(_) => "Specific tool must be used (no parallel)",
         }
     }
@@ -372,6 +425,7 @@ impl ToolChoice {
             Self::None => json!("none"),
             Self::Any => json!("required"),
             Self::Specific(choice) => json!(choice),
+            Self::AllowedTools(choice) => json!(choice.mode.as_str()),
         }
     }
 
@@ -382,6 +436,7 @@ impl ToolChoice {
             Self::None => json!({"type": "none"}),
             Self::Any => json!({"type": "any"}),
             Self::Specific(choice) => json!({"type": "tool", "name": &choice.function.name}),
+            Self::AllowedTools(choice) => json!({"type": choice.mode.anthropic_mode()}),
         }
     }
 
@@ -391,6 +446,7 @@ impl ToolChoice {
             Self::Auto => json!({"mode": "auto"}),
             Self::None => json!({"mode": "none"}),
             Self::Any => json!({"mode": "any"}),
+            Self::AllowedTools(choice) => json!({"mode": choice.mode.gemini_mode()}),
             Self::Specific(choice) => {
                 json!({"mode": "any", "allowed_function_names": [&choice.function.name]})
             }

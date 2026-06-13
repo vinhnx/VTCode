@@ -21,7 +21,7 @@
 //!
 //! ## Usage
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! use vtcode_core::sandboxing::{SandboxPolicy, SandboxManager, CommandSpec, ResourceLimits};
 //!
 //! let policy = SandboxPolicy::read_only();

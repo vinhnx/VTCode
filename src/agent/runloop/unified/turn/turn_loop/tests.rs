@@ -278,6 +278,7 @@ fn accumulate_turn_usage_merges_prompt_completion_and_cached_tokens() {
             cached_prompt_tokens: Some(15),
             cache_creation_tokens: None,
             cache_read_tokens: Some(15),
+            iterations: None,
         }),
     );
     accumulate_turn_usage(
@@ -289,6 +290,7 @@ fn accumulate_turn_usage_merges_prompt_completion_and_cached_tokens() {
             cached_prompt_tokens: None,
             cache_creation_tokens: None,
             cache_read_tokens: None,
+            iterations: None,
         }),
     );
 

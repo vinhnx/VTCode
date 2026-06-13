@@ -1257,7 +1257,7 @@ impl LLMProvider for OllamaProvider {
     fn validate_request(&self, request: &LLMRequest) -> Result<(), LLMError> {
         if let Some(tool_choice) = &request.tool_choice {
             match tool_choice {
-                ToolChoice::Auto | ToolChoice::None => {}
+                ToolChoice::Auto | ToolChoice::None | ToolChoice::AllowedTools(_) => {}
                 _ => {
                     return Err(LLMError::InvalidRequest {
                         message: "Ollama does not support explicit tool_choice overrides"

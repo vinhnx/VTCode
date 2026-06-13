@@ -88,11 +88,12 @@ fn prompt_file_content_variations() {
 /// Test that the actual prompts/system.md file exists and is valid (if present)
 #[test]
 fn actual_prompt_file_validation() {
-    let prompt_path = Path::new(prompts::DEFAULT_SYSTEM_PROMPT_PATH);
+    let prompt_path =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join(prompts::DEFAULT_SYSTEM_PROMPT_PATH);
 
     if prompt_path.exists() {
         let content =
-            fs::read_to_string(prompt_path).expect("Failed to read actual prompts/system.md");
+            fs::read_to_string(&prompt_path).expect("Failed to read actual prompts/system.md");
 
         // Basic validation of the system prompt content
         assert!(!content.is_empty(), "System prompt should not be empty");
@@ -139,7 +140,7 @@ fn actual_prompt_file_validation() {
 /// Test directory structure requirements
 #[test]
 fn prompt_directory_structure() {
-    let expected_dir = Path::new("prompts");
+    let expected_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("prompts");
 
     if expected_dir.exists() {
         assert!(
@@ -179,10 +180,6 @@ fn prompt_directory_structure() {
 #[test]
 fn integration_prompt_loading_workflow() {
     let temp_dir = TempDir::new().expect("Failed to create temp directory");
-    let original_dir = std::env::current_dir().expect("Failed to get current directory");
-
-    // Change to temp directory for this test
-    std::env::set_current_dir(&temp_dir).expect("Failed to change directory");
 
     // Create the expected directory structure
     let prompts_dir = temp_dir.path().join("prompts");
@@ -211,15 +208,13 @@ Always respond with helpful, accurate information about the codebase.
     assert!(prompt_path.is_file());
 
     // Test loading the content
-    let loaded_content = fs::read_to_string(prompts::DEFAULT_SYSTEM_PROMPT_PATH)
-        .expect("Failed to load system prompt using constant path");
+    let loaded_content =
+        fs::read_to_string(temp_dir.path().join(prompts::DEFAULT_SYSTEM_PROMPT_PATH))
+            .expect("Failed to load system prompt using constant path");
 
     assert_eq!(loaded_content, system_prompt);
     assert!(loaded_content.contains("VT Code"));
     assert!(loaded_content.contains("Available Tools"));
-
-    // Restore original directory
-    std::env::set_current_dir(original_dir).expect("Failed to restore directory");
 
     println!("[SUCCESS] Integration test completed successfully");
 }

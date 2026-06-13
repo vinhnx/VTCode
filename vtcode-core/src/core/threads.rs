@@ -554,6 +554,7 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial(session_dir_override)]
     fn list_recent_sessions_in_scope_filters_by_workspace() {
         let _guard = SESSION_DIR_TEST_GUARD
             .lock()
@@ -606,6 +607,7 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial(session_dir_override)]
     fn prepare_archived_session_resume_reuses_source_identifier_and_archive() {
         let _guard = SESSION_DIR_TEST_GUARD
             .lock()
@@ -681,6 +683,7 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial(session_dir_override)]
     fn prepare_archived_session_fork_uses_new_identifier_and_preserves_history() {
         let _guard = SESSION_DIR_TEST_GUARD
             .lock()
@@ -761,6 +764,7 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial(session_dir_override)]
     fn prepare_archived_session_preserves_prompt_cache_lineage_when_compatible() {
         let _guard = SESSION_DIR_TEST_GUARD
             .lock()
@@ -823,6 +827,7 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial(session_dir_override)]
     fn prepare_archived_session_resets_prompt_cache_lineage_on_model_change() {
         let _guard = SESSION_DIR_TEST_GUARD
             .lock()

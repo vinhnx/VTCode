@@ -7,13 +7,17 @@ use anyhow::{Result, anyhow};
 use hashbrown::HashSet;
 
 impl AgentRunner {
-    pub(super) async fn build_exposed_tool_snapshot(&self) -> Result<SessionToolCatalogSnapshot> {
-        let config = SessionToolsConfig {
+    fn session_tools_config_for_snapshot(
+        &self,
+        planning_active: bool,
+        request_user_input_enabled: bool,
+    ) -> SessionToolsConfig {
+        SessionToolsConfig {
             surface: SessionSurface::AgentRunner,
             capability_level: CapabilityLevel::CodeSearch,
             documentation_mode: self.config().agent.tool_documentation_mode,
-            planning_active: self.tool_registry.is_planning_active(),
-            request_user_input_enabled: false,
+            planning_active,
+            request_user_input_enabled,
             model_capabilities: ToolModelCapabilities::for_model_name(&self.model),
             deferred_tool_policy: crate::tools::handlers::deferred_tool_policy_for_runtime(
                 crate::llm::factory::infer_provider(
@@ -33,21 +37,35 @@ impl AgentRunner {
                     &self.model,
                     Some(self.config()),
                 ),
-        };
+        }
+    }
 
-        let definitions = self.tool_registry.model_tools(config).await;
-        let mut exposed = Vec::with_capacity(definitions.len());
+    pub(super) async fn build_exposed_tool_snapshot(&self) -> Result<SessionToolCatalogSnapshot> {
+        let planning_active = self.tool_registry.is_planning_active();
+        let request_user_input_enabled = false;
+        // Build from the stable configuration, then strip any tool hidden by
+        // runtime policy before the snapshot reaches provider requests.
+        let stable_config = self.session_tools_config_for_snapshot(false, true);
+        let definitions = self.tool_registry.model_tools(stable_config).await;
+        let mut active_tool_names = Vec::new();
+        let mut exposed_definitions = Vec::new();
         for tool in definitions {
-            if self.is_tool_exposed(tool.function_name()).await {
-                exposed.push(tool);
+            let tool_name = tool.function_name().to_string();
+            if self.is_tool_exposed(tool_name.as_str()).await {
+                active_tool_names.push(tool_name);
+                exposed_definitions.push(tool);
             }
         }
 
-        Ok(self.tool_registry.tool_catalog_state().snapshot_for_defs(
-            exposed,
-            self.tool_registry.is_planning_active(),
-            false,
-        ))
+        Ok(self
+            .tool_registry
+            .tool_catalog_state()
+            .snapshot_for_stable_defs_with_active_names(
+                exposed_definitions,
+                active_tool_names,
+                planning_active,
+                request_user_input_enabled,
+            ))
     }
 
     pub(super) async fn build_exposed_tool_definitions(&self) -> Result<Vec<ToolDefinition>> {

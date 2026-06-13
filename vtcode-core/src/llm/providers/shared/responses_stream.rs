@@ -6,12 +6,20 @@ use futures::StreamExt;
 use hashbrown::{HashMap, HashSet};
 use serde_json::{Value, json};
 
-use super::StreamAggregator;
+use super::{StreamAggregator, parse_cached_prompt_tokens_from_usage};
 
+// Retained shared Responses stream processor.
+// Rig 0.38.2 can consume SSE, but VTCode needs a provider-agnostic
+// NormalizedStreamEvent contract: text/refusal/reasoning deltas, tool-call
+// start and argument deltas, tolerant empty-final-response recovery, and
+// backend error text. Protected by this module's `responses_stream` tests.
+// Remove only when Rig exposes an event adapter with the same normalised
+// surface for all VTCode providers that use Responses-style streaming.
 pub struct ResponsesNormalizedStreamOptions {
     pub provider_name: &'static str,
     pub model: String,
     pub emit_reasoning: bool,
+    pub include_cached_prompt_metrics: bool,
 }
 
 struct ResponsesNormalizedStreamProcessor<P> {
@@ -178,7 +186,11 @@ where
                         && streamed_response_is_usable(&streamed) =>
                 {
                     let mut response = streamed.clone();
-                    merge_final_response_metadata(&mut response, &final_response);
+                    merge_final_response_metadata(
+                        &mut response,
+                        &final_response,
+                        self.options.include_cached_prompt_metrics,
+                    );
                     response
                 }
                 Err(err) => return Err(err),
@@ -390,8 +402,12 @@ fn merge_streamed_response(response: &mut LLMResponse, streamed: LLMResponse) {
     }
 }
 
-fn merge_final_response_metadata(response: &mut LLMResponse, final_response: &Value) {
-    if let Some(usage) = parse_responses_usage(final_response) {
+fn merge_final_response_metadata(
+    response: &mut LLMResponse,
+    final_response: &Value,
+    include_cached_prompt_metrics: bool,
+) {
+    if let Some(usage) = parse_responses_usage(final_response, include_cached_prompt_metrics) {
         response.usage = Some(usage);
     }
 
@@ -404,8 +420,13 @@ fn merge_final_response_metadata(response: &mut LLMResponse, final_response: &Va
     }
 }
 
-fn parse_responses_usage(final_response: &Value) -> Option<crate::llm::provider::Usage> {
+fn parse_responses_usage(
+    final_response: &Value,
+    include_cached_prompt_metrics: bool,
+) -> Option<crate::llm::provider::Usage> {
     let usage_value = final_response.get("usage")?;
+    let cached_prompt_tokens =
+        parse_cached_prompt_tokens_from_usage(usage_value, include_cached_prompt_metrics);
     Some(crate::llm::provider::Usage {
         prompt_tokens: usage_value
             .get("input_tokens")
@@ -424,7 +445,7 @@ fn parse_responses_usage(final_response: &Value) -> Option<crate::llm::provider:
             .and_then(Value::as_u64)
             .and_then(|value| u32::try_from(value).ok())
             .unwrap_or(0),
-        cached_prompt_tokens: None,
+        cached_prompt_tokens,
         cache_creation_tokens: None,
         cache_read_tokens: None,
         iterations: None,
@@ -468,6 +489,7 @@ mod tests {
             provider_name: "TestProvider",
             model: "gpt-5".to_string(),
             emit_reasoning: true,
+            include_cached_prompt_metrics: false,
         }
     }
 
@@ -529,7 +551,9 @@ mod tests {
 
     #[test]
     fn empty_final_response_uses_streamed_text_and_preserves_metadata() {
-        let mut processor = ResponsesNormalizedStreamProcessor::new(options(), |value| {
+        let mut options = options();
+        options.include_cached_prompt_metrics = true;
+        let mut processor = ResponsesNormalizedStreamProcessor::new(options, |value| {
             let output = value
                 .get("output")
                 .and_then(Value::as_array)
@@ -555,7 +579,10 @@ mod tests {
                     "usage": {
                         "input_tokens": 11,
                         "output_tokens": 7,
-                        "total_tokens": 18
+                        "total_tokens": 18,
+                        "input_tokens_details": {
+                            "cached_tokens": 5
+                        }
                     }
                 }
             }))
@@ -572,6 +599,7 @@ mod tests {
         assert_eq!(usage.prompt_tokens, 11);
         assert_eq!(usage.completion_tokens, 7);
         assert_eq!(usage.total_tokens, 18);
+        assert_eq!(usage.cached_prompt_tokens, Some(5));
         assert_eq!(response.content.as_deref(), Some("streamed answer"));
         assert_eq!(response.request_id.as_deref(), Some("resp_streamed"));
     }

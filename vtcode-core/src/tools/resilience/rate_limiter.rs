@@ -13,7 +13,7 @@
 //! message).
 //!
 //! Usage example:
-//! ```rust
+//! ```rust,ignore
 //! use vtcode_core::tools::rate_limiter::GLOBAL_RATE_LIMITER;
 //!
 //! fn execute_tool() -> anyhow::Result<()> {

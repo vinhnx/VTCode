@@ -1,115 +1,118 @@
-//! Visual TUI snapshot tests with actual terminal output rendering
+//! TUI backend smoke tests.
 //!
-//! These tests create actual terminal outputs using TestBackend to verify
-//! the visual rendering of the TUI with different content types and states.
-//!
-//! To update snapshots, run: `cargo insta review`
+//! These tests exercise `TestBackend` sizing and session command plumbing.
+//! They intentionally do not render the session widget, so the backend remains
+//! blank after each draw.
 
-use insta::assert_snapshot;
 use ratatui::{Terminal, backend::TestBackend};
 use vtcode_core::ui::{
-    InlineHeaderContext, InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme,
-    SessionOptions, spawn_session_with_options,
+    InlineCommand, InlineHandle, InlineHeaderContext, InlineMessageKind, InlineSegment,
+    InlineTextStyle,
 };
 
-/// Test visual rendering of a simple user-agent exchange
+fn blank_terminal(width: usize, height: usize) -> String {
+    let mut output = (0..height)
+        .map(|_| format!("\"{}\"", " ".repeat(width)))
+        .collect::<Vec<_>>()
+        .join("\n");
+    output.push('\n');
+    output
+}
+
+fn smoke_handle() -> (
+    InlineHandle,
+    tokio::sync::mpsc::UnboundedReceiver<InlineCommand>,
+) {
+    let (command_tx, command_rx) = tokio::sync::mpsc::unbounded_channel();
+    (InlineHandle::new_for_tests(command_tx), command_rx)
+}
+
+fn drain_append_lines(
+    command_rx: &mut tokio::sync::mpsc::UnboundedReceiver<InlineCommand>,
+) -> Vec<(InlineMessageKind, Vec<InlineSegment>)> {
+    let mut appended = Vec::new();
+    while let Ok(command) = command_rx.try_recv() {
+        if let InlineCommand::AppendLine { kind, segments } = command {
+            appended.push((kind, segments));
+        }
+    }
+    appended
+}
+
+/// Smoke test backend sizing while a simple user-agent exchange is queued.
 #[tokio::test]
-async fn test_visual_user_agent_exchange() {
+async fn test_tui_backend_smoke_user_agent_exchange() {
     let backend = TestBackend::new(80, 20);
     let mut terminal = Terminal::new(backend).unwrap();
 
-    // Snapshot the initial clear terminal state
+    // Snapshot the initial clear terminal state.
     terminal
         .draw(|f| {
             let _area = f.area();
-            // This would be where the TUI would render, for testing purposes we verify area
+            // This smoke path verifies backend sizing only.
             assert!(_area.width == 80);
             assert!(_area.height == 20);
         })
         .unwrap();
 
-    assert_snapshot!(
-        "visual_simple_exchange_initial",
-        format!("{}", terminal.backend())
+    assert_eq!(format!("{}", terminal.backend()), blank_terminal(80, 20));
+
+    // Create a session and queue content without rendering the session widget.
+    let (handle, mut command_rx) = smoke_handle();
+
+    // Add content that a full session widget render would display.
+    handle.append_line(
+        InlineMessageKind::User,
+        vec![InlineSegment {
+            text: "Explain how bubble sort works".to_string(),
+            style: InlineTextStyle::default().into(),
+        }],
     );
 
-    // Create a session to populate with content
-    let session = spawn_session_with_options(
-        InlineTheme::default(),
-        SessionOptions {
-            placeholder: Some("Ask me anything...".to_string()),
-            inline_rows: 12,
-            ..SessionOptions::default()
-        },
+    handle.append_line(
+        InlineMessageKind::Agent,
+        vec![InlineSegment {
+            text: "Bubble sort is a simple sorting algorithm that repeatedly steps through the list, compares adjacent elements and swaps them if they are in the wrong order. The pass through the list is repeated until the list is sorted.".to_string(),
+            style: InlineTextStyle::default().into(),
+        }],
     );
+    assert_eq!(drain_append_lines(&mut command_rx).len(), 2);
 
-    // Add content that would render visually
-    if let Ok(sess) = session {
-        sess.handle.append_line(
-            InlineMessageKind::User,
-            vec![InlineSegment {
-                text: "Explain how bubble sort works".to_string(),
-                style: InlineTextStyle::default().into(),
-            }],
-        );
-
-        sess.handle.append_line(
-            InlineMessageKind::Agent,
-            vec![InlineSegment {
-                text: "Bubble sort is a simple sorting algorithm that repeatedly steps through the list, compares adjacent elements and swaps them if they are in the wrong order. The pass through the list is repeated until the list is sorted.".to_string(),
-                style: InlineTextStyle::default().into(),
-            }],
-        );
-    }
-
-    // Draw a representation of what the terminal would look like
+    // Draw without the session widget; the backend should remain blank.
     terminal
         .draw(|f| {
-            // This simulates what would be rendered after content is added
             let _area = f.area();
-            // Render operations would happen here in a real scenario
         })
         .unwrap();
 
-    assert_snapshot!(
-        "visual_simple_exchange_final",
-        format!("{}", terminal.backend())
-    );
+    assert_eq!(format!("{}", terminal.backend()), blank_terminal(80, 20));
 }
 
-/// Test visual rendering with code blocks and syntax highlighting representation
+/// Smoke test backend sizing while code-related session content is queued.
 #[tokio::test]
-async fn test_visual_code_rendering() {
+async fn test_tui_backend_smoke_code_content() {
     let backend = TestBackend::new(100, 25);
     let mut terminal = Terminal::new(backend).unwrap();
 
-    let session = spawn_session_with_options(
-        InlineTheme::default(),
-        SessionOptions {
-            placeholder: Some("Enter code to analyze...".to_string()),
-            inline_rows: 15,
-            ..SessionOptions::default()
-        },
+    let (handle, mut command_rx) = smoke_handle();
+
+    // Add code-related content that is not rendered in this backend smoke test.
+    handle.append_line(
+        InlineMessageKind::User,
+        vec![InlineSegment {
+            text: "Show me a Rust function to reverse a string".to_string(),
+            style: InlineTextStyle::default().into(),
+        }],
     );
 
-    if let Ok(sess) = session {
-        // Add code-related content
-        sess.handle.append_line(
-            InlineMessageKind::User,
-            vec![InlineSegment {
-                text: "Show me a Rust function to reverse a string".to_string(),
-                style: InlineTextStyle::default().into(),
-            }],
-        );
-
-        sess.handle.append_line(
-            InlineMessageKind::Agent,
-            vec![InlineSegment {
-                text: "Here's a Rust function to reverse a string:\n\n```rust\nfn reverse_string(s: &str) -> String {\n    s.chars().rev().collect()\n}\n\nfn main() {\n    let original = \"hello\";\n    let reversed = reverse_string(original);\n    println!(\"{} -> {}\", original, reversed);\n}\n```\n\nThis function works by converting the string to characters, reversing the iterator, and collecting back into a String.".to_string(),
-                style: InlineTextStyle::default().into(),
-            }],
-        );
-    }
+    handle.append_line(
+        InlineMessageKind::Agent,
+        vec![InlineSegment {
+            text: "Here's a Rust function to reverse a string:\n\n```rust\nfn reverse_string(s: &str) -> String {\n    s.chars().rev().collect()\n}\n\nfn main() {\n    let original = \"hello\";\n    let reversed = reverse_string(original);\n    println!(\"{} -> {}\", original, reversed);\n}\n```\n\nThis function works by converting the string to characters, reversing the iterator, and collecting back into a String.".to_string(),
+            style: InlineTextStyle::default().into(),
+        }],
+    );
+    assert_eq!(drain_append_lines(&mut command_rx).len(), 2);
 
     terminal
         .draw(|f| {
@@ -119,58 +122,50 @@ async fn test_visual_code_rendering() {
         })
         .unwrap();
 
-    assert_snapshot!("visual_code_rendering", format!("{}", terminal.backend()));
+    assert_eq!(format!("{}", terminal.backend()), blank_terminal(100, 25));
 }
 
-/// Test visual rendering with tool output
+/// Smoke test backend sizing while tool output content is queued.
 #[tokio::test]
-async fn test_visual_tool_output() {
+async fn test_tui_backend_smoke_tool_output() {
     let backend = TestBackend::new(80, 20);
     let mut terminal = Terminal::new(backend).unwrap();
 
-    let session = spawn_session_with_options(
-        InlineTheme::default(),
-        SessionOptions {
-            placeholder: Some("Enter command...".to_string()),
-            inline_rows: 10,
-            ..SessionOptions::default()
-        },
+    let (handle, mut command_rx) = smoke_handle();
+
+    // Simulate tool usage without rendering the session widget.
+    handle.append_line(
+        InlineMessageKind::User,
+        vec![InlineSegment {
+            text: "List files in current directory".to_string(),
+            style: InlineTextStyle::default().into(),
+        }],
     );
 
-    if let Ok(sess) = session {
-        // Simulate tool usage
-        sess.handle.append_line(
-            InlineMessageKind::User,
-            vec![InlineSegment {
-                text: "List files in current directory".to_string(),
-                style: InlineTextStyle::default().into(),
-            }],
-        );
+    handle.append_line(
+        InlineMessageKind::Tool,
+        vec![InlineSegment {
+            text: "run_pty_cmd([\"ls\", \"-la\"])".to_string(),
+            style: InlineTextStyle::default().into(),
+        }],
+    );
 
-        sess.handle.append_line(
-            InlineMessageKind::Tool,
-            vec![InlineSegment {
-                text: "run_pty_cmd([\"ls\", \"-la\"])".to_string(),
-                style: InlineTextStyle::default().into(),
-            }],
-        );
+    handle.append_line(
+        InlineMessageKind::Pty,
+        vec![InlineSegment {
+            text: "total 48\ndrwxr-xr-x  10 user  staff  320 Nov  1 10:30 .\ndrwxr-xr-x   5 user  staff  160 Nov  1 10:25 ..\n-rw-r--r--   1 user  staff  156 Nov  1 10:20 Cargo.toml\n-rw-r--r--   1 user  staff  368 Nov  1 10:25 README.md\ndrwxr-xr-x   3 user  staff   96 Nov  1 10:20 src/\n".to_string(),
+            style: InlineTextStyle::default().into(),
+        }],
+    );
 
-        sess.handle.append_line(
-            InlineMessageKind::Pty,
-            vec![InlineSegment {
-                text: "total 48\ndrwxr-xr-x  10 user  staff  320 Nov  1 10:30 .\ndrwxr-xr-x   5 user  staff  160 Nov  1 10:25 ..\n-rw-r--r--   1 user  staff  156 Nov  1 10:20 Cargo.toml\n-rw-r--r--   1 user  staff  368 Nov  1 10:25 README.md\ndrwxr-xr-x   3 user  staff   96 Nov  1 10:20 src/\n".to_string(),
-                style: InlineTextStyle::default().into(),
-            }],
-        );
-
-        sess.handle.append_line(
-            InlineMessageKind::Agent,
-            vec![InlineSegment {
-                text: "I've listed the files in the current directory. You have Cargo.toml, README.md, and a src/ directory.".to_string(),
-                style: InlineTextStyle::default().into(),
-            }],
-        );
-    }
+    handle.append_line(
+        InlineMessageKind::Agent,
+        vec![InlineSegment {
+            text: "I've listed the files in the current directory. You have Cargo.toml, README.md, and a src/ directory.".to_string(),
+            style: InlineTextStyle::default().into(),
+        }],
+    );
+    assert_eq!(drain_append_lines(&mut command_rx).len(), 4);
 
     terminal
         .draw(|f| {
@@ -180,58 +175,50 @@ async fn test_visual_tool_output() {
         })
         .unwrap();
 
-    assert_snapshot!("visual_tool_output", format!("{}", terminal.backend()));
+    assert_eq!(format!("{}", terminal.backend()), blank_terminal(80, 20));
 }
 
-/// Test visual rendering with error messages
+/// Smoke test backend sizing while error content is queued.
 #[tokio::test]
-async fn test_visual_error_handling() {
+async fn test_tui_backend_smoke_error_content() {
     let backend = TestBackend::new(80, 20);
     let mut terminal = Terminal::new(backend).unwrap();
 
-    let session = spawn_session_with_options(
-        InlineTheme::default(),
-        SessionOptions {
-            placeholder: Some("Enter command (errors possible)...".to_string()),
-            inline_rows: 12,
-            ..SessionOptions::default()
-        },
+    let (handle, mut command_rx) = smoke_handle();
+
+    // Simulate an error scenario without rendering the session widget.
+    handle.append_line(
+        InlineMessageKind::User,
+        vec![InlineSegment {
+            text: "Run command that might fail".to_string(),
+            style: InlineTextStyle::default().into(),
+        }],
     );
 
-    if let Ok(sess) = session {
-        // Simulate an error scenario
-        sess.handle.append_line(
-            InlineMessageKind::User,
-            vec![InlineSegment {
-                text: "Run command that might fail".to_string(),
-                style: InlineTextStyle::default().into(),
-            }],
-        );
+    handle.append_line(
+        InlineMessageKind::Tool,
+        vec![InlineSegment {
+            text: "run_pty_cmd([\"nonexistent-command\", \"--help\"])".to_string(),
+            style: InlineTextStyle::default().into(),
+        }],
+    );
 
-        sess.handle.append_line(
-            InlineMessageKind::Tool,
-            vec![InlineSegment {
-                text: "run_pty_cmd([\"nonexistent-command\", \"--help\"])".to_string(),
-                style: InlineTextStyle::default().into(),
-            }],
-        );
+    handle.append_line(
+        InlineMessageKind::Error,
+        vec![InlineSegment {
+            text: "Error: Command 'nonexistent-command' not found. Make sure the command is installed and in your PATH.".to_string(),
+            style: InlineTextStyle::default().into(),
+        }],
+    );
 
-        sess.handle.append_line(
-            InlineMessageKind::Error,
-            vec![InlineSegment {
-                text: "Error: Command 'nonexistent-command' not found. Make sure the command is installed and in your PATH.".to_string(),
-                style: InlineTextStyle::default().into(),
-            }],
-        );
-
-        sess.handle.append_line(
-            InlineMessageKind::Agent,
-            vec![InlineSegment {
-                text: "I encountered an error running that command. The command 'nonexistent-command' doesn't appear to be available on your system. Would you like me to help you find an alternative?".to_string(),
-                style: InlineTextStyle::default().into(),
-            }],
-        );
-    }
+    handle.append_line(
+        InlineMessageKind::Agent,
+        vec![InlineSegment {
+            text: "I encountered an error running that command. The command 'nonexistent-command' doesn't appear to be available on your system. Would you like me to help you find an alternative?".to_string(),
+            style: InlineTextStyle::default().into(),
+        }],
+    );
+    assert_eq!(drain_append_lines(&mut command_rx).len(), 4);
 
     terminal
         .draw(|f| {
@@ -241,13 +228,13 @@ async fn test_visual_error_handling() {
         })
         .unwrap();
 
-    assert_snapshot!("visual_error_handling", format!("{}", terminal.backend()));
+    assert_eq!(format!("{}", terminal.backend()), blank_terminal(80, 20));
 }
 
-/// Test visual rendering with different header contexts
+/// Smoke test backend sizing while different header contexts are queued.
 #[tokio::test]
-async fn test_visual_header_variations() {
-    // Test different header contexts that would appear visually different
+async fn test_tui_backend_smoke_header_variations() {
+    // Test different header contexts without rendering the session widget.
     let contexts_and_snapshots = vec![
         (
             "openai_gpt5",
@@ -282,26 +269,17 @@ async fn test_visual_header_variations() {
         let backend = TestBackend::new(80, 15);
         let mut terminal = Terminal::new(backend).unwrap();
 
-        // Create session with specific header context
-        let session = spawn_session_with_options(
-            InlineTheme::default(),
-            SessionOptions {
-                placeholder: Some("Working...".to_string()),
-                inline_rows: 8,
-                ..SessionOptions::default()
-            },
+        // Queue session commands with specific header context.
+        let (handle, mut command_rx) = smoke_handle();
+        handle.set_header_context(context);
+        handle.append_line(
+            InlineMessageKind::Agent,
+            vec![InlineSegment {
+                text: format!("Session initialized with {} context", name),
+                style: InlineTextStyle::default().into(),
+            }],
         );
-
-        if let Ok(sess) = session {
-            sess.handle.set_header_context(context);
-            sess.handle.append_line(
-                InlineMessageKind::Agent,
-                vec![InlineSegment {
-                    text: format!("Session initialized with {} context", name),
-                    style: InlineTextStyle::default().into(),
-                }],
-            );
-        }
+        assert_eq!(drain_append_lines(&mut command_rx).len(), 1);
 
         terminal
             .draw(|f| {
@@ -311,9 +289,6 @@ async fn test_visual_header_variations() {
             })
             .unwrap();
 
-        assert_snapshot!(
-            format!("visual_header_{}", name),
-            format!("{}", terminal.backend())
-        );
+        assert_eq!(format!("{}", terminal.backend()), blank_terminal(80, 15));
     }
 }

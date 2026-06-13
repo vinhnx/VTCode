@@ -3,7 +3,8 @@ use crate::config::constants::tools;
 use crate::core::agent::harness_kernel::PreparedToolCall;
 use crate::core::agent::session::AgentSessionState;
 use crate::permissions::{
-    ResolvedPermissionDecision, build_permission_request, evaluate_effective_permissions,
+    ResolvedPermissionDecision, build_advertised_permission_requests, build_permission_request,
+    evaluate_effective_permissions, evaluate_permissions,
 };
 use crate::primary_agent::primary_agent_allows_tool;
 use crate::tools::file_ops::restore_exact_text_content;
@@ -138,19 +139,55 @@ impl AgentRunner {
 
     /// Check if a tool is exposed to the active runtime after feature gating.
     pub(super) async fn is_tool_exposed(&self, tool_name: &str) -> bool {
+        if !self.features().allows_tool_name(
+            tool_name,
+            self.tool_registry.is_planning_active(),
+            false,
+        ) {
+            return false;
+        }
+
         if let Some(active_primary_agent) = self.active_primary_agent.as_ref()
             && !primary_agent_allows_tool(active_primary_agent, tool_name)
         {
             return false;
         }
 
+        let current_dir = std::env::current_dir().unwrap_or_else(|_| self._workspace.clone());
+        let advertised_requests =
+            build_advertised_permission_requests(&self._workspace, &current_dir, tool_name);
+        if advertised_requests.iter().any(|request| {
+            evaluate_permissions(
+                &self.config().permissions,
+                &self._workspace,
+                &current_dir,
+                request,
+            )
+            .deny
+        }) {
+            return false;
+        }
+
+        if let Some(active_primary_agent) = self.active_primary_agent.as_ref() {
+            let permission_denied = advertised_requests.iter().any(|permission_request| {
+                evaluate_effective_permissions(
+                    &self.config().permissions,
+                    &active_primary_agent.permissions,
+                    &self._workspace,
+                    &current_dir,
+                    permission_request,
+                ) == ResolvedPermissionDecision::Deny
+            });
+            if permission_denied {
+                return false;
+            }
+        }
+
         if !self.tool_registry.is_allowed_in_full_auto(tool_name).await {
             return false;
         }
 
-        self.features()
-            .allows_tool_name(tool_name, self.tool_registry.is_planning_active(), false)
-            && self.is_tool_allowed(tool_name).await
+        self.is_tool_allowed(tool_name).await
     }
 
     /// Validate if a tool name is safe, registered, and allowed by policy

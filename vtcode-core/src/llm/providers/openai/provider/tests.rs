@@ -1,7 +1,12 @@
 use super::super::CustomProviderAuthHandle;
+use super::super::backend_setup::{
+    CHATGPT_CODEX_BASE, ChatGptSubscriptionAuthSource, OpenAIBackendKind,
+    OpenAIBackendRefreshBehaviour, OpenAIBackendSetup,
+};
 use super::super::tool_serialization;
 use super::*;
 use crate::config::TimeoutsConfig;
+use crate::config::constants::urls;
 use crate::config::core::{
     OpenAIHostedShellConfig, OpenAIHostedShellDomainSecret, OpenAIHostedShellEnvironment,
     OpenAIHostedShellNetworkPolicy, OpenAIHostedShellNetworkPolicyType, OpenAIHostedSkill,
@@ -13,6 +18,7 @@ use crate::tools::handlers::task_tracker::TaskTrackerTool;
 use crate::tools::traits::Tool;
 use futures::StreamExt;
 use reqwest::StatusCode;
+use rig::providers::chatgpt::ChatGPTAuth as RigChatGptAuth;
 use serde_json::{Value, json};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -298,6 +304,23 @@ fn assert_absent(value: &Value, key: &str) {
     assert!(value.get(key).is_none(), "field '{key}' should be absent");
 }
 
+fn without_responses_backend_fields(mut payload: Value) -> Value {
+    let map = payload
+        .as_object_mut()
+        .expect("responses payload should be an object");
+    for field in [
+        "include",
+        "output_types",
+        "previous_response_id",
+        "prompt_cache_retention",
+        "sampling_parameters",
+        "store",
+    ] {
+        map.remove(field);
+    }
+    payload
+}
+
 fn get_input_array(payload: &Value) -> &[Value] {
     payload
         .get("input")
@@ -330,6 +353,23 @@ fn responses_payload_for(model: &str, provider: &OpenAIProvider) -> Value {
     provider
         .convert_to_openai_responses_format(&sample_request(model))
         .expect("conversion should succeed")
+}
+
+fn responses_allowed_tools_request(model: &str) -> provider::LLMRequest {
+    provider::LLMRequest {
+        messages: vec![provider::Message::user("Hello".to_owned())],
+        tools: Some(Arc::new(vec![
+            sample_tool(),
+            provider::ToolDefinition::web_search(json!({})),
+            provider::ToolDefinition::file_search(json!({"vector_store_ids":["vs_123"]})),
+        ])),
+        tool_choice: Some(provider::ToolChoice::allowed_tools_auto(vec![
+            "web_search".to_string(),
+            "search_workspace".to_string(),
+        ])),
+        model: model.to_string(),
+        ..Default::default()
+    }
 }
 
 fn chat_payload_for(model: &str, provider: &OpenAIProvider) -> Value {
@@ -384,9 +424,12 @@ fn mock_service_tier_fallback(
 fn schema_keyword_path(value: &Value, keywords: &[&str], path: &str) -> Option<String> {
     match value {
         Value::Object(map) => {
-            for keyword in keywords {
-                if map.contains_key(*keyword) {
-                    return Some(format!("{path}.{keyword}"));
+            let properties_object = path.ends_with(".properties");
+            if !properties_object {
+                for keyword in keywords {
+                    if map.contains_key(*keyword) {
+                        return Some(format!("{path}.{keyword}"));
+                    }
                 }
             }
             for (key, nested) in map {
@@ -407,6 +450,209 @@ fn schema_keyword_path(value: &Value, keywords: &[&str], path: &str) -> Option<S
 
 // ─── Auth & Retry Tests ──────────────────────────────────────────────────────
 
+#[test]
+fn openai_auth_backend_setup_uses_api_key_base_url_and_static_auth() {
+    let setup = OpenAIBackendSetup::from_api_key_config(None);
+    let transport = setup.transport();
+    let responses = setup.responses_defaults();
+
+    assert_eq!(setup.base_url(), urls::OPENAI_API_BASE);
+    assert!(matches!(setup.kind(), OpenAIBackendKind::ApiKey));
+    assert_eq!(
+        setup.refresh_behaviour(),
+        OpenAIBackendRefreshBehaviour::StaticBearer
+    );
+    assert!(transport.websocket);
+    assert!(transport.chat_completions_fallback);
+    assert!(transport.responses_compaction_endpoint);
+    assert!(!responses.force_store_false);
+    assert!(responses.include_prompt_cache_retention);
+    assert!(!responses.include_encrypted_reasoning);
+}
+
+#[test]
+fn chatgpt_auth_backend_setup_uses_rig_chatgpt_by_default() {
+    let setup = OpenAIBackendSetup::from_chatgpt_subscription_config(None);
+    let transport = setup.transport();
+    let responses = setup.responses_defaults();
+
+    assert_eq!(setup.base_url(), CHATGPT_CODEX_BASE);
+    assert!(matches!(
+        setup.kind(),
+        OpenAIBackendKind::ChatGptSubscription(ChatGptSubscriptionAuthSource::RigChatGpt)
+    ));
+    assert_eq!(
+        setup.refresh_behaviour(),
+        OpenAIBackendRefreshBehaviour::RefreshableChatGptSession
+    );
+    assert!(!transport.websocket);
+    assert!(!transport.chat_completions_fallback);
+    assert!(!transport.responses_compaction_endpoint);
+    assert!(responses.force_store_false);
+    assert!(!responses.include_prompt_cache_retention);
+    assert!(responses.include_encrypted_reasoning);
+    assert!(!responses.include_structured_history_in_input);
+    assert!(responses.preserve_structured_history_on_replay);
+}
+
+#[test]
+fn chatgpt_auth_backend_setup_keeps_compatibility_auth_behind_boundary() {
+    let setup =
+        OpenAIBackendSetup::chatgpt_subscription_compatibility(CHATGPT_CODEX_BASE.to_string());
+
+    assert_eq!(
+        setup.kind(),
+        &OpenAIBackendKind::ChatGptSubscription(
+            ChatGptSubscriptionAuthSource::CodexAppServerCompatibility
+        )
+    );
+    assert!(
+        setup.uses_refreshable_auth(),
+        "ChatGPT compatibility auth must remain refreshable behind the backend setup boundary"
+    );
+
+    let auth = setup.request_auth_from_session(OpenAIChatGptSession {
+        openai_api_key: "exchanged-api-key".to_string(),
+        id_token: "id-token".to_string(),
+        access_token: "oauth-access".to_string(),
+        refresh_token: "refresh-token".to_string(),
+        account_id: Some("acc_123".to_string()),
+        email: Some("test@example.com".to_string()),
+        plan: Some("plus".to_string()),
+        obtained_at: 1,
+        refreshed_at: 1,
+        expires_at: None,
+    });
+    assert_eq!(auth.bearer_token, "oauth-access");
+    assert!(
+        auth.rig_chatgpt_auth.is_none(),
+        "compatibility fallback should not masquerade as Rig-backed auth"
+    );
+}
+
+#[test]
+fn chatgpt_auth_backend_setup_applies_account_and_session_headers() {
+    let setup = OpenAIBackendSetup::from_chatgpt_subscription_config(None);
+    let auth = setup.request_auth_from_session(OpenAIChatGptSession {
+        openai_api_key: "exchanged-api-key".to_string(),
+        id_token: "id-token".to_string(),
+        access_token: "oauth-access".to_string(),
+        refresh_token: "refresh-token".to_string(),
+        account_id: Some("acc_123".to_string()),
+        email: Some("test@example.com".to_string()),
+        plan: Some("plus".to_string()),
+        obtained_at: 1,
+        refreshed_at: 1,
+        expires_at: None,
+    });
+    assert_eq!(auth.bearer_token, "oauth-access");
+    assert_eq!(auth.chatgpt_account_id.as_deref(), Some("acc_123"));
+    assert!(matches!(
+        auth.rig_chatgpt_auth.as_ref(),
+        Some(RigChatGptAuth::AccessToken {
+            access_token,
+            account_id: Some(account_id),
+        }) if access_token == "oauth-access" && account_id.as_str() == "acc_123"
+    ));
+
+    let request = setup
+        .authorize_request(
+            reqwest::Client::builder()
+                .no_proxy()
+                .build()
+                .expect("test client")
+                .get("http://example.com"),
+            &auth,
+        )
+        .build()
+        .expect("request should build");
+
+    assert_eq!(
+        request
+            .headers()
+            .get("authorization")
+            .and_then(|v| v.to_str().ok()),
+        Some("Bearer oauth-access")
+    );
+    assert_eq!(
+        request
+            .headers()
+            .get("ChatGPT-Account-Id")
+            .and_then(|v| v.to_str().ok()),
+        Some("acc_123")
+    );
+    assert_eq!(
+        request
+            .headers()
+            .get("originator")
+            .and_then(|v| v.to_str().ok()),
+        Some("codex_cli_rs")
+    );
+}
+
+#[test]
+fn api_key_and_chatgpt_subscription_share_responses_item_history_builder() {
+    let native_provider = native_openai_provider(models::openai::GPT_5_2);
+    let chatgpt_provider = chatgpt_backend_provider(models::openai::GPT_5_2);
+    let mut request = provider::LLMRequest {
+        messages: vec![
+            provider::Message::system("Follow the local policy.".to_owned()),
+            provider::Message::user("Summarise the repository state.".to_owned()),
+            provider::Message::assistant("There is one modified file.".to_owned()),
+            provider::Message::user("Continue.".to_owned()),
+        ],
+        model: models::openai::GPT_5_2.to_string(),
+        stream: true,
+        tools: Some(Arc::new(vec![sample_tool()])),
+        ..Default::default()
+    };
+    request.previous_response_id = Some("resp_previous_123".to_owned());
+    request.response_store = Some(true);
+    request.responses_include = Some(vec!["output_text.annotations".to_owned()]);
+
+    let native_payload = native_provider
+        .convert_to_openai_responses_format(&request)
+        .expect("native payload should build");
+    let chatgpt_payload = chatgpt_provider
+        .convert_to_openai_responses_format(&request)
+        .expect("chatgpt payload should build");
+
+    assert_eq!(
+        native_payload.get("input"),
+        chatgpt_payload.get("input"),
+        "API-key and ChatGPT paths must share the same Responses item/history builder"
+    );
+    assert_eq!(
+        native_payload.get("instructions"),
+        chatgpt_payload.get("instructions")
+    );
+    assert_eq!(
+        without_responses_backend_fields(native_payload.clone()),
+        without_responses_backend_fields(chatgpt_payload.clone())
+    );
+
+    assert_eq!(
+        native_payload
+            .get("previous_response_id")
+            .and_then(Value::as_str),
+        Some("resp_previous_123")
+    );
+    assert_eq!(
+        chatgpt_payload.get("previous_response_id"),
+        None,
+        "ChatGPT backend does not use VTCode's Responses continuation state"
+    );
+    assert_eq!(
+        native_payload.get("store").and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        chatgpt_payload.get("store").and_then(Value::as_bool),
+        Some(false),
+        "ChatGPT subscription requests must force store=false"
+    );
+}
+
 #[tokio::test]
 async fn chatgpt_backend_uses_oauth_access_token_and_account_header() {
     let Some(server) = start_mock_server_or_skip().await else {
@@ -423,6 +669,10 @@ async fn chatgpt_backend_uses_oauth_access_token_and_account_header() {
         chatgpt_mock_base_url(&server),
         TimeoutsConfig::default(),
     );
+    assert!(matches!(
+        provider.backend_setup.kind(),
+        OpenAIBackendKind::ChatGptSubscription(ChatGptSubscriptionAuthSource::RigChatGpt)
+    ));
 
     let auth = provider.request_auth_from_session(OpenAIChatGptSession {
         openai_api_key: "exchanged-api-key".to_string(),
@@ -460,6 +710,114 @@ async fn chatgpt_backend_uses_oauth_access_token_and_account_header() {
 }
 
 #[tokio::test]
+async fn api_key_responses_stream_sends_metadata_and_preserves_usage() {
+    let Some(server) = start_mock_server_or_skip().await else {
+        return;
+    };
+    let captured = Arc::new(Mutex::new(None::<Value>));
+    let captured_for_mock = Arc::clone(&captured);
+    let stream_body = concat!(
+        "data: {\"type\":\"response.output_text.delta\",\"delta\":\"hello from api key stream\"}\n\n",
+        "data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_api_stream\",\"output\":[],\"usage\":{\"input_tokens\":21,\"output_tokens\":6,\"total_tokens\":27,\"input_tokens_details\":{\"cached_tokens\":8}}}}\n\n",
+    );
+
+    Mock::given(method("POST"))
+        .and(path("/responses"))
+        .respond_with(move |req: &wiremock::Request| {
+            let body: Value = serde_json::from_slice(&req.body).expect("valid json");
+            *captured_for_mock.lock().expect("not poisoned") = Some(json!({
+                "body": body,
+                "beta": req.headers.get("openai-beta").and_then(|v| v.to_str().ok()),
+                "client_request_id": req.headers.get("x-client-request-id").and_then(|v| v.to_str().ok()),
+                "turn_metadata": req.headers.get("x-turn-metadata").and_then(|v| v.to_str().ok()),
+            }));
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                .set_body_string(stream_body)
+        })
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let provider = OpenAIProvider::new_with_client(
+        "test-key".to_string(),
+        None,
+        models::openai::GPT_5.to_string(),
+        reqwest::Client::builder()
+            .no_proxy()
+            .build()
+            .expect("test client"),
+        native_openai_mock_base_url(&server),
+        TimeoutsConfig::default(),
+    );
+
+    let mut stream = provider
+        .stream(provider::LLMRequest {
+            messages: vec![provider::Message::user("Hello".to_string())],
+            model: models::openai::GPT_5.to_string(),
+            response_store: Some(true),
+            metadata: Some(json!({"commit": "abc123"})),
+            ..Default::default()
+        })
+        .await
+        .expect("stream should start");
+    let mut text = String::new();
+    let mut completed = None;
+    while let Some(event) = stream.next().await {
+        match event.expect("stream event should parse") {
+            provider::LLMStreamEvent::Token { delta } => text.push_str(&delta),
+            provider::LLMStreamEvent::Completed { response } => {
+                completed = Some(*response);
+                break;
+            }
+            provider::LLMStreamEvent::Reasoning { .. }
+            | provider::LLMStreamEvent::ReasoningSignature { .. }
+            | provider::LLMStreamEvent::ReasoningStage { .. } => {}
+        }
+    }
+
+    let response = completed.expect("completion event should be emitted");
+    assert_eq!(text, "hello from api key stream");
+    assert_eq!(
+        response.content.as_deref(),
+        Some("hello from api key stream")
+    );
+    assert_eq!(response.request_id.as_deref(), Some("resp_api_stream"));
+    let usage = response.usage.expect("final usage should be preserved");
+    assert_eq!(usage.prompt_tokens, 21);
+    assert_eq!(usage.completion_tokens, 6);
+    assert_eq!(usage.total_tokens, 27);
+    assert_eq!(usage.cached_prompt_tokens, None);
+
+    let captured = captured
+        .lock()
+        .expect("not poisoned")
+        .clone()
+        .expect("request captured");
+    assert_eq!(
+        captured.get("beta").and_then(Value::as_str),
+        Some("responses=v1")
+    );
+    assert!(
+        captured
+            .get("client_request_id")
+            .and_then(Value::as_str)
+            .is_some_and(|value| value.starts_with("vtcode-"))
+    );
+    assert_eq!(
+        captured.get("turn_metadata").and_then(Value::as_str),
+        Some(r#"{"commit":"abc123"}"#)
+    );
+    let payload = captured.get("body").expect("body captured");
+    assert_eq!(payload.get("stream").and_then(Value::as_bool), Some(true));
+    assert_eq!(payload.get("store").and_then(Value::as_bool), Some(true));
+    assert_ne!(
+        payload.get("include").and_then(Value::as_array),
+        Some(&vec![json!("reasoning.encrypted_content")])
+    );
+}
+
+#[tokio::test]
 async fn chatgpt_responses_stream_accepts_empty_final_output_after_text_delta() {
     let Some(server) = start_mock_server_or_skip().await else {
         return;
@@ -474,8 +832,13 @@ async fn chatgpt_responses_stream_accepts_empty_final_output_after_text_delta() 
     Mock::given(method("POST"))
         .and(path("/responses"))
         .respond_with(move |req: &wiremock::Request| {
-            *captured_for_mock.lock().expect("not poisoned") =
-                Some(serde_json::from_slice(&req.body).expect("valid json"));
+            let body: Value = serde_json::from_slice(&req.body).expect("valid json");
+            *captured_for_mock.lock().expect("not poisoned") = Some(json!({
+                "body": body,
+                "account": req.headers.get("chatgpt-account-id").and_then(|v| v.to_str().ok()),
+                "originator": req.headers.get("originator").and_then(|v| v.to_str().ok()),
+                "beta": req.headers.get("openai-beta").and_then(|v| v.to_str().ok()),
+            }));
             ResponseTemplate::new(200)
                 .insert_header("content-type", "text/event-stream")
                 .set_body_string(stream_body)
@@ -533,6 +896,19 @@ async fn chatgpt_responses_stream_accepts_empty_final_output_after_text_delta() 
         .expect("not poisoned")
         .clone()
         .expect("payload captured");
+    assert_eq!(
+        payload.get("account").and_then(Value::as_str),
+        Some("acc_123")
+    );
+    assert_eq!(
+        payload.get("originator").and_then(Value::as_str),
+        Some("codex_cli_rs")
+    );
+    assert_eq!(
+        payload.get("beta").and_then(Value::as_str),
+        Some("responses=v1")
+    );
+    let payload = payload.get("body").expect("body captured");
     assert_eq!(payload.get("store").and_then(Value::as_bool), Some(false));
     assert_eq!(
         payload.get("include").and_then(Value::as_array),
@@ -762,6 +1138,79 @@ fn responses_payload_serializes_hosted_tool_search_and_deferred_function() {
 }
 
 #[test]
+fn responses_payload_emits_allowed_tools_for_native_openai_from_stable_catalogue() {
+    let provider = native_openai_provider(models::openai::GPT_5);
+    let request = responses_allowed_tools_request(models::openai::GPT_5);
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+
+    let full_tools = payload["tools"]
+        .as_array()
+        .expect("tools should be present");
+    assert_eq!(full_tools.len(), 3, "full stable catalogue should remain");
+    assert_eq!(
+        full_tools
+            .iter()
+            .filter_map(|tool| tool.get("name").and_then(Value::as_str))
+            .collect::<Vec<_>>(),
+        vec!["search_workspace"]
+    );
+    assert!(
+        full_tools
+            .iter()
+            .any(|tool| tool.get("type").and_then(Value::as_str) == Some("web_search")),
+        "hosted web_search should remain in full catalogue"
+    );
+
+    let choice = payload["tool_choice"]
+        .as_object()
+        .expect("allowed_tools choice should be an object");
+    assert_str_field_obj(choice, "type", "allowed_tools");
+    assert_str_field_obj(choice, "mode", "auto");
+    assert_eq!(
+        choice["tools"].as_array().expect("allowed tools array"),
+        &vec![json!("search_workspace"), json!("web_search")]
+    );
+}
+
+#[test]
+fn responses_payload_emits_allowed_tools_for_chatgpt_backend() {
+    let provider = chatgpt_backend_provider(models::openai::GPT_5);
+    let request = responses_allowed_tools_request(models::openai::GPT_5);
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+
+    assert_eq!(
+        payload["tool_choice"]["type"].as_str(),
+        Some("allowed_tools")
+    );
+}
+
+#[test]
+fn responses_payload_omits_allowed_tools_for_compatible_endpoint() {
+    let provider = compatible_endpoint_provider(models::openai::GPT_5, "https://example.test/v1");
+    let request = responses_allowed_tools_request(models::openai::GPT_5);
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+
+    assert_eq!(payload["tool_choice"].as_str(), Some("auto"));
+}
+
+#[test]
+fn responses_payload_omits_allowed_tools_for_non_responses_model() {
+    let provider = native_openai_provider(models::openai::GPT_OSS_20B);
+    let request = responses_allowed_tools_request(models::openai::GPT_OSS_20B);
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+
+    assert_eq!(payload["tool_choice"].as_str(), Some("auto"));
+}
+
+#[test]
 fn responses_payload_preserves_any_of_enum_and_nullable_type_unions() {
     let tools = vec![provider::ToolDefinition::function(
         "schema_rich_tool".to_owned(),
@@ -896,6 +1345,32 @@ fn chat_completions_uses_max_completion_tokens_field() {
         Some(512)
     );
     assert!(payload.get("max_tokens").is_none());
+}
+
+#[test]
+fn custom_openai_provider_uses_compatible_max_tokens_field_even_on_openai_url() {
+    let provider = OpenAIProvider::from_custom_config(
+        "openai-compatible".to_string(),
+        "OpenAI-compatible".to_string(),
+        Some(String::new()),
+        Some(models::openai::DEFAULT_MODEL.to_string()),
+        Some("https://api.openai.com/v1".to_string()),
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    );
+    let mut request = sample_request(models::openai::DEFAULT_MODEL);
+    request.max_tokens = Some(512);
+
+    let payload = provider
+        .convert_to_openai_format(&request)
+        .expect("conversion should succeed");
+
+    assert_eq!(payload.get("max_tokens").and_then(Value::as_u64), Some(512));
+    assert!(payload.get("max_completion_tokens").is_none());
 }
 
 #[test]

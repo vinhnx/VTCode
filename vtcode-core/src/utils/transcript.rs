@@ -275,6 +275,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[serial_test::serial(transcript_state)]
     fn append_and_snapshot_store_lines() {
         clear();
         append("first");
@@ -286,6 +287,7 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial(transcript_state)]
     fn append_skips_adjacent_duplicate_lines() {
         clear();
         append("duplicate");
@@ -305,6 +307,7 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial(transcript_state)]
     fn transcript_drops_oldest_chunk_when_full() {
         clear();
         for idx in 0..MAX_LINES {
@@ -324,6 +327,7 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial(transcript_state)]
     fn message_queue_enqueue_and_retrieve() {
         clear_queue();
         assert_eq!(queue_len(), 0);
@@ -340,6 +344,7 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial(transcript_state)]
     fn message_queue_preserves_metadata() {
         clear_queue();
 
@@ -357,6 +362,7 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial(transcript_state)]
     fn message_queue_size_limit() {
         clear_queue();
 
@@ -378,6 +384,7 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial(transcript_state)]
     fn suppressed_scope_skips_transcript_entries() {
         clear();
         with_suppressed(|| {

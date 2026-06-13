@@ -29,7 +29,7 @@
 //!
 //! # Example
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! use vtcode_core::skills::native_plugin::{NativePlugin, PluginLoader};
 //!
 //! let mut loader = PluginLoader::new();

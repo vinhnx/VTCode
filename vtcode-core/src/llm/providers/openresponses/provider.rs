@@ -1004,6 +1004,7 @@ impl LLMProvider for OpenResponsesProvider {
                 provider_name: "OpenResponses",
                 model: model.clone(),
                 emit_reasoning,
+                include_cached_prompt_metrics: false,
             },
             move |value| Self::parse_native_response_payload(value, model.clone()),
         ))

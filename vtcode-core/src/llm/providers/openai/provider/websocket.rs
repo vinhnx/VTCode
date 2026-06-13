@@ -18,6 +18,13 @@ const WEBSOCKET_CONNECTION_LIMIT_REACHED_CODE: &str = "websocket_connection_limi
 const PREVIOUS_RESPONSE_NOT_FOUND_CODE: &str = "previous_response_not_found";
 const WEBSOCKET_AUTH_RETRY_STATUSES: [&str; 2] = ["401", "403"];
 
+// Retained custom WebSocket transport.
+// Rig 0.38.2 depends on websocket crates, but this project has not enabled or
+// proven a Rig WebSocket path with VTCode's `responses=v2` header, warm-up
+// `generate=false` request, continuation cache, active-response reconnect,
+// auth refresh retry, and connection-limit retry semantics. Protected by the
+// websocket tests in this module and provider websocket gating tests. Remove
+// only once Rig demonstrates identical Responses WebSocket protocol behaviour.
 fn is_websocket_active_response_error(err: &LLMError) -> bool {
     let message = match err {
         LLMError::Provider { message, .. } | LLMError::Network { message, .. } => message,

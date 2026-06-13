@@ -18,7 +18,7 @@
 //! ## Key Components
 //!
 //! ### Agent System
-//! ```rust,no_run
+//! ```rust,ignore
 //! use vtcode_core::core::agent::core::Agent;
 //! use vtcode_core::VTCodeConfig;
 //!

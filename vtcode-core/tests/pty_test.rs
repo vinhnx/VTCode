@@ -112,13 +112,17 @@ async fn test_pty_functionality_with_exit_code() {
     let response = result.unwrap();
 
     // The command should execute successfully (no error in execution)
-    // but the exit code should be 1
+    // but the exit code should be non-zero. Different `ls` implementations
+    // use different codes for a missing operand/path.
     assert_eq!(response["success"], true);
     // Check for exit_code field (may be "code" or "exit_code" depending on implementation)
     let exit_code = response["exit_code"]
         .as_i64()
         .or_else(|| response["code"].as_i64());
-    assert_eq!(exit_code, Some(1));
+    assert!(
+        exit_code.is_some_and(|code| code != 0),
+        "expected present non-zero exit code, got {exit_code:?}; response={response:?}"
+    );
 }
 
 #[cfg(unix)]

@@ -873,7 +873,10 @@ mod tests {
     const DEMO_SKILL_TOOL_NAME: &str = "demo-skill";
 
     fn temp_codex_home(workspace: &Path) -> PathBuf {
-        workspace.join(".test-vtcode-home")
+        let codex_home = workspace.join(".test-vtcode-home");
+        crate::skills::system::install_system_skills(&codex_home)
+            .expect("install embedded system skills for test codex home");
+        codex_home
     }
 
     fn write_skill_fixture(workspace: &Path, name: &str) {

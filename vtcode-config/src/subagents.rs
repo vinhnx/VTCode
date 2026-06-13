@@ -656,12 +656,11 @@ fn builtin_readonly_tool_ids() -> Vec<String> {
     vec![
         tools::UNIFIED_SEARCH.to_string(),
         tools::UNIFIED_FILE.to_string(),
-        tools::UNIFIED_EXEC.to_string(),
     ]
 }
 
 fn builtin_readonly_disallowed_tool_ids() -> Vec<String> {
-    vec![tools::UNIFIED_FILE.to_string()]
+    Vec::new()
 }
 
 fn mutating_agent_permissions() -> AgentPermissionsConfig {
@@ -674,11 +673,7 @@ fn auto_agent_permissions() -> AgentPermissionsConfig {
 
 fn readonly_agent_permissions() -> AgentPermissionsConfig {
     let mut permissions = AgentPermissionsConfig::new(PermissionDefault::Deny);
-    permissions.allow = vec![
-        tools::READ_FILE.to_string(),
-        tools::LIST_FILES.to_string(),
-        tools::UNIFIED_SEARCH.to_string(),
-    ];
+    permissions.allow = vec!["read".to_string()];
     permissions
 }
 
@@ -2127,6 +2122,10 @@ Hook prompt"#,
     #[test]
     fn builtin_primary_agents_are_available() {
         let builtins = builtin_subagents();
+        let expected_readonly_tools = vec![
+            tools::UNIFIED_SEARCH.to_string(),
+            tools::UNIFIED_FILE.to_string(),
+        ];
         let default = builtins
             .iter()
             .find(|spec| spec.name == "default")
@@ -2137,12 +2136,19 @@ Hook prompt"#,
             .find(|spec| spec.name == "explorer")
             .expect("missing explorer built-in");
         assert_eq!(explorer.permissions.default, PermissionDefault::Deny);
-        assert!(
-            explorer
-                .permissions
-                .allow
-                .contains(&tools::READ_FILE.to_string())
+        assert_eq!(explorer.permissions.allow, vec!["read".to_string()]);
+        assert_eq!(
+            explorer.tools.as_deref(),
+            Some(expected_readonly_tools.as_slice())
         );
+        assert!(
+            !explorer
+                .tools
+                .as_deref()
+                .unwrap_or_default()
+                .contains(&tools::UNIFIED_EXEC.to_string())
+        );
+        assert!(explorer.disallowed_tools.is_empty());
 
         for name in ["build", "auto", "duck", "plan"] {
             let spec = builtins
@@ -2157,6 +2163,21 @@ Hook prompt"#,
                 _ => unreachable!("unexpected built-in primary agent"),
             };
             assert_eq!(spec.permissions.default, expected_default);
+            if matches!(name, "duck" | "plan") {
+                assert_eq!(
+                    spec.tools.as_deref(),
+                    Some(expected_readonly_tools.as_slice())
+                );
+                assert!(
+                    !spec
+                        .tools
+                        .as_deref()
+                        .unwrap_or_default()
+                        .contains(&tools::UNIFIED_EXEC.to_string())
+                );
+                assert!(spec.disallowed_tools.is_empty());
+                assert_eq!(spec.permissions.allow, vec!["read".to_string()]);
+            }
         }
         let plan = builtins
             .iter()

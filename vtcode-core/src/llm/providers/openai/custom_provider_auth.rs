@@ -9,6 +9,12 @@ use tokio::sync::Mutex;
 use tokio::time::timeout;
 use vtcode_config::core::CustomProviderCommandAuthConfig;
 
+// Retained custom auth transport for OpenAI-compatible providers.
+// Rig does not model VT Code's configured command-token provider, refresh
+// interval, workspace-relative cwd, timeout, stdout trimming, or forced refresh
+// on 401. Protected by this module's auth-command tests and
+// `custom_provider_auth_retries_with_refreshed_tokens_after_401`. Remove only
+// if Rig gains an equivalent command-auth hook with retry/cache parity.
 #[derive(Clone, Debug)]
 pub struct CustomProviderAuthHandle {
     config: CustomProviderCommandAuthConfig,

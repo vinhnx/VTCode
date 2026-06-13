@@ -18,6 +18,15 @@ use async_stream::try_stream;
 use futures::StreamExt;
 use serde_json::{Value, json};
 
+// Retained custom streaming boundary.
+// Rig 0.38.2 exposes Responses SSE support, but this provider still needs the
+// VTCode request retry/fallback path, client request id and turn metadata
+// headers, ChatGPT backend defaults, prompt-cache usage parsing, and both
+// LLMStreamEvent and NormalizedStreamEvent shapes. Protected by
+// `api_key_responses_stream_sends_metadata_and_preserves_usage`,
+// `chatgpt_responses_stream_accepts_empty_final_output_after_text_delta`, and
+// the shared `responses_stream`/`stream_decoder` tests. Remove this boundary
+// only once Rig can feed those exact VTCode event and error contracts.
 #[inline]
 fn should_prefer_responses_stream(state: ResponsesApiState) -> bool {
     !matches!(state, ResponsesApiState::Disabled)
@@ -71,6 +80,7 @@ impl OpenAIProvider {
                         provider_name: "OpenAI",
                         model: model.clone(),
                         emit_reasoning,
+                        include_cached_prompt_metrics: include_metrics,
                     },
                     move |value| {
                         let response =
@@ -253,7 +263,7 @@ impl OpenAIProvider {
         openai_request["stream"] = Value::Bool(true);
         // Request usage stats in the stream (compatible with newer OpenAI models)
         // Note: Some proxies do not support stream_options and will return 400.
-        let is_native_openai = self.base_url.contains("api.openai.com");
+        let is_native_openai = self.is_native_openai_api();
         if is_native_openai {
             openai_request["stream_options"] = json!({ "include_usage": true });
         }

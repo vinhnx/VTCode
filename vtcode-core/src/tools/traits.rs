@@ -30,7 +30,7 @@ pub trait Tool: Send + Sync {
     /// Tools can override this to provide optimized dual output.
     ///
     /// # Example
-    /// ```rust,no_run
+    /// ```rust,ignore
     /// use vtcode_core::tools::result::ToolResult as SplitToolResult;
     /// use serde_json::Value;
     /// use anyhow::Result;

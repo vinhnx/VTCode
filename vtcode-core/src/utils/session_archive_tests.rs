@@ -55,6 +55,7 @@ async fn lock_history_test_guard() -> tokio::sync::MutexGuard<'static, ()> {
     SESSION_HISTORY_TEST_LOCK.lock().await
 }
 
+#[serial_test::serial(session_dir_override)]
 #[tokio::test]
 async fn session_archive_persists_snapshot() -> Result<()> {
     let _settings_lock = lock_history_test_guard().await;
@@ -97,6 +98,7 @@ async fn session_archive_persists_snapshot() -> Result<()> {
     Ok(())
 }
 
+#[serial_test::serial(session_dir_override)]
 #[tokio::test]
 async fn session_archive_persists_budget_limit_continuation_metadata() -> Result<()> {
     let _settings_lock = lock_history_test_guard().await;
@@ -283,6 +285,7 @@ fn boxed_session_progress_option_is_pointer_sized() {
     assert!(size_of::<Option<SessionProgress>>() > size_of::<Option<Box<SessionProgress>>>());
 }
 
+#[serial_test::serial(session_dir_override)]
 #[tokio::test]
 async fn session_progress_persists_budget_and_recent_messages() -> Result<()> {
     let _settings_lock = lock_history_test_guard().await;
@@ -326,6 +329,7 @@ async fn session_progress_persists_budget_and_recent_messages() -> Result<()> {
     Ok(())
 }
 
+#[serial_test::serial(session_dir_override)]
 #[tokio::test]
 async fn session_progress_transcript_skips_tool_noise_and_duplicates() -> Result<()> {
     let _settings_lock = lock_history_test_guard().await;
@@ -449,6 +453,7 @@ fn archive_transcript_cleaner_preserves_paragraph_spacing_and_drops_structured_r
     );
 }
 
+#[serial_test::serial(session_dir_override)]
 #[tokio::test]
 async fn session_progress_normalizes_exec_tool_aliases_in_summaries() -> Result<()> {
     let _settings_lock = lock_history_test_guard().await;
@@ -508,6 +513,7 @@ async fn session_progress_normalizes_exec_tool_aliases_in_summaries() -> Result<
     Ok(())
 }
 
+#[serial_test::serial(session_dir_override)]
 #[tokio::test]
 async fn find_session_by_identifier_returns_match() -> Result<()> {
     let _settings_lock = lock_history_test_guard().await;
@@ -544,6 +550,7 @@ async fn find_session_by_identifier_returns_match() -> Result<()> {
     Ok(())
 }
 
+#[serial_test::serial(session_dir_override)]
 #[tokio::test]
 async fn session_archive_path_collision_adds_suffix() -> Result<()> {
     let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
@@ -610,6 +617,7 @@ fn session_archive_filename_includes_microseconds_and_pid() -> Result<()> {
     Ok(())
 }
 
+#[serial_test::serial(session_dir_override)]
 #[tokio::test]
 async fn reserve_session_identifier_can_be_reused_for_archive() -> Result<()> {
     let _settings_lock = lock_history_test_guard().await;
@@ -665,6 +673,7 @@ fn generated_session_identifier_includes_workspace_and_custom_suffix() {
     assert!(generated.ends_with("-branch"));
 }
 
+#[serial_test::serial(session_dir_override)]
 #[tokio::test]
 async fn resume_from_listing_reuses_existing_archive_path() -> Result<()> {
     let _settings_lock = lock_history_test_guard().await;
@@ -716,6 +725,7 @@ async fn resume_from_listing_reuses_existing_archive_path() -> Result<()> {
     Ok(())
 }
 
+#[serial_test::serial(session_dir_override)]
 #[tokio::test]
 async fn list_recent_sessions_orders_entries() -> Result<()> {
     let _settings_lock = lock_history_test_guard().await;
@@ -875,6 +885,7 @@ fn listing_previews_return_first_non_empty_lines() {
     assert_eq!(listing.first_reply_preview(), Some(expected));
 }
 
+#[serial_test::serial(session_dir_override)]
 #[tokio::test]
 async fn search_sessions_finds_keyword_case_insensitively() -> Result<()> {
     let _settings_lock = lock_history_test_guard().await;
@@ -907,6 +918,7 @@ async fn search_sessions_finds_keyword_case_insensitively() -> Result<()> {
     Ok(())
 }
 
+#[serial_test::serial(session_dir_override)]
 #[tokio::test]
 async fn session_archive_skips_writes_when_history_persistence_is_disabled() -> Result<()> {
     let _settings_lock = lock_history_test_guard().await;

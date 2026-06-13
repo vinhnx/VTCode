@@ -16,9 +16,9 @@ fn test_message_kind_snapshot() {
     let user_kind = format!("{:?}", InlineMessageKind::User);
     let error_kind = format!("{:?}", InlineMessageKind::Error);
 
-    assert_snapshot!("message_kind_agent", agent_kind);
-    assert_snapshot!("message_kind_user", user_kind);
-    assert_snapshot!("message_kind_error", error_kind);
+    assert_snapshot!(&agent_kind, @"Agent");
+    assert_snapshot!(&user_kind, @"User");
+    assert_snapshot!(&error_kind, @"Error");
 }
 
 /// Test message segment representation
@@ -28,7 +28,10 @@ fn test_inline_segment_snapshot() {
         text: "Hello, world!".to_string(),
         style: InlineTextStyle::default().bold().into(),
     };
-    assert_snapshot!("styled_segment", format!("{:?}", segment));
+    assert_snapshot!(
+        &format!("{:?}", segment),
+        @"InlineSegment { text: \"Hello, world!\", style: InlineTextStyle { color: None, bg_color: None, effects: Effects(BOLD) } }"
+    );
 }
 
 /// Test header context representation
@@ -54,7 +57,10 @@ fn test_header_context_snapshot() {
         pr_review: None,
         editor_context: None,
     };
-    assert_snapshot!("header_context", format!("{:?}", context));
+    assert_snapshot!(
+        &format!("{:?}", context),
+        @"InlineHeaderContext { app_name: \"VT Code\", provider: \"openai\", model: \"gpt-oss-20b\", context_window_size: None, version: \"0.37.1\", search_tools: None, persistent_memory: None, pr_review: None, editor_context: None, git: \"clean\", reasoning: \"creative\", reasoning_stage: None, workspace_trust: \"trusted\", tools: \"enabled\", mcp: \"disabled\", primary_agent: None, highlights: [], subagent_badges: [] }"
+    );
 }
 
 /// Test inline command debugging output
@@ -67,10 +73,13 @@ fn test_inline_command_debug() {
 
     // Test string representation
     let debug_output = format!("{:?}", InlineMessageKind::Agent);
-    assert_snapshot!("message_kind_debug", debug_output);
+    assert_snapshot!(&debug_output, @"Agent");
 
     let segment_debug = format!("{:?}", segment);
-    assert_snapshot!("segment_debug", segment_debug);
+    assert_snapshot!(
+        &segment_debug,
+        @"InlineSegment { text: \"Hello! I'm your AI assistant.\", style: InlineTextStyle { color: None, bg_color: None, effects: Effects(BOLD) } }"
+    );
 }
 
 /// Test UI component combinations
@@ -91,5 +100,11 @@ fn test_ui_component_combinations() {
 
     let combined_repr = format!("Message: {:?}\nContext: {:?}", message_segment, context);
 
-    assert_snapshot!("ui_component_combinations", combined_repr);
+    assert_snapshot!(
+        &combined_repr,
+        @r###"
+    Message: InlineSegment { text: "This is a test message with styling", style: InlineTextStyle { color: None, bg_color: None, effects: Effects(BOLD | ITALIC) } }
+    Context: InlineHeaderContext { app_name: "App", provider: "anthropic", model: "claude-3", context_window_size: None, version: "test-version", search_tools: None, persistent_memory: None, pr_review: None, editor_context: None, git: "git: unavailable", reasoning: "Reasoning effort: unavailable", reasoning_stage: None, workspace_trust: "Trust: unavailable", tools: "Tools: unavailable", mcp: "MCP: unavailable", primary_agent: None, highlights: [], subagent_badges: [] }
+    "###
+    );
 }

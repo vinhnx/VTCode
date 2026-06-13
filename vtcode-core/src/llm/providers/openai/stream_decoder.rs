@@ -1,8 +1,17 @@
 //! Streaming decoders for OpenAI Chat Completions and Responses APIs.
+//!
+//! Retained custom decoder boundary: Rig's SSE parser does not currently prove
+//! parity for VTCode's legacy `LLMStreamEvent` shape, fallback from empty final
+//! Responses output to streamed deltas, cached prompt usage overlay, and
+//! provider-specific error mapping. Protected by this module's
+//! `stream_decoder` tests and provider mock streaming tests. Remove only once a
+//! Rig stream adapter preserves the same final `LLMResponse` and runtime event
+//! behaviour.
 
 use crate::llm::error_display;
 use crate::llm::provider;
 use crate::llm::providers::shared::StreamTelemetry;
+use crate::llm::providers::shared::parse_cached_prompt_tokens_from_usage;
 use crate::llm::providers::shared::{StreamAssemblyError, extract_data_payload, find_sse_boundary};
 use crate::models_manager::model_family::find_family_for_model;
 use async_stream::try_stream;
@@ -57,16 +66,8 @@ fn merge_final_response_metadata(
     include_cached_prompt_metrics: bool,
 ) {
     if let Some(usage_value) = final_response.get("usage") {
-        let cached_prompt_tokens = if include_cached_prompt_metrics {
-            usage_value
-                .get("prompt_tokens_details")
-                .and_then(|details| details.get("cached_tokens"))
-                .or_else(|| usage_value.get("prompt_cache_hit_tokens"))
-                .and_then(Value::as_u64)
-                .and_then(|value| u32::try_from(value).ok())
-        } else {
-            None
-        };
+        let cached_prompt_tokens =
+            parse_cached_prompt_tokens_from_usage(usage_value, include_cached_prompt_metrics);
 
         response.usage = Some(provider::Usage {
             prompt_tokens: usage_value
@@ -187,6 +188,57 @@ pub(crate) fn create_chat_stream(
     };
 
     Box::pin(stream)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        final_response_output_is_empty, merge_final_response_metadata, streamed_response_is_usable,
+    };
+    use crate::llm::provider::{LLMResponse, ToolCall};
+    use serde_json::json;
+
+    #[test]
+    fn responses_final_metadata_parses_cached_prompt_tokens_when_enabled() {
+        let mut response = LLMResponse::default();
+        merge_final_response_metadata(
+            &mut response,
+            &json!({
+                "id": "resp_stream",
+                "usage": {
+                    "input_tokens": 12,
+                    "output_tokens": 5,
+                    "total_tokens": 17,
+                    "input_tokens_details": {
+                        "cached_tokens": 9
+                    }
+                }
+            }),
+            true,
+        );
+
+        assert_eq!(response.request_id.as_deref(), Some("resp_stream"));
+        let usage = response.usage.expect("usage should be populated");
+        assert_eq!(usage.prompt_tokens, 12);
+        assert_eq!(usage.completion_tokens, 5);
+        assert_eq!(usage.total_tokens, 17);
+        assert_eq!(usage.cached_prompt_tokens, Some(9));
+    }
+
+    #[test]
+    fn empty_final_response_can_use_streamed_tool_call_delta() {
+        let response = LLMResponse {
+            tool_calls: Some(vec![ToolCall::function(
+                "call_1".to_string(),
+                "search_workspace".to_string(),
+                "{\"query\":\"vtcode\"}".to_string(),
+            )]),
+            ..Default::default()
+        };
+
+        assert!(final_response_output_is_empty(&json!({"output": []})));
+        assert!(streamed_response_is_usable(&response));
+    }
 }
 
 pub(crate) fn create_responses_stream(

@@ -25,6 +25,7 @@
 //! let provider = OpenAIProvider::new("sk-...".to_string());
 //! ```
 
+pub(crate) mod backend_setup;
 mod custom_provider_auth;
 pub mod errors;
 mod harmony;

@@ -501,6 +501,50 @@ fn maybe_inline_spooled_uses_reference_only_for_spooled_exec_output() {
     );
 }
 
+#[test]
+fn maybe_inline_spooled_uses_reference_only_for_spooled_search_output() {
+    let large_match_payload = "match\n".repeat(10_000);
+    let serialized = maybe_inline_spooled(
+        tool_names::UNIFIED_SEARCH,
+        &serde_json::json!({
+            "query": "",
+            "matches": [
+                {
+                    "type": "match",
+                    "data": {
+                        "lines": {
+                            "text": large_match_payload
+                        }
+                    }
+                }
+            ],
+            "content": large_match_payload,
+            "spool_path": ".vtcode/context/tool_outputs/unified_search_1.txt",
+            "truncated": true
+        }),
+    );
+
+    let parsed: serde_json::Value =
+        serde_json::from_str(&serialized).expect("serialized JSON payload");
+    assert!(parsed.get("matches").is_none());
+    assert!(parsed.get("content").is_none());
+    assert_eq!(
+        parsed.get("spool_path"),
+        Some(&serde_json::json!(
+            ".vtcode/context/tool_outputs/unified_search_1.txt"
+        ))
+    );
+    assert_eq!(
+        parsed.get("result_ref_only"),
+        Some(&serde_json::json!(true))
+    );
+    assert!(
+        serialized.len() < 1_000,
+        "spooled search payload should stay compact, got {} bytes",
+        serialized.len()
+    );
+}
+
 #[tokio::test]
 async fn maybe_inline_spooled_with_preview_includes_tail_excerpt_from_spool_file() {
     let workspace = tempdir().expect("tempdir");

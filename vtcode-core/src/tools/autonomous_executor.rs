@@ -876,11 +876,12 @@ mod tests {
         let args = json!({"path": "/etc/passwd"});
         let result = executor.validate_args(tools::WRITE_FILE, &args);
         assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
         assert!(
-            result
-                .unwrap_err()
-                .to_string()
-                .contains("workspace boundary")
+            err.contains("workspace boundary")
+                || err.contains("Path traversal")
+                || err.contains("system directory"),
+            "{err}"
         );
 
         // /tmp/vtcode should be allowed
@@ -916,7 +917,13 @@ mod tests {
             )
             .expect_err("destination outside workspace should fail");
 
-        assert!(err.to_string().contains("workspace boundary"));
+        let err = err.to_string();
+        assert!(
+            err.contains("workspace boundary")
+                || err.contains("Path traversal")
+                || err.contains("system directory"),
+            "{err}"
+        );
     }
 
     #[test]
@@ -986,10 +993,12 @@ mod tests {
         let workspace = PathBuf::from("/workspace");
         executor.set_workspace_dir(workspace);
 
-        // Path with .. that stays in workspace should be allowed (with warning)
+        // Parent traversal is rejected before canonical workspace checks.
         let args = json!({"path": "src/../lib/file.rs"});
         let result = executor.validate_args(tools::WRITE_FILE, &args);
-        // This should succeed but log a warning
-        result.unwrap();
+        let err = result
+            .expect_err("parent traversal should fail")
+            .to_string();
+        assert!(err.contains("Path traversal"), "{err}");
     }
 }

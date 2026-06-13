@@ -1,6 +1,6 @@
 use glob::Pattern;
 use ignore::gitignore::{Gitignore, GitignoreBuilder};
-use serde_json::Value;
+use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 use url::Url;
 
@@ -96,6 +96,39 @@ pub fn build_permission_request(
         builtin_file_mutation,
         protected_write_paths,
     }
+}
+
+/// Build representative permission requests for advertised tool availability.
+///
+/// Runtime dispatch still evaluates the concrete call arguments. Advertisement cannot know future
+/// arguments, so multi-action tools include each category they can expose and callers should treat
+/// any denied representative request as a reason not to grant provider-native availability.
+pub fn build_advertised_permission_requests(
+    workspace_root: &Path,
+    current_dir: &Path,
+    normalized_tool_name: &str,
+) -> Vec<PermissionRequest> {
+    let representative_args = advertised_permission_args(normalized_tool_name);
+    if representative_args.is_empty() {
+        return vec![build_permission_request(
+            workspace_root,
+            current_dir,
+            normalized_tool_name,
+            None,
+        )];
+    }
+
+    representative_args
+        .iter()
+        .map(|args| {
+            build_permission_request(
+                workspace_root,
+                current_dir,
+                normalized_tool_name,
+                Some(args),
+            )
+        })
+        .collect()
 }
 
 pub fn evaluate_permissions(
@@ -456,6 +489,45 @@ fn build_request_kind(
     PermissionRequestKind::Other
 }
 
+fn advertised_permission_args(normalized_tool_name: &str) -> Vec<Value> {
+    match normalized_tool_name {
+        tools::UNIFIED_EXEC | tools::EXEC_PTY_CMD | tools::EXEC_COMMAND | "exec" => {
+            vec![json!({ "action": "run", "command": "true" })]
+        }
+        tools::RUN_PTY_CMD | tools::CREATE_PTY_SESSION | tools::SHELL | "bash" => {
+            vec![json!({ "command": "true" })]
+        }
+        tools::READ_FILE | tools::GREP_FILE | tools::LIST_FILES => {
+            vec![json!({ "path": "." })]
+        }
+        tools::WRITE_FILE | tools::CREATE_FILE | tools::DELETE_FILE => {
+            vec![json!({ "path": "advertised-permission-probe.txt" })]
+        }
+        tools::MOVE_FILE | tools::COPY_FILE => vec![json!({
+            "path": "advertised-permission-probe.txt",
+            "destination": "advertised-permission-probe-copy.txt"
+        })],
+        tools::EDIT_FILE | tools::SEARCH_REPLACE => {
+            vec![json!({ "path": "advertised-permission-probe.txt" })]
+        }
+        tools::APPLY_PATCH => vec![json!({
+            "patch": "*** Begin Patch\n*** Update File: advertised-permission-probe.txt\n@@\n-old\n+new\n*** End Patch\n"
+        })],
+        tools::FILE_OP => vec![json!({ "path": "advertised-permission-probe.txt" })],
+        tools::UNIFIED_SEARCH => vec![
+            json!({ "action": "list", "path": "." }),
+            json!({ "action": "web", "url": "https://example.com/" }),
+        ],
+        tools::UNIFIED_FILE => vec![
+            json!({ "action": "read", "path": "." }),
+            json!({ "action": "edit", "path": "advertised-permission-probe.txt" }),
+            json!({ "action": "write", "path": "advertised-permission-probe.txt" }),
+        ],
+        tools::WEB_FETCH | tools::FETCH_URL => vec![json!({ "url": "https://example.com/" })],
+        _ => Vec::new(),
+    }
+}
+
 fn parse_mcp_request(normalized_tool_name: &str) -> Option<(String, String)> {
     if let Some((server, tool)) = parse_canonical_mcp_tool_name(normalized_tool_name) {
         return Some((server.to_string(), tool.to_string()));
@@ -672,7 +744,7 @@ mod tests {
         ResolvedPermissionDecision, build_permission_request, evaluate_agent_permissions,
         evaluate_effective_permissions, evaluate_permissions,
     };
-    use crate::config::PermissionsConfig;
+    use crate::config::{PermissionsConfig, constants::tools};
     use serde_json::json;
     use tempfile::TempDir;
     use vtcode_config::core::permissions::{AgentPermissionsConfig, PermissionDefault};
@@ -938,6 +1010,35 @@ mod tests {
         assert_eq!(
             evaluate_agent_permissions(&permissions, &workspace, &cwd, &request),
             ResolvedPermissionDecision::Allow
+        );
+    }
+
+    #[test]
+    fn agent_read_permission_allows_unified_file_read_only() {
+        let (_temp, workspace, cwd) = workspace_roots();
+        let mut permissions = agent_permissions(PermissionDefault::Deny);
+        permissions.allow = vec!["read".to_string()];
+
+        let read_request = build_permission_request(
+            &workspace,
+            &cwd,
+            tools::UNIFIED_FILE,
+            Some(&json!({"action": "read", "path": "README.md"})),
+        );
+        let write_request = build_permission_request(
+            &workspace,
+            &cwd,
+            tools::UNIFIED_FILE,
+            Some(&json!({"action": "write", "path": "README.md", "content": "x"})),
+        );
+
+        assert_eq!(
+            evaluate_agent_permissions(&permissions, &workspace, &cwd, &read_request),
+            ResolvedPermissionDecision::Allow
+        );
+        assert_eq!(
+            evaluate_agent_permissions(&permissions, &workspace, &cwd, &write_request),
+            ResolvedPermissionDecision::Deny
         );
     }
 

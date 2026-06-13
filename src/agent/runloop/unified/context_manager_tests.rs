@@ -371,6 +371,7 @@ fn test_update_token_usage_prefers_prompt_pressure() {
         cached_prompt_tokens: None,
         cache_creation_tokens: None,
         cache_read_tokens: None,
+        iterations: None,
     }));
     assert_eq!(manager.current_token_usage(), 1000);
 
@@ -382,6 +383,7 @@ fn test_update_token_usage_prefers_prompt_pressure() {
         cached_prompt_tokens: None,
         cache_creation_tokens: None,
         cache_read_tokens: None,
+        iterations: None,
     }));
     assert_eq!(manager.current_token_usage(), 2500);
 }
@@ -402,6 +404,7 @@ fn test_update_token_usage_falls_back_when_prompt_missing() {
         cached_prompt_tokens: None,
         cache_creation_tokens: None,
         cache_read_tokens: None,
+        iterations: None,
     }));
 
     // Fallback estimate = total - completion.
@@ -436,6 +439,7 @@ async fn build_system_prompt_ignores_token_usage_updates() {
         cached_prompt_tokens: None,
         cache_creation_tokens: None,
         cache_read_tokens: None,
+        iterations: None,
     }));
 
     let prompt_after = manager

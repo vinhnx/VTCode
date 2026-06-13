@@ -435,7 +435,7 @@ pub fn vtcode_tui_workspace_root() -> PathBuf {
 }
 
 pub fn transcript_file_fixture_relative_path() -> &'static str {
-    "src/core_tui/session.rs"
+    "src/tui/core_tui/session.rs"
 }
 
 pub fn transcript_file_fixture_absolute_path() -> String {
