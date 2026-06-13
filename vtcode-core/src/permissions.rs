@@ -9,7 +9,9 @@ use crate::config::constants::tools;
 use crate::tools::command_args;
 use crate::tools::mcp::{MCP_QUALIFIED_TOOL_PREFIX, parse_canonical_mcp_tool_name};
 use crate::tools::tool_intent;
-use vtcode_config::core::permissions::{AgentPermissionsConfig, PermissionDefault};
+use vtcode_config::core::permissions::{
+    AgentPermissionsConfig, PermissionDefault, normalize_permission_rule,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PermissionRuleDecision {
@@ -275,7 +277,8 @@ enum CompiledPermissionRule {
 
 impl CompiledPermissionRule {
     fn compile(raw: &str, workspace_root: &Path, current_dir: &Path) -> Option<Self> {
-        let rule = raw.trim();
+        let rule = normalize_permission_rule(raw);
+        let rule = rule.trim();
         if rule.is_empty() {
             return None;
         }
@@ -932,9 +935,10 @@ mod tests {
     #[test]
     fn exact_tool_rules_feed_rule_tiers() {
         let (_temp, workspace, cwd) = workspace_roots();
+        // Use semantic rules which are the recommended approach
         let config = PermissionsConfig {
-            allow: vec!["read_file".to_string()],
-            deny: vec!["unified_exec".to_string()],
+            allow: vec!["read".to_string()],
+            deny: vec!["bash".to_string()],
             ..PermissionsConfig::default()
         };
 
@@ -946,7 +950,9 @@ mod tests {
         };
         let exec_request = PermissionRequest {
             exact_tool_name: "unified_exec".to_string(),
-            kind: PermissionRequestKind::Other,
+            kind: PermissionRequestKind::Bash {
+                command: "test".to_string(),
+            },
             builtin_file_mutation: false,
             protected_write_paths: Vec::new(),
         };
@@ -958,12 +964,13 @@ mod tests {
     #[test]
     fn agent_deny_wins_over_ask_auto_allow_and_default() {
         let (_temp, workspace, cwd) = workspace_roots();
-        let request = exact_tool_request("unified_exec");
+        // Use a custom tool name that won't be normalized to a semantic rule
+        let request = exact_tool_request("custom_tool");
         let mut permissions = agent_permissions(PermissionDefault::Allow);
-        permissions.allow = vec!["unified_exec".to_string()];
-        permissions.auto = vec!["unified_exec".to_string()];
-        permissions.ask = vec!["unified_exec".to_string()];
-        permissions.deny = vec!["unified_exec".to_string()];
+        permissions.allow = vec!["custom_tool".to_string()];
+        permissions.auto = vec!["custom_tool".to_string()];
+        permissions.ask = vec!["custom_tool".to_string()];
+        permissions.deny = vec!["custom_tool".to_string()];
 
         assert_eq!(
             evaluate_agent_permissions(&permissions, &workspace, &cwd, &request),
@@ -974,11 +981,12 @@ mod tests {
     #[test]
     fn agent_ask_wins_over_auto_allow_and_default() {
         let (_temp, workspace, cwd) = workspace_roots();
-        let request = exact_tool_request("unified_exec");
+        // Use a custom tool name that won't be normalized to a semantic rule
+        let request = exact_tool_request("custom_tool");
         let mut permissions = agent_permissions(PermissionDefault::Deny);
-        permissions.allow = vec!["unified_exec".to_string()];
-        permissions.auto = vec!["unified_exec".to_string()];
-        permissions.ask = vec!["unified_exec".to_string()];
+        permissions.allow = vec!["custom_tool".to_string()];
+        permissions.auto = vec!["custom_tool".to_string()];
+        permissions.ask = vec!["custom_tool".to_string()];
 
         assert_eq!(
             evaluate_agent_permissions(&permissions, &workspace, &cwd, &request),
@@ -989,10 +997,11 @@ mod tests {
     #[test]
     fn agent_auto_wins_over_allow_and_default() {
         let (_temp, workspace, cwd) = workspace_roots();
-        let request = exact_tool_request("unified_exec");
+        // Use a custom tool name that won't be normalized to a semantic rule
+        let request = exact_tool_request("custom_tool");
         let mut permissions = agent_permissions(PermissionDefault::Deny);
-        permissions.allow = vec!["unified_exec".to_string()];
-        permissions.auto = vec!["unified_exec".to_string()];
+        permissions.allow = vec!["custom_tool".to_string()];
+        permissions.auto = vec!["custom_tool".to_string()];
 
         assert_eq!(
             evaluate_agent_permissions(&permissions, &workspace, &cwd, &request),
@@ -1003,9 +1012,10 @@ mod tests {
     #[test]
     fn agent_allow_wins_over_default() {
         let (_temp, workspace, cwd) = workspace_roots();
-        let request = exact_tool_request("read_file");
+        // Use a custom tool name that won't be normalized to a semantic rule
+        let request = exact_tool_request("custom_tool");
         let mut permissions = agent_permissions(PermissionDefault::Deny);
-        permissions.allow = vec!["read_file".to_string()];
+        permissions.allow = vec!["custom_tool".to_string()];
 
         assert_eq!(
             evaluate_agent_permissions(&permissions, &workspace, &cwd, &request),
@@ -1064,9 +1074,10 @@ mod tests {
     #[test]
     fn global_deny_is_hard_ceiling() {
         let (_temp, workspace, cwd) = workspace_roots();
-        let request = exact_tool_request("unified_exec");
+        // Use a custom tool name that won't be normalized to a semantic rule
+        let request = exact_tool_request("custom_tool");
         let global = PermissionsConfig {
-            deny: vec!["unified_exec".to_string()],
+            deny: vec!["custom_tool".to_string()],
             ..PermissionsConfig::default()
         };
         let permissions = agent_permissions(PermissionDefault::Allow);
@@ -1080,9 +1091,10 @@ mod tests {
     #[test]
     fn global_ask_forces_prompt_over_agent_allow_or_auto() {
         let (_temp, workspace, cwd) = workspace_roots();
-        let request = exact_tool_request("unified_exec");
+        // Use a custom tool name that won't be normalized to a semantic rule
+        let request = exact_tool_request("custom_tool");
         let global = PermissionsConfig {
-            ask: vec!["unified_exec".to_string()],
+            ask: vec!["custom_tool".to_string()],
             ..PermissionsConfig::default()
         };
 
@@ -1142,13 +1154,14 @@ mod tests {
     #[test]
     fn agent_specific_deny_wins_within_agent_scope() {
         let (_temp, workspace, cwd) = workspace_roots();
-        let request = exact_tool_request("write_file");
+        // Use a custom tool name that won't be normalized to a semantic rule
+        let request = exact_tool_request("custom_tool");
         let global = PermissionsConfig {
-            allow: vec!["write_file".to_string()],
+            allow: vec!["custom_tool".to_string()],
             ..PermissionsConfig::default()
         };
         let mut permissions = agent_permissions(PermissionDefault::Allow);
-        permissions.deny = vec!["write_file".to_string()];
+        permissions.deny = vec!["custom_tool".to_string()];
 
         assert_eq!(
             evaluate_effective_permissions(&global, &permissions, &workspace, &cwd, &request),
@@ -1159,9 +1172,10 @@ mod tests {
     #[test]
     fn auto_bucket_resolves_to_classifier_backed_decision() {
         let (_temp, workspace, cwd) = workspace_roots();
-        let request = exact_tool_request("unified_exec");
+        // Use a custom tool name that won't be normalized to a semantic rule
+        let request = exact_tool_request("custom_tool");
         let mut permissions = agent_permissions(PermissionDefault::Ask);
-        permissions.auto = vec!["unified_exec".to_string()];
+        permissions.auto = vec!["custom_tool".to_string()];
 
         assert_eq!(
             evaluate_agent_permissions(&permissions, &workspace, &cwd, &request),

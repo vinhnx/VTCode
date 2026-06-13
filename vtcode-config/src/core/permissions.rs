@@ -18,17 +18,30 @@ pub enum PermissionDefault {
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct AgentPermissionsConfig {
+    /// Default permission for unmatched tool calls.
+    /// Options: `"ask"`, `"allow"`, `"auto"`, `"deny"`.
     pub default: PermissionDefault,
 
+    /// Rules that allow matching tool calls without prompting.
+    ///
+    /// Recommended semantic rules: `"read"`, `"write"`, `"edit"`, `"bash"`.
+    /// Tool-name rules like `"read_file"` are normalized to semantic rules
+    /// automatically. Supports path specifiers: `"read(/src/**/*.rs)"`.
     #[serde(default)]
     pub allow: Vec<String>,
 
+    /// Rules that require an interactive prompt when they match.
+    /// Same syntax as [`Self::allow`].
     #[serde(default)]
     pub ask: Vec<String>,
 
+    /// Rules that auto-approve with classifier-backed review.
+    /// Same syntax as [`Self::allow`].
     #[serde(default)]
     pub auto: Vec<String>,
 
+    /// Rules that deny matching tool calls.
+    /// Same syntax as [`Self::allow`].
     #[serde(default)]
     pub deny: Vec<String>,
 }
@@ -44,6 +57,109 @@ impl AgentPermissionsConfig {
             deny: Vec::new(),
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// Permission rule normalization
+// ---------------------------------------------------------------------------
+
+/// Check whether a rule string is already a recognized semantic rule.
+///
+/// Semantic rules operate on `PermissionRequestKind` rather than exact tool
+/// names, which means they work correctly regardless of whether the LLM calls
+/// `read_file` directly or `unified_file(action="read")`.
+fn is_semantic_rule(rule: &str) -> bool {
+    matches!(
+        rule.to_ascii_lowercase().as_str(),
+        "read" | "write" | "edit" | "bash" | "webfetch"
+    )
+}
+
+/// Normalize a tool-name permission rule to its semantic category.
+///
+/// Raw internal tool names like `"read_file"` or `"unified_file"` are mapped to
+/// the semantic rule `"read"` so they correctly match all read operations
+/// regardless of which tool the LLM actually invokes.
+fn normalize_tool_name_to_semantic(tool_name: &str) -> String {
+    match tool_name.to_ascii_lowercase().as_str() {
+        // Read operations
+        "read_file" | "read" | "grep_file" | "grep" | "list_files" | "list" | "glob"
+        | "listfiles" | "grepfile" => "read".to_string(),
+
+        // Write operations
+        "write_file" | "write" | "create_file" | "createfile" | "delete_file" | "deletefile"
+        | "move_file" | "movefile" | "copy_file" | "copyfile" => "write".to_string(),
+
+        // Edit operations
+        "edit_file" | "edit" | "apply_patch" | "applypatch" | "search_replace"
+        | "searchreplace" | "file_op" | "fileop" | "patch" => "edit".to_string(),
+
+        // Bash operations
+        "bash" | "shell" | "command" | "exec_command" | "execcommand" | "run_pty_cmd"
+        | "runptycmd" | "execute_code" | "executecode" => "bash".to_string(),
+
+        // Web fetch operations
+        "webfetch" | "web_fetch" | "fetch" => "webfetch".to_string(),
+
+        // Unified tools: pass through as-is so they compile to ExactTool rules.
+        // These are multi-action dispatch tools where a single tool name maps to
+        // multiple PermissionRequestKind variants (e.g., unified_file produces
+        // Read, Edit, and Write depending on the action argument). Collapsing
+        // them to a single semantic category would silently narrow deny/allow
+        // rules to only one action type.
+        "unified_file" | "unified_exec" | "unified_search" => tool_name.to_string(),
+
+        // Pass through unknown rules as-is (will become ExactTool)
+        other => other.to_string(),
+    }
+}
+
+/// Parse a rule string into its tool name and optional path specifier.
+///
+/// For example, `"read_file(/src/**/*.rs)"` returns `Some(("read_file", "/src/**/*.rs"))`.
+/// A rule without parentheses returns `None`.
+fn parse_tool_specifier_parts(rule: &str) -> Option<(&str, &str)> {
+    let trimmed = rule.trim();
+    if let Some(open) = trimmed.find('(') {
+        let tool_part = trimmed[..open].trim();
+        let specifier = trimmed[open + 1..].strip_suffix(')').map(str::trim)?;
+        if !tool_part.is_empty() && !specifier.is_empty() {
+            return Some((tool_part, specifier));
+        }
+    }
+    None
+}
+
+/// Normalize a permission rule string to its semantic form.
+///
+/// This transforms raw tool-name rules into semantic rules before compilation.
+/// For example:
+/// - `"read_file"` → `"read"`
+/// - `"read_file(/src/**/*.rs)"` → `"read(/src/**/*.rs)"`
+/// - `"mcp__server__tool"` → unchanged (MCP rules pass through)
+/// - `"read"` → unchanged (already semantic)
+#[must_use]
+pub fn normalize_permission_rule(raw: &str) -> String {
+    let trimmed = raw.trim();
+
+    // Already a semantic rule - normalize to lowercase and pass through
+    if is_semantic_rule(trimmed) {
+        return trimmed.to_ascii_lowercase();
+    }
+
+    // Already an MCP rule - pass through
+    if trimmed.starts_with("mcp__") {
+        return trimmed.to_string();
+    }
+
+    // Has path specifier - normalize the tool name part
+    if let Some((tool_part, specifier)) = parse_tool_specifier_parts(trimmed) {
+        let normalized_tool = normalize_tool_name_to_semantic(tool_part);
+        return format!("{}({})", normalized_tool, specifier);
+    }
+
+    // Raw tool name - normalize to semantic
+    normalize_tool_name_to_semantic(trimmed)
 }
 
 /// Permission system configuration - Controls command resolution, audit logging, and caching
@@ -410,5 +526,111 @@ mod tests {
         assert!(!config.auto_permission.block_rules.is_empty());
         assert!(!config.auto_permission.allow_exceptions.is_empty());
         assert!(config.auto_permission.environment.trusted_paths.is_empty());
+    }
+
+    #[test]
+    fn normalizes_read_tool_names_to_semantic_rule() {
+        for input in ["read_file", "Read_File", "READ_FILE", "read", "Read"] {
+            assert_eq!(
+                super::normalize_permission_rule(input),
+                "read",
+                "input: {input}"
+            );
+        }
+    }
+
+    #[test]
+    fn normalizes_write_tool_names_to_semantic_rule() {
+        for input in ["write_file", "Write_File", "create_file", "delete_file"] {
+            assert_eq!(
+                super::normalize_permission_rule(input),
+                "write",
+                "input: {input}"
+            );
+        }
+    }
+
+    #[test]
+    fn normalizes_edit_tool_names_to_semantic_rule() {
+        for input in ["edit_file", "Edit_File", "apply_patch", "file_op"] {
+            assert_eq!(
+                super::normalize_permission_rule(input),
+                "edit",
+                "input: {input}"
+            );
+        }
+    }
+
+    #[test]
+    fn normalizes_bash_tool_names_to_semantic_rule() {
+        for input in ["bash", "Bash", "exec_command", "run_pty_cmd"] {
+            assert_eq!(
+                super::normalize_permission_rule(input),
+                "bash",
+                "input: {input}"
+            );
+        }
+    }
+
+    #[test]
+    fn unified_tools_pass_through_as_exact_tool_rules() {
+        // Unified tools are multi-action dispatch tools that should NOT be
+        // collapsed to semantic rules. They pass through as-is so they compile
+        // to ExactTool rules matching on exact_tool_name.
+        assert_eq!(
+            super::normalize_permission_rule("unified_file"),
+            "unified_file"
+        );
+        assert_eq!(
+            super::normalize_permission_rule("unified_exec"),
+            "unified_exec"
+        );
+        assert_eq!(
+            super::normalize_permission_rule("unified_search"),
+            "unified_search"
+        );
+    }
+
+    #[test]
+    fn normalizes_tool_name_with_path_specifier() {
+        assert_eq!(
+            super::normalize_permission_rule("read_file(/src/**/*.rs)"),
+            "read(/src/**/*.rs)"
+        );
+        assert_eq!(
+            super::normalize_permission_rule("write_file(/docs/**)"),
+            "write(/docs/**)"
+        );
+    }
+
+    #[test]
+    fn mcp_rules_pass_through_unchanged() {
+        assert_eq!(
+            super::normalize_permission_rule("mcp__server__tool"),
+            "mcp__server__tool"
+        );
+        assert_eq!(
+            super::normalize_permission_rule("mcp__context7__*"),
+            "mcp__context7__*"
+        );
+    }
+
+    #[test]
+    fn semantic_rules_pass_through_unchanged() {
+        for input in ["read", "write", "edit", "bash", "webfetch"] {
+            assert_eq!(
+                super::normalize_permission_rule(input),
+                input,
+                "input: {input}"
+            );
+        }
+    }
+
+    #[test]
+    fn unknown_rules_pass_through_unchanged() {
+        assert_eq!(
+            super::normalize_permission_rule("some_custom_tool"),
+            "some_custom_tool"
+        );
     }
 }

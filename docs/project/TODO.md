@@ -78,9 +78,3 @@ Xiaomi provider implement hybrid token plan + API key setup
 3. When select XiaoMi providers in /model command -> show 2 options continuation + existing setup for user to choose from
 
 https://mimo.mi.com/docs/en-US/tokenplan/Token%20Plan/subscription
-
----
-
-https://github.com/vinhnx/VTCode/pull/673
-
-@vinhnx this is ready now, it unifies the OpenAI and chatgpt paths by making use of Rig, and also aligns the built-in agents' permissions and allowed/denied tools. Regarding the latter, the configuration right now can be a bit confusing, as you can effectively allow file reads but deny the tool to do so or vice versa. We should probably streamline this by either only allowing meaningful aliases (e.g. read_file instead of unified_file) or directly renaming some of the tools to match coding agent conventions. Custom tools from MCPs would not be affected of course.

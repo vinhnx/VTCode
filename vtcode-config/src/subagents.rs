@@ -803,7 +803,8 @@ fn load_cli_agents(value: &JsonValue) -> Result<Vec<SubagentSpec>> {
             .and_then(JsonValue::as_str)
             .map(ToString::to_string);
         let aliases = optional_string_list(config.get("aliases"))?.unwrap_or_default();
-        let warnings = primary_agent_subagent_only_field_warnings(config, mode);
+        let mut warnings = primary_agent_subagent_only_field_warnings(config, mode);
+        warnings.extend(warn_legacy_permission_rules(&permissions));
 
         specs.push(SubagentSpec {
             name: name.clone(),
@@ -969,7 +970,8 @@ fn subagent_spec_from_json_map(
         .and_then(JsonValue::as_str)
         .map(ToString::to_string);
     let aliases = optional_string_list(object.get("aliases"))?.unwrap_or_default();
-    let warnings = primary_agent_subagent_only_field_warnings(object, mode);
+    let mut warnings = primary_agent_subagent_only_field_warnings(object, mode);
+    warnings.extend(warn_legacy_permission_rules(&permissions));
 
     Ok(SubagentSpec {
         name,
@@ -1105,6 +1107,58 @@ fn permission_rule_tool_name(rule: &str) -> &str {
         return tool_name.trim();
     }
     trimmed
+}
+
+/// Check whether a tool name is a legacy internal name that should be expressed
+/// as a semantic rule instead (e.g., `"read"` instead of `"read_file"`).
+fn is_legacy_tool_name(name: &str) -> bool {
+    matches!(
+        name.to_ascii_lowercase().as_str(),
+        "read_file"
+            | "write_file"
+            | "edit_file"
+            | "create_file"
+            | "delete_file"
+            | "move_file"
+            | "copy_file"
+            | "apply_patch"
+            | "search_replace"
+            | "file_op"
+            | "grep_file"
+            | "list_files"
+            | "exec_command"
+            | "run_pty_cmd"
+            | "execute_code"
+            | "unified_file"
+            | "unified_exec"
+            | "unified_search"
+    )
+}
+
+/// Generate warnings for permission rules that use legacy tool names instead of
+/// semantic rules.
+fn warn_legacy_permission_rules(permissions: &AgentPermissionsConfig) -> Vec<String> {
+    let mut warnings = Vec::new();
+    for rule in permissions
+        .allow
+        .iter()
+        .chain(permissions.ask.iter())
+        .chain(permissions.auto.iter())
+        .chain(permissions.deny.iter())
+    {
+        let tool_name = permission_rule_tool_name(rule);
+        if is_legacy_tool_name(tool_name) {
+            // Normalize the full rule (including path specifier) so the
+            // suggestion preserves any path constraints the user specified.
+            let normalized = crate::core::permissions::normalize_permission_rule(rule);
+            warnings.push(format!(
+                "permission rule '{}' uses legacy tool name '{}'; \
+                 consider using the semantic rule '{}' for clearer intent",
+                rule, tool_name, normalized
+            ));
+        }
+    }
+    warnings
 }
 
 fn apply_plugin_restrictions(spec: &mut SubagentSpec) {
@@ -1647,7 +1701,11 @@ Primary prompt."#,
         );
         assert_eq!(spec.mode, AgentMode::Primary);
         assert!(spec.hooks.is_some());
-        assert!(spec.warnings.is_empty());
+        // Legacy tool names in permission rules generate warnings
+        assert!(spec.warnings.iter().any(|w| w.contains("read_file")));
+        assert!(spec.warnings.iter().any(|w| w.contains("unified_exec")));
+        assert!(spec.warnings.iter().any(|w| w.contains("unified_search")));
+        assert!(spec.warnings.iter().any(|w| w.contains("write_file")));
         Ok(())
     }
 
@@ -2263,5 +2321,29 @@ toggle_shortcut = "ctrl+b"
         assert_eq!(config.refresh_interval_ms, 1_500);
         assert!(config.auto_restore);
         assert_eq!(config.toggle_shortcut, "ctrl+b");
+    }
+
+    #[test]
+    fn emits_warning_for_legacy_tool_name_permissions() -> Result<()> {
+        let temp = TempDir::new()?;
+        let path = temp.path().join("legacy.md");
+        fs::write(
+            &path,
+            r#"---
+name: legacy
+description: Agent with legacy permission rules
+permissions:
+  default: deny
+  allow: [read_file, "write_file(/docs/**)"]
+  deny: [unified_exec]
+---
+Legacy prompt."#,
+        )?;
+
+        let spec = load_subagent_from_file(&path, SubagentSource::ProjectVtcode)?;
+        assert!(spec.warnings.iter().any(|w| w.contains("read_file")));
+        assert!(spec.warnings.iter().any(|w| w.contains("write_file")));
+        assert!(spec.warnings.iter().any(|w| w.contains("unified_exec")));
+        Ok(())
     }
 }
