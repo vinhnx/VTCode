@@ -75,6 +75,7 @@ impl ModelId {
             | ModelId::OllamaMinimaxM3Cloud
             | ModelId::OllamaNemotron3SuperCloud
             | ModelId::OllamaKimiK26Cloud
+            | ModelId::OllamaKimiK27CodeCloud
             | ModelId::OllamaGemma4
             | ModelId::OllamaLagunaXs2 => Provider::Ollama,
             ModelId::LlamaCppGemma426bA4b

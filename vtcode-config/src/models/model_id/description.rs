@@ -111,6 +111,9 @@ impl ModelId {
                 "Cloud-hosted MiniMax-M3 model served via Ollama Cloud"
             }
             ModelId::OllamaKimiK26Cloud => "Cloud-hosted Kimi K2.6 model served via Ollama Cloud",
+            ModelId::OllamaKimiK27CodeCloud => {
+                "Cloud-hosted Kimi K2.7 Code model served via Ollama Cloud"
+            }
             ModelId::OllamaNemotron3SuperCloud => {
                 "NVIDIA Nemotron\u{2122} is a family of open models delivering leading efficiency and accuracy for building specialized AI agents. Nemotron-3-Super (120B) is optimized for collaborative agents and high-volume workloads."
             }

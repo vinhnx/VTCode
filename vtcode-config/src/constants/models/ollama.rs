@@ -12,6 +12,7 @@ pub const SUPPORTED_MODELS: &[&str] = &[
     MINIMAX_M27_CLOUD,
     MINIMAX_M3_CLOUD,
     KIMI_K2_6_CLOUD,
+    KIMI_K2_7_CODE_CLOUD,
     NEMOTRON_3_SUPER_CLOUD,
     GEMMA_4,
     LAGUNA_XS_2,
@@ -30,6 +31,7 @@ pub const REASONING_MODELS: &[&str] = &[
     MINIMAX_M3_CLOUD,
     NEMOTRON_3_SUPER_CLOUD,
     LAGUNA_XS_2,
+    KIMI_K2_7_CODE_CLOUD,
 ];
 
 /// Models that require an explicit reasoning effort level instead of boolean toggle
@@ -51,6 +53,7 @@ pub const GEMINI_3_1_PRO_PREVIEW_LATEST_CLOUD: &str = "gemini-3.1-pro-preview:la
 pub const MINIMAX_M27_CLOUD: &str = "minimax-m2.7:cloud";
 pub const MINIMAX_M3_CLOUD: &str = "minimax-m3:cloud";
 pub const KIMI_K2_6_CLOUD: &str = "kimi-k2.6:cloud";
+pub const KIMI_K2_7_CODE_CLOUD: &str = "kimi-k2.7-code:cloud";
 pub const NEMOTRON_3_SUPER_CLOUD: &str = "nemotron-3-super:cloud";
 pub const GEMMA_4: &str = "gemma4";
 pub const LAGUNA_XS_2: &str = "laguna-xs.2";

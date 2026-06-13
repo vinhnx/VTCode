@@ -2962,6 +2962,22 @@
         },
         "context": 262144
       },
+      "kimi-k2.7-code:cloud": {
+        "id": "kimi-k2.7-code:cloud",
+        "name": "Kimi K2.7 Code (cloud)",
+        "description": "Cloud-hosted Kimi K2.7 Code model served via Ollama Cloud",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 262144
+      },
       "gemma4": {
         "id": "gemma4",
         "name": "Gemma 4",

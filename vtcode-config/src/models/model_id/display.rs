@@ -54,6 +54,7 @@ impl ModelId {
             ModelId::OllamaMinimaxM27Cloud => "MiniMax-M2.7 (cloud)",
             ModelId::OllamaMinimaxM3Cloud => "MiniMax-M3 (cloud)",
             ModelId::OllamaKimiK26Cloud => "Kimi-K2.6 (cloud)",
+            ModelId::OllamaKimiK27CodeCloud => "Kimi-K2.7-Code (cloud)",
             ModelId::OllamaNemotron3SuperCloud => "Nemotron-3-Super (cloud)",
             ModelId::OllamaGemma4 => "Gemma 4",
             ModelId::OllamaLagunaXs2 => "Laguna XS.2 (local)",

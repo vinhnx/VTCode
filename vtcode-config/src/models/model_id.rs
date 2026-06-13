@@ -186,6 +186,8 @@ pub enum ModelId {
     OllamaGlm51Cloud,
     /// Kimi K2.6 Cloud - Moonshot Kimi K2.6 via Ollama Cloud
     OllamaKimiK26Cloud,
+    /// Kimi K2.7 Code Cloud - Moonshot Kimi K2.7 Code via Ollama Cloud
+    OllamaKimiK27CodeCloud,
     /// Nemotron 3 Super Cloud - NVIDIA Nemotron 3 Super 120B via Ollama Cloud
     OllamaNemotron3SuperCloud,
     /// Gemma 4 - Google Gemma 4 model served via Ollama
