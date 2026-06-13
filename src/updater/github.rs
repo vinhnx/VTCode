@@ -16,7 +16,7 @@ fn github_client() -> Result<reqwest::Client> {
     // Authenticate with GitHub API when a token is available.
     // Unauthenticated requests are limited to 60/hour per IP; authenticated
     // requests get 5,000/hour. Check the two conventional env var names.
-    if let Ok(token) = std::env::var("GITHUB_TOKEN").or_else(|_| std::env::var("GH_TOKEN")) {
+    if let Some(token) = github_token() {
         let mut headers = reqwest::header::HeaderMap::new();
         let mut value = reqwest::header::HeaderValue::from_str(&format!("Bearer {token}"))
             .context("Invalid GITHUB_TOKEN value")?;
@@ -28,13 +28,11 @@ fn github_client() -> Result<reqwest::Client> {
     builder.build().context("Failed to create HTTP client")
 }
 
-/// Returns `true` if the error came from a 401 Unauthorized response.
-fn is_auth_error(err: &anyhow::Error) -> bool {
-    err.chain().any(|cause| {
-        cause
-            .downcast_ref::<reqwest::Error>()
-            .is_some_and(|e| e.status() == Some(reqwest::StatusCode::UNAUTHORIZED))
-    })
+fn github_token() -> Option<String> {
+    std::env::var("GITHUB_TOKEN")
+        .ok()
+        .or_else(|| std::env::var("GH_TOKEN").ok())
+        .filter(|token| !token.trim().is_empty())
 }
 
 /// Strip the `Authorization` header and rebuild the client for unauthenticated
@@ -53,33 +51,35 @@ async fn try_fetch_json_with_auth_fallback(
     url: &str,
     timeout: Duration,
 ) -> Result<serde_json::Value> {
-    let result = github_client()?
+    let response = github_client()?
         .get(url)
         .timeout(timeout)
         .send()
         .await
-        .context("Failed to fetch from GitHub API")?
+        .context("Failed to fetch from GitHub API");
+
+    let response = match response {
+        Ok(response)
+            if response.status() == reqwest::StatusCode::UNAUTHORIZED
+                && github_token().is_some() =>
+        {
+            unauthenticated_client()?
+                .get(url)
+                .timeout(timeout)
+                .send()
+                .await
+                .context("Failed to fetch from GitHub API")?
+        }
+        Ok(response) => response,
+        Err(err) => return Err(err),
+    };
+
+    response
         .error_for_status()
         .context("GitHub API returned non-success status")?
         .json::<serde_json::Value>()
         .await
-        .context("Failed to parse GitHub API response");
-
-    match result {
-        Ok(json) => Ok(json),
-        Err(err) if is_auth_error(&err) => unauthenticated_client()?
-            .get(url)
-            .timeout(timeout)
-            .send()
-            .await
-            .context("Failed to fetch from GitHub API")?
-            .error_for_status()
-            .context("GitHub API returned non-success status")?
-            .json::<serde_json::Value>()
-            .await
-            .context("Failed to parse GitHub API response"),
-        Err(err) => Err(err),
-    }
+        .context("Failed to parse GitHub API response")
 }
 
 /// Clamp the timeout to at least 1 second to prevent a zero-duration timeout
