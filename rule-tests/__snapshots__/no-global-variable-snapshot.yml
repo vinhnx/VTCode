@@ -1,0 +1,26 @@
+id: no-global-variable
+snapshots:
+  ? |
+    var cache = make(map[string]string)
+  : labels:
+    - source: var cache = make(map[string]string)
+      style: primary
+      start: 0
+      end: 35
+    - source: |
+        var cache = make(map[string]string)
+      style: secondary
+      start: 0
+      end: 36
+  ? |
+    var dbConnection *sql.DB
+  : labels:
+    - source: var dbConnection *sql.DB
+      style: primary
+      start: 0
+      end: 24
+    - source: |
+        var dbConnection *sql.DB
+      style: secondary
+      start: 0
+      end: 25

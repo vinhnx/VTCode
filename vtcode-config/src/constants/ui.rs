@@ -130,6 +130,17 @@ pub const STATUS_LINE_MODE: &str = "auto";
 pub const STATUS_LINE_REFRESH_INTERVAL_MS: u64 = 1000;
 pub const STATUS_LINE_COMMAND_TIMEOUT_MS: u64 = 200;
 
+// Agent/Mode color constants (hex RGB)
+// These colors are used for agent badges, header labels, and input borders.
+/// Build agent color - golden/amber (warm, creative tone)
+pub const AGENT_COLOR_BUILD: &str = "#D99A4E";
+/// Auto agent color - dark olive/green (autonomy and go-signal)
+pub const AGENT_COLOR_AUTO: &str = "#515948";
+/// Plan agent color - dark purple/blue (thoughtful, planning tone)
+pub const AGENT_COLOR_PLAN: &str = "#383B73";
+/// Duck agent color - light beige/tan (soft, discussion-focused)
+pub const AGENT_COLOR_DUCK: &str = "#BFB38F";
+
 // TUI tick rate constants for smooth scrolling
 /// Tick rate (Hz) when user is actively interacting with the TUI
 pub const TUI_ACTIVE_TICK_RATE_HZ: f64 = 60.0;

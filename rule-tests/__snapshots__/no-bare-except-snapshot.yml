@@ -1,0 +1,14 @@
+id: no-bare-except
+snapshots:
+  ? |
+    try:
+        result = int(value)
+    except:
+        result = 0
+  : labels:
+    - source: |-
+        except:
+            result = 0
+      style: primary
+      start: 29
+      end: 51

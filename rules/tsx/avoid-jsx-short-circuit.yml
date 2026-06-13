@@ -24,7 +24,7 @@ constraints:
     any:
       - kind: jsx_element
       - kind: jsx_self_closing_element
-fix: $COND ? $JSX : null
+fix: "$COND ? $JSX : null"
 files:
   - "**/*.tsx"
   - "**/*.jsx"

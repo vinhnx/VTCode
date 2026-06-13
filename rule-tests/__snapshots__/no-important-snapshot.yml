@@ -1,0 +1,11 @@
+id: no-important
+snapshots:
+  ? |
+    .header {
+        color: red !important;
+    }
+  : labels:
+    - source: '!important'
+      style: primary
+      start: 25
+      end: 35

@@ -1,0 +1,26 @@
+id: no-underscore-func-name
+snapshots:
+  ? |
+    func _helper() string {
+        return ""
+    }
+  : labels:
+    - source: |-
+        func _helper() string {
+            return ""
+        }
+      style: primary
+      start: 0
+      end: 39
+  ? |
+    func get_user_name(id int) string {
+        return ""
+    }
+  : labels:
+    - source: |-
+        func get_user_name(id int) string {
+            return ""
+        }
+      style: primary
+      start: 0
+      end: 51

@@ -1,0 +1,16 @@
+id: no-printf
+snapshots:
+  ? |
+    fprintf(stderr, "error: %s\n", msg);
+  : labels:
+    - source: 'fprintf(stderr, "error: %s\n", msg)'
+      style: primary
+      start: 0
+      end: 35
+  ? |
+    printf("value: %d\n", 42);
+  : labels:
+    - source: 'printf("value: %d\n", 42)'
+      style: primary
+      start: 0
+      end: 25

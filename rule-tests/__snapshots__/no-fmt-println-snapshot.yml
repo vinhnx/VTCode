@@ -1,0 +1,28 @@
+id: no-fmt-println
+snapshots:
+  ? |
+    func main() {
+        fmt.Printf("value: %d\n", 42)
+    }
+  : labels:
+    - source: 'fmt.Printf("value: %d\n", 42)'
+      style: primary
+      start: 18
+      end: 47
+    - source: Printf
+      style: secondary
+      start: 22
+      end: 28
+  ? |
+    func main() {
+        fmt.Println("hello")
+    }
+  : labels:
+    - source: fmt.Println("hello")
+      style: primary
+      start: 18
+      end: 38
+    - source: Println
+      style: secondary
+      start: 22
+      end: 29

@@ -440,8 +440,15 @@ pub(crate) async fn initialize_session_ui(
         .active()
         .display_name
         .clone();
+    let primary_agent_color = session_state
+        .active_primary_agent
+        .active()
+        .color
+        .clone()
+        .filter(|c| !c.trim().is_empty());
     header_context.primary_agent = Some(primary_agent_name.clone());
-    handle.set_primary_agent(Some(primary_agent_name));
+    header_context.primary_agent_color = primary_agent_color.clone();
+    handle.set_primary_agent(Some(primary_agent_name), primary_agent_color);
 
     let mut startup_update_notice_rx = None;
     let mut startup_update_task_guard = None;

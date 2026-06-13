@@ -1,0 +1,16 @@
+id: no-malloc-free-cpp
+snapshots:
+  ? |
+    free(ptr);
+  : labels:
+    - source: free(ptr)
+      style: primary
+      start: 0
+      end: 9
+  ? |
+    int *p = (int *)malloc(sizeof(int) * 10);
+  : labels:
+    - source: malloc(sizeof(int) * 10)
+      style: primary
+      start: 16
+      end: 40

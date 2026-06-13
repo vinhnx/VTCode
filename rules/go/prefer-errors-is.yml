@@ -13,7 +13,7 @@ rule:
     - pattern: $ERR != $TARGET
 constraints:
   TARGET:
-    regex: "^(Err|err|[A-Z].*Error)"
+    regex: "^(Err|err|[A-Z].*[Ee]rror|os\\.Err)"
 fix: errors.Is($ERR, $TARGET)
 files:
   - "**/*.go"

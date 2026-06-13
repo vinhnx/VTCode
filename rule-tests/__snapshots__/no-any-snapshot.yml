@@ -1,0 +1,14 @@
+id: no-any
+snapshots:
+  ? |
+    function process(input: any): string {
+        return String(input);
+    }
+  : labels:
+    - source: |-
+        function process(input: any): string {
+            return String(input);
+        }
+      style: primary
+      start: 0
+      end: 66

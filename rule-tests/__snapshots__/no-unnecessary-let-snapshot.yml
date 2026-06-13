@@ -1,12 +1,26 @@
 id: no-unnecessary-let
 snapshots:
   ? |
+    name.let { it.length }
+  : labels:
+    - source: name.let { it.length }
+      style: primary
+      start: 0
+      end: 22
+  ? |
     name.let { n -> n.length }
   : labels:
     - source: name.let { n -> n.length }
       style: primary
       start: 0
       end: 26
+  ? |
+    obj.let { it.toString() }
+  : labels:
+    - source: obj.let { it.toString() }
+      style: primary
+      start: 0
+      end: 25
   ? |
     result.let { value -> process(value) }
   : labels:

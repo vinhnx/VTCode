@@ -9,11 +9,12 @@ note: |
   tests, examples, and CLI tools.
 rule:
   any:
-    - pattern: fmt.Println($$$)
-    - pattern: fmt.Printf($$$)
-    - pattern: fmt.Fprintln(os.Stdout, $$$)
-    - pattern: fmt.Fprint(os.Stdout, $$$)
-    - pattern: fmt.Fprintf(os.Stdout, $$$)
+    - pattern: $FUNC($$$)
+constraints:
+  FUNC:
+    regex: "^fmt\\.(Println|Printf|Fprintln|Fprint|Fprintf)$"
+    has:
+      kind: field_identifier
 files:
   - "**/*.go"
   - "!**/*_test.go"

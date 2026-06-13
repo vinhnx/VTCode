@@ -9,9 +9,7 @@ snapshots:
       end: 21
   ? |
     if (isValid !== false) { proceed(); }
-  : fixed: |
-      if (isValid) { proceed(); }
-    labels:
+  : labels:
     - source: isValid !== false
       style: primary
       start: 4
@@ -25,9 +23,7 @@ snapshots:
       end: 19
   ? |
     if (isValid == true) { proceed(); }
-  : fixed: |
-      if (isValid) { proceed(); }
-    labels:
+  : labels:
     - source: isValid == true
       style: primary
       start: 4
@@ -41,9 +37,7 @@ snapshots:
       end: 20
   ? |
     if (isValid === true) { proceed(); }
-  : fixed: |
-      if (isValid) { proceed(); }
-    labels:
+  : labels:
     - source: isValid === true
       style: primary
       start: 4

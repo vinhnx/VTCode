@@ -1,0 +1,14 @@
+id: prefer-readonly
+snapshots:
+  ? |
+    function getItems(): string[] {
+        return ["a", "b"];
+    }
+  : labels:
+    - source: |-
+        function getItems(): string[] {
+            return ["a", "b"];
+        }
+      style: primary
+      start: 0
+      end: 56

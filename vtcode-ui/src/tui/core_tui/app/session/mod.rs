@@ -774,9 +774,10 @@ fn to_core_command(command: &InlineCommand) -> Option<crate::tui::core_tui::type
         }
         InlineCommand::SetLocalAgents { .. } => return None,
         InlineCommand::SetArchivedHistory { .. } => return None,
-        InlineCommand::SetPrimaryAgent { name } => {
-            CoreCommand::SetPrimaryAgent { name: name.clone() }
-        }
+        InlineCommand::SetPrimaryAgent { name, color } => CoreCommand::SetPrimaryAgent {
+            name: name.clone(),
+            color: color.clone(),
+        },
         InlineCommand::SetCursorVisible(value) => CoreCommand::SetCursorVisible(*value),
         InlineCommand::SetInputEnabled(value) => CoreCommand::SetInputEnabled(*value),
         InlineCommand::SetInput(value) => CoreCommand::SetInput(value.clone()),

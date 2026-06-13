@@ -9,9 +9,7 @@ note: |
   or when renaming `it` improves readability.
 rule:
   all:
-    - any:
-        - pattern: $RECEIVER.let { $PARAM -> $BODY }
-        - pattern: $RECEIVER.let { $BODY }
+    - pattern: $RECEIVER.let { $BODY }
     - not:
         pattern: $RECEIVER?.let { $$$ }
 files:

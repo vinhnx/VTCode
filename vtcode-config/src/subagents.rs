@@ -6,6 +6,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::constants::tools;
+use crate::constants::ui;
 use crate::core::permissions::{AgentPermissionsConfig, PermissionDefault};
 use crate::hooks::{HookCommandConfig, HookCommandKind, HookGroupConfig, HooksConfig};
 
@@ -549,7 +550,7 @@ pub fn builtin_primary_build_agent() -> SubagentSpec {
         tools: None,
         disallowed_tools: Vec::new(),
         model: Some("inherit".to_string()),
-        color: Some("#D99A4E".to_string()),
+        color: Some(ui::AGENT_COLOR_BUILD.to_string()),
         reasoning_effort: None,
         permissions: mutating_agent_permissions(),
         skills: Vec::new(),
@@ -577,7 +578,7 @@ pub fn builtin_primary_auto_agent() -> SubagentSpec {
         tools: None,
         disallowed_tools: Vec::new(),
         model: Some("inherit".to_string()),
-        color: Some("#515948".to_string()),
+        color: Some(ui::AGENT_COLOR_AUTO.to_string()),
         reasoning_effort: None,
         permissions: auto_agent_permissions(),
         skills: Vec::new(),
@@ -605,8 +606,8 @@ pub fn builtin_plan_agent() -> SubagentSpec {
         tools: Some(builtin_readonly_tool_ids()),
         disallowed_tools: builtin_readonly_disallowed_tool_ids(),
         model: Some("inherit".to_string()),
-        color: Some("#383B73".to_string()),
-        reasoning_effort: Some("medium".to_string()),
+        color: Some(ui::AGENT_COLOR_PLAN.to_string()),
+        reasoning_effort: None,
         permissions: readonly_agent_permissions(),
         skills: Vec::new(),
         mcp_servers: Vec::new(),
@@ -633,8 +634,8 @@ pub fn builtin_primary_duck_agent() -> SubagentSpec {
         tools: Some(builtin_readonly_tool_ids()),
         disallowed_tools: builtin_readonly_disallowed_tool_ids(),
         model: Some("inherit".to_string()),
-        color: Some("#BFB38F".to_string()),
-        reasoning_effort: Some("low".to_string()),
+        color: Some(ui::AGENT_COLOR_DUCK.to_string()),
+        reasoning_effort: None,
         permissions: readonly_agent_permissions(),
         skills: Vec::new(),
         mcp_servers: Vec::new(),

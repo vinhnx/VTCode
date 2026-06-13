@@ -210,10 +210,14 @@ fn set_primary_agent_command_updates_header_badge() {
 
     session.handle_command(InlineCommand::SetPrimaryAgent {
         name: Some("reviewer".to_string()),
+        color: None,
     });
     assert_header_contains_badge(&mut session, "Reviewer");
 
-    session.handle_command(InlineCommand::SetPrimaryAgent { name: None });
+    session.handle_command(InlineCommand::SetPrimaryAgent {
+        name: None,
+        color: None,
+    });
     let text = header_line_text(&mut session);
     assert!(text.contains("Duck"));
     assert!(!text.contains("Reviewer"));

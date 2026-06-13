@@ -73,7 +73,14 @@ vtcode --version
 export OPENAI_API_KEY="sk-..."
 ```
 
-### 3. Launch VT Code
+### 3. Initialize your project
+
+```bash
+cd your-project
+vtcode init    # scaffolds vtcode.toml, .vtcode/, and AGENTS.md
+```
+
+### 4. Launch VT Code
 
 ```bash
 vtcode

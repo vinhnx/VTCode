@@ -33,6 +33,28 @@ pub fn ratatui_color_from_ansi(color: AnsiColorEnum) -> Color {
     crate::design::color::anstyle_to_ratatui_color(color)
 }
 
+/// Parse a hex color string (e.g., "#D99A4E") to a ratatui Color.
+/// Returns None if the string is invalid or cannot be parsed.
+pub fn hex_to_ratatui_color(hex: &str) -> Option<Color> {
+    let hex = hex.trim().trim_start_matches('#');
+    if hex.len() != 6 {
+        return None;
+    }
+    let r = u8::from_str_radix(&hex[0..2], 16).ok()?;
+    let g = u8::from_str_radix(&hex[2..4], 16).ok()?;
+    let b = u8::from_str_radix(&hex[4..6], 16).ok()?;
+    Some(Color::Rgb(r, g, b))
+}
+
+/// Get the agent color style from an optional hex color string.
+/// Falls back to `fallback_color` if no color is specified or parsing fails.
+pub fn agent_color_style(color: Option<&str>, fallback_color: Color) -> Style {
+    let color = color
+        .and_then(hex_to_ratatui_color)
+        .unwrap_or(fallback_color);
+    Style::default().fg(color).add_modifier(Modifier::BOLD)
+}
+
 pub fn ratatui_style_from_inline(
     style: &InlineTextStyle,
     fallback: Option<AnsiColorEnum>,

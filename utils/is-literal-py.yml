@@ -1,4 +1,4 @@
-id: is-literal
+id: is-literal-py
 language: Python
 severity: info
 rule:

@@ -1,0 +1,15 @@
+id: no-panic-in-lib
+snapshots:
+  ? |
+    func mustDivide(a, b int) int {
+        if b == 0 {
+            panic("division by zero")
+        }
+        return a / b
+    }
+  : labels:
+    - source: '"division by zero"'
+      message: this panic will crash the caller
+      style: primary
+      start: 62
+      end: 80

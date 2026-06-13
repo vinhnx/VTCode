@@ -1,4 +1,4 @@
-id: is-literal
+id: is-literal-js
 language: JavaScript
 severity: info
 rule:

@@ -1,0 +1,12 @@
+id: prefer-string-builder
+snapshots:
+  ? |
+    func concat(a string, b string) string {
+        a = a + b
+        return a
+    }
+  : labels:
+    - source: a = a + b
+      style: primary
+      start: 45
+      end: 54

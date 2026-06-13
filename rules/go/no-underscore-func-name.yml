@@ -8,10 +8,10 @@ note: |
   flags them as style violations. This is a detection rule with no autofix
   because renaming a function requires updating all call sites.
 rule:
-  kind: function_declaration
-  has:
-    field: name
-    regex: "^[a-z]+_[a-z]"
+  pattern: func $NAME($$$) $$$ { $$$ }
+constraints:
+  NAME:
+    regex: "^[a-z_]*_[a-z]"
 files:
   - "**/*.go"
   - "!**/*_test.go"

@@ -1,0 +1,16 @@
+id: prefer-fstring
+snapshots:
+  ? |
+    msg = "hello %s" % name
+  : labels:
+    - source: '"hello %s" % name'
+      style: primary
+      start: 6
+      end: 23
+  ? |
+    msg = "hello {}".format(name)
+  : labels:
+    - source: '"hello {}".format(name)'
+      style: primary
+      start: 6
+      end: 29

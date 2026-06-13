@@ -177,6 +177,7 @@ pub struct InlineHeaderContext {
     pub tools: String,
     pub mcp: String,
     pub primary_agent: Option<String>,
+    pub primary_agent_color: Option<String>,
     pub highlights: Vec<InlineHeaderHighlight>,
     pub subagent_badges: Vec<InlineHeaderBadge>,
 }
@@ -201,6 +202,7 @@ impl Default for InlineHeaderContext {
             tools: "Tools: unavailable".to_string(),
             mcp: "MCP: unavailable".to_string(),
             primary_agent: None,
+            primary_agent_color: None,
             highlights: Vec::new(),
             subagent_badges: Vec::new(),
         }

@@ -8,10 +8,7 @@ note: |
   maintainability and consistency. Inline styles are acceptable for
   dynamic values set by JavaScript.
 rule:
-  kind: attribute
-  has:
-    field: name
-    pattern: style
+  pattern: "<$TAG style=\"$A\">"
 files:
   - "**/*.html"
   - "**/*.htm"

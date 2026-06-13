@@ -1,0 +1,16 @@
+id: no-puts-debug
+snapshots:
+  ? |
+    p user.inspect
+  : labels:
+    - source: p user.inspect
+      style: primary
+      start: 0
+      end: 14
+  ? |
+    puts "debug: #{value}"
+  : labels:
+    - source: 'puts "debug: #{value}"'
+      style: primary
+      start: 0
+      end: 22

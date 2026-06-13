@@ -3,11 +3,11 @@ valid:
   - |
       obj?.let { println(it) }
   - |
+      obj.let { value -> process(value) }
+  - |
+      name.let { n -> n.length }
+invalid:
+  - |
       obj.let { it.toString() }
   - |
       name.let { it.length }
-invalid:
-  - |
-      result.let { value -> process(value) }
-  - |
-      name.let { n -> n.length }

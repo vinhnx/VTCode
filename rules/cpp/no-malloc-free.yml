@@ -1,4 +1,4 @@
-id: no-malloc-free
+id: no-malloc-free-cpp
 language: Cpp
 severity: warning
 message: Use RAII and smart pointers instead of `malloc`/`free`.

@@ -1022,8 +1022,15 @@ async fn load_primary_agent_specs(
 }
 
 fn set_primary_agent_display(ctx: &mut InteractionLoopContext<'_>, name: String) {
+    let color = ctx
+        .active_primary_agent
+        .active()
+        .color
+        .clone()
+        .filter(|c| !c.trim().is_empty());
     ctx.header_context.primary_agent = Some(name.clone());
-    ctx.handle.set_primary_agent(Some(name));
+    ctx.header_context.primary_agent_color = color.clone();
+    ctx.handle.set_primary_agent(Some(name), color);
 }
 
 fn next_primary_agent_name(

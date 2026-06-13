@@ -605,21 +605,21 @@ main() {
 
     if [[ "$WITH_SEARCH_TOOLS" -eq 1 ]]; then
         echo ""
-        log_info "Installing search tools bundle..."
-        install_optional_dependency "$target_path" "search-tools" "search tools bundle"
+        log_info "Installing search tools (ripgrep + ast-grep)..."
+        install_optional_dependency "$target_path" "search-tools" "search tools"
     elif [[ "$WITH_AST_GREP" -eq 1 ]]; then
         echo ""
-        log_info "Installing VT Code-managed ast-grep..."
+        log_info "Installing ast-grep..."
         install_optional_dependency "$target_path" "ast-grep" "ast-grep"
     fi
 
     echo ""
-    log_info "Search tools bundle is enabled by default. To skip it, rerun with --without-search-tools."
-    log_info "Dependency commands:"
-    log_info "  vtcode dependencies install search-tools"
-    log_info "  vtcode dependencies status search-tools"
+    log_success "Next steps:"
+    log_info "  vtcode init          # scaffold project config and AGENTS.md"
+    log_info "  vtcode               # launch interactive TUI"
+    log_info "  vtcode --help        # see all commands"
     echo ""
-    log_info "To get started, run: vtcode ask 'hello world'"
+    log_info "Docs: https://vtcode.dev/docs"
 }
 
 # Show usage

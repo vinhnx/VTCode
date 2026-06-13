@@ -12,7 +12,8 @@ rule:
   any:
     - pattern: $X === true
     - pattern: $X == true
-fix: $X
+    - pattern: $X !== false
+    - pattern: $X != false
 files:
   - "**/*.ts"
   - "**/*.tsx"

@@ -1,0 +1,16 @@
+id: no-malloc-free-c
+snapshots:
+  ? |
+    free(ptr);
+  : labels:
+    - source: free
+      style: primary
+      start: 0
+      end: 4
+  ? |
+    int *p = malloc(sizeof(int) * 10);
+  : labels:
+    - source: malloc
+      style: primary
+      start: 9
+      end: 15

@@ -9,8 +9,10 @@ note: |
   and prevents unintended side effects.
 rule:
   any:
-    - pattern: "(): $T[]"
-    - pattern: "(): Array<$T>"
+    - pattern: "function $NAME(): $T[] { $$$ }"
+    - pattern: "function $NAME(): Array<$T> { $$$ }"
+    - pattern: "const $NAME = (): $T[] => { $$$ }"
+    - pattern: "const $NAME = (): Array<$T> => { $$$ }"
 files:
   - "**/*.ts"
   - "**/*.tsx"

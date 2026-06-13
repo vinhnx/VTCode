@@ -8,6 +8,6 @@ note: |
   to avoid conflicts. `!important` should only be used as a last resort
   for utility classes that must override inline styles.
 rule:
-  pattern: $PROP: $VALUE !important
+  pattern: "!important"
 files:
   - "**/*.css"

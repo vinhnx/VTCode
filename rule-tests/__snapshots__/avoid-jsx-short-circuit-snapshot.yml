@@ -23,7 +23,7 @@ snapshots:
     }
   : fixed: |
       function App({ count }: { count: number }) {
-        return <span>{{count ? <Badge /> : null}}</span>;
+        return <span>{count ? <Badge /> : null}</span>;
       }
     labels:
     - source: count && <Badge />
@@ -57,7 +57,7 @@ snapshots:
     }
   : fixed: |
       function App({ items }: { items: string[] }) {
-        return <div>{{items.length ? <List items={items} /> : null}}</div>;
+        return <div>{items.length ? <List items={items} /> : null}</div>;
       }
     labels:
     - source: items.length && <List items={items} />

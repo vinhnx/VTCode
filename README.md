@@ -32,22 +32,25 @@ VT Code is a local-first coding agent built in Rust, the only one with defense-i
 
 ## Quick start
 
-### Installing and running VT Code
-
 ```shell
-curl -fsSL https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.sh | bash   # macOS / Linux (recommended)
+curl -fsSL https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.sh | bash
+vtcode init
+vtcode
 ```
 
-Then run `vtcode` to get started.
+1. **Install** - one-liner for macOS/Linux (also installs ripgrep + ast-grep)
+2. **Init** - scaffolds `vtcode.toml`, `.vtcode/`, and `AGENTS.md` in your project
+3. **Launch** - interactive TUI with streaming, tools, and slash commands
 
 ### Common commands
 
 ```shell
-vtcode                        # launch interactive TUI
-vtcode ask "explain Rc vs Arc"  # one-shot question, no tools
+vtcode                         # interactive TUI
+vtcode init                    # scaffold project config + AGENTS.md
+vtcode ask "explain Rc vs Arc" # one-shot question
 vtcode exec "refactor main.rs" # headless task with full tool access
 vtcode review                  # review uncommitted changes
-vtcode --resume                # pick up the last session
+vtcode update                  # self-update
 ```
 
 ## Documentation

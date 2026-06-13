@@ -926,6 +926,21 @@ impl Session {
     }
 
     fn active_subagent_input_border_style(&self) -> Option<Style> {
+        // Use the primary agent color if available, otherwise fall back to badge color.
+        if let Some(color_style) = super::super::style::agent_color_style(
+            self.header_context.primary_agent_color.as_deref(),
+            ratatui::style::Color::Magenta,
+        )
+        .fg
+        {
+            return Some(
+                self.styles
+                    .accent_style()
+                    .fg(color_style)
+                    .add_modifier(Modifier::BOLD),
+            );
+        }
+
         let badge = self.header_context.subagent_badges.first()?;
         let mut title_style = ratatui_style_from_inline(&badge.style, self.theme.foreground);
         if badge.full_background {

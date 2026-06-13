@@ -1,0 +1,9 @@
+id: no-inline-style
+snapshots:
+  ? |
+    <div style="color: red;">Hello</div>
+  : labels:
+    - source: '<div style="color: red;">'
+      style: primary
+      start: 0
+      end: 25

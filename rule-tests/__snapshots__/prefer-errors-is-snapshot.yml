@@ -1,0 +1,15 @@
+id: prefer-errors-is
+snapshots:
+  ? |
+    if err == os.ErrNotExist {
+        return nil
+    }
+  : fixed: |
+      if errors.Is(err, os.ErrNotExist) {
+          return nil
+      }
+    labels:
+    - source: err == os.ErrNotExist
+      style: primary
+      start: 3
+      end: 24

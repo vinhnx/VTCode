@@ -1,4 +1,4 @@
-id: no-malloc-free
+id: no-malloc-free-c
 language: C
 severity: warning
 message: Manual `malloc`/`free` is error-prone; consider structured allocation patterns.
@@ -9,10 +9,10 @@ note: |
   to reduce risk.
 rule:
   any:
-    - pattern: malloc($$$)
-    - pattern: calloc($$$)
-    - pattern: realloc($$$)
-    - pattern: free($$$)
+    - pattern: malloc
+    - pattern: calloc
+    - pattern: realloc
+    - pattern: free
 files:
   - "**/*.c"
   - "**/*.h"

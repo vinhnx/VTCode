@@ -189,7 +189,7 @@ impl GuidedInitQuestionKey {
     pub fn custom_placeholder(self) -> &'static str {
         match self {
             Self::VerificationCommand => "cargo nextest run",
-            Self::OrientationDoc => "docs/ARCHITECTURE.md",
+            Self::OrientationDoc => "AGENTS.md",
             Self::CriticalInstruction => "State the one rule agents should always follow",
         }
     }

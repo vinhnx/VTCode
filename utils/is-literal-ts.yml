@@ -1,4 +1,4 @@
-id: is-literal
+id: is-literal-ts
 language: TypeScript
 severity: info
 rule:

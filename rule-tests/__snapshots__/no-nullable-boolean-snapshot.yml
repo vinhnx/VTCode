@@ -1,0 +1,9 @@
+id: no-nullable-boolean
+snapshots:
+  ? |
+    val isEnabled: Boolean? = null
+  : labels:
+    - source: 'val isEnabled: Boolean? = null'
+      style: primary
+      start: 0
+      end: 30

@@ -8,8 +8,10 @@ note: |
   type, or define proper types/interfaces. `any` is acceptable during
   migration or when interfacing with untyped third-party libraries.
 rule:
-  kind: type_annotation
-  pattern: ": any"
+  any:
+    - pattern: "function $NAME($A: any): $B { $$$ }"
+    - pattern: "const $NAME = ($A: any): $B => { $$$ }"
+    - pattern: "const $NAME: any = $$$"
 files:
   - "**/*.ts"
   - "**/*.tsx"

@@ -96,6 +96,7 @@ impl Session {
                 let mut next_context = *context;
                 next_context.reasoning_stage = self.header_context.reasoning_stage.clone();
                 next_context.primary_agent = self.header_context.primary_agent.clone();
+                next_context.primary_agent_color = self.header_context.primary_agent_color.clone();
                 self.header_context = next_context;
                 self.invalidate_header_cache();
             }
@@ -149,8 +150,10 @@ impl Session {
                 self.subagent_preview = text.filter(|value| !value.trim().is_empty());
                 self.invalidate_sidebar_cache();
             }
-            InlineCommand::SetPrimaryAgent { name } => {
+            InlineCommand::SetPrimaryAgent { name, color } => {
                 self.header_context.primary_agent = name.filter(|value| !value.trim().is_empty());
+                self.header_context.primary_agent_color =
+                    color.filter(|value| !value.trim().is_empty());
                 self.invalidate_header_cache();
             }
             InlineCommand::SetCursorVisible(value) => {

@@ -8,8 +8,8 @@ note: |
   directly in the string literal, making the output easier to read.
 rule:
   any:
-    - pattern: '"{}" % $$$ARGS'
-    - pattern: "'{}' % $$$ARGS"
+    - pattern: '"$STR" % $ARGS'
+    - pattern: "'$STR' % $ARGS"
     - pattern: '"$STR".format($$$ARGS)'
     - pattern: "'$STR'.format($$$ARGS)"
 files:

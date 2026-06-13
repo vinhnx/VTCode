@@ -1,4 +1,4 @@
-id: no-malloc-free
+id: no-malloc-free-cpp
 valid:
   - |
       auto p = std::make_unique<int>(42);

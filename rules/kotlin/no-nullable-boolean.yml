@@ -7,7 +7,11 @@ note: |
   complicates control flow. Use `Boolean` with a default value of
   `false` or `true`, or use a sealed class/enum for tri-state logic.
 rule:
-  pattern: ": Boolean?"
+  any:
+    - pattern: "val $NAME: Boolean? = $VALUE"
+    - pattern: "var $NAME: Boolean? = $VALUE"
+    - pattern: "fun $NAME($A: Boolean?): $B { $$$ }"
+    - pattern: "fun $NAME(): Boolean? { $$$ }"
 files:
   - "**/*.kt"
   - "**/*.kts"

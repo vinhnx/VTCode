@@ -191,12 +191,11 @@ impl Session {
         let agent_label = primary_agent_header_label(self.header_context.primary_agent.as_deref());
         let model_summary_spans = self.header_compact_model_summary_spans();
         if !agent_label.trim().is_empty() {
-            spans.push(Span::styled(
-                agent_label,
-                Style::default()
-                    .fg(Color::Magenta)
-                    .add_modifier(Modifier::BOLD),
-            ));
+            let agent_style = super::super::style::agent_color_style(
+                self.header_context.primary_agent_color.as_deref(),
+                Color::Magenta,
+            );
+            spans.push(Span::styled(agent_label, agent_style));
         }
 
         if !spans.is_empty() && !model_summary_spans.is_empty() {
