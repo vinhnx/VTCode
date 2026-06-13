@@ -1,7 +1,6 @@
 // Claude 4.x series - Latest Anthropic models
 pub const DEFAULT_MODEL: &str = "claude-opus-4-8";
 pub const SUPPORTED_MODELS: &[&str] = &[
-    "claude-fable-5",  // Latest flagship with 1M context, adaptive thinking, 128k output
     "claude-opus-4-8", // Latest premium flagship with adaptive thinking
     "claude-sonnet-4-6", // Latest balanced flagship for complex agents and coding
     "claude-haiku-4-5", // Fastest model with near-frontier intelligence
@@ -15,7 +14,6 @@ pub const CLAUDE_HAIKU_4_5_20251001: &str = "claude-haiku-4-5-20251001";
 pub const CLAUDE_HAIKU_4_5: &str = "claude-haiku-4-5";
 pub const CLAUDE_SONNET_4_6: &str = "claude-sonnet-4-6";
 pub const CLAUDE_OPUS_4_8: &str = "claude-opus-4-8";
-pub const CLAUDE_FABLE_5: &str = "claude-fable-5";
 
 /// Models that accept the reasoning effort parameter or extended thinking
 pub const REASONING_MODELS: &[&str] = &[
@@ -23,5 +21,5 @@ pub const REASONING_MODELS: &[&str] = &[
     CLAUDE_OPUS_4_8,
     CLAUDE_HAIKU_4_5,
     CLAUDE_HAIKU_4_5_20251001,
-    CLAUDE_FABLE_5,
 ];
+

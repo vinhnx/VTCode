@@ -43,9 +43,6 @@ impl ModelId {
                 "OpenAI's open-source 120B parameter GPT-OSS model using harmony tokenization"
             }
             // Anthropic models
-            ModelId::ClaudeFable5 => {
-                "Anthropic's most capable widely released model with 1M context window, 128k max output tokens, and always-on adaptive thinking"
-            }
             ModelId::ClaudeOpus48 => {
                 "Anthropic's most capable model for complex reasoning, long-horizon agentic coding, and high-autonomy work"
             }

@@ -5,7 +5,6 @@ mod system;
 mod thinking;
 mod tools;
 
-use crate::config::constants::models::anthropic as anthropic_models;
 use crate::config::constants::reasoning;
 use crate::config::core::{AnthropicConfig, AnthropicPromptCacheSettings};
 use crate::config::types::ReasoningEffortLevel;
@@ -17,7 +16,6 @@ use crate::llm::providers::anthropic_types::{
     AnthropicFallbackParam, AnthropicOutputConfig, AnthropicOutputFormat, AnthropicRequest,
     AnthropicTaskBudget, CacheControl, ThinkingConfig, ThinkingDisplay,
 };
-use crate::prompts::system::fable_5_contract_addendum;
 use serde_json::Value;
 
 use super::capabilities::{
@@ -48,25 +46,6 @@ fn resolve_messages_ttl(request: &LLMRequest, ctx: &RequestBuilderContext<'_>) -
     match request.prompt_cache_profile {
         Some(PromptCacheProfile::BudgetContinuation) => "1h",
         None => get_messages_cache_ttl(ctx.prompt_cache_settings),
-    }
-}
-
-fn is_fable5_model(model: &str) -> bool {
-    model == anthropic_models::CLAUDE_FABLE_5
-}
-
-fn augment_anthropic_fable5_instructions(model: &str, instructions: String) -> String {
-    if !is_fable5_model(model) {
-        return instructions;
-    }
-
-    let addendum = fable_5_contract_addendum();
-    if instructions.contains(addendum.trim()) {
-        instructions
-    } else if instructions.trim().is_empty() {
-        addendum
-    } else {
-        format!("{instructions}\n\n{addendum}")
     }
 }
 
@@ -114,35 +93,12 @@ pub fn convert_to_anthropic_format(
     let tools = build_tools(request, &tools_cache_control, &mut breakpoints_remaining)?;
     let tools_breakpoints_used = tools_breakpoints_before.saturating_sub(breakpoints_remaining);
 
-    // Augment system prompt with Fable 5 behavioral addendum when applicable.
-    let fable5_modified;
-    let system_prompt_request = if is_fable5_model(resolved_model) {
-        let base = request.system_prompt.clone().unwrap_or_default();
-        let augmented = augment_anthropic_fable5_instructions(resolved_model, base.to_string());
-        let should_augment = request
-            .system_prompt
-            .as_deref()
-            .map_or(true, |current| augmented.as_str() != current.as_str());
-        if should_augment {
-            fable5_modified = Some({
-                let mut modified = request.clone();
-                modified.system_prompt = Some(augmented.into());
-                modified
-            });
-            fable5_modified.as_ref().unwrap()
-        } else {
-            request
-        }
-    } else {
-        request
-    };
-
     let SystemPromptBuildResult {
         system_value,
         breakpoints_used,
         has_uncached_runtime_context,
     } = build_system_prompt(
-        system_prompt_request,
+        request,
         &system_cache_control,
         breakpoints_remaining,
     );

@@ -26,7 +26,6 @@ impl ModelId {
             ModelId::OpenAIGptOss20b,
             ModelId::OpenAIGptOss120b,
             // Anthropic models
-            ModelId::ClaudeFable5,
             ModelId::ClaudeOpus48,
             ModelId::ClaudeSonnet46,
             ModelId::ClaudeHaiku45,

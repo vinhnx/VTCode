@@ -48,8 +48,6 @@ pub enum ModelId {
     OpenAIGptOss120b,
 
     // Anthropic models
-    /// Claude Fable 5 - Anthropic's most capable widely released model with 1M context, 128k output, adaptive thinking
-    ClaudeFable5,
     /// Claude Opus 4.8 - Anthropic's most capable model for complex reasoning and agentic coding
     ClaudeOpus48,
     /// Claude Sonnet 4.6 - Balanced flagship Anthropic model in VT Code's conservative rollout

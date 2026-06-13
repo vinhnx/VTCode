@@ -64,22 +64,6 @@ pub(crate) fn claude_thinking_profile(
 ) -> Option<ClaudeThinkingProfile> {
     let requested = resolve_model_name(model, default_model);
 
-    if matches_model(requested, models::anthropic::CLAUDE_FABLE_5) {
-        return Some(ClaudeThinkingProfile {
-            mode: ClaudeThinkingMode::Adaptive,
-            supports_manual_budget: false,
-            adaptive_only: true,
-            default_thinking_enabled: true,
-            manual_interleaved_beta: false,
-            supports_effort: true,
-            supports_task_budget: true,
-            default_display: ThinkingDisplay::Omitted,
-            default_effort: reasoning::XHIGH,
-            supports_xhigh_effort: true,
-            supports_max_effort: true,
-        });
-    }
-
     if matches_model(requested, models::anthropic::CLAUDE_OPUS_4_8) {
         return Some(ClaudeThinkingProfile {
             mode: ClaudeThinkingMode::Adaptive,
@@ -132,8 +116,7 @@ pub(crate) fn claude_thinking_profile(
 }
 
 fn supports_native_1m_context(model: &str) -> bool {
-    matches_model(model, models::anthropic::CLAUDE_FABLE_5)
-        || matches_model(model, models::anthropic::CLAUDE_SONNET_4_6)
+    matches_model(model, models::anthropic::CLAUDE_SONNET_4_6)
         || matches_model(model, models::anthropic::CLAUDE_OPUS_4_8)
 }
 
@@ -188,7 +171,7 @@ pub(crate) fn supports_assistant_prefill(model: &str, default_model: &str) -> bo
     match claude_thinking_profile(requested, default_model) {
         Some(profile) => {
             // Haiku 4.5 is the only thinking-profile model that supports prefill.
-            // All others (Fable 5, Opus 4.8, Sonnet 4.6) do not.
+            // All others (Opus 4.8, Sonnet 4.6) do not.
             !profile.adaptive_only && matches_model(requested, models::anthropic::CLAUDE_HAIKU_4_5)
         }
         None => true,
@@ -236,8 +219,7 @@ pub(crate) fn effort_allowed_for_model(model: &str, default_model: &str, effort:
 }
 
 pub fn supports_compaction(model: &str) -> bool {
-    matches_model(model, models::anthropic::CLAUDE_FABLE_5)
-        || matches_model(model, models::anthropic::CLAUDE_OPUS_4_8)
+    matches_model(model, models::anthropic::CLAUDE_OPUS_4_8)
         || matches_model(model, models::anthropic::CLAUDE_SONNET_4_6)
 }
 

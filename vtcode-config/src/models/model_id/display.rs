@@ -21,7 +21,6 @@ impl ModelId {
             ModelId::OpenAIGptOss20b => "GPT-OSS 20B",
             ModelId::OpenAIGptOss120b => "GPT-OSS 120B",
             // Anthropic models
-            ModelId::ClaudeFable5 => "Claude Fable 5",
             ModelId::ClaudeOpus48 => "Claude Opus 4.8",
             ModelId::ClaudeSonnet46 => "Claude Sonnet 4.6",
             ModelId::ClaudeHaiku45 => "Claude Haiku 4.5",

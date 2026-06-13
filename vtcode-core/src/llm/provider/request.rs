@@ -188,7 +188,7 @@ pub struct LLMRequest {
     /// Optional request-scoped prompt cache profile for provider-specific TTL overrides.
     pub prompt_cache_profile: Option<PromptCacheProfile>,
 
-    /// Optional fallback models for Anthropic server-side fallback (Claude Fable 5).
+    /// Optional fallback models for Anthropic server-side fallback.
     /// Requires the `server-side-fallback-2026-06-01` beta header.
     pub fallbacks: Option<Vec<FallbackModel>>,
 

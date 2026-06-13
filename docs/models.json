@@ -1525,29 +1525,8 @@
     "api": "https://api.anthropic.com/v1",
     "name": "Anthropic",
     "doc": "https://docs.anthropic.com/claude/docs/models-overview",
-    "default_model": "claude-fable-5",
+    "default_model": "claude-opus-4-8",
     "models": {
-      "claude-fable-5": {
-        "id": "claude-fable-5",
-        "name": "Claude Fable 5",
-        "description": "Anthropic's most capable widely released model with 1M context window, 128k max output tokens, and always-on adaptive thinking",
-        "reasoning": true,
-        "effort": true,
-        "tool_call": true,
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "context": 1000000,
-        "output_tokens": 128000,
-        "status": "current",
-        "version": "5"
-      },
       "claude-opus-4-8": {
         "id": "claude-opus-4-8",
         "name": "Claude Opus 4.8",

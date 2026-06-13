@@ -1014,7 +1014,7 @@ mod tests {
 
     #[test]
     fn beta_header_omits_context_1m_for_native_1m_models() {
-        for model in [models::CLAUDE_FABLE_5, models::CLAUDE_SONNET_4_6] {
+        for model in [models::CLAUDE_SONNET_4_6] {
             let provider = AnthropicProvider::with_model("test-key".to_string(), model.to_string());
             let request = LLMRequest {
                 model: model.to_string(),
