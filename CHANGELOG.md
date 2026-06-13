@@ -2,6 +2,16 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.128.3 - 2026-06-13
+
+### Highlights
+### Other Changes
+#### Other
+
+- Update TODO (b0a2c9f3) 
+- Add MiMo authentication method support and related configurations (b23ac5d1) 
+- Update TODO (ddf079ae) 
+- Add MiMo authentication method support and update UI constants (f80f806d) 
 ## 0.128.2 - 2026-06-13
 
 ### Highlights
