@@ -291,10 +291,7 @@ fn test_preferred_lightweight_variant() {
         ModelId::Gemini31ProPreview.preferred_lightweight_variant(),
         Some(ModelId::Gemini35Flash)
     );
-    assert_eq!(
-        ModelId::ZaiGlm51.preferred_lightweight_variant(),
-        None
-    );
+    assert_eq!(ModelId::ZaiGlm51.preferred_lightweight_variant(), None);
     assert_eq!(
         ModelId::OpenCodeZenGPT54.preferred_lightweight_variant(),
         Some(ModelId::OpenCodeZenGPT54Mini)

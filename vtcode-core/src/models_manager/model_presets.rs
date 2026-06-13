@@ -753,33 +753,31 @@ fn deepseek_presets() -> Vec<ModelPreset> {
 }
 
 fn zai_presets() -> Vec<ModelPreset> {
-    vec![
-        ModelPreset {
-            id: "glm-5.1".to_string(),
-            model: "glm-5.1".to_string(),
-            display_name: "GLM-5.1".to_string(),
-            description:
-                "Z.ai's next-gen foundation model with improved reasoning and agent capabilities"
-                    .to_string(),
-            provider: Provider::ZAI,
-            default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Medium,
-                    description: "Balanced".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::High,
-                    description: "Deep thinking".to_string(),
-                },
-            ],
-            is_default: true,
-            upgrade: None,
-            show_in_picker: true,
-            supported_in_api: true,
-            context_window: Some(200_000),
-        },
-    ]
+    vec![ModelPreset {
+        id: "glm-5.1".to_string(),
+        model: "glm-5.1".to_string(),
+        display_name: "GLM-5.1".to_string(),
+        description:
+            "Z.ai's next-gen foundation model with improved reasoning and agent capabilities"
+                .to_string(),
+        provider: Provider::ZAI,
+        default_reasoning_effort: ReasoningEffortLevel::Medium,
+        supported_reasoning_efforts: vec![
+            ReasoningEffortPreset {
+                effort: ReasoningEffortLevel::Medium,
+                description: "Balanced".to_string(),
+            },
+            ReasoningEffortPreset {
+                effort: ReasoningEffortLevel::High,
+                description: "Deep thinking".to_string(),
+            },
+        ],
+        is_default: true,
+        upgrade: None,
+        show_in_picker: true,
+        supported_in_api: true,
+        context_window: Some(200_000),
+    }]
 }
 
 fn mistral_presets() -> Vec<ModelPreset> {
@@ -893,31 +891,29 @@ fn mistral_presets() -> Vec<ModelPreset> {
 }
 
 fn minimax_presets() -> Vec<ModelPreset> {
-    vec![
-        ModelPreset {
-            id: "minimax-m3".to_string(),
-            model: "MiniMax-M3".to_string(),
-            display_name: "MiniMax M3".to_string(),
-            description: "Frontier multimodal coding model with 1M context".to_string(),
-            provider: Provider::Minimax,
-            default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Medium,
-                    description: "Balanced".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::High,
-                    description: "Deep".to_string(),
-                },
-            ],
-            is_default: true,
-            upgrade: None,
-            show_in_picker: true,
-            supported_in_api: true,
-            context_window: Some(1_000_000),
-        },
-    ]
+    vec![ModelPreset {
+        id: "minimax-m3".to_string(),
+        model: "MiniMax-M3".to_string(),
+        display_name: "MiniMax M3".to_string(),
+        description: "Frontier multimodal coding model with 1M context".to_string(),
+        provider: Provider::Minimax,
+        default_reasoning_effort: ReasoningEffortLevel::Medium,
+        supported_reasoning_efforts: vec![
+            ReasoningEffortPreset {
+                effort: ReasoningEffortLevel::Medium,
+                description: "Balanced".to_string(),
+            },
+            ReasoningEffortPreset {
+                effort: ReasoningEffortLevel::High,
+                description: "Deep".to_string(),
+            },
+        ],
+        is_default: true,
+        upgrade: None,
+        show_in_picker: true,
+        supported_in_api: true,
+        context_window: Some(1_000_000),
+    }]
 }
 
 fn openrouter_presets() -> Vec<ModelPreset> {
@@ -1450,7 +1446,6 @@ fn mimo_presets() -> Vec<ModelPreset> {
             supported_in_api: true,
             context_window: Some(1_048_576),
         },
-
     ]
 }
 
