@@ -796,6 +796,26 @@ TODO2.md
 .qwen/
 .ruler/
 .cursorignore
+.opencode/
+.mimocode/
+.claude-code/
+.aider/
+.aide/
+.void/
+.continue/
+.windsurf/
+.supermaven/
+.bigcode/
+.codeium/
+.tabnine/
+.cline/
+.pearai/
+.roo/
+.roo-code/
+.kilo/
+.amazonq/
+.github/copilot/
+.github/copilot-instructions.md
 # VT Code runtime files (excluded from git, but accessible to agent)
 .vtcode/index/
 .vtcode/checkpoints/
