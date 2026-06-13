@@ -152,14 +152,14 @@ impl<'a> FooterWidget<'a> {
 
     fn build_right_status_spans(&self, status: &str) -> Vec<Span<'static>> {
         let mut spans = Vec::new();
-        let mut parts = status.split(" | ").peekable();
+        let mut parts = status.split(" · ").peekable();
 
         while let Some(part) = parts.next() {
             let style = language_badge_style(part).unwrap_or_else(|| self.styles.muted_style());
             spans.push(Span::styled(part.to_string(), style));
 
             if parts.peek().is_some() {
-                spans.push(Span::styled(" | ".to_string(), self.styles.muted_style()));
+                spans.push(Span::styled(" · ".to_string(), self.styles.muted_style()));
             }
         }
 
@@ -237,7 +237,7 @@ mod tests {
         let styles = SessionStyles::new(InlineTheme::default());
         let widget = FooterWidget::new(&styles);
 
-        let spans = widget.build_right_status_spans("Rust | model | 17% context left");
+        let spans = widget.build_right_status_spans("Rust · model · 17% context left");
 
         assert_eq!(spans[0].content.as_ref(), "Rust");
         assert_eq!(spans[0].style.fg, Some(Color::Rgb(0xCE, 0x7E, 0x47)));

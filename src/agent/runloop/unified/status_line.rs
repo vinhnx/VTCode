@@ -175,9 +175,7 @@ pub(crate) async fn update_input_status_if_changed(
             state.last_command_refresh = None;
             (None, None)
         }
-        StatusLineMode::Auto => {
-            auto_status_layout(state, trimmed_model, trimmed_reasoning).into_status()
-        }
+        StatusLineMode::Auto => auto_status_layout(state).into_status(),
         StatusLineMode::Command => {
             if let Some(cfg) = status_config {
                 if let Some(command) = cfg
@@ -223,11 +221,11 @@ pub(crate) async fn update_input_status_if_changed(
                     (state.command_value.clone(), None)
                 } else {
                     state.command_value = None;
-                    auto_status_layout(state, trimmed_model, trimmed_reasoning).into_status()
+                    auto_status_layout(state).into_status()
                 }
             } else {
                 state.command_value = None;
-                auto_status_layout(state, trimmed_model, trimmed_reasoning).into_status()
+                auto_status_layout(state).into_status()
             }
         }
     };
@@ -245,21 +243,12 @@ pub(crate) async fn update_input_status_if_changed(
     }
 }
 
-fn auto_status_layout(
-    state: &InputStatusState,
-    trimmed_model: &str,
-    trimmed_reasoning: &str,
-) -> BottomStatusLayout {
+fn auto_status_layout(state: &InputStatusState) -> BottomStatusLayout {
     let mut layout = BottomStatusLayout::default();
     layout.push_left(state.git_left.clone());
     layout.right = auto_status_components(
         state.thread_context.as_deref(),
         state.ide_context_source.as_deref(),
-        state.git_summary.as_ref(),
-        trimmed_model,
-        trimmed_reasoning,
-        state.context_utilization,
-        state.context_tokens,
         state.is_cancelling,
         state.spooled_files_count,
         state,
@@ -269,14 +258,9 @@ fn auto_status_layout(
 
 /// Build model status with all context indicators including spooled files
 #[cfg(test)]
-#[expect(clippy::too_many_arguments)]
 fn build_model_status_with_context_and_spooled(
     thread_context: Option<&str>,
     ide_context_source: Option<&str>,
-    model: &str,
-    reasoning: &str,
-    context_utilization: Option<f64>,
-    _total_tokens: Option<usize>,
     is_cancelling: bool,
     spooled_files: Option<usize>,
 ) -> Option<String> {
@@ -284,26 +268,15 @@ fn build_model_status_with_context_and_spooled(
     join_status_components(auto_status_components(
         thread_context,
         ide_context_source,
-        None,
-        model,
-        reasoning,
-        context_utilization,
-        _total_tokens,
         is_cancelling,
         spooled_files,
         &default_state,
     ))
 }
 
-#[expect(clippy::too_many_arguments)]
 fn auto_status_components(
     thread_context: Option<&str>,
     ide_context_source: Option<&str>,
-    git_summary: Option<&GitStatusSummary>,
-    model: &str,
-    reasoning: &str,
-    context_utilization: Option<f64>,
-    _total_tokens: Option<usize>,
     is_cancelling: bool,
     spooled_files: Option<usize>,
     state: &InputStatusState,
@@ -313,14 +286,18 @@ fn auto_status_components(
         parts.push(Some("CANCELLING...".to_string()));
     }
 
-    parts.push(normalize_thread_context(thread_context, git_summary));
+    parts.push(
+        thread_context
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string),
+    );
     parts.push(
         ide_context_source
             .map(str::trim)
             .filter(|value| !value.is_empty())
             .map(str::to_string),
     );
-    parts.push((!model.trim().is_empty()).then(|| model.trim().to_string()));
 
     // Provider-specific balance/cost/cache display (DeepSeek, OpenAI)
     if state.show_costs {
@@ -335,18 +312,10 @@ fn auto_status_components(
         }
     }
 
-    if let Some(util) = context_utilization {
-        parts.push(Some(format!("{:.0}% context left", util.clamp(0.0, 100.0))));
-    }
-
     if let Some(count) = spooled_files
         && count > 0
     {
         parts.push(Some(format!("{count} spooled")));
-    }
-
-    if !reasoning.trim().is_empty() {
-        parts.push(Some(format!("({})", reasoning.trim())));
     }
 
     let mut deduped = Vec::new();
@@ -354,43 +323,6 @@ fn auto_status_components(
         push_unique(&mut deduped, value);
     }
     deduped
-}
-
-fn normalize_thread_context(
-    thread_context: Option<&str>,
-    git_summary: Option<&GitStatusSummary>,
-) -> Option<String> {
-    let thread = thread_context
-        .map(str::trim)
-        .filter(|value| !value.is_empty())?;
-
-    let Some(branch) = git_summary
-        .and_then(|summary| {
-            let value = summary.branch.trim();
-            (!value.is_empty()).then_some(value)
-        })
-        .map(normalize_for_dedup)
-    else {
-        return Some(thread.to_string());
-    };
-
-    let thread_normalized = normalize_for_dedup(thread);
-    if thread_normalized == branch {
-        return None;
-    }
-
-    if let Some((head, tail)) = thread.split_once('|')
-        && normalize_for_dedup(head) == branch
-    {
-        let tail = tail.trim();
-        if tail.is_empty() {
-            None
-        } else {
-            Some(tail.to_string())
-        }
-    } else {
-        Some(thread.to_string())
-    }
 }
 
 fn push_unique(values: &mut Vec<String>, value: String) {
@@ -427,7 +359,7 @@ fn join_status_components(values: Vec<String>) -> Option<String> {
     if parts.is_empty() {
         None
     } else {
-        Some(parts.join(" | "))
+        Some(parts.join(" · "))
     }
 }
 
@@ -448,14 +380,14 @@ pub(crate) fn update_thread_context(
     let mut value = thread_label.trim().to_string();
     if local_agent_count > 0 {
         let suffix = format!(
-            "{} local agent{} | ↓ explore",
+            "{} local agent{} · ↓ explore",
             local_agent_count,
             if local_agent_count == 1 { "" } else { "s" }
         );
         if value.is_empty() {
             value = suffix;
         } else {
-            value.push_str(" | ");
+            value.push_str(" · ");
             value.push_str(&suffix);
         }
     }
@@ -518,74 +450,36 @@ pub(crate) async fn refresh_balance_info(
 #[cfg(test)]
 mod tests {
     use super::{
-        InputStatusState, build_model_status_with_context_and_spooled, normalize_thread_context,
-        update_thread_context,
+        InputStatusState, build_model_status_with_context_and_spooled, update_thread_context,
     };
-    use crate::agent::runloop::git::GitStatusSummary;
 
     #[test]
-    fn status_line_shows_context_left_percent() {
-        let status = build_model_status_with_context_and_spooled(
-            None,
-            None,
-            "gemini-3-flash-preview",
-            "low",
-            Some(17.0),
-            Some(83_000),
-            false,
-            None,
-        );
+    fn status_line_shows_thread_context() {
+        let status = build_model_status_with_context_and_spooled(Some("main"), None, false, None);
 
-        assert_eq!(
-            status.as_deref(),
-            Some("gemini-3-flash-preview | 17% context left | (low)")
-        );
+        assert_eq!(status.as_deref(), Some("main"));
     }
 
     #[test]
-    fn status_line_clamps_context_left_percent() {
-        let high = build_model_status_with_context_and_spooled(
-            None,
-            None,
-            "model",
-            "",
-            Some(150.0),
-            Some(1_000),
-            false,
-            None,
-        );
-        let low = build_model_status_with_context_and_spooled(
-            None,
-            None,
-            "model",
-            "",
-            Some(-10.0),
-            Some(1_000),
-            false,
-            None,
-        );
-
-        assert_eq!(high.as_deref(), Some("model | 100% context left"));
-        assert_eq!(low.as_deref(), Some("model | 0% context left"));
-    }
-
-    #[test]
-    fn status_line_includes_compact_ide_context_source() {
+    fn status_line_shows_ide_context_source() {
         let status = build_model_status_with_context_and_spooled(
             None,
             Some("IDE Context (VS Code): vtcode-config/src/core/agent.rs"),
-            "model",
-            "",
-            None,
-            None,
             false,
             None,
         );
 
         assert_eq!(
             status.as_deref(),
-            Some("IDE Context (VS Code): vtcode-config/src/core/agent.rs | model")
+            Some("IDE Context (VS Code): vtcode-config/src/core/agent.rs")
         );
+    }
+
+    #[test]
+    fn status_line_shows_spooled_files() {
+        let status = build_model_status_with_context_and_spooled(None, None, false, Some(3));
+
+        assert_eq!(status.as_deref(), Some("3 spooled"));
     }
 
     #[test]
@@ -603,31 +497,7 @@ mod tests {
 
         assert_eq!(
             state.thread_context.as_deref(),
-            Some("main | 2 local agents | ↓ explore")
+            Some("main · 2 local agents · ↓ explore")
         );
-    }
-
-    #[test]
-    fn thread_context_hides_duplicate_git_branch_label() {
-        let thread = normalize_thread_context(
-            Some("main"),
-            Some(&GitStatusSummary {
-                branch: "main".to_string(),
-                dirty: false,
-            }),
-        );
-        assert_eq!(thread, None);
-    }
-
-    #[test]
-    fn thread_context_strips_duplicate_branch_prefix_when_suffix_exists() {
-        let thread = normalize_thread_context(
-            Some("main | 2 local agents | ↓ explore"),
-            Some(&GitStatusSummary {
-                branch: "main".to_string(),
-                dirty: true,
-            }),
-        );
-        assert_eq!(thread.as_deref(), Some("2 local agents | ↓ explore"));
     }
 }

@@ -9,13 +9,10 @@ use unicode_segmentation::UnicodeSegmentation;
 
 use crate::tui::config::constants::ui;
 
-use super::super::types::{
-    InlineHeaderBadge, InlineHeaderContext, InlineHeaderHighlight, InlineHeaderStatusBadge,
-    InlineHeaderStatusTone,
-};
+use super::super::types::{InlineHeaderContext, InlineHeaderHighlight};
 use super::terminal_capabilities;
 use super::utils::line_truncation::truncate_line_with_ellipsis_if_overflow;
-use super::{Session, ratatui_color_from_ansi, ratatui_style_from_inline};
+use super::{Session, ratatui_color_from_ansi};
 
 fn clean_reasoning_text(text: &str) -> String {
     vtcode_commons::formatting::clean_reasoning_text(text)
@@ -56,23 +53,6 @@ fn compact_context_window_label(context_window_size: usize) -> String {
 
 fn line_is_empty(spans: &[Span<'static>]) -> bool {
     spans.len() == 1 && spans.first().is_some_and(|span| span.content.is_empty())
-}
-
-fn header_status_badge_style(badge: &InlineHeaderStatusBadge, fallback: Style) -> Style {
-    let color = match badge.tone {
-        InlineHeaderStatusTone::Ready => Color::Green,
-        InlineHeaderStatusTone::Warning => Color::Yellow,
-        InlineHeaderStatusTone::Error => Color::Red,
-    };
-    fallback.fg(color).add_modifier(Modifier::BOLD)
-}
-
-fn header_context_badge_style(badge: &InlineHeaderBadge) -> Style {
-    let mut style = ratatui_style_from_inline(&badge.style, None);
-    if badge.full_background {
-        style = style.add_modifier(Modifier::BOLD);
-    }
-    style
 }
 
 impl Session {
@@ -268,12 +248,7 @@ impl Session {
                     self.header_secondary_style(),
                 ));
             }
-            let label_style = self
-                .header_secondary_style()
-                .add_modifier(Modifier::ITALIC | Modifier::DIM);
             let value_style = self.header_secondary_style().add_modifier(Modifier::ITALIC);
-            spans.push(Span::styled("effort:".to_owned(), label_style));
-            spans.push(Span::styled(" ".to_owned(), label_style));
             spans.push(Span::styled(reasoning, value_style));
         }
 
@@ -526,72 +501,6 @@ impl Session {
                 badge_style,
                 &mut first_section,
             );
-        }
-
-        if let Some(badge) = self
-            .header_context
-            .persistent_memory
-            .as_ref()
-            .filter(|badge| !badge.text.trim().is_empty())
-        {
-            if !first_section {
-                spans.push(Span::styled(
-                    ui::HEADER_SECONDARY_SEPARATOR.to_owned(),
-                    self.header_secondary_style(),
-                ));
-            }
-            let style = header_status_badge_style(badge, self.header_primary_style());
-            spans.push(Span::styled(badge.text.clone(), style));
-            first_section = false;
-        }
-
-        if let Some(badge) = self
-            .header_context
-            .pr_review
-            .as_ref()
-            .filter(|badge| !badge.text.trim().is_empty())
-        {
-            if !first_section {
-                spans.push(Span::styled(
-                    ui::HEADER_SECONDARY_SEPARATOR.to_owned(),
-                    self.header_secondary_style(),
-                ));
-            }
-            let style = header_status_badge_style(badge, self.header_primary_style());
-            spans.push(Span::styled(badge.text.clone(), style));
-            first_section = false;
-        }
-
-        for badge in self
-            .header_context
-            .subagent_badges
-            .iter()
-            .filter(|badge| !badge.text.trim().is_empty())
-        {
-            if !first_section {
-                spans.push(Span::styled(
-                    ui::HEADER_SECONDARY_SEPARATOR.to_owned(),
-                    self.header_secondary_style(),
-                ));
-            }
-            let text = if badge.full_background {
-                format!(" {} ", badge.text)
-            } else {
-                badge.text.clone()
-            };
-            spans.push(Span::styled(text, header_context_badge_style(badge)));
-            first_section = false;
-        }
-
-        for value in self.header_chain_values() {
-            if !first_section {
-                spans.push(Span::styled(
-                    ui::HEADER_SECONDARY_SEPARATOR.to_owned(),
-                    self.header_secondary_style(),
-                ));
-            }
-            spans.push(Span::styled(value, self.header_primary_style()));
-            first_section = false;
         }
 
         if spans.is_empty() {

@@ -418,30 +418,6 @@ fn header_omits_auto_permission_badge() {
 }
 
 #[test]
-fn header_shows_pr_review_status_badge() {
-    let mut session = fresh_session();
-    session.header_context.pr_review = Some(InlineHeaderStatusBadge {
-        text: "PR: outdated".to_string(),
-        tone: InlineHeaderStatusTone::Warning,
-    });
-
-    let line = session.header_meta_line();
-    assert_badge_style(&line, "PR: outdated", Color::Yellow);
-}
-
-#[test]
-fn header_shows_persistent_memory_status_badge() {
-    let mut session = fresh_session();
-    session.header_context.persistent_memory = Some(InlineHeaderStatusBadge {
-        text: "Memory: cleanup".to_string(),
-        tone: InlineHeaderStatusTone::Warning,
-    });
-
-    let line = session.header_meta_line();
-    assert_badge_style(&line, "Memory: cleanup", Color::Yellow);
-}
-
-#[test]
 fn header_meta_line_excludes_editor_context() {
     let mut session = fresh_session();
     session.header_context.editor_context =
@@ -486,15 +462,7 @@ fn hidden_header_summary_combines_provider_model_and_styles_effort_label() {
     let summary = line_text(line);
     assert!(summary.contains("Mimo Mimo-V2.5"));
     assert!(!summary.contains("Mimo · Mimo-V2.5"));
-    assert!(summary.contains("effort: medium"));
-
-    let effort_label = line
-        .spans
-        .iter()
-        .find(|span| span.content.as_ref() == "effort:")
-        .expect("effort label should be rendered");
-    assert!(effort_label.style.add_modifier.contains(Modifier::ITALIC));
-    assert!(effort_label.style.add_modifier.contains(Modifier::DIM));
+    assert!(summary.contains("medium"));
 }
 
 fn hidden_header_summary_live_reloads_model_changes() {
@@ -518,7 +486,7 @@ fn hidden_header_summary_live_reloads_model_changes() {
 
     let updated = header_line_text(&mut session);
     assert!(updated.contains("Moonshot Kimi-K2"));
-    assert!(updated.contains("effort: high"));
+    assert!(updated.contains("high"));
     assert!(!updated.contains("Mimo Mimo-V2.5"));
 }
 

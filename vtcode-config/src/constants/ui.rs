@@ -75,7 +75,7 @@ pub const HEADER_VERSION_LEFT_DELIMITER: &str = "(";
 pub const HEADER_VERSION_RIGHT_DELIMITER: &str = ")";
 pub const HEADER_PROVIDER_PREFIX: &str = "Provider: ";
 pub const HEADER_MODEL_PREFIX: &str = "Model: ";
-pub const HEADER_REASONING_PREFIX: &str = "Reasoning effort: ";
+pub const HEADER_REASONING_PREFIX: &str = "";
 pub const HEADER_TRUST_PREFIX: &str = "Trust: ";
 pub const HEADER_TOOLS_PREFIX: &str = "Tools: ";
 pub const HEADER_MCP_PREFIX: &str = "MCP: ";
@@ -91,11 +91,13 @@ pub const HEADER_INPUT_LABEL: &str = "Input";
 pub const HEADER_INPUT_ENABLED: &str = "Enabled";
 pub const HEADER_INPUT_DISABLED: &str = "Disabled";
 pub const INLINE_USER_PREFIX: &str = " ";
-pub const CHAT_INPUT_PLACEHOLDER_BOOTSTRAP: &str = "Type a request… @files /commands • Tab next agent • Shift+Tab previous agent • Ctrl+M model • Alt+P suggest • Enter queue • Ctrl+Enter run now • /stop stop task";
-pub const CHAT_INPUT_PLACEHOLDER_FOLLOW_UP: &str = "Continue… @files /commands • Tab next agent • Shift+Tab previous agent • Ctrl+M model • Alt+P suggest • Enter queue • Ctrl+Enter run now • /stop stop task";
+pub const CHAT_INPUT_PLACEHOLDER_BOOTSTRAP: &str =
+    "Type a request… @files /commands • Ctrl+Enter run • Enter queue";
+pub const CHAT_INPUT_PLACEHOLDER_FOLLOW_UP: &str =
+    "Continue… @files /commands • Ctrl+Enter run • Enter queue";
 pub const CHAT_INPUT_PLACEHOLDER_INTERRUPTED: &str =
     "Interrupted · What should VT Code do instead?";
-pub const HEADER_SHORTCUT_HINT: &str = "Shortcuts: Alt+P suggest • Tab next agent • Shift+Tab previous agent • Enter queue • Ctrl+Enter run • Shift+Enter newline • Esc cancel • Ctrl+C interrupt";
+pub const HEADER_SHORTCUT_HINT: &str = "? help • / command • @ file • Ctrl+Enter run • Enter queue";
 pub const HEADER_META_SEPARATOR: &str = "   ";
 pub const WELCOME_TEXT_WIDTH: usize = 80;
 pub const WELCOME_SHORTCUT_SECTION_TITLE: &str = "Keyboard Shortcuts";
