@@ -2,6 +2,22 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.128.0 - 2026-06-13
+
+### Highlights
+#### Features
+
+- Feat/refactor OpenAI chatgpt Rig  (8a57c899) (@kernitus)
+- Add compile-time validation for tool name constants and integrate ctor for pre-main checks (394677b2) 
+- Add Kimi K2.7 Code model support across configurations and descriptions (1767daec) 
+### Other Changes
+#### Other
+
+- Update TODO (c272494b) (@vinhnx)
+#### Refactors
+
+- Normalize legacy tool names in permission rules and enhance warnings (ecab9d29) 
+- Remove Claude Fable 5 references and update to Claude Opus 4.8 across models and capabilities (3d0cd491) 
 ## 0.127.0 - 2026-06-12
 
 ### Highlights
