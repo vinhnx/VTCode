@@ -94,6 +94,7 @@ proc-macro2 = "1"
 quote = "1"
 syn = "2"
 linkme = "0.3"
+ctor = "0.2"
 
 [workspace.package]
 version = "0.127.0"
