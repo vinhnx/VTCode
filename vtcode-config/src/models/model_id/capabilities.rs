@@ -148,9 +148,7 @@ impl ModelId {
             ModelId::GPT55 | ModelId::GPT54 | ModelId::GPT54Pro => Some(ModelId::GPT54Mini),
             ModelId::OpenCodeZenGPT54 => Some(ModelId::OpenCodeZenGPT54Mini),
             ModelId::GPT53Codex => Some(ModelId::GPT54Mini),
-            ModelId::ClaudeOpus48 | ModelId::ClaudeSonnet46 => {
-                Some(ModelId::ClaudeHaiku45)
-            }
+            ModelId::ClaudeOpus48 | ModelId::ClaudeSonnet46 => Some(ModelId::ClaudeHaiku45),
             ModelId::CopilotGPT54 => Some(ModelId::CopilotGPT54Mini),
             ModelId::CopilotGPT52Codex | ModelId::CopilotGPT51CodexMax => {
                 Some(ModelId::CopilotGPT54Mini)

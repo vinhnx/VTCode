@@ -146,6 +146,21 @@ impl ModelPickerState {
         &mut self,
         renderer: &mut AnsiRenderer,
     ) -> Result<ModelPickerProgress> {
+        // Insert MiMo auth method step after reasoning, before service tier
+        if self
+            .selection
+            .as_ref()
+            .map(|d| d.provider_enum == Some(Provider::MiMo))
+            .unwrap_or(false)
+            && self.selected_mimo_auth.is_none()
+        {
+            self.step = PickerStep::AwaitMiMoAuthMethod;
+            if let Some(progress) = self.prompt_mimo_auth_method_step(renderer)? {
+                return Ok(progress);
+            }
+            return Ok(ModelPickerProgress::InProgress);
+        }
+
         if self
             .selection
             .as_ref()
@@ -160,6 +175,72 @@ impl ModelPickerState {
         }
 
         self.finish_after_service_tier(renderer)
+    }
+
+    pub(super) fn handle_mimo_auth_method(
+        &mut self,
+        renderer: &mut AnsiRenderer,
+        input: &str,
+    ) -> Result<ModelPickerProgress> {
+        let normalized = input.to_ascii_lowercase();
+        let auth_method = match normalized.as_str() {
+            "token-plan" | "token_plan" | "tokenplan" | "tp" | "2" => MiMoAuthMethod::TokenPlan,
+            "payg" | "pay-as-you-go" | "pay_as_you_go" | "1" | "skip" => MiMoAuthMethod::PayAsYouGo,
+            _ => {
+                renderer.line(
+                    MessageStyle::Error,
+                    "Unknown auth method. Use 'token-plan' or 'pay-as-you-go', or type 'skip' for default.",
+                )?;
+                if self.inline_enabled {
+                    render_mimo_auth_method_inline(renderer)?;
+                } else {
+                    prompt_mimo_auth_method_plain(renderer)?;
+                }
+                return Ok(ModelPickerProgress::InProgress);
+            }
+        };
+
+        self.selected_mimo_auth = Some(auth_method);
+
+        if let Some(ref mut selection) = self.selection {
+            selection.mimo_auth_method = Some(auth_method);
+            selection.env_key = auth_method.env_key().to_string();
+        }
+
+        self.finish_after_mimo_auth_method(renderer)
+    }
+
+    pub(super) fn finish_after_mimo_auth_method(
+        &mut self,
+        renderer: &mut AnsiRenderer,
+    ) -> Result<ModelPickerProgress> {
+        if self
+            .selection
+            .as_ref()
+            .map(|detail| detail.service_tier_supported)
+            .unwrap_or(false)
+        {
+            self.step = PickerStep::AwaitServiceTier;
+            if let Some(progress) = self.prompt_service_tier_step(renderer)? {
+                return Ok(progress);
+            }
+            return Ok(ModelPickerProgress::InProgress);
+        }
+
+        self.finish_after_service_tier(renderer)
+    }
+
+    fn prompt_mimo_auth_method_step(
+        &mut self,
+        renderer: &mut AnsiRenderer,
+    ) -> Result<Option<ModelPickerProgress>> {
+        if self.inline_enabled {
+            render_mimo_auth_method_inline(renderer)?;
+            return Ok(None);
+        }
+
+        prompt_mimo_auth_method_plain(renderer)?;
+        Ok(None)
     }
 
     fn finish_after_service_tier(
@@ -297,6 +378,7 @@ impl ModelPickerState {
             env_key: selection.env_key.clone(),
             requires_api_key: selection.requires_api_key,
             uses_chatgpt_auth: selection.uses_chatgpt_auth,
+            mimo_auth_method: selection.mimo_auth_method.or(self.selected_mimo_auth),
         })
     }
 

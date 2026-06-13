@@ -3,8 +3,9 @@ use reqwest::Client as HttpClient;
 use serde_json::{Map, Value};
 
 use crate::config::TimeoutsConfig;
-use crate::config::constants::{env_vars, models, urls};
+use crate::config::constants::{env_vars, models};
 use crate::config::core::{AnthropicConfig, ModelConfig, PromptCachingConfig};
+use crate::config::models::{MiMoAuthMethod, detect_mimo_auth_method};
 use crate::llm::error_display;
 use crate::llm::provider::{LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream};
 
@@ -29,10 +30,12 @@ pub struct MiMoProvider {
     model: String,
     prompt_cache_enabled: bool,
     model_behavior: Option<ModelConfig>,
+    auth_method: MiMoAuthMethod,
 }
 
 impl MiMoProvider {
     pub fn new(api_key: String) -> Self {
+        let auth_method = detect_mimo_auth_method(&api_key, None);
         Self::with_model_internal(
             api_key,
             models::mimo::DEFAULT_MODEL.to_string(),
@@ -40,11 +43,21 @@ impl MiMoProvider {
             None,
             TimeoutsConfig::default(),
             None,
+            auth_method,
         )
     }
 
     pub fn with_model(api_key: String, model: String) -> Self {
-        Self::with_model_internal(api_key, model, None, None, TimeoutsConfig::default(), None)
+        let auth_method = detect_mimo_auth_method(&api_key, None);
+        Self::with_model_internal(
+            api_key,
+            model,
+            None,
+            None,
+            TimeoutsConfig::default(),
+            None,
+            auth_method,
+        )
     }
 
     pub fn new_with_client(
@@ -54,6 +67,7 @@ impl MiMoProvider {
         base_url: String,
         _timeouts: TimeoutsConfig,
     ) -> Self {
+        let auth_method = detect_mimo_auth_method(&api_key, Some(&base_url));
         Self {
             api_key,
             http_client,
@@ -61,6 +75,7 @@ impl MiMoProvider {
             model,
             prompt_cache_enabled: false,
             model_behavior: None,
+            auth_method,
         }
     }
 
@@ -74,6 +89,7 @@ impl MiMoProvider {
         model_behavior: Option<ModelConfig>,
     ) -> Self {
         let api_key_value = api_key.unwrap_or_default();
+        let auth_method = detect_mimo_auth_method(&api_key_value, base_url.as_deref());
 
         Self::with_model_internal(
             api_key_value,
@@ -82,6 +98,7 @@ impl MiMoProvider {
             base_url,
             timeouts.unwrap_or_default(),
             model_behavior,
+            auth_method,
         )
     }
 
@@ -92,23 +109,27 @@ impl MiMoProvider {
         base_url: Option<String>,
         timeouts: TimeoutsConfig,
         model_behavior: Option<ModelConfig>,
+        auth_method: MiMoAuthMethod,
     ) -> Self {
         use crate::llm::http_client::HttpClientFactory;
 
         let (prompt_cache_enabled, _) =
             extract_prompt_cache_settings_default(prompt_cache, PROVIDER_KEY);
 
+        let default_base = auth_method.api_base();
+        let env_var = match auth_method {
+            MiMoAuthMethod::PayAsYouGo => env_vars::MIMO_BASE_URL,
+            MiMoAuthMethod::TokenPlan => env_vars::MIMO_TOKEN_PLAN_BASE_URL,
+        };
+
         Self {
             api_key,
             http_client: HttpClientFactory::for_llm(&timeouts),
-            base_url: override_base_url(
-                urls::MIMO_API_BASE,
-                base_url,
-                Some(env_vars::MIMO_BASE_URL),
-            ),
+            base_url: override_base_url(default_base, base_url, Some(env_var)),
             model,
             prompt_cache_enabled,
             model_behavior,
+            auth_method,
         }
     }
 
@@ -208,19 +229,23 @@ impl MiMoProvider {
     async fn send_request(&self, payload: &Value) -> Result<reqwest::Response, LLMError> {
         let url = format!("{}/chat/completions", self.base_url.trim_end_matches('/'));
 
-        self.http_client
-            .post(&url)
-            .header("api-key", &self.api_key)
-            .json(payload)
-            .send()
-            .await
-            .map_err(|e| LLMError::Network {
-                message: error_display::format_llm_error(
-                    PROVIDER_NAME,
-                    &format!("network error: {}", e),
-                ),
-                metadata: None,
-            })
+        let mut request = self.http_client.post(&url).json(payload);
+
+        // Use different header format based on auth method
+        request = match self.auth_method {
+            MiMoAuthMethod::PayAsYouGo => request.header("api-key", &self.api_key),
+            MiMoAuthMethod::TokenPlan => {
+                request.header("Authorization", format!("Bearer {}", &self.api_key))
+            }
+        };
+
+        request.send().await.map_err(|e| LLMError::Network {
+            message: error_display::format_llm_error(
+                PROVIDER_NAME,
+                &format!("network error: {}", e),
+            ),
+            metadata: None,
+        })
     }
 
     fn serialize_messages(&self, request: &LLMRequest) -> Result<Vec<Value>, LLMError> {
@@ -310,7 +335,8 @@ impl LLMProvider for MiMoProvider {
 
         let payload = self.convert_to_mimo_format(&request)?;
         let response = self.send_request(&payload).await?;
-        let response = handle_openai_http_error(response, PROVIDER_NAME, "MIMO_API_KEY").await?;
+        let env_key = self.auth_method.env_key();
+        let response = handle_openai_http_error(response, PROVIDER_NAME, env_key).await?;
 
         let response_json = parse_json_response(response, PROVIDER_NAME).await?;
         self.parse_response(response_json, model)
@@ -324,7 +350,8 @@ impl LLMProvider for MiMoProvider {
 
         let payload = self.convert_to_mimo_format(&request)?;
         let response = self.send_request(&payload).await?;
-        let response = handle_openai_http_error(response, PROVIDER_NAME, "MIMO_API_KEY").await?;
+        let env_key = self.auth_method.env_key();
+        let response = handle_openai_http_error(response, PROVIDER_NAME, env_key).await?;
 
         Ok(spawn_openai_compatible_stream(
             response,
@@ -336,19 +363,19 @@ impl LLMProvider for MiMoProvider {
     }
 
     fn supported_models(&self) -> Vec<String> {
-        models::mimo::SUPPORTED_MODELS
-            .iter()
-            .map(|model| model.to_string())
-            .collect()
+        let model_list = match self.auth_method {
+            MiMoAuthMethod::PayAsYouGo => models::mimo::PAYG_MODELS,
+            MiMoAuthMethod::TokenPlan => models::mimo::TOKEN_PLAN_MODELS,
+        };
+        model_list.iter().map(|model| model.to_string()).collect()
     }
 
     fn validate_request(&self, request: &LLMRequest) -> Result<(), LLMError> {
-        validate_supported_models(
-            request,
-            PROVIDER_NAME,
-            PROVIDER_KEY,
-            models::mimo::SUPPORTED_MODELS,
-        )
+        let model_list = match self.auth_method {
+            MiMoAuthMethod::PayAsYouGo => models::mimo::PAYG_MODELS,
+            MiMoAuthMethod::TokenPlan => models::mimo::TOKEN_PLAN_MODELS,
+        };
+        validate_supported_models(request, PROVIDER_NAME, PROVIDER_KEY, model_list)
     }
 }
 

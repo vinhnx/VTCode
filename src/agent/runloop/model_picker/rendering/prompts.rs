@@ -383,3 +383,63 @@ pub(crate) fn prompt_custom_model_entry(renderer: &mut AnsiRenderer) -> Result<(
     )?;
     Ok(())
 }
+
+pub(crate) fn render_mimo_auth_method_inline(renderer: &mut AnsiRenderer) -> Result<()> {
+    let items = vec![
+        InlineListItem {
+            title: "Pay-as-you-go".to_string(),
+            subtitle: Some("Standard API access. Uses sk- key with api-key header.".to_string()),
+            badge: Some("Default".to_string()),
+            indent: 0,
+            selection: Some(InlineListSelection::ConfigAction(
+                "mimo-auth:pay-as-you-go".to_string(),
+            )),
+            search_value: Some("mimo payg pay-as-you-go sk api key".to_string()),
+        },
+        InlineListItem {
+            title: "Token Plan".to_string(),
+            subtitle: Some(
+                "Subscription-based access. Uses tp- key with Bearer token. Includes more models."
+                    .to_string(),
+            ),
+            badge: Some("Subscription".to_string()),
+            indent: 0,
+            selection: Some(InlineListSelection::ConfigAction(
+                "mimo-auth:token-plan".to_string(),
+            )),
+            search_value: Some("mimo token plan subscription tp bearer".to_string()),
+        },
+    ];
+
+    renderer.show_list_modal(
+        "MiMo Auth Method",
+        vec![
+            "Choose an authentication method for Xiaomi MiMo.".to_string(),
+            "Token Plan defaults to Europe cluster (token-plan-ams). Set MIMO_TOKEN_PLAN_BASE_URL to override region.".to_string(),
+        ],
+        items,
+        None,
+        None,
+    );
+    Ok(())
+}
+
+pub(crate) fn prompt_mimo_auth_method_plain(renderer: &mut AnsiRenderer) -> Result<()> {
+    renderer.line(
+        MessageStyle::Info,
+        "MiMo auth method - choose 'pay-as-you-go' or 'token-plan'. Type 'skip' for default (pay-as-you-go).",
+    )?;
+    renderer.line(
+        MessageStyle::Info,
+        "Pay-as-you-go: standard API access with sk- key.",
+    )?;
+    renderer.line(
+        MessageStyle::Info,
+        "Token Plan: subscription-based access with tp- key. Includes more models.",
+    )?;
+    renderer.line(
+        MessageStyle::Info,
+        "Note: Token Plan defaults to Europe cluster (token-plan-ams). Set MIMO_TOKEN_PLAN_BASE_URL to use China (token-plan-cn) or Singapore (token-plan-sgp).",
+    )?;
+    Ok(())
+}

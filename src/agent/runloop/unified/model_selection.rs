@@ -410,6 +410,7 @@ mod tests {
             env_key: env_key.to_string(),
             requires_api_key,
             uses_chatgpt_auth: false,
+            mimo_auth_method: None,
         }
     }
 

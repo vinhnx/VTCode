@@ -333,6 +333,7 @@ fn base_picker_state(current_provider: &str, current_model: &str) -> ModelPicker
         custom_providers: Vec::new(),
         selected_reasoning: None,
         selected_service_tier: None,
+        selected_mimo_auth: None,
         pending_api_key: None,
         workspace: None,
         ctrl_c_state: None,
@@ -507,6 +508,7 @@ fn build_result_uses_selected_service_tier() {
         requires_api_key: false,
         uses_chatgpt_auth: false,
         env_key: "OPENAI_API_KEY".to_string(),
+        mimo_auth_method: None,
     });
     picker.selected_reasoning = Some(ReasoningEffortLevel::Low);
     picker.selected_service_tier = Some(Some(OpenAIServiceTier::Priority));
@@ -534,6 +536,7 @@ fn build_result_uses_selected_flex_service_tier() {
         requires_api_key: false,
         uses_chatgpt_auth: false,
         env_key: "OPENAI_API_KEY".to_string(),
+        mimo_auth_method: None,
     });
     picker.selected_reasoning = Some(ReasoningEffortLevel::Low);
     picker.selected_service_tier = Some(Some(OpenAIServiceTier::Flex));
@@ -561,6 +564,7 @@ async fn openai_login_stays_in_picker_when_ctrl_c_cancels_auth() {
         requires_api_key: true,
         uses_chatgpt_auth: false,
         env_key: "OPENAI_API_KEY".to_string(),
+        mimo_auth_method: None,
     });
 
     let (handle, mut session) = session_with_channels();

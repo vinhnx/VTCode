@@ -97,11 +97,7 @@ pub fn convert_to_anthropic_format(
         system_value,
         breakpoints_used,
         has_uncached_runtime_context,
-    } = build_system_prompt(
-        request,
-        &system_cache_control,
-        breakpoints_remaining,
-    );
+    } = build_system_prompt(request, &system_cache_control, breakpoints_remaining);
     breakpoints_remaining = breakpoints_remaining.saturating_sub(breakpoints_used);
 
     let messages_cache_control =

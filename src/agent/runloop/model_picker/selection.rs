@@ -1,6 +1,7 @@
 use anyhow::{Result, anyhow};
 use std::str::FromStr;
 
+use vtcode_config::MiMoAuthMethod;
 use vtcode_config::OpenAIServiceTier;
 use vtcode_config::VTCodeConfig;
 use vtcode_config::core::CustomProviderConfig;
@@ -26,6 +27,7 @@ pub(super) struct SelectionDetail {
     pub(super) requires_api_key: bool,
     pub(super) uses_chatgpt_auth: bool,
     pub(super) env_key: String,
+    pub(super) mimo_auth_method: Option<MiMoAuthMethod>,
 }
 
 #[derive(Clone, Copy)]
@@ -67,6 +69,7 @@ pub(crate) struct ModelSelectionResult {
     pub(crate) env_key: String,
     pub(crate) requires_api_key: bool,
     pub(crate) uses_chatgpt_auth: bool,
+    pub(crate) mimo_auth_method: Option<MiMoAuthMethod>,
 }
 
 pub(super) fn parse_model_selection(
@@ -135,6 +138,7 @@ pub(super) fn parse_model_selection(
             requires_api_key: !uses_command_auth,
             uses_chatgpt_auth: false,
             env_key,
+            mimo_auth_method: None,
         });
     }
     if let Some(provider) = provider_enum {
@@ -166,6 +170,7 @@ pub(super) fn parse_model_selection(
         requires_api_key: true,
         uses_chatgpt_auth: false,
         env_key,
+        mimo_auth_method: None,
     })
 }
 
@@ -239,6 +244,7 @@ pub(super) fn selections_from_custom_provider(
             requires_api_key: !provider.uses_command_auth(),
             uses_chatgpt_auth: false,
             env_key: env_key.clone(),
+            mimo_auth_method: None,
         })
         .collect()
 }
@@ -266,6 +272,7 @@ fn selection_from_resolved(
         requires_api_key: resolved.availability.requires_api_key(),
         uses_chatgpt_auth: resolved.availability.uses_managed_auth(),
         env_key,
+        mimo_auth_method: None,
     }
 }
 
@@ -299,10 +306,7 @@ pub(super) fn supports_xhigh_reasoning(model_id: &str) -> bool {
 }
 
 pub(super) fn supports_max_reasoning(model_id: &str) -> bool {
-    matches!(
-        model_id,
-        "claude-opus-4-8" | "claude-sonnet-4-6"
-    )
+    matches!(model_id, "claude-opus-4-8" | "claude-sonnet-4-6")
 }
 
 pub(super) fn reasoning_level_description(level: ReasoningEffortLevel) -> &'static str {

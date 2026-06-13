@@ -4,7 +4,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::Notify;
 use tokio::task;
-use vtcode_config::{OpenAIServiceTier, VTCodeConfig};
+use vtcode_config::{MiMoAuthMethod, OpenAIServiceTier, VTCodeConfig};
 use vtcode_core::config::models::{ModelId, Provider};
 use vtcode_core::config::types::ReasoningEffortLevel;
 use vtcode_core::ui::{
@@ -31,9 +31,10 @@ use interaction::{
 use options::{MODEL_OPTIONS, ModelOption, find_option_index};
 use rendering::{
     CLOSE_THEME_MESSAGE, dynamic_model_subtitle, model_search_value, prompt_api_key_plain,
-    prompt_custom_model_entry, prompt_reasoning_plain, prompt_service_tier_plain,
-    render_reasoning_inline, render_service_tier_inline, render_step_one_inline,
-    render_step_one_plain, show_secure_api_modal, static_model_search_terms, static_model_subtitle,
+    prompt_custom_model_entry, prompt_mimo_auth_method_plain, prompt_reasoning_plain,
+    prompt_service_tier_plain, render_mimo_auth_method_inline, render_reasoning_inline,
+    render_service_tier_inline, render_step_one_inline, render_step_one_plain,
+    show_secure_api_modal, static_model_search_terms, static_model_subtitle,
 };
 use selection::{
     ExistingKey, ReasoningChoice, SelectionDetail, ServiceTierChoice, is_cancel_command,
@@ -89,6 +90,7 @@ const SUBAGENT_SHORTCUTS: [(&str, &str); 5] = [
 enum PickerStep {
     AwaitModel,
     AwaitReasoning,
+    AwaitMiMoAuthMethod,
     AwaitServiceTier,
     AwaitApiKey,
 }
@@ -133,6 +135,7 @@ pub(crate) struct ModelPickerState {
     custom_providers: Vec<SelectionDetail>,
     selected_reasoning: Option<ReasoningEffortLevel>,
     selected_service_tier: Option<Option<OpenAIServiceTier>>,
+    selected_mimo_auth: Option<MiMoAuthMethod>,
     pending_api_key: Option<String>,
     workspace: Option<PathBuf>,
     ctrl_c_state: Option<Arc<CtrlCState>>,
@@ -189,6 +192,7 @@ impl ModelPickerState {
             custom_providers,
             selected_reasoning: None,
             selected_service_tier: None,
+            selected_mimo_auth: None,
             pending_api_key: None,
             workspace,
             ctrl_c_state,
@@ -383,6 +387,7 @@ impl ModelPickerState {
         match self.step {
             PickerStep::AwaitModel => self.handle_model_selection(renderer, trimmed),
             PickerStep::AwaitReasoning => self.handle_reasoning(renderer, trimmed),
+            PickerStep::AwaitMiMoAuthMethod => self.handle_mimo_auth_method(renderer, trimmed),
             PickerStep::AwaitServiceTier => self.handle_service_tier(renderer, trimmed),
             PickerStep::AwaitApiKey => self.handle_api_key(renderer, trimmed, url_guard).await,
         }
@@ -498,6 +503,42 @@ impl ModelPickerState {
                     Ok(ModelPickerProgress::InProgress)
                 }
                 _ => Ok(ModelPickerProgress::InProgress),
+            },
+            PickerStep::AwaitMiMoAuthMethod => match choice {
+                InlineListSelection::ConfigAction(action) => {
+                    if let Some(method_str) = action.strip_prefix("mimo-auth:") {
+                        let auth_method = match method_str {
+                            "token-plan" => MiMoAuthMethod::TokenPlan,
+                            "pay-as-you-go" => MiMoAuthMethod::PayAsYouGo,
+                            _ => {
+                                renderer.line(
+                                    MessageStyle::Error,
+                                    "Unknown MiMo auth method selection.",
+                                )?;
+                                return Ok(ModelPickerProgress::InProgress);
+                            }
+                        };
+                        self.selected_mimo_auth = Some(auth_method);
+                        if let Some(ref mut selection) = self.selection {
+                            selection.mimo_auth_method = Some(auth_method);
+                            selection.env_key = auth_method.env_key().to_string();
+                        }
+                        self.finish_after_mimo_auth_method(renderer)
+                    } else {
+                        renderer.line(
+                            MessageStyle::Error,
+                            "Choose an auth method for MiMo or press Esc to cancel.",
+                        )?;
+                        Ok(ModelPickerProgress::InProgress)
+                    }
+                }
+                _ => {
+                    renderer.line(
+                        MessageStyle::Error,
+                        "Choose an auth method for MiMo or press Esc to cancel.",
+                    )?;
+                    Ok(ModelPickerProgress::InProgress)
+                }
             },
             PickerStep::AwaitServiceTier => match choice {
                 InlineListSelection::OpenAIServiceTier(choice) => {
