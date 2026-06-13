@@ -34,6 +34,11 @@ static ACTIVE: Lazy<RwLock<ActiveTheme>> = Lazy::new(|| {
     })
 });
 
+/// Preview state: when set, `active_styles()` returns the preview styles
+/// instead of the committed theme styles. This allows theme palette
+/// navigation to show a live preview without committing the selection.
+static PREVIEW: Lazy<RwLock<Option<ActiveTheme>>> = Lazy::new(|| RwLock::new(None));
+
 /// Update the runtime color accessibility configuration.
 pub fn set_color_accessibility_config(config: ColorAccessibilityConfig) {
     *COLOR_CONFIG.write() = config;
@@ -80,8 +85,38 @@ pub fn active_theme_label() -> String {
 }
 
 /// Return a clone of the active style set.
+/// When a preview theme is active, returns the preview styles instead.
 pub fn active_styles() -> ThemeStyles {
+    if let Some(preview) = PREVIEW.read().as_ref() {
+        return preview.styles.clone();
+    }
     ACTIVE.read().styles.clone()
+}
+
+/// Set a preview theme by identifier. The preview is returned by
+/// `active_styles()` until `clear_preview_theme()` is called.
+pub fn set_preview_theme(theme_id: &str) -> Result<()> {
+    let id_lc = theme_id.trim().to_lowercase();
+    let theme =
+        theme_definition(id_lc.as_str()).ok_or_else(|| anyhow!("Unknown theme '{theme_id}'"))?;
+    let styles = theme
+        .palette
+        .build_styles_with_accessibility(&current_color_config());
+    *PREVIEW.write() = Some(ActiveTheme {
+        definition: theme,
+        styles,
+    });
+    Ok(())
+}
+
+/// Return true when a preview theme is active.
+pub fn has_preview_theme() -> bool {
+    PREVIEW.read().is_some()
+}
+
+/// Clear the preview theme, reverting `active_styles()` to the committed theme.
+pub fn clear_preview_theme() {
+    *PREVIEW.write() = None;
 }
 
 /// Return a readable accent color for banner-like copy.

@@ -43,6 +43,7 @@ pub struct CoreSessionOptions {
     pub appearance: Option<SessionAppearanceConfig>,
     pub app_name: String,
     pub non_interactive_hint: Option<String>,
+    pub preview_callback: Option<core_tui::types::PreviewCallback>,
 }
 
 impl Default for CoreSessionOptions {
@@ -61,6 +62,7 @@ impl Default for CoreSessionOptions {
             appearance: None,
             app_name: "Agent TUI".to_string(),
             non_interactive_hint: None,
+            preview_callback: None,
         }
     }
 }
@@ -85,6 +87,7 @@ pub fn spawn_core_session(
         options.appearance,
         options.app_name,
         options.non_interactive_hint,
+        options.preview_callback,
     )
 }
 

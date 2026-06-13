@@ -7,7 +7,8 @@ use hashbrown::HashMap;
 
 use crate::tui::core_tui::app::session::AppSession;
 use crate::tui::core_tui::app::types::{
-    FocusChangeCallback, InlineEventCallback, InlineSession, InlineTheme, SlashCommandItem,
+    FocusChangeCallback, InlineEventCallback, InlineSession, InlineTheme, PreviewCallback,
+    SlashCommandItem,
 };
 use crate::tui::core_tui::log;
 use crate::tui::core_tui::runner::{TuiOptions, run_tui};
@@ -37,6 +38,7 @@ pub struct SessionOptions {
     /// User-customizable keybindings (action_name → key spec list).
     /// Merged on top of built-in defaults.
     pub key_bindings: HashMap<String, Vec<String>>,
+    pub preview_callback: Option<PreviewCallback>,
 }
 
 impl Default for SessionOptions {
@@ -57,6 +59,7 @@ impl Default for SessionOptions {
             app_name: "Agent TUI".to_string(),
             non_interactive_hint: None,
             key_bindings: HashMap::new(),
+            preview_callback: None,
         }
     }
 }
@@ -113,6 +116,7 @@ pub fn spawn_session_with_options(
                 keyboard_protocol: KeyboardProtocolConfig::from(options.keyboard_protocol),
                 fullscreen: options.fullscreen,
                 workspace_root: options.workspace_root,
+                preview_callback: options.preview_callback.clone(),
             },
             move |rows| {
                 let bindings = BindingStore::new(options.key_bindings.clone());

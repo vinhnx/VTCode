@@ -7,7 +7,7 @@ use vtcode_config::constants::defaults::DEFAULT_PRIMARY_AGENT_NAME;
 use vtcode_config::core::permissions::AgentPermissionsConfig;
 use vtcode_config::{
     DiscoveredSubagents, HookGroupConfig, HooksConfig, McpProviderConfig, SubagentMcpServer,
-    SubagentMemoryScope, SubagentSource, SubagentSpec, builtin_primary_duck_agent,
+    SubagentMemoryScope, SubagentSource, SubagentSpec, builtin_primary_build_agent,
 };
 
 use crate::config::{ReasoningEffortLevel, VTCodeConfig};
@@ -84,7 +84,7 @@ pub struct ActivePrimaryAgentState {
 impl Default for ActivePrimaryAgentState {
     fn default() -> Self {
         Self {
-            active: ActivePrimaryAgent::from_spec(&builtin_primary_duck_agent()),
+            active: ActivePrimaryAgent::from_spec(&builtin_primary_build_agent()),
         }
     }
 }

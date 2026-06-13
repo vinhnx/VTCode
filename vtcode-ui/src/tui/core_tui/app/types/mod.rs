@@ -24,6 +24,6 @@ pub use crate::tui::core_tui::types::{
     InlineHeaderHighlight, InlineHeaderStatusBadge, InlineHeaderStatusTone, InlineLinkRange,
     InlineLinkTarget, InlineListItem, InlineListSearchConfig, InlineListSelection,
     InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme, LocalAgentEntry,
-    LocalAgentKind, OpenAIServiceTierChoice, RewindAction, SecurePromptConfig, WizardModalMode,
-    WizardStep,
+    LocalAgentKind, OpenAIServiceTierChoice, OverlayEvent, OverlaySelectionChange, PreviewCallback,
+    RewindAction, SecurePromptConfig, WizardModalMode, WizardStep,
 };

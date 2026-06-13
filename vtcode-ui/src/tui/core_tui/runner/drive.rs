@@ -285,6 +285,8 @@ pub(super) struct DriveRuntimeOptions<E> {
     #[allow(dead_code)]
     pub(super) keyboard_flags: crossterm::event::KeyboardEnhancementFlags,
     pub(super) fullscreen: FullscreenInteractionSettings,
+    #[allow(dead_code)]
+    pub(super) preview_callback: Option<super::PreviewCallback>,
 }
 
 fn should_count_as_user_activity(event: &crossterm::event::Event) -> bool {

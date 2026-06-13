@@ -66,6 +66,7 @@ pub trait TuiSessionDriver {
     );
     fn set_fullscreen_active(&mut self, active: bool);
     fn set_fullscreen_interaction(&mut self, config: FullscreenInteractionSettings);
+    fn set_preview_callback(&mut self, callback: Option<PreviewCallback>);
 }
 
 impl TuiCommand for crate::tui::core_tui::types::InlineCommand {
@@ -113,6 +114,7 @@ impl TuiCommand for crate::tui::core_tui::types::InlineCommand {
 }
 
 use super::types::FocusChangeCallback;
+pub(crate) use super::types::PreviewCallback;
 
 mod drive;
 mod events;
@@ -243,6 +245,7 @@ pub struct TuiOptions<E> {
     pub keyboard_protocol: crate::tui::config::KeyboardProtocolConfig,
     pub fullscreen: FullscreenInteractionSettings,
     pub workspace_root: Option<std::path::PathBuf>,
+    pub preview_callback: Option<PreviewCallback>,
 }
 
 pub async fn run_tui<S, F>(
@@ -264,6 +267,7 @@ where
     let surface = TerminalSurface::detect(options.surface_preference, options.inline_rows)?;
     set_log_theme_name(options.log_theme.clone());
     let mut session = make_session(surface.rows());
+    session.set_preview_callback(options.preview_callback.clone());
     session.set_show_logs(options.show_logs);
     session.set_active_pty_sessions(options.active_pty_sessions);
     session.set_workspace_root(options.workspace_root.clone());
@@ -351,6 +355,7 @@ where
             input_activity_counter: options.input_activity_counter,
             keyboard_flags,
             fullscreen: options.fullscreen,
+            preview_callback: options.preview_callback,
         },
         &mut event_stream,
     )

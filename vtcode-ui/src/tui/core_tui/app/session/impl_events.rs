@@ -1,8 +1,14 @@
 use super::*;
 use crate::tui::config::constants::ui;
+use crate::tui::core_tui::app::types::InlineEvent;
 use crate::tui::core_tui::session::MouseDragTarget;
 use crate::tui::core_tui::session::render::modal_render_styles;
 use crate::tui::core_tui::session::{TranscriptLinkClickAction, inline_list, list_panel, modal};
+use crate::tui::core_tui::style::theme_from_styles;
+use crate::tui::core_tui::types::{
+    InlineEvent as CoreInlineEvent, OverlayEvent, OverlaySelectionChange,
+};
+use crate::tui::ui::theme;
 use std::time::Instant;
 
 impl Session {
@@ -54,6 +60,23 @@ impl Session {
             }
             modal::ModalListKeyResult::Emit(event) => {
                 self.mark_dirty();
+                // Synchronous preview: fire the callback and sync session theme
+                // before returning so the render picks up the preview in the
+                // same frame as the cursor movement.
+                if let Some(ref cb) = self.preview_callback {
+                    if let CoreInlineEvent::Overlay(OverlayEvent::SelectionChanged(
+                        OverlaySelectionChange::List(ref selection),
+                    )) = event
+                    {
+                        let _ = cb(Some(selection));
+                        if theme::has_preview_theme() {
+                            let styles = theme::active_styles();
+                            let inline_theme = theme_from_styles(&styles);
+                            self.core.theme = inline_theme;
+                            self.core.styles.set_theme(self.core.theme.clone());
+                        }
+                    }
+                }
                 let outbound: InlineEvent = event.into();
                 events::emit_inline_event(&outbound, events, callback);
                 true

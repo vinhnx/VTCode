@@ -52,8 +52,8 @@ use vtcode_core::utils::dot_config::load_user_config;
 use vtcode_core::utils::session_archive::SessionArchive;
 use vtcode_core::utils::transcript;
 use vtcode_ui::tui::app::{
-    AgentPaletteItem, FocusChangeCallback, InlineEvent, InlineEventCallback, SessionOptions,
-    SlashCommandItem, spawn_session_with_options,
+    AgentPaletteItem, FocusChangeCallback, InlineEvent, InlineEventCallback, InlineListSelection,
+    PreviewCallback, SessionOptions, SlashCommandItem, spawn_session_with_options,
 };
 
 use self::header_context::{HeaderContextInit, initialize_header_context};
@@ -215,6 +215,18 @@ pub(crate) async fn initialize_session_ui(
         Err(_) => HashMap::new(),
     };
 
+    // Synchronous preview callback that applies the theme preview on the TUI
+    // side before rendering, eliminating the one-frame lag between cursor
+    // movement and theme preview update. The render function picks up the
+    // preview from the global `PREVIEW` state.
+    let preview_callback: PreviewCallback = Arc::new(move |selection| {
+        let Some(InlineListSelection::Theme(theme_id)) = selection else {
+            return Ok(());
+        };
+        theme::set_preview_theme(theme_id)?;
+        Ok(())
+    });
+
     let mut session = spawn_session_with_options(
         theme_spec.clone(),
         SessionOptions {
@@ -247,6 +259,7 @@ pub(crate) async fn initialize_session_ui(
                 "Use `vtcode ask \"your prompt\"` for non-interactive input.".to_string(),
             ),
             key_bindings: user_key_bindings,
+            preview_callback: Some(preview_callback),
         },
     )
     .context("failed to launch inline session")?;

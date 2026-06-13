@@ -145,6 +145,8 @@ pub enum InlineEvent {
 
 pub type InlineEventCallback = Arc<dyn Fn(&InlineEvent) + Send + Sync + 'static>;
 pub type FocusChangeCallback = Arc<dyn Fn(bool) + Send + Sync + 'static>;
+pub type PreviewCallback =
+    Arc<dyn Fn(Option<&InlineListSelection>) -> anyhow::Result<()> + Send + Sync + 'static>;
 
 #[derive(Clone)]
 pub struct InlineHandle {

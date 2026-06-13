@@ -492,7 +492,7 @@ impl VTCodeConfig {
 file_opener = "none"
 
 # Primary agent selected for new sessions when no explicit session selection is active
-default_primary_agent = "duck"
+default_primary_agent = "build"
 
 # Optional external command invoked after each completed agent turn
 notify = []

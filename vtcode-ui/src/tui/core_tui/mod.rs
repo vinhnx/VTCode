@@ -25,8 +25,8 @@ pub use types::{
     InlineListItem, InlineListSearchConfig, InlineListSelection, InlineMessageKind, InlineSegment,
     InlineSession, InlineTextStyle, InlineTheme, ListOverlayRequest, ModalOverlayRequest,
     OverlayEvent, OverlayHotkey, OverlayHotkeyAction, OverlayHotkeyKey, OverlayRequest,
-    OverlaySelectionChange, OverlaySubmission, RewindAction, SecurePromptConfig, WizardModalMode,
-    WizardOverlayRequest, WizardStep,
+    OverlaySelectionChange, OverlaySubmission, PreviewCallback, RewindAction, SecurePromptConfig,
+    WizardModalMode, WizardOverlayRequest, WizardStep,
 };
 
 use runner::{TuiOptions, run_tui};
@@ -51,6 +51,7 @@ pub fn spawn_session(
         crate::tui::config::KeyboardProtocolConfig::default(),
         crate::tui::options::FullscreenInteractionSettings::default(),
         workspace_root,
+        None,
     )
 }
 
@@ -67,6 +68,7 @@ pub fn spawn_session_with_prompts(
     keyboard_protocol: crate::tui::config::KeyboardProtocolConfig,
     fullscreen: crate::tui::options::FullscreenInteractionSettings,
     workspace_root: Option<std::path::PathBuf>,
+    preview_callback: Option<PreviewCallback>,
 ) -> Result<InlineSession> {
     spawn_session_with_prompts_and_options(
         theme,
@@ -83,6 +85,7 @@ pub fn spawn_session_with_prompts(
         None,
         "Agent TUI".to_string(),
         None,
+        preview_callback,
     )
 }
 
@@ -103,6 +106,7 @@ pub fn spawn_session_with_prompts_and_options(
     appearance: Option<session::config::AppearanceConfig>,
     app_name: String,
     non_interactive_hint: Option<String>,
+    preview_callback: Option<PreviewCallback>,
 ) -> Result<InlineSession> {
     use crossterm::tty::IsTty;
 
@@ -133,6 +137,7 @@ pub fn spawn_session_with_prompts_and_options(
                 keyboard_protocol,
                 fullscreen,
                 workspace_root,
+                preview_callback,
             },
             move |rows| {
                 session::Session::new_with_logs(

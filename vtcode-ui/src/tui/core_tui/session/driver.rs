@@ -114,4 +114,11 @@ impl TuiSessionDriver for Session {
     fn set_fullscreen_interaction(&mut self, config: FullscreenInteractionSettings) {
         self.set_fullscreen_interaction(config);
     }
+
+    fn set_preview_callback(
+        &mut self,
+        _callback: Option<crate::tui::core_tui::types::PreviewCallback>,
+    ) {
+        // Core session does not use preview callbacks; only AppSession does.
+    }
 }

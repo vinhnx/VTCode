@@ -10,7 +10,12 @@ use crate::tui::core_tui::app::session::transient::TransientSurface;
 use crate::tui::core_tui::app::types::InlineMessageKind;
 use crate::tui::core_tui::session::modal::{ModalKeyModifiers, ModalListKeyResult};
 use crate::tui::core_tui::session::reverse_search;
+use crate::tui::core_tui::style::theme_from_styles;
 use crate::tui::core_tui::types::InlineSegment;
+use crate::tui::core_tui::types::{
+    InlineEvent as CoreInlineEvent, OverlayEvent, OverlaySelectionChange,
+};
+use crate::tui::ui::theme;
 
 fn input_history_entries(
     session: &Session,
@@ -165,6 +170,23 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             }
             ModalListKeyResult::Emit(event) => {
                 session.mark_dirty();
+                // Synchronous preview: fire the callback and sync session theme
+                // before returning so the render picks up the preview in the
+                // same frame as the cursor movement.
+                if let Some(ref cb) = session.preview_callback {
+                    if let CoreInlineEvent::Overlay(OverlayEvent::SelectionChanged(
+                        OverlaySelectionChange::List(ref selection),
+                    )) = event
+                    {
+                        let _ = cb(Some(selection));
+                        if theme::has_preview_theme() {
+                            let styles = theme::active_styles();
+                            let inline_theme = theme_from_styles(&styles);
+                            session.core.theme = inline_theme;
+                            session.core.styles.set_theme(session.core.theme.clone());
+                        }
+                    }
+                }
                 return Some(event.into());
             }
             ModalListKeyResult::HandledNoRedraw => {

@@ -27,7 +27,7 @@ enabled = true
 # Default: "none"
 # Type: `string`
 reasoning_effort = "low"
-theme = "mono"
+theme = "ansi-classic"
 default_model = "mimo-v2.5-pro"
 api_key_env = "MIMO_TOKEN_PLAN_KEY"
 provider = "mimo"

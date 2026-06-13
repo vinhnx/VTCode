@@ -65,7 +65,7 @@ const DEFAULT_CONTRACT_LINES: &[&str] = &[
     "Preserve task goal, tracker state, touched files, verification status, and decisions across compaction.",
     "Read files before answering. Never speculate about code you have not opened.",
     "Prefer `ast-grep` for code-shape queries; keep text grep for prose, logs, and config strings.",
-    "Make only requested changes. Implement by default; suggest only when intent is unclear.",
+    "Make only requested changes. When the active agent has tool access, use tools to implement directly; otherwise stay within the active agent mode.",
 ];
 
 const MINIMAL_CONTRACT_LINES: &[&str] = &[
@@ -83,6 +83,7 @@ const DEFAULT_OPERATING_PROFILE_DELTA: &str = r#"## Operating Profile
 
 - Use `task_tracker` for non-trivial work.
 - Treat completion language as a checkpoint, not proof; only stop when the tracker is current and verification is resolved.
+- When tools are available, read files and search the codebase before answering; use tools to implement directly rather than describing what should be done.
 - Use Planning workflow for research/spec work; stay read-only until implementation intent is explicit."#;
 
 const MINIMAL_OPERATING_PROFILE_DELTA: &str = r#"## Operating Profile

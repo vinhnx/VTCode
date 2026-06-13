@@ -61,6 +61,7 @@ pub struct AppSession {
     pub(crate) transcript_review_state: Option<TranscriptReviewState>,
     pub(crate) diff_overlay_queue: VecDeque<DiffOverlayRequest>,
     pub(crate) transient_host: TransientHost,
+    pub(crate) preview_callback: Option<crate::tui::core_tui::types::PreviewCallback>,
 }
 
 pub(super) type Session = AppSession;
@@ -101,6 +102,7 @@ impl AppSession {
             transcript_review_state: None,
             diff_overlay_queue: VecDeque::new(),
             transient_host: TransientHost::default(),
+            preview_callback: None,
         }
     }
 
@@ -141,6 +143,7 @@ impl AppSession {
             transcript_review_state: None,
             diff_overlay_queue: VecDeque::new(),
             transient_host: TransientHost::default(),
+            preview_callback: None,
         }
     }
 
@@ -919,5 +922,12 @@ impl TuiSessionDriver for AppSession {
 
     fn set_fullscreen_interaction(&mut self, config: FullscreenInteractionSettings) {
         self.core.set_fullscreen_interaction(config);
+    }
+
+    fn set_preview_callback(
+        &mut self,
+        callback: Option<crate::tui::core_tui::types::PreviewCallback>,
+    ) {
+        self.preview_callback = callback;
     }
 }
