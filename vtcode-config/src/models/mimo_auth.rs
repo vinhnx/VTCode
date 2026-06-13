@@ -20,8 +20,8 @@ impl MiMoAuthMethod {
     #[must_use]
     pub fn label(&self) -> &'static str {
         match self {
-            Self::PayAsYouGo => "Pay-as-you-go",
-            Self::TokenPlan => "Token Plan",
+            Self::PayAsYouGo => "API Usage Billing",
+            Self::TokenPlan => "Subscription Plan",
         }
     }
 
@@ -55,8 +55,8 @@ impl MiMoAuthMethod {
 impl fmt::Display for MiMoAuthMethod {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::PayAsYouGo => write!(f, "payg"),
-            Self::TokenPlan => write!(f, "token-plan"),
+            Self::PayAsYouGo => write!(f, "api-usage-billing"),
+            Self::TokenPlan => write!(f, "subscription-plan"),
         }
     }
 }
@@ -66,10 +66,11 @@ impl FromStr for MiMoAuthMethod {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_ascii_lowercase().as_str() {
-            "payg" | "pay-as-you-go" | "pay_as_you_go" | "apikey" | "api-key" => {
-                Ok(Self::PayAsYouGo)
+            "payg" | "pay-as-you-go" | "pay_as_you_go" | "apikey" | "api-key"
+            | "api-usage-billing" => Ok(Self::PayAsYouGo),
+            "token-plan" | "token_plan" | "tokenplan" | "tp" | "subscription-plan" => {
+                Ok(Self::TokenPlan)
             }
-            "token-plan" | "token_plan" | "tokenplan" | "tp" => Ok(Self::TokenPlan),
             _ => Err(format!("Unknown MiMo auth method: {s}")),
         }
     }

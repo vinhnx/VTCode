@@ -195,7 +195,7 @@ impl Default for InlineHeaderContext {
             pr_review: None,
             editor_context: None,
             git: "git: unavailable".to_string(),
-            reasoning: "Reasoning effort: unavailable".to_string(),
+            reasoning: "unavailable".to_string(),
             reasoning_stage: None,
             workspace_trust: "Trust: unavailable".to_string(),
             tools: "Tools: unavailable".to_string(),

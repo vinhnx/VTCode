@@ -46,6 +46,8 @@ use vtcode_core::{
 
 use crate::startup::take_search_tools_bundle_notice;
 use crate::updater::{Updater, append_notice_highlight};
+use vtcode_config::MiMoAuthMethod;
+use vtcode_config::models::detect_mimo_auth_method;
 
 #[expect(clippy::unnecessary_cast)]
 fn vtcode_config_circuit_breaker_to_core(
@@ -86,6 +88,21 @@ pub(crate) fn resolve_provider_label(
 ) -> String {
     if config.provider.eq_ignore_ascii_case("openai") && config.openai_chatgpt_auth.is_some() {
         return "OpenAI (ChatGPT)".to_string();
+    }
+
+    // MiMo auth method detection
+    if config.provider.eq_ignore_ascii_case("mimo") {
+        if let Some(vt_cfg) = vt_cfg {
+            if let Some(method_str) = vt_cfg.provider.mimo_auth_method.as_deref() {
+                if let Ok(method) = MiMoAuthMethod::from_str(method_str) {
+                    return format!("{} ({})", "Xiaomi MiMo", method.label());
+                }
+            }
+        }
+        if !config.api_key.is_empty() {
+            let method = detect_mimo_auth_method(&config.api_key, None);
+            return format!("{} ({})", "Xiaomi MiMo", method.label());
+        }
     }
 
     let key = config.provider.trim();

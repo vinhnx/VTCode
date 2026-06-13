@@ -186,6 +186,13 @@ pub(crate) async fn finalize_model_selection(
             MessageStyle::Info,
             "Using GitHub Copilot managed authentication.",
         )?;
+    } else if selection.provider_enum == Some(Provider::MiMo) {
+        if let Some(method) = selection.mimo_auth_method {
+            renderer.line(
+                MessageStyle::Info,
+                &format!("Using MiMo {} authentication.", method.label()),
+            )?;
+        }
     } else if selection.api_key.is_some() {
         renderer.line(
             MessageStyle::Info,
@@ -372,6 +379,12 @@ fn sync_runtime_custom_api_key(config: &mut CoreAgentConfig, selection: &ModelSe
 fn runtime_provider_label(selection: &ModelSelectionResult, using_chatgpt_auth: bool) -> String {
     if selection.provider_enum == Some(Provider::OpenAI) && using_chatgpt_auth {
         "OpenAI (ChatGPT)".to_string()
+    } else if selection.provider_enum == Some(Provider::MiMo) {
+        if let Some(method) = selection.mimo_auth_method {
+            format!("{} ({})", "Xiaomi MiMo", method.label())
+        } else {
+            selection.provider_label.clone()
+        }
     } else {
         selection.provider_label.clone()
     }
