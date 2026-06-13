@@ -304,11 +304,8 @@ impl LLMProvider for QwenProvider {
             model
         };
         match requested {
-            models::qwen::DEEPSEEK_V4_FLASH
-            | models::qwen::DEEPSEEK_V4_PRO => 1_048_576,
-            models::qwen::GLM_5_1 => {
-                131_072
-            }
+            models::qwen::DEEPSEEK_V4_FLASH | models::qwen::DEEPSEEK_V4_PRO => 1_048_576,
+            models::qwen::GLM_5_1 => 131_072,
             _ => 131_072,
         }
     }

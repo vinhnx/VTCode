@@ -11,8 +11,5 @@ pub const CHAT_COMPLETIONS_MODELS: &[&str] = &[GLM_5_1];
 // Curated models VT Code currently exposes in config flows and ModelId metadata.
 pub const CONFIGURED_MODELS: &[&str] = &[GLM_5_1, MINIMAX_M2_7];
 
-pub const SUPPORTED_MODELS: &[&str] = &[
-    GLM_5_1,
-    MINIMAX_M2_7,
-];
+pub const SUPPORTED_MODELS: &[&str] = &[GLM_5_1, MINIMAX_M2_7];
 pub const REASONING_MODELS: &[&str] = &[];

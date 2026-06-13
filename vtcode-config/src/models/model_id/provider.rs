@@ -9,7 +9,8 @@ impl ModelId {
             return Provider::OpenRouter;
         }
         match self {
-            ModelId::Gemini31ProPreview | ModelId::Gemini31ProPreviewCustomTools
+            ModelId::Gemini31ProPreview
+            | ModelId::Gemini31ProPreviewCustomTools
             | ModelId::Gemini35Flash => Provider::Gemini,
             ModelId::GPT55
             | ModelId::GPT54
@@ -61,11 +62,10 @@ impl ModelId {
             | ModelId::OpenCodeZenGPT54Mini
             | ModelId::OpenCodeZenClaudeSonnet46
             | ModelId::OpenCodeZenGlm51 => Provider::OpenCodeZen,
-            ModelId::OpenCodeGoGlm51
-            | ModelId::OpenCodeGoMinimaxM27 => Provider::OpenCodeGo,
-            ModelId::QwenDeepSeekV4Flash
-            | ModelId::QwenDeepSeekV4Pro
-            | ModelId::QwenGlm51 => Provider::Qwen,
+            ModelId::OpenCodeGoGlm51 | ModelId::OpenCodeGoMinimaxM27 => Provider::OpenCodeGo,
+            ModelId::QwenDeepSeekV4Flash | ModelId::QwenDeepSeekV4Pro | ModelId::QwenGlm51 => {
+                Provider::Qwen
+            }
             ModelId::OllamaGptOss20b
             | ModelId::OllamaGptOss20bCloud
             | ModelId::OllamaGptOss120bCloud
