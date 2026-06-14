@@ -2,6 +2,13 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.130.0 - 2026-06-14
+
+### Highlights
+### Other Changes
+#### Other
+
+- Refactor crate lists in publish and release scripts for clarity and consistency (57fbe342) 
 ## 0.129.0 - 2026-06-14
 
 ### Highlights
