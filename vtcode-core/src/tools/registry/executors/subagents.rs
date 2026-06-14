@@ -94,9 +94,9 @@ impl ToolRegistry {
     pub(crate) fn wait_agent_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move {
             let targets = args
-                .get("targets")
+                .get("ids")
                 .and_then(Value::as_array)
-                .ok_or_else(|| anyhow!("wait_agent requires a targets array"))?
+                .ok_or_else(|| anyhow!("wait_agent requires an ids array"))?
                 .iter()
                 .filter_map(Value::as_str)
                 .map(ToOwned::to_owned)
@@ -130,9 +130,9 @@ impl ToolRegistry {
     pub(crate) fn close_agent_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move {
             let target = args
-                .get("target")
+                .get("id")
                 .and_then(Value::as_str)
-                .ok_or_else(|| anyhow!("close_agent requires target"))?
+                .ok_or_else(|| anyhow!("close_agent requires id"))?
                 .to_string();
             self.execute_subagent_call(
                 move |controller| async move { controller.close(&target).await },

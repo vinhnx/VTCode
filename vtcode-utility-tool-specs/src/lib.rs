@@ -68,6 +68,7 @@ pub fn cron_create_parameters() -> Value {
     json!({
         "type": "object",
         "required": ["prompt"],
+        "additionalProperties": false,
         "properties": {
             "prompt": {"type": "string", "description": "Prompt to run when the task fires."},
             "name": {"type": "string", "description": "Optional short label for the task."},
@@ -85,7 +86,8 @@ pub fn cron_create_parameters() -> Value {
 pub fn cron_list_parameters() -> Value {
     json!({
         "type": "object",
-        "properties": {}
+        "properties": {},
+        "additionalProperties": false
     })
 }
 
@@ -135,8 +137,7 @@ pub fn unified_exec_parameters() -> Value {
                 "enum": ["run", "write", "poll", "continue", "inspect", "list", "close", "code"],
                 "description": "Optional; inferred from command/code/input/session_id/spool_path. Use `code` to run a fresh Python or JavaScript snippet through the local code executor."
             },
-            "workdir": {"type": "string", "description": "Working directory."},
-            "cwd": {"type": "string", "description": "Alias for workdir."},
+            "workdir": {"type": "string", "description": "Working directory. Alias: cwd."},
             "tty": {"type": "boolean", "description": "Use PTY mode.", "default": false},
             "shell": {"type": "string", "description": "Shell binary."},
             "login": {"type": "boolean", "description": "Use a login shell.", "default": false},
@@ -196,8 +197,8 @@ pub fn unified_file_parameters() -> Value {
             "offset": {"type": "integer", "description": "Read start line (1-indexed). Compact alias: `o`."},
             "limit": {"type": "integer", "description": "Read line count. Compact alias: `l`."},
             "mode": {"type": "string", "description": "Read mode or write mode.", "default": "slice"},
-            "condense": {"type": "boolean", "description": "Condense long output.", "default": true},
-            "raw": {"type": "boolean", "description": "Bypass LLM summarization and return full content. Use when you need exact file content, not a summary.", "default": false},
+            "condense": {"type": "boolean", "description": "Condense long output to head/tail. Set false for full content.", "default": true},
+            "raw": {"type": "boolean", "description": "Bypass output spooling and return full content inline. Use when you need exact file content without spooling to disk.", "default": false},
             "indentation": {
                 "description": "Indentation config. `true` uses defaults.",
                 "anyOf": [
@@ -253,7 +254,7 @@ pub fn read_file_parameters() -> Value {
             "max_lines": {"type": "integer", "description": "Maximum lines to return in legacy mode.", "minimum": 1},
             "chunk_lines": {"type": "integer", "description": "Legacy alias for chunk size in lines.", "minimum": 1},
             "max_tokens": {"type": "integer", "description": "Optional token budget for large reads.", "minimum": 1},
-            "condense": {"type": "boolean", "description": "Condense long outputs to head/tail.", "default": true}
+            "condense": {"type": "boolean", "description": "Condense long outputs to head/tail. Set false for full content.", "default": true}
         }
     })
 }
@@ -307,22 +308,22 @@ pub fn unified_search_parameters() -> Value {
                     "template": {"type": "string", "description": "Replacement template string. Meta variables from `pattern` can be referenced."},
                     "expand_start": {
                         "type": "object",
-                        "description": "Rule to expand the fix range start backwards until the rule is no longer met. At least one of `regex`, `kind`, or `pattern` is required.",
+                        "description": "Expand fix range start backwards. Requires at least one of: regex, kind, pattern.",
                         "properties": {
-                            "regex": {"type": "string", "description": "Regex pattern to match for expansion."},
-                            "kind": {"type": "string", "description": "Tree-sitter node kind to match for expansion."},
-                            "pattern": {"type": "string", "description": "Ast-grep pattern to match for expansion."},
-                            "stop_by": {"description": "Controls where expansion stops. String value like `\"line\"` or `\"end\"`, or a rule object."}
+                            "regex": {"type": "string", "description": "Regex to match node text."},
+                            "kind": {"type": "string", "description": "Tree-sitter node kind."},
+                            "pattern": {"type": "string", "description": "Ast-grep pattern."},
+                            "stop_by": {"description": "Expansion stop rule. String (\"line\"|\"end\") or rule object."}
                         }
                     },
                     "expand_end": {
                         "type": "object",
-                        "description": "Rule to expand the fix range end forwards until the rule is no longer met. At least one of `regex`, `kind`, or `pattern` is required.",
+                        "description": "Expand fix range end forwards. Requires at least one of: regex, kind, pattern.",
                         "properties": {
-                            "regex": {"type": "string", "description": "Regex pattern to match for expansion."},
-                            "kind": {"type": "string", "description": "Tree-sitter node kind to match for expansion."},
-                            "pattern": {"type": "string", "description": "Ast-grep pattern to match for expansion."},
-                            "stop_by": {"description": "Controls where expansion stops. String value like `\"line\"` or `\"end\"`, or a rule object."}
+                            "regex": {"type": "string", "description": "Regex to match node text."},
+                            "kind": {"type": "string", "description": "Tree-sitter node kind."},
+                            "pattern": {"type": "string", "description": "Ast-grep pattern."},
+                            "stop_by": {"description": "Expansion stop rule. String (\"line\"|\"end\") or rule object."}
                         }
                     }
                 },
@@ -466,13 +467,13 @@ mod tests {
             params["properties"]["action"]["description"]
                 .as_str()
                 .expect("action description")
-                .contains("Default to `structural`")
+                .contains("structural")
         );
         assert!(
             params["properties"]["pattern"]["description"]
                 .as_str()
                 .expect("pattern description")
-                .contains("valid parseable code")
+                .contains("ast-grep pattern")
         );
         assert!(
             params["properties"]["pattern"]["description"]
@@ -490,7 +491,7 @@ mod tests {
             params["properties"]["action"]["description"]
                 .as_str()
                 .expect("action description")
-                .contains("Refine and retry `grep` or `structural`")
+                .contains("grep")
         );
         assert_eq!(params["properties"]["workflow"]["enum"][1], "scan");
         assert_eq!(params["properties"]["workflow"]["enum"][2], "test");

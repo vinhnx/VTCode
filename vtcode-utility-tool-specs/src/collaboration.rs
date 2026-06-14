@@ -62,9 +62,9 @@ pub fn spawn_background_subprocess_parameters() -> Value {
 pub fn send_input_parameters() -> Value {
     json!({
         "type": "object",
-        "required": ["target"],
+        "required": ["id"],
         "properties": {
-            "target": {"type": "string", "description": "Child agent id to message."},
+            "id": {"type": "string", "description": "Child agent id to message."},
             "message": {"type": "string", "description": "Follow-up prompt for the child."},
             "items": {
                 "type": "array",
@@ -80,9 +80,9 @@ pub fn send_input_parameters() -> Value {
 pub fn wait_agent_parameters() -> Value {
     json!({
         "type": "object",
-        "required": ["targets"],
+        "required": ["ids"],
         "properties": {
-            "targets": {
+            "ids": {
                 "type": "array",
                 "items": {"type": "string"},
                 "description": "Child agent ids to wait for. This blocks the current foreground turn until one target reaches a terminal state or the wait times out."
@@ -110,9 +110,9 @@ pub fn resume_agent_parameters() -> Value {
 pub fn close_agent_parameters() -> Value {
     json!({
         "type": "object",
-        "required": ["target"],
+        "required": ["id"],
         "properties": {
-            "target": {"type": "string", "description": "Child agent id to close."}
+            "id": {"type": "string", "description": "Child agent id to close."}
         }
     })
 }
@@ -231,34 +231,22 @@ mod tests {
 
         assert_eq!(
             spawn["properties"]["message"]["description"],
-            json!(
-                "Task prompt for the child agent. The child receives the same tools as the parent and may spawn its own child agents."
-            )
+            json!("Task prompt for the child agent.")
         );
         assert_eq!(
-            send["properties"]["target"]["description"],
+            send["properties"]["id"]["description"],
             json!("Child agent id to message.")
         );
         assert_eq!(
-            send["properties"]["interrupt"]["description"],
-            json!(
-                "When true, abort current child work and restart with this input. When false (default), queue the input; if the child is already running, it starts the child's next turn after the current turn completes."
-            )
-        );
-        assert_eq!(
             spawn["properties"]["background"]["description"],
-            json!(
-                "Mark the delegated child thread as background-style work. This still creates a normal child agent thread in the current session; it does not launch the managed background subprocess runtime."
-            )
+            json!("Run agent in background. Returns immediately.")
         );
         assert_eq!(
             spawn_background["properties"]["message"]["description"],
-            json!(
-                "Task prompt for the managed background subprocess. Use this for durable helper work that should be launched once and then managed outside the current foreground turn."
-            )
+            json!("Task prompt for the background subprocess.")
         );
         assert_eq!(
-            wait["properties"]["targets"]["description"],
+            wait["properties"]["ids"]["description"],
             json!(
                 "Child agent ids to wait for. This blocks the current foreground turn until one target reaches a terminal state or the wait times out."
             )

@@ -248,9 +248,7 @@ fn register_spawn_background_subprocess(
         false,
         ToolRegistry::spawn_background_subprocess_executor,
     )
-    .with_description(
-        "Launch a managed background subprocess for a background-enabled subagent. Use this for durable helpers that should outlive the current foreground turn instead of calling spawn_agent(background=true).",
-    )
+    .with_description("Launch a managed background subprocess that outlives the current turn.")
     .with_parameter_schema(spawn_background_subprocess_parameters())
     .with_aliases(["background_subagent", "launch_background_helper"])
 }
@@ -263,9 +261,7 @@ fn register_send_input(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegis
         false,
         ToolRegistry::send_input_executor,
     )
-    .with_description(
-        "Send follow-up input to an existing child agent. When interrupt is false, running work keeps going and the new input is queued for the next turn; when true, current work is aborted and restarted with the new input.",
-    )
+    .with_description("Send follow-up input to an existing child agent.")
     .with_parameter_schema(send_input_parameters())
     .with_aliases(["message_agent", "continue_agent"])
 }
@@ -278,9 +274,7 @@ fn register_wait_agent(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegis
         false,
         ToolRegistry::wait_agent_executor,
     )
-    .with_description(
-        "Wait for one or more child agents to reach a terminal state. Returns completion status for the first target that finishes, or completed=false if the wait times out.",
-    )
+    .with_description("Wait for child agents to reach a terminal state.")
     .with_parameter_schema(wait_agent_parameters())
     .with_aliases(["wait_subagent"])
 }
@@ -328,7 +322,7 @@ fn register_unified_search(_plan_state: Option<&PlanningWorkflowState>) -> ToolR
         ToolRegistry::unified_search_executor,
     )
     .with_description(
-        "Unified discovery tool: structural code search, grep text search, list, tool discovery, errors, agent status, web fetch, and skills. Use `action=list` for file discovery before falling back to shell listing. Paths are relative to the workspace root.",
+        "Search & discovery: grep, list, structural (ast-grep), tools, errors, web, skills. Use action=list for files.",
     )
     .with_parameter_schema(unified_search_parameters())
     .with_permission(ToolPolicy::Allow)
@@ -430,7 +424,7 @@ fn register_unified_exec(_plan_state: Option<&PlanningWorkflowState>) -> ToolReg
         ToolRegistry::unified_exec_executor,
     )
     .with_description(
-        "Run commands or execute code. Actions: run, write, poll, continue, inspect, list, close, code. Pipe-first by default; set tty=true for PTY. Default language: python3.",
+        "Shell & code execution. Actions: run, write, poll, continue, inspect, list, close, code.",
     )
     .with_parameter_schema(unified_exec_parameters())
     .with_aliases([
@@ -457,7 +451,7 @@ fn register_unified_file(_plan_state: Option<&PlanningWorkflowState>) -> ToolReg
         ToolRegistry::unified_file_executor,
     )
     .with_description(
-        "File ops: read, write, edit, patch, delete, move, copy. Use action=read for contents. Edit requires exact old_str. Patch uses *** Begin Patch format.",
+        "File ops: read, write, edit, patch, delete, move, copy. Edit requires exact old_str.",
     )
     .with_parameter_schema(unified_file_parameters())
     .with_aliases([
@@ -827,7 +821,7 @@ mod tests {
                 .metadata()
                 .description()
                 .expect("send_input description")
-                .contains("queued for the next turn")
+                .contains("follow-up input")
         );
 
         let wait_agent = registrations
@@ -839,7 +833,7 @@ mod tests {
                 .metadata()
                 .description()
                 .expect("wait_agent description")
-                .contains("completed=false if the wait times out")
+                .contains("terminal state")
         );
 
         let spawn_background = registrations
@@ -851,7 +845,7 @@ mod tests {
                 .metadata()
                 .description()
                 .expect("spawn_background_subprocess description")
-                .contains("spawn_agent(background=true)")
+                .contains("outlives the current turn")
         );
     }
 }

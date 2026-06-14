@@ -211,6 +211,7 @@ pub struct SpawnBackgroundSubprocessRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SendInputRequest {
+    #[serde(rename = "id")]
     pub target: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,

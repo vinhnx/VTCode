@@ -69,31 +69,32 @@ const OPENAI_GPT55_CONTRACT_LINES: &[&str] = &[
     "Use retrieved evidence for citation-sensitive work; use the minimum evidence sufficient to answer correctly, then stop.",
 ];
 
-const DEFAULT_CONTRACT_LINES: &[&str] = &[
+/// Contract rules shared across all prompt modes.
+const SHARED_CONTRACT_LINES: &[&str] = &[
+    "If context is missing, say so, do not guess, finish unblocked slices.",
+    "Do not use emoji in responses.",
+    "Use retrieved evidence when citation-sensitive.",
+    "Preserve task goal, tracker state, touched files, verification status, and decisions across compaction.",
+    "Keep outputs concise.",
+    "Prefer `ast-grep` for code-shape queries; keep text grep for prose and config.",
+];
+
+/// Default/Lightweight/Specialized mode: expanded contract lines beyond shared rules.
+const DEFAULT_SPECIFIC_LINES: &[&str] = &[
     "Start with `AGENTS.md`; inspect code first, match local patterns, use `@file`.",
-    "If context is missing, say so, do not guess, finish unblocked slices first.",
     "Take safe, reversible steps; ask only for material behavior, API, UX, or credential changes.",
     "Keep control on the main thread. Delegate bounded, independent work only.",
     "Verify changes yourself; never claim a check passed unless you ran it.",
-    "Keep outputs concise. Keep user updates brief and high-signal.",
-    "Do not use emoji in responses.",
-    "Use retrieved evidence for citation-sensitive work.",
-    "Preserve task goal, tracker state, touched files, verification status, and decisions across compaction.",
+    "Keep user updates brief and high-signal.",
     "Read files before answering. Never speculate about code you have not opened.",
-    "Prefer `ast-grep` for code-shape queries; keep text grep for prose, logs, and config strings.",
     "Make only requested changes. When the active agent has tool access, use tools to implement directly; otherwise stay within the active agent mode.",
 ];
 
-const MINIMAL_CONTRACT_LINES: &[&str] = &[
+/// Minimal mode: additional contract lines beyond shared rules.
+const MINIMAL_SPECIFIC_LINES: &[&str] = &[
     "Use `AGENTS.md`; inspect code first.",
-    "If context is missing, say so, do not guess, finish unblocked slices.",
     "Take safe, reversible steps; verify changes yourself.",
     "Keep delegation bounded and explicit.",
-    "Preserve tracker state, touched files, and verification status across compaction.",
-    "Use retrieved evidence when citation-sensitive.",
-    "Prefer `ast-grep` for code-shape queries; keep text grep for prose and config.",
-    "Keep outputs concise.",
-    "Do not use emoji in responses.",
 ];
 
 const DEFAULT_OPERATING_PROFILE_DELTA: &str = r#"## Operating Profile
@@ -298,39 +299,44 @@ fn static_profile_prompt(prompt_mode: SystemPromptMode) -> &'static str {
     match prompt_mode {
         SystemPromptMode::Default => DEFAULT_SYSTEM_PROMPT.get_or_init(|| {
             build_profile_prompt(
-                &build_contract_prompt(DEFAULT_CONTRACT_LINES),
+                &build_contract_prompt(&[SHARED_CONTRACT_LINES, DEFAULT_SPECIFIC_LINES]),
                 DEFAULT_OPERATING_PROFILE_DELTA,
             )
         }),
         SystemPromptMode::Minimal => MINIMAL_SYSTEM_PROMPT.get_or_init(|| {
             build_profile_prompt(
-                &build_contract_prompt(MINIMAL_CONTRACT_LINES),
+                &build_contract_prompt(&[SHARED_CONTRACT_LINES, MINIMAL_SPECIFIC_LINES]),
                 MINIMAL_OPERATING_PROFILE_DELTA,
             )
         }),
         SystemPromptMode::Lightweight => DEFAULT_LIGHTWEIGHT_PROMPT.get_or_init(|| {
             build_profile_prompt(
-                &build_contract_prompt(DEFAULT_CONTRACT_LINES),
+                &build_contract_prompt(&[SHARED_CONTRACT_LINES, DEFAULT_SPECIFIC_LINES]),
                 LIGHTWEIGHT_OPERATING_PROFILE_DELTA,
             )
         }),
         SystemPromptMode::Specialized => DEFAULT_SPECIALIZED_PROMPT.get_or_init(|| {
             build_profile_prompt(
-                &build_contract_prompt(DEFAULT_CONTRACT_LINES),
+                &build_contract_prompt(&[SHARED_CONTRACT_LINES, DEFAULT_SPECIFIC_LINES]),
                 SPECIALIZED_OPERATING_PROFILE_DELTA,
             )
         }),
     }
 }
 
-fn build_contract_prompt(contract_lines: &[&str]) -> String {
-    let lines_len = contract_lines.iter().map(|line| line.len()).sum::<usize>();
+fn build_contract_prompt(contract_groups: &[&[&str]]) -> String {
+    let total_lines: usize = contract_groups.iter().map(|g| g.len()).sum();
+    let lines_len: usize = contract_groups
+        .iter()
+        .flat_map(|g| g.iter())
+        .map(|l| l.len())
+        .sum();
     let mut prompt = String::with_capacity(
         PROMPT_TITLE.len()
             + PROMPT_INTRO.len()
             + CONTRACT_HEADER.len()
             + lines_len
-            + contract_lines.len() * 3
+            + total_lines * 3
             + 8,
     );
     prompt.push_str(PROMPT_TITLE);
@@ -340,13 +346,15 @@ fn build_contract_prompt(contract_lines: &[&str]) -> String {
     prompt.push_str(CONTRACT_HEADER);
     prompt.push_str("\n\n");
 
-    for line in contract_lines {
-        prompt.push_str("- ");
-        prompt.push_str(line);
-        prompt.push('\n');
+    for group in contract_groups {
+        for line in *group {
+            prompt.push_str("- ");
+            prompt.push_str(line);
+            prompt.push('\n');
+        }
     }
 
-    if !contract_lines.is_empty() {
+    if total_lines > 0 {
         prompt.pop();
     }
     prompt
