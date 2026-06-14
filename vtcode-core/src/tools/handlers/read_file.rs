@@ -1580,7 +1580,7 @@ mod tests {
             max_tokens: None,
             condense: false,
             offset_bytes: Some(0),
-            page_size_bytes: Some(6),
+            page_size_bytes: Some(7), // Read all 7 bytes
         };
         let outcome = handler.handle_detailed(args).await?;
         // Lossy conversion replaces invalid UTF-8 with U+FFFD
