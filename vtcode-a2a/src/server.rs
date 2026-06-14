@@ -163,7 +163,7 @@ async fn handle_stream(
 
     // Parse params
     let params: MessageSendParams = serde_json::from_value(request.params.unwrap_or_default())
-        .map_err(|_| {
+        .map_err(|_e| {
             A2aErrorResponse::invalid_request("Invalid message/stream params", request.id.clone())
         })?;
 
@@ -328,7 +328,7 @@ async fn handle_message_send(
     _id: Value,
 ) -> A2aResult<Value> {
     let params: MessageSendParams = serde_json::from_value(params.unwrap_or_default())
-        .map_err(|_| A2aError::rpc(A2aErrorCode::InvalidParams, "Invalid message/send params"))?;
+        .map_err(|_e| A2aError::rpc(A2aErrorCode::InvalidParams, "Invalid message/send params"))?;
 
     // Create or get task
     let task_id = if let Some(task_id) = params.task_id {
@@ -361,7 +361,7 @@ async fn handle_push_config_set(
     _id: Value,
 ) -> A2aResult<Value> {
     let config: crate::rpc::TaskPushNotificationConfig =
-        serde_json::from_value(params.unwrap_or_default()).map_err(|_| {
+        serde_json::from_value(params.unwrap_or_default()).map_err(|_e| {
             A2aError::rpc(
                 A2aErrorCode::InvalidParams,
                 "Invalid pushNotificationConfig/set params",
@@ -380,7 +380,7 @@ async fn handle_push_config_get(
     _id: Value,
 ) -> A2aResult<Value> {
     let params: TaskIdParams =
-        serde_json::from_value(params.unwrap_or_default()).map_err(|_| {
+        serde_json::from_value(params.unwrap_or_default()).map_err(|_e| {
             A2aError::rpc(
                 A2aErrorCode::InvalidParams,
                 "Invalid pushNotificationConfig/get params",
@@ -409,7 +409,7 @@ async fn handle_tasks_get(
     _id: Value,
 ) -> A2aResult<Value> {
     let params: TaskQueryParams = serde_json::from_value(params.unwrap_or_default())
-        .map_err(|_| A2aError::rpc(A2aErrorCode::InvalidParams, "Invalid tasks/get params"))?;
+        .map_err(|_e| A2aError::rpc(A2aErrorCode::InvalidParams, "Invalid tasks/get params"))?;
 
     let task = state.task_manager.get_task_or_error(&params.id).await?;
 
@@ -437,7 +437,7 @@ async fn handle_tasks_cancel(
     _id: Value,
 ) -> A2aResult<Value> {
     let params: TaskIdParams = serde_json::from_value(params.unwrap_or_default())
-        .map_err(|_| A2aError::rpc(A2aErrorCode::InvalidParams, "Invalid tasks/cancel params"))?;
+        .map_err(|_e| A2aError::rpc(A2aErrorCode::InvalidParams, "Invalid tasks/cancel params"))?;
 
     let task = state.task_manager.cancel_task(&params.id).await?;
 

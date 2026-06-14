@@ -31,9 +31,8 @@ Provides a unified interface for multiple LLM providers (Gemini, OpenAI, Anthrop
 
 ## Dependencies
 
-- `vtcode-commons` (HTTP, CGP, error types)
+- `vtcode-commons` (HTTP, CGP, error types, model families, CompactStr)
 - `vtcode-config` (provider config, timeouts, auth)
-- `vtcode-tool-types` (model families, CompactStr)
 - `vtcode-utility-tool-specs` (apply_patch schemas)
 
 ## Coding Conventions

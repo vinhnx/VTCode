@@ -49,6 +49,7 @@ pub mod slug;
 pub mod stop_hints;
 pub mod styling;
 pub mod telemetry;
+pub mod terminal_detection;
 pub mod thread_safety;
 pub mod tokens;
 pub mod tool_types;

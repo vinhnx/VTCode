@@ -546,7 +546,7 @@ impl LlamaCppProvider {
                 }
             }
 
-            rx.changed().await.map_err(|_| {
+            rx.changed().await.map_err(|_e| {
                 Self::provider_error("llama.cpp managed server watcher unexpectedly closed")
             })?;
 

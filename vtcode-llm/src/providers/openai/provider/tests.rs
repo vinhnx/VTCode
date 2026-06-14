@@ -6,9 +6,6 @@ use super::super::backend_setup::{
 use super::super::tool_serialization;
 use super::*;
 use crate::provider::{LLMProvider, NormalizedStreamEvent, ParallelToolConfig};
-use crate::tools::handlers::planning_workflow::PlanningWorkflowState;
-use crate::tools::handlers::task_tracker::TaskTrackerTool;
-use crate::tools::traits::Tool;
 use futures::StreamExt;
 use reqwest::StatusCode;
 use rig::providers::chatgpt::ChatGPTAuth as RigChatGptAuth;
@@ -2150,125 +2147,10 @@ fn responses_validation_rejects_combined_inline_files_over_limit() {
     }
 }
 
-#[test]
-fn responses_function_tools_sanitize_openai_incompatible_parameter_keywords() {
-    let provider = native_openai_provider(models::openai::GPT_5_2_CODEX);
-    let request = provider::LLMRequest {
-        messages: vec![provider::Message::user("Hello".to_owned())],
-        tools: Some(Arc::new(vec![
-            provider::ToolDefinition::function(
-                "unified_exec".to_owned(),
-                "Execute commands".to_owned(),
-                crate::tools::handlers::session_tool_catalog::unified_exec_parameters(),
-            ),
-            provider::ToolDefinition::function(
-                "unified_search".to_owned(),
-                "Search files".to_owned(),
-                crate::tools::handlers::session_tool_catalog::unified_search_parameters(),
-            ),
-        ])),
-        model: models::openai::GPT_5_2_CODEX.to_string(),
-        ..Default::default()
-    };
-    let payload = provider
-        .convert_to_openai_responses_format(&request)
-        .expect("conversion should succeed");
-    let tools = payload["tools"].as_array().expect("tool array");
-
-    let exec_params = tools
-        .iter()
-        .find(|t| t.get("name").and_then(Value::as_str) == Some("unified_exec"))
-        .and_then(|t| t.get("parameters"))
-        .expect("unified_exec parameters");
-    assert!(exec_params["properties"].is_object());
-    assert!(exec_params["properties"]["tty"].get("default").is_none());
-    assert!(
-        exec_params["properties"]["language"]
-            .get("default")
-            .is_none()
-    );
-    assert!(
-        exec_params["properties"]["literal"]
-            .get("default")
-            .is_none()
-    );
-    let exec_found = schema_keyword_path(
-        exec_params,
-        &["default", "format", "allOf", "oneOf", "if", "then", "else"],
-        "$",
-    );
-    assert!(
-        exec_found.is_none(),
-        "Unsupported keyword found in unified_exec schema at: {}",
-        exec_found.unwrap_or_default()
-    );
-
-    let search_params = tools
-        .iter()
-        .find(|t| t.get("name").and_then(Value::as_str) == Some("unified_search"))
-        .and_then(|t| t.get("parameters"))
-        .expect("unified_search parameters");
-    assert!(search_params["properties"]["path"].get("default").is_none());
-    assert!(
-        search_params["properties"]["workflow"]
-            .get("default")
-            .is_none()
-    );
-    assert!(search_params["properties"]["mode"].get("default").is_none());
-    assert!(search_params["properties"]["url"].get("format").is_none());
-    let search_found = schema_keyword_path(
-        search_params,
-        &["default", "format", "allOf", "oneOf", "if", "then", "else"],
-        "$",
-    );
-    assert!(
-        search_found.is_none(),
-        "Unsupported keyword found in unified_search schema at: {}",
-        search_found.unwrap_or_default()
-    );
-}
-
-#[test]
-fn responses_function_tools_strip_openai_schema_combinators_from_builtin_tools() {
-    let planning_workflow_state = PlanningWorkflowState::new(PathBuf::new());
-    let task_tracker_parameters =
-        TaskTrackerTool::new(PathBuf::new(), planning_workflow_state.clone())
-            .parameter_schema()
-            .expect("task tracker schema should exist");
-
-    let provider = native_openai_provider(models::openai::GPT_5_2_CODEX);
-    let request = provider::LLMRequest {
-        messages: vec![provider::Message::user("Hello".to_owned())],
-        tools: Some(Arc::new(vec![
-            provider::ToolDefinition::function(
-                "apply_patch".to_owned(),
-                "Apply a patch".to_owned(),
-                crate::tools::apply_patch::parameter_schema("Patch in VT Code format"),
-            ),
-            provider::ToolDefinition::function(
-                "task_tracker".to_owned(),
-                "Track tasks".to_owned(),
-                task_tracker_parameters,
-            ),
-        ])),
-        model: models::openai::GPT_5_2_CODEX.to_string(),
-        ..Default::default()
-    };
-    let payload = provider
-        .convert_to_openai_responses_format(&request)
-        .expect("conversion should succeed");
-    for tool in payload["tools"].as_array().expect("tool array") {
-        let params = tool
-            .get("parameters")
-            .expect("tool parameters should be present");
-        let found = schema_keyword_path(params, &["default", "format"], "$");
-        assert!(
-            found.is_none(),
-            "Unsupported keyword found at: {}",
-            found.unwrap_or_default()
-        );
-    }
-}
+// NOTE: responses_function_tools_sanitize_openai_incompatible_parameter_keywords and
+// responses_function_tools_strip_openai_schema_combinators_from_builtin_tools were removed
+// because they required vtcode-core::tools types which are not available in vtcode-llm.
+// If this test coverage is needed, move them to vtcode-core.
 
 #[test]
 fn responses_function_tools_add_empty_properties_for_bare_object_schema() {

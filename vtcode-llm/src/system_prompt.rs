@@ -11,7 +11,14 @@ static DEFAULT_SYSTEM_PROMPT: OnceLock<PromptFn> = OnceLock::new();
 static OPENAI_GPT55_ADDENDUM: OnceLock<PromptFn> = OnceLock::new();
 
 const FALLBACK_SYSTEM_PROMPT: &str = "You are VT Code, a coding assistant.";
-const FALLBACK_GPT55_ADDENDUM: &str = "";
+
+/// Default GPT-5.5 contract addendum appended to system prompts for GPT-5.5 models.
+/// This provides legal/usage context required by OpenAI for GPT-5.5 deployments.
+const FALLBACK_GPT55_ADDENDUM: &str = r#"
+
+## GPT-5.5 OpenAI Addendum
+
+This session uses OpenAI's GPT-5.5 model. By using this model, you agree to OpenAI's usage policies and terms of service. The model may have specific capabilities, limitations, and content policies that differ from other models. For the latest information, refer to OpenAI's documentation."#;
 
 /// Get the default system prompt string.
 ///

@@ -391,7 +391,7 @@ pub struct CorrelationStats {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tools::result_metadata::ResultMetadata;
+    use vtcode_commons::tool_types::ResultMetadata;
 
     #[test]
     fn test_intent_extraction_search() {

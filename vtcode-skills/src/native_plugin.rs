@@ -297,7 +297,7 @@ impl NativePlugin {
             let _execution_guard = self
                 .execution_lock
                 .lock()
-                .map_err(|_| anyhow!("native plugin execution lock poisoned"))?;
+                .map_err(|_e| anyhow!("native plugin execution lock poisoned"))?;
 
             self.execute_ffi(input_cstr)
         } else {

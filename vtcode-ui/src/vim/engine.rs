@@ -1,11 +1,11 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use crate::text::{
+use super::text::{
     next_char_boundary, vim_current_line_bounds, vim_current_line_full_range, vim_end_word,
     vim_find_char, vim_is_linewise_range, vim_line_end, vim_line_first_non_ws, vim_line_start,
     vim_motion_range, vim_next_word_start, vim_prev_word_start, vim_text_object_range,
 };
-use crate::types::{
+use super::types::{
     ChangeTarget, ClipboardKind, FindState, InsertCapture, InsertKind, InsertRepeat, Motion,
     Operator, PendingState, RepeatableCommand, TextObjectSpec, VimMode, VimState,
 };

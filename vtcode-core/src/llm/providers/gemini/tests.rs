@@ -13,6 +13,7 @@ use crate::llm::provider::{
 use crate::tools::request_user_input::RequestUserInputTool;
 use crate::tools::traits::Tool;
 use serde_json::json;
+use vtcode_config::models::ProviderModelSupport;
 
 #[test]
 fn convert_to_gemini_request_maps_history_and_system_prompt() {

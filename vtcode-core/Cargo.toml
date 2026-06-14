@@ -124,9 +124,7 @@ vtcode-config = { path = "../vtcode-config", version = "0.128.4" }
 vtcode-utility-tool-specs = { path = "../vtcode-utility-tool-specs", version = "0.128.4" }
 vtcode-indexer = { path = "../vtcode-indexer", version = "0.128.4" }
 vtcode-bash-runner = { path = "../vtcode-bash-runner", version = "0.128.4" }
-vtcode-terminal-detection = { path = "../vtcode-terminal-detection", version = "0.128.4" }
 vtcode-safety = { path = "../vtcode-safety", version = "0.128.4" }
-vtcode-pods = { path = "../vtcode-pods", version = "0.128.4" }
 vtcode-a2a = { path = "../vtcode-a2a", version = "0.128.4" }
 vtcode-mcp = { path = "../vtcode-mcp", version = "0.128.4" }
 vtcode-llm = { path = "../vtcode-llm", version = "0.128.4", features = ["copilot"] }
@@ -188,7 +186,7 @@ default = ["tui"]
 tui = ["dep:crossterm"]
 mock = []
 policies = []
-schema = ["dep:schemars", "vtcode-config/schema"]
+schema = ["dep:schemars", "vtcode-config/schema", "vtcode-commons/schema"]
 a2a-server = ["http-server", "vtcode-a2a/a2a-server"]
 anthropic-api = ["http-server"]
 http-server = ["dep:axum", "dep:tower", "dep:tower-http", "dep:tokio-stream"]

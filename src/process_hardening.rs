@@ -1,3 +1,9 @@
+//! Process hardening and security measures.
+//!
+//! Provides early-process hardening functions that run before `main()` via
+//! linker-section constructors, plus a public `pre_main_hardening()` entry
+//! point for explicit calls from `main()`.
+
 #[cfg(unix)]
 use std::ffi::OsString;
 #[cfg(unix)]
@@ -69,7 +75,7 @@ const PTRACE_DENY_ATTACH_FAILED_EXIT_CODE: i32 = 6;
 const SET_RLIMIT_CORE_FAILED_EXIT_CODE: i32 = 7;
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
-pub(crate) fn pre_main_hardening_linux() {
+fn pre_main_hardening_linux() {
     cap_stack_rlimit();
 
     // Disable ptrace attach / mark process non-dumpable.
@@ -94,7 +100,7 @@ pub(crate) fn pre_main_hardening_linux() {
 }
 
 #[cfg(any(target_os = "freebsd", target_os = "openbsd"))]
-pub(crate) fn pre_main_hardening_bsd() {
+fn pre_main_hardening_bsd() {
     cap_stack_rlimit();
 
     // FreeBSD/OpenBSD: set RLIMIT_CORE to 0 and clear LD_* env vars
@@ -107,7 +113,7 @@ pub(crate) fn pre_main_hardening_bsd() {
 }
 
 #[cfg(target_os = "macos")]
-pub(crate) fn pre_main_hardening_macos() {
+fn pre_main_hardening_macos() {
     cap_stack_rlimit();
 
     // Prevent debuggers from attaching to this process.
@@ -160,10 +166,6 @@ fn set_core_file_size_limit_to_zero() {
 /// Linux allows `RLIMIT_STACK` to be `RLIM_INFINITY` (unlimited).  We set it
 /// to a fixed cap (8 MiB) when that is the case.  If the current stack usage
 /// already exceeds the cap the call will fail harmlessly with `EINVAL`.
-// This function is a no-op on targets without RLIMIT_STACK (e.g., Windows).
-// The cfg gate prevents dead_code on those targets; the allow attribute
-// suppresses the remaining unused-variables warning on the function-level
-// `current` borrow when no cfg branch matches.
 #[allow(unused_variables)]
 #[allow(unsafe_code)]
 fn cap_stack_rlimit() {
@@ -202,7 +204,7 @@ fn cap_stack_rlimit() {
 }
 
 #[cfg(windows)]
-pub(crate) fn pre_main_hardening_windows() {
+fn pre_main_hardening_windows() {
     // Windows process hardening would involve using Job Objects to limit
     // resource usage and restrict UI access, or using restricted tokens.
     // This is currently a future enhancement.
@@ -225,7 +227,6 @@ pub(crate) fn pre_main_hardening_windows() {
 fn verify_hardening_effectiveness() {
     use std::mem::MaybeUninit;
 
-    // SAFETY: getrlimit is a pure syscall that fills the output struct.
     #[cfg(any(
         target_os = "linux",
         target_os = "android",
@@ -331,7 +332,6 @@ mod tests {
 
     #[test]
     fn env_keys_with_prefix_handles_non_utf8_entries() {
-        // RÖDBURK - non-UTF8 environment variable name
         let non_utf8_key1 = OsStr::from_bytes(b"R\xD6DBURK").to_os_string();
         assert!(non_utf8_key1.clone().into_string().is_err());
 

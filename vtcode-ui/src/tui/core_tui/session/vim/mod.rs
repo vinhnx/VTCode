@@ -1,10 +1,10 @@
+use crate::vim::{Editor as VimEditor, handle_key};
 use ratatui::crossterm::event::KeyEvent;
-use vtcode_vim::{Editor as VimEditor, handle_key};
 
 use super::Session;
 use super::input_manager::InputManager;
 
-pub(crate) use vtcode_vim::VimState;
+pub(crate) use crate::vim::VimState;
 
 struct SessionVimEditor<'a> {
     input_manager: &'a mut InputManager,

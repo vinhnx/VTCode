@@ -39,7 +39,7 @@ static SECRET_ASSIGNMENT_REGEX: LazyLock<Regex> = LazyLock::new(|| {
 /// ```
 /// use vtcode_commons::sanitizer::redact_secrets;
 ///
-/// let input = "API key is sk-abc123xyz789".to_string();
+/// let input = "API key is sk-abcdefghijklmnopqrstuvwxyz1234".to_string();
 /// let output = redact_secrets(input);
 /// assert_eq!(output, "API key is [REDACTED_SECRET]");
 /// ```

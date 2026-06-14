@@ -1,5 +1,6 @@
 use super::{InlinePromptSuggestionSource, Session};
 use crate::tui::config::constants::ui;
+use crate::vim::{next_char_boundary, prev_char_boundary};
 /// Text editing and cursor movement operations for Session
 ///
 /// This module handles all text manipulation and cursor navigation including:
@@ -9,7 +10,6 @@ use crate::tui::config::constants::ui;
 /// - Input history navigation
 /// - Newline handling with capacity limits
 use unicode_segmentation::UnicodeSegmentation;
-use vtcode_vim::{next_char_boundary, prev_char_boundary};
 
 const WORD_SEPARATORS: &str = "`~!@#$%^&*()-=+[{]}\\|;:'\",.<>/?";
 

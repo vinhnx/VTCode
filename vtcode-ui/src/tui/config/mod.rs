@@ -8,7 +8,7 @@ pub mod types;
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use vtcode_terminal_detection::is_ghostty_terminal;
+use vtcode_commons::terminal_detection::is_ghostty_terminal;
 
 pub use types::{
     ReasoningEffortLevel, SystemPromptMode, ToolDocumentationMode, UiSurfacePreference,

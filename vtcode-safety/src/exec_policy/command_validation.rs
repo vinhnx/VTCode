@@ -958,7 +958,7 @@ async fn ensure_within_workspace(normalized_root: &Path, candidate: &Path) -> Re
 
     let relative = candidate
         .strip_prefix(normalized_root)
-        .map_err(|_| anyhow!("path '{}' escapes the workspace root", candidate.display()))?;
+        .map_err(|_e| anyhow!("path '{}' escapes the workspace root", candidate.display()))?;
 
     let mut prefix = normalized_root.to_path_buf();
     let mut components = relative.components().peekable();

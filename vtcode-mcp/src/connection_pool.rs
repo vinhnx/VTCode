@@ -112,7 +112,7 @@ impl McpConnectionPool {
             McpProvider::connect(config.clone(), elicitation_handler),
         )
         .await
-        .map_err(|_| McpPoolError::ConnectionTimeout(config.name.clone()))?
+        .map_err(|_e| McpPoolError::ConnectionTimeout(config.name.clone()))?
         .map_err(|e| McpPoolError::ConnectionError(config.name.clone(), e.to_string()))?;
 
         // Initialize the provider with proper parameters

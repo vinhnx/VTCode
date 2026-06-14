@@ -28,7 +28,6 @@ absolute-paths-allowed-crates = [
     "vtcode-bash-runner",
     "vtcode-exec-events",
     "vtcode-acp",
-    "vtcode-process-hardening",
 ]
 
 # Suppress arithmetic checks for specific types where overflow is expected

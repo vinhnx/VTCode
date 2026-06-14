@@ -1,8 +1,10 @@
 # vtcode-* Crate Audit Report
 
-**Date**: 2026-06-14
-**Scope**: All 23 vtcode-* workspace crates
+**Date**: 2026-06-14 (updated 2026-06-14)
+**Scope**: All vtcode-* workspace crates
 **Goal**: Identify mergeable crates, redundant code, and test duplicates
+
+> **Note**: Several merges from this audit have been completed. See "Completed Merges" section below.
 
 ---
 
@@ -252,3 +254,32 @@ Each merge should be a separate PR with:
 - `cargo test --workspace` passing
 - Updated AGENTS.md for affected crates
 - Deprecation annotations on old import paths
+
+---
+
+## COMPLETED MERGES (2026-06-14)
+
+The following merges from this audit have been implemented:
+
+| Merge | From | To | Status |
+|-------|------|----|--------|
+| MERGE 4 | vtcode-process-hardening | vtcode (root binary) | Completed |
+| MERGE 5 | vtcode-terminal-detection | vtcode-commons | Completed |
+| MERGE 6 | vtcode-vim | vtcode-ui | Completed |
+| MERGE 7 | vtcode-pods | vtcode-core | Completed |
+| MERGE 8 | vtcode-tool-types | vtcode-commons | Completed |
+| MERGE 9 | vtcode-file-search + vtcode-markdown-store | vtcode-indexer | Completed (prior session) |
+
+### What changed:
+- **vtcode-process-hardening**: Moved to `src/process_hardening.rs` in root binary crate
+- **vtcode-terminal-detection**: Moved to `vtcode-commons/src/terminal_detection.rs`
+- **vtcode-vim**: Moved to `vtcode-ui/src/vim/` module
+- **vtcode-pods**: Moved to `vtcode-core/src/pods/` module
+- **vtcode-tool-types**: Merged into `vtcode-commons` (tool_types, model_family modules)
+- **vtcode-file-search + vtcode-markdown-store**: Merged into vtcode-indexer (prior session)
+
+### Benefits realized:
+- 6 fewer crates in workspace (from 23 to 17 member crates)
+- Reduced cross-crate dependency complexity
+- Simpler import paths for shared types
+- Fewer Cargo.toml files to maintain

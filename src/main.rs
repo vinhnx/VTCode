@@ -20,6 +20,7 @@ mod agent;
 mod cli; // local CLI handlers in src/cli // agent runloops (single-agent only)
 mod codex_app_server;
 mod main_helpers;
+mod process_hardening;
 mod startup;
 mod updater;
 
@@ -46,7 +47,7 @@ fn main() -> std::process::ExitCode {
     // This disables core dumps, caps RLIMIT_STACK (defense-in-depth complement
     // to Rust's built-in stack clash protection — see rustc exploit-mitigations
     // docs), removes dangerous env vars, and prevents ptrace attach.
-    vtcode_process_hardening::pre_main_hardening();
+    process_hardening::pre_main_hardening();
 
     // The hardening layer caps RLIMIT_STACK at 8 MiB (only when unlimited).
     // The spawned thread below uses 16 MiB — this is safe because

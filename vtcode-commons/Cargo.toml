@@ -21,6 +21,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
 tui = ["dep:ratatui"]
+schema = ["dep:schemars"]
 default = ["tui"]
 
 [dependencies]
@@ -50,6 +51,7 @@ send_wrapper = "0.6.0"
 unicode-width = { workspace = true }
 url = { workspace = true }
 percent-encoding = "2.3"
+schemars = { workspace = true, optional = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["fs", "io-util", "macros", "rt"] }

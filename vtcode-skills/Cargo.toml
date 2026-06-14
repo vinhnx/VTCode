@@ -25,5 +25,8 @@ vtcode-commons = { path = "../vtcode-commons", version = "0.128.4" }
 vtcode-config = { path = "../vtcode-config", version = "0.128.4" }
 zip = { version = "8.6", default-features = false, features = ["deflate"] }
 
+[dev-dependencies]
+serial_test.workspace = true
+
 [lints]
 workspace = true

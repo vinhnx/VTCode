@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use tracing::warn;
+use vtcode_commons::terminal_detection::{TerminalFeature, TerminalType};
 use vtcode_core::config::AgentClientProtocolZedWorkspaceTrustMode;
 use vtcode_core::config::constants::{
     prompt_budget as prompt_budget_constants, ui as ui_constants,
@@ -11,7 +12,6 @@ use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::project_doc::{self, ProjectDocOptions};
 use vtcode_core::ui::slash::find_visible_command;
 use vtcode_core::utils::common::summarize_workspace_languages;
-use vtcode_terminal_detection::{TerminalFeature, TerminalType};
 use vtcode_ui::tui::app::InlineHeaderHighlight;
 
 #[derive(Default, Clone)]

@@ -34,23 +34,15 @@ All VT Code crates require Rust 1.88 or later due to dependencies (ratatui 0.30,
 | vtcode-core | 0.123.4 | 1.88 | 2024 | Initial release |
 | vtcode-config | 0.123.4 | 1.88 | 2024 | Initial release |
 | vtcode-commons | 0.123.4 | 1.88 | 2024 | Initial release |
-| vtcode-lmstudio | 0.123.4 | 1.88 | 2024 | Initial release (publish=false) |
-| vtcode-markdown-store | 0.123.4 | 1.88 | 2024 | Initial release |
 | vtcode-indexer | 0.123.4 | 1.88 | 2024 | Initial release |
 | vtcode-bash-runner | 0.123.4 | 1.88 | 2024 | Initial release |
 | vtcode-exec-events | 0.123.4 | 1.88 | 2024 | Initial release |
-| vtcode-file-search | 0.123.4 | 1.88 | 2024 | Initial release |
 | vtcode-acp | 0.123.4 | 1.88 | 2024 | Initial release |
 | vtcode-auth | 0.123.4 | 1.88 | 2024 | Initial release |
-| vtcode-process-hardening | 0.123.4 | 1.88 | 2024 | Initial release |
 | vtcode-macros | 0.123.4 | 1.88 | 2024 | Initial release |
-| vtcode-terminal-detection | 0.123.4 | 1.88 | 2024 | Initial release |
 | vtcode-ui | 0.123.10 | 1.88 | 2024 | Internal (publish=false) |
 | vtcode-utility-tool-specs | 0.123.4 | 1.88 | 2024 | Includes collaboration schemas (merged from vtcode-collaboration-tool-specs) |
-| vtcode-vim | 0.123.4 | 1.88 | 2024 | Initial release |
-| vtcode-tool-types | 0.128.4 | 1.88 | 2024 | Extracted from vtcode-core |
 | vtcode-safety | 0.128.4 | 1.88 | 2024 | Extracted from vtcode-core |
-| vtcode-pods | 0.128.4 | 1.88 | 2024 | Extracted from vtcode-core |
 | vtcode-a2a | 0.128.4 | 1.88 | 2024 | Extracted from vtcode-core |
 | vtcode-mcp | 0.128.4 | 1.88 | 2024 | Extracted from vtcode-core |
 | vtcode-llm | 0.128.4 | 1.88 | 2024 | Extracted from vtcode-core (partial) |

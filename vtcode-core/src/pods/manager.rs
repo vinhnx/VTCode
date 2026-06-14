@@ -1,7 +1,7 @@
-use crate::catalog::{PodCatalog, PodProfile};
-use crate::state::{PodGpu, PodHealth, PodState, PodsState, RunningModel};
-use crate::store::PodsStore;
-use crate::transport::{PodTransport, SshTransport};
+use super::catalog::{PodCatalog, PodProfile};
+use super::state::{PodGpu, PodHealth, PodState, PodsState, RunningModel};
+use super::store::PodsStore;
+use super::transport::{PodTransport, SshTransport};
 use anyhow::{Context, Result, anyhow};
 use parking_lot::RwLock;
 use std::collections::BTreeMap;
@@ -695,9 +695,9 @@ fn default_command_template() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::catalog::PodProfile;
-    use crate::state::PodGpu;
-    use crate::transport::CommandOutput;
+    use crate::pods::catalog::PodProfile;
+    use crate::pods::state::PodGpu;
+    use crate::pods::transport::CommandOutput;
     use anyhow::Result;
     use async_trait::async_trait;
     use parking_lot::Mutex;

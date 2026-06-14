@@ -8,11 +8,10 @@ use super::*;
 use crate::provider::{
     MessageContent, MessageRole, SpecificFunctionChoice, SpecificToolChoice, ToolDefinition,
 };
-use crate::tools::request_user_input::RequestUserInputTool;
-use crate::tools::traits::Tool;
 use serde_json::json;
 use vtcode_config::constants::models;
 use vtcode_config::constants::tools;
+use vtcode_config::models::ProviderModelSupport;
 
 #[test]
 fn convert_to_gemini_request_maps_history_and_system_prompt() {
@@ -859,26 +858,9 @@ fn sanitize_function_parameters_drops_invalid_required_entries() {
     assert_eq!(sanitized["required"], json!(["label"]));
 }
 
-#[test]
-fn sanitize_function_parameters_renames_nested_description_property_names() {
-    let parameters = RequestUserInputTool
-        .parameter_schema()
-        .expect("request_user_input schema");
-
-    let sanitized = sanitize_function_parameters(parameters);
-    let option_items =
-        &sanitized["properties"]["questions"]["items"]["properties"]["options"]["items"];
-    let option_properties = option_items["properties"]
-        .as_object()
-        .expect("option properties should remain an object");
-
-    assert!(!option_properties.contains_key("description"));
-    assert_eq!(
-        option_properties["details"]["description"],
-        json!("One short sentence explaining impact/tradeoff if selected.")
-    );
-    assert_eq!(option_items["required"], json!(["label", "details"]));
-}
+// NOTE: sanitize_function_parameters_renames_nested_description_property_names was removed
+// because it required vtcode-core::tools::RequestUserInputTool which is not available in
+// vtcode-llm. If this test coverage is needed, move it to vtcode-core.
 
 #[test]
 fn sanitize_function_parameters_preserves_real_details_property() {

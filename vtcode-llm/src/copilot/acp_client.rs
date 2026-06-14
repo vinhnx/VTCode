@@ -106,7 +106,7 @@ impl PendingPermissionRequest {
     pub fn respond(self, decision: CopilotPermissionDecision) -> Result<()> {
         self.response_tx
             .send(self.response_format.render(decision))
-            .map_err(|_| anyhow!("copilot permission response channel closed"))
+            .map_err(|_e| anyhow!("copilot permission response channel closed"))
     }
 }
 
@@ -122,7 +122,7 @@ macro_rules! define_pending_request {
             pub fn respond(self, response: $response_ty) -> Result<()> {
                 self.response_tx
                     .send(response)
-                    .map_err(|_| anyhow!($error_message))
+                    .map_err(|_e| anyhow!($error_message))
             }
         }
     };
@@ -140,7 +140,7 @@ macro_rules! define_pending_signal_request {
             pub fn respond(self) -> Result<()> {
                 self.response_tx
                     .send(())
-                    .map_err(|_| anyhow!($error_message))
+                    .map_err(|_e| anyhow!($error_message))
             }
         }
     };
@@ -372,12 +372,12 @@ impl CopilotAcpClient {
                 .inner
                 .session_id
                 .lock()
-                .map_err(|_| anyhow!("copilot acp session mutex poisoned"))? = Some(session_id);
+                .map_err(|_e| anyhow!("copilot acp session mutex poisoned"))? = Some(session_id);
             *client
                 .inner
                 .compatibility_state
                 .lock()
-                .map_err(|_| anyhow!("copilot acp compatibility mutex poisoned"))? =
+                .map_err(|_e| anyhow!("copilot acp compatibility mutex poisoned"))? =
                 CopilotAcpCompatibilityState::FullTools;
             Ok::<(), anyhow::Error>(())
         })
@@ -390,7 +390,7 @@ impl CopilotAcpClient {
         self.inner
             .session_id
             .lock()
-            .map_err(|_| anyhow!("copilot acp session mutex poisoned"))?
+            .map_err(|_e| anyhow!("copilot acp session mutex poisoned"))?
             .clone()
             .ok_or_else(|| anyhow!("copilot acp session not initialized"))
     }
@@ -403,7 +403,7 @@ impl CopilotAcpClient {
                 .inner
                 .active_prompt
                 .lock()
-                .map_err(|_| anyhow!("copilot acp active prompt mutex poisoned"))?;
+                .map_err(|_e| anyhow!("copilot acp active prompt mutex poisoned"))?;
             if active_prompt.is_some() {
                 return Err(anyhow!("copilot acp only supports one active prompt"));
             }
@@ -614,7 +614,7 @@ impl CopilotAcpClient {
             .compatibility_state
             .lock()
             .map(|state| *state)
-            .map_err(|_| anyhow!("copilot acp compatibility mutex poisoned"))
+            .map_err(|_e| anyhow!("copilot acp compatibility mutex poisoned"))
     }
 }
 
@@ -1214,7 +1214,7 @@ fn send_prompt_update(inner: &Arc<CopilotAcpClientInner>, update: PromptUpdate) 
     if let Some(active_prompt) = inner
         .active_prompt
         .lock()
-        .map_err(|_| anyhow!("copilot acp active prompt mutex poisoned"))?
+        .map_err(|_e| anyhow!("copilot acp active prompt mutex poisoned"))?
         .as_ref()
         && active_prompt.updates.send(update).is_err()
     {
@@ -1228,7 +1228,7 @@ fn mark_prompt_degraded(inner: &Arc<CopilotAcpClientInner>, message: String) -> 
         let mut compatibility_state = inner
             .compatibility_state
             .lock()
-            .map_err(|_| anyhow!("copilot acp compatibility mutex poisoned"))?;
+            .map_err(|_e| anyhow!("copilot acp compatibility mutex poisoned"))?;
         if *compatibility_state == CopilotAcpCompatibilityState::PromptOnly {
             return Ok(());
         }
@@ -1260,7 +1260,7 @@ fn enqueue_runtime_request(
     let sender = inner
         .active_prompt
         .lock()
-        .map_err(|_| anyhow!("copilot acp active prompt mutex poisoned"))?
+        .map_err(|_e| anyhow!("copilot acp active prompt mutex poisoned"))?
         .as_ref()
         .map(|active_prompt| active_prompt.runtime_requests.clone());
     let Some(sender) = sender else {

@@ -4,7 +4,7 @@
 //! call sites continue to access configuration types and helpers through
 //! `vtcode_core::config`.
 
-use vtcode_terminal_detection::is_ghostty_terminal;
+use vtcode_commons::terminal_detection::is_ghostty_terminal;
 
 pub mod acp;
 pub mod api;

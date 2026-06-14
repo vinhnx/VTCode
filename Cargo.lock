@@ -7001,6 +7001,7 @@ dependencies = [
  "clap",
  "colorchoice",
  "crossterm",
+ "ctor",
  "dialoguer",
  "dirs",
  "futures",
@@ -7008,10 +7009,12 @@ dependencies = [
  "indexmap 2.14.0",
  "insta",
  "itertools 0.14.0",
+ "libc",
  "memchr",
  "mimalloc",
  "once_cell",
  "predicates",
+ "pretty_assertions",
  "rand 0.9.4",
  "ratatui",
  "regex",
@@ -7041,10 +7044,7 @@ dependencies = [
  "vtcode-commons",
  "vtcode-config",
  "vtcode-core",
- "vtcode-pods",
- "vtcode-process-hardening",
  "vtcode-safety",
- "vtcode-terminal-detection",
  "vtcode-ui",
  "webbrowser",
 ]
@@ -7169,6 +7169,7 @@ dependencies = [
  "ratatui",
  "regex",
  "reqwest 0.12.28",
+ "schemars 1.2.1",
  "send_wrapper",
  "serde",
  "serde_json",
@@ -7320,10 +7321,8 @@ dependencies = [
  "vtcode-llm",
  "vtcode-macros",
  "vtcode-mcp",
- "vtcode-pods",
  "vtcode-safety",
  "vtcode-skills",
- "vtcode-terminal-detection",
  "vtcode-ui",
  "vtcode-utility-tool-specs",
  "webbrowser",
@@ -7377,6 +7376,7 @@ version = "0.128.4"
 dependencies = [
  "anstyle",
  "anyhow",
+ "assert_fs",
  "async-stream",
  "async-trait",
  "base64",
@@ -7458,30 +7458,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "vtcode-pods"
-version = "0.128.4"
-dependencies = [
- "anyhow",
- "async-trait",
- "dirs",
- "parking_lot",
- "serde",
- "serde_json",
- "shell-words",
- "tokio",
- "vtcode-commons",
-]
-
-[[package]]
-name = "vtcode-process-hardening"
-version = "0.128.4"
-dependencies = [
- "ctor",
- "libc",
- "pretty_assertions",
-]
-
-[[package]]
 name = "vtcode-safety"
 version = "0.128.4"
 dependencies = [
@@ -7519,6 +7495,7 @@ dependencies = [
  "serde",
  "serde-saphyr",
  "serde_json",
+ "serial_test",
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
@@ -7526,14 +7503,6 @@ dependencies = [
  "vtcode-commons",
  "vtcode-config",
  "zip",
-]
-
-[[package]]
-name = "vtcode-terminal-detection"
-version = "0.128.4"
-dependencies = [
- "anyhow",
- "dirs",
 ]
 
 [[package]]
@@ -7580,8 +7549,6 @@ dependencies = [
  "unicode-width",
  "vtcode-commons",
  "vtcode-config",
- "vtcode-terminal-detection",
- "vtcode-vim",
 ]
 
 [[package]]
@@ -7591,14 +7558,6 @@ dependencies = [
  "rmcp",
  "serde",
  "serde_json",
-]
-
-[[package]]
-name = "vtcode-vim"
-version = "0.128.4"
-dependencies = [
- "criterion",
- "crossterm",
 ]
 
 [[package]]

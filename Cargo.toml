@@ -43,7 +43,7 @@ serde_json = "1.0"
 tempfile = "3.27"
 tokio = { version = "1.52", features = ["full"] }
 anyhow = "1.0"
-serde = { version = "1.0", features = ["derive"] }
+serde = { version = "1.0", features = ["derive", "rc"] }
 regex = "1.12"
 num_cpus = "1.16"
 clap = { version = "4.6", features = ["derive"] }
@@ -112,17 +112,13 @@ members = [
     "vtcode-core",
     "vtcode-ui",
     "vtcode-utility-tool-specs",
-    "vtcode-terminal-detection",
-    "vtcode-vim",
     "vtcode-commons",
     "vtcode-config",
     "vtcode-indexer",
     "vtcode-bash-runner",
     "vtcode-exec-events",
-    "vtcode-process-hardening",
     "vtcode-macros",
     "vtcode-safety",
-    "vtcode-pods",
     "vtcode-a2a",
     "vtcode-mcp",
     "vtcode-llm",
@@ -139,13 +135,10 @@ vtcode-auth = { path = "vtcode-auth" }
 vtcode-config = { path = "vtcode-config" }
 vtcode-core = { path = "vtcode-core" }
 vtcode-ui = { path = "vtcode-ui" }
-vtcode-process-hardening = { path = "vtcode-process-hardening" }
-vtcode-terminal-detection = { path = "vtcode-terminal-detection" }
 vtcode-indexer = { path = "vtcode-indexer" }
 vtcode-bash-runner = { path = "vtcode-bash-runner" }
 vtcode-exec-events = { path = "vtcode-exec-events" }
 vtcode-safety = { path = "vtcode-safety" }
-vtcode-pods = { path = "vtcode-pods" }
 vtcode-a2a = { path = "vtcode-a2a" }
 vtcode-mcp = { path = "vtcode-mcp" }
 vtcode-llm = { path = "vtcode-llm" }
@@ -153,7 +146,7 @@ vtcode-skills = { path = "vtcode-skills" }
 
 [workspace.lints]
 # Rust compiler lints
-rust.unexpected_cfgs = { level = "warn", check-cfg = ['cfg(tarpaulin)'] }
+rust.unexpected_cfgs = { level = "warn", check-cfg = ['cfg(tarpaulin)', 'cfg(feature, values("schema", "default", "tui"))'] }
 rust.unused_extern_crates = "warn"
 rust.unused_import_braces = "warn"
 rust.unused_qualifications = "warn"
@@ -233,10 +226,7 @@ vtcode-ui = { path = "vtcode-ui", version = "0.128.4" }
 vtcode-config = { path = "vtcode-config", version = "0.128.4" }
 vtcode-auth = { path = "vtcode-auth", version = "0.128.4" }
 vtcode-core = { path = "vtcode-core", version = "0.128.4", default-features = false }
-vtcode-process-hardening = { path = "vtcode-process-hardening", version = "0.128.4" }
-vtcode-terminal-detection = { path = "vtcode-terminal-detection", version = "0.128.4" }
 vtcode-safety = { path = "vtcode-safety", version = "0.128.4" }
-vtcode-pods = { path = "vtcode-pods", version = "0.128.4" }
 vtcode-a2a = { path = "vtcode-a2a", version = "0.128.4" }
 anyhow = { workspace = true }
 clap = { workspace = true }
@@ -258,6 +248,8 @@ async-trait = { workspace = true }
 async-stream = "0.3"
 # Home directory detection
 dirs = { workspace = true }
+libc = { workspace = true }
+ctor = { workspace = true }
 # Hashing for large output file paths
 sha2 = { workspace = true }
 # ANSI styling
@@ -363,6 +355,7 @@ name = "vtcode"
 path = "src/main.rs"
 
 [dev-dependencies]
+pretty_assertions = { workspace = true }
 tempfile = { workspace = true }
 assert_fs = { workspace = true }
 indexmap = { workspace = true }

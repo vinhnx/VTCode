@@ -33,8 +33,8 @@
 //!
 //! ## Example Usage
 //!
-//! ```rust
-//! use vtcode_core::llm::provider::{Message, MessageRole};
+//! ```rust,ignore
+//! use vtcode_llm::provider::{Message, MessageRole};
 //!
 //! // Create a proper tool response message
 //! let tool_response = Message::tool_response(

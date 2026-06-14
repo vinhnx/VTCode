@@ -1,4 +1,4 @@
-use crate::types::{Motion, TextObjectSpec};
+use super::types::{Motion, TextObjectSpec};
 
 pub fn next_char_boundary(content: &str, mut pos: usize) -> usize {
     if pos >= content.len() {
