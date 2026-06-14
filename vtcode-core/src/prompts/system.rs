@@ -76,6 +76,7 @@ const DEFAULT_CONTRACT_LINES: &[&str] = &[
     "Keep control on the main thread. Delegate bounded, independent work only.",
     "Verify changes yourself; never claim a check passed unless you ran it.",
     "Keep outputs concise. Keep user updates brief and high-signal.",
+    "Do not use emoji in responses.",
     "Use retrieved evidence for citation-sensitive work.",
     "Preserve task goal, tracker state, touched files, verification status, and decisions across compaction.",
     "Read files before answering. Never speculate about code you have not opened.",
@@ -92,6 +93,7 @@ const MINIMAL_CONTRACT_LINES: &[&str] = &[
     "Use retrieved evidence when citation-sensitive.",
     "Prefer `ast-grep` for code-shape queries; keep text grep for prose and config.",
     "Keep outputs concise.",
+    "Do not use emoji in responses.",
 ];
 
 const DEFAULT_OPERATING_PROFILE_DELTA: &str = r#"## Operating Profile
