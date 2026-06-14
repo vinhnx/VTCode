@@ -1,7 +1,7 @@
 # vtcode-* Crate Audit Report
 
 **Date**: 2026-06-14
-**Scope**: All 21 vtcode-* workspace crates
+**Scope**: All 23 vtcode-* workspace crates
 **Goal**: Identify mergeable crates, redundant code, and test duplicates
 
 ---
@@ -27,6 +27,8 @@
 | vtcode-utility-tool-specs | 5 | 4 | JSON schemas for tool parameter definitions | none (leaf) |
 | vtcode-vim | 4 | 1 | Vim-style prompt editing engine | none (leaf) |
 | vtcode-tool-types | 6 | 0 | Shared tool runtime types (breaks circular deps) | none (leaf) |
+| vtcode-llm | ~100 | 0 | LLM provider abstraction, client implementations, streaming | commons, config, tool-types, utility-tool-specs |
+| vtcode-skills | 22 | 0 | Skill types, discovery, loading, and validation | commons, config |
 | vtcode-safety | 15 | 31 | Command safety detection, execution policies, sandboxing | commons |
 | vtcode-pods | 6 | 0 | GPU pod management | commons |
 | vtcode-a2a | 10 | 6 | Agent2Agent protocol client and server | none (leaf) |
@@ -40,11 +42,13 @@
                    vtcode-acp  |  vtcode-ui  vtcode-process-hardening
                      /    \    |    /    \  \
               vtcode-core  vtcode-config | vtcode-vim  vtcode-terminal-detection
-              / | | | \  \    /   \      |
+              / | | | \ \  \    /   \      |
     commons auth bash exec file idx md-store
          macros    events search         utility-tool-specs
               \      |      /
                vtcode-safety (command_safety + exec_policy + sandboxing)
+               vtcode-llm (LLM providers, client abstraction, streaming)
+               vtcode-skills (skill types, discovery, validation)
                     vtcode-pods (GPU management)
                     vtcode-a2a (Agent2Agent protocol)
                     vtcode-tool-types (shared types, breaks circular deps)

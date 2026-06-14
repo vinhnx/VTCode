@@ -1,0 +1,13 @@
+{
+  "name": "{{tool_name}}",
+  "description": "{{tool_description}}",
+  "executable_path": "./tool.sh",
+  "readme_path": "./README.md",
+  "schema_path": "./schema.json",
+  "timeout_seconds": 30,
+  "supports_json": {{supports_json}},
+  "environment": {
+    "TOOL_NAME": "{{tool_name}}"
+  },
+  "working_dir": "."
+}

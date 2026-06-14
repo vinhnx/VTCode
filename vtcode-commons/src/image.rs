@@ -1,6 +1,6 @@
 //! Image processing utilities
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use base64::Engine;
 use std::path::Path;
 
@@ -112,4 +112,86 @@ pub fn has_supported_image_extension(path: &Path) -> bool {
 /// Encodes binary data to base64
 pub fn encode_to_base64(data: &[u8]) -> String {
     base64::engine::general_purpose::STANDARD.encode(data)
+}
+
+/// Reads an image file from the local filesystem and converts it to base64 format.
+///
+/// Validates the path for traversal attacks and checks the file extension
+/// against a supported set. Max file size is 20 MB.
+pub async fn read_image_file<P: AsRef<Path>>(file_path: P) -> Result<ImageData> {
+    use crate::paths::is_safe_relative_path;
+
+    let path = file_path.as_ref();
+
+    if !is_safe_relative_path(&path.to_string_lossy()) {
+        return Err(anyhow::anyhow!(
+            "Unsafe or traversal detected in image path: {}",
+            path.display()
+        ));
+    }
+
+    if !has_supported_image_extension(path) {
+        return Err(anyhow::anyhow!(
+            "Unsupported image extension for path: {}",
+            path.display()
+        ));
+    }
+
+    let file_contents = tokio::fs::read(path)
+        .await
+        .with_context(|| format!("Failed to read image file: {}", path.display()))?;
+
+    if file_contents.len() > 20 * 1024 * 1024 {
+        return Err(anyhow::anyhow!(
+            "Image file too large: {} bytes (max 20MB)",
+            file_contents.len()
+        ));
+    }
+
+    let mime_type = detect_mime_type_from_extension(path)?;
+    let base64_data = encode_to_base64(&file_contents);
+
+    Ok(ImageData {
+        base64_data,
+        mime_type,
+        file_path: path.display().to_string(),
+        size: file_contents.len() as u64,
+    })
+}
+
+/// Reads an image file from an absolute path (or already validated path) and
+/// converts it to base64.
+///
+/// This skips relative-path safety checks and should only be used when the
+/// caller has already validated the path scope and intent.
+pub async fn read_image_file_any_path<P: AsRef<Path>>(file_path: P) -> Result<ImageData> {
+    let path = file_path.as_ref();
+
+    if !has_supported_image_extension(path) {
+        return Err(anyhow::anyhow!(
+            "Unsupported image extension for path: {}",
+            path.display()
+        ));
+    }
+
+    let file_contents = tokio::fs::read(path)
+        .await
+        .with_context(|| format!("Failed to read image file: {}", path.display()))?;
+
+    if file_contents.len() > 20 * 1024 * 1024 {
+        return Err(anyhow::anyhow!(
+            "Image file too large: {} bytes (max 20MB)",
+            file_contents.len()
+        ));
+    }
+
+    let mime_type = detect_mime_type_from_extension(path)?;
+    let base64_data = encode_to_base64(&file_contents);
+
+    Ok(ImageData {
+        base64_data,
+        mime_type,
+        file_path: path.display().to_string(),
+        size: file_contents.len() as u64,
+    })
 }

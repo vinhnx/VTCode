@@ -79,42 +79,11 @@ const MAX_RETRY_ATTEMPTS: u32 = 16;
 const MAX_RETRY_BACKOFF: Duration = Duration::from_secs(30);
 
 // ============================================================================
-// Core wiring trait
+// Core wiring trait (re-exported from vtcode-commons::cgp)
 // ============================================================================
 
-/// Type-level lookup: maps a component **Name** to a concrete **Provider**
-/// type for a given implementor (the "context").
-///
-/// This is the single foundational trait of the CGP substrate. All
-/// composition flows through it.
-pub trait HasComponent<Name> {
-    /// The concrete provider type wired to `Name` for this context.
-    type Provider;
-}
-
-/// The elaborated provider/dictionary selected by `Ctx` for component `Name`.
-pub type ComponentProvider<Ctx, Name> = <Ctx as HasComponent<Name>>::Provider;
-
-/// Wire multiple component names to provider types for a context.
-///
-/// Generates one `HasComponent<Name>` implementation per entry.
-///
-/// ```rust,ignore
-/// delegate_components!(MyCtx {
-///     ApprovalComponent => PromptApproval,
-///     SandboxComponent  => WorkspaceSandbox,
-/// });
-/// ```
-#[macro_export]
-macro_rules! delegate_components {
-    ($ctx:ty { $($name:ty => $provider:ty),* $(,)? }) => {
-        $(
-            impl $crate::components::HasComponent<$name> for $ctx {
-                type Provider = $provider;
-            }
-        )*
-    };
-}
+pub use vtcode_commons::cgp::{ComponentProvider, HasComponent};
+pub use vtcode_commons::delegate_components;
 
 // ============================================================================
 // Component name markers

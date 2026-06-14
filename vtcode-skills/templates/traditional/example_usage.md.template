@@ -1,0 +1,46 @@
+## Example Usage
+
+### Basic Example
+
+```
+User: Use the {{skill_name}} skill to [describe basic task]
+
+Agent: I'll use the {{skill_name}} skill to [describe what the skill will do].
+
+[Skill execution and results]
+```
+
+### Advanced Example
+
+```
+User: Use the {{skill_name}} skill with [specific parameters] to [describe complex task]
+
+Agent: I'll use the {{skill_name}} skill with the specified parameters to [describe what the skill will do].
+
+[Skill execution and results]
+```
+
+### Error Handling Example
+
+```
+User: Use the {{skill_name}} skill to [describe task that might fail]
+
+Agent: I'll attempt to use the {{skill_name}} skill for this task.
+
+[Skill execution - if error occurs]
+Agent: I encountered an error: [error description]. Let me try [alternative approach].
+
+[Alternative execution and results]
+```
+
+### Integration Example
+
+```
+User: First use [another skill] to [prepare data], then use {{skill_name}} to [process it]
+
+Agent: I'll first use [other skill] to prepare the data, then use {{skill_name}} to process it.
+
+[First skill execution]
+[Second skill execution]
+[Final results]
+```

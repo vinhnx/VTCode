@@ -8,7 +8,7 @@
 
 ## Current State
 
-21 workspace members (20 `vtcode-*` + `xtask`). Audit found:
+23 workspace members (22 `vtcode-*` + `xtask`). Audit found:
 
 - 3 crates that are thin facades over `vtcode-core` (candidates for merge)
 - 2 spec crates with identical patterns (candidates for merge)
@@ -92,22 +92,16 @@ Backward-compatible aliases maintained in re-exports (`tools/mod.rs`, `tools/reg
 
 ## Phase 3: Evaluate Facade Crates
 
-### 3.1 Evaluate `vtcode-llm` for Merge into `vtcode-core` -- DONE
+### 3.1 `vtcode-llm` -- Re-extracted as Standalone Crate
 
-**Status:** Completed 2026-06-14.
+**Status:** Re-extracted 2026-06-14 as part of vtcode-core monolith decomposition.
 
-**Findings:**
-- Zero consumers within the workspace -- no crate imports from `vtcode_llm`
-- Marked `publish = false` -- no external consumers
-- 75% of source is tests (~500 of 796 lines in config.rs)
-- Unique items: `ProviderConfig` trait (~150 lines), `StaticResponseClient` mock (~134 lines)
-- All other exports are pass-through re-exports from `vtcode-core` and `vtcode-commons`
-
-**What changed:**
-1. `ProviderConfig` trait + adapter moved into `vtcode_core::llm::config_adapter`
-2. `StaticResponseClient` moved into `vtcode_core::llm` behind `mock` feature
-3. `vtcode-llm` removed from workspace members and `clippy.toml`
-4. `vtcode-llm/` directory deleted
+**Current state:**
+- `vtcode-llm` is a workspace member with ~100 source files
+- Contains LLM provider implementations, client abstraction, streaming, tool bridge
+- Depends on: `vtcode-commons`, `vtcode-config`, `vtcode-tool-types`, `vtcode-utility-tool-specs`
+- vtcode-core has vtcode-llm as a dependency but does not yet consume it (partial extraction)
+- Integration-point files remain in vtcode-core: `cgp.rs`, `factory.rs`, `provider_config.rs`, `provider_builder.rs`, `lightweight_routing.rs`, `copilot.rs`, `openresponses/provider.rs`
 
 ### 3.2 Evaluate `vtcode-tools` for Merge into `vtcode-core` -- DONE
 

@@ -115,7 +115,7 @@ Rust stable, edition 2024, MSRV 1.88. Workspace of ~30 crates:
 |---|---|
 | Binary | `vtcode` |
 | Core | `vtcode-core`, `vtcode-ui`, `vtcode-config` |
-| Extracted | `vtcode-safety`, `vtcode-pods`, `vtcode-a2a`, `vtcode-tool-types`, `vtcode-mcp` |
+| Extracted | `vtcode-llm`, `vtcode-skills`, `vtcode-safety`, `vtcode-pods`, `vtcode-a2a`, `vtcode-tool-types`, `vtcode-mcp` |
 | Infrastructure | `vtcode-commons`, `vtcode-auth`, `vtcode-bash-runner`, `vtcode-macros` |
 | Tooling | `vtcode-indexer`, `vtcode-file-search`, `vtcode-exec-events` |
 | Protocol | `vtcode-acp`, `vtcode-utility-tool-specs` |

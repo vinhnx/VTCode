@@ -1,6 +1,6 @@
-> **Note:** `vtcode-llm` has been merged into `vtcode-core`. The `ProviderConfig` trait and adapter
-> are now at `vtcode_core::llm::config_adapter`. The mock client is at
-> `vtcode_core::llm::mock_client` (behind the `mock` feature flag).
+> **Note:** `vtcode-llm` has been re-extracted as a standalone crate from `vtcode-core`.
+> The `ProviderConfig` trait and adapter remain in `vtcode_core::llm::config_adapter`.
+> The mock client is at `vtcode_core::llm::mock_client` (behind the `mock` feature flag).
 
 # `vtcode-llm` Environment Configuration Guide
 

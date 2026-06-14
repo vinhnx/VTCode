@@ -18,6 +18,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 compact_str = { workspace = true }
 hashbrown = { workspace = true }
+vtcode-config = { path = "../vtcode-config", version = "0.128.4" }
 
 [package.metadata.docs.rs]
 all-features = true

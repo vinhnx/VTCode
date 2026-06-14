@@ -1,77 +1,12 @@
+//! Styled terminal output helpers.
+//!
+//! `Styles` is re-exported from `vtcode-commons::styling`.
+//! Print convenience functions remain here because they depend on `anstream`.
+
 use anstream::println as styled_println;
-use anstyle::{AnsiColor, Color, Effects, Reset, Style};
+use anstyle::Style;
 
-/// Style presets for consistent UI theming
-pub struct Styles;
-
-impl Styles {
-    /// Error message style (red)
-    pub fn error() -> Style {
-        Style::new().fg_color(Some(Color::Ansi(AnsiColor::Red)))
-    }
-
-    /// Warning message style (red)
-    pub fn warning() -> Style {
-        Style::new().fg_color(Some(Color::Ansi(AnsiColor::Red)))
-    }
-
-    /// Success message style (green)
-    pub fn success() -> Style {
-        Style::new().fg_color(Some(Color::Ansi(AnsiColor::Green)))
-    }
-
-    /// Info message style (cyan)
-    pub fn info() -> Style {
-        Style::new().fg_color(Some(Color::Ansi(AnsiColor::Cyan)))
-    }
-
-    /// Debug message style (cyan)
-    pub fn debug() -> Style {
-        Style::new()
-            .fg_color(Some(Color::Ansi(AnsiColor::Cyan)))
-            .dimmed()
-    }
-
-    /// Bold text style
-    pub fn bold() -> Style {
-        Style::new().effects(Effects::BOLD)
-    }
-
-    /// Bold error style
-    pub fn bold_error() -> Style {
-        Self::error().bold()
-    }
-
-    /// Bold success style
-    pub fn bold_success() -> Style {
-        Self::success().bold()
-    }
-
-    /// Bold warning style
-    pub fn bold_warning() -> Style {
-        Self::warning().bold()
-    }
-
-    /// Header style (bold)
-    pub fn header() -> Style {
-        Style::new().effects(Effects::BOLD)
-    }
-
-    /// Code style (magenta)
-    pub fn code() -> Style {
-        Style::new().fg_color(Some(Color::Ansi(AnsiColor::Magenta)))
-    }
-
-    /// Render style to ANSI string
-    pub fn render(style: &Style) -> String {
-        style.to_string()
-    }
-
-    /// Render reset ANSI string
-    pub fn render_reset() -> String {
-        Reset.to_string()
-    }
-}
+pub use vtcode_commons::styling::Styles;
 
 /// Print a styled error message
 pub fn error(message: &str) {

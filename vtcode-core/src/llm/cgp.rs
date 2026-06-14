@@ -8,12 +8,10 @@
 
 use std::marker::PhantomData;
 
-use crate::components::{ComponentProvider, HasComponent};
-use crate::config::TimeoutsConfig;
-use crate::config::core::{AnthropicConfig, ModelConfig, PromptCachingConfig};
-use crate::llm::factory::{LLMFactory, ProviderConfig as FactoryProviderConfig};
-use crate::llm::provider::LLMProvider;
-use crate::llm::provider_config::{
+use super::factory::LLMFactory;
+use super::factory::ProviderConfig as FactoryProviderConfig;
+use super::provider::LLMProvider;
+use super::provider_config::{
     AnthropicProviderConfig, CopilotProviderConfig, DeepSeekProviderConfig, EvolinkProviderConfig,
     GeminiProviderConfig, HuggingFaceProviderConfig, LlamaCppProviderConfig,
     LmStudioProviderConfig, MiMoProviderConfig, MinimaxProviderConfig, MistralProviderConfig,
@@ -21,13 +19,16 @@ use crate::llm::provider_config::{
     OpenCodeZenProviderConfig, OpenResponsesProviderConfig, OpenRouterProviderConfig,
     PoolsideProviderConfig, QwenProviderConfig, StepFunProviderConfig, ZAIProviderConfig,
 };
-use crate::llm::providers::{
+use super::providers::{
     AnthropicProvider, CopilotProvider, DeepSeekProvider, EvolinkProvider, GeminiProvider,
     HuggingFaceProvider, LlamaCppProvider, LmStudioProvider, MiMoProvider, MinimaxProvider,
     MistralProvider, MoonshotProvider, OllamaProvider, OpenAIProvider, OpenCodeGoProvider,
     OpenCodeZenProvider, OpenResponsesProvider, OpenRouterProvider, PoolsideProvider, QwenProvider,
     StepFunProvider, ZAIProvider,
 };
+use vtcode_commons::cgp::{ComponentProvider, HasComponent};
+use vtcode_config::TimeoutsConfig;
+use vtcode_config::core::{AnthropicConfig, ModelConfig, PromptCachingConfig};
 
 /// Marker component for static provider metadata.
 pub enum ProviderMetadataComponent {}
@@ -393,7 +394,7 @@ pub fn register_builtin_cgp_providers(factory: &mut LLMFactory) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::core::{AnthropicConfig, OpenAIConfig};
+    use vtcode_config::core::{AnthropicConfig, OpenAIConfig};
 
     #[test]
     fn provider_context_metadata_is_available_through_consumer_traits() {
@@ -407,7 +408,7 @@ mod tests {
         );
         assert_eq!(
             <AnthropicProviderConfig as CanDescribeProvider>::BASE_URL_ENV_VAR,
-            Some(crate::config::constants::env_vars::ANTHROPIC_BASE_URL)
+            Some(vtcode_config::constants::env_vars::ANTHROPIC_BASE_URL)
         );
     }
 
@@ -420,7 +421,7 @@ mod tests {
                 copilot_auth: None,
                 base_url: None,
                 model: Some(
-                    crate::config::constants::models::google::GEMINI_3_FLASH_PREVIEW.to_string(),
+                    vtcode_config::constants::models::google::GEMINI_3_FLASH_PREVIEW.to_string(),
                 ),
                 prompt_cache: None,
                 timeouts: None,
@@ -441,7 +442,7 @@ mod tests {
                 openai_chatgpt_auth: None,
                 copilot_auth: None,
                 base_url: None,
-                model: Some(crate::config::constants::models::openai::DEFAULT_MODEL.to_string()),
+                model: Some(vtcode_config::constants::models::openai::DEFAULT_MODEL.to_string()),
                 prompt_cache: None,
                 timeouts: None,
                 openai: Some(OpenAIConfig {
@@ -464,7 +465,7 @@ mod tests {
                 openai_chatgpt_auth: None,
                 copilot_auth: None,
                 base_url: None,
-                model: Some(crate::config::constants::models::anthropic::DEFAULT_MODEL.to_string()),
+                model: Some(vtcode_config::constants::models::anthropic::DEFAULT_MODEL.to_string()),
                 prompt_cache: None,
                 timeouts: None,
                 openai: None,

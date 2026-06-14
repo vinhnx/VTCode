@@ -132,6 +132,8 @@ vtcode-safety = { path = "../vtcode-safety", version = "0.128.4" }
 vtcode-pods = { path = "../vtcode-pods", version = "0.128.4" }
 vtcode-a2a = { path = "../vtcode-a2a", version = "0.128.4" }
 vtcode-mcp = { path = "../vtcode-mcp", version = "0.128.4" }
+vtcode-llm = { path = "../vtcode-llm", version = "0.128.4" }
+vtcode-skills = { path = "../vtcode-skills", version = "0.128.4" }
 
 # Schema generation
 schemars = { workspace = true, optional = true }

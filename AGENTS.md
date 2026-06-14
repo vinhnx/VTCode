@@ -49,6 +49,8 @@ Cargo workspace, ~30 crates. Rust stable, MSRV 1.88, edition 2024. `default-memb
 | `vtcode-file-search` | Parallel fuzzy file search |
 | `vtcode-vim` | Vim-style prompt editing engine |
 | `vtcode-tool-types` | Shared tool runtime types (breaks circular deps between tools and llm) |
+| `vtcode-llm` | LLM provider abstraction, client implementations, streaming (partial extraction) |
+| `vtcode-skills` | Skill types, discovery, loading, and validation (partial extraction) |
 | `vtcode-safety` | Command safety detection, execution policies, sandboxing |
 | `vtcode-pods` | GPU pod management |
 | `vtcode-a2a` | Agent2Agent (A2A) protocol client and server |
@@ -81,6 +83,8 @@ Every crate has its own AGENTS.md with crate-specific conventions:
 | `vtcode-file-search` | [vtcode-file-search/AGENTS.md](vtcode-file-search/AGENTS.md) |
 | `vtcode-vim` | [vtcode-vim/AGENTS.md](vtcode-vim/AGENTS.md) |
 | `vtcode-tool-types` | [vtcode-tool-types/AGENTS.md](vtcode-tool-types/AGENTS.md) |
+| `vtcode-llm` | [vtcode-llm/AGENTS.md](vtcode-llm/AGENTS.md) |
+| `vtcode-skills` | [vtcode-skills/AGENTS.md](vtcode-skills/AGENTS.md) |
 | `vtcode-safety` | [vtcode-safety/AGENTS.md](vtcode-safety/AGENTS.md) |
 | `vtcode-pods` | [vtcode-pods/AGENTS.md](vtcode-pods/AGENTS.md) |
 | `vtcode-a2a` | [vtcode-a2a/AGENTS.md](vtcode-a2a/AGENTS.md) |

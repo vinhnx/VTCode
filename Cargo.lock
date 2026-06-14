@@ -7319,11 +7319,13 @@ dependencies = [
  "vtcode-exec-events",
  "vtcode-file-search",
  "vtcode-indexer",
+ "vtcode-llm",
  "vtcode-macros",
  "vtcode-markdown-store",
  "vtcode-mcp",
  "vtcode-pods",
  "vtcode-safety",
+ "vtcode-skills",
  "vtcode-terminal-detection",
  "vtcode-tool-types",
  "vtcode-ui",
@@ -7379,6 +7381,48 @@ dependencies = [
  "serde",
  "tempfile",
  "vtcode-commons",
+]
+
+[[package]]
+name = "vtcode-llm"
+version = "0.128.4"
+dependencies = [
+ "anstyle",
+ "anyhow",
+ "async-stream",
+ "async-trait",
+ "base64",
+ "bytes",
+ "compact_str",
+ "futures",
+ "hashbrown 0.17.1",
+ "lru",
+ "once_cell",
+ "openai-harmony",
+ "parking_lot",
+ "ratatui",
+ "reqwest 0.12.28",
+ "rig-core",
+ "rustc-hash 2.1.2",
+ "semver",
+ "serde",
+ "serde_json",
+ "serial_test",
+ "shell-words",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-stream",
+ "tokio-tungstenite 0.29.0",
+ "tracing",
+ "url",
+ "uuid",
+ "vtcode-commons",
+ "vtcode-config",
+ "vtcode-tool-types",
+ "vtcode-utility-tool-specs",
+ "which",
+ "wiremock",
 ]
 
 [[package]]
@@ -7484,6 +7528,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "vtcode-skills"
+version = "0.128.4"
+dependencies = [
+ "anyhow",
+ "base64",
+ "chrono",
+ "hashbrown 0.17.1",
+ "include_dir",
+ "libloading",
+ "lru",
+ "regex",
+ "serde",
+ "serde-saphyr",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "vtcode-commons",
+ "vtcode-config",
+ "zip",
+]
+
+[[package]]
 name = "vtcode-terminal-detection"
 version = "0.128.4"
 dependencies = [
@@ -7499,6 +7567,7 @@ dependencies = [
  "hashbrown 0.17.1",
  "serde",
  "serde_json",
+ "vtcode-config",
 ]
 
 [[package]]

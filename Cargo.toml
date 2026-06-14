@@ -128,6 +128,8 @@ members = [
     "vtcode-pods",
     "vtcode-a2a",
     "vtcode-mcp",
+    "vtcode-llm",
+    "vtcode-skills",
     "xtask",
 ]
 default-members = [".", "vtcode-core", "vtcode-ui"]
@@ -152,6 +154,8 @@ vtcode-safety = { path = "vtcode-safety" }
 vtcode-pods = { path = "vtcode-pods" }
 vtcode-a2a = { path = "vtcode-a2a" }
 vtcode-mcp = { path = "vtcode-mcp" }
+vtcode-llm = { path = "vtcode-llm" }
+vtcode-skills = { path = "vtcode-skills" }
 
 [workspace.lints]
 # Rust compiler lints

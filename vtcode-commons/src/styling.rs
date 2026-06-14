@@ -148,3 +148,78 @@ pub use crate::diff_theme::{
     DiffColorLevel, DiffTheme, diff_add_bg, diff_del_bg, diff_gutter_bg_add_light,
     diff_gutter_bg_del_light, diff_gutter_fg_light,
 };
+
+/// Style presets for consistent UI theming.
+///
+/// Provides convenience constructors for common ANSI styles used across
+/// VT Code's terminal output.
+pub struct Styles;
+
+impl Styles {
+    /// Error message style (red)
+    pub fn error() -> Style {
+        Style::new().fg_color(Some(Color::Ansi(AnsiColor::Red)))
+    }
+
+    /// Warning message style (red)
+    pub fn warning() -> Style {
+        Style::new().fg_color(Some(Color::Ansi(AnsiColor::Red)))
+    }
+
+    /// Success message style (green)
+    pub fn success() -> Style {
+        Style::new().fg_color(Some(Color::Ansi(AnsiColor::Green)))
+    }
+
+    /// Info message style (cyan)
+    pub fn info() -> Style {
+        Style::new().fg_color(Some(Color::Ansi(AnsiColor::Cyan)))
+    }
+
+    /// Debug message style (cyan, dimmed)
+    pub fn debug() -> Style {
+        Style::new()
+            .fg_color(Some(Color::Ansi(AnsiColor::Cyan)))
+            .dimmed()
+    }
+
+    /// Bold text style
+    pub fn bold() -> Style {
+        Style::new().effects(Effects::BOLD)
+    }
+
+    /// Bold error style
+    pub fn bold_error() -> Style {
+        Self::error().bold()
+    }
+
+    /// Bold success style
+    pub fn bold_success() -> Style {
+        Self::success().bold()
+    }
+
+    /// Bold warning style
+    pub fn bold_warning() -> Style {
+        Self::warning().bold()
+    }
+
+    /// Header style (bold)
+    pub fn header() -> Style {
+        Style::new().effects(Effects::BOLD)
+    }
+
+    /// Code style (magenta)
+    pub fn code() -> Style {
+        Style::new().fg_color(Some(Color::Ansi(AnsiColor::Magenta)))
+    }
+
+    /// Render style to ANSI string
+    pub fn render(style: &Style) -> String {
+        style.to_string()
+    }
+
+    /// Render reset ANSI string
+    pub fn render_reset() -> String {
+        anstyle::Reset.to_string()
+    }
+}

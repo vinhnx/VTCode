@@ -1,0 +1,47 @@
+#![allow(clippy::collapsible_if)]
+
+use self::wire::function_calling::FunctionCall as GeminiFunctionCall;
+use self::wire::{
+    Candidate, Content, FunctionDeclaration, GenerateContentRequest, GenerateContentResponse,
+    Interaction, InteractionContent, InteractionInput, InteractionOutput, InteractionRequest,
+    InteractionResult, InteractionTool, InteractionToolChoice, InteractionTurn,
+    InteractionTurnContent, Part, StreamingCandidate, StreamingConfig, StreamingError,
+    StreamingProcessor, StreamingResponse, SystemInstruction, Tool, ToolConfig,
+};
+use self::wire::{FunctionCallingConfig, FunctionResponse};
+use crate::client::LLMClient;
+use crate::error_display;
+use crate::provider::{
+    FinishReason, FunctionCall, LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream,
+    LLMStreamEvent, Message, MessageRole, ToolCall, ToolChoice,
+};
+use async_stream::try_stream;
+use async_trait::async_trait;
+use futures::StreamExt;
+use hashbrown::HashMap;
+use reqwest::Client as HttpClient;
+use serde_json::{Map, Value, json};
+use std::sync::Arc;
+use tokio::sync::mpsc;
+use tracing;
+use vtcode_config::TimeoutsConfig;
+use vtcode_config::constants::{env_vars, models, urls};
+use vtcode_config::core::{
+    AnthropicConfig, GeminiPromptCacheMode, GeminiPromptCacheSettings, PromptCachingConfig,
+};
+use vtcode_config::types::ReasoningEffortLevel;
+
+use super::common::{extract_prompt_cache_settings, override_base_url, resolve_model};
+use super::error_handling::{format_network_error, format_parse_error, is_rate_limit_error};
+
+mod client;
+mod helpers;
+mod llm_provider;
+mod provider;
+mod sanitize;
+#[cfg(test)]
+mod tests;
+pub mod wire;
+
+pub use provider::GeminiProvider;
+pub use sanitize::sanitize_function_parameters;

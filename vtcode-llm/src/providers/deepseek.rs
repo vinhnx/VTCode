@@ -1,0 +1,474 @@
+#![allow(clippy::collapsible_if)]
+
+use crate::error_display;
+use crate::provider::{LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent};
+use async_stream::try_stream;
+use async_trait::async_trait;
+use reqwest::Client as HttpClient;
+use serde_json::{Map, Value};
+use vtcode_config::TimeoutsConfig;
+use vtcode_config::constants::{env_vars, models, urls};
+use vtcode_config::core::{
+    AnthropicConfig, DeepSeekPromptCacheSettings, ModelConfig, PromptCachingConfig,
+};
+
+use super::{
+    common::{
+        ensure_model, extract_prompt_cache_settings, impl_llm_client, map_finish_reason_common,
+        override_base_url, parse_json_response, parse_response_openai_format, resolve_model,
+        serialize_messages_openai_format, serialize_tools_openai_format, validate_supported_models,
+    },
+    error_handling::handle_openai_http_error,
+    extract_reasoning_trace,
+};
+
+const PROVIDER_NAME: &str = "DeepSeek";
+const PROVIDER_KEY: &str = "deepseek";
+
+pub struct DeepSeekProvider {
+    api_key: String,
+    http_client: HttpClient,
+    base_url: String,
+    model: String,
+    prompt_cache_enabled: bool,
+    prompt_cache_settings: DeepSeekPromptCacheSettings,
+    model_behavior: Option<ModelConfig>,
+}
+
+impl DeepSeekProvider {
+    pub fn new(api_key: String) -> Self {
+        Self::with_model_internal(
+            api_key,
+            models::deepseek::DEFAULT_MODEL.to_string(),
+            None,
+            None,
+            TimeoutsConfig::default(),
+            None,
+        )
+    }
+
+    pub fn with_model(api_key: String, model: String) -> Self {
+        Self::with_model_internal(api_key, model, None, None, TimeoutsConfig::default(), None)
+    }
+
+    pub fn new_with_client(
+        api_key: String,
+        model: String,
+        http_client: reqwest::Client,
+        base_url: String,
+        _timeouts: TimeoutsConfig,
+    ) -> Self {
+        Self {
+            api_key,
+            http_client,
+            base_url,
+            model,
+            prompt_cache_enabled: false,
+            prompt_cache_settings: DeepSeekPromptCacheSettings::default(),
+            model_behavior: None,
+        }
+    }
+
+    pub fn from_config(
+        api_key: Option<String>,
+        model: Option<String>,
+        base_url: Option<String>,
+        prompt_cache: Option<PromptCachingConfig>,
+        timeouts: Option<TimeoutsConfig>,
+        _anthropic: Option<AnthropicConfig>,
+        model_behavior: Option<ModelConfig>,
+    ) -> Self {
+        let api_key_value = api_key.unwrap_or_default();
+        let model_value = resolve_model(model, models::deepseek::DEFAULT_MODEL);
+
+        Self::with_model_internal(
+            api_key_value,
+            model_value,
+            prompt_cache,
+            base_url,
+            timeouts.unwrap_or_default(),
+            model_behavior,
+        )
+    }
+
+    fn with_model_internal(
+        api_key: String,
+        model: String,
+        prompt_cache: Option<PromptCachingConfig>,
+        base_url: Option<String>,
+        timeouts: TimeoutsConfig,
+        model_behavior: Option<ModelConfig>,
+    ) -> Self {
+        use crate::http_client::HttpClientFactory;
+
+        let (prompt_cache_enabled, prompt_cache_settings) = extract_prompt_cache_settings(
+            prompt_cache,
+            |providers| &providers.deepseek,
+            |cfg, provider_settings| cfg.enabled && provider_settings.enabled,
+        );
+
+        Self {
+            api_key,
+            http_client: HttpClientFactory::for_llm(&timeouts),
+            base_url: override_base_url(
+                urls::DEEPSEEK_API_BASE,
+                base_url,
+                Some(env_vars::DEEPSEEK_BASE_URL),
+            ),
+            model,
+            prompt_cache_enabled,
+            prompt_cache_settings,
+            model_behavior,
+        }
+    }
+
+    #[must_use]
+    #[inline]
+    fn is_thinking_enabled(request: &LLMRequest) -> bool {
+        request
+            .reasoning_effort
+            .is_some_and(|e| e != vtcode_config::types::ReasoningEffortLevel::None)
+    }
+
+    fn convert_to_deepseek_format(&self, request: &LLMRequest) -> Result<Value, LLMError> {
+        // est. 8–12 keys: model, messages, system (cond), max_tokens (cond),
+        // temperature/top_p (cond), stream (cond), tools (cond), tool_choice (cond),
+        // thinking (cond), user_id (cond)
+        let mut payload = Map::with_capacity(12);
+
+        payload.insert("model".to_owned(), Value::String(request.model.clone()));
+        payload.insert(
+            "messages".to_owned(),
+            Value::Array(self.serialize_messages(request)?),
+        );
+
+        if let Some(system_prompt) = &request.system_prompt {
+            payload.insert(
+                "system".to_owned(),
+                Value::String(system_prompt.trim().to_owned()),
+            );
+        }
+
+        if let Some(max_tokens) = request.max_tokens {
+            payload.insert(
+                "max_tokens".to_owned(),
+                Value::Number(serde_json::Number::from(max_tokens as u64)),
+            );
+        }
+
+        let thinking_enabled = Self::is_thinking_enabled(request);
+
+        // Thinking mode does not support temperature, top_p, presence_penalty,
+        // or frequency_penalty. Suppress them to avoid wasted payload bytes.
+        if !thinking_enabled {
+            if let Some(temperature) = request.temperature {
+                payload.insert(
+                    "temperature".to_owned(),
+                    Value::Number(super::common::float_to_json_number(temperature)?),
+                );
+            }
+
+            if let Some(top_p) = request.top_p {
+                payload.insert(
+                    "top_p".to_owned(),
+                    Value::Number(super::common::float_to_json_number(top_p)?),
+                );
+            }
+        }
+
+        if request.stream {
+            payload.insert("stream".to_string(), Value::Bool(true));
+            // Request usage info in the final streaming chunk.
+            payload.insert(
+                "stream_options".to_string(),
+                serde_json::json!({"include_usage": true}),
+            );
+        }
+
+        if let Some(tools) = &request.tools
+            && let Some(serialized_tools) = serialize_tools_openai_format(tools)
+        {
+            payload.insert("tools".to_string(), Value::Array(serialized_tools));
+        }
+
+        if let Some(choice) = &request.tool_choice {
+            payload.insert(
+                "tool_choice".to_string(),
+                choice.to_provider_format(PROVIDER_KEY),
+            );
+        }
+
+        if let Some(effort) = request.reasoning_effort {
+            use crate::rig_adapter::RigProviderCapabilities;
+            use vtcode_config::models::Provider;
+            if effort == vtcode_config::types::ReasoningEffortLevel::None {
+                payload.insert(
+                    "thinking".to_owned(),
+                    serde_json::json!({"type": "disabled"}),
+                );
+            } else if let Some(reasoning_params) =
+                RigProviderCapabilities::new(Provider::DeepSeek, &request.model)
+                    .reasoning_parameters(effort)
+            {
+                if let Some(params_obj) = reasoning_params.as_object() {
+                    for (k, v) in params_obj {
+                        payload[k] = v.clone();
+                    }
+                }
+            }
+        }
+
+        // Pass through user_id for KV cache isolation and traffic management.
+        if let Some(meta) = &request.metadata {
+            if let Some(user_id) = meta.get("user_id").and_then(|v| v.as_str()) {
+                payload.insert("user_id".to_owned(), Value::String(user_id.to_owned()));
+            }
+        }
+
+        Ok(Value::Object(payload))
+    }
+
+    async fn send_request(&self, payload: &Value) -> Result<reqwest::Response, LLMError> {
+        let url = format!("{}/chat/completions", self.base_url.trim_end_matches('/'));
+
+        self.http_client
+            .post(&url)
+            .bearer_auth(&self.api_key)
+            .json(payload)
+            .send()
+            .await
+            .map_err(|e| LLMError::Network {
+                message: error_display::format_llm_error(
+                    PROVIDER_NAME,
+                    &format!("network error: {}", e),
+                ),
+                metadata: None,
+            })
+    }
+
+    fn serialize_messages(&self, request: &LLMRequest) -> Result<Vec<Value>, LLMError> {
+        serialize_messages_openai_format(request, PROVIDER_KEY)
+    }
+
+    fn parse_response(&self, response_json: Value, model: String) -> Result<LLMResponse, LLMError> {
+        let include_cache = self.prompt_cache_enabled && self.prompt_cache_settings.surface_metrics;
+
+        // Custom reasoning extractor for DeepSeek
+        let reasoning_extractor = |message: &Value, choice: &Value| {
+            message
+                .get("reasoning_content")
+                .and_then(extract_reasoning_trace)
+                .or_else(|| message.get("reasoning").and_then(extract_reasoning_trace))
+                .or_else(|| {
+                    choice
+                        .get("reasoning_content")
+                        .and_then(extract_reasoning_trace)
+                })
+        };
+
+        parse_response_openai_format(
+            response_json,
+            PROVIDER_NAME,
+            model,
+            include_cache,
+            Some(reasoning_extractor),
+        )
+    }
+}
+
+#[async_trait]
+impl LLMProvider for DeepSeekProvider {
+    fn name(&self) -> &str {
+        PROVIDER_KEY
+    }
+
+    fn supports_reasoning(&self, model: &str) -> bool {
+        let requested = if model.trim().is_empty() {
+            &self.model
+        } else {
+            model
+        };
+
+        // Codex-inspired robustness: Setting model_supports_reasoning to false
+        // does NOT disable it for known reasoning models.
+        requested == models::deepseek::DEEPSEEK_V4_PRO
+            || self
+                .model_behavior
+                .as_ref()
+                .and_then(|b| b.model_supports_reasoning)
+                .unwrap_or(false)
+    }
+
+    fn supports_reasoning_effort(&self, _model: &str) -> bool {
+        // Same robustness logic for reasoning effort
+        self.model_behavior
+            .as_ref()
+            .and_then(|b| b.model_supports_reasoning_effort)
+            .unwrap_or(false)
+    }
+
+    async fn generate(&self, mut request: LLMRequest) -> Result<LLMResponse, LLMError> {
+        let model = ensure_model(&mut request, &self.model);
+
+        let payload = self.convert_to_deepseek_format(&request)?;
+        let response = self.send_request(&payload).await?;
+        let response =
+            handle_openai_http_error(response, PROVIDER_NAME, "DEEPSEEK_API_KEY").await?;
+
+        let response_json = parse_json_response(response, PROVIDER_NAME).await?;
+        self.parse_response(response_json, model)
+    }
+
+    async fn stream(&self, mut request: LLMRequest) -> Result<LLMStream, LLMError> {
+        ensure_model(&mut request, &self.model);
+        self.validate_request(&request)?;
+        request.stream = true;
+        let model = request.model.clone();
+
+        let payload = self.convert_to_deepseek_format(&request)?;
+        let response = self.send_request(&payload).await?;
+        let response =
+            handle_openai_http_error(response, PROVIDER_NAME, "DEEPSEEK_API_KEY").await?;
+
+        let bytes_stream = response.bytes_stream();
+        let (event_tx, event_rx) =
+            tokio::sync::mpsc::unbounded_channel::<Result<LLMStreamEvent, LLMError>>();
+        let tx = event_tx.clone();
+
+        let model_clone = model.clone();
+        tokio::spawn(async move {
+            let mut aggregator =
+                crate::providers::shared::StreamAggregator::new(model_clone.clone());
+
+            let result = crate::providers::shared::process_openai_stream(
+                bytes_stream,
+                PROVIDER_NAME,
+                model_clone,
+                |value| {
+                    if let Some(choices) = value.get("choices").and_then(|c| c.as_array())
+                        && let Some(choice) = choices.first()
+                    {
+                        if let Some(delta) = choice.get("delta") {
+                            if let Some(reasoning) =
+                                delta.get("reasoning_content").and_then(|r| r.as_str())
+                            {
+                                if let Some(delta) = aggregator.handle_reasoning(reasoning) {
+                                    let _ = tx.send(Ok(LLMStreamEvent::Reasoning { delta }));
+                                }
+                            }
+
+                            if let Some(content) = delta.get("content").and_then(|c| c.as_str()) {
+                                for event in aggregator.handle_content(content) {
+                                    let _ = tx.send(Ok(event));
+                                }
+                            }
+
+                            if let Some(tool_calls) =
+                                delta.get("tool_calls").and_then(|tc| tc.as_array())
+                            {
+                                aggregator.handle_tool_calls(tool_calls);
+                            }
+                        }
+
+                        if let Some(reason) = choice.get("finish_reason").and_then(|r| r.as_str()) {
+                            aggregator.set_finish_reason(map_finish_reason_common(reason));
+                        }
+                    }
+
+                    if let Some(_usage_value) = value.get("usage") {
+                        if let Some(usage) =
+                            crate::providers::common::parse_usage_openai_format(&value, true)
+                        {
+                            aggregator.set_usage(usage);
+                        }
+                    }
+                    Ok(())
+                },
+            )
+            .await;
+
+            match result {
+                Ok(_) => {
+                    let response = aggregator.finalize();
+                    let _ = tx.send(Ok(LLMStreamEvent::Completed {
+                        response: Box::new(response),
+                    }));
+                }
+                Err(err) => {
+                    let _ = tx.send(Err(err));
+                }
+            }
+        });
+
+        let stream = try_stream! {
+            let mut receiver = event_rx;
+            while let Some(event) = receiver.recv().await {
+                yield event?;
+            }
+        };
+
+        Ok(Box::pin(stream))
+    }
+
+    fn supported_models(&self) -> Vec<String> {
+        models::deepseek::SUPPORTED_MODELS
+            .iter()
+            .map(|model| model.to_string())
+            .collect()
+    }
+
+    fn validate_request(&self, request: &LLMRequest) -> Result<(), LLMError> {
+        validate_supported_models(
+            request,
+            PROVIDER_NAME,
+            PROVIDER_KEY,
+            models::deepseek::SUPPORTED_MODELS,
+        )
+    }
+
+    async fn get_balance(&self) -> Result<Option<vtcode_commons::llm::BalanceInfo>, LLMError> {
+        // Strip /v1 suffix to get the root API URL for the balance endpoint.
+        let base = self.base_url.trim_end_matches('/');
+        let root = base.strip_suffix("/v1").unwrap_or(base);
+        let url = format!("{}/user/balance", root);
+
+        let response = self
+            .http_client
+            .get(&url)
+            .bearer_auth(&self.api_key)
+            .send()
+            .await
+            .map_err(|e| LLMError::Network {
+                message: error_display::format_llm_error(
+                    PROVIDER_NAME,
+                    &format!("balance request failed: {}", e),
+                ),
+                metadata: None,
+            })?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            return Err(LLMError::Provider {
+                message: error_display::format_llm_error(
+                    PROVIDER_NAME,
+                    &format!("balance API returned {}: {}", status, body),
+                ),
+                metadata: None,
+            });
+        }
+
+        let balance_resp: vtcode_commons::llm::DeepSeekBalanceResponse =
+            response.json().await.map_err(|e| LLMError::Provider {
+                message: error_display::format_llm_error(
+                    PROVIDER_NAME,
+                    &format!("failed to parse balance response: {}", e),
+                ),
+                metadata: None,
+            })?;
+
+        Ok(Some(balance_resp.into()))
+    }
+}
+
+impl_llm_client!(DeepSeekProvider);

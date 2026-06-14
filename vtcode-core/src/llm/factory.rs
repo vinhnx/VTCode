@@ -1,16 +1,19 @@
 use super::cgp::{CanBuildProvider, CanDescribeProvider, register_builtin_cgp_providers};
 use super::model_resolver::{ModelResolver, heuristic_provider_from_model};
-use crate::config::TimeoutsConfig;
-use crate::config::core::{AnthropicConfig, ModelConfig, OpenAIConfig, PromptCachingConfig};
-use crate::config::models::Provider;
-use crate::ctx_err;
-use crate::llm::provider::{LLMError, LLMProvider};
-use crate::llm::providers::OpenAIProvider;
-use crate::llm::providers::openai::CustomProviderAuthHandle;
+use super::provider::{LLMError, LLMProvider};
+use super::providers::OpenAIProvider;
+use super::providers::openai::CustomProviderAuthHandle;
 use hashbrown::HashMap;
 use std::path::PathBuf;
+use vtcode_commons::ctx_err;
+use vtcode_config::TimeoutsConfig;
 use vtcode_config::auth::CopilotAuthConfig;
 use vtcode_config::auth::OpenAIChatGptAuthHandle;
+use vtcode_config::core::{AnthropicConfig, ModelConfig, OpenAIConfig, PromptCachingConfig};
+use vtcode_config::models::Provider;
+// ProviderConfig is defined locally (same shape as vtcode_llm::ProviderConfig).
+// During partial extraction both copies exist; they will merge when vtcode-llm
+// is fully decoupled from the CGP registration system.
 
 type ProviderFactory = Box<dyn Fn(ProviderConfig) -> Box<dyn LLMProvider> + Send + Sync>;
 
@@ -123,7 +126,7 @@ impl LLMFactory {
 ///
 /// Attempts, in order:
 /// 1. Parse the override if provided.
-/// 2. Parse the model into a [`crate::config::models::ModelId`] and return its provider.
+/// 2. Parse the model into a [`vtcode_config::models::ModelId`] and return its provider.
 /// 3. Fall back to heuristic detection via [`LLMFactory::provider_from_model`].
 pub fn infer_provider(override_provider: Option<&str>, model: &str) -> Option<Provider> {
     ModelResolver::resolve_provider(override_provider, model, &[])
@@ -159,7 +162,7 @@ pub fn get_models_manager() -> &'static ModelsManager {
 /// `provider_from_model` by checking against known model presets first.
 pub fn infer_provider_from_model(model: &str) -> Option<Provider> {
     ModelResolver::resolve_provider(None, model, &[]).or_else(|| {
-        let family = crate::models_manager::find_family_for_model(model);
+        let family = vtcode_tool_types::model_family::find_family_for_model(model);
         (family.family != "unknown").then_some(family.provider)
     })
 }
@@ -319,13 +322,13 @@ pub fn register_custom_providers(custom_providers: &[vtcode_config::core::Custom
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::config::core::CustomProviderConfig;
-    use crate::config::core::{AnthropicConfig, OpenAIConfig};
-    use crate::llm::provider_config::{
+    use super::super::provider_config::{
         AnthropicProviderConfig, GeminiProviderConfig, OpenAIProviderConfig,
     };
-    use crate::llm::providers::OllamaProvider;
+    use super::super::providers::OllamaProvider;
+    use super::*;
+    use vtcode_config::core::CustomProviderConfig;
+    use vtcode_config::core::{AnthropicConfig, OpenAIConfig};
 
     #[test]
     fn builtin_cgp_registration_exposes_expected_provider_keys() {
@@ -374,7 +377,7 @@ mod tests {
                     copilot_auth: None,
                     base_url: None,
                     model: Some(
-                        crate::config::constants::models::google::GEMINI_3_FLASH_PREVIEW
+                        vtcode_config::constants::models::google::GEMINI_3_FLASH_PREVIEW
                             .to_string(),
                     ),
                     prompt_cache: None,
@@ -402,7 +405,7 @@ mod tests {
                     copilot_auth: None,
                     base_url: None,
                     model: Some(
-                        crate::config::constants::models::openai::DEFAULT_MODEL.to_string(),
+                        vtcode_config::constants::models::openai::DEFAULT_MODEL.to_string(),
                     ),
                     prompt_cache: None,
                     timeouts: None,
@@ -432,7 +435,7 @@ mod tests {
                     copilot_auth: None,
                     base_url: None,
                     model: Some(
-                        crate::config::constants::models::anthropic::DEFAULT_MODEL.to_string(),
+                        vtcode_config::constants::models::anthropic::DEFAULT_MODEL.to_string(),
                     ),
                     prompt_cache: None,
                     timeouts: None,
@@ -492,7 +495,7 @@ mod tests {
                     copilot_auth: None,
                     base_url: None,
                     model: Some(
-                        crate::config::constants::models::openai::DEFAULT_MODEL.to_string(),
+                        vtcode_config::constants::models::openai::DEFAULT_MODEL.to_string(),
                     ),
                     prompt_cache: None,
                     timeouts: None,

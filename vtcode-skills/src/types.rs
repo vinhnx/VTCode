@@ -1,0 +1,791 @@
+//! Agent Skills type definitions
+//!
+//! Defines core types for Agent Skills integration, including
+//! skill metadata, manifest parsing, and resource management.
+
+use hashbrown::HashMap;
+use serde::{Deserialize, Deserializer, Serialize};
+use serde_json::Value as JsonValue;
+use std::path::PathBuf;
+
+pub use crate::model::{SkillErrorInfo, SkillMetadata, SkillScope};
+
+pub type SkillManifestMetadata = HashMap<String, JsonValue>;
+
+/// Skill variety indicating the type of skill
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum SkillVariety {
+    /// High-level instruction-based skill (Agent Skills spec)
+    #[default]
+    AgentSkill,
+    /// Low-level CLI tool bridge
+    SystemUtility,
+    /// Native VT Code functionality
+    BuiltIn,
+}
+
+/// Network access policy for a skill
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SkillNetworkPolicy {
+    #[serde(default)]
+    pub allowed_domains: Vec<String>,
+    #[serde(default)]
+    pub denied_domains: Vec<String>,
+}
+
+/// Additional sandbox permissions requested by a skill.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct SkillPermissionProfile {
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_boxed_file_system_permissions_opt"
+    )]
+    pub file_system: Option<Box<SkillFileSystemPermissions>>,
+}
+
+/// Skill-scoped filesystem permission additions.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct SkillFileSystemPermissions {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub read: Vec<PathBuf>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub write: Vec<PathBuf>,
+}
+
+/// Skill manifest metadata from SKILL.md frontmatter
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SkillManifest {
+    /// Unique identifier (lowercase, hyphens, max 64 chars)
+    pub name: String,
+    /// What the skill does and when to use it (max 1024 chars)
+    pub description: String,
+    /// Optional version string
+    pub version: Option<String>,
+    /// Optional default version for pinning
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "default-version")]
+    #[serde(alias = "default_version")]
+    pub default_version: Option<String>,
+    /// Optional latest known version
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "latest-version")]
+    #[serde(alias = "latest_version")]
+    pub latest_version: Option<String>,
+    /// Optional author name
+    pub author: Option<String>,
+    /// Optional license string for the skill
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub license: Option<String>,
+    /// Optional model preference (inherits session if unset)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    /// Marks the skill as a mode command (displayed prominently)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mode: Option<bool>,
+    /// Indicates if skill uses VT Code native features (not container skills)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "vtcode-native")]
+    #[serde(alias = "vtcode_native")]
+    pub vtcode_native: Option<bool>,
+    /// Space-delimited list of pre-approved tools (Agent Skills spec)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "allowed-tools")]
+    #[serde(alias = "allowed_tools")]
+    pub allowed_tools: Option<String>,
+    /// Optional guard to disable direct model invocations when skill is active
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "disable-model-invocation")]
+    #[serde(alias = "disable_model_invocation")]
+    pub disable_model_invocation: Option<bool>,
+    /// Optional guidance on when to use the skill (Claude frontmatter best practice)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "when-to-use")]
+    #[serde(alias = "when_to_use")]
+    pub when_to_use: Option<String>,
+    /// Optional guidance on when NOT to use the skill
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "when-not-to-use")]
+    #[serde(alias = "when_not_to_use")]
+    pub when_not_to_use: Option<String>,
+    /// Optional argument hint for slash command style usage
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "argument-hint")]
+    #[serde(alias = "argument_hint")]
+    pub argument_hint: Option<String>,
+    /// Optional toggle for user menu visibility
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "user-invocable")]
+    #[serde(alias = "user_invocable")]
+    pub user_invocable: Option<bool>,
+    /// Optional execution context ("fork" for isolated execution)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context: Option<String>,
+    /// Optional profile identifier when context is forked
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent: Option<String>,
+    /// Optional hooks configuration (raw payload)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hooks: Option<JsonValue>,
+    /// Indicates the skill explicitly requires container skills
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "requires-container")]
+    #[serde(alias = "requires_container")]
+    pub requires_container: Option<bool>,
+    /// Indicates the skill should not be run inside a container (force VT Code-native path)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "disallow-container")]
+    #[serde(alias = "disallow_container")]
+    pub disallow_container: Option<bool>,
+    /// Environment/platform requirements (1-500 chars, Agent Skills spec)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub compatibility: Option<String>,
+    /// The variety of this skill
+    #[serde(default)]
+    pub variety: SkillVariety,
+    /// Arbitrary JSON-compatible metadata (Agent Skills spec)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<SkillManifestMetadata>,
+    /// Tool dependencies for this skill (Agent Skills spec extension)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tools: Option<Vec<String>>,
+    /// Optional network access policy
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "network")]
+    #[serde(alias = "network_policy")]
+    pub network_policy: Option<Box<SkillNetworkPolicy>>,
+    /// Optional additive sandbox permissions for command tools.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "permission_profile",
+        deserialize_with = "deserialize_boxed_permission_profile_opt"
+    )]
+    pub permissions: Option<Box<SkillPermissionProfile>>,
+}
+
+impl SkillPermissionProfile {
+    fn is_empty(&self) -> bool {
+        self.file_system.is_none()
+    }
+
+    fn into_boxed_if_non_empty(self) -> Option<Box<Self>> {
+        (!self.is_empty()).then_some(Box::new(self))
+    }
+}
+
+impl SkillFileSystemPermissions {
+    fn is_empty(&self) -> bool {
+        self.read.is_empty() && self.write.is_empty()
+    }
+
+    fn into_boxed_if_non_empty(self) -> Option<Box<Self>> {
+        (!self.is_empty()).then_some(Box::new(self))
+    }
+}
+
+fn deserialize_boxed_permission_profile_opt<'de, D>(
+    deserializer: D,
+) -> Result<Option<Box<SkillPermissionProfile>>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Option::<SkillPermissionProfile>::deserialize(deserializer)
+        .map(|value| value.and_then(SkillPermissionProfile::into_boxed_if_non_empty))
+}
+
+fn deserialize_boxed_file_system_permissions_opt<'de, D>(
+    deserializer: D,
+) -> Result<Option<Box<SkillFileSystemPermissions>>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Option::<SkillFileSystemPermissions>::deserialize(deserializer)
+        .map(|value| value.and_then(SkillFileSystemPermissions::into_boxed_if_non_empty))
+}
+
+impl Default for SkillManifest {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            description: String::new(),
+            version: None,
+            default_version: None,
+            latest_version: None,
+            author: None,
+            license: None,
+            model: None,
+            mode: None,
+            vtcode_native: None,
+            allowed_tools: None,
+            disable_model_invocation: None,
+            when_to_use: None,
+            when_not_to_use: None,
+            argument_hint: None,
+            user_invocable: None,
+            context: None,
+            agent: None,
+            hooks: None,
+            requires_container: None,
+            disallow_container: None,
+            compatibility: None,
+            variety: SkillVariety::AgentSkill,
+            metadata: None,
+            tools: None,
+            network_policy: None,
+            permissions: None,
+        }
+    }
+}
+
+impl SkillManifest {
+    /// Validate manifest against the Agent Skills specification.
+    pub fn validate(&self) -> anyhow::Result<()> {
+        self.validate_name()?;
+        self.validate_description()?;
+        self.validate_optional_fields()?;
+        Ok(())
+    }
+
+    /// Validate name field per Agent Skills spec
+    fn validate_name(&self) -> anyhow::Result<()> {
+        if self.name.is_empty() {
+            anyhow::bail!("name is required and must not be empty");
+        }
+
+        if self.name.len() > 64 {
+            anyhow::bail!(
+                "name exceeds maximum length: {} characters (max 64)",
+                self.name.len()
+            );
+        }
+
+        // Check for lowercase letters, numbers, and hyphens only
+        if !self
+            .name
+            .chars()
+            .all(|c| c.is_lowercase() || c.is_numeric() || c == '-')
+        {
+            anyhow::bail!(
+                "name contains invalid characters: '{}'\nMust contain only lowercase letters, numbers, and hyphens",
+                self.name
+            );
+        }
+
+        // Check for consecutive hyphens
+        if self.name.contains("--") {
+            anyhow::bail!(
+                "name contains consecutive hyphens: '{}'\nHyphens must not appear consecutively",
+                self.name
+            );
+        }
+
+        // Check for leading hyphen
+        if self.name.starts_with('-') {
+            anyhow::bail!(
+                "name starts with hyphen: '{}'\nMust not start with a hyphen",
+                self.name
+            );
+        }
+
+        // Check for trailing hyphen
+        if self.name.ends_with('-') {
+            anyhow::bail!(
+                "name ends with hyphen: '{}'\nMust not end with a hyphen",
+                self.name
+            );
+        }
+
+        // Check for reserved words
+        if self.name.contains("anthropic") || self.name.contains("claude") {
+            anyhow::bail!(
+                "name contains reserved word: '{}'\nMust not contain 'anthropic' or 'claude'",
+                self.name
+            );
+        }
+
+        Ok(())
+    }
+
+    /// Validate description field per Agent Skills spec
+    fn validate_description(&self) -> anyhow::Result<()> {
+        if self.description.is_empty() {
+            anyhow::bail!("description is required and must not be empty");
+        }
+
+        if self.description.len() > 1024 {
+            anyhow::bail!(
+                "description exceeds maximum length: {} characters (max 1024)",
+                self.description.len()
+            );
+        }
+
+        Ok(())
+    }
+
+    /// Validate optional fields per the strict SKILL.md spec supported by VT Code.
+    fn validate_optional_fields(&self) -> anyhow::Result<()> {
+        if self.hooks.is_some() {
+            anyhow::bail!("hooks are not supported in VT Code skills");
+        }
+
+        // Validate allowed-tools field
+        if let Some(allowed_tools) = &self.allowed_tools {
+            let tools: Vec<&str> = allowed_tools.split_whitespace().collect();
+
+            if tools.len() > 16 {
+                anyhow::bail!(
+                    "allowed-tools exceeds maximum tool count: {} tools (max 16)",
+                    tools.len()
+                );
+            }
+
+            if tools.is_empty() {
+                anyhow::bail!("allowed-tools must not be empty if specified");
+            }
+        }
+
+        // Validate license field
+        if let Some(license) = &self.license
+            && license.len() > 512
+        {
+            anyhow::bail!(
+                "license exceeds maximum length: {} characters (max 512)",
+                license.len()
+            );
+        }
+
+        // Validate compatibility field
+        if let Some(compatibility) = &self.compatibility
+            && (compatibility.is_empty() || compatibility.len() > 500)
+        {
+            anyhow::bail!(
+                "compatibility must be between 1-500 characters if provided, got {} characters",
+                compatibility.len()
+            );
+        }
+
+        Ok(())
+    }
+
+    /// Validate that skill name matches the parent directory name
+    /// This is a requirement per Agent Skills specification
+    pub fn validate_directory_name_match(
+        &self,
+        skill_path: &std::path::Path,
+    ) -> anyhow::Result<()> {
+        // For CLI tools, the directory name might not match the skill name
+        // Check if this is a CLI tool by looking for tool.json
+        let tool_json = skill_path.join("tool.json");
+        if tool_json.exists() {
+            return Ok(());
+        }
+
+        let parent_dir = skill_path.parent().ok_or_else(|| {
+            anyhow::anyhow!("Cannot determine parent directory of: {:?}", skill_path)
+        })?;
+
+        let dir_name = parent_dir
+            .file_name()
+            .and_then(|name| name.to_str())
+            .ok_or_else(|| {
+                anyhow::anyhow!("Cannot extract directory name from: {:?}", parent_dir)
+            })?;
+
+        if dir_name != self.name {
+            anyhow::bail!(
+                "Skill name '{}' does not match directory name '{}'\nPer Agent Skills spec, the name field must match the parent directory name",
+                self.name,
+                dir_name
+            );
+        }
+
+        Ok(())
+    }
+}
+
+/// Resource types bundled with a skill
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ResourceType {
+    /// Markdown documentation or additional instructions
+    Markdown,
+    /// Executable script (Python, Shell, etc.)
+    Script,
+    /// Reference data (JSON, schemas, templates, etc.)
+    Reference,
+    /// Static assets (images, data files, templates)
+    Asset,
+    /// Other resource types
+    Other(String),
+}
+
+/// A skill resource (Level 3: on-demand loading)
+#[derive(Debug, Clone)]
+pub struct SkillResource {
+    /// Relative path within skill directory
+    pub path: String,
+    /// Content type
+    pub resource_type: ResourceType,
+    /// Cached content (None until loaded)
+    pub content: Option<Vec<u8>>,
+}
+
+/// Complete skill definition with progressive disclosure levels
+#[derive(Debug, Clone)]
+pub struct Skill {
+    /// Level 1: Metadata (~100 tokens, always loaded)
+    pub manifest: SkillManifest,
+
+    /// Absolute path to skill directory
+    pub path: PathBuf,
+
+    /// Skill scope (user-level or repo-level)
+    pub scope: SkillScope,
+
+    /// Level 2: Instructions from SKILL.md body (<5K tokens, loaded when triggered)
+    pub instructions: String,
+
+    /// Skill variety
+    pub variety: SkillVariety,
+
+    /// Level 3: Bundled resources (lazy-loaded on demand)
+    pub resources: HashMap<String, SkillResource>,
+}
+
+impl Skill {
+    /// Create a new skill
+    pub fn new(
+        manifest: SkillManifest,
+        path: PathBuf,
+        instructions: String,
+    ) -> anyhow::Result<Self> {
+        manifest.validate()?;
+        let path_str = path.to_string_lossy();
+        let scope = if path.starts_with(PathBuf::from("/etc/codex/skills")) {
+            SkillScope::Admin
+        } else if path_str.contains("/skills/.system/")
+            || path_str.ends_with("/skills/.system")
+            || path_str.contains("\\skills\\.system\\")
+        {
+            SkillScope::System
+        } else if path_str.contains("/.agents/skills/") || path_str.contains("\\.agents\\skills\\")
+        {
+            SkillScope::Repo
+        } else {
+            SkillScope::User
+        };
+        Ok(Skill {
+            variety: manifest.variety,
+            manifest,
+            path,
+            scope,
+            instructions,
+            resources: HashMap::new(),
+        })
+    }
+
+    /// Create a new skill with explicit scope
+    pub fn with_scope(
+        manifest: SkillManifest,
+        path: PathBuf,
+        scope: SkillScope,
+        instructions: String,
+    ) -> anyhow::Result<Self> {
+        manifest.validate()?;
+        Ok(Skill {
+            variety: manifest.variety,
+            manifest,
+            path,
+            scope,
+            instructions,
+            resources: HashMap::new(),
+        })
+    }
+
+    /// Add a resource to the skill
+    pub fn add_resource(&mut self, path: String, resource: SkillResource) {
+        self.resources.insert(path, resource);
+    }
+
+    /// Get skill's display name
+    pub fn name(&self) -> &str {
+        &self.manifest.name
+    }
+
+    /// Get skill's description
+    pub fn description(&self) -> &str {
+        &self.manifest.description
+    }
+
+    /// Estimate token count for instructions (approximate)
+    pub fn instruction_tokens(&self) -> usize {
+        // Rough estimate: ~1 token per 4 characters
+        self.instructions.len() / 4
+    }
+
+    /// Check if skill has a resource
+    pub fn has_resource(&self, path: &str) -> bool {
+        self.resources.contains_key(path)
+    }
+
+    /// Get resource by path
+    pub fn get_resource(&self, path: &str) -> Option<&SkillResource> {
+        self.resources.get(path)
+    }
+
+    /// List all available resources
+    pub fn list_resources(&self) -> Vec<&str> {
+        self.resources.keys().map(|s| s.as_str()).collect()
+    }
+}
+
+/// Progressive disclosure context for skill loading
+#[derive(Debug, Clone)]
+pub enum SkillContext {
+    /// Level 1: Only metadata (~100 tokens)
+    MetadataOnly(SkillManifest, PathBuf),
+    /// Level 2: Metadata + instructions (<5K tokens)
+    WithInstructions(Skill),
+    /// Level 3: Full skill with resources loaded
+    Full(Skill),
+}
+
+impl SkillContext {
+    /// Get manifest from any context level
+    pub fn manifest(&self) -> &SkillManifest {
+        match self {
+            SkillContext::MetadataOnly(m, _) => m,
+            SkillContext::WithInstructions(s) => &s.manifest,
+            SkillContext::Full(s) => &s.manifest,
+        }
+    }
+
+    /// Get path from any context level
+    pub fn path(&self) -> &PathBuf {
+        match self {
+            SkillContext::MetadataOnly(_, p) => p,
+            SkillContext::WithInstructions(s) => &s.path,
+            SkillContext::Full(s) => &s.path,
+        }
+    }
+
+    /// Get skill (requires Level 2+)
+    pub fn skill(&self) -> Option<&Skill> {
+        match self {
+            SkillContext::MetadataOnly(_, _) => None,
+            SkillContext::WithInstructions(s) => Some(s),
+            SkillContext::Full(s) => Some(s),
+        }
+    }
+
+    /// Estimated tokens consumed in system prompt
+    pub fn tokens(&self) -> usize {
+        match self {
+            SkillContext::MetadataOnly(_, _) => 100,
+            SkillContext::WithInstructions(s) => 100 + s.instruction_tokens(),
+            SkillContext::Full(s) => 100 + s.instruction_tokens() + (s.resources.len() * 50),
+        }
+    }
+}
+
+/// Skill registry entry (loaded skill + metadata)
+#[derive(Debug, Clone)]
+pub struct SkillRegistryEntry {
+    pub skill: Skill,
+    pub enabled: bool,
+    pub load_time: std::time::SystemTime,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_manifest_validation_valid() {
+        let m = SkillManifest {
+            name: "my-skill".to_string(),
+            description: "A test skill".to_string(),
+            ..Default::default()
+        };
+        m.validate().unwrap();
+    }
+
+    #[test]
+    fn test_manifest_validation_invalid_name_length() {
+        let m = SkillManifest {
+            name: "a".repeat(65),
+            description: "Valid description".to_string(),
+            ..Default::default()
+        };
+        assert!(m.validate().is_err());
+    }
+
+    #[test]
+    fn test_manifest_validation_reserved_word() {
+        let m = SkillManifest {
+            name: "anthropic-skill".to_string(),
+            description: "Valid description".to_string(),
+            ..Default::default()
+        };
+        assert!(m.validate().is_err());
+    }
+
+    #[test]
+    fn test_skill_context_tokens() {
+        let manifest = SkillManifest {
+            name: "test".to_string(),
+            description: "Test".to_string(),
+            ..Default::default()
+        };
+
+        let meta_ctx = SkillContext::MetadataOnly(manifest.clone(), PathBuf::from("/test"));
+        assert_eq!(meta_ctx.tokens(), 100);
+    }
+
+    #[test]
+    fn test_compatibility_validation() {
+        // Valid compatibility
+        let m = SkillManifest {
+            name: "test-skill".to_string(),
+            description: "Test description".to_string(),
+            compatibility: Some("Designed for VT Code".to_string()),
+            ..Default::default()
+        };
+        m.validate().unwrap();
+
+        // Invalid: empty compatibility
+        let m = SkillManifest {
+            name: "test-skill".to_string(),
+            description: "Test description".to_string(),
+            compatibility: Some("".to_string()),
+            ..Default::default()
+        };
+        assert!(m.validate().is_err());
+
+        // Invalid: too long (> 500 chars)
+        let m = SkillManifest {
+            name: "test-skill".to_string(),
+            description: "Test description".to_string(),
+            compatibility: Some("a".repeat(501)),
+            ..Default::default()
+        };
+        assert!(m.validate().is_err());
+    }
+
+    #[test]
+    fn test_allowed_tools_string_format() {
+        // Valid space-delimited string
+        let m = SkillManifest {
+            name: "test-skill".to_string(),
+            description: "Test description".to_string(),
+            allowed_tools: Some("Read Write Bash".to_string()),
+            ..Default::default()
+        };
+        m.validate().unwrap();
+
+        // Invalid: empty string
+        let m = SkillManifest {
+            name: "test-skill".to_string(),
+            description: "Test description".to_string(),
+            allowed_tools: Some("".to_string()),
+            ..Default::default()
+        };
+        assert!(m.validate().is_err());
+
+        // Invalid: too many tools (> 16)
+        let tools = (0..17)
+            .map(|i| format!("Tool{}", i))
+            .collect::<Vec<_>>()
+            .join(" ");
+        let m = SkillManifest {
+            name: "test-skill".to_string(),
+            description: "Test description".to_string(),
+            allowed_tools: Some(tools),
+            ..Default::default()
+        };
+        assert!(m.validate().is_err());
+    }
+
+    #[test]
+    fn test_hooks_rejected() {
+        let m = SkillManifest {
+            name: "test-skill".to_string(),
+            description: "Test description".to_string(),
+            hooks: Some(serde_json::json!({
+                "pre_tool_use": [
+                    { "command": "echo pre" }
+                ]
+            })),
+            ..Default::default()
+        };
+        assert!(m.validate().is_err());
+    }
+
+    #[test]
+    fn test_metadata_field() {
+        let mut metadata = HashMap::new();
+        metadata.insert("author".to_string(), serde_json::json!("Test Author"));
+        metadata.insert("version".to_string(), serde_json::json!("1.0.0"));
+
+        let m = SkillManifest {
+            name: "test-skill".to_string(),
+            description: "Test description".to_string(),
+            version: Some("1.0.0".to_string()),
+            author: Some("Test Author".to_string()),
+            metadata: Some(metadata),
+            tools: None,
+            ..Default::default()
+        };
+        m.validate().unwrap();
+    }
+
+    #[test]
+    fn empty_permissions_deserialize_to_none() {
+        let manifest: SkillManifest = serde_json::from_str(
+            r#"{
+                "name": "test-skill",
+                "description": "Test description",
+                "permissions": {},
+                "network": {}
+            }"#,
+        )
+        .expect("manifest should deserialize");
+
+        assert!(manifest.permissions.is_none());
+        assert!(manifest.network_policy.is_some());
+    }
+
+    #[test]
+    fn empty_file_system_permissions_deserialize_to_none() {
+        let manifest: SkillManifest = serde_json::from_str(
+            r#"{
+                "name": "test-skill",
+                "description": "Test description",
+                "permissions": {
+                    "file_system": {}
+                }
+            }"#,
+        )
+        .expect("manifest should deserialize");
+
+        assert!(manifest.permissions.is_none());
+    }
+
+    #[test]
+    fn boxed_skill_fields_are_smaller_than_inline_options() {
+        use std::mem::size_of;
+
+        assert!(
+            size_of::<Option<Box<SkillNetworkPolicy>>>() < size_of::<Option<SkillNetworkPolicy>>()
+        );
+        assert!(
+            size_of::<Option<Box<SkillPermissionProfile>>>()
+                < size_of::<Option<SkillPermissionProfile>>()
+        );
+        assert!(
+            size_of::<Option<Box<SkillFileSystemPermissions>>>()
+                < size_of::<Option<SkillFileSystemPermissions>>()
+        );
+    }
+}

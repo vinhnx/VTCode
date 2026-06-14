@@ -53,6 +53,8 @@ All VT Code crates require Rust 1.88 or later due to dependencies (ratatui 0.30,
 | vtcode-pods | 0.128.4 | 1.88 | 2024 | Extracted from vtcode-core |
 | vtcode-a2a | 0.128.4 | 1.88 | 2024 | Extracted from vtcode-core |
 | vtcode-mcp | 0.128.4 | 1.88 | 2024 | Extracted from vtcode-core |
+| vtcode-llm | 0.128.4 | 1.88 | 2024 | Extracted from vtcode-core (partial) |
+| vtcode-skills | 0.128.4 | 1.88 | 2024 | Extracted from vtcode-core (partial) |
 | xtask | 0.8.4 | 1.88 | 2024 | Internal |
 
 ---

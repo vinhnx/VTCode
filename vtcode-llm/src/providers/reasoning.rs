@@ -1,0 +1,467 @@
+use serde_json::Value;
+
+#[derive(Default, Clone)]
+pub struct ReasoningBuffer {
+    text: String,
+    last_chunk: Option<String>,
+}
+
+impl ReasoningBuffer {
+    #[inline]
+    pub fn push(&mut self, chunk: &str) -> Option<String> {
+        if chunk.is_empty() {
+            return None;
+        }
+
+        if self.last_chunk.as_deref() == Some(chunk) {
+            return None;
+        }
+
+        self.text.push_str(chunk);
+        self.last_chunk = Some(chunk.to_string());
+
+        Some(chunk.to_string())
+    }
+
+    pub fn finalize(self) -> Option<String> {
+        let trimmed = self.text.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    }
+}
+
+pub fn clean_reasoning_text(text: &str) -> String {
+    vtcode_commons::formatting::clean_reasoning_text(text)
+}
+
+const PRIMARY_TEXT_KEYS: &[&str] = &[
+    "text",
+    "content",
+    "reasoning",
+    "thought",
+    "thinking",
+    "value",
+];
+const SECONDARY_COLLECTION_KEYS: &[&str] = &[
+    "messages", "parts", "items", "entries", "steps", "segments", "records", "output", "outputs",
+    "logs",
+];
+
+const REASONING_TAGS: &[&str] = &["think", "thinking", "reasoning", "analysis", "thought"];
+const ANSWER_TAGS: &[&str] = &["answer", "final"];
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum TagCategory {
+    Reasoning,
+    Answer,
+}
+
+struct ParsedTag<'a> {
+    name: &'a str,
+    end_index: usize,
+    category: TagCategory,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReasoningSegment {
+    pub text: String,
+    pub stage: Option<String>,
+}
+
+impl ReasoningSegment {
+    pub fn new(text: impl Into<String>, stage: Option<String>) -> Self {
+        Self {
+            text: text.into(),
+            stage,
+        }
+    }
+}
+
+pub fn extract_reasoning_trace(value: &Value) -> Option<String> {
+    let mut segments = Vec::new();
+    collect_reasoning_segments(value, &mut segments);
+    let combined: Vec<String> = segments.into_iter().map(|s| s.text).collect();
+    let combined = combined.join("\n");
+    let trimmed = combined.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
+}
+
+fn collect_reasoning_segments(value: &Value, segments: &mut Vec<ReasoningSegment>) {
+    match value {
+        Value::Null => {}
+        Value::Bool(_) | Value::Number(_) => {}
+        Value::String(text) => {
+            let (mut tagged_segments, cleaned) = split_reasoning_from_text(text);
+
+            if !tagged_segments.is_empty() {
+                for segment in tagged_segments.drain(..) {
+                    push_unique_segment(segments, segment);
+                }
+                if let Some(cleaned_text) = cleaned {
+                    let trimmed = cleaned_text.trim();
+                    if !trimmed.is_empty() {
+                        push_unique_segment(segments, ReasoningSegment::new(trimmed, None));
+                    }
+                }
+                return;
+            }
+
+            let trimmed = text.trim();
+            if trimmed.is_empty() {
+                return;
+            }
+
+            push_unique_segment(segments, ReasoningSegment::new(trimmed, None));
+        }
+        Value::Array(items) => {
+            for item in items {
+                collect_reasoning_segments(item, segments);
+            }
+        }
+        Value::Object(map) => {
+            let mut matched_key = false;
+            for key in PRIMARY_TEXT_KEYS {
+                if let Some(nested) = map.get(*key) {
+                    collect_reasoning_segments(nested, segments);
+                    matched_key = true;
+                }
+            }
+
+            if !matched_key {
+                for key in SECONDARY_COLLECTION_KEYS {
+                    if let Some(nested) = map.get(*key) {
+                        collect_reasoning_segments(nested, segments);
+                        matched_key = true;
+                    }
+                }
+            }
+
+            if !matched_key {
+                for nested in map.values() {
+                    if matches!(nested, Value::Array(_) | Value::Object(_)) {
+                        collect_reasoning_segments(nested, segments);
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn push_unique_segment(segments: &mut Vec<ReasoningSegment>, segment: ReasoningSegment) {
+    if segment.text.trim().is_empty() {
+        return;
+    }
+
+    if segments
+        .last()
+        .map(|last| last.text == segment.text && last.stage == segment.stage)
+        .unwrap_or(false)
+    {
+        return;
+    }
+
+    segments.push(segment);
+}
+
+fn parse_start_tag<'a>(lower: &'a str, start: usize) -> Option<ParsedTag<'a>> {
+    let bytes = lower.as_bytes();
+    let mut index = start + 1;
+
+    if index >= lower.len() {
+        return None;
+    }
+
+    match bytes[index] {
+        b'/' | b'!' | b'?' => return None,
+        _ => {}
+    }
+
+    while index < lower.len() && bytes[index].is_ascii_whitespace() {
+        index += 1;
+    }
+
+    if index >= lower.len() {
+        return None;
+    }
+
+    let name_start = index;
+    while index < lower.len() {
+        let ch = bytes[index];
+        if ch == b'>' || ch.is_ascii_whitespace() {
+            break;
+        }
+        index += 1;
+    }
+
+    if index == name_start {
+        return None;
+    }
+
+    let mut end_index = index;
+    while end_index < lower.len() && bytes[end_index] != b'>' {
+        end_index += 1;
+    }
+
+    if end_index >= lower.len() {
+        return None;
+    }
+
+    let name = &lower[name_start..index];
+    let category = if REASONING_TAGS.contains(&name) {
+        TagCategory::Reasoning
+    } else if ANSWER_TAGS.contains(&name) {
+        TagCategory::Answer
+    } else {
+        return None;
+    };
+
+    Some(ParsedTag {
+        name,
+        end_index,
+        category,
+    })
+}
+
+pub fn split_reasoning_from_text(text: &str) -> (Vec<ReasoningSegment>, Option<String>) {
+    if text.trim().is_empty() {
+        return (Vec::new(), None);
+    }
+
+    let lower = text.to_ascii_lowercase();
+    let mut segments: Vec<ReasoningSegment> = Vec::new();
+    let mut cleaned = String::new();
+    let mut modified = false;
+    let mut index = 0usize;
+
+    while index < text.len() {
+        let Some(relative) = lower[index..].find('<') else {
+            cleaned.push_str(&text[index..]);
+            break;
+        };
+
+        let open_index = index + relative;
+        cleaned.push_str(&text[index..open_index]);
+
+        if let Some(tag) = parse_start_tag(&lower, open_index) {
+            let content_start = tag.end_index + 1;
+            let close_sequence = format!("</{}>", tag.name);
+
+            if let Some(relative_close) = lower[content_start..].find(&close_sequence) {
+                let content_end = content_start + relative_close;
+                let inner = &text[content_start..content_end];
+
+                match tag.category {
+                    TagCategory::Reasoning => {
+                        modified = true;
+                        let (nested_segments, nested_cleaned) = split_reasoning_from_text(inner);
+
+                        if nested_segments.is_empty() {
+                            let trimmed = inner.trim();
+                            if !trimmed.is_empty() {
+                                // Use the tag name as the stage
+                                push_unique_segment(
+                                    &mut segments,
+                                    ReasoningSegment::new(trimmed, Some(tag.name.to_owned())),
+                                );
+                            }
+                        } else {
+                            for segment in nested_segments {
+                                push_unique_segment(&mut segments, segment);
+                            }
+                            if let Some(cleaned_inner) = nested_cleaned {
+                                let trimmed = cleaned_inner.trim();
+                                if !trimmed.is_empty() {
+                                    push_unique_segment(
+                                        &mut segments,
+                                        ReasoningSegment::new(trimmed, Some(tag.name.to_owned())),
+                                    );
+                                }
+                            }
+                        }
+                    }
+                    TagCategory::Answer => {
+                        modified = true;
+                        let (nested_segments, nested_cleaned) = split_reasoning_from_text(inner);
+                        for segment in nested_segments {
+                            push_unique_segment(&mut segments, segment);
+                        }
+                        if let Some(cleaned_inner) = nested_cleaned {
+                            cleaned.push_str(&cleaned_inner);
+                        } else {
+                            let trimmed = inner.trim();
+                            if !trimmed.is_empty() {
+                                cleaned.push_str(trimmed);
+                            }
+                        }
+                    }
+                }
+
+                index = content_end + close_sequence.len();
+                continue;
+            }
+        }
+
+        cleaned.push('<');
+        index = open_index + 1;
+    }
+
+    if !modified {
+        return (segments, None);
+    }
+
+    let output = if cleaned.trim().is_empty() {
+        None
+    } else {
+        Some(cleaned)
+    };
+
+    (segments, output)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn extracts_text_from_string() {
+        let value = Value::String("  sample reasoning  ".to_string());
+        let extracted = extract_reasoning_trace(&value);
+        assert_eq!(extracted, Some("sample reasoning".to_string()));
+    }
+
+    #[test]
+    fn extracts_text_from_nested_array() {
+        let value = Value::Array(vec![
+            Value::Object(
+                serde_json::json!({
+                    "type": "thinking",
+                    "text": "step one"
+                })
+                .as_object()
+                .unwrap()
+                .clone(),
+            ),
+            Value::Object(
+                serde_json::json!({
+                    "type": "thinking",
+                    "text": "step two"
+                })
+                .as_object()
+                .unwrap()
+                .clone(),
+            ),
+        ]);
+        let extracted = extract_reasoning_trace(&value);
+        assert_eq!(extracted, Some("step one\nstep two".to_string()));
+    }
+
+    #[test]
+    fn deduplicates_adjacent_segments() {
+        let value = Value::Array(vec![
+            Value::String("repeat".to_string()),
+            Value::String("repeat".to_string()),
+            Value::String("unique".to_string()),
+        ]);
+        let extracted = extract_reasoning_trace(&value);
+        assert_eq!(extracted, Some("repeat\nunique".to_string()));
+    }
+
+    #[test]
+    fn extracts_reasoning_from_think_markup() {
+        let source = "<think>first step</think>\n<answer>final output</answer>";
+        let (segments, cleaned) = split_reasoning_from_text(source);
+        assert_eq!(
+            segments,
+            vec![ReasoningSegment::new(
+                "first step",
+                Some("think".to_string())
+            )]
+        );
+        assert_eq!(cleaned, Some("\nfinal output".to_string()));
+    }
+
+    #[test]
+    fn handles_nested_reasoning_markup() {
+        let source = "<think><analysis>deep dive</analysis> summary</think>";
+        let (segments, cleaned) = split_reasoning_from_text(source);
+        assert_eq!(
+            segments,
+            vec![
+                ReasoningSegment::new("deep dive", Some("analysis".to_string())),
+                ReasoningSegment::new("summary", Some("think".to_string()))
+            ]
+        );
+        assert!(cleaned.is_none());
+    }
+
+    #[test]
+    fn cleans_blank_lines_from_reasoning() {
+        let input = "line1\n\n\nline2\n\n\n\nline3";
+        let cleaned = clean_reasoning_text(input);
+        assert_eq!(cleaned, "line1\nline2\nline3");
+    }
+
+    #[test]
+    fn cleans_leading_and_trailing_blank_lines() {
+        let input = "\n\nline1\n\n\n\n";
+        let cleaned = clean_reasoning_text(input);
+        assert_eq!(cleaned, "line1");
+    }
+
+    #[test]
+    fn handles_empty_and_whitespace_only() {
+        assert_eq!(clean_reasoning_text(""), "");
+        assert_eq!(clean_reasoning_text("   "), "");
+        assert_eq!(clean_reasoning_text("\n\n\n"), "");
+    }
+
+    #[test]
+    fn removes_single_blank_lines() {
+        let input = "line1\n\nline2";
+        let cleaned = clean_reasoning_text(input);
+        assert_eq!(cleaned, "line1\nline2");
+    }
+
+    #[test]
+    fn handles_mixed_whitespace_lines() {
+        let input = "  line1  \n   \n  \n  line2  \n\t\n     \nline3";
+        let cleaned = clean_reasoning_text(input);
+        assert_eq!(cleaned, "  line1\n  line2\nline3");
+    }
+
+    #[test]
+    fn reasoning_buffer_preserves_leading_whitespace_spacing() {
+        let mut buffer = ReasoningBuffer::default();
+        let first = buffer.push("Hello");
+        assert_eq!(first.as_deref(), Some("Hello"));
+
+        let second = buffer.push(" world");
+        assert_eq!(second.as_deref(), Some(" world"));
+
+        let third = buffer.push("!");
+        assert_eq!(third.as_deref(), Some("!"));
+
+        let finalized = buffer.finalize();
+        assert_eq!(finalized.as_deref(), Some("Hello world!"));
+    }
+
+    #[test]
+    fn reasoning_buffer_keeps_subword_tokens_together() {
+        let mut buffer = ReasoningBuffer::default();
+        buffer.push("Andre");
+        buffer.push("j");
+        buffer.push(" Kar");
+        buffer.push("pathy");
+        buffer.push("'s");
+
+        let finalized = buffer.finalize();
+        assert_eq!(finalized.as_deref(), Some("Andrej Karpathy's"));
+    }
+}

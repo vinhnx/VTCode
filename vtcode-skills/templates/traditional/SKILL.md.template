@@ -1,0 +1,28 @@
+---
+name: {{skill_name}}
+description: {{description}}
+---
+
+# {{skill_name}}
+
+## Purpose
+
+Summarize the workflow, expected inputs, and the artifact or outcome this skill should produce.
+
+## Workflow
+
+1. Confirm the request matches the routing guidance above.
+2. Keep the core workflow here and move deep detail into bundled resources.
+3. Reuse scripts, templates, or assets instead of retyping large procedures.
+4. Produce the expected result and note any important constraints.
+
+## Resources
+
+- `scripts/`: deterministic helpers for repeatable or fragile steps
+- `references/`: detailed docs loaded only when needed
+- `assets/`: reusable output skeletons, examples, or supporting files
+
+## Example
+
+**Input:** [Describe the request or files]
+**Output/Artifact:** [Describe the result this skill should produce]
