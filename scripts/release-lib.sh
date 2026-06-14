@@ -588,7 +588,7 @@ trigger_and_wait_ci() {
     fi
 
     print_info "Step 3.5: Triggering CI for Linux/Windows..."
-    git push origin --tags --no-verify --force
+    git push origin --tags --no-verify 2>/dev/null || true
 
     if ! gh workflow run build-linux-windows.yml --field tag="$released_version"; then
         print_warning "Failed to trigger CI workflow"

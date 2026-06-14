@@ -1055,7 +1055,7 @@ main() {
         else
             # Push tags to ensure CI can checkout the correct ref
             print_info "Pushing tags to GitHub..."
-            git push origin --tags --no-verify --force
+            git push origin --tags --no-verify 2>/dev/null || true
 
             # Trigger the build-linux-windows workflow
             if gh workflow run build-linux-windows.yml --field tag="$released_version"; then
