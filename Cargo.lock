@@ -7464,6 +7464,7 @@ dependencies = [
  "anyhow",
  "dirs",
  "hashbrown 0.17.1",
+ "libc",
  "once_cell",
  "rustc-hash 2.1.2",
  "serde",
