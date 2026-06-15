@@ -43,21 +43,13 @@ pub(crate) fn spooled_output_hint(path: &str) -> String {
     )
 }
 
-/// Render a detail line with tree prefix styling (╰ prefix).
+/// Render a detail line with tree prefix styling (└ prefix).
 /// Used to unify output details with the tree structure used by other tools.
 pub(crate) fn render_tree_detail(renderer: &mut AnsiRenderer, detail: &str) -> Result<()> {
-    render_tree_detail_with_indent(renderer, detail, "╰")
-}
-
-fn render_tree_detail_with_indent(
-    renderer: &mut AnsiRenderer,
-    detail: &str,
-    branch: &str,
-) -> Result<()> {
     let palette = ColorPalette::default();
     let mut styled = String::new();
-    styled.push_str("   ");
-    styled.push_str(&render_styled(branch, palette.muted, Some("dim".to_string())));
+    styled.push_str("  ");
+    styled.push_str(&render_styled("└", palette.muted, Some("dim".to_string())));
     styled.push(' ');
     styled.push_str(&render_styled(detail, palette.muted, None));
     renderer.line(MessageStyle::Info, &styled)?;
@@ -941,6 +933,8 @@ mod tests {
         let inline_output = collect_inline_output(&mut receiver);
         // read_file now shows a summary line instead of code preview
         assert!(inline_output.contains("Read 100 lines"));
+        assert!(inline_output.contains("└ Read 100 lines"));
+        assert!(!inline_output.contains("    Read 100 lines"));
     }
 
     #[tokio::test]
