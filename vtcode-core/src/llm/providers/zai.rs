@@ -2,10 +2,7 @@ use crate::config::TimeoutsConfig;
 use crate::config::constants::{env_vars, models, urls};
 use crate::config::core::{AnthropicConfig, ModelConfig, PromptCachingConfig};
 use crate::llm::error_display;
-use crate::llm::provider::{
-    LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent,
-};
-use async_stream::try_stream;
+use crate::llm::provider::{LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream};
 use async_trait::async_trait;
 
 use reqwest::Client as HttpClient;
@@ -13,9 +10,9 @@ use serde_json::{Map, Value};
 use std::borrow::Cow;
 
 use super::common::{
-    ensure_model, impl_llm_client, map_finish_reason_common, parse_json_response,
-    parse_response_openai_format, resolve_model, serialize_messages_openai_format,
-    serialize_tools_openai_format, validate_supported_models,
+    ensure_model, impl_llm_client, parse_json_response, parse_response_openai_format,
+    resolve_model, serialize_messages_openai_format, serialize_tools_openai_format,
+    spawn_openai_compatible_stream, validate_supported_models,
 };
 use super::error_handling::handle_openai_http_error;
 
@@ -335,82 +332,13 @@ impl LLMProvider for ZAIProvider {
 
         let response = handle_openai_http_error(response, PROVIDER_NAME, "ZAI_API_KEY").await?;
 
-        let bytes_stream = response.bytes_stream();
-        let (event_tx, event_rx) =
-            tokio::sync::mpsc::unbounded_channel::<Result<LLMStreamEvent, LLMError>>();
-        let tx = event_tx.clone();
-
-        let model_clone = model.clone();
-        tokio::spawn(async move {
-            let mut aggregator =
-                crate::llm::providers::shared::StreamAggregator::new(model_clone.clone());
-
-            let result = crate::llm::providers::shared::process_openai_stream(
-                bytes_stream,
-                PROVIDER_NAME,
-                model_clone,
-                |value| {
-                    if let Some(choices) = value.get("choices").and_then(|c| c.as_array())
-                        && let Some(choice) = choices.first()
-                    {
-                        if let Some(delta) = choice.get("delta") {
-                            if let Some(content) = delta.get("content").and_then(|c| c.as_str()) {
-                                for event in aggregator.handle_content(content) {
-                                    let _ = tx.send(Ok(event));
-                                }
-                            }
-
-                            if let Some(reasoning) =
-                                delta.get("reasoning_content").and_then(|c| c.as_str())
-                                && let Some(d) = aggregator.handle_reasoning(reasoning)
-                            {
-                                let _ = tx.send(Ok(LLMStreamEvent::Reasoning { delta: d }));
-                            }
-
-                            if let Some(tool_calls) =
-                                delta.get("tool_calls").and_then(|tc| tc.as_array())
-                            {
-                                aggregator.handle_tool_calls(tool_calls);
-                            }
-                        }
-
-                        if let Some(reason) = choice.get("finish_reason").and_then(|r| r.as_str()) {
-                            aggregator.set_finish_reason(map_finish_reason_common(reason));
-                        }
-                    }
-
-                    if let Some(_usage_value) = value.get("usage")
-                        && let Some(usage) =
-                            crate::llm::providers::common::parse_usage_openai_format(&value, false)
-                    {
-                        aggregator.set_usage(usage);
-                    }
-                    Ok(())
-                },
-            )
-            .await;
-
-            match result {
-                Ok(_) => {
-                    let response = aggregator.finalize();
-                    let _ = tx.send(Ok(LLMStreamEvent::Completed {
-                        response: Box::new(response),
-                    }));
-                }
-                Err(err) => {
-                    let _ = tx.send(Err(err));
-                }
-            }
-        });
-
-        let stream = try_stream! {
-            let mut receiver = event_rx;
-            while let Some(event) = receiver.recv().await {
-                yield event?;
-            }
-        };
-
-        Ok(Box::pin(stream))
+        Ok(spawn_openai_compatible_stream(
+            response,
+            PROVIDER_NAME,
+            model,
+            Some("reasoning_content"),
+            super::shared::OpenAiDeltaOrder::ContentFirst,
+        ))
     }
 
     fn supported_models(&self) -> Vec<String> {
