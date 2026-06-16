@@ -433,6 +433,31 @@ pub fn validate_supported_models(
     validate_request_common(request, provider_name, provider_key, Some(&models))
 }
 
+/// Builds the `/chat/completions` endpoint URL for an OpenAI-compatible base URL,
+/// tolerating a trailing slash on the configured base.
+#[inline]
+pub fn chat_completions_url(base_url: &str) -> String {
+    format!("{}/chat/completions", base_url.trim_end_matches('/'))
+}
+
+/// Sends an OpenAI-compatible chat-completions POST, mapping transport failures
+/// to `LLMError::Network` with consistent formatting.
+///
+/// The caller supplies a `RequestBuilder` with the endpoint, authentication, and
+/// any provider-specific headers already applied; this helper only attaches the
+/// JSON payload, dispatches the request, and normalizes network errors.
+pub async fn send_chat_completions(
+    request: reqwest::RequestBuilder,
+    payload: &Value,
+    provider_name: &str,
+) -> Result<reqwest::Response, LLMError> {
+    request
+        .json(payload)
+        .send()
+        .await
+        .map_err(|error| super::error_handling::format_network_error(provider_name, &error))
+}
+
 /// Spawns an OpenAI-compatible streaming response handler.
 /// Returns an `LLMStream` backed by a tokio task that processes chunks via
 /// `process_openai_stream` with the `handle_openai_compatible_chunk` handler.
@@ -443,7 +468,7 @@ pub fn spawn_openai_compatible_stream(
     response: reqwest::Response,
     provider_name: &'static str,
     model: String,
-    reasoning_field: Option<&'static str>,
+    reasoning_fields: &'static [&'static str],
     delta_order: crate::llm::providers::shared::OpenAiDeltaOrder,
 ) -> LLMStream {
     use async_stream::try_stream;
@@ -466,7 +491,7 @@ pub fn spawn_openai_compatible_stream(
                     &value,
                     &mut aggregator,
                     &tx,
-                    reasoning_field,
+                    reasoning_fields,
                     delta_order,
                 );
                 Ok(())

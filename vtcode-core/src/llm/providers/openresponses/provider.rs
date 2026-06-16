@@ -8,12 +8,13 @@ use crate::llm::provider::{
     LLMStreamEvent, Message, ToolCall,
 };
 use crate::llm::providers::common::{
-    append_normalized_reasoning_detail_items, serialize_message_content_openai,
+    append_normalized_reasoning_detail_items, chat_completions_url,
+    serialize_message_content_openai,
 };
 use crate::llm::providers::shared::{
-    ResponsesNormalizedStreamOptions, collect_tool_references_from_tool_search_output,
-    create_responses_normalized_stream, function_output_value_from_message_content,
-    parse_compacted_output_messages,
+    ResponsesNormalizedStreamOptions, Utf8StreamDecoder,
+    collect_tool_references_from_tool_search_output, create_responses_normalized_stream,
+    function_output_value_from_message_content, parse_compacted_output_messages,
 };
 use crate::llm::rig_adapter::RigProviderCapabilities;
 use anyhow::Result;
@@ -549,7 +550,7 @@ impl OpenResponsesProvider {
     async fn generate_fallback(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
         let model = request.model.clone();
         let payload = self.build_payload(&request, false)?;
-        let url = format!("{}/chat/completions", self.base_url.trim_end_matches('/'));
+        let url = chat_completions_url(&self.base_url);
 
         let response = self
             .http_client
@@ -656,7 +657,7 @@ impl OpenResponsesProvider {
     async fn stream_fallback(&self, request: LLMRequest) -> Result<LLMStream, LLMError> {
         let model = request.model.clone();
         let payload = self.build_payload(&request, true)?;
-        let url = format!("{}/chat/completions", self.base_url.trim_end_matches('/'));
+        let url = chat_completions_url(&self.base_url);
 
         let response = self
             .http_client
@@ -683,11 +684,12 @@ impl OpenResponsesProvider {
         let stream = try_stream! {
             let mut body_stream = response.bytes_stream();
             let mut buffer = String::new();
+            let mut decoder = Utf8StreamDecoder::new();
             let mut aggregator = crate::llm::providers::shared::StreamAggregator::new(model);
 
             while let Some(chunk_result) = body_stream.next().await {
                 let chunk = chunk_result.map_err(|e| format_network_error("OpenResponses", &e))?;
-                buffer.push_str(&String::from_utf8_lossy(&chunk));
+                buffer.push_str(&decoder.push(&chunk));
 
                 while let Some((split_idx, delimiter_len)) = crate::llm::providers::shared::find_sse_boundary(&buffer) {
                     let event = buffer[..split_idx].to_string();
@@ -887,11 +889,12 @@ impl LLMProvider for OpenResponsesProvider {
         let stream = try_stream! {
             let mut body_stream = response.bytes_stream();
             let mut buffer = String::new();
+            let mut decoder = Utf8StreamDecoder::new();
             let mut aggregator = crate::llm::providers::shared::StreamAggregator::new(model);
 
             while let Some(chunk_result) = body_stream.next().await {
                 let chunk = chunk_result.map_err(|e| format_network_error("OpenResponses", &e))?;
-                buffer.push_str(&String::from_utf8_lossy(&chunk));
+                buffer.push_str(&decoder.push(&chunk));
 
                 while let Some((split_idx, delimiter_len)) = crate::llm::providers::shared::find_sse_boundary(&buffer) {
                     let event_text = buffer[..split_idx].to_string();

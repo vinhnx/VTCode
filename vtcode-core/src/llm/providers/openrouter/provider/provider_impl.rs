@@ -4,6 +4,7 @@ use crate::llm::provider::{
     NormalizedStreamEvent,
 };
 use crate::llm::providers::error_handling::{format_network_error, format_parse_error};
+use crate::llm::providers::shared::Utf8StreamDecoder;
 
 use async_stream::try_stream;
 use async_trait::async_trait;
@@ -63,11 +64,12 @@ impl LLMProvider for OpenRouterProvider {
         let stream = try_stream! {
             let mut body_stream = response.bytes_stream();
             let mut buffer = String::new();
+            let mut decoder = Utf8StreamDecoder::new();
             let mut aggregator = crate::llm::providers::shared::StreamAggregator::new(model);
 
             while let Some(chunk_result) = body_stream.next().await {
                 let chunk = chunk_result.map_err(|e| format_network_error("OpenRouter", &e))?;
-                buffer.push_str(&String::from_utf8_lossy(&chunk));
+                buffer.push_str(&decoder.push(&chunk));
 
                 while let Some((split_idx, delimiter_len)) = crate::llm::providers::shared::find_sse_boundary(&buffer) {
                     let event = buffer[..split_idx].to_string();
@@ -157,12 +159,13 @@ impl LLMProvider for OpenRouterProvider {
         let stream = try_stream! {
             let mut body_stream = response.bytes_stream();
             let mut buffer = String::new();
+            let mut decoder = Utf8StreamDecoder::new();
             let mut aggregator = crate::llm::providers::shared::StreamAggregator::new(resolved_model);
             let mut seen_tool_calls = HashSet::new();
 
             while let Some(chunk_result) = body_stream.next().await {
                 let chunk = chunk_result.map_err(|e| format_network_error("OpenRouter", &e))?;
-                buffer.push_str(&String::from_utf8_lossy(&chunk));
+                buffer.push_str(&decoder.push(&chunk));
 
                 while let Some((split_idx, delimiter_len)) =
                     crate::llm::providers::shared::find_sse_boundary(&buffer)

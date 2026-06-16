@@ -11,8 +11,9 @@ use crate::config::models::ModelId;
 use crate::llm::error_display;
 use crate::llm::provider::{LLMError, LLMRequest, Message, MessageRole, ToolChoice};
 use crate::llm::providers::common::{
-    extract_prompt_cache_settings, override_base_url, resolve_model,
+    chat_completions_url, extract_prompt_cache_settings, override_base_url, resolve_model,
 };
+use crate::llm::providers::error_handling::format_network_error;
 use reqwest::{Client as HttpClient, Response, StatusCode};
 use serde_json::Value;
 use std::borrow::Cow;
@@ -293,7 +294,7 @@ impl OpenRouterProvider {
     fn build_provider_payload(&self, request: &LLMRequest) -> Result<(Value, String), LLMError> {
         Ok((
             self.convert_to_openrouter_format(request)?,
-            format!("{}/chat/completions", self.base_url),
+            chat_completions_url(&self.base_url),
         ))
     }
 
@@ -307,14 +308,7 @@ impl OpenRouterProvider {
             .json(payload)
             .send()
             .await
-            .map_err(|e| {
-                let formatted_error =
-                    error_display::format_llm_error("OpenRouter", &format!("Network error: {}", e));
-                LLMError::Network {
-                    message: formatted_error,
-                    metadata: None,
-                }
-            })
+            .map_err(|e| format_network_error("OpenRouter", &e))
     }
 
     async fn send_with_fallback(

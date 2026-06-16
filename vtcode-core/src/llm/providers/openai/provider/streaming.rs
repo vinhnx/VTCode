@@ -10,6 +10,7 @@ use super::OpenAIProvider;
 use crate::llm::error_display;
 use crate::llm::provider::LLMProvider;
 use crate::llm::provider::{self, LLMNormalizedStream};
+use crate::llm::providers::common::chat_completions_url;
 use crate::llm::providers::error_handling::{is_rate_limit_error, parse_api_error};
 use crate::llm::providers::shared::{
     ResponsesNormalizedStreamOptions, create_responses_normalized_stream,
@@ -267,7 +268,7 @@ impl OpenAIProvider {
         if is_native_openai {
             openai_request["stream_options"] = json!({ "include_usage": true });
         }
-        let url = format!("{}/chat/completions", self.base_url);
+        let url = chat_completions_url(&self.base_url);
         let client_request_id = Self::new_client_request_id();
 
         let response = self

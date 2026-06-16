@@ -8,6 +8,7 @@ use super::OpenAIProvider;
 use crate::llm::error_display;
 use crate::llm::provider;
 use crate::llm::provider::LLMProvider;
+use crate::llm::providers::common::chat_completions_url;
 use crate::llm::providers::error_handling::{is_rate_limit_error, parse_api_error};
 use crate::llm::providers::shared::parse_compacted_output_messages;
 use futures::StreamExt;
@@ -509,7 +510,7 @@ impl OpenAIProvider {
     ) -> Result<provider::LLMResponse, provider::LLMError> {
         let model = request.model.clone();
         let openai_request = self.convert_to_openai_format(request)?;
-        let url = format!("{}/chat/completions", self.base_url);
+        let url = chat_completions_url(&self.base_url);
         let client_request_id = Self::new_client_request_id();
 
         let response = self

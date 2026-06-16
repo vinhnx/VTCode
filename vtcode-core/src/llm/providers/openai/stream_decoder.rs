@@ -12,7 +12,9 @@ use crate::llm::error_display;
 use crate::llm::provider;
 use crate::llm::providers::shared::StreamTelemetry;
 use crate::llm::providers::shared::parse_cached_prompt_tokens_from_usage;
-use crate::llm::providers::shared::{StreamAssemblyError, extract_data_payload, find_sse_boundary};
+use crate::llm::providers::shared::{
+    StreamAssemblyError, Utf8StreamDecoder, extract_data_payload, find_sse_boundary,
+};
 use crate::models_manager::model_family::find_family_for_model;
 use async_stream::try_stream;
 use futures::StreamExt;
@@ -110,6 +112,7 @@ pub(crate) fn create_chat_stream(
     let stream = try_stream! {
         let mut body_stream = response.bytes_stream();
         let mut buffer = String::new();
+        let mut decoder = Utf8StreamDecoder::new();
         let retain_reasoning_summaries = find_family_for_model(&model).supports_reasoning_summaries;
         let mut aggregator = crate::llm::providers::shared::StreamAggregator::new(model.clone());
         let telemetry = OpenAIStreamTelemetry;
@@ -123,7 +126,7 @@ pub(crate) fn create_chat_stream(
                 provider::LLMError::Network { message: formatted_error, metadata: None }
             })?;
 
-            buffer.push_str(&String::from_utf8_lossy(&chunk));
+            buffer.push_str(&decoder.push(&chunk));
 
             while let Some((split_idx, delimiter_len)) = find_sse_boundary(&buffer) {
                 let event = buffer[..split_idx].to_string();
@@ -251,6 +254,7 @@ pub(crate) fn create_responses_stream(
     let stream = try_stream! {
         let mut body_stream = response.bytes_stream();
         let mut buffer = String::new();
+        let mut decoder = Utf8StreamDecoder::new();
         let mut aggregator = crate::llm::providers::shared::StreamAggregator::new(model.clone());
         let retain_reasoning_summaries = find_family_for_model(&model).supports_reasoning_summaries;
         let mut final_response: Option<Value> = None;
@@ -268,7 +272,7 @@ pub(crate) fn create_responses_stream(
                 provider::LLMError::Network { message: formatted_error, metadata: None }
             })?;
 
-            buffer.push_str(&String::from_utf8_lossy(&chunk));
+            buffer.push_str(&decoder.push(&chunk));
 
             while let Some((split_idx, delimiter_len)) = find_sse_boundary(&buffer) {
                 let event = buffer[..split_idx].to_string();

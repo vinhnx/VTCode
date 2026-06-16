@@ -1,6 +1,6 @@
 use crate::llm::error_display;
 use crate::llm::provider::{LLMError, LLMNormalizedStream, LLMResponse, NormalizedStreamEvent};
-use crate::llm::providers::shared::{extract_data_payload, find_sse_boundary};
+use crate::llm::providers::shared::{Utf8StreamDecoder, extract_data_payload, find_sse_boundary};
 use async_stream::try_stream;
 use futures::StreamExt;
 use hashbrown::{HashMap, HashSet};
@@ -291,13 +291,14 @@ where
         let mut processor = ResponsesNormalizedStreamProcessor::new(options, parse_final_response);
         let mut body_stream = response.bytes_stream();
         let mut buffer = String::new();
+        let mut decoder = Utf8StreamDecoder::new();
 
         while let Some(chunk_result) = body_stream.next().await {
             let chunk = chunk_result.map_err(|err| provider_error(
                 provider_name,
                 format!("streaming error: {err}"),
             ))?;
-            buffer.push_str(&String::from_utf8_lossy(&chunk));
+            buffer.push_str(&decoder.push(&chunk));
 
             while let Some((split_idx, delimiter_len)) = find_sse_boundary(&buffer) {
                 let event = buffer[..split_idx].to_string();

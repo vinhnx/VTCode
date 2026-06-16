@@ -13,9 +13,9 @@ use serde_json::{Map, Value};
 
 use super::{
     common::{
-        ensure_model, extract_prompt_cache_settings, impl_llm_client, override_base_url,
-        parse_json_response, parse_response_openai_format, resolve_model,
-        serialize_messages_openai_format, serialize_tools_openai_format,
+        chat_completions_url, ensure_model, extract_prompt_cache_settings, impl_llm_client,
+        override_base_url, parse_json_response, parse_response_openai_format, resolve_model,
+        send_chat_completions, serialize_messages_openai_format, serialize_tools_openai_format,
         spawn_openai_compatible_stream, validate_supported_models,
     },
     error_handling::handle_openai_http_error,
@@ -229,21 +229,13 @@ impl DeepSeekProvider {
     }
 
     async fn send_request(&self, payload: &Value) -> Result<reqwest::Response, LLMError> {
-        let url = format!("{}/chat/completions", self.base_url.trim_end_matches('/'));
-
-        self.http_client
-            .post(&url)
-            .bearer_auth(&self.api_key)
-            .json(payload)
-            .send()
-            .await
-            .map_err(|e| LLMError::Network {
-                message: error_display::format_llm_error(
-                    PROVIDER_NAME,
-                    &format!("network error: {}", e),
-                ),
-                metadata: None,
-            })
+        let url = chat_completions_url(&self.base_url);
+        send_chat_completions(
+            self.http_client.post(&url).bearer_auth(&self.api_key),
+            payload,
+            PROVIDER_NAME,
+        )
+        .await
     }
 
     fn serialize_messages(&self, request: &LLMRequest) -> Result<Vec<Value>, LLMError> {
@@ -334,7 +326,7 @@ impl LLMProvider for DeepSeekProvider {
             response,
             PROVIDER_NAME,
             model,
-            Some("reasoning_content"),
+            &["reasoning_content"],
             super::shared::OpenAiDeltaOrder::ReasoningFirst,
         ))
     }

@@ -126,21 +126,14 @@ impl LLMProvider for GeminiProvider {
                 try_stream! {
                     let mut body_stream = response.bytes_stream();
                     let mut buffer = String::new();
+                    let mut decoder = crate::llm::providers::shared::Utf8StreamDecoder::new();
                     let mut state = InteractionStreamState::default();
 
                     while let Some(chunk_result) = body_stream.next().await {
-                        let chunk = chunk_result.map_err(|err| {
-                            let formatted_error = error_display::format_llm_error(
-                                "Gemini",
-                                &format!("Streaming error: {}", err),
-                            );
-                            LLMError::Network {
-                                message: formatted_error,
-                                metadata: None,
-                            }
-                        })?;
+                        let chunk = chunk_result
+                            .map_err(|err| format_network_error("Gemini", &err))?;
 
-                        buffer.push_str(&String::from_utf8_lossy(&chunk));
+                        buffer.push_str(&decoder.push(&chunk));
 
                         while let Some((split_idx, delimiter_len)) = find_sse_boundary(&buffer) {
                             let event = buffer[..split_idx].to_string();

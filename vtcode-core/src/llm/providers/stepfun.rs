@@ -6,13 +6,13 @@ use crate::config::TimeoutsConfig;
 use crate::config::constants::{env_vars, models, urls};
 use crate::config::core::{AnthropicConfig, ModelConfig, PromptCachingConfig};
 use crate::config::types::ReasoningEffortLevel;
-use crate::llm::error_display;
 use crate::llm::provider::{LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream};
 
 use super::common::{
-    ensure_model, impl_llm_client, override_base_url, parse_json_response,
-    parse_response_openai_format, resolve_model, serialize_messages_openai_format,
-    serialize_tools_openai_format, spawn_openai_compatible_stream, validate_supported_models,
+    chat_completions_url, ensure_model, impl_llm_client, override_base_url, parse_json_response,
+    parse_response_openai_format, resolve_model, send_chat_completions,
+    serialize_messages_openai_format, serialize_tools_openai_format,
+    spawn_openai_compatible_stream, validate_supported_models,
 };
 use super::error_handling::handle_openai_http_error;
 use super::extract_reasoning_trace;
@@ -262,22 +262,14 @@ impl LLMProvider for StepFunProvider {
         let model = ensure_model(&mut request, &self.model);
 
         let payload = self.convert_to_stepfun_format(&request)?;
-        let url = format!("{}/chat/completions", self.base_url.trim_end_matches('/'));
+        let url = chat_completions_url(&self.base_url);
 
-        let response = self
-            .http_client
-            .post(&url)
-            .bearer_auth(&self.api_key)
-            .json(&payload)
-            .send()
-            .await
-            .map_err(|error| LLMError::Network {
-                message: error_display::format_llm_error(
-                    PROVIDER_NAME,
-                    &format!("network error: {error}"),
-                ),
-                metadata: None,
-            })?;
+        let response = send_chat_completions(
+            self.http_client.post(&url).bearer_auth(&self.api_key),
+            &payload,
+            PROVIDER_NAME,
+        )
+        .await?;
 
         let response =
             handle_openai_http_error(response, PROVIDER_NAME, PRIMARY_API_KEY_ENV).await?;
@@ -306,22 +298,14 @@ impl LLMProvider for StepFunProvider {
         let model = request.model.clone();
 
         let payload = self.convert_to_stepfun_format(&request)?;
-        let url = format!("{}/chat/completions", self.base_url.trim_end_matches('/'));
+        let url = chat_completions_url(&self.base_url);
 
-        let response = self
-            .http_client
-            .post(&url)
-            .bearer_auth(&self.api_key)
-            .json(&payload)
-            .send()
-            .await
-            .map_err(|error| LLMError::Network {
-                message: error_display::format_llm_error(
-                    PROVIDER_NAME,
-                    &format!("network error: {error}"),
-                ),
-                metadata: None,
-            })?;
+        let response = send_chat_completions(
+            self.http_client.post(&url).bearer_auth(&self.api_key),
+            &payload,
+            PROVIDER_NAME,
+        )
+        .await?;
 
         let response =
             handle_openai_http_error(response, PROVIDER_NAME, PRIMARY_API_KEY_ENV).await?;
@@ -330,7 +314,7 @@ impl LLMProvider for StepFunProvider {
             response,
             PROVIDER_NAME,
             model,
-            Some("reasoning"),
+            &["reasoning"],
             super::shared::OpenAiDeltaOrder::ReasoningFirst,
         ))
     }

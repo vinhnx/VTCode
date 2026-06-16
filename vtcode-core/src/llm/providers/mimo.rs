@@ -6,14 +6,13 @@ use crate::config::TimeoutsConfig;
 use crate::config::constants::{env_vars, models};
 use crate::config::core::{AnthropicConfig, ModelConfig, PromptCachingConfig};
 use crate::config::models::{MiMoAuthMethod, detect_mimo_auth_method};
-use crate::llm::error_display;
 use crate::llm::provider::{LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream};
 
 use super::{
     common::{
-        ensure_model, extract_prompt_cache_settings_default, impl_llm_client, override_base_url,
-        parse_json_response, parse_response_openai_format, resolve_model,
-        serialize_messages_openai_format, serialize_tools_openai_format,
+        chat_completions_url, ensure_model, extract_prompt_cache_settings_default, impl_llm_client,
+        override_base_url, parse_json_response, parse_response_openai_format, resolve_model,
+        send_chat_completions, serialize_messages_openai_format, serialize_tools_openai_format,
         spawn_openai_compatible_stream, validate_supported_models,
     },
     error_handling::handle_openai_http_error,
@@ -227,25 +226,18 @@ impl MiMoProvider {
     }
 
     async fn send_request(&self, payload: &Value) -> Result<reqwest::Response, LLMError> {
-        let url = format!("{}/chat/completions", self.base_url.trim_end_matches('/'));
-
-        let mut request = self.http_client.post(&url).json(payload);
+        let url = chat_completions_url(&self.base_url);
+        let request = self.http_client.post(&url);
 
         // Use different header format based on auth method
-        request = match self.auth_method {
+        let request = match self.auth_method {
             MiMoAuthMethod::PayAsYouGo => request.header("api-key", &self.api_key),
             MiMoAuthMethod::TokenPlan => {
                 request.header("Authorization", format!("Bearer {}", &self.api_key))
             }
         };
 
-        request.send().await.map_err(|e| LLMError::Network {
-            message: error_display::format_llm_error(
-                PROVIDER_NAME,
-                &format!("network error: {}", e),
-            ),
-            metadata: None,
-        })
+        send_chat_completions(request, payload, PROVIDER_NAME).await
     }
 
     fn serialize_messages(&self, request: &LLMRequest) -> Result<Vec<Value>, LLMError> {
@@ -357,7 +349,7 @@ impl LLMProvider for MiMoProvider {
             response,
             PROVIDER_NAME,
             model,
-            Some("reasoning_content"),
+            &["reasoning_content"],
             super::shared::OpenAiDeltaOrder::ReasoningFirst,
         ))
     }

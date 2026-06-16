@@ -1,5 +1,4 @@
 use crate::config::models::model_catalog_entry;
-use crate::llm::error_display;
 use crate::llm::provider::{
     LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent,
 };
@@ -9,10 +8,10 @@ use reqwest::Client as HttpClient;
 use serde_json::{Map, Value};
 
 use super::common::{
-    ensure_model, map_finish_reason_common, parse_json_response, parse_response_openai_format,
-    serialize_messages_openai_format, validate_supported_models,
+    chat_completions_url, ensure_model, map_finish_reason_common, parse_json_response,
+    parse_response_openai_format, serialize_messages_openai_format, validate_supported_models,
 };
-use super::error_handling::handle_openai_http_error;
+use super::error_handling::{format_network_error, handle_openai_http_error};
 
 pub(crate) struct OpenCodeCompatibleProvider {
     provider_name: &'static str,
@@ -159,7 +158,7 @@ impl LLMProvider for OpenCodeCompatibleProvider {
         let model = ensure_model(&mut request, &self.model);
 
         let payload = self.convert_to_format(&request)?;
-        let url = format!("{}/chat/completions", self.base_url.trim_end_matches('/'));
+        let url = chat_completions_url(&self.base_url);
 
         let response = self
             .http_client
@@ -168,16 +167,7 @@ impl LLMProvider for OpenCodeCompatibleProvider {
             .json(&payload)
             .send()
             .await
-            .map_err(|error| {
-                let formatted_error = error_display::format_llm_error(
-                    self.provider_name,
-                    &format!("Network error: {error}"),
-                );
-                LLMError::Network {
-                    message: formatted_error,
-                    metadata: None,
-                }
-            })?;
+            .map_err(|error| format_network_error(self.provider_name, &error))?;
 
         let response =
             handle_openai_http_error(response, self.provider_name, self.api_key_env).await?;
@@ -198,7 +188,7 @@ impl LLMProvider for OpenCodeCompatibleProvider {
         request.stream = true;
 
         let payload = self.convert_to_format(&request)?;
-        let url = format!("{}/chat/completions", self.base_url.trim_end_matches('/'));
+        let url = chat_completions_url(&self.base_url);
 
         let response = self
             .http_client
@@ -207,16 +197,7 @@ impl LLMProvider for OpenCodeCompatibleProvider {
             .json(&payload)
             .send()
             .await
-            .map_err(|error| {
-                let formatted_error = error_display::format_llm_error(
-                    self.provider_name,
-                    &format!("Network error: {error}"),
-                );
-                LLMError::Network {
-                    message: formatted_error,
-                    metadata: None,
-                }
-            })?;
+            .map_err(|error| format_network_error(self.provider_name, &error))?;
 
         let response =
             handle_openai_http_error(response, self.provider_name, self.api_key_env).await?;

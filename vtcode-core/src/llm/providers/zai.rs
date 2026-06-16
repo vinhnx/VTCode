@@ -1,7 +1,6 @@
 use crate::config::TimeoutsConfig;
 use crate::config::constants::{env_vars, models, urls};
 use crate::config::core::{AnthropicConfig, ModelConfig, PromptCachingConfig};
-use crate::llm::error_display;
 use crate::llm::provider::{LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream};
 use async_trait::async_trait;
 
@@ -10,11 +9,11 @@ use serde_json::{Map, Value};
 use std::borrow::Cow;
 
 use super::common::{
-    ensure_model, impl_llm_client, parse_json_response, parse_response_openai_format,
-    resolve_model, serialize_messages_openai_format, serialize_tools_openai_format,
-    spawn_openai_compatible_stream, validate_supported_models,
+    chat_completions_url, ensure_model, impl_llm_client, parse_json_response,
+    parse_response_openai_format, resolve_model, serialize_messages_openai_format,
+    serialize_tools_openai_format, spawn_openai_compatible_stream, validate_supported_models,
 };
-use super::error_handling::handle_openai_http_error;
+use super::error_handling::{format_network_error, handle_openai_http_error};
 
 const PROVIDER_NAME: &str = "Z.AI";
 const PROVIDER_KEY: &str = "zai";
@@ -269,7 +268,7 @@ impl LLMProvider for ZAIProvider {
         let model = ensure_model(&mut request, &self.model);
 
         let payload = self.convert_to_zai_format(&request)?;
-        let url = format!("{}/chat/completions", self.base_url.trim_end_matches('/'));
+        let url = chat_completions_url(&self.base_url);
 
         let response = self
             .http_client
@@ -279,16 +278,7 @@ impl LLMProvider for ZAIProvider {
             .json(&payload)
             .send()
             .await
-            .map_err(|e| {
-                let formatted_error = error_display::format_llm_error(
-                    PROVIDER_NAME,
-                    &format!("Network error: {}", e),
-                );
-                LLMError::Network {
-                    message: formatted_error,
-                    metadata: None,
-                }
-            })?;
+            .map_err(|e| format_network_error(PROVIDER_NAME, &e))?;
 
         let response = handle_openai_http_error(response, PROVIDER_NAME, "ZAI_API_KEY").await?;
         let response_json = parse_json_response(response, PROVIDER_NAME).await?;
@@ -309,7 +299,7 @@ impl LLMProvider for ZAIProvider {
         request.stream = true;
 
         let payload = self.convert_to_zai_format(&request)?;
-        let url = format!("{}/chat/completions", self.base_url.trim_end_matches('/'));
+        let url = chat_completions_url(&self.base_url);
 
         let response = self
             .http_client
@@ -319,16 +309,7 @@ impl LLMProvider for ZAIProvider {
             .json(&payload)
             .send()
             .await
-            .map_err(|e| {
-                let formatted_error = error_display::format_llm_error(
-                    PROVIDER_NAME,
-                    &format!("Network error: {}", e),
-                );
-                LLMError::Network {
-                    message: formatted_error,
-                    metadata: None,
-                }
-            })?;
+            .map_err(|e| format_network_error(PROVIDER_NAME, &e))?;
 
         let response = handle_openai_http_error(response, PROVIDER_NAME, "ZAI_API_KEY").await?;
 
@@ -336,7 +317,7 @@ impl LLMProvider for ZAIProvider {
             response,
             PROVIDER_NAME,
             model,
-            Some("reasoning_content"),
+            &["reasoning_content"],
             super::shared::OpenAiDeltaOrder::ContentFirst,
         ))
     }

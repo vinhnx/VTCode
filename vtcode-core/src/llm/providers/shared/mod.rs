@@ -633,12 +633,14 @@ fn emit_reasoning_delta(
     aggregator: &mut StreamAggregator,
     tx: &tokio::sync::mpsc::UnboundedSender<Result<LLMStreamEvent, LLMError>>,
     delta: &Value,
-    reasoning_field: Option<&'static str>,
+    reasoning_fields: &[&'static str],
 ) {
-    let Some(reasoning_field) = reasoning_field else {
-        return;
-    };
-    let Some(reasoning) = delta.get(reasoning_field).and_then(Value::as_str) else {
+    // Pick the first present reasoning field, allowing providers to declare a
+    // fallback order (e.g. `["reasoning", "reasoning_content"]`).
+    let Some(reasoning) = reasoning_fields
+        .iter()
+        .find_map(|field| delta.get(*field).and_then(Value::as_str))
+    else {
         return;
     };
     let Some(delta) = aggregator.handle_reasoning(reasoning) else {
@@ -664,7 +666,7 @@ pub fn handle_openai_compatible_chunk(
     value: &Value,
     aggregator: &mut StreamAggregator,
     tx: &tokio::sync::mpsc::UnboundedSender<Result<LLMStreamEvent, LLMError>>,
-    reasoning_field: Option<&'static str>,
+    reasoning_fields: &[&'static str],
     delta_order: OpenAiDeltaOrder,
 ) {
     if let Some(choices) = value.get("choices").and_then(Value::as_array)
@@ -673,12 +675,12 @@ pub fn handle_openai_compatible_chunk(
         if let Some(delta) = choice.get("delta") {
             match delta_order {
                 OpenAiDeltaOrder::ReasoningFirst => {
-                    emit_reasoning_delta(aggregator, tx, delta, reasoning_field);
+                    emit_reasoning_delta(aggregator, tx, delta, reasoning_fields);
                     emit_content_delta(aggregator, tx, delta);
                 }
                 OpenAiDeltaOrder::ContentFirst => {
                     emit_content_delta(aggregator, tx, delta);
-                    emit_reasoning_delta(aggregator, tx, delta, reasoning_field);
+                    emit_reasoning_delta(aggregator, tx, delta, reasoning_fields);
                 }
             }
 
@@ -813,6 +815,61 @@ impl StreamAggregator {
     }
 }
 
+/// Incrementally decodes a byte stream into UTF-8 text.
+///
+/// Network chunks can split a multibyte code point (CJK, emoji, accented
+/// characters, smart quotes) across boundaries. Decoding each chunk
+/// independently with `String::from_utf8_lossy` corrupts such code points into
+/// `U+FFFD` replacement characters. This decoder buffers any trailing incomplete
+/// sequence until the rest of its bytes arrive, while still replacing genuinely
+/// invalid bytes with `U+FFFD` (matching `from_utf8_lossy` semantics).
+#[derive(Debug, Default)]
+pub struct Utf8StreamDecoder {
+    pending: Vec<u8>,
+}
+
+impl Utf8StreamDecoder {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Appends `bytes` and returns the decodable UTF-8 prefix. A trailing
+    /// incomplete multibyte sequence is retained for the next call.
+    pub fn push(&mut self, bytes: &[u8]) -> String {
+        self.pending.extend_from_slice(bytes);
+        let mut out = String::new();
+        loop {
+            match std::str::from_utf8(&self.pending) {
+                Ok(text) => {
+                    out.push_str(text);
+                    self.pending.clear();
+                    break;
+                }
+                Err(err) => {
+                    let valid = err.valid_up_to();
+                    if let Some(valid_bytes) = self.pending.get(..valid) {
+                        // `valid_bytes` is guaranteed valid UTF-8 by `valid_up_to`.
+                        out.push_str(&String::from_utf8_lossy(valid_bytes));
+                    }
+                    match err.error_len() {
+                        // Genuinely invalid sequence: emit replacement and skip it.
+                        Some(invalid_len) => {
+                            out.push('\u{FFFD}');
+                            self.pending.drain(..valid + invalid_len);
+                        }
+                        // Incomplete trailing sequence: keep it for the next push.
+                        None => {
+                            self.pending.drain(..valid);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        out
+    }
+}
+
 /// Common helper for processing OpenAI-compatible SSE streams.
 ///
 /// This simplifies stream implementations across providers like DeepSeek, ZAI, Moonshot, etc.
@@ -832,13 +889,13 @@ where
     use futures::StreamExt;
 
     let mut buffer = String::new();
+    let mut decoder = Utf8StreamDecoder::new();
     let mut last_response_value = None;
 
     while let Some(chunk_result) = byte_stream.next().await {
         let chunk_bytes =
             chunk_result.map_err(|e| format_network_error(provider_name, &e.to_string()))?;
-        let chunk_str = String::from_utf8_lossy(&chunk_bytes);
-        buffer.push_str(&chunk_str);
+        buffer.push_str(&decoder.push(&chunk_bytes));
 
         while let Some((boundary_idx, boundary_len)) = find_sse_boundary(&buffer) {
             let event = buffer[..boundary_idx].to_string();

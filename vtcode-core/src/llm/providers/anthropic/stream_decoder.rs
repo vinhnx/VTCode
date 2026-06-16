@@ -37,6 +37,7 @@ pub fn create_stream(
     let stream = try_stream! {
         let mut body_stream = response.bytes_stream();
         let mut buffer = String::new();
+        let mut decoder = shared::Utf8StreamDecoder::new();
         let mut aggregator = shared::StreamAggregator::new(model);
         let mut reasoning_blocks = BTreeMap::new();
         let mut finalized_reasoning_details = Vec::new();
@@ -46,7 +47,7 @@ pub fn create_stream(
                 format_network_error("Anthropic", &anyhow::Error::new(err))
             })?;
 
-            buffer.push_str(&String::from_utf8_lossy(&chunk));
+            buffer.push_str(&decoder.push(&chunk));
 
             while let Some((split_idx, delimiter_len)) = shared::find_sse_boundary(&buffer) {
                 let event_text = buffer[..split_idx].to_string();
