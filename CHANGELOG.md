@@ -2,6 +2,36 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.132.0 - 2026-06-16
+
+### Highlights
+#### Bug Fixes
+
+- Correct logo path and improve formatting in README (2c6952e5) 
+#### Documentation
+
+- Add signal handling architecture documentation (3d30aa17) 
+- Update tree detail rendering to use correct prefix styling (5f335b9d) 
+- Update tree detail rendering to use correct prefix character (50bb4f4a) 
+- Update safety documentation link to SECURITY_MODEL.md (5919991d) 
+- Update logo and fix documentation links in README (47c2d476) 
+#### Features
+
+- Add include_cache_metrics parameter to stream handling functions and update related tests (200090ba) 
+- Add GLM-5.2 model support and update related configurations (a7ab54fb) 
+- Add GLM-5.2 model support and update related configurations (603720b2) 
+### Other Changes
+#### Other
+
+- Update README.md (f04686e6) (@vinhnx)
+- Update README.md (a391ca62) (@vinhnx)
+- Update TODO.md (d7aba241) (@vinhnx)
+- Delete crate-consolidation-plan.md (60a4f9d2) (@vinhnx)
+- Refactor chat completion URL handling and improve error formatting across providers (44a1f2ff) 
+#### Refactors
+
+- Simplify stream handling in DeepSeek, StepFun, and ZAI providers (365e4a6a) 
+- Update reasoning_field to reasoning_fields for improved flexibility in stream handling (3fe34776) 
 ## 0.131.1 - 2026-06-14
 
 ### Highlights
