@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./resources/vtcode_logo/vt_code_adaptive.svg" alt="VT Code" style="border-radius: 12px" />
+  <img src="./resources/logo/vt_code_adaptive.svg" alt="VT Code" style="border-radius: 12px" />
 </p>
 
 <p align="center">
@@ -92,12 +92,12 @@ Read: [Provider Guides](./docs/providers/PROVIDER_GUIDES.md).
 
 Xiaomi MiMo V2.5 Pro ships as the default model in VT Code, available both natively and through OpenRouter. It brings a 1M-token context window, deep reasoning, and strong agentic performance to every session.
 
-- **Xiaomi MiMo** - `mimo-v2.5-pro` · `mimo-v2.5` · *1M context*
-- **OpenRouter** - `xiaomi/mimo-v2.5-pro` · `xiaomi/mimo-v2.5` · *1M context*
+- **Xiaomi MiMo** - `mimo-v2.5-pro` · `mimo-v2.5` · _1M context_
+- **OpenRouter** - `xiaomi/mimo-v2.5-pro` · `xiaomi/mimo-v2.5` · _1M context_
 
 Pricing: [Pay-as-you-go](https://platform.xiaomimimo.com/docs/en-US/price/pay-as-you-go) · [Subscription](https://platform.xiaomimimo.com/docs/en-US/price/tokenplan/subscription) · [Quick Access](https://platform.xiaomimimo.com/docs/en-US/price/tokenplan/quick-access) · [Docs](https://platform.xiaomimimo.com/docs/en-US/welcome) · [OpenRouter](https://openrouter.ai/xiaomi/mimo-v2.5-pro)
 
-> **Get started with MiMo Open Platform** — Xiaomi's most powerful AI. [Sign up with invite code **K5BCAP**](https://platform.xiaomimimo.com?ref=K5BCAP): both get **$2 API credits + 10% off** your first plan. *(Auto-filled on sign-up · Credits valid for 40 days)*
+> **Get started with MiMo Open Platform** — Xiaomi's most powerful AI. [Sign up with invite code **K5BCAP**](https://platform.xiaomimimo.com?ref=K5BCAP): both get **$2 API credits + 10% off** your first plan. _(Auto-filled on sign-up · Credits valid for 40 days)_
 
 ## Development
 
@@ -109,14 +109,14 @@ cd vtcode
 
 Rust stable, edition 2024, MSRV 1.88. Workspace of ~30 crates:
 
-| Layer | Crates |
-|---|---|
-| Binary | `vtcode` |
-| Core | `vtcode-core`, `vtcode-ui`, `vtcode-config` |
-| Extracted | `vtcode-llm`, `vtcode-skills`, `vtcode-safety`, `vtcode-a2a`, `vtcode-mcp` |
-| Infrastructure | `vtcode-commons`, `vtcode-auth`, `vtcode-bash-runner`, `vtcode-macros` |
-| Tooling | `vtcode-indexer`, `vtcode-exec-events` |
-| Protocol | `vtcode-acp`, `vtcode-utility-tool-specs` |
+| Layer          | Crates                                                                     |
+| -------------- | -------------------------------------------------------------------------- |
+| Binary         | `vtcode`                                                                   |
+| Core           | `vtcode-core`, `vtcode-ui`, `vtcode-config`                                |
+| Extracted      | `vtcode-llm`, `vtcode-skills`, `vtcode-safety`, `vtcode-a2a`, `vtcode-mcp` |
+| Infrastructure | `vtcode-commons`, `vtcode-auth`, `vtcode-bash-runner`, `vtcode-macros`     |
+| Tooling        | `vtcode-indexer`, `vtcode-exec-events`                                     |
+| Protocol       | `vtcode-acp`, `vtcode-utility-tool-specs`                                  |
 
 ```shell
 ./scripts/check-dev.sh  # fast quality gate (clippy, fmt, check)
