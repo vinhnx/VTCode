@@ -297,6 +297,7 @@ impl ModelId {
                 | ModelId::OpenRouterNvidiaNemotron3Super120bA12bFree
                 | ModelId::MinimaxM27
                 | ModelId::OllamaGlm51Cloud
+                | ModelId::OllamaGlm52Cloud
                 | ModelId::OllamaNemotron3SuperCloud
                 | ModelId::HuggingFaceDeepseekV4ProTogether
                 | ModelId::HuggingFaceGlm51Deepinfra
@@ -367,6 +368,7 @@ impl ModelId {
                 | ModelId::OpenRouterMoonshotaiKimiK27Code
                 | ModelId::MoonshotKimiK27Code
                 | ModelId::PoolsideLagunaM1
+                | ModelId::OllamaGlm52Cloud
         )
     }
 
@@ -431,6 +433,7 @@ impl ModelId {
             ModelId::OllamaMinimaxM27Cloud => "minimax-m2.7",
             ModelId::OllamaMinimaxM3Cloud => "minimax-m3",
             ModelId::OllamaGlm51Cloud => "glm-5.1",
+            ModelId::OllamaGlm52Cloud => "glm-5.2",
             ModelId::OllamaKimiK26Cloud => "kimi-k2.6",
             ModelId::OllamaKimiK27CodeCloud => "kimi-k2.7-code",
             ModelId::OllamaNemotron3SuperCloud => "nemotron-3",

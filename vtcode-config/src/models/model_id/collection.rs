@@ -68,6 +68,7 @@ impl ModelId {
             ModelId::OllamaDeepseekV4FlashCloud,
             ModelId::OllamaDeepseekV4ProCloud,
             ModelId::OllamaGlm51Cloud,
+            ModelId::OllamaGlm52Cloud,
             ModelId::OllamaMinimaxM27Cloud,
             ModelId::OllamaMinimaxM3Cloud,
             ModelId::OllamaKimiK26Cloud,

@@ -8,6 +8,7 @@ pub const SUPPORTED_MODELS: &[&str] = &[
     DEEPSEEK_V4_FLASH_CLOUD,
     DEEPSEEK_V4_PRO_CLOUD,
     GLM_5_1_CLOUD,
+    GLM_5_2_CLOUD,
     GEMINI_3_1_PRO_PREVIEW_LATEST_CLOUD,
     MINIMAX_M27_CLOUD,
     MINIMAX_M3_CLOUD,
@@ -26,6 +27,7 @@ pub const REASONING_MODELS: &[&str] = &[
     DEEPSEEK_V4_FLASH_CLOUD,
     DEEPSEEK_V4_PRO_CLOUD,
     GLM_5_1_CLOUD,
+    GLM_5_2_CLOUD,
     GEMINI_3_1_PRO_PREVIEW_LATEST_CLOUD,
     MINIMAX_M27_CLOUD,
     MINIMAX_M3_CLOUD,
@@ -40,6 +42,7 @@ pub const REASONING_LEVEL_MODELS: &[&str] = &[
     GPT_OSS_20B_CLOUD,
     GPT_OSS_120B_CLOUD,
     GLM_5_1_CLOUD,
+    GLM_5_2_CLOUD,
     NEMOTRON_3_SUPER_CLOUD,
 ];
 
@@ -49,6 +52,7 @@ pub const GPT_OSS_120B_CLOUD: &str = DEFAULT_CLOUD_MODEL;
 pub const DEEPSEEK_V4_FLASH_CLOUD: &str = "deepseek-v4-flash:cloud";
 pub const DEEPSEEK_V4_PRO_CLOUD: &str = "deepseek-v4-pro:cloud";
 pub const GLM_5_1_CLOUD: &str = "glm-5.1:cloud";
+pub const GLM_5_2_CLOUD: &str = "glm-5.2:cloud";
 pub const GEMINI_3_1_PRO_PREVIEW_LATEST_CLOUD: &str = "gemini-3.1-pro-preview:latest";
 pub const MINIMAX_M27_CLOUD: &str = "minimax-m2.7:cloud";
 pub const MINIMAX_M3_CLOUD: &str = "minimax-m3:cloud";

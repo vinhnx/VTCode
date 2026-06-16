@@ -110,6 +110,9 @@ impl ModelId {
                 "DeepSeek V4 Pro cloud deployment via Ollama with advanced thinking and strong reasoning"
             }
             ModelId::OllamaGlm51Cloud => "Cloud-hosted GLM-5.1 model served via Ollama Cloud",
+            ModelId::OllamaGlm52Cloud => {
+                "Cloud-hosted GLM-5.2 flagship model for long-horizon tasks with 1M context via Ollama Cloud"
+            }
             ModelId::OllamaMinimaxM3Cloud => {
                 "Cloud-hosted MiniMax-M3 model served via Ollama Cloud"
             }

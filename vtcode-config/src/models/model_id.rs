@@ -188,6 +188,8 @@ pub enum ModelId {
     OllamaMinimaxM3Cloud,
     /// GLM-5.1 Cloud - Cloud-hosted GLM-5.1 model served via Ollama Cloud
     OllamaGlm51Cloud,
+    /// GLM-5.2 Cloud - Cloud-hosted GLM-5.2 flagship model served via Ollama Cloud
+    OllamaGlm52Cloud,
     /// Kimi K2.6 Cloud - Moonshot Kimi K2.6 via Ollama Cloud
     OllamaKimiK26Cloud,
     /// Kimi K2.7 Code Cloud - Moonshot Kimi K2.7 Code via Ollama Cloud

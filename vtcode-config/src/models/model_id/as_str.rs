@@ -60,6 +60,7 @@ impl ModelId {
             ModelId::OllamaDeepseekV4FlashCloud => models::ollama::DEEPSEEK_V4_FLASH_CLOUD,
             ModelId::OllamaDeepseekV4ProCloud => models::ollama::DEEPSEEK_V4_PRO_CLOUD,
             ModelId::OllamaGlm51Cloud => models::ollama::GLM_5_1_CLOUD,
+            ModelId::OllamaGlm52Cloud => models::ollama::GLM_5_2_CLOUD,
             ModelId::OllamaMinimaxM27Cloud => models::ollama::MINIMAX_M27_CLOUD,
             ModelId::OllamaMinimaxM3Cloud => models::ollama::MINIMAX_M3_CLOUD,
             ModelId::OllamaKimiK26Cloud => models::ollama::KIMI_K2_6_CLOUD,

@@ -2977,6 +2977,23 @@
         },
         "context": 200000
       },
+      "glm-5.2:cloud": {
+        "id": "glm-5.2:cloud",
+        "name": "GLM-5.2 (cloud)",
+        "description": "Cloud-hosted Z.AI GLM-5.2 flagship model for long-horizon tasks with 1M context via Ollama Cloud.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1000000,
+        "max_output_tokens": 128000
+      },
       "minimax-m2.7:cloud": {
         "id": "minimax-m2.7:cloud",
         "name": "MiniMax-M2.7 (cloud)",

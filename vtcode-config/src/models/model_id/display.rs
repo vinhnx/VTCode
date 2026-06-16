@@ -52,6 +52,7 @@ impl ModelId {
             ModelId::OllamaDeepseekV4FlashCloud => "DeepSeek V4 Flash (cloud)",
             ModelId::OllamaDeepseekV4ProCloud => "DeepSeek V4 Pro (cloud)",
             ModelId::OllamaGlm51Cloud => "GLM-5.1 (cloud)",
+            ModelId::OllamaGlm52Cloud => "GLM-5.2 (cloud)",
             ModelId::OllamaMinimaxM27Cloud => "MiniMax-M2.7 (cloud)",
             ModelId::OllamaMinimaxM3Cloud => "MiniMax-M3 (cloud)",
             ModelId::OllamaKimiK26Cloud => "Kimi-K2.6 (cloud)",
