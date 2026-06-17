@@ -99,6 +99,10 @@ Pricing: [Pay-as-you-go](https://platform.xiaomimimo.com/docs/en-US/price/pay-as
 
 > **Get started with MiMo Open Platform** — Xiaomi's most powerful AI. [Sign up with invite code **K5BCAP**](https://platform.xiaomimimo.com?ref=K5BCAP): both get **$2 API credits + 10% off** your first plan. _(Auto-filled on sign-up · Credits valid for 40 days)_
 
+### Z.ai GLM Coding Plan
+
+> **Z.ai GLM** — full support for Claude Code, Cline, and 20+ top coding tools, starting at $18/month. [Join now with invite code **KPHRHRAVLL**](https://z.ai/subscribe?ic=KPHRHRAVLL). _(Limited-time pricing)_
+
 ## Development
 
 ```shell
