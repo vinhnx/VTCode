@@ -8,11 +8,11 @@ use crate::permissions::{
 };
 use crate::primary_agent::primary_agent_allows_tool;
 use crate::tools::file_ops::restore_exact_text_content;
-use crate::tools::registry::{ExecutionPolicySnapshot, ToolExecutionError};
+use crate::tools::registry::{ExecutionPolicySnapshot, ToolErrorType, ToolExecutionError};
 use crate::tools::{command_args, tool_intent};
 use anyhow::{Result, bail};
 use serde_json::Value;
-use tracing::info;
+use tracing::{info, warn};
 
 fn restore_exact_file_read_output(mut output: Value) -> Value {
     let Some(obj) = output.as_object_mut() else {
@@ -247,10 +247,44 @@ impl AgentRunner {
             .with_max_retries(self.config().agent.harness.max_tool_retries as usize);
         policy.retry_jitter = 0.15;
 
-        let outcome = self
-            .tool_registry
-            .execute_prepared_public_tool_request(prepared, policy)
-            .await;
+        // Enforce the harness tool wall-clock budget per call. This is the
+        // single chokepoint for both parallel and sequential batch paths. On
+        // elapsed, surface a `Timeout` error so the call flows through the
+        // existing retry/fallback handling — no new state type is introduced.
+        // `0` disables the bound and preserves the previous unbounded behaviour.
+        let wall_clock_secs = self.config().agent.harness.max_tool_wall_clock_secs;
+        let outcome = if wall_clock_secs > 0 {
+            let budget = std::time::Duration::from_secs(wall_clock_secs);
+            match tokio::time::timeout(
+                budget,
+                self.tool_registry
+                    .execute_prepared_public_tool_request(prepared, policy),
+            )
+            .await
+            {
+                Ok(outcome) => outcome,
+                Err(_elapsed) => {
+                    warn!(
+                        agent = ?self.agent_type,
+                        tool = resolved_tool_name,
+                        budget_secs = wall_clock_secs,
+                        "tool execution exceeded the harness wall-clock budget; aborting"
+                    );
+                    return Err(ToolExecutionError::new(
+                        resolved_tool_name.to_string(),
+                        ToolErrorType::Timeout,
+                        format!(
+                            "tool execution exceeded the harness wall-clock budget of {wall_clock_secs}s"
+                        ),
+                    )
+                    .with_surface("agent_runner"));
+                }
+            }
+        } else {
+            self.tool_registry
+                .execute_prepared_public_tool_request(prepared, policy)
+                .await
+        };
         match (outcome.output, outcome.error) {
             (Some(output), None) => Ok(restore_exact_file_read_output(output)),
             (_, Some(error)) => Err(error.with_surface("agent_runner")),

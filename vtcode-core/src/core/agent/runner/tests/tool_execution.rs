@@ -38,7 +38,14 @@ async fn denied_tool_call_emits_one_failed_output_for_runtime_invocation() {
     recorder.record_thread_events(runtime.take_emitted_events());
 
     runner
-        .execute_sequential_tool_calls(tool_calls, &mut runtime, &mut recorder, "[single]", false)
+        .execute_tool_call_batches(
+            tool_calls,
+            &mut runtime,
+            &mut recorder,
+            "[single]",
+            false,
+            false,
+        )
         .await
         .expect("tool execution should finish");
 
@@ -83,7 +90,14 @@ async fn denied_parallel_tool_halt_returns_promptly() {
 
     let start = Instant::now();
     runner
-        .execute_parallel_tool_calls(tool_calls, &mut runtime, &mut recorder, "[parallel]", false)
+        .execute_tool_call_batches(
+            tool_calls,
+            &mut runtime,
+            &mut recorder,
+            "[parallel]",
+            false,
+            false,
+        )
         .await
         .expect("tool execution should finish");
 
@@ -308,11 +322,12 @@ async fn denied_sequential_tool_halt_returns_promptly() {
 
     let start = Instant::now();
     runner
-        .execute_sequential_tool_calls(
+        .execute_tool_call_batches(
             tool_calls,
             &mut runtime,
             &mut recorder,
             "[sequential]",
+            false,
             false,
         )
         .await
@@ -399,7 +414,14 @@ async fn sequential_policy_failure_halts_following_tool_calls() {
     let mut recorder = ExecEventRecorder::new("thread-policy-halt", None, None);
 
     runner
-        .execute_sequential_tool_calls(tool_calls, &mut runtime, &mut recorder, "[single]", false)
+        .execute_tool_call_batches(
+            tool_calls,
+            &mut runtime,
+            &mut recorder,
+            "[single]",
+            false,
+            false,
+        )
         .await
         .expect("tool execution should finish");
 
@@ -452,7 +474,14 @@ async fn sequential_tool_failures_record_categorized_user_message() {
     let mut recorder = ExecEventRecorder::new("thread-policy-message", None, None);
 
     runner
-        .execute_sequential_tool_calls(tool_calls, &mut runtime, &mut recorder, "[single]", false)
+        .execute_tool_call_batches(
+            tool_calls,
+            &mut runtime,
+            &mut recorder,
+            "[single]",
+            false,
+            false,
+        )
         .await
         .expect("tool execution should finish");
 
@@ -512,7 +541,14 @@ async fn sequential_tool_failures_do_not_record_interruption_guards() {
     let mut recorder = ExecEventRecorder::new("thread-policy-guard", None, None);
 
     runner
-        .execute_sequential_tool_calls(tool_calls, &mut runtime, &mut recorder, "[single]", false)
+        .execute_tool_call_batches(
+            tool_calls,
+            &mut runtime,
+            &mut recorder,
+            "[single]",
+            false,
+            false,
+        )
         .await
         .expect("tool execution should finish");
 
@@ -562,7 +598,14 @@ async fn steer_stop_closes_open_tool_calls_with_failed_output_items() {
         .expect("steer stop should queue");
 
     runner
-        .execute_sequential_tool_calls(tool_calls, &mut runtime, &mut recorder, "[single]", false)
+        .execute_tool_call_batches(
+            tool_calls,
+            &mut runtime,
+            &mut recorder,
+            "[single]",
+            false,
+            false,
+        )
         .await
         .expect("tool execution should finish");
 

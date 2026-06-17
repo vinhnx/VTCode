@@ -411,7 +411,7 @@ fn format_command_list(results: &[VerificationResult]) -> String {
         .join(", ")
 }
 
-fn build_verification_failure_summary(failure: &VerificationResult) -> String {
+pub(super) fn build_verification_failure_summary(failure: &VerificationResult) -> String {
     match failure.exit_code {
         Some(code) => format!(
             "Verification failed: {} (exit code {}).",
@@ -419,6 +419,20 @@ fn build_verification_failure_summary(failure: &VerificationResult) -> String {
         ),
         None => format!("Verification failed: {}.", failure.command),
     }
+}
+
+/// Compose the harness event payload for a failed verification command.
+///
+/// Reuses [`build_verification_failure_summary`] for the headline and appends the
+/// trimmed command output when present, matching the layout expected by the
+/// `VerificationFailed` event.
+pub(super) fn build_verification_failure_payload(failure: &VerificationResult) -> String {
+    let mut payload = build_verification_failure_summary(failure);
+    if !failure.output.trim().is_empty() {
+        payload.push_str("\n");
+        payload.push_str(failure.output.trim());
+    }
+    payload
 }
 
 fn build_verification_failure_prompt(failure: &VerificationResult) -> String {

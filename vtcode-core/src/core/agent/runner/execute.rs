@@ -413,6 +413,50 @@ impl AgentRunner {
         Ok(results)
     }
 
+    /// Emit the `ContinuationStarted` harness event for a forced-continuation
+    /// assessment. Centralizes the (reason-only) event shape used by both the
+    /// pre- and post-verification continuation paths.
+    fn emit_continuation_started(&self, event_recorder: &mut ExecEventRecorder, reason: String) {
+        event_recorder.harness_event(
+            HarnessEventKind::ContinuationStarted,
+            Some(reason),
+            None,
+            None,
+            None,
+        );
+    }
+
+    /// Emit `VerificationFailed` (for the first failing command) or
+    /// `VerificationPassed` based on the verification run. Reuses
+    /// [`continuation::build_verification_failure_payload`] so the failure
+    /// headline stays in sync with the continuation prompt builder.
+    fn emit_verification_outcome(
+        &self,
+        event_recorder: &mut ExecEventRecorder,
+        commands: &[String],
+        results: &[VerificationResult],
+    ) {
+        if let Some(failure) = results.iter().find(|result| !result.success) {
+            event_recorder.harness_event(
+                HarnessEventKind::VerificationFailed,
+                Some(super::continuation::build_verification_failure_payload(
+                    failure,
+                )),
+                Some(failure.command.clone()),
+                None,
+                failure.exit_code,
+            );
+        } else {
+            event_recorder.harness_event(
+                HarnessEventKind::VerificationPassed,
+                Some(format!("Verification passed: {}", commands.join(", "))),
+                commands.last().cloned(),
+                None,
+                Some(0),
+            );
+        }
+    }
+
     /// Execute a task with this agent
     pub async fn execute_task(
         &mut self,
@@ -905,13 +949,7 @@ impl AgentRunner {
                                 break;
                             }
                             CompletionAssessment::Continue { reason, prompt } => {
-                                event_recorder.harness_event(
-                                    HarnessEventKind::ContinuationStarted,
-                                    Some(reason),
-                                    None,
-                                    None,
-                                    None,
-                                );
+                                self.emit_continuation_started(&mut event_recorder, reason);
                                 runtime.state.add_user_message(prompt);
                                 forced_continuation = true;
                             }
@@ -926,45 +964,11 @@ impl AgentRunner {
                                 let verification_results = self
                                     .run_verification_commands(&commands, &mut event_recorder)
                                     .await?;
-                                if let Some(failure) =
-                                    verification_results.iter().find(|result| !result.success)
-                                {
-                                    event_recorder.harness_event(
-                                        HarnessEventKind::VerificationFailed,
-                                        Some(format!(
-                                            "{}{}",
-                                            match failure.exit_code {
-                                                Some(code) => format!(
-                                                    "Verification failed: {} (exit code {}).",
-                                                    failure.command, code
-                                                ),
-                                                None => format!(
-                                                    "Verification failed: {}.",
-                                                    failure.command
-                                                ),
-                                            },
-                                            if failure.output.trim().is_empty() {
-                                                String::new()
-                                            } else {
-                                                format!("\n{}", failure.output.trim())
-                                            }
-                                        )),
-                                        Some(failure.command.clone()),
-                                        None,
-                                        failure.exit_code,
-                                    );
-                                } else {
-                                    event_recorder.harness_event(
-                                        HarnessEventKind::VerificationPassed,
-                                        Some(format!(
-                                            "Verification passed: {}",
-                                            commands.join(", ")
-                                        )),
-                                        commands.last().cloned(),
-                                        None,
-                                        Some(0),
-                                    );
-                                }
+                                self.emit_verification_outcome(
+                                    &mut event_recorder,
+                                    &commands,
+                                    &verification_results,
+                                );
 
                                 match continuation_controller
                                     .after_verification(&verification_results)
@@ -990,16 +994,11 @@ impl AgentRunner {
                                         forced_continuation = true;
                                     }
                                     CompletionAssessment::Continue { reason, prompt } => {
-                                        event_recorder.harness_event(
-                                            HarnessEventKind::ContinuationStarted,
-                                            Some(reason),
-                                            None,
-                                            None,
-                                            None,
-                                        );
+                                        self.emit_continuation_started(&mut event_recorder, reason);
                                         runtime.state.add_user_message(prompt);
                                         forced_continuation = true;
                                     }
+                                    // `after_verification` never yields `Verify`; nothing to do.
                                     CompletionAssessment::Verify { .. } => {}
                                 }
                             }
