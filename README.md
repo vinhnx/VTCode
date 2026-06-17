@@ -17,7 +17,7 @@
 
 ## What is VT Code?
 
-VT Code is a local-first coding agent built in Rust, with defense-in-depth security gating, broad LLM provider support, open protocols (Open Responses, A2A, MCP, ATIF), an extensible skill framework, delegated subagents, and rich tooling for long-running autonomous workflows.
+VT Code is a Rust coding agent built for long-running autonomous workflows, with OS-native sandboxing, multi-provider LLM support, open protocols, and extensible Skills.
 
 ## Features
 
