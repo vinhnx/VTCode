@@ -232,11 +232,7 @@ impl ZAIProvider {
 }
 
 fn normalize_model_id<'a>(model: &'a str) -> Cow<'a, str> {
-    if model == models::zai::GLM_5_LEGACY {
-        Cow::Owned(models::zai::GLM_5.to_string())
-    } else {
-        Cow::Borrowed(model)
-    }
+    Cow::Borrowed(model)
 }
 
 #[async_trait]
@@ -464,16 +460,8 @@ mod tests {
     use vtcode_config::types::ReasoningEffortLevel;
 
     #[test]
-    fn normalizes_legacy_glm5_model_id() {
-        assert_eq!(
-            normalize_model_id(models::zai::GLM_5_LEGACY),
-            models::zai::GLM_5
-        );
-    }
-
-    #[test]
-    fn keeps_canonical_glm5_model_id() {
-        assert_eq!(normalize_model_id(models::zai::GLM_5), models::zai::GLM_5);
+    fn keeps_canonical_glm51_model_id() {
+        assert_eq!(normalize_model_id(models::zai::GLM_5_1), models::zai::GLM_5_1);
     }
 
     #[test]
@@ -485,7 +473,7 @@ mod tests {
     fn payload_includes_top_p() {
         let provider = ZAIProvider::new("test-key".to_string());
         let request = LLMRequest {
-            model: models::zai::GLM_5.to_string(),
+            model: models::zai::GLM_5_1.to_string(),
             messages: vec![Message::user("hello".to_string())],
             top_p: Some(0.95),
             ..Default::default()
@@ -505,7 +493,7 @@ mod tests {
     fn payload_enables_tool_stream_when_streaming_with_tools() {
         let provider = ZAIProvider::new("test-key".to_string());
         let request = LLMRequest {
-            model: models::zai::GLM_5.to_string(),
+            model: models::zai::GLM_5_1.to_string(),
             messages: vec![Message::user("hello".to_string())],
             stream: true,
             tools: Some(Arc::new(vec![ToolDefinition::function(
@@ -536,7 +524,7 @@ mod tests {
     fn payload_streaming_without_tools_does_not_set_tool_stream() {
         let provider = ZAIProvider::new("test-key".to_string());
         let request = LLMRequest {
-            model: models::zai::GLM_5.to_string(),
+            model: models::zai::GLM_5_1.to_string(),
             messages: vec![Message::user("hello".to_string())],
             stream: true,
             ..Default::default()
@@ -560,7 +548,7 @@ mod tests {
     fn payload_includes_do_sample() {
         let provider = ZAIProvider::new("test-key".to_string());
         let request = LLMRequest {
-            model: models::zai::GLM_5.to_string(),
+            model: models::zai::GLM_5_1.to_string(),
             messages: vec![Message::user("hello".to_string())],
             do_sample: Some(false),
             ..Default::default()
@@ -579,7 +567,7 @@ mod tests {
     fn payload_disables_thinking_for_none_effort() {
         let provider = ZAIProvider::new("test-key".to_string());
         let request = LLMRequest {
-            model: models::zai::GLM_5.to_string(),
+            model: models::zai::GLM_5_1.to_string(),
             messages: vec![Message::user("hello".to_string())],
             reasoning_effort: Some(ReasoningEffortLevel::None),
             ..Default::default()
@@ -601,7 +589,7 @@ mod tests {
     fn payload_enables_thinking_for_low_effort() {
         let provider = ZAIProvider::new("test-key".to_string());
         let request = LLMRequest {
-            model: models::zai::GLM_5.to_string(),
+            model: models::zai::GLM_5_1.to_string(),
             messages: vec![Message::user("hello".to_string())],
             reasoning_effort: Some(ReasoningEffortLevel::Low),
             ..Default::default()
@@ -630,7 +618,7 @@ mod tests {
         assistant.reasoning = Some("reason step 1".to_string());
 
         let request = LLMRequest {
-            model: models::zai::GLM_5.to_string(),
+            model: models::zai::GLM_5_1.to_string(),
             messages: vec![assistant],
             ..Default::default()
         };
@@ -661,7 +649,7 @@ mod tests {
         assistant.reasoning = Some("chain".to_string());
 
         let request = LLMRequest {
-            model: models::zai::GLM_5.to_string(),
+            model: models::zai::GLM_5_1.to_string(),
             messages: vec![assistant],
             ..Default::default()
         };
@@ -684,7 +672,7 @@ mod tests {
     fn payload_serializes_web_search_tool() {
         let provider = ZAIProvider::new("test-key".to_string());
         let request = LLMRequest {
-            model: models::zai::GLM_5.to_string(),
+            model: models::zai::GLM_5_1.to_string(),
             messages: vec![Message::user("latest economic events".to_string())],
             tools: Some(Arc::new(vec![ToolDefinition::web_search(
                 serde_json::json!({
@@ -721,7 +709,7 @@ mod tests {
     fn payload_tool_choice_auto_when_requested() {
         let provider = ZAIProvider::new("test-key".to_string());
         let request = LLMRequest {
-            model: models::zai::GLM_5.to_string(),
+            model: models::zai::GLM_5_1.to_string(),
             messages: vec![Message::user("hello".to_string())],
             tool_choice: Some(ToolChoice::auto()),
             ..Default::default()
@@ -740,7 +728,7 @@ mod tests {
     fn payload_forces_tool_choice_to_auto_for_non_auto_permissions() {
         let provider = ZAIProvider::new("test-key".to_string());
         let request = LLMRequest {
-            model: models::zai::GLM_5.to_string(),
+            model: models::zai::GLM_5_1.to_string(),
             messages: vec![Message::user("hello".to_string())],
             tool_choice: Some(ToolChoice::none()),
             ..Default::default()
@@ -759,7 +747,7 @@ mod tests {
     fn payload_defaults_tool_choice_to_auto_when_tools_provided() {
         let provider = ZAIProvider::new("test-key".to_string());
         let request = LLMRequest {
-            model: models::zai::GLM_5.to_string(),
+            model: models::zai::GLM_5_1.to_string(),
             messages: vec![Message::user("hello".to_string())],
             tools: Some(Arc::new(vec![ToolDefinition::function(
                 "get_weather".to_string(),
@@ -788,7 +776,7 @@ mod tests {
     fn payload_enables_json_mode_when_output_format_requested() {
         let provider = ZAIProvider::new("test-key".to_string());
         let request = LLMRequest {
-            model: models::zai::GLM_5.to_string(),
+            model: models::zai::GLM_5_1.to_string(),
             messages: vec![Message::user("return json".to_string())],
             output_format: Some(serde_json::json!({
                 "type": "object",
@@ -815,7 +803,7 @@ mod tests {
     fn payload_keeps_json_mode_when_thinking_disabled() {
         let provider = ZAIProvider::new("test-key".to_string());
         let request = LLMRequest {
-            model: models::zai::GLM_5.to_string(),
+            model: models::zai::GLM_5_1.to_string(),
             messages: vec![Message::user("return json".to_string())],
             output_format: Some(serde_json::json!({
                 "type": "object",

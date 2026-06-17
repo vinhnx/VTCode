@@ -1186,9 +1186,9 @@ mod tests {
     #[test]
     fn serialize_messages_rehydrates_glm_interleaved_history_into_content() {
         let provider =
-            HuggingFaceProvider::with_model("test-key".to_string(), "zai-org/GLM-5:novita".into());
+            HuggingFaceProvider::with_model("test-key".to_string(), "zai-org/GLM-5.1:novita".into());
         let request = LLMRequest {
-            model: "zai-org/GLM-5:novita".to_string(),
+            model: "zai-org/GLM-5.1:novita".to_string(),
             messages: vec![
                 Message::assistant("done".to_string()).with_reasoning(Some("trace".to_string())),
             ],

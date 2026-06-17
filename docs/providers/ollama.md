@@ -81,7 +81,6 @@ The `/model` picker now lists the core Ollama catalog so you can choose them wit
 - `glm-4.7:cloud`
 - `minimax-m2.7:cloud`
 - `minimax-m2.5:cloud`
-- `nemotron-3-super:cloud`
 - `laguna-xs.2` (local, 33B MoE with 3B activated — optimized for agentic coding)
 
 These entries appear beneath the Ollama provider section alongside the "Custom Ollama model" option.

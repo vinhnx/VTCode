@@ -73,7 +73,6 @@ impl ModelId {
             ModelId::OllamaMinimaxM3Cloud,
             ModelId::OllamaKimiK26Cloud,
             ModelId::OllamaKimiK27CodeCloud,
-            ModelId::OllamaNemotron3SuperCloud,
             ModelId::OllamaGemma4,
             ModelId::OllamaLagunaXs2,
             // llama.cpp models
@@ -109,7 +108,6 @@ impl ModelId {
             ModelId::EvolinkClaudeSonnet46,
             ModelId::EvolinkClaudeOpus48,
             ModelId::EvolinkClaudeHaiku45,
-            ModelId::OpenRouterNvidiaNemotron3Super120bA12bFree,
             ModelId::OpenRouterMoonshotaiKimiK26,
             ModelId::OpenRouterMoonshotaiKimiK27Code,
             ModelId::OpenRouterZaiGlm51,

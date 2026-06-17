@@ -1441,8 +1441,7 @@ mod tests {
     fn interleaved_thinking_model_detection_handles_glm5() {
         assert!(is_interleaved_thinking_model("glm-5.1"));
         assert!(is_interleaved_thinking_model("zai-org/GLM-5.1:novita"));
-        assert!(is_interleaved_thinking_model("z-ai/glm-5"));
-        assert!(is_interleaved_thinking_model("zai-org/GLM-5:novita"));
+        assert!(is_interleaved_thinking_model("glm-5.2"));
         assert!(is_interleaved_thinking_model("MiniMax-M2.7"));
         assert!(!is_interleaved_thinking_model("deepseek-r1"));
     }

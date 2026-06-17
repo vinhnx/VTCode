@@ -75,7 +75,6 @@ impl ModelId {
             | ModelId::OllamaGlm52Cloud
             | ModelId::OllamaMinimaxM27Cloud
             | ModelId::OllamaMinimaxM3Cloud
-            | ModelId::OllamaNemotron3SuperCloud
             | ModelId::OllamaKimiK26Cloud
             | ModelId::OllamaKimiK27CodeCloud
             | ModelId::OllamaGemma4
@@ -101,7 +100,6 @@ impl ModelId {
             | ModelId::OpenRouterMistralaiMistralLarge2512
             | ModelId::OpenRouterNexAgiDeepseekV31NexN1
             | ModelId::OpenRouterStepfunStep35FlashFree
-            | ModelId::OpenRouterNvidiaNemotron3Super120bA12bFree
             | ModelId::OpenRouterZaiGlm51
             | ModelId::OpenRouterZaiGlm52
             | ModelId::OpenRouterMoonshotaiKimiK26

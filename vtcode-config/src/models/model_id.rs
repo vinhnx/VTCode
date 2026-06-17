@@ -194,8 +194,6 @@ pub enum ModelId {
     OllamaKimiK26Cloud,
     /// Kimi K2.7 Code Cloud - Moonshot Kimi K2.7 Code via Ollama Cloud
     OllamaKimiK27CodeCloud,
-    /// Nemotron 3 Super Cloud - NVIDIA Nemotron 3 Super 120B via Ollama Cloud
-    OllamaNemotron3SuperCloud,
     /// Gemma 4 - Google Gemma 4 model served via Ollama
     OllamaGemma4,
     /// Laguna XS.2 - Poolside's 33B MoE model (3B activated) for agentic coding via Ollama
@@ -250,8 +248,6 @@ pub enum ModelId {
     OpenRouterNexAgiDeepseekV31NexN1,
     /// Step 3.5 Flash (free) - StepFun's most capable open-source reasoning model via OpenRouter
     OpenRouterStepfunStep35FlashFree,
-    /// Nemotron 3 Super (free) - NVIDIA's 120B hybrid MoE model via OpenRouter
-    OpenRouterNvidiaNemotron3Super120bA12bFree,
     /// GLM-5.1 - Z.AI GLM-5.1 next-gen foundation model via OpenRouter
     OpenRouterZaiGlm51,
     /// GLM-5.2 - Z.AI GLM-5.2 flagship model for long-horizon tasks via OpenRouter

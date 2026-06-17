@@ -112,9 +112,6 @@ impl FromStr for ModelId {
             s if s == models::ollama::MINIMAX_M3_CLOUD => Ok(ModelId::OllamaMinimaxM3Cloud),
             s if s == models::ollama::KIMI_K2_6_CLOUD => Ok(ModelId::OllamaKimiK26Cloud),
             s if s == models::ollama::KIMI_K2_7_CODE_CLOUD => Ok(ModelId::OllamaKimiK27CodeCloud),
-            s if s == models::ollama::NEMOTRON_3_SUPER_CLOUD => {
-                Ok(ModelId::OllamaNemotron3SuperCloud)
-            }
             s if s == models::ollama::GEMMA_4 => Ok(ModelId::OllamaGemma4),
             s if s == models::ollama::LAGUNA_XS_2 => Ok(ModelId::OllamaLagunaXs2),
             s if s == models::llamacpp::GEMMA_4_26B_A4B => Ok(ModelId::LlamaCppGemma426bA4b),

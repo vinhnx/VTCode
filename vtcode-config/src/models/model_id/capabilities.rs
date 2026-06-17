@@ -260,7 +260,6 @@ impl ModelId {
                 | ModelId::EvolinkGemini35Flash
                 | ModelId::EvolinkDeepseekV4Flash
                 | ModelId::OpenRouterStepfunStep35FlashFree
-                | ModelId::OpenRouterNvidiaNemotron3Super120bA12bFree
                 | ModelId::HuggingFaceStep35Flash
                 | ModelId::StepFun37Flash
                 | ModelId::HuggingFaceDeepseekV4FlashNovita
@@ -294,11 +293,9 @@ impl ModelId {
                 | ModelId::ZaiGlm52
                 | ModelId::ZaiGlm51
                 | ModelId::OpenRouterStepfunStep35FlashFree
-                | ModelId::OpenRouterNvidiaNemotron3Super120bA12bFree
                 | ModelId::MinimaxM27
                 | ModelId::OllamaGlm51Cloud
                 | ModelId::OllamaGlm52Cloud
-                | ModelId::OllamaNemotron3SuperCloud
                 | ModelId::HuggingFaceDeepseekV4ProTogether
                 | ModelId::HuggingFaceGlm51Deepinfra
                 | ModelId::HuggingFaceGlm52Novita
@@ -436,7 +433,6 @@ impl ModelId {
             ModelId::OllamaGlm52Cloud => "glm-5.2",
             ModelId::OllamaKimiK26Cloud => "kimi-k2.6",
             ModelId::OllamaKimiK27CodeCloud => "kimi-k2.7-code",
-            ModelId::OllamaNemotron3SuperCloud => "nemotron-3",
             ModelId::OllamaLagunaXs2 => "laguna-xs.2",
             ModelId::OllamaGemma4 => "gemma-4",
             ModelId::LlamaCppGemma426bA4b => "4",

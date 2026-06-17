@@ -120,9 +120,6 @@ impl ModelId {
             ModelId::OllamaKimiK27CodeCloud => {
                 "Cloud-hosted Kimi K2.7 Code model served via Ollama Cloud"
             }
-            ModelId::OllamaNemotron3SuperCloud => {
-                "NVIDIA Nemotron\u{2122} is a family of open models delivering leading efficiency and accuracy for building specialized AI agents. Nemotron-3-Super (120B) is optimized for collaborative agents and high-volume workloads."
-            }
             ModelId::OllamaGemma4 => {
                 "Google Gemma 4 model designed for frontier-level reasoning, agentic workflows, coding, and multimodal understanding (128K context)."
             }

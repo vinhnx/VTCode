@@ -27,10 +27,8 @@ pub const CLAUDE_3_5_HAIKU: &str = "claude-3-5-haiku";
 pub const MINIMAX_M2_5: &str = "minimax-m2.5";
 pub const MINIMAX_M2_5_FREE: &str = "minimax-m2.5-free";
 pub const GLM_5_1: &str = "glm-5.1";
-pub const GLM_5: &str = "glm-5";
 pub const KIMI_K2_5: &str = "kimi-k2.5";
 pub const BIG_PICKLE: &str = "big-pickle";
-pub const NEMOTRON_3_SUPER_FREE: &str = "nemotron-3-super-free";
 
 pub const OPENAI_MODELS: &[&str] = &[
     GPT_5_4,
@@ -62,10 +60,8 @@ pub const OPENAI_COMPATIBLE_MODELS: &[&str] = &[
     MINIMAX_M2_5,
     MINIMAX_M2_5_FREE,
     GLM_5_1,
-    GLM_5,
     KIMI_K2_5,
     BIG_PICKLE,
-    NEMOTRON_3_SUPER_FREE,
 ];
 
 // Curated models VT Code currently exposes in config flows and ModelId metadata.
@@ -96,9 +92,7 @@ pub const SUPPORTED_MODELS: &[&str] = &[
     MINIMAX_M2_5,
     MINIMAX_M2_5_FREE,
     GLM_5_1,
-    GLM_5,
     KIMI_K2_5,
     BIG_PICKLE,
-    NEMOTRON_3_SUPER_FREE,
 ];
 pub const REASONING_MODELS: &[&str] = &[];

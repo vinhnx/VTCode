@@ -65,7 +65,6 @@ impl ModelId {
             ModelId::OllamaMinimaxM3Cloud => models::ollama::MINIMAX_M3_CLOUD,
             ModelId::OllamaKimiK26Cloud => models::ollama::KIMI_K2_6_CLOUD,
             ModelId::OllamaKimiK27CodeCloud => models::ollama::KIMI_K2_7_CODE_CLOUD,
-            ModelId::OllamaNemotron3SuperCloud => models::ollama::NEMOTRON_3_SUPER_CLOUD,
             ModelId::OllamaGemma4 => models::ollama::GEMMA_4,
             ModelId::OllamaLagunaXs2 => models::ollama::LAGUNA_XS_2,
             // llama.cpp models
