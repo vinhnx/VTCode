@@ -429,7 +429,7 @@ pub(super) fn build_verification_failure_summary(failure: &VerificationResult) -
 pub(super) fn build_verification_failure_payload(failure: &VerificationResult) -> String {
     let mut payload = build_verification_failure_summary(failure);
     if !failure.output.trim().is_empty() {
-        payload.push_str("\n");
+        payload.push('\n');
         payload.push_str(failure.output.trim());
     }
     payload

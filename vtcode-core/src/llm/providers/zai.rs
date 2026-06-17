@@ -373,7 +373,10 @@ mod tests {
 
     #[test]
     fn keeps_canonical_glm51_model_id() {
-        assert_eq!(normalize_model_id(models::zai::GLM_5_1), models::zai::GLM_5_1);
+        assert_eq!(
+            normalize_model_id(models::zai::GLM_5_1),
+            models::zai::GLM_5_1
+        );
     }
 
     #[test]

@@ -163,6 +163,20 @@ struct RuntimePromptBundle {
     request_tools: Option<Arc<Vec<ToolDefinition>>>,
 }
 
+/// Outcome of [`AgentRunner::resolve_completion_assessment`].
+///
+/// Collapses the duplicated `CompletionAssessment` handling (pre- and
+/// post-verification) into a single signal the turn loop reacts to.
+enum AssessmentResolution {
+    /// Assessment resolved to acceptance or skip — the turn loop should break.
+    Break,
+    /// Assessment requested more work — the turn loop should force a continuation.
+    ForceContinue,
+    /// Assessment is `Verify`; the caller runs verification and re-dispatches the
+    /// `after_verification` result through the same helper.
+    VerifyNotHandled,
+}
+
 impl AgentRunner {
     async fn compose_task_system_prompt(
         &self,
@@ -363,6 +377,75 @@ impl AgentRunner {
                 *should_write_blocked_handoff = true;
                 Ok(true)
             }
+        }
+    }
+
+    /// Resolve a [`CompletionAssessment`] produced by either
+    /// [`ContinuationController::assess_completion`] (pre-verification) or
+    /// [`ContinuationController::after_verification`] (post-verification) into a
+    /// single [`AssessmentResolution`] the turn loop reacts to.
+    ///
+    /// This consolidates the previously duplicated match arms for `Accept`,
+    /// `SkipAccept`, and `Continue`. `Verify` is returned as
+    /// [`AssessmentResolution::VerifyNotHandled`] so the caller can run
+    /// verification commands and re-dispatch the `after_verification` result
+    /// through this same helper.
+    ///
+    /// Note: `SkipAccept` intentionally bypasses the evaluator gate (mirroring
+    /// the original pre-verification path) regardless of which controller call
+    /// produced it.
+    #[allow(clippy::too_many_arguments)]
+    async fn resolve_completion_assessment(
+        &mut self,
+        assessment: CompletionAssessment,
+        verification_results: &[VerificationResult],
+        effective_task: &Task,
+        runtime: &mut AgentRuntime,
+        event_recorder: &mut ExecEventRecorder,
+        orchestration_enabled: bool,
+        revision_rounds_used: &mut usize,
+        max_revision_rounds: usize,
+        should_write_blocked_handoff: &mut bool,
+    ) -> Result<AssessmentResolution> {
+        match assessment {
+            CompletionAssessment::Accept => {
+                if self
+                    .resolve_completion_acceptance(
+                        effective_task,
+                        &mut runtime.state,
+                        event_recorder,
+                        orchestration_enabled,
+                        verification_results,
+                        revision_rounds_used,
+                        max_revision_rounds,
+                        should_write_blocked_handoff,
+                    )
+                    .await?
+                {
+                    return Ok(AssessmentResolution::Break);
+                }
+                Ok(AssessmentResolution::ForceContinue)
+            }
+            CompletionAssessment::SkipAccept { reason } => {
+                event_recorder.harness_event(
+                    HarnessEventKind::ContinuationSkipped,
+                    Some(reason),
+                    None,
+                    None,
+                    None,
+                );
+                runtime.state.is_completed = true;
+                runtime.state.outcome = TaskOutcome::Success;
+                Ok(AssessmentResolution::Break)
+            }
+            CompletionAssessment::Continue { reason, prompt } => {
+                self.emit_continuation_started(event_recorder, reason);
+                runtime.state.add_user_message(prompt);
+                Ok(AssessmentResolution::ForceContinue)
+            }
+            // Handled by the caller, which has access to the continuation
+            // controller and runs verification before re-dispatching.
+            CompletionAssessment::Verify { .. } => Ok(AssessmentResolution::VerifyNotHandled),
         }
     }
 
@@ -914,92 +997,79 @@ impl AgentRunner {
                                 .green()
                                 .bold()
                         ));
-                        match continuation_controller
+                        let assessment = continuation_controller
                             .assess_completion(&effective_task, &runtime.state)
-                            .await?
-                        {
-                            CompletionAssessment::Accept => {
-                                if self
-                                    .resolve_completion_acceptance(
-                                        &effective_task,
-                                        &mut runtime.state,
-                                        &mut event_recorder,
-                                        orchestration_enabled,
-                                        &[],
-                                        &mut revision_rounds_used,
-                                        max_revision_rounds,
-                                        &mut should_write_blocked_handoff,
-                                    )
-                                    .await?
-                                {
-                                    break;
-                                }
-                                forced_continuation = true;
-                            }
-                            CompletionAssessment::SkipAccept { reason } => {
-                                event_recorder.harness_event(
-                                    HarnessEventKind::ContinuationSkipped,
-                                    Some(reason),
-                                    None,
-                                    None,
-                                    None,
-                                );
-                                runtime.state.is_completed = true;
-                                runtime.state.outcome = TaskOutcome::Success;
-                                break;
-                            }
-                            CompletionAssessment::Continue { reason, prompt } => {
-                                self.emit_continuation_started(&mut event_recorder, reason);
-                                runtime.state.add_user_message(prompt);
-                                forced_continuation = true;
-                            }
-                            CompletionAssessment::Verify { commands } => {
-                                event_recorder.harness_event(
-                                    HarnessEventKind::VerificationStarted,
-                                    Some(format!("Running verification: {}", commands.join(", "))),
-                                    commands.first().cloned(),
-                                    None,
-                                    None,
-                                );
-                                let verification_results = self
-                                    .run_verification_commands(&commands, &mut event_recorder)
-                                    .await?;
-                                self.emit_verification_outcome(
-                                    &mut event_recorder,
-                                    &commands,
-                                    &verification_results,
-                                );
+                            .await?;
 
-                                match continuation_controller
-                                    .after_verification(&verification_results)
-                                    .await?
-                                {
-                                    CompletionAssessment::Accept
-                                    | CompletionAssessment::SkipAccept { .. } => {
-                                        if self
-                                            .resolve_completion_acceptance(
-                                                &effective_task,
-                                                &mut runtime.state,
-                                                &mut event_recorder,
-                                                orchestration_enabled,
-                                                &verification_results,
-                                                &mut revision_rounds_used,
-                                                max_revision_rounds,
-                                                &mut should_write_blocked_handoff,
-                                            )
-                                            .await?
-                                        {
-                                            break;
-                                        }
-                                        forced_continuation = true;
-                                    }
-                                    CompletionAssessment::Continue { reason, prompt } => {
-                                        self.emit_continuation_started(&mut event_recorder, reason);
-                                        runtime.state.add_user_message(prompt);
-                                        forced_continuation = true;
-                                    }
-                                    // `after_verification` never yields `Verify`; nothing to do.
-                                    CompletionAssessment::Verify { .. } => {}
+                        // Verify requires running verification commands before
+                        // re-dispatching the after_verification result through the
+                        // same helper. All other variants are resolved directly.
+                        if let CompletionAssessment::Verify { commands } = &assessment {
+                            event_recorder.harness_event(
+                                HarnessEventKind::VerificationStarted,
+                                Some(format!("Running verification: {}", commands.join(", "))),
+                                commands.first().cloned(),
+                                None,
+                                None,
+                            );
+                            let verification_results = self
+                                .run_verification_commands(commands, &mut event_recorder)
+                                .await?;
+                            self.emit_verification_outcome(
+                                &mut event_recorder,
+                                commands,
+                                &verification_results,
+                            );
+
+                            let post_verification = continuation_controller
+                                .after_verification(&verification_results)
+                                .await?;
+                            match self
+                                .resolve_completion_assessment(
+                                    post_verification,
+                                    &verification_results,
+                                    &effective_task,
+                                    &mut runtime,
+                                    &mut event_recorder,
+                                    orchestration_enabled,
+                                    &mut revision_rounds_used,
+                                    max_revision_rounds,
+                                    &mut should_write_blocked_handoff,
+                                )
+                                .await?
+                            {
+                                AssessmentResolution::Break => break,
+                                AssessmentResolution::ForceContinue => {
+                                    forced_continuation = true;
+                                }
+                                // `after_verification` never yields `Verify`.
+                                AssessmentResolution::VerifyNotHandled => {}
+                            }
+                        } else {
+                            match self
+                                .resolve_completion_assessment(
+                                    assessment,
+                                    &[],
+                                    &effective_task,
+                                    &mut runtime,
+                                    &mut event_recorder,
+                                    orchestration_enabled,
+                                    &mut revision_rounds_used,
+                                    max_revision_rounds,
+                                    &mut should_write_blocked_handoff,
+                                )
+                                .await?
+                            {
+                                AssessmentResolution::Break => break,
+                                AssessmentResolution::ForceContinue => {
+                                    forced_continuation = true;
+                                }
+                                AssessmentResolution::VerifyNotHandled => {
+                                    // Verify is handled in the if-branch above;
+                                    // the helper only returns this for Verify.
+                                    return Err(anyhow::anyhow!(
+                                        "unexpected VerifyNotHandled from assess_completion"
+                                    ));
                                 }
                             }
                         }

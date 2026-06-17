@@ -287,7 +287,7 @@ impl ModelId {
                 | ModelId::OpenCodeZenClaudeSonnet46
                 | ModelId::OpenCodeZenGlm51
                 | ModelId::OpenCodeGoGlm51
-                |             ModelId::OpenCodeGoMinimaxM27
+                | ModelId::OpenCodeGoMinimaxM27
                 | ModelId::DeepSeekV4Pro
                 | ModelId::EvolinkDeepseekV4Pro
                 | ModelId::ZaiGlm52
