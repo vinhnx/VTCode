@@ -1,7 +1,7 @@
 use serde_json::Value;
 
 use crate::config::constants::tools;
-use crate::tools::command_args::interactive_input_text;
+use crate::tools::command_args::{interactive_input_text, is_readonly_command_string};
 use crate::tools::names::canonical_tool_name;
 
 pub type ToolIntentClassifier = fn(&Value) -> ToolIntent;
@@ -389,6 +389,20 @@ fn memory_tool_intent(args: &Value) -> ToolIntent {
     }
 }
 
+/// Conservative allow-list of read-only inspection commands used by
+/// `unified_exec`. Any command that could write, move, or delete must be
+/// rejected so it is not cached or parallelized as read-only.
+const READONLY_UNIFIED_EXEC_COMMANDS: &[&str] = &[
+    "rg", "ls", "cat", "diff", "find", "wc", "grep", "egrep", "fgrep", "head", "tail", "sort",
+    "uniq", "awk", "sed", "cut", "tr", "ast-grep", "sg",
+];
+
+fn is_readonly_base_command(command: &str) -> bool {
+    READONLY_UNIFIED_EXEC_COMMANDS
+        .iter()
+        .any(|candidate| *candidate == command)
+}
+
 fn is_readonly_unified_exec_command(args: &Value) -> bool {
     let Ok(Some(parts)) = crate::tools::command_args::command_words(args) else {
         return false;
@@ -402,8 +416,17 @@ fn is_readonly_unified_exec_command(args: &Value) -> bool {
         return false;
     };
 
+    if is_readonly_base_command(command) {
+        // Verify the raw command has no redirections, command substitutions, or
+        // destructive subcommands (e.g. `find -delete`, `-exec rm`).
+        if !is_readonly_command_string(args) {
+            return false;
+        }
+        // For pipelines, every segment must start with an allow-listed command.
+        return is_readonly_pipeline_segments(args);
+    }
+
     match command {
-        "rg" | "ls" | "cat" => true,
         "git" => matches!(parts.get(1).map(String::as_str), Some("status")),
         "cargo" => matches!(parts.get(1).map(String::as_str), Some("check" | "test")),
         "npm" | "pnpm" | "yarn" => match parts.get(1).map(String::as_str) {
@@ -413,6 +436,38 @@ fn is_readonly_unified_exec_command(args: &Value) -> bool {
         },
         _ => false,
     }
+}
+
+/// For pipelined commands, ensure every segment begins with an allow-listed
+/// read-only command. This prevents read-only caching of constructs like
+/// `cat a.txt | tee b.txt` or `grep x | rm`.
+fn is_readonly_pipeline_segments(args: &Value) -> bool {
+    let Some(raw) = crate::tools::command_args::raw_command_text(args) else {
+        return false;
+    };
+
+    let segments: Vec<&str> = raw.split('|').map(str::trim).collect();
+    if segments.len() <= 1 {
+        return true;
+    }
+
+    for segment in segments {
+        if segment.is_empty() {
+            return false;
+        }
+        let first_command = segment
+            .split_whitespace()
+            .find(|token| !token.starts_with('-') && !token.contains('='))
+            .map(|token| token.to_ascii_lowercase());
+        let Some(first_command) = first_command else {
+            return false;
+        };
+        if !is_readonly_base_command(&first_command) {
+            return false;
+        }
+    }
+
+    true
 }
 
 /// Determine the action for unified_file tool based on args.
@@ -902,6 +957,109 @@ mod tests {
         assert!(intent.mutating);
         assert!(intent.destructive);
         assert!(!intent.retry_safe);
+    }
+
+    #[test]
+    fn unified_exec_run_diff_is_read_only() {
+        let intent = classify_tool_intent(
+            tools::UNIFIED_EXEC,
+            &json!({"action": "run", "command": "diff a.rs b.rs"}),
+        );
+        assert!(!intent.mutating);
+        assert!(intent.readonly_unified_action);
+        assert!(intent.retry_safe);
+    }
+
+    #[test]
+    fn unified_exec_run_find_is_read_only() {
+        let intent = classify_tool_intent(
+            tools::UNIFIED_EXEC,
+            &json!({"action": "run", "command": "find . -type f -name '*.rs' -not -path '*/target/*'"}),
+        );
+        assert!(!intent.mutating);
+        assert!(intent.readonly_unified_action);
+        assert!(intent.retry_safe);
+    }
+
+    #[test]
+    fn unified_exec_run_grep_wc_head_are_read_only() {
+        for cmd in [
+            "grep -rn 'todo' src",
+            "wc -l src/main.rs",
+            "head -50 src/lib.rs",
+            "tail -20 src/lib.rs",
+            "sort src/words.txt | uniq",
+            "ast-grep -p 'foo($A)' -l rs",
+        ] {
+            let intent = classify_tool_intent(
+                tools::UNIFIED_EXEC,
+                &json!({"action": "run", "command": cmd}),
+            );
+            assert!(!intent.mutating, "expected '{}' to be read-only", cmd);
+            assert!(
+                intent.readonly_unified_action,
+                "expected '{}' to be readonly_unified_action",
+                cmd
+            );
+        }
+    }
+
+    #[test]
+    fn unified_exec_run_with_redirection_is_mutating() {
+        for cmd in [
+            "cat a.txt > b.txt",
+            "grep x src > out.txt",
+            "diff a b | wc -l > count.txt",
+            "echo $(date) > log.txt",
+        ] {
+            let intent = classify_tool_intent(
+                tools::UNIFIED_EXEC,
+                &json!({"action": "run", "command": cmd}),
+            );
+            assert!(
+                intent.mutating,
+                "expected '{}' to be mutating because it contains redirection/substitution",
+                cmd
+            );
+        }
+    }
+
+    #[test]
+    fn unified_exec_run_find_with_destructive_flags_is_mutating() {
+        for cmd in [
+            "find . -type f -delete",
+            "find . -name '*.tmp' -exec rm {} \\;",
+            "find . -name '*.tmp' -exec chmod 600 {} \\;",
+        ] {
+            let intent = classify_tool_intent(
+                tools::UNIFIED_EXEC,
+                &json!({"action": "run", "command": cmd}),
+            );
+            assert!(
+                intent.mutating,
+                "expected '{}' to be mutating because it has destructive find flags",
+                cmd
+            );
+        }
+    }
+
+    #[test]
+    fn unified_exec_run_pipelines_with_unsafe_segments_are_mutating() {
+        for cmd in [
+            "cat a.txt | tee b.txt",
+            "echo hi | cat",
+            "grep x src | rm -rf",
+        ] {
+            let intent = classify_tool_intent(
+                tools::UNIFIED_EXEC,
+                &json!({"action": "run", "command": cmd}),
+            );
+            assert!(
+                intent.mutating,
+                "expected '{}' to be mutating because a pipeline segment is unsafe",
+                cmd
+            );
+        }
     }
 
     #[test]

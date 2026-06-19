@@ -997,6 +997,43 @@ impl ToolRegistry {
             );
         }
 
+        // FAST REUSE: Read-only inspection calls are often repeated verbatim within a
+        // single turn (e.g. `diff a b | wc -l`, `find ... | grep`). Reuse the most recent
+        // successful result immediately instead of paying for another round-trip and
+        // another spool file. This is gated by a short TTL and the read-only classification
+        // so mutating calls never take this path.
+        if readonly_classification && !skip_loop_detection {
+            let fast_reuse_max_age = Duration::from_secs(60);
+            let fast_reused = self
+                .execution_history
+                .find_recent_spooled_result(&tool_name, args, fast_reuse_max_age)
+                .or_else(|| {
+                    self.execution_history.find_recent_successful_result(
+                        &tool_name,
+                        args,
+                        fast_reuse_max_age,
+                    )
+                });
+            if let Some(mut reused_value) = fast_reused {
+                if let Some(obj) = reused_value.as_object_mut() {
+                    obj.insert("reused_recent_result".into(), json!(true));
+                    obj.insert("tool".into(), json!(display_name));
+                    let reused_spooled = obj.get("spool_path").and_then(|v| v.as_str()).is_some();
+                    let note = if reused_spooled {
+                        "Reusing a recent spooled output for this identical read-only call. Continue from the spool file instead of re-running the tool."
+                    } else {
+                        "Reusing a recent successful output for this identical read-only call."
+                    };
+                    obj.insert("reused_result_note".into(), json!(note));
+                }
+                trace!(
+                    tool = %tool_name,
+                    "Fast-reusing recent successful read-only result"
+                );
+                return Ok(reused_value);
+            }
+        }
+
         // LOOP DETECTION: Check if we're calling the same tool repeatedly with identical params
         let loop_limit = if skip_loop_detection {
             0

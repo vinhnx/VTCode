@@ -900,6 +900,40 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn read_only_unified_exec_results_are_fast_reused() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        registry.allow_all_tools().await?;
+
+        let test_file = temp_dir.path().join("test.txt");
+        fs::write(&test_file, "hello")?;
+
+        let cat_args = json!({
+            "action": "run",
+            "command": format!("cat {}", test_file.to_string_lossy()),
+        });
+
+        let first = registry
+            .execute_tool_ref(tools::UNIFIED_EXEC, &cat_args)
+            .await?;
+        assert!(
+            first.get("reused_recent_result").is_none(),
+            "first call should not be reused"
+        );
+
+        let second = registry
+            .execute_tool_ref(tools::UNIFIED_EXEC, &cat_args)
+            .await?;
+        assert_eq!(
+            second.get("reused_recent_result"),
+            Some(&json!(true)),
+            "second identical read-only exec call should reuse the first result"
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn prevalidated_execution_enforces_planning_workflow_guards() -> Result<()> {
         let temp_dir = TempDir::new()?;
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;

@@ -1,3 +1,5 @@
+//! Re-exported from `vtcode_llm` to eliminate duplication.
+
 use super::provider::{LLMError, LLMProvider, LLMRequest, LLMResponse, NormalizedStreamEvent};
 use futures::StreamExt as _;
 

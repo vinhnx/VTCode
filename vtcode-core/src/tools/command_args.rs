@@ -210,6 +210,161 @@ pub fn working_dir_text(args: &Value) -> Option<&str> {
     args.as_object().and_then(working_dir_text_from_payload)
 }
 
+/// Extract the raw command string from unified_exec-style arguments without
+/// splitting it into words. This is useful for checking shell syntax that
+/// would be lost after `shell_words::split`, such as redirections and pipes.
+pub fn raw_command_text(args: &Value) -> Option<String> {
+    let payload = args.as_object()?;
+
+    if let Some(command) = payload
+        .get("command")
+        .or_else(|| payload.get("cmd"))
+        .or_else(|| payload.get("raw_command"))
+    {
+        match command {
+            Value::String(text) => return Some(text.clone()),
+            Value::Array(values) => {
+                let parts: Option<Vec<&str>> = values.iter().map(|v| v.as_str()).collect();
+                return parts.map(|parts| shell_words::join(parts));
+            }
+            _ => return None,
+        }
+    }
+
+    let indexed = parse_indexed_command_parts(payload).ok().flatten()?;
+    Some(shell_words::join(indexed.iter().map(String::as_str)))
+}
+
+/// Returns true if the raw command string appears to be a safe read-only
+/// inspection command. It checks for shell write operators, process
+/// substitutions, and common destructive subcommands/flags.
+///
+/// This is intentionally conservative: a command that does anything suspicious
+/// is treated as mutating so it does not get silently cached or parallelized.
+pub fn is_readonly_command_string(args: &Value) -> bool {
+    let Some(command) = raw_command_text(args) else {
+        return false;
+    };
+    let trimmed = command.trim();
+    if trimmed.is_empty() {
+        return false;
+    }
+
+    // Deny shell operators that produce side effects or hide them.
+    // Matches: >, >>, >|, <(, >(, ;, &&, ||, $() backticks handled below.
+    // Pipelines are allowed here but validated segment-by-segment by the caller.
+    if trimmed.contains('>')
+        || trimmed.contains("<(")
+        || trimmed.contains(">(")
+        || trimmed.contains(';')
+        || trimmed.contains("&&")
+        || trimmed.contains("||")
+    {
+        return false;
+    }
+
+    // Deny command substitution and process redirection that can run arbitrary code.
+    if trimmed.contains("$(") || trimmed.contains('`') || trimmed.contains("$((") {
+        return false;
+    }
+
+    // Deny common destructive commands outright, regardless of flags.
+    let lower = trimmed.to_ascii_lowercase();
+    for destructive in [
+        " rm ",
+        "rm ",
+        " shred ",
+        "shred ",
+        " truncate ",
+        "truncate ",
+        " tee ",
+        "tee ",
+        " mv ",
+        "mv ",
+        " cp ",
+        "cp ",
+        " install ",
+        "install ",
+        " chmod ",
+        "chmod ",
+        " chown ",
+        "chown ",
+        " chattr ",
+        "chattr ",
+        " mkfs ",
+        "mkfs",
+        " dd ",
+        "dd ",
+        " wipe ",
+        "wipe ",
+        " srm ",
+        "srm ",
+        " rm\t",
+        "shred\t",
+        "truncate\t",
+        "tee\t",
+        "mv\t",
+        "cp\t",
+    ] {
+        if lower.contains(destructive) {
+            return false;
+        }
+    }
+    if lower.starts_with("rm ")
+        || lower.starts_with("shred ")
+        || lower.starts_with("truncate ")
+        || lower.starts_with("tee ")
+        || lower.starts_with("mv ")
+        || lower.starts_with("cp ")
+        || lower.starts_with("install ")
+        || lower.starts_with("chmod ")
+        || lower.starts_with("chown ")
+        || lower.starts_with("chattr ")
+        || lower.starts_with("mkfs")
+        || lower.starts_with("dd ")
+        || lower.starts_with("wipe ")
+        || lower.starts_with("srm ")
+    {
+        return false;
+    }
+
+    // Deny destructive `find` flags before we allow `find` as read-only.
+    if lower.contains("find ") {
+        for destructive_flag in [
+            " -delete",
+            "-delete ",
+            "\t-delete",
+            " -exec rm",
+            "-exec rm",
+            " -exec shred",
+            "-exec shred",
+            " -exec chmod",
+            "-exec chmod",
+            " -exec chown",
+            "-exec chown",
+            " -exec truncate",
+            "-exec truncate",
+            " -exec tee",
+            "-exec tee",
+            " -exec mv",
+            "-exec mv",
+            " -exec cp",
+            "-exec cp",
+            " -exec install",
+            "-exec install",
+            " -execdd",
+            " -exec bash",
+            "-exec bash",
+        ] {
+            if lower.contains(destructive_flag) {
+                return false;
+            }
+        }
+    }
+
+    true
+}
+
 pub fn normalize_shell_args(args: &Value) -> Result<Value, &'static str> {
     let mut normalized = match normalize_indexed_command_args(args)? {
         Some(value) => value,
@@ -261,10 +416,10 @@ pub fn normalize_shell_args(args: &Value) -> Result<Value, &'static str> {
 mod tests {
     use super::{
         command_text, command_words, has_indexed_command_parts, interactive_input_text,
-        normalize_indexed_command_args, normalize_shell_args, normalized_command_value,
-        parse_indexed_command_parts, session_id_text, session_id_text_from_payload,
-        unified_exec_missing_required_args, unified_exec_requires_command_safety, working_dir_text,
-        working_dir_text_from_payload,
+        is_readonly_command_string, normalize_indexed_command_args, normalize_shell_args,
+        normalized_command_value, parse_indexed_command_parts, raw_command_text, session_id_text,
+        session_id_text_from_payload, unified_exec_missing_required_args,
+        unified_exec_requires_command_safety, working_dir_text, working_dir_text_from_payload,
     };
     use serde_json::{Value, json};
 
@@ -504,5 +659,92 @@ mod tests {
             "action": "poll",
             "session_id": "run-1"
         })));
+    }
+
+    #[test]
+    fn raw_command_text_extracts_command_string() {
+        assert_eq!(
+            raw_command_text(&json!({"command": "rg foo"})),
+            Some("rg foo".to_string())
+        );
+        assert_eq!(
+            raw_command_text(&json!({"cmd": "ls -la"})),
+            Some("ls -la".to_string())
+        );
+        assert_eq!(
+            raw_command_text(&json!({"command.0": "cat", "command.1": "file.txt"})),
+            Some("cat file.txt".to_string())
+        );
+        assert_eq!(
+            raw_command_text(&json!({"command": ["wc", "-l"]})),
+            Some("wc -l".to_string())
+        );
+        assert!(raw_command_text(&json!({})).is_none());
+    }
+
+    #[test]
+    fn is_readonly_command_string_allows_inspection_commands() {
+        for cmd in [
+            "diff a.rs b.rs",
+            "find . -type f -name '*.rs'",
+            "wc -l src/main.rs",
+            "grep -rn 'todo' src",
+            "head -50 src/lib.rs",
+            "sort src/words.txt | uniq",
+        ] {
+            assert!(
+                is_readonly_command_string(&json!({"command": cmd})),
+                "expected '{}' to be read-only",
+                cmd
+            );
+        }
+    }
+
+    #[test]
+    fn is_readonly_command_string_allows_pipelines() {
+        // Pipelines are allowed here; the caller is responsible for checking each
+        // segment against an allow-list of safe commands.
+        assert!(is_readonly_command_string(
+            &json!({"command": "diff a b | wc -l"})
+        ));
+        assert!(is_readonly_command_string(
+            &json!({"command": "grep x src | sort | uniq"})
+        ));
+    }
+
+    #[test]
+    fn is_readonly_command_string_rejects_redirections_and_substitutions() {
+        for cmd in [
+            "cat a.txt > b.txt",
+            "grep x src >> out.txt",
+            "echo $(date)",
+            "echo `date`",
+            "cat <(echo hi)",
+            "cat >(echo hi)",
+            "true && rm a.txt",
+        ] {
+            assert!(
+                !is_readonly_command_string(&json!({"command": cmd})),
+                "expected '{}' to be rejected",
+                cmd
+            );
+        }
+    }
+
+    #[test]
+    fn is_readonly_command_string_rejects_destructive_commands() {
+        for cmd in [
+            "rm a.txt",
+            "find . -type f -delete",
+            "find . -name '*.tmp' -exec rm {} \\;",
+            "shred a.txt",
+            "mv a.txt b.txt",
+        ] {
+            assert!(
+                !is_readonly_command_string(&json!({"command": cmd})),
+                "expected '{}' to be rejected",
+                cmd
+            );
+        }
     }
 }
