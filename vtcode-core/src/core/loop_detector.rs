@@ -264,7 +264,8 @@ impl LoopDetector {
         let is_readonly = matches!(
             base_name,
             tools::READ_FILE | LEGACY_GREP_FILE | LEGACY_LIST_FILES | tools::UNIFIED_SEARCH
-        ) || (base_name == tools::UNIFIED_FILE && tool_name.ends_with("::read"));
+        ) || (base_name == tools::UNIFIED_FILE
+            && self.recent_calls.back().is_some_and(|r| r.read_target.is_some()));
 
         let is_mutating = matches!(
             base_name,
@@ -366,8 +367,16 @@ impl LoopDetector {
 
     fn detect_repetitive_read_target(&mut self, tool_name: &str) -> Option<String> {
         let base_name = base_tool_name(tool_name);
+        // The current call's record was already pushed into `recent_calls` with
+        // `read_target` populated by `read_target_for_tool_call` (which now
+        // handles `unified_file` with `action: "read"`).  Use that field as the
+        // authoritative indicator instead of checking for a `::read` suffix.
+        let current_has_read_target = self
+            .recent_calls
+            .back()
+            .is_some_and(|r| r.read_target.is_some());
         let is_read_tool = base_name == tools::READ_FILE
-            || (base_name == tools::UNIFIED_FILE && tool_name.ends_with("::read"));
+            || (base_name == tools::UNIFIED_FILE && current_has_read_target);
         if !is_read_tool {
             return None;
         }
@@ -389,7 +398,7 @@ impl LoopDetector {
         for record in self.recent_calls.iter().rev() {
             let rec_base = base_tool_name(&record.tool_name);
             let rec_is_read_tool = rec_base == tools::READ_FILE
-                || (rec_base == tools::UNIFIED_FILE && record.tool_name.ends_with("::read"));
+                || (rec_base == tools::UNIFIED_FILE && record.read_target.is_some());
             let rec_is_mutating = matches!(
                 rec_base,
                 tools::WRITE_FILE
@@ -656,7 +665,7 @@ impl Default for LoopDetector {
 fn read_target_for_tool_call(tool_name: &str, args: &serde_json::Value) -> Option<String> {
     let base_name = base_tool_name(tool_name);
     let read_tool = base_name == tools::READ_FILE
-        || (base_name == tools::UNIFIED_FILE && tool_name.ends_with("::read"));
+        || (base_name == tools::UNIFIED_FILE && is_unified_file_read(tool_name, args));
     if !read_tool {
         return None;
     }
@@ -671,6 +680,17 @@ fn read_target_for_tool_call(tool_name: &str, args: &serde_json::Value) -> Optio
         }
     }
     None
+}
+
+/// Returns `true` when `(tool_name, args)` represent a `unified_file` read
+/// invocation — either via the legacy `::read` suffix or the modern
+/// `action: "read"` argument.
+fn is_unified_file_read(tool_name: &str, args: &serde_json::Value) -> bool {
+    tool_name.ends_with("::read")
+        || matches!(
+            args.get("action").and_then(|v| v.as_str()),
+            Some("read")
+        )
 }
 
 #[cfg(test)]
@@ -1200,5 +1220,52 @@ mod tests {
         assert!(msg.contains("offset/limit"));
         assert!(detector.is_hard_limit_exceeded(&read_tool));
         assert!(detector.is_hard_limit_exceeded(&read_tool));
+    }
+
+    // --- unified_file read-action tests ---
+
+    #[test]
+    fn read_target_extracted_for_unified_file_read_action() {
+        let args = json!({"action": "read", "path": "src/lib.rs"});
+        let target = read_target_for_tool_call("unified_file", &args);
+        assert_eq!(target.as_deref(), Some("src/lib.rs"));
+    }
+
+    #[test]
+    fn read_target_none_for_unified_file_write_action() {
+        let args = json!({"action": "write", "path": "src/lib.rs", "content": "fn main() {}"});
+        let target = read_target_for_tool_call("unified_file", &args);
+        assert!(target.is_none());
+    }
+
+    #[test]
+    fn read_target_extracted_for_unified_file_with_read_suffix() {
+        let args = json!({"path": "src/main.rs"});
+        let target = read_target_for_tool_call("unified_file::read", &args);
+        assert_eq!(target.as_deref(), Some("src/main.rs"));
+    }
+
+    #[test]
+    fn repetitive_read_target_fires_for_unified_file_read_action() {
+        let mut detector = LoopDetector::new();
+
+        // Use only 2 different offsets so variants stays <= MAX_SIMILAR_READ_TARGET_VARIANTS.
+        // With 4 calls to the same file, same_target_streak >= MAX_SIMILAR_READ_TARGET_CALLS
+        // and variants <= MAX_SIMILAR_READ_TARGET_VARIANTS => HARD STOP fires.
+        let offsets = [0, 100, 0, 100];
+        for (i, offset) in offsets.iter().enumerate() {
+            let result = detector.record_call(
+                "unified_file",
+                &json!({"action": "read", "path": "src/lib.rs", "offset": offset}),
+            );
+            if i < offsets.len() - 1 {
+                assert!(result.is_none(), "call {} should not trigger", i);
+            } else {
+                assert!(result.is_some(), "call {} should trigger HARD STOP", i);
+                let msg = result.unwrap();
+                assert!(msg.contains("HARD STOP"), "Expected HARD STOP: {}", msg);
+                assert!(msg.contains("src/lib.rs"));
+            }
+        }
     }
 }

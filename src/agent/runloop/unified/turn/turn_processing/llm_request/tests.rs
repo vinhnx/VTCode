@@ -336,7 +336,7 @@ fn llm_attempt_timeout_defaults_to_fifth_of_turn_budget() {
 
 #[test]
 fn llm_attempt_timeout_expands_for_planning_workflow() {
-    assert_eq!(llm_attempt_timeout_secs(300, true, "openai"), 120);
+    assert_eq!(llm_attempt_timeout_secs(300, true, "openai"), 150);
 }
 
 #[test]
@@ -359,7 +359,7 @@ fn llm_timeout_warning_delay_targets_three_quarters_of_budget() {
 
 #[test]
 fn llm_attempt_timeout_respects_planning_workflow_cap() {
-    assert_eq!(llm_attempt_timeout_secs(1_200, true, "huggingface"), 120);
+    assert_eq!(llm_attempt_timeout_secs(1_200, true, "huggingface"), 180);
 }
 
 #[test]

@@ -70,7 +70,12 @@ use vtcode_core::primary_agent::ActivePrimaryAgentState;
 const RECOVERY_SYNTHESIS_MAX_TOKENS: u32 = 1024;
 /// Maximum number of times the recovery pass is retried when the model
 /// returns tool calls (discarded) instead of text during tool-free recovery.
-const MAX_RECOVERY_RETRIES: u8 = 2;
+///
+/// Raised from 2 → 3: a single transient post-tool follow-up failure (e.g. an
+/// LLM stream timeout on a large context) no longer terminates the turn and
+/// forces the user to nudge "continue". The extra pass only fires when the
+/// model keeps emitting tool calls during a tool-free recovery window.
+const MAX_RECOVERY_RETRIES: u8 = 3;
 pub(crate) const POST_TOOL_RECOVERY_REASON: &str = "Model follow-up failed after tool activity. Tools are disabled on the next pass; provide a direct textual response from the current context and reuse the latest tool outputs already in history.";
 pub(crate) const POST_TOOL_TIMEOUT_RECOVERY_REASON: &str = "The model follow-up timed out after tool activity. Tools are disabled on the next pass; provide a direct textual response from the current context and reuse the latest tool outputs already in history.";
 const RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER: &str = "Recovery synthesis failed. No additional tool call was applied in this recovery pass. The latest validated tool outputs from earlier in this turn are still usable — reuse them directly or re-state your request.";

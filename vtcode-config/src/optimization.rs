@@ -302,7 +302,10 @@ impl Default for AgentExecutionConfig {
             state_history_size: 1000,
             resource_monitor_interval_ms: 100,
             max_memory_mb: 1024,
-            max_execution_time_secs: 300,
+            // Aligned with `DEFAULT_MAX_TOOL_WALL_CLOCK_SECS` (600). Previously 300,
+            // which conflicted with the harness wall-clock budget (600) and could
+            // truncate long agentic runs at 5 minutes, forcing "continue" nudges.
+            max_execution_time_secs: 600,
             idle_timeout_ms: 5000, // 5 seconds idle timeout
             idle_backoff_ms: 100,  // 100ms backoff during idle
             max_idle_cycles: 10,   // 10 consecutive idle cycles before deep sleep

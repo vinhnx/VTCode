@@ -94,7 +94,12 @@ pub(crate) fn llm_attempt_timeout_secs(
     planning_active: bool,
     provider_name: &str,
 ) -> u64 {
-    let baseline = (turn_timeout_secs / 5).clamp(30, 120);
+    // Ceiling raised 120 → 180s: a single slow first-token follow-up on a large
+    // context (common after many accumulated tool outputs) should not exhaust
+    // the per-attempt budget and terminate the whole turn via
+    // "model follow-up timed out". The baseline fraction (turn/5) still bounds
+    // the default; only the clamp ceiling is relaxed.
+    let baseline = (turn_timeout_secs / 5).clamp(30, 180);
     if !planning_active {
         return baseline;
     }
@@ -106,7 +111,7 @@ pub(crate) fn llm_attempt_timeout_secs(
     } else {
         60
     };
-    let planning_budget = (turn_timeout_secs / 2).clamp(planning_floor, 120);
+    let planning_budget = (turn_timeout_secs / 2).clamp(planning_floor, 180);
     baseline.max(planning_budget)
 }
 

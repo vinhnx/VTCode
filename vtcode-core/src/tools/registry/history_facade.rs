@@ -38,6 +38,19 @@ impl ToolRegistry {
             .find_recent_successful_result(tool_name, args, max_age)
     }
 
+    /// Find the most recent successful output for a read-only tool call that
+    /// targets the same file path, ignoring pagination fields.  Returns `None`
+    /// for non-read-only tools or when no path can be extracted.
+    pub fn find_recent_successful_by_read_target(
+        &self,
+        tool_name: &str,
+        args: &Value,
+        max_age: Duration,
+    ) -> Option<Value> {
+        self.execution_history
+            .find_recent_successful_by_read_target(tool_name, args, max_age)
+    }
+
     /// Find continuation metadata from a recent chunked file-read result for the same path.
     ///
     /// Supports both `read_file` and `unified_file` (read action) history records.

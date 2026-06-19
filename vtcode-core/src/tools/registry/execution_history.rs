@@ -443,7 +443,96 @@ impl ToolExecutionHistory {
         None
     }
 
-    /// Find continuation info from a recent chunked file-read call for the same path.
+    /// Find the most recent successful output for a read-only tool call that
+    /// targets the same file path, ignoring pagination fields (`offset`,
+    /// `limit`, `page`, etc.).  This enables cross-turn dedup when the model
+    /// re-reads the same file with different pagination arguments.
+    ///
+    /// Returns `None` for non-read-only tools or when no matching path can be
+    /// extracted from the args.
+    pub fn find_recent_successful_by_read_target(
+        &self,
+        tool_name: &str,
+        query_args: &Value,
+        max_age: Duration,
+    ) -> Option<Value> {
+        let query_path = Self::extract_read_target(tool_name, query_args)?;
+        let records = self.records.read().ok()?;
+        let now = SystemTime::now();
+
+        for record in records.iter().rev() {
+            if record.tool_name != tool_name || !record.success {
+                continue;
+            }
+            let Some(record_path) = Self::extract_read_target(tool_name, &record.args) else {
+                continue;
+            };
+            if record_path != query_path {
+                continue;
+            }
+            let age_ok = match now.duration_since(record.timestamp) {
+                Ok(age) => age <= max_age,
+                Err(_) => false,
+            };
+            if !age_ok {
+                continue;
+            }
+            if let Ok(result) = &record.result {
+                if result.get("spool_path").and_then(|v| v.as_str()).is_some() {
+                    let Some(spool_path) = result.get("spool_path").and_then(|v| v.as_str()) else {
+                        continue;
+                    };
+                    if !Path::new(spool_path).exists() {
+                        continue;
+                    }
+                }
+                return Some(result.clone());
+            }
+        }
+        None
+    }
+
+    /// Extract the read target from tool args for path-based matching.
+    /// Returns `None` for non-read-only tools or when no path is found.
+    ///
+    /// For `unified_search` and `grep_file`, the key includes action+pattern
+    /// so that two greps with different patterns on the same directory are NOT
+    /// treated as duplicates.
+    fn extract_read_target(tool_name: &str, args: &Value) -> Option<String> {
+        let obj = args.as_object()?;
+        let is_read = match tool_name {
+            tools::READ_FILE | tools::GREP_FILE | tools::LIST_FILES => true,
+            tools::UNIFIED_SEARCH => true,
+            tools::UNIFIED_FILE => {
+                matches!(obj.get("action").and_then(Value::as_str), Some("read"))
+            }
+            _ => false,
+        };
+        if !is_read {
+            return None;
+        }
+        let path = Self::extract_path_from_args(obj)?;
+        // For search tools, include action+pattern so different queries on the
+        // same directory are not treated as duplicates.
+        if tool_name == tools::UNIFIED_SEARCH || tool_name == tools::GREP_FILE {
+            let action = obj.get("action").and_then(Value::as_str).unwrap_or("");
+            let pattern = obj.get("pattern").and_then(Value::as_str).unwrap_or("");
+            return Some(format!("{path}::{action}::{pattern}"));
+        }
+        Some(path)
+    }
+
+    fn extract_path_from_args(obj: &serde_json::Map<String, Value>) -> Option<String> {
+        for key in ["path", "file_path", "filepath", "target_path", "file"] {
+            if let Some(path) = obj.get(key).and_then(Value::as_str) {
+                let trimmed = path.trim();
+                if !trimmed.is_empty() {
+                    return Some(trimmed.to_string());
+                }
+            }
+        }
+        None
+    }
     ///
     /// Supports both `read_file` and `unified_file` read action records.
     ///
@@ -1010,5 +1099,68 @@ mod tests {
         assert!(loop_result.detected);
         assert_eq!(loop_result.repeat_count, 2);
         assert_eq!(loop_result.tool_name, "unified_search");
+    }
+
+    #[test]
+    fn find_recent_successful_by_read_target_matches_same_path_different_offset() {
+        let history = ToolExecutionHistory::new(10);
+
+        // Record 1: read src/lib.rs with offset=0
+        history.add_record(ToolExecutionRecord::success(
+            "unified_file".to_string(),
+            "unified_file".to_string(),
+            false,
+            None,
+            json!({"action":"read","path":"src/lib.rs","offset":0,"limit":100}),
+            json!({"content":"file content"}),
+            make_snapshot(),
+            None, None, None, None, false,
+        ));
+
+        // Record 2: read src/main.rs (different file)
+        history.add_record(ToolExecutionRecord::success(
+            "unified_file".to_string(),
+            "unified_file".to_string(),
+            false,
+            None,
+            json!({"action":"read","path":"src/main.rs","offset":0,"limit":100}),
+            json!({"content":"main content"}),
+            make_snapshot(),
+            None, None, None, None, false,
+        ));
+
+        // Query: same path, different offset — should match record 1
+        let result = history.find_recent_successful_by_read_target(
+            "unified_file",
+            &json!({"action":"read","path":"src/lib.rs","offset":500,"limit":200}),
+            Duration::from_secs(600),
+        );
+        assert!(result.is_some(), "should match same path with different offset");
+        assert_eq!(result.unwrap(), json!({"content":"file content"}));
+
+        // Query: different path — should match record 2
+        let result2 = history.find_recent_successful_by_read_target(
+            "unified_file",
+            &json!({"action":"read","path":"src/main.rs","offset":0}),
+            Duration::from_secs(600),
+        );
+        assert!(result2.is_some());
+        assert_eq!(result2.unwrap(), json!({"content":"main content"}));
+
+        // Query: non-existent path — should return None
+        let result3 = history.find_recent_successful_by_read_target(
+            "unified_file",
+            &json!({"action":"read","path":"src/missing.rs"}),
+            Duration::from_secs(600),
+        );
+        assert!(result3.is_none());
+
+        // Query: write action — should return None (not read-only)
+        let result4 = history.find_recent_successful_by_read_target(
+            "unified_file",
+            &json!({"action":"write","path":"src/lib.rs","content":"new"}),
+            Duration::from_secs(600),
+        );
+        assert!(result4.is_none(), "write action should not match read records");
     }
 }

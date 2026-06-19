@@ -289,6 +289,33 @@ pub(super) fn enforce_repeated_read_only_call_guard(
         }
     }
 
+    // Cross-turn TTL-bounded cache: consult the registry's execution history
+    // even when the per-turn signature set is empty (e.g. after a "continue"
+    // turn that creates a fresh HarnessTurnState).  The TTL is bounded by
+    // `max_tool_wall_clock` (600s by default), so stale results naturally
+    // expire.  This prevents 5× re-reads of the same file across turns when
+    // the model varies pagination arguments slightly.
+    //
+    // Uses path-based matching (`find_recent_successful_by_read_target`) which
+    // ignores offset/limit/page fields.  The exact-arg cache
+    // (`find_recent_successful_output`) won't match when pagination differs,
+    // so the path-based lookup is the primary cross-turn dedup mechanism.
+    if let Some(mut reused_value) = ctx.tool_registry.find_recent_successful_by_read_target(
+        canonical_tool_name,
+        effective_args,
+        ctx.harness_state.max_tool_wall_clock,
+    ) {
+        if let Some(obj) = reused_value.as_object_mut() {
+            super::apply_reused_read_only_loop_metadata(obj);
+        }
+        ctx.push_tool_response(tool_call_id, reused_value.to_string());
+        // Also register in the per-turn set so subsequent in-turn calls
+        // short-circuit at the top of this function.
+        ctx.harness_state
+            .record_successful_readonly_signature(signature);
+        return Some(ValidationResult::Handled);
+    }
+
     // Cross-turn duplicate: scan working history for an identical readonly call
     // from a previous turn. Produces the same structured reused_recent_result
     // payload so the model recognizes the signal to stop retrying.
