@@ -535,15 +535,14 @@ impl<'a> PaletteCoordinator<'a> {
             return Ok(InlineLoopAction::Continue);
         }
 
-        // Safety net: If palette state is missing, log and inform the user
-        warn!(
-            "Palette selection {:?} dropped because no active palette was tracked",
+        // No active palette: this is a Selection event from a floating overlay
+        // (e.g. subagent inspector, threads modal) whose own event loop has already
+        // exited. Silently ignore it -- the overlay was already closed when the
+        // event was emitted.
+        tracing::debug!(
+            "Palette selection {:?} dropped -- no active palette (floating overlay event)",
             selection
         );
-        renderer.line(
-            MessageStyle::Error,
-            "Selection dismissed because the palette is no longer active. Please try again.",
-        )?;
 
         Ok(InlineLoopAction::Continue)
     }
