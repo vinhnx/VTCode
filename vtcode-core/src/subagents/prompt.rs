@@ -313,6 +313,7 @@ mod tests {
             source: SubagentSource::Builtin,
             file_path: None,
             warnings: Vec::new(),
+            tool_policy_overrides: std::collections::BTreeMap::new(),
         }
     }
 

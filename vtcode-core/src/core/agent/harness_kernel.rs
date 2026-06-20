@@ -423,25 +423,67 @@ pub fn filter_tool_definitions_for_mode(
     request_user_input_enabled: bool,
 ) -> Option<Arc<Vec<ToolDefinition>>> {
     let tools = tools?;
-    if tools
+    let all_exposed = tools
         .iter()
-        .all(|tool| should_expose_tool_in_mode(tool, planning_active, request_user_input_enabled))
-    {
-        return Some(tools);
-    }
+        .all(|tool| should_expose_tool_in_mode(tool, planning_active, request_user_input_enabled));
 
-    let filtered: Vec<ToolDefinition> = tools
-        .iter()
-        .filter(|tool| {
-            should_expose_tool_in_mode(tool, planning_active, request_user_input_enabled)
-        })
-        .cloned()
-        .collect();
+    let filtered: Vec<ToolDefinition> = if all_exposed {
+        tools
+            .iter()
+            .map(|tool| mask_tool_actions_for_mode(tool, planning_active))
+            .collect()
+    } else {
+        tools
+            .iter()
+            .filter(|tool| {
+                should_expose_tool_in_mode(tool, planning_active, request_user_input_enabled)
+            })
+            .map(|tool| mask_tool_actions_for_mode(tool, planning_active))
+            .collect()
+    };
     if filtered.is_empty() {
         None
     } else {
         Some(Arc::new(filtered))
     }
+}
+
+/// When planning mode is active, mask the `action` enum in a multi-action
+/// tool's JSON schema to only include read-only actions. This prevents the
+/// LLM from seeing write/edit/delete actions that would be rejected at
+/// execution time.
+fn mask_tool_actions_for_mode(tool: &ToolDefinition, planning_active: bool) -> ToolDefinition {
+    if !planning_active {
+        return tool.clone();
+    }
+    let Some(name) = tool.function.as_ref().map(|f| f.name.as_str()) else {
+        return tool.clone();
+    };
+    let Some(allowed) = tool_intent::planning_allowed_actions(name) else {
+        return tool.clone();
+    };
+
+    let mut masked = tool.clone();
+    if let Some(func) = masked.function.as_mut() {
+        if let Some(action_prop) = func
+            .parameters
+            .get_mut("properties")
+            .and_then(|p| p.get_mut("action"))
+        {
+            if let Some(obj) = action_prop.as_object_mut() {
+                obj.insert(
+                    "enum".to_string(),
+                    Value::Array(
+                        allowed
+                            .iter()
+                            .map(|a| Value::String((*a).to_string()))
+                            .collect(),
+                    ),
+                );
+            }
+        }
+    }
+    masked
 }
 
 pub fn reduce_tool_result(tool_name: &str, result: Value) -> Value {
@@ -937,5 +979,151 @@ mod tests {
         );
 
         assert_eq!(reduced.get("is_truncated"), Some(&Value::Bool(true)));
+    }
+
+    fn tool_with_action_enum(name: &str, actions: &[&str]) -> ToolDefinition {
+        ToolDefinition::function(
+            name.to_string(),
+            name.to_string(),
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": actions
+                    }
+                }
+            }),
+        )
+    }
+
+    #[test]
+    fn filter_tool_definitions_masks_unified_file_actions_in_planning() {
+        let tools = Arc::new(vec![tool_with_action_enum(
+            tools::UNIFIED_FILE,
+            &["read", "write", "edit", "patch", "delete", "move", "copy"],
+        )]);
+
+        let filtered =
+            filter_tool_definitions_for_mode(Some(tools), true, false).expect("filtered tools");
+        assert_eq!(filtered.len(), 1);
+
+        let action_enum = filtered[0]
+            .function
+            .as_ref()
+            .unwrap()
+            .parameters
+            .get("properties")
+            .and_then(|p| p.get("action"))
+            .and_then(|a| a.get("enum"))
+            .and_then(|e| e.as_array())
+            .expect("action enum should exist");
+
+        let action_strings: Vec<&str> = action_enum.iter().filter_map(|v| v.as_str()).collect();
+        assert_eq!(action_strings, vec!["read"]);
+    }
+
+    #[test]
+    fn filter_tool_definitions_masks_unified_exec_actions_in_planning() {
+        let tools = Arc::new(vec![tool_with_action_enum(
+            tools::UNIFIED_EXEC,
+            &[
+                "run", "write", "poll", "continue", "inspect", "list", "close", "code",
+            ],
+        )]);
+
+        let filtered =
+            filter_tool_definitions_for_mode(Some(tools), true, false).expect("filtered tools");
+        assert_eq!(filtered.len(), 1);
+
+        let action_enum = filtered[0]
+            .function
+            .as_ref()
+            .unwrap()
+            .parameters
+            .get("properties")
+            .and_then(|p| p.get("action"))
+            .and_then(|a| a.get("enum"))
+            .and_then(|e| e.as_array())
+            .expect("action enum should exist");
+
+        let action_strings: Vec<&str> = action_enum.iter().filter_map(|v| v.as_str()).collect();
+        assert_eq!(
+            action_strings,
+            vec!["run", "poll", "list", "inspect", "continue"]
+        );
+    }
+
+    #[test]
+    fn filter_tool_definitions_preserves_actions_when_planning_inactive() {
+        let tools = Arc::new(vec![tool_with_action_enum(
+            tools::UNIFIED_FILE,
+            &["read", "write", "edit", "patch", "delete", "move", "copy"],
+        )]);
+
+        let filtered =
+            filter_tool_definitions_for_mode(Some(tools), false, false).expect("filtered tools");
+        assert_eq!(filtered.len(), 1);
+
+        let action_enum = filtered[0]
+            .function
+            .as_ref()
+            .unwrap()
+            .parameters
+            .get("properties")
+            .and_then(|p| p.get("action"))
+            .and_then(|a| a.get("enum"))
+            .and_then(|e| e.as_array())
+            .expect("action enum should exist");
+
+        let action_strings: Vec<&str> = action_enum.iter().filter_map(|v| v.as_str()).collect();
+        assert_eq!(
+            action_strings,
+            vec!["read", "write", "edit", "patch", "delete", "move", "copy"]
+        );
+    }
+
+    #[test]
+    fn filter_tool_definitions_skips_masking_for_non_multi_action_tools() {
+        let tools = Arc::new(vec![function_tool(tools::UNIFIED_SEARCH)]);
+
+        let filtered =
+            filter_tool_definitions_for_mode(Some(tools), true, false).expect("filtered tools");
+        assert_eq!(filtered.len(), 1);
+        // No action property to mask — just verify the tool is still present.
+        assert_eq!(filtered[0].function_name(), tools::UNIFIED_SEARCH);
+    }
+
+    #[test]
+    fn filter_tool_definitions_masks_actions_even_when_no_whole_tool_filter() {
+        // All tools pass the whole-tool filter (none are Mutating-only),
+        // but action masking should still apply.
+        let tools = Arc::new(vec![
+            function_tool(tools::UNIFIED_SEARCH),
+            tool_with_action_enum(tools::UNIFIED_FILE, &["read", "write", "edit"]),
+        ]);
+
+        let filtered =
+            filter_tool_definitions_for_mode(Some(tools), true, false).expect("filtered tools");
+        assert_eq!(filtered.len(), 2);
+
+        let unified_file = filtered
+            .iter()
+            .find(|t| t.function_name() == tools::UNIFIED_FILE)
+            .expect("unified_file should be present");
+
+        let action_enum = unified_file
+            .function
+            .as_ref()
+            .unwrap()
+            .parameters
+            .get("properties")
+            .and_then(|p| p.get("action"))
+            .and_then(|a| a.get("enum"))
+            .and_then(|e| e.as_array())
+            .expect("action enum should exist");
+
+        let action_strings: Vec<&str> = action_enum.iter().filter_map(|v| v.as_str()).collect();
+        assert_eq!(action_strings, vec!["read"]);
     }
 }

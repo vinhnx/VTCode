@@ -2283,6 +2283,7 @@ Inspect the repository.
             source: SubagentSource::Builtin,
             file_path: None,
             warnings: Vec::new(),
+            tool_policy_overrides: std::collections::BTreeMap::new(),
         }
     }
 
@@ -2360,6 +2361,7 @@ Inspect the repository.
             source: SubagentSource::Builtin,
             file_path: None,
             warnings: Vec::new(),
+            tool_policy_overrides: std::collections::BTreeMap::new(),
         };
 
         let filtered = filter_child_tools(&spec, defs, spec.is_read_only());

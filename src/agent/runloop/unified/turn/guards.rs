@@ -255,13 +255,15 @@ fn maybe_activate_turn_timeout_recovery(ctx: &mut TurnProcessingContext<'_>) {
     let remaining_turn_budget_secs = ctx.harness_state.remaining_turn_timeout().as_secs();
     let tool_calls = ctx.harness_state.tool_calls;
     let reason = format!(
-        "Turn budget nearly exhausted after {tool_calls} tool call(s); synthesize a final answer now without more tools (remaining_turn_budget_secs={remaining_turn_budget_secs})."
+        "Turn budget nearly exhausted after {tool_calls} tool call(s); remaining_turn_budget_secs={remaining_turn_budget_secs}. Choose a recovery action."
     );
-    ctx.activate_recovery_with_mode(reason.clone(), RecoveryMode::ToolFreeSynthesis);
-    ctx.push_system_message(reason);
+    ctx.activate_recovery_with_mode(reason.clone(), RecoveryMode::AdaptiveBudgetDecision);
+    ctx.push_system_message(format!(
+        "{reason} Active options: `summarize_and_conclude`, `compact_context`, `request_more_resources`, `adjust_plan`. Call the `recovery_decision` tool to choose."
+    ));
     let _ = ctx.renderer.line(
         MessageStyle::Info,
-        "Turn budget nearly exhausted; forcing a final tool-free synthesis pass.",
+        "Turn budget nearly exhausted; requesting an adaptive recovery decision.",
     );
 }
 

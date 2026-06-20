@@ -66,6 +66,17 @@ pub(crate) async fn apply_turn_outcome(
             ctx.ctrl_c_state.reset();
             Ok(())
         }
+        TurnLoopResult::AwaitingUser { reason } => {
+            // Voluntary pause: render the reason (already shown by the recovery
+            // path) but do NOT write a blocked-handoff artifact or treat this
+            // as a failure. The session stays alive and waits for user input.
+            if let Some(reason) = reason.as_deref() {
+                let _ = ctx.renderer.line(MessageStyle::Info, reason);
+            }
+            reset_inline_input(ctx.handle, ctx.default_placeholder.clone());
+            ctx.ctrl_c_state.reset();
+            Ok(())
+        }
         TurnLoopResult::Blocked { reason } => {
             if let Some(reason) = reason.as_deref() {
                 let _ = ctx.renderer.line(MessageStyle::Info, reason);

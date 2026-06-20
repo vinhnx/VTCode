@@ -116,6 +116,12 @@ pub const RESUME_AGENT: &str = "resume_agent";
 /// Close a delegated child agent.
 pub const CLOSE_AGENT: &str = "close_agent";
 
+// ============================================================
+// ADAPTIVE BUDGET RECOVERY
+// ============================================================
+/// Internal decision tool used when the turn wall-clock budget is nearly exhausted.
+pub const RECOVERY_DECISION: &str = "recovery_decision";
+
 // Special wildcard for full access
 pub const WILDCARD_ALL: &str = "*";
 
@@ -231,6 +237,9 @@ const _: () = {
     validate_tool_name(WAIT_AGENT);
     validate_tool_name(RESUME_AGENT);
     validate_tool_name(CLOSE_AGENT);
+
+    // Adaptive budget recovery
+    validate_tool_name(RECOVERY_DECISION);
 
     // Wildcard
     validate_tool_name(WILDCARD_ALL);

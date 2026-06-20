@@ -56,6 +56,7 @@ pub(crate) enum RecoveryPhase {
 pub(crate) enum RecoveryMode {
     ToolEnabledRetry,
     ToolFreeSynthesis,
+    AdaptiveBudgetDecision,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -179,6 +180,7 @@ pub(crate) struct HarnessTurnState {
     recovery_phase: RecoveryPhase,
     recovery_mode: Option<RecoveryMode>,
     recovery_retry_count: u8,
+    adaptive_recovery_decisions: u8,
     pub max_tool_calls: usize,
     pub max_tool_wall_clock: Duration,
     pub max_tool_retries: u32,
@@ -219,6 +221,7 @@ impl HarnessTurnState {
             recovery_phase: RecoveryPhase::Inactive,
             recovery_mode: None,
             recovery_retry_count: 0,
+            adaptive_recovery_decisions: 0,
             max_tool_calls,
             max_tool_wall_clock: Duration::from_secs(max_tool_wall_clock_secs),
             max_tool_retries,
@@ -379,9 +382,29 @@ impl HarnessTurnState {
         )
     }
 
-    #[cfg(test)]
     pub(crate) fn recovery_mode(&self) -> Option<RecoveryMode> {
         self.recovery_mode
+    }
+
+    pub(crate) fn set_recovery_mode(&mut self, mode: RecoveryMode) {
+        self.recovery_mode = Some(mode);
+    }
+
+    pub(crate) fn increment_adaptive_recovery_decisions(&mut self) -> u8 {
+        self.adaptive_recovery_decisions = self.adaptive_recovery_decisions.saturating_add(1);
+        self.adaptive_recovery_decisions
+    }
+
+    pub(crate) fn reset_recovery_phase_to_pending(&mut self) -> bool {
+        if matches!(
+            self.recovery_phase,
+            RecoveryPhase::InPass | RecoveryPhase::Completed
+        ) {
+            self.recovery_phase = RecoveryPhase::Pending;
+            true
+        } else {
+            false
+        }
     }
 
     pub(crate) fn recovery_is_tool_free(&self) -> bool {
@@ -964,6 +987,91 @@ mod tests {
         assert!(!state.recovery_is_tool_free());
         assert!(state.consume_recovery_pass());
         assert!(state.finish_recovery_pass());
+    }
+
+    #[test]
+    fn harness_state_recovery_is_tool_free_false_for_adaptive() {
+        let mut state = HarnessTurnState::new(
+            TurnRunId("run-1".to_string()),
+            TurnId("turn-1".to_string()),
+            4,
+            10,
+            1,
+        );
+
+        state.activate_recovery_with_mode("budget low", RecoveryMode::AdaptiveBudgetDecision);
+        assert!(state.is_recovery_active());
+        assert_eq!(
+            state.recovery_mode(),
+            Some(RecoveryMode::AdaptiveBudgetDecision)
+        );
+        assert!(!state.recovery_is_tool_free());
+    }
+
+    #[test]
+    fn harness_state_resets_recovery_phase_to_pending() {
+        let mut state = HarnessTurnState::new(
+            TurnRunId("run-1".to_string()),
+            TurnId("turn-1".to_string()),
+            4,
+            10,
+            1,
+        );
+
+        state.activate_recovery_with_mode("budget low", RecoveryMode::AdaptiveBudgetDecision);
+        assert!(state.consume_recovery_pass());
+        assert!(state.reset_recovery_phase_to_pending());
+        assert!(state.is_recovery_active());
+        assert!(state.consume_recovery_pass());
+    }
+
+    #[test]
+    fn harness_state_activate_is_noop_once_pass_in_flight_but_set_mode_switches() {
+        // Regression guard for the adaptive-budget-recovery infinite loop:
+        // once a recovery pass has been consumed (phase == InPass),
+        // `activate_recovery_with_mode` must NOT change the mode (it is guarded
+        // by phase == Inactive), so the turn loop must use `set_recovery_mode`
+        // to switch out of AdaptiveBudgetDecision mid-pass.
+        let mut state = HarnessTurnState::new(
+            TurnRunId("run-1".to_string()),
+            TurnId("turn-1".to_string()),
+            4,
+            10,
+            1,
+        );
+
+        state.activate_recovery_with_mode("budget low", RecoveryMode::AdaptiveBudgetDecision);
+        assert!(state.consume_recovery_pass());
+        assert_eq!(
+            state.recovery_mode(),
+            Some(RecoveryMode::AdaptiveBudgetDecision)
+        );
+
+        // activate_recovery_with_mode is a no-op while a pass is in flight.
+        state.activate_recovery_with_mode("try to switch", RecoveryMode::ToolFreeSynthesis);
+        assert_eq!(
+            state.recovery_mode(),
+            Some(RecoveryMode::AdaptiveBudgetDecision),
+            "activate_recovery_with_mode must not switch mode mid-pass"
+        );
+
+        // set_recovery_mode switches unconditionally and is the correct escape.
+        state.set_recovery_mode(RecoveryMode::ToolFreeSynthesis);
+        assert_eq!(state.recovery_mode(), Some(RecoveryMode::ToolFreeSynthesis));
+    }
+
+    #[test]
+    fn harness_state_tracks_adaptive_recovery_decision_count() {
+        let mut state = HarnessTurnState::new(
+            TurnRunId("run-1".to_string()),
+            TurnId("turn-1".to_string()),
+            4,
+            10,
+            1,
+        );
+
+        assert_eq!(state.increment_adaptive_recovery_decisions(), 1);
+        assert_eq!(state.increment_adaptive_recovery_decisions(), 2);
     }
 
     #[test]

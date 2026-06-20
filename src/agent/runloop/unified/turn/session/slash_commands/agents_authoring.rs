@@ -1729,6 +1729,7 @@ Review the target changes."#,
             source: SubagentSource::ProjectVtcode,
             file_path: Some(PathBuf::from(".vtcode/agents/reviewer.md")),
             warnings: Vec::new(),
+            tool_policy_overrides: std::collections::BTreeMap::new(),
         };
         assert!(is_native_vtcode_spec(&base_spec));
 

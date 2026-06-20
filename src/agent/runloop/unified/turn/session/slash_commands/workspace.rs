@@ -699,6 +699,7 @@ mod tests {
             source: SubagentSource::ProjectVtcode,
             file_path: None,
             warnings: vec!["warning".to_string()],
+            tool_policy_overrides: std::collections::BTreeMap::new(),
         }])
         .expect("init grounding spec");
 

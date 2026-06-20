@@ -1025,6 +1025,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                         RunLoopTurnLoopResult::Cancelled => "cancelled",
                         RunLoopTurnLoopResult::Exit => "exit",
                         RunLoopTurnLoopResult::Blocked { .. } => "blocked",
+                        RunLoopTurnLoopResult::AwaitingUser { .. } => "awaiting_user",
                     },
                 });
 
@@ -1088,6 +1089,12 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                             session_end_reason = SessionEndReason::Error;
                             break;
                         }
+                    }
+                    RunLoopTurnLoopResult::AwaitingUser { .. } => {
+                        // Voluntary pause (e.g. agent requested more resources).
+                        // Graceful: do not stall the turn or terminate the session;
+                        // the loop continues and waits for the next user message.
+                        session_stats.mark_turn_stalled(false, None);
                     }
                     _ => {
                         session_stats.mark_turn_stalled(false, None);

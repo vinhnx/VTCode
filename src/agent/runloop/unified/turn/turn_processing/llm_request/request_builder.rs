@@ -982,6 +982,7 @@ mod tests {
             source: SubagentSource::ProjectVtcode,
             file_path: None,
             warnings: Vec::new(),
+            tool_policy_overrides: std::collections::BTreeMap::new(),
         }
     }
 

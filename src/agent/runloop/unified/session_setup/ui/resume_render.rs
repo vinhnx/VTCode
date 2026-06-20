@@ -242,12 +242,18 @@ fn format_tool_arguments_for_resume(arguments: &str) -> String {
     {
         summary_parts.push(format!("command: {}", cmd));
     }
-    // For unified_file: show action and path
+    // For unified_file / task_tracker: show action and related fields
     if let Some(action) = obj.get("action").and_then(|v| v.as_str()) {
         summary_parts.push(format!("action: {}", action));
-    }
-    if let Some(path) = obj.get("path").and_then(|v| v.as_str()) {
-        summary_parts.push(format!("path: {}", path));
+        if let Some(path) = obj.get("path").and_then(|v| v.as_str()) {
+            summary_parts.push(format!("path: {}", path));
+        }
+        if let Some(subject) = obj.get("subject").and_then(|v| v.as_str()) {
+            summary_parts.push(format!("subject: {}", subject));
+        }
+        if let Some(status) = obj.get("status").and_then(|v| v.as_str()) {
+            summary_parts.push(format!("status: {}", status));
+        }
     }
     // For unified_search: show query
     if let Some(query) = obj.get("query").and_then(|v| v.as_str()) {
@@ -256,15 +262,6 @@ fn format_tool_arguments_for_resume(arguments: &str) -> String {
     // For unified_exec: show session_id if present
     if let Some(sid) = obj.get("session_id").and_then(|v| v.as_str()) {
         summary_parts.push(format!("session: {}", sid));
-    }
-    // For task_tracker: show action and task details
-    if let Some(_task_action) = obj.get("action").and_then(|v| v.as_str()) {
-        if let Some(subject) = obj.get("subject").and_then(|v| v.as_str()) {
-            summary_parts.push(format!("subject: {}", subject));
-        }
-        if let Some(status) = obj.get("status").and_then(|v| v.as_str()) {
-            summary_parts.push(format!("status: {}", status));
-        }
     }
 
     if !summary_parts.is_empty() {

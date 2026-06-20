@@ -106,6 +106,18 @@ impl ToolIntent {
     }
 }
 
+/// Returns the subset of actions that are allowed for a multi-action tool
+/// when planning mode is active. Returns `None` for tools that are not
+/// multi-action or have no action-level restrictions.
+pub fn planning_allowed_actions(tool_name: &str) -> Option<&'static [&'static str]> {
+    let canonical = canonical_tool_name(tool_name);
+    match canonical {
+        tools::UNIFIED_FILE => Some(&["read"]),
+        tools::UNIFIED_EXEC => Some(&["run", "poll", "list", "inspect", "continue"]),
+        _ => None,
+    }
+}
+
 pub fn builtin_tool_behavior(tool_name: &str) -> Option<ToolBehavior> {
     let canonical = canonical_tool_name(tool_name);
     builtin_tool_behavior_canonical(canonical)
