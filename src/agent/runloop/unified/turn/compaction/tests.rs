@@ -202,6 +202,10 @@ impl LLMProvider for FailingProviderCompactionProvider {
         true
     }
 
+    fn supports_native_inline_compaction(&self, _model: &str) -> bool {
+        true
+    }
+
     fn supported_models(&self) -> Vec<String> {
         vec!["stub-model".to_string()]
     }
@@ -293,6 +297,10 @@ impl LLMProvider for InlineRejectingRecoveryProvider {
     }
 
     fn supports_responses_compaction(&self, _model: &str) -> bool {
+        true
+    }
+
+    fn supports_native_inline_compaction(&self, _model: &str) -> bool {
         true
     }
 

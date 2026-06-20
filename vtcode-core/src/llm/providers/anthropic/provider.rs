@@ -610,6 +610,13 @@ impl LLMProvider for AnthropicProvider {
         capabilities::supports_compaction(model)
     }
 
+    fn supports_native_inline_compaction(&self, model: &str) -> bool {
+        // Anthropic drives compaction inline via the `compact_20260112`
+        // context-management edit on a `generate` request, so it is the
+        // `NativeInline` strategy provider.
+        capabilities::supports_compaction(model)
+    }
+
     fn effective_context_size(&self, model: &str) -> usize {
         capabilities::effective_context_size(model)
     }

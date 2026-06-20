@@ -117,12 +117,19 @@ pub enum CompactionStrategy {
 ///
 /// `NativeStandalone` when the provider opts in via `supports_manual_compaction`
 /// (e.g. OpenAI `/responses/compact`), `NativeInline` when the provider reports
-/// inline compaction support via `supports_responses_compaction` (e.g. Anthropic
-/// `compact_20260112`), otherwise `Local`.
+/// inline compaction support via `supports_native_inline_compaction` (e.g.
+/// Anthropic `compact_20260112`), otherwise `Local`.
+///
+/// Note: `supports_responses_compaction` is intentionally *not* the discriminator
+/// for `NativeInline`. It is overloaded — true for both OpenAI-compatible
+/// standalone compaction and Anthropic inline compaction — so OpenAI-compatible
+/// custom endpoints (which report it but cannot serve an Anthropic
+/// `compact_20260112` edit) would otherwise be misrouted to `NativeInline` and
+/// waste a rejected `generate` call before falling back to `Local`.
 pub fn manual_compaction_strategy(provider: &dyn LLMProvider, model: &str) -> CompactionStrategy {
     if provider.supports_manual_compaction(model) {
         CompactionStrategy::NativeStandalone
-    } else if provider.supports_responses_compaction(model) {
+    } else if provider.supports_native_inline_compaction(model) {
         CompactionStrategy::NativeInline
     } else {
         CompactionStrategy::Local
@@ -487,6 +494,14 @@ mod tests {
     /// compactors; the dispatch must fall back to Local rather than aborting.
     struct InlineRejectingProvider;
 
+    /// Models an OpenAI-compatible custom endpoint (non-`api.openai.com` host or
+    /// `provider_key_override`): it exposes the Responses API
+    /// (`supports_responses_compaction == true`) but neither the standalone
+    /// `/responses/compact` endpoint nor Anthropic inline compaction. The dispatch
+    /// must pick `Local` rather than misrouting it to `NativeInline` (which would
+    /// send an Anthropic `compact_20260112` edit only to be rejected).
+    struct CompatibleEndpointProvider;
+
     #[async_trait]
     impl LLMProvider for StubProvider {
         fn name(&self) -> &str {
@@ -597,6 +612,10 @@ mod tests {
         fn supports_responses_compaction(&self, _model: &str) -> bool {
             true
         }
+
+        fn supports_native_inline_compaction(&self, _model: &str) -> bool {
+            true
+        }
     }
 
     #[async_trait]
@@ -648,6 +667,36 @@ mod tests {
         fn supports_responses_compaction(&self, _model: &str) -> bool {
             true
         }
+
+        fn supports_native_inline_compaction(&self, _model: &str) -> bool {
+            true
+        }
+    }
+
+    #[async_trait]
+    impl LLMProvider for CompatibleEndpointProvider {
+        fn name(&self) -> &str {
+            "compatible-endpoint"
+        }
+
+        async fn generate(&self, _request: LLMRequest) -> Result<LLMResponse, LLMError> {
+            Ok(LLMResponse::new("stub-model", "summary"))
+        }
+
+        fn supported_models(&self) -> Vec<String> {
+            vec!["stub-model".to_string()]
+        }
+
+        fn validate_request(&self, _request: &LLMRequest) -> Result<(), LLMError> {
+            Ok(())
+        }
+
+        // Reports Responses API support but neither standalone nor inline
+        // compaction (defaults: supports_manual_compaction and
+        // supports_native_inline_compaction are both false).
+        fn supports_responses_compaction(&self, _model: &str) -> bool {
+            true
+        }
     }
 
     fn sample_history() -> Vec<Message> {
@@ -686,6 +735,17 @@ mod tests {
         assert_eq!(
             manual_compaction_strategy(&provider, "stub-model"),
             super::CompactionStrategy::NativeInline
+        );
+    }
+
+    #[tokio::test]
+    async fn manual_compaction_strategy_picks_local_for_compatible_endpoint() {
+        // OpenAI-compatible custom endpoints report `supports_responses_compaction`
+        // but cannot serve standalone `/responses/compact` or Anthropic inline
+        // compaction; they must route to Local, not NativeInline.
+        assert_eq!(
+            manual_compaction_strategy(&CompatibleEndpointProvider, "stub-model"),
+            super::CompactionStrategy::Local
         );
     }
 

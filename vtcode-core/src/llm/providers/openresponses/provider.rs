@@ -5,7 +5,7 @@ use crate::config::models::Provider as ModelProvider;
 use crate::llm::error_display;
 use crate::llm::provider::{
     FinishReason, LLMError, LLMNormalizedStream, LLMProvider, LLMRequest, LLMResponse, LLMStream,
-    LLMStreamEvent, Message, ToolCall,
+    LLMStreamEvent, Message, ResponsesCompactionOptions, ToolCall,
 };
 use crate::llm::providers::common::{
     append_normalized_reasoning_detail_items, chat_completions_url,
@@ -754,6 +754,16 @@ impl LLMProvider for OpenResponsesProvider {
         self.supports_compaction_endpoint()
     }
 
+    // OpenResponses exposes the same standalone `/responses/compact` endpoint as
+    // the native OpenAI provider, so it opts into the NativeStandalone dispatch
+    // (`compact_history_with_options`). Without this, the unified dispatch would
+    // route it to NativeInline (Anthropic `compact_20260112` via `generate`),
+    // which OpenResponses cannot serve, silently downgrading auto/recovery
+    // compaction to the local summarization fallback.
+    fn supports_manual_compaction(&self, _model: &str) -> bool {
+        self.supports_compaction_endpoint()
+    }
+
     async fn compact_history(
         &self,
         model: &str,
@@ -769,6 +779,18 @@ impl LLMProvider for OpenResponsesProvider {
         }
 
         self.compact_history_request(model, history).await
+    }
+
+    // The standalone `/responses/compact` endpoint does not accept the
+    // provider-specific Responses options, so delegate to `compact_history`
+    // (matching the legacy auto/recovery path, which never passed options).
+    async fn compact_history_with_options(
+        &self,
+        model: &str,
+        history: &[Message],
+        _options: &ResponsesCompactionOptions,
+    ) -> Result<Vec<Message>, LLMError> {
+        self.compact_history(model, history).await
     }
 
     fn supported_models(&self) -> Vec<String> {
