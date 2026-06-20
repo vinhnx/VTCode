@@ -2,6 +2,58 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.133.0 - 2026-06-20
+
+### Highlights
+#### Bug Fixes
+
+- Reduce mid-run stops and eliminate wasted duplicate tool calls (884b39b0) 
+- Reduce mid-run stops and eliminate wasted duplicate tool calls (a925cb80) 
+- Silently ignore floating overlay Selection events when no palette is active (e67db4e4) 
+- Stop constant writes of background_subagents.json (5cfc6c10) 
+#### Features
+
+- Add Z.ai GLM Coding Plan with subscription details to README (593ba1ba) (@vinhnx)
+- Enhance verification handling and refactor tool execution methods (d4f91648) 
+- Implement duplicate tool call detection and enhance recovery handling (89e92b27) 
+- Enhance agent selection and permissions handling for planning workflow (5c372a64) 
+- Enhance planning workflow with real-time header updates and tool output handling (16c55cfc) 
+- Improve planning confirmation flow and enhance tool output handling (49d64115) 
+- Enhance planning workflow with trust checks and tool behavior adjustments (be0b38e9) 
+- Implement tool policy overrides and enhance denial diagnostics in planning workflow (0cf67cf7) 
+- Merge session and subagent lifecycle events in primary hook configuration (ba264332) 
+- Prevent TUI interrupt from exiting the program and improve signal handling (8cac5ee2) 
+- Enhance planning workflow with agent type handling and patch file extraction (25227d31) 
+- Deactivate planning workflow on agent switch and refine exit triggers (4e95879b) 
+- Add mode command to switch active agent mode and implement mode palette (ef1b52b6) 
+- Enhance agent mode handling and improve tool output formatting (02c5a155) 
+- Add kimi-k2.7-code, glm-5.2, minimax-m3 models (ce6c7222) 
+- Improve signal handler responsiveness and refine tool action filtering (36da47e7) 
+- Enhance Ctrl+C handling and add agent context to tool logging (474fcdfb) 
+- Implement tool-free recovery mode switch and refactor related logic (a379f558) 
+- Enhance workspace detection and logging for safe-mode prompts (ed91aee6) 
+- Add support for native inline compaction in LLMProvider and related providers (f8146fce) 
+### Other Changes
+#### Other
+
+- Remove references to Nemotron 3 Super model from Ollama provider and related tests (e8a7077c) (@vinhnx)
+- Refactor documentation links and update references across multiple files (8838ff0e) (@vinhnx)
+- Update documentation for VT Code version 0.132.0, including new modules, features, and provider integrations. (1a2fe628) (@vinhnx)
+- Revise VT Code description for clarity and conciseness (7a3b9abb) (@vinhnx)
+- Rename sections for OpenAI and Anthropic in guide (f801db7d) (@vinhnx)
+- Add global read-only budget limit and update harness limits prompt (7f96113d) 
+- Implement subagent mode with tighter read-only budgets and navigation limits (e7c2f746) 
+- Update TODO (69b98ae2) 
+- Update notes (8c0d97a8) 
+- Implement adaptive budget recovery mechanism and related tool definitions (1f518af1) 
+- Refactor manual compaction support and improve provider interface (29030ca3) 
+#### Refactors
+
+- Update tool references from `grep_file` and `read_file` to `unified_search` and `unified_file` across documentation (87391096) (@vinhnx)
+- Clean up code formatting and improve readability in multiple files (f5b06c97) 
+- Streamline fallback handling and improve code readability in tool execution (a6b542f4) 
+- Consolidate HTTP client and optimized client code, enhance command argument handling, and improve read-only command detection (6d3915db) 
+- Consolidate duplicated tool dispatch patterns and add fallback validation (0b37a840) 
 ## 0.132.0 - 2026-06-16
 
 ### Highlights
