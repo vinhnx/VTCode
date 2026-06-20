@@ -23,7 +23,7 @@ use tracing::warn;
 /// Shared Planning workflow header used by both static and incremental prompt builders.
 pub const PLANNING_WORKFLOW_READ_ONLY_HEADER: &str = "# PLANNING WORKFLOW (READ-ONLY)";
 /// Shared Planning workflow notice line describing strict read-only enforcement.
-pub const PLANNING_WORKFLOW_READ_ONLY_NOTICE_LINE: &str = "Planning workflow is active. Mutating tools are blocked except for optional plan artifact writes under `.vtcode/plans/` (or an explicit custom plan path).";
+pub const PLANNING_WORKFLOW_READ_ONLY_NOTICE_LINE: &str = "Planning workflow is active. Only mutating tools (write_file, edit_file, apply_patch, unified_file:write/create/edit) are blocked. You CAN and SHOULD: read files (unified_file:read), run readonly commands (cargo check, cargo test, git status, ls, grep, find, diff), search code (unified_search), and use task_tracker. Plan artifact writes under `.vtcode/plans/` are also allowed.";
 /// Shared Planning workflow instruction line for transitioning to implementation.
 pub const PLANNING_WORKFLOW_EXIT_INSTRUCTION_LINE: &str =
     "Call `finish_planning` when ready to transition to implementation.";

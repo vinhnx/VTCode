@@ -12,6 +12,11 @@ use std::time::{Duration, Instant};
 use tokio::time::sleep;
 use tracing::{info, warn};
 
+use vtcode_config::constants::execution::{
+    DEFAULT_ORCHESTRATOR_MAX_RETRIES, DEFAULT_ORCHESTRATOR_RETRY_INITIAL_DELAY_MS,
+    DEFAULT_ORCHESTRATOR_RETRY_MAX_DELAY_SECS, DEFAULT_ORCHESTRATOR_RETRY_MULTIPLIER,
+};
+
 /// Statistics about retry attempts
 #[derive(Debug, Clone, Default)]
 pub struct RetryStats {
@@ -43,10 +48,10 @@ impl RetryManager {
     pub fn new() -> Self {
         Self {
             policy: RetryPolicy::from_retries(
-                5,
-                Duration::from_secs(1),
-                Duration::from_secs(60),
-                2.0,
+                DEFAULT_ORCHESTRATOR_MAX_RETRIES,
+                Duration::from_millis(DEFAULT_ORCHESTRATOR_RETRY_INITIAL_DELAY_MS),
+                Duration::from_secs(DEFAULT_ORCHESTRATOR_RETRY_MAX_DELAY_SECS),
+                DEFAULT_ORCHESTRATOR_RETRY_MULTIPLIER,
             ),
             stats: RetryStats::default(),
         }

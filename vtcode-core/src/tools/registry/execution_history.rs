@@ -1114,7 +1114,11 @@ mod tests {
             json!({"action":"read","path":"src/lib.rs","offset":0,"limit":100}),
             json!({"content":"file content"}),
             make_snapshot(),
-            None, None, None, None, false,
+            None,
+            None,
+            None,
+            None,
+            false,
         ));
 
         // Record 2: read src/main.rs (different file)
@@ -1126,7 +1130,11 @@ mod tests {
             json!({"action":"read","path":"src/main.rs","offset":0,"limit":100}),
             json!({"content":"main content"}),
             make_snapshot(),
-            None, None, None, None, false,
+            None,
+            None,
+            None,
+            None,
+            false,
         ));
 
         // Query: same path, different offset — should match record 1
@@ -1135,7 +1143,10 @@ mod tests {
             &json!({"action":"read","path":"src/lib.rs","offset":500,"limit":200}),
             Duration::from_secs(600),
         );
-        assert!(result.is_some(), "should match same path with different offset");
+        assert!(
+            result.is_some(),
+            "should match same path with different offset"
+        );
         assert_eq!(result.unwrap(), json!({"content":"file content"}));
 
         // Query: different path — should match record 2
@@ -1161,6 +1172,9 @@ mod tests {
             &json!({"action":"write","path":"src/lib.rs","content":"new"}),
             Duration::from_secs(600),
         );
-        assert!(result4.is_none(), "write action should not match read records");
+        assert!(
+            result4.is_none(),
+            "write action should not match read records"
+        );
     }
 }

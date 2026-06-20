@@ -17,7 +17,13 @@ pub mod agent_execution {
     pub fn planning_workflow_denial_message(tool_name: &str) -> String {
         format!(
             "Tool '{}' execution failed: tool denied by planning workflow\n\n\
-             ACTION REQUIRED: Planning workflow is using read-only permissions. To start implementation:\n\
+             This tool is MUTATING and blocked during planning.\n\n\
+             What you CAN do during planning:\n\
+             - Read files: unified_file with action='read'\n\
+             - Run readonly commands: cargo check, cargo test, git status, ls, grep, find, diff\n\
+             - Search code: unified_search\n\
+             - Use task_tracker\n\n\
+             To start implementation:\n\
              1. Call `finish_planning` tool to show the user your plan for approval\n\
              2. Wait for user to confirm (they will see the Implementation Blueprint)\n\
              3. After approval, mutating tools will be enabled\n\n\
@@ -85,7 +91,9 @@ mod tests {
         let planning_msg = agent_execution::planning_workflow_denial_message("write_file");
         assert!(agent_execution::is_planning_active_denial(&planning_msg));
         assert!(planning_msg.contains("finish_planning"));
-        assert!(planning_msg.contains("read-only permissions"));
+        assert!(planning_msg.contains("MUTATING"));
+        assert!(planning_msg.contains("cargo check"));
+        assert!(planning_msg.contains("unified_file with action='read'"));
         assert!(!planning_msg.contains(&format!("/{}", "mode")));
         assert!(!planning_msg.contains("DO NOT retry this tool or use /plan off"));
 

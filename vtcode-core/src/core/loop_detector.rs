@@ -265,7 +265,10 @@ impl LoopDetector {
             base_name,
             tools::READ_FILE | LEGACY_GREP_FILE | LEGACY_LIST_FILES | tools::UNIFIED_SEARCH
         ) || (base_name == tools::UNIFIED_FILE
-            && self.recent_calls.back().is_some_and(|r| r.read_target.is_some()));
+            && self
+                .recent_calls
+                .back()
+                .is_some_and(|r| r.read_target.is_some()));
 
         let is_mutating = matches!(
             base_name,
@@ -687,10 +690,7 @@ fn read_target_for_tool_call(tool_name: &str, args: &serde_json::Value) -> Optio
 /// `action: "read"` argument.
 fn is_unified_file_read(tool_name: &str, args: &serde_json::Value) -> bool {
     tool_name.ends_with("::read")
-        || matches!(
-            args.get("action").and_then(|v| v.as_str()),
-            Some("read")
-        )
+        || matches!(args.get("action").and_then(|v| v.as_str()), Some("read"))
 }
 
 #[cfg(test)]

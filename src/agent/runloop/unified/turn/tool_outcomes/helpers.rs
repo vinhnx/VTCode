@@ -375,10 +375,7 @@ fn is_read_only_tool_args(name: &str, args: &serde_json::Value) -> bool {
         tools::READ_FILE | tools::GREP_FILE | tools::LIST_FILES => true,
         tools::UNIFIED_SEARCH => true,
         tools::UNIFIED_FILE => {
-            matches!(
-                args.get("action").and_then(|v| v.as_str()),
-                Some("read")
-            )
+            matches!(args.get("action").and_then(|v| v.as_str()), Some("read"))
         }
         _ => false,
     }
@@ -979,7 +976,10 @@ mod tests {
         let args_b = json!({"action": "read", "path": "src/lib.rs", "offset": 50, "limit": 200});
         let key_a = read_normalized_signature_key("unified_file", &args_a);
         let key_b = read_normalized_signature_key("unified_file", &args_b);
-        assert_eq!(key_a, key_b, "same file read with different offset/limit should produce the same normalized key");
+        assert_eq!(
+            key_a, key_b,
+            "same file read with different offset/limit should produce the same normalized key"
+        );
     }
 
     #[test]
@@ -997,7 +997,10 @@ mod tests {
         let args_b = json!({"action": "grep", "pattern": "fn main", "path": "src", "page": 2});
         let key_a = read_normalized_signature_key("unified_search", &args_a);
         let key_b = read_normalized_signature_key("unified_search", &args_b);
-        assert_eq!(key_a, key_b, "same search with different page should produce the same normalized key");
+        assert_eq!(
+            key_a, key_b,
+            "same search with different page should produce the same normalized key"
+        );
     }
 
     #[test]
@@ -1043,14 +1046,20 @@ mod tests {
             "unified_file",
             &json!({"action":"read","path":"src/lib.rs","offset":50,"limit":500}),
         );
-        assert_eq!(key_a, key_b, "same file read with different offset/limit should normalize to the same key");
+        assert_eq!(
+            key_a, key_b,
+            "same file read with different offset/limit should normalize to the same key"
+        );
 
         // Verify: different file → different key
         let key_c = read_normalized_signature_key(
             "unified_file",
             &json!({"action":"read","path":"src/main.rs","offset":0,"limit":100}),
         );
-        assert_ne!(key_a, key_c, "different files must produce different normalized keys");
+        assert_ne!(
+            key_a, key_c,
+            "different files must produce different normalized keys"
+        );
 
         // Verify: search pagination normalized away
         let s_key_a = read_normalized_signature_key(
@@ -1061,7 +1070,10 @@ mod tests {
             "unified_search",
             &json!({"action":"grep","pattern":"fn main","path":"src","page":2}),
         );
-        assert_eq!(s_key_a, s_key_b, "same search with different page should normalize to the same key");
+        assert_eq!(
+            s_key_a, s_key_b,
+            "same search with different page should normalize to the same key"
+        );
 
         // Verify: write NOT normalized
         let w_key_a = read_normalized_signature_key(
@@ -1081,7 +1093,10 @@ mod tests {
             vec![uni::ToolCall::function(
                 "tc_exact".into(),
                 "unified_file".into(),
-                serde_json::to_string(&json!({"action":"read","path":"src/lib.rs","offset":0,"limit":100})).unwrap(),
+                serde_json::to_string(
+                    &json!({"action":"read","path":"src/lib.rs","offset":0,"limit":100}),
+                )
+                .unwrap(),
             )],
         ));
         history.push(uni::Message {

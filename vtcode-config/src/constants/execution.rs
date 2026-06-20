@@ -33,6 +33,15 @@ pub const MAX_TIMEOUT_SECS: u64 = 3600;
 /// Prevents unreasonably short timeouts that would cause failures
 pub const MIN_TIMEOUT_SECS: u64 = 10;
 
+/// Default maximum retry attempts for orchestrator operations.
+pub const DEFAULT_ORCHESTRATOR_MAX_RETRIES: u32 = 5;
+/// Default initial delay between orchestrator retries (milliseconds).
+pub const DEFAULT_ORCHESTRATOR_RETRY_INITIAL_DELAY_MS: u64 = 1_000;
+/// Default maximum delay between orchestrator retries (seconds).
+pub const DEFAULT_ORCHESTRATOR_RETRY_MAX_DELAY_SECS: u64 = 60;
+/// Default backoff multiplier for orchestrator retries.
+pub const DEFAULT_ORCHESTRATOR_RETRY_MULTIPLIER: f64 = 2.0;
+
 /// Resolve timeout with deterministic bounds (never returns 0 or unbounded)
 /// This pattern ensures execution always has a bounded duration.
 ///

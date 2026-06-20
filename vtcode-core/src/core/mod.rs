@@ -35,7 +35,6 @@
 //!
 pub mod agent;
 
-pub mod context_optimizer;
 pub mod decision_tracker;
 pub mod error_recovery;
 pub mod interfaces;
@@ -53,7 +52,6 @@ pub mod trajectory;
 pub(crate) const SECONDS_PER_DAY: u64 = 24 * 60 * 60;
 
 // Re-export main types
-pub use context_optimizer::ContextOptimizer;
 pub use memory_pool::{MemoryPool, global_pool};
 pub use performance_profiler::{BenchmarkResults, BenchmarkUtils, PerformanceProfiler};
 pub use threads::{

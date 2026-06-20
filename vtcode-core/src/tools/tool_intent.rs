@@ -297,6 +297,16 @@ fn looks_like_unified_search_output(obj: &serde_json::Map<String, Value>) -> boo
             .is_some_and(|name| canonical_tool_name(name) == tools::UNIFIED_SEARCH)
 }
 
+/// Returns `true` if `tool_name` refers to a command/PTY execution tool.
+///
+/// This includes PTY session tools and all unified exec aliases.
+#[must_use]
+pub fn is_command_tool(tool_name: &str) -> bool {
+    tool_name == tools::CREATE_PTY_SESSION
+        || tool_name == tools::SEND_PTY_INPUT
+        || canonical_unified_exec_tool_name(tool_name).is_some()
+}
+
 pub fn is_command_run_tool_call(tool_name: &str, args: &Value) -> bool {
     match tool_name {
         tools::RUN_PTY_CMD | tools::CREATE_PTY_SESSION | tools::SHELL | "bash" => true,
