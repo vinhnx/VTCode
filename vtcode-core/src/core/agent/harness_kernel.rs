@@ -102,6 +102,14 @@ pub struct FallbackRecommendation {
     pub args: Value,
 }
 
+impl FallbackRecommendation {
+    /// Returns `true` when the recommendation carries a non-empty tool name
+    /// so downstream callers can skip invalid fallbacks early.
+    pub fn is_valid(&self) -> bool {
+        !self.tool_name.trim().is_empty()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct PreparedToolCall {
     pub canonical_name: String,

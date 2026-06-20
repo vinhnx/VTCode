@@ -893,7 +893,10 @@ impl AgentRunner {
                 let turn_output = runtime
                     .run_turn_once(&mut self.provider_client, request, streaming_timeout)
                     .await?;
-                event_recorder.record_thread_events(runtime.take_emitted_events());
+                super::tool_dispatch_common::drain_and_record_runtime_events(
+                    &mut runtime,
+                    &mut event_recorder,
+                );
                 let response = turn_output.response;
                 runtime.state.stop_reason =
                     Some(stop_reason_from_finish_reason(&response.finish_reason));
@@ -1098,7 +1101,10 @@ impl AgentRunner {
                         previous_response_chain_present,
                     )
                     .await?;
-                    event_recorder.record_thread_events(runtime.take_emitted_events());
+                    super::tool_dispatch_common::drain_and_record_runtime_events(
+                        &mut runtime,
+                        &mut event_recorder,
+                    );
                 }
 
                 // Refresh tool definitions if the catalog was mutated during tool

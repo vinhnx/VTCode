@@ -1,7 +1,6 @@
 use super::AgentRunner;
 use super::constants::{LOOP_THROTTLE_BASE_MS, LOOP_THROTTLE_MAX_MS};
 use super::tool_execution_guard::ToolExecutionGuard;
-use super::types::ToolFailureContext;
 use crate::core::agent::events::{
     ExecEventRecorder, tool_invocation_completed_event, tool_output_payload_from_value,
 };
@@ -116,7 +115,7 @@ fn complete_tool_invocation(
     }
 
     runtime.complete_tool_call(tool_call_id, status);
-    event_recorder.record_thread_events(runtime.take_emitted_events());
+    super::tool_dispatch_common::drain_and_record_runtime_events(runtime, event_recorder);
 }
 
 fn reject_tool_call(
@@ -394,6 +393,15 @@ impl AgentRunner {
         agent_prefix: &str,
         name: &str,
     ) -> Option<(serde_json::Value, String, serde_json::Value)> {
+        if !fallback.is_valid() {
+            warn!(
+                agent = %agent_prefix,
+                tool = %name,
+                "Skipping fallback recommendation with empty tool name"
+            );
+            return None;
+        }
+
         info!(
             agent = %agent_prefix,
             tool = %name,
@@ -674,14 +682,15 @@ impl AgentRunner {
                             &tool_call_item,
                             ToolCallStatus::Failed,
                         );
-                        let mut failure_ctx = ToolFailureContext {
-                            agent_prefix,
-                            session_state: &mut runtime.state,
-                            event_recorder,
-                            tool_call_id: &call_id,
-                            call_item_id: Some(tool_call_item.call_item_id.as_str()),
-                            is_gemini,
-                        };
+                        let mut failure_ctx =
+                            super::tool_dispatch_common::build_tool_failure_context(
+                                agent_prefix,
+                                &mut runtime.state,
+                                event_recorder,
+                                &call_id,
+                                Some(tool_call_item.call_item_id.as_str()),
+                                is_gemini,
+                            );
                         self.record_tool_failure(
                             &mut failure_ctx,
                             &name,
@@ -801,14 +810,14 @@ impl AgentRunner {
                         &tool_call_item,
                         ToolCallStatus::Failed,
                     );
-                    let mut failure_ctx = ToolFailureContext {
+                    let mut failure_ctx = super::tool_dispatch_common::build_tool_failure_context(
                         agent_prefix,
-                        session_state: &mut runtime.state,
+                        &mut runtime.state,
                         event_recorder,
-                        tool_call_id: &call.tool_call_id,
-                        call_item_id: Some(tool_call_item.call_item_id.as_str()),
+                        &call.tool_call_id,
+                        Some(tool_call_item.call_item_id.as_str()),
                         is_gemini,
-                    };
+                    );
                     self.record_tool_failure(
                         &mut failure_ctx,
                         &name,
