@@ -378,6 +378,12 @@ impl AgentRunner {
         self.quiet = quiet;
     }
 
+    /// Configure the loop detector for subagent mode with tighter read-only
+    /// budgets and earlier navigation streak intervention.
+    pub fn set_subagent_mode(&self, is_subagent: bool) {
+        self.loop_detector.lock().set_subagent_mode(is_subagent);
+    }
+
     /// Snapshot the runner-owned conversation messages for archive persistence.
     pub fn session_messages(&self) -> Vec<crate::llm::provider::Message> {
         self.thread_handle.messages()

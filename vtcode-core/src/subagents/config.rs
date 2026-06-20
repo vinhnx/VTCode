@@ -442,6 +442,11 @@ const WRITE_TOOL_REMINDER: &str = "Tool reminder: `list_files` on the workspace 
 Use a specific subdirectory, `unified_search` for workspace-wide discovery, or `unified_exec` with \
 `git diff --name-only` / `git diff --stat` when reviewing current changes.";
 
+const WRITE_SYNTHESIS_REMINDER: &str = "CRITICAL: After reading files to gather context, you MUST synthesize \
+your findings and begin implementation. Do not continue reading additional files. The harness enforces a hard \
+read-only budget -- exceeding it terminates your session with no output. \
+If you catch yourself reading the same file with different offsets, STOP immediately and write what you have.";
+
 pub fn compose_subagent_instructions(
     spec: &SubagentSpec,
     memory_appendix: Option<String>,
@@ -467,6 +472,7 @@ fn compose_subagent_runtime_instructions(
         sections.push(READ_ONLY_PLANNING_WORKFLOW_REMINDER.to_string());
     } else {
         sections.push(WRITE_TOOL_REMINDER.to_string());
+        sections.push(WRITE_SYNTHESIS_REMINDER.to_string());
     }
 
     if !runtime.skills.is_empty() {

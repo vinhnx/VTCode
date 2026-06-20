@@ -28,6 +28,17 @@ const MAX_SIMILAR_READ_TARGET_VARIANTS: usize = 3;
 /// Also referenced by `prompts::harness_limits` to advertise the budget in the
 /// system prompt -- keep both in sync.
 pub(crate) const MAX_TOTAL_READONLY_CALLS: usize = 30;
+
+/// Subagent-specific read-only budget. Subagents should do focused work and
+/// need less exploration headroom than the main agent.
+pub(crate) const SUBAGENT_MAX_TOTAL_READONLY_CALLS: usize = 20;
+
+/// Navigation streak thresholds -- warning and hard stop.
+/// Subagents get tighter limits to force earlier synthesis.
+const NAVIGATION_WARNING_STREAK: usize = 4;
+const NAVIGATION_HARD_STOP_STREAK: usize = 7;
+const SUBAGENT_NAVIGATION_WARNING_STREAK: usize = 3;
+const SUBAGENT_NAVIGATION_HARD_STOP_STREAK: usize = 5;
 const LEGACY_GREP_FILE: &str = tools::GREP_FILE;
 const LEGACY_LIST_FILES: &str = tools::LIST_FILES;
 const LEGACY_SEARCH_TOOLS: &str = "search_tools";
@@ -163,6 +174,9 @@ pub struct LoopDetector {
     /// agent cannot alternate between different read-only tools to evade
     /// per-tool limits.
     total_readonly_calls: usize,
+    /// When true, applies tighter read-only budgets and navigation streak
+    /// thresholds appropriate for subagents that should do focused work.
+    is_subagent: bool,
 }
 
 impl LoopDetector {
@@ -181,6 +195,34 @@ impl LoopDetector {
             norm_cache: HashMap::with_capacity(16),
             readonly_streak: 0,
             total_readonly_calls: 0,
+            is_subagent: false,
+        }
+    }
+
+    /// Configure this detector for subagent use with tighter read-only budgets
+    /// and earlier navigation streak intervention.
+    pub fn set_subagent_mode(&mut self, is_subagent: bool) {
+        self.is_subagent = is_subagent;
+    }
+
+    /// Returns the effective global read-only budget for this detector.
+    fn effective_readonly_budget(&self) -> usize {
+        if self.is_subagent {
+            SUBAGENT_MAX_TOTAL_READONLY_CALLS
+        } else {
+            MAX_TOTAL_READONLY_CALLS
+        }
+    }
+
+    /// Returns the effective navigation warning and hard-stop streak thresholds.
+    fn effective_navigation_thresholds(&self) -> (usize, usize) {
+        if self.is_subagent {
+            (
+                SUBAGENT_NAVIGATION_WARNING_STREAK,
+                SUBAGENT_NAVIGATION_HARD_STOP_STREAK,
+            )
+        } else {
+            (NAVIGATION_WARNING_STREAK, NAVIGATION_HARD_STOP_STREAK)
         }
     }
 
@@ -304,22 +346,22 @@ impl LoopDetector {
         // --- Global read-only budget ---
         // Prevents the agent from alternating between different read-only tools
         // (e.g., unified_search and unified_file) to evade per-tool limits.
-        if self.total_readonly_calls >= MAX_TOTAL_READONLY_CALLS {
+        let readonly_budget = self.effective_readonly_budget();
+        if self.total_readonly_calls >= readonly_budget {
             let hard_limit = self.get_limit_for_tool(tool_name) * HARD_LIMIT_MULTIPLIER;
             self.tool_counts.insert(tool_name.to_string(), hard_limit);
             return Some(format!(
-                "HARD STOP: Global read-only budget exhausted ({} total read-only calls). \
+                "HARD STOP: Global read-only budget exhausted ({} total read-only calls, limit: {}). \
                  You have collected far more information than needed. \
                  Synthesize a final answer NOW using the data already in your conversation history. \
                  Do NOT call any more read-only tools.",
-                self.total_readonly_calls
+                self.total_readonly_calls, readonly_budget
             ));
         }
 
-        const MAX_NAVIGATION_ONLY_STREAK: usize = 4;
-        const NAVIGATION_HARD_STOP_STREAK: usize = 7;
-        if self.readonly_streak >= MAX_NAVIGATION_ONLY_STREAK {
-            if self.readonly_streak >= NAVIGATION_HARD_STOP_STREAK {
+        let (warning_streak, hard_stop_streak) = self.effective_navigation_thresholds();
+        if self.readonly_streak >= warning_streak {
+            if self.readonly_streak >= hard_stop_streak {
                 let hard_limit = self.get_limit_for_tool(tool_name) * HARD_LIMIT_MULTIPLIER;
                 self.tool_counts.insert(tool_name.to_string(), hard_limit);
                 return Some(format!(
@@ -1445,5 +1487,84 @@ mod tests {
         let msg = warning.unwrap();
         assert!(msg.contains("HARD STOP"), "Expected HARD STOP: {}", msg);
         assert!(detector.is_hard_limit_exceeded(tools::UNIFIED_SEARCH));
+    }
+
+    #[test]
+    fn subagent_navigation_hard_stop_at_5() {
+        let mut detector = LoopDetector::with_max_repeated_calls(100);
+        detector.set_subagent_mode(true);
+
+        // Make 4 read-only calls (subagent warning at 3, but no hard stop yet)
+        for i in 0..4 {
+            let args = json!({"pattern": format!("p_{i}"), "path": "src/"});
+            detector.record_call(tools::UNIFIED_SEARCH, &args);
+        }
+
+        // 5th call should trigger HARD STOP for subagent
+        let args = json!({"pattern": "p_5", "path": "src/"});
+        let warning = detector.record_call(tools::UNIFIED_SEARCH, &args);
+        assert!(
+            warning.is_some(),
+            "Subagent navigation hard stop should fire at streak 5"
+        );
+        let msg = warning.unwrap();
+        assert!(msg.contains("HARD STOP"), "Expected HARD STOP: {}", msg);
+    }
+
+    #[test]
+    fn subagent_readonly_budget_at_20() {
+        let mut detector = LoopDetector::with_max_repeated_calls(100);
+        detector.set_subagent_mode(true);
+
+        // Make 20 read-only calls with different args to avoid per-tool detection
+        for i in 0..20 {
+            let args = json!({"pattern": format!("unique_{i}"), "path": "src/"});
+            detector.record_call(tools::UNIFIED_SEARCH, &args);
+        }
+
+        // 21st call should trigger global budget HARD STOP
+        let args = json!({"pattern": "final", "path": "src/"});
+        let warning = detector.record_call(tools::UNIFIED_SEARCH, &args);
+        assert!(
+            warning.is_some(),
+            "Subagent global read-only budget should fire at 20"
+        );
+        let msg = warning.unwrap();
+        assert!(
+            msg.contains("Global read-only budget exhausted"),
+            "Expected budget exhaustion: {}",
+            msg
+        );
+        assert!(
+            msg.contains("limit: 20"),
+            "Expected limit 20 in message: {}",
+            msg
+        );
+    }
+
+    #[test]
+    fn main_agent_readonly_budget_still_30() {
+        let mut detector = LoopDetector::with_max_repeated_calls(100);
+        // NOT setting subagent mode -- default is false
+
+        // Make 30 read-only calls
+        for i in 0..30 {
+            let args = json!({"pattern": format!("unique_{i}"), "path": "src/"});
+            detector.record_call(tools::UNIFIED_SEARCH, &args);
+        }
+
+        // 31st call should trigger global budget HARD STOP
+        let args = json!({"pattern": "final", "path": "src/"});
+        let warning = detector.record_call(tools::UNIFIED_SEARCH, &args);
+        assert!(
+            warning.is_some(),
+            "Main agent global read-only budget should fire at 30"
+        );
+        let msg = warning.unwrap();
+        assert!(
+            msg.contains("limit: 30"),
+            "Expected limit 30 in message: {}",
+            msg
+        );
     }
 }

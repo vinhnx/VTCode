@@ -1725,6 +1725,7 @@ impl SubagentController {
         )
         .await?;
         runner.set_quiet(true);
+        runner.set_subagent_mode(true);
         let thread_handle = runner.thread_handle();
         let archive_path = archive.path().to_path_buf();
 
