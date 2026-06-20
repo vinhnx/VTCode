@@ -92,9 +92,11 @@ impl FeatureSet {
         match tool_name {
             tools::REQUEST_USER_INPUT => request_user_input_enabled,
             _ if !planning_active => true,
-            _ => builtin_tool_behavior(tool_name)
-                .map(|behavior| !matches!(behavior.mutation_model, ToolMutationModel::Mutating))
-                .unwrap_or(true),
+            _ => {
+                builtin_tool_behavior(tool_name)
+                    .map(|behavior| !matches!(behavior.mutation_model, ToolMutationModel::Mutating))
+                    .unwrap_or(false) // fail-closed: deny unknown tools in planning mode
+            }
         }
     }
 

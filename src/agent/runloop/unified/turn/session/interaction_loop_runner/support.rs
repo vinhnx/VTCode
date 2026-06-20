@@ -900,18 +900,16 @@ async fn handle_select_primary_agent(
                 == vtcode_config::core::permissions::PermissionDefault::Auto
                 && !ensure_full_auto_workspace_trust(&ctx.config.workspace).await?
             {
-                // Revert to previous agent. If revert fails (e.g. specs
-                // changed), fall through with auto still active — the trust
-                // guard at exec time is the hard backstop.
+                // Revert to previous agent. If revert fails, block the switch
+                // entirely — leaving auto active without trust is unsafe.
                 if ctx
                     .active_primary_agent
                     .select_from_specs(&specs, &previous_name)
                     .is_err()
                 {
-                    ctx.renderer.line(
-                        MessageStyle::Warning,
-                        "Workspace trust required for auto agent. Could not revert to previous agent.",
-                    )?;
+                    anyhow::bail!(
+                        "Workspace trust required for auto agent and could not revert to previous agent '{previous_name}'. Switch blocked."
+                    );
                 } else {
                     ctx.renderer.line(
                         MessageStyle::Warning,

@@ -1,4 +1,12 @@
-change modes switching order, Build → Duck → Plan → Auto (auto last/most guarded); add trust gate to interactive auto; fix lifecycle tool policy hole; unify plan concept; unify prompt placement; centralize advertisement snapshot and add action-level masking for multi-action tools.
+DONE: add trust gate to interactive auto (hard block on revert failure)
+DONE: fix planning mode tool filtering (fail-closed for unknown tools)
+DONE: mode switching order is Build → Duck → Plan → Auto (verified)
+
+Remaining:
+- fix lifecycle tool policy hole (primary-agent hooks skip SessionStart/SessionEnd/SubagentStart/SubagentStop)
+- unify plan concept (PlanningWorkflowState vs AgentType::Plan)
+- unify prompt placement (scattered PLANNING_WORKFLOW_* constants)
+- centralize advertisement snapshot and add action-level masking for multi-action tools
 
 ===
 

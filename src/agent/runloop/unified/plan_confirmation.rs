@@ -7,7 +7,6 @@ use std::sync::Arc;
 use anyhow::Result;
 use serde_json::{Value, json};
 use tokio::sync::Notify;
-use tokio::task;
 
 use vtcode_ui::tui::app::{
     InlineHandle, InlineListItem, InlineListSelection, InlineMessageKind, InlineSession,
@@ -15,7 +14,7 @@ use vtcode_ui::tui::app::{
     TransientRequest, TransientSubmission,
 };
 
-use super::overlay_prompt::{OverlayWaitOutcome, wait_for_overlay_submission};
+use super::overlay_prompt::{OverlayWaitOutcome, show_overlay_and_wait};
 use super::state::CtrlCState;
 
 /// Result of the plan confirmation flow
@@ -152,33 +151,31 @@ pub(crate) async fn execute_plan_confirmation(
     ctrl_c_notify: &Arc<Notify>,
 ) -> Result<PlanConfirmationOutcome> {
     render_confirmation_prompt(handle, &plan_content);
-    handle.show_transient(build_plan_confirmation_request(
-        &plan_content,
-        draft_incomplete,
-    ));
-    handle.force_redraw();
-    task::yield_now().await;
-    let outcome =
-        wait_for_overlay_submission(handle, session, ctrl_c_state, ctrl_c_notify, |submission| {
-            match submission {
-                TransientSubmission::Selection(InlineListSelection::PlanApprovalExecute) => {
-                    Some(PlanConfirmationOutcome::Execute)
-                }
-                TransientSubmission::Selection(InlineListSelection::PlanApprovalAutoAccept) => {
-                    Some(PlanConfirmationOutcome::AutoAccept)
-                }
-                TransientSubmission::Selection(InlineListSelection::PlanApprovalEditPlan) => {
-                    Some(PlanConfirmationOutcome::EditPlan)
-                }
-                TransientSubmission::Hotkey(TransientHotkeyAction::LaunchEditor) => {
-                    handle.set_input("/edit".to_string());
-                    Some(PlanConfirmationOutcome::EditPlan)
-                }
-                TransientSubmission::Selection(_) => Some(PlanConfirmationOutcome::Cancel),
-                _ => None,
+    let outcome = show_overlay_and_wait(
+        handle,
+        session,
+        build_plan_confirmation_request(&plan_content, draft_incomplete),
+        ctrl_c_state,
+        ctrl_c_notify,
+        |submission| match submission {
+            TransientSubmission::Selection(InlineListSelection::PlanApprovalExecute) => {
+                Some(PlanConfirmationOutcome::Execute)
             }
-        })
-        .await?;
+            TransientSubmission::Selection(InlineListSelection::PlanApprovalAutoAccept) => {
+                Some(PlanConfirmationOutcome::AutoAccept)
+            }
+            TransientSubmission::Selection(InlineListSelection::PlanApprovalEditPlan) => {
+                Some(PlanConfirmationOutcome::EditPlan)
+            }
+            TransientSubmission::Hotkey(TransientHotkeyAction::LaunchEditor) => {
+                handle.set_input("/edit".to_string());
+                Some(PlanConfirmationOutcome::EditPlan)
+            }
+            TransientSubmission::Selection(_) => Some(PlanConfirmationOutcome::Cancel),
+            _ => None,
+        },
+    )
+    .await?;
 
     Ok(match outcome {
         OverlayWaitOutcome::Submitted(outcome) => outcome,

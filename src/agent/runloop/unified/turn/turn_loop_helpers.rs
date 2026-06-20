@@ -411,7 +411,7 @@ pub(super) async fn maybe_handle_planning_exit_trigger(
                 // confused repeated output when called on the next turn.
                 working_history.push(uni::Message::assistant_with_tools(
                     String::new(),
-                    vec![call.clone()],
+                    vec![call],
                 ));
                 push_tool_response(
                     working_history,
