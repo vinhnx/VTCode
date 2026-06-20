@@ -142,6 +142,20 @@ async fn persisted_approval_hit_key(
         .then(|| exact_target.approval_key.clone())
 }
 
+fn session_approval_cache_keys<'a>(
+    tool_name: &'a str,
+    cache_key: &'a str,
+    approval_learning_target: &'a shell_approval::ApprovalLearningTarget,
+    exact_shell_approval_target: Option<&'a shell_approval::ApprovalLearningTarget>,
+) -> impl Iterator<Item = &'a str> {
+    std::iter::once(cache_key)
+        .chain(std::iter::once(tool_name))
+        .chain(std::iter::once(
+            approval_learning_target.approval_key.as_str(),
+        ))
+        .chain(exact_shell_approval_target.map(|target| target.approval_key.as_str()))
+}
+
 async fn persist_approval_cache_key(
     tool_registry: &ToolRegistry,
     tool_name: &str,
@@ -372,16 +386,18 @@ async fn apply_permission_hook_updates(
 async fn approve_tool_permission(
     tool_registry: &ToolRegistry,
     tool_name: &str,
-    cache_key: Option<&str>,
+    cache_keys: &[&str],
     tool_permission_cache: Option<&Arc<RwLock<ToolPermissionCache>>>,
     grant: Option<PermissionGrant>,
     updated_args: Option<Value>,
 ) -> ToolPermissionFlow {
     tool_registry.mark_tool_preapproved(tool_name).await;
 
-    if let (Some(cache_key), Some(grant), Some(cache)) = (cache_key, grant, tool_permission_cache) {
+    if let (Some(grant), Some(cache)) = (grant, tool_permission_cache) {
         let mut permission_cache = cache.write().await;
-        permission_cache.cache_grant(cache_key.to_string(), grant);
+        for cache_key in cache_keys {
+            permission_cache.cache_grant((*cache_key).to_string(), grant);
+        }
     }
 
     ToolPermissionFlow::Approved { updated_args }
@@ -464,7 +480,7 @@ async fn reuse_saved_approval(
             approve_tool_permission(
                 tool_registry,
                 tool_name,
-                Some(cache_key),
+                &[cache_key],
                 tool_permission_cache,
                 Some(PermissionGrant::Permanent),
                 None,
@@ -488,7 +504,7 @@ async fn reuse_saved_approval(
             approve_tool_permission(
                 tool_registry,
                 tool_name,
-                Some(cache_key),
+                &[cache_key],
                 tool_permission_cache,
                 Some(PermissionGrant::Permanent),
                 None,
@@ -500,7 +516,14 @@ async fn reuse_saved_approval(
     let cache = tool_permission_cache?;
 
     let permission_cache = cache.read().await;
-    if permission_cache.can_use_cached(cache_key) || permission_cache.can_use_cached(tool_name) {
+    if session_approval_cache_keys(
+        tool_name,
+        cache_key,
+        approval_learning_target,
+        exact_shell_approval_target,
+    )
+    .any(|key| permission_cache.can_use_cached(key))
+    {
         tracing::debug!(
             "Using cached ACP permission for tool invocation: {}",
             cache_key
@@ -542,7 +565,13 @@ async fn finalize_permission_decision(
             Ok(approve_tool_permission(
                 tool_registry,
                 tool_name,
-                Some(cache_key),
+                &session_approval_cache_keys(
+                    tool_name,
+                    cache_key,
+                    approval_learning_target,
+                    exact_shell_approval_target,
+                )
+                .collect::<Vec<_>>(),
                 tool_permission_cache,
                 Some(grant),
                 updated_args,
@@ -631,7 +660,13 @@ async fn finalize_permission_decision(
             Ok(approve_tool_permission(
                 tool_registry,
                 tool_name,
-                Some(cache_key),
+                &session_approval_cache_keys(
+                    tool_name,
+                    cache_key,
+                    approval_learning_target,
+                    exact_shell_approval_target,
+                )
+                .collect::<Vec<_>>(),
                 tool_permission_cache,
                 Some(PermissionGrant::Permanent),
                 updated_args,

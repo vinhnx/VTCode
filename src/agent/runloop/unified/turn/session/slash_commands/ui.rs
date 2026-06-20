@@ -18,8 +18,8 @@ use crate::agent::runloop::unified::overlay_prompt::{
 };
 use crate::agent::runloop::unified::palettes::{
     ActivePalette, apply_prompt_style, build_lightweight_palette_view,
-    show_lightweight_model_palette, show_model_target_palette, show_sessions_palette,
-    show_theme_palette,
+    show_lightweight_model_palette, show_mode_palette, show_model_target_palette,
+    show_sessions_palette, show_theme_palette,
 };
 use crate::agent::runloop::unified::session_setup::{
     apply_ide_context_snapshot, ide_context_status_label_from_bridge,
@@ -404,4 +404,38 @@ pub(super) async fn start_model_picker(
         }
     }
     Ok(SlashCommandControl::Continue)
+}
+
+pub(crate) async fn handle_start_mode_palette(
+    mut ctx: SlashCommandContext<'_>,
+) -> Result<SlashCommandControl> {
+    if !ensure_selection_ui_available(&mut ctx, "selecting an agent mode")? {
+        return Ok(SlashCommandControl::Continue);
+    }
+
+    let specs = match vtcode_config::discover_subagents(
+        &vtcode_config::SubagentDiscoveryInput::new(ctx.config.workspace.clone()),
+    ) {
+        Ok(discovered) => discovered.effective,
+        Err(err) => {
+            ctx.renderer.line(
+                MessageStyle::Error,
+                &format!("Failed to discover agents: {}", err),
+            )?;
+            return Ok(SlashCommandControl::Continue);
+        }
+    };
+
+    let current_name = ctx.active_primary_agent.active().identity.name.clone();
+    if show_mode_palette(ctx.renderer, &specs, &current_name)? {
+        *ctx.palette_state = Some(ActivePalette::Mode);
+    }
+    Ok(SlashCommandControl::Continue)
+}
+
+pub(crate) async fn handle_select_primary_agent_from_slash(
+    _ctx: SlashCommandContext<'_>,
+    name: &str,
+) -> Result<SlashCommandControl> {
+    Ok(SlashCommandControl::SelectAgent(name.to_string()))
 }

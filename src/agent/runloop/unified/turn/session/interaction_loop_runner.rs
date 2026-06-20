@@ -27,6 +27,7 @@ use crate::agent::runloop::unified::turn::session::{
 use vtcode_config::loader::SimpleConfigWatcher;
 
 use super::interaction_loop::{InteractionLoopContext, InteractionOutcome, InteractionState};
+pub(crate) use support::handle_select_primary_agent;
 use support::{
     InlineLoopActionResolution, apply_live_theme_and_appearance, build_durable_scheduler_daemon,
     build_user_message_content, extract_recent_follow_up_hint, fallback_args_preview,

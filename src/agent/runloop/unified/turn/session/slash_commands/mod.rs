@@ -37,6 +37,7 @@ pub(crate) enum SlashCommandControl {
     SubmitPrompt(String),
     ReplaceInput(String),
     BreakWithReason(SessionEndReason),
+    SelectAgent(String),
 }
 
 pub(crate) struct SlashCommandContext<'a> {

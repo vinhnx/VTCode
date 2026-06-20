@@ -133,6 +133,15 @@ pub(crate) async fn handle_input_commands(
                             reason,
                         }));
                     }
+                    SlashCommandControl::SelectAgent(name) => {
+                        super::interaction_loop_runner::handle_select_primary_agent(
+                            ctx,
+                            state,
+                            Some(name),
+                        )
+                        .await?;
+                        return Ok(CommandProcessingResult::ContinueLoop);
+                    }
                 }
             }
         }

@@ -24,6 +24,8 @@ pub(super) async fn route_outcome(
         | SlashCommandOutcome::StartStatuslineSetup { .. }
         | SlashCommandOutcome::StartTerminalTitleSetup
         | SlashCommandOutcome::StartModelSelection
+        | SlashCommandOutcome::StartModePalette
+        | SlashCommandOutcome::SelectPrimaryAgent { .. }
         | SlashCommandOutcome::SetEffort { .. }
         | SlashCommandOutcome::ToggleIdeContext
         | SlashCommandOutcome::InitializeWorkspace { .. }
@@ -106,6 +108,10 @@ async fn route_ui_and_settings_outcome(
         }
         SlashCommandOutcome::StartModelSelection => {
             handlers::handle_start_model_selection(ctx).await
+        }
+        SlashCommandOutcome::StartModePalette => handlers::handle_start_mode_palette(ctx).await,
+        SlashCommandOutcome::SelectPrimaryAgent { name } => {
+            handlers::handle_select_primary_agent_from_slash(ctx, &name).await
         }
         SlashCommandOutcome::SetEffort { level, persist } => {
             handlers::handle_set_effort(ctx, level, persist).await

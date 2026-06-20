@@ -52,6 +52,11 @@ const LIGHTWEIGHT_MODEL_PALETTE_TITLE: &str = "Lightweight model";
 pub(crate) const MODEL_TARGET_ACTION_MAIN: &str = "model_target:main";
 pub(crate) const MODEL_TARGET_ACTION_LIGHTWEIGHT: &str = "model_target:lightweight";
 pub(crate) const LIGHTWEIGHT_MODEL_ACTION_PREFIX: &str = "lightweight_model:";
+const MODE_PALETTE_TITLE: &str = "Agent mode";
+const MODE_SELECT_HINT: &str = "↑/↓ choose • Enter select • Esc cancel";
+const MODE_SEARCH_LABEL: &str = "Search agents";
+const MODE_SEARCH_PLACEHOLDER: &str = "name or description";
+pub(crate) const MODE_ACTION_PREFIX: &str = "mode:";
 
 #[derive(Clone)]
 pub(crate) enum ActivePalette {
@@ -80,6 +85,7 @@ pub(crate) enum ActivePalette {
         esc_armed: bool,
     },
     ModelTarget,
+    Mode,
     LightweightModel {
         view: Box<LightweightModelPaletteView>,
     },
@@ -148,6 +154,66 @@ pub(crate) fn show_theme_palette(
 
 fn theme_search_value(theme_id: &str, theme_label: &str) -> String {
     format!("{theme_label} {theme_id} theme appearance colors")
+}
+
+pub(crate) fn show_mode_palette(
+    renderer: &mut AnsiRenderer,
+    specs: &[vtcode_config::SubagentSpec],
+    current_name: &str,
+) -> Result<bool> {
+    let primary_specs: Vec<_> = specs.iter().filter(|s| s.is_primary()).collect();
+
+    if primary_specs.is_empty() {
+        renderer.line(MessageStyle::Info, "No primary agents available.")?;
+        return Ok(false);
+    }
+
+    let mut items = Vec::new();
+    for spec in &primary_specs {
+        let is_current = spec.name.eq_ignore_ascii_case(current_name);
+        let badge = if is_current {
+            Some("Active".to_string())
+        } else {
+            None
+        };
+        let subtitle = if spec.permissions.default
+            == vtcode_config::core::permissions::PermissionDefault::Auto
+        {
+            Some(format!("{} (autonomous)", spec.description))
+        } else {
+            Some(spec.description.clone())
+        };
+        items.push(InlineListItem {
+            title: spec.name.clone(),
+            subtitle,
+            badge,
+            indent: 0,
+            selection: Some(InlineListSelection::ConfigAction(format!(
+                "{}{}",
+                MODE_ACTION_PREFIX, spec.name
+            ))),
+            search_value: Some(format!("{} {} agent mode", spec.name, spec.description)),
+        });
+    }
+
+    renderer.show_list_modal(
+        MODE_PALETTE_TITLE,
+        vec![
+            format!("Current agent: {}", current_name),
+            MODE_SELECT_HINT.to_string(),
+        ],
+        items,
+        Some(InlineListSelection::ConfigAction(format!(
+            "{}{}",
+            MODE_ACTION_PREFIX, current_name
+        ))),
+        Some(InlineListSearchConfig {
+            label: MODE_SEARCH_LABEL.to_string(),
+            placeholder: Some(MODE_SEARCH_PLACEHOLDER.to_string()),
+        }),
+    );
+
+    Ok(true)
 }
 
 fn session_search_value(
@@ -627,6 +693,7 @@ pub(crate) async fn handle_palette_selection(
         ActivePalette::UrlGuard { prompt, previous } => {
             Ok(Some(ActivePalette::UrlGuard { prompt, previous }))
         }
+        ActivePalette::Mode => Ok(None),
     }
 }
 
@@ -802,7 +869,9 @@ pub(crate) fn handle_palette_cancel(
                 Ok(None)
             }
         }
-        ActivePalette::ModelTarget | ActivePalette::LightweightModel { .. } => Ok(None),
+        ActivePalette::ModelTarget
+        | ActivePalette::LightweightModel { .. }
+        | ActivePalette::Mode => Ok(None),
         ActivePalette::UrlGuard { previous, .. } => Ok(previous.map(|palette| *palette)),
     }
 }

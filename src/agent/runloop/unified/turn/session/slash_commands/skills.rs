@@ -233,6 +233,9 @@ async fn apply_skill_command_outcome(
                     )?;
                     Ok(SlashCommandControl::BreakWithReason(reason))
                 }
+                SlashCommandControl::SelectAgent(name) => {
+                    Ok(SlashCommandControl::SelectAgent(name))
+                }
             }
         }
         SkillCommandOutcome::Error { message } => {

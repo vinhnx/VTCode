@@ -354,6 +354,11 @@ async fn handle_show_memory_intent(
         SlashCommandControl::BreakWithReason(reason) => {
             Ok(Some(InteractionOutcome::Exit { reason }))
         }
+        SlashCommandControl::SelectAgent(name) => {
+            super::interaction_loop_runner::handle_select_primary_agent(ctx, state, Some(name))
+                .await?;
+            Ok(Some(InteractionOutcome::DirectToolHandled))
+        }
     }
 }
 

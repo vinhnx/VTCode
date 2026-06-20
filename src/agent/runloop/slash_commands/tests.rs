@@ -539,14 +539,20 @@ async fn interactive_mode_commands_parse_to_expected_outcomes() {
         .expect("jobs should parse");
     assert!(matches!(jobs, SlashCommandOutcome::ShowJobsPanel));
 
-    let removed_command = format!("{} auto", "mode");
-    let removed_mode = handle_slash_command(&removed_command, &mut renderer, &workspace)
+    let mode_no_args = handle_slash_command("mode", &mut renderer, &workspace)
         .await
-        .expect("mode should fall through");
-    let removed_prompt = format!("/{}", removed_command);
+        .expect("mode should parse");
     assert!(matches!(
-        removed_mode,
-        SlashCommandOutcome::SubmitPrompt { ref prompt } if prompt == &removed_prompt
+        mode_no_args,
+        SlashCommandOutcome::StartModePalette
+    ));
+
+    let mode_with_arg = handle_slash_command("mode auto", &mut renderer, &workspace)
+        .await
+        .expect("mode auto should parse");
+    assert!(matches!(
+        mode_with_arg,
+        SlashCommandOutcome::SelectPrimaryAgent { ref name } if name == "auto"
     ));
 }
 

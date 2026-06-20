@@ -211,6 +211,16 @@ pub(in crate::agent::runloop::slash_commands) async fn execute_built_in_command_
         "mcp" => handle_mcp_command(args, renderer),
         "local" => handle_local_command(args, renderer),
         "model" => Ok(SlashCommandOutcome::StartModelSelection),
+        "mode" => {
+            let trimmed = args.trim();
+            if trimmed.is_empty() {
+                Ok(SlashCommandOutcome::StartModePalette)
+            } else {
+                Ok(SlashCommandOutcome::SelectPrimaryAgent {
+                    name: trimmed.to_string(),
+                })
+            }
+        }
         "effort" => match parse_effort_args(args) {
             Ok((level, persist)) => Ok(SlashCommandOutcome::SetEffort { level, persist }),
             Err(message) => {

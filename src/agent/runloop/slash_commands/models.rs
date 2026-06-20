@@ -120,6 +120,10 @@ pub(crate) enum SlashCommandOutcome {
     OpenDonateLinks,
     ShowReleaseNotes,
     StartModelSelection,
+    StartModePalette,
+    SelectPrimaryAgent {
+        name: String,
+    },
     SetEffort {
         level: Option<ReasoningEffortLevel>,
         persist: bool,

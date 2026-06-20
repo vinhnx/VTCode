@@ -868,7 +868,7 @@ async fn handle_cycle_primary_agent_previous(
     }
 }
 
-async fn handle_select_primary_agent(
+pub(crate) async fn handle_select_primary_agent(
     ctx: &mut InteractionLoopContext<'_>,
     state: &mut InteractionState<'_>,
     name: Option<String>,

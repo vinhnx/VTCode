@@ -188,6 +188,12 @@ pub const COMMAND_SKILL_SPECS: &[CommandSkillSpec] = &[
         "configuration"
     ),
     built_in_command_spec!(
+        "mode",
+        "Switch the active agent mode (usage: /mode [build|auto|duck|plan])",
+        "/mode [build|auto|duck|plan]",
+        "configuration"
+    ),
+    built_in_command_spec!(
         "effort",
         "Set model effort level for this conversation (usage: /effort [--persist] [level])",
         "/effort [--persist] [none|minimal|low|medium|high|xhigh|max]",
