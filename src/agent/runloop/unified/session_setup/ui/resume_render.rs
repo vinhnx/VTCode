@@ -184,7 +184,11 @@ pub(crate) fn build_structured_resume_lines(
                     MessageStyle::Tool,
                     format_resume_tool_header(&tool_name, call_id),
                 ));
-                push_content_lines(&mut lines, MessageStyle::ToolOutput, &message.content);
+                if let Some(formatted) = format_tool_output_for_resume(&message.content) {
+                    lines.push(ResumeRenderLine::new(MessageStyle::ToolOutput, formatted));
+                } else {
+                    push_content_lines(&mut lines, MessageStyle::ToolOutput, &message.content);
+                }
             }
             uni::MessageRole::System => {
                 lines.push(ResumeRenderLine::new(MessageStyle::Info, "System:"));
@@ -217,12 +221,125 @@ fn format_tool_arguments_for_resume(arguments: &str) -> String {
         return String::new();
     }
 
-    match serde_json::from_str::<serde_json::Value>(trimmed) {
-        Ok(value) => serde_json::to_string_pretty(&value)
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(trimmed) else {
+        return format!("```text\n{}\n```", trimmed);
+    };
+
+    let Some(obj) = value.as_object() else {
+        return serde_json::to_string_pretty(&value)
             .map(|pretty| format!("```json\n{}\n```", pretty))
-            .unwrap_or_else(|_| format!("```json\n{}\n```", trimmed)),
-        Err(_) => format!("```text\n{}\n```", trimmed),
+            .unwrap_or_else(|_| format!("```json\n{}\n```", trimmed));
+    };
+
+    // Build a concise summary from key fields instead of showing raw JSON
+    let mut summary_parts = Vec::new();
+
+    // For unified_exec: show command
+    if let Some(cmd) = obj
+        .get("command")
+        .or_else(|| obj.get("cmd"))
+        .and_then(|v| v.as_str())
+    {
+        summary_parts.push(format!("command: {}", cmd));
     }
+    // For unified_file: show action and path
+    if let Some(action) = obj.get("action").and_then(|v| v.as_str()) {
+        summary_parts.push(format!("action: {}", action));
+    }
+    if let Some(path) = obj.get("path").and_then(|v| v.as_str()) {
+        summary_parts.push(format!("path: {}", path));
+    }
+    // For unified_search: show query
+    if let Some(query) = obj.get("query").and_then(|v| v.as_str()) {
+        summary_parts.push(format!("query: {}", query));
+    }
+    // For unified_exec: show session_id if present
+    if let Some(sid) = obj.get("session_id").and_then(|v| v.as_str()) {
+        summary_parts.push(format!("session: {}", sid));
+    }
+    // For task_tracker: show action and task details
+    if let Some(_task_action) = obj.get("action").and_then(|v| v.as_str()) {
+        if let Some(subject) = obj.get("subject").and_then(|v| v.as_str()) {
+            summary_parts.push(format!("subject: {}", subject));
+        }
+        if let Some(status) = obj.get("status").and_then(|v| v.as_str()) {
+            summary_parts.push(format!("status: {}", status));
+        }
+    }
+
+    if !summary_parts.is_empty() {
+        return format!("[{}]", summary_parts.join(", "));
+    }
+
+    // Fallback: show pretty-printed JSON in a code block
+    serde_json::to_string_pretty(&value)
+        .map(|pretty| format!("```json\n{}\n```", pretty))
+        .unwrap_or_else(|_| format!("```json\n{}\n```", trimmed))
+}
+
+/// Format tool output content for resume display.
+///
+/// Tool responses are stored as JSON objects with fields like `output`, `error`,
+/// `exit_code`, `failure_kind`, etc. This function extracts the meaningful parts
+/// and renders them as human-readable text instead of showing raw JSON.
+fn format_tool_output_for_resume(content: &uni::MessageContent) -> Option<String> {
+    let text = project_content_text(content)?;
+    let trimmed = text.trim();
+
+    let value = serde_json::from_str::<serde_json::Value>(trimmed).ok()?;
+
+    let obj = value.as_object()?;
+
+    // Error responses: {"error":"...","failure_kind":"...","error_class":"...","is_recoverable":...}
+    if let Some(error) = obj.get("error").and_then(|v| v.as_str()) {
+        let mut parts = vec![format!("Error: {}", error)];
+        if let Some(kind) = obj.get("failure_kind").and_then(|v| v.as_str()) {
+            parts.push(format!("Kind: {}", kind));
+        }
+        if let Some(class) = obj.get("error_class").and_then(|v| v.as_str()) {
+            parts.push(format!("Class: {}", class));
+        }
+        if let Some(recoverable) = obj.get("is_recoverable").and_then(|v| v.as_bool()) {
+            parts.push(format!("Recoverable: {}", recoverable));
+        }
+        return Some(parts.join("\n"));
+    }
+
+    // Success responses with output: {"output":"...","exit_code":0,"backend":"pipe"}
+    if obj.contains_key("output") || obj.contains_key("exit_code") {
+        let mut parts = Vec::new();
+
+        if let Some(output) = obj.get("output").and_then(|v| v.as_str()) {
+            let trimmed_output = output.trim();
+            if !trimmed_output.is_empty() {
+                // Truncate very long output to keep resume display concise
+                let display = if trimmed_output.len() > 500 {
+                    let mut end = 500;
+                    while !trimmed_output.is_char_boundary(end) {
+                        end -= 1;
+                    }
+                    format!("{}...", &trimmed_output[..end])
+                } else {
+                    trimmed_output.to_string()
+                };
+                parts.push(display);
+            }
+        }
+
+        if let Some(code) = obj.get("exit_code").and_then(|v| v.as_i64()) {
+            if code != 0 {
+                parts.push(format!("Exit code: {}", code));
+            }
+        }
+
+        if parts.is_empty() {
+            return None;
+        }
+        return Some(parts.join("\n"));
+    }
+
+    // Unknown JSON structure - fall back to raw display
+    None
 }
 
 fn push_resume_spacing(lines: &mut Vec<ResumeRenderLine>) {

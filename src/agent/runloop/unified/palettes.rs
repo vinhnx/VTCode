@@ -169,8 +169,12 @@ pub(crate) fn show_mode_palette(
     }
 
     let mut items = Vec::new();
+    let mut canonical_current = current_name;
     for spec in &primary_specs {
         let is_current = spec.name.eq_ignore_ascii_case(current_name);
+        if is_current {
+            canonical_current = spec.name.as_str();
+        }
         let badge = if is_current {
             Some("Active".to_string())
         } else {
@@ -199,13 +203,13 @@ pub(crate) fn show_mode_palette(
     renderer.show_list_modal(
         MODE_PALETTE_TITLE,
         vec![
-            format!("Current agent: {}", current_name),
+            format!("Current agent: {}", canonical_current),
             MODE_SELECT_HINT.to_string(),
         ],
         items,
         Some(InlineListSelection::ConfigAction(format!(
             "{}{}",
-            MODE_ACTION_PREFIX, current_name
+            MODE_ACTION_PREFIX, canonical_current
         ))),
         Some(InlineListSearchConfig {
             label: MODE_SEARCH_LABEL.to_string(),

@@ -186,12 +186,12 @@ pub(super) fn tool_display_labels(tool_name: &str, tool_args: Option<&Value>) ->
 
 /// Build a conservative family/pattern learning key for safe shell commands.
 ///
-/// Currently only matches `find <subdir> ...` invocations that:
-/// - contain no destructive options (`-delete`, `-exec`, `-execdir`, `-ok`,
-///   `-okdir`, `-fls`, `-fprint*`),
+/// Currently matches safe read-only command families such as `find <subdir>`
+/// and `sed -n <range> <path>` invocations that:
+/// - contain no destructive options,
 /// - are a single simple command (no `&&`, `||`, `;`, `|`, nested shells, etc.
 ///   — gated via [`extract_shell_approval_command_prefix_words`]),
-/// - target a non-absolute, non-traversal, workspace-relative subdirectory.
+/// - target a non-absolute, non-traversal, workspace-relative path.
 ///
 /// Scope (sandbox + additional permissions) is baked into the key so a
 /// pattern approved under default permissions does not promote escalated runs.
@@ -203,6 +203,7 @@ fn learned_shell_pattern(tool_name: &str, tool_args: Option<&Value>) -> Option<L
     let command_words = extract_shell_approval_command_prefix_words(tool_name, tool_args)?;
 
     learned_find_pattern(&command_words, &scope_signature)
+        .or_else(|| learned_sed_print_pattern(&command_words, &scope_signature))
 }
 
 fn learned_find_pattern(command_words: &[String], scope_signature: &str) -> Option<LearnedPattern> {
@@ -244,6 +245,39 @@ fn is_destructive_find_option(word: &str) -> bool {
     )
 }
 
+fn learned_sed_print_pattern(
+    command_words: &[String],
+    scope_signature: &str,
+) -> Option<LearnedPattern> {
+    if command_words.first().map(String::as_str) != Some("sed") {
+        return None;
+    }
+    let [_, flag, range, path] = command_words else {
+        return None;
+    };
+    if flag != "-n" || !is_sed_print_range(range) {
+        return None;
+    }
+    let family = normalize_workspace_file_family(path)?;
+
+    Some(LearnedPattern {
+        key: format!("shell-pattern:sed -n <range> {family}|{scope_signature}"),
+        label: format!("safe `sed -n` reads under `{family}`"),
+    })
+}
+
+fn is_sed_print_range(range: &str) -> bool {
+    let Some(range) = range.strip_suffix('p') else {
+        return false;
+    };
+
+    let Some((start, end)) = range.split_once(',') else {
+        return range.parse::<usize>().is_ok();
+    };
+
+    start.parse::<usize>().is_ok() && end.parse::<usize>().is_ok()
+}
+
 /// Reduce a `find <root>` argument to a stable, safe, workspace-relative
 /// top-level segment. Rejects anything that would escape the workspace
 /// (absolute paths, `..` traversal, `~` home expansion, empty segments) so the
@@ -273,6 +307,28 @@ fn normalize_find_root(root: &str) -> Option<String> {
     // Collapse `src/foo/bar` to `src` so all safe finds under the same
     // top-level workspace subdirectory share a single family key.
     stripped.split('/').next().map(str::to_owned)
+}
+
+fn normalize_workspace_file_family(path: &str) -> Option<String> {
+    let trimmed = path.trim();
+    if trimmed.is_empty()
+        || trimmed.starts_with('/')
+        || trimmed.starts_with('~')
+        || trimmed.starts_with('-')
+    {
+        return None;
+    }
+    let stripped = trimmed.strip_prefix("./").unwrap_or(trimmed);
+    let mut parts = stripped.split('/');
+    let first = parts.next()?;
+    if first.is_empty() || first == "." || first == ".." || first.contains('\0') {
+        return None;
+    }
+    if parts.any(|part| part.is_empty() || part == "." || part == ".." || part.contains('\0')) {
+        return None;
+    }
+
+    Some(first.to_string())
 }
 
 #[cfg(test)]
@@ -335,6 +391,31 @@ mod tests {
     fn non_find_command_has_no_pattern() {
         assert!(pattern_for("grep -r foo src").is_none());
         assert!(pattern_for("ls src").is_none());
+    }
+
+    #[test]
+    fn grep_command_has_no_pattern() {
+        assert!(pattern_for("grep -r foo src").is_none());
+    }
+
+    #[test]
+    fn sed_print_under_workspace_path_yields_pattern_key() {
+        let pattern = pattern_for("sed -n '87,140p' vtcode-core/src/core/agent/features.rs")
+            .expect("pattern");
+
+        assert!(
+            pattern
+                .key
+                .starts_with("shell-pattern:sed -n <range> vtcode-core|sandbox_permissions=")
+        );
+        assert_eq!(pattern.label, "safe `sed -n` reads under `vtcode-core`");
+    }
+
+    #[test]
+    fn sed_without_print_range_has_no_pattern() {
+        assert!(pattern_for("sed -i 's/a/b/' src/lib.rs").is_none());
+        assert!(pattern_for("sed -n '1,10d' src/lib.rs").is_none());
+        assert!(pattern_for("sed -n '1,10p' ../src/lib.rs").is_none());
     }
 
     #[test]

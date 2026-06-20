@@ -38,8 +38,9 @@ fn structured_resume_lines_preserve_tool_context() {
         "{\"cmd\":\"cargo fmt\"}".to_string(),
     )]);
 
+    let tool_output = r#"{"output":" Finished dev profile [unoptimized + debuginfo]\n","exit_code":0,"backend":"pipe"}"#;
     let mut tool_response =
-        uni::Message::tool_response("call_123".to_string(), "{\"exit_code\":0}".to_string());
+        uni::Message::tool_response("call_123".to_string(), tool_output.to_string());
     tool_response.origin_tool = Some("unified_exec".to_string());
 
     let history = vec![
@@ -63,11 +64,13 @@ fn structured_resume_lines_preserve_tool_context() {
                 .text
                 .contains("Tool unified_exec [tool_call_id: call_123]:")
     }));
+    // Tool arguments should show a concise summary instead of raw JSON
     assert!(lines.iter().any(|line| {
-        line.style == MessageStyle::ToolDetail && line.text.starts_with("```json")
+        line.style == MessageStyle::ToolDetail && line.text.contains("command: cargo fmt")
     }));
+    // Tool output should show extracted output text, not raw JSON
     assert!(lines.iter().any(|line| {
-        line.style == MessageStyle::ToolOutput && line.text.contains("\"exit_code\":0")
+        line.style == MessageStyle::ToolOutput && line.text.contains("Finished dev profile")
     }));
 }
 

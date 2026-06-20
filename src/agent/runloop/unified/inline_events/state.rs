@@ -25,10 +25,6 @@ impl<'a> InlineEventState<'a> {
         self.renderer
     }
 
-    pub(crate) fn interrupts(&self) -> InlineInterruptCoordinator<'a> {
-        self.interrupts
-    }
-
     pub(crate) fn reset_interrupt_state(&mut self) {
         self.interrupts
             .reset_after_user_action(self.ctrl_c_notice_displayed);

@@ -413,16 +413,20 @@ pub(crate) async fn handle_start_mode_palette(
         return Ok(SlashCommandControl::Continue);
     }
 
-    let specs = match vtcode_config::discover_subagents(
-        &vtcode_config::SubagentDiscoveryInput::new(ctx.config.workspace.clone()),
-    ) {
-        Ok(discovered) => discovered.effective,
-        Err(err) => {
-            ctx.renderer.line(
-                MessageStyle::Error,
-                &format!("Failed to discover agents: {}", err),
-            )?;
-            return Ok(SlashCommandControl::Continue);
+    let specs = if let Some(controller) = ctx.tool_registry.subagent_controller() {
+        controller.effective_specs().await
+    } else {
+        match vtcode_config::discover_subagents(&vtcode_config::SubagentDiscoveryInput::new(
+            ctx.config.workspace.clone(),
+        )) {
+            Ok(discovered) => discovered.effective,
+            Err(err) => {
+                ctx.renderer.line(
+                    MessageStyle::Error,
+                    &format!("Failed to discover agents: {}", err),
+                )?;
+                return Ok(SlashCommandControl::Continue);
+            }
         }
     };
 
