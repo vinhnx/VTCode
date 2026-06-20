@@ -539,7 +539,6 @@ fn should_finish_planning_from_user_text(text: &str) -> bool {
     let direct_commands = [
         "implement",
         "yes",
-        "continue",
         "go",
         "start",
         "implement now",
@@ -838,7 +837,11 @@ mod tests {
     #[test]
     fn detects_direct_confirmation_aliases_as_execute_intent() {
         assert!(should_finish_planning_from_user_text("yes"));
-        assert!(should_finish_planning_from_user_text("continue"));
+        // "continue" is intentionally NOT a direct exit trigger — it is
+        // ambiguous ("continue planning" vs "continue to implementation").
+        // It remains valid as a short confirmation when the assistant
+        // recently prompted for implementation.
+        assert!(!should_finish_planning_from_user_text("continue"));
         assert!(should_finish_planning_from_user_text("go"));
         assert!(should_finish_planning_from_user_text("start"));
         assert!(should_finish_planning_from_user_text("yes!"));

@@ -938,6 +938,17 @@ async fn handle_select_primary_agent(
             }
             sync_primary_agent_mcp_runtime(ctx, state).await?;
             set_primary_agent_display(ctx, display_name);
+            // Deactivate planning workflow when switching away from the plan
+            // agent so the state does not leak into other modes.
+            if !is_plan_agent && ctx.tool_registry.is_planning_active() {
+                crate::agent::runloop::unified::planning_workflow_state::finish_planning_workflow(
+                    ctx.tool_registry,
+                    ctx.plan_session,
+                    ctx.handle,
+                    true,
+                )
+                .await;
+            }
             // Activating the plan agent also enters the planning workflow so
             // both "plan" concepts stay unified.
             if is_plan_agent && !ctx.tool_registry.is_planning_active() {
