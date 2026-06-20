@@ -887,22 +887,13 @@ mod tests {
 
         let merged = build_primary_agent_hook_config(&global, &active);
 
-        assert_hook_commands(
-            &merged.lifecycle.session_start,
-            &["primary-session-start"],
-        );
-        assert_hook_commands(
-            &merged.lifecycle.session_end,
-            &["primary-session-end"],
-        );
+        assert_hook_commands(&merged.lifecycle.session_start, &["primary-session-start"]);
+        assert_hook_commands(&merged.lifecycle.session_end, &["primary-session-end"]);
         assert_hook_commands(
             &merged.lifecycle.subagent_start,
             &["primary-subagent-start"],
         );
-        assert_hook_commands(
-            &merged.lifecycle.subagent_stop,
-            &["primary-subagent-stop"],
-        );
+        assert_hook_commands(&merged.lifecycle.subagent_stop, &["primary-subagent-stop"]);
         assert!(merged.lifecycle.task_completion.is_empty());
         assert!(merged.lifecycle.task_completed.is_empty());
         assert!(merged.lifecycle.stop.is_empty());

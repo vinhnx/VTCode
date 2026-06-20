@@ -36,6 +36,11 @@ pub const PLANNING_WORKFLOW_NO_REQUEST_USER_INPUT_POLICY_LINE: &str = "In this r
 /// Shared Planning workflow guard line requiring explicit transition from planning to execution.
 pub const PLANNING_WORKFLOW_NO_AUTO_EXIT_LINE: &str = "Do not auto-exit Planning workflow just because a plan exists; wait for explicit implementation intent.";
 /// Shared Planning workflow task-tracking line clarifying availability and aliasing.
+/// Implementation prompt used when transitioning from planning to execution.
+pub const PLANNING_WORKFLOW_IMPLEMENTATION_PROMPT: &str = "Implement the approved plan.";
+/// Hint shown when planning workflow is active.
+pub const PLANNING_WORKFLOW_HINT: &str = "Planning workflow is active. Type `implement` to start execution or continue refining the plan.";
+
 pub const PLANNING_WORKFLOW_TASK_TRACKER_LINE: &str =
     "`task_tracker` remains available while planning.";
 /// Shared reminder appended when presenting plans while still in Planning workflow.

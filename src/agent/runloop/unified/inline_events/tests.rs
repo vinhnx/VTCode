@@ -658,7 +658,7 @@ async fn plan_confirmation_events_map_to_expected_actions() {
 }
 
 #[tokio::test]
-async fn interrupt_event_returns_exit_after_double_ctrl_c() {
+async fn interrupt_event_never_returns_exit_from_tui() {
     let (handle, mut renderer) = renderer_with_handle();
     let (ctrl_c_state, ctrl_c_notify) = ctrl_c_handles();
     let interrupts = InlineInterruptCoordinator::new(ctrl_c_state.as_ref());
@@ -691,15 +691,19 @@ async fn interrupt_event_returns_exit_after_double_ctrl_c() {
     let mut prefer_latest_once = false;
     let mut queue = InlineQueueState::new(&handle, &mut queued_inputs, &mut prefer_latest_once);
 
+    // Simulate double Ctrl+C registering signals on the CtrlCState.
     let _ = ctrl_c_state.register_signal();
     std::thread::sleep(Duration::from_millis(250));
     let _ = ctrl_c_state.register_signal();
 
+    // Even with CtrlCState in ExitRequested, the TUI interrupt handler
+    // must never return Exit.  Program exit is reserved for the OS signal
+    // handler (SIGINT) which manages CtrlCState escalation directly.
     let action = context
         .process_event(InlineEvent::Interrupt, &mut queue)
         .await
         .expect("process interrupt");
-    assert!(matches!(action, InlineLoopAction::Exit(_)));
+    assert!(matches!(action, InlineLoopAction::Continue));
 }
 
 #[tokio::test]

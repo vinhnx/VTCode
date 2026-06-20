@@ -212,7 +212,13 @@ impl<'a> InlineEventContext<'a> {
 
     fn handle_interrupt(&mut self) -> InlineLoopAction {
         let _ = self.modal.handle_cancel(self.state.renderer());
-        self.state.interrupts().action_for_interrupt()
+        // Esc / Ctrl+C from the TUI should cancel the running task but never
+        // exit the program.  Program exit is reserved for the OS signal handler
+        // (SIGINT) which directly calls `register_signal()` on the CtrlCState
+        // and handles the `Exit` result itself.  Delegating to
+        // `action_for_interrupt()` here would let a TUI keypress escalate
+        // through the CtrlCState exit window and terminate the session.
+        InlineLoopAction::Continue
     }
 
     fn input_processor(&mut self) -> InlineInputProcessor<'_, 'a> {

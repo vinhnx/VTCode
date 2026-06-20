@@ -8,8 +8,7 @@ use vtcode_ui::tui::app::{
     InlineEvent, InlineHandle, TransientEvent, TransientRequest, TransientSubmission,
 };
 
-use super::state::{CtrlCSignal, CtrlCState};
-use super::stop_requests::request_local_stop;
+use super::state::CtrlCState;
 
 pub(crate) enum OverlayWaitOutcome<T> {
     Submitted(T),
@@ -69,18 +68,15 @@ where
 
         match event {
             InlineEvent::Interrupt => {
-                let signal = if ctrl_c_state.is_exit_requested() {
-                    CtrlCSignal::Exit
-                } else if ctrl_c_state.is_cancel_requested() {
-                    CtrlCSignal::Cancel
-                } else {
-                    request_local_stop(ctrl_c_state, ctrl_c_notify)
-                };
+                // Esc / Ctrl+C from the TUI should cancel the overlay but
+                // never exit the program.  Program exit is reserved for the
+                // OS signal handler (SIGINT) which directly manages the
+                // CtrlCState escalation.  Calling `request_local_stop()`
+                // here would let a TUI keypress advance the CtrlCState
+                // through the exit window and terminate the session.
+                ctrl_c_state.reset();
                 close_overlay(handle).await;
-                return Ok(match signal {
-                    CtrlCSignal::Exit => OverlayWaitOutcome::Exit,
-                    CtrlCSignal::Cancel => OverlayWaitOutcome::Interrupted,
-                });
+                return Ok(OverlayWaitOutcome::Interrupted);
             }
             InlineEvent::Transient(TransientEvent::Submitted(submission)) => {
                 ctrl_c_state.reset();

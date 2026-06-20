@@ -5,6 +5,7 @@ use crate::utils::session_archive::{
     find_session_by_identifier, list_recent_sessions, reserve_session_archive_identifier,
     session_listing_matches_workspace,
 };
+use crate::utils::session_debug::runtime_archive_session_id;
 use anyhow::{Result, anyhow};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
@@ -359,6 +360,18 @@ pub async fn list_recent_sessions_in_scope(
     if let SessionQueryScope::CurrentWorkspace(workspace) = scope {
         listings.retain(|listing| session_listing_matches_workspace(listing, workspace));
     }
+    let current_id = runtime_archive_session_id();
+    listings.retain(|listing| {
+        if listing.snapshot.total_messages == 0 {
+            return false;
+        }
+        if let Some(ref current) = current_id {
+            if listing.identifier() == *current {
+                return false;
+            }
+        }
+        true
+    });
     listings.truncate(limit);
     Ok(listings)
 }

@@ -29,8 +29,9 @@ use vtcode_core::utils::session_archive::{
 const APPROVAL_POLICY_INTERACTIVE: &str = "on-request";
 const APPROVAL_POLICY_AUTOMATIC: &str = "never";
 const MCP_SERVER_STATUS_UPDATED_METHOD: &str = "mcpServerStatus/updated";
-const PLANNING_WORKFLOW_IMPLEMENTATION_PROMPT: &str = "Implement the approved plan.";
-const PLANNING_WORKFLOW_HINT: &str = "Planning workflow is active. Type `implement` to start execution or continue refining the plan.";
+use vtcode_core::prompts::system::{
+    PLANNING_WORKFLOW_HINT, PLANNING_WORKFLOW_IMPLEMENTATION_PROMPT,
+};
 
 #[derive(Debug, Default, Clone, Copy)]
 pub(crate) struct CodexSessionRuntime;
@@ -1027,13 +1028,14 @@ fn should_switch_to_execution_mode(input: &str) -> bool {
 mod tests {
     use super::{
         CodexMcpStartupStatus, CodexMcpStartupTracker, MCP_SERVER_STATUS_UPDATED_METHOD,
-        PLANNING_WORKFLOW_IMPLEMENTATION_PROMPT, ServerEvent, archive_save_warning_message,
-        codex_experimental_features_enabled, finalize_archive, normalize_planning_input,
-        parse_mcp_startup_notification, persist_archive_progress,
+        ServerEvent, archive_save_warning_message, codex_experimental_features_enabled,
+        finalize_archive, normalize_planning_input, parse_mcp_startup_notification,
+        persist_archive_progress,
     };
     use anyhow::anyhow;
     use serde_json::json;
     use vtcode_core::llm::provider::MessageRole;
+    use vtcode_core::prompts::system::PLANNING_WORKFLOW_IMPLEMENTATION_PROMPT;
     use vtcode_core::utils::session_archive::SessionMessage;
 
     #[test]
