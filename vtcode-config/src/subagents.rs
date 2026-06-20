@@ -603,7 +603,7 @@ pub fn builtin_plan_agent() -> SubagentSpec {
         name: "plan".to_string(),
         description: "Built-in read-only planning agent definition.".to_string(),
         prompt: BUILTIN_PLAN_AGENT.to_string(),
-        tools: Some(builtin_readonly_tool_ids()),
+        tools: Some(builtin_primary_readonly_tool_ids()),
         disallowed_tools: builtin_readonly_disallowed_tool_ids(),
         model: Some("inherit".to_string()),
         color: Some(ui::AGENT_COLOR_PLAN.to_string()),
@@ -631,7 +631,7 @@ pub fn builtin_primary_duck_agent() -> SubagentSpec {
         name: "duck".to_string(),
         description: "Built-in discussion-first agent for the main session.".to_string(),
         prompt: BUILTIN_DUCK_PRIMARY_AGENT.to_string(),
-        tools: Some(builtin_readonly_tool_ids()),
+        tools: Some(builtin_primary_readonly_tool_ids()),
         disallowed_tools: builtin_readonly_disallowed_tool_ids(),
         model: Some("inherit".to_string()),
         color: Some(ui::AGENT_COLOR_DUCK.to_string()),
@@ -659,6 +659,15 @@ fn builtin_readonly_tool_ids() -> Vec<String> {
         tools::UNIFIED_SEARCH.to_string(),
         tools::UNIFIED_FILE.to_string(),
     ]
+}
+
+/// Readonly tools for primary agents that interact with the user directly.
+/// Extends the base readonly set with `request_user_input` so plan/duck can
+/// ask clarifying questions.
+fn builtin_primary_readonly_tool_ids() -> Vec<String> {
+    let mut ids = builtin_readonly_tool_ids();
+    ids.push(tools::REQUEST_USER_INPUT.to_string());
+    ids
 }
 
 fn builtin_readonly_disallowed_tool_ids() -> Vec<String> {
@@ -1449,8 +1458,8 @@ mod tests {
     use super::{
         AgentMode, AgentSpecFieldClass, BackgroundSubagentConfig, SubagentDiscoveryInput,
         SubagentMcpServer, SubagentMemoryScope, SubagentRuntimeLimits, SubagentSource,
-        builtin_subagents, classify_agent_spec_field, discover_subagents, load_cli_agents,
-        load_subagent_from_file,
+        builtin_plan_agent, builtin_primary_duck_agent, builtin_subagents,
+        classify_agent_spec_field, discover_subagents, load_cli_agents, load_subagent_from_file,
     };
     use crate::constants::tools;
     use crate::core::permissions::PermissionDefault;
@@ -2186,6 +2195,11 @@ Hook prompt"#,
             tools::UNIFIED_SEARCH.to_string(),
             tools::UNIFIED_FILE.to_string(),
         ];
+        let expected_primary_readonly_tools = vec![
+            tools::UNIFIED_SEARCH.to_string(),
+            tools::UNIFIED_FILE.to_string(),
+            tools::REQUEST_USER_INPUT.to_string(),
+        ];
         let default = builtins
             .iter()
             .find(|spec| spec.name == "default")
@@ -2226,7 +2240,7 @@ Hook prompt"#,
             if matches!(name, "duck" | "plan") {
                 assert_eq!(
                     spec.tools.as_deref(),
-                    Some(expected_readonly_tools.as_slice())
+                    Some(expected_primary_readonly_tools.as_slice())
                 );
                 assert!(
                     !spec
@@ -2347,5 +2361,31 @@ Legacy prompt."#,
         assert!(spec.warnings.iter().any(|w| w.contains("write_file")));
         assert!(spec.warnings.iter().any(|w| w.contains("unified_exec")));
         Ok(())
+    }
+
+    #[test]
+    fn builtin_plan_agent_exposes_request_user_input() {
+        let spec = builtin_plan_agent();
+        let tools = spec
+            .tools
+            .as_ref()
+            .expect("plan agent should have tool list");
+        assert!(
+            tools.iter().any(|t| t == tools::REQUEST_USER_INPUT),
+            "plan agent should expose request_user_input for clarifying questions"
+        );
+    }
+
+    #[test]
+    fn builtin_duck_agent_exposes_request_user_input() {
+        let spec = builtin_primary_duck_agent();
+        let tools = spec
+            .tools
+            .as_ref()
+            .expect("duck agent should have tool list");
+        assert!(
+            tools.iter().any(|t| t == tools::REQUEST_USER_INPUT),
+            "duck agent should expose request_user_input for clarifying questions"
+        );
     }
 }

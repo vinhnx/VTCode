@@ -13,6 +13,8 @@ pub enum PlanningEntrySource {
     CliFlag,
     ConfigDefault,
     UserRequest,
+    /// Planning activated by selecting the `plan` primary agent via Tab/palette.
+    AgentSelection,
 }
 
 impl PlanningEntrySource {

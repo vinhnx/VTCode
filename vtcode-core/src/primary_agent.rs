@@ -3,7 +3,7 @@ use std::fmt;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use vtcode_config::constants::defaults::DEFAULT_PRIMARY_AGENT_NAME;
+use vtcode_config::constants::{defaults::DEFAULT_PRIMARY_AGENT_NAME, tools};
 use vtcode_config::core::permissions::AgentPermissionsConfig;
 use vtcode_config::{
     DiscoveredSubagents, HookGroupConfig, HooksConfig, McpProviderConfig, SubagentMcpServer,
@@ -183,30 +183,19 @@ pub fn resolve_primary_agent(
         })
 }
 
-/// Returns `true` when `tool_name` is a subagent lifecycle tool that must
-/// remain available regardless of the active primary agent's tool policy.
-/// These tools manage running subagents (spawn, wait, close, send input,
-/// resume, background subprocess). Blocking them would orphan active
-/// subagents when a restricted primary agent (e.g. `plan`) is selected.
-fn is_subagent_lifecycle_tool(tool_name: &str) -> bool {
-    matches!(
-        tool_name,
-        "spawn_agent"
-            | "spawn_background_subprocess"
-            | "send_input"
-            | "wait_agent"
-            | "resume_agent"
-            | "close_agent"
-    )
+/// Returns `true` for cleanup-only child-agent tools that must remain
+/// available regardless of the active primary agent's tool policy.
+fn is_subagent_cleanup_tool(tool_name: &str) -> bool {
+    tool_name == tools::WAIT_AGENT || tool_name == tools::CLOSE_AGENT
 }
 
 #[must_use]
 pub fn primary_agent_allows_tool(agent: &ActivePrimaryAgent, tool_name: &str) -> bool {
     let tool_name = normalise_tool_name(tool_name);
 
-    // Subagent lifecycle tools are always allowed -- they manage running
-    // subagents regardless of which primary agent is active.
-    if is_subagent_lifecycle_tool(&tool_name) {
+    // Cleanup tools stay available so restricted agents can still join or
+    // close already-running child work.
+    if is_subagent_cleanup_tool(&tool_name) {
         return true;
     }
 
@@ -643,34 +632,34 @@ mod tests {
     }
 
     #[test]
-    fn subagent_lifecycle_tools_bypass_tool_policy() {
+    fn subagent_cleanup_tools_bypass_policy_but_new_work_obeys_policy() {
         let mut spec = test_spec("restricted");
         spec.tools = Some(vec!["unified_search".to_string()]);
         spec.disallowed_tools = vec![
-            "spawn_agent".to_string(),
-            "wait_agent".to_string(),
-            "close_agent".to_string(),
-            "send_input".to_string(),
-            "resume_agent".to_string(),
-            "spawn_background_subprocess".to_string(),
+            tools::SPAWN_AGENT.to_string(),
+            tools::WAIT_AGENT.to_string(),
+            tools::CLOSE_AGENT.to_string(),
+            tools::SEND_INPUT.to_string(),
+            tools::RESUME_AGENT.to_string(),
+            tools::SPAWN_BACKGROUND_SUBPROCESS.to_string(),
         ];
         let active = ActivePrimaryAgent::from_spec(&spec);
 
-        // Non-lifecycle tools respect the policy.
+        // Non-cleanup tools respect the policy.
         assert!(!primary_agent_allows_tool(&active, "unified_exec"));
         assert!(!primary_agent_allows_tool(&active, "unified_file"));
-
-        // Subagent lifecycle tools are always allowed even when listed in
-        // disallowed_tools and absent from the allow list.
-        assert!(primary_agent_allows_tool(&active, "spawn_agent"));
-        assert!(primary_agent_allows_tool(&active, "wait_agent"));
-        assert!(primary_agent_allows_tool(&active, "close_agent"));
-        assert!(primary_agent_allows_tool(&active, "send_input"));
-        assert!(primary_agent_allows_tool(&active, "resume_agent"));
-        assert!(primary_agent_allows_tool(
+        assert!(!primary_agent_allows_tool(&active, tools::SPAWN_AGENT));
+        assert!(!primary_agent_allows_tool(
             &active,
-            "spawn_background_subprocess"
+            tools::SPAWN_BACKGROUND_SUBPROCESS
         ));
+        assert!(!primary_agent_allows_tool(&active, tools::SEND_INPUT));
+        assert!(!primary_agent_allows_tool(&active, tools::RESUME_AGENT));
+
+        // Cleanup tools remain available even when listed in disallowed_tools
+        // and absent from the allow list.
+        assert!(primary_agent_allows_tool(&active, tools::WAIT_AGENT));
+        assert!(primary_agent_allows_tool(&active, tools::CLOSE_AGENT));
     }
 
     #[test]

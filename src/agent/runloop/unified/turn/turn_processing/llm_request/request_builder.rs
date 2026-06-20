@@ -17,6 +17,9 @@ use vtcode_core::llm::provider::{
     self as uni, ParallelToolConfig, prepare_responses_continuation_request,
     supports_responses_chaining,
 };
+use vtcode_core::permissions::{
+    build_advertised_permission_requests, evaluate_effective_permissions,
+};
 use vtcode_core::prompts::{
     PromptContext, append_runtime_tool_prompt_sections, temporal::generate_temporal_context,
     upsert_harness_limits_section,
@@ -246,7 +249,12 @@ async fn build_prompt_output(
                 input.turn.request_user_input_enabled,
             )
             .await;
-        apply_primary_agent_policy_to_tool_snapshot(base_snapshot, &input.turn.active_primary_agent)
+        apply_primary_agent_policy_to_tool_snapshot(
+            base_snapshot,
+            &input.turn.active_primary_agent,
+            &ctx.config.workspace,
+            ctx.vt_cfg,
+        )
     };
 
     append_runtime_tool_prompt_sections(
@@ -268,8 +276,12 @@ async fn build_prompt_output(
 fn apply_primary_agent_policy_to_tool_snapshot(
     snapshot: SessionToolCatalogSnapshot,
     active_primary_agent: &ActivePrimaryAgent,
+    workspace: &std::path::Path,
+    vt_cfg: Option<&vtcode_core::config::loader::VTCodeConfig>,
 ) -> SessionToolCatalogSnapshot {
     let filtered = apply_primary_agent_tool_policy(snapshot.snapshot, active_primary_agent);
+    let filtered =
+        apply_permission_policy_to_tools(filtered, active_primary_agent, workspace, vt_cfg);
     SessionToolCatalogSnapshot::new(
         snapshot.version,
         snapshot.epoch,
@@ -278,6 +290,80 @@ fn apply_primary_agent_policy_to_tool_snapshot(
         filtered,
         snapshot.cache_hit,
     )
+}
+
+/// Filter tools by effective permissions. Tools where ALL advertised permission
+/// requests are denied by the agent's permissions are hidden. This mirrors the
+/// AgentRunner's `is_tool_exposed` check so both paths agree on what the model
+/// sees.
+///
+/// When the active agent has `PermissionDefault::Auto`, the
+/// `automation.full_auto.allowed_tools` config is also enforced so that
+/// interactive `auto` matches the `--full-auto` CLI blast radius.
+fn apply_permission_policy_to_tools(
+    tools: Option<Arc<Vec<vtcode_core::llm::provider::ToolDefinition>>>,
+    active_primary_agent: &ActivePrimaryAgent,
+    workspace: &std::path::Path,
+    vt_cfg: Option<&vtcode_core::config::loader::VTCodeConfig>,
+) -> Option<Arc<Vec<vtcode_core::llm::provider::ToolDefinition>>> {
+    use vtcode_config::core::permissions::PermissionDefault;
+    use vtcode_core::permissions::ResolvedPermissionDecision;
+
+    let tools = tools?;
+    let Some(cfg) = vt_cfg else {
+        return Some(tools);
+    };
+    let current_dir = std::env::current_dir().unwrap_or_else(|_| workspace.to_path_buf());
+    let agent_permissions = &active_primary_agent.permissions;
+
+    // When the auto agent is active, enforce the full-auto allow-list from
+    // config so interactive auto has the same blast radius as --full-auto.
+    // An empty allowlist means no tools are allowed (matching CLI behaviour);
+    // a wildcard ["*"] means unrestricted.
+    let full_auto_allowlist: Option<&[String]> =
+        if agent_permissions.default == PermissionDefault::Auto {
+            let allowed = &cfg.automation.full_auto.allowed_tools;
+            if cfg.automation.full_auto.enabled && !allowed.iter().any(|t| t == "*") {
+                Some(allowed.as_slice())
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+    let filtered: Vec<_> = tools
+        .iter()
+        .filter(|tool| {
+            let name = tool.function_name();
+
+            // Enforce full-auto allow-list if present.
+            if let Some(allowlist) = full_auto_allowlist {
+                if !allowlist.iter().any(|allowed| allowed == name) {
+                    return false;
+                }
+            }
+
+            let requests = build_advertised_permission_requests(workspace, &current_dir, name);
+            if requests.is_empty() {
+                return true;
+            }
+            // Hide the tool only when ALL advertised actions are denied.
+            let all_denied = requests.iter().all(|request| {
+                evaluate_effective_permissions(
+                    &cfg.permissions,
+                    agent_permissions,
+                    workspace,
+                    &current_dir,
+                    request,
+                ) == ResolvedPermissionDecision::Deny
+            });
+            !all_denied
+        })
+        .cloned()
+        .collect();
+
+    (!filtered.is_empty()).then(|| Arc::new(filtered))
 }
 
 fn active_primary_agent_prompt_context(
@@ -551,31 +637,6 @@ fn prepend_request_context_message(
     request_messages
 }
 
-fn inject_request_context_messages(
-    messages: Vec<uni::Message>,
-    editor_context_message: Option<uni::Message>,
-    primary_agent_context_message: Option<uni::Message>,
-) -> Vec<uni::Message> {
-    let messages = prepend_request_context_message(messages, editor_context_message);
-    insert_after_latest_user_message(messages, primary_agent_context_message)
-}
-
-fn insert_after_latest_user_message(
-    mut messages: Vec<uni::Message>,
-    context_message: Option<uni::Message>,
-) -> Vec<uni::Message> {
-    let Some(context_message) = context_message else {
-        return messages;
-    };
-
-    let insert_at = messages
-        .iter()
-        .rposition(|message| message.role == uni::MessageRole::User)
-        .map_or(messages.len(), |index| index + 1);
-    messages.insert(insert_at, context_message);
-    messages
-}
-
 fn resolve_effective_reasoning_effort(
     cfg: Option<&vtcode_core::config::loader::VTCodeConfig>,
     turn_snapshot: &TurnRequestSnapshot,
@@ -590,24 +651,6 @@ fn resolve_effective_reasoning_effort(
         .as_deref()
         .and_then(vtcode_core::config::types::ReasoningEffortLevel::parse)
         .or_else(|| cfg.map(|cfg| cfg.agent.reasoning_effort))
-}
-
-async fn request_primary_agent_context_message(
-    ctx: &TurnProcessingContext<'_>,
-    turn_snapshot: &TurnRequestSnapshot,
-    tool_snapshot: &SessionToolCatalogSnapshot,
-    reasoning_effort: Option<vtcode_core::config::types::ReasoningEffortLevel>,
-) -> uni::Message {
-    let agent = &turn_snapshot.active_primary_agent;
-    let block = render_primary_agent_runtime_context(
-        ctx,
-        turn_snapshot,
-        tool_snapshot,
-        agent,
-        reasoning_effort,
-    )
-    .await;
-    uni::Message::user(block)
 }
 
 async fn render_primary_agent_runtime_context(
@@ -763,7 +806,7 @@ pub(super) async fn build_turn_request(
     use_streaming: bool,
 ) -> Result<TurnRequestBuildResult> {
     let request_model = turn_snapshot.active_model.as_str();
-    let prompt_output = assemble_prompt(
+    let mut prompt_output = assemble_prompt(
         ctx,
         PromptAssemblyInput {
             turn: turn_snapshot,
@@ -772,6 +815,15 @@ pub(super) async fn build_turn_request(
     .await?;
 
     let reasoning_effort = resolve_effective_reasoning_effort(ctx.vt_cfg, turn_snapshot);
+    let primary_agent_context = render_primary_agent_runtime_context(
+        ctx,
+        turn_snapshot,
+        &prompt_output.tool_snapshot,
+        &turn_snapshot.active_primary_agent,
+        reasoning_effort,
+    )
+    .await;
+    let _ = writeln!(prompt_output.system_prompt, "\n{primary_agent_context}");
     let temperature = if reasoning_effort.is_some()
         && matches!(
             turn_snapshot.provider_name.as_str(),
@@ -846,19 +898,9 @@ pub(super) async fn build_turn_request(
         &continuation_messages,
     );
     let request_messages = request_messages.into_owned();
-    let primary_agent_context_message = Some(
-        request_primary_agent_context_message(
-            ctx,
-            turn_snapshot,
-            &prompt_output.tool_snapshot,
-            reasoning_effort,
-        )
-        .await,
-    );
-    let request_messages = inject_request_context_messages(
+    let request_messages = prepend_request_context_message(
         request_messages,
         ctx.context_manager.request_editor_context_message(),
-        primary_agent_context_message,
     );
     let request_plan = build_harness_request_plan(HarnessRequestPlanInput {
         messages: request_messages,
@@ -968,20 +1010,15 @@ mod tests {
     }
 
     fn non_runtime_request_messages(request: &uni::LLMRequest) -> Vec<uni::Message> {
-        request
-            .messages
-            .iter()
-            .filter(|message| !is_primary_agent_runtime_context_message(message))
-            .cloned()
-            .collect()
+        request.messages.clone()
     }
 
-    fn is_primary_agent_runtime_context_message(message: &uni::Message) -> bool {
-        message.role == uni::MessageRole::User
-            && message
-                .content
-                .as_text()
-                .starts_with("## Active Primary Agent Runtime State")
+    fn system_prompt_text(request: &uni::LLMRequest) -> &str {
+        request
+            .system_prompt
+            .as_ref()
+            .expect("system prompt")
+            .as_str()
     }
 
     #[tokio::test]
@@ -1312,7 +1349,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn active_primary_agent_runtime_state_is_request_only_after_latest_user() {
+    async fn active_primary_agent_runtime_state_is_system_prompt_context() {
         let mut backing = TestTurnProcessingBacking::new(4).await;
         backing
             .add_tool_definition(ToolDefinition::function(
@@ -1339,13 +1376,17 @@ mod tests {
                 .expect("request should build")
         };
 
-        assert_eq!(built.request.messages.len(), 2);
+        assert_eq!(built.request.messages.len(), 1);
         assert_eq!(
             built.request.messages[0],
             uni::Message::user("hello".to_string())
         );
-        assert_eq!(built.request.messages[1].role, uni::MessageRole::User);
-        let runtime_context = built.request.messages[1].content.as_text();
+        let runtime_context = built
+            .request
+            .system_prompt
+            .as_ref()
+            .expect("system prompt")
+            .as_str();
         assert!(runtime_context.contains("## Active Primary Agent Runtime State"));
         assert!(runtime_context.contains("- Active agent: planner"));
         assert!(runtime_context.contains("- Effective request tools: unified_search"));
@@ -1394,7 +1435,7 @@ mod tests {
                 .expect("request should build")
         };
 
-        let runtime_context = built.request.messages[1].content.as_text();
+        let runtime_context = system_prompt_text(&built.request);
         assert!(runtime_context.contains("### Memory Appendix"));
         assert!(runtime_context.contains("Primary-agent memory file:"));
         assert!(runtime_context.contains(".vtcode/agent-memory/reviewer/MEMORY.md"));
@@ -1432,7 +1473,7 @@ mod tests {
                 .expect("request should build")
         };
 
-        let runtime_context = built.request.messages[1].content.as_text();
+        let runtime_context = system_prompt_text(&built.request);
         assert!(!runtime_context.contains("### Memory Appendix"));
         assert!(!runtime_context.contains("Create or update `MEMORY.md`"));
         assert!(!memory_dir.exists());
@@ -1480,8 +1521,8 @@ mod tests {
                 .expect("second request should build")
         };
 
-        let first_runtime = first_built.request.messages[1].content.as_text();
-        let second_runtime = second_built.request.messages[1].content.as_text();
+        let first_runtime = system_prompt_text(&first_built.request);
+        let second_runtime = system_prompt_text(&second_built.request);
         assert!(first_runtime.contains("Planner-only durable note."));
         assert!(!first_runtime.contains("Reviewer-only durable note."));
         assert!(second_runtime.contains("Reviewer-only durable note."));
@@ -1551,10 +1592,7 @@ mod tests {
 
         assert_eq!(request_tool_names(&built.request), vec!["unified_file"]);
         assert!(
-            built.request.messages[1]
-                .content
-                .as_text()
-                .contains("- Effective request tools: unified_file")
+            system_prompt_text(&built.request).contains("- Effective request tools: unified_file")
         );
     }
 
@@ -1620,16 +1658,13 @@ mod tests {
             built.request.previous_response_id.as_deref(),
             Some("resp_123")
         );
-        assert_eq!(built.request.messages.len(), 2);
+        assert_eq!(built.request.messages.len(), 1);
         assert_eq!(
             built.request.messages[0],
             uni::Message::user("continue".to_string())
         );
         assert!(
-            built.request.messages[1]
-                .content
-                .as_text()
-                .contains("## Active Primary Agent Runtime State")
+            system_prompt_text(&built.request).contains("## Active Primary Agent Runtime State")
         );
         assert_eq!(
             built.continuation_messages,
@@ -1677,21 +1712,15 @@ mod tests {
 
         let first_system = first_built.request.system_prompt.as_ref().expect("system");
         let second_system = second_built.request.system_prompt.as_ref().expect("system");
-        assert_eq!(first_system, second_system);
+        assert_ne!(first_system, second_system);
         assert_eq!(
             stable_system_prefix_hash(first_system),
             stable_system_prefix_hash(second_system)
         );
-        assert!(!first_system.contains("Planner instructions."));
-        assert!(!second_system.contains("Reviewer instructions."));
-        assert!(!first_system.contains("Current date and time"));
-
-        let first_runtime = first_built.request.messages[1].content.as_text();
-        let second_runtime = second_built.request.messages[1].content.as_text();
-        assert!(first_runtime.contains("Planner instructions."));
-        assert!(second_runtime.contains("Reviewer instructions."));
-        assert!(first_runtime.contains("Current date and time"));
-        assert!(second_runtime.contains("Current date and time"));
+        assert!(first_system.contains("Planner instructions."));
+        assert!(second_system.contains("Reviewer instructions."));
+        assert!(first_system.contains("Current date and time"));
+        assert!(second_system.contains("Current date and time"));
     }
 
     #[tokio::test]
@@ -1734,10 +1763,8 @@ mod tests {
         assert!(second_system.contains("- beta"));
         assert!(!second_system.contains("- alpha"));
 
-        let first_runtime = first_built.request.messages[1].content.as_text();
-        let second_runtime = second_built.request.messages[1].content.as_text();
-        assert!(first_runtime.contains("- Active primary skills: alpha"));
-        assert!(second_runtime.contains("- Active primary skills: beta"));
+        assert!(first_system.contains("- Active primary skills: alpha"));
+        assert!(second_system.contains("- Active primary skills: beta"));
     }
 
     #[tokio::test]
@@ -1769,7 +1796,7 @@ mod tests {
             built.request.reasoning_effort,
             Some(ReasoningEffortLevel::High)
         );
-        let runtime_context = built.request.messages[1].content.as_text();
+        let runtime_context = system_prompt_text(&built.request);
         assert!(runtime_context.contains("- Request model: overlay-model"));
         assert!(runtime_context.contains("- Request reasoning effort: high"));
     }

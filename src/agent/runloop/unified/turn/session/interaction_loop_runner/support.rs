@@ -36,6 +36,10 @@ use crate::agent::runloop::unified::session_setup::{
 };
 use crate::agent::runloop::unified::status_line::InputStatusState;
 use crate::agent::runloop::unified::turn::session::slash_commands::run_with_event_loop_suspended;
+use crate::startup::ensure_full_auto_workspace_trust;
+
+use crate::agent::runloop::unified::planning_workflow_state::transition_to_planning_workflow;
+use vtcode_core::core::interfaces::session::PlanningEntrySource;
 
 use super::super::interaction_loop::{
     InteractionLoopContext, InteractionOutcome, InteractionState,
@@ -887,12 +891,54 @@ async fn handle_select_primary_agent(
     let Some(specs) = load_primary_agent_specs_or_report(ctx).await? else {
         return Ok(());
     };
+    // Save the current agent name so we can revert if trust is denied.
+    let previous_name = ctx.active_primary_agent.active().identity.name.clone();
     match ctx.active_primary_agent.select_from_specs(&specs, &name) {
         Ok(active) => {
+            // Auto-permission agents require workspace trust.
+            if active.permissions.default
+                == vtcode_config::core::permissions::PermissionDefault::Auto
+                && !ensure_full_auto_workspace_trust(&ctx.config.workspace).await?
+            {
+                // Revert to previous agent. If revert fails (e.g. specs
+                // changed), fall through with auto still active — the trust
+                // guard at exec time is the hard backstop.
+                if ctx
+                    .active_primary_agent
+                    .select_from_specs(&specs, &previous_name)
+                    .is_err()
+                {
+                    ctx.renderer.line(
+                        MessageStyle::Warning,
+                        "Workspace trust required for auto agent. Could not revert to previous agent.",
+                    )?;
+                } else {
+                    ctx.renderer.line(
+                        MessageStyle::Warning,
+                        "Workspace trust required for auto agent. Keeping previous agent.",
+                    )?;
+                }
+                return Ok(());
+            }
             let display_name = active.display_name.clone();
+            let is_plan_agent = active.identity.name.eq_ignore_ascii_case("plan");
             sync_primary_agent_hook_runtime(ctx).await?;
             sync_primary_agent_mcp_runtime(ctx, state).await?;
             set_primary_agent_display(ctx, display_name);
+            // Activating the plan agent also enters the planning workflow so
+            // both "plan" concepts stay unified.
+            if is_plan_agent && !ctx.tool_registry.is_planning_active() {
+                transition_to_planning_workflow(
+                    ctx.tool_registry,
+                    ctx.session_stats,
+                    ctx.plan_session,
+                    ctx.handle,
+                    PlanningEntrySource::AgentSelection,
+                    true,
+                    true,
+                )
+                .await;
+            }
         }
         Err(vtcode_core::primary_agent::PrimaryAgentResolutionError::UnknownAgent {
             requested,
@@ -1077,9 +1123,23 @@ fn primary_agent_names(specs: &[vtcode_config::SubagentSpec]) -> Vec<String> {
         .filter(|name| !name.is_empty())
         .map(str::to_string)
         .collect::<Vec<_>>();
-    names.sort_by_key(|name| name.to_ascii_lowercase());
+    names.sort_by(|left, right| {
+        primary_agent_cycle_rank(left)
+            .cmp(&primary_agent_cycle_rank(right))
+            .then_with(|| left.to_ascii_lowercase().cmp(&right.to_ascii_lowercase()))
+    });
     names.dedup_by(|left, right| left.eq_ignore_ascii_case(right));
     names
+}
+
+fn primary_agent_cycle_rank(name: &str) -> u8 {
+    match name.trim().to_ascii_lowercase().as_str() {
+        "build" => 0,
+        "duck" => 1,
+        "plan" => 2,
+        "auto" => 3,
+        _ => 4,
+    }
 }
 
 #[cfg(test)]
@@ -1125,6 +1185,46 @@ mod tests {
         assert_eq!(
             next_primary_agent_name(&active, &specs),
             Some("build".to_string())
+        );
+    }
+
+    #[test]
+    fn primary_agent_names_put_builtin_auto_last_before_custom_agents() {
+        let specs = vec![
+            test_subagent_spec("zeta"),
+            test_subagent_spec("auto"),
+            test_subagent_spec("plan"),
+            test_subagent_spec("build"),
+            test_subagent_spec("duck"),
+            test_subagent_spec("alpha"),
+        ];
+
+        assert_eq!(
+            primary_agent_names(&specs),
+            vec![
+                "build".to_string(),
+                "duck".to_string(),
+                "plan".to_string(),
+                "auto".to_string(),
+                "alpha".to_string(),
+                "zeta".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn previous_primary_agent_name_cycles_through_explicit_builtin_order() {
+        let specs = vec![
+            test_subagent_spec("auto"),
+            test_subagent_spec("plan"),
+            test_subagent_spec("build"),
+            test_subagent_spec("duck"),
+        ];
+        let active = vtcode_core::primary_agent::ActivePrimaryAgent::from_spec(&specs[0]);
+
+        assert_eq!(
+            previous_primary_agent_name(&active, &specs),
+            Some("plan".to_string())
         );
     }
 
