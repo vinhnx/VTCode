@@ -25,6 +25,16 @@ reasoning_effort = "low"
 # base_url = "https://api.atlascloud.ai/v1"
 # api_key_env = "ATLASCLOUD_API_KEY"
 # model = "deepseek-ai/deepseek-v4-flash"
+# models = [
+#     "deepseek-ai/deepseek-v4-flash",
+#     "deepseek-ai/DeepSeek-V3-0324",
+#     "moonshotai/kimi-k2.7-code",
+#     "moonshotai/kimi-k2.6",
+#     "zai-org/glm-5.2",
+#     "zai-org/glm-4.7",
+#     "minimaxai/minimax-m3",
+#     "minimaxai/minimax-m2.1",
+# ]
 
 [agent.persistent_memory]
 enabled = true
