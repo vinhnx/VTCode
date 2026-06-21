@@ -29,16 +29,6 @@ fn assert_header_contains_badge(session: &mut Session, badge_text: &str) {
     );
 }
 
-fn assert_badge_style(line: &Line<'_>, badge_text: &str, expected_fg: Color) {
-    let badge_span = line
-        .spans
-        .iter()
-        .find(|span| span.content.as_ref() == badge_text)
-        .unwrap_or_else(|| panic!("badge span '{badge_text}' not found"));
-    assert_eq!(badge_span.style.fg, Some(expected_fg));
-    assert!(badge_span.style.add_modifier.contains(Modifier::BOLD));
-}
-
 fn setup_shimmer_session(session: &mut Session, left_status: &str) {
     session.handle_command(InlineCommand::SetInputStatus {
         left: Some(left_status.to_string()),
@@ -471,6 +461,7 @@ fn hidden_header_summary_combines_provider_model_and_styles_effort_label() {
     assert!(summary.contains("medium"));
 }
 
+#[test]
 fn hidden_header_summary_live_reloads_model_changes() {
     let mut session = fresh_session();
     session.appearance.hide_header = true;

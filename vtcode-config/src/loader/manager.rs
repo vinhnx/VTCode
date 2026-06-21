@@ -677,8 +677,10 @@ mod sparse_config_tests {
 
     #[test]
     fn sparse_config_persists_non_default_primary_agent() {
-        let mut config = VTCodeConfig::default();
-        config.default_primary_agent = "auto".to_string();
+        let config = VTCodeConfig {
+            default_primary_agent: "auto".to_string(),
+            ..Default::default()
+        };
 
         let value = ConfigManager::sparse_config_value(&config).expect("sparse config");
 

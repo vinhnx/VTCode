@@ -86,14 +86,14 @@ impl ConfigWatcher {
         let mut current = self
             .current_config
             .lock()
-            .map_err(|_| anyhow!("config watcher state lock poisoned"))?;
+            .map_err(|e| anyhow!("config watcher state lock poisoned: {e}"))?;
         *current = config;
         drop(current);
 
         let mut last_load = self
             .last_load_time
             .lock()
-            .map_err(|_| anyhow!("config watcher timestamp lock poisoned"))?;
+            .map_err(|e| anyhow!("config watcher timestamp lock poisoned: {e}"))?;
         *last_load = Instant::now();
 
         Ok(())

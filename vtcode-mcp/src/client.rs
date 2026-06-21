@@ -1373,8 +1373,7 @@ mod tests {
     #[tokio::test]
     async fn connect_server_rejects_unknown_server_name() {
         let client = McpClient::new(base_config());
-        let err = client
-            .connect_server("missing")
+        let err = Box::pin(client.connect_server("missing"))
             .await
             .expect_err("missing server should error");
         assert!(err.to_string().contains("not configured"));

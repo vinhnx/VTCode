@@ -70,13 +70,13 @@ mod tests {
 
     #[test]
     fn layout_breakpoints_are_ordered() {
-        assert!(COMPACT_MAX_COLS < WIDE_MIN_COLS);
-        assert!(COMPACT_MAX_ROWS < WIDE_MIN_ROWS);
+        const _: () = assert!(COMPACT_MAX_COLS < WIDE_MIN_COLS);
+        const _: () = assert!(COMPACT_MAX_ROWS < WIDE_MIN_ROWS);
     }
 
     #[test]
     fn spacing_tokens_are_ordered() {
-        assert!(SPACING_TIGHT < SPACING_NORMAL);
-        assert!(SPACING_NORMAL < SPACING_LOOSE);
+        const _: () = assert!(SPACING_TIGHT < SPACING_NORMAL);
+        const _: () = assert!(SPACING_NORMAL < SPACING_LOOSE);
     }
 }

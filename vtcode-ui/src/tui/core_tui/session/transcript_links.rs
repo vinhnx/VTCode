@@ -587,15 +587,31 @@ fn line_local_link_bounds(
     let start = if line_text.is_char_boundary(relative_start) {
         relative_start
     } else {
-        line_text.floor_char_boundary(relative_start)
+        floor_char_boundary_impl(line_text, relative_start)
     };
     let end = if line_text.is_char_boundary(relative_end) {
         relative_end
     } else {
-        line_text.ceil_char_boundary(relative_end)
+        ceil_char_boundary_impl(line_text, relative_end)
     };
 
     (start < end && end <= line_text.len()).then_some((start, end))
+}
+
+fn floor_char_boundary_impl(s: &str, i: usize) -> usize {
+    let mut idx = i.min(s.len());
+    while idx > 0 && !s.is_char_boundary(idx) {
+        idx -= 1;
+    }
+    idx
+}
+
+fn ceil_char_boundary_impl(s: &str, i: usize) -> usize {
+    let mut idx = i.min(s.len());
+    while idx < s.len() && !s.is_char_boundary(idx) {
+        idx += 1;
+    }
+    idx
 }
 
 #[inline]
@@ -735,13 +751,9 @@ pub(crate) fn decorate_detected_link_lines(
                     continue;
                 }
 
-                let Some((relative_start, relative_end)) = line_local_link_bounds(
-                    *start,
-                    *end,
-                    wrapped_start,
-                    wrapped_end,
-                    &wrapped_text,
-                ) else {
+                let Some((relative_start, relative_end)) =
+                    line_local_link_bounds(*start, *end, wrapped_start, wrapped_end, &wrapped_text)
+                else {
                     continue;
                 };
                 let start_col = UnicodeWidthStr::width(&wrapped_text[..relative_start]);
@@ -809,13 +821,9 @@ pub(crate) fn project_detected_links_onto_wrapped_lines(
                 continue;
             }
 
-            let Some((relative_start, relative_end)) = line_local_link_bounds(
-                *start,
-                *end,
-                wrapped_start,
-                wrapped_end,
-                &wrapped_text,
-            ) else {
+            let Some((relative_start, relative_end)) =
+                line_local_link_bounds(*start, *end, wrapped_start, wrapped_end, &wrapped_text)
+            else {
                 continue;
             };
             let start_col = UnicodeWidthStr::width(&wrapped_text[..relative_start]);
@@ -1097,7 +1105,10 @@ mod tests {
     #[test]
     fn project_detected_links_preserves_char_boundaries_for_unicode_wraps() {
         let original_text = "vtcode-core/src/tool_policy.rs — those files";
-        let wrapped_lines = vec![Line::from("vtcode-core/src/tool_policy.rs —"), Line::from(" those files")];
+        let wrapped_lines = vec![
+            Line::from("vtcode-core/src/tool_policy.rs —"),
+            Line::from(" those files"),
+        ];
 
         let projected = project_detected_links_onto_wrapped_lines(
             &wrapped_lines,

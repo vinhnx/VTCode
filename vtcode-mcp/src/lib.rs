@@ -267,7 +267,6 @@ pub(crate) fn format_tool_markdown(tool: &McpToolInfo) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::McpToolInfo;
     use crate::utils::{
         LOCAL_TIMEZONE_ENV_VAR, TIMEZONE_ARGUMENT, clear_test_env_override, set_test_env_override,
     };

@@ -299,7 +299,7 @@ mod tests {
     #[test]
     fn fuzzy_score_exact_match() {
         let discovery = ToolDiscovery::new(Arc::new(MockMcpClient::default()));
-        assert_eq!(discovery.fuzzy_score("read_file", "read_file"), 1.0);
+        assert!((discovery.fuzzy_score("read_file", "read_file") - 1.0).abs() < f32::EPSILON);
     }
 
     #[test]
@@ -312,7 +312,7 @@ mod tests {
     #[test]
     fn fuzzy_score_no_match() {
         let discovery = ToolDiscovery::new(Arc::new(MockMcpClient::default()));
-        assert_eq!(discovery.fuzzy_score("read_file", "xyz"), 0.0);
+        assert!(discovery.fuzzy_score("read_file", "xyz").abs() < f32::EPSILON);
     }
 
     #[tokio::test]
