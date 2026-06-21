@@ -479,15 +479,15 @@ fn mask_tool_actions_for_mode(tool: &ToolDefinition, planning_active: bool) -> T
             .and_then(|p| p.get_mut("action"))
         && let Some(obj) = action_prop.as_object_mut()
     {
-            obj.insert(
-                "enum".to_string(),
-                Value::Array(
-                    allowed
-                        .iter()
-                        .map(|a| Value::String((*a).to_string()))
-                        .collect(),
-                ),
-            );
+        obj.insert(
+            "enum".to_string(),
+            Value::Array(
+                allowed
+                    .iter()
+                    .map(|a| Value::String((*a).to_string()))
+                    .collect(),
+            ),
+        );
     }
     masked
 }

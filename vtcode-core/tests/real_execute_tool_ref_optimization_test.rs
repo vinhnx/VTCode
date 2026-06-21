@@ -50,8 +50,14 @@ async fn test_execute_tool_ref_uses_optimizations() {
     let result3 = registry.execute_tool_ref("read_file", &args).await;
     result3.unwrap();
 
-    // Verify results are consistent
-    assert_eq!(result1.unwrap(), result2.unwrap());
+    // Verify results are consistent. The second read may reuse a recent
+    // identical read-only call, which annotates the response with cache-reuse
+    // metadata (reused_recent_result, tool, reused_result_note); the file
+    // content and metadata must still match the first call.
+    let cached1 = result1.unwrap();
+    let cached2 = result2.unwrap();
+    assert_eq!(cached1.get("content"), cached2.get("content"));
+    assert_eq!(cached1.get("metadata"), cached2.get("metadata"));
 
     println!("v execute_tool_ref optimization test passed");
     println!("   Cache size after first call: {cache_size_after_first}");
@@ -192,7 +198,9 @@ async fn test_execute_tool_ref_performance_comparison() {
         registry_optimized.has_optimizations_enabled()
     );
 
-    // Both should complete successfully (performance may vary)
-    assert!(unoptimized_duration.as_millis() > 0);
-    assert!(optimized_duration.as_millis() > 0);
+    // Both should complete successfully (performance may vary). Use nanos
+    // rather than millis: on fast machines the 5-iteration loop can complete
+    // in under a millisecond, which would flake a `> 0` millis check.
+    assert!(unoptimized_duration.as_nanos() > 0);
+    assert!(optimized_duration.as_nanos() > 0);
 }

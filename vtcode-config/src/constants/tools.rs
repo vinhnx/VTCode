@@ -116,6 +116,11 @@ pub const RESUME_AGENT: &str = "resume_agent";
 /// Close a delegated child agent.
 pub const CLOSE_AGENT: &str = "close_agent";
 
+/// Cleanup-only child-agent tools that must remain available regardless of the
+/// active primary agent's tool policy, so restricted primaries can still join or
+/// close already-running child work. Add new lifecycle-only cleanup tools here.
+pub const LIFECYCLE_CLEANUP_TOOLS: &[&str] = &[WAIT_AGENT, CLOSE_AGENT];
+
 // ============================================================
 // ADAPTIVE BUDGET RECOVERY
 // ============================================================

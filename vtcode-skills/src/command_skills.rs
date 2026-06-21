@@ -596,9 +596,13 @@ mod tests {
     }
 
     #[test]
-    fn removed_mode_command_is_not_registered() {
-        assert!(find_command_skill_by_slash_name("mode").is_none());
-        assert!(find_command_skill_by_skill_name("cmd-mode").is_none());
+    fn mode_command_switches_active_agent_mode() {
+        // The `/mode` command was re-introduced (commit ef1b52b6f) as a live
+        // feature: with no argument it opens the mode palette, with an argument
+        // (build|auto|duck|plan) it selects the primary agent directly. It must
+        // remain registered alongside the dedicated mode commands.
+        let mode = find_command_skill_by_slash_name("mode").expect("mode spec");
+        assert!(mode.description.contains("mode"));
     }
 
     #[test]

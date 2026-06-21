@@ -539,7 +539,9 @@ impl CtrlCPhase {
 /// and cannot be blocked by any other process. The following guarantees are enforced:
 ///
 /// 1. **First Ctrl+C**: Immediately cancels the current operation (Cancel signal)
-/// 2. **Second Ctrl+C (within 1 second)**: Immediately exits the program (Exit signal)
+/// 2. **Second Ctrl+C (within 1 second)**: Escalates to exit; a 200ms debounce
+///    sub-window suppresses accidental double-taps so a rapid second tap returns
+///    `Cancel` (debounced) rather than `Exit` (see State Machine below)
 /// 3. **Emergency exit path**: On double Ctrl+C, the program calls `std::process::exit(130)`
 ///    which bypasses all other operations and cleanup routines
 /// 4. **No signal masking**: SIGINT is never blocked or masked anywhere in the codebase

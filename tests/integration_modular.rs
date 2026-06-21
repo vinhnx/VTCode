@@ -36,8 +36,12 @@ fn test_config_module_integration() {
     );
     assert_eq!(config.tools.default_policy, ToolPolicy::Prompt);
 
-    // Test that we can load configuration (will use defaults if no file)
-    let manager = ConfigManager::load_from_workspace(".").unwrap();
+    // Test that we can load configuration from an isolated workspace with no
+    // config file (defaults apply). Loading from "." would pick up any local
+    // vtcode.toml (e.g. a custom provider), making this test non-deterministic.
+    let temp_workspace = tempfile::tempdir().expect("Failed to create temp workspace");
+    let manager = ConfigManager::load_from_workspace(temp_workspace.path())
+        .expect("Failed to load config from temp workspace");
     let loaded_config = manager.config();
     assert!(
         Provider::from_str(loaded_config.agent.provider.as_str()).is_ok(),

@@ -48,12 +48,19 @@ pub(crate) fn spooled_output_hint(path: &str) -> String {
 pub(crate) fn render_tree_detail(renderer: &mut AnsiRenderer, detail: &str) -> Result<()> {
     let palette = ColorPalette::default();
     let mut styled = String::new();
-    styled.push_str("  ");
-    styled.push_str(&render_styled("└", palette.muted, Some("dim".to_string())));
-    styled.push(' ');
+    push_tree_prefix(&mut styled, &palette);
     styled.push_str(&render_styled(detail, palette.muted, None));
     renderer.line(MessageStyle::Info, &styled)?;
     Ok(())
+}
+
+/// Push the shared `  └ ` tree-detail prefix (two-space indent, dim `└`, trailing
+/// space) into `styled`. Centralized so the prefix style can change in one place
+/// across both detail lines and command-line renderings.
+pub(crate) fn push_tree_prefix(styled: &mut String, palette: &ColorPalette) {
+    styled.push_str("  ");
+    styled.push_str(&render_styled("└", palette.muted, Some("dim".to_string())));
+    styled.push(' ');
 }
 
 fn tool_recovery_hint(val: &Value) -> Option<&'static str> {

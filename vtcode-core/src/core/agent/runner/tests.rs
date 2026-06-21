@@ -1344,7 +1344,12 @@ async fn exec_full_auto_retries_after_verification_failure() {
 #[tokio::test]
 async fn review_runs_skip_continuation_and_finish_single_pass() {
     let temp = TempDir::new().expect("tempdir");
-    let mut runner = Box::pin(make_runner(&temp, VTCodeConfig::default(), "thread-review-skip")).await;
+    let mut runner = Box::pin(make_runner(
+        &temp,
+        VTCodeConfig::default(),
+        "thread-review-skip",
+    ))
+    .await;
     runner
         .enable_full_auto(&[tools::UNIFIED_FILE.to_string()])
         .await;
@@ -1529,7 +1534,12 @@ async fn default_full_auto_exec_uses_plan_build_evaluate_harness() {
     let workspace = workspace_root(&temp);
 
     let vt_cfg = VTCodeConfig::default();
-    let mut runner = Box::pin(make_runner(&temp, vt_cfg, "thread-default-plan-build-evaluate")).await;
+    let mut runner = Box::pin(make_runner(
+        &temp,
+        vt_cfg,
+        "thread-default-plan-build-evaluate",
+    ))
+    .await;
     runner
         .enable_full_auto(&[tools::TASK_TRACKER.to_string()])
         .await;
@@ -1740,7 +1750,12 @@ async fn evaluator_missing_scorecard_forces_revision() {
     vt_cfg.agent.harness.orchestration_mode =
         vtcode_config::core::agent::HarnessOrchestrationMode::PlanBuildEvaluate;
     vt_cfg.automation.full_auto.max_turns = 4;
-    let mut runner = Box::pin(make_runner(&temp, vt_cfg, "thread-evaluator-missing-scorecard")).await;
+    let mut runner = Box::pin(make_runner(
+        &temp,
+        vt_cfg,
+        "thread-evaluator-missing-scorecard",
+    ))
+    .await;
     runner
         .enable_full_auto(&[tools::TASK_TRACKER.to_string()])
         .await;
@@ -1799,7 +1814,12 @@ async fn evaluator_out_of_range_scorecard_forces_revision() {
     vt_cfg.agent.harness.orchestration_mode =
         vtcode_config::core::agent::HarnessOrchestrationMode::PlanBuildEvaluate;
     vt_cfg.automation.full_auto.max_turns = 4;
-    let mut runner = Box::pin(make_runner(&temp, vt_cfg, "thread-evaluator-invalid-scorecard")).await;
+    let mut runner = Box::pin(make_runner(
+        &temp,
+        vt_cfg,
+        "thread-evaluator-invalid-scorecard",
+    ))
+    .await;
     runner
         .enable_full_auto(&[tools::TASK_TRACKER.to_string()])
         .await;

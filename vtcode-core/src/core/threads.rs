@@ -365,9 +365,11 @@ pub async fn list_recent_sessions_in_scope(
         if listing.snapshot.total_messages == 0 {
             return false;
         }
-        if let Some(ref current) = current_id && listing.identifier() == *current {
-                return false;
-            }
+        if let Some(ref current) = current_id
+            && listing.identifier() == *current
+        {
+            return false;
+        }
         true
     });
     listings.truncate(limit);

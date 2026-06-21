@@ -102,7 +102,7 @@ mod memory_profiling {
         #[allow(clippy::cast_sign_loss)]
         #[allow(clippy::cast_sign_loss)]
         cache.insert(key1, value1, test_size_bytes as u64); // safe: positive literal
-        
+
         let stats = cache.stats();
         #[allow(clippy::cast_sign_loss)]
         let expected_bytes = test_size_bytes as u64; // safe: positive literal

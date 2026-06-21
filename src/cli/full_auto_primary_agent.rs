@@ -99,7 +99,7 @@ mod tests {
     }
 
     #[test]
-    fn explicit_duck_is_honoured_for_full_auto() {
+    fn explicit_missing_primary_for_full_auto_falls_back_to_build_with_notice() {
         let cfg = VTCodeConfig {
             default_primary_agent: "duck".to_string(),
             ..VTCodeConfig::default()
@@ -112,9 +112,12 @@ mod tests {
         )
         .expect("explicit duck should resolve");
 
-        // "duck" is not in the provided specs, so the resolver falls back
-        // to the built-in "build" agent.  This matches the behaviour tested
-        // in `from_specs_with_default_falls_back_to_build_for_missing_configured_agent`.
+        // "duck" is not in the provided specs, so the resolver falls back to
+        // the built-in "build" agent. Unlike the previously silent behaviour,
+        // `from_specs_with_default` now emits a `tracing::warn!` fallback
+        // notice (see `fallback_notice` in `vtcode-core::primary_agent`) so the
+        // operator learns the configured "duck" agent was dropped under
+        // full-auto. The behaviour here is unchanged: build is selected.
         assert_eq!(resolved.active_primary_agent.identity.name, "build");
         assert_eq!(
             resolved

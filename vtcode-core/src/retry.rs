@@ -661,9 +661,7 @@ mod tests {
                     }
                 })
             },
-            |_: &RetryPolicy| {
-                VtCodeError::execution(ErrorCode::ToolExecutionFailed, "exhausted")
-            },
+            |_: &RetryPolicy| VtCodeError::execution(ErrorCode::ToolExecutionFailed, "exhausted"),
         )
         .await;
         assert_eq!(result.unwrap(), "ok");
@@ -686,15 +684,10 @@ mod tests {
                 let attempts = attempts_for_op.clone();
                 Box::pin(async move {
                     attempts.fetch_add(1, Ordering::SeqCst);
-                    Err::<String, _>(VtCodeError::input(
-                        ErrorCode::InvalidArgument,
-                        "bad input",
-                    ))
+                    Err::<String, _>(VtCodeError::input(ErrorCode::InvalidArgument, "bad input"))
                 })
             },
-            |_: &RetryPolicy| {
-                VtCodeError::execution(ErrorCode::ToolExecutionFailed, "exhausted")
-            },
+            |_: &RetryPolicy| VtCodeError::execution(ErrorCode::ToolExecutionFailed, "exhausted"),
         )
         .await;
         assert!(result.is_err());

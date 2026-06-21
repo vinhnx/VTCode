@@ -18,9 +18,7 @@ use vtcode_ui::tui::app::InlineHandle;
 
 #[test]
 fn recovery_synthesis_fallback_says_no_tool_call_was_applied() {
-    assert!(
-        RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER.contains("No additional tool call was applied")
-    );
+    assert!(RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER.contains("no tool call applied"));
 }
 
 #[test]

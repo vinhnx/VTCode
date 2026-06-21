@@ -19,6 +19,7 @@ use crate::permissions::{
 };
 use crate::prompts::PromptContext;
 use crate::subagents::ResolvedAgentRuntimeView;
+use tracing::warn;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ActivePrimaryAgentSpecIdentity {
@@ -116,8 +117,22 @@ impl ActivePrimaryAgentState {
         } else {
             requested_default.trim()
         };
-        let active = resolve_primary_agent(specs, requested)
-            .unwrap_or_else(|_| ActivePrimaryAgent::from_spec(&builtin_primary_build_agent()));
+        let active = match resolve_primary_agent(specs, requested) {
+            Ok(active) => active,
+            Err(_) => {
+                if let Some(requested_name) = fallback_notice(requested) {
+                    warn!(
+                        requested = %requested_name,
+                        fallback = %DEFAULT_PRIMARY_AGENT_NAME,
+                        "Primary agent '{}' was not discovered; falling back to the built-in '{}' agent. \
+                         Set default_primary_agent to a discovered agent or add a matching primary agent.",
+                        requested_name,
+                        DEFAULT_PRIMARY_AGENT_NAME,
+                    );
+                }
+                ActivePrimaryAgent::from_spec(&builtin_primary_build_agent())
+            }
+        };
         Self { active }
     }
 
@@ -190,7 +205,28 @@ pub fn resolve_primary_agent(
 /// Returns `true` for cleanup-only child-agent tools that must remain
 /// available regardless of the active primary agent's tool policy.
 fn is_subagent_cleanup_tool(tool_name: &str) -> bool {
-    tool_name == tools::WAIT_AGENT || tool_name == tools::CLOSE_AGENT
+    tools::LIFECYCLE_CLEANUP_TOOLS.contains(&tool_name)
+}
+
+/// Returns the configured agent name that should be surfaced to the operator
+/// when the resolver cannot find it and falls back to the built-in `build`
+/// agent, or `None` when the fallback is expected and should stay silent.
+///
+/// A fallback is expected (and therefore silent) when the operator asked for
+/// the default `build` agent — whether explicitly or because no
+/// `default_primary_agent` was configured — since the built-in `build` agent
+/// *is* the canonical build. Any other requested name that misses discovery is
+/// a configuration mismatch the operator should hear about.
+///
+/// Extracted as a pure predicate so the decision is unit-testable without a
+/// tracing subscriber.
+fn fallback_notice(requested_default: &str) -> Option<&str> {
+    let requested = requested_default.trim();
+    if requested.is_empty() || requested.eq_ignore_ascii_case(DEFAULT_PRIMARY_AGENT_NAME) {
+        None
+    } else {
+        Some(requested)
+    }
 }
 
 #[must_use]
@@ -397,7 +433,8 @@ mod tests {
     use vtcode_config::core::permissions::{AgentPermissionsConfig, PermissionDefault};
     use vtcode_config::{
         HookCommandConfig, HooksConfig, SubagentDiscoveryInput, SubagentMcpServer,
-        SubagentMemoryScope, SubagentSource, builtin_subagents, discover_subagents,
+        SubagentMemoryScope, SubagentSource, builtin_plan_agent, builtin_primary_duck_agent,
+        builtin_subagents, discover_subagents,
     };
 
     use crate::config::constants::tools;
@@ -589,6 +626,26 @@ mod tests {
     }
 
     #[test]
+    fn fallback_notice_silent_for_build_and_empty() {
+        // The built-in `build` agent is the canonical default, so falling back
+        // to it when the operator asked for `build` (or nothing) is expected.
+        assert_eq!(fallback_notice("build"), None);
+        assert_eq!(fallback_notice("BUILD"), None);
+        assert_eq!(fallback_notice("Build"), None);
+        assert_eq!(fallback_notice(""), None);
+        assert_eq!(fallback_notice("   "), None);
+    }
+
+    #[test]
+    fn fallback_notice_surfaces_non_default_mismatches() {
+        // Any other requested name that misses discovery is a configuration
+        // mismatch the operator should be warned about.
+        assert_eq!(fallback_notice("duck"), Some("duck"));
+        assert_eq!(fallback_notice("auto"), Some("auto"));
+        assert_eq!(fallback_notice("  duck  "), Some("duck"));
+    }
+
+    #[test]
     fn discovery_precedence_overrides_builtin_build_agent() {
         let temp = TempDir::new().expect("tempdir");
         let discovered = discover_subagents(&SubagentDiscoveryInput {
@@ -624,6 +681,52 @@ mod tests {
         assert!(primary_agent_allows_tool(active.active(), "unified_exec"));
         assert!(primary_agent_allows_tool(active.active(), "run_pty_cmd"));
         assert_eq!(active.active().permissions.default, PermissionDefault::Ask);
+    }
+
+    #[test]
+    fn readonly_primaries_hard_block_mutating_tools_via_allow_list() {
+        // The `tools` allow-list (filtered by `primary_agent_allows_tool` /
+        // `apply_primary_agent_tool_policy`) hard-blocks mutating tools before
+        // any global `[tools.policies]` entry can reach them. This is why the
+        // `plan` and `duck` read-only primaries do not need explicit
+        // `tool_policy_overrides` Deny entries for `apply_patch`, `unified_exec`,
+        // etc.: those tools are never exposed to the agent in the first place.
+        // `unified_file` is allow-listed for reads; its write actions are gated
+        // per-action by the planning workflow + the Deny permission default, so a
+        // per-tool Deny (which cannot distinguish read vs write) would break reads.
+        for spec in [builtin_primary_duck_agent(), builtin_plan_agent()] {
+            let name = spec.name.clone();
+            let active = ActivePrimaryAgent::from_spec(&spec);
+
+            // Read-only primaries expose only their read allow-list.
+            assert!(
+                primary_agent_allows_tool(&active, "unified_search"),
+                "{name} should expose unified_search"
+            );
+            assert!(
+                primary_agent_allows_tool(&active, "unified_file"),
+                "{name} should expose unified_file for reads"
+            );
+
+            // Mutating tools outside the allow-list are hard-blocked regardless
+            // of global policy.
+            assert!(
+                !primary_agent_allows_tool(&active, "unified_exec"),
+                "{name} must not expose unified_exec"
+            );
+            assert!(
+                !primary_agent_allows_tool(&active, "apply_patch"),
+                "{name} must not expose apply_patch"
+            );
+            assert!(
+                !primary_agent_allows_tool(&active, "run_pty_cmd"),
+                "{name} must not expose run_pty_cmd"
+            );
+            assert!(
+                !primary_agent_allows_tool(&active, "write_file"),
+                "{name} must not expose write_file"
+            );
+        }
     }
 
     #[test]

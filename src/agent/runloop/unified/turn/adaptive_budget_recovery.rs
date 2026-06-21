@@ -159,9 +159,10 @@ fn parse_recovery_decision(response: &uni::LLMResponse) -> AdaptiveRecoveryDecis
         return fallback_summarize("no tool call returned");
     };
 
-    let Some(call) = tool_calls.iter().find(|c| {
-        c.tool_name() == Some(RECOVERY_DECISION)
-    }) else {
+    let Some(call) = tool_calls
+        .iter()
+        .find(|c| c.tool_name() == Some(RECOVERY_DECISION))
+    else {
         return fallback_summarize("unexpected tool call");
     };
 

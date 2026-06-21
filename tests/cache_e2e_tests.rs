@@ -163,8 +163,22 @@ mod e2e_tests {
         let result2 = registry.execute_tool("unified_search", list_args).await;
         assert!(result2.is_ok(), "Second list should succeed");
 
-        // Results should be identical
-        assert_eq!(result1.unwrap(), result2.unwrap());
+        // Second list should reuse the cached result. The second call annotates
+        // the response with cache-reuse metadata (reused_recent_result, tool,
+        // reused_result_note); the underlying directory contents must still match.
+        let cached1 = result1.unwrap();
+        let cached2 = result2.unwrap();
+        assert_eq!(
+            cached1.get("items"),
+            cached2.get("items"),
+            "cached directory items must match"
+        );
+        assert_eq!(cached1.get("total"), cached2.get("total"));
+        assert_eq!(
+            cached2.get("reused_recent_result"),
+            Some(&json!(true)),
+            "second call should reuse the cached result"
+        );
     }
 
     /// Test cache invalidation on file modification

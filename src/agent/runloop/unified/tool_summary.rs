@@ -241,9 +241,7 @@ pub(crate) fn render_tool_call_summary(
 
     if let Some(command_line) = command_line {
         let mut styled = String::new();
-        styled.push_str("  ");
-        styled.push_str(&render_styled("└", palette.muted, Some("dim".to_string())));
-        styled.push(' ');
+        crate::agent::runloop::tool_output::push_tree_prefix(&mut styled, &palette);
         styled.push_str(&render_styled("$", palette.accent, None));
         styled.push(' ');
         styled.push_str(&render_styled(&command_line, palette.muted, None));

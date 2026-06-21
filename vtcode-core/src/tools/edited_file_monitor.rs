@@ -65,14 +65,11 @@ impl FileSnapshot {
         let modified_millis = match object.get("modified_millis") {
             Some(Value::Null) | None => None,
             Some(value) => value.as_u64().map(u128::from).or_else(|| {
-                value
-                    .as_i64()
-                    .filter(|millis| *millis >= 0)
-                    .map(|millis| {
-                        #[allow(clippy::cast_sign_loss)]
-                        let val: u64 = millis as u64;
-                        val as u128
-                    }) // safe: filtered non-negative
+                value.as_i64().filter(|millis| *millis >= 0).map(|millis| {
+                    #[allow(clippy::cast_sign_loss)]
+                    let val: u64 = millis as u64;
+                    val as u128
+                }) // safe: filtered non-negative
             }),
         };
 

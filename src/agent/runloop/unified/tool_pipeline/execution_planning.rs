@@ -189,8 +189,7 @@ pub(super) async fn handle_finish_planning(
         ) {
             FinishPlanningDisposition::ConfirmReview => {
                 ctx.tool_registry
-                    .planning_workflow_state()
-                    .set_phase(PlanLifecyclePhase::ReviewPending);
+                    .set_planning_phase(PlanLifecyclePhase::ReviewPending);
                 return Some(
                     handle_pending_confirmation(ctx, output, ctrl_c_state, ctrl_c_notify).await,
                 );
@@ -279,23 +278,20 @@ async fn handle_pending_confirmation(
                 );
             } else if matches!(outcome, PlanConfirmationOutcome::EditPlan) {
                 ctx.tool_registry
-                    .planning_workflow_state()
-                    .set_phase(PlanLifecyclePhase::DraftReady);
+                    .set_planning_phase(PlanLifecyclePhase::DraftReady);
                 tracing::info!(
                     target: "vtcode.planning_workflow",
                     "User requested plan edit, remaining in Planning workflow"
                 );
             } else {
                 ctx.tool_registry
-                    .planning_workflow_state()
-                    .set_phase(PlanLifecyclePhase::DraftReady);
+                    .set_planning_phase(PlanLifecyclePhase::DraftReady);
             }
             plan_confirmation_outcome_to_json(&outcome)
         }
         Err(e) => {
             ctx.tool_registry
-                .planning_workflow_state()
-                .set_phase(PlanLifecyclePhase::DraftReady);
+                .set_planning_phase(PlanLifecyclePhase::DraftReady);
             serde_json::json!({
                 "status": "error",
                 "error": format!("Plan confirmation failed: {}", e)
@@ -339,8 +335,7 @@ async fn handle_enter_pending_confirmation(
     max_tool_retries: usize,
 ) -> ToolPipelineOutcome {
     ctx.tool_registry
-        .planning_workflow_state()
-        .set_phase(PlanLifecyclePhase::EnterPendingApproval);
+        .set_planning_phase(PlanLifecyclePhase::EnterPendingApproval);
 
     let overlay = TransientRequest::List(ListOverlayRequest {
         title: "Enter Planning workflow?".to_string(),
@@ -413,8 +408,7 @@ async fn handle_enter_pending_confirmation(
 
     if decision == StartPlanningConfirmation::Stay {
         ctx.tool_registry
-            .planning_workflow_state()
-            .set_phase(PlanLifecyclePhase::Off);
+            .set_planning_phase(PlanLifecyclePhase::Off);
         return ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
             output: json!({
                 "status": "cancelled",

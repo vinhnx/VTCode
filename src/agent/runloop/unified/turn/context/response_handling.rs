@@ -237,13 +237,12 @@ impl<'a> TurnProcessingContext<'a> {
             let persisted =
                 persist_plan_draft(&self.tool_registry.planning_workflow_state(), &plan_text)
                     .await?;
-            self.tool_registry.planning_workflow_state().set_phase(
-                if persisted.validation.is_ready() {
+            self.tool_registry
+                .set_planning_phase(if persisted.validation.is_ready() {
                     PlanLifecyclePhase::DraftReady
                 } else {
                     PlanLifecyclePhase::ActiveDrafting
-                },
-            );
+                });
         }
 
         Ok(TurnHandlerOutcome::Break(TurnLoopResult::Completed))

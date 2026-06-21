@@ -364,4 +364,50 @@ mod tests {
         let err = classify_env_trust_value("   ").expect_err("empty value should fail");
         assert!(err.to_string().contains("empty"));
     }
+
+    #[tokio::test]
+    async fn require_full_auto_workspace_trust_rejects_env_denied() {
+        // An untrusted temp workspace with `VTCODE_TRUST_WORKSPACE=deny` must be
+        // rejected before any full-auto session starts. This is the gate the
+        // interactive codex-app-server path now shares with `--auto`.
+        let temp = tempfile::TempDir::new().expect("tempdir");
+
+        let env_guard = vtcode_commons::env_lock::lock();
+        let previous = env::var_os(TRUST_OVERRIDE_ENV);
+        env_guard.set_var(TRUST_OVERRIDE_ENV, "deny");
+
+        let err = require_full_auto_workspace_trust(temp.path(), "interactive full-auto", "test")
+            .await
+            .expect_err("denied trust should error");
+
+        env_guard.restore_var(TRUST_OVERRIDE_ENV, previous);
+
+        assert!(
+            err.to_string().contains("denied"),
+            "expected a denial error, got: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn require_full_auto_workspace_trust_non_interactive_untrusted_errors() {
+        // An untrusted temp workspace with no env override and no TTY (tests
+        // run without one) yields a `NonInteractive` outcome that must surface
+        // an actionable error rather than silently proceeding.
+        let temp = tempfile::TempDir::new().expect("tempdir");
+
+        let env_guard = vtcode_commons::env_lock::lock();
+        let previous = env::var_os(TRUST_OVERRIDE_ENV);
+        env_guard.remove_var(TRUST_OVERRIDE_ENV);
+
+        let err = require_full_auto_workspace_trust(temp.path(), "interactive full-auto", "test")
+            .await
+            .expect_err("untrusted non-interactive should error");
+
+        env_guard.restore_var(TRUST_OVERRIDE_ENV, previous);
+
+        assert!(
+            err.to_string().contains("not trusted"),
+            "expected a not-trusted error, got: {err}"
+        );
+    }
 }

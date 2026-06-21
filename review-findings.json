@@ -5,7 +5,8 @@
     "summary": "Documentation diagram omits 200ms debounce sub-window, misleading developers about escalation behavior",
     "failure_scenario": "Developer reads diagram showing 'CancelRequested -> Second Ctrl+C within 1s -> ExitRequested' and writes test expecting exit after 50ms double-tap. Test fails because debounce returns Cancel, not Exit. Developer wastes hours debugging 'wrong' logic.",
     "severity": "high",
-    "status": "CONFIRMED"
+    "status": "FALSE_POSITIVE",
+    "verification": "Cited line 554 is the '/exit command priority' section, unrelated to debounce. The actual state-machine diagram at lines 556-564 DOES include the 200ms debounce sub-window (lines 560-562: 'within 200ms -> CancelRequested debounced' and 'between 200ms and 1s -> ExitRequested'). The failure scenario misrepresents the diagram. The only imprecision was the high-level summary at line 542 ('within 1 second: Immediately exits'); refined to mention the 200ms debounce sub-window."
   },
   {
     "file": "src/agent/runloop/unified/async_mcp_manager.rs",
@@ -13,7 +14,8 @@
     "summary": "Comment says 'spawn_blocking' but code uses 'tokio::spawn'; redundant write to already-Disabled status; dropped JoinHandle",
     "failure_scenario": "Developer reads comment, assumes spawn_blocking is used, adds blocking I/O inside spawned task thinking it runs on blocking pool. Task actually runs on async runtime, blocking tokio worker thread - exactly the problem the fix was trying to avoid.",
     "severity": "medium",
-    "status": "PLAUSIBLE"
+    "status": "FALSE_POSITIVE",
+    "verification": "Comment at lines 137-143 accurately says 'never block tokio worker threads' and 'spawned as a background task' — there is NO mention of spawn_blocking. Actual spawn is tokio::spawn at line 167. The comment matches the code."
   },
   {
     "file": "src/agent/runloop/tool_output/files.rs",
@@ -21,7 +23,8 @@
     "summary": "render_tree_detail() duplicates identical pattern from tool_summary.rs lines 249-256",
     "failure_scenario": "Tree prefix style changes (e.g., '└' to Unicode box-drawing). Two locations must be updated in lockstep. Mismatch produces visually inconsistent output between file-operation and tool-call summaries.",
     "severity": "medium",
-    "status": "CONFIRMED"
+    "status": "FIXED",
+    "verification": "Extracted push_tree_prefix(styled, palette) helper in tool_output/mod.rs and reused it from tool_summary.rs command_line block. Single source of truth for the tree prefix styling."
   },
   {
     "file": "src/agent/runloop/unified/stop_requests.rs",
@@ -29,7 +32,8 @@
     "summary": "notify_one() may delay cancellation in batch tool execution - only one of N+1 concurrent waiters is woken",
     "failure_scenario": "User starts 5 parallel tools, presses Ctrl+C. notify_one wakes tool future #3. Tools #1, #2, #4, #5 continue executing until they complete or timeout. User sees delayed/partial cancellation instead of immediate stop.",
     "severity": "low",
-    "status": "PLAUSIBLE"
+    "status": "ACKNOWLEDGED",
+    "verification": "Real latent issue: with N+1 waiters on one Notify (batch driver select at handlers_batch.rs:200 + each tool's inner select at execution_attempts.rs:416), notify_one wakes exactly one. If the permit is stolen by a tool future rather than the batch driver, the group is not cancelled wholesale and siblings run until the next Ctrl+C. However the notify_one choice is deliberate and documented (permit storage prevents the lost-notification problem of notify_waiters when no task is waiting). The correct fix is a CancellationToken broadcast, which is a larger refactor with its own turn-ordering semantics. Low severity, independent of this audit; left as-is with the documented rationale."
   },
   {
     "file": "src/agent/runloop/unified/state.rs",
@@ -37,7 +41,8 @@
     "summary": "Thread-safety test assertion is too weak - passes trivially even if no concurrency occurs",
     "failure_scenario": "Test asserts 'is_cancel_requested() || is_exit_requested()' which is true after first register_signal() call. Test spawns 10 threads x 100 iterations but assertion doesn't verify atomicity or consistency under contention.",
     "severity": "low",
-    "status": "PLAUSIBLE"
+    "status": "ACKNOWLEDGED",
+    "verification": "Assertion is weak (trivially true after 1000 register_signal calls) and does not verify atomicity under contention. However the test still exercises concurrent register_signal without panicking, so it has value as a smoke test. Low severity test-quality issue, independent of this audit; left as-is."
   },
   {
     "file": "src/agent/runloop/unified/tool_summary_helpers.rs",
@@ -45,6 +50,7 @@
     "summary": "Stale '// Pagination / read plumbing' comment remains after entries were removed",
     "failure_scenario": "Developer sees comment header with no entries beneath it, confused about whether removal was intentional or merge artifact.",
     "severity": "low",
-    "status": "PLAUSIBLE"
+    "status": "FALSE_POSITIVE",
+    "verification": "No '// Pagination / read plumbing' comment exists at line 349 or nearby. The section headers present are legitimate ('Search plumbing', 'Execution plumbing') with entries beneath them. No stale orphaned comment."
   }
 ]

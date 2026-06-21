@@ -54,8 +54,8 @@ impl ToolRegistry {
             {
                 if *adaptive < base {
                     #[allow(clippy::cast_sign_loss)]
-                    let relaxed_ms =
-                        (((*adaptive).as_millis() as f64 * (1.0 / tuning.decay_ratio)).max(0.0)) as u128;
+                    let relaxed_ms = (((*adaptive).as_millis() as f64 * (1.0 / tuning.decay_ratio))
+                        .max(0.0)) as u128;
                     let relaxed = Duration::from_millis(relaxed_ms as u64);
                     *adaptive = std::cmp::min(relaxed, base);
                 }

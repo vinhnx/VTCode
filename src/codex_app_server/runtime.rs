@@ -3,6 +3,7 @@ use super::client::{
     CodexThreadEnvelope, CodexThreadRequest, CodexTurnRequest, ServerEvent,
 };
 use crate::agent::runloop::ResumeSession;
+use crate::startup::require_full_auto_workspace_trust;
 use anyhow::{Context, Result, anyhow, bail};
 use async_trait::async_trait;
 use dialoguer::{Select, theme::ColorfulTheme};
@@ -408,6 +409,18 @@ async fn run_interactive_session(
     resume: Option<ResumeSession>,
     mut steering_receiver: Option<UnboundedReceiver<SteeringMessage>>,
 ) -> Result<()> {
+    if full_auto {
+        // The non-interactive `--auto` path (`src/cli/auto.rs`) gates full-auto on
+        // workspace trust; the interactive codex-app-server path must too, so a
+        // session cannot flip into auto trust semantics without the operator
+        // granting (or having granted) full-auto trust for this workspace.
+        require_full_auto_workspace_trust(
+            config.workspace.as_path(),
+            "interactive full-auto sessions",
+            "vtcode ask / codex full-auto",
+        )
+        .await?;
+    }
     let client = CodexAppServerClient::connect(vt_cfg).await?;
     let mut events = client.subscribe();
     let mut mcp_startup = load_mcp_startup_tracker(&client).await;
@@ -1010,18 +1023,36 @@ fn normalize_planning_input(input: &str, planning_active: &mut bool) -> (String,
     (user_input, turn_input)
 }
 
-fn is_planning_active_implementation_alias(input: &str) -> bool {
-    matches!(
-        input.trim().to_ascii_lowercase().as_str(),
-        "implement" | "continue" | "go" | "start" | "yes"
-    )
+/// Canonical alias set that clears the planning-active flag and switches the
+/// session to execution mode.
+///
+/// Both branches of the handoff (`should_switch_to_execution_mode` and
+/// `is_planning_active_implementation_alias`) consult this one set so they can
+/// never drift apart. `exit planning workflow` is an alias that clears the flag
+/// without rewriting the turn input (it is not an "implement" intent), so it is
+/// a flag-clearing alias only — see [`implementation_alias_matches`].
+const EXECUTION_MODE_ALIASES: &[&str] = &["implement", "continue", "go", "start", "yes"];
+
+/// Additional aliases that clear the planning-active flag but are *not*
+/// implementation intents — they should pass through verbatim as the turn input
+/// rather than being rewritten to the implementation prompt.
+const FLAG_CLEARING_ONLY_ALIASES: &[&str] = &["exit planning workflow"];
+
+fn execution_alias_match(input: &str) -> Option<&'static str> {
+    let normalized = input.trim().to_ascii_lowercase();
+    EXECUTION_MODE_ALIASES
+        .iter()
+        .chain(FLAG_CLEARING_ONLY_ALIASES.iter())
+        .copied()
+        .find(|alias| *alias == normalized)
 }
 
 fn should_switch_to_execution_mode(input: &str) -> bool {
-    matches!(
-        input.trim().to_ascii_lowercase().as_str(),
-        "implement" | "continue" | "go" | "start" | "yes" | "exit planning workflow"
-    )
+    execution_alias_match(input).is_some()
+}
+
+fn is_planning_active_implementation_alias(input: &str) -> bool {
+    execution_alias_match(input).is_some_and(|alias| EXECUTION_MODE_ALIASES.contains(&alias))
 }
 
 #[cfg(test)]
@@ -1178,6 +1209,34 @@ mod tests {
         assert_eq!(user_input, "continue");
         assert_eq!(turn_input, PLANNING_WORKFLOW_IMPLEMENTATION_PROMPT);
         assert!(!planning_active);
+    }
+
+    #[test]
+    fn normalize_planning_input_exit_planning_workflow_clears_flag_without_rewrite() {
+        // "exit planning workflow" clears the planning-active flag (it is a
+        // flag-clearing alias) but is *not* an implementation intent, so it must
+        // pass through verbatim rather than being rewritten to the
+        // implementation prompt. This is the one case where the two alias sets
+        // previously disagreed; both now derive from `EXECUTION_MODE_ALIASES` +
+        // `FLAG_CLEARING_ONLY_ALIASES`.
+        let mut planning_active = true;
+        let (user_input, turn_input) =
+            normalize_planning_input("exit planning workflow", &mut planning_active);
+
+        assert_eq!(user_input, "exit planning workflow");
+        assert_eq!(turn_input, "exit planning workflow");
+        assert!(!planning_active);
+    }
+
+    #[test]
+    fn normalize_planning_input_leaves_unrelated_input_untouched() {
+        let mut planning_active = true;
+        let (user_input, turn_input) =
+            normalize_planning_input("add a login page", &mut planning_active);
+
+        assert_eq!(user_input, "add a login page");
+        assert_eq!(turn_input, "add a login page");
+        assert!(planning_active);
     }
 
     #[test]

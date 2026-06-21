@@ -255,8 +255,7 @@ pub(crate) async fn run_tool_call_with_args(
         .request_user_input_enabled(ctx.tool_registry.is_planning_active(), true);
     if ctx.tool_registry.is_planning_active() && name == tools::REQUEST_USER_INPUT {
         ctx.tool_registry
-            .planning_workflow_state()
-            .set_phase(PlanLifecyclePhase::InterviewPending);
+            .set_planning_phase(PlanLifecyclePhase::InterviewPending);
     }
     if let Some(hitl_result) = execute_hitl_tool(
         name,
@@ -271,8 +270,7 @@ pub(crate) async fn run_tool_call_with_args(
     {
         if ctx.tool_registry.is_planning_active() && name == tools::REQUEST_USER_INPUT {
             ctx.tool_registry
-                .planning_workflow_state()
-                .set_phase(PlanLifecyclePhase::ActiveDrafting);
+                .set_planning_phase(PlanLifecyclePhase::ActiveDrafting);
         }
         let status = match hitl_result {
             Ok(value) => ToolExecutionStatus::Success {

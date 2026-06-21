@@ -4,6 +4,7 @@ use serde_json::{Map as JsonMap, Value as JsonValue};
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
 
 use crate::constants::tools;
 use crate::constants::ui;
@@ -464,7 +465,22 @@ pub fn discover_subagents(input: &SubagentDiscoveryInput) -> Result<DiscoveredSu
     })
 }
 
+/// Cached built-in subagent specifications.
+///
+/// Built once on first access and reused for every subsequent discovery call.
+/// The constructors below (`builtin_primary_build_agent`, etc.) each allocate
+/// a `SubagentSpec` with a `BTreeMap` of policy overrides and a cloned prompt
+/// string; reconstructing all of them on every `discover_subagents` call is the
+/// expensive part, so the result is memoized here. Callers still receive an
+/// owned `Vec` (cloned from this cache) so they can mutate freely without
+/// touching the shared canonical specs.
+static BUILTIN_SUBAGENTS: LazyLock<Vec<SubagentSpec>> = LazyLock::new(builtin_subagents_inner);
+
 pub fn builtin_subagents() -> Vec<SubagentSpec> {
+    BUILTIN_SUBAGENTS.clone()
+}
+
+fn builtin_subagents_inner() -> Vec<SubagentSpec> {
     vec![
         builtin_primary_build_agent(),
         builtin_primary_auto_agent(),
@@ -632,7 +648,7 @@ pub fn builtin_plan_agent() -> SubagentSpec {
         mcp_servers: Vec::new(),
         hooks: None,
         background: false,
-        mode: AgentMode::All,
+        mode: AgentMode::Primary,
         max_turns: None,
         nickname_candidates: vec!["plan".to_string(), "planner".to_string()],
         initial_prompt: None,
@@ -2278,10 +2294,13 @@ Hook prompt"#,
         }
         let plan = builtins
             .iter()
-            .find(|spec| spec.name == "plan" && spec.mode == AgentMode::All)
-            .expect("missing built-in all-mode plan agent");
+            .find(|spec| spec.name == "plan" && spec.mode == AgentMode::Primary)
+            .expect("missing built-in primary-only plan agent");
         assert_eq!(plan.source, SubagentSource::Builtin);
         assert_eq!(plan.permissions.default, PermissionDefault::Deny);
+        // `plan` is primary-only (like `duck`); projects that want a delegatable
+        // plan subagent define their own `.vtcode/agents/plan.md` (mode: subagent).
+        assert!(!plan.is_subagent());
 
         let auto = builtins
             .iter()

@@ -120,8 +120,10 @@ pub(crate) async fn transition_to_planning_workflow(
 ) {
     tool_registry.enable_planning();
     let plan_state = tool_registry.planning_workflow_state();
-    plan_state.enable();
-    plan_state.set_phase(PlanLifecyclePhase::ActiveDrafting);
+    // `enable_planning()` above already sets the active flag on
+    // `PlanningWorkflowState` (the single source of truth), so we do not call
+    // `plan_state.enable()` again here.
+    tool_registry.set_planning_phase(PlanLifecyclePhase::ActiveDrafting);
     if reset_plan_file {
         plan_state.set_plan_file(None).await;
     }
