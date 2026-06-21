@@ -89,6 +89,10 @@ fn suspend_to_shell<B: Backend, S: TuiSessionDriver>(
         {
             tracing::debug!(%error, "failed to disable mouse capture before suspend");
         }
+        // Drain any terminal responses from the disable sequences above
+        // while raw mode is still active so individual bytes remain readable.
+        super::terminal_io::drain_terminal_events();
+
         if let Err(error) = disable_raw_mode() {
             tracing::debug!(%error, "failed to disable raw mode before suspend");
         }

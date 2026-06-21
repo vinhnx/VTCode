@@ -73,7 +73,7 @@ pub(super) fn finalize_terminal<B: Backend>(terminal: &mut Terminal<B>) -> Resul
 
 /// Drain any pending crossterm events (e.g., resize, focus responses, or buffered keystrokes)
 /// so they don't leak to the shell or interfere with next startup.
-pub(super) fn drain_terminal_events() {
+pub(crate) fn drain_terminal_events() {
     use ratatui::crossterm::event;
 
     while event::poll(Duration::from_millis(0)).unwrap_or(false) {

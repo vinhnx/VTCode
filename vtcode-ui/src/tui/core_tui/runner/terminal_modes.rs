@@ -178,6 +178,12 @@ pub(super) fn restore_terminal_modes(state: &TerminalModeState) -> Result<()> {
         errors.push(format!("bracketed paste: {}", error));
     }
 
+    // Drain any terminal responses from the restore sequences above
+    // (especially PopKeyboardEnhancementFlags which can trigger a reply
+    // from terminals that support the kitty keyboard protocol) while
+    // raw mode is still active so individual bytes remain readable.
+    super::terminal_io::drain_terminal_events();
+
     // 5. Disable raw mode LAST (if it was enabled)
     if state.raw_mode_enabled
         && let Err(error) = disable_raw_mode()

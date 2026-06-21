@@ -184,6 +184,10 @@ impl AlternateScreenSession {
             errors.push(format!("disable bracketed paste: {}", e));
         }
 
+        // Drain any terminal responses from the restore sequences above
+        // while raw mode is still active so individual bytes remain readable.
+        crate::tui::core_tui::runner::terminal_io::drain_terminal_events();
+
         // 4. Disable raw mode LAST
         if self.original_state.raw_mode_enabled
             && let Err(e) = disable_raw_mode()

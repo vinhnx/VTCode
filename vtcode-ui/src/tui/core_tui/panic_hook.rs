@@ -252,9 +252,7 @@ pub fn restore_tui() -> io::Result<()> {
 
     // 1. Drain any pending crossterm events to prevent them from leaking to the shell
     // This is a best-effort drain with a zero timeout
-    while let Ok(true) = crossterm::event::poll(std::time::Duration::from_millis(0)) {
-        let _ = crossterm::event::read();
-    }
+    crate::tui::core_tui::runner::terminal_io::drain_terminal_events();
 
     // Get stderr for executing terminal commands
     let mut stderr = io::stderr();
@@ -301,6 +299,10 @@ pub fn restore_tui() -> io::Result<()> {
     ) {
         first_error.get_or_insert(error);
     }
+
+    // Drain any terminal responses from the restore sequences above
+    // while raw mode is still active so individual bytes remain readable.
+    crate::tui::core_tui::runner::terminal_io::drain_terminal_events();
 
     // 5. Disable raw mode LAST to ensure all cleanup commands are sent properly
     if let Err(error) = disable_raw_mode() {
