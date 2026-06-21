@@ -2,6 +2,13 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.133.4 - 2026-06-21
+
+### Highlights
+### Other Changes
+#### Refactors
+
+- Refactor: streamline theme resolution and update preference logic (1d1ecc31) 
 ## 0.133.3 - 2026-06-21
 
 ### Highlights
