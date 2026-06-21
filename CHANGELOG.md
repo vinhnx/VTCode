@@ -2,6 +2,18 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.133.2 - 2026-06-21
+
+### Highlights
+#### Bug Fixes
+
+- Improve concurrency safety and fix race conditions (e270c3d6) 
+- Additional concurrency and safety improvements (6865b65d) 
+- Error handling, logic bugs, and integer overflow prevention (ad181e85) 
+- Replace expect() with poison recovery in search_runtime and cached_executor (14dc8a55) 
+- Wait 10ms for in-flight terminal responses in drain (defa765a) 
+- Add dead code annotations for unused methods and fields (4c200cd1) 
+### Other Changes
 ## 0.133.1 - 2026-06-21
 
 ### Highlights
