@@ -252,7 +252,7 @@ pub(crate) async fn handle_turn_processing_result<'a>(
                 {
                     let _ = params.ctx.renderer.line(
                         MessageStyle::Info,
-                        "[i] Stripped tool-call tags from recovery response.",
+                        "[i] Cleaned recovery response (removed tool-call markup).",
                     );
                     return params
                         .ctx
