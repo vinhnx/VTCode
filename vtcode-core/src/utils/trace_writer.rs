@@ -55,7 +55,7 @@ impl FlushableWriter {
     fn lock_writer(&self) -> std::io::Result<MutexGuard<'_, BufWriter<File>>> {
         self.inner
             .lock()
-            .map_err(|_| std::io::Error::other("trace writer lock poisoned"))
+            .map_err(|e| std::io::Error::other(format!("trace writer lock poisoned: {e}")))
     }
 
     fn flush_locked(&self) -> std::io::Result<()> {

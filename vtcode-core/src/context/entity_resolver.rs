@@ -412,7 +412,7 @@ mod tests {
             proximity_score: 0.0,
         };
 
-        assert_eq!(match1.total_score(), 1.5);
+        assert!((match1.total_score() - 1.5).abs() < f32::EPSILON);
     }
 
     #[tokio::test]
@@ -434,6 +434,6 @@ mod tests {
 
         let matched = result.unwrap();
         assert_eq!(matched.entity, "Sidebar");
-        assert_eq!(matched.confidence, 1.0);
+        assert!((matched.confidence - 1.0).abs() < f32::EPSILON);
     }
 }

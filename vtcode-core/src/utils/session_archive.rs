@@ -237,6 +237,7 @@ fn usd_to_micros(value: f64) -> Option<u64> {
         return None;
     }
 
+    #[allow(clippy::cast_sign_loss)]
     Some((value * 1_000_000.0).round() as u64)
 }
 

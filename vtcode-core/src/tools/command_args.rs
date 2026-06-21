@@ -89,7 +89,7 @@ pub fn command_words(args: &Value) -> Result<Option<Vec<String>>, &'static str> 
 
     let mut parts = match command {
         Value::String(command) => {
-            shell_words::split(&command).map_err(|_| COMMAND_VALUE_TYPE_ERROR)?
+            shell_words::split(&command).map_err(|_e| COMMAND_VALUE_TYPE_ERROR)?
         }
         Value::Array(values) => values
             .iter()
@@ -225,7 +225,7 @@ pub fn raw_command_text(args: &Value) -> Option<String> {
             Value::String(text) => return Some(text.clone()),
             Value::Array(values) => {
                 let parts: Option<Vec<&str>> = values.iter().map(|v| v.as_str()).collect();
-                return parts.map(|parts| shell_words::join(parts));
+                return parts.map(shell_words::join);
             }
             _ => return None,
         }

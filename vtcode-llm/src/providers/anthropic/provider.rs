@@ -707,7 +707,6 @@ mod tests {
     use crate::provider::{ContentPart, LLMRequest, Message, MessageContent, ToolDefinition};
     use serde_json::json;
     use vtcode_config::constants::models;
-    use vtcode_config::core::AnthropicConfig;
 
     #[test]
     fn resolve_minimax_base_url_defaults_to_anthropic_v1() {
@@ -1007,22 +1006,21 @@ mod tests {
 
     #[test]
     fn beta_header_omits_context_1m_for_native_1m_models() {
-        for model in [models::CLAUDE_SONNET_4_6] {
-            let provider = AnthropicProvider::with_model("test-key".to_string(), model.to_string());
-            let request = LLMRequest {
-                model: model.to_string(),
-                messages: vec![Message::user("hello".to_string())],
-                ..Default::default()
-            };
+        let model = models::CLAUDE_SONNET_4_6;
+        let provider = AnthropicProvider::with_model("test-key".to_string(), model.to_string());
+        let request = LLMRequest {
+            model: model.to_string(),
+            messages: vec![Message::user("hello".to_string())],
+            ..Default::default()
+        };
 
-            let payload = provider
-                .convert_to_anthropic_format(&request)
-                .expect("payload conversion");
-            let beta_header = provider.beta_header_for_request(&request, &payload, false, None);
+        let payload = provider
+            .convert_to_anthropic_format(&request)
+            .expect("payload conversion");
+        let beta_header = provider.beta_header_for_request(&request, &payload, false, None);
 
-            if let Some(header) = &beta_header {
-                assert!(!header.contains("context-1m-2025-08-07"));
-            }
+        if let Some(header) = &beta_header {
+            assert!(!header.contains("context-1m-2025-08-07"));
         }
     }
 

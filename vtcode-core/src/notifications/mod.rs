@@ -710,7 +710,7 @@ pub fn init_global_notification_manager() -> Result<()> {
     let manager = NotificationManager::new();
     GLOBAL_NOTIFICATION_MANAGER
         .set(manager)
-        .map_err(|_| anyhow::anyhow!("Failed to set global notification manager"))
+        .map_err(|_e| anyhow::anyhow!("Failed to set global notification manager"))
 }
 
 /// Initialize the global notification manager with explicit configuration.
@@ -718,7 +718,7 @@ pub fn init_global_notification_manager_with_config(config: NotificationConfig) 
     let manager = NotificationManager::with_config(config);
     GLOBAL_NOTIFICATION_MANAGER
         .set(manager)
-        .map_err(|_| anyhow::anyhow!("Failed to set global notification manager"))
+        .map_err(|_e| anyhow::anyhow!("Failed to set global notification manager"))
 }
 
 /// Get a reference to the global notification manager

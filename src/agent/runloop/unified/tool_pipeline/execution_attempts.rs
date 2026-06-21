@@ -51,6 +51,7 @@ pub(crate) async fn execute_tool_with_timeout(
 }
 
 #[cfg(test)]
+#[allow(dead_code)]
 pub(crate) async fn execute_tool_with_timeout_ref(
     registry: &ToolRegistry,
     name: &str,

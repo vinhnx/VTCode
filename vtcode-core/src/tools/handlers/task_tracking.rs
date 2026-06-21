@@ -283,7 +283,9 @@ impl TaskCounts {
 
     pub fn progress_percent(&self) -> usize {
         if self.total > 0 {
-            (self.completed as f64 / self.total as f64 * 100.0).round() as usize
+            #[allow(clippy::cast_sign_loss, clippy::let_and_return)]
+            let progress = ((self.completed as f64 / self.total as f64 * 100.0).round()).max(0.0) as usize;
+            progress
         } else {
             0
         }

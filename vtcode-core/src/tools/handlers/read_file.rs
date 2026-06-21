@@ -840,6 +840,7 @@ mod indentation {
 
             // Expand upward
             if i >= 0 {
+                #[allow(clippy::cast_sign_loss)]
                 let iu = i as usize;
                 if effective_indents[iu] >= min_indent {
                     out.push_front(&collected[iu]);

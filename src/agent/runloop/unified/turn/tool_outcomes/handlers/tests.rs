@@ -363,7 +363,7 @@ fn test_primary_agent_spec(name: &str) -> SubagentSpec {
         source: SubagentSource::ProjectVtcode,
         file_path: None,
         warnings: Vec::new(),
-        tool_policy_overrides: std::collections::BTreeMap::new(),
+        tool_policy_overrides: BTreeMap::new(),
     }
 }
 

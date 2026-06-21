@@ -98,6 +98,7 @@ impl StreamingProgressTracker {
     // Private: Report progress with clamping and threshold checking
     fn report_progress(&self, progress: f32) {
         let progress_clamped = progress.clamp(0.0, 1.0);
+        #[allow(clippy::cast_sign_loss)]
         let percent = (progress_clamped * 100.0) as u8;
 
         // Only update if progress changed by at least 1%
@@ -237,7 +238,7 @@ mod tests {
             .build();
 
         assert_eq!(tracker.total_timeout.as_secs(), 300);
-        assert_eq!(tracker.warning_threshold, 0.75);
+        assert!((tracker.warning_threshold - 0.75).abs() < f32::EPSILON);
     }
 
     #[test]

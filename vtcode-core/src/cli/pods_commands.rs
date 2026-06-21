@@ -81,7 +81,7 @@ fn parse_gpu_entries(raw: &[String]) -> Result<Vec<PodGpu>> {
             let id = id
                 .trim()
                 .parse::<u32>()
-                .map_err(|_| anyhow!("invalid GPU id '{}'", id.trim()))?;
+                .map_err(|e| anyhow!("invalid GPU id '{}': {e}", id.trim()))?;
             let name = name.trim();
             if name.is_empty() {
                 return Err(anyhow!("GPU name cannot be empty"));

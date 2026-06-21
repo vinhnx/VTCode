@@ -557,25 +557,21 @@ impl StructuralSearchRequest {
         }
 
         // Validate format value.
-        if let Some(fmt) = self.effective_format() {
-            if !VALID_FORMAT_VALUES.contains(&fmt) {
-                bail!(
-                    "invalid `format` value `{}`; expected one of: {}",
-                    fmt,
-                    VALID_FORMAT_VALUES.join(", ")
-                );
-            }
+        if let Some(fmt) = self.effective_format() && !VALID_FORMAT_VALUES.contains(&fmt) {
+            bail!(
+                "invalid `format` value `{}`; expected one of: {}",
+                fmt,
+                VALID_FORMAT_VALUES.join(", ")
+            );
         }
 
         // Validate report_style value.
-        if let Some(style) = self.effective_report_style() {
-            if !VALID_REPORT_STYLE_VALUES.contains(&style) {
-                bail!(
-                    "invalid `report_style` value `{}`; expected one of: {}",
-                    style,
-                    VALID_REPORT_STYLE_VALUES.join(", ")
-                );
-            }
+        if let Some(style) = self.effective_report_style() && !VALID_REPORT_STYLE_VALUES.contains(&style) {
+            bail!(
+                "invalid `report_style` value `{}`; expected one of: {}",
+                style,
+                VALID_REPORT_STYLE_VALUES.join(", ")
+            );
         }
 
         // Validate builtin_rules values.
@@ -677,10 +673,8 @@ impl StructuralSearchRequest {
                     }
                 }
                 NthChildInput::Object(obj) => {
-                    if let Some(pos) = obj.position.as_u64() {
-                        if pos == 0 {
-                            bail!("`nth_child` position is 1-based; 0 is not valid");
-                        }
+                    if let Some(pos) = obj.position.as_u64() && pos == 0 {
+                        bail!("`nth_child` position is 1-based; 0 is not valid");
                     }
                 }
                 NthChildInput::Formula(_) => {
@@ -879,13 +873,11 @@ impl StructuralSearchRequest {
         }
 
         // rule and util require a language.
-        if subcommand == "rule" || subcommand == "util" {
-            if self.lang.as_deref().is_none_or(str::is_empty) {
-                bail!(
-                    "action='structural' workflow='new' subcommand `{subcommand}` \
-                     requires `lang`"
-                );
-            }
+        if (subcommand == "rule" || subcommand == "util") && self.lang.as_deref().is_none_or(str::is_empty) {
+            bail!(
+                "action='structural' workflow='new' subcommand `{subcommand}` \
+                 requires `lang`"
+            );
         }
 
         // Reject fields that don't apply to the new workflow.
@@ -1418,14 +1410,12 @@ async fn execute_structural_query(
 ) -> Result<Value> {
     let search_path = resolve_search_path(workspace_root, request.requested_path())?;
     let globs = request.normalized_globs();
-    if request.pattern().is_some() {
-        if let Some(hint) = preflight_parseable_pattern(request)? {
-            return Ok(build_fragment_result(
-                request,
-                &search_path.display_path,
-                hint,
-            ));
-        }
+    if request.pattern().is_some() && let Some(hint) = preflight_parseable_pattern(request)? {
+        return Ok(build_fragment_result(
+            request,
+            &search_path.display_path,
+            hint,
+        ));
     }
     let command_path = search_path.command_arg.clone();
 
@@ -1954,13 +1944,11 @@ fn build_atomic_rule_yaml(request: &StructuralSearchRequest, lang: &str) -> Stri
     let _ = writeln!(yaml, "severity: info");
 
     // Emit local utility rules if present.
-    if let Some(utils) = &request.utils {
-        if !utils.is_empty() {
-            yaml.push_str("utils:\n");
-            for (util_name, util_rule) in utils {
-                let _ = writeln!(yaml, "  {}:", util_name);
-                value_to_yaml(&mut yaml, util_rule, 4);
-            }
+    if let Some(utils) = &request.utils && !utils.is_empty() {
+        yaml.push_str("utils:\n");
+        for (util_name, util_rule) in utils {
+            let _ = writeln!(yaml, "  {}:", util_name);
+            value_to_yaml(&mut yaml, util_rule, 4);
         }
     }
 
@@ -2048,13 +2036,11 @@ fn build_atomic_rule_yaml(request: &StructuralSearchRequest, lang: &str) -> Stri
     emit_value_yaml_field(&mut yaml, "  ", "precedes", request.precedes.as_deref());
 
     // Constraints.
-    if let Some(constraints) = &request.constraints {
-        if !constraints.is_empty() {
-            yaml.push_str("  constraints:\n");
-            for (var_name, constraint_value) in constraints {
-                yaml.push_str(&format!("    {}:\n", var_name));
-                value_to_yaml(&mut yaml, constraint_value, 6);
-            }
+    if let Some(constraints) = &request.constraints && !constraints.is_empty() {
+        yaml.push_str("  constraints:\n");
+        for (var_name, constraint_value) in constraints {
+            yaml.push_str(&format!("    {}:\n", var_name));
+            value_to_yaml(&mut yaml, constraint_value, 6);
         }
     }
 
@@ -2062,36 +2048,32 @@ fn build_atomic_rule_yaml(request: &StructuralSearchRequest, lang: &str) -> Stri
     if let Some(matches_name) = &request.matches {
         let _ = writeln!(yaml, "  matches: {}", yaml_escape_scalar(matches_name));
     }
-    if let Some(all_rules) = &request.all {
-        if !all_rules.is_empty() {
-            yaml.push_str("  all:\n");
-            for rule in all_rules {
-                yaml.push_str("    - ");
-                match rule {
-                    Value::String(s) => {
-                        let _ = writeln!(yaml, "pattern: {}", yaml_escape_scalar(s));
-                    }
-                    _ => {
-                        yaml.push('\n');
-                        value_to_yaml(&mut yaml, rule, 6);
-                    }
+    if let Some(all_rules) = &request.all && !all_rules.is_empty() {
+        yaml.push_str("  all:\n");
+        for rule in all_rules {
+            yaml.push_str("    - ");
+            match rule {
+                Value::String(s) => {
+                    let _ = writeln!(yaml, "pattern: {}", yaml_escape_scalar(s));
+                }
+                _ => {
+                    yaml.push('\n');
+                    value_to_yaml(&mut yaml, rule, 6);
                 }
             }
         }
     }
-    if let Some(any_rules) = &request.any {
-        if !any_rules.is_empty() {
-            yaml.push_str("  any:\n");
-            for rule in any_rules {
-                yaml.push_str("    - ");
-                match rule {
-                    Value::String(s) => {
-                        let _ = writeln!(yaml, "pattern: {}", yaml_escape_scalar(s));
-                    }
-                    _ => {
-                        yaml.push('\n');
-                        value_to_yaml(&mut yaml, rule, 6);
-                    }
+    if let Some(any_rules) = &request.any && !any_rules.is_empty() {
+        yaml.push_str("  any:\n");
+        for rule in any_rules {
+            yaml.push_str("    - ");
+            match rule {
+                Value::String(s) => {
+                    let _ = writeln!(yaml, "pattern: {}", yaml_escape_scalar(s));
+                }
+                _ => {
+                    yaml.push('\n');
+                    value_to_yaml(&mut yaml, rule, 6);
                 }
             }
         }
@@ -2109,13 +2091,11 @@ fn build_atomic_rule_yaml(request: &StructuralSearchRequest, lang: &str) -> Stri
     }
 
     // Emit transform pipeline if present.
-    if let Some(transform) = &request.transform {
-        if !transform.is_empty() {
-            yaml.push_str("transform:\n");
-            for (var_name, transform_def) in transform {
-                let _ = writeln!(yaml, "  {}:", var_name);
-                value_to_yaml(&mut yaml, transform_def, 4);
-            }
+    if let Some(transform) = &request.transform && !transform.is_empty() {
+        yaml.push_str("transform:\n");
+        for (var_name, transform_def) in transform {
+            let _ = writeln!(yaml, "  {}:", var_name);
+            value_to_yaml(&mut yaml, transform_def, 4);
         }
     }
 
@@ -2686,14 +2666,12 @@ fn build_fixconfig_rule_yaml(
 
     // Emit transform pipeline before fix so that transformed variables
     // can be referenced in the fix template.
-    if let Some(transform) = transform {
-        if !transform.is_empty() {
-            yaml.push_str("transform:\n");
-            for (var_name, transform_def) in transform {
-                use std::fmt::Write as _;
-                let _ = writeln!(yaml, "  {}:", var_name);
-                value_to_yaml(&mut yaml, transform_def, 4);
-            }
+    if let Some(transform) = transform && !transform.is_empty() {
+        yaml.push_str("transform:\n");
+        for (var_name, transform_def) in transform {
+            use std::fmt::Write as _;
+            let _ = writeln!(yaml, "  {}:", var_name);
+            value_to_yaml(&mut yaml, transform_def, 4);
         }
     }
 
@@ -3357,12 +3335,10 @@ fn extract_rule_summary(content: &str, path: &Path) -> Option<Value> {
             if indent <= utils_indent && !trimmed.is_empty() && !trimmed.starts_with('#') {
                 // Hit a new top-level key; exit the utils section.
                 in_utils = false;
-            } else if indent == utils_indent + 2 {
-                if let Some(name) = trimmed.strip_suffix(':') {
-                    let name = name.trim();
-                    if !name.is_empty() && !name.contains(' ') && !name.starts_with('#') {
-                        utils_list.push(name.to_string());
-                    }
+            } else if indent == utils_indent + 2 && let Some(name) = trimmed.strip_suffix(':') {
+                let name = name.trim();
+                if !name.is_empty() && !name.contains(' ') && !name.starts_with('#') {
+                    utils_list.push(name.to_string());
                 }
             }
         }
@@ -3604,10 +3580,8 @@ fn apply_context_and_globs(
         command.arg("--after").arg(after.to_string());
     }
     // Symmetric context only when before/after are not set (validated upstream).
-    if before_lines.is_none() && after_lines.is_none() {
-        if let Some(context_lines) = context_lines {
-            command.arg("--context").arg(context_lines.to_string());
-        }
+    if before_lines.is_none() && after_lines.is_none() && let Some(context_lines) = context_lines {
+        command.arg("--context").arg(context_lines.to_string());
     }
     for glob in globs {
         command.arg("--globs").arg(glob);
@@ -4389,17 +4363,15 @@ async fn extract_rule_dirs(config_path: &Path) -> Vec<String> {
         if trimmed.starts_with("ruleDirs:") {
             in_rule_dirs = true;
             // Handle inline array: ruleDirs: [rules, custom-rules]
-            if let Some(bracket_content) = trimmed.strip_prefix("ruleDirs:").map(str::trim) {
-                if bracket_content.starts_with('[') {
-                    let inner = bracket_content.trim_matches(|c| c == '[' || c == ']');
-                    for item in inner.split(',') {
-                        let item = item.trim().trim_matches('"').trim_matches('\'');
-                        if !item.is_empty() {
-                            dirs.push(item.to_string());
-                        }
+            if let Some(bracket_content) = trimmed.strip_prefix("ruleDirs:").map(str::trim) && bracket_content.starts_with('[') {
+                let inner = bracket_content.trim_matches(|c| c == '[' || c == ']');
+                for item in inner.split(',') {
+                    let item = item.trim().trim_matches('"').trim_matches('\'');
+                    if !item.is_empty() {
+                        dirs.push(item.to_string());
                     }
-                    in_rule_dirs = false;
                 }
+                in_rule_dirs = false;
             }
             continue;
         }
@@ -4460,10 +4432,8 @@ async fn extract_test_configs(config_path: &Path) -> Vec<Value> {
             current_item = Some(Map::new());
             // Check for inline key-value: "- testDir: tests"
             let after_dash = trimmed.strip_prefix("- ").unwrap_or(trimmed).trim();
-            if let Some((key, value)) = parse_yaml_simple_kv(after_dash) {
-                if let Some(ref mut item) = current_item {
-                    item.insert(key, value);
-                }
+            if let Some((key, value)) = parse_yaml_simple_kv(after_dash) && let Some(ref mut item) = current_item {
+                item.insert(key, value);
             }
             continue;
         }
@@ -4478,10 +4448,8 @@ async fn extract_test_configs(config_path: &Path) -> Vec<Value> {
         }
 
         // Key-value inside a list item (indented deeper than "- ")
-        if let Some(ref mut item) = current_item {
-            if let Some((key, value)) = parse_yaml_simple_kv(trimmed) {
-                item.insert(key, value);
-            }
+        if let Some(ref mut item) = current_item && let Some((key, value)) = parse_yaml_simple_kv(trimmed) {
+            item.insert(key, value);
         }
     }
 
@@ -4508,17 +4476,15 @@ async fn extract_util_dirs(config_path: &Path) -> Vec<String> {
         if trimmed.starts_with("utilDirs:") {
             in_util_dirs = true;
             // Handle inline array: utilDirs: [utils, shared]
-            if let Some(bracket_content) = trimmed.strip_prefix("utilDirs:").map(str::trim) {
-                if bracket_content.starts_with('[') {
-                    let inner = bracket_content.trim_matches(|c| c == '[' || c == ']');
-                    for item in inner.split(',') {
-                        let item = item.trim().trim_matches('"').trim_matches('\'');
-                        if !item.is_empty() {
-                            dirs.push(item.to_string());
-                        }
+            if let Some(bracket_content) = trimmed.strip_prefix("utilDirs:").map(str::trim) && bracket_content.starts_with('[') {
+                let inner = bracket_content.trim_matches(|c| c == '[' || c == ']');
+                for item in inner.split(',') {
+                    let item = item.trim().trim_matches('"').trim_matches('\'');
+                    if !item.is_empty() {
+                        dirs.push(item.to_string());
                     }
-                    in_util_dirs = false;
                 }
+                in_util_dirs = false;
             }
             continue;
         }
@@ -4582,10 +4548,8 @@ async fn extract_language_injections(config_path: &Path) -> Vec<Value> {
             current_item = Some(Map::new());
             // Check for inline key-value: "- hostLanguage: js"
             let after_dash = trimmed.strip_prefix("- ").unwrap_or(trimmed).trim();
-            if let Some((key, value)) = parse_yaml_simple_kv(after_dash) {
-                if let Some(ref mut item) = current_item {
-                    item.insert(key, value);
-                }
+            if let Some((key, value)) = parse_yaml_simple_kv(after_dash) && let Some(ref mut item) = current_item {
+                item.insert(key, value);
             }
             continue;
         }
@@ -4600,10 +4564,8 @@ async fn extract_language_injections(config_path: &Path) -> Vec<Value> {
         }
 
         // Key-value inside a list item (indented deeper than "- ")
-        if let Some(ref mut item) = current_item {
-            if let Some((key, value)) = parse_yaml_simple_kv(trimmed) {
-                item.insert(key, value);
-            }
+        if let Some(ref mut item) = current_item && let Some((key, value)) = parse_yaml_simple_kv(trimmed) {
+            item.insert(key, value);
         }
     }
 
@@ -4665,10 +4627,8 @@ async fn extract_custom_languages(config_path: &Path) -> Value {
         }
 
         // Key-value inside a language entry
-        if let Some(ref mut config) = current_lang_config {
-            if let Some((key, value)) = parse_yaml_simple_kv(trimmed) {
-                config.insert(key, value);
-            }
+        if let Some(ref mut config) = current_lang_config && let Some((key, value)) = parse_yaml_simple_kv(trimmed) {
+            config.insert(key, value);
         }
     }
 

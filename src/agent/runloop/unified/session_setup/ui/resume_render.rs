@@ -323,10 +323,10 @@ fn format_tool_output_for_resume(content: &uni::MessageContent) -> Option<String
             }
         }
 
-        if let Some(code) = obj.get("exit_code").and_then(|v| v.as_i64()) {
-            if code != 0 {
-                parts.push(format!("Exit code: {}", code));
-            }
+        if let Some(code) = obj.get("exit_code").and_then(|v| v.as_i64())
+            && code != 0
+        {
+            parts.push(format!("Exit code: {}", code));
         }
 
         if parts.is_empty() {

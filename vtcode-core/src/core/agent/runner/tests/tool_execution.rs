@@ -3,7 +3,7 @@ use super::*;
 #[tokio::test]
 async fn denied_tool_call_emits_one_failed_output_for_runtime_invocation() {
     let temp = TempDir::new().expect("tempdir");
-    let mut runner = make_runner(&temp, VTCodeConfig::default(), "thread-denied-tool-output").await;
+    let mut runner = Box::pin(make_runner(&temp, VTCodeConfig::default(), "thread-denied-tool-output")).await;
     runner
         .enable_full_auto(&[tools::UNIFIED_FILE.to_string()])
         .await;
@@ -66,7 +66,7 @@ async fn denied_tool_call_emits_one_failed_output_for_runtime_invocation() {
 #[tokio::test]
 async fn denied_parallel_tool_halt_returns_promptly() {
     let temp = TempDir::new().expect("tempdir");
-    let mut runner = make_runner(&temp, VTCodeConfig::default(), "thread-denied-parallel").await;
+    let mut runner = Box::pin(make_runner(&temp, VTCodeConfig::default(), "thread-denied-parallel")).await;
     runner
         .enable_full_auto(&[tools::UNIFIED_FILE.to_string()])
         .await;
@@ -110,7 +110,7 @@ async fn duplicate_parallel_tool_names_are_split_into_safe_batches() {
     fs::write(temp.path().join("note-a.txt"), "hello\n").expect("workspace file");
     fs::write(temp.path().join("note-b.txt"), "world\n").expect("workspace file");
 
-    let mut runner = make_runner(&temp, VTCodeConfig::default(), "thread-duplicate-parallel").await;
+    let mut runner = Box::pin(make_runner(&temp, VTCodeConfig::default(), "thread-duplicate-parallel")).await;
     runner
         .enable_full_auto(&[tools::READ_FILE.to_string()])
         .await;
@@ -184,11 +184,11 @@ async fn list_files_and_unified_search_parallel_batch_avoids_reentrancy() {
     fs::write(temp.path().join("notes/a.txt"), "hello from vt code\n").expect("workspace file");
     fs::write(temp.path().join("notes/b.txt"), "another line\n").expect("workspace file");
 
-    let mut runner = make_runner(
+    let mut runner = Box::pin(make_runner(
         &temp,
         VTCodeConfig::default(),
         "thread-list-search-parallel",
-    )
+    ))
     .await;
     runner
         .enable_full_auto(&[
@@ -298,7 +298,7 @@ async fn list_files_and_unified_search_parallel_batch_avoids_reentrancy() {
 #[tokio::test]
 async fn denied_sequential_tool_halt_returns_promptly() {
     let temp = TempDir::new().expect("tempdir");
-    let mut runner = make_runner(&temp, VTCodeConfig::default(), "thread-denied-sequential").await;
+    let mut runner = Box::pin(make_runner(&temp, VTCodeConfig::default(), "thread-denied-sequential")).await;
     runner
         .enable_full_auto(&[tools::UNIFIED_FILE.to_string()])
         .await;
@@ -340,7 +340,7 @@ async fn denied_sequential_tool_halt_returns_promptly() {
 async fn execute_tool_internal_retries_open_circuit_breaker() {
     let temp = TempDir::new().expect("tempdir");
     fs::write(temp.path().join("note.txt"), "hello\n").expect("workspace file");
-    let runner = make_runner(&temp, VTCodeConfig::default(), "thread-open-circuit").await;
+    let runner = Box::pin(make_runner(&temp, VTCodeConfig::default(), "thread-open-circuit")).await;
     let breaker = Arc::new(CircuitBreaker::new(CircuitBreakerConfig {
         failure_threshold: 1,
         min_backoff: Duration::from_millis(10),
@@ -376,7 +376,7 @@ async fn sequential_policy_failure_halts_following_tool_calls() {
 
     let mut vt_cfg = VTCodeConfig::default();
     vt_cfg.commands.deny_regex = vec!["^blocked-cmd$".to_string()];
-    let mut runner = make_runner(&temp, vt_cfg, "thread-policy-halt").await;
+    let mut runner = Box::pin(make_runner(&temp, vt_cfg, "thread-policy-halt")).await;
     runner
         .enable_full_auto(&[
             tools::UNIFIED_EXEC.to_string(),
@@ -450,7 +450,7 @@ async fn sequential_tool_failures_record_categorized_user_message() {
     let temp = TempDir::new().expect("tempdir");
     let mut vt_cfg = VTCodeConfig::default();
     vt_cfg.commands.deny_regex = vec!["^blocked-cmd$".to_string()];
-    let mut runner = make_runner(&temp, vt_cfg, "thread-policy-message").await;
+    let mut runner = Box::pin(make_runner(&temp, vt_cfg, "thread-policy-message")).await;
     runner
         .enable_full_auto(&[tools::UNIFIED_EXEC.to_string()])
         .await;
@@ -518,7 +518,7 @@ async fn sequential_tool_failures_do_not_record_interruption_guards() {
     let temp = TempDir::new().expect("tempdir");
     let mut vt_cfg = VTCodeConfig::default();
     vt_cfg.commands.deny_regex = vec!["^blocked-cmd$".to_string()];
-    let mut runner = make_runner(&temp, vt_cfg, "thread-policy-guard").await;
+    let mut runner = Box::pin(make_runner(&temp, vt_cfg, "thread-policy-guard")).await;
     runner
         .enable_full_auto(&[tools::UNIFIED_EXEC.to_string()])
         .await;
@@ -561,7 +561,7 @@ async fn sequential_tool_failures_do_not_record_interruption_guards() {
 #[tokio::test]
 async fn steer_stop_closes_open_tool_calls_with_failed_output_items() {
     let temp = TempDir::new().expect("tempdir");
-    let mut runner = make_runner(&temp, VTCodeConfig::default(), "thread-stop-tool-output").await;
+    let mut runner = Box::pin(make_runner(&temp, VTCodeConfig::default(), "thread-stop-tool-output")).await;
 
     fs::write(temp.path().join("note.txt"), "hello\n").expect("workspace file");
 

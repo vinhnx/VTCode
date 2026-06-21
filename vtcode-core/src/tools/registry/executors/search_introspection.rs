@@ -251,7 +251,7 @@ impl ToolRegistry {
                 "mcp_connect_server is disabled by config. Set [mcp.lifecycle].allow_model_control = true to enable."
             );
         }
-        mcp_client.connect_server(server_name).await?;
+        Box::pin(mcp_client.connect_server(server_name)).await?;
         self.refresh_mcp_tools().await?;
         Ok(json!({
             "connected": true,

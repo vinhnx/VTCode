@@ -472,24 +472,22 @@ fn mask_tool_actions_for_mode(tool: &ToolDefinition, planning_active: bool) -> T
     };
 
     let mut masked = tool.clone();
-    if let Some(func) = masked.function.as_mut() {
-        if let Some(action_prop) = func
+    if let Some(func) = masked.function.as_mut()
+        && let Some(action_prop) = func
             .parameters
             .get_mut("properties")
             .and_then(|p| p.get_mut("action"))
-        {
-            if let Some(obj) = action_prop.as_object_mut() {
-                obj.insert(
-                    "enum".to_string(),
-                    Value::Array(
-                        allowed
-                            .iter()
-                            .map(|a| Value::String((*a).to_string()))
-                            .collect(),
-                    ),
-                );
-            }
-        }
+        && let Some(obj) = action_prop.as_object_mut()
+    {
+            obj.insert(
+                "enum".to_string(),
+                Value::Array(
+                    allowed
+                        .iter()
+                        .map(|a| Value::String((*a).to_string()))
+                        .collect(),
+                ),
+            );
     }
     masked
 }

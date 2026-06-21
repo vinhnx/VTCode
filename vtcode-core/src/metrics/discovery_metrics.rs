@@ -127,7 +127,7 @@ mod tests {
 
         assert_eq!(metrics.total_queries, 1);
         assert_eq!(metrics.failed_queries, 1);
-        assert_eq!(metrics.hit_rate(), 0.0);
+        assert!((metrics.hit_rate() - 0.0).abs() < f64::EPSILON);
     }
 
     #[test]
@@ -138,7 +138,7 @@ mod tests {
         metrics.record_failure("test3".to_owned());
 
         assert_eq!(metrics.total_queries, 3);
-        assert_eq!(metrics.hit_rate(), 2.0 / 3.0);
+        assert!((metrics.hit_rate() - 2.0 / 3.0).abs() < f64::EPSILON);
     }
 
     #[test]

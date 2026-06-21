@@ -282,23 +282,22 @@ async fn compact_history_native_inline(
         }
     };
 
-    if response.finish_reason == FinishReason::Pause {
-        if let Some(summary) = response
+    if response.finish_reason == FinishReason::Pause
+        && let Some(summary) = response
             .compaction
             .as_ref()
             .map(|summary| summary.trim())
             .filter(|summary| !summary.is_empty())
-        {
-            let retained_users = collect_retained_user_messages(
-                history,
-                config.retained_user_message_tokens,
-                config.retained_user_messages,
-            );
-            let mut compacted = Vec::with_capacity(retained_users.len().saturating_add(1));
-            compacted.push(Message::system(format!("{SUMMARY_PREFIX}{}", summary)));
-            compacted.extend(retained_users);
-            return Ok((compacted, CompactionMode::Provider));
-        }
+    {
+        let retained_users = collect_retained_user_messages(
+            history,
+            config.retained_user_message_tokens,
+            config.retained_user_messages,
+        );
+        let mut compacted = Vec::with_capacity(retained_users.len().saturating_add(1));
+        compacted.push(Message::system(format!("{SUMMARY_PREFIX}{}", summary)));
+        compacted.extend(retained_users);
+        return Ok((compacted, CompactionMode::Provider));
     }
 
     // Compaction did not fire (e.g. history below the minimum trigger threshold);

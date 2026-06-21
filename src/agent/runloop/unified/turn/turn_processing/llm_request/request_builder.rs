@@ -338,10 +338,10 @@ fn apply_permission_policy_to_tools(
             let name = tool.function_name();
 
             // Enforce full-auto allow-list if present.
-            if let Some(allowlist) = full_auto_allowlist {
-                if !allowlist.iter().any(|allowed| allowed == name) {
-                    return false;
-                }
+            if let Some(allowlist) = full_auto_allowlist
+                && !allowlist.iter().any(|allowed| allowed == name)
+            {
+                return false;
             }
 
             let requests = build_advertised_permission_requests(workspace, &current_dir, name);

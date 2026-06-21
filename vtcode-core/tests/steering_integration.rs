@@ -26,7 +26,7 @@ async fn test_agent_steering_stop() -> Result<()> {
     let api_key = "dummy-key".to_string();
     let session_id = "test-session".to_string();
 
-    let mut runner = AgentRunner::new(
+    let mut runner = Box::pin(AgentRunner::new(
         AgentType::Single,
         model_id,
         api_key,
@@ -37,7 +37,7 @@ async fn test_agent_steering_stop() -> Result<()> {
             verbosity: None,
         },
         Some(steering_rx),
-    )
+    ))
     .await?;
 
     // Create a dummy task

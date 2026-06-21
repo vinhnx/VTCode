@@ -421,7 +421,7 @@ impl ChildAgentSkillExecutor {
             .with_context(|| format!("invalid model for forked skill '{}'", skill.name()))?;
 
         let mut runner = if let Some(vt_cfg) = self.runtime.vt_cfg.clone() {
-            AgentRunner::new_with_bootstrap(
+            Box::pin(AgentRunner::new_with_bootstrap(
                 fork_agent_type(skill),
                 model,
                 self.runtime.api_key.clone(),
@@ -432,10 +432,10 @@ impl ChildAgentSkillExecutor {
                 crate::core::threads::ThreadBootstrap::new(None),
                 Some(vt_cfg),
                 self.runtime.openai_chatgpt_auth.clone(),
-            )
+            ))
             .await?
         } else {
-            AgentRunner::new_with_bootstrap(
+            Box::pin(AgentRunner::new_with_bootstrap(
                 fork_agent_type(skill),
                 model,
                 self.runtime.api_key.clone(),
@@ -446,7 +446,7 @@ impl ChildAgentSkillExecutor {
                 crate::core::threads::ThreadBootstrap::new(None),
                 None,
                 self.runtime.openai_chatgpt_auth.clone(),
-            )
+            ))
             .await?
         };
         runner.set_quiet(true);
@@ -522,7 +522,7 @@ impl ForkSkillExecutor for ChildAgentSkillExecutor {
     async fn execute(&self, skill: &Skill, user_input: Value) -> Result<Value> {
         let parent_session_id = self.tool_registry.harness_context_snapshot().session_id;
         let session_id = child_session_id(&parent_session_id, skill.name());
-        let mut runner = self.build_runner(skill, session_id.clone()).await?;
+        let mut runner = Box::pin(self.build_runner(skill, session_id.clone())).await?;
 
         let restricted_tools = filter_tools_for_skill(skill, runner.build_universal_tools().await?);
         let allowed_tools = restricted_tools

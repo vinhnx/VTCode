@@ -141,7 +141,7 @@ pub(crate) async fn decide_recovery_action(
         ctx.provider_client.generate(request),
     )
     .await
-    .map_err(|_| {
+    .map_err(|_e| {
         anyhow::anyhow!(
             "recovery decision call exceeded {}s timeout",
             RECOVERY_DECISION_TIMEOUT.as_secs()
@@ -160,8 +160,7 @@ fn parse_recovery_decision(response: &uni::LLMResponse) -> AdaptiveRecoveryDecis
     };
 
     let Some(call) = tool_calls.iter().find(|c| {
-        c.tool_name()
-            .map_or(false, |name| name == RECOVERY_DECISION)
+        c.tool_name() == Some(RECOVERY_DECISION)
     }) else {
         return fallback_summarize("unexpected tool call");
     };

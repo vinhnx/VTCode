@@ -103,7 +103,7 @@ impl ShellHandler {
         // Execute with timeout
         let result = tokio::time::timeout(Duration::from_millis(timeout_ms), runner.exec(&command))
             .await
-            .map_err(|_| ToolCallError::Timeout(timeout_ms))?
+            .map_err(|_e| ToolCallError::Timeout(timeout_ms))?
             .map_err(ToolCallError::Internal)?;
 
         Ok(result)

@@ -226,7 +226,7 @@ impl LLMProvider for GeminiProvider {
                     }
 
                     for event in aggregator.sanitizer.process_chunk(&delta) {
-                        event_sender.send(Ok(event)).map_err(|_| {
+                        event_sender.send(Ok(event)).map_err(|_e| {
                             StreamingError::StreamingError {
                                 message: "Streaming consumer dropped".to_string(),
                                 partial_content: Some(chunk.to_string()),

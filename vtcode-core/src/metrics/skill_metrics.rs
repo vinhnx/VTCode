@@ -192,7 +192,7 @@ mod tests {
         metrics.record_execution("skill1".to_owned(), 100, true);
         metrics.record_execution("skill2".to_owned(), 200, true);
 
-        assert_eq!(metrics.reuse_ratio(), 3.0 / 2.0);
+        assert!((metrics.reuse_ratio() - 3.0 / 2.0).abs() < f64::EPSILON);
     }
 
     #[test]

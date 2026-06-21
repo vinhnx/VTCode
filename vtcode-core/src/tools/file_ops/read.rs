@@ -379,7 +379,7 @@ impl FileOpsTool {
     pub async fn read_file(&self, args: Value) -> Result<Value> {
         let mut perf = PerfSpan::new("vtcode.perf.read_file_ms");
 
-        let path_args: PathArgs = serde_json::from_value(args.clone()).map_err(|_| {
+        let path_args: PathArgs = serde_json::from_value(args.clone()).map_err(|_e| {
             if looks_like_patch_payload(&args) {
                 return anyhow!(
                     "Error: Patch content was sent to read_file.\n\
@@ -1086,11 +1086,13 @@ mod read_tests {
         // Should indicate truncation
         assert!(result["is_truncated"].as_bool().unwrap());
         // Should report applied token budget
+        #[allow(clippy::cast_sign_loss)]
+        let expected_max_tokens = max_tokens as u64; // safe: max_tokens is positive literal
         assert_eq!(
             result["metadata"]["data"]["applied_max_tokens"]
                 .as_u64()
                 .unwrap(),
-            max_tokens as u64
+            expected_max_tokens,
         );
     }
 

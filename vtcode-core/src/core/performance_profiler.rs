@@ -155,6 +155,7 @@ impl PerformanceProfiler {
         let max_duration_ns = durations_ns.last().copied().unwrap_or(0);
 
         let percentile_95_ns = if !durations_ns.is_empty() {
+            #[allow(clippy::cast_sign_loss)]
             let index = (durations_ns.len() as f64 * 0.95) as usize;
             durations_ns
                 .get(index.min(durations_ns.len() - 1))
@@ -165,6 +166,7 @@ impl PerformanceProfiler {
         };
 
         let percentile_99_ns = if !durations_ns.is_empty() {
+            #[allow(clippy::cast_sign_loss)]
             let index = (durations_ns.len() as f64 * 0.99) as usize;
             durations_ns
                 .get(index.min(durations_ns.len() - 1))

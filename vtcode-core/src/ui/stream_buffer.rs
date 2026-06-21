@@ -177,7 +177,9 @@ impl AllocationPredictor {
 
     /// Predict pre-allocation size for markdown rendering
     pub fn pre_allocation_capacity(&self, estimated_lines: usize) -> usize {
-        (estimated_lines as f64 * 1.2) as usize // 20% headroom
+        #[allow(clippy::cast_sign_loss, clippy::let_and_return)]
+        let cap = ((estimated_lines as f64 * 1.2).max(0.0)) as usize; // 20% headroom
+        cap
     }
 }
 

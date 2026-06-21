@@ -644,7 +644,7 @@ async fn write_global_config(path: &Path, config: &VTCodeConfig) -> Result<()> {
 fn global_config_path() -> Result<PathBuf> {
     if let Some(path) = GLOBAL_CONFIG_PATH_OVERRIDE
         .lock()
-        .map_err(|_| anyhow!("global config path override mutex poisoned"))?
+        .map_err(|_e| anyhow!("global config path override mutex poisoned"))?
         .clone()
     {
         return Ok(path);
@@ -658,7 +658,7 @@ fn global_config_path() -> Result<PathBuf> {
 pub fn set_global_config_path_override_for_tests(path: Option<PathBuf>) -> Result<()> {
     let mut guard = GLOBAL_CONFIG_PATH_OVERRIDE
         .lock()
-        .map_err(|_| anyhow!("global config path override mutex poisoned"))?;
+        .map_err(|_e| anyhow!("global config path override mutex poisoned"))?;
     *guard = path;
     Ok(())
 }

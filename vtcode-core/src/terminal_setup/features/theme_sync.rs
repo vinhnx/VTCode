@@ -106,11 +106,11 @@ impl Rgb {
         }
 
         let r = u8::from_str_radix(&trimmed[0..2], 16)
-            .map_err(|_| anyhow!("Invalid red component in '{}'", hex))?;
+            .map_err(|e| anyhow!("Invalid red component in '{}': {e}", hex))?;
         let g = u8::from_str_radix(&trimmed[2..4], 16)
-            .map_err(|_| anyhow!("Invalid green component in '{}'", hex))?;
+            .map_err(|e| anyhow!("Invalid green component in '{}': {e}", hex))?;
         let b = u8::from_str_radix(&trimmed[4..6], 16)
-            .map_err(|_| anyhow!("Invalid blue component in '{}'", hex))?;
+            .map_err(|e| anyhow!("Invalid blue component in '{}': {e}", hex))?;
 
         Ok(Self { r, g, b })
     }
@@ -194,7 +194,10 @@ fn lab_f_inv(value: f64) -> f64 {
 }
 
 fn to_u8(value: f64) -> u8 {
-    (value.clamp(0.0, 1.0) * 255.0).round() as u8
+    #[allow(clippy::cast_sign_loss)]
+    {
+        (value.clamp(0.0, 1.0) * 255.0).round() as u8
+    }
 }
 
 fn lerp_lab(t: f64, start: Lab, end: Lab) -> Lab {

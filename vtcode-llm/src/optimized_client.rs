@@ -613,6 +613,6 @@ mod tests {
             .expect("rate limiter should not stall with zero configured burst")
             .expect("rate limiter acquire should succeed");
 
-        assert_eq!(limiter.token_bucket.read().await.capacity, 1.0);
+        assert!((limiter.token_bucket.read().await.capacity - 1.0).abs() < f64::EPSILON);
     }
 }

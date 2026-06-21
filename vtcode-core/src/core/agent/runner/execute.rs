@@ -714,9 +714,11 @@ impl AgentRunner {
                 let utilization = runtime.state.utilization();
                 if utilization > 0.90 {
                     warn!("Context at {:.1}% - approaching limit", utilization * 100.0);
+                    #[allow(clippy::cast_sign_loss)]
+                    let warning_pct = (utilization * 100.0) as u32;
                     runtime.state.warnings.push(format!(
                         "Token budget at {}% - approaching context limit",
-                        (utilization * 100.0) as u32
+                        warning_pct
                     ));
                 }
 

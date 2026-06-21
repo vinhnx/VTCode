@@ -535,10 +535,10 @@ pub(crate) async fn validate_tool_call<'a>(
                     ),
                 )
                 .to_json_value();
-                if let Some(diagnostic) = tool_denial_diagnostic(&canonical_tool_name) {
-                    if let Some(obj) = error_json.as_object_mut() {
-                        obj.insert("diagnostic".to_string(), diagnostic);
-                    }
+                if let Some(diagnostic) = tool_denial_diagnostic(&canonical_tool_name)
+                    && let Some(obj) = error_json.as_object_mut()
+                {
+                    obj.insert("diagnostic".to_string(), diagnostic);
                 }
                 error_json
             };

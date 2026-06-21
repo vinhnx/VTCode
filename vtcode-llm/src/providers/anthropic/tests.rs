@@ -110,7 +110,6 @@ mod validation_tests {
     use std::sync::Arc;
     use vtcode_config::constants::models;
     use vtcode_config::core::AnthropicConfig;
-    use vtcode_config::types::ReasoningEffortLevel;
 
     #[test]
     fn test_validate_empty_messages() {
@@ -516,7 +515,6 @@ mod request_builder_tests {
     use std::sync::Arc;
     use vtcode_config::constants::models;
     use vtcode_config::core::{AnthropicConfig, AnthropicPromptCacheSettings};
-    use vtcode_config::types::ReasoningEffortLevel;
 
     #[test]
     fn test_tool_result_blocks_empty() {

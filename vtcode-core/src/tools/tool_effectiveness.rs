@@ -291,7 +291,7 @@ mod tests {
 
         assert_eq!(eff.success_count, 2);
         assert_eq!(eff.usage_count, 2);
-        assert_eq!(eff.success_rate, 1.0);
+        assert!((eff.success_rate - 1.0).abs() < f32::EPSILON);
         assert!(eff.avg_result_quality > 0.8);
     }
 
@@ -302,7 +302,7 @@ mod tests {
 
         assert_eq!(eff.success_count, 0);
         assert_eq!(eff.usage_count, 1);
-        assert_eq!(eff.success_rate, 0.0);
+        assert!((eff.success_rate - 0.0).abs() < f32::EPSILON);
         assert!(eff.failure_modes.contains(&ToolFailureMode::Timeout));
     }
 

@@ -1367,12 +1367,10 @@ mod tests {
         // Make MAX_TOTAL_READONLY_CALLS calls with different args to avoid per-tool detection
         for i in 0..MAX_TOTAL_READONLY_CALLS {
             let args = json!({"pattern": format!("pattern_{i}"), "path": "src/"});
-            if let Some(msg) = detector.record_call(tools::UNIFIED_SEARCH, &args) {
-                if msg.contains("Global read-only budget") {
+            if let Some(msg) = detector.record_call(tools::UNIFIED_SEARCH, &args) && msg.contains("Global read-only budget") {
                     saw_hard_stop = true;
                     break;
                 }
-            }
         }
 
         assert!(
@@ -1391,18 +1389,14 @@ mod tests {
         for i in 0..MAX_TOTAL_READONLY_CALLS + 5 {
             if i % 2 == 0 {
                 let args = json!({"pattern": format!("p_{i}"), "path": "src/"});
-                if let Some(msg) = detector.record_call(tools::UNIFIED_SEARCH, &args) {
-                    if msg.contains("Global read-only budget") {
+                if let Some(msg) = detector.record_call(tools::UNIFIED_SEARCH, &args) && msg.contains("Global read-only budget") {
                         hard_stop_count += 1;
                     }
-                }
             } else {
                 let args = json!({"action": "read", "path": format!("src/file_{i}.rs")});
-                if let Some(msg) = detector.record_call(tools::UNIFIED_FILE, &args) {
-                    if msg.contains("Global read-only budget") {
+                if let Some(msg) = detector.record_call(tools::UNIFIED_FILE, &args) && msg.contains("Global read-only budget") {
                         hard_stop_count += 1;
                     }
-                }
             }
         }
 

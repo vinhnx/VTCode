@@ -193,7 +193,7 @@ mod tests {
 
         assert_eq!(metrics.total_executions, 1);
         assert_eq!(metrics.failed_executions, 1);
-        assert_eq!(metrics.success_rate(), 0.0);
+        assert!((metrics.success_rate() - 0.0).abs() < f64::EPSILON);
     }
 
     #[test]
@@ -202,7 +202,7 @@ mod tests {
         metrics.record_timeout("python3".to_owned(), 5000);
 
         assert_eq!(metrics.timeouts, 1);
-        assert_eq!(metrics.timeout_rate(), 1.0);
+        assert!((metrics.timeout_rate() - 1.0).abs() < f64::EPSILON);
     }
 
     #[test]
@@ -213,7 +213,7 @@ mod tests {
         metrics.record_failure("python3".to_owned(), 100);
 
         assert_eq!(metrics.total_executions, 3);
-        assert_eq!(metrics.success_rate(), 2.0 / 3.0);
+        assert!((metrics.success_rate() - 2.0 / 3.0).abs() < f64::EPSILON);
     }
 
     #[test]

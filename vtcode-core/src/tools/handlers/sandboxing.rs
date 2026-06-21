@@ -626,7 +626,7 @@ pub async fn execute_env(
 
     let output = tokio::time::timeout(timeout, cmd.output())
         .await
-        .map_err(|_| anyhow::anyhow!("Command timed out"))?
+        .map_err(|e| anyhow::anyhow!("Command timed out: {e}"))?
         .map_err(|e| anyhow::anyhow!("Command failed: {}", e))?;
 
     Ok(ExecToolCallOutput {

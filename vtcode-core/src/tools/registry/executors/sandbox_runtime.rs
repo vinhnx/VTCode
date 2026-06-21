@@ -6,8 +6,6 @@ use crate::sandboxing::{
 use crate::tools::tool_intent;
 use anyhow::{Context, Result, anyhow};
 use serde_json::Value;
-#[cfg(test)]
-use std::sync::{LazyLock, Mutex};
 use std::{
     collections::BTreeSet,
     path::{Path, PathBuf},
@@ -15,6 +13,9 @@ use std::{
 use vtcode_config::{
     ResourceLimitsPreset, SandboxPolicy as RuntimeSandboxPolicy, SeccompProfilePreset,
 };
+
+#[cfg(all(test, target_os = "linux"))]
+use std::sync::{LazyLock, Mutex};
 
 #[derive(Debug, Clone)]
 pub(super) struct ShellExecutionPlan {

@@ -67,7 +67,8 @@ impl SearchMetrics {
         files_searched: usize,
     ) {
         // Estimate tokens from character count (using default 4.0 chars/token)
-        let estimated_tokens = (result_chars as f64 / 4.0).ceil() as usize;
+        #[allow(clippy::cast_sign_loss)]
+        let estimated_tokens = ((result_chars as f64 / 4.0).ceil()).max(0.0) as usize;
         let is_expensive = estimated_tokens > self.expensive_threshold;
 
         let metric = SearchMetric {
@@ -265,7 +266,7 @@ mod tests {
 
         // Non-expensive search should not be sampled
         metrics.record_search("cheap", 10, 5000, 10, 5);
-        assert_eq!(metrics.estimate_sampling_ratio("cheap"), 1.0);
+        assert!((metrics.estimate_sampling_ratio("cheap") - 1.0).abs() < f64::EPSILON);
 
         // Expensive search should be sampled
         metrics.record_search("expensive", 100, 50000, 100, 50);

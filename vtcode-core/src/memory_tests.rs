@@ -99,11 +99,15 @@ mod memory_profiling {
         let key1 = MemTestKey("key1".into());
         let value1 = "x".repeat(1000); // Approximately test_size_bytes
 
-        cache.insert(key1, value1, test_size_bytes as u64);
-
+        #[allow(clippy::cast_sign_loss)]
+        #[allow(clippy::cast_sign_loss)]
+        cache.insert(key1, value1, test_size_bytes as u64); // safe: positive literal
+        
         let stats = cache.stats();
+        #[allow(clippy::cast_sign_loss)]
+        let expected_bytes = test_size_bytes as u64; // safe: positive literal
         assert_eq!(
-            stats.total_memory_bytes, test_size_bytes as u64,
+            stats.total_memory_bytes, expected_bytes,
             "Memory tracking mismatch"
         );
     }

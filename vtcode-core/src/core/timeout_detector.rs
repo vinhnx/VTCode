@@ -270,6 +270,7 @@ impl TimeoutDetector {
 
         let base_delay = config.initial_retry_delay.as_millis() as f64;
         let multiplier = config.backoff_multiplier.powi(attempt as i32);
+        #[allow(clippy::cast_sign_loss)]
         let delay_ms = (base_delay * multiplier) as u64;
 
         let mut delay =
@@ -283,6 +284,7 @@ impl TimeoutDetector {
                 .unwrap_or_default()
                 .as_nanos() as u64;
             let jitter_factor = (seed % 100) as f64 / 100.0; // 0.0 to 1.0
+            #[allow(clippy::cast_sign_loss)]
             let jitter_ms = (delay.as_millis() as f64 * 0.1 * jitter_factor) as u64; // 10% jitter
             delay += Duration::from_millis(jitter_ms);
         }

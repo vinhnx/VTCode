@@ -421,9 +421,7 @@ const READONLY_UNIFIED_EXEC_COMMANDS: &[&str] = &[
 ];
 
 fn is_readonly_base_command(command: &str) -> bool {
-    READONLY_UNIFIED_EXEC_COMMANDS
-        .iter()
-        .any(|candidate| *candidate == command)
+    READONLY_UNIFIED_EXEC_COMMANDS.contains(&command)
 }
 
 fn is_readonly_unified_exec_command(args: &Value) -> bool {

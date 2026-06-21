@@ -255,7 +255,8 @@ impl FileCache {
         // Heuristic: Assume 16GB system if we can't query (conservative default)
         const ASSUMED_SYSTEM_MEMORY: usize = 16 * 1024 * 1024 * 1024;
 
-        let target_bytes = (ASSUMED_SYSTEM_MEMORY as f64 * target_memory_ratio) as usize;
+        #[allow(clippy::cast_sign_loss)]
+        let target_bytes = ((ASSUMED_SYSTEM_MEMORY as f64 * target_memory_ratio).max(0.0)) as usize;
         self.max_size_bytes.store(target_bytes, Ordering::Relaxed);
     }
 }

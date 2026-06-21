@@ -352,7 +352,7 @@ impl SubagentController {
                 let record = state.background_children.get(&record_id);
                 (
                     record.map(|r| r.exec_session_id.clone()),
-                    record.map(|r| r.status.clone()),
+                    record.map(|r| r.status),
                     record.and_then(|r| r.error.clone()),
                 )
             };
@@ -1584,7 +1584,7 @@ impl SubagentController {
         let controller = self.clone();
         let target = child_id.to_string();
         let handle = tokio::spawn(async move {
-            controller.child_loop(&target).await;
+            Box::pin(controller.child_loop(&target)).await;
         });
         let mut state = self.state.write().await;
         let record = state
@@ -1615,15 +1615,14 @@ impl SubagentController {
                 return;
             };
 
-            let execute = self
-                .run_child_once(
-                    child_id,
-                    request.prompt,
-                    request.max_turns,
-                    request.model_override,
-                    request.reasoning_override,
-                )
-                .await;
+            let execute = Box::pin(self.run_child_once(
+                child_id,
+                request.prompt,
+                request.max_turns,
+                request.model_override,
+                request.reasoning_override,
+            ))
+            .await;
 
             let (has_more_work, hook_payload) = {
                 let mut state = self.state.write().await;
@@ -1734,7 +1733,7 @@ impl SubagentController {
                 .await?
         };
         checkpoint_subagent_archive_start(&archive, &bootstrap_messages).await?;
-        let mut runner = AgentRunner::new_with_bootstrap(
+        let mut runner = Box::pin(AgentRunner::new_with_bootstrap(
             agent_type_for_spec(&spec),
             resolved_model,
             self.config.api_key.clone(),
@@ -1748,7 +1747,7 @@ impl SubagentController {
             bootstrap,
             Some(child_cfg.clone()),
             self.config.openai_chatgpt_auth.clone(),
-        )
+        ))
         .await?;
         runner.set_quiet(true);
         runner.set_subagent_mode(true);
@@ -2309,7 +2308,7 @@ Inspect the repository.
             source: SubagentSource::Builtin,
             file_path: None,
             warnings: Vec::new(),
-            tool_policy_overrides: std::collections::BTreeMap::new(),
+            tool_policy_overrides: BTreeMap::new(),
         }
     }
 
@@ -2387,7 +2386,7 @@ Inspect the repository.
             source: SubagentSource::Builtin,
             file_path: None,
             warnings: Vec::new(),
-            tool_policy_overrides: std::collections::BTreeMap::new(),
+            tool_policy_overrides: BTreeMap::new(),
         };
 
         let filtered = filter_child_tools(&spec, defs, spec.is_read_only());

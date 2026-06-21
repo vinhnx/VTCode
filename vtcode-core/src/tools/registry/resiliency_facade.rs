@@ -53,15 +53,17 @@ impl ToolRegistry {
                 .and_then(|p| p.ceiling_for(category))
             {
                 if *adaptive < base {
+                    #[allow(clippy::cast_sign_loss)]
                     let relaxed_ms =
-                        ((*adaptive).as_millis() as f64 * (1.0 / tuning.decay_ratio)) as u128;
+                        (((*adaptive).as_millis() as f64 * (1.0 / tuning.decay_ratio)).max(0.0)) as u128;
                     let relaxed = Duration::from_millis(relaxed_ms as u64);
                     *adaptive = std::cmp::min(relaxed, base);
                 }
             } else {
                 // If no base, relax upward modestly
+                #[allow(clippy::cast_sign_loss)]
                 let relaxed = Duration::from_millis(
-                    ((*adaptive).as_millis() as f64 * (1.0 / tuning.decay_ratio)) as u64,
+                    (((*adaptive).as_millis() as f64 * (1.0 / tuning.decay_ratio)).max(0.0)) as u64,
                 );
                 *adaptive = relaxed;
             }

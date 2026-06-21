@@ -292,7 +292,7 @@ pub(super) fn preflight_validate_call(
     let normalized_tool_name = registry
         .resolve_public_tool(name)
         .map(|resolution| resolution.registration_name().to_string())
-        .map_err(|_| anyhow!("Unknown tool: {}", canonical_tool_name(name)))?;
+        .map_err(|e| anyhow!("Unknown tool: {}: {e}", canonical_tool_name(name)))?;
 
     if let Some(remapped_args) =
         remap_public_unified_file_alias_args(name, &normalized_tool_name, args)

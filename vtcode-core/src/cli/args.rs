@@ -1294,7 +1294,7 @@ mod exec_command_tests {
         CheckSubcommand, Cli, Commands, DependenciesSubcommand, ExecSubcommand, ManagedDependency,
         PodsCommands,
     };
-    use clap::{CommandFactory, Parser};
+    use clap::Parser;
     use std::path::PathBuf;
 
     #[test]

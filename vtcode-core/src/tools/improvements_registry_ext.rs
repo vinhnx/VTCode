@@ -212,7 +212,7 @@ mod tests {
 
         let metrics = ext.get_tool_metrics(tools::UNIFIED_SEARCH);
         assert!(metrics.is_some());
-        assert_eq!(metrics.unwrap().success_rate(), 1.0);
+        assert!((metrics.unwrap().success_rate() - 1.0).abs() < f32::EPSILON);
     }
 
     #[test]

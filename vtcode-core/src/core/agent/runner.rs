@@ -137,7 +137,7 @@ impl AgentRunner {
         settings: RunnerSettings,
         steering_receiver: Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
     ) -> Result<Self> {
-        Self::new_internal(
+        Box::pin(Self::new_internal(
             agent_type,
             model,
             api_key,
@@ -148,7 +148,7 @@ impl AgentRunner {
             ThreadBootstrap::new(None),
             None,
             None,
-        )
+        ))
         .await
     }
 
@@ -166,7 +166,7 @@ impl AgentRunner {
         vt_cfg: Option<VTCodeConfig>,
         openai_chatgpt_auth: Option<OpenAIChatGptAuthHandle>,
     ) -> Result<Self> {
-        Self::new_internal(
+        Box::pin(Self::new_internal(
             agent_type,
             model,
             api_key,
@@ -177,7 +177,7 @@ impl AgentRunner {
             bootstrap,
             vt_cfg,
             openai_chatgpt_auth,
-        )
+        ))
         .await
     }
 

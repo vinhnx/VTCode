@@ -317,8 +317,7 @@ fn effort_description(level: ReasoningEffortLevel, model: &str) -> &'static str 
 
 #[cfg(test)]
 mod tests {
-    use super::{effort_description, resolve_model_preset};
-    use vtcode_core::config::models::Provider;
+    use super::effort_description;
     use vtcode_core::config::types::ReasoningEffortLevel;
 
     #[test]

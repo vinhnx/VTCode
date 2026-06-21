@@ -175,7 +175,7 @@ fn into_results_computes_metrics() {
 #[tokio::test]
 async fn full_auto_allowlist_hides_tools_from_exposure() {
     let temp = TempDir::new().expect("tempdir");
-    let mut runner = AgentRunner::new_with_bootstrap(
+    let mut runner = Box::pin(AgentRunner::new_with_bootstrap(
         AgentType::Single,
         ModelId::default(),
         "test-key".to_string(),
@@ -189,7 +189,7 @@ async fn full_auto_allowlist_hides_tools_from_exposure() {
         ThreadBootstrap::new(None),
         Some(VTCodeConfig::default()),
         None,
-    )
+    ))
     .await
     .expect("runner");
 
@@ -219,7 +219,7 @@ async fn full_auto_allowlist_hides_tools_from_exposure() {
 #[tokio::test]
 async fn runner_uses_public_tool_resolution_for_validation() {
     let temp = TempDir::new().expect("tempdir");
-    let runner = AgentRunner::new_with_bootstrap(
+    let runner = Box::pin(AgentRunner::new_with_bootstrap(
         AgentType::Single,
         ModelId::default(),
         "test-key".to_string(),
@@ -233,7 +233,7 @@ async fn runner_uses_public_tool_resolution_for_validation() {
         ThreadBootstrap::new(None),
         Some(VTCodeConfig::default()),
         None,
-    )
+    ))
     .await
     .expect("runner");
 
@@ -245,7 +245,7 @@ async fn runner_uses_public_tool_resolution_for_validation() {
 #[tokio::test]
 async fn build_universal_tools_matches_registry_agent_runner_snapshot() {
     let temp = TempDir::new().expect("tempdir");
-    let runner = AgentRunner::new_with_bootstrap(
+    let runner = Box::pin(AgentRunner::new_with_bootstrap(
         AgentType::Single,
         ModelId::default(),
         "test-key".to_string(),
@@ -259,7 +259,7 @@ async fn build_universal_tools_matches_registry_agent_runner_snapshot() {
         ThreadBootstrap::new(None),
         Some(VTCodeConfig::default()),
         None,
-    )
+    ))
     .await
     .expect("runner");
 
@@ -313,7 +313,7 @@ async fn build_universal_tools_matches_registry_agent_runner_snapshot() {
 #[tokio::test]
 async fn build_universal_tools_uses_override_when_present() {
     let temp = TempDir::new().expect("tempdir");
-    let mut runner = AgentRunner::new_with_bootstrap(
+    let mut runner = Box::pin(AgentRunner::new_with_bootstrap(
         AgentType::Single,
         ModelId::default(),
         "test-key".to_string(),
@@ -327,7 +327,7 @@ async fn build_universal_tools_uses_override_when_present() {
         ThreadBootstrap::new(None),
         Some(VTCodeConfig::default()),
         None,
-    )
+    ))
     .await
     .expect("runner");
 
@@ -346,7 +346,7 @@ async fn build_universal_tools_uses_override_when_present() {
 #[tokio::test]
 async fn active_primary_agent_policy_filters_provider_exposure_and_execution() {
     let temp = TempDir::new().expect("tempdir");
-    let mut runner = AgentRunner::new_with_bootstrap(
+    let mut runner = Box::pin(AgentRunner::new_with_bootstrap(
         AgentType::Single,
         ModelId::default(),
         "test-key".to_string(),
@@ -360,7 +360,7 @@ async fn active_primary_agent_policy_filters_provider_exposure_and_execution() {
         ThreadBootstrap::new(None),
         Some(VTCodeConfig::default()),
         None,
-    )
+    ))
     .await
     .expect("runner");
 
@@ -399,7 +399,7 @@ async fn active_primary_agent_policy_filters_provider_exposure_and_execution() {
 #[tokio::test]
 async fn explicit_tool_policy_deny_filters_runtime_state_and_allowed_tools() {
     let temp = TempDir::new().expect("tempdir");
-    let runner = AgentRunner::new_with_bootstrap(
+    let runner = Box::pin(AgentRunner::new_with_bootstrap(
         AgentType::Single,
         ModelId::default(),
         "test-key".to_string(),
@@ -413,7 +413,7 @@ async fn explicit_tool_policy_deny_filters_runtime_state_and_allowed_tools() {
         ThreadBootstrap::new(None),
         Some(VTCodeConfig::default()),
         None,
-    )
+    ))
     .await
     .expect("runner");
 
@@ -445,7 +445,7 @@ async fn category_read_deny_filters_advertised_active_tools() {
     let temp = TempDir::new().expect("tempdir");
     let mut config = VTCodeConfig::default();
     config.permissions.deny = vec!["read".to_string()];
-    let runner = AgentRunner::new_with_bootstrap(
+    let runner = Box::pin(AgentRunner::new_with_bootstrap(
         AgentType::Single,
         ModelId::default(),
         "test-key".to_string(),
@@ -459,7 +459,7 @@ async fn category_read_deny_filters_advertised_active_tools() {
         ThreadBootstrap::new(None),
         Some(config),
         None,
-    )
+    ))
     .await
     .expect("runner");
 
@@ -476,7 +476,7 @@ async fn category_bash_deny_filters_advertised_active_tools_and_allowed_tools() 
     let temp = TempDir::new().expect("tempdir");
     let mut config = VTCodeConfig::default();
     config.permissions.deny = vec!["bash".to_string()];
-    let runner = AgentRunner::new_with_bootstrap(
+    let runner = Box::pin(AgentRunner::new_with_bootstrap(
         AgentType::Single,
         ModelId::default(),
         "test-key".to_string(),
@@ -490,7 +490,7 @@ async fn category_bash_deny_filters_advertised_active_tools_and_allowed_tools() 
         ThreadBootstrap::new(None),
         Some(config),
         None,
-    )
+    ))
     .await
     .expect("runner");
 
@@ -513,7 +513,7 @@ async fn category_edit_deny_filters_advertised_file_tool_conservatively() {
     let temp = TempDir::new().expect("tempdir");
     let mut config = VTCodeConfig::default();
     config.permissions.deny = vec!["edit".to_string()];
-    let runner = AgentRunner::new_with_bootstrap(
+    let runner = Box::pin(AgentRunner::new_with_bootstrap(
         AgentType::Single,
         ModelId::default(),
         "test-key".to_string(),
@@ -527,7 +527,7 @@ async fn category_edit_deny_filters_advertised_file_tool_conservatively() {
         ThreadBootstrap::new(None),
         Some(config),
         None,
-    )
+    ))
     .await
     .expect("runner");
 
@@ -544,7 +544,7 @@ async fn category_write_deny_filters_advertised_file_tool_conservatively() {
     let temp = TempDir::new().expect("tempdir");
     let mut config = VTCodeConfig::default();
     config.permissions.deny = vec!["write".to_string()];
-    let runner = AgentRunner::new_with_bootstrap(
+    let runner = Box::pin(AgentRunner::new_with_bootstrap(
         AgentType::Single,
         ModelId::default(),
         "test-key".to_string(),
@@ -558,7 +558,7 @@ async fn category_write_deny_filters_advertised_file_tool_conservatively() {
         ThreadBootstrap::new(None),
         Some(config),
         None,
-    )
+    ))
     .await
     .expect("runner");
 
@@ -575,7 +575,7 @@ async fn webfetch_domain_deny_filters_representative_unified_search_tool() {
     let temp = TempDir::new().expect("tempdir");
     let mut config = VTCodeConfig::default();
     config.permissions.deny = vec!["webfetch(domain:example.com)".to_string()];
-    let runner = AgentRunner::new_with_bootstrap(
+    let runner = Box::pin(AgentRunner::new_with_bootstrap(
         AgentType::Single,
         ModelId::default(),
         "test-key".to_string(),
@@ -589,7 +589,7 @@ async fn webfetch_domain_deny_filters_representative_unified_search_tool() {
         ThreadBootstrap::new(None),
         Some(config),
         None,
-    )
+    ))
     .await
     .expect("runner");
 
@@ -604,7 +604,7 @@ async fn webfetch_domain_deny_filters_representative_unified_search_tool() {
 #[tokio::test]
 async fn planning_mode_filters_provider_facing_mutating_tools() {
     let temp = TempDir::new().expect("tempdir");
-    let runner = AgentRunner::new_with_bootstrap(
+    let runner = Box::pin(AgentRunner::new_with_bootstrap(
         AgentType::Single,
         ModelId::default(),
         "test-key".to_string(),
@@ -618,7 +618,7 @@ async fn planning_mode_filters_provider_facing_mutating_tools() {
         ThreadBootstrap::new(None),
         Some(VTCodeConfig::default()),
         None,
-    )
+    ))
     .await
     .expect("runner");
 
@@ -635,7 +635,7 @@ async fn planning_mode_filters_provider_facing_mutating_tools() {
 #[tokio::test]
 async fn active_primary_agent_policy_filters_provider_snapshot_to_allowed_tools() {
     let temp = TempDir::new().expect("tempdir");
-    let mut runner = AgentRunner::new_with_bootstrap(
+    let mut runner = Box::pin(AgentRunner::new_with_bootstrap(
         AgentType::Single,
         ModelId::default(),
         "test-key".to_string(),
@@ -649,7 +649,7 @@ async fn active_primary_agent_policy_filters_provider_snapshot_to_allowed_tools(
         ThreadBootstrap::new(None),
         Some(VTCodeConfig::default()),
         None,
-    )
+    ))
     .await
     .expect("runner");
 
@@ -678,7 +678,7 @@ async fn active_primary_agent_policy_filters_provider_snapshot_to_allowed_tools(
 #[tokio::test]
 async fn normalize_tool_args_applies_transform_after_defaults() {
     let temp = TempDir::new().expect("tempdir");
-    let mut runner = AgentRunner::new_with_bootstrap(
+    let mut runner = Box::pin(AgentRunner::new_with_bootstrap(
         AgentType::Single,
         ModelId::default(),
         "test-key".to_string(),
@@ -692,7 +692,7 @@ async fn normalize_tool_args_applies_transform_after_defaults() {
         ThreadBootstrap::new(None),
         Some(VTCodeConfig::default()),
         None,
-    )
+    ))
     .await
     .expect("runner");
     runner.set_tool_arg_transform(Arc::new(|name, value| {
@@ -722,7 +722,7 @@ async fn new_with_preloaded_config_uses_override_snapshot() {
     let mut vt_cfg = VTCodeConfig::default();
     vt_cfg.agent.provider = "anthropic".to_string();
 
-    let runner = AgentRunner::new_with_bootstrap(
+    let runner = Box::pin(AgentRunner::new_with_bootstrap(
         AgentType::Single,
         ModelId::default(),
         "test-key".to_string(),
@@ -736,7 +736,7 @@ async fn new_with_preloaded_config_uses_override_snapshot() {
         ThreadBootstrap::new(None),
         Some(vt_cfg),
         None,
-    )
+    ))
     .await
     .expect("runner");
 
@@ -753,7 +753,7 @@ async fn core_agent_config_normalizes_api_key_env_and_checkpoint_dir() {
     vt_cfg.agent.api_key_env = crate::config::constants::defaults::DEFAULT_API_KEY_ENV.to_string();
     vt_cfg.agent.checkpointing.storage_dir = Some(absolute_checkpoint_dir.display().to_string());
 
-    let runner = AgentRunner::new_with_bootstrap(
+    let runner = Box::pin(AgentRunner::new_with_bootstrap(
         AgentType::Single,
         ModelId::default(),
         "test-key".to_string(),
@@ -767,7 +767,7 @@ async fn core_agent_config_normalizes_api_key_env_and_checkpoint_dir() {
         ThreadBootstrap::new(None),
         Some(vt_cfg),
         None,
-    )
+    ))
     .await
     .expect("runner");
 
@@ -788,7 +788,7 @@ async fn runner_uses_configured_provider_for_huggingface_repo_models() {
     vt_cfg.agent.default_model =
         crate::config::constants::models::huggingface::ZAI_GLM_5_1_ZAI_ORG.to_string();
 
-    let runner = AgentRunner::new_with_bootstrap(
+    let runner = Box::pin(AgentRunner::new_with_bootstrap(
         AgentType::Single,
         ModelId::HuggingFaceGlm51ZaiOrg,
         "test-key".to_string(),
@@ -802,7 +802,7 @@ async fn runner_uses_configured_provider_for_huggingface_repo_models() {
         ThreadBootstrap::new(None),
         Some(vt_cfg),
         None,
-    )
+    ))
     .await
     .expect("runner");
 
@@ -812,7 +812,7 @@ async fn runner_uses_configured_provider_for_huggingface_repo_models() {
 #[tokio::test]
 async fn review_tool_allowlist_excludes_mutating_and_plan_only_tools() {
     let temp = TempDir::new().expect("tempdir");
-    let runner = AgentRunner::new_with_bootstrap(
+    let runner = Box::pin(AgentRunner::new_with_bootstrap(
         AgentType::Single,
         ModelId::default(),
         "test-key".to_string(),
@@ -826,7 +826,7 @@ async fn review_tool_allowlist_excludes_mutating_and_plan_only_tools() {
         ThreadBootstrap::new(None),
         Some(VTCodeConfig::default()),
         None,
-    )
+    ))
     .await
     .expect("runner");
 
@@ -845,7 +845,7 @@ async fn review_tool_allowlist_excludes_mutating_and_plan_only_tools() {
 #[tokio::test]
 async fn review_tool_allowlist_expands_wildcard_read_only() {
     let temp = TempDir::new().expect("tempdir");
-    let mut runner = AgentRunner::new_with_bootstrap(
+    let mut runner = Box::pin(AgentRunner::new_with_bootstrap(
         AgentType::Single,
         ModelId::default(),
         "test-key".to_string(),
@@ -859,7 +859,7 @@ async fn review_tool_allowlist_expands_wildcard_read_only() {
         ThreadBootstrap::new(None),
         Some(VTCodeConfig::default()),
         None,
-    )
+    ))
     .await
     .expect("runner");
 
@@ -1063,7 +1063,7 @@ fn workspace_root(temp: &TempDir) -> PathBuf {
 }
 
 async fn make_runner(temp: &TempDir, vt_cfg: VTCodeConfig, session_id: &str) -> AgentRunner {
-    let mut runner = AgentRunner::new_with_bootstrap(
+    let mut runner = Box::pin(AgentRunner::new_with_bootstrap(
         AgentType::Single,
         ModelId::default(),
         "test-key".to_string(),
@@ -1077,7 +1077,7 @@ async fn make_runner(temp: &TempDir, vt_cfg: VTCodeConfig, session_id: &str) -> 
         ThreadBootstrap::new(None),
         Some(vt_cfg),
         None,
-    )
+    ))
     .await
     .expect("runner");
     runner.set_quiet(true);
@@ -1182,7 +1182,7 @@ async fn exec_full_auto_continues_until_tracker_is_completed() {
     vt_cfg.agent.harness.orchestration_mode =
         vtcode_config::core::agent::HarnessOrchestrationMode::Single;
     vt_cfg.automation.full_auto.max_turns = 3;
-    let mut runner = make_runner(&temp, vt_cfg, "thread-continuation-success").await;
+    let mut runner = Box::pin(make_runner(&temp, vt_cfg, "thread-continuation-success")).await;
     runner
         .enable_full_auto(&[tools::TASK_TRACKER.to_string()])
         .await;
@@ -1222,7 +1222,7 @@ async fn runner_reuses_openai_response_chain_and_session_cache_key() {
     let mut vt_cfg = VTCodeConfig::default();
     vt_cfg.agent.harness.orchestration_mode =
         vtcode_config::core::agent::HarnessOrchestrationMode::Single;
-    let mut runner = make_runner(&temp, vt_cfg, "thread-cache-lineage").await;
+    let mut runner = Box::pin(make_runner(&temp, vt_cfg, "thread-cache-lineage")).await;
     runner
         .enable_full_auto(&[tools::TASK_TRACKER.to_string()])
         .await;
@@ -1281,7 +1281,7 @@ async fn exec_full_auto_runs_verification_before_accepting_completion() {
     let mut vt_cfg = VTCodeConfig::default();
     vt_cfg.agent.harness.orchestration_mode =
         vtcode_config::core::agent::HarnessOrchestrationMode::Single;
-    let mut runner = make_runner(&temp, vt_cfg, "thread-verification-success").await;
+    let mut runner = Box::pin(make_runner(&temp, vt_cfg, "thread-verification-success")).await;
     runner.enable_full_auto(&[]).await;
     runner.provider_client = Box::new(QueuedProvider::new(vec![text_response(
         "The task is complete.",
@@ -1318,7 +1318,7 @@ async fn exec_full_auto_retries_after_verification_failure() {
     vt_cfg.agent.harness.orchestration_mode =
         vtcode_config::core::agent::HarnessOrchestrationMode::Single;
     vt_cfg.automation.full_auto.max_turns = 2;
-    let mut runner = make_runner(&temp, vt_cfg, "thread-verification-failure").await;
+    let mut runner = Box::pin(make_runner(&temp, vt_cfg, "thread-verification-failure")).await;
     runner.enable_full_auto(&[]).await;
     runner.provider_client = Box::new(QueuedProvider::new(vec![
         text_response("The task is complete."),
@@ -1344,7 +1344,7 @@ async fn exec_full_auto_retries_after_verification_failure() {
 #[tokio::test]
 async fn review_runs_skip_continuation_and_finish_single_pass() {
     let temp = TempDir::new().expect("tempdir");
-    let mut runner = make_runner(&temp, VTCodeConfig::default(), "thread-review-skip").await;
+    let mut runner = Box::pin(make_runner(&temp, VTCodeConfig::default(), "thread-review-skip")).await;
     runner
         .enable_full_auto(&[tools::UNIFIED_FILE.to_string()])
         .await;
@@ -1368,11 +1368,11 @@ async fn review_runs_skip_continuation_and_finish_single_pass() {
 #[tokio::test]
 async fn planning_workflow_runs_skip_continuation_and_finish_single_pass() {
     let temp = TempDir::new().expect("tempdir");
-    let mut runner = make_runner(
+    let mut runner = Box::pin(make_runner(
         &temp,
         VTCodeConfig::default(),
         "thread-planning-workflow-skip",
-    )
+    ))
     .await;
     runner.enable_full_auto(&[]).await;
     runner.enable_planning();
@@ -1399,7 +1399,7 @@ async fn exec_only_policy_skips_when_full_auto_is_disabled() {
     let mut vt_cfg = VTCodeConfig::default();
     vt_cfg.agent.harness.continuation_policy =
         vtcode_config::core::agent::ContinuationPolicy::ExecOnly;
-    let mut runner = make_runner(&temp, vt_cfg, "thread-exec-only-skip").await;
+    let mut runner = Box::pin(make_runner(&temp, vt_cfg, "thread-exec-only-skip")).await;
     runner.provider_client = Box::new(QueuedProvider::new(vec![text_response(
         "The task is complete.",
     )]));
@@ -1428,7 +1428,7 @@ async fn tool_loop_limit_writes_blocked_handoff_artifacts() {
         vtcode_config::core::agent::HarnessOrchestrationMode::Single;
     vt_cfg.automation.full_auto.max_turns = 1;
     vt_cfg.tools.max_tool_loops = 1;
-    let mut runner = make_runner(&temp, vt_cfg, "thread-tool-loop-blocked").await;
+    let mut runner = Box::pin(make_runner(&temp, vt_cfg, "thread-tool-loop-blocked")).await;
     runner
         .enable_full_auto(&[tools::TASK_TRACKER.to_string()])
         .await;
@@ -1465,7 +1465,7 @@ async fn plan_build_evaluate_exec_creates_spec_and_evaluation_artifacts() {
     let mut vt_cfg = VTCodeConfig::default();
     vt_cfg.agent.harness.orchestration_mode =
         vtcode_config::core::agent::HarnessOrchestrationMode::PlanBuildEvaluate;
-    let mut runner = make_runner(&temp, vt_cfg, "thread-plan-build-evaluate").await;
+    let mut runner = Box::pin(make_runner(&temp, vt_cfg, "thread-plan-build-evaluate")).await;
     runner
         .enable_full_auto(&[tools::TASK_TRACKER.to_string()])
         .await;
@@ -1529,7 +1529,7 @@ async fn default_full_auto_exec_uses_plan_build_evaluate_harness() {
     let workspace = workspace_root(&temp);
 
     let vt_cfg = VTCodeConfig::default();
-    let mut runner = make_runner(&temp, vt_cfg, "thread-default-plan-build-evaluate").await;
+    let mut runner = Box::pin(make_runner(&temp, vt_cfg, "thread-default-plan-build-evaluate")).await;
     runner
         .enable_full_auto(&[tools::TASK_TRACKER.to_string()])
         .await;
@@ -1587,7 +1587,7 @@ async fn evaluator_failure_forces_revision_before_success() {
     vt_cfg.agent.harness.orchestration_mode =
         vtcode_config::core::agent::HarnessOrchestrationMode::PlanBuildEvaluate;
     vt_cfg.automation.full_auto.max_turns = 4;
-    let mut runner = make_runner(&temp, vt_cfg, "thread-evaluator-revision").await;
+    let mut runner = Box::pin(make_runner(&temp, vt_cfg, "thread-evaluator-revision")).await;
     runner
         .enable_full_auto(&[tools::TASK_TRACKER.to_string()])
         .await;
@@ -1634,7 +1634,7 @@ async fn evaluator_request_includes_verification_results() {
     let mut vt_cfg = VTCodeConfig::default();
     vt_cfg.agent.harness.orchestration_mode =
         vtcode_config::core::agent::HarnessOrchestrationMode::PlanBuildEvaluate;
-    let mut runner = make_runner(&temp, vt_cfg, "thread-evaluator-verification").await;
+    let mut runner = Box::pin(make_runner(&temp, vt_cfg, "thread-evaluator-verification")).await;
     runner
         .enable_full_auto(&[tools::TASK_TRACKER.to_string()])
         .await;
@@ -1686,7 +1686,7 @@ async fn evaluator_scorecard_below_threshold_forces_revision() {
     vt_cfg.agent.harness.orchestration_mode =
         vtcode_config::core::agent::HarnessOrchestrationMode::PlanBuildEvaluate;
     vt_cfg.automation.full_auto.max_turns = 4;
-    let mut runner = make_runner(&temp, vt_cfg, "thread-evaluator-scorecard").await;
+    let mut runner = Box::pin(make_runner(&temp, vt_cfg, "thread-evaluator-scorecard")).await;
     runner
         .enable_full_auto(&[tools::TASK_TRACKER.to_string()])
         .await;
@@ -1740,7 +1740,7 @@ async fn evaluator_missing_scorecard_forces_revision() {
     vt_cfg.agent.harness.orchestration_mode =
         vtcode_config::core::agent::HarnessOrchestrationMode::PlanBuildEvaluate;
     vt_cfg.automation.full_auto.max_turns = 4;
-    let mut runner = make_runner(&temp, vt_cfg, "thread-evaluator-missing-scorecard").await;
+    let mut runner = Box::pin(make_runner(&temp, vt_cfg, "thread-evaluator-missing-scorecard")).await;
     runner
         .enable_full_auto(&[tools::TASK_TRACKER.to_string()])
         .await;
@@ -1799,7 +1799,7 @@ async fn evaluator_out_of_range_scorecard_forces_revision() {
     vt_cfg.agent.harness.orchestration_mode =
         vtcode_config::core::agent::HarnessOrchestrationMode::PlanBuildEvaluate;
     vt_cfg.automation.full_auto.max_turns = 4;
-    let mut runner = make_runner(&temp, vt_cfg, "thread-evaluator-invalid-scorecard").await;
+    let mut runner = Box::pin(make_runner(&temp, vt_cfg, "thread-evaluator-invalid-scorecard")).await;
     runner
         .enable_full_auto(&[tools::TASK_TRACKER.to_string()])
         .await;
@@ -1857,7 +1857,7 @@ async fn evaluator_exhaustion_writes_blocked_handoff_with_artifact_paths() {
         vtcode_config::core::agent::HarnessOrchestrationMode::PlanBuildEvaluate;
     vt_cfg.agent.harness.max_revision_rounds = 1;
     vt_cfg.automation.full_auto.max_turns = 4;
-    let mut runner = make_runner(&temp, vt_cfg, "thread-evaluator-exhaustion").await;
+    let mut runner = Box::pin(make_runner(&temp, vt_cfg, "thread-evaluator-exhaustion")).await;
     runner
         .enable_full_auto(&[tools::TASK_TRACKER.to_string()])
         .await;

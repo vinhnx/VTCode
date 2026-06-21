@@ -185,10 +185,14 @@ impl ToolRiskScorer {
         }
 
         // Apply source multiplier
-        base_score = (base_score as f32 * ctx.source.risk_multiplier()) as u32;
+        #[allow(clippy::cast_sign_loss, clippy::let_and_return)]
+        let adjusted = ((base_score as f32 * ctx.source.risk_multiplier()).max(0.0)) as u32;
+        base_score = adjusted;
 
         // Apply trust reduction
-        base_score = (base_score as f32 * ctx.workspace_trust.risk_reduction()) as u32;
+        #[allow(clippy::cast_sign_loss, clippy::let_and_return)]
+        let adjusted = ((base_score as f32 * ctx.workspace_trust.risk_reduction()).max(0.0)) as u32;
+        base_score = adjusted;
 
         // Approval history reduces risk (diminishing returns)
         let approval_reduction = ctx.recent_approvals.min(3) as u32 * 5;

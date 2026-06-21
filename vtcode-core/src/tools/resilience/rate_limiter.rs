@@ -101,13 +101,15 @@ impl RateLimiterInner {
         }
 
         // Fractional refill: (per_sec * multiplier) tokens per 1000ms
-        let effective_rate = (self.config.per_sec as f64 * speed_multiplier) as u64;
+        #[allow(clippy::cast_sign_loss)]
+        let effective_rate = ((self.config.per_sec as f64 * speed_multiplier).max(0.0)) as u64;
 
         // Using integer math: tokens = (effective_rate * millis) / 1000
         let added = u32::try_from(effective_rate.saturating_mul(millis) / 1000).unwrap_or(u32::MAX);
 
         if added > 0 {
             let effective_burst = self.config.burst as f64 * speed_multiplier.max(1.0);
+            #[allow(clippy::cast_sign_loss)]
             let effective_burst: u32 = if effective_burst.is_finite()
                 && effective_burst >= 0.0
                 && effective_burst <= u32::MAX as f64

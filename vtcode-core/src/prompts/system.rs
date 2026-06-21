@@ -1657,8 +1657,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_system_prompt_includes_agent_identity() {
-        let mut config = VTCodeConfig::default();
-        config.default_primary_agent = "build".to_string();
+        let mut config = VTCodeConfig {
+            default_primary_agent: "build".to_string(),
+            ..Default::default()
+        };
         config.agent.include_temporal_context = false;
         config.agent.include_working_directory = false;
 
@@ -1678,8 +1680,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_system_prompt_auto_agent_identity() {
-        let mut config = VTCodeConfig::default();
-        config.default_primary_agent = "auto".to_string();
+        let mut config = VTCodeConfig {
+            default_primary_agent: "auto".to_string(),
+            ..Default::default()
+        };
         config.agent.include_temporal_context = false;
         config.agent.include_working_directory = false;
 
@@ -1694,8 +1698,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_system_prompt_duck_agent_identity() {
-        let mut config = VTCodeConfig::default();
-        config.default_primary_agent = "duck".to_string();
+        let mut config = VTCodeConfig {
+            default_primary_agent: "duck".to_string(),
+            ..Default::default()
+        };
         config.agent.include_temporal_context = false;
         config.agent.include_working_directory = false;
 

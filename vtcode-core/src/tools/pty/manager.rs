@@ -461,9 +461,9 @@ if output.len() > max_tokens * 4 {
 
         let candidate = self.workspace_root.join(requested);
         let normalized =
-            ensure_path_within_workspace(&candidate, &self.workspace_root).map_err(|_| {
+            ensure_path_within_workspace(&candidate, &self.workspace_root).map_err(|e| {
                 anyhow!(
-                    "Working directory '{}' escapes the workspace root",
+                    "Working directory '{}' escapes the workspace root: {e}",
                     candidate.display()
                 )
             })?;

@@ -129,7 +129,7 @@ impl MemoryMonitor {
 
         let kb: usize = rss_str
             .parse()
-            .map_err(|_| MemoryError::Parse(format!("invalid ps output: {}", rss_str)))?;
+            .map_err(|_e| MemoryError::Parse(format!("invalid ps output: {}", rss_str)))?;
 
         Ok(kb * 1024) // Convert KB to bytes
     }

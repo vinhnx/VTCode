@@ -170,7 +170,7 @@ pub fn create_provider_for_model(
             message: format!("Cannot determine provider for model: {}", model),
             metadata: None,
         })?;
-    let factory = get_factory().lock().map_err(|_| LLMError::Provider {
+    let factory = get_factory().lock().map_err(|_e| LLMError::Provider {
         message: ctx_err!("llm factory", "lock poisoned"),
         metadata: None,
     })?;
@@ -198,7 +198,7 @@ pub fn create_provider_with_config(
     provider_name: &str,
     config: ProviderConfig,
 ) -> Result<Box<dyn LLMProvider>, LLMError> {
-    let factory = get_factory().lock().map_err(|_| LLMError::Provider {
+    let factory = get_factory().lock().map_err(|_e| LLMError::Provider {
         message: ctx_err!("llm factory", "lock poisoned"),
         metadata: None,
     })?;

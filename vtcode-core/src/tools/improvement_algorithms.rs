@@ -333,7 +333,7 @@ mod tests {
 
     #[test]
     fn test_jaro_winkler_exact() {
-        assert_eq!(jaro_winkler_similarity("hello", "hello"), 1.0);
+        assert!((jaro_winkler_similarity("hello", "hello") - 1.0).abs() < f32::EPSILON);
     }
 
     #[test]

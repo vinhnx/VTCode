@@ -143,7 +143,7 @@ fn validate_markdown_language_consistency(markdown: &str) -> Result<()> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Script {
     Latin,
-    #[expect(non_camel_case_types)]
+    #[allow(non_camel_case_types)]
     Cjk,
     Cyrillic,
     Arabic,

@@ -672,7 +672,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&temp_dir);
 
         let recorder = ApprovalRecorder::new(temp_dir.clone());
-        let target = super::approval_learning_target(
+        let target = approval_learning_target(
             "unified_exec",
             Some(&json!({"action":"run","command":"find src -type f"})),
             "default",
@@ -702,7 +702,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&temp_dir);
 
         let recorder = ApprovalRecorder::new(temp_dir.clone());
-        let target = super::approval_learning_target(
+        let target = approval_learning_target(
             "unified_exec",
             Some(&json!({"action":"run","command":"find src -type f"})),
             "default",
@@ -744,7 +744,7 @@ mod tests {
             "find src -type d",
             "find src -name foo",
         ] {
-            let target = super::approval_learning_target(
+            let target = approval_learning_target(
                 "unified_exec",
                 Some(&json!({"action":"run","command":command})),
                 "default",
@@ -754,7 +754,7 @@ mod tests {
 
         // A *new* safe `find src ...` invocation should auto-approve via the
         // pattern key even though its exact form has never been seen before.
-        let new_target = super::approval_learning_target(
+        let new_target = approval_learning_target(
             "unified_exec",
             Some(&json!({"action":"run","command":"find src -path '*runloop*'"})),
             "default",
@@ -767,7 +767,7 @@ mod tests {
         );
 
         // Destructive `find src -delete` MUST NOT inherit the pattern.
-        let destructive = super::approval_learning_target(
+        let destructive = approval_learning_target(
             "unified_exec",
             Some(&json!({"action":"run","command":"find src -delete"})),
             "default",

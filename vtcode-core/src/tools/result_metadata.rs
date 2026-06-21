@@ -289,7 +289,7 @@ mod tests {
         let legacy_meta = registry.score(tools::RUN_PTY_CMD, &result);
 
         assert_eq!(legacy_meta.result_count, unified_meta.result_count);
-        assert_eq!(legacy_meta.confidence, unified_meta.confidence);
-        assert_eq!(legacy_meta.relevance, unified_meta.relevance);
+        assert!((legacy_meta.confidence - unified_meta.confidence).abs() < f32::EPSILON);
+        assert!((legacy_meta.relevance - unified_meta.relevance).abs() < f32::EPSILON);
     }
 }

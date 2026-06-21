@@ -82,13 +82,13 @@ impl ToolInventory {
     }
 
     /// Get alias usage metrics for debugging and analytics
-    #[expect(dead_code)]
+    #[allow(dead_code)]
     pub fn alias_metrics(&self) -> AliasMetrics {
         self.alias_metrics.lock().clone()
     }
 
     /// Reset alias metrics
-    #[expect(dead_code)]
+    #[allow(dead_code)]
     pub fn reset_alias_metrics(&self) {
         *self.alias_metrics.lock() = AliasMetrics::default();
     }

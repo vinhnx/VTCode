@@ -194,14 +194,14 @@ impl PipeSessionManager {
             .handle
             .write(data.to_vec())
             .await
-            .map_err(|_| anyhow!("exec session '{}' is no longer writable", session_id))?;
+            .map_err(|e| anyhow!("exec session '{}' is no longer writable: {e}", session_id))?;
 
         if append_newline {
             record
                 .handle
                 .write(b"\n".to_vec())
                 .await
-                .map_err(|_| anyhow!("exec session '{}' is no longer writable", session_id))?;
+                .map_err(|e| anyhow!("exec session '{}' is no longer writable: {e}", session_id))?;
         }
 
         Ok(data.len() + usize::from(append_newline))

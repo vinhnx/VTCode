@@ -100,7 +100,7 @@ fn acquire_executor_rate_limit(bucket: &str, multiplier: f64) -> Result<()> {
         .map_err(|err| anyhow!("per-tool rate limiter poisoned: {}", err))?;
     guard
         .try_acquire_for_scaled(bucket, multiplier)
-        .map_err(|_| anyhow!("tool rate limit exceeded for {}", bucket))
+        .map_err(|e| anyhow!("tool rate limit exceeded for {}: {e}", bucket))
 }
 
 fn parse_action<T>(action_str: &str) -> Result<T>

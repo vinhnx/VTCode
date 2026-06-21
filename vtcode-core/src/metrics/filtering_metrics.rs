@@ -144,7 +144,11 @@ mod tests {
     fn test_recent_operations_limit() {
         let mut metrics = FilteringMetrics::new();
         for i in 0..150 {
-            metrics.record_operation(format!("op_{}", i % 5), 1000 + i as u64, 500 + i as u64, 50);
+            #[allow(clippy::cast_sign_loss)]
+            let op_duration = 1000 + i as u64;
+            #[allow(clippy::cast_sign_loss)]
+            let op_wait = 500 + i as u64;
+            metrics.record_operation(format!("op_{}", i % 5), op_duration, op_wait, 50);
         }
 
         assert_eq!(metrics.total_operations, 150);

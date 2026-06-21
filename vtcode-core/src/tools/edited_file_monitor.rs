@@ -68,7 +68,11 @@ impl FileSnapshot {
                 value
                     .as_i64()
                     .filter(|millis| *millis >= 0)
-                    .map(|millis| millis as u128)
+                    .map(|millis| {
+                        #[allow(clippy::cast_sign_loss)]
+                        let val: u64 = millis as u64;
+                        val as u128
+                    }) // safe: filtered non-negative
             }),
         };
 

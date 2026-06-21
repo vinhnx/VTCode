@@ -323,7 +323,7 @@ mod tests {
             recent_reason: None,
         };
 
-        assert_eq!(pattern.approval_rate(), 0.9);
+        assert!((pattern.approval_rate() - 0.9).abs() < f32::EPSILON);
         assert!(pattern.has_high_approval_rate());
 
         pattern.approve_count = 3;
@@ -343,7 +343,7 @@ mod tests {
         let pattern = manager.get_pattern("read_file").unwrap();
         assert_eq!(pattern.approve_count, 2);
         assert_eq!(pattern.deny_count, 1);
-        assert_eq!(pattern.approval_rate(), 2.0 / 3.0);
+        assert!((pattern.approval_rate() - 2.0 / 3.0).abs() < f32::EPSILON);
         assert_eq!(pattern.display_name.as_deref(), Some("Read File"));
 
         // Cleanup

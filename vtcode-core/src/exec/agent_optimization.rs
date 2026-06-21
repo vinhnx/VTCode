@@ -596,7 +596,7 @@ mod tests {
 
         let recovery = analyzer.get_recovery_strategy("timeout");
         assert!(recovery.is_some());
-        assert_eq!(recovery.unwrap().success_rate, 0.85);
+        assert!((recovery.unwrap().success_rate - 0.85).abs() < f64::EPSILON);
     }
 
     #[test]
@@ -669,7 +669,7 @@ mod tests {
         let applied = applied.unwrap();
         assert_eq!(applied.error_type, "timeout");
         assert_eq!(applied.recovery_action, "retry with increased timeout");
-        assert_eq!(applied.success_rate, 0.85);
+        assert!((applied.success_rate - 0.85).abs() < f64::EPSILON);
         assert_eq!(applied.attempts, 20);
 
         // Non-existent error type
@@ -733,7 +733,7 @@ mod tests {
         let pattern = &analyzer.failure_patterns.recovery_patterns[0];
         assert_eq!(pattern.error_type, "new_error");
         assert_eq!(pattern.recovery_action, "new recovery action");
-        assert_eq!(pattern.success_rate, 0.75);
+        assert!((pattern.success_rate - 0.75).abs() < f64::EPSILON);
         assert_eq!(pattern.attempts, 0);
     }
 
@@ -760,7 +760,7 @@ mod tests {
         let pattern = &analyzer.failure_patterns.recovery_patterns[0];
         assert_eq!(pattern.error_type, "existing_error");
         assert_eq!(pattern.recovery_action, "updated action");
-        assert_eq!(pattern.success_rate, 0.9);
+        assert!((pattern.success_rate - 0.9).abs() < f64::EPSILON);
         // Attempts should be preserved from original
         assert_eq!(pattern.attempts, 10);
     }

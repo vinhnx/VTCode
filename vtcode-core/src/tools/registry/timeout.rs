@@ -158,8 +158,9 @@ impl ToolLatencyStats {
         }
         let mut sorted: Vec<Duration> = self.samples.iter().copied().collect();
         sorted.sort_unstable();
+        #[allow(clippy::cast_sign_loss)]
         let idx =
-            ((pct.clamp(0.0, 1.0)) * (sorted.len().saturating_sub(1) as f64)).round() as usize;
+            (((pct.clamp(0.0, 1.0)) * (sorted.len().saturating_sub(1) as f64)).round()).max(0.0) as usize;
         sorted.get(idx).copied()
     }
 }

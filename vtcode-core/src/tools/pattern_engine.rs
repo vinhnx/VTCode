@@ -385,7 +385,7 @@ mod tests {
         let summary = engine.summary();
         assert_eq!(summary.total_executions, 5);
         assert_eq!(summary.successful_executions, 4);
-        assert_eq!(summary.success_rate, 0.8);
+        assert!((summary.success_rate - 0.8).abs() < f32::EPSILON);
         assert_eq!(summary.unique_tools, 1);
     }
 }

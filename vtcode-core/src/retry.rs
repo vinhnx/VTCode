@@ -61,6 +61,7 @@ impl RetryPolicy {
             return base_delay;
         }
 
+        #[allow(clippy::cast_sign_loss)]
         let max_jitter_ms = (base_delay.as_millis() as f64 * self.jitter)
             .round()
             .clamp(0.0, u64::MAX as f64) as u64;
@@ -652,7 +653,7 @@ mod tests {
                     let n = attempts.fetch_add(1, Ordering::SeqCst) + 1;
                     if n < 2 {
                         Err(VtCodeError::network(
-                            crate::error::ErrorCode::ConnectionFailed,
+                            ErrorCode::ConnectionFailed,
                             "transient",
                         ))
                     } else {
@@ -661,7 +662,7 @@ mod tests {
                 })
             },
             |_: &RetryPolicy| {
-                VtCodeError::execution(crate::error::ErrorCode::ToolExecutionFailed, "exhausted")
+                VtCodeError::execution(ErrorCode::ToolExecutionFailed, "exhausted")
             },
         )
         .await;
@@ -686,13 +687,13 @@ mod tests {
                 Box::pin(async move {
                     attempts.fetch_add(1, Ordering::SeqCst);
                     Err::<String, _>(VtCodeError::input(
-                        crate::error::ErrorCode::InvalidArgument,
+                        ErrorCode::InvalidArgument,
                         "bad input",
                     ))
                 })
             },
             |_: &RetryPolicy| {
-                VtCodeError::execution(crate::error::ErrorCode::ToolExecutionFailed, "exhausted")
+                VtCodeError::execution(ErrorCode::ToolExecutionFailed, "exhausted")
             },
         )
         .await;

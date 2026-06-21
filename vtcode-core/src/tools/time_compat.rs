@@ -32,6 +32,7 @@ fn civil_from_unix(secs: u64) -> (i32, u32, u32, u32, u32, u32) {
     let minute = (rem % 3600) / 60;
     let second = rem % 60;
     let (y, m, d) = civil_from_days(days);
+    #[allow(clippy::cast_sign_loss)]
     (y, m as u32, d as u32, hour, minute, second)
 }
 
@@ -73,6 +74,7 @@ mod tests {
     #[test]
     fn formats_known_timestamp() {
         // 2024-01-15T12:34:56Z
+        #[allow(clippy::cast_sign_loss)]
         let secs = days_from_civil(2024, 1, 15) as u64 * 86_400 + 12 * 3600 + 34 * 60 + 56;
         assert_eq!(format_rfc3339_utc_seconds(secs), "2024-01-15T12:34:56Z");
     }

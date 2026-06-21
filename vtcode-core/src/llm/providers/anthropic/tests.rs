@@ -106,7 +106,6 @@ mod prompt_cache_tests {
 mod validation_tests {
     use crate::config::constants::models;
     use crate::config::core::AnthropicConfig;
-    use crate::config::types::ReasoningEffortLevel;
     use crate::llm::provider::{
         LLMRequest, Message, ParallelToolConfig, ToolChoice, ToolDefinition,
     };
@@ -512,7 +511,6 @@ mod response_parser_tests {
 mod request_builder_tests {
     use crate::config::constants::models;
     use crate::config::core::{AnthropicConfig, AnthropicPromptCacheSettings};
-    use crate::config::types::ReasoningEffortLevel;
     use crate::llm::provider::{LLMRequest, Message, PromptCacheProfile, ToolDefinition};
     use crate::llm::providers::anthropic::request_builder::{
         RequestBuilderContext, convert_to_anthropic_format, tool_result_blocks,

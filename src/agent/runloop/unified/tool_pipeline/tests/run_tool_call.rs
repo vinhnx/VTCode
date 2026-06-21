@@ -270,8 +270,10 @@ async fn test_run_tool_call_forwards_runtime_agent_permissions_to_routing() {
         &mut harness_state,
         None,
     );
-    let mut vt_cfg = VTCodeConfig::default();
-    vt_cfg.runtime_agent_permissions = Some(agent_permissions);
+    let vt_cfg = VTCodeConfig {
+        runtime_agent_permissions: Some(agent_permissions),
+        ..Default::default()
+    };
 
     let args = serde_json::to_string(&json!({
         "action": "write",
@@ -787,11 +789,11 @@ async fn test_run_tool_call_unified_exec_git_diff_uses_cache_on_repeat() {
 
     let first_output = match &first_outcome.status {
         ToolExecutionStatus::Success { output, .. } => output,
-        _ => unreachable!(),
+        other => panic!("expected Success, got: {other:?}"),
     };
     let second_output = match &second_outcome.status {
         ToolExecutionStatus::Success { output, .. } => output,
-        _ => unreachable!(),
+        other => panic!("expected Success, got: {other:?}"),
     };
 
     let mut first_stable = first_output.clone();

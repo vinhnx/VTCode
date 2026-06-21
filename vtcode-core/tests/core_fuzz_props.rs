@@ -55,7 +55,7 @@ proptest! {
     ) {
         let pattern: Vec<String> = pattern_words.into_iter().take(pattern_len).collect();
         let rule = PrefixRule::new(pattern, Decision::Allow);
-        let _ = rule.matches(&command_words.iter().map(|s| s.clone()).collect::<Vec<_>>());
+        let _ = rule.matches(&command_words.to_vec());
     }
 }
 
@@ -95,7 +95,6 @@ proptest! {
     fn fuzz_non_root_listing_path_never_panics(
         path in "\\PC{0,128}",
     ) {
-        // Safety: validate_non_root_listing_path accepts Option<&str>
         if !path.is_empty() {
             let _ = validate_non_root_listing_path(Some(&path));
         }

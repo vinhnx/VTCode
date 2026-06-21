@@ -327,12 +327,12 @@ impl PtyScrollback {
         !self.pending_lines.is_empty() || !self.pending_partial.is_empty()
     }
 
-    #[expect(dead_code)]
+    #[allow(dead_code)]
     fn has_overflow(&self) -> bool {
         self.overflow_detected
     }
 
-    #[expect(dead_code)]
+    #[allow(dead_code)]
     fn current_size_bytes(&self) -> usize {
         self.current_bytes
     }

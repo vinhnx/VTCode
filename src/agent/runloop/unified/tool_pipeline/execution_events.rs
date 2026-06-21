@@ -210,7 +210,7 @@ mod tests {
                     .and_then(|code| i32::try_from(code).ok()),
                 tool_output_payload_from_value(output),
             ),
-            _ => unreachable!("success status expected"),
+            _ => panic!("success status expected"),
         };
 
         assert_eq!(event_status, ToolCallStatus::Failed);

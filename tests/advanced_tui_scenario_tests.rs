@@ -214,7 +214,7 @@ fn test_tui_with_different_header_contexts() {
             "minimal_context" => {
                 r#"InlineHeaderContext { app_name: "App", provider: "local", model: "llama3", context_window_size: None, version: "test-version", search_tools: None, persistent_memory: None, pr_review: None, editor_context: None, git: "git: unavailable", reasoning: "unavailable", reasoning_stage: None, workspace_trust: "Trust: unavailable", tools: "Tools: unavailable", mcp: "MCP: unavailable", primary_agent: None, primary_agent_color: None, highlights: [], subagent_badges: [] }"#
             }
-            _ => unreachable!("unexpected context fixture"),
+            _ => panic!("unexpected context fixture"),
         };
         assert_eq!(format!("{context:?}"), expected);
     }
@@ -275,7 +275,7 @@ fn test_ui_message_combinations() {
             "tool_usage" => {
                 r#"["User: Show me files in current directory", "Tool: run_pty_cmd([\"ls\", \"-la\"])", "Pty: file1.txt  file2.rs  src/", "Agent: I've listed the files in the current directory for you."]"#
             }
-            _ => unreachable!("unexpected message fixture"),
+            _ => panic!("unexpected message fixture"),
         };
         assert_eq!(format!("{message_repr:?}"), expected);
     }
@@ -349,7 +349,7 @@ fn test_ui_styling_variations() {
             "bold_italic_text" => {
                 r#"InlineSegment { text: "This is bold and italic text", style: InlineTextStyle { color: None, bg_color: None, effects: Effects(BOLD | ITALIC) } }"#
             }
-            _ => unreachable!("unexpected style fixture"),
+            _ => panic!("unexpected style fixture"),
         };
         assert_eq!(format!("{segment:?}"), expected);
     }

@@ -104,7 +104,7 @@ pub(crate) fn compute_extra_search_paths(
 }
 
 /// Attempt to resolve a program against the provided path iterator.
-#[expect(dead_code)] // Function is deprecated but kept for explicit path iteration tests
+#[allow(dead_code)] // Function is deprecated but kept for explicit path iteration tests
 pub(crate) fn resolve_program_path_from_paths(
     program: &str,
     paths: impl Iterator<Item = PathBuf>,

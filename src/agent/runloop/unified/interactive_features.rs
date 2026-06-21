@@ -785,7 +785,7 @@ mod tests {
         let routes = resolve_prompt_suggestion_routes(&config, Some(&vt_cfg));
         assert_eq!(routes.primary.provider_name, "openai");
         assert_eq!(routes.primary.model, "gpt-5-mini");
-        assert_eq!(routes.primary.temperature, 0.2);
+        assert!((routes.primary.temperature - 0.2_f32).abs() < f32::EPSILON);
     }
 
     #[test]
