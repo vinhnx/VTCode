@@ -42,9 +42,9 @@ tokio = { workspace = true, features = ["fs", "io-util", "macros", "rt-multi-thr
 thiserror = { workspace = true }
 tracing = { workspace = true }
 url = { workspace = true }
-vtcode-commons = { path = "../vtcode-commons", version = "0.133.1" }
-vtcode-config = { path = "../vtcode-config", version = "0.133.1" }
-vtcode-utility-tool-specs = { path = "../vtcode-utility-tool-specs", version = "0.133.1", features = ["mcp"] }
+vtcode-commons = { path = "../vtcode-commons", version = "0.133.2" }
+vtcode-config = { path = "../vtcode-config", version = "0.133.2" }
+vtcode-utility-tool-specs = { path = "../vtcode-utility-tool-specs", version = "0.133.2", features = ["mcp"] }
 schemars = { workspace = true, optional = true }
 
 [features]
