@@ -3,7 +3,6 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, anyhow, bail};
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::validator::ConfigValidator;
-use vtcode_core::tools::RipgrepStatus;
 use vtcode_core::utils::path::canonicalize_workspace;
 
 pub(super) fn apply_cli_permission_overrides(
@@ -130,7 +129,10 @@ pub(super) fn validate_startup_configuration(
     _workspace: &Path,
     quiet: bool,
 ) -> Result<()> {
-    check_ripgrep_availability();
+    // Ripgrep availability is checked lazily when search tools are actually
+    // needed (session setup, first-run, `vtcode dependencies`).  Checking it
+    // here would fork a subprocess (`rg --version`) on every startup for
+    // purely informational logging — not worth the 50-200ms cost.
 
     let validator = ConfigValidator::generated();
     if let Err(e) = validator.validate(config)
@@ -143,20 +145,6 @@ pub(super) fn validate_startup_configuration(
     }
 
     Ok(())
-}
-
-fn check_ripgrep_availability() {
-    match RipgrepStatus::check() {
-        RipgrepStatus::Available { version } => {
-            tracing::debug!("Ripgrep available: {}", version);
-        }
-        RipgrepStatus::NotFound => {
-            tracing::debug!("Ripgrep not found; VT Code will use its built-in grep fallback");
-        }
-        RipgrepStatus::Error { reason } => {
-            tracing::warn!("Ripgrep check error: {}", reason);
-        }
-    }
 }
 
 #[cfg(test)]

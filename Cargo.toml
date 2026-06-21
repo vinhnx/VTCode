@@ -274,7 +274,7 @@ serde-saphyr = { workspace = true }
 mimalloc = { version = "0.1", default-features = false }
 
 [features]
-default = ["tool-chat", "a2a-server", "desktop-notifications"]
+default = ["tool-chat", "desktop-notifications"]
 tool-chat = []
 profiling = []
 anthropic-api = ["vtcode-core/anthropic-api"]
@@ -310,6 +310,15 @@ inherits = "dev"
 lto = "thin"
 codegen-units = 1
 opt-level = 2
+
+# Fast dev profile with better runtime performance than plain `dev`.
+# Use `cargo build --profile dev-fast` when you need a faster binary
+# during development without paying the full release LTO cost.
+[profile.dev-fast]
+inherits = "dev"
+opt-level = 1
+lto = false
+codegen-units = 16
 
 # Fast release profile - thin LTO for ~50% faster builds than full LTO
 [profile.release-fast]

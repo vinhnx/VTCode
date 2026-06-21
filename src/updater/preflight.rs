@@ -74,9 +74,7 @@ pub(crate) async fn run_preflight_check() {
             latest = latest.version,
         );
     } else {
-        debug!(
-            "Preflight update check: versions match ({current}), no update available",
-        );
+        debug!("Preflight update check: versions match ({current}), no update available",);
     }
 
     // Keep the on-disk cache in sync so the session init code can also

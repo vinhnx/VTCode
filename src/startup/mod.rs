@@ -115,9 +115,22 @@ impl StartupContext {
             tracing::warn!("Failed to initialize dotfile protection: {}", e);
         }
 
-        let theme_selection = determine_theme(args, &config).await?;
+        let theme_resolution = determine_theme(args, &config).await?;
+        let theme_selection = theme_resolution.theme;
 
-        update_theme_preference(&theme_selection).await.ok();
+        // Only persist the theme preference when it actually changed.  The
+        // previous implementation read + wrote ~/.vtcode/config.toml on every
+        // startup (~10-20ms) even when the theme was already correct.
+        // The loaded dot-config from determine_theme() is reused to avoid a
+        // second load_user_config() call.
+        let theme_changed = theme_resolution
+            .loaded_dot_config
+            .as_ref()
+            .map(|dot| dot.preferences.theme.trim() != theme_selection.as_str())
+            .unwrap_or(true);
+        if theme_changed {
+            update_theme_preference(&theme_selection).await.ok();
+        }
         vtcode_core::utils::session_archive::apply_session_history_config_from_vtcode(&config);
         vtcode_core::utils::ansi::apply_file_opener_config(config.file_opener);
 

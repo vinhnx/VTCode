@@ -4,7 +4,6 @@ use clap::builder::styling::{AnsiColor, Effects};
 use clap::{ColorChoice as CliColorChoice, CommandFactory};
 use vtcode_commons::color_policy::{self, ColorOutputPolicy, ColorOutputPolicySource};
 use vtcode_core::cli::args::Cli;
-use vtcode_core::config::loader::ConfigManager;
 
 use crate::startup::StartupContext;
 
@@ -130,11 +129,41 @@ fn cli_args_include_provider_or_model() -> bool {
     })
 }
 
+/// Lightweight check: read only the user-home and workspace config files
+/// directly instead of doing a full 5-layer `ConfigManager::load()`.  This
+/// avoids the ~200-400ms cost of reading, parsing, merging, deserializing,
+/// and validating all config layers just to decide which `--help` text to
+/// show.
 fn config_includes_provider_or_model() -> bool {
-    let Ok(manager) = ConfigManager::load() else {
-        return false;
-    };
-    has_provider_or_model_keys(&manager.effective_config())
+    // Check user-home config first (most common location for provider/model).
+    if let Some(found) = check_toml_file(home_config_path()) {
+        return found;
+    }
+    // Fall back to workspace config in the current directory.
+    if let Some(found) = check_toml_file(workspace_config_path()) {
+        return found;
+    }
+    false
+}
+
+fn home_config_path() -> Option<std::path::PathBuf> {
+    dirs::home_dir().map(|h| h.join(".vtcode").join("vtcode.toml"))
+}
+
+fn workspace_config_path() -> Option<std::path::PathBuf> {
+    std::env::current_dir()
+        .ok()
+        .map(|cwd| cwd.join("vtcode.toml"))
+}
+
+/// Read a single TOML file and check for provider/model keys.
+/// Returns `Some(true)` if found, `Some(false)` if not found, `None` if the
+/// file could not be read or parsed.
+fn check_toml_file(path: Option<std::path::PathBuf>) -> Option<bool> {
+    let path = path?;
+    let content = std::fs::read_to_string(&path).ok()?;
+    let value: toml::Value = toml::from_str(&content).ok()?;
+    Some(has_provider_or_model_keys(&value))
 }
 
 fn has_provider_or_model_keys(config: &toml::Value) -> bool {

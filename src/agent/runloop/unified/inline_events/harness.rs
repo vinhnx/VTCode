@@ -144,7 +144,9 @@ impl HarnessEventEmitter {
     /// already-computed ATIF metrics — zero clones, zero telemetry lock.
     pub(crate) fn finish_atif(&self) -> (u64, u64, u64) {
         let state = self.inner.atif.lock().ok().and_then(|mut g| g.take());
-        let Some(state) = state else { return (0, 0, 0); };
+        let Some(state) = state else {
+            return (0, 0, 0);
+        };
 
         let trajectory = state.builder.finish(None);
         let (prompt, completion, cached) = trajectory

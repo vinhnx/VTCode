@@ -185,7 +185,10 @@ mod tests {
 
     #[test]
     fn trust_line_fallback() {
-        assert_eq!(build_trust_label("some_other").as_ref(), "Trust: some other");
+        assert_eq!(
+            build_trust_label("some_other").as_ref(),
+            "Trust: some other"
+        );
     }
 
     #[test]

@@ -37,9 +37,14 @@ struct PreparedRun {
     print_mode: Option<String>,
 }
 
+struct BootstrapReady {
+    prepared: PreparedRun,
+    runtime: tokio::runtime::Runtime,
+}
+
 enum BootstrapOutcome {
     ExitEarly,
-    Ready(Box<PreparedRun>),
+    Ready(Box<BootstrapReady>),
 }
 
 fn main() -> std::process::ExitCode {
@@ -62,12 +67,11 @@ fn main() -> std::process::ExitCode {
         .spawn(|| -> Result<()> {
             match bootstrap_main()? {
                 BootstrapOutcome::ExitEarly => Ok(()),
-                BootstrapOutcome::Ready(prepared) => {
-                    let runtime = tokio::runtime::Builder::new_multi_thread()
-                        .enable_all()
-                        .build()
-                        .context("failed to build Tokio runtime")?;
-                    runtime.block_on(run(*prepared))
+                BootstrapOutcome::Ready(ready) => {
+                    // Reuse the multi-threaded runtime created during bootstrap
+                    // instead of building a second one.
+                    let BootstrapReady { prepared, runtime } = *ready;
+                    runtime.block_on(run(prepared))
                 }
             }
         }) {
@@ -169,16 +173,23 @@ fn bootstrap_main() -> Result<BootstrapOutcome> {
         GlobalColorChoice::Never.write_global();
     }
 
-    let startup_runtime = tokio::runtime::Builder::new_current_thread()
+    // Build the multi-threaded runtime once; it serves both the startup context
+    // resolution and the main agent run loop.  Previously a single-threaded
+    // runtime was created here and a second multi-threaded one later in main(),
+    // which duplicated thread-pool and I/O-driver setup.
+    let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
-        .context("failed to build startup Tokio runtime")?;
-    let startup = startup_runtime.block_on(resolve_startup_context(&args))?;
+        .context("failed to build Tokio runtime")?;
+    let startup = runtime.block_on(resolve_startup_context(&args))?;
 
-    Ok(BootstrapOutcome::Ready(Box::new(PreparedRun {
-        args,
-        startup,
-        print_mode,
+    Ok(BootstrapOutcome::Ready(Box::new(BootstrapReady {
+        prepared: PreparedRun {
+            args,
+            startup,
+            print_mode,
+        },
+        runtime,
     })))
 }
 
@@ -210,8 +221,9 @@ async fn run(prepared: PreparedRun) -> Result<()> {
     panic_hook::set_show_diagnostics(startup.config.ui.show_diagnostics_in_transcript);
 
     // Preflight update check — always fetches from GitHub (force fetch).
-    // Silently ignores errors so a network failure never blocks startup.
-    updater::run_preflight_check().await;
+    // Spawned as a background task so network I/O never blocks startup.
+    // The result is consumed later (after dispatch) via get_preflight_notice().
+    tokio::spawn(updater::run_preflight_check());
 
     let dispatch_result = cli::dispatch(&args, &startup, print_mode).await;
     perform_queued_runtime_relaunch();

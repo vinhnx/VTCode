@@ -128,7 +128,6 @@ impl TelemetryManager {
         snapshot.dropped_metric_updates = self.dropped_metric_updates.load(Ordering::Relaxed);
         Ok(snapshot)
     }
-
 }
 
 #[cfg(test)]

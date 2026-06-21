@@ -3,8 +3,18 @@ use vtcode_core::cli::args::Cli;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::load_user_config;
 use vtcode_core::ui::theme::{self as ui_theme, DEFAULT_THEME_ID};
+use vtcode_core::utils::dot_config::DotConfig;
 
-pub(super) async fn determine_theme(args: &Cli, config: &VTCodeConfig) -> Result<String> {
+/// Resolved theme selection together with the user dot-config that was loaded
+/// during resolution (if available).  Returning the loaded config avoids a
+/// redundant `load_user_config()` call in the caller when it needs to check
+/// whether the theme preference actually changed.
+pub(super) struct ThemeResolution {
+    pub theme: String,
+    pub loaded_dot_config: Option<DotConfig>,
+}
+
+pub(super) async fn determine_theme(args: &Cli, config: &VTCodeConfig) -> Result<ThemeResolution> {
     let color_config = ui_theme::ColorAccessibilityConfig {
         minimum_contrast: config.ui.minimum_contrast,
         bold_is_bright: config.ui.bold_is_bright,
@@ -12,7 +22,8 @@ pub(super) async fn determine_theme(args: &Cli, config: &VTCodeConfig) -> Result
     };
     ui_theme::set_color_accessibility_config(color_config);
 
-    let user_theme_pref = load_user_config().await.ok().and_then(|dot| {
+    let loaded_dot = load_user_config().await.ok();
+    let user_theme_pref = loaded_dot.as_ref().and_then(|dot| {
         let trimmed = dot.preferences.theme.trim();
         if trimmed.is_empty() {
             None
@@ -70,5 +81,8 @@ pub(super) async fn determine_theme(args: &Cli, config: &VTCodeConfig) -> Result
         );
     }
 
-    Ok(theme_selection)
+    Ok(ThemeResolution {
+        theme: theme_selection,
+        loaded_dot_config: loaded_dot,
+    })
 }
