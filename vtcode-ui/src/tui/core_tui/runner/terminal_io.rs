@@ -73,9 +73,20 @@ pub(super) fn finalize_terminal<B: Backend>(terminal: &mut Terminal<B>) -> Resul
 
 /// Drain any pending crossterm events (e.g., resize, focus responses, or buffered keystrokes)
 /// so they don't leak to the shell or interfere with next startup.
+///
+/// The first poll waits up to 10ms for an in-flight terminal response (e.g. a CPR reply
+/// triggered by PopKeyboardEnhancementFlags). Subsequent polls are instant — once the
+/// first response is consumed any additional buffered events are drained without further
+/// delay. This eliminates the "5;1R" escape-code leak on TUI exit.
 pub(crate) fn drain_terminal_events() {
     use ratatui::crossterm::event;
 
+    // First poll: wait briefly for any in-flight terminal response.
+    if event::poll(Duration::from_millis(10)).unwrap_or(false) {
+        let _ = event::read();
+    }
+
+    // Subsequent polls: instant — drain whatever else is already buffered.
     while event::poll(Duration::from_millis(0)).unwrap_or(false) {
         let _ = event::read();
     }
