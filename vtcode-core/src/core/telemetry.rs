@@ -129,24 +129,6 @@ impl TelemetryManager {
         Ok(snapshot)
     }
 
-    /// Lightweight aggregate — locks briefly and folds model_usage to u64 totals.
-    /// Clones no HashMaps, allocates nothing beyond the return tuple.
-    pub fn get_aggregate_token_usage(&self) -> (u64, u64, u64, u64) {
-        let Ok(stats) = self.stats.lock() else {
-            return (0, 0, 0, 0);
-        };
-        stats
-            .model_usage
-            .values()
-            .fold((0, 0, 0, 0), |(p, c, r, w), s| {
-                (
-                    p + s.prompt_tokens,
-                    c + s.completion_tokens,
-                    r + s.cache_read_tokens,
-                    w + s.cache_creation_tokens,
-                )
-            })
-    }
 }
 
 #[cfg(test)]

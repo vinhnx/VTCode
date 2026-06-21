@@ -1148,10 +1148,13 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 tracing::debug!(error = %err, "harness thread.completed event emission failed");
             }
         }
-        if let Some(emitter) = harness_emitter.as_ref() {
-            emitter.finish_open_responses();
-            emitter.finish_atif();
-        }
+        let atif_metrics = harness_emitter
+            .as_ref()
+            .map(|emitter| {
+                emitter.finish_open_responses();
+                emitter.finish_atif()
+            })
+            .unwrap_or((0, 0, 0));
         agent_touched_paths.extend(context_manager.tracked_instruction_activity_paths());
         // Skip persistent memory on interrupt-exits (it makes LLM API calls which
         // delay shutdown significantly). For normal exits, cap it with a timeout.
@@ -1258,16 +1261,13 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             start_code_changes.as_ref(),
             end_code_changes.as_ref(),
         );
-        let (prompt_tokens, completion_tokens, cache_read_tokens, cache_creation_tokens) =
-            telemetry.get_aggregate_token_usage();
+        let (prompt_tokens, completion_tokens, cached_tokens) = atif_metrics;
         let finalization_succeeded = finalization_output.is_some();
         let resume_identifier = finalization_output
-            .and_then(|output| output.archive_path)
-            .and_then(|path| {
-                path.file_stem()
-                    .and_then(|stem| stem.to_str())
-                    .map(|stem| stem.to_string())
-            });
+            .as_ref()
+            .and_then(|output| output.archive_path.as_ref())
+            .and_then(|path| path.file_stem())
+            .and_then(|stem| stem.to_str());
         let trust_label = match session_bootstrap.acp_workspace_trust {
             Some(vtcode_core::config::AgentClientProtocolZedWorkspaceTrustMode::FullAuto) => {
                 "full auto"
@@ -1300,17 +1300,16 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             let _ = vtcode_ui::tui::panic_hook::restore_tui();
         }
         print_exit_summary(ExitData {
-            app_name: "VT Code".to_string(),
-            version: env!("CARGO_PKG_VERSION").to_string(),
-            model: config.model.clone(),
-            provider: provider_label,
-            trust_label: trust_label.to_string(),
-            reasoning: reasoning_label,
+            app_name: "VT Code",
+            version: env!("CARGO_PKG_VERSION"),
+            model: &config.model,
+            provider: &provider_label,
+            trust_label,
+            reasoning: &reasoning_label,
             session_duration: session_started_at.elapsed(),
             prompt_tokens,
             completion_tokens,
-            cache_read_tokens,
-            cache_creation_tokens,
+            cached_tokens,
             code_additions,
             code_deletions,
             resume_identifier,

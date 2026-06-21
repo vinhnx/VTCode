@@ -140,16 +140,30 @@ impl HarnessEventEmitter {
     }
 
     /// Finishes the ATIF trajectory and writes the JSON file to disk.
-    pub(crate) fn finish_atif(&self) {
+    /// Returns (prompt_tokens, completion_tokens, cached_tokens) from the
+    /// already-computed ATIF metrics — zero clones, zero telemetry lock.
+    pub(crate) fn finish_atif(&self) -> (u64, u64, u64) {
         let state = self.inner.atif.lock().ok().and_then(|mut g| g.take());
-        let Some(state) = state else { return };
+        let Some(state) = state else { return (0, 0, 0); };
 
         let trajectory = state.builder.finish(None);
+        let (prompt, completion, cached) = trajectory
+            .final_metrics
+            .as_ref()
+            .map(|fm| {
+                (
+                    fm.total_prompt_tokens.unwrap_or(0),
+                    fm.total_completion_tokens.unwrap_or(0),
+                    fm.total_cached_tokens.unwrap_or(0),
+                )
+            })
+            .unwrap_or((0, 0, 0));
+
         let json = match serde_json::to_string_pretty(&trajectory) {
             Ok(j) => j,
             Err(err) => {
                 tracing::debug!(error = %err, "failed to serialize ATIF trajectory");
-                return;
+                return (prompt, completion, cached);
             }
         };
         if let Some(parent) = state.output_path.parent() {
@@ -162,6 +176,7 @@ impl HarnessEventEmitter {
                 "failed to write ATIF trajectory"
             );
         }
+        (prompt, completion, cached)
     }
 
     pub(crate) fn emit(&self, event: ThreadEvent) -> Result<()> {

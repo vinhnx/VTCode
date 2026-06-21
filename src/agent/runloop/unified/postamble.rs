@@ -1,29 +1,30 @@
+use std::borrow::Cow;
 use std::time::Duration;
 use vtcode_commons::ansi_codes::{BOLD, DIM, RESET, fg_256};
 use vtcode_commons::color256_theme::rgb_to_ansi256_for_theme;
 use vtcode_ui::tui::ui::theme;
 
-/// Lightweight exit data — all aggregate, no heavy clones, no baked-in prefixes.
-/// If a value is 0, it won't appear in the postamble.
-pub(crate) struct ExitData {
-    pub app_name: String,
-    pub version: String,
-    pub model: String,
-    pub provider: String,
-    pub trust_label: String,
-    pub reasoning: String,
+/// Zero-allocation exit data — all borrowed, no clones.
+/// All token fields come from the ATIF builder (already computed during session).
+/// Zero-valued fields are omitted from display.
+pub(crate) struct ExitData<'a> {
+    pub app_name: &'static str,
+    pub version: &'static str,
+    pub model: &'a str,
+    pub provider: &'a str,
+    pub trust_label: &'a str,
+    pub reasoning: &'a str,
     pub session_duration: Duration,
     pub prompt_tokens: u64,
     pub completion_tokens: u64,
-    pub cache_read_tokens: u64,
-    pub cache_creation_tokens: u64,
+    pub cached_tokens: u64,
     pub code_additions: u64,
     pub code_deletions: u64,
-    pub resume_identifier: Option<String>,
+    pub resume_identifier: Option<&'a str>,
     pub budget_limit: Option<(f64, f64)>,
 }
 
-pub(crate) fn print_exit_summary(data: ExitData) {
+pub(crate) fn print_exit_summary(data: ExitData<'_>) {
     let is_light = theme::is_light_theme(&theme::active_theme_id());
 
     const TITLE_RGB: (u8, u8, u8) = (0xAE, 0xA4, 0x7F);
@@ -43,12 +44,12 @@ pub(crate) fn print_exit_summary(data: ExitData) {
         data.app_name, data.version
     );
 
-    let trust = build_trust_line(&data.trust_label);
+    let trust = build_trust_label(data.trust_label);
     if !trust.is_empty() {
         println!("{DIM}{trust}{RESET}");
     }
 
-    print_model_line(&data, &model_style);
+    print_model_line(data.model, data.provider, data.reasoning, &model_style);
 
     let mut stats = Vec::new();
     stats.push(format!(
@@ -64,12 +65,8 @@ pub(crate) fn print_exit_summary(data: ExitData) {
         ));
     }
 
-    if data.cache_read_tokens > 0 || data.cache_creation_tokens > 0 {
-        stats.push(format!(
-            "Cache {} read / {} write",
-            format_number(data.cache_read_tokens),
-            format_number(data.cache_creation_tokens),
-        ));
+    if data.cached_tokens > 0 {
+        stats.push(format!("Cache {} read", format_number(data.cached_tokens)));
     }
 
     if data.code_additions > 0 || data.code_deletions > 0 {
@@ -96,10 +93,10 @@ pub(crate) fn print_exit_summary(data: ExitData) {
     println!();
 }
 
-fn print_model_line(data: &ExitData, model_style: &str) {
-    let model = data.model.trim();
-    let provider = data.provider.trim();
-    let reasoning = data.reasoning.trim();
+fn print_model_line(model: &str, provider: &str, reasoning: &str, model_style: &str) {
+    let model = model.trim();
+    let provider = provider.trim();
+    let reasoning = reasoning.trim();
 
     let show_model = !model.is_empty();
     let show_provider = !provider.is_empty();
@@ -126,16 +123,17 @@ fn print_model_line(data: &ExitData, model_style: &str) {
     }
 }
 
-fn build_trust_line(trust_label: &str) -> String {
+/// Returns a borrowed trust label — empty string if unknown, no allocation.
+fn build_trust_label(trust_label: &str) -> Cow<'static, str> {
     let t = trust_label.trim().to_ascii_lowercase().replace('_', " ");
     if t.contains("full auto") {
-        "Full-auto trust".into()
+        Cow::Borrowed("Full-auto trust")
     } else if t.contains("tools policy") {
-        "Safe tools".into()
+        Cow::Borrowed("Safe tools")
     } else if t.is_empty() || t == "unknown" {
-        String::new()
+        Cow::Borrowed("")
     } else {
-        format!("Trust: {t}")
+        Cow::Owned(format!("Trust: {t}"))
     }
 }
 
@@ -169,25 +167,25 @@ mod tests {
 
     #[test]
     fn trust_line_full_auto() {
-        assert_eq!(build_trust_line("full auto"), "Full-auto trust");
-        assert_eq!(build_trust_line("full_auto"), "Full-auto trust");
+        assert_eq!(build_trust_label("full auto").as_ref(), "Full-auto trust");
+        assert_eq!(build_trust_label("full_auto").as_ref(), "Full-auto trust");
     }
 
     #[test]
     fn trust_line_safe_tools() {
-        assert_eq!(build_trust_line("tools policy"), "Safe tools");
-        assert_eq!(build_trust_line("tools_policy"), "Safe tools");
+        assert_eq!(build_trust_label("tools policy").as_ref(), "Safe tools");
+        assert_eq!(build_trust_label("tools_policy").as_ref(), "Safe tools");
     }
 
     #[test]
     fn trust_line_empty_or_unknown() {
-        assert_eq!(build_trust_line(""), "");
-        assert_eq!(build_trust_line("unknown"), "");
+        assert_eq!(build_trust_label("").as_ref(), "");
+        assert_eq!(build_trust_label("unknown").as_ref(), "");
     }
 
     #[test]
     fn trust_line_fallback() {
-        assert_eq!(build_trust_line("some_other"), "Trust: some other");
+        assert_eq!(build_trust_label("some_other").as_ref(), "Trust: some other");
     }
 
     #[test]
