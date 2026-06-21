@@ -124,7 +124,16 @@ pub struct CachedToolExecutor {
     cache: Arc<LruCache<Value>>,
     /// Composable middleware chain
     middleware: MiddlewareChain,
-    /// Pattern detector for workflow analysis
+    /// Pattern detector for workflow analysis.
+    ///
+    /// Uses `std::sync::RwLock` instead of `tokio::sync::RwLock` because:
+    /// 1. Critical sections are very short (just calling methods on PatternDetector)
+    /// 2. No async operations occur inside the lock
+    /// 3. `std::sync::RwLock` has lower overhead for short critical sections
+    ///
+    /// This is safe because the lock is never held across await points.
+    /// If critical sections become longer or need async operations, migrate to
+    /// `tokio::sync::RwLock`.
     patterns: Arc<RwLock<PatternDetector>>,
     /// Lock-free stats tracking
     stats: Arc<AtomicStats>,

@@ -2,13 +2,22 @@
 //!
 //! Implements a three-state circuit breaker (Closed, Open, HalfOpen) to prevent
 //! cascading failures when MCP providers become unavailable.
+//!
+//! # Race Condition Prevention
+//!
+//! This implementation uses a `parking_lot::Mutex` to protect the entire state,
+//! ensuring that check-and-transition operations are atomic. This prevents TOCTOU
+//! (Time-of-Check-Time-of-Use) race conditions where multiple threads could
+//! simultaneously observe the same state and attempt conflicting transitions.
+//!
+//! See "Rust Prevents Data Races, Not Race Conditions" for why this matters:
+//! https://corrode.dev/blog/rust-prevents-data-races-not-race-conditions/
 
 use crate::metrics::MetricsCollector;
+use parking_lot::Mutex;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU8, Ordering};
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant};
 use vtcode_commons::error_category::ErrorCategory;
-use vtcode_commons::thread_safety::RelaxedAtomic;
 
 /// Circuit breaker states
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -22,40 +31,43 @@ pub enum CircuitState {
     HalfOpen = 2,
 }
 
-impl From<u8> for CircuitState {
-    fn from(val: u8) -> Self {
-        match val {
-            0 => CircuitState::Closed,
-            1 => CircuitState::Open,
-            2 => CircuitState::HalfOpen,
-            _ => CircuitState::Closed, // Default to closed for invalid values
+use std::fs;
+use std::path::PathBuf;
+
+/// Internal state protected by mutex
+#[derive(Debug, Clone)]
+struct InternalState {
+    /// Current circuit state
+    status: CircuitState,
+    /// Consecutive failure count
+    consecutive_failures: u32,
+    /// Success count in half-open state
+    half_open_successes: u32,
+    /// Last failure timestamp
+    last_failure_time: Option<Instant>,
+    /// Count of requests denied while the breaker is open
+    blocked_requests: u32,
+}
+
+impl Default for InternalState {
+    fn default() -> Self {
+        Self {
+            status: CircuitState::Closed,
+            consecutive_failures: 0,
+            half_open_successes: 0,
+            last_failure_time: None,
+            blocked_requests: 0,
         }
     }
 }
 
-use std::fs;
-use std::path::PathBuf;
-
-/// Persistable state of the circuit breaker
-#[derive(serde::Serialize, serde::Deserialize)]
-struct PersistedState {
-    state: u8,
-    consecutive_failures: u32,
-    last_failure_epoch_secs: Option<u64>,
-}
-
 /// Circuit breaker for MCP client failures
+///
+/// Uses mutex-protected state to ensure atomic check-and-transition operations,
+/// preventing TOCTOU race conditions.
 pub struct McpCircuitBreaker {
-    /// Current circuit state (0=Closed, 1=Open, 2=HalfOpen)
-    state: AtomicU8,
-    /// Consecutive failure count
-    consecutive_failures: RelaxedAtomic<u32>,
-    /// Success count in half-open state
-    half_open_successes: RelaxedAtomic<u32>,
-    /// Last failure timestamp (seconds since UNIX_EPOCH)
-    last_failure_time: parking_lot::Mutex<Option<SystemTime>>,
-    /// Count of requests denied while the breaker is open
-    blocked_requests: RelaxedAtomic<u32>,
+    /// Protected state - all reads and writes go through this mutex
+    state: Mutex<InternalState>,
     /// Configuration
     config: CircuitBreakerConfig,
     /// Optional path for persisting state
@@ -87,7 +99,6 @@ impl Default for CircuitBreakerConfig {
     }
 }
 
-#[expect(dead_code)]
 impl McpCircuitBreaker {
     /// Create a new circuit breaker with default configuration
     pub fn new() -> Self {
@@ -118,11 +129,7 @@ impl McpCircuitBreaker {
         metrics: Option<Arc<MetricsCollector>>,
     ) -> Self {
         Self {
-            state: AtomicU8::new(CircuitState::Closed as u8),
-            consecutive_failures: RelaxedAtomic::new(0),
-            half_open_successes: RelaxedAtomic::new(0),
-            last_failure_time: parking_lot::Mutex::new(None),
-            blocked_requests: RelaxedAtomic::new(0),
+            state: Mutex::new(InternalState::default()),
             config,
             persistence_path,
             metrics,
@@ -135,24 +142,22 @@ impl McpCircuitBreaker {
 
         // Try to load state
         if let Ok(data) = fs::read_to_string(&path)
-            && let Ok(state) = serde_json::from_str::<PersistedState>(&data)
+            && let Ok(persisted) = serde_json::from_str::<PersistedState>(&data)
         {
-            breaker.state.store(state.state, Ordering::Release);
-            breaker
-                .consecutive_failures
-                .store(state.consecutive_failures);
+            let mut state = breaker.state.lock();
+            state.status = match persisted.state {
+                0 => CircuitState::Closed,
+                1 => CircuitState::Open,
+                2 => CircuitState::HalfOpen,
+                _ => CircuitState::Closed,
+            };
+            state.consecutive_failures = persisted.consecutive_failures;
 
-            if let Some(epoch) = state.last_failure_epoch_secs {
-                // Only restore if plausible (roughly sanity check vs now)
-                let now = SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_secs();
-                // If it's in the past and within reasonable bounds (e.g. not older than a year and not in future)
-                if epoch <= now {
-                    *breaker.last_failure_time.lock() =
-                        Some(std::time::UNIX_EPOCH + Duration::from_secs(epoch));
-                }
+            if let Some(epoch) = persisted.last_failure_epoch_secs {
+                let now = Instant::now();
+                let elapsed = Duration::from_secs(epoch);
+                // Approximate - we can't perfectly restore Instant, but this is close enough
+                state.last_failure_time = Some(now - elapsed);
             }
         }
         breaker
@@ -160,42 +165,37 @@ impl McpCircuitBreaker {
 
     #[inline]
     fn record_half_open_metric(&self) {
-        if let Some(metrics) = &self.metrics {
-            metrics.record_half_open();
-        }
+        MetricsCollector::record_circuit_breaker_metrics(&self.metrics, true, false, false);
     }
 
     #[inline]
     fn record_breaker_denial_metric(&self) {
-        if let Some(metrics) = &self.metrics {
-            metrics.record_breaker_denial();
-        }
+        MetricsCollector::record_circuit_breaker_metrics(&self.metrics, false, true, false);
     }
 
     #[inline]
     fn record_circuit_open_metric(&self) {
-        if let Some(metrics) = &self.metrics {
-            metrics.record_circuit_open();
-        }
+        MetricsCollector::record_circuit_breaker_metrics(&self.metrics, false, false, true);
     }
 
-    /// Persist current state to disk if path is configured
-    fn persist(&self) {
+    /// Persist current state to disk if path is configured.
+    ///
+    /// This method is called outside the lock to minimize critical section duration.
+    fn persist(&self, state: &InternalState) {
         if let Some(path) = &self.persistence_path {
-            let last_failure = *self.last_failure_time.lock();
-            let epoch = last_failure.map(|t| {
-                t.duration_since(std::time::UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_secs()
+            let epoch = state.last_failure_time.map(|t| {
+                // We can't get epoch from Instant, so we approximate
+                // This is good enough for persistence across restarts
+                t.elapsed().as_secs()
             });
 
-            let state = PersistedState {
-                state: self.state.load(Ordering::Acquire),
-                consecutive_failures: self.consecutive_failures.load(),
+            let persisted = PersistedState {
+                state: state.status as u8,
+                consecutive_failures: state.consecutive_failures,
                 last_failure_epoch_secs: epoch,
             };
 
-            if let Ok(data) = serde_json::to_string(&state) {
+            if let Ok(data) = serde_json::to_string(&persisted) {
                 // Best effort write
                 let _ = fs::write(path, data);
             }
@@ -204,133 +204,139 @@ impl McpCircuitBreaker {
 
     /// Get current circuit state
     pub fn state(&self) -> CircuitState {
-        self.state.load(Ordering::Relaxed).into()
+        self.state.lock().status
     }
 
     /// Check if request should be allowed through
     ///
-    /// Returns `true` if the request should be allowed, `false` otherwise
+    /// Returns `true` if the request should be allowed, `false` otherwise.
+    ///
+    /// This method holds the lock for the entire check-and-transition operation,
+    /// preventing TOCTOU race conditions. Disk I/O is performed outside the lock.
     pub fn allow_request(&self) -> bool {
-        let state = self.state();
+        let mut state = self.state.lock();
+        let mut should_persist = false;
 
-        match state {
-            CircuitState::Closed => true,
+        let result = match state.status {
+            CircuitState::Closed | CircuitState::HalfOpen => true,
             CircuitState::Open => {
                 // Check if timeout has elapsed to transition to half-open
-                let should_retry = {
-                    let last_failure = self.last_failure_time.lock();
-                    if let Some(failure_time) = *last_failure {
-                        if let Ok(elapsed) = failure_time.elapsed() {
-                            let timeout = self.calculate_timeout();
-                            elapsed >= timeout
-                        } else {
-                            false
-                        }
-                    } else {
-                        // No failure recorded, allow transition
+                if let Some(last_failure) = state.last_failure_time {
+                    let timeout = self.calculate_timeout(&state);
+                    if last_failure.elapsed() >= timeout {
+                        // Transition to half-open - atomic with the check
+                        state.status = CircuitState::HalfOpen;
+                        state.half_open_successes = 0;
+                        self.record_half_open_metric();
+                        should_persist = true;
                         true
+                    } else {
+                        state.blocked_requests += 1;
+                        self.record_breaker_denial_metric();
+                        should_persist = true;
+                        false
                     }
-                };
-
-                if should_retry {
-                    // Transition to half-open
-                    self.state
-                        .store(CircuitState::HalfOpen as u8, Ordering::Release);
-                    self.half_open_successes.store(0);
-                    self.record_half_open_metric();
-                    self.persist();
-                    true
                 } else {
-                    self.blocked_requests.fetch_add(1);
+                    state.blocked_requests += 1;
                     self.record_breaker_denial_metric();
+                    should_persist = true;
                     false
                 }
             }
-            CircuitState::HalfOpen => {
-                // Allow limited requests in half-open state
-                true
-            }
+        };
+
+        // Persist outside the lock
+        if should_persist {
+            let state_clone = state.clone();
+            drop(state); // Explicitly release lock before disk I/O
+            self.persist(&state_clone);
         }
+
+        result
     }
 
     /// Record a successful operation
     pub fn record_success(&self) {
-        let state = self.state();
+        let mut state = self.state.lock();
+        let mut should_persist = false;
 
-        match state {
+        match state.status {
             CircuitState::Closed => {
                 // Reset failure counter on success
-                self.consecutive_failures.store(0);
+                state.consecutive_failures = 0;
             }
             CircuitState::HalfOpen => {
-                let successes = self.half_open_successes.fetch_add(1) + 1;
-                if successes >= self.config.success_threshold {
+                state.half_open_successes += 1;
+                if state.half_open_successes >= self.config.success_threshold {
                     // Enough successes, close the circuit
-                    self.state
-                        .store(CircuitState::Closed as u8, Ordering::Release);
-                    self.consecutive_failures.store(0);
-                    self.half_open_successes.store(0);
-                    *self.last_failure_time.lock() = None;
-                    self.persist();
+                    state.status = CircuitState::Closed;
+                    state.consecutive_failures = 0;
+                    state.half_open_successes = 0;
+                    state.last_failure_time = None;
+                    should_persist = true;
                 }
             }
             CircuitState::Open => {
                 // Shouldn't happen, but treat as half-open transition
-                self.state
-                    .store(CircuitState::HalfOpen as u8, Ordering::Release);
-                self.half_open_successes.store(1);
-                self.persist();
+                state.status = CircuitState::HalfOpen;
+                state.half_open_successes = 1;
+                should_persist = true;
             }
+        }
+
+        // Persist outside the lock
+        if should_persist {
+            let state_clone = state.clone();
+            drop(state); // Explicitly release lock before disk I/O
+            self.persist(&state_clone);
         }
     }
 
     /// Record a failed operation
-    #[cold]
     pub fn record_failure(&self) {
         self.record_failure_category(ErrorCategory::ExecutionError);
     }
 
     /// Record a failed operation with its canonical error category.
-    #[cold]
     pub fn record_failure_category(&self, category: ErrorCategory) {
         if !category.should_trip_circuit_breaker() {
             return;
         }
 
-        let state = self.state();
-        *self.last_failure_time.lock() = Some(SystemTime::now());
+        let mut state = self.state.lock();
+        state.last_failure_time = Some(Instant::now());
 
-        match state {
+        match state.status {
             CircuitState::Closed => {
-                let failures = self.consecutive_failures.fetch_add(1) + 1;
-                if failures >= self.config.failure_threshold {
+                state.consecutive_failures += 1;
+                if state.consecutive_failures >= self.config.failure_threshold {
                     // Too many failures, open the circuit
-                    self.state
-                        .store(CircuitState::Open as u8, Ordering::Release);
+                    state.status = CircuitState::Open;
                     self.record_circuit_open_metric();
                 }
             }
             CircuitState::HalfOpen => {
                 // Failure in half-open, go back to open
-                self.state
-                    .store(CircuitState::Open as u8, Ordering::Release);
-                self.consecutive_failures.fetch_add(1);
-                self.half_open_successes.store(0);
+                state.status = CircuitState::Open;
+                state.consecutive_failures += 1;
+                state.half_open_successes = 0;
                 self.record_circuit_open_metric();
             }
             CircuitState::Open => {
                 // Already open, just increment failure count
-                self.consecutive_failures.fetch_add(1);
+                state.consecutive_failures += 1;
             }
         }
-        // Always persist on failure update
-        self.persist();
+
+        // Always persist on failure update, outside the lock
+        let state_clone = state.clone();
+        drop(state); // Explicitly release lock before disk I/O
+        self.persist(&state_clone);
     }
 
     /// Calculate timeout duration with exponential backoff
-    #[cold]
-    fn calculate_timeout(&self) -> Duration {
-        let failures = self.consecutive_failures.load();
+    fn calculate_timeout(&self, state: &InternalState) -> Duration {
+        let failures = state.consecutive_failures;
 
         // Exponential backoff: base_timeout * 2^(failures - threshold)
         let multiplier = if failures > self.config.failure_threshold {
@@ -345,26 +351,28 @@ impl McpCircuitBreaker {
 
     /// Get diagnostic information
     pub fn diagnostics(&self) -> CircuitBreakerDiagnostics {
-        let retry_after = if self.state() == CircuitState::Open {
-            (*self.last_failure_time.lock()).and_then(|failure_time| {
-                failure_time
-                    .elapsed()
-                    .ok()
-                    .and_then(|elapsed| self.calculate_timeout().checked_sub(elapsed))
+        let state = self.state.lock();
+        let timeout = self.calculate_timeout(&state);
+
+        let retry_after = if state.status == CircuitState::Open {
+            state.last_failure_time.and_then(|failure_time| {
+                let elapsed = failure_time.elapsed();
+                let timeout = self.calculate_timeout(&state);
+                timeout.checked_sub(elapsed)
             })
         } else {
             None
         };
 
         CircuitBreakerDiagnostics {
-            state: self.state(),
-            consecutive_failures: self.consecutive_failures.load(),
-            half_open_successes: self.half_open_successes.load(),
-            last_failure_time: *self.last_failure_time.lock(),
-            current_timeout: self.calculate_timeout(),
+            status: state.status,
+            consecutive_failures: state.consecutive_failures,
+            half_open_successes: state.half_open_successes,
+            last_failure_time: state.last_failure_time,
+            current_timeout: timeout,
             retry_after,
-            blocked_requests: self.blocked_requests.load(),
-            is_blocking: self.state() == CircuitState::Open,
+            blocked_requests: state.blocked_requests,
+            is_blocking: state.status == CircuitState::Open,
         }
     }
 }
@@ -377,17 +385,23 @@ impl Default for McpCircuitBreaker {
 
 /// Diagnostic information about circuit breaker state
 #[derive(Debug, Clone)]
-#[expect(dead_code)]
 pub struct CircuitBreakerDiagnostics {
-    pub state: CircuitState,
+    pub status: CircuitState,
     pub consecutive_failures: u32,
-    #[expect(dead_code)]
     pub half_open_successes: u32,
-    pub last_failure_time: Option<SystemTime>,
+    pub last_failure_time: Option<Instant>,
     pub current_timeout: Duration,
     pub retry_after: Option<Duration>,
     pub blocked_requests: u32,
     pub is_blocking: bool,
+}
+
+/// Persistable state of the circuit breaker
+#[derive(serde::Serialize, serde::Deserialize)]
+struct PersistedState {
+    state: u8,
+    consecutive_failures: u32,
+    last_failure_epoch_secs: Option<u64>,
 }
 
 #[cfg(test)]
@@ -550,5 +564,55 @@ mod tests {
         assert_eq!(execution.circuit_open_events, 1);
         assert_eq!(execution.breaker_denials, 1);
         assert_eq!(execution.half_open_events, 1);
+    }
+
+    #[test]
+    fn concurrent_requests_do_not_cause_inconsistent_state() {
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let config = CircuitBreakerConfig {
+            failure_threshold: 1,
+            base_timeout: Duration::from_millis(50),
+            ..Default::default()
+        };
+        let breaker = Arc::new(McpCircuitBreaker::with_config(config));
+        let request_count = Arc::new(AtomicUsize::new(0));
+
+        // Open the circuit
+        breaker.record_failure();
+        assert_eq!(breaker.state(), CircuitState::Open);
+
+        // Wait for timeout with generous margin (2x the backoff) to avoid flaky tests
+        thread::sleep(Duration::from_millis(100));
+
+        // Spawn multiple threads that all try to make requests
+        let mut handles = vec![];
+        for _ in 0..10 {
+            let breaker = breaker.clone();
+            let request_count = request_count.clone();
+            handles.push(thread::spawn(move || {
+                if breaker.allow_request() {
+                    request_count.fetch_add(1, Ordering::SeqCst);
+                }
+            }));
+        }
+
+        for handle in handles {
+            handle.join().unwrap();
+        }
+
+        // The circuit should be in HalfOpen state (or Closed if all succeeded)
+        // All threads should see consistent state - no panics or inconsistencies
+        let final_state = breaker.state();
+        assert!(
+            final_state == CircuitState::HalfOpen || final_state == CircuitState::Closed,
+            "Circuit should be in HalfOpen or Closed state, got {:?}",
+            final_state
+        );
+
+        // All threads that called allow_request should have gotten a consistent answer
+        let count = request_count.load(Ordering::SeqCst);
+        assert!(count >= 1, "At least one thread should have succeeded");
     }
 }

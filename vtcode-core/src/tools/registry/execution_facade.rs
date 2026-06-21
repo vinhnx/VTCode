@@ -8,7 +8,7 @@ use std::borrow::Cow;
 use std::cell::RefCell;
 use std::future::Future;
 use std::sync::Mutex;
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, Instant};
 use tokio::task::Id as TokioTaskId;
 use tracing::{trace, warn};
 use vtcode_commons::ErrorCategory;
@@ -1373,16 +1373,15 @@ impl ToolRegistry {
             let error = ToolExecutionError::new(
                 tool_name_owned.clone(),
                 ToolErrorType::ExecutionError,
-                format!("MCP circuit breaker {:?}; skipping execution", diag.state),
+                format!("MCP circuit breaker {:?}; skipping execution", diag.status),
             );
             let payload = json!({
                 "error": error.to_json_value(),
-                "circuit_breaker_state": format!("{:?}", diag.state),
+                "circuit_breaker_state": format!("{:?}", diag.status),
                 "consecutive_failures": diag.consecutive_failures,
                 "note": "MCP provider circuit breaker open; execution skipped",
-                "last_failed_at": diag.last_failure_time
-                    .and_then(|ts| ts.duration_since(SystemTime::UNIX_EPOCH).ok())
-                    .map(|d| d.as_secs()),
+                "last_failed_at_ago_ms": diag.last_failure_time
+                    .map(|ts| ts.elapsed().as_millis() as u64),
                 "current_timeout_seconds": diag.current_timeout.as_secs(),
                 "mcp_provider": mcp_provider,
             });
@@ -1398,7 +1397,7 @@ impl ToolRegistry {
                     is_mcp_tool,
                     mcp_provider.clone(),
                     args_for_recording,
-                    format!("MCP circuit breaker {:?}; execution skipped", diag.state),
+                    format!("MCP circuit breaker {:?}; execution skipped", diag.status),
                     context_snapshot.clone(),
                     timeout_category_label.clone(),
                     base_timeout_ms,
@@ -1406,7 +1405,7 @@ impl ToolRegistry {
                     None,
                     false,
                 )
-                .with_circuit_breaker_state(format!("{:?}", diag.state))
+                .with_circuit_breaker_state(format!("{:?}", diag.status))
                 .with_retry_after(diag.retry_after),
             );
             return Ok(payload);

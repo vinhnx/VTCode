@@ -191,6 +191,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 ### Getting Started & Overview
 
+- **File**: `docs/concurrency-improvements-report.md`
+  - **Content**: Concurrency Improvements Report
+  - **Topics**: Executive Summary, Changes Made, Bug Summary Table, False Positives Eliminated, Test Results
+  - **User Questions**: "What can you tell me about Concurrency Improvements Report?", "How does Executive Summary work?", "How does Changes Made work?"
+
 - **File**: `docs/user-guide/exec-mode.md`
   - **Content**: Exec Mode Automation
   - **Topics**: Launching exec mode, Dry-run mode, Continuation and verification, Structured event stream, Resuming sessions

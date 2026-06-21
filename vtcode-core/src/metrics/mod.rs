@@ -166,6 +166,31 @@ impl MetricsCollector {
         }
     }
 
+    // ========== Circuit Breaker Helper Methods ==========
+
+    /// Record circuit breaker metrics for an optional collector.
+    ///
+    /// This helper method is used by both `McpCircuitBreaker` and `ToolCircuitBreaker`
+    /// to avoid code duplication.
+    pub fn record_circuit_breaker_metrics(
+        metrics: &Option<Arc<MetricsCollector>>,
+        half_open: bool,
+        denial: bool,
+        circuit_open: bool,
+    ) {
+        if let Some(metrics) = metrics {
+            if half_open {
+                metrics.record_half_open();
+            }
+            if denial {
+                metrics.record_breaker_denial();
+            }
+            if circuit_open {
+                metrics.record_circuit_open();
+            }
+        }
+    }
+
     /// Record result size for filtering calculation
     pub fn record_result_size(&self, size_bytes: usize) {
         if let Ok(mut metrics) = self.execution.lock() {

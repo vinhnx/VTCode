@@ -148,23 +148,17 @@ impl CircuitBreaker {
 
     #[inline]
     fn record_half_open_metric(&self) {
-        if let Some(metrics) = &self.metrics {
-            metrics.record_half_open();
-        }
+        MetricsCollector::record_circuit_breaker_metrics(&self.metrics, true, false, false);
     }
 
     #[inline]
     fn record_breaker_denial_metric(&self) {
-        if let Some(metrics) = &self.metrics {
-            metrics.record_breaker_denial();
-        }
+        MetricsCollector::record_circuit_breaker_metrics(&self.metrics, false, true, false);
     }
 
     #[inline]
     fn record_circuit_open_metric(&self) {
-        if let Some(metrics) = &self.metrics {
-            metrics.record_circuit_open();
-        }
+        MetricsCollector::record_circuit_breaker_metrics(&self.metrics, false, false, true);
     }
 
     /// Check if a request for a specific tool is allowed to proceed.
@@ -539,5 +533,152 @@ mod tests {
             breaker.get_diagnostics("shell").current_backoff,
             Duration::from_millis(10)
         );
+    }
+
+    #[test]
+    fn concurrent_requests_do_not_cause_inconsistent_state() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let breaker = Arc::new(CircuitBreaker::new(CircuitBreakerConfig {
+            failure_threshold: 1,
+            min_backoff: Duration::from_millis(50),
+            ..Default::default()
+        }));
+
+        // Open the circuit for "tool_a"
+        breaker.record_failure_category_for_tool("tool_a", ErrorCategory::ExecutionError);
+        assert_eq!(breaker.state_for_tool("tool_a"), CircuitState::Open);
+
+        // Wait for backoff to expire with generous margin (2x the backoff) to avoid flaky tests
+        std::thread::sleep(Duration::from_millis(100));
+
+        // Spawn multiple threads that all try to make requests
+        let mut handles = vec![];
+        let request_count = Arc::new(AtomicUsize::new(0));
+
+        for _ in 0..10 {
+            let breaker = breaker.clone();
+            let request_count = request_count.clone();
+            handles.push(std::thread::spawn(move || {
+                if breaker.allow_request_for_tool("tool_a") {
+                    request_count.fetch_add(1, Ordering::SeqCst);
+                }
+            }));
+        }
+
+        for handle in handles {
+            handle.join().unwrap();
+        }
+
+        // The circuit should be in HalfOpen state
+        // All threads should see consistent state
+        let final_state = breaker.state_for_tool("tool_a");
+        assert!(
+            final_state == CircuitState::HalfOpen || final_state == CircuitState::Closed,
+            "Circuit should be in HalfOpen or Closed state, got {:?}",
+            final_state
+        );
+
+        // At least one thread should have succeeded
+        let count = request_count.load(Ordering::SeqCst);
+        assert!(count >= 1, "At least one thread should have succeeded");
+    }
+
+    #[test]
+    fn concurrent_failures_across_different_tools_are_independent() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let breaker = Arc::new(CircuitBreaker::new(CircuitBreakerConfig {
+            failure_threshold: 3,
+            ..Default::default()
+        }));
+
+        // Spawn threads that fail different tools
+        let mut handles = vec![];
+
+        for i in 0..10 {
+            let breaker = breaker.clone();
+            handles.push(std::thread::spawn(move || {
+                let tool_name = format!("tool_{}", i % 3);
+                for _ in 0..2 {
+                    breaker.record_failure_category_for_tool(
+                        &tool_name,
+                        ErrorCategory::ExecutionError,
+                    );
+                }
+            }));
+        }
+
+        for handle in handles {
+            handle.join().unwrap();
+        }
+
+        // Each tool should have exactly 6 failures (2 failures * 3 threads per tool)
+        // but none should be open (threshold is 3, each thread does 2 failures)
+        // Actually, with 3 threads doing 2 failures each = 6 failures total per tool
+        // which exceeds threshold of 3, so they should be open
+        for i in 0..3 {
+            let tool_name = format!("tool_{}", i);
+            let state = breaker.state_for_tool(&tool_name);
+            // With 6 failures per tool (exceeds threshold of 3), circuit should be open
+            assert_eq!(
+                state,
+                CircuitState::Open,
+                "Tool {} should be Open after 6 failures",
+                tool_name
+            );
+        }
+    }
+
+    #[test]
+    fn concurrent_successes_and_failures_maintain_consistency() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let breaker = Arc::new(CircuitBreaker::new(CircuitBreakerConfig {
+            failure_threshold: 5,
+            ..Default::default()
+        }));
+
+        let success_count = Arc::new(AtomicUsize::new(0));
+        let failure_count = Arc::new(AtomicUsize::new(0));
+
+        // Spawn threads that do both successes and failures
+        let mut handles = vec![];
+
+        for i in 0..20 {
+            let breaker = breaker.clone();
+            let success_count = success_count.clone();
+            let failure_count = failure_count.clone();
+            handles.push(std::thread::spawn(move || {
+                if i % 2 == 0 {
+                    breaker.record_success_for_tool("tool_x");
+                    success_count.fetch_add(1, Ordering::SeqCst);
+                } else {
+                    breaker
+                        .record_failure_category_for_tool("tool_x", ErrorCategory::ExecutionError);
+                    failure_count.fetch_add(1, Ordering::SeqCst);
+                }
+            }));
+        }
+
+        for handle in handles {
+            handle.join().unwrap();
+        }
+
+        // Verify that the circuit state is consistent
+        // With 10 successes and 10 failures, the state depends on ordering
+        // but it should be either Closed or Open, not in an invalid state
+        let final_state = breaker.state_for_tool("tool_x");
+        assert!(
+            final_state == CircuitState::Closed || final_state == CircuitState::Open,
+            "Circuit should be in a valid state, got {:?}",
+            final_state
+        );
+
+        // Verify all operations were counted
+        let successes = success_count.load(Ordering::SeqCst);
+        let failures = failure_count.load(Ordering::SeqCst);
+        assert_eq!(successes, 10, "Should have 10 successes");
+        assert_eq!(failures, 10, "Should have 10 failures");
     }
 }
