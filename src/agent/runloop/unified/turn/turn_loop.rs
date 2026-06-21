@@ -79,16 +79,17 @@ const RECOVERY_SYNTHESIS_MAX_TOKENS: u32 = 1024;
 /// forces the user to nudge "continue". The extra pass only fires when the
 /// model keeps emitting tool calls during a tool-free recovery window.
 const MAX_RECOVERY_RETRIES: u8 = 3;
-pub(crate) const POST_TOOL_RECOVERY_REASON: &str = "Model follow-up failed after tool activity. Tools are disabled on the next pass; provide a direct textual response from the current context and reuse the latest tool outputs already in history.";
-pub(crate) const POST_TOOL_TIMEOUT_RECOVERY_REASON: &str = "The model follow-up timed out after tool activity. Tools are disabled on the next pass; provide a direct textual response from the current context and reuse the latest tool outputs already in history.";
-const RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER: &str = "Recovery synthesis failed. No additional tool call was applied in this recovery pass. The latest validated tool outputs from earlier in this turn are still usable — reuse them directly or re-state your request.";
+pub(crate) const POST_TOOL_RECOVERY_REASON: &str = "Tool follow-up failed. Tools disabled; respond with text using context and recent tool outputs.";
+pub(crate) const POST_TOOL_TIMEOUT_RECOVERY_REASON: &str = "Tool follow-up timed out. Tools disabled; respond with text using context and recent tool outputs.";
+const RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER: &str = "Recovery synthesis failed; no tool call applied. Reuse recent tool outputs or re-state your request.";
 /// Reason set on `TurnLoopResult::Blocked` when the model emits tool calls or
 /// textual tool-call markup during a tool-free recovery pass.  Shared between
 /// `result_handler` (producer) and `post_tool_recovery` (consumer).
 pub(super) const RECOVERY_CONTRACT_VIOLATION_REASON: &str = "Recovery mode requested a final tool-free synthesis pass, but the model attempted more tool calls.";
 /// System message injected before retrying a tool-free recovery pass when the model
 /// produced tool calls (which are discarded) instead of text.
-const RECOVERY_TOOL_CALL_RETRY_DIRECTIVE: &str = "CRITICAL: Recovery pass: the model attempted tool calls instead of a text-only synthesis. Tools remain disabled. Provide a text-only synthesis now, summarizing what was found from the previous tool outputs already in history and proposing the next concrete action.";
+const RECOVERY_TOOL_CALL_RETRY_DIRECTIVE: &str =
+    "Recovery: tools disabled. Summarize findings from tool outputs in history.";
 
 pub(crate) struct TurnLoopOutcome {
     pub result: TurnLoopResult,

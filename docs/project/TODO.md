@@ -1,26 +1,4 @@
-check and fix all clippy issues
-
-===
-
-fix raw display when turn budget is nearly exhausted for summarize_and_conclude recovery decision and for some models. also improve the wording and message
-
-```
--------------------------------------------------------------------------- Info ---------------------------------------------------------------------------
-Turn budget nearly exhausted; requesting an adaptive recovery decision.
-
----
-
-• ]<]minimax[>[<tool_call>
-]<]minimax[>[<invoke name="recovery_decision">]<]minimax[>[<action>summarize_and_conclude]<]minimax[>[</action>]<]minimax[>[</invoke>
-]<]minimax[>[</tool_call>
-========================================================================= Warning =========================================================================
-[!] Stripped textual tool-call region from recovery synthesis.
-===========================================================================================================================================================
-```
-
-===
-
-implement
+implement:
 
 ````
 # VTCode Modes & Subagents Audit

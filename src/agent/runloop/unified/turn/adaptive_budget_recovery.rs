@@ -115,7 +115,13 @@ pub(crate) async fn decide_recovery_action(
         .collect();
 
     let system_prompt = format!(
-        "The turn wall-clock budget is nearly exhausted. Choose a recovery action by calling the `{}` tool.\n\n- summarize_and_conclude: produce a final tool-free summary from the evidence already collected.\n- compact_context: compact earlier conversation history to free capacity, then re-evaluate.\n- request_more_resources: stop the turn and ask the user for more resources, with suggested next actions.\n- adjust_plan: produce a reduced-scope final answer that states what was completed, what is deferred, and how to resume; use `plan_adjustment` to describe the scoping. Use this when the original plan cannot be finished in the remaining budget.\n\nIf you are unsure, choose summarize_and_conclude.",
+        "Budget nearly exhausted. Call the `{}` tool to pick a recovery action. \
+         Keep your response concise.\n\n\
+         - summarize_and_conclude: summarize evidence collected so far.\n\
+         - compact_context: compact history, then re-evaluate.\n\
+         - request_more_resources: pause and ask the user for more budget.\n\
+         - adjust_plan: produce a reduced-scope answer (completed/deferred/resume).\n\n\
+         Default: summarize_and_conclude.",
         RECOVERY_DECISION
     );
 
@@ -223,11 +229,9 @@ pub(crate) async fn apply_recovery_decision(
         AdaptiveRecoveryAction::SummarizeAndConclude => {
             let _ = ctx.renderer.line(
                 vtcode_core::utils::ansi::MessageStyle::Info,
-                "Budget nearly exhausted; producing a final answer from collected evidence.",
+                "Recovering: summarizing findings from collected evidence.",
             );
-            ctx.push_system_message(
-                "Adaptive recovery: synthesize a final answer from the evidence already collected.",
-            );
+            ctx.push_system_message("Recovery: summarize the evidence collected so far.");
             ctx.harness_state.switch_to_tool_free_recovery();
             Ok(AdaptiveRecoveryOutcome::Continue)
         }
@@ -235,7 +239,7 @@ pub(crate) async fn apply_recovery_decision(
         AdaptiveRecoveryAction::CompactContext => {
             let _ = ctx.renderer.line(
                 vtcode_core::utils::ansi::MessageStyle::Info,
-                "Compacting conversation history to free capacity, then re-evaluating.",
+                "Recovering: compacting history to free capacity.",
             );
             let workspace = ctx.config.workspace.clone();
             let outcome = compact_history_for_recovery_in_place(
@@ -256,20 +260,18 @@ pub(crate) async fn apply_recovery_decision(
             .context("adaptive recovery compaction failed")?;
 
             if outcome.is_some() {
-                ctx.push_system_message("Context compacted. Re-evaluating recovery action.");
+                ctx.push_system_message("Context compacted. Continue recovery.");
             } else {
                 let _ = ctx.renderer.line(
                     vtcode_core::utils::ansi::MessageStyle::Info,
                     "Compaction had no effect; producing a final answer.",
                 );
-                ctx.push_system_message("Compaction had no effect; forcing a final synthesis.");
+                ctx.push_system_message("Compaction ineffective. Summarize evidence now.");
             }
 
             let attempts = ctx.harness_state.increment_adaptive_recovery_decisions();
             if attempts > MAX_ADAPTIVE_REDECISIONS {
-                ctx.push_system_message(
-                    "Adaptive re-decision limit reached; forcing final synthesis.",
-                );
+                ctx.push_system_message("Re-decision limit reached. Summarize now.");
                 ctx.harness_state
                     .set_recovery_mode(RecoveryMode::ToolFreeSynthesis);
             }
@@ -280,11 +282,11 @@ pub(crate) async fn apply_recovery_decision(
 
         AdaptiveRecoveryAction::RequestMoreResources { prompt } => {
             let user_prompt = prompt.unwrap_or_else(|| {
-                "The turn budget is nearly exhausted and more resources are needed to continue."
-                    .to_string()
+                "Budget nearly exhausted. More resources needed to continue.".to_string()
             });
-            let suggested_commands = "Suggested next actions: `/compact` to compact conversation history and continue, type a message to proceed with a fresh turn, or `/stop` to end the current task.";
-            let message = format!("{user_prompt} {suggested_commands}");
+            let suggested =
+                "Next: `/compact` to compact and continue, type a message, or `/stop` to end.";
+            let message = format!("{user_prompt} {suggested}");
             ctx.push_system_message(message.clone());
             let _ = ctx
                 .renderer
@@ -295,20 +297,17 @@ pub(crate) async fn apply_recovery_decision(
         AdaptiveRecoveryAction::AdjustPlan { guidance } => {
             let _ = ctx.renderer.line(
                 vtcode_core::utils::ansi::MessageStyle::Info,
-                "Budget nearly exhausted; producing a reduced-scope plan and final answer.",
+                "Recovering: producing a reduced-scope answer.",
             );
             let guidance_text = guidance.unwrap_or_default();
             let system_msg = if guidance_text.trim().is_empty() {
-                "Adaptive recovery: the budget is nearly exhausted and the original plan cannot \
-                 be finished. Produce a reduced-scope final answer that states what was completed, \
-                 what is deferred, and how to resume."
+                "Recovery: budget exhausted. Produce a reduced-scope answer \
+                 (completed/deferred/resume)."
                     .to_string()
             } else {
                 format!(
-                    "Adaptive recovery: the budget is nearly exhausted and the original plan \
-                     cannot be finished. Produce a reduced-scope final answer that states what was \
-                     completed, what is deferred, and how to resume. Plan adjustment guidance: \
-                     {guidance_text}"
+                    "Recovery: budget exhausted. Produce a reduced-scope answer \
+                     (completed/deferred/resume). Guidance: {guidance_text}."
                 )
             };
             ctx.push_system_message(system_msg);

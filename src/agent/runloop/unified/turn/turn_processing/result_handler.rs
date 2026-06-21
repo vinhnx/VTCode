@@ -225,8 +225,8 @@ pub(crate) async fn handle_turn_processing_result<'a>(
                     )
                 {
                     let _ = params.ctx.renderer.line(
-                        MessageStyle::Warning,
-                        "[!] Stripped tool-call markup from recovery synthesis.",
+                        MessageStyle::Info,
+                        "[i] Cleaned recovery response (removed tool-call markup).",
                     );
                     return params
                         .ctx
@@ -251,8 +251,8 @@ pub(crate) async fn handle_turn_processing_result<'a>(
                     )
                 {
                     let _ = params.ctx.renderer.line(
-                        MessageStyle::Warning,
-                        "[!] Stripped textual tool-call region from recovery synthesis.",
+                        MessageStyle::Info,
+                        "[i] Stripped tool-call tags from recovery response.",
                     );
                     return params
                         .ctx

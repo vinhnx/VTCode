@@ -259,11 +259,12 @@ fn maybe_activate_turn_timeout_recovery(ctx: &mut TurnProcessingContext<'_>) {
     );
     ctx.activate_recovery_with_mode(reason.clone(), RecoveryMode::AdaptiveBudgetDecision);
     ctx.push_system_message(format!(
-        "{reason} Active options: `summarize_and_conclude`, `compact_context`, `request_more_resources`, `adjust_plan`. Call the `recovery_decision` tool to choose."
+        "{reason} Call `recovery_decision` tool. \
+         Actions: summarize_and_conclude, compact_context, request_more_resources, adjust_plan."
     ));
     let _ = ctx.renderer.line(
         MessageStyle::Info,
-        "Turn budget nearly exhausted; requesting an adaptive recovery decision.",
+        "Budget nearly exhausted — choosing recovery action.",
     );
 }
 

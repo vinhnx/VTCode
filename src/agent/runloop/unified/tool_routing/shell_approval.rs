@@ -112,10 +112,7 @@ fn exact_shell_learning_target(
     ))
 }
 
-fn segment_readonly_pattern(
-    segment: &[String],
-    scope_signature: &str,
-) -> Option<LearnedPattern> {
+fn segment_readonly_pattern(segment: &[String], scope_signature: &str) -> Option<LearnedPattern> {
     let program = segment.first().map(String::as_str);
     // Commands with specific pattern rules that rejected this segment get no
     // generic pattern.  This prevents e.g. `find /tmp` from creating a broad
@@ -308,13 +305,22 @@ fn learned_readonly_path_pattern(
 
 fn command_looks_like_readonly_path_query(program: &str, words: &[String]) -> bool {
     const KNOWN_MUTATING_COMMANDS: &[&str] = &[
-        "awk", "cargo", "chmod", "chown", "cp", "curl", "dd", "install", "ln", "mkdir",
-        "mv", "perl", "python", "python3", "rm", "rmdir", "rsync", "ruby", "sh", "bash",
-        "zsh", "tee", "touch", "truncate", "wget",
+        "awk", "cargo", "chmod", "chown", "cp", "curl", "dd", "install", "ln", "mkdir", "mv",
+        "perl", "python", "python3", "rm", "rmdir", "rsync", "ruby", "sh", "bash", "zsh", "tee",
+        "touch", "truncate", "wget",
     ];
     const MUTATING_OPTION_HINTS: &[&str] = &[
-        "--delete", "--exec", "--in-place", "--output", "--remove", "--write", "-delete",
-        "-exec", "-execdir", "-i", "-o",
+        "--delete",
+        "--exec",
+        "--in-place",
+        "--output",
+        "--remove",
+        "--write",
+        "-delete",
+        "-exec",
+        "-execdir",
+        "-i",
+        "-o",
     ];
 
     !program.is_empty()
@@ -599,7 +605,10 @@ mod tests {
         let target = exact_shell_learning_target("unified_exec", Some(&args), "Run Command")
             .expect("target");
 
-        assert_eq!(target.approval_key, "shell-pattern:ls|sandbox_permissions=\"use_default\"|additional_permissions=null");
+        assert_eq!(
+            target.approval_key,
+            "shell-pattern:ls|sandbox_permissions=\"use_default\"|additional_permissions=null"
+        );
         assert_eq!(target.display_label, "safe `ls` path reads");
     }
 

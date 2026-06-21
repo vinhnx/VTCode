@@ -48,13 +48,22 @@ const SHELL_APPROVAL_SCOPE_MARKER: &str = "|sandbox_permissions=";
 const DEFAULT_APPROVAL_SCOPE_SIGNATURE: &str =
     "sandbox_permissions=\"use_default\"|additional_permissions=null";
 const KNOWN_MUTATING_COMMANDS: &[&str] = &[
-    "awk", "cargo", "chmod", "chown", "cp", "curl", "dd", "install", "ln", "mkdir", "mv",
-    "perl", "python", "python3", "rm", "rmdir", "rsync", "ruby", "sh", "bash", "zsh", "tee",
-    "touch", "truncate", "wget",
+    "awk", "cargo", "chmod", "chown", "cp", "curl", "dd", "install", "ln", "mkdir", "mv", "perl",
+    "python", "python3", "rm", "rmdir", "rsync", "ruby", "sh", "bash", "zsh", "tee", "touch",
+    "truncate", "wget",
 ];
 const MUTATING_OPTION_HINTS: &[&str] = &[
-    "--delete", "--exec", "--in-place", "--output", "--remove", "--write", "-delete",
-    "-exec", "-execdir", "-i", "-o",
+    "--delete",
+    "--exec",
+    "--in-place",
+    "--output",
+    "--remove",
+    "--write",
+    "-delete",
+    "-exec",
+    "-execdir",
+    "-i",
+    "-o",
 ];
 
 /// Decision result for tool execution
@@ -1341,7 +1350,10 @@ fn command_looks_like_readonly_path_query(program: &str, words: &[String]) -> bo
         return false;
     }
 
-    words.iter().skip(1).any(|word| is_probable_workspace_path(word))
+    words
+        .iter()
+        .skip(1)
+        .any(|word| is_probable_workspace_path(word))
 }
 
 fn command_path_args<'a>(program: &str, words: &'a [String]) -> Vec<&'a str> {
@@ -1664,8 +1676,7 @@ mod tests {
         );
 
         assert!(prefixes.iter().any(|prefix| {
-            prefix
-                == "sed -n|sandbox_permissions=\"use_default\"|additional_permissions=null"
+            prefix == "sed -n|sandbox_permissions=\"use_default\"|additional_permissions=null"
         }));
     }
 
@@ -1689,10 +1700,12 @@ mod tests {
         assert!(prefixes.iter().any(|prefix| {
             prefix == "wc|sandbox_permissions=\"use_default\"|additional_permissions=null"
         }));
-        assert!(derived_shell_approval_prefixes(
-            "rm src/lib.rs|sandbox_permissions=\"use_default\"|additional_permissions=null"
-        )
-        .is_empty());
+        assert!(
+            derived_shell_approval_prefixes(
+                "rm src/lib.rs|sandbox_permissions=\"use_default\"|additional_permissions=null"
+            )
+            .is_empty()
+        );
         assert!(derived_shell_approval_prefixes(
             "perl -i -pe 's/a/b/' src/lib.rs|sandbox_permissions=\"use_default\"|additional_permissions=null"
         )
