@@ -367,6 +367,8 @@ mod tests {
                 "qwen/qwen3.6-35b-a3b".to_string(),
                 "moonshotai/kimi-k2.7-code".to_string(),
                 "moonshotai/kimi-k2.6".to_string(),
+                "zai-org/glm-5.2".to_string(),
+                "minimaxai/minimax-m3".to_string(),
             ],
         };
 
@@ -379,6 +381,8 @@ mod tests {
                 "qwen/qwen3.6-35b-a3b".to_string(),
                 "moonshotai/kimi-k2.7-code".to_string(),
                 "moonshotai/kimi-k2.6".to_string(),
+                "zai-org/glm-5.2".to_string(),
+                "minimaxai/minimax-m3".to_string(),
             ]
         );
     }

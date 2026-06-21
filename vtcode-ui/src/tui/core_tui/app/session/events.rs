@@ -1,6 +1,7 @@
 use super::*;
 use ratatui::crossterm::event::KeyModifiers;
 use std::sync::Arc;
+use std::time::Instant;
 
 use super::super::types::{
     ContentPart, DiffPreviewMode, InlineTextStyle, TransientEvent, TransientSelectionChange,
@@ -341,6 +342,18 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 session.mark_dirty();
                 return None;
             }
+            let now = Instant::now();
+            if session
+                .core
+                .last_interrupt_press
+                .is_some_and(|last| now.duration_since(last).as_millis() < 1_000)
+            {
+                session.core.last_interrupt_press = None;
+                session.request_exit();
+                session.mark_dirty();
+                return Some(InlineEvent::Exit);
+            }
+            session.core.last_interrupt_press = Some(now);
             if session.has_active_overlay() {
                 session.close_overlay();
             }
@@ -353,6 +366,18 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 session.mark_dirty();
                 return None;
             }
+            let now = Instant::now();
+            if session
+                .core
+                .last_interrupt_press
+                .is_some_and(|last| now.duration_since(last).as_millis() < 1_000)
+            {
+                session.core.last_interrupt_press = None;
+                session.request_exit();
+                session.mark_dirty();
+                return Some(InlineEvent::Exit);
+            }
+            session.core.last_interrupt_press = Some(now);
             if session.has_active_overlay() {
                 session.close_overlay();
             }
@@ -496,7 +521,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 None
             } else {
                 // Escape with no content: detect double-Esc for rewind
-                let now = std::time::Instant::now();
+                let now = Instant::now();
                 let is_double_esc = session
                     .core
                     .last_esc_press

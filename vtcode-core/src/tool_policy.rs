@@ -42,6 +42,7 @@ const AUTO_ALLOW_TOOLS: &[&str] = &[
 const SHELL_APPROVAL_SCOPE_MARKER: &str = "|sandbox_permissions=";
 const DEFAULT_APPROVAL_SCOPE_SIGNATURE: &str =
     "sandbox_permissions=\"use_default\"|additional_permissions=null";
+const READ_ONLY_COMMANDS_WITH_PATH_ARG: &[&str] = &["cat", "head", "tail", "sed", "grep", "rg"];
 
 /// Decision result for tool execution
 #[derive(Debug, Clone, PartialEq)]
@@ -1025,12 +1026,18 @@ impl ToolPolicyManager {
             }
         }
 
-        // Word-prefix match against cached prefixes
-        let approval_words: Vec<&str> = approval_key.split_whitespace().collect();
+        // Word-prefix match against cached prefixes. Prefer shell tokenization
+        // so persisted command approvals preserve argument/option boundaries
+        // instead of raw whitespace quirks from display/rendering.
+        let (approval_text, approval_scope) = split_shell_approval_entry(approval_key);
+        let approval_words = shell_words_lossy(approval_text);
         for cached in &self.config.approval_cache.prefixes {
-            let (prefix_text, _) = split_shell_approval_entry(cached.as_str());
-            let prefix_words: Vec<&str> = prefix_text.split_whitespace().collect();
+            let (prefix_text, prefix_scope) = split_shell_approval_entry(cached.as_str());
+            let prefix_words = shell_words_lossy(prefix_text);
+            let scope_matches = prefix_scope.unwrap_or(DEFAULT_APPROVAL_SCOPE_SIGNATURE)
+                == approval_scope.unwrap_or(DEFAULT_APPROVAL_SCOPE_SIGNATURE);
             if !prefix_words.is_empty()
+                && scope_matches
                 && prefix_words.len() <= approval_words.len()
                 && prefix_words
                     .iter()
@@ -1100,16 +1107,9 @@ impl ToolPolicyManager {
             changed = true;
         }
 
-        // Derive segment prefixes for shell commands (3+ words):
-        // "cargo check --target x86_64" → also caches word prefixes:
-        // "cargo", "cargo check", "cargo check --target"
-        let words: Vec<&str> = key.split_whitespace().collect();
-        if words.len() >= 3 {
-            for i in (1..words.len()).rev() {
-                let prefix: String = words[..i].join(" ");
-                if self.config.approval_cache.prefixes.insert(prefix) {
-                    changed = true;
-                }
+        for prefix in derived_shell_approval_prefixes(&key) {
+            if self.config.approval_cache.prefixes.insert(prefix) {
+                changed = true;
             }
         }
 
@@ -1275,6 +1275,83 @@ fn split_shell_approval_entry(entry: &str) -> (&str, Option<&str>) {
     } else {
         (entry, None)
     }
+}
+
+fn shell_words_lossy(text: &str) -> Vec<String> {
+    shell_words::split(text)
+        .unwrap_or_else(|_| text.split_whitespace().map(str::to_owned).collect())
+}
+
+fn shell_command_words_for_approval(text: &str) -> Vec<String> {
+    crate::command_safety::shell_parser::parse_shell_commands_tree_sitter(text)
+        .ok()
+        .and_then(|commands| {
+            if commands.len() == 1 {
+                commands.into_iter().next()
+            } else {
+                None
+            }
+        })
+        .filter(|command| !command.is_empty())
+        .unwrap_or_else(|| shell_words_lossy(text))
+}
+
+fn is_probable_workspace_path(word: &str) -> bool {
+    !word.is_empty()
+        && !word.starts_with('-')
+        && !word.starts_with('/')
+        && !word.starts_with('~')
+        && word != "."
+        && word != ".."
+        && word.split('/').all(|part| {
+            !part.is_empty() && part != "." && part != ".." && !part.contains('\0')
+        })
+}
+
+fn derived_shell_approval_prefixes(key: &str) -> Vec<String> {
+    let (command_text, scope_signature) = split_shell_approval_entry(key);
+    let words = shell_command_words_for_approval(command_text);
+    if words.len() < 2 {
+        return Vec::new();
+    }
+
+    let append_scope = |prefix: String| {
+        if let Some(scope_signature) = scope_signature {
+            format!("{prefix}|{scope_signature}")
+        } else {
+            prefix
+        }
+    };
+
+    let mut prefixes = Vec::new();
+    if let Some(program) = words.first().map(String::as_str) {
+        if READ_ONLY_COMMANDS_WITH_PATH_ARG.contains(&program)
+            && words
+                .last()
+                .is_some_and(|path| is_probable_workspace_path(path))
+            && words.len() > 2
+        {
+            prefixes.push(append_scope(shell_words::join(
+                words[..words.len() - 1].iter().map(String::as_str),
+            )));
+        }
+
+        match program {
+            "sed" if words.len() >= 3 && words.get(1).is_some_and(|arg| arg == "-n") => {
+                prefixes.push(append_scope("sed -n".to_string()));
+            }
+            "cargo" | "git" if words.len() >= 2 => {
+                prefixes.push(append_scope(shell_words::join(
+                    words[..2].iter().map(String::as_str),
+                )));
+            }
+            _ => {}
+        }
+    }
+
+    prefixes.sort();
+    prefixes.dedup();
+    prefixes
 }
 
 fn shell_command_words_match_prefix(command_words: &[String], prefix_words: &[String]) -> bool {
@@ -1448,6 +1525,76 @@ mod tests {
                 )
                 .is_some()
         );
+    }
+
+    #[tokio::test]
+    async fn approval_cache_key_persists_shell_token_prefixes_with_scope() {
+        let dir = tempdir().unwrap();
+        let config_path = dir.path().join("tool-policy.json");
+        let mut manager = ToolPolicyManager::new_with_config_path(&config_path)
+            .await
+            .expect("manager");
+
+        manager
+            .add_approval_cache_key_with_segments(
+                "sed -n 87,140p vtcode-core/src/core/agent/features.rs|sandbox_permissions=\"use_default\"|additional_permissions=null",
+            )
+            .await
+            .expect("persist key");
+
+        let reloaded = ToolPolicyManager::new_with_config_path(&config_path)
+            .await
+            .expect("reload manager");
+        let command_words = vec![
+            "sed".to_string(),
+            "-n".to_string(),
+            "109,250p".to_string(),
+            "vtcode-core/src/tools/tool_intent.rs".to_string(),
+        ];
+
+        assert!(
+            reloaded
+                .matching_shell_approval_prefix(
+                    &command_words,
+                    "sandbox_permissions=\"use_default\"|additional_permissions=null",
+                )
+                .is_some()
+        );
+        assert!(reloaded.has_approval_cache_key(
+            "sed -n 109,250p vtcode-core/src/tools/tool_intent.rs|sandbox_permissions=\"use_default\"|additional_permissions=null"
+        ));
+    }
+
+    #[tokio::test]
+    async fn approval_cache_key_does_not_cross_permission_scope() {
+        let dir = tempdir().unwrap();
+        let config_path = dir.path().join("tool-policy.json");
+        let mut manager = ToolPolicyManager::new_with_config_path(&config_path)
+            .await
+            .expect("manager");
+
+        manager
+            .add_approval_cache_key_with_segments(
+                "sed -n 87,140p vtcode-core/src/core/agent/features.rs|sandbox_permissions=\"use_default\"|additional_permissions=null",
+            )
+            .await
+            .expect("persist key");
+
+        assert!(!manager.has_approval_cache_key(
+            "sed -n 109,250p vtcode-core/src/tools/tool_intent.rs|sandbox_permissions=\"require_escalated\"|additional_permissions=null"
+        ));
+    }
+
+    #[test]
+    fn approval_prefix_derivation_uses_bash_parser_for_quoted_args() {
+        let prefixes = derived_shell_approval_prefixes(
+            "sed -n '87,140p' vtcode-core/src/core/agent/features.rs|sandbox_permissions=\"use_default\"|additional_permissions=null",
+        );
+
+        assert!(prefixes.iter().any(|prefix| {
+            prefix
+                == "sed -n|sandbox_permissions=\"use_default\"|additional_permissions=null"
+        }));
     }
 
     #[tokio::test]

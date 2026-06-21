@@ -234,6 +234,7 @@ pub struct Session {
     /// Track whether the transcript viewport must be cleared before repainting.
     pub(crate) transcript_clear_required: bool,
     should_exit: bool,
+    pub(crate) last_interrupt_press: Option<Instant>,
     scroll_cursor_steady_until: Option<Instant>,
     last_shimmer_active: bool,
     pub(crate) view_rows: u16,

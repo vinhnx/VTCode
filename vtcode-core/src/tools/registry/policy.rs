@@ -184,7 +184,9 @@ impl ToolPolicyGateway {
 
     pub async fn add_approval_cache_key(&mut self, approval_key: &str) -> Result<()> {
         if let Some(ref mut manager) = self.tool_policy {
-            manager.add_approval_cache_key(approval_key).await
+            manager
+                .add_approval_cache_key_with_segments(approval_key)
+                .await
         } else {
             Err(anyhow::anyhow!("Tool policy manager not initialized"))
         }

@@ -60,6 +60,17 @@ fn handle_interrupt(session: &mut Session) -> Option<InlineEvent> {
         session.mark_dirty();
         return None;
     }
+    let now = Instant::now();
+    if session
+        .last_interrupt_press
+        .is_some_and(|last| now.duration_since(last).as_millis() < 1_000)
+    {
+        session.last_interrupt_press = None;
+        session.request_exit();
+        session.mark_dirty();
+        return Some(InlineEvent::Exit);
+    }
+    session.last_interrupt_press = Some(now);
     if session.has_active_overlay() {
         session.close_overlay();
     }
