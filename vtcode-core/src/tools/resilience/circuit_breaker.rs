@@ -586,8 +586,6 @@ mod tests {
 
     #[test]
     fn concurrent_failures_across_different_tools_are_independent() {
-        use std::sync::atomic::{AtomicUsize, Ordering};
-
         let breaker = Arc::new(CircuitBreaker::new(CircuitBreakerConfig {
             failure_threshold: 3,
             ..Default::default()

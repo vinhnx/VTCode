@@ -137,6 +137,7 @@ impl McpCircuitBreaker {
     }
 
     /// Create a new persistence-enabled circuit breaker
+    #[allow(dead_code)]
     pub fn with_persistence(path: PathBuf) -> Self {
         let breaker = Self::build(CircuitBreakerConfig::default(), Some(path.clone()), None);
 
@@ -203,6 +204,7 @@ impl McpCircuitBreaker {
     }
 
     /// Get current circuit state
+    #[cfg(test)]
     pub fn state(&self) -> CircuitState {
         self.state.lock().status
     }
@@ -293,6 +295,7 @@ impl McpCircuitBreaker {
     }
 
     /// Record a failed operation
+    #[cfg(test)]
     pub fn record_failure(&self) {
         self.record_failure_category(ErrorCategory::ExecutionError);
     }
@@ -388,11 +391,14 @@ impl Default for McpCircuitBreaker {
 pub struct CircuitBreakerDiagnostics {
     pub status: CircuitState,
     pub consecutive_failures: u32,
+    #[allow(dead_code)]
     pub half_open_successes: u32,
     pub last_failure_time: Option<Instant>,
     pub current_timeout: Duration,
     pub retry_after: Option<Duration>,
+    #[allow(dead_code)]
     pub blocked_requests: u32,
+    #[allow(dead_code)]
     pub is_blocking: bool,
 }
 
