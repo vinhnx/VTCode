@@ -1187,8 +1187,9 @@ pub(crate) async fn ensure_tool_permission_with_call_id<S: UiSession + ?Sized>(
         ))
         || full_auto_promptable;
     let requires_sandbox_prompt = raw_requires_sandbox_prompt && !auto_permission_classifier_review;
-    let can_reuse_saved_approval = !raw_requires_rule_prompt
-        && !auto_permission_classifier_review
+    // Check saved approval regardless of permission-config "Ask" — the user's
+    // explicit permanent/session approval overrides the config-level prompt.
+    let can_reuse_saved_approval = !auto_permission_classifier_review
         && !full_auto_allowlist_active;
 
     if can_reuse_saved_approval

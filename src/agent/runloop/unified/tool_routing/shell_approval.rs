@@ -6,7 +6,7 @@ use super::permission_prompt::{
     extract_shell_approval_command_prefix_words, extract_shell_approval_command_words,
     extract_shell_command_text, extract_shell_permission_scope_signature,
     extract_shell_persistent_approval_prefix_rule, render_shell_approval_command_words,
-    render_shell_persistent_approval_prefix_entry,
+    render_shell_persistent_approval_prefix_entry, split_command_words_on_operators,
 };
 
 /// Secondary learning key for shell-command "families" (e.g. all safe
@@ -43,10 +43,17 @@ impl ApprovalLearningTarget {
 
     /// Iterate over every (key, label) pair this target contributes to
     /// learning: the exact invocation first, then the optional family pattern.
+    ///
+    /// Skips the pattern key if it matches the approval key to avoid
+    /// double-counting approvals in [`record_approval_blocking`] (the
+    /// auto-approve classifier) and duplicate session cache entries.
     pub fn iter_keys(&self) -> impl Iterator<Item = (&str, &str)> {
-        std::iter::once((self.approval_key.as_str(), self.display_label.as_str())).chain(
+        let approval_key = self.approval_key.as_str();
+        let display_label = self.display_label.as_str();
+        std::iter::once((approval_key, display_label)).chain(
             self.pattern
                 .iter()
+                .filter(move |p| p.key != approval_key)
                 .map(|p| (p.key.as_str(), p.label.as_str())),
         )
     }
@@ -78,6 +85,10 @@ fn exact_shell_learning_target(
     let scope_signature = extract_shell_permission_scope_signature(tool_name, tool_args)?;
 
     if let Some(command_words) = extract_shell_approval_command_words(tool_name, tool_args) {
+        if let Some(target) = segmented_shell_learning_target(&command_words, &scope_signature) {
+            return Some(target);
+        }
+
         let rendered_command = render_shell_approval_command_words(&command_words);
         return Some(ApprovalLearningTarget::new(
             format!("{rendered_command}|{scope_signature}"),
@@ -99,6 +110,60 @@ fn exact_shell_learning_target(
         format!("{fallback_key}|{scope_signature}"),
         default_learning_label.to_string(),
     ))
+}
+
+fn segment_readonly_pattern(
+    segment: &[String],
+    scope_signature: &str,
+) -> Option<LearnedPattern> {
+    let program = segment.first().map(String::as_str);
+    // Commands with specific pattern rules that rejected this segment get no
+    // generic pattern.  This prevents e.g. `find /tmp` from creating a broad
+    // `shell-pattern:find` family key when the specific find-pattern rejected
+    // the absolute-path argument.
+    if matches!(program, Some("find" | "sed")) {
+        return None;
+    }
+    learned_readonly_path_pattern(segment, scope_signature)
+}
+
+fn segmented_shell_learning_target(
+    command_words: &[String],
+    scope_signature: &str,
+) -> Option<ApprovalLearningTarget> {
+    let segments = split_command_words_on_operators(command_words).or_else(|| {
+        vtcode_core::command_safety::shell_parser::parse_shell_commands(&shell_words::join(
+            command_words.iter().map(String::as_str),
+        ))
+        .ok()
+    })?;
+
+    let mut patterns = segments
+        .iter()
+        .filter_map(|segment| segment_readonly_pattern(segment, scope_signature))
+        .collect::<Vec<_>>();
+    if patterns.is_empty() {
+        return None;
+    }
+
+    patterns.sort_by(|left, right| left.key.cmp(&right.key));
+    patterns.dedup_by(|left, right| left.key == right.key);
+    if patterns.len() == 1 {
+        let pattern = patterns.remove(0);
+        return Some(ApprovalLearningTarget::new(pattern.key, pattern.label));
+    }
+
+    let key = patterns
+        .iter()
+        .map(|pattern| pattern.key.as_str())
+        .collect::<Vec<_>>()
+        .join("&&");
+    let label = patterns
+        .iter()
+        .map(|pattern| pattern.label.as_str())
+        .collect::<Vec<_>>()
+        .join(" and ");
+    Some(ApprovalLearningTarget::new(key, label))
 }
 
 pub(super) fn approval_learning_target(
@@ -202,9 +267,19 @@ fn learned_shell_pattern(tool_name: &str, tool_args: Option<&Value>) -> Option<L
     // by commands like `find src && rm -rf target` or `bash -c '...'`.
     let command_words = extract_shell_approval_command_prefix_words(tool_name, tool_args)?;
 
-    learned_readonly_path_pattern(&command_words, &scope_signature)
-        .or_else(|| learned_find_pattern(&command_words, &scope_signature))
-        .or_else(|| learned_sed_print_pattern(&command_words, &scope_signature))
+    // Specific command patterns first: find, sed.
+    // These have tighter path-validation rules (e.g. reject absolute paths,
+    // directory traversal, and destructive flags).
+    if let Some(pattern) = learned_find_pattern(&command_words, &scope_signature) {
+        return Some(pattern);
+    }
+    if let Some(pattern) = learned_sed_print_pattern(&command_words, &scope_signature) {
+        return Some(pattern);
+    }
+    // Generic read-only path-read pattern as fallback for commands without
+    // specific pattern rules (e.g. ls, grep, wc).  If find/sed had specific
+    // rules that rejected this invocation, no generic pattern is attached.
+    segment_readonly_pattern(&command_words, &scope_signature)
 }
 
 fn learned_readonly_path_pattern(
@@ -223,27 +298,19 @@ fn learned_readonly_path_pattern(
         return None;
     }
 
-    let option_words = command_words[1..]
-        .iter()
-        .filter(|word| !is_probable_readonly_path_arg(word))
-        .map(String::as_str)
-        .collect::<Vec<_>>();
-    let mut prefix_words = Vec::with_capacity(1 + option_words.len());
-    prefix_words.push(program);
-    prefix_words.extend(option_words);
-    let rendered = shell_words::join(prefix_words);
+    let base_rendered = program.to_string();
 
     Some(LearnedPattern {
-        key: format!("shell-pattern:{rendered}|{scope_signature}"),
-        label: format!("safe `{rendered}` path reads"),
+        key: format!("shell-pattern:{base_rendered}|{scope_signature}"),
+        label: format!("safe `{base_rendered}` path reads"),
     })
 }
 
 fn command_looks_like_readonly_path_query(program: &str, words: &[String]) -> bool {
     const KNOWN_MUTATING_COMMANDS: &[&str] = &[
-        "awk", "chmod", "chown", "cp", "curl", "dd", "install", "ln", "mkdir", "mv",
-        "perl", "python", "python3", "rm", "rmdir", "rsync", "ruby", "sh", "bash", "zsh",
-        "tee", "touch", "truncate", "wget",
+        "awk", "cargo", "chmod", "chown", "cp", "curl", "dd", "install", "ln", "mkdir",
+        "mv", "perl", "python", "python3", "rm", "rmdir", "rsync", "ruby", "sh", "bash",
+        "zsh", "tee", "touch", "truncate", "wget",
     ];
     const MUTATING_OPTION_HINTS: &[&str] = &[
         "--delete", "--exec", "--in-place", "--output", "--remove", "--write", "-delete",
@@ -266,10 +333,14 @@ fn is_probable_readonly_path_arg(word: &str) -> bool {
     if word.is_empty() || word.starts_with('-') || word.starts_with('~') || word == "." {
         return false;
     }
-    let parts = if word.starts_with('/') {
-        word.split('/').skip(1).collect::<Vec<_>>()
+    let trimmed = word.trim_end_matches('/');
+    if trimmed.is_empty() {
+        return false;
+    }
+    let parts = if trimmed.starts_with('/') {
+        trimmed.split('/').skip(1).collect::<Vec<_>>()
     } else {
-        word.split('/').collect::<Vec<_>>()
+        trimmed.split('/').collect::<Vec<_>>()
     };
 
     !parts.is_empty()
@@ -460,15 +531,28 @@ mod tests {
     }
 
     #[test]
-    fn non_find_command_has_no_pattern() {
-        assert!(pattern_for("grep -r foo src").is_none());
-        assert!(pattern_for("ls src").is_none());
+    fn mutating_commands_have_no_pattern() {
+        assert!(pattern_for("rm -rf target").is_none());
+        assert!(pattern_for("cp src/lib.rs /tmp/lib.rs").is_none());
+        assert!(pattern_for("mkdir build").is_none());
+    }
+
+    #[test]
+    fn readonly_path_commands_get_generic_pattern() {
+        let pattern = pattern_for("grep -r foo src").expect("pattern");
+        assert!(pattern.key.starts_with("shell-pattern:grep|"));
+
+        let pattern = pattern_for("ls src").expect("pattern");
+        assert!(pattern.key.starts_with("shell-pattern:ls|"));
+
+        let pattern = pattern_for("wc -l src/main.rs").expect("pattern");
+        assert!(pattern.key.starts_with("shell-pattern:wc|"));
     }
 
     #[test]
     fn grep_command_has_no_pattern() {
         let pattern = pattern_for("grep -r foo src").expect("pattern");
-        assert!(pattern.key.starts_with("shell-pattern:grep -r foo|"));
+        assert!(pattern.key.starts_with("shell-pattern:grep|"));
     }
 
     #[test]
@@ -479,9 +563,9 @@ mod tests {
         assert!(
             pattern
                 .key
-                .starts_with("shell-pattern:sed -n|sandbox_permissions=")
+                .starts_with("shell-pattern:sed -n <range> vtcode-core|sandbox_permissions=")
         );
-        assert_eq!(pattern.label, "safe `sed -n` path reads");
+        assert_eq!(pattern.label, "safe `sed -n` reads under `vtcode-core`");
     }
 
     #[test]
@@ -507,10 +591,23 @@ mod tests {
     }
 
     #[test]
+    fn compound_ls_commands_use_compact_segmented_target() {
+        let args = json!({
+            "action": "run",
+            "command": "ls /Users/me/project/.agents/ 2>/dev/null; echo '---'; ls /Users/me/project/docs/ 2>/dev/null"
+        });
+        let target = exact_shell_learning_target("unified_exec", Some(&args), "Run Command")
+            .expect("target");
+
+        assert_eq!(target.approval_key, "shell-pattern:ls|sandbox_permissions=\"use_default\"|additional_permissions=null");
+        assert_eq!(target.display_label, "safe `ls` path reads");
+    }
+
+    #[test]
     fn unknown_non_mutating_path_command_gets_compact_pattern() {
         let pattern = pattern_for("wc -l src/lib.rs README.md").expect("pattern");
-        assert!(pattern.key.starts_with("shell-pattern:wc -l|"));
-        assert_eq!(pattern.label, "safe `wc -l` path reads");
+        assert!(pattern.key.starts_with("shell-pattern:wc|"));
+        assert_eq!(pattern.label, "safe `wc` path reads");
     }
 
     #[test]

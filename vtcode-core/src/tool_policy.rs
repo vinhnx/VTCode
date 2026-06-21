@@ -48,9 +48,9 @@ const SHELL_APPROVAL_SCOPE_MARKER: &str = "|sandbox_permissions=";
 const DEFAULT_APPROVAL_SCOPE_SIGNATURE: &str =
     "sandbox_permissions=\"use_default\"|additional_permissions=null";
 const KNOWN_MUTATING_COMMANDS: &[&str] = &[
-    "awk", "chmod", "chown", "cp", "curl", "dd", "install", "ln", "mkdir", "mv", "perl",
-    "python", "python3", "rm", "rmdir", "rsync", "ruby", "sh", "bash", "zsh", "tee", "touch",
-    "truncate", "wget",
+    "awk", "cargo", "chmod", "chown", "cp", "curl", "dd", "install", "ln", "mkdir", "mv",
+    "perl", "python", "python3", "rm", "rmdir", "rsync", "ruby", "sh", "bash", "zsh", "tee",
+    "touch", "truncate", "wget",
 ];
 const MUTATING_OPTION_HINTS: &[&str] = &[
     "--delete", "--exec", "--in-place", "--output", "--remove", "--write", "-delete",
@@ -1313,11 +1313,15 @@ fn is_probable_workspace_path(word: &str) -> bool {
     if word.is_empty() || word.starts_with('-') || word.starts_with('~') || word == "." {
         return false;
     }
+    let trimmed = word.trim_end_matches('/');
+    if trimmed.is_empty() {
+        return false;
+    }
 
-    let parts = if word.starts_with('/') {
-        word.split('/').skip(1).collect::<Vec<_>>()
+    let parts = if trimmed.starts_with('/') {
+        trimmed.split('/').skip(1).collect::<Vec<_>>()
     } else {
-        word.split('/').collect::<Vec<_>>()
+        trimmed.split('/').collect::<Vec<_>>()
     };
 
     !parts.is_empty()
@@ -1381,6 +1385,7 @@ fn derived_shell_approval_prefixes(key: &str) -> Vec<String> {
             prefix_words.push(program);
             prefix_words.extend(option_words);
             prefixes.push(append_scope(shell_words::join(prefix_words)));
+            prefixes.push(append_scope(program.to_string()));
         }
 
         match program {
@@ -1613,6 +1618,26 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn approval_cache_path_command_options_also_persist_base_family() {
+        let dir = tempdir().unwrap();
+        let config_path = dir.path().join("tool-policy.json");
+        let mut manager = ToolPolicyManager::new_with_config_path(&config_path)
+            .await
+            .expect("manager");
+
+        manager
+            .add_approval_cache_key_with_segments(
+                "ls -la /Users/me/project|sandbox_permissions=\"use_default\"|additional_permissions=null",
+            )
+            .await
+            .expect("persist key");
+
+        assert!(manager.has_approval_cache_key(
+            "ls /Users/me/project/docs|sandbox_permissions=\"use_default\"|additional_permissions=null"
+        ));
+    }
+
+    #[tokio::test]
     async fn approval_cache_key_does_not_cross_permission_scope() {
         let dir = tempdir().unwrap();
         let config_path = dir.path().join("tool-policy.json");
@@ -1662,7 +1687,7 @@ mod tests {
         );
 
         assert!(prefixes.iter().any(|prefix| {
-            prefix == "wc -l|sandbox_permissions=\"use_default\"|additional_permissions=null"
+            prefix == "wc|sandbox_permissions=\"use_default\"|additional_permissions=null"
         }));
         assert!(derived_shell_approval_prefixes(
             "rm src/lib.rs|sandbox_permissions=\"use_default\"|additional_permissions=null"
