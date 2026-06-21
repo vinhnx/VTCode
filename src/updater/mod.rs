@@ -2,6 +2,7 @@ mod cache;
 mod github;
 mod install_source;
 mod interactive;
+mod preflight;
 mod release_notes;
 mod types;
 
@@ -15,6 +16,7 @@ pub(crate) use interactive::{
     InlineUpdateOutcome, append_notice_highlight, display_release_notes, display_update_notice,
     execute_inline_update, run_inline_update_prompt,
 };
+pub(crate) use preflight::{get_preflight_notice, run_preflight_check};
 pub(crate) use release_notes::parse_highlights as parse_release_highlights;
 pub(crate) use types::{
     InstallOutcome, StartupUpdateCheck, StartupUpdateNotice, UpdateExecutionStrategy,

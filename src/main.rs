@@ -209,6 +209,10 @@ async fn run(prepared: PreparedRun) -> Result<()> {
     // Sync global diagnostics flag so TuiLogLayer respects ui.show_diagnostics_in_transcript
     panic_hook::set_show_diagnostics(startup.config.ui.show_diagnostics_in_transcript);
 
+    // Preflight update check — always fetches from GitHub (force fetch).
+    // Silently ignores errors so a network failure never blocks startup.
+    updater::run_preflight_check().await;
+
     let dispatch_result = cli::dispatch(&args, &startup, print_mode).await;
     perform_queued_runtime_relaunch();
     vtcode_core::utils::trace_writer::flush_trace_log();

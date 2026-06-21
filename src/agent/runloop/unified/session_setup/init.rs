@@ -475,6 +475,23 @@ pub(crate) fn active_primary_agent_from_specs_for_mode(
 }
 
 fn load_startup_update_check() -> crate::updater::StartupUpdateCheck {
+    // The preflight check ran at binary startup and already fetched from
+    // GitHub (force fetch).  Use its result when available — it is always
+    // fresher than the on-disk cache.
+    if let Some(notice) = crate::updater::get_preflight_notice() {
+        // Respect user config — if update checks are disabled
+        // or the version is pinned, suppress the notice entirely.
+        if let Ok(updater) = Updater::new(env!("CARGO_PKG_VERSION")) {
+            if updater.config().check_interval_hours == 0 || updater.is_pinned() {
+                return crate::updater::StartupUpdateCheck::default();
+            }
+        }
+        return crate::updater::StartupUpdateCheck {
+            cached_notice: Some(notice),
+            should_refresh: false,
+        };
+    }
+
     let updater = match Updater::new(env!("CARGO_PKG_VERSION")) {
         Ok(updater) => updater,
         Err(err) => {

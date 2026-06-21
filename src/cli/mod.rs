@@ -1,7 +1,7 @@
 use anyhow::Result;
 
 use crate::startup::StartupContext;
-use vtcode_core::cli::args::Cli;
+use vtcode_core::cli::args::{Cli, Commands};
 
 mod acp;
 mod action_resolution;
@@ -110,6 +110,21 @@ pub async fn dispatch(
                 startup.planning_entry_source,
             )
             .await?;
+        }
+    }
+
+    // After the command completes, show a one-line hint on stderr when an
+    // update is available and the user didn't just run the update command
+    // or exit an interactive chat session (the TUI already shows it there).
+    let is_update_subcommand = matches!(args.command, Some(Commands::Update { .. }));
+    let is_interactive_chat = args.command.is_none()
+        || matches!(args.command, Some(Commands::Chat | Commands::ChatVerbose));
+    if !is_update_subcommand && !is_interactive_chat {
+        if let Some(notice) = crate::updater::get_preflight_notice() {
+            eprintln!(
+                "info: VT Code v{} -> v{} available. Run `vtcode update` to upgrade.",
+                notice.current_version, notice.latest_version
+            );
         }
     }
 
