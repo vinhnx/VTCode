@@ -213,3 +213,100 @@ All tests pass:
 **Problem**: Global mutexes could cause contention under high concurrency.
 
 **Solution**: Added documentation explaining the trade-offs and suggesting future improvements if contention becomes an issue.
+
+---
+
+## Additional Improvements (Round 3)
+
+### Fixed Operator Precedence Bug in diff_renderer.rs (HIGH)
+
+**File**: `vtcode-core/src/ui/diff_renderer.rs`
+
+**Problem**: Operator precedence bug caused ANSI color codes to be inserted even when colors were disabled, producing garbage characters in non-color terminal output.
+
+**Before**:
+```rust
+if check.total_additions > 0 || check.total_deletions > 0 && self.diff_renderer.use_colors {
+```
+
+**After**:
+```rust
+if check.total_additions > 0 || check.total_deletions > 0 {
+    // Always show numbers, but only add color codes when use_colors is true
+    if self.diff_renderer.use_colors {
+        output.push_str(&self.diff_renderer.cached_styles.stat_added);
+    }
+    // ...
+}
+```
+
+### Improved ProviderBuilder.build() Documentation (MEDIUM)
+
+**File**: `vtcode-core/src/llm/provider_builder.rs`
+
+**Problem**: `build()` method panicked without clear documentation about when to use `try_build()` vs `build()`.
+
+**Solution**: Added comprehensive documentation explaining:
+- When to use `build()` (after validation, when failure is unexpected)
+- When to use `try_build()` (when failure is possible)
+- What the panic indicates (bug in configuration validation)
+
+### Fixed Silent Error Swallowing in persistent_memory.rs (MEDIUM)
+
+**File**: `vtcode-core/src/persistent_memory.rs`
+
+**Problem**: Three locations silently ignored results of important operations:
+- `consolidate_memory_files` results were dropped
+- `write_classified_memory` results were dropped
+
+**Solution**: Added proper error handling:
+- Best-effort operations log warnings but don't fail
+- Critical operations propagate errors with `?`
+
+### Fixed Integer Overflow in Cache Size Estimation (LOW)
+
+**File**: `vtcode-core/src/cache/mod.rs`
+
+**Problem**: Recursive `estimate_json_size` function used `.sum()` which could overflow silently for large JSON structures.
+
+**Solution**: Changed to use `saturating_add` with `.fold()` to prevent silent overflow.
+
+---
+
+## Additional Improvements (Round 4)
+
+### Fixed Mutex Poison Panic in search_runtime.rs (MEDIUM)
+
+**File**: `vtcode-core/src/tools/search_runtime.rs`
+
+**Problem**: Two `expect()` calls on `std::sync::Mutex::lock()` would cause cascading panics if any thread panicked while holding the global cache mutex.
+
+**Solution**: Replaced `expect()` with `unwrap_or_else(|poisoned| poisoned.into_inner())` pattern to recover from poison, matching the defensive pattern used elsewhere in the crate.
+
+### Fixed RwLock Poison Panic in cached_executor.rs (MEDIUM)
+
+**File**: `vtcode-core/src/tools/cached_executor.rs`
+
+**Problem**: Five `expect("pattern detector lock poisoned")` calls on `std::sync::RwLock` would cause cascading panics if any thread panicked while holding the pattern detector lock.
+
+**Solution**: Replaced all five `expect()` calls with `unwrap_or_else(|poisoned| poisoned.into_inner())` pattern to recover from poison.
+
+---
+
+## Bug Summary Table (All Rounds)
+
+| # | Severity | File | Issue | Status |
+|---|----------|------|-------|--------|
+| 1 | HIGH | diff_renderer.rs | Operator precedence bug | FIXED |
+| 2 | HIGH | provider_builder.rs | Panic without documentation | FIXED |
+| 3 | HIGH | justification.rs | I/O under lock | FIXED |
+| 4 | MEDIUM | registry/circuit_breaker.rs | TOCTOU race condition | FIXED |
+| 5 | MEDIUM | registry/circuit_breaker.rs | Disk I/O under mutex | FIXED |
+| 6 | MEDIUM | lr_map.rs | Silent data loss | FIXED |
+| 7 | MEDIUM | persistent_memory.rs | Silent error swallowing | FIXED |
+| 8 | MEDIUM | search_runtime.rs | Mutex poison panic | FIXED |
+| 9 | MEDIUM | cached_executor.rs | RwLock poison panic | FIXED |
+| 10 | LOW | thread_safety.rs | Incorrect documentation | FIXED |
+| 11 | LOW | both circuit_breaker.rs | DRY violation | FIXED |
+| 12 | LOW | both circuit_breaker.rs | Flaky tests | FIXED |
+| 13 | LOW | cache/mod.rs | Integer overflow | FIXED |

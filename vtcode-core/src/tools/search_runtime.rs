@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
+use tracing::warn;
 
 use crate::command_safety::shell_parser::prewarm_bash_parser;
 use crate::tools::tree_sitter_runtime::prewarm_workspace_languages;
@@ -56,10 +57,10 @@ impl SearchToolBundleStatus {
     #[must_use]
     pub fn header_summary(self) -> String {
         if self.all_ready() {
-            return "Search: ripgrep · ast-grep".to_string();
+            return "Search: ripgrep \u{00b7} ast-grep".to_string();
         }
         format!(
-            "Search: ripgrep {} · ast-grep {}",
+            "Search: ripgrep {} \u{00b7} ast-grep {}",
             self.ripgrep.label(),
             self.ast_grep.label()
         )
@@ -83,13 +84,15 @@ pub(crate) fn snapshot_for_workspace(workspace_root: &Path) -> SearchRuntimeSnap
     let workspace_root = workspace_root.to_path_buf();
     let cache = SEARCH_RUNTIME_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
 
-    if let Some(snapshot) = cache
-        .lock()
-        .expect("search runtime cache mutex must not be poisoned")
-        .get(&workspace_root)
-        .cloned()
+    // Check cache first; recover from poison by clearing and returning None to recompute
     {
-        return snapshot;
+        let cache_guard = cache.lock().unwrap_or_else(|poisoned| {
+            warn!("search runtime cache mutex poisoned; recovering");
+            poisoned.into_inner()
+        });
+        if let Some(snapshot) = cache_guard.get(&workspace_root).cloned() {
+            return snapshot;
+        }
     }
 
     let workspace_languages = detect_workspace_languages(&workspace_root);
@@ -108,9 +111,10 @@ pub(crate) fn snapshot_for_workspace(workspace_root: &Path) -> SearchRuntimeSnap
         bash_tree_sitter_ready: prewarm_bash_parser().is_ok(),
     };
 
-    let mut guard = cache
-        .lock()
-        .expect("search runtime cache mutex must not be poisoned");
+    let mut guard = cache.lock().unwrap_or_else(|poisoned| {
+        warn!("search runtime cache mutex poisoned; recovering");
+        poisoned.into_inner()
+    });
     guard
         .entry(workspace_root)
         .or_insert_with(|| snapshot.clone())
@@ -236,7 +240,7 @@ mod tests {
 
         assert_eq!(
             status.header_summary(),
-            "Search: ripgrep ready · ast-grep missing"
+            "Search: ripgrep ready \u{00b7} ast-grep missing"
         );
         assert!(!status.all_ready());
         assert!(!status.all_unavailable());
@@ -250,7 +254,7 @@ mod tests {
             ast_grep: SearchToolReadiness::Ready,
         };
 
-        assert_eq!(status.header_summary(), "Search: ripgrep · ast-grep");
+        assert_eq!(status.header_summary(), "Search: ripgrep \u{00b7} ast-grep");
         assert!(status.all_ready());
     }
 }

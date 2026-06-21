@@ -16,6 +16,7 @@ use std::sync::RwLock;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 use tokio::time::timeout;
+use tracing::warn;
 
 static REQUEST_ID: AtomicU64 = AtomicU64::new(1);
 
@@ -340,10 +341,10 @@ impl CachedToolExecutor {
 
     /// Record event in pattern detector
     async fn record_pattern(&self, tool_name: &str, success: bool, duration_ms: u64) {
-        let mut patterns = self
-            .patterns
-            .write()
-            .expect("pattern detector lock poisoned");
+        let mut patterns = self.patterns.write().unwrap_or_else(|poisoned| {
+            warn!("pattern detector lock poisoned; recovering");
+            poisoned.into_inner()
+        });
         patterns.record_event(ToolEvent {
             tool_name: tool_name.to_string(),
             success,
@@ -355,10 +356,10 @@ impl CachedToolExecutor {
     /// Get current executor statistics.
     pub async fn stats(&self) -> ExecutorStats {
         let mut stats = self.stats.snapshot();
-        let patterns = self
-            .patterns
-            .read()
-            .expect("pattern detector lock poisoned");
+        let patterns = self.patterns.read().unwrap_or_else(|poisoned| {
+            warn!("pattern detector lock poisoned; recovering");
+            poisoned.into_inner()
+        });
         stats.patterns_detected = patterns.patterns().len();
         stats
     }
@@ -370,19 +371,19 @@ impl CachedToolExecutor {
 
     /// Get detected workflow patterns.
     pub async fn patterns(&self) -> Vec<crate::tools::pattern_detection::DetectedPattern> {
-        let patterns = self
-            .patterns
-            .read()
-            .expect("pattern detector lock poisoned");
+        let patterns = self.patterns.read().unwrap_or_else(|poisoned| {
+            warn!("pattern detector lock poisoned; recovering");
+            poisoned.into_inner()
+        });
         patterns.patterns().to_vec()
     }
 
     /// Get ML-ready feature vector from patterns.
     pub async fn feature_vector(&self) -> Vec<f64> {
-        let patterns = self
-            .patterns
-            .read()
-            .expect("pattern detector lock poisoned");
+        let patterns = self.patterns.read().unwrap_or_else(|poisoned| {
+            warn!("pattern detector lock poisoned; recovering");
+            poisoned.into_inner()
+        });
         patterns.feature_vector()
     }
 
@@ -393,10 +394,10 @@ impl CachedToolExecutor {
 
     /// Clear patterns
     pub async fn clear_patterns(&self) {
-        let mut patterns = self
-            .patterns
-            .write()
-            .expect("pattern detector lock poisoned");
+        let mut patterns = self.patterns.write().unwrap_or_else(|poisoned| {
+            warn!("pattern detector lock poisoned; recovering");
+            poisoned.into_inner()
+        });
         patterns.reset();
     }
 
