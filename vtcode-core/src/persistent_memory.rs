@@ -725,7 +725,10 @@ pub async fn rebuild_generated_memory_files(
     let mut created_files = Vec::new();
     ensure_memory_layout(&files, &mut created_files).await?;
     let _lock = MemoryLock::acquire(&files.lock_file).await?;
-    let _ = consolidate_memory_files(None, None, workspace_root, &files).await?;
+    // Consolidation is best-effort; log errors but don't fail initialization
+    if let Err(e) = consolidate_memory_files(None, None, workspace_root, &files).await {
+        tracing::warn!("Failed to consolidate memory files during init: {}", e);
+    }
     Ok(())
 }
 
@@ -865,7 +868,8 @@ pub async fn cleanup_persistent_memory(
     };
 
     let removed_rollout_files = remove_rollout_markdown_files(&files.rollout_summaries_dir).await?;
-    let _ = write_classified_memory(
+    // Write is critical; propagate errors
+    write_classified_memory(
         &files,
         &classified,
         Some(runtime_config),
@@ -1055,13 +1059,17 @@ pub async fn forget_planned_persistent_memory_matches(
     }
 
     if removed_facts > 0 {
-        let _ = consolidate_memory_files(
+        // Consolidation is best-effort; log errors but don't fail the forget operation
+        if let Err(e) = consolidate_memory_files(
             Some(runtime_config),
             vt_cfg,
             runtime_config.workspace.as_path(),
             &files,
         )
-        .await?;
+        .await
+        {
+            tracing::warn!("Failed to consolidate memory files after forget: {}", e);
+        }
     }
 
     Ok(Some(PersistentMemoryForgetReport {

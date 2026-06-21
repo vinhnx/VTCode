@@ -555,11 +555,18 @@ pub fn estimate_json_size(value: &serde_json::Value) -> u64 {
         serde_json::Value::Bool(_) => 5,
         serde_json::Value::Number(n) => n.to_string().len() as u64,
         serde_json::Value::String(s) => s.len() as u64,
-        serde_json::Value::Array(arr) => arr.iter().map(estimate_json_size).sum(),
+        serde_json::Value::Array(arr) => arr
+            .iter()
+            .map(estimate_json_size)
+            .fold(0u64, |acc, size| acc.saturating_add(size)),
         serde_json::Value::Object(obj) => obj
             .iter()
-            .map(|(k, v)| k.len() as u64 + estimate_json_size(v) + 3) // +3 for quotes and colon
-            .sum(),
+            .map(|(k, v)| {
+                (k.len() as u64)
+                    .saturating_add(estimate_json_size(v))
+                    .saturating_add(3)
+            }) // +3 for quotes and colon
+            .fold(0u64, |acc, size| acc.saturating_add(size)),
     }
 }
 

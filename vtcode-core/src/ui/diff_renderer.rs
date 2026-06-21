@@ -696,15 +696,19 @@ impl DiffChatRenderer {
         use std::fmt::Write as FmtWrite;
         let _ = write!(output, "{} file(s) changed", check.file_count);
 
-        if check.total_additions > 0 || check.total_deletions > 0 && self.diff_renderer.use_colors {
+        if check.total_additions > 0 || check.total_deletions > 0 {
             output.push_str(" (");
 
             // Additions stat
             if check.total_additions > 0 {
-                output.push_str(&self.diff_renderer.cached_styles.stat_added);
+                if self.diff_renderer.use_colors {
+                    output.push_str(&self.diff_renderer.cached_styles.stat_added);
+                }
                 output.push('+');
                 let _ = write!(output, "{}", check.total_additions);
-                output.push_str(&self.diff_renderer.cached_styles.reset);
+                if self.diff_renderer.use_colors {
+                    output.push_str(&self.diff_renderer.cached_styles.reset);
+                }
             }
 
             if check.total_additions > 0 && check.total_deletions > 0 {
@@ -713,10 +717,14 @@ impl DiffChatRenderer {
 
             // Deletions stat
             if check.total_deletions > 0 {
-                output.push_str(&self.diff_renderer.cached_styles.stat_removed);
+                if self.diff_renderer.use_colors {
+                    output.push_str(&self.diff_renderer.cached_styles.stat_removed);
+                }
                 output.push('-');
                 let _ = write!(output, "{}", check.total_deletions);
-                output.push_str(&self.diff_renderer.cached_styles.reset);
+                if self.diff_renderer.use_colors {
+                    output.push_str(&self.diff_renderer.cached_styles.reset);
+                }
             }
 
             output.push(')');

@@ -70,11 +70,23 @@ where
         )
     }
 
+    /// Build the provider, panicking if creation fails.
+    ///
+    /// This method is intended for use in contexts where provider creation
+    /// should never fail (e.g., after configuration validation). If failure
+    /// is possible, use [`try_build`] instead.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the provider cannot be created. This indicates a bug in the
+    /// configuration validation or provider creation logic.
     pub fn build(self) -> Box<dyn LLMProvider> {
         match self.try_build() {
             Ok(provider) => provider,
             Err(error) => panic!(
-                "provider builder invariant violated for `{}`: {}",
+                "provider builder invariant violated for `{}`: {}. \
+                 This indicates a bug in configuration validation. \
+                 Use try_build() if failure is expected.",
                 T::PROVIDER_KEY,
                 error
             ),
