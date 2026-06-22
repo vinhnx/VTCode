@@ -2,6 +2,27 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.133.5 - 2026-06-22
+
+### Highlights
+#### Bug Fixes
+
+- Handle TUI mode in prompt capability check (7582512e) 
+- Prevent TUI corruption when cycling agents via Tab (704b65c7) 
+- Guard raw println/print calls that corrupt TUI display (61baed0d) 
+- Drain terminal events to prevent input corruption after external app execution (a461c329) 
+#### Documentation
+
+- Update TUI println audit with fix status and remaining items (2b039c28) 
+#### Features
+
+- Implement domain-scoped approval caching for web_fetch tool (70e5c760) 
+- Implement workspace configuration with root layer control (8e617121) 
+### Other Changes
+#### Other
+
+- Register web_fetch tool and implement HITL approval flow (36aed2e5) 
+- Refactor model display names to use Cow for dynamic strings; update provider handling and validation logic (7b72264b) 
 ## 0.133.4 - 2026-06-21
 
 ### Highlights
