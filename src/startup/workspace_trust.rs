@@ -157,6 +157,13 @@ async fn resolve_full_auto_workspace_trust(
 }
 
 fn prompt_capable() -> bool {
+    // When the TUI is active, crossterm owns the terminal.  Using raw
+    // println! / stdin.read_line() would corrupt the display and block the
+    // event loop, so treat the session as non-interactive here.  The caller
+    // will surface the trust requirement through its own renderer.
+    if vtcode_core::ui::is_tui_mode() {
+        return false;
+    }
     io::stdin().is_tty_ext() && io::stdout().is_tty_ext()
 }
 

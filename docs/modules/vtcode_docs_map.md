@@ -644,6 +644,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: 1. Humans Steer, Agents Execute, 2. Repository as System of Record, 3. Progressive Disclosure, 4. Agent Legibility Over Human Aesthetics, 5. Enforce Invariants, Not Implementations
   - **User Questions**: "What can you tell me about Core Beliefs?", "How does 1. Humans Steer, Agents Execute work?", "How does 2. Repository as System of Record work?"
 
+- **File**: `docs/project/TODO.md`
+  - **Content**: Curl web tool blocked by policy
+  - **Topics**: User, Assistant, User, Assistant, User
+  - **User Questions**: "What can you tell me about Curl web tool blocked by policy?", "How does User work?", "How does Assistant work?"
+
 - **File**: `docs/analysis/DRY_DUPLICATION_AUDIT.md`
   - **Content**: DRY/KISS Duplication Audit
   - **Topics**: Scope, Implemented Refactors, Duplication Intentionally Left Alone, Expected Benefits, Verification
@@ -783,10 +788,6 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Content**: Styling Quick Start Guide
   - **Topics**: For CLI Output, For TUI Widgets, Unified Theme, Color Reference, Common Patterns
   - **User Questions**: "What can you tell me about Styling Quick Start Guide?", "How does For CLI Output work?", "How does For TUI Widgets work?"
-
-- **File**: `docs/project/TODO.md`
-  - **Content**: TODO.md
-  - **User Questions**: "What can you tell me about TODO.md?"
 
 - **File**: `docs/harness/TECH_DEBT_TRACKER.md`
   - **Content**: Tech Debt Tracker
