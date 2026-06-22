@@ -16,6 +16,8 @@ use tempfile::NamedTempFile;
 use tracing::debug;
 use vtcode_commons::EditorTarget;
 
+const TERMINAL_EVENT_DRAIN_WAIT: Duration = Duration::from_millis(10);
+
 /// Result from running a terminal application
 #[derive(Debug)]
 pub struct TerminalAppResult {
@@ -364,9 +366,7 @@ impl TerminalAppLauncher {
             // CRITICAL: Drain any pending crossterm events BEFORE disabling raw mode.
             // This prevents the external app from receiving garbage input (like terminal
             // capability responses or buffered keystrokes) that might have been sent to the TUI.
-            while event::poll(Duration::from_millis(0)).unwrap_or(false) {
-                let _ = event::read();
-            }
+            drain_terminal_events();
 
             // Disable raw mode
             disable_raw_mode().context("failed to disable raw mode")?;
@@ -387,6 +387,11 @@ impl TerminalAppLauncher {
             if let Err(error) = io::stdout().execute(EnterAlternateScreen) {
                 restore_errors.push(format!("failed to re-enter alternate screen: {}", error));
             }
+
+            // Drain terminal replies triggered by the fullscreen app while raw mode is active.
+            // Without this, Kitty keyboard protocol responses can be interpreted as shell input
+            // after returning from apps like lazygit.
+            drain_terminal_events();
 
             // This prevents ANSI escape codes from external apps' background color requests
             // from appearing in the TUI.
@@ -486,6 +491,16 @@ impl TerminalAppLauncher {
 
             Ok(())
         })
+    }
+}
+
+fn drain_terminal_events() {
+    if event::poll(TERMINAL_EVENT_DRAIN_WAIT).unwrap_or(false) {
+        let _ = event::read();
+    }
+
+    while event::poll(Duration::from_millis(0)).unwrap_or(false) {
+        let _ = event::read();
     }
 }
 
