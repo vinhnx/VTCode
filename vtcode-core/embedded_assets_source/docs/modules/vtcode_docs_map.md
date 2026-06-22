@@ -469,8 +469,8 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 - **File**: `docs/modules/println_tui_audit.md`
   - **Content**: Audit: Raw println!/print! calls that could leak into the TUI
-  - **Topics**: Summary, Risk Categories, Recommendations, Verification
-  - **User Questions**: "What can you tell me about Audit: Raw println!/print! calls that could leak into the TUI?", "How does Summary work?", "How does Risk Categories work?"
+  - **Topics**: Summary, Current Status: All Known Issues Fixed, Remaining Low-Risk Items, Safe I/O Patterns (Verified), Recommendations
+  - **User Questions**: "What can you tell me about Audit: Raw println!/print! calls that could leak into the TUI?", "How does Summary work?", "How does Current Status: All Known Issues Fixed work?"
 
 - **File**: `docs/modules/vtcode_config_migration.md`
   - **Content**: Migrating to the `vtcode-config` Crate

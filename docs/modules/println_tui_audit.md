@@ -7,77 +7,76 @@ Raw `println!`/`print!` calls bypass crossterm's terminal management, causing:
 - Blocked event loop (when paired with `io::stdin().read_line()`)
 - Screen flashing or black screens
 
-## Risk Categories
+## Current Status: All Known Issues Fixed
 
-### HIGH RISK - Active in TUI, no guard
+| Severity | Issue | Fix | Commit |
+|----------|-------|-----|--------|
+| CRITICAL | `terminal.clear()` in ForceRedraw handler blanked entire screen | Removed `terminal.clear()`, session dirty flag suffices | `704b65c7c` |
+| HIGH | MCP elicitation used raw `print!`+`stdin.read_line()` in TUI | Auto-decline in TUI mode with tracing log | `61baed0db` |
+| HIGH | Agent switch did trust check AFTER `select_from_specs`, causing switch-revert flicker | Trust check moved BEFORE switch; cycle functions skip untrusted auto agents | `704b65c7c` |
+| MEDIUM | `ensure_full_auto_workspace_trust` status messages used raw `println!` | `tui_safe_println()` helper routes to tracing in TUI mode | `61baed0db` |
+| MEDIUM | `prompt_capable()` didn't account for TUI mode | Added `is_tui_mode()` guard | `7582512e3` |
 
-| File | Line | Issue |
-|------|------|-------|
-| `src/agent/runloop/mcp_elicitation.rs` | 97 | `print!("Response> ")` + `io::stdin().read_line()` during MCP elicitation. No `is_tui_mode()` check. Would corrupt TUI and block event loop if an MCP server requests elicitation while TUI is active. |
+## Remaining Low-Risk Items
 
-### MEDIUM RISK - Latent, guarded by existing code paths
+### Atomicity gap in agent switching
 
-| File | Lines | Status |
-|------|-------|--------|
-| `src/startup/workspace_trust.rs` | 72, 79, 86, 142, 220-303 | `ensure_full_auto_workspace_trust` status messages and `render_prompt`/`read_user_selection`. Currently safe because: (1) `prompt_capable()` returns false in TUI mode, preventing the interactive prompt; (2) `is_workspace_trusted()` check in `support.rs` prevents reaching the `NonInteractive` branch from TUI. **Latent risk**: if a new caller invokes `ensure_full_auto_workspace_trust` without the pre-check, the `println!` calls would corrupt the TUI. |
+**File:** `src/agent/runloop/unified/turn/session/interaction_loop_runner/support.rs:939-998`
 
-### SAFE - Properly guarded or CLI-only
+If `select_from_specs` succeeds but a subsequent `sync_primary_agent_hook_runtime` or `sync_primary_agent_mcp_runtime` call fails, the agent state is partially updated. This is a recoverability concern, not a crash risk. The system would continue operating with the new agent but without synchronized hooks/MCP.
 
-| File | Lines | Guard |
-|------|-------|-------|
-| `src/agent/runloop/git.rs` | 327-328 | `is_tui_mode()` check skips interactive prompt in TUI |
-| `src/agent/runloop/unified/postamble.rs` | 41-122 | Called after `restore_tui()` (session_loop_runner:1300) |
-| `src/codex_app_server/runtime.rs` | 266, 439-492, 709-719, 930 | Codex app server has its own TUI (not crossterm-based) |
+**Severity:** Low  
+**Impact:** Partial state on async failure (agent active but hooks/MCP not synced)  
+**Mitigation:** The async operations are idempotent and can be retried on next interaction.
+
+### force_redraw during config live-reload
+
+**File:** `src/agent/runloop/unified/turn/session/interaction_loop_runner/support.rs:631`
+
+`apply_live_theme_and_appearance` calls `force_redraw()` on workspace config file reload. The 200ms debounce at `interaction_loop_runner.rs:59` mitigates frequent triggers.
+
+**Severity:** Low  
+**Impact:** Potential unnecessary redraws if config files change frequently  
+**Mitigation:** Debounce duration is configurable.
+
+## Safe I/O Patterns (Verified)
+
+| File | Lines | Why Safe |
+|------|-------|----------|
+| `src/agent/runloop/git.rs` | 327-328 | `is_tui_mode()` check skips interactive prompt |
+| `src/agent/runloop/unified/postamble.rs` | 41-122 | Called after `restore_tui()` |
+| `src/codex_app_server/runtime.rs` | 266, 439-492, 709-719, 930 | Own TUI (not crossterm-based) |
 | `src/cli/` | various | CLI commands, not TUI context |
 | `src/main.rs`, `src/main_helpers/` | various | Startup/shutdown, not TUI |
-| `src/process_hardening.rs` | various | Error messages via `eprintln!`, not TUI |
+| `src/process_hardening.rs` | various | `eprintln!` for error messages |
 | `src/startup/first_run_prompts/` | various | First-run setup, not TUI |
-| `src/startup/workspace_trust.rs:159-176` | `prompt_capable()` | Returns false in TUI mode, preventing interactive prompt |
+| `vtcode-ui/src/tui/core_tui/session/terminal_title.rs` | 261-266 | Writes to stdout (TUI uses stderr) |
+| `vtcode-ui/src/tui/core_tui/panic_hook.rs` | 89-208 | `eprintln!` in panic hook by design |
 
 ## Recommendations
 
-### 1. Fix MCP elicitation handler (HIGH)
-
-Add TUI mode guard to `InteractiveMcpElicitationHandler`:
-
-```rust
-// src/agent/runloop/mcp_elicitation.rs
-if vtcode_core::ui::is_tui_mode() {
-    // In TUI mode, auto-decline elicitation to avoid corrupting display
-    tracing::info!("MCP elicitation declined in TUI mode");
-    return Ok(McpElicitationResponse {
-        action: ElicitationAction::Decline,
-        content: None,
-        meta: None,
-    });
-}
-```
-
-### 2. Guard `ensure_full_auto_workspace_trust` status messages (MEDIUM)
-
-Add TUI mode check to the `println!` calls in `ensure_full_auto_workspace_trust`:
-
-```rust
-// src/startup/workspace_trust.rs
-fn tui_safe_println(msg: &str) {
-    if vtcode_core::ui::is_tui_mode() {
-        tracing::info!("{}", msg);
-    } else {
-        println!("{}", msg);
-    }
-}
-```
-
-### 3. Add lint rule (PREVENTIVE)
+### 1. Add lint rule (PREVENTIVE)
 
 Consider adding an `ast-grep` rule or CI check to flag `println!`/`print!` in `src/` outside of:
 - `#[cfg(test)]` modules
 - CLI command handlers (`src/cli/`)
-- Files with explicit TUI mode guards
+- Files with explicit `is_tui_mode()` guards
+
+### 2. Consider atomic agent switching (LOW priority)
+
+Wrap `select_from_specs` + sync operations in a rollback-capable pattern:
+```rust
+// Pseudocode
+let result = select_and_sync(specs, name).await;
+if result.is_err() {
+    select_from_specs(specs, previous_name)?;  // rollback
+}
+```
+
+This is low priority because the current failure modes are non-critical.
 
 ## Verification
 
-After fixes, verify with:
 ```bash
 # Find all non-test println/print calls in src/
 grep -rn "println!\|print!(" --include="*.rs" src/ | grep -v "#\[test\]" | grep -v "// "
