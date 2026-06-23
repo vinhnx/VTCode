@@ -28,6 +28,12 @@
 //!   VTCode's hosted shell, tool search, remote MCP, and custom-tool payloads.
 
 use crate::llm::provider::{LLMError, LLMRequest};
+use crate::llm::providers::shared::StreamAssemblyError;
+use rig::providers::openai::responses_api::Output as RigResponsesOutput;
+use rig::providers::openai::responses_api::streaming::{
+    ItemChunkKind as RigResponsesItemChunkKind, ResponseChunkKind as RigResponsesChunkKind,
+    StreamingCompletionChunk as RigResponsesStreamingChunk,
+};
 use rig::providers::openai::responses_api::{
     AdditionalParameters as RigResponsesAdditionalParameters, Include as RigResponsesInclude,
 };
@@ -47,6 +53,177 @@ pub(crate) struct PromptCacheOverlay<'a> {
     pub include_prompt_cache_retention: bool,
     pub is_responses_api_model: bool,
     pub prompt_cache_retention: Option<&'a str>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum ResponsesStreamEvent {
+    Lifecycle {
+        kind: ResponsesLifecycleEvent,
+    },
+    TextDelta {
+        delta: String,
+    },
+    RefusalDelta {
+        delta: String,
+    },
+    ReasoningDelta {
+        delta: String,
+    },
+    FunctionCallNameDelta {
+        call_id: String,
+        name: String,
+        output_index: Option<usize>,
+    },
+    FunctionCallArgumentsDelta {
+        call_id: String,
+        delta: String,
+        output_index: Option<usize>,
+    },
+    CompletedToolCall {
+        call_id: String,
+        name: String,
+        arguments: String,
+        output_index: Option<usize>,
+    },
+    CompletedResponse {
+        response: Value,
+    },
+    Error {
+        message: String,
+    },
+    Unknown,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ResponsesLifecycleEvent {
+    Created,
+    InProgress,
+}
+
+pub(crate) struct OpenAIResponsesStreamAdapter;
+
+impl OpenAIResponsesStreamAdapter {
+    pub(crate) fn parse_sse_data(data: &str) -> Result<ResponsesStreamEvent, LLMError> {
+        Self::parse_sse_data_for_provider("OpenAI", data)
+    }
+
+    pub(crate) fn parse_sse_data_for_provider(
+        provider_name: &str,
+        data: &str,
+    ) -> Result<ResponsesStreamEvent, LLMError> {
+        let trimmed = data.trim();
+        if trimmed.is_empty() || trimmed == "[DONE]" {
+            return Ok(ResponsesStreamEvent::Unknown);
+        }
+
+        let raw_payload: Value = serde_json::from_str(trimmed).map_err(|err| {
+            StreamAssemblyError::InvalidPayload(err.to_string()).into_llm_error(provider_name)
+        })?;
+
+        if raw_payload.get("type").and_then(Value::as_str) == Some("error") {
+            return Ok(ResponsesStreamEvent::Error {
+                message: response_error_message(&raw_payload)
+                    .unwrap_or_else(|| "Unknown error from Responses API".to_string()),
+            });
+        }
+
+        let parsed = match serde_json::from_str::<RigResponsesStreamingChunk>(trimmed) {
+            Ok(parsed) => parsed,
+            Err(err) if is_known_rig_stream_event(&raw_payload) => {
+                return Err(StreamAssemblyError::InvalidPayload(err.to_string())
+                    .into_llm_error(provider_name));
+            }
+            Err(_) => return adapt_overlay_payload(raw_payload),
+        };
+
+        Self::adapt_rig_chunk(provider_name, parsed, raw_payload)
+    }
+
+    pub(crate) fn parse_payload_for_provider(
+        provider_name: &str,
+        payload: Value,
+    ) -> Result<ResponsesStreamEvent, LLMError> {
+        let data = serde_json::to_string(&payload).map_err(|err| {
+            StreamAssemblyError::InvalidPayload(err.to_string()).into_llm_error(provider_name)
+        })?;
+        Self::parse_sse_data_for_provider(provider_name, &data)
+    }
+
+    fn adapt_rig_chunk(
+        provider_name: &str,
+        chunk: RigResponsesStreamingChunk,
+        raw_payload: Value,
+    ) -> Result<ResponsesStreamEvent, LLMError> {
+        match chunk {
+            RigResponsesStreamingChunk::Response(response_chunk) => {
+                let kind = response_chunk.kind;
+                match kind {
+                    RigResponsesChunkKind::ResponseCreated => Ok(ResponsesStreamEvent::Lifecycle {
+                        kind: ResponsesLifecycleEvent::Created,
+                    }),
+                    RigResponsesChunkKind::ResponseInProgress => {
+                        Ok(ResponsesStreamEvent::Lifecycle {
+                            kind: ResponsesLifecycleEvent::InProgress,
+                        })
+                    }
+                    RigResponsesChunkKind::ResponseCompleted => {
+                        Ok(ResponsesStreamEvent::CompletedResponse {
+                            response: raw_payload.get("response").cloned().unwrap_or(Value::Null),
+                        })
+                    }
+                    RigResponsesChunkKind::ResponseFailed
+                    | RigResponsesChunkKind::ResponseIncomplete => {
+                        Ok(ResponsesStreamEvent::Error {
+                            message: response_error_message(&raw_payload)
+                                .unwrap_or_else(|| "Unknown error from Responses API".to_string()),
+                        })
+                    }
+                }
+            }
+            RigResponsesStreamingChunk::Delta(item_chunk) => {
+                let output_index = usize::try_from(item_chunk.output_index).ok();
+                let item_id = item_chunk.item_id;
+                match item_chunk.data {
+                    RigResponsesItemChunkKind::OutputTextDelta(delta) => {
+                        Ok(ResponsesStreamEvent::TextDelta { delta: delta.delta })
+                    }
+                    RigResponsesItemChunkKind::RefusalDelta(delta) => {
+                        Ok(ResponsesStreamEvent::RefusalDelta { delta: delta.delta })
+                    }
+                    RigResponsesItemChunkKind::ReasoningSummaryTextDelta(delta) => {
+                        Ok(ResponsesStreamEvent::ReasoningDelta { delta: delta.delta })
+                    }
+                    RigResponsesItemChunkKind::OutputItemAdded(output)
+                    | RigResponsesItemChunkKind::OutputItemDone(output) => {
+                        adapt_output_item(provider_name, output.item, output_index)
+                    }
+                    RigResponsesItemChunkKind::FunctionCallArgsDelta(delta) => {
+                        let call_id = item_id
+                            .or_else(|| {
+                                raw_payload
+                                    .get("item_id")
+                                    .and_then(Value::as_str)
+                                    .map(ToOwned::to_owned)
+                            })
+                            .or_else(|| {
+                                raw_payload
+                                    .get("call_id")
+                                    .and_then(Value::as_str)
+                                    .map(ToOwned::to_owned)
+                            })
+                            .unwrap_or_default();
+
+                        Ok(ResponsesStreamEvent::FunctionCallArgumentsDelta {
+                            call_id,
+                            delta: delta.delta,
+                            output_index,
+                        })
+                    }
+                    _ => adapt_overlay_payload(raw_payload),
+                }
+            }
+        }
+    }
 }
 
 pub(crate) fn map_request_items_to_responses(
@@ -202,10 +379,102 @@ fn trimmed_non_empty(value: Option<&str>) -> Option<&str> {
     value.map(str::trim).filter(|value| !value.is_empty())
 }
 
+fn adapt_output_item(
+    provider_name: &str,
+    item: RigResponsesOutput,
+    output_index: Option<usize>,
+) -> Result<ResponsesStreamEvent, LLMError> {
+    match item {
+        RigResponsesOutput::FunctionCall(function_call) => {
+            let arguments = serde_json::to_string(&function_call.arguments).map_err(|err| {
+                StreamAssemblyError::InvalidPayload(err.to_string()).into_llm_error(provider_name)
+            })?;
+            if function_call.status == rig::providers::openai::responses_api::ToolStatus::Completed
+            {
+                Ok(ResponsesStreamEvent::CompletedToolCall {
+                    call_id: function_call.id,
+                    name: function_call.name,
+                    arguments,
+                    output_index,
+                })
+            } else {
+                Ok(ResponsesStreamEvent::FunctionCallNameDelta {
+                    call_id: function_call.id,
+                    name: function_call.name,
+                    output_index,
+                })
+            }
+        }
+        _ => Ok(ResponsesStreamEvent::Unknown),
+    }
+}
+
+fn adapt_overlay_payload(payload: Value) -> Result<ResponsesStreamEvent, LLMError> {
+    match payload.get("type").and_then(Value::as_str) {
+        // VTCode overlay: Rig 0.39 models reasoning summary deltas, while some
+        // OpenAI-compatible endpoints still emit reasoning_text deltas.
+        Some("response.reasoning_text.delta") | Some("response.reasoning_content.delta") => {
+            Ok(ResponsesStreamEvent::ReasoningDelta {
+                delta: payload
+                    .get("delta")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_string(),
+            })
+        }
+        Some("response.function_call_arguments.done") => Ok(ResponsesStreamEvent::Unknown),
+        _ => Ok(ResponsesStreamEvent::Unknown),
+    }
+}
+
+fn is_known_rig_stream_event(payload: &Value) -> bool {
+    matches!(
+        payload.get("type").and_then(Value::as_str),
+        Some(
+            "response.created"
+                | "response.in_progress"
+                | "response.completed"
+                | "response.failed"
+                | "response.incomplete"
+                | "response.output_item.added"
+                | "response.output_item.done"
+                | "response.content_part.added"
+                | "response.content_part.done"
+                | "response.output_text.delta"
+                | "response.output_text.done"
+                | "response.refusal.delta"
+                | "response.refusal.done"
+                | "response.function_call_arguments.delta"
+                | "response.function_call_arguments.done"
+                | "response.reasoning_summary_part.added"
+                | "response.reasoning_summary_part.done"
+                | "response.reasoning_summary_text.delta"
+                | "response.reasoning_summary_text.done"
+        )
+    )
+}
+
+fn response_error_message(payload: &Value) -> Option<String> {
+    payload
+        .get("error")
+        .and_then(|error| error.get("message"))
+        .and_then(Value::as_str)
+        .map(ToOwned::to_owned)
+        .or_else(|| {
+            payload
+                .get("response")
+                .and_then(|response| response.get("error"))
+                .and_then(|error| error.get("message"))
+                .and_then(Value::as_str)
+                .map(ToOwned::to_owned)
+        })
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        PromptCacheOverlay, ResponsesItemAdapterOptions, apply_prompt_cache_overlay,
+        OpenAIResponsesStreamAdapter, PromptCacheOverlay, ResponsesItemAdapterOptions,
+        ResponsesLifecycleEvent, ResponsesStreamEvent, apply_prompt_cache_overlay,
         clear_rig_chatgpt_unsupported_parameters, map_include_fields,
         map_request_items_to_responses, rig_chatgpt_default_parameters,
         rig_supported_state_parameters, strip_assistant_phase_overlay,
@@ -390,5 +659,183 @@ mod tests {
         ] {
             assert!(request.get(field).is_none(), "{field} should be cleared");
         }
+    }
+
+    fn event_fixture(payload: Value) -> ResponsesStreamEvent {
+        OpenAIResponsesStreamAdapter::parse_sse_data(&payload.to_string())
+            .expect("fixture should parse")
+    }
+
+    #[test]
+    fn stream_adapter_parses_lifecycle_text_refusal_reasoning_and_usage_fixtures() {
+        assert_eq!(
+            event_fixture(json!({
+                "type": "response.created",
+                "sequence_number": 0,
+                "response": {
+                    "id": "resp_1",
+                    "object": "response",
+                    "created_at": 1,
+                    "status": "in_progress",
+                    "error": null,
+                    "incomplete_details": null,
+                    "instructions": null,
+                    "max_output_tokens": null,
+                    "model": "gpt-5",
+                    "usage": null,
+                    "output": [],
+                    "tools": []
+                }
+            })),
+            ResponsesStreamEvent::Lifecycle {
+                kind: ResponsesLifecycleEvent::Created
+            }
+        );
+
+        assert_eq!(
+            event_fixture(json!({
+                "type": "response.output_text.delta",
+                "item_id": "msg_1",
+                "output_index": 0,
+                "content_index": 0,
+                "sequence_number": 1,
+                "delta": "hello"
+            })),
+            ResponsesStreamEvent::TextDelta {
+                delta: "hello".to_string()
+            }
+        );
+
+        assert_eq!(
+            event_fixture(json!({
+                "type": "response.refusal.delta",
+                "item_id": "msg_1",
+                "output_index": 0,
+                "content_index": 0,
+                "sequence_number": 2,
+                "delta": "no"
+            })),
+            ResponsesStreamEvent::RefusalDelta {
+                delta: "no".to_string()
+            }
+        );
+
+        assert_eq!(
+            event_fixture(json!({
+                "type": "response.reasoning_summary_text.delta",
+                "item_id": "rs_1",
+                "output_index": 1,
+                "summary_index": 0,
+                "sequence_number": 3,
+                "delta": "thinking"
+            })),
+            ResponsesStreamEvent::ReasoningDelta {
+                delta: "thinking".to_string()
+            }
+        );
+
+        let completed = event_fixture(json!({
+            "type": "response.completed",
+            "sequence_number": 4,
+            "response": {
+                "id": "resp_1",
+                "object": "response",
+                "created_at": 1,
+                "status": "completed",
+                "error": null,
+                "incomplete_details": null,
+                "instructions": null,
+                "max_output_tokens": null,
+                "model": "gpt-5",
+                "usage": {
+                    "input_tokens": 10,
+                    "output_tokens": 5,
+                    "total_tokens": 15
+                },
+                "output": [],
+                "tools": [],
+                "vtcode_overlay": "preserved"
+            }
+        }));
+
+        let ResponsesStreamEvent::CompletedResponse { response } = completed else {
+            panic!("expected completed response event");
+        };
+        assert_eq!(response["usage"]["input_tokens"], 10);
+        assert_eq!(response["vtcode_overlay"], "preserved");
+    }
+
+    #[test]
+    fn stream_adapter_parses_function_call_deltas_completed_tool_call_and_error_fixtures() {
+        assert_eq!(
+            event_fixture(json!({
+                "type": "response.output_item.added",
+                "item_id": "fc_1",
+                "output_index": 0,
+                "sequence_number": 1,
+                "item": {
+                    "type": "function_call",
+                    "id": "fc_1",
+                    "call_id": "call_1",
+                    "name": "search_workspace",
+                    "arguments": "",
+                    "status": "in_progress"
+                }
+            })),
+            ResponsesStreamEvent::FunctionCallNameDelta {
+                call_id: "fc_1".to_string(),
+                name: "search_workspace".to_string(),
+                output_index: Some(0)
+            }
+        );
+
+        assert_eq!(
+            event_fixture(json!({
+                "type": "response.function_call_arguments.delta",
+                "item_id": "fc_1",
+                "output_index": 0,
+                "content_index": 0,
+                "sequence_number": 2,
+                "delta": "{\"query\":\"vtcode\"}"
+            })),
+            ResponsesStreamEvent::FunctionCallArgumentsDelta {
+                call_id: "fc_1".to_string(),
+                delta: "{\"query\":\"vtcode\"}".to_string(),
+                output_index: Some(0)
+            }
+        );
+
+        assert_eq!(
+            event_fixture(json!({
+                "type": "response.output_item.done",
+                "item_id": "fc_1",
+                "output_index": 0,
+                "sequence_number": 3,
+                "item": {
+                    "type": "function_call",
+                    "id": "fc_1",
+                    "call_id": "call_1",
+                    "name": "search_workspace",
+                    "arguments": "{\"query\":\"vtcode\"}",
+                    "status": "completed"
+                }
+            })),
+            ResponsesStreamEvent::CompletedToolCall {
+                call_id: "fc_1".to_string(),
+                name: "search_workspace".to_string(),
+                arguments: "{\"query\":\"vtcode\"}".to_string(),
+                output_index: Some(0)
+            }
+        );
+
+        assert_eq!(
+            event_fixture(json!({
+                "type": "error",
+                "error": {"message": "rate limited"}
+            })),
+            ResponsesStreamEvent::Error {
+                message: "rate limited".to_string()
+            }
+        );
     }
 }

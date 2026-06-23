@@ -32,7 +32,7 @@ mod harmony;
 pub mod headers;
 pub mod request_builder;
 pub mod response_parser;
-mod responses_adapter;
+pub(crate) mod responses_adapter;
 pub mod responses_api;
 pub mod stream_decoder;
 pub mod streaming;

@@ -18,9 +18,10 @@ use crate::llm::providers::shared::{
 use crate::models_manager::model_family::find_family_for_model;
 use async_stream::try_stream;
 use futures::StreamExt;
-use serde_json::Value;
+use serde_json::{Value, json};
 use std::time::Instant;
 
+use super::responses_adapter::{OpenAIResponsesStreamAdapter, ResponsesStreamEvent};
 use super::responses_api::parse_responses_payload;
 use super::streaming::OpenAIStreamTelemetry;
 
@@ -242,77 +243,81 @@ pub(crate) fn create_responses_stream(
                         break;
                     }
 
-                    let payload: Value = serde_json::from_str(trimmed_payload).map_err(|err| {
-                        StreamAssemblyError::InvalidPayload(err.to_string())
-                            .into_llm_error("OpenAI")
-                    })?;
+                    match OpenAIResponsesStreamAdapter::parse_sse_data(trimmed_payload)? {
+                        ResponsesStreamEvent::TextDelta { delta } => {
+                            telemetry.on_content_delta(&delta);
 
-                    if let Some(event_type) = payload.get("type").and_then(|value| value.as_str()) {
-                        match event_type {
-                            "response.output_text.delta" => {
-                                let delta = payload
-                                    .get("delta")
-                                    .and_then(|value| value.as_str())
-                                    .ok_or_else(|| {
-                                        StreamAssemblyError::MissingField("delta")
-                                            .into_llm_error("OpenAI")
-                                    })?;
-                                telemetry.on_content_delta(delta);
-
-                                for event in aggregator.handle_content(delta) {
-                                    yield event;
-                                }
+                            for event in aggregator.handle_content(&delta) {
+                                yield event;
                             }
-                            "response.refusal.delta" => {
-                                let delta = payload
-                                    .get("delta")
-                                    .and_then(|value| value.as_str())
-                                    .ok_or_else(|| {
-                                        StreamAssemblyError::MissingField("delta")
-                                            .into_llm_error("OpenAI")
-                                    })?;
-                                telemetry.on_content_delta(delta);
-                                aggregator.content.push_str(delta);
-                            }
-                            "response.reasoning_text.delta" | "response.reasoning_summary_text.delta" => {
-                                let delta = payload
-                                    .get("delta")
-                                    .and_then(|value| value.as_str())
-                                    .ok_or_else(|| {
-                                        StreamAssemblyError::MissingField("delta")
-                                            .into_llm_error("OpenAI")
-                                    })?;
-                                if retain_reasoning_summaries
-                                    && let Some(delta) = aggregator.handle_reasoning(delta) {
-                                    telemetry.on_reasoning_delta(&delta);
-                                    yield provider::LLMStreamEvent::Reasoning { delta };
-                                }
-                            }
-                            "response.function_call_arguments.delta" => {}
-                            "response.completed" => {
-                                if let Some(response_value) = payload.get("response") {
-                                    final_response = Some(response_value.clone());
-                                }
-                                done = true;
-                            }
-                            "response.failed" | "response.incomplete" => {
-                                let error_message = if let Some(err) = payload.get("response")
-                                    .and_then(|r| r.get("error"))
-                                {
-                                    err.get("message")
-                                        .and_then(|v| v.as_str())
-                                        .unwrap_or("Unknown error")
-                                } else {
-                                    "Unknown error from Responses API"
-                                };
-                                let formatted_error = error_display::format_llm_error("OpenAI", error_message);
-                                Err(provider::LLMError::Provider {
-                                    message: formatted_error,
-                                    metadata: None,
-                                })?;
-                            }
-                            _ => {}
                         }
+                        ResponsesStreamEvent::RefusalDelta { delta } => {
+                            telemetry.on_content_delta(&delta);
+                            aggregator.content.push_str(&delta);
+                        }
+                        ResponsesStreamEvent::ReasoningDelta { delta } => {
+                            if retain_reasoning_summaries
+                                && let Some(delta) = aggregator.handle_reasoning(&delta) {
+                                telemetry.on_reasoning_delta(&delta);
+                                yield provider::LLMStreamEvent::Reasoning { delta };
+                            }
+                        }
+                        ResponsesStreamEvent::FunctionCallNameDelta {
+                            call_id,
+                            name,
+                            output_index,
+                        } => {
+                            aggregator.handle_tool_calls(&[json!({
+                                "index": output_index.unwrap_or(0),
+                                "id": call_id,
+                                "function": {
+                                    "name": name,
+                                }
+                            })]);
+                            telemetry.on_tool_call_delta();
+                        }
+                        ResponsesStreamEvent::FunctionCallArgumentsDelta {
+                            call_id,
+                            delta,
+                            output_index,
+                        } => {
+                            aggregator.handle_tool_calls(&[json!({
+                                "index": output_index.unwrap_or(0),
+                                "id": call_id,
+                                "function": {
+                                    "arguments": delta,
+                                }
+                            })]);
+                            telemetry.on_tool_call_delta();
+                        }
+                        ResponsesStreamEvent::CompletedToolCall {
+                            call_id,
+                            name,
+                            arguments,
+                            output_index,
+                        } => {
+                            aggregator.handle_tool_calls(&[json!({
+                                "index": output_index.unwrap_or(0),
+                                "id": call_id,
+                                "function": {
+                                    "name": name,
+                                    "arguments": arguments,
+                                }
+                            })]);
+                            telemetry.on_tool_call_delta();
+                        }
+                        ResponsesStreamEvent::CompletedResponse { response } => {
+                            final_response = Some(response);
+                            done = true;
+                        }
+                        ResponsesStreamEvent::Error { message } => {
+                            let formatted_error = error_display::format_llm_error("OpenAI", &message);
+                            Err(provider::LLMError::Provider {
+                                message: formatted_error,
+                                metadata: None,
+                            })?;
+                        }
+                        ResponsesStreamEvent::Lifecycle { .. } | ResponsesStreamEvent::Unknown => {}
                     }
                 }
 

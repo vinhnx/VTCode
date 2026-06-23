@@ -219,6 +219,37 @@ fn sample_chatgpt_auth_handle() -> OpenAIChatGptAuthHandle {
     )
 }
 
+fn responses_stream_body(response_id: &str, text_delta: &str, usage: Value) -> String {
+    let text_event = json!({
+        "type": "response.output_text.delta",
+        "item_id": "msg_1",
+        "output_index": 0,
+        "content_index": 0,
+        "sequence_number": 1,
+        "delta": text_delta
+    });
+    let completed_event = json!({
+        "type": "response.completed",
+        "sequence_number": 2,
+        "response": {
+            "id": response_id,
+            "object": "response",
+            "created_at": 1,
+            "status": "completed",
+            "error": null,
+            "incomplete_details": null,
+            "instructions": null,
+            "max_output_tokens": null,
+            "model": "gpt-5",
+            "usage": usage,
+            "output": [],
+            "tools": []
+        }
+    });
+
+    format!("data: {text_event}\n\ndata: {completed_event}\n\n")
+}
+
 // ─── Config builders ─────────────────────────────────────────────────────────
 fn priority_openai_config() -> OpenAIConfig {
     OpenAIConfig {
@@ -750,9 +781,15 @@ async fn api_key_responses_stream_sends_metadata_and_preserves_usage() {
     };
     let captured = Arc::new(Mutex::new(None::<Value>));
     let captured_for_mock = Arc::clone(&captured);
-    let stream_body = concat!(
-        "data: {\"type\":\"response.output_text.delta\",\"delta\":\"hello from api key stream\"}\n\n",
-        "data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_api_stream\",\"output\":[],\"usage\":{\"input_tokens\":21,\"output_tokens\":6,\"total_tokens\":27,\"input_tokens_details\":{\"cached_tokens\":8}}}}\n\n",
+    let stream_body = responses_stream_body(
+        "resp_api_stream",
+        "hello from api key stream",
+        json!({
+            "input_tokens": 21,
+            "output_tokens": 6,
+            "total_tokens": 27,
+            "input_tokens_details": {"cached_tokens": 8}
+        }),
     );
 
     Mock::given(method("POST"))
@@ -767,7 +804,7 @@ async fn api_key_responses_stream_sends_metadata_and_preserves_usage() {
             }));
             ResponseTemplate::new(200)
                 .insert_header("content-type", "text/event-stream")
-                .set_body_string(stream_body)
+                .set_body_string(stream_body.clone())
         })
         .expect(1)
         .mount(&server)
@@ -858,9 +895,14 @@ async fn chatgpt_responses_stream_accepts_empty_final_output_after_text_delta() 
     };
     let captured = Arc::new(Mutex::new(None::<Value>));
     let captured_for_mock = Arc::clone(&captured);
-    let stream_body = concat!(
-        "data: {\"type\":\"response.output_text.delta\",\"delta\":\"hello from stream\"}\n\n",
-        "data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_chatgpt_stream\",\"output\":[],\"usage\":{\"input_tokens\":13,\"output_tokens\":4,\"total_tokens\":17}}}\n\n",
+    let stream_body = responses_stream_body(
+        "resp_chatgpt_stream",
+        "hello from stream",
+        json!({
+            "input_tokens": 13,
+            "output_tokens": 4,
+            "total_tokens": 17
+        }),
     );
 
     Mock::given(method("POST"))
@@ -875,7 +917,7 @@ async fn chatgpt_responses_stream_accepts_empty_final_output_after_text_delta() 
             }));
             ResponseTemplate::new(200)
                 .insert_header("content-type", "text/event-stream")
-                .set_body_string(stream_body)
+                .set_body_string(stream_body.clone())
         })
         .expect(1)
         .mount(&server)
