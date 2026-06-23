@@ -485,12 +485,18 @@ fn adapt_value_bearing_rig_gap(payload: Value) -> Result<ResponsesStreamEvent, L
         | "response.mcp_call_arguments.delta"
         | "response.mcp_call_arguments.done"
         | "response.image_generation_call.partial_image"
+        | "response.custom_tool_call_input.delta"
+        | "response.custom_tool_call_input.done"
         | "response.output_text.annotation.added" => {
             // VTCode has no runtime surface for provider-hosted code execution,
-            // provider-side MCP dispatch, partial image rendering, or streamed
-            // annotation metadata. Keep the documented value-bearing payload
-            // distinct from status no-ops and retain reconciliation fields here;
-            // downstream processors intentionally ignore this internal event.
+            // provider-side MCP dispatch, partial image rendering, streamed
+            // custom tool input, or streamed annotation metadata. Custom tool
+            // execution is owned by the final `custom_tool_call` replay path,
+            // so partial input cannot be surfaced earlier without changing
+            // dispatch and permission ownership. Keep these documented
+            // value-bearing payloads distinct from status no-ops and retain
+            // reconciliation fields here; downstream processors intentionally
+            // ignore this internal event.
             Ok(ResponsesStreamEvent::ProviderValueBearingRigGap {
                 event_type: event_type.to_string(),
                 item_id: payload
@@ -508,11 +514,6 @@ fn adapt_value_bearing_rig_gap(payload: Value) -> Result<ResponsesStreamEvent, L
                 sequence_number: payload.get("sequence_number").and_then(Value::as_u64),
                 payload,
             })
-        }
-        // Slice 5 owns the detailed custom tool streaming decision. Keep custom
-        // tool input excluded from status-only no-ops without adding semantics here.
-        "response.custom_tool_call_input.delta" | "response.custom_tool_call_input.done" => {
-            Ok(ResponsesStreamEvent::Unknown)
         }
         _ => Ok(ResponsesStreamEvent::Unknown),
     }
@@ -1210,18 +1211,34 @@ mod tests {
     }
 
     #[test]
-    fn custom_tool_input_remains_excluded_from_status_noops_without_slice_four_semantics() {
-        assert_eq!(
-            event_fixture(json!({
+    fn custom_tool_input_events_preserve_payload_identity_without_runtime_dispatch() {
+        let delta_payload = assert_provider_value_bearing_rig_gap(
+            json!({
                 "type": "response.custom_tool_call_input.delta",
                 "sequence_number": 10,
-                "item_id": "ct_1",
+                "item_id": "item_1",
                 "call_id": "call_custom_1",
                 "output_index": 2,
-                "delta": "raw"
-            })),
-            ResponsesStreamEvent::Unknown
+                "delta": "*** Begin"
+            }),
+            "response.custom_tool_call_input.delta",
+            Some("call_custom_1"),
         );
+        assert_eq!(delta_payload["delta"], "*** Begin");
+
+        let done_payload = assert_provider_value_bearing_rig_gap(
+            json!({
+                "type": "response.custom_tool_call_input.done",
+                "sequence_number": 10,
+                "item_id": "item_1",
+                "call_id": "call_custom_1",
+                "output_index": 2,
+                "input": "*** Begin Patch\n*** End Patch\n"
+            }),
+            "response.custom_tool_call_input.done",
+            Some("call_custom_1"),
+        );
+        assert_eq!(done_payload["input"], "*** Begin Patch\n*** End Patch\n");
     }
 
     #[test]

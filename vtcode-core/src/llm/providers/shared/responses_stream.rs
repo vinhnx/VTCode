@@ -798,6 +798,103 @@ mod tests {
     }
 
     #[test]
+    fn custom_tool_input_stream_events_wait_for_completed_response_replay() {
+        let mut processor = ResponsesNormalizedStreamProcessor::new(options(), |value| {
+            let custom_call = value
+                .get("output")
+                .and_then(Value::as_array)
+                .and_then(|items| items.first())
+                .expect("custom tool output should exist");
+
+            Ok(LLMResponse {
+                model: "gpt-5".to_string(),
+                finish_reason: FinishReason::ToolCalls,
+                tool_calls: Some(vec![ToolCall::custom(
+                    custom_call
+                        .get("call_id")
+                        .and_then(Value::as_str)
+                        .unwrap_or_default()
+                        .to_string(),
+                    custom_call
+                        .get("name")
+                        .and_then(Value::as_str)
+                        .unwrap_or_default()
+                        .to_string(),
+                    custom_call
+                        .get("input")
+                        .and_then(Value::as_str)
+                        .unwrap_or_default()
+                        .to_string(),
+                )]),
+                ..Default::default()
+            })
+        });
+
+        let delta_events = processor
+            .handle_payload(json!({
+                "type": "response.custom_tool_call_input.delta",
+                "sequence_number": 1,
+                "item_id": "ct_1",
+                "call_id": "call_patch_1",
+                "output_index": 0,
+                "delta": "*** Begin"
+            }))
+            .expect("custom tool input delta should parse");
+        assert!(
+            delta_events.is_empty(),
+            "custom input deltas are preserved internally but are not runtime dispatch events"
+        );
+
+        let done_events = processor
+            .handle_payload(json!({
+                "type": "response.custom_tool_call_input.done",
+                "sequence_number": 2,
+                "item_id": "ct_1",
+                "call_id": "call_patch_1",
+                "output_index": 0,
+                "input": "*** Begin Patch\n*** End Patch\n"
+            }))
+            .expect("custom tool input done should parse");
+        assert!(
+            done_events.is_empty(),
+            "custom tool dispatch remains owned by response.completed replay"
+        );
+
+        let completed_events = processor
+            .handle_payload(json!({
+                "type": "response.completed",
+                "sequence_number": 3,
+                "response": completed_response_fixture(json!([{
+                    "type": "custom_tool_call",
+                    "id": "ct_1",
+                    "call_id": "call_patch_1",
+                    "name": "apply_patch",
+                    "input": "*** Begin Patch\n*** End Patch\n"
+                }]))
+            }))
+            .expect("completed event should parse");
+        assert!(completed_events.is_empty());
+
+        let finished = processor.finish().expect("finish should succeed");
+        let response = match finished.as_slice() {
+            [NormalizedStreamEvent::Done { response }] => response,
+            _ => panic!("expected final done event"),
+        };
+        let tool_calls = response
+            .tool_calls
+            .as_ref()
+            .expect("custom tool call should be replayed from final response");
+        assert_eq!(tool_calls.len(), 1);
+        assert!(tool_calls[0].is_custom());
+        assert_eq!(tool_calls[0].id, "call_patch_1");
+        assert_eq!(tool_calls[0].tool_name(), Some("apply_patch"));
+        assert_eq!(
+            tool_calls[0].raw_input(),
+            Some("*** Begin Patch\n*** End Patch\n")
+        );
+    }
+
+    #[test]
     fn refusal_delta_streams_visible_output() {
         let mut processor = ResponsesNormalizedStreamProcessor::new(options(), parse_response);
 
