@@ -709,6 +709,40 @@ async fn chatgpt_backend_uses_oauth_access_token_and_account_header() {
     );
 }
 
+#[test]
+fn chatgpt_auth_backend_does_not_emit_session_cookie_auth() {
+    let setup = OpenAIBackendSetup::from_chatgpt_subscription_config(None);
+    let auth = setup.request_auth_from_session(OpenAIChatGptSession {
+        openai_api_key: String::new(),
+        id_token: "id-token".to_string(),
+        access_token: "oauth-access".to_string(),
+        refresh_token: "refresh-token".to_string(),
+        account_id: Some("acc_123".to_string()),
+        email: Some("test@example.com".to_string()),
+        plan: Some("plus".to_string()),
+        obtained_at: 1,
+        refreshed_at: 1,
+        expires_at: None,
+    });
+
+    let request = setup
+        .authorize_request(
+            reqwest::Client::builder()
+                .no_proxy()
+                .build()
+                .expect("test client")
+                .get("http://example.com"),
+            &auth,
+        )
+        .build()
+        .expect("request should build");
+
+    assert!(
+        request.headers().get("cookie").is_none(),
+        "Rig 0.39 ChatGPT auth supports access tokens/OAuth, not session-cookie auth"
+    );
+}
+
 #[tokio::test]
 async fn api_key_responses_stream_sends_metadata_and_preserves_usage() {
     let Some(server) = start_mock_server_or_skip().await else {
@@ -2416,6 +2450,53 @@ fn chatgpt_backend_omits_previous_response_id_from_responses_payload() {
         .convert_to_openai_responses_format(&request)
         .expect("conversion should succeed");
     assert_absent(&payload, "previous_response_id");
+}
+
+#[test]
+fn chatgpt_backend_applies_rig_default_request_shape_and_clears_unsupported_fields() {
+    let provider = chatgpt_backend_provider(models::openai::GPT_5_2);
+    let mut request = sample_request(models::openai::GPT_5_2);
+    request.stream = false;
+    request.max_tokens = Some(256);
+    request.temperature = Some(0.7);
+    request.top_p = Some(0.9);
+    request.parallel_tool_calls = Some(true);
+    request.previous_response_id = Some("resp_previous_123".to_string());
+    request.response_store = Some(true);
+    request.responses_include = Some(vec!["output_text.annotations".to_string()]);
+    request.service_tier = Some("priority".to_string());
+    request.prompt_cache_key = Some("vtcode:chatgpt:session".to_string());
+
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+
+    assert_eq!(payload.get("stream").and_then(Value::as_bool), Some(true));
+    assert_eq!(payload.get("store").and_then(Value::as_bool), Some(false));
+    assert_eq!(
+        payload.get("include").and_then(Value::as_array),
+        Some(&vec![
+            json!("output_text.annotations"),
+            json!("reasoning.encrypted_content"),
+        ])
+    );
+
+    for field in [
+        "max_output_tokens",
+        "output_types",
+        "parallel_tool_calls",
+        "parallel_tool_config",
+        "previous_response_id",
+        "prompt_cache_key",
+        "prompt_cache_retention",
+        "sampling_parameters",
+        "service_tier",
+        "temperature",
+        "text",
+        "top_p",
+    ] {
+        assert_absent(&payload, field);
+    }
 }
 
 // Helper to build ChatGPT backend history payload

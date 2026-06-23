@@ -16,8 +16,9 @@ use serde_json::{Value, json};
 
 use super::responses_adapter::{
     PromptCacheOverlay, ResponsesItemAdapterOptions, apply_prompt_cache_overlay,
-    map_include_fields, map_request_items_to_responses, merge_rig_supported_state,
-    rig_supported_state_parameters, strip_assistant_phase_overlay,
+    clear_rig_chatgpt_unsupported_parameters, map_include_fields, map_request_items_to_responses,
+    merge_rig_supported_state, rig_chatgpt_default_parameters, rig_supported_state_parameters,
+    strip_assistant_phase_overlay,
 };
 use super::tool_serialization;
 use super::types::{MAX_COMPLETION_TOKENS_FIELD, OpenAIResponsesPayload};
@@ -96,6 +97,7 @@ pub(crate) struct ResponsesRequestContext<'a> {
     pub include_structured_history_in_input: bool,
     pub preserve_structured_history_on_replay: bool,
     pub preserve_assistant_phase_on_replay: bool,
+    pub use_rig_chatgpt_defaults: bool,
 }
 
 fn is_gpt5_codex_model(model: &str) -> bool {
@@ -436,7 +438,7 @@ fn build_responses_request_from_history(
     let mut openai_request = json!({
         "model": request.model,
         "input": input,
-        "stream": request.stream,
+        "stream": if ctx.use_rig_chatgpt_defaults { true } else { request.stream },
     });
     let effective_reasoning_effort = request
         .reasoning_effort
@@ -475,7 +477,9 @@ fn build_responses_request_from_history(
         openai_request["service_tier"] = json!(service_tier);
     }
 
-    if ctx.force_response_store_false {
+    if ctx.use_rig_chatgpt_defaults {
+        merge_rig_supported_state(&mut openai_request, rig_chatgpt_default_parameters());
+    } else if ctx.force_response_store_false {
         merge_rig_supported_state(
             &mut openai_request,
             rig_supported_state_parameters(previous_response_id, Some(false)),
@@ -665,6 +669,10 @@ fn build_responses_request_from_history(
         },
     );
 
+    if ctx.use_rig_chatgpt_defaults {
+        clear_rig_chatgpt_unsupported_parameters(&mut openai_request);
+    }
+
     Ok(openai_request)
 }
 
@@ -704,6 +712,7 @@ mod tests {
             include_structured_history_in_input: true,
             preserve_structured_history_on_replay: false,
             preserve_assistant_phase_on_replay: false,
+            use_rig_chatgpt_defaults: false,
         }
     }
 

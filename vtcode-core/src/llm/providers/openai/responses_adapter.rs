@@ -75,6 +75,14 @@ pub(crate) fn rig_supported_state_parameters(
     }
 }
 
+pub(crate) fn rig_chatgpt_default_parameters() -> RigResponsesAdditionalParameters {
+    RigResponsesAdditionalParameters {
+        include: Some(vec![RigResponsesInclude::ReasoningEncryptedContent]),
+        store: Some(false),
+        ..Default::default()
+    }
+}
+
 pub(crate) fn merge_rig_supported_state(
     openai_request: &mut Value,
     params: RigResponsesAdditionalParameters,
@@ -87,6 +95,31 @@ pub(crate) fn merge_rig_supported_state(
     };
 
     request.extend(fields);
+}
+
+pub(crate) fn clear_rig_chatgpt_unsupported_parameters(openai_request: &mut Value) {
+    let Some(request) = openai_request.as_object_mut() else {
+        return;
+    };
+
+    for field in [
+        "background",
+        "max_output_tokens",
+        "metadata",
+        "output_types",
+        "parallel_tool_calls",
+        "parallel_tool_config",
+        "prompt_cache_key",
+        "prompt_cache_retention",
+        "sampling_parameters",
+        "service_tier",
+        "temperature",
+        "text",
+        "top_p",
+        "user",
+    ] {
+        request.remove(field);
+    }
 }
 
 pub(crate) fn map_include_fields(
@@ -173,8 +206,9 @@ fn trimmed_non_empty(value: Option<&str>) -> Option<&str> {
 mod tests {
     use super::{
         PromptCacheOverlay, ResponsesItemAdapterOptions, apply_prompt_cache_overlay,
-        map_include_fields, map_request_items_to_responses, rig_supported_state_parameters,
-        strip_assistant_phase_overlay,
+        clear_rig_chatgpt_unsupported_parameters, map_include_fields,
+        map_request_items_to_responses, rig_chatgpt_default_parameters,
+        rig_supported_state_parameters, strip_assistant_phase_overlay,
     };
     use crate::llm::provider::{AssistantPhase, LLMRequest, Message, ToolCall};
     use serde_json::{Value, json};
@@ -299,5 +333,62 @@ mod tests {
                 .and_then(Value::as_str),
             Some("24h")
         );
+    }
+
+    #[test]
+    fn chatgpt_defaults_are_modelled_with_rig_responses_parameters() {
+        let params = rig_chatgpt_default_parameters();
+        let encoded = serde_json::to_value(params).expect("params should serialize");
+
+        assert_eq!(encoded.get("store").and_then(Value::as_bool), Some(false));
+        assert_eq!(
+            encoded.get("include").and_then(Value::as_array),
+            Some(&vec![json!("reasoning.encrypted_content")])
+        );
+        assert!(encoded.get("previous_response_id").is_none());
+    }
+
+    #[test]
+    fn chatgpt_unsupported_parameter_clear_matches_rig_boundary() {
+        let mut request = json!({
+            "model": "gpt-5.3-codex",
+            "input": [],
+            "stream": true,
+            "background": true,
+            "max_output_tokens": 123,
+            "metadata": {"turn": "1"},
+            "output_types": ["message"],
+            "parallel_tool_calls": true,
+            "parallel_tool_config": {"max_parallel_tool_calls": 2},
+            "prompt_cache_key": "session",
+            "prompt_cache_retention": "24h",
+            "sampling_parameters": {"temperature": 0.2},
+            "service_tier": "priority",
+            "temperature": 0.2,
+            "text": {"verbosity": "low"},
+            "top_p": 0.9,
+            "user": "tester"
+        });
+
+        clear_rig_chatgpt_unsupported_parameters(&mut request);
+
+        for field in [
+            "background",
+            "max_output_tokens",
+            "metadata",
+            "output_types",
+            "parallel_tool_calls",
+            "parallel_tool_config",
+            "prompt_cache_key",
+            "prompt_cache_retention",
+            "sampling_parameters",
+            "service_tier",
+            "temperature",
+            "text",
+            "top_p",
+            "user",
+        ] {
+            assert!(request.get(field).is_none(), "{field} should be cleared");
+        }
     }
 }
