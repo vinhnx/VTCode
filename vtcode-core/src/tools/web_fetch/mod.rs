@@ -22,6 +22,8 @@ const MAX_CONTENT_SIZE: usize = 500_000; // 500KB max content size
 const MAX_ALLOWED_BYTES: usize = 2_000_000; // 2MB hard cap
 const MAX_ALLOWED_TIMEOUT_SECS: u64 = 120; // 2 minutes hard cap
 
+pub(crate) const WEB_FETCH_DESCRIPTION: &str = "Fetches content from a specified URL and returns an analyzed summary. Accepts: { url: string, prompt?: string, max_bytes?: number, timeout_secs?: number }. If 'prompt' is omitted, VT Code uses a safe default summary prompt so that simple 'fetch https://…' requests are handled by this built-in tool instead of delegating to external MCP tools. For documentation domains, try the site's LLM-oriented /llms.txt index first when appropriate: for input like 'abc.com', fetch https://abc.com/llms.txt before the homepage, then traverse the linked URL map for the most relevant Markdown sources.";
+
 #[derive(Debug, Deserialize)]
 struct WebFetchArgs {
     url: String,
@@ -475,7 +477,7 @@ impl Tool for WebFetchTool {
     }
 
     fn description(&self) -> &str {
-        "Fetches content from a specified URL and returns an analyzed summary. Accepts: { url: string, prompt?: string, max_bytes?: number, timeout_secs?: number }. If 'prompt' is omitted, VT Code uses a safe default summary prompt so that simple 'fetch https://…' requests are handled by this built-in tool instead of delegating to external MCP tools."
+        WEB_FETCH_DESCRIPTION
     }
 }
 
@@ -818,11 +820,23 @@ mod tests {
     }
 
     #[test]
+    fn description_guides_agents_to_try_llms_txt_first() {
+        let tool = WebFetchTool::new();
+        let description = tool.description();
+
+        assert!(description.contains("/llms.txt"));
+        assert!(description.contains("abc.com"));
+        assert!(description.contains("https://abc.com/llms.txt"));
+        assert!(description.contains("traverse"));
+    }
+
+    #[test]
     fn max_bytes_and_timeout_are_clamped_to_hard_caps() {
-        // Verify the constants exist and are reasonable
-        assert!(MAX_ALLOWED_BYTES >= MAX_CONTENT_SIZE);
-        assert!(MAX_ALLOWED_TIMEOUT_SECS >= DEFAULT_TIMEOUT_SECS);
-        assert!(MAX_ALLOWED_BYTES <= 10_000_000); // sanity: under 10MB
-        assert!(MAX_ALLOWED_TIMEOUT_SECS <= 300); // sanity: under 5 minutes
+        const _: () = {
+            assert!(MAX_ALLOWED_BYTES >= MAX_CONTENT_SIZE);
+            assert!(MAX_ALLOWED_TIMEOUT_SECS >= DEFAULT_TIMEOUT_SECS);
+            assert!(MAX_ALLOWED_BYTES <= 10_000_000); // sanity: under 10MB
+            assert!(MAX_ALLOWED_TIMEOUT_SECS <= 300); // sanity: under 5 minutes
+        };
     }
 }

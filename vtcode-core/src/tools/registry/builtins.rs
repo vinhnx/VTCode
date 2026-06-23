@@ -16,7 +16,7 @@ use crate::tools::handlers::{
 use crate::tools::native_memory;
 use crate::tools::request_user_input::RequestUserInputTool;
 use crate::tools::tool_intent::builtin_tool_behavior;
-use crate::tools::web_fetch::WebFetchTool;
+use crate::tools::web_fetch::{WEB_FETCH_DESCRIPTION, WebFetchTool};
 use serde_json::json;
 use vtcode_utility_tool_specs::{
     apply_patch_parameters, close_agent_parameters, cron_create_parameters, cron_delete_parameters,
@@ -356,9 +356,7 @@ fn register_web_fetch(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegist
         web_fetch,
     )
     .with_native_cgp_factory(web_fetch_factory)
-    .with_description(
-        "Fetch content from a URL and return analyzed text. Accepts: { url: string, prompt?: string, max_bytes?: number, timeout_secs?: number }. If 'prompt' is omitted, a safe default summary prompt is used.",
-    )
+    .with_description(WEB_FETCH_DESCRIPTION)
     .with_parameter_schema(json!({
         "type": "object",
         "properties": {
@@ -893,5 +891,23 @@ mod tests {
                 .expect("spawn_background_subprocess description")
                 .contains("outlives the current turn")
         );
+    }
+
+    #[test]
+    fn web_fetch_builtin_description_guides_agents_to_try_llms_txt_first() {
+        let registrations = builtin_tool_registrations(None);
+        let web_fetch = registrations
+            .iter()
+            .find(|registration| registration.name() == tools::WEB_FETCH)
+            .expect("web_fetch registration should exist");
+        let description = web_fetch
+            .metadata()
+            .description()
+            .expect("web_fetch description");
+
+        assert!(description.contains("/llms.txt"));
+        assert!(description.contains("abc.com"));
+        assert!(description.contains("https://abc.com/llms.txt"));
+        assert!(description.contains("traverse"));
     }
 }
