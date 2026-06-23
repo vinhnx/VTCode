@@ -84,6 +84,7 @@ use self::config::*;
 use self::constants::*;
 use self::discovery::discover_controller_subagents;
 use self::model::*;
+use vtcode_config::subagents::SUBAGENT_HARD_CONCURRENCY_LIMIT;
 
 // ─── Controller Config ─────────────────────────────────────────────────────
 

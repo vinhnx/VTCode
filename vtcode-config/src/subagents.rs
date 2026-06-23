@@ -1460,6 +1460,10 @@ const fn default_subagents_enabled() -> bool {
     true
 }
 
+/// Hard ceiling for subagent concurrency. The configurable `max_concurrent` is
+/// clamped to this value at runtime so it can never be exceeded.
+pub const SUBAGENT_HARD_CONCURRENCY_LIMIT: usize = 5;
+
 const fn default_subagents_max_concurrent() -> usize {
     3
 }

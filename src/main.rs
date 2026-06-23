@@ -229,8 +229,7 @@ async fn run(prepared: PreparedRun) -> Result<()> {
     if let Ok(home) = std::env::var("HOME") {
         let tmp_dir = std::path::Path::new(&home).join(".vtcode").join("tmp");
         if let Err(err) = agent::runloop::tool_output::large_output::cleanup_old_temp_spools(
-            &tmp_dir,
-            86400, // 24 hours
+            &tmp_dir, 86400, // 24 hours
         ) {
             tracing::debug!(error = %err, "Failed to clean old temp spool dirs");
         }

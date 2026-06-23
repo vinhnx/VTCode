@@ -4,7 +4,6 @@ pub(crate) const SUBAGENT_TRANSCRIPT_LINE_LIMIT: usize = 200;
 pub(crate) const SUBAGENT_MEMORY_BYTES_LIMIT: usize = 25 * 1024;
 pub(crate) const SUBAGENT_MEMORY_LINE_LIMIT: usize = 200;
 pub(crate) const SUBAGENT_MEMORY_HIGHLIGHT_LIMIT: usize = 4;
-pub(crate) const SUBAGENT_HARD_CONCURRENCY_LIMIT: usize = 3;
 pub(crate) const SUBAGENT_MIN_MAX_TURNS: usize = 2;
 pub(crate) const SUBAGENT_MIN_BACKGROUND_MAX_TURNS: usize = 4;
 pub(crate) const SUBAGENT_PREVIEW_LINES: usize = 24;

@@ -200,7 +200,9 @@ fn cleanup_old_audit_logs(audit_dir: &Path, max_age_days: u64) -> Result<()> {
     }
 
     let cutoff = SystemTime::now()
-        .checked_sub(Duration::from_secs(max_age_days.saturating_mul(SECONDS_PER_DAY)))
+        .checked_sub(Duration::from_secs(
+            max_age_days.saturating_mul(SECONDS_PER_DAY),
+        ))
         .unwrap_or(UNIX_EPOCH);
 
     let entries = match fs::read_dir(audit_dir) {

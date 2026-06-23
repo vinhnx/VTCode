@@ -1,4 +1,3 @@
-cap max 5 concurrent subagents at a time.
 
 ---
 

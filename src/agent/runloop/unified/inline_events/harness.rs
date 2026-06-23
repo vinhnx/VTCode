@@ -45,9 +45,9 @@ pub(crate) fn prune_old_harness_logs(log_dir: &Path, max_age_days: u64) {
         return;
     }
 
-    let cutoff = match SystemTime::now()
-        .checked_sub(Duration::from_secs(max_age_days.saturating_mul(SECONDS_PER_DAY)))
-    {
+    let cutoff = match SystemTime::now().checked_sub(Duration::from_secs(
+        max_age_days.saturating_mul(SECONDS_PER_DAY),
+    )) {
         Some(t) => t,
         None => return,
     };

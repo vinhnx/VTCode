@@ -6,15 +6,15 @@ mod support;
 
 use super::*;
 use crate::agent::runloop::git::{compute_session_code_change_delta, normalize_workspace_path};
+use crate::agent::runloop::unified::inline_events::harness::{
+    HARNESS_LOG_MAX_AGE_DAYS, prune_old_harness_logs,
+};
 use crate::agent::runloop::unified::planning_workflow_state::render_planning_workflow_next_step_hint;
 use crate::agent::runloop::unified::postamble::{ExitData, print_exit_summary};
 use crate::agent::runloop::unified::run_loop_context::RecoveryMode;
 use crate::agent::runloop::unified::turn::turn_loop::TurnLoopOutcome;
 use crate::agent::runloop::unified::turn::turn_loop::{
     POST_TOOL_TIMEOUT_RECOVERY_REASON, prepare_post_tool_tool_free_recovery,
-};
-use crate::agent::runloop::unified::inline_events::harness::{
-    prune_old_harness_logs, HARNESS_LOG_MAX_AGE_DAYS,
 };
 use crate::updater::{InlineUpdateOutcome, display_update_notice, run_inline_update_prompt};
 use vtcode_config::loader::SimpleConfigWatcher;
