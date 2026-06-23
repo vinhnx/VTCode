@@ -109,7 +109,7 @@ ratatui = { workspace = true, features = [
 ] }
 
 nucleo-matcher = "0.3"
-rig = { package = "rig-core", version = "0.38.2", default-features = false, features = [
+rig = { package = "rig-core", version = "0.39", default-features = false, features = [
     "reqwest",
     "rustls",
 ] }

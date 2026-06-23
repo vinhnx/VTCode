@@ -28,7 +28,7 @@ openai-harmony = "0.0.8"
 once_cell = { workspace = true }
 parking_lot = "0.12"
 reqwest = { workspace = true, features = ["http2"] }
-rig = { package = "rig-core", version = "0.38.2", default-features = false, features = ["reqwest", "rustls"] }
+rig = { package = "rig-core", version = "0.39", default-features = false, features = ["reqwest", "rustls"] }
 rustc-hash = { workspace = true }
 semver = { workspace = true }
 serde = { workspace = true }
