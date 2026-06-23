@@ -1049,8 +1049,21 @@ mod tests {
 
         assert_eq!(
             event_fixture(json!({
-                "type": "response.reasoning_text.done",
+                "type": "response.reasoning_content.delta",
                 "sequence_number": 2,
+                "item_id": "rs_1",
+                "output_index": 0,
+                "delta": "provider reasoning content"
+            })),
+            ResponsesStreamEvent::ReasoningDelta {
+                delta: "provider reasoning content".to_string()
+            }
+        );
+
+        assert_eq!(
+            event_fixture(json!({
+                "type": "response.reasoning_text.done",
+                "sequence_number": 3,
                 "item_id": "rs_1",
                 "output_index": 0
             })),
@@ -1060,7 +1073,7 @@ mod tests {
         assert_eq!(
             event_fixture(json!({
                 "type": "response.reasoning_text.done",
-                "sequence_number": 3,
+                "sequence_number": 4,
                 "item_id": "rs_1",
                 "output_index": 0,
                 "text": "final reasoning text"
@@ -1192,12 +1205,83 @@ mod tests {
         let ResponsesStreamEvent::CompletedResponse { response } = completed else {
             panic!("expected completed response event");
         };
+        assert_eq!(response["id"], "resp_1");
+        assert_eq!(response["status"], "completed");
         assert_eq!(response["usage"]["input_tokens"], 10);
+        assert_eq!(response["usage"]["output_tokens"], 5);
+        assert_eq!(response["usage"]["total_tokens"], 15);
         assert_eq!(response["vtcode_overlay"], "preserved");
     }
 
     #[test]
-    fn stream_adapter_parses_function_call_deltas_completed_tool_call_and_error_fixtures() {
+    fn provider_error_events_surface_messages() {
+        assert_eq!(
+            event_fixture(json!({
+                "type": "response.failed",
+                "sequence_number": 1,
+                "response": {
+                    "id": "resp_failed",
+                    "object": "response",
+                    "created_at": 1,
+                    "status": "failed",
+                    "error": {
+                        "code": "server_error",
+                        "message": "backend failed"
+                    },
+                    "incomplete_details": null,
+                    "instructions": null,
+                    "max_output_tokens": null,
+                    "model": "gpt-5",
+                    "usage": null,
+                    "output": [],
+                    "tools": []
+                }
+            })),
+            ResponsesStreamEvent::Error {
+                message: "backend failed".to_string()
+            }
+        );
+
+        assert_eq!(
+            event_fixture(json!({
+                "type": "response.incomplete",
+                "sequence_number": 2,
+                "response": {
+                    "id": "resp_incomplete",
+                    "object": "response",
+                    "created_at": 1,
+                    "status": "incomplete",
+                    "error": {
+                        "code": "max_output_tokens",
+                        "message": "max output tokens reached"
+                    },
+                    "incomplete_details": {"reason": "max_output_tokens"},
+                    "instructions": null,
+                    "max_output_tokens": 100,
+                    "model": "gpt-5",
+                    "usage": null,
+                    "output": [],
+                    "tools": []
+                }
+            })),
+            ResponsesStreamEvent::Error {
+                message: "max output tokens reached".to_string()
+            }
+        );
+
+        assert_eq!(
+            event_fixture(json!({
+                "type": "error",
+                "error": {"message": "rate limited"}
+            })),
+            ResponsesStreamEvent::Error {
+                message: "rate limited".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn function_call_stream_preserves_call_id_across_start_delta_and_completion() {
         assert_eq!(
             event_fixture(json!({
                 "type": "response.output_item.added",
@@ -1228,10 +1312,11 @@ mod tests {
                 "output_index": 0,
                 "content_index": 0,
                 "sequence_number": 2,
+                "call_id": "call_1",
                 "delta": "{\"query\":\"vtcode\"}"
             })),
             ResponsesStreamEvent::FunctionCallArgumentsDelta {
-                call_id: "fc_1".to_string(),
+                call_id: "call_1".to_string(),
                 item_id: Some("fc_1".to_string()),
                 delta: "{\"query\":\"vtcode\"}".to_string(),
                 output_index: Some(0)
@@ -1259,16 +1344,6 @@ mod tests {
                 name: "search_workspace".to_string(),
                 arguments: "{\"query\":\"vtcode\"}".to_string(),
                 output_index: Some(0)
-            }
-        );
-
-        assert_eq!(
-            event_fixture(json!({
-                "type": "error",
-                "error": {"message": "rate limited"}
-            })),
-            ResponsesStreamEvent::Error {
-                message: "rate limited".to_string()
             }
         );
     }
