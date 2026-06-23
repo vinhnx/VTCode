@@ -837,9 +837,13 @@ mod tests {
 
         for event_type in [
             "response.code_interpreter_call_code.delta",
+            "response.code_interpreter_call_code.done",
             "response.mcp_call_arguments.delta",
+            "response.mcp_call_arguments.done",
             "response.image_generation_call.partial_image",
             "response.custom_tool_call_input.delta",
+            "response.custom_tool_call_input.done",
+            "response.output_text.annotation.added",
             "response.reasoning_text.done",
         ] {
             assert_ne!(
@@ -862,24 +866,169 @@ mod tests {
     }
 
     #[test]
-    fn documented_status_marker_noops_without_rig_coverage_do_not_fatal() {
-        for payload in [
-            json!({
-                "type": "response.queued",
-                "sequence_number": 0,
-                "response": {
-                    "id": "resp_queued",
-                    "status": "queued"
-                }
-            }),
-            json!({
-                "type": "response.file_search_call.searching",
-                "sequence_number": 1,
-                "item_id": "fs_1",
-                "output_index": 0
-            }),
+    fn documented_status_marker_noop_fixtures_do_not_emit_runtime_events() {
+        for (event_type, payload) in [
+            (
+                "response.queued",
+                json!({
+                    "type": "response.queued",
+                    "sequence_number": 0,
+                    "response": {
+                        "id": "resp_queued",
+                        "status": "queued"
+                    }
+                }),
+            ),
+            (
+                "response.file_search_call.in_progress",
+                json!({
+                    "type": "response.file_search_call.in_progress",
+                    "sequence_number": 1,
+                    "item_id": "fs_1",
+                    "output_index": 0
+                }),
+            ),
+            (
+                "response.file_search_call.searching",
+                json!({
+                    "type": "response.file_search_call.searching",
+                    "sequence_number": 2,
+                    "item_id": "fs_1",
+                    "output_index": 0
+                }),
+            ),
+            (
+                "response.file_search_call.completed",
+                json!({
+                    "type": "response.file_search_call.completed",
+                    "sequence_number": 3,
+                    "item_id": "fs_1",
+                    "output_index": 0
+                }),
+            ),
+            (
+                "response.web_search_call.in_progress",
+                json!({
+                    "type": "response.web_search_call.in_progress",
+                    "sequence_number": 4,
+                    "item_id": "ws_1",
+                    "output_index": 1
+                }),
+            ),
+            (
+                "response.web_search_call.searching",
+                json!({
+                    "type": "response.web_search_call.searching",
+                    "sequence_number": 5,
+                    "item_id": "ws_1",
+                    "output_index": 1
+                }),
+            ),
+            (
+                "response.web_search_call.completed",
+                json!({
+                    "type": "response.web_search_call.completed",
+                    "sequence_number": 6,
+                    "item_id": "ws_1",
+                    "output_index": 1
+                }),
+            ),
+            (
+                "response.image_generation_call.in_progress",
+                json!({
+                    "type": "response.image_generation_call.in_progress",
+                    "sequence_number": 7,
+                    "item_id": "ig_1",
+                    "output_index": 2
+                }),
+            ),
+            (
+                "response.image_generation_call.generating",
+                json!({
+                    "type": "response.image_generation_call.generating",
+                    "sequence_number": 8,
+                    "item_id": "ig_1",
+                    "output_index": 2
+                }),
+            ),
+            (
+                "response.image_generation_call.completed",
+                json!({
+                    "type": "response.image_generation_call.completed",
+                    "sequence_number": 9,
+                    "item_id": "ig_1",
+                    "output_index": 2
+                }),
+            ),
+            (
+                "response.mcp_call.in_progress",
+                json!({
+                    "type": "response.mcp_call.in_progress",
+                    "sequence_number": 10,
+                    "item_id": "mcp_1",
+                    "output_index": 3
+                }),
+            ),
+            (
+                "response.mcp_call.completed",
+                json!({
+                    "type": "response.mcp_call.completed",
+                    "sequence_number": 11,
+                    "item_id": "mcp_1",
+                    "output_index": 3
+                }),
+            ),
+            (
+                "response.mcp_list_tools.in_progress",
+                json!({
+                    "type": "response.mcp_list_tools.in_progress",
+                    "sequence_number": 12,
+                    "item_id": "mcp_tools_1",
+                    "output_index": 4
+                }),
+            ),
+            (
+                "response.mcp_list_tools.completed",
+                json!({
+                    "type": "response.mcp_list_tools.completed",
+                    "sequence_number": 13,
+                    "item_id": "mcp_tools_1",
+                    "output_index": 4
+                }),
+            ),
+            (
+                "response.code_interpreter_call.in_progress",
+                json!({
+                    "type": "response.code_interpreter_call.in_progress",
+                    "sequence_number": 14,
+                    "item_id": "ci_1",
+                    "output_index": 5
+                }),
+            ),
+            (
+                "response.code_interpreter_call.interpreting",
+                json!({
+                    "type": "response.code_interpreter_call.interpreting",
+                    "sequence_number": 15,
+                    "item_id": "ci_1",
+                    "output_index": 5
+                }),
+            ),
+            (
+                "response.code_interpreter_call.completed",
+                json!({
+                    "type": "response.code_interpreter_call.completed",
+                    "sequence_number": 16,
+                    "item_id": "ci_1",
+                    "output_index": 5
+                }),
+            ),
         ] {
-            assert_eq!(event_fixture(payload), ResponsesStreamEvent::Unknown);
+            assert_eq!(
+                event_fixture(payload),
+                ResponsesStreamEvent::Unknown,
+                "{event_type} should be an explicit status/marker no-op"
+            );
         }
     }
 
