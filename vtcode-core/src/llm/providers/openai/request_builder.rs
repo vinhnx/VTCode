@@ -12,12 +12,13 @@ use crate::llm::providers::common::serialize_message_content_openai_for_model;
 use crate::llm::rig_adapter::RigProviderCapabilities;
 use crate::prompts::system::{default_system_prompt, openai_gpt55_contract_addendum};
 use hashbrown::HashSet;
-use rig::providers::openai::responses_api::{
-    AdditionalParameters as RigResponsesAdditionalParameters, Include as RigResponsesInclude,
-};
 use serde_json::{Value, json};
 
-use super::responses_api::build_standard_responses_payload;
+use super::responses_adapter::{
+    PromptCacheOverlay, ResponsesItemAdapterOptions, apply_prompt_cache_overlay,
+    map_include_fields, map_request_items_to_responses, merge_rig_supported_state,
+    rig_supported_state_parameters, strip_assistant_phase_overlay,
+};
 use super::tool_serialization;
 use super::types::{MAX_COMPLETION_TOKENS_FIELD, OpenAIResponsesPayload};
 
@@ -97,14 +98,6 @@ pub(crate) struct ResponsesRequestContext<'a> {
     pub preserve_assistant_phase_on_replay: bool,
 }
 
-fn strip_non_native_assistant_phase(input: &mut [Value]) {
-    for item in input {
-        if let Some(map) = item.as_object_mut() {
-            map.remove("phase");
-        }
-    }
-}
-
 fn is_gpt5_codex_model(model: &str) -> bool {
     model == openai_models::GPT_5_CODEX
         || (model.starts_with(openai_models::GPT_5) && model.contains("codex"))
@@ -149,69 +142,6 @@ fn default_reasoning_effort_for_model(model: &str) -> Option<ReasoningEffortLeve
 
 fn supports_text_verbosity(model: &str) -> bool {
     TEXT_VERBOSITY_MODELS.contains(&model)
-}
-
-fn push_unique_include(include_values: &mut Vec<String>, field: &str) {
-    let field = field.trim();
-    if field.is_empty() || include_values.iter().any(|value| value == field) {
-        return;
-    }
-
-    include_values.push(field.to_string());
-}
-
-fn rig_include_for_field(field: &str) -> Option<RigResponsesInclude> {
-    match field {
-        "file_search_call.results" => Some(RigResponsesInclude::FileSearchCallResults),
-        "message.input_image.image_url" => Some(RigResponsesInclude::MessageInputImageImageUrl),
-        "computer_call.output.image_url" => {
-            Some(RigResponsesInclude::ComputerCallOutputOutputImageUrl)
-        }
-        "reasoning.encrypted_content" => Some(RigResponsesInclude::ReasoningEncryptedContent),
-        "code_interpreter_call.outputs" => Some(RigResponsesInclude::CodeInterpreterCallOutputs),
-        _ => None,
-    }
-}
-
-fn responses_include_value(field: &str) -> Value {
-    rig_include_for_field(field)
-        .and_then(|include| serde_json::to_value(include).ok())
-        .unwrap_or_else(|| json!(field))
-}
-
-fn merge_typed_responses_parameters(
-    openai_request: &mut Value,
-    params: RigResponsesAdditionalParameters,
-) {
-    let Ok(Value::Object(fields)) = serde_json::to_value(params) else {
-        return;
-    };
-    let Some(request) = openai_request.as_object_mut() else {
-        return;
-    };
-
-    request.extend(fields);
-}
-
-fn apply_prompt_cache_overlay(openai_request: &mut Value, ctx: &ResponsesRequestContext<'_>) {
-    let Some(request) = openai_request.as_object_mut() else {
-        return;
-    };
-
-    if let Some(prompt_cache_key) = trimmed_non_empty(ctx.prompt_cache_key) {
-        request
-            .entry("prompt_cache_key".to_string())
-            .or_insert_with(|| json!(prompt_cache_key));
-    }
-
-    if ctx.include_prompt_cache_retention
-        && ctx.is_responses_api_model
-        && let Some(retention) = trimmed_non_empty(ctx.prompt_cache_retention)
-    {
-        request
-            .entry("prompt_cache_retention".to_string())
-            .or_insert_with(|| json!(retention));
-    }
 }
 
 fn openai_responses_allowed_tools_choice(
@@ -452,16 +382,6 @@ pub(crate) fn build_responses_request(
     build_responses_request_from_history(request, ctx, responses_payload)
 }
 
-/// Retained custom Responses item/history boundary.
-///
-/// Rig 0.38.2 has typed Responses input items, but does not preserve VTCode's
-/// assistant `phase` replay field, open-ended include strings such as
-/// `output_text.annotations`, synthetic missing tool outputs, or the exact
-/// instruction fallback used for ChatGPT replay parity. Protective tests:
-/// `api_key_and_chatgpt_subscription_share_responses_item_history_builder`,
-/// `openai_request_builder_preserves_custom_include_strings_around_typed_include`,
-/// and the `responses_api` history tests. Remove this boundary once Rig exposes
-/// open custom include values and VTCode-compatible structured history hooks.
 fn build_responses_item_history(
     request: &provider::LLMRequest,
     ctx: &ResponsesRequestContext<'_>,
@@ -469,8 +389,12 @@ fn build_responses_item_history(
     let preserve_structured_history = ctx.include_structured_history_in_input
         || (ctx.preserve_structured_history_on_replay
             && is_openai_gpt_responses_model(&request.model));
-    let mut responses_payload =
-        build_standard_responses_payload(request, preserve_structured_history)?;
+    let mut responses_payload = map_request_items_to_responses(
+        request,
+        ResponsesItemAdapterOptions {
+            include_structured_history_in_input: preserve_structured_history,
+        },
+    )?;
     if responses_payload.instructions.is_none()
         && preserve_structured_history
         && let Some(instructions) = default_replay_instructions(&request.model)
@@ -487,24 +411,12 @@ fn build_responses_item_history(
         || ctx.preserve_assistant_phase_on_replay
             && supports_assistant_phase_replay(&request.model))
     {
-        strip_non_native_assistant_phase(&mut responses_payload.input);
+        strip_assistant_phase_overlay(&mut responses_payload.input);
     }
 
     Ok(responses_payload)
 }
 
-/// Retained custom Responses JSON boundary.
-///
-/// Rig 0.38.2 typed request fields are used here for compatible state such as
-/// `store`, `previous_response_id`, and known `include` enum values. The final
-/// JSON remains custom because Rig lacks typed coverage for VTCode's
-/// `output_types`, nested `sampling_parameters`, prompt-cache overlay fields,
-/// `context_management`, text verbosity, and provider-specific tool payloads.
-/// Protective tests: `openai_request_builder_serialises_rig_typed_state_fields`,
-/// `chatgpt_backend_forces_store_false_and_omits_output_sampling_cache`, and
-/// `responses_payload_includes_prompt_cache_retention_for_native_openai`.
-/// Remove this boundary when Rig exposes those fields with identical streaming
-/// and request JSON parity.
 fn build_responses_request_from_history(
     request: &provider::LLMRequest,
     ctx: &ResponsesRequestContext<'_>,
@@ -551,13 +463,10 @@ fn build_responses_request_from_history(
         openai_request["instructions"] = json!(instructions);
     }
 
-    let mut typed_parameters = RigResponsesAdditionalParameters::default();
-    if ctx.include_previous_response_id
-        && let Some(previous_response_id) =
-            trimmed_non_empty(request.previous_response_id.as_deref())
-    {
-        typed_parameters.previous_response_id = Some(previous_response_id.to_string());
-    }
+    let previous_response_id = ctx
+        .include_previous_response_id
+        .then(|| trimmed_non_empty(request.previous_response_id.as_deref()))
+        .flatten();
 
     if ModelProvider::OpenAI.supports_service_tier(&request.model)
         && let Some(service_tier) =
@@ -567,32 +476,30 @@ fn build_responses_request_from_history(
     }
 
     if ctx.force_response_store_false {
-        typed_parameters.store = Some(false);
-    } else if let Some(store) = request.response_store.or(ctx.default_response_store) {
-        typed_parameters.store = Some(store);
-    }
-    merge_typed_responses_parameters(&mut openai_request, typed_parameters);
-
-    let mut include_values = Vec::new();
-    if let Some(include_fields) = request
-        .responses_include
-        .as_deref()
-        .or(ctx.default_responses_include)
-    {
-        for field in include_fields {
-            push_unique_include(&mut include_values, field);
-        }
-    }
-    if ctx.include_encrypted_reasoning {
-        push_unique_include(&mut include_values, "reasoning.encrypted_content");
-    }
-    if !include_values.is_empty() {
-        openai_request["include"] = Value::Array(
-            include_values
-                .iter()
-                .map(|field| responses_include_value(field))
-                .collect(),
+        merge_rig_supported_state(
+            &mut openai_request,
+            rig_supported_state_parameters(previous_response_id, Some(false)),
         );
+    } else if let Some(store) = request.response_store.or(ctx.default_response_store) {
+        merge_rig_supported_state(
+            &mut openai_request,
+            rig_supported_state_parameters(previous_response_id, Some(store)),
+        );
+    } else {
+        merge_rig_supported_state(
+            &mut openai_request,
+            rig_supported_state_parameters(previous_response_id, None),
+        );
+    }
+
+    if let Some(include) = map_include_fields(
+        request
+            .responses_include
+            .as_deref()
+            .or(ctx.default_responses_include),
+        ctx.include_encrypted_reasoning,
+    ) {
+        openai_request["include"] = include;
     }
 
     if let Some(context_management) = &request.context_management {
@@ -748,13 +655,15 @@ fn build_responses_request_from_history(
         openai_request["text"] = text_format;
     }
 
-    // Rig 0.38.2 lacks typed `prompt_cache_key` and
-    // `prompt_cache_retention` fields, so VT Code injects them after typed
-    // request construction at the final JSON boundary. `or_insert` preserves
-    // future Rig output; remove this overlay once Rig exposes typed fields and
-    // the prompt-cache JSON-boundary tests are updated to assert Rig-owned
-    // serialisation instead.
-    apply_prompt_cache_overlay(&mut openai_request, ctx);
+    apply_prompt_cache_overlay(
+        &mut openai_request,
+        PromptCacheOverlay {
+            prompt_cache_key: ctx.prompt_cache_key,
+            include_prompt_cache_retention: ctx.include_prompt_cache_retention,
+            is_responses_api_model: ctx.is_responses_api_model,
+            prompt_cache_retention: ctx.prompt_cache_retention,
+        },
+    );
 
     Ok(openai_request)
 }
@@ -764,6 +673,7 @@ mod tests {
     use super::{ResponsesRequestContext, apply_prompt_cache_overlay, build_responses_request};
     use crate::config::constants::models;
     use crate::llm::provider;
+    use crate::llm::providers::openai::responses_adapter::PromptCacheOverlay;
     use serde_json::{Value, json};
 
     fn base_context<'a>(
@@ -873,7 +783,15 @@ mod tests {
             "prompt_cache_retention": "in_memory"
         });
 
-        apply_prompt_cache_overlay(&mut payload, &ctx);
+        apply_prompt_cache_overlay(
+            &mut payload,
+            PromptCacheOverlay {
+                prompt_cache_key: ctx.prompt_cache_key,
+                include_prompt_cache_retention: ctx.include_prompt_cache_retention,
+                is_responses_api_model: ctx.is_responses_api_model,
+                prompt_cache_retention: ctx.prompt_cache_retention,
+            },
+        );
 
         assert_eq!(
             payload.get("prompt_cache_key").and_then(Value::as_str),
@@ -885,5 +803,60 @@ mod tests {
                 .and_then(Value::as_str),
             Some("in_memory")
         );
+    }
+
+    #[test]
+    fn responses_request_boundary_retains_vtcode_overlays() {
+        let mut request = provider::LLMRequest {
+            messages: vec![
+                provider::Message::user("Apply patch".to_owned()),
+                provider::Message::assistant_with_tools(
+                    String::new(),
+                    vec![provider::ToolCall::custom(
+                        "call_patch_1".to_owned(),
+                        "apply_patch".to_owned(),
+                        "*** Begin Patch\n*** End Patch\n".to_owned(),
+                    )],
+                ),
+                provider::Message::tool_response("call_patch_1".to_owned(), "patched".to_owned()),
+            ],
+            model: models::openai::GPT_5_3_CODEX.to_owned(),
+            temperature: Some(0.2),
+            top_p: Some(0.9),
+            context_management: Some(json!([{"type": "compaction"}])),
+            prompt_cache_key: Some("vtcode:openai:session".to_owned()),
+            verbosity: Some(crate::config::types::VerbosityLevel::High),
+            stream: true,
+            ..Default::default()
+        };
+        request.responses_include = Some(vec!["output_text.annotations".to_owned()]);
+
+        let mut ctx = base_context(None);
+        ctx.prompt_cache_key = request.prompt_cache_key.as_deref();
+        ctx.include_prompt_cache_retention = true;
+        ctx.prompt_cache_retention = Some("24h");
+
+        let payload =
+            build_responses_request(&request, &ctx).expect("responses request should build");
+
+        assert_eq!(payload["input"][1]["type"], "custom_tool_call");
+        assert_eq!(payload["input"][2]["type"], "custom_tool_call_output");
+        assert_eq!(payload["include"], json!(["output_text.annotations"]));
+        assert_eq!(
+            payload["context_management"],
+            json!([{"type": "compaction"}])
+        );
+        assert_eq!(payload["prompt_cache_key"], json!("vtcode:openai:session"));
+        assert_eq!(payload["prompt_cache_retention"], json!("24h"));
+        assert_eq!(payload["output_types"], json!(["message", "tool_call"]));
+        let temperature = payload["sampling_parameters"]["temperature"]
+            .as_f64()
+            .expect("temperature should be numeric");
+        let top_p = payload["sampling_parameters"]["top_p"]
+            .as_f64()
+            .expect("top_p should be numeric");
+        assert!((temperature - 0.2).abs() < 0.000_001);
+        assert!((top_p - 0.9).abs() < 0.000_001);
+        assert_eq!(payload["text"]["verbosity"], json!("high"));
     }
 }
