@@ -32,6 +32,7 @@ struct ResponsesNormalizedStreamProcessor<P> {
     seen_tool_calls: HashSet<String>,
     tool_call_indexes: HashMap<String, usize>,
     tool_call_names: HashMap<String, String>,
+    tool_call_ids_by_item_id: HashMap<String, String>,
     next_tool_call_index: usize,
     final_response: Option<Value>,
     done: bool,
@@ -49,6 +50,7 @@ where
             seen_tool_calls: HashSet::new(),
             tool_call_indexes: HashMap::new(),
             tool_call_names: HashMap::new(),
+            tool_call_ids_by_item_id: HashMap::new(),
             next_tool_call_index: 0,
             final_response: None,
             done: false,
@@ -104,17 +106,21 @@ where
             }
             ResponsesStreamEvent::FunctionCallNameDelta {
                 call_id,
+                item_id,
                 name,
                 output_index,
             } => {
+                self.record_tool_call_item_id(item_id.as_deref(), &call_id);
                 self.record_tool_call_name(&call_id, &name, output_index);
                 self.push_tool_call_start(&mut events, call_id, Some(name));
             }
             ResponsesStreamEvent::FunctionCallArgumentsDelta {
                 call_id,
+                item_id,
                 delta,
                 output_index,
             } => {
+                let call_id = self.provider_tool_call_id(item_id.as_deref(), call_id);
                 let call_id = if call_id.is_empty() {
                     format!("tool_call_{}", self.next_tool_call_index)
                 } else {
@@ -138,10 +144,12 @@ where
             }
             ResponsesStreamEvent::CompletedToolCall {
                 call_id,
+                item_id,
                 name,
                 arguments,
                 output_index,
             } => {
+                self.record_tool_call_item_id(item_id.as_deref(), &call_id);
                 let index = self.record_tool_call_name(&call_id, &name, output_index);
                 self.push_tool_call_start(&mut events, call_id.clone(), Some(name));
                 self.aggregator.handle_tool_calls(&[json!({
@@ -218,6 +226,24 @@ where
             response: Box::new(response),
         });
         Ok(events)
+    }
+
+    fn record_tool_call_item_id(&mut self, item_id: Option<&str>, call_id: &str) {
+        let Some(item_id) = item_id.filter(|item_id| !item_id.is_empty()) else {
+            return;
+        };
+
+        self.tool_call_ids_by_item_id
+            .entry(item_id.to_string())
+            .or_insert_with(|| call_id.to_string());
+    }
+
+    fn provider_tool_call_id(&self, item_id: Option<&str>, call_id: String) -> String {
+        item_id
+            .and_then(|item_id| self.tool_call_ids_by_item_id.get(item_id))
+            .or_else(|| self.tool_call_ids_by_item_id.get(call_id.as_str()))
+            .cloned()
+            .unwrap_or(call_id)
     }
 
     fn push_tool_call_start(
@@ -672,6 +698,83 @@ mod tests {
             [NormalizedStreamEvent::ToolCallDelta { call_id, delta }]
                 if call_id == "call_1" && delta == "code\"}"
         ));
+
+        let finished = processor.finish().expect("finish should succeed");
+        let response = match finished.as_slice() {
+            [NormalizedStreamEvent::Done { response }] => response,
+            _ => panic!("expected done event"),
+        };
+        let tool_calls = response
+            .tool_calls
+            .as_ref()
+            .expect("tool call should be assembled");
+        assert_eq!(
+            tool_calls,
+            &vec![ToolCall::function(
+                "call_1".to_string(),
+                "search_workspace".to_string(),
+                "{\"query\":\"vtcode\"}".to_string(),
+            )]
+        );
+    }
+
+    #[test]
+    fn tool_call_deltas_use_provider_call_id_when_item_id_differs() {
+        let mut processor = ResponsesNormalizedStreamProcessor::new(options(), |_| {
+            Ok(LLMResponse {
+                model: "gpt-5".to_string(),
+                ..Default::default()
+            })
+        });
+
+        let started = processor
+            .handle_payload(json!({
+                "type": "response.output_item.added",
+                "item_id": "fc_1",
+                "output_index": 0,
+                "sequence_number": 1,
+                "item": {
+                    "type": "function_call",
+                    "id": "fc_1",
+                    "call_id": "call_1",
+                    "name": "search_workspace",
+                    "arguments": "",
+                    "status": "in_progress"
+                }
+            }))
+            .expect("output item metadata should parse");
+        assert!(matches!(
+            started.as_slice(),
+            [NormalizedStreamEvent::ToolCallStart { call_id, name }]
+                if call_id == "call_1" && name.as_deref() == Some("search_workspace")
+        ));
+
+        let first = processor
+            .handle_payload(json!({
+                "type": "response.function_call_arguments.delta",
+                "item_id": "fc_1",
+                "output_index": 0,
+                "content_index": 0,
+                "sequence_number": 2,
+                "delta": "{\"query\":\"vt"
+            }))
+            .expect("first tool delta should parse");
+        assert!(matches!(
+            first.as_slice(),
+            [NormalizedStreamEvent::ToolCallDelta { call_id, delta }]
+                if call_id == "call_1" && delta == "{\"query\":\"vt"
+        ));
+
+        processor
+            .handle_payload(json!({
+                "type": "response.function_call_arguments.delta",
+                "item_id": "fc_1",
+                "output_index": 0,
+                "content_index": 0,
+                "sequence_number": 3,
+                "delta": "code\"}"
+            }))
+            .expect("second tool delta should parse");
 
         let finished = processor.finish().expect("finish should succeed");
         let response = match finished.as_slice() {

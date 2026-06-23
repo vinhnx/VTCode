@@ -71,16 +71,19 @@ pub(crate) enum ResponsesStreamEvent {
     },
     FunctionCallNameDelta {
         call_id: String,
+        item_id: Option<String>,
         name: String,
         output_index: Option<usize>,
     },
     FunctionCallArgumentsDelta {
         call_id: String,
+        item_id: Option<String>,
         delta: String,
         output_index: Option<usize>,
     },
     CompletedToolCall {
         call_id: String,
+        item_id: Option<String>,
         name: String,
         arguments: String,
         output_index: Option<usize>,
@@ -198,23 +201,22 @@ impl ResponsesStreamAdapter {
                         adapt_output_item(provider_name, output.item, output_index)
                     }
                     RigResponsesItemChunkKind::FunctionCallArgsDelta(delta) => {
-                        let call_id = item_id
-                            .or_else(|| {
-                                raw_payload
-                                    .get("item_id")
-                                    .and_then(Value::as_str)
-                                    .map(ToOwned::to_owned)
-                            })
-                            .or_else(|| {
-                                raw_payload
-                                    .get("call_id")
-                                    .and_then(Value::as_str)
-                                    .map(ToOwned::to_owned)
-                            })
+                        let item_id = item_id.or_else(|| {
+                            raw_payload
+                                .get("item_id")
+                                .and_then(Value::as_str)
+                                .map(ToOwned::to_owned)
+                        });
+                        let call_id = raw_payload
+                            .get("call_id")
+                            .and_then(Value::as_str)
+                            .map(ToOwned::to_owned)
+                            .or_else(|| item_id.clone())
                             .unwrap_or_default();
 
                         Ok(ResponsesStreamEvent::FunctionCallArgumentsDelta {
                             call_id,
+                            item_id,
                             delta: delta.delta,
                             output_index,
                         })
@@ -389,17 +391,21 @@ fn adapt_output_item(
             let arguments = serde_json::to_string(&function_call.arguments).map_err(|err| {
                 StreamAssemblyError::InvalidPayload(err.to_string()).into_llm_error(provider_name)
             })?;
+            let item_id = Some(function_call.id);
+            let call_id = function_call.call_id;
             if function_call.status == rig::providers::openai::responses_api::ToolStatus::Completed
             {
                 Ok(ResponsesStreamEvent::CompletedToolCall {
-                    call_id: function_call.id,
+                    call_id,
+                    item_id,
                     name: function_call.name,
                     arguments,
                     output_index,
                 })
             } else {
                 Ok(ResponsesStreamEvent::FunctionCallNameDelta {
-                    call_id: function_call.id,
+                    call_id,
+                    item_id,
                     name: function_call.name,
                     output_index,
                 })
@@ -782,7 +788,8 @@ mod tests {
                 }
             })),
             ResponsesStreamEvent::FunctionCallNameDelta {
-                call_id: "fc_1".to_string(),
+                call_id: "call_1".to_string(),
+                item_id: Some("fc_1".to_string()),
                 name: "search_workspace".to_string(),
                 output_index: Some(0)
             }
@@ -799,6 +806,7 @@ mod tests {
             })),
             ResponsesStreamEvent::FunctionCallArgumentsDelta {
                 call_id: "fc_1".to_string(),
+                item_id: Some("fc_1".to_string()),
                 delta: "{\"query\":\"vtcode\"}".to_string(),
                 output_index: Some(0)
             }
@@ -820,7 +828,8 @@ mod tests {
                 }
             })),
             ResponsesStreamEvent::CompletedToolCall {
-                call_id: "fc_1".to_string(),
+                call_id: "call_1".to_string(),
+                item_id: Some("fc_1".to_string()),
                 name: "search_workspace".to_string(),
                 arguments: "{\"query\":\"vtcode\"}".to_string(),
                 output_index: Some(0)
