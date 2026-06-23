@@ -22,7 +22,7 @@ const MAX_CONTENT_SIZE: usize = 500_000; // 500KB max content size
 const MAX_ALLOWED_BYTES: usize = 2_000_000; // 2MB hard cap
 const MAX_ALLOWED_TIMEOUT_SECS: u64 = 120; // 2 minutes hard cap
 
-pub(crate) const WEB_FETCH_DESCRIPTION: &str = "Fetches content from a specified URL and returns an analyzed summary. Accepts: { url: string, prompt?: string, max_bytes?: number, timeout_secs?: number }. If 'prompt' is omitted, VT Code uses a safe default summary prompt so that simple 'fetch https://…' requests are handled by this built-in tool instead of delegating to external MCP tools. For documentation domains, try the site's LLM-oriented /llms.txt index first when appropriate: for input like 'abc.com', fetch https://abc.com/llms.txt before the homepage, then traverse the linked URL map for the most relevant Markdown sources.";
+pub(crate) const WEB_FETCH_DESCRIPTION: &str = "Fetches content from a specified URL and returns an analyzed summary. Accepts: { url: string, prompt?: string, max_bytes?: number, timeout_secs?: number }. If 'prompt' is omitted, VT Code uses a safe default summary prompt so that simple 'fetch https://…' requests are handled by this built-in tool instead of delegating to external MCP tools. For documentation domains, try the site's LLM-oriented /llms.txt index first when appropriate: for input like 'abc.com', fetch https://abc.com/llms.txt before the homepage, then traverse the linked URL map for the most relevant Markdown sources. Budget guidance: the default max_bytes is 500KB which fits most pages including llms.txt files (typically under 50KB). Do NOT set max_bytes unless you have a specific reason — the default is generous. If a page exceeds max_bytes, the tool truncates the response and returns truncation metadata (truncated_by_max_bytes, source_size_bytes) so you can decide whether to retry with a larger budget. Note that llms-full.txt files can be multi-megabyte; prefer the compact llms.txt index first.";
 
 #[derive(Debug, Deserialize)]
 struct WebFetchArgs {
@@ -47,6 +47,40 @@ pub struct WebFetchTool {
     pub allowed_domains: HashSet<String>,
     /// Strict HTTPS-only mode
     pub strict_https_only: bool,
+}
+
+struct FetchedWebContent {
+    content: String,
+    truncated_by_max_bytes: bool,
+    source_size_bytes: usize,
+}
+
+fn fetched_content_from_bytes(bytes: &[u8], max_bytes: usize) -> Result<FetchedWebContent> {
+    let source_size_bytes = bytes.len();
+    let truncated_by_max_bytes = source_size_bytes > max_bytes;
+    if !truncated_by_max_bytes {
+        return Ok(FetchedWebContent {
+            content: String::from_utf8(bytes.to_vec())
+                .context("Response body is not valid UTF-8")?,
+            truncated_by_max_bytes,
+            source_size_bytes,
+        });
+    }
+
+    let mut end = max_bytes;
+
+    while end > 0 && std::str::from_utf8(&bytes[..end]).is_err() {
+        end -= 1;
+    }
+
+    let content = std::str::from_utf8(&bytes[..end])
+        .context("Response body is not valid UTF-8")?
+        .to_string();
+    Ok(FetchedWebContent {
+        content,
+        truncated_by_max_bytes,
+        source_size_bytes,
+    })
 }
 
 impl WebFetchTool {
@@ -82,7 +116,7 @@ impl WebFetchTool {
         url: &str,
         max_bytes: usize,
         timeout_secs: u64,
-    ) -> Result<String> {
+    ) -> Result<FetchedWebContent> {
         // Validate URL
         self.validate_url(url)?;
 
@@ -112,17 +146,11 @@ impl WebFetchTool {
         // Validate content type
         self.validate_content_type(&content_type)?;
 
-        // Limit response body to max_bytes
+        // Limit response body to max_bytes while still returning useful partial
+        // text. Oversized documentation pages are common, and a truncated fetch
+        // gives the agent more signal than an error-only result.
         let bytes = response.bytes().await?;
-        if bytes.len() > max_bytes {
-            return Err(anyhow!(
-                "Response body size {} bytes exceeds maximum allowed size of {} bytes",
-                bytes.len(),
-                max_bytes
-            ));
-        }
-
-        String::from_utf8(bytes.to_vec()).context("Response body is not valid UTF-8")
+        fetched_content_from_bytes(&bytes, max_bytes)
     }
 
     fn validate_url(&self, url: &str) -> Result<()> {
@@ -293,11 +321,11 @@ impl WebFetchTool {
             .unwrap_or(DEFAULT_TIMEOUT_SECS);
 
         // Fetch the URL content with detailed error handling
-        let content = match self
+        let fetched = match self
             .fetch_url_content(&args.url, max_bytes, timeout_secs)
             .await
         {
-            Ok(content) => content,
+            Ok(fetched) => fetched,
             Err(e) => {
                 // Structured, readable error. The agent can surface this or fall back to other tools.
                 return Ok(json!({
@@ -308,6 +336,7 @@ impl WebFetchTool {
                 }));
             }
         };
+        let content = fetched.content;
 
         let content_length = content.len();
 
@@ -350,6 +379,15 @@ impl WebFetchTool {
         // Add overflow indicator if content was truncated
         if let Some(overflow) = overflow_info {
             response["overflow"] = json!(overflow);
+        }
+
+        if fetched.truncated_by_max_bytes {
+            response["truncated_by_max_bytes"] = json!(true);
+            response["max_bytes"] = json!(max_bytes);
+            response["source_size_bytes"] = json!(fetched.source_size_bytes);
+            response["next_action_hint"] = json!(
+                "Analyze the truncated `content` using `prompt`. If it does not contain enough detail, retry web_fetch with a larger max_bytes or a more specific URL."
+            );
         }
 
         Ok(response)
@@ -464,7 +502,7 @@ impl Tool for WebFetchTool {
             if has_url && !has_prompt {
                 obj.insert(
                     "prompt".to_string(),
-                    json!("Briefly summarize what this page is and what it represents. Focus on the owner/profile, primary purpose, and any notable repositories or projects."),
+                    json!("Summarize this page concisely. Use the full content field (up to 500KB) to answer, not just the preview. Focus on the primary purpose, key information, and any actionable details."),
                 );
             }
         }
@@ -817,6 +855,16 @@ mod tests {
         assert!(headers.contains_key(ACCEPT));
         let val = headers.get(ACCEPT).unwrap().to_str().unwrap();
         assert!(val.contains("text/markdown"));
+    }
+
+    #[test]
+    fn oversized_body_is_truncated_instead_of_rejected() {
+        let fetched = fetched_content_from_bytes("αβγ".as_bytes(), 3)
+            .expect("valid utf-8 prefix should be returned");
+
+        assert_eq!(fetched.content, "α");
+        assert!(fetched.truncated_by_max_bytes);
+        assert_eq!(fetched.source_size_bytes, "αβγ".len());
     }
 
     #[test]

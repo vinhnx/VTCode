@@ -934,6 +934,38 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn web_fetch_structured_errors_are_not_reused_as_successful_results() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        registry.allow_all_tools().await?;
+
+        let args = json!({
+            "url": "http://example.com",
+        });
+
+        let first = registry.execute_tool_ref(tools::WEB_FETCH, &args).await?;
+        assert!(
+            first
+                .get("error")
+                .and_then(Value::as_str)
+                .is_some_and(|error| error.contains("Only HTTPS URLs are allowed")),
+            "first web_fetch call should return the structured tool error"
+        );
+
+        let second = registry.execute_tool_ref(tools::WEB_FETCH, &args).await?;
+        assert!(
+            second.get("reused_recent_result").is_none(),
+            "failed web_fetch output must not be cached as a successful read-only result"
+        );
+        assert!(
+            second.get("loop_detected").is_none(),
+            "failed web_fetch output must not count toward identical successful-call loops"
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn prevalidated_execution_enforces_planning_workflow_guards() -> Result<()> {
         let temp_dir = TempDir::new()?;
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
