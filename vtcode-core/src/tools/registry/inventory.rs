@@ -1,5 +1,9 @@
 use parking_lot::{Mutex, RwLock};
+use rig::completion::ToolDefinition as RigToolDefinition;
+use rig::tool::{ToolDyn as RigToolDyn, ToolError as RigToolError, ToolSet as RigToolSet};
+use rig::wasm_compat::WasmBoxedFuture;
 use rustc_hash::{FxHashMap, FxHashSet};
+use serde_json::json;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -33,13 +37,54 @@ struct ToolInventoryState {
     aliases: FxHashMap<String, String>,
     frequently_used: FxHashSet<String>,
     last_cache_cleanup: Instant,
-    sorted_names: Vec<String>,
+}
+
+struct RigRegistrationTool {
+    name: String,
+    definition: RigToolDefinition,
+}
+
+impl RigRegistrationTool {
+    fn from_registration(name: String, registration: &ToolRegistration) -> Self {
+        let metadata = registration.metadata();
+        let definition = RigToolDefinition {
+            name: name.clone(),
+            description: metadata.description().unwrap_or_default().to_owned(),
+            parameters: metadata
+                .parameter_schema()
+                .cloned()
+                .unwrap_or_else(|| json!({"type": "object"})),
+        };
+
+        Self { name, definition }
+    }
+}
+
+impl RigToolDyn for RigRegistrationTool {
+    fn name(&self) -> String {
+        self.name.clone()
+    }
+
+    fn definition<'a>(&'a self, _prompt: String) -> WasmBoxedFuture<'a, RigToolDefinition> {
+        Box::pin(async move { self.definition.clone() })
+    }
+
+    fn call<'a>(&'a self, _args: String) -> WasmBoxedFuture<'a, Result<String, RigToolError>> {
+        Box::pin(async move {
+            Err(RigToolError::ToolCallError(Box::new(
+                std::io::Error::other(
+                    "VTCode owns tool dispatch; Rig ToolSet is used for registration only",
+                ),
+            )))
+        })
+    }
 }
 
 #[derive(Clone)]
 pub(super) struct ToolInventory {
     workspace_root: PathBuf,
     tools: Arc<RwLock<FxHashMap<String, Arc<ToolCacheEntry>>>>,
+    rig_tool_set: Arc<RwLock<RigToolSet>>,
     state: Arc<RwLock<ToolInventoryState>>,
     /// Track alias usage for analytics and debugging
     alias_metrics: Arc<Mutex<AliasMetrics>>,
@@ -67,11 +112,11 @@ impl ToolInventory {
         Self {
             workspace_root,
             tools: Arc::new(RwLock::new(FxHashMap::default())),
+            rig_tool_set: Arc::new(RwLock::new(RigToolSet::default())),
             state: Arc::new(RwLock::new(ToolInventoryState {
                 aliases: FxHashMap::default(),
                 frequently_used: FxHashSet::default(),
                 last_cache_cleanup: Instant::now(),
-                sorted_names: Vec::new(),
             })),
             alias_metrics: Arc::new(Mutex::new(AliasMetrics::default())),
             file_ops_tool,
@@ -126,7 +171,7 @@ impl ToolInventory {
 
             for alias in &aliases {
                 let alias_lower = alias.to_ascii_lowercase();
-                if tools.contains_key(&alias_lower) {
+                if alias_lower != name_lower && tools.contains_key(&alias_lower) {
                     return Err(anyhow::anyhow!(
                         "Cannot register alias '{}' for tool '{}': alias conflicts with existing tool name",
                         alias,
@@ -148,11 +193,10 @@ impl ToolInventory {
         }
 
         {
+            let rig_tool =
+                RigRegistrationTool::from_registration(name_lower.clone(), &registration);
             let mut tools = self.tools.write();
-            if tools.contains_key(&name_lower) {
-                return Err(anyhow::anyhow!("Tool '{}' is already registered", name));
-            }
-            tools.insert(
+            let replaced = tools.insert(
                 name_lower.clone(),
                 Arc::new(ToolCacheEntry {
                     registration,
@@ -161,11 +205,14 @@ impl ToolInventory {
                 }),
             );
             let mut state = self.state.write();
-            let pos = state
-                .sorted_names
-                .binary_search(&name_lower)
-                .unwrap_or_else(|e| e);
-            state.sorted_names.insert(pos, name_lower.clone());
+            if replaced.is_some() {
+                state.aliases.retain(|_, target| target != &name_lower);
+                self.alias_metrics
+                    .lock()
+                    .usage
+                    .retain(|_, (canonical, _)| canonical != &name_lower);
+            }
+            self.rig_tool_set.write().add_tool(rig_tool);
         }
 
         if self.is_common_tool(&name_lower) {
@@ -197,12 +244,11 @@ impl ToolInventory {
 
         {
             let mut state = self.state.write();
-            state
-                .sorted_names
-                .retain(|registered| registered != &name_lower);
             state.aliases.retain(|_, target| target != &name_lower);
             state.frequently_used.remove(&name_lower);
         }
+
+        self.rig_tool_set.write().delete_tool(&name_lower);
 
         self.alias_metrics
             .lock()
@@ -291,11 +337,25 @@ impl ToolInventory {
     }
 
     pub fn registrations_snapshot(&self) -> Vec<ToolRegistration> {
-        self.tools
-            .read()
-            .values()
-            .map(|entry| entry.registration.clone())
-            .collect()
+        let ordered_names = {
+            let tool_set = self.rig_tool_set.read();
+            futures::executor::block_on(tool_set.get_tool_definitions())
+                .unwrap_or_default()
+                .into_iter()
+                .map(|definition| definition.name.to_ascii_lowercase())
+                .collect::<Vec<_>>()
+        };
+        let tools = self.tools.read();
+        let mut registrations = ordered_names
+            .into_iter()
+            .filter_map(|name| tools.get(&name).map(|entry| entry.registration.clone()))
+            .collect::<Vec<_>>();
+
+        if registrations.is_empty() && !tools.is_empty() {
+            registrations.extend(tools.values().map(|entry| entry.registration.clone()));
+        }
+
+        registrations
     }
 
     /// Check if a tool is commonly used
@@ -365,17 +425,31 @@ impl ToolInventory {
         let old_len = tools.len();
         let frequently_used_snapshot = self.state.read().frequently_used.clone();
 
+        let mut removed_names = Vec::new();
         tools.retain(|name, entry| {
-            if frequently_used_snapshot.contains(name) {
-                return true;
+            let keep = if frequently_used_snapshot.contains(name) {
+                true
+            } else {
+                let last_used = *entry.last_used.read();
+                now.duration_since(last_used) < Duration::from_secs(3600)
+            };
+            if !keep {
+                removed_names.push(name.clone());
             }
-            let last_used = *entry.last_used.read();
-            now.duration_since(last_used) < Duration::from_secs(3600)
+            keep
         });
+        let new_len = tools.len();
+        drop(tools);
+
+        if !removed_names.is_empty() {
+            let mut tool_set = self.rig_tool_set.write();
+            for name in &removed_names {
+                tool_set.delete_tool(name);
+            }
+        }
 
         self.state.write().last_cache_cleanup = now;
 
-        let new_len = tools.len();
         if new_len < old_len {
             tracing::debug!(
                 "Cleaned up {} unused tools from cache. Old: {}, New: {}",
@@ -393,7 +467,7 @@ mod tests {
     use crate::config::types::CapabilityLevel;
     use crate::tools::edited_file_monitor::EditedFileMonitor;
     use crate::tools::registry::registration::ToolRegistration;
-    use serde_json::Value;
+    use serde_json::{Value, json};
     use std::path::PathBuf;
     use std::sync::Arc;
 
@@ -404,17 +478,26 @@ mod tests {
         )
     }
 
-    fn make_visible_registration(name: &'static str) -> ToolRegistration {
+    fn make_visible_registration(name: impl Into<Arc<str>>) -> ToolRegistration {
         ToolRegistration::new(name, CapabilityLevel::Basic, false, |_, _| {
             Box::pin(async { Ok(Value::Null) })
         })
     }
 
-    fn make_hidden_registration(name: &'static str) -> ToolRegistration {
+    fn make_hidden_registration(name: impl Into<Arc<str>>) -> ToolRegistration {
         ToolRegistration::new(name, CapabilityLevel::Basic, false, |_, _| {
             Box::pin(async { Ok(Value::Null) })
         })
         .with_llm_visibility(false)
+    }
+
+    fn rig_definition_names(inventory: &ToolInventory) -> Vec<String> {
+        let tool_set = inventory.rig_tool_set.read();
+        futures::executor::block_on(tool_set.get_tool_definitions())
+            .unwrap()
+            .into_iter()
+            .map(|definition| definition.name)
+            .collect()
     }
 
     #[test]
@@ -528,21 +611,79 @@ mod tests {
     }
 
     #[test]
-    fn test_duplicate_tool_registration_fails() {
+    fn test_registration_order_comes_from_rig_tool_set() {
         let inventory = make_test_inventory();
 
-        let tool1 = make_visible_registration("my_tool");
-        let tool2 = make_visible_registration("my_tool");
+        for name in ["zeta_tool", "alpha_tool", "middle_tool"] {
+            inventory
+                .register_tool(make_visible_registration(name))
+                .unwrap();
+        }
+
+        let snapshot_names = inventory
+            .registrations_snapshot()
+            .into_iter()
+            .map(|registration| registration.name().to_string())
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            rig_definition_names(&inventory),
+            vec!["zeta_tool", "alpha_tool", "middle_tool"]
+        );
+        assert_eq!(snapshot_names, rig_definition_names(&inventory));
+    }
+
+    #[test]
+    fn test_duplicate_tool_registration_replaces_in_place() {
+        let inventory = make_test_inventory();
+
+        let tool1 = make_visible_registration("my_tool")
+            .with_description("first")
+            .with_parameter_schema(
+                json!({"type": "object", "properties": {"old": {"type": "string"}}}),
+            )
+            .with_aliases(["old_alias"]);
+        let tool2 = make_visible_registration("my_tool")
+            .with_description("second")
+            .with_parameter_schema(
+                json!({"type": "object", "properties": {"new": {"type": "string"}}}),
+            )
+            .with_aliases(["new_alias"]);
+        let trailing = make_visible_registration("trailing_tool");
 
         inventory.register_tool(tool1).unwrap();
-        let result = inventory.register_tool(tool2);
+        inventory.register_tool(trailing).unwrap();
+        inventory.register_tool(tool2).unwrap();
 
-        assert!(result.is_err());
         assert!(
-            result
-                .unwrap_err()
-                .to_string()
-                .contains("already registered")
+            inventory.registration_for("old_alias").is_none(),
+            "old aliases must be removed when a duplicate registration is replaced"
+        );
+        assert_eq!(
+            inventory
+                .registration_for("new_alias")
+                .map(|registration| registration.name().to_string()),
+            Some("my_tool".to_string())
+        );
+        assert_eq!(
+            rig_definition_names(&inventory),
+            vec!["my_tool", "trailing_tool"],
+            "Rig ToolSet keeps the original position while replacing the duplicate"
+        );
+        let rig_defs = {
+            let tool_set = inventory.rig_tool_set.read();
+            futures::executor::block_on(tool_set.get_tool_definitions()).unwrap()
+        };
+        assert_eq!(rig_defs[0].description, "second");
+        assert_eq!(
+            rig_defs[0].parameters,
+            json!({"type": "object", "properties": {"new": {"type": "string"}}})
+        );
+        assert_eq!(
+            inventory.registrations_snapshot()[0]
+                .metadata()
+                .description(),
+            Some("second")
         );
     }
 

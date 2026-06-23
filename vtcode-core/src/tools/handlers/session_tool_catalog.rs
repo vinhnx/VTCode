@@ -10,6 +10,7 @@ use crate::tool_policy::ToolPolicy;
 use crate::tools::mcp::MCP_QUALIFIED_TOOL_PREFIX;
 use crate::tools::registry::{ToolHandler as RegistryToolHandler, ToolRegistration};
 use crate::tools::tool_intent::ToolSurfaceKind;
+use rustc_hash::FxHashSet;
 use serde::Serialize;
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
@@ -271,8 +272,8 @@ impl SessionToolCatalog {
             }
         }
 
-        entries.sort_by(|left, right| left.public_name.cmp(&right.public_name));
-        entries.dedup_by(|left, right| left.public_name == right.public_name);
+        let mut seen_public_names = FxHashSet::default();
+        entries.retain(|entry| seen_public_names.insert(entry.public_name.clone()));
         Self { entries }
     }
 
@@ -361,7 +362,7 @@ impl SessionToolCatalog {
             tools.push(search_tool);
         }
 
-        crate::prompts::sort_tool_definitions(tools)
+        tools
     }
 
     pub fn schema_for_name(

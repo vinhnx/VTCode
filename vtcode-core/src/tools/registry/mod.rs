@@ -223,6 +223,7 @@ mod tests {
     const REENTRANT_TOOL_NAME: &str = "reentrant_guard_test_tool";
     const MUTUAL_REENTRANT_TOOL_A: &str = "mutual_reentrant_tool_a";
     const MUTUAL_REENTRANT_TOOL_B: &str = "mutual_reentrant_tool_b";
+    const REPLACE_DISPATCH_TOOL_NAME: &str = "replace_dispatch_test_tool";
 
     struct CustomEchoTool;
     struct SlowTimeoutTool;
@@ -292,6 +293,20 @@ mod tests {
         })
     }
 
+    fn replacement_first_executor<'a>(
+        _registry: &'a ToolRegistry,
+        _args: Value,
+    ) -> BoxFuture<'a, Result<Value>> {
+        Box::pin(async move { Ok(json!({"version": 1})) })
+    }
+
+    fn replacement_second_executor<'a>(
+        _registry: &'a ToolRegistry,
+        _args: Value,
+    ) -> BoxFuture<'a, Result<Value>> {
+        Box::pin(async move { Ok(json!({"version": 2})) })
+    }
+
     #[tokio::test]
     async fn registers_builtin_tools() -> Result<()> {
         let temp_dir = TempDir::new()?;
@@ -344,14 +359,12 @@ mod tests {
             .into_iter()
             .map(|entry| entry.name)
             .collect::<Vec<_>>();
-        let mut model_tool_names = registry
+        let model_tool_names = registry
             .model_tools(config)
             .await
             .into_iter()
             .map(|tool| tool.function_name().to_string())
             .collect::<Vec<_>>();
-
-        model_tool_names.sort();
 
         assert_eq!(schema_names, names);
         assert_eq!(declaration_names, names);
@@ -508,6 +521,65 @@ mod tests {
                 .available_tools
                 .contains(&CUSTOM_TOOL_NAME.to_string())
         );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn duplicate_registration_replaces_schema_and_runtime_dispatch() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+
+        registry
+            .register_tool(
+                ToolRegistration::new(
+                    REPLACE_DISPATCH_TOOL_NAME,
+                    CapabilityLevel::CodeSearch,
+                    false,
+                    replacement_first_executor,
+                )
+                .with_description("first version")
+                .with_parameter_schema(json!({
+                    "type": "object",
+                    "properties": {
+                        "old": {"type": "string"}
+                    }
+                })),
+            )
+            .await?;
+        registry
+            .register_tool(
+                ToolRegistration::new(
+                    REPLACE_DISPATCH_TOOL_NAME,
+                    CapabilityLevel::CodeSearch,
+                    false,
+                    replacement_second_executor,
+                )
+                .with_description("second version")
+                .with_parameter_schema(json!({
+                    "type": "object",
+                    "properties": {
+                        "new": {"type": "string"}
+                    }
+                })),
+            )
+            .await?;
+        registry.allow_all_tools().await?;
+
+        let schema = registry
+            .get_tool_schema(REPLACE_DISPATCH_TOOL_NAME)
+            .await
+            .expect("replacement schema should be present");
+        assert_eq!(
+            schema.pointer("/parameters/properties/new/type"),
+            Some(&json!("string"))
+        );
+        assert!(schema.pointer("/parameters/properties/old").is_none());
+
+        let response = registry
+            .execute_tool(REPLACE_DISPATCH_TOOL_NAME, json!({}))
+            .await?;
+        assert_eq!(response.get("version"), Some(&json!(2)));
 
         Ok(())
     }
