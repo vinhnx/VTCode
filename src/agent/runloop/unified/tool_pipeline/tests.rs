@@ -203,16 +203,22 @@ fn test_process_tool_output_loop_detection() {
     });
 
     let status = process_llm_tool_output(output);
-    if let ToolExecutionStatus::Failure { error } = status {
-        let error_msg = error.to_string();
-        assert!(error_msg.contains("LOOP DETECTION"));
-        assert!(error_msg.contains("read_file"));
-        assert!(error_msg.contains("5"));
-        assert!(error_msg.contains("DO NOT retry"));
-        assert!(error_msg.contains("ACTION REQUIRED"));
+    // loop_detected is now treated as Success (not Failure) so it does not
+    // increment the consecutive_blocked_tool_calls fuse.
+    if let ToolExecutionStatus::Success { output, .. } = status {
+        assert_eq!(
+            output.get("loop_detected").and_then(|v| v.as_bool()),
+            Some(true),
+            "loop_detected flag must be preserved in the output"
+        );
+        assert_eq!(output.get("repeat_count").and_then(|v| v.as_u64()), Some(5));
+        assert_eq!(
+            output.get("tool").and_then(|v| v.as_str()),
+            Some("read_file")
+        );
     } else {
         panic!(
-            "Expected Failure variant for loop detection, got: {:?}",
+            "Expected Success variant for loop detection (to avoid blocked-streak increment), got: {:?}",
             status
         );
     }

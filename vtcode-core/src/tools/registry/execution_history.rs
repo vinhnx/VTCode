@@ -171,13 +171,18 @@ impl ToolExecutionRecord {
 }
 
 /// Default window size for loop detection.
-const DEFAULT_LOOP_DETECT_WINDOW: usize = 5;
+///
+/// A larger window gives the detector more context across turns, reducing
+/// false positives when the model retries a call after a transient failure.
+const DEFAULT_LOOP_DETECT_WINDOW: usize = 8;
 /// Minimum limit for identical readonly operations.
 ///
 /// Read/search calls are cheap to reuse but can become stale across unrelated
-/// turns, so keep the threshold low enough to stop obvious churn without
-/// blocking a single intentional reread.
-const MIN_READONLY_IDENTICAL_LIMIT: usize = 2;
+/// turns. The threshold must be high enough to allow one legitimate retry
+/// (e.g. after an ast-grep parse error or a transient network failure) before
+/// the loop detector fires.  A limit of 3 means the same identical call must
+/// appear 3 times in the detection window before it is flagged.
+const MIN_READONLY_IDENTICAL_LIMIT: usize = 3;
 
 fn spool_path_exists(result: &Value) -> bool {
     let Some(spool_path) = result.get("spool_path").and_then(|v| v.as_str()) else {
@@ -1064,11 +1069,15 @@ mod tests {
             "path": "vtcode-core/src/core/agent/runner/tests.rs"
         });
 
-        assert_eq!(history.loop_limit_for("unified_file", &args), 2);
+        // The effective limit is max(base_limit, MIN_READONLY_IDENTICAL_LIMIT).
+        // Even when the configured base limit is 2, the readonly minimum (3)
+        // takes precedence so that one legitimate retry is allowed before the
+        // loop detector fires.
+        assert_eq!(history.loop_limit_for("unified_file", &args), 3);
     }
 
     #[test]
-    fn unified_search_exact_repeat_is_detected_after_two_successes() {
+    fn unified_search_exact_repeat_is_detected_after_three_successes() {
         let history = ToolExecutionHistory::new(10);
         history.set_loop_detection_limits(5, 2);
 
@@ -1078,6 +1087,9 @@ mod tests {
             "path": "vtcode-core/src/core/agent/runner/tests.rs"
         });
 
+        // With MIN_READONLY_IDENTICAL_LIMIT=3, three identical successful calls
+        // are required before the loop detector fires.  Two calls (the old
+        // threshold) should NOT be detected — the model is allowed one retry.
         for _ in 0..2 {
             history.add_record(ToolExecutionRecord::success(
                 "unified_search".to_string(),
@@ -1096,8 +1108,30 @@ mod tests {
         }
 
         let loop_result = history.detect_loop("unified_search", &args);
+        assert!(
+            !loop_result.detected,
+            "two identical calls should not trigger loop detection with MIN_READONLY_IDENTICAL_LIMIT=3"
+        );
+
+        // A third identical call crosses the threshold.
+        history.add_record(ToolExecutionRecord::success(
+            "unified_search".to_string(),
+            "unified_search".to_string(),
+            false,
+            None,
+            args.clone(),
+            json!({"matches": []}),
+            make_snapshot(),
+            None,
+            None,
+            None,
+            None,
+            false,
+        ));
+
+        let loop_result = history.detect_loop("unified_search", &args);
         assert!(loop_result.detected);
-        assert_eq!(loop_result.repeat_count, 2);
+        assert_eq!(loop_result.repeat_count, 3);
         assert_eq!(loop_result.tool_name, "unified_search");
     }
 

@@ -716,39 +716,19 @@ mod tests {
             command_success: true,
         });
 
-        update_repetition_tracker(
-            &mut tracker,
-            &miss,
-            tool_names::UNIFIED_SEARCH,
-            &json!({
-                "action": "structural",
-                "pattern": "fn $name(...) -> Result<$T, $E>",
-                "lang": "rust",
-                "globs": ["vtcode-tui/**/*.rs"]
-            }),
-        );
-        update_repetition_tracker(
-            &mut tracker,
-            &miss,
-            tool_names::UNIFIED_SEARCH,
-            &json!({
-                "action": "grep",
-                "pattern": "-> Result",
-                "path": "vtcode-tui",
-                "globs": ["vtcode-tui/**/*.rs"]
-            }),
-        );
-        update_repetition_tracker(
-            &mut tracker,
-            &miss,
-            tool_names::UNIFIED_SEARCH,
-            &json!({
-                "action": "grep",
-                "pattern": "Result<",
-                "path": "vtcode-tui",
-                "globs": ["vtcode-tui/**/*.rs"]
-            }),
-        );
+        // Use the same pattern for all 3 calls so they group into the same
+        // low-signal family.  Different patterns produce different family keys
+        // (action+pattern differentiation), so each would only have count 1
+        // and the balancer threshold would never be reached.
+        let same_args = json!({
+            "action": "grep",
+            "pattern": "-> Result",
+            "path": "vtcode-tui",
+            "globs": ["vtcode-tui/**/*.rs"]
+        });
+        update_repetition_tracker(&mut tracker, &miss, tool_names::UNIFIED_SEARCH, &same_args);
+        update_repetition_tracker(&mut tracker, &miss, tool_names::UNIFIED_SEARCH, &same_args);
+        update_repetition_tracker(&mut tracker, &miss, tool_names::UNIFIED_SEARCH, &same_args);
 
         let balancer_outcome = super::handle_turn_balancer(&mut ctx, 4, &mut tracker, 4, 3).await;
         assert!(matches!(balancer_outcome, TurnHandlerOutcome::Continue));
@@ -786,39 +766,18 @@ mod tests {
             command_success: true,
         });
 
-        update_repetition_tracker(
-            &mut tracker,
-            &miss,
-            tool_names::UNIFIED_SEARCH,
-            &json!({
-                "action": "structural",
-                "pattern": "fn $name(...) -> Result<$T, $E>",
-                "lang": "rust",
-                "globs": ["vtcode-tui/**/*.rs"]
-            }),
-        );
-        update_repetition_tracker(
-            &mut tracker,
-            &miss,
-            tool_names::UNIFIED_SEARCH,
-            &json!({
-                "action": "grep",
-                "pattern": "-> Result",
-                "path": "vtcode-tui",
-                "globs": ["vtcode-tui/**/*.rs"]
-            }),
-        );
-        update_repetition_tracker(
-            &mut tracker,
-            &miss,
-            tool_names::UNIFIED_SEARCH,
-            &json!({
-                "action": "grep",
-                "pattern": "Result<",
-                "path": "vtcode-tui",
-                "globs": ["vtcode-tui/**/*.rs"]
-            }),
-        );
+        // Use the same pattern for all 3 calls so they group into the same
+        // low-signal family (action+pattern differentiation means different
+        // patterns each have count 1, which would never reach the threshold).
+        let same_args = json!({
+            "action": "grep",
+            "pattern": "-> Result",
+            "path": "vtcode-tui",
+            "globs": ["vtcode-tui/**/*.rs"]
+        });
+        update_repetition_tracker(&mut tracker, &miss, tool_names::UNIFIED_SEARCH, &same_args);
+        update_repetition_tracker(&mut tracker, &miss, tool_names::UNIFIED_SEARCH, &same_args);
+        update_repetition_tracker(&mut tracker, &miss, tool_names::UNIFIED_SEARCH, &same_args);
 
         let balancer_outcome = super::handle_turn_balancer(&mut ctx, 3, &mut tracker, 20, 3).await;
         assert!(matches!(balancer_outcome, TurnHandlerOutcome::Continue));
