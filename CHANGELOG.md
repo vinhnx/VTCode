@@ -2,6 +2,41 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.133.9 - 2026-06-24
+
+### Highlights
+#### Bug Fixes
+
+- Preserve responses stream call ids (bda2d6fb) (@kernitus)
+- Preserve responses stream call ids (a87f5006) (@kernitus)
+- Classify responses stream rig gaps (c769df4b) (@kernitus)
+- Preserve responses rig gap payloads (31d60dcb) (@kernitus)
+- Preserve custom tool input stream payloads (e8175f2a) (@kernitus)
+- Align responses stream parser policy (ec737084) (@kernitus)
+- Avoid duplicate tool call replays (e3eaf4e1) (@kernitus)
+- Preserve rig-unknown responses items (b5345844) (@kernitus)
+- Preserve responses stream mode (9c301493) (@kernitus)
+### Other Changes
+#### Build
+
+- Test rig 0.39 compatibility (0519913d) (@kernitus)
+#### Other
+
+- Update TODO (74789d35) 
+- Update TODO (ea9d8fe8) 
+#### Refactors
+
+- Add responses adapter boundary (9486046c) (@kernitus)
+- Route chatgpt requests through rig (2c0c5223) (@kernitus)
+- Adapt openai responses sse via rig (5456eebc) (@kernitus)
+- Register tools through rig toolset (a0c04d08) (@kernitus)
+- Consolidate openai chatgpt responses glue (45077f86) (@kernitus)
+- Document chatgpt rig request boundary (38198cde) (@kernitus)
+#### Tests
+
+- Cover responses status marker events (b8797d82) (@kernitus)
+- Preserve responses stream conversions (de597a96) (@kernitus)
+- Use documented code interpreter stream event (53c3559d) (@kernitus)
 ## 0.133.8 - 2026-06-24
 
 ### Highlights
