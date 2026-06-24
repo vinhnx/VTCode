@@ -438,7 +438,7 @@ fn build_responses_request_from_history(
     let mut openai_request = json!({
         "model": request.model,
         "input": input,
-        "stream": if ctx.use_rig_chatgpt_defaults { true } else { request.stream },
+        "stream": request.stream,
     });
     let effective_reasoning_effort = request
         .reasoning_effort
@@ -812,6 +812,25 @@ mod tests {
                 .and_then(Value::as_str),
             Some("in_memory")
         );
+    }
+
+    #[test]
+    fn chatgpt_rig_defaults_preserve_requested_stream_mode() {
+        for requested_stream in [false, true] {
+            let mut request = request();
+            request.stream = requested_stream;
+
+            let mut ctx = base_context(None);
+            ctx.use_rig_chatgpt_defaults = true;
+
+            let payload =
+                build_responses_request(&request, &ctx).expect("responses request should build");
+
+            assert_eq!(
+                payload.get("stream").and_then(Value::as_bool),
+                Some(requested_stream)
+            );
+        }
     }
 
     #[test]

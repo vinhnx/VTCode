@@ -856,7 +856,6 @@ fn apply_rig_chatgpt_private_defaults(request: &mut Value) {
     merge_typed_responses_parameters(request, typed_parameters);
 
     if let Some(map) = request.as_object_mut() {
-        map.insert("stream".to_string(), json!(true));
         for field in [
             "background",
             "max_output_tokens",
@@ -1121,7 +1120,7 @@ mod tests {
                 .contains("chatgpt::ResponsesCompletionModel"),
             "the compatibility boundary documents the private Rig ChatGPT request constructor"
         );
-        assert_eq!(payload.get("stream").and_then(Value::as_bool), Some(true));
+        assert_eq!(payload.get("stream").and_then(Value::as_bool), Some(false));
         assert_eq!(payload.get("store").and_then(Value::as_bool), Some(false));
         assert!(payload.get("max_output_tokens").is_none());
         assert!(payload.get("temperature").is_none());
@@ -1135,5 +1134,25 @@ mod tests {
                 json!("reasoning.encrypted_content"),
             ])
         );
+    }
+
+    #[test]
+    fn chatgpt_request_construction_preserves_requested_stream_mode() {
+        for requested_stream in [false, true] {
+            let mut request = request();
+            request.stream = requested_stream;
+
+            let mut ctx = base_context(None);
+            ctx.request_construction =
+                ResponsesRequestConstruction::RigChatGptPrivateDefaultsCompatibility;
+
+            let payload = build_responses_request(&request, &ctx)
+                .expect("chatgpt responses request should build");
+
+            assert_eq!(
+                payload.get("stream").and_then(Value::as_bool),
+                Some(requested_stream)
+            );
+        }
     }
 }
