@@ -6,6 +6,13 @@ issues: https://github.com/vinhnx/VTCode/issues/678
 
 fix Rig.
 
+Rig
+
+Follow-up work should happen if/when Rig implements some of the missing pieces, at which point we can rely on it more and remove our wrappers and fallbacks. For example:
+
+[0xPlaygrounds/rig#1855](https://github.com/0xPlaygrounds/rig/pull/1855)
+[0xPlaygrounds/rig#1830](https://github.com/0xPlaygrounds/rig/pull/1830)
+
 ---
 
 [x] handle up and down arrow to autofill messages in reversed-prompt (control_r and /rewind) history log. example: when use hit up arrow, use last message in the history logs queue, the up arrow again, then move to the next messages in the queue, and so on. — Implemented via `prepend_archived_history` which merges archived session prompts into `InputManager` history on startup.
