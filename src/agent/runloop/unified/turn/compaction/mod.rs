@@ -770,6 +770,7 @@ async fn compact_history_before_index_in_place(
     }))
 }
 
+#[cfg(test)]
 pub(crate) async fn compact_history_from_index_in_place(
     provider: &dyn LLMProvider,
     model: &str,

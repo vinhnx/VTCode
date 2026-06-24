@@ -31,7 +31,6 @@ pub(super) async fn route_outcome(
         | SlashCommandOutcome::InitializeWorkspace { .. }
         | SlashCommandOutcome::ShowSettings
         | SlashCommandOutcome::ShowSettingsAtPath { .. }
-        | SlashCommandOutcome::ShowHooks
         | SlashCommandOutcome::ShowMemoryConfig
         | SlashCommandOutcome::ShowPermissions
         | SlashCommandOutcome::ShowMemory) => route_ui_and_settings_outcome(outcome, ctx).await,
@@ -50,21 +49,16 @@ pub(super) async fn route_outcome(
         | SlashCommandOutcome::RunDoctor { .. }
         | SlashCommandOutcome::Update { .. }
         | SlashCommandOutcome::StartTerminalSetup
-        | SlashCommandOutcome::ManageLoop { .. }
-        | SlashCommandOutcome::ManageSchedule { .. }
         | SlashCommandOutcome::ManageLocalServer { .. }) => {
             route_runtime_outcome(outcome, ctx).await
         }
         outcome @ (SlashCommandOutcome::NewSession
         | SlashCommandOutcome::OpenDocs
         | SlashCommandOutcome::OpenDonateLinks
-        | SlashCommandOutcome::ShowReleaseNotes
         | SlashCommandOutcome::LaunchEditor { .. }
-        | SlashCommandOutcome::LaunchGit
         | SlashCommandOutcome::ManageSkills { .. }
         | SlashCommandOutcome::ManageAgents { .. }
         | SlashCommandOutcome::ManageSubprocesses { .. }
-        | SlashCommandOutcome::OpenRewindPicker
         | SlashCommandOutcome::RewindToTurn { .. }
         | SlashCommandOutcome::RewindLatest { .. }
         | SlashCommandOutcome::ShareLog { .. }
@@ -124,7 +118,6 @@ async fn route_ui_and_settings_outcome(
         SlashCommandOutcome::ShowSettingsAtPath { path } => {
             handlers::handle_show_settings_at_path(ctx, Some(&path)).await
         }
-        SlashCommandOutcome::ShowHooks => handlers::handle_show_hooks(ctx).await,
         SlashCommandOutcome::ShowMemoryConfig => handlers::handle_show_memory_config(ctx).await,
         SlashCommandOutcome::ShowPermissions => handlers::handle_show_permissions(ctx).await,
         SlashCommandOutcome::ShowMemory => handlers::handle_show_memory(ctx).await,
@@ -164,12 +157,6 @@ async fn route_runtime_outcome(
             force,
         } => handlers::handle_update(ctx, check_only, install, force).await,
         SlashCommandOutcome::StartTerminalSetup => handlers::handle_start_terminal_setup(ctx).await,
-        SlashCommandOutcome::ManageLoop { command } => {
-            handlers::handle_manage_loop(ctx, command).await
-        }
-        SlashCommandOutcome::ManageSchedule { action } => {
-            handlers::handle_manage_schedule(ctx, action).await
-        }
         SlashCommandOutcome::ManageLocalServer { action } => {
             handlers::handle_manage_local_server(ctx, action).await
         }
@@ -185,11 +172,9 @@ async fn route_navigation_outcome(
         SlashCommandOutcome::NewSession => handlers::handle_new_session(ctx).await,
         SlashCommandOutcome::OpenDocs => handlers::handle_open_docs(ctx).await,
         SlashCommandOutcome::OpenDonateLinks => handlers::handle_open_donate_links(ctx).await,
-        SlashCommandOutcome::ShowReleaseNotes => handlers::handle_release_notes(ctx).await,
         SlashCommandOutcome::LaunchEditor { file } => {
             handlers::handle_launch_editor(ctx, file).await
         }
-        SlashCommandOutcome::LaunchGit => handlers::handle_launch_git(ctx).await,
         SlashCommandOutcome::ManageSkills { action } => {
             handlers::handle_manage_skills(ctx, action).await
         }
@@ -199,7 +184,6 @@ async fn route_navigation_outcome(
         SlashCommandOutcome::ManageSubprocesses { action } => {
             handlers::handle_manage_subprocesses(ctx, action).await
         }
-        SlashCommandOutcome::OpenRewindPicker => handlers::handle_open_rewind_picker(ctx).await,
         SlashCommandOutcome::RewindToTurn { turn, scope } => {
             handlers::handle_rewind_to_turn(ctx, turn, scope).await
         }

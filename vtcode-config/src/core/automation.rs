@@ -18,7 +18,7 @@ pub struct AutomationConfig {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ScheduledTasksConfig {
-    /// Enable session-scoped `/loop` tasks and durable `vtcode schedule` jobs.
+    /// Enable scheduler tools and durable `vtcode schedule` jobs.
     #[serde(default = "default_scheduled_tasks_enabled")]
     pub enabled: bool,
 }

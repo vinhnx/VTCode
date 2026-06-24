@@ -117,11 +117,9 @@ Press `Alt+O` to open the fullscreen transcript review surface. It builds a plai
 
 ## Scheduled Prompts And Reminders
 
-- `/loop` schedules a prompt repeatedly for the current interactive session. It defaults to every 10 minutes when you omit the interval.
-- `/schedule` manages durable scheduled tasks. They are polled while VT Code is open, and can also be run by the local scheduler daemon for background execution.
 - VT Code also recognizes narrow reminder phrases in chat such as `remind me at 3pm to ...`, `in 45 minutes, ...`, `what scheduled tasks do I have?`, and `cancel <job id|name>`.
 - Session-scoped scheduled prompts fire only at idle boundaries so they do not interrupt an in-flight turn.
-- For full behavior, limits, jitter, and CLI examples, see [Scheduled Tasks](./scheduled-tasks.md).
+- For full behavior, limits, and CLI examples, see [Scheduled Tasks](./scheduled-tasks.md).
 
 ## Vim Mode
 

@@ -168,7 +168,6 @@ allow_glob = [
 
 VT Code supports automation through internal scheduling primitives instead:
 
--   `/loop` for session-scoped recurring prompts in interactive chat
 -   `vtcode schedule` for durable local automation and reminders
 
 #### 11. Container/Orchestration

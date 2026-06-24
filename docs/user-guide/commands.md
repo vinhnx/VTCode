@@ -141,12 +141,10 @@ Configure the behaviour under **Settings › Extensions › VT Code**:
 - `/agent` and `/agents` inspect agent definitions and delegated child runs. `@agent-name` remains a delegated child-agent control. Primary agents are switched from the TUI with `Tab` on an empty idle composer. The active primary agent is shown in the session header badge and influences the session's instructions, model, granular permission policy, and tool access.
 - `/agents list` shows all agent definitions with their availability (`mode: primary`, `mode: subagent`, or `mode: all`). `/agents create` scaffolds a new agent definition in `.vtcode/agents/`.
 - `/plan` starts or continues the planning workflow. It is a workflow command, not a state selector.
-- `/loop` schedules a session-scoped prompt that re-enters the chat only when the current turn is idle.
-- `/schedule` manages durable scheduled tasks. They are polled while VT Code is open, and the local scheduler daemon keeps them running in the background.
 
 ## Scheduled tasks
 
-Use `/loop` inside interactive chat for quick polling, and use `vtcode schedule` when the task should survive restarts.
+Use `vtcode schedule` when the task should survive restarts.
 
 ```bash
 vtcode schedule create --prompt "check the deployment" --every 10m

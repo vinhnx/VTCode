@@ -55,6 +55,10 @@ pub fn generate_tool_guidelines(
     }
     if has_search && has_exec {
         lines.push("- Prefer search over shell for exploration.".to_string());
+        lines.push(
+            "- Use `unified_search` `action=structural` for ast-grep code-shape searches; set `lang` and use `format=github` unless SARIF is needed. Use grep only for plain text."
+                .to_string(),
+        );
     }
     if has_file || has_apply_patch || has_exec {
         lines.push(
@@ -296,6 +300,8 @@ mod tests {
         let tools = vec!["unified_exec".to_string(), "unified_search".to_string()];
         let guidelines = generate_tool_guidelines(&tools, None);
         assert!(guidelines.contains("Prefer search over shell"));
+        assert!(guidelines.contains("action=structural"));
+        assert!(guidelines.contains("format=github"));
         assert!(guidelines.contains("git diff -- <path>"));
         assert!(guidelines.contains("Completion is a checkpoint"));
     }

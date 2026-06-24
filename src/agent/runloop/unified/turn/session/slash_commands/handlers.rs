@@ -28,8 +28,6 @@ mod oauth;
 mod planning;
 #[path = "rewind.rs"]
 mod rewind;
-#[path = "schedule.rs"]
-mod schedule;
 #[path = "share_log.rs"]
 mod share_log;
 #[path = "skills.rs"]
@@ -41,20 +39,16 @@ mod update;
 #[path = "workspace.rs"]
 mod workspace;
 
-pub(crate) use control::scheduler_enabled;
-
 pub(super) use agents::{handle_manage_agents, handle_manage_subprocesses};
 pub(crate) use apps::run_with_event_loop_suspended;
 pub(super) use apps::{
-    handle_launch_editor, handle_launch_git, handle_new_session, handle_open_docs,
-    handle_open_donate_links, handle_release_notes,
+    handle_launch_editor, handle_new_session, handle_open_docs, handle_open_donate_links,
 };
 pub(super) use compact::handle_compact_conversation;
 pub(super) use control::{
     handle_clear_conversation, handle_clear_screen, handle_copy_latest_assistant_reply,
-    handle_exit, handle_manage_loop, handle_notify, handle_show_hooks, handle_show_permissions,
-    handle_show_settings, handle_show_settings_at_path, handle_stop_agent,
-    show_settings_at_path_from_context,
+    handle_exit, handle_notify, handle_show_permissions, handle_show_settings,
+    handle_show_settings_at_path, handle_stop_agent, show_settings_at_path_from_context,
 };
 pub(super) use diagnostics::{
     handle_run_doctor, handle_show_memory, handle_show_memory_config, handle_show_status,
@@ -71,8 +65,7 @@ pub(super) use oauth::{
     handle_start_oauth_provider_picker,
 };
 pub(super) use planning::handle_toggle_planning_workflow;
-pub(super) use rewind::{handle_open_rewind_picker, handle_rewind_latest, handle_rewind_to_turn};
-pub(super) use schedule::handle_manage_schedule;
+pub(super) use rewind::{handle_rewind_latest, handle_rewind_to_turn};
 pub(super) use share_log::handle_share_log;
 pub(super) use skills::handle_manage_skills;
 pub(super) use ui::{

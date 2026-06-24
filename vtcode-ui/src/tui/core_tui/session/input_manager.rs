@@ -4,6 +4,8 @@
 /// and command history navigation.  Text editing and cursor positioning are
 /// delegated to [`ratatui_textarea::TextArea`], which provides undo/redo,
 /// proper UTF-8 handling, and a battle-tested editing model.
+use std::collections::HashSet;
+
 use chrono::{DateTime, Utc};
 use ratatui_textarea::{CursorMove, DataCursor, TextArea};
 
@@ -34,6 +36,20 @@ impl InputHistoryEntry {
             content,
             elements,
             created_at: Utc::now(),
+        }
+    }
+
+    /// Create an entry with an explicit timestamp (used for archived history).
+    pub fn from_content_and_timestamp(content: String, created_at: DateTime<Utc>) -> Self {
+        let elements = if content.is_empty() {
+            Vec::new()
+        } else {
+            vec![ContentPart::text(&content)]
+        };
+        Self {
+            content,
+            elements,
+            created_at,
         }
     }
 
@@ -85,6 +101,10 @@ pub struct InputManager {
     history_index: Option<usize>,
     /// Unsaved draft when navigating history
     history_draft: Option<InputHistoryEntry>,
+    /// Number of archived entries prepended at the front of `history`.
+    /// Down-arrow restores the draft as soon as the index falls into this
+    /// range instead of cycling through archived items.
+    archived_count: usize,
 }
 
 #[expect(dead_code)]
@@ -100,6 +120,7 @@ impl InputManager {
             history: Vec::new(),
             history_index: None,
             history_draft: None,
+            archived_count: 0,
         }
     }
 
@@ -626,9 +647,47 @@ impl InputManager {
         self.reset_history_navigation();
     }
 
+    /// Prepend archived history entries from previous sessions.
+    ///
+    /// Entries are inserted at the front of the history vector so that Up-arrow
+    /// navigation surfaces the current session's most recent prompts first,
+    /// followed by archived prompts (newest archived first).  The caller should
+    /// provide entries in reverse-chronological order (newest first).
+    /// Duplicates (by content) against existing history or among the archived
+    /// entries themselves are skipped.
+    pub fn prepend_archived_history(&mut self, entries: Vec<InputHistoryEntry>) {
+        let mut seen: HashSet<String> = self.history.iter().map(|e| e.content.clone()).collect();
+        let mut to_prepend = Vec::new();
+        for entry in entries {
+            if entry.is_empty() || !seen.insert(entry.content.clone()) {
+                continue;
+            }
+            to_prepend.push(entry);
+        }
+        if to_prepend.is_empty() {
+            return;
+        }
+        // Caller provides newest-first; insert each at position 0 so the final
+        // order is [oldest_archived, ..., newest_archived, session_entries...].
+        // Up-arrow (which walks from the tail) therefore hits session entries
+        // first, then the most recent archived entry, then older ones.
+        let count = to_prepend.len();
+        for entry in to_prepend {
+            self.history.insert(0, entry);
+        }
+        self.archived_count += count;
+        self.reset_history_navigation();
+    }
+
     pub fn go_to_next_history(&mut self) -> Option<InputHistoryEntry> {
         match self.history_index {
             None => None,
+            Some(i) if i < self.archived_count => {
+                // In the archived range — restore the user's preserved draft
+                // immediately instead of cycling through archived items.
+                self.history_index = None;
+                self.history_draft.take()
+            }
             Some(0) => {
                 self.history_index = None;
                 self.history_draft.take()
@@ -915,5 +974,128 @@ mod tests {
 
         manager.redo();
         assert_eq!(manager.content(), "hello");
+    }
+
+    #[test]
+    fn prepend_archived_history_inserts_at_front() {
+        let mut manager = InputManager::new();
+        let now = Utc::now();
+        manager.add_to_history(InputHistoryEntry::from_content_and_attachments(
+            "session-prompt".to_owned(),
+            Vec::new(),
+        ));
+
+        // Input is newest-first; archived-1 is newer than archived-2.
+        manager.prepend_archived_history(vec![
+            InputHistoryEntry::from_content_and_timestamp("archived-1".to_owned(), now),
+            InputHistoryEntry::from_content_and_timestamp("archived-2".to_owned(), now),
+        ]);
+
+        // After prepend: oldest archived at front, newest archived, then session.
+        let texts = manager.history_texts();
+        assert_eq!(texts, vec!["archived-2", "archived-1", "session-prompt"]);
+    }
+
+    #[test]
+    fn prepend_archived_history_deduplicates() {
+        let mut manager = InputManager::new();
+        let now = Utc::now();
+        manager.add_to_history(InputHistoryEntry::from_content_and_attachments(
+            "duplicate".to_owned(),
+            Vec::new(),
+        ));
+
+        manager.prepend_archived_history(vec![
+            InputHistoryEntry::from_content_and_timestamp("unique".to_owned(), now),
+            InputHistoryEntry::from_content_and_timestamp("duplicate".to_owned(), now),
+        ]);
+
+        let texts = manager.history_texts();
+        // "duplicate" was already in session history, so the archived copy is skipped.
+        assert_eq!(texts, vec!["unique", "duplicate"]);
+        assert_eq!(texts.iter().filter(|t| *t == "duplicate").count(), 1);
+    }
+
+    #[test]
+    fn prepend_archived_history_skips_empty() {
+        let mut manager = InputManager::new();
+        let now = Utc::now();
+
+        manager.prepend_archived_history(vec![
+            InputHistoryEntry::from_content_and_timestamp("".to_owned(), now),
+            InputHistoryEntry::from_content_and_timestamp("real".to_owned(), now),
+        ]);
+
+        assert_eq!(manager.history_texts(), vec!["real"]);
+    }
+
+    #[test]
+    fn up_arrow_cycles_session_first_then_archived() {
+        let mut manager = InputManager::new();
+        let now = Utc::now();
+        manager.add_to_history(InputHistoryEntry::from_content_and_attachments(
+            "session-2".to_owned(),
+            Vec::new(),
+        ));
+        manager.add_to_history(InputHistoryEntry::from_content_and_attachments(
+            "session-1".to_owned(),
+            Vec::new(),
+        ));
+
+        // archived-newer is the most recent archived entry.
+        manager.prepend_archived_history(vec![
+            InputHistoryEntry::from_content_and_timestamp("archived-newer".to_owned(), now),
+            InputHistoryEntry::from_content_and_timestamp("archived-older".to_owned(), now),
+        ]);
+
+        // History: [archived-newer, archived-older, session-2, session-1]
+        // Up arrow from fresh state: most recent session entry first, then
+        // older session entries, then archived (newest archived first).
+        assert_eq!(
+            manager.go_to_previous_history().map(|e| e.content.clone()),
+            Some("session-1".to_owned())
+        );
+        assert_eq!(
+            manager.go_to_previous_history().map(|e| e.content.clone()),
+            Some("session-2".to_owned())
+        );
+        assert_eq!(
+            manager.go_to_previous_history().map(|e| e.content.clone()),
+            Some("archived-newer".to_owned())
+        );
+        assert_eq!(
+            manager.go_to_previous_history().map(|e| e.content.clone()),
+            Some("archived-older".to_owned())
+        );
+        assert!(manager.go_to_previous_history().is_none());
+    }
+
+    #[test]
+    fn down_restores_draft_from_archived_entries() {
+        let mut manager = InputManager::new();
+        let now = Utc::now();
+        manager.set_content("my original prompt".to_owned());
+        manager.add_to_history(InputHistoryEntry::from_content_and_attachments(
+            "session-1".to_owned(),
+            Vec::new(),
+        ));
+
+        manager.prepend_archived_history(vec![
+            InputHistoryEntry::from_content_and_timestamp("archived-1".to_owned(), now),
+            InputHistoryEntry::from_content_and_timestamp("archived-2".to_owned(), now),
+        ]);
+
+        // Navigate backward into archived entries.
+        manager.go_to_previous_history(); // session-1
+        let entry = manager.go_to_previous_history().map(|e| e.content.clone());
+        // archived-1 is the newest archived (adjacent to session entries).
+        assert_eq!(entry, Some("archived-1".to_owned()));
+
+        // Press Down from an archived entry — should restore the draft
+        // instead of cycling to the next archived item.
+        let restored = manager.go_to_next_history().map(|e| e.content.clone());
+        assert_eq!(restored, Some("my original prompt".to_owned()));
+        // History navigation should be fully exited.
+        assert!(manager.history_index().is_none());
     }
 }

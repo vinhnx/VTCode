@@ -219,7 +219,18 @@ async fn handle_success<'a>(
         content_for_model,
     )
     .await?;
-    if !vtcode_core::tools::tool_intent::classify_tool_intent(tool_name, args_val).mutating {
+    // Skip signature recording for loop-detected stubs: a loop-detected result is
+    // a cached/short-circuited response, not a genuine successful execution.
+    // Recording its signature would cause the turn-local guard
+    // (`has_successful_readonly_signature`) to treat future identical calls as
+    // duplicates and return the stale loop-detected stub instead of re-executing.
+    let is_loop_detected_stub = output
+        .get("loop_detected")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    if !is_loop_detected_stub
+        && !vtcode_core::tools::tool_intent::classify_tool_intent(tool_name, args_val).mutating
+    {
         let signature = signature_key_for(tool_name, args_val);
         t_ctx
             .ctx

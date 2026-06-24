@@ -1,18 +1,11 @@
 use anyhow::Result;
-use chrono::Utc;
-
-use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::core::decision_tracker::DecisionTracker;
 use vtcode_core::hooks::SessionEndReason;
 use vtcode_core::llm::provider::MessageRole;
 use vtcode_core::notifications::{NotificationEvent, send_global_notification_force};
-use vtcode_core::scheduler::{LoopCommand, ScheduleSpec, scheduled_tasks_enabled};
 use vtcode_core::utils::ansi::MessageStyle;
 use vtcode_core::utils::transcript;
 
-use crate::agent::runloop::unified::hooks_browser::{
-    create_hooks_palette_state, render_hooks_summary, show_hooks_palette,
-};
 use crate::agent::runloop::unified::palettes::ActivePalette;
 use crate::agent::runloop::unified::settings_interactive::{
     create_settings_palette_state, resolve_settings_view_path, show_settings_palette,
@@ -42,52 +35,6 @@ pub(crate) async fn handle_notify(
     Ok(SlashCommandControl::Continue)
 }
 
-pub(crate) async fn handle_manage_loop(
-    ctx: SlashCommandContext<'_>,
-    command: LoopCommand,
-) -> Result<SlashCommandControl> {
-    if !scheduler_enabled(ctx.vt_cfg.as_ref()) {
-        ctx.renderer.line(
-            MessageStyle::Info,
-            "Scheduled tasks are disabled. Enable [automation.scheduled_tasks].enabled or unset VTCODE_DISABLE_CRON.",
-        )?;
-        return Ok(SlashCommandControl::Continue);
-    }
-
-    let LoopCommand {
-        prompt,
-        interval,
-        normalization_note,
-    } = command;
-    let summary = ctx
-        .tool_registry
-        .create_session_prompt_task(
-            None,
-            prompt,
-            ScheduleSpec::FixedInterval(interval),
-            Utc::now(),
-        )
-        .await?;
-    ctx.renderer.line(
-        MessageStyle::Info,
-        &format!(
-            "Scheduled session task {} ({}) with {}.",
-            summary.id, summary.name, summary.schedule
-        ),
-    )?;
-    if let Some(note) = normalization_note {
-        ctx.renderer.line(MessageStyle::Info, &note)?;
-    }
-    Ok(SlashCommandControl::Continue)
-}
-
-pub(crate) fn scheduler_enabled(vt_cfg: Option<&VTCodeConfig>) -> bool {
-    let enabled = vt_cfg
-        .map(|cfg| cfg.automation.scheduled_tasks.enabled)
-        .unwrap_or(false);
-    scheduled_tasks_enabled(enabled)
-}
-
 pub(crate) async fn handle_show_settings(
     ctx: SlashCommandContext<'_>,
 ) -> Result<SlashCommandControl> {
@@ -100,30 +47,6 @@ pub(crate) async fn handle_show_permissions(
 ) -> Result<SlashCommandControl> {
     let mut ctx = ctx;
     show_settings_at_path_from_context(&mut ctx, Some("permissions")).await
-}
-
-pub(crate) async fn handle_show_hooks(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
-    if !ctx.renderer.supports_inline_ui() {
-        let lifecycle = ctx
-            .vt_cfg
-            .as_ref()
-            .map(|cfg| cfg.hooks.lifecycle.normalized())
-            .unwrap_or_default();
-        render_hooks_summary(ctx.renderer, &lifecycle)?;
-        return Ok(SlashCommandControl::Continue);
-    }
-
-    let workspace_path = ctx.config.workspace.clone();
-    let vt_snapshot = ctx.vt_cfg.clone();
-    let hooks_state = create_hooks_palette_state(&workspace_path, &vt_snapshot)?;
-    if show_hooks_palette(ctx.renderer, &hooks_state, None)? {
-        *ctx.palette_state = Some(ActivePalette::Hooks {
-            state: Box::new(hooks_state),
-            esc_armed: false,
-        });
-    }
-
-    Ok(SlashCommandControl::Continue)
 }
 
 pub(crate) async fn handle_show_settings_at_path(

@@ -21,7 +21,6 @@ use crate::config::defaults::{get_config_dir, get_data_dir};
 use crate::notifications::{NotificationEvent, send_global_notification};
 use crate::utils::path::normalize_path;
 
-pub const DEFAULT_LOOP_INTERVAL_MINUTES: u64 = 10;
 pub const MAX_SCHEDULED_TASKS: usize = 50;
 pub const SESSION_TASK_EXPIRY_HOURS: i64 = 72;
 pub const DISABLE_CRON_ENV: &str = "VTCODE_DISABLE_CRON";
@@ -55,37 +54,6 @@ mod test_env_overrides {
 
 #[cfg(test)]
 mod tests;
-
-static LEADING_INTERVAL_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(
-        r"(?ix)
-        ^\s*
-        (?P<count>\d+)
-        \s*
-        (?P<unit>s|sec|secs|second|seconds|m|min|mins|minute|minutes|h|hr|hrs|hour|hours|d|day|days)
-        \s+
-        (?P<prompt>.+)
-        $",
-    )
-    .expect("leading interval regex")
-});
-
-static TRAILING_INTERVAL_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(
-        r"(?ix)
-        ^\s*
-        (?P<prompt>.+?)
-        \s+
-        every
-        \s+
-        (?P<count>\d+)
-        \s*
-        (?P<unit>s|sec|secs|second|seconds|m|min|mins|minute|minutes|h|hr|hrs|hour|hours|d|day|days)
-        \s*
-        $",
-    )
-    .expect("trailing interval regex")
-});
 
 static REMIND_AT_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?ix)^\s*remind\s+me\s+at\s+(?P<when>.+?)\s+to\s+(?P<prompt>.+)\s*$")
@@ -521,13 +489,6 @@ impl SessionScheduler {
         }
         Ok(())
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LoopCommand {
-    pub prompt: String,
-    pub interval: FixedInterval,
-    pub normalization_note: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1157,44 +1118,6 @@ pub fn durable_task_is_overdue(
     !has_last_status && last_run_at.is_none() && next_run_at.is_some_and(|next_run| next_run <= now)
 }
 
-pub fn parse_loop_command(args: &str) -> Result<LoopCommand> {
-    let trimmed = args.trim();
-    if trimmed.is_empty() {
-        bail!("Usage: /loop [interval] <prompt>");
-    }
-
-    let (raw_prompt, count, unit) = if let Some(captures) = LEADING_INTERVAL_RE.captures(trimmed) {
-        (
-            captures["prompt"].trim().to_string(),
-            captures["count"].parse::<u64>()?,
-            captures["unit"].to_string(),
-        )
-    } else if let Some(captures) = TRAILING_INTERVAL_RE.captures(trimmed) {
-        (
-            captures["prompt"].trim().to_string(),
-            captures["count"].parse::<u64>()?,
-            captures["unit"].to_string(),
-        )
-    } else {
-        (
-            trimmed.to_string(),
-            DEFAULT_LOOP_INTERVAL_MINUTES,
-            "minutes".to_string(),
-        )
-    };
-
-    if raw_prompt.trim().is_empty() {
-        bail!("Usage: /loop [interval] <prompt>");
-    }
-
-    let (seconds, note) = normalize_interval_spec(count, &unit)?;
-    Ok(LoopCommand {
-        prompt: raw_prompt,
-        interval: FixedInterval { seconds },
-        normalization_note: note,
-    })
-}
-
 pub fn parse_session_language_command(
     input: &str,
     now: DateTime<Local>,
@@ -1575,58 +1498,6 @@ fn humanize_interval(seconds: u64) -> String {
             }
         }
     }
-}
-
-fn normalize_interval_spec(count: u64, unit: &str) -> Result<(u64, Option<String>)> {
-    if count == 0 {
-        bail!("Intervals must be greater than zero");
-    }
-
-    let unit = unit.to_ascii_lowercase();
-    let (raw_minutes, original) = match unit.as_str() {
-        "s" | "sec" | "secs" | "second" | "seconds" => {
-            let minutes = count.div_ceil(60);
-            (minutes, format!("{count}s"))
-        }
-        "m" | "min" | "mins" | "minute" | "minutes" => (count, format!("{count}m")),
-        "h" | "hr" | "hrs" | "hour" | "hours" => (count * 60, format!("{count}h")),
-        "d" | "day" | "days" => (count * 60 * 24, format!("{count}d")),
-        _ => bail!("Unsupported interval unit: {unit}"),
-    };
-
-    let normalized_minutes = normalize_clean_minutes(raw_minutes);
-    let note = if normalized_minutes != raw_minutes {
-        Some(format!(
-            "Rounded {original} to {} for scheduler cadence.",
-            humanize_interval(normalized_minutes * 60)
-        ))
-    } else if raw_minutes != count && unit.starts_with('s') {
-        Some(format!(
-            "Rounded {original} up to {} because VT Code schedules at minute granularity.",
-            humanize_interval(normalized_minutes * 60)
-        ))
-    } else {
-        None
-    };
-
-    Ok((normalized_minutes * 60, note))
-}
-
-fn normalize_clean_minutes(raw_minutes: u64) -> u64 {
-    const CLEAN_MINUTES: &[u64] = &[
-        1, 2, 3, 4, 5, 6, 10, 12, 15, 20, 30, 60, 120, 180, 240, 360, 480, 720, 1_440,
-    ];
-    if CLEAN_MINUTES.contains(&raw_minutes) {
-        return raw_minutes;
-    }
-    CLEAN_MINUTES
-        .iter()
-        .copied()
-        .min_by_key(|candidate| {
-            let distance = candidate.abs_diff(raw_minutes);
-            (distance, *candidate < raw_minutes, *candidate)
-        })
-        .unwrap_or(raw_minutes)
 }
 
 pub fn parse_local_datetime(raw: &str, now: DateTime<Local>) -> Result<DateTime<Utc>> {

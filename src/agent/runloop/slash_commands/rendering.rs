@@ -57,43 +57,6 @@ pub(super) fn render_mcp_usage(renderer: &mut AnsiRenderer) -> Result<()> {
     Ok(())
 }
 
-pub(super) fn render_loop_usage(renderer: &mut AnsiRenderer) -> Result<()> {
-    renderer.line(
-        MessageStyle::Info,
-        "Usage: /loop [interval] <prompt>  or  /loop <prompt> every <interval>",
-    )?;
-    renderer.line(
-        MessageStyle::Info,
-        "Examples: /loop 5m check the deployment, /loop /review-pr 1234 every 20m",
-    )?;
-    Ok(())
-}
-
-pub(super) fn render_schedule_usage(renderer: &mut AnsiRenderer) -> Result<()> {
-    renderer.line(
-        MessageStyle::Info,
-        "Usage: /schedule                      (open interactive manager)",
-    )?;
-    renderer.line(
-        MessageStyle::Info,
-        "       /schedule list                 (browse tasks interactively)",
-    )?;
-    renderer.line(
-        MessageStyle::Info,
-        "       /schedule create               (interactive create flow)",
-    )?;
-    renderer.line(
-        MessageStyle::Info,
-        "       /schedule delete               (interactive delete picker)",
-    )?;
-    renderer.line(MessageStyle::Info, "       /schedule delete <task-id>")?;
-    renderer.line(
-        MessageStyle::Info,
-        "       /schedule create --prompt <text>|--reminder <text> --every <dur>|--cron <expr>|--at <time> [--name <label>] [--workspace <path>]",
-    )?;
-    Ok(())
-}
-
 pub(super) fn render_local_usage(renderer: &mut AnsiRenderer) -> Result<()> {
     renderer.line(
         MessageStyle::Info,

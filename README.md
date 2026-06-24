@@ -53,7 +53,7 @@ vtcode update                  # self-update
 
 ## Documentation
 
-- [**Interactive TUI**](./docs/user-guide/interactive-mode.md) - Primary agents, slash commands (`/model`, `/review`, `/mcp`, `/skills`, `/theme`, `/compact`, `/schedule`)
+- [**Interactive TUI**](./docs/user-guide/interactive-mode.md) - Primary agents, slash commands (`/model`, `/review`, `/mcp`, `/skills`, `/theme`, `/compact`)
 - [**Full automation**](./docs/guides/full-automation.md) - `--full-auto` CLI, plan-build-evaluate harness, subagents, scheduled tasks
 - [**Providers**](./docs/providers/PROVIDER_GUIDES.md) - Setup guides for all 21 providers
 - [**Configuration**](./docs/config/CONFIG_FIELD_REFERENCE.md) - `vtcode.toml`, tool config, lifecycle hooks

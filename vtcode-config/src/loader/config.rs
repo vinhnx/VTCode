@@ -1052,7 +1052,7 @@ require_profile_ack = true
 profile_path = "automation/full_auto_profile.toml"
 
 [automation.scheduled_tasks]
-# Enable /loop, cron tools, and durable `vtcode schedule` jobs
+# Enable cron tools and durable `vtcode schedule` jobs
 enabled = false
 
 # Prompt caching - Cache model responses for efficiency

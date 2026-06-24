@@ -1,5 +1,4 @@
 use vtcode_core::config::types::ReasoningEffortLevel;
-use vtcode_core::scheduler::{LoopCommand, ScheduleCreateInput};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ThemePaletteMode {
@@ -72,16 +71,6 @@ pub(crate) enum SubprocessManagerAction {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) enum ScheduleCommandAction {
-    Interactive,
-    Browse,
-    CreateInteractive,
-    Create { input: ScheduleCreateInput },
-    DeleteInteractive,
-    Delete { id: String },
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum LocalServerAction {
     Interactive,
     Status { provider: Option<String> },
@@ -112,7 +101,6 @@ pub(crate) enum SlashCommandOutcome {
     ShowSettingsAtPath {
         path: String,
     },
-    ShowHooks,
     ShowMemoryConfig,
     ShowPermissions,
     ShowMemory,
@@ -120,7 +108,6 @@ pub(crate) enum SlashCommandOutcome {
     NewSession,
     OpenDocs,
     OpenDonateLinks,
-    ShowReleaseNotes,
     StartModelSelection,
     StartModePalette,
     SelectPrimaryAgent {
@@ -173,19 +160,12 @@ pub(crate) enum SlashCommandOutcome {
         install: bool,
         force: bool,
     },
-    ManageLoop {
-        command: LoopCommand,
-    },
-    ManageSchedule {
-        action: ScheduleCommandAction,
-    },
     ManageLocalServer {
         action: LocalServerAction,
     },
     LaunchEditor {
         file: Option<String>,
     },
-    LaunchGit,
     ManageSkills {
         action: crate::agent::runloop::SkillCommandAction,
     },
@@ -202,7 +182,6 @@ pub(crate) enum SlashCommandOutcome {
         prompt: String,
     },
     StartTerminalSetup,
-    OpenRewindPicker,
     RewindToTurn {
         turn: usize,
         scope: vtcode_core::core::agent::snapshots::RevertScope,

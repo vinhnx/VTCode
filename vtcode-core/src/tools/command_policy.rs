@@ -4,7 +4,7 @@ use crate::tools::command_cache::PermissionCache;
 use crate::tools::command_resolver::CommandResolver;
 use regex::Regex;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex};
 use tracing::warn;
 
 #[derive(Clone)]

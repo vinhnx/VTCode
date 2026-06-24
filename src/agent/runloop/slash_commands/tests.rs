@@ -1,7 +1,7 @@
 use super::builtins::{DoctorCommand, parse_doctor_args, parse_effort_args, parse_update_args};
 use super::{
-    AgentManagerAction, CompactConversationCommand, ScheduleCommandAction, SessionLogExportFormat,
-    SlashCommandOutcome, SubprocessManagerAction, handle_slash_command,
+    AgentManagerAction, CompactConversationCommand, SessionLogExportFormat, SlashCommandOutcome,
+    SubprocessManagerAction, handle_slash_command,
 };
 use vtcode_core::compaction::ManualCompactionOptions;
 use vtcode_core::config::types::ReasoningEffortLevel;
@@ -245,18 +245,6 @@ async fn notify_command_preserves_custom_message() {
         SlashCommandOutcome::Notify { ref message }
         if message == "build finished"
     ));
-}
-
-#[tokio::test]
-async fn hooks_command_returns_hooks_outcome() {
-    let workspace = std::env::current_dir().expect("workspace");
-    let mut renderer = renderer_for_tests();
-
-    let outcome = handle_slash_command("hooks", &mut renderer, &workspace)
-        .await
-        .expect("hooks command should parse");
-
-    assert!(matches!(outcome, SlashCommandOutcome::ShowHooks));
 }
 
 #[tokio::test]
@@ -581,77 +569,6 @@ async fn plan_command_still_routes_to_planning_workflow() {
             enable: Some(true),
             prompt: Some(ref prompt)
         } if prompt == "implement auth checks"
-    ));
-}
-
-#[tokio::test]
-async fn schedule_commands_parse_to_interactive_and_direct_outcomes() {
-    let workspace = std::env::current_dir().expect("workspace");
-    let mut renderer = renderer_for_tests();
-
-    let interactive = handle_slash_command("schedule", &mut renderer, &workspace)
-        .await
-        .expect("schedule should parse");
-    assert!(matches!(
-        interactive,
-        SlashCommandOutcome::ManageSchedule {
-            action: ScheduleCommandAction::Interactive
-        }
-    ));
-
-    let browse = handle_slash_command("schedule list", &mut renderer, &workspace)
-        .await
-        .expect("schedule list should parse");
-    assert!(matches!(
-        browse,
-        SlashCommandOutcome::ManageSchedule {
-            action: ScheduleCommandAction::Browse
-        }
-    ));
-
-    let create_interactive = handle_slash_command("schedule create", &mut renderer, &workspace)
-        .await
-        .expect("schedule create should parse");
-    assert!(matches!(
-        create_interactive,
-        SlashCommandOutcome::ManageSchedule {
-            action: ScheduleCommandAction::CreateInteractive
-        }
-    ));
-
-    let delete_interactive = handle_slash_command("schedule delete", &mut renderer, &workspace)
-        .await
-        .expect("schedule delete should parse");
-    assert!(matches!(
-        delete_interactive,
-        SlashCommandOutcome::ManageSchedule {
-            action: ScheduleCommandAction::DeleteInteractive
-        }
-    ));
-
-    let delete_direct = handle_slash_command("schedule delete deadbeef", &mut renderer, &workspace)
-        .await
-        .expect("schedule delete id should parse");
-    assert!(matches!(
-        delete_direct,
-        SlashCommandOutcome::ManageSchedule {
-            action: ScheduleCommandAction::Delete { ref id }
-        } if id == "deadbeef"
-    ));
-
-    let create_direct = handle_slash_command(
-        "schedule create --prompt \"check the deployment\" --every 10m",
-        &mut renderer,
-        &workspace,
-    )
-    .await
-    .expect("schedule create with flags should parse");
-    assert!(matches!(
-        create_direct,
-        SlashCommandOutcome::ManageSchedule {
-            action: ScheduleCommandAction::Create { ref input }
-        } if input.prompt.as_deref() == Some("check the deployment")
-            && input.every.as_deref() == Some("10m")
     ));
 }
 

@@ -350,7 +350,6 @@ fn capability_highlight_lines(persistent_memory_enabled: bool) -> Vec<String> {
         "- Subagents let you delegate bounded work; use `/agent`, `/agents`, or the Local Agents drawer.".to_string(),
         "- Skills add reusable capabilities; browse them with `/skills` or the CLI skills commands.".to_string(),
         "- Prompt suggestions and the lightweight model route help with faster suggestions, memory triage, and smaller delegated tasks.".to_string(),
-        "- Use `/loop` for recurring prompts in the current session and `/schedule` for durable scheduled tasks and automations.".to_string(),
         "- Granular permissions are configured with `[permissions]` defaults and allow/ask/auto/deny lists in `vtcode.toml`.".to_string(),
     ]
 }
@@ -489,8 +488,6 @@ mod tests {
         assert!(rendered.contains("Subagents"));
         assert!(rendered.contains("Skills"));
         assert!(rendered.contains("lightweight model route"));
-        assert!(rendered.contains("/loop"));
-        assert!(rendered.contains("/schedule"));
         assert!(rendered.contains("Granular permissions"));
         assert!(!rendered.contains("Startup mode"));
         assert!(!rendered.contains("permission mode"));

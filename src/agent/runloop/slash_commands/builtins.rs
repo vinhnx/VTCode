@@ -10,9 +10,7 @@ use super::flow::{
     handle_auth_command, handle_fork_command, handle_login_command, handle_logout_command,
     handle_plan_command, handle_resume_command, handle_rewind_command,
 };
-use super::management::{
-    handle_local_command, handle_loop_command, handle_mcp_command, handle_schedule_command,
-};
+use super::management::{handle_local_command, handle_mcp_command};
 use super::models::{
     AgentDefinitionScope, AgentManagerAction, SlashCommandOutcome, SubprocessManagerAction,
     ThemePaletteMode,
@@ -35,7 +33,6 @@ pub(in crate::agent::runloop::slash_commands) async fn execute_built_in_command_
             )?;
             Ok(SlashCommandOutcome::OpenDonateLinks)
         }
-        "release-notes" => Ok(SlashCommandOutcome::ShowReleaseNotes),
         "theme" => {
             let mut tokens = args.split_whitespace();
             if let Some(next_theme) = tokens.next() {
@@ -232,13 +229,6 @@ pub(in crate::agent::runloop::slash_commands) async fn execute_built_in_command_
                 Ok(SlashCommandOutcome::Handled)
             }
         },
-        "hooks" => {
-            if !args.is_empty() {
-                renderer.line(MessageStyle::Error, "Usage: /hooks")?;
-                return Ok(SlashCommandOutcome::Handled);
-            }
-            Ok(SlashCommandOutcome::ShowHooks)
-        }
         "ide" => {
             if !args.is_empty() {
                 renderer.line(MessageStyle::Error, "Usage: /ide")?;
@@ -263,8 +253,6 @@ pub(in crate::agent::runloop::slash_commands) async fn execute_built_in_command_
             )?;
             Ok(SlashCommandOutcome::Handled)
         }
-        "loop" => handle_loop_command(args, renderer),
-        "schedule" => handle_schedule_command(args, renderer),
         "share" => match parse_session_log_export_format(args) {
             Ok(format) => Ok(SlashCommandOutcome::ShareLog { format }),
             Err(message) => {
@@ -304,7 +292,6 @@ pub(in crate::agent::runloop::slash_commands) async fn execute_built_in_command_
             };
             Ok(SlashCommandOutcome::LaunchEditor { file })
         }
-        "git" => Ok(SlashCommandOutcome::LaunchGit),
         "exit" => Ok(SlashCommandOutcome::Exit),
         "skills" => {
             let full_command = format!("/{}", input);

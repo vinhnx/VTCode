@@ -622,15 +622,27 @@ impl AppSession {
                 }
             }
             InlineCommand::SetArchivedHistory { entries } => {
+                let mut input_entries = Vec::new();
                 let archived = entries
                     .into_iter()
-                    .map(|e| history_picker::ArchivedPrompt {
-                        content: e.content,
-                        created_at: e.created_at,
-                        session_label: e.session_label,
+                    .map(|e| {
+                        input_entries.push(
+                            crate::tui::core_tui::session::input_manager::InputHistoryEntry::from_content_and_timestamp(
+                                e.content.clone(),
+                                e.created_at,
+                            ),
+                        );
+                        history_picker::ArchivedPrompt {
+                            content: e.content,
+                            created_at: e.created_at,
+                            session_label: e.session_label,
+                        }
                     })
                     .collect();
                 self.history_picker_state.set_archived_prompts(archived);
+                self.core
+                    .input_manager
+                    .prepend_archived_history(input_entries);
                 self.core.mark_dirty();
             }
             InlineCommand::SetInput(value) => {

@@ -1,7 +1,6 @@
 use anyhow::anyhow;
 use serde_json::Value;
 use vtcode_core::config::constants::tools;
-use vtcode_core::tools::error_messages::agent_execution;
 use vtcode_core::tools::registry::{ToolErrorType, ToolExecutionError};
 use vtcode_core::tools::tool_intent;
 
@@ -39,30 +38,26 @@ fn is_command_tool(tool_name: &str, args: &Value) -> bool {
 }
 
 pub(crate) fn process_llm_tool_output(output: Value) -> ToolExecutionStatus {
-    if let Some(loop_detected) = output.get("loop_detected").and_then(|v| v.as_bool())
-        && loop_detected
+    // Treat loop_detected as Success (not Failure) so it does not increment the
+    // consecutive_blocked_tool_calls fuse.  The model receives the loop metadata
+    // (loop_detected, reused_recent_result, etc.) and can adjust its approach,
+    // but the blocked-streak counter is not polluted by a synthetic PolicyViolation.
+    //
+    // Prior to this fix, loop_detected was wrapped in a PolicyViolation failure
+    // which caused the consecutive blocked fuse to kill the entire turn after
+    // DEFAULT_MAX_CONSECUTIVE_BLOCKED_TOOL_CALLS_PER_TURN (8) iterations —
+    // blocking even unrelated tool calls (e.g. unified_exec) that happened to
+    // follow the loop-detected ones.
+    if output
+        .get("loop_detected")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
     {
-        let tool_name = output
-            .get("tool")
-            .and_then(|v| v.as_str())
-            .unwrap_or("tool");
-        let repeat_count = output
-            .get("repeat_count")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(0);
-        let base_error_msg = output
-            .get("error")
-            .and_then(|e| e.get("message"))
-            .and_then(|m| m.as_str())
-            .unwrap_or("Tool blocked due to repeated identical invocations");
-
-        let clear_error_msg = agent_execution::loop_detection_block_message(
-            tool_name,
-            repeat_count,
-            Some(base_error_msg),
-        );
-        return ToolExecutionStatus::Failure {
-            error: ToolExecutionError::policy_violation(tool_name.to_string(), clear_error_msg),
+        return ToolExecutionStatus::Success {
+            output,
+            stdout: None,
+            modified_files: vec![],
+            command_success: true,
         };
     }
 

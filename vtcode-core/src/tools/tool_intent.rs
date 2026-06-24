@@ -803,6 +803,8 @@ pub fn normalize_unified_search_args(args: &Value) -> Value {
             "filter"
         } else if key.eq_ignore_ascii_case("globs") {
             "globs"
+        } else if key.eq_ignore_ascii_case("exclude") {
+            "exclude"
         } else if key.eq_ignore_ascii_case("context_lines")
             || key.eq_ignore_ascii_case("context-lines")
         {

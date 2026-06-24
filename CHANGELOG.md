@@ -2,6 +2,29 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.133.8 - 2026-06-24
+
+### Highlights
+#### Bug Fixes
+
+- Improve ast-grep structural search reliability and YAML safety (5eb728bb) 
+- Prevent loop detection from killing entire turns via blocked-streak fuse (b773e66c) 
+### Other Changes
+#### Other
+
+- Improve search (882b6c2b) 
+- Improve unified_search family key differentiation and deny in-place editing commands (9d449d37) 
+- Add up/down arrow archived history navigation and structural search exclude parameter (7cff539f) 
+## 0.133.7 - 2026-06-24
+
+### Highlights
+#### Bug Fixes
+
+- Allow selecting auto agent from mode palette (2efcf777) 
+### Other Changes
+#### Other
+
+- Refine (6948d078) 
 ## 0.133.6 - 2026-06-23
 
 ### Highlights

@@ -559,7 +559,6 @@ enabled = false
 
 `automation.scheduled_tasks.enabled` controls VT Code's internal scheduler surfaces:
 
-- `/loop` recurring prompts in interactive chat
 - one-shot reminder interception such as `remind me at 3pm to ...`
 - scheduler tools `cron_create`, `cron_list`, and `cron_delete`
 - durable `vtcode schedule ...` commands and the local scheduler daemon
@@ -946,7 +945,7 @@ turn limits, and context reuse for long-running exec sessions.
 | `automation.full_auto.enabled`          | boolean                                           | Enable full automation.                                                                                                                                                  |
 | `automation.full_auto.allowed_tools`    | array                                             | Tools allowed during full automation.                                                                                                                                             |
 | `automation.full_auto.max_turns`        | integer                                           | Upper bound for autonomous turns before exec pauses.                                                                                                                          |
-| `automation.scheduled_tasks.enabled`    | boolean                                           | Enable VT Code's internal scheduler for `/loop`, reminders, cron tools, and `vtcode schedule`. Can still be force-disabled with `VTCODE_DISABLE_CRON=1`.                      |
+| `automation.scheduled_tasks.enabled`    | boolean                                           | Enable VT Code's internal scheduler for reminders, cron tools, and `vtcode schedule`. Can still be force-disabled with `VTCODE_DISABLE_CRON=1`.                      |
 | `agent.harness.continuation_policy`     | `off` \| `exec_only` \| `all`                     | Controls when the harness may auto-continue after a completion attempt. Default: `all` in interactive and exec sessions; use `exec_only` to keep interactive sessions manual. |
 | `agent.harness.event_log_path`          | string \| null                                    | Optional JSONL sink for harness events in interactive and exec flows.                                                                                                         |
 | `sandbox.default_policy`                | `read_only` \| `workspace_write` \| `danger_full_access` \| `external` | Default sandbox policy.                                                                                                                                                      |

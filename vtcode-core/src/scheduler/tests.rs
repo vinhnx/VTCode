@@ -8,42 +8,6 @@ fn utc(y: i32, m: u32, d: u32, hh: u32, mm: u32, ss: u32) -> DateTime<Utc> {
 }
 
 #[test]
-fn loop_defaults_to_ten_minutes() {
-    let parsed = parse_loop_command("check the build").expect("loop");
-    assert_eq!(parsed.prompt, "check the build");
-    assert_eq!(parsed.interval.seconds, 600);
-    assert!(parsed.normalization_note.is_none());
-}
-
-#[test]
-fn loop_parses_leading_interval() {
-    let parsed = parse_loop_command("30m check the build").expect("loop");
-    assert_eq!(parsed.prompt, "check the build");
-    assert_eq!(parsed.interval.seconds, 30 * 60);
-}
-
-#[test]
-fn loop_parses_trailing_every_clause() {
-    let parsed = parse_loop_command("check the build every 2 hours").expect("loop");
-    assert_eq!(parsed.prompt, "check the build");
-    assert_eq!(parsed.interval.seconds, 2 * 60 * 60);
-}
-
-#[test]
-fn loop_rounds_seconds_up_to_minutes() {
-    let parsed = parse_loop_command("45s check again").expect("loop");
-    assert_eq!(parsed.interval.seconds, 60);
-    assert!(parsed.normalization_note.is_some());
-}
-
-#[test]
-fn loop_rounds_unclean_minutes() {
-    let parsed = parse_loop_command("7m check again").expect("loop");
-    assert_eq!(parsed.interval.seconds, 6 * 60);
-    assert!(parsed.normalization_note.is_some());
-}
-
-#[test]
 fn cron5_supports_vixie_or_semantics() {
     let cron = Cron5::parse("0 9 15 * 1").expect("cron");
     let monday = Local

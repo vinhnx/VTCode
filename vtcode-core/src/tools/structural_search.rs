@@ -22,7 +22,7 @@ const MAX_ALLOWED_GLOBS: usize = 64;
 const MAX_ALLOWED_CONTEXT_LINES: usize = 20;
 const MAX_AUXILIARY_OUTPUT_CHARS: usize = 64_000;
 const DEFAULT_AST_GREP_CONFIG_PATH: &str = "sgconfig.yml";
-const AST_GREP_FAQ_HINT: &str = "Hints: patterns must be valid parseable code for the selected language; ast-grep matches CST structure, not raw text; if the target is only a fragment, retry with a larger parseable pattern and use `selector` when the real match is a subnode inside that pattern; invalid snippets may appear to work only through tree-sitter recovery, so prefer valid `context` plus `selector` instead of relying on recovery; for C, tree-sitter-c parses fragments differently by context: `test($A)` alone becomes `macro_type_specifier`, while `test($A);` becomes `expression_statement -> call_expression`; use `context` plus `selector: call_expression` for C function-call matching; do not try to force a different node kind by combining separate `kind` and `pattern` rules; use one pattern object with `context` plus `selector` instead; operators and keywords usually are not valid meta-variable positions, so switch to parseable code plus `kind`, `regex`, `has`, or another rule object; `$VAR` matches named nodes by default, `$$VAR` includes unnamed nodes, and `$$$ARGS` matches zero or more nodes lazily; `$_NAME` prefix means non-capturing (no backreference); same-name metavariables enforce identity (`$A == $A` matches `a == a` but not `a == b`); meta variables are only detected when the whole AST node text matches meta-variable syntax, so mixed text, lowercase names, or bare `$` followed by digits will not work; repeat captured names only when the syntax must match exactly, and prefix with `_` to disable capture when equality is not required; if a name must match by prefix or suffix, capture the whole node and narrow it with `constraints.regex` instead of mixing text into the meta variable; if node role matters, make it explicit in the parseable pattern instead of guessing; `selector` can also override the default effective node when statement-level matching matters more than the inner expression; if matches are too broad or too narrow, tune `strictness` (`smart` default; `cst`, `ast`, `relaxed`, and `signature` control what matching may skip); use `debug_query` to inspect parse output when matching is surprising; structural search is syntax-aware, not scope/type/data-flow analysis; `kind` supports ESQuery-style compound selectors: `A > B` (direct child), `A B` (descendant), `A + B` (immediate sibling), `A ~ B` (general sibling), and `A, B` (either); pseudo-selectors `:has()`, `:not()`, `:is()`, `:nth-child()`, and `:nth-last-child()` narrow `kind` and `selector` matches by descendant structure, exclusion, alternatives, or sibling position; for HTML, key node kinds are `element`, `tag_name`, `attribute_name`, `attribute_value`, and `text`; use `kind: element` with `has` to match elements by tag or attribute, `kind: tag_name` to match tag names, `kind: attribute_name` to match attribute names, and `kind: text` to match text content; HTML `inside` with `stopBy: { kind: element }` scopes matches to the nearest enclosing element; HTML `<script>` and `<style>` content is parsed as embedded JavaScript/CSS respectively, so search those regions with `lang: javascript` or `lang: css` rules; for simple pattern-to-pattern rewrites, use `workflow='rewrite'` which previews replacements without applying them; use `workflow='apply'` to write rewrite results directly to disk; for FixConfig rewrites with range expansion via `expandStart`/`expandEnd`, use `workflow='rewrite'` with `fix_config` which generates a temporary YAML rule and previews the expanded replacements; for advanced rewrite operations using `transform` (replace for regex substitution with capture groups, substring for Python-style Unicode slicing, convert for identifier case changes like camelCase/snakeCase/kebabCase/pascalCase), `fix`, `rewriters`, load the bundled `ast-grep` skill which covers the full transform pipeline including regex capture groups, chained sequential transformations, conditional separators from multi-captures, and string-form shorthand syntax; use `matches` to reference a utility rule by name; define local utilities in the `utils` section of the request; composite rules `all` (conjunction), `any` (disjunction), and `not` (negation) combine sub-rules; use `matches` with `utils` for recursive pattern matching; cyclic `matches` dependencies are not allowed; for `matches` and composite rules, `lang` is required because the YAML rule generation path is used.";
+const AST_GREP_FAQ_HINT: &str = "Hints: patterns must be valid parseable code for the selected language; ast-grep matches CST structure, not raw text; if the target is only a fragment, retry with a larger parseable pattern and use `selector` when the real match is a subnode inside that pattern; invalid snippets may appear to work only through tree-sitter recovery, so prefer valid `context` plus `selector` instead of relying on recovery; for C, tree-sitter-c parses fragments differently by context: `test($A)` alone becomes `macro_type_specifier`, while `test($A);` becomes `expression_statement -> call_expression`; use `context` plus `selector: call_expression` for C function-call matching; do not try to force a different node kind by combining separate `kind` and `pattern` rules; use one pattern object with `context` plus `selector` instead; operators and keywords usually are not valid meta-variable positions, so switch to parseable code plus `kind`, `regex`, `has`, or another rule object; `$VAR` matches named nodes by default, `$$VAR` includes unnamed nodes, and `$$$ARGS` matches zero or more nodes lazily; `$_NAME` prefix means non-capturing (no backreference); same-name metavariables enforce identity (`$A == $A` matches `a == a` but not `a == b`); meta variables are only detected when the whole AST node text matches meta-variable syntax, so mixed text, lowercase names, or bare `$` followed by digits will not work; repeat captured names only when the syntax must match exactly, and prefix with `_` to disable capture when equality is not required; if a name must match by prefix or suffix, capture the whole node and narrow it with `constraints.regex` instead of mixing text into the meta variable; if node role matters, make it explicit in the parseable pattern instead of guessing; `selector` can also override the default effective node when statement-level matching matters more than the inner expression; if matches are too broad or too narrow, tune `strictness` (`smart` default; `cst`, `ast`, `relaxed`, and `signature` control what matching may skip); use `debug_query` to inspect parse output when matching is surprising; structural search is syntax-aware, not scope/type/data-flow analysis; `kind` supports ESQuery-style compound selectors: `A > B` (direct child), `A B` (descendant), `A + B` (immediate sibling), `A ~ B` (general sibling), and `A, B` (either); pseudo-selectors `:has()`, `:not()`, `:is()`, `:nth-child()`, and `:nth-last-child()` narrow `kind` and `selector` matches by descendant structure, exclusion, alternatives, or sibling position; for HTML, key node kinds are `element`, `tag_name`, `attribute_name`, `attribute_value`, and `text`; use `kind: element` with `has` to match elements by tag or attribute, `kind: tag_name` to match tag names, `kind: attribute_name` to match attribute names, and `kind: text` to match text content; HTML `inside` with `stopBy: { kind: element }` scopes matches to the nearest enclosing element; HTML `<script>` and `<style>` content is parsed as embedded JavaScript/CSS respectively, so search those regions with `lang: javascript` or `lang: css` rules; for simple pattern-to-pattern rewrites, use `workflow='rewrite'` which previews replacements without applying them; use `workflow='apply'` to write rewrite results directly to disk; for FixConfig rewrites with range expansion via `expandStart`/`expandEnd`, use `workflow='rewrite'` with `fix_config` which generates a temporary YAML rule and previews the expanded replacements; for advanced rewrite operations using `transform` (replace for regex substitution with capture groups, substring for Python-style Unicode slicing, convert for identifier case changes like camelCase/snakeCase/kebabCase/pascalCase), `fix`, `rewriters`, load the bundled `ast-grep` skill which covers the full transform pipeline including regex capture groups, chained sequential transformations, conditional separators from multi-captures, and string-form shorthand syntax; use `matches` to reference a utility rule by name; define local utilities in the `utils` section of the request; composite rules `all` (conjunction), `any` (disjunction), and `not` (negation) combine sub-rules; use `matches` with `utils` for recursive pattern matching; cyclic `matches` dependencies are not allowed; for `matches` and composite rules, `lang` is required because the YAML rule generation path is used; to exclude files from the search, use the `exclude` parameter (e.g. `exclude: ['*.md', 'tests/**']`) instead of passing `--exclude` directly to ast-grep, which is not a valid CLI flag; `exclude` entries are converted to negative `--globs` patterns automatically.";
 const AST_GREP_PROJECT_CONFIG_HINT: &str = "If the target language is not built into ast-grep, register it in workspace-local `sgconfig.yml` under `customLanguages` with a compiled tree-sitter dynamic library. Prefer `tree-sitter build --output <lib>` to compile it, or use `TREE_SITTER_LIBDIR` with `tree-sitter test` on older tree-sitter versions. Reusing a compatible parser library from Neovim is also valid. If the parser exists but the extension is unusual, map it with `languageGlobs`. Some embedded-language cases are built in, such as HTML `<script>` / `<style>` extraction. If the target syntax is embedded inside another host language, configure `languageInjections` with `hostLanguage`, `rule`, and `injected`; the rule should capture the embedded subregion with a meta variable like `$CONTENT`. If `$VAR` is not valid syntax for that language, use its configured `expandoChar` instead. Use `tree-sitter parse <file>` to inspect parser output when the grammar or file association is unclear. ast-grep rules are single-language, so shared JS/TS-style coverage usually means parsing both through the superset via `languageGlobs` or maintaining separate rules. Use `testConfigs` with `testDir` (required) and optional `snapshotDir` to configure ast-grep test discovery. Use `utilDirs` to declare directories for global utility rules shared across multiple rule files. Use `workflow='inspect'` to see the project's current `testConfigs`, `utilDirs`, `languageInjections`, `customLanguages`, and `languageGlobs` configuration. Utility rules must declare `id` and `language` and can only use `id`, `language`, `rule`, `constraints`, and local `utils`.";
 const DEBUG_QUERY_LANG_HINT: &str = "action='structural' requires an effective `lang` when `debug_query` is set. Inference only works for unambiguous file paths or single-language positive globs; narrow `path`, add a single-language glob, or set `lang` explicitly";
 const STRUCTURAL_FORBIDDEN_KEYS: &[&str] = &[
@@ -50,7 +50,7 @@ const VALID_REPORT_STYLE_VALUES: &[&str] = &["rich", "medium", "short"];
 const VALID_BUILTIN_RULES: &[&str] = &["unused-suppression", "no-suppress-all"];
 const MAX_THREADS: u32 = 256;
 static AST_GREP_METAVARIABLE_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"\$\$?[A-Za-z_][A-Za-z0-9_]*").expect("ast-grep metavariable regex must compile")
+    Regex::new(r"\$\$?\$?[A-Za-z_][A-Za-z0-9_]*").expect("ast-grep metavariable regex must compile")
 });
 /// Valid ast-grep metavariable: `$` or `$$` followed by uppercase/startunderscore,
 /// then uppercase/digits/underscores. Multi-metavariable `$$$` is also valid.
@@ -321,6 +321,12 @@ struct StructuralSearchRequest {
     debug_query: Option<DebugQueryFormat>,
     #[serde(default)]
     globs: Option<GlobInput>,
+    /// Glob patterns to exclude from the search. Each entry is a glob
+    /// pattern (e.g. `"*.md"`, `"tests/**"`). These are converted to
+    /// negative `--globs` flags (`!pattern`) for ast-grep. Can be a
+    /// single string or an array of strings.
+    #[serde(default, alias = "exclude")]
+    exclude: Option<GlobInput>,
     #[serde(default)]
     context_lines: Option<usize>,
     #[serde(default)]
@@ -1103,14 +1109,35 @@ impl StructuralSearchRequest {
     }
 
     fn normalized_globs(&self) -> Vec<String> {
-        self.globs
+        let mut result: Vec<String> = self
+            .globs
             .clone()
             .map(GlobInput::into_vec)
             .unwrap_or_default()
             .into_iter()
             .map(|glob| glob.trim().to_string())
             .filter(|glob| !glob.is_empty())
-            .collect()
+            .collect();
+
+        // Merge exclude patterns as negative globs (prefixed with `!`).
+        if let Some(excludes) = &self.exclude {
+            for pattern in excludes.clone().into_vec() {
+                let trimmed = pattern.trim().to_string();
+                if trimmed.is_empty() {
+                    continue;
+                }
+                // Strip a leading `!` if the caller already provided one,
+                // then re-add it to guarantee the negative-glob prefix.
+                let negative = if let Some(stripped) = trimmed.strip_prefix('!') {
+                    format!("!{stripped}")
+                } else {
+                    format!("!{trimmed}")
+                };
+                result.push(negative);
+            }
+        }
+
+        result
     }
 
     fn effective_max_results(&self) -> usize {
@@ -2680,10 +2707,10 @@ fn build_fixconfig_rule_yaml(
     yaml.push_str("rule:\n");
 
     if let Some(selector) = selector.filter(|s| !s.trim().is_empty()) {
-        yaml.push_str(&format!("  pattern: {pattern}\n"));
-        yaml.push_str(&format!("  selector: {selector}\n"));
+        yaml.push_str(&format!("  pattern: {}\n", yaml_escape_scalar(pattern)));
+        yaml.push_str(&format!("  selector: {}\n", yaml_escape_scalar(selector)));
     } else {
-        yaml.push_str(&format!("  pattern: {pattern}\n"));
+        yaml.push_str(&format!("  pattern: {}\n", yaml_escape_scalar(pattern)));
     }
 
     // Emit transform pipeline before fix so that transformed variables
@@ -3479,10 +3506,10 @@ fn sanitize_pattern_for_tree_sitter(pattern: &str) -> (String, bool) {
     let sanitized =
         AST_GREP_METAVARIABLE_RE.replace_all(pattern, |captures: &regex::Captures<'_>| {
             contains_metavariables = true;
-            if captures
-                .get(0)
-                .is_some_and(|matched| matched.as_str().starts_with("$$"))
-            {
+            let matched = captures.get(0).map(|m| m.as_str()).unwrap_or("");
+            // `$$$NAME` (multi-metavariable) and `$$NAME` (unnamed node)
+            // both need multiple placeholders; `$NAME` (named node) gets one.
+            if matched.starts_with("$$") {
                 "placeholders"
             } else {
                 "placeholder"
@@ -3495,7 +3522,7 @@ fn sanitize_pattern_for_tree_sitter(pattern: &str) -> (String, bool) {
 /// Validate metavariable syntax in an ast-grep pattern.
 fn validate_metavariable_syntax(pattern: &str) -> Result<()> {
     static AST_GREP_DOLLAR_TOKEN_RE: Lazy<Regex> = Lazy::new(|| {
-        Regex::new(r"\$\$?[A-Za-z0-9_]+").expect("ast-grep dollar token regex must compile")
+        Regex::new(r"\$\$?\$?[A-Za-z0-9_]+").expect("ast-grep dollar token regex must compile")
     });
 
     for mat in AST_GREP_DOLLAR_TOKEN_RE.find_iter(pattern) {
@@ -4109,6 +4136,46 @@ fn looks_like_ruby_block_fragment(pattern: &str) -> bool {
     false
 }
 
+/// Detect patterns that look like Rust method calls without a receiver,
+/// e.g. `unwrap_or($T::default())`, `map_err($E)`, `and_then($C)`.
+/// These fail tree-sitter preflight because `.method()` calls require a
+/// receiver in Rust syntax. The correct ast-grep form is `$X.method($A)`.
+///
+/// This only fires when the full pattern contains metavariables, because
+/// plain `foo()` parses fine as a function call and never reaches this
+/// code path.
+fn looks_like_rust_method_call_fragment(pattern: &str) -> bool {
+    let trimmed = pattern.trim();
+    // Must not start with `$` — that would already be a receiver.
+    if trimmed.starts_with('$') {
+        return false;
+    }
+    // Must end with `)` to look like a call.
+    if !trimmed.ends_with(')') {
+        return false;
+    }
+    // Must contain a metavariable — otherwise it's a plain expression
+    // that tree-sitter can parse and this code path is never reached.
+    if !trimmed.contains('$') {
+        return false;
+    }
+    let Some(paren) = trimmed.find('(') else {
+        return false;
+    };
+    if paren == 0 {
+        return false;
+    }
+    let callee = &trimmed[..paren];
+    // Callee must be a simple identifier — no dots (receiver.method or
+    // path::method) and no colons (associated function Type::method).
+    !callee.is_empty()
+        && !callee.contains('.')
+        && !callee.contains("::")
+        && callee
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
 fn fragment_pattern_hint(request: &StructuralSearchRequest, language: AstGrepLanguage) -> String {
     let Some(trimmed) = request.pattern() else {
         return format!(
@@ -4128,6 +4195,13 @@ fn fragment_pattern_hint(request: &StructuralSearchRequest, language: AstGrepLan
     {
         message.push_str(
             " For Result return-type queries, anchor it in a full signature like `fn $NAME($$ARGS) -> Result<$T> { $$BODY }`.",
+        );
+    } else if language == AstGrepLanguage::Rust && looks_like_rust_method_call_fragment(trimmed) {
+        message.push_str(
+            " In Rust, method calls like `unwrap_or($T)` need a receiver. \
+             Use `$X.unwrap_or($T::default())` to match method calls on any receiver, \
+             where `$X` captures the receiver expression. \
+             For associated functions like `Type::method($A)`, use the full qualified path in the pattern.",
         );
     } else if language == AstGrepLanguage::Go && looks_like_go_call_pattern(trimmed) {
         message.push_str(

@@ -6,7 +6,7 @@ use crate::agent::runloop::model_picker::ModelPickerState;
 use crate::agent::runloop::unified::inline_events::{
     InlineEventContext, InlineInterruptCoordinator, InlineLoopAction, InlineQueueState, QueuedInput,
 };
-use crate::agent::runloop::unified::palettes::ActivePalette;
+use crate::agent::runloop::unified::palettes::{ActivePalette, MODE_ACTION_PREFIX};
 use crate::agent::runloop::unified::settings_interactive::{
     ACTION_CONFIGURE_EDITOR, SettingsPaletteState,
 };
@@ -572,6 +572,57 @@ async fn settings_editor_selection_submits_editor_config_command() {
     assert!(matches!(
         action,
         InlineLoopAction::Submit(ref command) if command == "/config tools.editor"
+    ));
+    assert!(palette_state.is_none());
+}
+
+#[tokio::test]
+async fn mode_palette_selection_selects_primary_agent() {
+    let (handle, mut renderer) = renderer_with_handle();
+    let (ctrl_c_state, ctrl_c_notify) = ctrl_c_handles();
+    let interrupts = InlineInterruptCoordinator::new(ctrl_c_state.as_ref());
+    let mut ctrl_c_notice_displayed = false;
+    let mut model_picker_state: Option<ModelPickerState> = None;
+    let mut palette_state: Option<ActivePalette> = Some(ActivePalette::Mode);
+    let mut config = runtime_config();
+    let mut vt_cfg = None;
+    let mut provider_client: Box<dyn uni::LLMProvider> = Box::new(DummyProvider);
+    let session_bootstrap = SessionBootstrap::default();
+    let mut header_context = vtcode_ui::tui::app::InlineHeaderContext::default();
+    let mut context = InlineEventContext::new(
+        &mut renderer,
+        &handle,
+        interrupts,
+        &mut ctrl_c_notice_displayed,
+        &mut header_context,
+        &mut model_picker_state,
+        &mut palette_state,
+        &mut config,
+        &mut vt_cfg,
+        &mut provider_client,
+        &ctrl_c_state,
+        &ctrl_c_notify,
+        &session_bootstrap,
+        false,
+        0,
+    );
+    let mut queued_inputs = VecDeque::new();
+    let mut prefer_latest_once = false;
+    let mut queue = InlineQueueState::new(&handle, &mut queued_inputs, &mut prefer_latest_once);
+
+    let action = context
+        .process_event(
+            InlineEvent::Transient(TransientEvent::Submitted(TransientSubmission::Selection(
+                InlineListSelection::ConfigAction(format!("{MODE_ACTION_PREFIX}auto")),
+            ))),
+            &mut queue,
+        )
+        .await
+        .expect("process mode palette selection");
+
+    assert!(matches!(
+        action,
+        InlineLoopAction::SelectPrimaryAgent { name: Some(ref name) } if name == "auto"
     ));
     assert!(palette_state.is_none());
 }

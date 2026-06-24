@@ -146,27 +146,9 @@ pub const COMMAND_SKILL_SPECS: &[CommandSkillSpec] = &[
         "workspace"
     ),
     built_in_command_spec!(
-        "loop",
-        "Run a session-scoped scheduled prompt repeatedly (usage: /loop [interval] <prompt>)",
-        "/loop [interval] <prompt>",
-        "automation"
-    ),
-    built_in_command_spec!(
-        "schedule",
-        "Manage durable scheduled tasks interactively (usage: /schedule)",
-        "/schedule [list|create|delete ...]",
-        "automation"
-    ),
-    built_in_command_spec!(
         "config",
         "Browse settings sections or focused memory controls (usage: /config [path|memory])",
         "/config [path|memory]",
-        "configuration"
-    ),
-    built_in_command_spec!(
-        "hooks",
-        "Browse resolved lifecycle hooks for this session and workspace",
-        "/hooks",
         "configuration"
     ),
     built_in_command_spec!(
@@ -222,12 +204,6 @@ pub const COMMAND_SKILL_SPECS: &[CommandSkillSpec] = &[
         "edit",
         "Open file in external editor (tools.editor config, then VISUAL/EDITOR) (usage: /edit [file])",
         "/edit [file]",
-        "tools"
-    ),
-    built_in_command_spec!(
-        "git",
-        "Launch git interface (lazygit or interactive git)",
-        "/git",
         "tools"
     ),
     traditional_command_spec!(
@@ -412,12 +388,6 @@ pub const COMMAND_SKILL_SPECS: &[CommandSkillSpec] = &[
         "donate",
         "Support the project by buying the author a coffee",
         "/donate",
-        "support"
-    ),
-    built_in_command_spec!(
-        "release-notes",
-        "Show highlights from the latest VT Code release",
-        "/release-notes",
         "support"
     ),
     built_in_command_spec!(

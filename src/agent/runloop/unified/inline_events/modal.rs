@@ -14,7 +14,6 @@ use crate::agent::runloop::model_picker::{
     ModelPickerProgress, ModelPickerStart, ModelPickerState,
 };
 use crate::agent::runloop::slash_commands::SessionPaletteMode;
-use crate::agent::runloop::unified::hooks_browser::show_hooks_palette;
 use crate::agent::runloop::unified::model_selection::finalize_model_selection;
 use crate::agent::runloop::unified::palettes::{
     ActivePalette, LIGHTWEIGHT_MODEL_ACTION_PREFIX, MODE_ACTION_PREFIX,
@@ -362,14 +361,6 @@ impl<'a> InlineModalProcessor<'a> {
                     });
                 }
             }
-            ActivePalette::Hooks { state, .. } => {
-                if show_hooks_palette(renderer, state.as_ref(), None)? {
-                    *self.palette.state = Some(ActivePalette::Hooks {
-                        state,
-                        esc_armed: false,
-                    });
-                }
-            }
             ActivePalette::ModelTarget => {
                 if show_model_target_palette(renderer)? {
                     *self.palette.state = Some(ActivePalette::ModelTarget);
@@ -433,6 +424,11 @@ impl<'a> InlineModalProcessor<'a> {
                 Ok(false)
             }
             (ActivePalette::UrlGuard { .. }, _) => Ok(true),
+            (ActivePalette::Mode, InlineListSelection::ConfigAction(action))
+                if action.starts_with(MODE_ACTION_PREFIX) =>
+            {
+                Ok(false)
+            }
             _ => Ok(false),
         }
     }
