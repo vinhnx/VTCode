@@ -2,6 +2,16 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.133.7 - 2026-06-24
+
+### Highlights
+#### Bug Fixes
+
+- Allow selecting auto agent from mode palette (2efcf777) 
+### Other Changes
+#### Other
+
+- Refine (6948d078) 
 ## 0.133.6 - 2026-06-23
 
 ### Highlights
