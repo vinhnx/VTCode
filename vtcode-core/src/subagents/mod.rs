@@ -3817,7 +3817,9 @@ Inspect the repository.
 
         assert!(err.to_string().contains(&format!(
             "Subagent concurrency limit reached (max_concurrent={})",
-            SUBAGENT_HARD_CONCURRENCY_LIMIT
+            controller.config.vt_cfg.subagents.max_concurrent.min(
+                SUBAGENT_HARD_CONCURRENCY_LIMIT
+            )
         )));
     }
 

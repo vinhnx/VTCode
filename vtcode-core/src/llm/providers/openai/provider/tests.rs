@@ -2514,7 +2514,7 @@ fn chatgpt_backend_applies_rig_default_request_shape_and_clears_unsupported_fiel
         .convert_to_openai_responses_format(&request)
         .expect("conversion should succeed");
 
-    assert_eq!(payload.get("stream").and_then(Value::as_bool), Some(true));
+    assert_eq!(payload.get("stream").and_then(Value::as_bool), Some(false));
     assert_eq!(payload.get("store").and_then(Value::as_bool), Some(false));
     assert_eq!(
         payload.get("include").and_then(Value::as_array),

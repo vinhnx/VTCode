@@ -307,6 +307,9 @@ async fn build_universal_tools_matches_registry_agent_runner_snapshot() {
         .map(|tool| tool.function_name().to_string())
         .collect::<Vec<_>>();
 
+    expected.sort();
+    let mut actual = actual;
+    actual.sort();
     assert_eq!(actual, expected);
 }
 

@@ -354,10 +354,11 @@ pub(super) fn enforce_repeated_read_only_call_guard(
     // expire.  This prevents 5× re-reads of the same file across turns when
     // the model varies pagination arguments slightly.
     //
-    // Uses path-based matching (`find_recent_successful_by_read_target`) which
-    // ignores offset/limit/page fields.  The exact-arg cache
-    // (`find_recent_successful_output`) won't match when pagination differs,
-    // so the path-based lookup is the primary cross-turn dedup mechanism.
+    // Uses path-based matching (`find_recent_successful_by_read_target`) with
+    // read-shape compatibility. The exact-arg cache
+    // (`find_recent_successful_output`) won't match when irrelevant argument
+    // spelling differs, so the path-based lookup is the primary cross-turn
+    // dedup mechanism.
     if let Some(mut reused_value) = ctx.tool_registry.find_recent_successful_by_read_target(
         canonical_tool_name,
         effective_args,

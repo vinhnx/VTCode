@@ -230,18 +230,18 @@ fn reused_read_only_result_uses_canonical_guidance() {
     assert_eq!(
         payload.get("loop_detected_note"),
         Some(&json!(
-            "Loop detected: same result returned. Use the data already in your conversation. Do NOT retry."
+            "Loop detected: same result returned. The content is in the result above — use it directly."
         ))
     );
     assert_eq!(
         payload.get("next_action"),
         Some(&json!(
-            "Use data from conversation history. Do not make more tool calls."
+            "The tool result content is already in this response. Synthesize your answer from the available data."
         ))
     );
-    assert!(payload.get("output").is_none());
-    assert!(payload.get("content").is_none());
-    assert!(payload.get("stdout").is_none());
-    assert!(payload.get("stderr").is_none());
-    assert!(payload.get("stderr_preview").is_none());
+    assert_eq!(payload.get("output"), Some(&json!("preview")));
+    assert_eq!(payload.get("content"), Some(&json!("preview")));
+    assert_eq!(payload.get("stdout"), Some(&json!("preview")));
+    assert_eq!(payload.get("stderr"), Some(&json!("preview")));
+    assert_eq!(payload.get("stderr_preview"), Some(&json!("preview")));
 }

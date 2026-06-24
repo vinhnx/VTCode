@@ -39,37 +39,33 @@ pub fn generate_tool_guidelines(
         lines.push(browse_guidance);
     }
     if has_file || has_apply_patch {
-        lines.push("- Read before edit and keep patches small.".to_string());
+        lines.push("- Read before edit; patches small.".to_string());
     }
     if has_exec {
         lines.push(
-            "- Use `unified_exec` for verification, `git diff -- <path>`, and commands the public tools cannot express."
+            "- Use `unified_exec` for verification, `git diff -- <path>`, and shell-only tasks."
                 .to_string(),
         );
     }
     if has_exec || has_file || has_apply_patch {
         lines.push(
-            "- Completion is a checkpoint: keep `task_tracker` current and verification resolved."
+            "- Completion is a checkpoint: keep `task_tracker` current; verification resolved."
                 .to_string(),
         );
     }
     if has_search && has_exec {
         lines.push("- Prefer search over shell for exploration.".to_string());
         lines.push(
-            "- Use `unified_search` `action=structural` for ast-grep code-shape searches; set `lang` and use `format=github` unless SARIF is needed. Use grep only for plain text."
+            "- Use `unified_search` `action=structural` for code shape; set `lang` and `format=github`. Grep for text."
                 .to_string(),
         );
     }
     if has_file || has_apply_patch || has_exec {
-        lines.push(
-            "- If calls repeat without progress, re-plan instead of retrying identically."
-                .to_string(),
-        );
+        lines.push("- If calls repeat, re-plan instead of retrying.".to_string());
     }
     if has_search || has_file || has_exec {
         lines.push(
-            "- When calling multiple tools with no dependencies, run them in parallel (e.g., read files or run independent commands at once)."
-                .to_string(),
+            "- Run independent tools in parallel (read files or commands at once).".to_string(),
         );
     }
 

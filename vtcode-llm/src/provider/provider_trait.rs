@@ -3,6 +3,7 @@ use async_trait::async_trait;
 use compact_str::format_compact;
 use once_cell::sync::Lazy;
 use rustc_hash::FxHashMap;
+#[cfg(feature = "copilot")]
 use std::future::Future;
 use std::sync::RwLock;
 use vtcode_commons::llm::BackendKind;

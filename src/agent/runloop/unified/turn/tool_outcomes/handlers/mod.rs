@@ -67,9 +67,8 @@ pub(super) fn apply_reused_read_only_loop_metadata(
     obj.insert("result_ref_only".to_string(), serde_json::Value::Bool(true));
     obj.insert("loop_detected".to_string(), serde_json::Value::Bool(true));
 
-    let has_content = obj.contains_key("output")
-        || obj.contains_key("content")
-        || obj.contains_key("stdout");
+    let has_content =
+        obj.contains_key("output") || obj.contains_key("content") || obj.contains_key("stdout");
     obj.insert(
         "loop_detected_note".to_string(),
         serde_json::Value::String(

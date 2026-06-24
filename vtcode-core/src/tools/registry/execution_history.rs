@@ -449,9 +449,8 @@ impl ToolExecutionHistory {
     }
 
     /// Find the most recent successful output for a read-only tool call that
-    /// targets the same file path, ignoring pagination fields (`offset`,
-    /// `limit`, `page`, etc.).  This enables cross-turn dedup when the model
-    /// re-reads the same file with different pagination arguments.
+    /// targets the same file path and compatible read shape. This enables
+    /// cross-turn dedup only when the cached read covers the new request.
     ///
     /// Returns `None` for non-read-only tools or when no matching path can be
     /// extracted from the args.
@@ -475,10 +474,11 @@ impl ToolExecutionHistory {
             if record_path != query_path {
                 continue;
             }
-            // Read extent check: only match if the cached result's offset and
-            // limit cover the query's request.  A query asking for a larger
-            // limit or different offset is a materially different read — the
-            // model genuinely needs fresh content, not a cached stub.
+            // Read-shape check: only match if the cached result covers the
+            // query's extent and has the same raw/summarized mode.  A query
+            // asking for a larger limit, different offset, or raw content is a
+            // materially different read — the model genuinely needs fresh
+            // content, not a cached stub.
             if !Self::read_extent_matches(&record.args, query_args) {
                 continue;
             }
@@ -504,14 +504,26 @@ impl ToolExecutionHistory {
         None
     }
 
-    /// Check whether the cached record's read extent covers the new query's extent.
+    /// Check whether the cached record's read shape covers the new query's shape.
     ///
     /// Returns `true` when both calls target the same offset and the cached
-    /// limit is at least as large as the query limit (so the cached result
-    /// contains everything the query asks for).  This prevents false loop
-    /// detection when the model requests a larger limit or different offset
-    /// (issue #680).
+    /// limit is at least as large as the query limit, and both calls use the
+    /// same raw mode. This prevents false loop detection when the model
+    /// requests a larger limit, different offset, or exact raw content after a
+    /// summarized read (issue #680).
     fn read_extent_matches(cached_args: &Value, query_args: &Value) -> bool {
+        let cached_raw = cached_args
+            .get("raw")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let query_raw = query_args
+            .get("raw")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        if cached_raw != query_raw {
+            return false;
+        }
+
         let cached_offset = cached_args
             .get("offset")
             .and_then(Value::as_u64)
@@ -1276,10 +1288,7 @@ mod tests {
             &json!({"action":"read","path":"AGENTS.md","offset":0,"limit":220}),
             Duration::from_secs(600),
         );
-        assert!(
-            result.is_none(),
-            "larger limit should not match same path"
-        );
+        assert!(result.is_none(), "larger limit should not match same path");
 
         // Query: same path, same offset, same limit → should match (genuine repeat)
         let result = history.find_recent_successful_by_read_target(
@@ -1287,10 +1296,7 @@ mod tests {
             &json!({"action":"read","path":"AGENTS.md","offset":0,"limit":200}),
             Duration::from_secs(600),
         );
-        assert!(
-            result.is_some(),
-            "same path and same limit should match"
-        );
+        assert!(result.is_some(), "same path and same limit should match");
 
         // Query: same path, same offset, smaller limit → should match (subset)
         let result = history.find_recent_successful_by_read_target(
@@ -1346,5 +1352,60 @@ mod tests {
             result.is_none(),
             "mixed default/explicit limit should not match"
         );
+    }
+
+    #[test]
+    fn find_recent_successful_by_read_target_raw_shape_matters() {
+        let history = ToolExecutionHistory::new(10);
+
+        // Record: non-raw read can be summarized for the model, so it must not
+        // satisfy a later raw=true query that asks for exact content.
+        history.add_record(ToolExecutionRecord::success(
+            "unified_file".to_string(),
+            "unified_file".to_string(),
+            false,
+            None,
+            json!({"action":"read","path":"AGENTS.md","offset":0,"limit":200}),
+            json!({"summary":"summarized guidance","summarized_for_model":true}),
+            make_snapshot(),
+            None,
+            None,
+            None,
+            None,
+            false,
+        ));
+
+        let result = history.find_recent_successful_by_read_target(
+            "unified_file",
+            &json!({"action":"read","path":"AGENTS.md","offset":0,"limit":200,"raw":true}),
+            Duration::from_secs(600),
+        );
+        assert!(
+            result.is_none(),
+            "non-raw summarized read should not satisfy raw=true query"
+        );
+
+        // Record: raw=true read can satisfy the same raw=true shape.
+        history.add_record(ToolExecutionRecord::success(
+            "unified_file".to_string(),
+            "unified_file".to_string(),
+            false,
+            None,
+            json!({"action":"read","path":"AGENTS.md","offset":0,"limit":200,"raw":true}),
+            json!({"output":"exact file content"}),
+            make_snapshot(),
+            None,
+            None,
+            None,
+            None,
+            false,
+        ));
+
+        let result = history.find_recent_successful_by_read_target(
+            "unified_file",
+            &json!({"action":"read","path":"AGENTS.md","offset":0,"limit":200,"raw":true}),
+            Duration::from_secs(600),
+        );
+        assert_eq!(result, Some(json!({"output":"exact file content"})));
     }
 }

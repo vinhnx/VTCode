@@ -843,8 +843,10 @@ fn build_chatgpt_responses_request_from_history(
 }
 
 fn apply_rig_chatgpt_private_defaults(request: &mut Value) {
-    let mut typed_parameters = RigResponsesAdditionalParameters::default();
-    typed_parameters.store = Some(false);
+    let mut typed_parameters = RigResponsesAdditionalParameters {
+        store: Some(false),
+        ..Default::default()
+    };
     let include = typed_parameters.include.get_or_insert_with(Vec::new);
     if !include
         .iter()

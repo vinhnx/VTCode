@@ -1418,10 +1418,10 @@ data: [DONE]\n\n",
                 ResponseTemplate::new(200)
                     .insert_header("content-type", "text/event-stream")
                     .set_body_string(
-                        "data: {\"type\":\"response.output_item.added\",\"output_index\":0,\"item\":{\"type\":\"function_call\",\"id\":\"call_1\",\"name\":\"search_workspace\"}}\n\n\
-data: {\"type\":\"response.function_call_arguments.delta\",\"item_id\":\"call_1\",\"delta\":\"{\\\"pattern\\\":\\\"ph\"}\n\n\
-data: {\"type\":\"response.function_call_arguments.delta\",\"item_id\":\"call_1\",\"delta\":\"ase\\\"}\"}\n\n\
-data: {\"type\":\"response.output_text.delta\",\"delta\":\"done\"}\n\n\
+                        "data: {\"type\":\"response.output_item.added\",\"item_id\":\"call_1\",\"output_index\":0,\"sequence_number\":1,\"item\":{\"type\":\"function_call\",\"id\":\"call_1\",\"call_id\":\"call_1\",\"name\":\"search_workspace\",\"arguments\":\"\",\"status\":\"in_progress\"}}\n\n\
+data: {\"type\":\"response.function_call_arguments.delta\",\"item_id\":\"call_1\",\"output_index\":0,\"content_index\":0,\"sequence_number\":2,\"delta\":\"{\\\"pattern\\\":\\\"ph\"}\n\n\
+data: {\"type\":\"response.function_call_arguments.delta\",\"item_id\":\"call_1\",\"output_index\":0,\"content_index\":0,\"sequence_number\":3,\"delta\":\"ase\\\"}\"}\n\n\
+data: {\"type\":\"response.output_text.delta\",\"output_index\":1,\"content_index\":0,\"sequence_number\":4,\"delta\":\"done\"}\n\n\
 data: [DONE]\n\n",
                     ),
             )
