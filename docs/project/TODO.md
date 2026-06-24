@@ -1,3 +1,5 @@
+handle up and down arrow to autofill messages in reversed-prompt (control_r and /rewind) history log. example: when use hit up arrow, use last message in the history logs
+
 https://github.com/vinhnx/VTCode/issues/677#issuecomment-4778106092
 
 ===

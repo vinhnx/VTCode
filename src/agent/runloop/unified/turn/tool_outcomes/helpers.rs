@@ -877,6 +877,9 @@ mod tests {
             command_success: true,
         });
 
+        // Different actions/patterns produce separate family keys, so each counts
+        // as its own family (max count == 1). This prevents false-positive family
+        // cap violations when the agent explores different searches on the same path.
         update_repetition_tracker(
             &mut tracker,
             &miss,
@@ -895,6 +898,26 @@ mod tests {
             tools::UNIFIED_SEARCH,
             &json!({"action":"grep","pattern":"Result<","path":"vtcode-tui","globs":["vtcode-tui/**/*.rs"]}),
         );
+
+        // Each call is a different family (action+pattern differ), so max is 1.
+        assert_eq!(tracker.max_low_signal_count(), 1);
+    }
+
+    #[test]
+    fn low_signal_tracker_groups_identical_searches_in_same_family() {
+        let mut tracker = LoopTracker::new();
+        let miss = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
+            output: serde_json::json!({"matches":[]}),
+            stdout: None,
+            modified_files: vec![],
+            command_success: true,
+        });
+
+        // Same action + same pattern + same path => same family key
+        let args = json!({"action":"grep","pattern":"TODO","path":"src","globs":["src/**/*.rs"]});
+        update_repetition_tracker(&mut tracker, &miss, tools::UNIFIED_SEARCH, &args);
+        update_repetition_tracker(&mut tracker, &miss, tools::UNIFIED_SEARCH, &args);
+        update_repetition_tracker(&mut tracker, &miss, tools::UNIFIED_SEARCH, &args);
 
         assert_eq!(tracker.max_low_signal_count(), 3);
     }

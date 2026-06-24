@@ -328,6 +328,18 @@ pub fn is_readonly_command_string(args: &Value) -> bool {
         return false;
     }
 
+    // Deny in-place editing commands (sed -i, perl -i, ruby -i) which modify files
+    // despite being in the read-only allow-list.
+    if lower.contains("sed ") && lower.contains(" -i") {
+        return false;
+    }
+    if lower.contains("perl ") && lower.contains(" -i") {
+        return false;
+    }
+    if lower.contains("ruby ") && lower.contains(" -i") {
+        return false;
+    }
+
     // Deny destructive `find` flags before we allow `find` as read-only.
     if lower.contains("find ") {
         for destructive_flag in [

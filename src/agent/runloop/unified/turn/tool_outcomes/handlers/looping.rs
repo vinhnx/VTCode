@@ -209,7 +209,21 @@ pub(crate) fn low_signal_family_key(canonical_tool_name: &str, args: &Value) -> 
             .map(|command| format!("{canonical_tool_name}::run::{command}")),
         tool_names::UNIFIED_SEARCH => {
             let normalized = tool_intent::normalize_unified_search_args(args);
-            let mut key = canonical_tool_name.to_string();
+            let action = tool_intent::unified_search_action(&normalized).unwrap_or("grep");
+            let mut key = format!("{}::{}", canonical_tool_name, action);
+            // Include pattern for grep/structural so different searches on the same
+            // path are tracked separately (avoids false-positive family cap violations).
+            if matches!(action, "grep" | "structural") {
+                if let Some(pattern) = normalized
+                    .get("pattern")
+                    .and_then(Value::as_str)
+                    .map(|p| compact_loop_text(p, 80))
+                    .filter(|p| !p.is_empty())
+                {
+                    key.push_str("::pat=");
+                    key.push_str(&pattern);
+                }
+            }
             if let Some(globs) = unified_search_globs_arg(&normalized) {
                 key.push_str("::globs=");
                 key.push_str(&globs);
