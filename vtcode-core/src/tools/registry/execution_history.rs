@@ -475,6 +475,13 @@ impl ToolExecutionHistory {
             if record_path != query_path {
                 continue;
             }
+            // Read extent check: only match if the cached result's offset and
+            // limit cover the query's request.  A query asking for a larger
+            // limit or different offset is a materially different read — the
+            // model genuinely needs fresh content, not a cached stub.
+            if !Self::read_extent_matches(&record.args, query_args) {
+                continue;
+            }
             let age_ok = match now.duration_since(record.timestamp) {
                 Ok(age) => age <= max_age,
                 Err(_) => false,
@@ -495,6 +502,35 @@ impl ToolExecutionHistory {
             }
         }
         None
+    }
+
+    /// Check whether the cached record's read extent covers the new query's extent.
+    ///
+    /// Returns `true` when both calls target the same offset and the cached
+    /// limit is at least as large as the query limit (so the cached result
+    /// contains everything the query asks for).  This prevents false loop
+    /// detection when the model requests a larger limit or different offset
+    /// (issue #680).
+    fn read_extent_matches(cached_args: &Value, query_args: &Value) -> bool {
+        let cached_offset = cached_args
+            .get("offset")
+            .and_then(Value::as_u64)
+            .unwrap_or(0);
+        let query_offset = query_args
+            .get("offset")
+            .and_then(Value::as_u64)
+            .unwrap_or(0);
+        if cached_offset != query_offset {
+            return false;
+        }
+
+        let cached_limit = cached_args.get("limit").and_then(Value::as_u64);
+        let query_limit = query_args.get("limit").and_then(Value::as_u64);
+        match (cached_limit, query_limit) {
+            (Some(c), Some(q)) => c >= q,
+            (None, None) => true,
+            _ => false,
+        }
     }
 
     /// Extract the read target from tool args for path-based matching.
@@ -1171,22 +1207,23 @@ mod tests {
             false,
         ));
 
-        // Query: same path, different offset — should match record 1
+        // Query: same path, different offset — should NOT match (issue #680:
+        // a different offset means the model is asking for a different slice
+        // of the file, so it needs fresh content, not a cached stub).
         let result = history.find_recent_successful_by_read_target(
             "unified_file",
             &json!({"action":"read","path":"src/lib.rs","offset":500,"limit":200}),
             Duration::from_secs(600),
         );
         assert!(
-            result.is_some(),
-            "should match same path with different offset"
+            result.is_none(),
+            "different offset should not match same path"
         );
-        assert_eq!(result.unwrap(), json!({"content":"file content"}));
 
-        // Query: different path — should match record 2
+        // Query: different path, same pagination — should match record 2
         let result2 = history.find_recent_successful_by_read_target(
             "unified_file",
-            &json!({"action":"read","path":"src/main.rs","offset":0}),
+            &json!({"action":"read","path":"src/main.rs","offset":0,"limit":100}),
             Duration::from_secs(600),
         );
         assert!(result2.is_some());
@@ -1209,6 +1246,105 @@ mod tests {
         assert!(
             result4.is_none(),
             "write action should not match read records"
+        );
+    }
+
+    #[test]
+    fn find_recent_successful_by_read_target_extent_matters() {
+        let history = ToolExecutionHistory::new(10);
+
+        // Record: read AGENTS.md, offset=0, limit=200
+        history.add_record(ToolExecutionRecord::success(
+            "unified_file".to_string(),
+            "unified_file".to_string(),
+            false,
+            None,
+            json!({"action":"read","path":"AGENTS.md","offset":0,"limit":200}),
+            json!({"output":"full file content line 1\nline2\n..."}),
+            make_snapshot(),
+            None,
+            None,
+            None,
+            None,
+            false,
+        ));
+
+        // Query: same path, same offset, larger limit → should NOT match
+        // (issue #680: the model asked for more lines than the cache has)
+        let result = history.find_recent_successful_by_read_target(
+            "unified_file",
+            &json!({"action":"read","path":"AGENTS.md","offset":0,"limit":220}),
+            Duration::from_secs(600),
+        );
+        assert!(
+            result.is_none(),
+            "larger limit should not match same path"
+        );
+
+        // Query: same path, same offset, same limit → should match (genuine repeat)
+        let result = history.find_recent_successful_by_read_target(
+            "unified_file",
+            &json!({"action":"read","path":"AGENTS.md","offset":0,"limit":200}),
+            Duration::from_secs(600),
+        );
+        assert!(
+            result.is_some(),
+            "same path and same limit should match"
+        );
+
+        // Query: same path, same offset, smaller limit → should match (subset)
+        let result = history.find_recent_successful_by_read_target(
+            "unified_file",
+            &json!({"action":"read","path":"AGENTS.md","offset":0,"limit":100}),
+            Duration::from_secs(600),
+        );
+        assert!(
+            result.is_some(),
+            "smaller limit is a subset of cached extent"
+        );
+    }
+
+    #[test]
+    fn find_recent_successful_by_read_target_no_limit_uses_default() {
+        let history = ToolExecutionHistory::new(10);
+
+        // Record: read AGENTS.md with no explicit limit or offset (defaults)
+        history.add_record(ToolExecutionRecord::success(
+            "unified_file".to_string(),
+            "unified_file".to_string(),
+            false,
+            None,
+            json!({"action":"read","path":"AGENTS.md"}),
+            json!({"output":"default content"}),
+            make_snapshot(),
+            None,
+            None,
+            None,
+            None,
+            false,
+        ));
+
+        // Query: same path, also no explicit limit/offset → should match (both use defaults)
+        let result = history.find_recent_successful_by_read_target(
+            "unified_file",
+            &json!({"action":"read","path":"AGENTS.md"}),
+            Duration::from_secs(600),
+        );
+        assert!(
+            result.is_some(),
+            "both using default offset/limit should match"
+        );
+
+        // Query: same path, default offset but explicit limit → should NOT match
+        // (one has explicit pagination, other doesn't — can't compare)
+        let result = history.find_recent_successful_by_read_target(
+            "unified_file",
+            &json!({"action":"read","path":"AGENTS.md","limit":200}),
+            Duration::from_secs(600),
+        );
+        assert!(
+            result.is_none(),
+            "mixed default/explicit limit should not match"
         );
     }
 }

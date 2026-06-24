@@ -57,28 +57,39 @@ fn build_failure_error_content(error: String, failure_kind: &'static str) -> Str
 pub(super) fn apply_reused_read_only_loop_metadata(
     obj: &mut serde_json::Map<String, serde_json::Value>,
 ) {
-    obj.remove("output");
-    obj.remove("content");
-    obj.remove("stdout");
-    obj.remove("stderr");
-    obj.remove("stderr_preview");
+    // Keep output/content/stdout/stderr intact — stripping them was causing
+    // false loop detection to leave the model with no data (issue #680). The
+    // cached result may have useful content the model needs.
     obj.insert(
         "reused_recent_result".to_string(),
         serde_json::Value::Bool(true),
     );
     obj.insert("result_ref_only".to_string(), serde_json::Value::Bool(true));
     obj.insert("loop_detected".to_string(), serde_json::Value::Bool(true));
+
+    let has_content = obj.contains_key("output")
+        || obj.contains_key("content")
+        || obj.contains_key("stdout");
     obj.insert(
         "loop_detected_note".to_string(),
         serde_json::Value::String(
-            "Loop detected: same result returned. Use the data already in your conversation. Do NOT retry."
-                .to_string(),
+            if has_content {
+                "Loop detected: same result returned. The content is in the result above — use it directly."
+            } else {
+                "Loop detected: same result returned. Use the data already in your conversation. Do NOT retry."
+            }
+            .to_string(),
         ),
     );
     obj.insert(
         "next_action".to_string(),
         serde_json::Value::String(
-            "Use data from conversation history. Do not make more tool calls.".to_string(),
+            if has_content {
+                "The tool result content is already in this response. Synthesize your answer from the available data."
+            } else {
+                "Use data from conversation history. Do not make more tool calls."
+            }
+            .to_string(),
         ),
     );
 }
