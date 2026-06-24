@@ -172,3 +172,37 @@ tracker). 5. Out of scope (this iteration)
 • Worktree backend: git worktree (simple, requires git) vs. filesystem snapshot (no git, but heavier). Default: git worktree, with a feature flag for snapshots.
 • Memory store default: markdown (current) vs. sqlite (faster queries). Default: markdown, sqlite behind a feature flag.
 • Scheduler driver: tokio interval vs. external cron. Default: tokio interval, since the harness already runs on tokio.
+
+――――――――――――――――――――――――――――――――
+
+Rig Upstream Follow-Up — Wrapper Removal Checklist
+
+Status: Blocked on upstream Rig PRs
+Tracking: https://github.com/vinhnx/VTCode/issues/678, PR #679
+
+VTCode maintains several wrappers and fallbacks that exist solely because rig-core 0.39 lacks certain features. When the upstream Rig PRs below land and VTCode updates to a compatible Rig version, the corresponding wrappers should be removed.
+
+Upstream Rig PRs:
+
+- https://github.com/0xPlaygrounds/rig/pull/1855 — Output::Unknown carries serde_json::Value (preserves hosted tool output items). Status: open, needs rebase.
+- https://github.com/0xPlaygrounds/rig/pull/1830 — prompt_cache_key and prompt_cache_retention pass-through via additional_params. Status: open.
+
+When rig#1855 lands (Output::Unknown carries Value):
+
+- [ ] vtcode-core/src/llm/providers/openai/responses_adapter.rs: Remove adapt_rig_gap_output_item_envelope and ProviderValueBearingRigGap fallback (lines 572-605)
+- [ ] vtcode-llm/src/providers/shared/responses_stream.rs: Evaluate if DocumentedValueBearingRigGap events can now flow through Rig's typed API instead of being silently dropped
+
+When rig#1830 lands (prompt_cache_key/retention pass-through):
+
+- [ ] vtcode-core/src/llm/providers/openai/responses_adapter.rs: Remove PromptCacheOverlay struct and apply_prompt_cache_overlay function (lines 50-56, 361-383)
+- [ ] vtcode-llm/src/providers/openai/request_builder.rs: Remove duplicate apply_prompt_cache_overlay function (lines 214-233) and its call site (lines 775-781)
+- [ ] Update prompt-cache JSON-boundary tests to assert Rig-owned serialisation
+
+When Rig exposes ChatGPT session refresh hooks:
+
+- [ ] vtcode-llm/src/providers/openai/backend_setup.rs: Remove ChatGptSubscriptionAuthSource::CodexAppServerCompatibility (line 49)
+- [ ] Remove from_rig_chatgpt_auth conversion (lines 109-123) if Rig handles session refresh directly
+
+When Rig exposes transport capability parity:
+
+- [ ] vtcode-llm/src/providers/openai/backend_setup.rs: Remove OpenAIBackendTransportCapabilities gating (lines 60-68)

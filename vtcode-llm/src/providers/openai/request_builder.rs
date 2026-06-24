@@ -772,12 +772,11 @@ fn build_responses_request_from_history(
         openai_request["text"] = text_format;
     }
 
-    // Rig 0.38.2 lacks typed `prompt_cache_key` and
-    // `prompt_cache_retention` fields, so VT Code injects them after typed
-    // request construction at the final JSON boundary. `or_insert` preserves
-    // future Rig output; remove this overlay once Rig exposes typed fields and
-    // the prompt-cache JSON-boundary tests are updated to assert Rig-owned
-    // serialisation instead.
+    // Rig 0.39 lacks typed `prompt_cache_key` and `prompt_cache_retention`
+    // fields, so VT Code injects them after typed request construction at the
+    // final JSON boundary. `or_insert` preserves future Rig output; remove
+    // this overlay once https://github.com/0xPlaygrounds/rig/pull/1830 lands
+    // and the prompt-cache JSON-boundary tests assert Rig-owned serialisation.
     apply_prompt_cache_overlay(&mut openai_request, ctx);
 
     Ok(openai_request)
