@@ -717,8 +717,13 @@ impl ToolRegistry {
     }
 
     fn prepare_apply_patch_args(&self, args: Value) -> Result<(Value, usize, bool)> {
-        let patch_input = crate::tools::apply_patch::decode_apply_patch_input(&args)?
-            .ok_or_else(|| anyhow!("Missing patch input"))?;
+        let patch_input =
+            crate::tools::apply_patch::decode_apply_patch_input(&args)?.ok_or_else(|| {
+                anyhow!(
+                    "Missing patch input {}",
+                    crate::tools::error_helpers::PATCH_PARAMETER_HINT
+                )
+            })?;
         let patch_input_bytes = patch_input.source_bytes;
         let patch_base64 = patch_input.was_base64;
 

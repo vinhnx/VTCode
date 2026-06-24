@@ -202,7 +202,12 @@ impl ToolHandler for ApplyPatchHandler {
                         ToolCallError::respond(format!("Failed to decode patch input: {e}"))
                     })?
                     .map(|input| input.text)
-                    .ok_or_else(|| ToolCallError::respond("Missing patch input"))?
+                    .ok_or_else(|| {
+                        ToolCallError::respond(format!(
+                            "Missing patch input {}",
+                            crate::tools::error_helpers::PATCH_PARAMETER_HINT
+                        ))
+                    })?
             }
             ToolPayload::Custom { input } => input,
             _ => {

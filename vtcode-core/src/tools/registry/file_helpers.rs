@@ -240,8 +240,9 @@ impl ToolRegistry {
             || old_lines > EDIT_FILE_MAX_LINES
             || new_lines > EDIT_FILE_MAX_LINES
         {
+            let guidance = crate::tools::error_helpers::USE_PATCH_FOR_LARGE_EDITS;
             return Err(anyhow!(
-                "edit_file is limited to small literal replacements (≤ {lines} lines or ≤ {chars} characters). Use apply_patch for larger or multi-file edits.",
+                "edit_file is limited to small literal replacements (≤ {lines} lines or ≤ {chars} characters). {guidance}",
                 lines = EDIT_FILE_MAX_LINES,
                 chars = EDIT_FILE_MAX_CHARS,
             ));
@@ -259,10 +260,11 @@ impl ToolRegistry {
             .await
             .with_context(|| format!("Cannot read file metadata: {}", canonical_path.display()))?;
         if metadata.len() > EDIT_FILE_MAX_BYTES {
+            let actual = metadata.len();
+            let max = EDIT_FILE_MAX_BYTES;
+            let guidance = crate::tools::error_helpers::USE_PATCH_OR_WRITE_FOR_LARGE_FILES;
             return Err(anyhow!(
-                "File too large for edit_file: {} bytes (max: {} bytes)",
-                metadata.len(),
-                EDIT_FILE_MAX_BYTES
+                "File too large for edit_file: {actual} bytes (max: {max} bytes). {guidance}",
             ));
         }
 

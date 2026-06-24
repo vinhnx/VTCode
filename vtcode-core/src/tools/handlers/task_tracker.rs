@@ -725,6 +725,54 @@ impl TaskTrackerTool {
         Ok(output)
     }
 
+    /// Check if a `create` call is idempotent (same checklist already active).
+    ///
+    /// Returns `Some(unchanged_response)` when the existing checklist should be
+    /// preserved, or `None` when a new checklist must be created.
+    fn check_create_idempotency(
+        existing: &TaskChecklist,
+        title: &str,
+        items: &[TaskItem],
+        task_file_display: &str,
+    ) -> Option<Value> {
+        let same_structure = existing.title == title
+            && existing.items.len() == items.len()
+            && existing
+                .items
+                .iter()
+                .zip(items.iter())
+                .all(|(left, right)| left.description == right.description);
+        let requested_has_explicit_status =
+            items.iter().any(|item| item.status != TaskStatus::Pending);
+        let requested_has_step_metadata = items.iter().any(|item| {
+            !item.metadata.files.is_empty()
+                || item.metadata.outcome.is_some()
+                || !item.metadata.verify.is_empty()
+        });
+
+        let unchanged =
+            if same_structure && !requested_has_explicit_status && !requested_has_step_metadata {
+                Some("Checklist already active; preserved current progress.")
+            } else if existing.title == title
+                && existing.items.len() == items.len()
+                && existing.items.iter().zip(items.iter()).all(|(l, r)| l == r)
+            {
+                Some("Requested checklist already matches current tracker state.")
+            } else {
+                None
+            };
+
+        unchanged.map(|message| {
+            json!({
+                "status": "unchanged",
+                "message": message,
+                "task_file": task_file_display,
+                "checklist": existing.summary(),
+                "view": existing.view()
+            })
+        })
+    }
+
     async fn handle_create(&self, args: &TaskTrackerArgs) -> Result<Value> {
         let title = args
             .title
@@ -743,47 +791,19 @@ impl TaskTrackerTool {
             anyhow::bail!("No valid task items were provided for create.");
         }
         let notes = append_notes(None, args.notes.as_deref());
-        let requested = TaskChecklist {
-            title: title.clone(),
-            items: items.clone(),
-            notes: notes.clone(),
-        };
 
         self.ensure_checklist_loaded().await?;
         let guard = self.checklist.write().await;
+        let mut existing_item_count = 0usize;
         if let Some(existing) = guard.as_ref() {
-            let same_structure = existing.title == title
-                && existing.items.len() == items.len()
-                && existing
-                    .items
-                    .iter()
-                    .zip(items.iter())
-                    .all(|(left, right)| left.description == right.description);
-            let requested_has_explicit_status =
-                items.iter().any(|item| item.status != TaskStatus::Pending);
-            let requested_has_step_metadata = items.iter().any(|item| {
-                !item.metadata.files.is_empty()
-                    || item.metadata.outcome.is_some()
-                    || !item.metadata.verify.is_empty()
-            });
-            if same_structure && !requested_has_explicit_status && !requested_has_step_metadata {
-                return Ok(json!({
-                    "status": "unchanged",
-                    "message": "Checklist already active; preserved current progress.",
-                    "task_file": self.task_file().display().to_string(),
-                    "checklist": existing.summary(),
-                    "view": existing.view()
-                }));
-            }
-
-            if existing == &requested {
-                return Ok(json!({
-                    "status": "unchanged",
-                    "message": "Requested checklist already matches current tracker state.",
-                    "task_file": self.task_file().display().to_string(),
-                    "checklist": existing.summary(),
-                    "view": existing.view()
-                }));
+            existing_item_count = existing.items.len();
+            if let Some(unchanged) = Self::check_create_idempotency(
+                existing,
+                &title,
+                &items,
+                &self.task_file().display().to_string(),
+            ) {
+                return Ok(unchanged);
             }
         }
 
@@ -798,9 +818,23 @@ impl TaskTrackerTool {
         let mut guard = self.checklist.write().await;
         *guard = Some(checklist);
 
+        let (status, message) = if existing_item_count > 0 {
+            (
+                "replaced",
+                format!(
+                    "Previous checklist replaced with new structure (was {existing_item_count} items).",
+                ),
+            )
+        } else {
+            (
+                "created",
+                "Task checklist created successfully.".to_string(),
+            )
+        };
+
         Ok(json!({
-            "status": "created",
-            "message": "Task checklist created successfully.",
+            "status": status,
+            "message": message,
             "task_file": self.task_file().display().to_string(),
             "checklist": summary,
             "view": view

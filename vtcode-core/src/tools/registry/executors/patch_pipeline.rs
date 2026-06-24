@@ -12,8 +12,13 @@ enum PlannedPatchWrite {
 
 impl ToolRegistry {
     pub(super) async fn execute_apply_patch_internal(&self, args: Value) -> Result<Value> {
-        let patch_input = crate::tools::apply_patch::decode_apply_patch_input(&args)?
-            .ok_or_else(|| anyhow!("Missing patch input (use 'input' or 'patch' parameter)"))?;
+        let patch_input =
+            crate::tools::apply_patch::decode_apply_patch_input(&args)?.ok_or_else(|| {
+                anyhow!(
+                    "Missing patch input {}",
+                    crate::tools::error_helpers::PATCH_PARAMETER_HINT
+                )
+            })?;
         let override_snapshot = conflict_override_snapshot(&args);
 
         let patch = crate::tools::editing::Patch::parse(&patch_input.text)?;

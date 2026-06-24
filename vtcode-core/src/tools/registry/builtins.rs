@@ -495,7 +495,7 @@ fn register_unified_file(_plan_state: Option<&PlanningWorkflowState>) -> ToolReg
         ToolRegistry::unified_file_executor,
     )
     .with_description(
-        "File ops: read, write, edit, patch, delete, move, copy. Edit requires exact old_str.",
+        "File ops: read, write, edit, patch, delete, move, copy. Edit: exact old_str, max 800 chars/40 lines per side. For larger edits use patch.",
     )
     .with_parameter_schema(unified_file_parameters())
     .with_aliases([

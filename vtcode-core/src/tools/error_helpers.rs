@@ -4,6 +4,25 @@ use anyhow::{Context, Result};
 use std::fmt::Display;
 use std::path::Path;
 
+// ---------------------------------------------------------------------------
+// Shared guidance constants — single source of truth for tool-facing messages
+// ---------------------------------------------------------------------------
+
+/// Standard hint when the model sends a patch payload to the wrong tool.
+pub const PATCH_PARAMETER_HINT: &str = "(use 'input' or 'patch' parameter)";
+
+/// Canonical guidance for routing large edits away from edit_file.
+pub const USE_PATCH_FOR_LARGE_EDITS: &str =
+    "For larger edits, use unified_file with action=\"patch\" instead.";
+
+/// Canonical guidance for routing large-file edits away from edit_file.
+pub const USE_PATCH_OR_WRITE_FOR_LARGE_FILES: &str =
+    "For large files, use unified_file with action=\"patch\" or action=\"write\".";
+
+/// Canonical guidance to read a file before attempting a precise edit or patch.
+pub const READ_FILE_FIRST_HINT: &str =
+    "Use read_file first to get the exact text, then copy it precisely.";
+
 /// Wrap a file operation result with standardized path context.
 /// Works with any `Result<T, E>` where `E` implements `std::error::Error`.
 pub fn with_file_context<T, E>(

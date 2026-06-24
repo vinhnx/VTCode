@@ -19,10 +19,6 @@ https://github.com/vinhnx/VTCode/issues/678#issuecomment-4790189881
 
 ---
 
-[x] handle up and down arrow to autofill messages in reversed-prompt (control_r and /rewind) history log. example: when use hit up arrow, use last message in the history logs queue, the up arrow again, then move to the next messages in the queue, and so on. — Implemented via `prepend_archived_history` which merges archived session prompts into `InputManager` history on startup.
-
----
-
 https://github.com/vinhnx/VTCode/issues/677#issuecomment-4778106092
 
 ===
