@@ -442,7 +442,8 @@ fn maybe_inline_spooled_keeps_loop_recovery_fields_and_drops_notes() {
 
     let parsed: serde_json::Value =
         serde_json::from_str(&serialized).expect("serialized JSON payload");
-    assert_eq!(parsed.get("loop_detected"), Some(&serde_json::json!(true)));
+    // `loop_detected` is internal control logic and is stripped from model output.
+    assert!(parsed.get("loop_detected").is_none());
     assert_eq!(
         parsed.get("spool_path"),
         Some(&serde_json::json!(

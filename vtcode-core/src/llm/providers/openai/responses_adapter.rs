@@ -554,13 +554,13 @@ fn adapt_rig_supported_envelope_fallback(payload: &Value) -> Option<ResponsesStr
     match event_type {
         "response.completed" => {
             let response = payload.get("response")?;
-            if raw_response_has_rig_unknown_output_item(response) {
-                Some(ResponsesStreamEvent::CompletedResponse {
-                    response: response.clone(),
-                })
-            } else {
-                None
-            }
+            // Accept any response.completed where Rig deserialization failed,
+            // not just those with Rig-unknown output item types. Rig can fail
+            // for missing required fields (sequence_number, object, model, etc.)
+            // and the raw response is always preferable to a hard error.
+            Some(ResponsesStreamEvent::CompletedResponse {
+                response: response.clone(),
+            })
         }
         "response.output_item.added" | "response.output_item.done" => {
             adapt_rig_gap_output_item_envelope(payload)
@@ -602,17 +602,6 @@ fn adapt_rig_gap_output_item_envelope(payload: &Value) -> Option<ResponsesStream
         sequence_number: payload.get("sequence_number").and_then(Value::as_u64),
         payload: payload.clone(),
     })
-}
-
-fn raw_response_has_rig_unknown_output_item(response: &Value) -> bool {
-    let Some(response) = response.as_object() else {
-        return false;
-    };
-
-    response
-        .get("output")
-        .and_then(Value::as_array)
-        .is_some_and(|output_items| output_items.iter().any(raw_output_item_is_rig_unknown))
 }
 
 fn raw_output_item_is_rig_unknown(item: &Value) -> bool {

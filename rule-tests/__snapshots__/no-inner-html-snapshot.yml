@@ -3,26 +3,26 @@ snapshots:
   ? |
     document.getElementById("app").innerHTML = dynamicContent;
   : labels:
-    - source: document.getElementById("app")
-      message: this element's innerHTML is being set directly
-      style: primary
-      start: 0
-      end: 30
     - source: dynamicContent
       message: this value is rendered as raw HTML
       style: secondary
       start: 43
       end: 57
-  ? |
-    element.innerHTML = userInput;
-  : labels:
-    - source: element
+    - source: document.getElementById("app")
       message: this element's innerHTML is being set directly
       style: primary
       start: 0
-      end: 7
+      end: 30
+  ? |
+    element.innerHTML = userInput;
+  : labels:
     - source: userInput
       message: this value is rendered as raw HTML
       style: secondary
       start: 20
       end: 29
+    - source: element
+      message: this element's innerHTML is being set directly
+      style: primary
+      start: 0
+      end: 7

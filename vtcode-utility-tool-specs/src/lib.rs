@@ -363,7 +363,7 @@ pub fn unified_search_parameters() -> Value {
             },
             "follow": {"type": "boolean", "description": "Follow symbolic links while traversing directories for structural workflows.", "default": false},
             "threads": {"type": "integer", "description": "Number of threads for ast-grep scan parallelism. 0 means auto. Only for `workflow=\"scan\"`.", "minimum": 0, "maximum": 256, "default": 0},
-            "format": {"type": "string", "enum": ["github", "sarif"], "description": "Output format for CI pipelines for structural `workflow=\"scan\"`. When set, returns raw formatted output instead of normalized JSON."},
+            "format": {"type": "string", "enum": ["github", "sarif", "files_with_matches", "count"], "description": "Output format for structural `workflow=\"scan\"`. `github`/`sarif`: CI pipeline formats (raw output). `files_with_matches`: return only unique file paths. `count`: return match counts per file."},
             "report_style": {"type": "string", "enum": ["rich", "medium", "short"], "description": "Diagnostic report style for structural `workflow=\"scan\"`. Controls verbosity of diagnostic output."},
             "before_lines": {"type": "integer", "description": "Context lines before each match for structural workflows. Mutually exclusive with `context_lines`.", "minimum": 0, "maximum": 20},
             "after_lines": {"type": "integer", "description": "Context lines after each match for structural workflows. Mutually exclusive with `context_lines`.", "minimum": 0, "maximum": 20},

@@ -199,7 +199,8 @@ fn validation_error_payload_marks_loop_detection_without_prose_hint() {
     );
     let parsed: serde_json::Value =
         serde_json::from_str(&payload).expect("validation payload should be json");
-    assert_eq!(parsed.get("loop_detected"), Some(&json!(true)));
+    // `loop_detected` is internal control logic and is stripped from model output.
+    assert!(parsed.get("loop_detected").is_none());
     assert_eq!(parsed["fallback_tool"], tool_names::UNIFIED_SEARCH);
     assert_eq!(parsed["fallback_tool_args"]["action"], "list");
     assert_eq!(

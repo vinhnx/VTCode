@@ -107,9 +107,12 @@ pub(crate) fn compact_model_tool_payload(output: serde_json::Value) -> serde_jso
             | "repeat_count"
             | "tool" => loop_detected,
             "limit" => loop_detected && obj.get("tool").is_some(),
-            "truncated" | "auto_recovered" | "loop_detected" | "query_truncated" => {
-                is_false_bool(value)
-            }
+            // `loop_detected` is internal control logic — always strip it from
+            // model output.  The related metadata keys (`reused_recent_result`,
+            // `loop_detected_note`, etc.) are gated on `loop_detected` being true
+            // elsewhere, so stripping the flag itself doesn't affect them.
+            "loop_detected" => true,
+            "truncated" | "auto_recovered" | "query_truncated" => is_false_bool(value),
             "stdout" => {
                 (is_exec_like && output_trimmed.is_some())
                     || output_trimmed == value.as_str().map(str::trim_end)
