@@ -162,10 +162,13 @@ impl FileOpsTool {
                 is_dir = base.is_dir(),
                 "Path does not exist or is neither file nor directory"
             );
+            let suggestion = self
+                .missing_path_suggestion_suffix(&input.path, PathSuggestionKind::Any)
+                .await;
             return Err(anyhow!(
                 "Path '{}' does not exist{}",
                 input.path,
-                self.missing_path_suggestion_suffix(&input.path, PathSuggestionKind::Any),
+                suggestion,
             ));
         }
 

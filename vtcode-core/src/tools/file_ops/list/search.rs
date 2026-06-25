@@ -21,11 +21,14 @@ impl FileOpsTool {
 
         // Check if path exists before walking
         if !search_path.exists() {
+            let suggestion = self
+                .missing_path_suggestion_suffix(&input.path, PathSuggestionKind::Any)
+                .await;
             return Err(anyhow!(
                 "Path '{}' does not exist. Workspace root: {}{}",
                 input.path,
                 self.workspace_root.display(),
-                self.missing_path_suggestion_suffix(&input.path, PathSuggestionKind::Any),
+                suggestion,
             ));
         }
 

@@ -1169,13 +1169,29 @@ async fn validate_cargo(
 async fn validate_python(args: &[String], workspace_root: &Path, working_dir: &Path) -> Result<()> {
     // Python allows running scripts and modules - safe for workspace
     ensure_within_workspace(workspace_root, working_dir).await?;
-    // Don't allow -c or eval-like flags that could be dangerous - only file/module execution
     if args.is_empty() {
         return Ok(()); // python interactive is allowed
     }
 
     let first_arg = &args[0];
-    if first_arg == "-c" || first_arg == "-m" || first_arg == "-W" {
+
+    // Reject -c (execute code string) - arbitrary code execution risk
+    if first_arg == "-c" {
+        return Err(anyhow!(
+            "python -c is not permitted for security reasons: \
+             it enables arbitrary code execution outside the workspace sandbox"
+        ));
+    }
+
+    // Reject -e and -c variants that bypass file-based execution
+    if first_arg == "-e" || first_arg == "-exec" {
+        return Err(anyhow!(
+            "python {} is not permitted: it enables arbitrary code execution",
+            first_arg
+        ));
+    }
+
+    if first_arg == "-m" || first_arg == "-W" {
         // Allow -m (module), -W (warnings), but validate any file paths
         if first_arg != "-m" && args.len() > 1 {
             let path = normalize_path(&working_dir.join(&args[1]));
@@ -1216,6 +1232,16 @@ async fn validate_node(args: &[String], workspace_root: &Path, working_dir: &Pat
     }
 
     let first_arg = &args[0];
+
+    // Reject -e/--eval (execute code string) - arbitrary code execution risk
+    if first_arg == "-e" || first_arg == "--eval" {
+        return Err(anyhow!(
+            "node {} is not permitted for security reasons: \
+             it enables arbitrary code execution outside the workspace sandbox",
+            first_arg
+        ));
+    }
+
     if !first_arg.starts_with('-') {
         // It's a script file - validate it exists in workspace
         let path = normalize_path(&working_dir.join(first_arg));

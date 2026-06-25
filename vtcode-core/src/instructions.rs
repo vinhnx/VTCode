@@ -117,11 +117,10 @@ struct MatchContext {
 }
 
 impl MatchContext {
-    fn new(project_root: &Path, match_paths: &[PathBuf]) -> Self {
+    async fn new(project_root: &Path, match_paths: &[PathBuf]) -> Self {
         let mut seen = HashSet::new();
         let mut candidates = Vec::with_capacity(match_paths.len());
-        let canonical_root =
-            canonicalize_with_context(project_root, "instruction match project root").ok();
+        let canonical_root = tokio::fs::canonicalize(project_root).await.ok();
 
         for raw_path in match_paths {
             let candidate = if raw_path.is_absolute() {
@@ -130,8 +129,9 @@ impl MatchContext {
                 project_root.join(raw_path)
             };
 
-            let normalized =
-                std::fs::canonicalize(&candidate).unwrap_or_else(|_| candidate.clone());
+            let normalized = tokio::fs::canonicalize(&candidate)
+                .await
+                .unwrap_or_else(|_| candidate.clone());
             let relative = normalized
                 .strip_prefix(project_root)
                 .ok()
@@ -469,7 +469,7 @@ pub async fn discover_instruction_sources(
         options.home_dir,
         options.exclude_patterns,
     )?;
-    let match_context = MatchContext::new(options.project_root, options.match_paths);
+    let match_context = MatchContext::new(options.project_root, options.match_paths).await;
 
     if let Some(home) = options.home_dir {
         for candidate in user_instruction_candidates(home, options.fallback_filenames) {

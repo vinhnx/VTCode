@@ -402,7 +402,7 @@ impl FileOpsTool {
         let path_str = &path_args.path;
 
         // Try to resolve the file path
-        let potential_paths = self.resolve_file_path(path_str)?;
+        let potential_paths = self.resolve_file_path(path_str).await?;
         let missing_spool_candidate = potential_paths
             .iter()
             .find(|candidate| is_tool_output_spool_path(candidate.as_path()))
@@ -669,6 +669,9 @@ impl FileOpsTool {
             .parent()
             .map(|p| p.to_string_lossy().to_string())
             .unwrap_or_else(|| ".".to_string());
+        let suggestion = self
+            .missing_path_suggestion_suffix(path_str, PathSuggestionKind::File)
+            .await;
         Err(anyhow!(
             "Error: File not found: {}. Tried paths: {}.{} Use unified_search action=list path=\"{}\" to discover available files.",
             path_str,
@@ -677,7 +680,7 @@ impl FileOpsTool {
                 .map(|p| self.workspace_relative_display(p))
                 .collect::<Vec<_>>()
                 .join(", "),
-            self.missing_path_suggestion_suffix(path_str, PathSuggestionKind::File),
+            suggestion,
             parent_dir
         ))
     }

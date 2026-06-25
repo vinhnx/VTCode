@@ -19,19 +19,53 @@ fn apply_platform_proxy_policy(builder: ClientBuilder) -> ClientBuilder {
     }
 }
 
+/// Try to build an HTTP client, returning an error if both primary and fallback builders fail.
+///
+/// This is the fallible version of `build_client`. Use this when you want to handle
+/// the error gracefully (e.g., return an error to the caller) instead of panicking.
+pub fn try_build_client<F>(configure: F) -> Result<Client, reqwest::Error>
+where
+    F: Fn(ClientBuilder) -> ClientBuilder,
+{
+    let primary_builder = configure(apply_platform_proxy_policy(ClientBuilder::new()));
+    match primary_builder.build() {
+        Ok(client) => Ok(client),
+        Err(primary_err) => {
+            let fallback_builder = apply_platform_proxy_policy(ClientBuilder::new())
+                .timeout(DEFAULT_TIMEOUT)
+                .connect_timeout(SHORT_TIMEOUT);
+            match fallback_builder.build() {
+                Ok(client) => Ok(client),
+                Err(fallback_err) => {
+                    tracing::error!(
+                        primary_error = %primary_err,
+                        fallback_error = %fallback_err,
+                        "HTTP client creation failed with both primary and fallback configurations"
+                    );
+                    Err(fallback_err)
+                }
+            }
+        }
+    }
+}
+
+/// Create a default HTTP client with standard timeouts.
+///
+/// # Panics
+///
+/// Panics if the HTTP client cannot be created (e.g., TLS library failure).
+/// For a non-panicking version, use [`try_build_client`].
 #[allow(clippy::panic)]
 fn build_client<F>(configure: F) -> Client
 where
     F: Fn(ClientBuilder) -> ClientBuilder,
 {
-    let primary_builder = configure(apply_platform_proxy_policy(ClientBuilder::new()));
-    primary_builder.build().unwrap_or_else(|_| {
-        let fallback_builder = apply_platform_proxy_policy(ClientBuilder::new())
-            .timeout(DEFAULT_TIMEOUT)
-            .connect_timeout(SHORT_TIMEOUT);
-        fallback_builder
-            .build()
-            .unwrap_or_else(|e| panic!("failed to build HTTP client: {e}"))
+    try_build_client(configure).unwrap_or_else(|e| {
+        panic!(
+            "failed to build HTTP client: {e}. \
+             This usually indicates a TLS configuration issue or system resource exhaustion. \
+             Ensure the system has valid TLS certificates and sufficient resources."
+        )
     })
 }
 

@@ -122,7 +122,8 @@ impl SubagentController {
             SessionStartTrigger::Startup,
             config.parent_session_id.clone(),
         )?;
-        let background_children = load_background_state(&config.workspace_root)?
+        let background_children = load_background_state(&config.workspace_root)
+            .await?
             .records
             .into_iter()
             .map(|record| (record.id.clone(), BackgroundRecord::from_persisted(record)))
@@ -229,7 +230,7 @@ impl SubagentController {
                         .as_ref()
                         .or(entry.archive_path.as_ref())
                     {
-                        load_archive_preview(path).unwrap_or_default()
+                        load_archive_preview(path).await.unwrap_or_default()
                     } else {
                         String::new()
                     }
@@ -635,7 +636,9 @@ impl SubagentController {
             Some(handle) => handle.snapshot(),
             None => {
                 let archive_listing = match archive_path.as_ref() {
-                    Some(path) if path.exists() => load_session_listing(path).ok(),
+                    Some(path) if tokio::fs::metadata(path).await.is_ok() => {
+                        load_session_listing(path).await.ok()
+                    }
                     _ => None,
                 };
                 let metadata = archive_listing
@@ -1299,7 +1302,7 @@ impl SubagentController {
                 .map(BackgroundRecord::into_persisted)
                 .collect()
         };
-        persist_background_state(&self.config.workspace_root, records)
+        persist_background_state(&self.config.workspace_root, records).await
     }
 
     async fn find_spec(&self, candidate: &str) -> Option<SubagentSpec> {
@@ -1582,19 +1585,31 @@ impl SubagentController {
     }
 
     async fn launch_child(&self, child_id: &str) -> Result<()> {
+        // Acquire the lock first to set up the record state, then release it
+        // before spawning the task. This avoids the spawned task immediately
+        // contending on the write lock.
+        {
+            let mut state = self.state.write().await;
+            let record = state
+                .children
+                .get_mut(child_id)
+                .ok_or_else(|| anyhow!("Unknown subagent id {}", child_id))?;
+            record.status = SubagentStatus::Queued;
+            record.updated_at = Utc::now();
+        }
+
+        // Spawn the task after releasing the lock.
         let controller = self.clone();
         let target = child_id.to_string();
         let handle = tokio::spawn(async move {
             Box::pin(controller.child_loop(&target)).await;
         });
+
+        // Store the handle in the record.
         let mut state = self.state.write().await;
-        let record = state
-            .children
-            .get_mut(child_id)
-            .ok_or_else(|| anyhow!("Unknown subagent id {}", child_id))?;
-        record.handle = Some(handle);
-        record.status = SubagentStatus::Queued;
-        record.updated_at = Utc::now();
+        if let Some(record) = state.children.get_mut(child_id) {
+            record.handle = Some(handle);
+        }
         Ok(())
     }
 
@@ -1840,11 +1855,12 @@ fn sanitize_component(value: &str) -> String {
         .to_string()
 }
 
-fn load_session_listing(
+async fn load_session_listing(
     path: &std::path::Path,
 ) -> Result<crate::utils::session_archive::SessionListing> {
     use anyhow::Context;
-    let raw = std::fs::read_to_string(path)
+    let raw = tokio::fs::read_to_string(path)
+        .await
         .with_context(|| format!("Failed to read session archive {}", path.display()))?;
     let snapshot: crate::utils::session_archive::SessionSnapshot = serde_json::from_str(&raw)
         .with_context(|| format!("Failed to parse session archive {}", path.display()))?;

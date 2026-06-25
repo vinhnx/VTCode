@@ -19,6 +19,15 @@ struct CacheEntry<V> {
     access_count: u64,
 }
 
+/// Combined cache state: entries and access order protected by a single lock.
+///
+/// This eliminates the deadlock risk from acquiring multiple locks simultaneously.
+#[derive(Debug)]
+struct CacheState<V> {
+    entries: HashMap<String, CacheEntry<V>>,
+    access_order: VecDeque<String>,
+}
+
 impl<V> CacheEntry<V> {
     #[inline]
     fn is_expired(&self, ttl: Duration) -> bool {
@@ -90,10 +99,8 @@ pub struct LruCache<V> {
     capacity: usize,
     /// TTL for all entries.
     ttl: Duration,
-    /// The actual cache.
-    entries: Arc<RwLock<HashMap<String, CacheEntry<V>>>>,
-    /// Access order for LRU tracking (stored separately for efficiency).
-    access_order: Arc<RwLock<VecDeque<String>>>,
+    /// Combined cache state: entries and access order protected by a single lock.
+    state: Arc<RwLock<CacheState<V>>>,
     /// Stats tracking.
     stats: Arc<RwLock<CacheStats>>,
     /// Observability hook.
@@ -111,8 +118,10 @@ impl<V: Send + Sync> LruCache<V> {
         Self {
             capacity,
             ttl,
-            entries: Arc::new(RwLock::new(HashMap::new())),
-            access_order: Arc::new(RwLock::new(VecDeque::new())),
+            state: Arc::new(RwLock::new(CacheState {
+                entries: HashMap::new(),
+                access_order: VecDeque::new(),
+            })),
             stats: Arc::new(RwLock::new(CacheStats::default())),
             observer,
         }
@@ -120,8 +129,7 @@ impl<V: Send + Sync> LruCache<V> {
 
     /// Get a value from the cache.
     pub async fn get(&self, key: &str) -> Option<Arc<V>> {
-        // Perform all state mutations under a single logical operation,
-        // minimizing lock re-acquisition overhead.
+        // Perform all state mutations under a single lock acquisition.
         enum GetOutcome<V> {
             Hit { value: Arc<V>, access_count: u64 },
             Miss,
@@ -129,23 +137,31 @@ impl<V: Send + Sync> LruCache<V> {
         }
 
         let outcome = {
-            let mut entries = self.entries.write().await;
+            let mut state = self.state.write().await;
 
             // Check for expiration first.
-            if let Some(entry) = entries.get(key) {
+            if let Some(entry) = state.entries.get(key) {
                 if entry.is_expired(self.ttl) {
-                    entries.remove(key);
+                    state.entries.remove(key);
+                    state.access_order.retain(|k| k != key);
                     GetOutcome::Expired
                 } else {
-                    // Valid hit - update access and return value.
-                    if let Some(entry) = entries.get_mut(key) {
+                    // Valid hit - extract value and access count, then update entry.
+                    let value = Arc::clone(&entry.value);
+                    let access_count = entry.access_count;
+
+                    // Update the entry's access metadata.
+                    if let Some(entry) = state.entries.get_mut(key) {
                         entry.update_access();
-                        GetOutcome::Hit {
-                            value: Arc::clone(&entry.value),
-                            access_count: entry.access_count,
-                        }
-                    } else {
-                        GetOutcome::Miss
+                    }
+
+                    // Move to back of access order (most recently used).
+                    state.access_order.retain(|k| k != key);
+                    state.access_order.push_back(key.to_string());
+
+                    GetOutcome::Hit {
+                        value,
+                        access_count,
                     }
                 }
             } else {
@@ -153,44 +169,27 @@ impl<V: Send + Sync> LruCache<V> {
             }
         };
 
-        // Now handle outcomes with appropriate stats/order updates.
+        // Handle observer callbacks outside the lock.
         match outcome {
             GetOutcome::Hit {
                 value,
                 access_count,
             } => {
-                // Batch stats and order updates together.
-                {
-                    let mut stats = self.stats.write().await;
-                    stats.hits += 1;
-                }
-                {
-                    let mut order = self.access_order.write().await;
-                    order.retain(|k| k != key);
-                    order.push_back(key.to_string());
-                }
+                let mut stats = self.stats.write().await;
+                stats.hits += 1;
                 self.observer.on_hit(key, access_count).await;
                 Some(value)
             }
             GetOutcome::Expired => {
-                // Update stats and order for expiration.
-                {
-                    let mut stats = self.stats.write().await;
-                    stats.expirations += 1;
-                    stats.misses += 1;
-                }
-                {
-                    let mut order = self.access_order.write().await;
-                    order.retain(|k| k != key);
-                }
+                let mut stats = self.stats.write().await;
+                stats.expirations += 1;
+                stats.misses += 1;
                 self.observer.on_evict(key, EvictionReason::Expired).await;
                 None
             }
             GetOutcome::Miss => {
-                {
-                    let mut stats = self.stats.write().await;
-                    stats.misses += 1;
-                }
+                let mut stats = self.stats.write().await;
+                stats.misses += 1;
                 self.observer.on_miss(key).await;
                 None
             }
@@ -218,14 +217,13 @@ impl<V: Send + Sync> LruCache<V> {
     /// Insert an Arc-wrapped value into the cache to avoid extra cloning.
     pub async fn insert_arc(&self, key: String, value: Arc<V>) {
         let capacity_evicted = {
-            let mut entries = self.entries.write().await;
+            let mut state = self.state.write().await;
             let mut evicted: Option<String> = None;
 
             // If at capacity and key doesn't exist, evict LRU entry.
-            if entries.len() >= self.capacity && !entries.contains_key(&key) {
-                let mut order = self.access_order.write().await;
-                if let Some(lru_key) = order.pop_front() {
-                    entries.remove(&lru_key);
+            if state.entries.len() >= self.capacity && !state.entries.contains_key(&key) {
+                if let Some(lru_key) = state.access_order.pop_front() {
+                    state.entries.remove(&lru_key);
                     evicted = Some(lru_key);
                 }
             }
@@ -237,14 +235,13 @@ impl<V: Send + Sync> LruCache<V> {
                 access_count: 0,
             };
 
-            entries.insert(key.clone(), entry);
-            let mut order = self.access_order.write().await;
-            order.retain(|existing| existing != &key);
-            order.push_back(key);
+            state.entries.insert(key.clone(), entry);
+            state.access_order.retain(|existing| existing != &key);
+            state.access_order.push_back(key);
             evicted
         };
 
-        // Avoid awaiting external observer hooks while cache locks are held.
+        // Avoid awaiting external observer hooks while cache lock is held.
         if let Some(evicted_key) = capacity_evicted {
             self.observer
                 .on_evict(&evicted_key, EvictionReason::Capacity)
@@ -257,10 +254,9 @@ impl<V: Send + Sync> LruCache<V> {
     /// Remove a specific key.
     pub async fn remove(&self, key: &str) -> Option<Arc<V>> {
         let removed = {
-            let mut entries = self.entries.write().await;
-            let mut order = self.access_order.write().await;
-            order.retain(|k| k != key);
-            entries.remove(key).map(|e| e.value)
+            let mut state = self.state.write().await;
+            state.access_order.retain(|k| k != key);
+            state.entries.remove(key).map(|e| e.value)
         };
 
         if removed.is_some() {
@@ -271,10 +267,9 @@ impl<V: Send + Sync> LruCache<V> {
 
     /// Clear all entries.
     pub async fn clear(&self) {
-        let mut entries = self.entries.write().await;
-        let mut order = self.access_order.write().await;
-        entries.clear();
-        order.clear();
+        let mut state = self.state.write().await;
+        state.entries.clear();
+        state.access_order.clear();
         let mut stats = self.stats.write().await;
         *stats = CacheStats::default();
     }
@@ -286,18 +281,19 @@ impl<V: Send + Sync> LruCache<V> {
 
     /// Get number of entries in cache.
     pub async fn len(&self) -> usize {
-        self.entries.read().await.len()
+        self.state.read().await.entries.len()
     }
 
     /// Check if cache is empty.
     pub async fn is_empty(&self) -> bool {
-        self.entries.read().await.is_empty()
+        self.state.read().await.entries.is_empty()
     }
 
     /// Get all keys in cache (excluding expired).
     pub async fn keys(&self) -> Vec<String> {
-        let entries = self.entries.read().await;
-        entries
+        let state = self.state.read().await;
+        state
+            .entries
             .iter()
             .filter(|(_, entry)| !entry.is_expired(self.ttl))
             .map(|(k, _)| k.clone())
@@ -307,11 +303,10 @@ impl<V: Send + Sync> LruCache<V> {
     /// Remove expired entries.
     pub async fn prune_expired(&self) {
         let expired = {
-            let mut entries = self.entries.write().await;
-            let mut order = self.access_order.write().await;
+            let mut state = self.state.write().await;
 
             let mut expired = Vec::new();
-            entries.retain(|key, entry| {
+            state.entries.retain(|key, entry| {
                 let keep = !entry.is_expired(self.ttl);
                 if !keep {
                     expired.push(key.clone());
@@ -321,7 +316,7 @@ impl<V: Send + Sync> LruCache<V> {
 
             if !expired.is_empty() {
                 let expired_set: HashSet<_> = expired.iter().cloned().collect();
-                order.retain(|k| !expired_set.contains(k));
+                state.access_order.retain(|k| !expired_set.contains(k));
             }
 
             expired

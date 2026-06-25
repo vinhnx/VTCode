@@ -93,7 +93,9 @@ pub async fn read_project_doc(cwd: &Path, max_bytes: usize) -> Result<Option<Pro
         return Ok(None);
     }
 
-    let project_root = resolve_project_root(cwd).unwrap_or_else(|_| cwd.to_path_buf());
+    let project_root = resolve_project_root(cwd)
+        .await
+        .unwrap_or_else(|_| cwd.to_path_buf());
     let home_dir = dirs::home_dir();
 
     read_project_doc_with_options(&ProjectDocOptions {
@@ -140,8 +142,9 @@ pub async fn load_instruction_appendix(
     active_dir: &Path,
     match_paths: &[PathBuf],
 ) -> Option<InstructionAppendixBundle> {
-    let project_root =
-        resolve_project_root(active_dir).unwrap_or_else(|_| active_dir.to_path_buf());
+    let project_root = resolve_project_root(active_dir)
+        .await
+        .unwrap_or_else(|_| active_dir.to_path_buf());
     let home_dir = dirs::home_dir();
     let bundle = read_project_doc_with_options(&ProjectDocOptions {
         current_dir: active_dir,
@@ -293,12 +296,12 @@ fn convert_bundle(bundle: InstructionBundle) -> ProjectDocBundle {
     }
 }
 
-fn resolve_project_root(cwd: &Path) -> Result<PathBuf> {
+async fn resolve_project_root(cwd: &Path) -> Result<PathBuf> {
     let mut cursor = canonicalize_with_context(cwd, "working directory")?;
 
     loop {
         let git_marker = cursor.join(".git");
-        match std::fs::metadata(&git_marker) {
+        match tokio::fs::metadata(&git_marker).await {
             Ok(_) => return Ok(cursor),
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
             Err(err) => {

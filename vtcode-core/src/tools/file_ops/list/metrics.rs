@@ -13,10 +13,13 @@ impl FileOpsTool {
         let search_root = self.workspace_root.join(&input.path);
 
         if !search_root.exists() {
+            let suggestion = self
+                .missing_path_suggestion_suffix(&input.path, PathSuggestionKind::Any)
+                .await;
             return Err(anyhow!(
                 "Path '{}' does not exist{}",
                 input.path,
-                self.missing_path_suggestion_suffix(&input.path, PathSuggestionKind::Any),
+                suggestion,
             ));
         }
 

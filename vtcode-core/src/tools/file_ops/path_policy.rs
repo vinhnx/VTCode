@@ -126,7 +126,7 @@ impl FileOpsTool {
         crate::utils::path::canonicalize_allow_missing(normalized)
     }
 
-    pub(super) fn resolve_file_path(&self, path: &str) -> Result<Vec<PathBuf>> {
+    pub(super) async fn resolve_file_path(&self, path: &str) -> Result<Vec<PathBuf>> {
         let mut paths = Vec::new();
         let requested = PathBuf::from(path);
 
@@ -157,15 +157,20 @@ impl FileOpsTool {
         }
 
         // Try case-insensitive variants for filenames
-        if !path.contains('/')
-            && !path.contains('\\')
-            && let Ok(entries) = std::fs::read_dir(&self.workspace_root)
-        {
-            for entry in entries.flatten() {
-                if let Ok(name) = entry.file_name().into_string()
-                    && name.to_lowercase() == path.to_lowercase()
-                {
-                    paths.push(entry.path());
+        if !path.contains('/') && !path.contains('\\') {
+            let path_lower = path.to_lowercase();
+            if let Ok(mut entries) = tokio::fs::read_dir(&self.workspace_root).await {
+                loop {
+                    let entry: tokio::fs::DirEntry = match entries.next_entry().await {
+                        Ok(Some(e)) => e,
+                        _ => break,
+                    };
+                    let name = entry.file_name();
+                    if let Ok(name_str) = name.into_string() {
+                        if name_str.to_lowercase() == path_lower {
+                            paths.push(entry.path());
+                        }
+                    }
                 }
             }
         }
@@ -173,12 +178,12 @@ impl FileOpsTool {
         Ok(paths)
     }
 
-    pub(super) fn missing_path_suggestion_suffix(
+    pub(super) async fn missing_path_suggestion_suffix(
         &self,
         requested_path: &str,
         kind: PathSuggestionKind,
     ) -> String {
-        let suggestions = self.suggest_workspace_paths(requested_path, kind);
+        let suggestions = self.suggest_workspace_paths(requested_path, kind).await;
         if suggestions.is_empty() {
             String::new()
         } else {
@@ -186,7 +191,7 @@ impl FileOpsTool {
         }
     }
 
-    pub(super) fn suggest_workspace_paths(
+    pub(super) async fn suggest_workspace_paths(
         &self,
         requested_path: &str,
         kind: PathSuggestionKind,

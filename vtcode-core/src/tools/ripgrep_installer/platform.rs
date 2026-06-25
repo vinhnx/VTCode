@@ -118,21 +118,60 @@ fn install_via_homebrew() -> Result<()> {
 
 #[cfg(target_os = "linux")]
 fn install_via_apt() -> Result<()> {
-    let _ = Command::new("sudo").args(["apt", "update"]).output();
+    // Check if we're already running as root (skip sudo if so)
+    let is_root = unsafe { libc::getuid() == 0 };
 
-    let output = Command::new("sudo")
-        .args(["apt", "install", "-y", "ripgrep"])
-        .output()
-        .context("Failed to execute apt install ripgrep")?;
+    if is_root {
+        // Running as root, no sudo needed
+        tracing::info!(method = "apt", "running as root, skipping sudo");
+        let _ = Command::new("apt").args(["update"]).output();
 
-    if output.status.success() {
-        tracing::info!(method = "apt", "ripgrep installed successfully");
-        Ok(())
+        let output = Command::new("apt")
+            .args(["install", "-y", "ripgrep"])
+            .output()
+            .context("Failed to execute apt install ripgrep")?;
+
+        if output.status.success() {
+            tracing::info!(method = "apt", "ripgrep installed successfully");
+            Ok(())
+        } else {
+            Err(anyhow!(
+                "apt installation failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            ))
+        }
     } else {
-        Err(anyhow!(
-            "apt installation failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        ))
+        // Need sudo - log a warning about elevated privileges
+        tracing::warn!(
+            method = "apt",
+            "using sudo to install ripgrep - this requires elevated privileges"
+        );
+
+        // Check if sudo is available
+        let sudo_check = Command::new("sudo").args(["-n", "true"]).output();
+        if sudo_check.is_err() || !sudo_check.unwrap().status.success() {
+            return Err(anyhow!(
+                "sudo is required to install ripgrep via apt, but is not available or requires a password. \
+                 Please install ripgrep manually or run with sudo."
+            ));
+        }
+
+        let _ = Command::new("sudo").args(["apt", "update"]).output();
+
+        let output = Command::new("sudo")
+            .args(["apt", "install", "-y", "ripgrep"])
+            .output()
+            .context("Failed to execute apt install ripgrep")?;
+
+        if output.status.success() {
+            tracing::info!(method = "apt", "ripgrep installed successfully");
+            Ok(())
+        } else {
+            Err(anyhow!(
+                "apt installation failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            ))
+        }
     }
 }
 

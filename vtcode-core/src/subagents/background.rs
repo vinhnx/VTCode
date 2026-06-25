@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
+use tokio::fs;
 
 use super::constants::SUBAGENT_PREVIEW_LINES;
 use super::types::{PersistedBackgroundRecord, PersistedBackgroundState};
@@ -22,28 +23,35 @@ pub(crate) fn background_state_path(workspace_root: &Path) -> PathBuf {
         .join("background_subagents.json")
 }
 
-pub(crate) fn load_background_state(workspace_root: &Path) -> Result<PersistedBackgroundState> {
+pub(crate) async fn load_background_state(
+    workspace_root: &Path,
+) -> Result<PersistedBackgroundState> {
     let path = background_state_path(workspace_root);
-    if !path.exists() {
-        return Ok(PersistedBackgroundState::default());
-    }
-
-    let raw = std::fs::read_to_string(&path)
-        .with_context(|| format!("Failed to read {}", path.display()))?;
+    let raw = match fs::read_to_string(&path).await {
+        Ok(raw) => raw,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(PersistedBackgroundState::default());
+        }
+        Err(e) => {
+            return Err(e).with_context(|| format!("Failed to read {}", path.display()));
+        }
+    };
     serde_json::from_str(&raw).with_context(|| format!("Failed to parse {}", path.display()))
 }
 
-pub(crate) fn persist_background_state(
+pub(crate) async fn persist_background_state(
     workspace_root: &Path,
     records: Vec<PersistedBackgroundRecord>,
 ) -> Result<()> {
     let path = background_state_path(workspace_root);
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)
+        fs::create_dir_all(parent)
+            .await
             .with_context(|| format!("Failed to create {}", parent.display()))?;
     }
     let payload = serde_json::to_string_pretty(&PersistedBackgroundState { records })?;
-    std::fs::write(&path, payload)
+    fs::write(&path, payload)
+        .await
         .with_context(|| format!("Failed to write {}", path.display()))?;
     Ok(())
 }
@@ -180,16 +188,17 @@ pub fn extract_tail_lines(content: &str, max_lines: usize) -> String {
     lines[start..].join("\n")
 }
 
-pub fn load_archive_preview(path: &Path) -> Result<String> {
-    let listing = load_session_listing(path)?;
+pub async fn load_archive_preview(path: &Path) -> Result<String> {
+    let listing = load_session_listing(path).await?;
     Ok(extract_tail_lines(
         &listing.snapshot.transcript.join("\n"),
         SUBAGENT_PREVIEW_LINES,
     ))
 }
 
-fn load_session_listing(path: &Path) -> Result<SessionListing> {
-    let raw = std::fs::read_to_string(path)
+async fn load_session_listing(path: &Path) -> Result<SessionListing> {
+    let raw = fs::read_to_string(path)
+        .await
         .with_context(|| format!("Failed to read session archive {}", path.display()))?;
     let snapshot: SessionSnapshot = serde_json::from_str(&raw)
         .with_context(|| format!("Failed to parse session archive {}", path.display()))?;

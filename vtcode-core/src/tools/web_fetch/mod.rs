@@ -95,21 +95,22 @@ fn fetched_content_from_bytes(bytes: &[u8], max_bytes: usize) -> Result<FetchedW
 
 /// Returns the path to the ephemeral temp directory for web_fetch artifacts.
 /// Creates the directory if it doesn't exist.
-fn web_fetch_temp_dir() -> Result<PathBuf> {
+async fn web_fetch_temp_dir() -> Result<PathBuf> {
     let base = dirs::home_dir()
         .unwrap_or_else(|| std::env::temp_dir())
         .join(".vtcode")
         .join("tmp")
         .join(TEMP_SUBDIR);
-    std::fs::create_dir_all(&base)
+    tokio::fs::create_dir_all(&base)
+        .await
         .with_context(|| format!("Failed to create temp directory: {}", base.display()))?;
     Ok(base)
 }
 
 /// Write content to an ephemeral temp file and return its path.
 /// Files are named with a timestamp for easy age-based cleanup.
-fn write_to_temp_file(content: &str, url: &str) -> Result<PathBuf> {
-    let temp_dir = web_fetch_temp_dir()?;
+async fn write_to_temp_file(content: &str, url: &str) -> Result<PathBuf> {
+    let temp_dir = web_fetch_temp_dir().await?;
     let timestamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
@@ -127,20 +128,21 @@ fn write_to_temp_file(content: &str, url: &str) -> Result<PathBuf> {
     let filename = format!("{}_{}.txt", url_hash, timestamp);
     let file_path = temp_dir.join(&filename);
 
-    std::fs::write(&file_path, content)
+    tokio::fs::write(&file_path, content)
+        .await
         .with_context(|| format!("Failed to write temp file: {}", file_path.display()))?;
 
     Ok(file_path)
 }
 
 /// Clean up old web_fetch temp files.
-pub fn cleanup_old_web_fetch_temps(max_age_secs: u64) -> Result<usize> {
-    let temp_dir = match web_fetch_temp_dir() {
+pub async fn cleanup_old_web_fetch_temps(max_age_secs: u64) -> Result<usize> {
+    let temp_dir = match web_fetch_temp_dir().await {
         Ok(d) => d,
         Err(_) => return Ok(0),
     };
 
-    if !temp_dir.exists() {
+    if !tokio::fs::metadata(&temp_dir).await.is_ok() {
         return Ok(0);
     }
 
@@ -149,20 +151,20 @@ pub fn cleanup_old_web_fetch_temps(max_age_secs: u64) -> Result<usize> {
         .unwrap_or(std::time::UNIX_EPOCH);
 
     let mut removed = 0;
-    let entries = match std::fs::read_dir(&temp_dir) {
+    let mut entries = match tokio::fs::read_dir(&temp_dir).await {
         Ok(e) => e,
         Err(_) => return Ok(0),
     };
 
-    for entry in entries.flatten() {
+    while let Some(entry) = entries.next_entry().await.unwrap_or(None) {
         let path = entry.path();
         if !path.is_file() {
             continue;
         }
-        if let Ok(metadata) = entry.metadata()
+        if let Ok(metadata) = entry.metadata().await
             && let Ok(modified) = metadata.modified()
             && modified <= cutoff
-            && std::fs::remove_file(&path).is_ok()
+            && tokio::fs::remove_file(&path).await.is_ok()
         {
             removed += 1;
         }
@@ -521,7 +523,7 @@ impl WebFetchTool {
 
         // Write content to ephemeral temp file instead of keeping it in the response.
         // The temp file is auto-cleaned by age-based cleanup.
-        let temp_path = write_to_temp_file(&content, &args.url)?;
+        let temp_path = write_to_temp_file(&content, &args.url).await?;
         let temp_path_str = temp_path.to_string_lossy().to_string();
 
         // Truncate preview for UI display only
@@ -535,7 +537,7 @@ impl WebFetchTool {
         };
 
         // Cleanup: periodically remove old temp files (every ~50 calls)
-        if let Err(e) = cleanup_old_web_fetch_temps(TEMP_MAX_AGE_SECS) {
+        if let Err(e) = cleanup_old_web_fetch_temps(TEMP_MAX_AGE_SECS).await {
             tracing::debug!(error = %e, "Periodic web_fetch temp cleanup failed");
         }
 

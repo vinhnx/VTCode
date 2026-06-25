@@ -16,6 +16,51 @@ use hashbrown::HashMap;
 use std::ffi::OsString;
 use std::path::PathBuf;
 
+/// Known-safe shell binaries that can be used as shell overrides.
+/// This list is intentionally restrictive to prevent prompt-injected LLMs
+/// from specifying arbitrary executables as the shell.
+const SAFE_SHELLS: &[&str] = &[
+    "/bin/sh",
+    "/bin/bash",
+    "/bin/zsh",
+    "/usr/bin/sh",
+    "/usr/bin/bash",
+    "/usr/bin/zsh",
+    "/bin/dash",
+    "/usr/bin/dash",
+    "sh",
+    "bash",
+    "zsh",
+    "dash",
+];
+
+/// Validate that a shell override is one of the known-safe shells.
+///
+/// Returns `Ok(shell)` if the shell is safe, or an error if it's not in the allowed list.
+fn validate_shell_override(shell: &str) -> Result<String> {
+    let trimmed = shell.trim();
+
+    // Check if it's in the safe list (exact match or basename match)
+    for safe_shell in SAFE_SHELLS {
+        if trimmed == *safe_shell {
+            return Ok(trimmed.to_string());
+        }
+        // Also match basename (e.g., "/usr/local/bin/bash" matches "bash")
+        if let Some(basename) = PathBuf::from(trimmed).file_name().and_then(|n| n.to_str()) {
+            if basename == *safe_shell {
+                return Ok(trimmed.to_string());
+            }
+        }
+    }
+
+    Err(anyhow!(
+        "shell '{}' is not in the allowed list. \
+         Allowed shells: {}",
+        trimmed,
+        SAFE_SHELLS.join(", ")
+    ))
+}
+
 /// Command execution tool for non-PTY process handling with policy enforcement
 #[derive(Clone)]
 pub struct CommandTool {
@@ -146,11 +191,16 @@ impl CommandTool {
             } else {
                 // Honor explicit shell override provided in the input. If the caller set `login` to
                 // false, use `-c` (no login). Otherwise use `-lc` to force login shell semantics.
-                let shell = input
-                    .shell
-                    .clone()
-                    .filter(|s| !s.trim().is_empty())
-                    .unwrap_or_else(resolve_fallback_shell);
+                let shell = if let Some(ref shell_override) = input.shell {
+                    if !shell_override.trim().is_empty() {
+                        // Validate the shell override against the safe list
+                        validate_shell_override(shell_override)?
+                    } else {
+                        resolve_fallback_shell()
+                    }
+                } else {
+                    resolve_fallback_shell()
+                };
                 let use_login = input.login.unwrap_or(true);
                 let full_command = format_command(command);
                 CommandInvocation {

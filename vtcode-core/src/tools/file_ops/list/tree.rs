@@ -13,10 +13,13 @@ pub(super) async fn execute_tree_view(tool: &FileOpsTool, input: &ListInput) -> 
     let search_path = tool.workspace_root.join(&input.path);
 
     if !search_path.exists() {
+        let suggestion = tool
+            .missing_path_suggestion_suffix(&input.path, PathSuggestionKind::Any)
+            .await;
         return Err(anyhow!(
             "Path '{}' does not exist{}",
             input.path,
-            tool.missing_path_suggestion_suffix(&input.path, PathSuggestionKind::Any),
+            suggestion,
         ));
     }
 
