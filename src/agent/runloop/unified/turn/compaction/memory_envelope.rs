@@ -311,7 +311,7 @@ pub(crate) fn refresh_session_memory_envelope(
     workspace_root: &Path,
     session_id: &str,
     vt_cfg: Option<&VTCodeConfig>,
-    history: &mut Vec<Message>,
+    history: &[Message],
     session_stats: &SessionStats,
     envelope_update: Option<&SessionMemoryEnvelopeUpdate>,
 ) -> Result<Option<SessionMemoryEnvelope>> {
@@ -346,6 +346,5 @@ pub(crate) fn refresh_session_memory_envelope(
     let path = latest_memory_envelope_path_for_session(workspace_root, session_id)
         .unwrap_or_else(|| default_memory_envelope_path_for_session(workspace_root, session_id));
     write_memory_envelope_to_path(&path, &envelope)?;
-    apply_memory_envelope(history, &envelope, MemoryEnvelopePlacement::Start);
     Ok(Some(envelope))
 }

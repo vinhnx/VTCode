@@ -302,11 +302,17 @@ async fn session_progress_persists_budget_and_recent_messages() -> Result<()> {
         "medium",
     );
     let archive = SessionArchive::new(metadata, None).await?;
+    let full = vec![
+        SessionMessage::new(MessageRole::User, "first"),
+        SessionMessage::new(MessageRole::Assistant, "middle"),
+        SessionMessage::new(MessageRole::User, "latest"),
+    ];
     let recent = vec![SessionMessage::new(MessageRole::Assistant, "recent")];
 
     let path = archive.persist_progress(SessionProgressArgs {
-        total_messages: 1,
+        total_messages: full.len(),
         distinct_tools: vec!["tool_a".to_owned()],
+        messages: full.clone(),
         recent_messages: recent.clone(),
         turn_number: 2,
         token_usage: Some("10 tokens".to_string()),
@@ -319,6 +325,7 @@ async fn session_progress_persists_budget_and_recent_messages() -> Result<()> {
     let snapshot: SessionSnapshot =
         serde_json::from_str(&stored).context("failed to deserialize stored snapshot")?;
 
+    assert_eq!(snapshot.messages, full);
     let progress = snapshot.progress.expect("progress should exist");
     assert_eq!(progress.turn_number, 2);
     assert_eq!(progress.recent_messages, recent);
@@ -358,6 +365,7 @@ async fn session_progress_transcript_skips_tool_noise_and_duplicates() -> Result
     let path = archive.persist_progress(SessionProgressArgs {
         total_messages: recent.len(),
         distinct_tools: vec!["unified_exec".to_owned()],
+        messages: recent.clone(),
         recent_messages: recent,
         turn_number: 2,
         token_usage: Some("10 tokens".to_string()),
@@ -489,6 +497,7 @@ async fn session_progress_normalizes_exec_tool_aliases_in_summaries() -> Result<
             "exec".to_string(),
             "container.exec".to_string(),
         ],
+        messages: recent.clone(),
         recent_messages: recent,
         turn_number: 2,
         token_usage: Some("10 tokens".to_string()),

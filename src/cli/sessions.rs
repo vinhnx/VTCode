@@ -503,7 +503,7 @@ mod tests {
     };
 
     #[test]
-    fn convert_listing_prefers_progress_messages() {
+    fn convert_listing_prefers_full_messages_over_progress_tail() {
         let progress_msg = SessionMessage::new(MessageRole::Assistant, "progress");
         let snapshot = SessionSnapshot {
             metadata: SessionArchiveMetadata::new(
@@ -515,6 +515,41 @@ mod tests {
             distinct_tools: vec!["tool_a".to_string()],
             transcript: Vec::new(),
             messages: vec![SessionMessage::new(MessageRole::User, "full")],
+            progress: Some(Box::new(SessionProgress {
+                turn_number: 2,
+                recent_messages: vec![progress_msg.clone()],
+                tool_summaries: vec!["tool_a".to_string()],
+                token_usage: None,
+                max_context_tokens: Some(128),
+                loaded_skills: Vec::new(),
+            })),
+            error_logs: Vec::new(),
+        };
+
+        let listing = SessionListing {
+            path: PathBuf::new(),
+            snapshot,
+        };
+
+        let resume = convert_listing(&listing, ArchivedSessionIntent::ResumeInPlace);
+        assert_eq!(resume.history().len(), 1);
+        assert_eq!(resume.history()[0].content.as_text(), "full");
+        assert!(!resume.is_fork());
+    }
+
+    #[test]
+    fn convert_listing_falls_back_to_progress_messages_for_legacy_archives() {
+        let progress_msg = SessionMessage::new(MessageRole::Assistant, "progress");
+        let snapshot = SessionSnapshot {
+            metadata: SessionArchiveMetadata::new(
+                "ws", "/tmp/ws", "model", "provider", "theme", "medium",
+            ),
+            started_at: Utc::now(),
+            ended_at: Utc::now(),
+            total_messages: 2,
+            distinct_tools: vec!["tool_a".to_string()],
+            transcript: Vec::new(),
+            messages: Vec::new(),
             progress: Some(Box::new(SessionProgress {
                 turn_number: 2,
                 recent_messages: vec![progress_msg.clone()],

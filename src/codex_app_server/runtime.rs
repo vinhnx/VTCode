@@ -956,6 +956,7 @@ fn persist_archive_progress(
         .persist_progress(SessionProgressArgs {
             total_messages: messages.len(),
             distinct_tools: Vec::new(),
+            messages: messages.to_vec(),
             recent_messages: messages.to_vec(),
             turn_number,
             token_usage: None,

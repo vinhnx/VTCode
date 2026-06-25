@@ -1014,7 +1014,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                         config.workspace.as_path(),
                         &harness_snapshot.session_id,
                         vt_cfg.as_ref(),
-                        &mut runtime.state.messages,
+                        &runtime.state.messages,
                         &session_stats,
                         None,
                     )
@@ -1047,6 +1047,12 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     .await;
                 tool_result_cache.write().await.check_pressure_and_evict();
                 if let Some(archive) = session_archive.as_ref() {
+                    let messages: Vec<SessionMessage> = runtime
+                        .state
+                        .messages
+                        .iter()
+                        .map(SessionMessage::from)
+                        .collect();
                     let mut recent_messages: Vec<SessionMessage> = runtime
                         .state
                         .messages
@@ -1066,6 +1072,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                         .persist_progress_async(SessionProgressArgs {
                             total_messages: runtime.state.messages.len(),
                             distinct_tools: distinct_tools.clone(),
+                            messages,
                             recent_messages,
                             turn_number: progress_turn,
                             token_usage: None,

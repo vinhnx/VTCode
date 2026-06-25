@@ -443,17 +443,17 @@ fn preserve_prompt_cache_lineage_if_compatible(
 }
 
 pub fn messages_from_session_listing(listing: &SessionListing) -> Vec<Message> {
-    if let Some(progress) = &listing.snapshot.progress
-        && !progress.recent_messages.is_empty()
-    {
-        progress.recent_messages.iter().map(Message::from).collect()
-    } else if !listing.snapshot.messages.is_empty() {
+    if !listing.snapshot.messages.is_empty() {
         listing
             .snapshot
             .messages
             .iter()
             .map(Message::from)
             .collect()
+    } else if let Some(progress) = &listing.snapshot.progress
+        && !progress.recent_messages.is_empty()
+    {
+        progress.recent_messages.iter().map(Message::from).collect()
     } else {
         Vec::new()
     }
@@ -679,7 +679,7 @@ mod tests {
 
         assert_eq!(prepared.thread_id, listing.identifier());
         assert_eq!(prepared.archive.path(), listing.path.as_path());
-        assert_eq!(prepared.bootstrap.messages[0].content.as_text(), "recent");
+        assert_eq!(prepared.bootstrap.messages[0].content.as_text(), "hello");
         assert_eq!(
             prepared.bootstrap.loaded_skills,
             vec!["skill_a".to_string()]

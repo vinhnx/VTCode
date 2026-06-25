@@ -256,7 +256,7 @@ pub(super) fn merge_subagent_completion_into_memory(
         ctx.config.workspace.as_path(),
         &session_id,
         ctx.vt_cfg,
-        ctx.working_history,
+        ctx.working_history.as_slice(),
         ctx.session_stats,
         Some(&update),
     )?;

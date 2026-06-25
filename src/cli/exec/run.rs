@@ -94,12 +94,13 @@ async fn checkpoint_exec_archive(
     archive: &vtcode_core::utils::session_archive::SessionArchive,
     session_messages: &[vtcode_core::llm::provider::Message],
 ) -> Result<()> {
-    let recent_messages = session_messages.iter().map(SessionMessage::from).collect();
+    let messages: Vec<SessionMessage> = session_messages.iter().map(SessionMessage::from).collect();
     archive
         .persist_progress_async(SessionProgressArgs {
             total_messages: session_messages.len(),
             distinct_tools: Vec::new(),
-            recent_messages,
+            messages: messages.clone(),
+            recent_messages: messages,
             turn_number: 1,
             token_usage: None,
             max_context_tokens: None,

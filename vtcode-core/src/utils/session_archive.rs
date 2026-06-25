@@ -549,6 +549,7 @@ pub struct SessionListing {
 pub struct SessionProgressArgs {
     pub total_messages: usize,
     pub distinct_tools: Vec<String>,
+    pub messages: Vec<SessionMessage>,
     pub recent_messages: Vec<SessionMessage>,
     pub turn_number: usize,
     pub token_usage: Option<String>,
@@ -1159,6 +1160,7 @@ impl SessionArchive {
         let SessionProgressArgs {
             total_messages,
             distinct_tools,
+            messages,
             recent_messages,
             turn_number,
             token_usage,
@@ -1169,7 +1171,6 @@ impl SessionArchive {
         let transcript = progress_transcript_from_recent_messages(&recent_messages);
         let distinct_tools = normalize_distinct_tools_for_summary(&distinct_tools);
         let tool_summaries = distinct_tools.clone();
-        let messages = recent_messages.clone();
 
         self.build_snapshot(
             total_messages,

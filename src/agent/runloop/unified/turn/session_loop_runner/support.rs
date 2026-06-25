@@ -274,12 +274,14 @@ pub(super) async fn checkpoint_session_archive_start(
     thread_handle: &vtcode_core::core::threads::ThreadRuntimeHandle,
 ) -> Result<()> {
     let snapshot = thread_handle.snapshot();
-    let recent_messages = snapshot.messages.iter().map(SessionMessage::from).collect();
+    let messages: Vec<SessionMessage> =
+        snapshot.messages.iter().map(SessionMessage::from).collect();
     archive
         .persist_progress_async(SessionProgressArgs {
             total_messages: snapshot.messages.len(),
             distinct_tools: Vec::new(),
-            recent_messages,
+            messages: messages.clone(),
+            recent_messages: messages,
             turn_number: 1,
             token_usage: None,
             max_context_tokens: None,

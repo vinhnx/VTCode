@@ -1875,7 +1875,7 @@ async fn checkpoint_subagent_archive_start(
     messages: &[Message],
 ) -> Result<()> {
     use crate::utils::session_archive::SessionMessage;
-    let recent_messages = messages
+    let recent_messages: Vec<SessionMessage> = messages
         .iter()
         .map(SessionMessage::from)
         .collect::<Vec<_>>();
@@ -1883,6 +1883,7 @@ async fn checkpoint_subagent_archive_start(
         .persist_progress_async(crate::utils::session_archive::SessionProgressArgs {
             total_messages: recent_messages.len(),
             distinct_tools: Vec::new(),
+            messages: recent_messages.clone(),
             recent_messages,
             turn_number: 1,
             token_usage: None,

@@ -22,7 +22,6 @@ use vtcode_core::tools::ApprovalRecorder;
 use vtcode_core::tools::{ToolRegistry, ToolResultCache};
 use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_core::utils::session_archive::SessionArchive;
-use vtcode_core::utils::session_archive::session_workspace_path;
 use vtcode_ui::tui::app::{InlineHandle, InlineHeaderContext, InlineSession};
 
 use crate::updater::{StartupUpdateCheck, StartupUpdateNotice};
@@ -116,14 +115,84 @@ pub(crate) async fn build_conversation_history_from_resume(
         return Vec::new();
     };
 
-    let mut history = session.history().to_vec();
-    if let Some(workspace_root) = session_workspace_path(session.listing()) {
-        crate::agent::runloop::unified::turn::compaction::inject_latest_memory_envelope(
-            &workspace_root,
-            &session.identifier(),
-            &mut history,
-        );
-    }
+    session.history().to_vec()
+}
 
-    history
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Utc;
+    use std::fs;
+    use std::path::PathBuf;
+    use tempfile::tempdir;
+    use vtcode_core::core::threads::ArchivedSessionIntent;
+    use vtcode_core::llm::provider::MessageRole;
+    use vtcode_core::utils::session_archive::{
+        SessionArchiveMetadata, SessionListing, SessionMessage, SessionSnapshot,
+    };
+
+    #[tokio::test]
+    async fn plain_resume_with_full_history_does_not_inject_latest_memory_envelope() {
+        let temp = tempdir().expect("tempdir");
+        let history_dir = temp.path().join(".vtcode").join("history");
+        fs::create_dir_all(&history_dir).expect("history dir");
+        fs::write(
+            history_dir.join("resume-session.memory.json"),
+            serde_json::json!({
+                "session_id": "resume-session",
+                "schema_version": 2,
+                "summary": "Persisted summary that must not be prepended",
+                "task_summary": null,
+                "spec_summary": null,
+                "evaluation_summary": null,
+                "grounded_facts": [],
+                "touched_files": [],
+                "history_artifact_path": null,
+                "generated_at": "2026-03-14T00:00:00Z"
+            })
+            .to_string(),
+        )
+        .expect("write envelope");
+
+        let listing = SessionListing {
+            path: PathBuf::from("/tmp/resume-session.json"),
+            snapshot: SessionSnapshot {
+                metadata: SessionArchiveMetadata::new(
+                    "workspace",
+                    temp.path().to_string_lossy(),
+                    "model",
+                    "provider",
+                    "theme",
+                    "medium",
+                ),
+                started_at: Utc::now(),
+                ended_at: Utc::now(),
+                total_messages: 2,
+                distinct_tools: Vec::new(),
+                transcript: Vec::new(),
+                messages: vec![
+                    SessionMessage::new(MessageRole::User, "saved request"),
+                    SessionMessage::new(MessageRole::Assistant, "saved answer"),
+                ],
+                progress: None,
+                error_logs: Vec::new(),
+            },
+        };
+        let resume = ResumeSession::from_listing(&listing, ArchivedSessionIntent::ResumeInPlace);
+
+        let history = build_conversation_history_from_resume(Some(&resume)).await;
+
+        assert_eq!(history.as_slice(), resume.history());
+        assert_eq!(history.len(), 2);
+        assert_eq!(history[0].role, MessageRole::User);
+        assert_eq!(history[0].content.as_text(), "saved request");
+        assert_eq!(history[1].role, MessageRole::Assistant);
+        assert_eq!(history[1].content.as_text(), "saved answer");
+        assert!(history.iter().all(|message| {
+            !message
+                .content
+                .as_text()
+                .contains("[Session Memory Envelope]")
+        }));
+    }
 }
