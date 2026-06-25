@@ -1114,7 +1114,7 @@ fn refresh_session_memory_envelope_merges_existing_continuity_fields() {
     )
     .expect("write envelope");
 
-    let mut history = vec![
+    let history = vec![
         Message::user("Continue the compaction work.".to_string()),
         Message::assistant("I will update the local compaction path.".to_string()),
     ];
@@ -1138,7 +1138,7 @@ fn refresh_session_memory_envelope_merges_existing_continuity_fields() {
         temp.path(),
         "session-alpha",
         Some(&VTCodeConfig::default()),
-        &mut history,
+        &history,
         &session_stats,
         Some(&update),
     )
@@ -1220,7 +1220,7 @@ fn refresh_session_memory_envelope_prefers_structured_verify_metadata() {
     )
     .expect("write task");
 
-    let mut history = vec![Message::user("Continue the compaction work.".to_string())];
+    let history = vec![Message::user("Continue the compaction work.".to_string())];
     let original_history = history.clone();
     let session_stats = SessionStats::default();
 
@@ -1228,7 +1228,7 @@ fn refresh_session_memory_envelope_prefers_structured_verify_metadata() {
         temp.path(),
         "session-alpha",
         Some(&VTCodeConfig::default()),
-        &mut history,
+        &history,
         &session_stats,
         None,
     )
@@ -1305,7 +1305,7 @@ fn refresh_session_memory_envelope_is_throttled_when_nothing_changes() {
     )
     .expect("write envelope");
 
-    let mut history = vec![Message::user("Continue the compaction work.".to_string())];
+    let history = vec![Message::user("Continue the compaction work.".to_string())];
     let original_history = history.clone();
     let session_stats = SessionStats::default();
 
@@ -1316,7 +1316,7 @@ fn refresh_session_memory_envelope_is_throttled_when_nothing_changes() {
         temp.path(),
         "session-alpha",
         Some(&VTCodeConfig::default()),
-        &mut history,
+        &history,
         &session_stats,
         None,
     )
@@ -1332,7 +1332,7 @@ fn refresh_session_memory_envelope_is_throttled_when_nothing_changes() {
         temp.path(),
         "session-alpha",
         Some(&VTCodeConfig::default()),
-        &mut history,
+        &history,
         &session_stats,
         None,
     )
@@ -1367,7 +1367,7 @@ fn refresh_session_memory_envelope_summary_is_concise() {
     )
     .expect("write task");
 
-    let mut history = vec![
+    let history = vec![
         Message::user("Check the log and reduce repeated duplicated work.".to_string()),
         Message::assistant("I will audit the agent loop.".to_string()),
         Message::tool_response(
@@ -1382,7 +1382,7 @@ fn refresh_session_memory_envelope_summary_is_concise() {
         temp.path(),
         "session-alpha",
         Some(&VTCodeConfig::default()),
-        &mut history,
+        &history,
         &session_stats,
         None,
     )

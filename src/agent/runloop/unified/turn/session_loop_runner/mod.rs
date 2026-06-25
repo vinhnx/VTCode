@@ -1014,7 +1014,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                         config.workspace.as_path(),
                         &harness_snapshot.session_id,
                         vt_cfg.as_ref(),
-                        &mut runtime.state.messages,
+                        &runtime.state.messages,
                         &session_stats,
                         None,
                     )

@@ -311,7 +311,7 @@ pub(crate) fn refresh_session_memory_envelope(
     workspace_root: &Path,
     session_id: &str,
     vt_cfg: Option<&VTCodeConfig>,
-    history: &mut Vec<Message>,
+    history: &[Message],
     session_stats: &SessionStats,
     envelope_update: Option<&SessionMemoryEnvelopeUpdate>,
 ) -> Result<Option<SessionMemoryEnvelope>> {
