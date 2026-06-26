@@ -2,6 +2,26 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.133.15 - 2026-06-26
+
+### Highlights
+
+*No highlighted changes*
+
+### Other Changes
+
+#### Chores
+
+- enhance build scripts for parallel processing and artifact management (452221875) (@vinhnx)
+
+#### Other
+
+- Fix release script (947307b26) (@vinhnx)
+
+### Contributors
+
+@vinhnx
+
 ## 0.133.13 - 2026-06-26
 
 ### Highlights
