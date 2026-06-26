@@ -8,7 +8,7 @@ mod tracing;
 
 pub(crate) use bootstrap::{
     build_augmented_cli_command, debug_runtime_flag_enabled, resolve_runtime_color_policy,
-    resolve_startup_context,
+    resolve_startup_context, try_enhance_clap_error,
 };
 pub(crate) use config_helpers::load_workspace_config;
 pub(crate) use debug_routing::configure_debug_session_routing;

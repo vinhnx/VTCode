@@ -39,7 +39,8 @@ fn parse_workspace_directory(raw: &str) -> Result<PathBuf, String> {
     let candidate = PathBuf::from(raw);
     if !candidate.exists() {
         return Err(format!(
-            "Workspace path does not exist: {}",
+            "'{}' is not a valid workspace path or subcommand.\n\
+             Run `vtcode --help` to see available commands and options.",
             candidate.display()
         ));
     }
@@ -502,6 +503,18 @@ pub enum Commands {
 
     /// Interactive AI coding assistant
     Chat,
+
+    /// Resume the most recent conversation automatically
+    ///
+    /// Equivalent to `vtcode --continue`. Loads the latest archived session in
+    /// the current workspace (or across all workspaces with `--all`) and resumes
+    /// it without showing the interactive picker.
+    ///
+    /// Examples:
+    ///   vtcode continue
+    ///   vtcode continue --all
+    ///   vtcode continue --session-id my-fork   # fork latest into a new session
+    Continue,
 
     /// Single prompt mode - prints model reply without tools
     ///

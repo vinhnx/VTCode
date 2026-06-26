@@ -29,6 +29,7 @@ use main_helpers::{
     configure_runtime_relaunch_context, debug_runtime_flag_enabled,
     initialize_default_error_tracing, initialize_tracing, initialize_tracing_from_config,
     perform_queued_runtime_relaunch, resolve_runtime_color_policy, resolve_startup_context,
+    try_enhance_clap_error,
 };
 
 struct PreparedRun {
@@ -145,7 +146,17 @@ fn bootstrap_main() -> Result<BootstrapOutcome> {
         return Ok(BootstrapOutcome::ExitEarly);
     }
 
-    let matches = build_augmented_cli_command().get_matches();
+    let matches = match build_augmented_cli_command().try_get_matches() {
+        Ok(m) => m,
+        Err(err) => {
+            let err_text = err.to_string();
+            if let Some(enhanced) = try_enhance_clap_error(&err_text) {
+                eprintln!("{enhanced}");
+                std::process::exit(1);
+            }
+            err.exit();
+        }
+    };
     let args = Cli::from_arg_matches(&matches)?;
     panic_hook::set_debug_mode(args.debug);
     let color_eyre_enabled = debug_runtime_flag_enabled(args.debug, "VTCODE_COLOR_EYRE");
