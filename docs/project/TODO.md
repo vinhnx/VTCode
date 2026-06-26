@@ -1,3 +1,6 @@
+optimize release.sh based on machine capabilities
+
+--
 Fix file icon unicode
 
 --
