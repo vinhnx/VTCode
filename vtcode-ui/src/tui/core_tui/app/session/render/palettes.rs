@@ -309,8 +309,8 @@ pub fn render_file_palette(session: &mut Session, frame: &mut Frame<'_>, area: R
         .groups(tree_groups)
         .mode(Mode::None)
         .styles(tree_styles)
-        .chevron_collapsed("\u{1F5C0}")
-        .chevron_expanded("\u{231E}")
+        .chevron_collapsed("▸")
+        .chevron_expanded("▾")
         .highlight_full_row(true);
 
     StatefulWidget::render(&tree, tree_area, frame.buffer_mut(), state);

@@ -6,6 +6,8 @@ pub(super) use self::local_summary::{
     build_zero_cost_summarized_fork_history, configured_retained_user_messages,
     local_compaction_config,
 };
+#[cfg(test)]
+pub(crate) use self::persistence::inject_latest_memory_envelope;
 use self::persistence::{
     apply_memory_envelope, default_memory_envelope_path_for_session, extract_compaction_summary,
     memory_envelope_path_from_history_path, read_task_tracker_snapshot,
@@ -14,8 +16,6 @@ use self::persistence::{
 pub(crate) use self::persistence::{
     has_latest_memory_envelope, latest_memory_envelope_path_for_session,
 };
-#[cfg(test)]
-pub(crate) use self::persistence::inject_latest_memory_envelope;
 pub(super) use self::persistence::{
     insert_memory_envelope_message, load_latest_memory_envelope, strip_existing_memory_envelope,
 };

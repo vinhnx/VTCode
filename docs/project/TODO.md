@@ -1,9 +1,7 @@
 optimize release.sh based on machine capabilities
 
 --
-Fix file icon unicode
 
---
 follow up fix
 
 https://github.com/vinhnx/VTCode/pull/679
