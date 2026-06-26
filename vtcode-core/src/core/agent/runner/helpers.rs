@@ -42,7 +42,7 @@ pub(super) fn detect_textual_exec_tool_call(text: &str) -> Option<Value> {
 
 /// Compose the system prompt for a workspace using the configured prompt
 /// context, then optionally append an instruction appendix derived from
-/// `AGENTS.md` and `.vtcode/rules/` files.
+/// `AGENTS.md`, `CLAUDE.md`, and `.vtcode/rules/` files.
 ///
 /// The persistent-memory section of the appendix is disabled when
 /// `config.memories_enabled()` returns `false` so the resulting prompt stays

@@ -12,6 +12,7 @@ use vtcode_commons::walk::build_walker_single_threaded;
 
 const AGENTS_FILENAME: &str = "AGENTS.md";
 const AGENTS_OVERRIDE_FILENAME: &str = "AGENTS.override.md";
+const CLAUDE_FILENAME: &str = "CLAUDE.md";
 const GLOBAL_CONFIG_DIRECTORY: &str = ".config/vtcode";
 const RULES_DIRECTORY: &str = ".vtcode/rules";
 const IMPORT_PROBE_NAME: &str = "__vtcode_instruction_probe__";
@@ -411,9 +412,11 @@ pub fn instruction_scope_label(scope: &InstructionScope) -> &'static str {
 
 pub fn instruction_source_label(source: &InstructionSource) -> String {
     match source.kind {
-        InstructionSourceKind::Agents => {
-            format!("{} AGENTS", instruction_scope_label(&source.scope))
-        }
+        InstructionSourceKind::Agents => format!(
+            "{} {}",
+            instruction_scope_label(&source.scope),
+            instruction_file_label(&source.path),
+        ),
         InstructionSourceKind::Extra => {
             format!(
                 "{} extra instructions",
@@ -426,6 +429,18 @@ pub fn instruction_source_label(source: &InstructionSource) -> String {
         InstructionSourceKind::Rule => {
             format!("{} rule", instruction_scope_label(&source.scope))
         }
+    }
+}
+
+fn instruction_file_label(path: &Path) -> &'static str {
+    if path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name.eq_ignore_ascii_case(CLAUDE_FILENAME))
+    {
+        "CLAUDE"
+    } else {
+        "AGENTS"
     }
 }
 
@@ -526,21 +541,25 @@ pub async fn discover_instruction_sources(
         cursor = root.clone();
     }
 
-    let mut workspace_paths = Vec::with_capacity(4);
+    let mut workspace_levels = Vec::with_capacity(4);
     loop {
-        let chosen =
-            select_workspace_instruction_candidate(&cursor, options.fallback_filenames, &excludes)
+        let chosen_paths =
+            select_workspace_instruction_candidates(&cursor, options.fallback_filenames, &excludes)
                 .await?;
 
-        if let Some(path) = chosen
-            && seen_paths.insert(path.clone())
-        {
-            workspace_paths.push(InstructionSource {
-                path,
-                scope: InstructionScope::Workspace,
-                kind: InstructionSourceKind::Agents,
-                matched: false,
-            });
+        let mut level_sources = Vec::with_capacity(chosen_paths.len());
+        for path in chosen_paths {
+            if seen_paths.insert(path.clone()) {
+                level_sources.push(InstructionSource {
+                    path,
+                    scope: InstructionScope::Workspace,
+                    kind: InstructionSourceKind::Agents,
+                    matched: false,
+                });
+            }
+        }
+        if !level_sources.is_empty() {
+            workspace_levels.push(level_sources);
         }
 
         if cursor == root {
@@ -553,8 +572,8 @@ pub async fn discover_instruction_sources(
             .ok_or_else(|| anyhow!("Reached filesystem root before encountering project root"))?;
     }
 
-    workspace_paths.reverse();
-    sources.extend(workspace_paths);
+    workspace_levels.reverse();
+    sources.extend(workspace_levels.into_iter().flatten());
 
     let (workspace_unconditional_rules, workspace_matched_rules) = discover_rule_sources(
         vec![root.join(RULES_DIRECTORY)],
@@ -703,6 +722,28 @@ async fn select_workspace_instruction_candidate(
         }
     }
     Ok(None)
+}
+
+async fn select_workspace_instruction_candidates(
+    dir: &Path,
+    fallback_filenames: &[String],
+    excludes: &ExclusionMatcher,
+) -> Result<Vec<PathBuf>> {
+    let mut selected = Vec::with_capacity(2);
+    if let Some(path) =
+        select_workspace_instruction_candidate(dir, fallback_filenames, excludes).await?
+    {
+        selected.push(path);
+    }
+
+    if let Some(path) =
+        normalize_instruction_candidate(&dir.join(CLAUDE_FILENAME), excludes).await?
+        && !selected.iter().any(|existing_path| existing_path == &path)
+    {
+        selected.push(path);
+    }
+
+    Ok(selected)
 }
 
 async fn normalize_instruction_candidate(
@@ -1380,6 +1421,13 @@ mod tests {
         Ok(path)
     }
 
+    fn write_claude_doc(dir: &Path, content: &str) -> Result<PathBuf> {
+        std::fs::create_dir_all(dir)?;
+        let path = dir.join("CLAUDE.md");
+        std::fs::write(&path, content)?;
+        Ok(path)
+    }
+
     fn write_rule(dir: &Path, name: &str, content: &str) -> Result<PathBuf> {
         std::fs::create_dir_all(dir)?;
         let path = dir.join(name);
@@ -1463,6 +1511,35 @@ mod tests {
                 "workspace rule",
                 "workspace matched rule",
             ]
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn discovers_claude_files_alongside_workspace_agents() -> Result<()> {
+        let workspace = tempdir()?;
+        let project_root = std::fs::canonicalize(workspace.path())?;
+        let nested = project_root.join("src");
+        std::fs::create_dir_all(&nested)?;
+
+        write_doc(&project_root, "root agents")?;
+        write_claude_doc(&project_root, "root claude")?;
+        write_doc(&nested, "nested agents")?;
+        write_claude_doc(&nested, "nested claude")?;
+
+        let sources =
+            discover_instruction_sources(&default_options(&nested, &project_root, None, &[]))
+                .await?;
+        let workspace_paths = sources
+            .iter()
+            .filter(|source| matches!(source.scope, InstructionScope::Workspace))
+            .map(|source| format_instruction_path(&source.path, &project_root, None))
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            workspace_paths,
+            vec!["AGENTS.md", "CLAUDE.md", "src/AGENTS.md", "src/CLAUDE.md"]
         );
 
         Ok(())

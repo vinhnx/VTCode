@@ -85,7 +85,7 @@ const SHARED_CONTRACT_LINES: &[&str] = &[
 
 /// Default/Lightweight/Specialized mode: expanded contract lines beyond shared rules.
 const DEFAULT_SPECIFIC_LINES: &[&str] = &[
-    "Start with `AGENTS.md`; inspect code first, match local patterns, use `@file`.",
+    "Start with existing `AGENTS.md` and `CLAUDE.md`; inspect code first, match local patterns, use `@file`.",
     "Take safe, reversible steps; ask only for material behavior, API, UX, or credential changes.",
     "Keep control on the main thread. Delegate bounded, independent work only.",
     "Verify changes yourself; never claim a check passed unless you ran it.",
@@ -96,7 +96,7 @@ const DEFAULT_SPECIFIC_LINES: &[&str] = &[
 
 /// Minimal mode: additional contract lines beyond shared rules.
 const MINIMAL_SPECIFIC_LINES: &[&str] = &[
-    "Use `AGENTS.md`; inspect code first.",
+    "Use existing `AGENTS.md` and `CLAUDE.md`; inspect code first.",
     "Take safe, reversible steps; verify changes yourself.",
     "Keep delegation bounded and explicit.",
 ];
@@ -112,7 +112,7 @@ const MINIMAL_OPERATING_PROFILE_DELTA: &str = r#"## Operating Profile
 
 - Stay precise; use `task_tracker` once work stops being trivial.
 - Treat completion language as a checkpoint, not proof.
-- Use `AGENTS.md` as the map; open repo docs only when structural rules matter."#;
+- Use `AGENTS.md` and `CLAUDE.md` as the map; open repo docs only when structural rules matter."#;
 
 const LIGHTWEIGHT_OPERATING_PROFILE_DELTA: &str = r#"## Operating Profile
 
@@ -126,7 +126,7 @@ const SPECIALIZED_OPERATING_PROFILE_DELTA: &str = r#"## Operating Profile
 - Use `task_tracker` for multi-step work and Planning workflow when scope or verification is still open.
 - Treat completion language as a checkpoint, not proof; only stop when tracker state, verification, and resumable state agree.
 - End plan work with one `<proposed_plan>` block; if a path stalls, re-plan into smaller verified slices.
-- Use `AGENTS.md` and `docs/harness/ARCHITECTURAL_INVARIANTS.md` when repo-wide invariants matter."#;
+- Use `AGENTS.md`, `CLAUDE.md`, and `docs/harness/ARCHITECTURAL_INVARIANTS.md` when repo-wide invariants matter."#;
 
 static DEFAULT_SYSTEM_PROMPT: OnceLock<String> = OnceLock::new();
 static MINIMAL_SYSTEM_PROMPT: OnceLock<String> = OnceLock::new();

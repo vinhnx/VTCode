@@ -135,7 +135,7 @@ impl IncrementalSystemPrompt {
     ///
     /// Assembly order:
     /// 1. Base system prompt (from `vtcode_core::prompts::system`)
-    /// 2. Instruction appendix (from AGENTS.md / project docs)
+    /// 2. Instruction appendix (from AGENTS.md, CLAUDE.md, and project docs)
     /// 3. Runtime prompt contract sections
     /// 4. Auto permission review notice when applicable
     async fn build_prompt_content(

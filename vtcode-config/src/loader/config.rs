@@ -719,7 +719,7 @@ include_project_overview = true
 # Include language summary information in welcome
 include_language_summary = false
 
-# Include key guideline highlights from AGENTS.md
+# Include key guideline highlights from AGENTS.md/CLAUDE.md
 include_guideline_highlights = true
 
 # Include usage tips in the welcome message
@@ -734,7 +734,7 @@ guideline_highlight_limit = 3
 # List of usage tips shown during onboarding
 usage_tips = [
     "Describe your current coding goal or ask for a quick status overview.",
-    "Reference AGENTS.md guidelines when proposing changes.",
+    "Reference AGENTS.md/CLAUDE.md guidelines when proposing changes.",
     "Prefer asking for targeted file reads or diffs before editing.",
 ]
 

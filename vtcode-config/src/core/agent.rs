@@ -127,7 +127,7 @@ pub struct AgentConfig {
     #[serde(default)]
     pub onboarding: AgentOnboardingConfig,
 
-    /// Maximum bytes of AGENTS.md content to load from project hierarchy
+    /// Maximum bytes of AGENTS.md/CLAUDE.md content to load from project hierarchy
     #[serde(default = "default_project_doc_max_bytes")]
     pub project_doc_max_bytes: usize,
 
@@ -135,7 +135,7 @@ pub struct AgentConfig {
     #[serde(default)]
     pub project_doc_fallback_filenames: Vec<String>,
 
-    /// Maximum bytes of instruction content to load from AGENTS.md hierarchy
+    /// Maximum bytes of instruction content to load from AGENTS.md/CLAUDE.md hierarchy
     #[serde(
         default = "default_instruction_max_bytes",
         alias = "rule_doc_max_bytes"
@@ -1076,7 +1076,7 @@ pub struct AgentOnboardingConfig {
     #[serde(default = "default_show_language_summary")]
     pub include_language_summary: bool,
 
-    /// Whether to include AGENTS.md highlights in onboarding message
+    /// Whether to include AGENTS.md/CLAUDE.md highlights in onboarding message
     #[serde(default = "default_show_guideline_highlights")]
     pub include_guideline_highlights: bool,
 
@@ -1168,7 +1168,7 @@ const fn default_guideline_highlight_limit() -> usize {
 
 const DEFAULT_USAGE_TIPS: &[&str] = &[
     "Describe your current coding goal or ask for a quick status overview.",
-    "Reference AGENTS.md guidelines when proposing changes.",
+    "Reference AGENTS.md/CLAUDE.md guidelines when proposing changes.",
     "Prefer asking for targeted file reads or diffs before editing.",
 ];
 
