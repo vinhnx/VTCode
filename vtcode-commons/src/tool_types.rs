@@ -9,7 +9,7 @@
 //! - [`CompactStr`] - stack-allocated string for short tool names
 //! - [`EnhancedToolResult`] - tool result with quality metadata
 //! - [`ResultMetadata`] - quality/confidence scoring for tool results
-//! - [`ToolResultConstants`] - tool name constants used across subsystems
+//! - [`tool_names`] - tool name constants used across subsystems
 
 // ---------------------------------------------------------------------------
 // CompactStr type alias

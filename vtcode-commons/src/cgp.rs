@@ -2,7 +2,7 @@
 //!
 //! CGP is a type-level composition pattern where a "context" struct maps
 //! component names to concrete provider types. The foundational trait is
-//! [`HasComponent`], which performs this mapping. The [`delegate_components!`]
+//! [`HasComponent`], which performs this mapping. The [`crate::delegate_components`]
 //! macro generates bulk implementations.
 //!
 //! # Example
