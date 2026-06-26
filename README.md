@@ -65,13 +65,7 @@ vtcode update                  # self-update
 
 ## Providers
 
-VT Code ships with **MiMo V2.5 (Xiaomi)** as the default model (1M-token context, `mimo-v2.5-pro`) and supports 21+ LLM providers out of the box, plus any OpenAI-compatible API via `[[custom_providers]]`.
-
-<p align="center"><a href="https://platform.xiaomimimo.com?ref=K5BCAP"><img src="./resources/screenshots/xiaomi_mi_promo.png" alt="Xiaomi MiMo" width="380" style="border-radius: 8px" /></a></p>
-
-### Z.ai GLM Coding Plan Special
-
-> 👉🏼 **Z.ai Coding Plan** — Use GLM-5.2, full support for Claude Code, Codex, and 20+ top coding tools, starting at $18/month. [Join now with invite code **KPHRHRAVLL**](https://z.ai/subscribe?ic=KPHRHRAVLL). _(Limited-time pricing)_
+VT Code supports 21+ LLM providers out of the box, plus any OpenAI-compatible API via `[[custom_providers]]`.
 
 | Category            | Providers                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
