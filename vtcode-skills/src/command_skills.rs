@@ -329,6 +329,12 @@ pub const COMMAND_SKILL_SPECS: &[CommandSkillSpec] = &[
         "session"
     ),
     built_in_command_spec!(
+        "continue",
+        "Resume the most recent archived session automatically (usage: /continue [--all])",
+        "/continue [--all]",
+        "session"
+    ),
+    built_in_command_spec!(
         "fork",
         "Fork an archived session into a new thread (usage: /fork [limit] [--all])",
         "/fork [limit] [--all]",

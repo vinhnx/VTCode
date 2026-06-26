@@ -126,6 +126,9 @@ pub(crate) enum SlashCommandOutcome {
         limit: usize,
         show_all: bool,
     },
+    ContinueLatest {
+        show_all: bool,
+    },
     StartHistoryPicker,
     StartFileBrowser {
         initial_filter: Option<String>,

@@ -690,6 +690,44 @@ pub(super) fn refresh_live_ide_context_update(
     }
 }
 
+/// Load the most recent archived session and return an `InteractionOutcome::Resume`.
+///
+/// Queries `list_recent_sessions_in_scope(1, ...)`, loads the session, and
+/// returns the resume outcome. Returns `Ok(None)` if no sessions are found or
+/// the session cannot be loaded (error is rendered to the user).
+pub(crate) async fn try_resume_latest_session(
+    renderer: &mut vtcode_core::utils::ansi::AnsiRenderer,
+    workspace: &Path,
+    show_all: bool,
+) -> Result<Option<InteractionOutcome>> {
+    use vtcode_core::core::threads::{SessionQueryScope, list_recent_sessions_in_scope};
+
+    let scope = if show_all {
+        SessionQueryScope::All
+    } else {
+        SessionQueryScope::CurrentWorkspace(workspace.to_path_buf())
+    };
+
+    let Some(listing) = list_recent_sessions_in_scope(1, &scope)
+        .await
+        .context("failed to load recent sessions")?
+        .pop()
+    else {
+        renderer.line(MessageStyle::Info, "No archived sessions found.")?;
+        return Ok(None);
+    };
+
+    let identifier = listing.identifier().to_string();
+    try_resume_archived_session(
+        renderer,
+        &identifier,
+        ArchivedSessionIntent::ResumeInPlace,
+        "Resuming session",
+        "Resuming session",
+    )
+    .await
+}
+
 async fn try_resume_archived_session(
     renderer: &mut vtcode_core::utils::ansi::AnsiRenderer,
     session_id: &str,

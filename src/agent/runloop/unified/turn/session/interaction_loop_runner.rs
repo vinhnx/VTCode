@@ -27,7 +27,6 @@ use crate::agent::runloop::unified::turn::session::{
 use vtcode_config::loader::SimpleConfigWatcher;
 
 use super::interaction_loop::{InteractionLoopContext, InteractionOutcome, InteractionState};
-pub(crate) use support::handle_select_primary_agent;
 use support::{
     InlineLoopActionResolution, apply_live_theme_and_appearance, build_durable_scheduler_daemon,
     build_user_message_content, extract_recent_follow_up_hint, fallback_args_preview,
@@ -35,6 +34,7 @@ use support::{
     resolve_inline_loop_action, scheduler_enabled, stalled_follow_up_recovery_prompt,
     sync_mcp_approval_policy_for_context,
 };
+pub(crate) use support::{handle_select_primary_agent, try_resume_latest_session};
 
 const REPEATED_FOLLOW_UP_DIRECTIVE: &str = "User has asked to continue repeatedly. Do not keep exploring silently. In your next assistant response, provide a concrete status update: completed work, current blocker, and the exact next action. If a recent tool result or tool error already provides `fallback_tool`, `fallback_tool_args`, `hint`, or `next_action`, use that guidance directly instead of retrying the same failing call or asking for more follow-up.";
 const REPEATED_FOLLOW_UP_STALLED_DIRECTIVE: &str = "Previous turn stalled or aborted and the user asked to continue repeatedly. Recover autonomously without asking for more user prompts: identify the likely root cause from recent errors, execute exactly one adjusted strategy, and then provide either a completion summary or a final blocker review with specific next action. If the last tool result or tool error includes `fallback_tool`, `fallback_tool_args`, `hint`, or `next_action`, use that guidance first. Do not repeat a failing tool call when the tool already provided the next step.";

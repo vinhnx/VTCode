@@ -19,6 +19,7 @@ pub(super) async fn route_outcome(
         outcome @ (SlashCommandOutcome::ThemeChanged(_)
         | SlashCommandOutcome::StartThemePalette { .. }
         | SlashCommandOutcome::StartSessionPalette { .. }
+        | SlashCommandOutcome::ContinueLatest { .. }
         | SlashCommandOutcome::StartHistoryPicker
         | SlashCommandOutcome::StartFileBrowser { .. }
         | SlashCommandOutcome::StartStatuslineSetup { .. }
@@ -90,6 +91,9 @@ async fn route_ui_and_settings_outcome(
             limit,
             show_all,
         } => handlers::handle_start_session_palette(ctx, mode, limit, show_all).await,
+        SlashCommandOutcome::ContinueLatest { show_all } => {
+            handlers::handle_continue_latest(ctx, show_all)
+        }
         SlashCommandOutcome::StartHistoryPicker => handlers::handle_start_history_picker(ctx).await,
         SlashCommandOutcome::StartFileBrowser { initial_filter } => {
             handlers::handle_start_file_browser(ctx, initial_filter).await

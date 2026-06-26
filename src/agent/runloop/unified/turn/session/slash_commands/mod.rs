@@ -38,6 +38,7 @@ pub(crate) enum SlashCommandControl {
     ReplaceInput(String),
     BreakWithReason(SessionEndReason),
     SelectAgent(String),
+    ResumeLatest { show_all: bool },
 }
 
 pub(crate) struct SlashCommandContext<'a> {

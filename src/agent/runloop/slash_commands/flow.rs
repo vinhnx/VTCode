@@ -149,6 +149,23 @@ pub(super) fn handle_fork_command<'a>(
     handle_session_palette_command(args, renderer, workspace, SessionPaletteMode::Fork)
 }
 
+pub(super) fn handle_continue_command(
+    args: &str,
+    renderer: &mut AnsiRenderer,
+) -> Result<SlashCommandOutcome> {
+    let mut show_all = false;
+    for token in args.split_whitespace() {
+        match token {
+            "--all" | "all" => show_all = true,
+            _ => {
+                renderer.line(MessageStyle::Error, "Usage: /continue [--all]")?;
+                return Ok(SlashCommandOutcome::Handled);
+            }
+        }
+    }
+    Ok(SlashCommandOutcome::ContinueLatest { show_all })
+}
+
 pub(super) fn handle_rewind_command(
     args: &str,
     renderer: &mut AnsiRenderer,

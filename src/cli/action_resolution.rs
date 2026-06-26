@@ -40,6 +40,18 @@ pub(crate) fn resolve_action(
         return Ok(ResolvedCliAction::Resume { mode });
     }
 
+    // The `continue` subcommand mirrors the `--continue` flag: resume the most
+    // recent conversation automatically. A custom session id turns it into a
+    // fork of the latest session.
+    if matches!(args.command, Some(Commands::Continue)) {
+        let mode = if startup.custom_session_id.is_some() {
+            crate::startup::SessionResumeMode::Fork("__latest__".to_string())
+        } else {
+            crate::startup::SessionResumeMode::Latest
+        };
+        return Ok(ResolvedCliAction::Resume { mode });
+    }
+
     Ok(match args.command.clone() {
         Some(command) => ResolvedCliAction::Command(command),
         None => ResolvedCliAction::Chat,

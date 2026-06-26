@@ -3,7 +3,10 @@ use anyhow::Result;
 use vtcode_core::cli::args::{Cli, Commands};
 use vtcode_core::mcp::cli::handle_mcp_command;
 
-use super::run::{handle_analyze_command, handle_ask_single_command, handle_chat_command};
+use super::run::{
+    handle_analyze_command, handle_ask_single_command, handle_chat_command,
+    handle_resume_session_command,
+};
 use super::skills::dispatch_skills_command;
 use crate::cli::acp::handle_acp_command;
 use crate::cli::adapters::{ask_options, skills_options};
@@ -49,6 +52,25 @@ pub(crate) async fn dispatch_command(
         }
         Commands::Pods { command } => {
             vtcode_core::cli::pods_commands::handle_pods_command(command).await?;
+        }
+        Commands::Continue => {
+            // `continue` is normally intercepted in `resolve_action` and turned
+            // into a resume-latest action. Handle it defensively here too so the
+            // subcommand keeps working if the resolution path changes.
+            let mode = if startup.custom_session_id.is_some() {
+                crate::startup::SessionResumeMode::Fork("__latest__".to_string())
+            } else {
+                crate::startup::SessionResumeMode::Latest
+            };
+            handle_resume_session_command(
+                core_cfg,
+                mode,
+                startup.resume_show_all,
+                startup.custom_session_id.clone(),
+                startup.summarize_fork,
+                skip_confirmations,
+            )
+            .await?;
         }
         Commands::Chat | Commands::ChatVerbose => {
             handle_chat_command(

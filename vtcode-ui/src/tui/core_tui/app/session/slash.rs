@@ -508,6 +508,7 @@ pub(crate) fn should_submit_immediately_from_palette(session: &Session) -> bool 
                 | "/auth"
                 | "/refresh-oauth"
                 | "/resume"
+                | "/continue"
                 | "/fork"
                 | "/history"
                 | "/exit"

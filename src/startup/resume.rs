@@ -57,6 +57,7 @@ pub(super) fn validate_resume_all_usage(
 ) -> Result<()> {
     if args.all
         && session_resume.is_none()
+        && !matches!(args.command, Some(Commands::Continue))
         && !matches!(
             args.command,
             Some(Commands::Exec {
@@ -69,8 +70,13 @@ pub(super) fn validate_resume_all_usage(
     }
 
     if args.summarize {
+        // The `continue` subcommand becomes a fork of the latest session when a
+        // custom session id is supplied, so `--summarize` is valid there too.
+        let is_continue_fork =
+            matches!(args.command, Some(Commands::Continue)) && args.session_id.is_some();
         let is_fork_operation = matches!(session_resume, Some(SessionResumeMode::Fork(_)))
-            || (args.session_id.is_some() && session_resume.is_some());
+            || (args.session_id.is_some() && session_resume.is_some())
+            || is_continue_fork;
         if !is_fork_operation {
             bail!("--summarize can only be used with forked session flows");
         }

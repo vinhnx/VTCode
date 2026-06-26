@@ -359,6 +359,18 @@ async fn handle_show_memory_intent(
                 .await?;
             Ok(Some(InteractionOutcome::DirectToolHandled))
         }
+        SlashCommandControl::ResumeLatest { show_all } => {
+            match super::interaction_loop_runner::try_resume_latest_session(
+                ctx.renderer,
+                &ctx.config.workspace,
+                show_all,
+            )
+            .await?
+            {
+                outcome @ Some(_) => Ok(outcome),
+                None => Ok(Some(InteractionOutcome::DirectToolHandled)),
+            }
+        }
     }
 }
 

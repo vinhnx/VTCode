@@ -7,8 +7,8 @@ use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::flow::{
-    handle_auth_command, handle_fork_command, handle_login_command, handle_logout_command,
-    handle_plan_command, handle_resume_command, handle_rewind_command,
+    handle_auth_command, handle_continue_command, handle_fork_command, handle_login_command,
+    handle_logout_command, handle_plan_command, handle_resume_command, handle_rewind_command,
 };
 use super::management::{handle_local_command, handle_mcp_command};
 use super::models::{
@@ -261,6 +261,7 @@ pub(in crate::agent::runloop::slash_commands) async fn execute_built_in_command_
             }
         },
         "resume" => handle_resume_command(args, renderer, workspace).await,
+        "continue" => handle_continue_command(args, renderer),
         "fork" => handle_fork_command(args, renderer, workspace).await,
         "history" => {
             if !args.is_empty() {
