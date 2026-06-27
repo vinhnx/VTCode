@@ -78,8 +78,6 @@ VT Code supports 21+ LLM providers out of the box, plus any OpenAI-compatible AP
 
 Read: [Provider Guides](./docs/providers/PROVIDER_GUIDES.md).
 
-<sup>Atlas Cloud referral: [atlascloud.ai?ref=C59AAV](https://www.atlascloud.ai?ref=C59AAV)</sup>
-
 ## Development
 
 ```shell
