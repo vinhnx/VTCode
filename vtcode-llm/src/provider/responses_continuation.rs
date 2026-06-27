@@ -35,20 +35,21 @@ pub fn supports_responses_chaining(
 
 pub fn records_responses_continuation_state(
     provider_name: &str,
-    provider_supports_responses_compaction: bool,
+    _provider_supports_responses_compaction: bool,
 ) -> bool {
-    !provider_name.eq_ignore_ascii_case("openai")
-        && supports_responses_chaining(provider_name, provider_supports_responses_compaction)
+    provider_name.eq_ignore_ascii_case("openresponses")
+        || provider_name.eq_ignore_ascii_case("gemini")
 }
 
+/// Compatibility shim for older callers.
+///
+/// Responses continuation now preserves full request history. Use
+/// [`prepare_responses_continuation_request`] to derive request state.
 pub fn uses_incremental_responses_history(
-    provider_name: &str,
-    provider_supports_responses_compaction: bool,
+    _provider_name: &str,
+    _provider_supports_responses_compaction: bool,
 ) -> bool {
-    provider_name.eq_ignore_ascii_case("openai")
-        || (provider_supports_responses_compaction
-            && !provider_name.eq_ignore_ascii_case("openresponses")
-            && !provider_name.eq_ignore_ascii_case("gemini"))
+    false
 }
 
 pub fn prepare_responses_continuation_request<'a, M>(
@@ -72,7 +73,9 @@ where
         };
     }
 
-    if !uses_incremental_responses_history(provider_name, provider_supports_responses_compaction) {
+    if provider_name.eq_ignore_ascii_case("openresponses")
+        || provider_name.eq_ignore_ascii_case("gemini")
+    {
         return PreparedResponsesRequest {
             messages: Cow::Borrowed(messages),
             previous_response_id: continuation.map(|chain| chain.response_id.clone()),
@@ -80,7 +83,7 @@ where
         };
     }
 
-    prepare_incremental_responses_request(messages, continuation)
+    prepare_openai_responses_request(messages, continuation)
 }
 
 pub fn prepare_openai_responses_request<'a, M>(
@@ -93,37 +96,6 @@ where
     PreparedResponsesRequest {
         messages: Cow::Borrowed(messages),
         previous_response_id: None,
-        clear_stale_chain: false,
-    }
-}
-
-fn prepare_incremental_responses_request<'a, M>(
-    messages: &'a [M],
-    continuation: Option<&ResponsesContinuationState<M>>,
-) -> PreparedResponsesRequest<'a, M>
-where
-    M: Clone + PartialEq,
-{
-    let Some(continuation) = continuation else {
-        return PreparedResponsesRequest {
-            messages: Cow::Borrowed(messages),
-            previous_response_id: None,
-            clear_stale_chain: false,
-        };
-    };
-
-    let previous_len = continuation.messages.len();
-    if previous_len >= messages.len() || !messages.starts_with(&continuation.messages) {
-        return PreparedResponsesRequest {
-            messages: Cow::Borrowed(messages),
-            previous_response_id: None,
-            clear_stale_chain: true,
-        };
-    }
-
-    PreparedResponsesRequest {
-        messages: Cow::Owned(messages[previous_len..].to_vec()),
-        previous_response_id: Some(continuation.response_id.clone()),
         clear_stale_chain: false,
     }
 }
@@ -155,13 +127,10 @@ mod tests {
     }
 
     #[test]
-    fn non_openai_chaining_providers_record_continuation_state() {
-        assert!(records_responses_continuation_state("mycorp", true));
+    fn provider_specific_responses_chaining_records_continuation_state() {
+        assert!(!records_responses_continuation_state("mycorp", true));
         assert!(records_responses_continuation_state("gemini", false));
-        assert!(records_responses_continuation_state(
-            "openresponses",
-            false
-        ));
+        assert!(records_responses_continuation_state("openresponses", false));
         assert!(!records_responses_continuation_state("anthropic", false));
     }
 
@@ -225,7 +194,7 @@ mod tests {
     }
 
     #[test]
-    fn prepare_responses_continuation_request_uses_incremental_suffix_for_compatible_provider() {
+    fn prepare_responses_continuation_request_keeps_compatible_provider_stateless() {
         let messages = vec![
             Message::user("hello".to_string()),
             Message::user("continue".to_string()),
@@ -240,11 +209,9 @@ mod tests {
             }),
         );
 
-        assert_eq!(prepared.previous_response_id.as_deref(), Some("resp_123"));
-        assert_eq!(
-            prepared.messages,
-            Cow::<[Message]>::Owned(vec![Message::user("continue".to_string())])
-        );
+        assert_eq!(prepared.previous_response_id, None);
+        assert!(matches!(prepared.messages, Cow::Borrowed(_)));
+        assert_eq!(prepared.messages.as_ref(), messages.as_slice());
         assert!(!prepared.clear_stale_chain);
     }
 

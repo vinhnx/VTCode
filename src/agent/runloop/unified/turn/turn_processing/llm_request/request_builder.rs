@@ -1238,7 +1238,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn compatible_provider_responses_chain_uses_incremental_history_only() {
+    async fn compatible_provider_responses_keeps_full_history_without_previous_response_id() {
         let mut backing = TestTurnProcessingBacking::new(4).await;
         let prior_messages = vec![uni::Message::user("hello".to_string())];
         let mut ctx = backing.turn_processing_context();
@@ -1260,13 +1260,13 @@ mod tests {
                 .await
                 .expect("compatible provider request should build");
 
-        assert_eq!(
-            built.request.previous_response_id.as_deref(),
-            Some("resp_123")
-        );
+        assert_eq!(built.request.previous_response_id, None);
         assert_eq!(
             non_runtime_request_messages(&built.request),
-            vec![uni::Message::user("continue".to_string())]
+            vec![
+                uni::Message::user("hello".to_string()),
+                uni::Message::user("continue".to_string())
+            ]
         );
     }
 

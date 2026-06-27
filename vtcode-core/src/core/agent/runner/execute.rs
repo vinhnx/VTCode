@@ -1438,10 +1438,19 @@ mod tests {
             state.set_previous_response_chain("openai", "gpt-5.4", Some("resp_123"), messages);
         }
 
-        assert_eq!(
-            state.previous_response_chain_for("openai", "gpt-5.4"),
-            None
-        );
+        assert_eq!(state.previous_response_chain_for("openai", "gpt-5.4"), None);
+    }
+
+    #[test]
+    fn compatible_runner_success_path_does_not_record_previous_response_chain() {
+        let mut state = AgentSessionState::new("session".to_string(), 4, 4, 16_000);
+        let messages = vec![Message::user("hello".to_string())];
+
+        if records_responses_continuation_state("mycorp", true) {
+            state.set_previous_response_chain("mycorp", "gpt-5.4", Some("resp_123"), messages);
+        }
+
+        assert_eq!(state.previous_response_chain_for("mycorp", "gpt-5.4"), None);
     }
 
     #[test]
@@ -1472,7 +1481,7 @@ mod tests {
     }
 
     #[test]
-    fn compatible_prepare_responses_request_messages_uses_incremental_suffix() {
+    fn compatible_prepare_responses_request_messages_keeps_custom_provider_stateless() {
         let mut state = AgentSessionState::new("session".to_string(), 4, 4, 16_000);
         let prior_messages = vec![Message::user("hello".to_string())];
         let current_messages = vec![
@@ -1489,10 +1498,7 @@ mod tests {
             &current_messages,
         );
 
-        assert_eq!(previous_response_id.as_deref(), Some("resp_123"));
-        assert_eq!(
-            request_messages.as_ref(),
-            [Message::user("continue".to_string())].as_slice()
-        );
+        assert_eq!(previous_response_id, None);
+        assert_eq!(request_messages.as_ref(), current_messages.as_slice());
     }
 }
