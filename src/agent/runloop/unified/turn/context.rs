@@ -245,6 +245,14 @@ impl<'a> TurnProcessingContext<'a> {
         self.harness_state.recovery_retry_count()
     }
 
+    pub(crate) fn post_tool_recovery_cycles(&self) -> u8 {
+        self.harness_state.post_tool_recovery_cycles()
+    }
+
+    pub(crate) fn increment_post_tool_recovery_cycle(&mut self) -> u8 {
+        self.harness_state.increment_post_tool_recovery_cycle()
+    }
+
     pub(crate) fn push_tool_response<S>(&mut self, tool_call_id: S, content: String)
     where
         S: AsRef<str> + Into<String>,

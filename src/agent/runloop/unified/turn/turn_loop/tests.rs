@@ -188,6 +188,68 @@ fn retryable_post_tool_follow_up_failure_stops_after_recovery_pass_is_spent() {
 }
 
 #[test]
+fn post_tool_follow_up_failure_chain_consumes_tool_free_recovery_pass() {
+    // End-to-end regression guard for the infinite loop: starting from a fresh
+    // (non-recovery) turn state (phase == Inactive), a retryable post-tool
+    // follow-up failure must schedule a tool-free recovery pass that is
+    // actually consumable. Before the fix, `switch_to_tool_free_recovery`
+    // left the phase as Inactive, so `consume_recovery_pass()` returned false,
+    // `tool_free_recovery` evaluated to false, and tools were never disabled
+    // at the API level — the model kept emitting tool calls and the follow-up
+    // kept failing, looping until the wall-clock timeout.
+    use crate::agent::runloop::unified::run_loop_context::{HarnessTurnState, TurnId, TurnRunId};
+
+    let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+    let handle = InlineHandle::new_for_tests(tx);
+    let mut renderer = AnsiRenderer::with_inline_ui(handle, Default::default());
+    let mut history = vec![
+        uni::Message::user("run cargo nextest".to_string()),
+        uni::Message::assistant("".to_string()),
+        uni::Message::tool_response(
+            "call_1".to_string(),
+            "{\"critical_note\":\"reuse output\"}".to_string(),
+        ),
+    ];
+
+    let mut state = HarnessTurnState::new(
+        TurnRunId("run-1".to_string()),
+        TurnId("turn-1".to_string()),
+        4,
+        10,
+        1,
+    );
+    // Fresh turn: recovery is inactive.
+    assert!(!state.is_recovery_active());
+
+    // Simulate the turn-loop error path: the follow-up LLM phase failed after
+    // tool execution. `allow_tool_free_retry = !tool_free_recovery = true`
+    // because this is a non-recovery turn.
+    let action = maybe_recover_after_post_tool_llm_failure(
+        &mut renderer,
+        &mut history,
+        &anyhow!("Network error"),
+        2,
+        1,
+        "execute_llm_request",
+        true,
+    )
+    .expect("recovery classification should succeed");
+    assert_eq!(action, PostToolFailureRecovery::RetryToolFree);
+
+    // The caller (turn_loop.rs) then switches to tool-free recovery. Before
+    // the fix this was a no-op on the phase because it was Inactive.
+    assert!(state.switch_to_tool_free_recovery());
+
+    // The next loop iteration consumes the pass — this is the gate that
+    // decides `tool_free_recovery = true` and disables tools at the API level.
+    assert!(
+        state.consume_recovery_pass(),
+        "consume_recovery_pass must succeed after switch from Inactive"
+    );
+    assert!(state.recovery_is_tool_free());
+}
+
+#[test]
 fn complete_turn_after_failed_tool_free_recovery_appends_fallback_once() {
     let mut history = vec![uni::Message::user("summarize".to_string())];
     let outcome = complete_turn_after_failed_tool_free_recovery(

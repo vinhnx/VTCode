@@ -181,6 +181,13 @@ pub(crate) struct HarnessTurnState {
     recovery_mode: Option<RecoveryMode>,
     recovery_retry_count: u8,
     adaptive_recovery_decisions: u8,
+    /// Counts how many times the post-tool follow-up failure path has
+    /// scheduled a tool-free recovery pass within a single turn. Bounded by
+    /// `MAX_POST_TOOL_RECOVERY_CYCLES` in the turn loop as a defense-in-depth
+    /// backstop against any regression that re-triggers recovery cyclically.
+    /// Resets naturally per turn because each turn constructs a fresh
+    /// `HarnessTurnState`.
+    post_tool_recovery_cycles: u8,
     pub max_tool_calls: usize,
     pub max_tool_wall_clock: Duration,
     pub max_tool_retries: u32,
@@ -227,6 +234,7 @@ impl HarnessTurnState {
             recovery_mode: None,
             recovery_retry_count: 0,
             adaptive_recovery_decisions: 0,
+            post_tool_recovery_cycles: 0,
             max_tool_calls,
             max_tool_wall_clock: Duration::from_secs(max_tool_wall_clock_secs),
             max_tool_retries,
@@ -396,12 +404,37 @@ impl HarnessTurnState {
         self.recovery_mode = Some(mode);
     }
 
-    /// Switch to tool-free synthesis mode and reset an in-flight/just-finished
-    /// recovery pass back to Pending so the next loop iteration can consume it.
-    /// Returns `true` when the phase was actually reset.
+    /// Switch to tool-free synthesis mode and reset the recovery phase back to
+    /// `Pending` so the next loop iteration can consume it.
+    ///
+    /// Unlike `activate_recovery_with_mode` (which is a guarded no-op once a
+    /// pass is in flight), this unconditionally forces the phase to `Pending`
+    /// — covering `Inactive`, `InPass`, and `Completed`. This is required
+    /// because the post-tool follow-up failure path runs from a *non-recovery*
+    /// turn (phase == `Inactive`): `activate_recovery_with_mode` would set the
+    /// reason/mode but `reset_recovery_phase_to_pending` alone would leave the
+    /// phase as `Inactive`, so `consume_recovery_pass()` would return `false`,
+    /// `tool_free_recovery` would evaluate to `false`, and tools would never be
+    /// disabled at the API level — producing an infinite retry loop.
+    ///
+    /// When transitioning from `Inactive`, this also resets the retry counter
+    /// and seeds a default `recovery_reason` (mirroring
+    /// `activate_recovery_with_mode`) so the `[Recovery Mode]` request block
+    /// reports why recovery was engaged.
+    ///
+    /// Returns `true` when the phase actually changed.
     pub(crate) fn switch_to_tool_free_recovery(&mut self) -> bool {
+        let was_inactive = matches!(self.recovery_phase, RecoveryPhase::Inactive);
         self.recovery_mode = Some(RecoveryMode::ToolFreeSynthesis);
-        self.reset_recovery_phase_to_pending()
+        let changed = !matches!(self.recovery_phase, RecoveryPhase::Pending);
+        self.recovery_phase = RecoveryPhase::Pending;
+        if was_inactive {
+            self.recovery_retry_count = 0;
+            if self.recovery_reason.is_none() {
+                self.recovery_reason = Some("post-tool follow-up failure".to_string());
+            }
+        }
+        changed
     }
 
     pub(crate) fn increment_adaptive_recovery_decisions(&mut self) -> u8 {
@@ -461,6 +494,16 @@ impl HarnessTurnState {
 
     pub(crate) fn recovery_retry_count(&self) -> u8 {
         self.recovery_retry_count
+    }
+
+    pub(crate) fn post_tool_recovery_cycles(&self) -> u8 {
+        self.post_tool_recovery_cycles
+    }
+
+    /// Increment the post-tool recovery cycle counter. Returns the new value.
+    pub(crate) fn increment_post_tool_recovery_cycle(&mut self) -> u8 {
+        self.post_tool_recovery_cycles = self.post_tool_recovery_cycles.saturating_add(1);
+        self.post_tool_recovery_cycles
     }
 
     pub(crate) fn record_spool_chunk_read(&mut self) -> usize {
@@ -1078,6 +1121,184 @@ mod tests {
         // set_recovery_mode switches unconditionally and is the correct escape.
         state.set_recovery_mode(RecoveryMode::ToolFreeSynthesis);
         assert_eq!(state.recovery_mode(), Some(RecoveryMode::ToolFreeSynthesis));
+    }
+
+    #[test]
+    fn harness_state_switch_to_tool_free_recovery_from_inactive() {
+        // Regression guard for the post-tool follow-up infinite loop:
+        // `switch_to_tool_free_recovery` must transition `Inactive -> Pending`
+        // (not just `InPass/Completed -> Pending`). When a normal (non-recovery)
+        // turn's follow-up LLM phase fails, the phase is `Inactive`; if the
+        // switch left it there, `consume_recovery_pass()` would return false,
+        // `tool_free_recovery` would evaluate to false, and tools would never
+        // be disabled at the API level — producing an infinite retry loop.
+        let mut state = HarnessTurnState::new(
+            TurnRunId("run-1".to_string()),
+            TurnId("turn-1".to_string()),
+            4,
+            10,
+            1,
+        );
+
+        // Fresh state: recovery is inactive.
+        assert!(!state.is_recovery_active());
+        assert!(!state.recovery_is_tool_free());
+
+        // Switching from Inactive must engage a tool-free recovery pass.
+        assert!(
+            state.switch_to_tool_free_recovery(),
+            "switch from Inactive must report a phase change"
+        );
+        assert!(state.is_recovery_active(), "phase must be Pending");
+        assert_eq!(state.recovery_mode(), Some(RecoveryMode::ToolFreeSynthesis));
+        assert!(state.recovery_is_tool_free());
+
+        // The pass must be consumable — this is what the turn loop checks to
+        // decide `tool_free_recovery = true` and disable tools at the API level.
+        assert!(
+            state.consume_recovery_pass(),
+            "consume_recovery_pass must succeed after switch from Inactive"
+        );
+
+        // A default recovery reason must be seeded so the [Recovery Mode]
+        // request block reports why recovery was engaged.
+        assert!(
+            state.recovery_reason().is_some(),
+            "recovery_reason must be seeded when switching from Inactive"
+        );
+    }
+
+    #[test]
+    fn harness_state_switch_to_tool_free_recovery_from_in_pass_keeps_consumable() {
+        // No-regression guard for the adaptive-budget-recovery path: switching
+        // from InPass (a pass already in flight) must still reset to Pending so
+        // the next loop iteration can consume it.
+        let mut state = HarnessTurnState::new(
+            TurnRunId("run-1".to_string()),
+            TurnId("turn-1".to_string()),
+            4,
+            10,
+            1,
+        );
+
+        state.activate_recovery_with_mode("budget low", RecoveryMode::AdaptiveBudgetDecision);
+        assert!(state.consume_recovery_pass()); // -> InPass
+        assert_eq!(
+            state.recovery_mode(),
+            Some(RecoveryMode::AdaptiveBudgetDecision)
+        );
+
+        assert!(state.switch_to_tool_free_recovery());
+        assert_eq!(state.recovery_mode(), Some(RecoveryMode::ToolFreeSynthesis));
+        assert!(
+            state.consume_recovery_pass(),
+            "pass must be consumable again after switching from InPass"
+        );
+    }
+
+    #[test]
+    fn harness_state_switch_to_tool_free_recovery_from_completed_keeps_consumable() {
+        // No-regression guard: switching from Completed must reset to Pending.
+        let mut state = HarnessTurnState::new(
+            TurnRunId("run-1".to_string()),
+            TurnId("turn-1".to_string()),
+            4,
+            10,
+            1,
+        );
+
+        state.activate_recovery_with_mode("budget low", RecoveryMode::AdaptiveBudgetDecision);
+        assert!(state.consume_recovery_pass()); // -> InPass
+        assert!(state.finish_recovery_pass()); // -> Completed
+        assert!(!state.is_recovery_active());
+
+        assert!(state.switch_to_tool_free_recovery());
+        assert!(state.is_recovery_active());
+        assert!(state.consume_recovery_pass());
+    }
+
+    #[test]
+    fn harness_state_switch_to_tool_free_recovery_idempotent_when_pending() {
+        // When already Pending, switching reports no phase change but still
+        // forces the mode to ToolFreeSynthesis.
+        let mut state = HarnessTurnState::new(
+            TurnRunId("run-1".to_string()),
+            TurnId("turn-1".to_string()),
+            4,
+            10,
+            1,
+        );
+
+        state.activate_recovery_with_mode("budget low", RecoveryMode::AdaptiveBudgetDecision);
+        assert!(state.is_recovery_active()); // Pending
+
+        assert!(
+            !state.switch_to_tool_free_recovery(),
+            "switch from Pending must report no phase change"
+        );
+        assert_eq!(state.recovery_mode(), Some(RecoveryMode::ToolFreeSynthesis));
+        assert!(state.consume_recovery_pass());
+    }
+
+    #[test]
+    fn harness_state_switch_to_tool_free_recovery_resets_retry_count_from_inactive() {
+        // Switching from Inactive resets the retry counter (mirrors
+        // activate_recovery_with_mode) so any stale count does not
+        // prematurely exhaust the in-pass retry budget on the new pass.
+        let mut state = HarnessTurnState::new(
+            TurnRunId("run-1".to_string()),
+            TurnId("turn-1".to_string()),
+            4,
+            10,
+            1,
+        );
+
+        // Fresh state: retry_count is 0, phase is Inactive.
+        assert_eq!(state.recovery_retry_count(), 0);
+
+        // Switch from Inactive → Pending: retry count stays 0.
+        state.switch_to_tool_free_recovery();
+        assert_eq!(state.recovery_retry_count(), 0);
+
+        // Complete this pass and start a second cycle.
+        assert!(state.consume_recovery_pass());
+        assert!(state.retry_recovery_pass()); // retry_count → 1
+        assert_eq!(state.recovery_retry_count(), 1);
+
+        // Switch from Completed → Pending: retry count is NOT reset
+        // (only Inactive triggers the reset).
+        assert!(state.consume_recovery_pass());
+        assert!(state.finish_recovery_pass());
+        state.switch_to_tool_free_recovery();
+        assert_eq!(
+            state.recovery_retry_count(),
+            1,
+            "retry count must NOT be reset when switching from Completed"
+        );
+
+        // Consume and retry: the budget should tick up to 2, not start over.
+        assert!(state.consume_recovery_pass());
+        assert!(state.retry_recovery_pass());
+        assert_eq!(state.recovery_retry_count(), 2);
+    }
+
+    #[test]
+    fn harness_state_tracks_post_tool_recovery_cycles() {
+        let mut state = HarnessTurnState::new(
+            TurnRunId("run-1".to_string()),
+            TurnId("turn-1".to_string()),
+            4,
+            10,
+            1,
+        );
+
+        assert_eq!(state.post_tool_recovery_cycles(), 0);
+        assert_eq!(state.increment_post_tool_recovery_cycle(), 1);
+        assert_eq!(state.post_tool_recovery_cycles(), 1);
+        assert_eq!(state.increment_post_tool_recovery_cycle(), 2);
+        assert_eq!(state.post_tool_recovery_cycles(), 2);
+        assert_eq!(state.increment_post_tool_recovery_cycle(), 3);
+        assert_eq!(state.post_tool_recovery_cycles(), 3);
     }
 
     #[test]

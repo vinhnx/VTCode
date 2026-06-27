@@ -757,6 +757,82 @@ mod tests {
         assert!(!ctx.is_recovery_active());
     }
 
+    #[tokio::test]
+    async fn tool_free_recovery_continuation_intent_text_is_terminal() {
+        // Regression guard for the post-tool follow-up infinite loop.
+        // During tool-free recovery, even when the text expresses continuation
+        // intent AND there is recent tool activity (the exact combination that
+        // previously produced a non-relaxed `Continue` via "recent_tool_activity",
+        // resetting `consecutive_relaxed_continuations` to 0 and re-enabling
+        // tools after `finish_recovery_pass()`), the turn must end. The recovery
+        // text IS the final answer; allowing continuation re-enables tools and
+        // re-triggers recovery when the follow-up fails again — an infinite
+        // cycle no existing bound catches.
+        let mut backing = TestTurnProcessingBacking::new(4).await;
+        let mut ctx = backing.turn_processing_context();
+        ctx.working_history.push(uni::Message::user(
+            "run cargo nextest and summarize".to_string(),
+        ));
+        ctx.working_history
+            .push(uni::Message::assistant(String::new()).with_tool_calls(vec![
+                uni::ToolCall::function(
+                    "call_1".to_string(),
+                    "unified_exec".to_string(),
+                    "{}".to_string(),
+                ),
+            ]));
+        ctx.working_history.push(uni::Message::tool_response(
+            "call_1".to_string(),
+            "test result: ok".to_string(),
+        ));
+        ctx.activate_recovery("post-tool follow-up failure");
+        assert!(ctx.consume_recovery_pass());
+        assert!(ctx.recovery_is_tool_free());
+
+        // Sanity: without recovery this exact text+history would continue.
+        // "Let me continue analyzing the results." is interim progress
+        // (<=800 chars, has "let me" intent clause, no question, no
+        // conclusive marker) and recent_tool_activity is true → the raw
+        // evaluator returns should_continue=true, is_relaxed_continuation=false.
+        assert!(
+            evaluate_interim_text_continuation(
+                true,
+                false,
+                &ctx.working_history,
+                "Let me continue analyzing the results.",
+                0,
+            )
+            .should_continue
+        );
+
+        // Under tool-free recovery, the turn loop must override to terminal.
+        let outcome = ctx
+            .handle_text_response(
+                "Let me continue analyzing the results.".to_string(),
+                Vec::new(),
+                None,
+                None,
+                false,
+            )
+            .await
+            .expect("recovery response should be handled");
+
+        assert!(
+            matches!(
+                outcome,
+                TurnHandlerOutcome::Break(TurnLoopResult::Completed)
+            ),
+            "tool-free recovery text with continuation intent must end the turn, \
+             not re-enable tools and loop"
+        );
+        // Recovery is finished (not active), and the turn did not continue.
+        assert!(!ctx.is_recovery_active());
+        assert!(!ctx.working_history.iter().any(|message| {
+            message.role == uni::MessageRole::System
+                && message.content.as_text().trim() == AUTONOMOUS_CONTINUE_DIRECTIVE
+        }));
+    }
+
     #[test]
     fn detects_new_intent_prefixes_as_interim() {
         assert!(is_interim_progress_update(

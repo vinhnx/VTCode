@@ -146,7 +146,11 @@ impl<K: Eq + Hash> PermissionCache<K> {
         matches!(self.grants.get(key), Some(PermissionGrant::TemporaryDenial))
     }
 
-    /// Check if we can use cached permission without prompting
+    /// Check if we can use cached permission without prompting.
+    ///
+    /// `Once` grants are included so that a single user approval persists
+    /// for the duration of the session — without this, every identical tool
+    /// call would re-prompt even after the user already said "yes".
     #[inline]
     pub fn can_use_cached<Q>(&self, key: &Q) -> bool
     where
@@ -155,7 +159,12 @@ impl<K: Eq + Hash> PermissionCache<K> {
     {
         matches!(
             self.grants.get(key),
-            Some(PermissionGrant::Session | PermissionGrant::Permanent | PermissionGrant::Denied)
+            Some(
+                PermissionGrant::Once
+                    | PermissionGrant::Session
+                    | PermissionGrant::Permanent
+                    | PermissionGrant::Denied
+            )
         )
     }
 }
@@ -308,8 +317,9 @@ mod tests {
         cache.cache_grant(denied_path.clone(), PermissionGrant::Denied);
         cache.cache_grant(temp_denied_path.clone(), PermissionGrant::TemporaryDenial);
 
-        // "Once" and "TemporaryDenial" grants can't be reused
-        assert!(!cache.can_use_cached(&once_path));
+        // "Once" grants ARE reusable (user approval persists for the session)
+        assert!(cache.can_use_cached(&once_path));
+        // "TemporaryDenial" grants can't be reused
         assert!(!cache.can_use_cached(&temp_denied_path));
 
         // Session and Permanent grants can be reused

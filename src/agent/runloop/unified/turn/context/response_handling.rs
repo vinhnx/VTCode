@@ -140,12 +140,17 @@ impl<'a> TurnProcessingContext<'a> {
         let final_text = text.clone();
         let consecutive_relaxed = self.harness_state.consecutive_relaxed_continuations;
         let continuation_decision = if tool_free_recovery_pass {
-            // During tool-free recovery (LLM follow-up failed after tool execution),
-            // evaluate whether the recovery text expresses continuation intent.
-            // If so, let the turn loop continue — tools will be re-enabled on the
-            // next iteration since `finish_recovery_pass()` clears the recovery state.
-            // This prevents premature turn endings when the model wants to keep working
-            // but was forced into text-only mode by a transient LLM failure.
+            // Tool-free recovery is terminal: the text produced during recovery
+            // IS the final answer. Allowing continuation here would call
+            // `finish_recovery_pass()` (deactivating recovery), re-enable tools
+            // on the next iteration, and — if the follow-up fails again —
+            // re-trigger recovery, producing an infinite cycle that no existing
+            // bound catches (`consecutive_relaxed_continuations` is bypassed by
+            // non-relaxed "recent_tool_activity" continuations that reset the
+            // counter to 0, and `MAX_RECOVERY_RETRIES` only counts retries
+            // within a single pass). Evaluate continuation intent solely to
+            // populate diagnostic fields for the tracing log; the decision is
+            // always to end the turn.
             let decision = evaluate_interim_text_continuation(
                 self.full_auto,
                 self.is_planning_active(),
@@ -153,19 +158,14 @@ impl<'a> TurnProcessingContext<'a> {
                 &text,
                 consecutive_relaxed,
             );
-            if decision.should_continue {
-                decision
-            } else {
-                InterimTextContinuationDecision {
-                    should_continue: false,
-                    reason: "recovery_pass",
-                    is_interim_progress: decision.is_interim_progress,
-                    last_user_follow_up: decision.last_user_follow_up,
-                    recent_tool_activity: decision.recent_tool_activity,
-                    last_user_requested_progressive_work: decision
-                        .last_user_requested_progressive_work,
-                    is_relaxed_continuation: false,
-                }
+            InterimTextContinuationDecision {
+                should_continue: false,
+                reason: "tool_free_recovery_terminal",
+                is_interim_progress: decision.is_interim_progress,
+                last_user_follow_up: decision.last_user_follow_up,
+                recent_tool_activity: decision.recent_tool_activity,
+                last_user_requested_progressive_work: decision.last_user_requested_progressive_work,
+                is_relaxed_continuation: false,
             }
         } else {
             evaluate_interim_text_continuation(
