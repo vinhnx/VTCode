@@ -8,6 +8,7 @@ use crate::tools::ast_grep_binary::{
     AST_GREP_NO_INSTALL_ENV, managed_ast_grep_bin_dir, missing_ast_grep_message,
     resolve_ast_grep_binary_from_env_and_fs,
 };
+use crate::tools::editing::patch::resolve_ast_grep_binary_path;
 use anyhow::{Context, Result, bail};
 
 use self::archive::{ast_grep_version, install_archive};
@@ -128,19 +129,28 @@ impl AstGrepStatus {
     /// (`msg.contains("ast-grep") && msg.contains("not available")`) still
     /// triggers for query/count workflows.
     pub async fn resolve_or_install() -> std::result::Result<PathBuf, String> {
-        // User opt-out takes priority: if VTCODE_AST_GREP_NO_INSTALL is set,
-        // skip auto-install and surface the missing-binary error immediately.
+        // Use an already-resolved binary regardless of the opt-out env var:
+        // `VTCODE_AST_GREP_NO_INSTALL` only disables auto-install, not usage of
+        // an already-present binary.
+        if let Ok(path) = resolve_ast_grep_binary_path() {
+            return Ok(path);
+        }
+
+        // No binary available. If the user opted out of auto-install, surface
+        // the missing-binary error immediately without attempting a download.
         if std::env::var_os(AST_GREP_NO_INSTALL_ENV).is_some() {
             return Err(missing_ast_grep_message(
                 "Auto-install disabled via VTCODE_AST_GREP_NO_INSTALL.",
             ));
         }
 
-        if let Some(path) = resolve_ast_grep_binary_from_env_and_fs() {
-            return Ok(path);
-        }
-
-        if crate::tools::ast_grep_binary::is_binary_override_missing() {
+        // Skip auto-install in test mode when either override registry forces
+        // the binary to be missing. Both are checked because
+        // `resolve_ast_grep_binary_path` consults the patch (semantic) registry
+        // first and the `ast_grep_binary` registry second.
+        if crate::tools::ast_grep_binary::is_binary_override_missing()
+            || crate::tools::editing::patch::is_binary_override_missing()
+        {
             return Err(missing_ast_grep_message(
                 "Auto-install skipped: test override forces missing binary.",
             ));
@@ -207,10 +217,11 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn resolve_or_install_mentions_env_optout_when_set() {
-        // Do NOT set the test override to Missing — let it default to System
-        // so the env-var code path is actually exercised.  With no ast-grep
-        // binary on PATH in the test environment, resolve falls through to
-        // the env-var check.
+        // Force the binary to be missing so `resolve_ast_grep_binary_path`
+        // fails and execution reaches the env-var check. The test override is
+        // checked AFTER the env var, so the env-var error wins. This keeps the
+        // test portable across machines that happen to have ast-grep installed.
+        let _override = set_ast_grep_binary_override_for_tests(None);
         let env = env_lock::lock();
         env.set_var("VTCODE_AST_GREP_NO_INSTALL", "1");
         let err = AstGrepStatus::resolve_or_install()

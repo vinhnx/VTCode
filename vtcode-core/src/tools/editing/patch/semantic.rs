@@ -61,6 +61,19 @@ pub fn set_ast_grep_binary_override_for_tests(path: Option<PathBuf>) -> AstGrepB
     AstGrepBinaryOverrideGuard { previous }
 }
 
+/// Returns `true` when this registry's test override is forced to `Missing`.
+/// Used by `AstGrepStatus::resolve_or_install` to skip auto-install in tests
+/// that mock the binary as missing through the patch (semantic) registry.
+pub(crate) fn is_binary_override_missing() -> bool {
+    matches!(
+        AST_GREP_OVERRIDE
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone(),
+        AstGrepBinaryOverride::Missing
+    )
+}
+
 #[derive(Debug, Deserialize)]
 struct AstGrepJsonMatch {
     text: String,
