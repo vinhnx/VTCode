@@ -32,7 +32,7 @@
 //! separate safeguards to prevent UI lag:
 //! - `MAX_LINE_LENGTH: 150`: Prevents extremely long lines from hanging the TUI
 //! - `INLINE_STREAM_MAX_LINES: 30`: Limits visible output in inline mode
-//! - `MAX_CODE_LINES: 500`: For code fence blocks (still truncated by tokens upstream)
+//! - `MAX_CODE_LINES: 30`: For code fence blocks (full output in spool files)
 //!
 //! Full output is spooled to `.vtcode/tool-output/` for later review.
 //! For very large outputs, files are saved to `~/.vtcode/tmp/<session_hash>/call_<id>.output`
@@ -69,7 +69,7 @@ pub(crate) use streams_helpers::{
 };
 use streams_helpers::{
     looks_like_diff_content, select_stream_lines_streaming, should_render_as_code_block,
-    spool_output_if_needed, tail_lines_streaming,
+    spool_output_if_needed,
 };
 
 /// Maximum number of lines to display in inline mode before truncating
@@ -82,25 +82,13 @@ const RUN_COMMAND_TAIL_PREVIEW_LINES: usize = 3;
 const MAX_LINE_LENGTH: usize = 150;
 /// Size threshold (bytes) below which output is displayed inline vs. spooled
 const DEFAULT_SPOOL_THRESHOLD: usize = 50_000; // 50KB — UI render truncation
-/// Maximum number of lines to display in code fence blocks
-const MAX_CODE_LINES: usize = 500;
-/// Size threshold (bytes) at which to show minimal preview instead of full output
-const LARGE_OUTPUT_THRESHOLD_MB: usize = 1_000_000;
-/// Size threshold (bytes) at which to show fewer preview lines
-const VERY_LARGE_OUTPUT_THRESHOLD_MB: usize = 500_000;
+/// Maximum number of lines to display in code fence blocks before truncating.
+/// Kept low to prevent TUI flooding — full output is in spool files.
+const MAX_CODE_LINES: usize = 30;
 /// Size threshold (bytes) at which to skip preview entirely
 const EXTREME_OUTPUT_THRESHOLD_MB: usize = 2_000_000;
 /// Size threshold (bytes) for using new large output handler with hashed directories
 const LARGE_OUTPUT_NOTIFICATION_THRESHOLD: usize = 50_000; // 50KB — triggers spool-to-file for UI
-
-/// Determine preview line count based on content size
-fn calculate_preview_lines(content_size: usize) -> usize {
-    match content_size {
-        size if size > LARGE_OUTPUT_THRESHOLD_MB => 3,
-        size if size > VERY_LARGE_OUTPUT_THRESHOLD_MB => 5,
-        _ => 10,
-    }
-}
 
 enum HiddenLinesNoticeKind {
     CommandPreview,
@@ -506,15 +494,12 @@ pub(crate) async fn render_stream_section(
         && let Ok(Some(log_path)) =
             spool_output_if_needed(effective_normalized_content.as_ref(), tool, config).await
     {
-        // For very large output, show minimal preview to avoid TUI hang
-        let preview_lines = calculate_preview_lines(effective_normalized_content.len());
-
         // Skip preview entirely for extremely large output
         if effective_normalized_content.len() > EXTREME_OUTPUT_THRESHOLD_MB {
             let mut msg_buffer = String::with_capacity(256);
             let _ = write!(
                 &mut msg_buffer,
-                "Command output too large ({} bytes), spooled to: {}",
+                "Output too large ({} bytes), spooled to: {}",
                 effective_normalized_content.len(),
                 log_path.display()
             );
@@ -523,8 +508,15 @@ pub(crate) async fn render_stream_section(
             return Ok(());
         }
 
-        let (tail, total) =
-            tail_lines_streaming(effective_normalized_content.as_ref(), preview_lines);
+        // Use compact head+tail preview (like diff view) instead of dumping tail lines
+        let head_lines = RUN_COMMAND_HEAD_PREVIEW_LINES;
+        let tail_lines_count = RUN_COMMAND_TAIL_PREVIEW_LINES;
+        let preview = excerpt_text_lines(
+            effective_normalized_content.as_ref(),
+            head_lines,
+            tail_lines_count,
+        );
+        let total = preview.total;
 
         let mut msg_buffer = String::with_capacity(256);
         if !is_run_command {
@@ -535,7 +527,7 @@ pub(crate) async fn render_stream_section(
             };
             let _ = write!(
                 &mut msg_buffer,
-                "[{}] Output too large ({} bytes, {} lines), spooled to: {}",
+                "[{}] {} bytes, {} lines — spooled to: {}",
                 uppercase_title.as_ref(),
                 effective_normalized_content.len(),
                 total,
@@ -544,77 +536,32 @@ pub(crate) async fn render_stream_section(
         } else {
             let _ = write!(
                 &mut msg_buffer,
-                "Command output too large ({} bytes, {} lines), spooled to: {}",
+                "{} bytes, {} lines — spooled to: {}",
                 effective_normalized_content.len(),
                 total,
                 log_path.display()
             );
         }
         renderer.line(MessageStyle::ToolDetail, &msg_buffer)?;
-        renderer.line(
-            MessageStyle::ToolDetail,
-            &format!("Last {} lines:", preview_lines),
-        )?;
 
-        msg_buffer.clear();
-        msg_buffer.reserve(128);
+        // Render head lines
+        for line in preview.head.iter() {
+            render_preview_line(renderer, line, None, Some("  "), true, fallback_style, None)?;
+        }
 
-        let hidden = total.saturating_sub(tail.len());
-        if hidden > 0 {
+        // Show omitted notice between head and tail
+        if preview.hidden_count > 0 {
             renderer.line(
                 MessageStyle::ToolDetail,
-                &hidden_lines_notice(hidden, HiddenLinesNoticeKind::Generic),
+                &hidden_lines_notice(preview.hidden_count, HiddenLinesNoticeKind::CommandPreview),
             )?;
         }
 
-        if should_render_as_code_block(fallback_style) && !apply_line_styles {
-            let markdown = build_markdown_code_block(&tail, None, true);
-            renderer.render_markdown_output(fallback_style, &markdown)?;
-        } else {
-            for line in &tail {
-                if display_width(line) > MAX_LINE_LENGTH {
-                    let truncated = truncate_with_ellipsis(line, MAX_LINE_LENGTH, "...");
-                    if apply_line_styles
-                        && let Some(style) =
-                            select_line_style(tool_name, &truncated, git_styles, ls_styles)
-                    {
-                        render_preview_line(
-                            renderer,
-                            &truncated,
-                            None,
-                            None,
-                            false,
-                            fallback_style,
-                            Some(style),
-                        )?;
-                    } else {
-                        render_preview_line(
-                            renderer,
-                            &truncated,
-                            None,
-                            None,
-                            false,
-                            fallback_style,
-                            None,
-                        )?;
-                    }
-                } else if apply_line_styles
-                    && let Some(style) = select_line_style(tool_name, line, git_styles, ls_styles)
-                {
-                    render_preview_line(
-                        renderer,
-                        line,
-                        None,
-                        None,
-                        false,
-                        fallback_style,
-                        Some(style),
-                    )?;
-                } else {
-                    render_preview_line(renderer, line, None, None, false, fallback_style, None)?;
-                }
-            }
+        // Render tail lines
+        for line in preview.tail.iter() {
+            render_preview_line(renderer, line, None, Some("  "), true, fallback_style, None)?;
         }
+
         return Ok(());
     }
 

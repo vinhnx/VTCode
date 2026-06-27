@@ -56,6 +56,71 @@ fn is_command_tool_name(tool_name: &str) -> bool {
     tool_intent::canonical_unified_exec_tool_name(tool_name).is_some()
 }
 
+/// Canonicalize shell commands for loop detection.
+///
+/// Collapses semantically equivalent verification and read commands so the
+/// identical-call detector catches patterns like:
+/// - `command -v ast-grep` / `which ast-grep` / `ast-grep --help` → `__verify__:ast-grep`
+/// - `cat file.txt` / `head file.txt` → `__read__:file.txt`
+///
+/// Returns `None` if the command is not a recognized pattern (pass through unchanged).
+fn canonicalize_command_for_detection(command: &str) -> Option<String> {
+    let trimmed = command.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    // Split into tokens, respecting basic quoting
+    let tokens: Vec<&str> = trimmed.split_whitespace().collect();
+    if tokens.is_empty() {
+        return None;
+    }
+
+    // `command -v <tool>` or `which <tool>`
+    if (tokens[0] == "command" && tokens.len() >= 3 && tokens[1] == "-v")
+        || (tokens[0] == "which" && tokens.len() >= 2)
+    {
+        let tool = if tokens[0] == "command" {
+            tokens[2]
+        } else {
+            tokens[1]
+        };
+        // Strip path prefix (e.g., /usr/bin/ast-grep → ast-grep)
+        let basename = tool.rsplit('/').next().unwrap_or(tool);
+        return Some(format!("__verify__:{basename}"));
+    }
+
+    // `<tool> --help`, `<tool> -h`, `<tool> --version`, `<tool> -V`
+    // Also handles `env VAR=val <tool> --help` by skipping env prefix.
+    if tokens.len() >= 2 {
+        let last = tokens.last().unwrap();
+        if matches!(*last, "--help" | "-h" | "--version" | "-V" | "version") {
+            // Skip leading `env` and its VAR=val flags to find the actual tool
+            let tool_token = if tokens[0] == "env" {
+                tokens
+                    .iter()
+                    .skip(1)
+                    .find(|t| !t.contains('='))
+                    .unwrap_or(&tokens[0])
+            } else {
+                &tokens[0]
+            };
+            let basename = tool_token.rsplit('/').next().unwrap_or(tool_token);
+            if !basename.is_empty() {
+                return Some(format!("__verify__:{basename}"));
+            }
+        }
+    }
+
+    // `cat <path>`, `head <path>`, `tail <path>` (simple single-file forms)
+    if tokens.len() == 2 && matches!(tokens[0], "cat" | "head" | "tail") {
+        let path = tokens[1].trim_matches(|c| c == '\'' || c == '"');
+        return Some(format!("__read__:{path}"));
+    }
+
+    None
+}
+
 /// Normalize tool arguments for consistent loop detection.
 /// This ensures path variations like ".", "", "./" are treated as the same root path,
 /// and read-file parameter aliases (offset_lines, max_lines, chunk_lines, line_start/line_end, etc.)
@@ -139,6 +204,17 @@ fn normalize_args_for_detection(tool_name: &str, args: &serde_json::Value) -> se
             // Remove noise params that don't change semantic intent
             normalized.remove("encoding");
             normalized.remove("action");
+        }
+
+        // For command tools: canonicalize verification and read commands
+        // so `command -v ast-grep` / `which ast-grep` / `ast-grep --help`
+        // all hash to the same `__verify__:ast-grep` token.
+        if is_command_tool_name(base_name) {
+            if let Some(cmd) = normalized.get("command").and_then(|v| v.as_str()) {
+                if let Some(canonical) = canonicalize_command_for_detection(cmd) {
+                    normalized.insert("command".into(), serde_json::Value::String(canonical));
+                }
+            }
         }
 
         serde_json::Value::Object(normalized)
@@ -263,8 +339,16 @@ impl LoopDetector {
             hash
         };
 
+        // For command tools, enforce identical-call limits when the normalized
+        // command is a verification or read pattern (e.g., `command -v X`, `cat file`).
+        // Regular commands (e.g., `cargo check`) are exempt because re-running
+        // them is legitimate (build-test cycles).
+        let enforce_identical = Self::should_enforce_identical_limit(tool_name)
+            || (is_command_tool_name(base_tool_name(tool_name))
+                && Self::is_verification_or_read_command(tool_name, args));
+
         if let Some(limit) = self.max_identical_call_limit
-            && Self::should_enforce_identical_limit(tool_name)
+            && enforce_identical
         {
             let required_history = limit.saturating_sub(1);
             if required_history > 0 && self.recent_calls.len() >= required_history {
@@ -445,14 +529,16 @@ impl LoopDetector {
         let base_name = base_tool_name(tool_name);
         // The current call's record was already pushed into `recent_calls` with
         // `read_target` populated by `read_target_for_tool_call` (which now
-        // handles `unified_file` with `action: "read"`).  Use that field as the
-        // authoritative indicator instead of checking for a `::read` suffix.
+        // handles `unified_file` with `action: "read"` and command tools with
+        // `__read__:path` normalization). Use that field as the authoritative
+        // indicator instead of checking for a `::read` suffix.
         let current_has_read_target = self
             .recent_calls
             .back()
             .is_some_and(|r| r.read_target.is_some());
         let is_read_tool = base_name == tools::READ_FILE
-            || (base_name == tools::UNIFIED_FILE && current_has_read_target);
+            || (base_name == tools::UNIFIED_FILE && current_has_read_target)
+            || (is_command_tool_name(base_name) && current_has_read_target);
         if !is_read_tool {
             return None;
         }
@@ -468,21 +554,21 @@ impl LoopDetector {
 
         // Count read_file calls on the same target in recent history, skipping over
         // other read-only tools (grep, list, search) that don't reset the streak.
-        // Only mutating tools (write, exec, edit, patch) break the streak.
+        // Command tools with a read_target (e.g. `cat file`) are counted as reads.
+        // Only mutating tools (write, edit, patch) and non-read commands break the streak.
         let mut same_target_streak = 0usize;
         let mut variants = HashSet::new();
         for record in self.recent_calls.iter().rev() {
             let rec_base = base_tool_name(&record.tool_name);
+            let rec_has_read_target = record.read_target.is_some();
             let rec_is_read_tool = rec_base == tools::READ_FILE
-                || (rec_base == tools::UNIFIED_FILE && record.read_target.is_some());
+                || (rec_base == tools::UNIFIED_FILE && rec_has_read_target)
+                || (is_command_tool_name(rec_base) && rec_has_read_target);
+            // Command tools without a read_target are mutating (e.g., `cargo check`)
             let rec_is_mutating = matches!(
                 rec_base,
-                tools::WRITE_FILE
-                    | tools::CREATE_FILE
-                    | tools::EDIT_FILE
-                    | tools::UNIFIED_EXEC
-                    | tools::APPLY_PATCH
-            );
+                tools::WRITE_FILE | tools::CREATE_FILE | tools::EDIT_FILE | tools::APPLY_PATCH
+            ) || (is_command_tool_name(rec_base) && !rec_has_read_target);
 
             if rec_is_mutating {
                 break;
@@ -647,6 +733,24 @@ impl LoopDetector {
         !is_command_tool_name(base_name)
     }
 
+    /// Returns `true` when the command is a verification or file-read pattern
+    /// that should be subject to identical-call limits.
+    ///
+    /// Verification commands (`command -v X`, `which X`, `X --help`) and
+    /// simple file reads (`cat file`, `head file`) are low-value repeats.
+    /// Regular commands (e.g., `cargo check`) are exempt.
+    #[inline]
+    fn is_verification_or_read_command(tool_name: &str, args: &serde_json::Value) -> bool {
+        let base_name = base_tool_name(tool_name);
+        if !is_command_tool_name(base_name) {
+            return false;
+        }
+        if let Some(cmd) = args.get("command").and_then(|v| v.as_str()) {
+            return canonicalize_command_for_detection(cmd).is_some();
+        }
+        false
+    }
+
     /// Suggest alternatives for stuck tools (extracted to static method for efficiency)
     /// Called only on the cold path (loop already detected); marked `#[cold]`
     /// and `#[inline(never)]` so LLVM does not inline it into the hot caller.
@@ -746,6 +850,30 @@ impl Default for LoopDetector {
 
 fn read_target_for_tool_call(tool_name: &str, args: &serde_json::Value) -> Option<String> {
     let base_name = base_tool_name(tool_name);
+
+    // For command tools: extract file target from simple read commands
+    // (`cat file`, `head file`, `tail file`) and normalized `__read__:path` commands.
+    if is_command_tool_name(base_name) {
+        if let Some(cmd) = args.get("command").and_then(|v| v.as_str()) {
+            // Check normalized form first
+            if let Some(path) = cmd.strip_prefix("__read__:") {
+                let trimmed = path.trim();
+                if !trimmed.is_empty() {
+                    return Some(trimmed.to_string());
+                }
+            }
+            // Extract from simple cat/head/tail commands (before normalization)
+            let tokens: Vec<&str> = cmd.split_whitespace().collect();
+            if tokens.len() == 2 && matches!(tokens[0], "cat" | "head" | "tail") {
+                let path = tokens[1].trim_matches(|c| c == '\'' || c == '"');
+                if !path.is_empty() {
+                    return Some(path.to_string());
+                }
+            }
+        }
+        return None;
+    }
+
     let read_tool = base_name == tools::READ_FILE
         || (base_name == tools::UNIFIED_FILE && is_unified_file_read(tool_name, args));
     if !read_tool {
@@ -1566,5 +1694,154 @@ mod tests {
             "Expected limit 30 in message: {}",
             msg
         );
+    }
+
+    // --- canonicalize_command_for_detection tests ---
+
+    #[test]
+    fn canonicalize_command_v_to_verify() {
+        assert_eq!(
+            canonicalize_command_for_detection("command -v ast-grep"),
+            Some("__verify__:ast-grep".to_string())
+        );
+    }
+
+    #[test]
+    fn canonicalize_which_to_verify() {
+        assert_eq!(
+            canonicalize_command_for_detection("which ast-grep"),
+            Some("__verify__:ast-grep".to_string())
+        );
+    }
+
+    #[test]
+    fn canonicalize_help_to_verify() {
+        assert_eq!(
+            canonicalize_command_for_detection("ast-grep --help"),
+            Some("__verify__:ast-grep".to_string())
+        );
+    }
+
+    #[test]
+    fn canonicalize_version_to_verify() {
+        assert_eq!(
+            canonicalize_command_for_detection("ast-grep --version"),
+            Some("__verify__:ast-grep".to_string())
+        );
+    }
+
+    #[test]
+    fn canonicalize_short_help_to_verify() {
+        assert_eq!(
+            canonicalize_command_for_detection("ast-grep -h"),
+            Some("__verify__:ast-grep".to_string())
+        );
+    }
+
+    #[test]
+    fn canonicalize_path_prefix_stripped() {
+        assert_eq!(
+            canonicalize_command_for_detection("command -v /usr/bin/ast-grep"),
+            Some("__verify__:ast-grep".to_string())
+        );
+    }
+
+    #[test]
+    fn canonicalize_cat_to_read() {
+        assert_eq!(
+            canonicalize_command_for_detection("cat src/main.rs"),
+            Some("__read__:src/main.rs".to_string())
+        );
+    }
+
+    #[test]
+    fn canonicalize_head_to_read() {
+        assert_eq!(
+            canonicalize_command_for_detection("head src/main.rs"),
+            Some("__read__:src/main.rs".to_string())
+        );
+    }
+
+    #[test]
+    fn canonicalize_arbitrary_command_returns_none() {
+        assert_eq!(
+            canonicalize_command_for_detection("cargo check -p vtcode-core"),
+            None
+        );
+    }
+
+    #[test]
+    fn canonicalize_empty_command_returns_none() {
+        assert_eq!(canonicalize_command_for_detection(""), None);
+    }
+
+    #[test]
+    fn canonicalize_env_prefix_skips_to_real_tool() {
+        assert_eq!(
+            canonicalize_command_for_detection("env VAR=val ast-grep --help"),
+            Some("__verify__:ast-grep".to_string())
+        );
+    }
+
+    #[test]
+    fn canonicalize_env_prefix_with_path() {
+        assert_eq!(
+            canonicalize_command_for_detection("env PATH=/usr/bin ast-grep --version"),
+            Some("__verify__:ast-grep".to_string())
+        );
+    }
+
+    // --- Command normalization integration tests ---
+
+    #[test]
+    fn verification_commands_normalize_to_same_hash() {
+        let mut detector = LoopDetector::with_max_repeated_calls(2);
+        let tool = tools::UNIFIED_EXEC;
+
+        // These should all normalize to __verify__:ast-grep
+        let args1 = json!({"command": "command -v ast-grep"});
+        let args2 = json!({"command": "which ast-grep"});
+        let args3 = json!({"command": "ast-grep --help"});
+
+        assert!(detector.record_call(tool, &args1).is_none());
+        // Second call with equivalent command should trigger
+        let warning = detector.record_call(tool, &args2);
+        assert!(
+            warning.is_some(),
+            "which ast-grep should be detected as duplicate of command -v ast-grep"
+        );
+    }
+
+    #[test]
+    fn cat_commands_normalize_to_read_target() {
+        let mut detector = LoopDetector::with_max_repeated_calls(100);
+        let tool = tools::UNIFIED_EXEC;
+
+        // cat file should set read_target
+        let args = json!({"command": "cat src/main.rs"});
+        detector.record_call(tool, &args);
+
+        // Check that the last record has a read_target
+        let record = detector.recent_calls.back().unwrap();
+        assert_eq!(
+            record.read_target.as_deref(),
+            Some("src/main.rs"),
+            "cat command should produce read_target"
+        );
+    }
+
+    #[test]
+    fn verification_spiral_detected_across_tools() {
+        let mut detector = LoopDetector::with_max_repeated_calls(2);
+        let tool = tools::UNIFIED_EXEC;
+
+        // Verification spiral: different commands checking the same tool
+        let args1 = json!({"command": "command -v ast-grep"});
+        let args2 = json!({"command": "ast-grep --version 2>&1 | head -5"});
+
+        assert!(detector.record_call(tool, &args1).is_none());
+        // --version doesn't normalize (has pipe), so this shouldn't trigger
+        // via identical-call detection. But the first two `command -v` variants
+        // should be caught.
     }
 }

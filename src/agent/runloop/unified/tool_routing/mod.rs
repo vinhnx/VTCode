@@ -1243,9 +1243,10 @@ pub(crate) async fn ensure_tool_permission_with_call_id<S: UiSession + ?Sized>(
     // However, when the safety gateway flagged this call as needing approval,
     // saved approvals must not short-circuit the prompt — the gateway's risk
     // assessment may differ from the original approval context.
-    let can_reuse_saved_approval = !auto_permission_classifier_review
-        && !full_auto_allowlist_active
-        && !safety_requires_prompt;
+    // In full-auto mode, allow reuse when the session cache confirms a prior
+    // approval for this exact command — the user already said yes.
+    let can_reuse_saved_approval =
+        !safety_requires_prompt && (!auto_permission_classifier_review || cached_command_approval);
 
     if can_reuse_saved_approval
         && let Some(flow) = reuse_saved_approval(
@@ -1261,6 +1262,13 @@ pub(crate) async fn ensure_tool_permission_with_call_id<S: UiSession + ?Sized>(
         .await
     {
         return Ok(flow);
+    }
+
+    // If the session permission cache confirmed a prior approval for this
+    // exact command, skip the popup even when reuse_saved_approval returned
+    // None (e.g. the persisted approval store doesn't have it yet).
+    if cached_command_approval && !safety_requires_prompt {
+        return Ok(approve_tool_permission_no_cache(tool_registry, tool_name).await);
     }
 
     if should_allow_without_prompt(

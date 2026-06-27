@@ -828,11 +828,11 @@ fn default_tool_output_mode() -> ToolOutputMode {
 }
 
 fn default_tool_output_max_lines() -> usize {
-    600
+    30
 }
 
 fn default_tool_output_spool_bytes() -> usize {
-    200_000
+    80_000
 }
 
 fn default_allow_tool_ansi() -> bool {
