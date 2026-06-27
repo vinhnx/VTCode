@@ -56,7 +56,7 @@ pub fn generate_tool_guidelines(
     if has_search && has_exec {
         lines.push("- Prefer search over shell for exploration.".to_string());
         lines.push(
-            "- Use `unified_search` `action=structural` for code shape; set `lang` and `format=github`. Grep for text."
+            "- Use `unified_search` `action=structural` for code shape; `action=outline` for a symbol map. Set `lang`; `format=github`. Grep text."
                 .to_string(),
         );
     }
@@ -297,6 +297,7 @@ mod tests {
         let guidelines = generate_tool_guidelines(&tools, None);
         assert!(guidelines.contains("Prefer search over shell"));
         assert!(guidelines.contains("action=structural"));
+        assert!(guidelines.contains("action=outline"));
         assert!(guidelines.contains("format=github"));
         assert!(guidelines.contains("git diff -- <path>"));
         assert!(guidelines.contains("Completion is a checkpoint"));

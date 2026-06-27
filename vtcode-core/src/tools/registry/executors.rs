@@ -558,6 +558,13 @@ impl ToolRegistry {
                     }
                 }
             }
+            UnifiedSearchAction::Outline => {
+                crate::tools::outline_search::execute_outline_search(
+                    self.workspace_root(),
+                    args.clone(),
+                )
+                .await
+            }
             UnifiedSearchAction::Intelligence => Ok(
                 serde_json::json!({"error": "Action 'intelligence' is deprecated. Use action='grep' or action='list'."}),
             ),

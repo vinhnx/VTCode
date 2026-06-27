@@ -66,6 +66,7 @@ pub fn tool_action_label(tool_name: &str, args: &Value) -> Cow<'static, str> {
                     "apply" => Cow::Borrowed("Structural apply"),
                     _ => Cow::Borrowed("Structural search"),
                 },
+                "outline" => Cow::Borrowed("Outline symbols"),
                 "tools" => Cow::Borrowed("List tools"),
                 "errors" => Cow::Borrowed("List errors"),
                 "agent" => Cow::Borrowed("Show agent info"),

@@ -3907,7 +3907,7 @@ fn truncate_auxiliary_output(text: &str) -> String {
     )
 }
 
-fn stderr_or_stdout(stderr: &[u8], stdout: &[u8]) -> String {
+pub(crate) fn stderr_or_stdout(stderr: &[u8], stdout: &[u8]) -> String {
     let stderr_text = String::from_utf8_lossy(stderr).trim().to_string();
     if !stderr_text.is_empty() {
         return stderr_text;

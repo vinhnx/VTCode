@@ -268,8 +268,8 @@ pub fn unified_search_parameters() -> Value {
         "properties": {
             "action": {
                 "type": "string",
-                "enum": ["grep", "list", "structural", "tools", "errors", "agent", "web", "skill"],
-                "description": "Search action: grep (text), list (files), structural (ast-grep), tools, errors, agent, web, skill. For 'web', provide 'query' to search the web, or 'url' to fetch a specific page."
+                "enum": ["grep", "list", "structural", "outline", "tools", "errors", "agent", "web", "skill"],
+                "description": "Search action: grep (text), list (files), structural (ast-grep pattern search), outline (ast-grep symbol map of a file/directory, no pattern needed), tools, errors, agent, web, skill. For 'web', provide 'query' to search the web, or 'url' to fetch a specific page."
             },
             "workflow": {
                 "type": "string",
@@ -279,16 +279,38 @@ pub fn unified_search_parameters() -> Value {
             },
             "pattern": {"type": "string", "description": "For grep: regex/literal. For list: glob filter. For structural: ast-grep pattern ($VAR=node, $$$ARGS=many). At least one of pattern or kind required for structural query."},
             "kind": {"type": "string", "description": "Ast-grep node kind (e.g. function_item, call_expression). Supports >, +, ~, :has(), :not() selectors. Use alone or with pattern."},
-            "path": {"type": "string", "description": "Directory or file path to search in. Used by `grep`, `list`, and structural `workflow=\"query\"|\"scan\"`. Public structural calls take one root per request even though raw ast-grep `run` can accept multiple paths.", "default": "."},
+            "path": {"type": "string", "description": "Directory or file path to search in. Used by `grep`, `list`, structural `workflow=\"query\"|\"scan\"`, and `outline`. Public structural calls take one root per request even though raw ast-grep `run` can accept multiple paths.", "default": "."},
             "config_path": {"type": "string", "description": "Ast-grep config path for structural `workflow=\"scan\"` or `workflow=\"test\"`. Defaults to workspace `sgconfig.yml`."},
             "filter": {"type": "string", "description": "Ast-grep rule or test filter for structural `workflow=\"scan\"` or `workflow=\"test\"`. On `scan`, this maps to `--filter` over rule ids from config."},
-            "lang": {"type": "string", "description": "Language for structural `workflow=\"query\"` or `workflow=\"rewrite\"`. Set it whenever the code language is known; required for debug_query and recommended for rewrite."},
+            "lang": {"type": "string", "description": "Language for structural `workflow=\"query\"` or `workflow=\"rewrite\"`, and for `outline`. Set it whenever the code language is known; required for debug_query and recommended for rewrite."},
             "selector": {"type": "string", "description": "Ast-grep selector when match is a subnode. Supports :has(), :not(), :is(), :nth-child()."},
             "strictness": {
                 "type": "string",
                 "enum": ["cst", "smart", "ast", "relaxed", "signature", "template"],
                 "description": "Pattern strictness for structural `workflow=\"query\"`."
             },
+            "view": {
+                "type": "string",
+                "enum": ["digest", "names", "full"],
+                "description": "Output shape for `outline`: digest (symbols grouped by kind, default), names (flat name groups), full (per-symbol records with ranges/signatures/members).",
+                "default": "digest"
+            },
+            "items": {
+                "type": "string",
+                "enum": ["auto", "structure", "exports", "imports", "all"],
+                "description": "Which top-level symbols `outline` includes. `auto` (default) uses structure for file input and exports for directory input.",
+                "default": "auto"
+            },
+            "type": {
+                "description": "Comma-separated symbol types to keep in `outline` (e.g. \"function\", [\"class\",\"enum\"]).",
+                "anyOf": [
+                    {"type": "string"},
+                    {"type": "array", "items": {"type": "string"}}
+                ]
+            },
+            "match": {"type": "string", "description": "Regex for `outline` to filter item names/signatures/first lines."},
+            "pub_members": {"type": "boolean", "description": "In `outline`, show only public members.", "default": false},
+            "follow": {"type": "boolean", "description": "Follow symbolic links in `outline`.", "default": false},
             "debug_query": {
                 "type": "string",
                 "enum": ["pattern", "ast", "cst", "sexp"],
@@ -458,7 +480,22 @@ mod tests {
             .expect("action enum");
 
         assert!(actions.iter().any(|value| value == "structural"));
+        assert!(actions.iter().any(|value| value == "outline"));
         assert!(!actions.iter().any(|value| value == "intelligence"));
+        assert!(
+            params["properties"]["view"]["enum"]
+                .as_array()
+                .expect("view enum")
+                .iter()
+                .any(|value| value == "digest")
+        );
+        assert!(
+            params["properties"]["items"]["enum"]
+                .as_array()
+                .expect("items enum")
+                .iter()
+                .any(|value| value == "auto")
+        );
         assert!(
             params["properties"]["debug_query"]["enum"]
                 .as_array()

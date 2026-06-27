@@ -191,5 +191,6 @@ What do you want to find?
 ## See Also
 
 - Full guide: `docs/development/grep-tool-guide.md`
+- Outline mode (`action=outline`): symbol maps via `ast-grep outline` (>= 0.44.0); see the grep-tool-guide "Outline mode" section.
 - System prompt: Agent instructions for grep usage
 - ripgrep docs: https://github.com/BurntSushi/ripgrep

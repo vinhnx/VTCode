@@ -162,6 +162,7 @@ pub mod resilience;
 
 pub use resilience::rate_limiter;
 pub mod defuddle;
+pub mod outline_search;
 pub mod registry;
 pub mod result;
 pub mod result_cache;
