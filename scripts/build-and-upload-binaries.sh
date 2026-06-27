@@ -206,20 +206,11 @@ build_binaries() {
 
     if command -v zig &>/dev/null; then
         build_linux=true
+        print_info "Phase 2: Building Linux x86_64 via zigbuild..."
+        ( env CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= cargo zigbuild --release --target x86_64-unknown-linux-gnu || print_warning "Linux x86_64 build failed" )
 
-        # Phase 2: Build all cross-compiled targets in parallel
-        print_info "Phase 2: Building Linux + Windows via zigbuild (parallel)..."
-        local cross_pids=()
-        local cross_status_dir
-        cross_status_dir=$(mktemp -d)
-
-        # Linux x86_64
-        ( env CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= cargo zigbuild --release --target x86_64-unknown-linux-gnu 2>"$cross_status_dir/linux-x64.log" && echo "ok" > "$cross_status_dir/linux-x64" || print_warning "Linux x86_64 build failed" ) &
-        cross_pids+=($!)
-
-        # Linux aarch64
-        ( env CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= cargo zigbuild --release --target aarch64-unknown-linux-gnu 2>"$cross_status_dir/linux-arm.log" && echo "ok" > "$cross_status_dir/linux-arm" || print_warning "Linux aarch64 build failed" ) &
-        cross_pids+=($!)
+        print_info "Phase 2: Building Linux aarch64 via zigbuild..."
+        ( env CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= cargo zigbuild --release --target aarch64-unknown-linux-gnu || print_warning "Linux aarch64 build failed" )
 
         # Windows builds via zigbuild only if Rust targets are installed
         local win_targets=("x86_64-pc-windows-msvc" "aarch64-pc-windows-msvc")
@@ -228,21 +219,12 @@ build_binaries() {
         for wt in "${win_targets[@]}"; do
             if echo "$installed_targets" | grep -q "$wt"; then
                 build_windows=true
-                ( env CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= cargo zigbuild --release --target "$wt" 2>"$cross_status_dir/${wt}.log" && echo "ok" > "$cross_status_dir/${wt}" || print_warning "Windows $wt build failed" ) &
-                cross_pids+=($!)
+                print_info "Phase 3: Building $wt via zigbuild..."
+                ( env CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= cargo zigbuild --release --target "$wt" || print_warning "Windows $wt build failed" )
             else
                 print_info "Skipping Windows $wt (target not installed, will use CI)"
             fi
         done
-
-        for pid in "${cross_pids[@]}"; do wait "$pid" || true; done
-
-        # Check actual build outcomes
-        local cross_ok=0
-        [[ -f "$cross_status_dir/linux-x64" ]] && cross_ok=$((cross_ok + 1)) || print_warning "Linux x86_64 build failed (log: $cross_status_dir/linux-x64.log)"
-        [[ -f "$cross_status_dir/linux-arm" ]] && cross_ok=$((cross_ok + 1)) || print_warning "Linux aarch64 build failed (log: $cross_status_dir/linux-arm.log)"
-        print_info "Cross-compiled builds: $cross_ok succeeded"
-        rm -rf "$cross_status_dir"
     else
         print_warning "Skipping Linux/Windows builds - 'zig' not available"
         print_info "To enable cross builds, install zig: https://ziglang.org/download/"
@@ -318,30 +300,15 @@ build_binaries_local() {
 
     # On macOS, build both architectures for Homebrew formula updates
     if [[ "$OSTYPE" == "darwin"* ]]; then
-        print_info "Building both macOS architectures (x86_64 and aarch64) in parallel..."
-
-        # Limit each build's internal parallelism to avoid saturating all cores
-        local total_cores
-        total_cores=$(sysctl -n hw.logicalcpu 2>/dev/null || nproc 2>/dev/null || echo 10)
-        local build_jobs=$(( total_cores < 6 ? total_cores - 1 : total_cores / 2 ))
-        export CARGO_BUILD_JOBS="$build_jobs"
-
-        # Build both architectures in parallel
-        local mac_pids=()
-        build_with_tool "x86_64-apple-darwin" &
-        mac_pids+=($!)
-        build_with_tool "aarch64-apple-darwin" &
-        mac_pids+=($!)
-
-        local mac_fail=0
-        for pid in "${mac_pids[@]}"; do
-            if ! wait "$pid"; then
-                mac_fail=$((mac_fail + 1))
-            fi
-        done
-        if [[ $mac_fail -gt 0 ]]; then
-            print_warning "$mac_fail macOS build(s) failed"
-        fi
+        print_info "Building both macOS architectures (x86_64 and aarch64)..."
+        
+        # Build x86_64
+        print_info "Building x86_64-apple-darwin..."
+        build_with_tool "x86_64-apple-darwin" || print_warning "x86_64 build failed"
+        
+        # Build aarch64
+        print_info "Building aarch64-apple-darwin..."
+        build_with_tool "aarch64-apple-darwin" || print_warning "aarch64 build failed"
         
         if [ "$DRY_RUN" = true ]; then
             print_success "Dry run: Local macOS build process simulation complete"
@@ -521,6 +488,52 @@ upload_binaries() {
         return 1
     fi
     cd ..
+}
+
+update_homebrew_formula_file() {
+    local formula_path=$1
+    local version=$2
+    local x86_64_macos_sha=$3
+    local aarch64_macos_sha=$4
+    local aarch64_linux_sha=${5:-}
+
+    FORMULA_PATH="$formula_path" \
+    FORMULA_VERSION="$version" \
+    FORMULA_X86_64_MACOS_SHA="$x86_64_macos_sha" \
+    FORMULA_AARCH64_MACOS_SHA="$aarch64_macos_sha" \
+    FORMULA_AARCH64_LINUX_SHA="$aarch64_linux_sha" \
+        python3 <<'PYTHON_SCRIPT'
+import os
+import re
+from pathlib import Path
+
+formula_path = Path(os.environ["FORMULA_PATH"])
+version = os.environ["FORMULA_VERSION"]
+x86_64_macos_sha = os.environ["FORMULA_X86_64_MACOS_SHA"]
+aarch64_macos_sha = os.environ["FORMULA_AARCH64_MACOS_SHA"]
+aarch64_linux_sha = os.environ.get("FORMULA_AARCH64_LINUX_SHA", "")
+
+content = formula_path.read_text()
+content = re.sub(r'version\s+"[^"]*"', f'version "{version}"', content)
+content = re.sub(
+    r'(aarch64-apple-darwin\.tar\.gz"\s+sha256\s+")([^"]*)(")',
+    lambda match: f'{match.group(1)}{aarch64_macos_sha}{match.group(3)}',
+    content,
+)
+content = re.sub(
+    r'(x86_64-apple-darwin\.tar\.gz"\s+sha256\s+")([^"]*)(")',
+    lambda match: f'{match.group(1)}{x86_64_macos_sha}{match.group(3)}',
+    content,
+)
+if aarch64_linux_sha:
+    content = re.sub(
+        r'(aarch64-unknown-linux-gnu\.tar\.gz"\s+sha256\s+")([^"]*)(")',
+        lambda match: f'{match.group(1)}{aarch64_linux_sha}{match.group(3)}',
+        content,
+    )
+
+formula_path.write_text(content)
+PYTHON_SCRIPT
 }
 
 publish_homebrew_tap() {

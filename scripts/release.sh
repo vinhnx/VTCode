@@ -25,6 +25,15 @@ print_distribution() {
     printf '%b\n' "${PURPLE}DISTRIBUTION:${NC} $1"
 }
 
+package_release_archive() {
+    local target=$1
+    local binary_name=$2
+    local archive_path=$3
+    local release_dir="target/$target/release"
+
+    tar -C "$release_dir" -czf "$archive_path" "$binary_name"
+}
+
 # Get GitHub username from commit author email
 get_github_username() {
     local email=$1
@@ -638,20 +647,55 @@ trigger_docs_rs_rebuild() {
         vtcode-utility-tool-specs vtcode-a2a vtcode-mcp
         vtcode-ui vtcode-safety vtcode-llm vtcode-skills
     )
-    # Fire all requests in parallel (background subshells) to avoid blocking
-    # sequentially on each HTTP round-trip. Max 8 concurrent to be polite.
-    local docs_pids=()
-    local max_concurrent=8
     for crate in "${crates[@]}"; do
-        (curl -s -o /dev/null "https://docs.rs/${crate}/${version}" || true) &
-        docs_pids+=($!)
-        # Throttle if we hit the concurrency cap
-        if [[ ${#docs_pids[@]} -ge $max_concurrent ]]; then
-            wait "${docs_pids[0]}" || true
-            docs_pids=("${docs_pids[@]:1}")
-        fi
+        curl -s -o /dev/null "https://docs.rs/${crate}/${version}" || true
     done
-    for pid in "${docs_pids[@]}"; do wait "$pid" || true; done
+}
+
+update_homebrew_formula_file() {
+    local formula_path=$1
+    local version=$2
+    local x86_64_macos_sha=$3
+    local aarch64_macos_sha=$4
+    local aarch64_linux_sha=${5:-}
+
+    FORMULA_PATH="$formula_path" \
+    FORMULA_VERSION="$version" \
+    FORMULA_X86_64_MACOS_SHA="$x86_64_macos_sha" \
+    FORMULA_AARCH64_MACOS_SHA="$aarch64_macos_sha" \
+    FORMULA_AARCH64_LINUX_SHA="$aarch64_linux_sha" \
+        python3 <<'PYTHON_SCRIPT'
+import os
+import re
+from pathlib import Path
+
+formula_path = Path(os.environ["FORMULA_PATH"])
+version = os.environ["FORMULA_VERSION"]
+x86_64_macos_sha = os.environ["FORMULA_X86_64_MACOS_SHA"]
+aarch64_macos_sha = os.environ["FORMULA_AARCH64_MACOS_SHA"]
+aarch64_linux_sha = os.environ.get("FORMULA_AARCH64_LINUX_SHA", "")
+
+content = formula_path.read_text()
+content = re.sub(r'version\s+"[^"]*"', f'version "{version}"', content)
+content = re.sub(
+    r'(aarch64-apple-darwin\.tar\.gz"\s+sha256\s+")([^"]*)(")',
+    lambda match: f'{match.group(1)}{aarch64_macos_sha}{match.group(3)}',
+    content,
+)
+content = re.sub(
+    r'(x86_64-apple-darwin\.tar\.gz"\s+sha256\s+")([^"]*)(")',
+    lambda match: f'{match.group(1)}{x86_64_macos_sha}{match.group(3)}',
+    content,
+)
+if aarch64_linux_sha:
+    content = re.sub(
+        r'(aarch64-unknown-linux-gnu\.tar\.gz"\s+sha256\s+")([^"]*)(")',
+        lambda match: f'{match.group(1)}{aarch64_linux_sha}{match.group(3)}',
+        content,
+    )
+
+formula_path.write_text(content)
+PYTHON_SCRIPT
 }
 
 publish_homebrew_tap() {
@@ -1108,33 +1152,14 @@ main() {
         local binaries_dir="/tmp/vtcode-release-$released_version"
         mkdir -p "$binaries_dir"
 
-        # Build macOS binaries locally (both architectures in parallel)
-         print_info "Building macOS binaries locally (both architectures in parallel)..."
-
+        # Build macOS binaries locally
+         print_info "Building macOS binaries locally..."
+         
          # Clear RUSTC_WRAPPER to avoid sccache permission issues
          unset RUSTC_WRAPPER
-
-         # Limit per-build parallelism so both arch builds don't fight for all cores
-         local total_cores
-         total_cores=$(sysctl -n hw.logicalcpu 2>/dev/null || echo 10)
-         local build_jobs=$(( total_cores < 6 ? total_cores - 1 : total_cores / 2 ))
-         export CARGO_BUILD_JOBS="$build_jobs"
-
-         # Build both architectures in parallel
-         local mac_build_pids=()
-         local mac_status_dir
-         mac_status_dir=$(mktemp -d)
-
-         (cargo build --release --target x86_64-apple-darwin 2>"$mac_status_dir/x64.log" && echo "ok" > "$mac_status_dir/x64") &
-         mac_build_pids+=($!)
-         (cargo build --release --target aarch64-apple-darwin 2>"$mac_status_dir/arm.log" && echo "ok" > "$mac_status_dir/arm") &
-         mac_build_pids+=($!)
-
-         # Wait for both builds
-         for pid in "${mac_build_pids[@]}"; do wait "$pid" || true; done
-
-         # Package x86_64
-         if [[ -f "$mac_status_dir/x64" ]] && [[ -f "target/x86_64-apple-darwin/release/vtcode" ]]; then
+         
+         # x86_64-apple-darwin
+         if cargo build --release --target x86_64-apple-darwin &>/dev/null; then
             package_release_archive \
                 "x86_64-apple-darwin" \
                 "vtcode" \
@@ -1142,11 +1167,11 @@ main() {
             shasum -a 256 "$binaries_dir/vtcode-$released_version-x86_64-apple-darwin.tar.gz" > "$binaries_dir/vtcode-$released_version-x86_64-apple-darwin.sha256"
             print_success "Built macOS x86_64"
         else
-            print_warning "Failed to build macOS x86_64 (log: $mac_status_dir/x64.log)"
+            print_warning "Failed to build macOS x86_64"
         fi
 
-        # Package aarch64
-        if [[ -f "$mac_status_dir/arm" ]] && [[ -f "target/aarch64-apple-darwin/release/vtcode" ]]; then
+        # aarch64-apple-darwin
+        if cargo build --release --target aarch64-apple-darwin &>/dev/null; then
             package_release_archive \
                 "aarch64-apple-darwin" \
                 "vtcode" \
@@ -1154,11 +1179,8 @@ main() {
             shasum -a 256 "$binaries_dir/vtcode-$released_version-aarch64-apple-darwin.tar.gz" > "$binaries_dir/vtcode-$released_version-aarch64-apple-darwin.sha256"
             print_success "Built macOS aarch64 (Apple Silicon)"
         else
-            print_warning "Failed to build macOS aarch64 (log: $mac_status_dir/arm.log)"
+            print_warning "Failed to build macOS aarch64"
         fi
-
-        # Cleanup temp status dir
-        rm -rf "$mac_status_dir"
 
         # Download Linux and Windows binaries from CI artifacts
         print_info "Downloading Linux and Windows binaries from CI..."
@@ -1182,97 +1204,54 @@ main() {
             local ci_artifacts_dir="/tmp/vtcode-ci-artifacts-$released_version"
             mkdir -p "$ci_artifacts_dir"
 
-            # Download all artifacts in parallel
-            print_info "Downloading CI artifacts in parallel..."
-
-            local dl_pids=()
-            local dl_tmp_dir
-            dl_tmp_dir=$(mktemp -d)
-
-            # Linux x86_64 gnu
-            (
-                local d="$dl_tmp_dir/linux-gnu"
-                mkdir -p "$d"
-                if gh run download "$run_id" --name "vtcode-${released_version}-x86_64-unknown-linux-gnu" --dir "$d" 2>/dev/null; then
-                    mv "$d"/*.tar.gz "$binaries_dir/" 2>/dev/null || true
-                    mv "$d"/*.sha256 "$binaries_dir/" 2>/dev/null || true
-                    echo "ok" > "$d/.status"
-                fi
-            ) &
-            dl_pids+=($!)
-
-            # Linux x86_64 musl
-            (
-                local d="$dl_tmp_dir/linux-musl"
-                mkdir -p "$d"
-                if gh run download "$run_id" --name "vtcode-${released_version}-x86_64-unknown-linux-musl" --dir "$d" 2>/dev/null; then
-                    mv "$d"/*.tar.gz "$binaries_dir/" 2>/dev/null || true
-                    mv "$d"/*.sha256 "$binaries_dir/" 2>/dev/null || true
-                    echo "ok" > "$d/.status"
-                fi
-            ) &
-            dl_pids+=($!)
-
-            # Linux aarch64
-            (
-                local d="$dl_tmp_dir/linux-aarch64"
-                mkdir -p "$d"
-                if gh run download "$run_id" --name "vtcode-${released_version}-aarch64-unknown-linux-gnu" --dir "$d" 2>/dev/null; then
-                    mv "$d"/*.tar.gz "$binaries_dir/" 2>/dev/null || true
-                    mv "$d"/*.sha256 "$binaries_dir/" 2>/dev/null || true
-                    echo "ok" > "$d/.status"
-                fi
-            ) &
-            dl_pids+=($!)
-
-            # Windows x86_64 (only when explicitly required)
-            if [[ "$require_windows" == "true" ]]; then
-                (
-                    local d="$dl_tmp_dir/windows"
-                    mkdir -p "$d"
-                    if gh run download "$run_id" --name "vtcode-${released_version}-x86_64-pc-windows-msvc" --dir "$d" 2>/dev/null; then
-                        mv "$d"/*.zip "$binaries_dir/" 2>/dev/null || true
-                        mv "$d"/*.sha256 "$binaries_dir/" 2>/dev/null || true
-                        echo "ok" > "$d/.status"
-                    fi
-                ) &
-                dl_pids+=($!)
-            else
-                print_info "Skipping Windows artifact download (set RELEASE_REQUIRE_WINDOWS=true to enable)"
-            fi
-
-            # Wait for all downloads
-            for pid in "${dl_pids[@]}"; do wait "$pid" || true; done
-
-            # Check results
-            if [[ -f "$dl_tmp_dir/linux-gnu/.status" ]]; then
+            # Download Linux x86_64 artifact
+            print_info "Downloading Linux x86_64 artifact..."
+            if gh run download "$run_id" --name "vtcode-${released_version}-x86_64-unknown-linux-gnu" --dir "$ci_artifacts_dir" 2>/dev/null; then
+                mv "$ci_artifacts_dir"/*.tar.gz "$binaries_dir/" 2>/dev/null || true
+                mv "$ci_artifacts_dir"/*.sha256 "$binaries_dir/" 2>/dev/null || true
                 print_success "Downloaded: Linux x86_64 gnu"
                 linux_gnu_downloaded=true
             else
                 print_warning "Could not download: Linux x86_64 gnu"
             fi
-            if [[ -f "$dl_tmp_dir/linux-musl/.status" ]]; then
+
+            # Download Linux x86_64 musl artifact
+            print_info "Downloading Linux x86_64 musl artifact..."
+            if gh run download "$run_id" --name "vtcode-${released_version}-x86_64-unknown-linux-musl" --dir "$ci_artifacts_dir" 2>/dev/null; then
+                mv "$ci_artifacts_dir"/*.tar.gz "$binaries_dir/" 2>/dev/null || true
+                mv "$ci_artifacts_dir"/*.sha256 "$binaries_dir/" 2>/dev/null || true
                 print_success "Downloaded: Linux x86_64 musl"
                 linux_musl_downloaded=true
             else
                 print_warning "Could not download: Linux x86_64 musl"
             fi
-            if [[ -f "$dl_tmp_dir/linux-aarch64/.status" ]]; then
+
+            # Download Linux aarch64 artifact
+            print_info "Downloading Linux aarch64 artifact..."
+            if gh run download "$run_id" --name "vtcode-${released_version}-aarch64-unknown-linux-gnu" --dir "$ci_artifacts_dir" 2>/dev/null; then
+                mv "$ci_artifacts_dir"/*.tar.gz "$binaries_dir/" 2>/dev/null || true
+                mv "$ci_artifacts_dir"/*.sha256 "$binaries_dir/" 2>/dev/null || true
                 print_success "Downloaded: Linux aarch64"
                 linux_aarch64_downloaded=true
             else
                 print_warning "Could not download: Linux aarch64"
             fi
+
+            # Download Windows x86_64 artifact only when explicitly required.
             if [[ "$require_windows" == "true" ]]; then
-                if [[ -f "$dl_tmp_dir/windows/.status" ]]; then
+                print_info "Downloading Windows x86_64 artifact..."
+                if gh run download "$run_id" --name "vtcode-${released_version}-x86_64-pc-windows-msvc" --dir "$ci_artifacts_dir" 2>/dev/null; then
+                    mv "$ci_artifacts_dir"/*.zip "$binaries_dir/" 2>/dev/null || true
+                    mv "$ci_artifacts_dir"/*.sha256 "$binaries_dir/" 2>/dev/null || true
                     print_success "Downloaded: Windows x86_64"
                     windows_downloaded=true
                 else
                     print_warning "Could not download: Windows x86_64"
                 fi
+            else
+                print_info "Skipping Windows artifact download (set RELEASE_REQUIRE_WINDOWS=true to enable)"
             fi
 
-            rm -rf "$dl_tmp_dir"
             rm -rf "$ci_artifacts_dir"
         else
             print_warning "No CI workflow run found - will use macOS binaries only"
