@@ -906,9 +906,7 @@ main() {
     if [[ "$release_argument" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
         next_version="$release_argument"
     else
-        # Strip pre-release suffix (e.g. -dev, -rc1) before semver arithmetic
-        local base_version="${current_version%%-*}"
-        IFS='.' read -ra v <<< "$base_version"
+        IFS='.' read -ra v <<< "$current_version"
         case "$release_argument" in
             major)
                 local major_num=$((v[0] + 1))
