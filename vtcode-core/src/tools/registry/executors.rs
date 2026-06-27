@@ -564,7 +564,7 @@ impl ToolRegistry {
             UnifiedSearchAction::Tools => self.execute_search_tools(args).await,
             UnifiedSearchAction::Errors => self.execute_get_errors(args).await,
             UnifiedSearchAction::Agent => self.execute_agent_info().await,
-            UnifiedSearchAction::Web => self.execute_web_fetch(args).await,
+            UnifiedSearchAction::Web => self.execute_unified_web(args).await,
             UnifiedSearchAction::Skill => self.execute_skill(args).await,
         }
     }
@@ -804,28 +804,33 @@ impl ToolRegistry {
         Ok(response)
     }
 
-    pub(super) async fn execute_web_fetch(&self, args: Value) -> Result<Value> {
+    /// Dispatch the `unified_search action="web"` surface.
+    ///
+    /// This action is polymorphic:
+    /// - `url` present  -> fetch that URL via the secure `WebFetchTool`
+    ///   (HTTPS enforcement, SSRF/private-network blocking, redirect validation,
+    ///   content-type and size caps).
+    /// - `query`/`pattern` present -> run a web search via `WebSearchTool`.
+    ///
+    /// Supplying neither (or both) returns an actionable error instead of
+    /// silently doing the wrong thing.
+    ///
+    /// Both tools are pulled from the inventory so user-configured
+    /// `[web_fetch]` and `[web_search]` settings are honored.
+    pub(super) async fn execute_unified_web(&self, args: Value) -> Result<Value> {
         acquire_executor_rate_limit("unified_search:web", 1.0)?;
 
-        let url = args
-            .get("url")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| anyhow!("Missing url in web_fetch"))?;
-
-        let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(30))
-            .user_agent("VT Code/1.0")
-            .build()?;
-
-        let response = client.get(url).send().await?;
-        let status = response.status();
-
-        if !status.is_success() {
-            return Err(anyhow!("Web fetch failed with status: {}", status));
+        match classify_unified_web_args(&args)? {
+            UnifiedWebDispatch::Fetch { args: fetch_args } => {
+                self.inventory.web_fetch_tool().execute(fetch_args).await
+            }
+            UnifiedWebDispatch::Search { query, extra } => {
+                self.inventory
+                    .web_search_tool()
+                    .execute(merge_search_args(&query, &extra))
+                    .await
+            }
         }
-
-        let body = response.text().await?;
-        Ok(json!({ "success": true, "content": body, "url": url }))
     }
 
     pub(super) async fn execute_skill(&self, args: Value) -> Result<Value> {
@@ -1032,6 +1037,65 @@ impl ToolRegistry {
     // ============================================================
     // INTERNAL IMPLEMENTATIONS
     // ============================================================
+}
+
+/// Outcome of classifying `unified_search action="web"` arguments. Extracted
+/// from `execute_unified_web` so the dispatch rules can be unit-tested without
+/// touching the network.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum UnifiedWebDispatch {
+    /// Caller requested a URL fetch; pass the original args through.
+    Fetch { args: Value },
+    /// Caller requested a web search; carry the resolved query plus any
+    /// forwarded `max_results` extras.
+    Search { query: String, extra: Value },
+}
+
+fn classify_unified_web_args(args: &Value) -> Result<UnifiedWebDispatch> {
+    let has_url = args
+        .get("url")
+        .and_then(|v| v.as_str())
+        .map(|u| !u.trim().is_empty())
+        .unwrap_or(false);
+    let query = args
+        .get("query")
+        .or_else(|| args.get("pattern"))
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|q| !q.is_empty())
+        .map(str::to_string);
+
+    match (has_url, query) {
+        (true, Some(_)) => Err(anyhow!(
+            "unified_search action='web' got both 'url' and 'query'. Provide 'url' to fetch a page, or 'query' to search the web — not both."
+        )),
+        (true, None) => Ok(UnifiedWebDispatch::Fetch { args: args.clone() }),
+        (false, Some(query)) => Ok(UnifiedWebDispatch::Search {
+            query,
+            extra: pick_search_extras(args),
+        }),
+        (false, None) => Err(anyhow!(
+            "unified_search action='web' requires either 'url' (to fetch a page) or 'query' (to search the web)."
+        )),
+    }
+}
+
+fn pick_search_extras(args: &Value) -> Value {
+    let mut extra = serde_json::Map::new();
+    if let Some(max) = args.get("max_results") {
+        extra.insert("max_results".to_string(), max.clone());
+    }
+    Value::Object(extra)
+}
+
+fn merge_search_args(query: &str, extra: &Value) -> Value {
+    let mut map = match extra {
+        Value::Object(map) => map.clone(),
+        _ => serde_json::Map::new(),
+    };
+    map.entry("query".to_string())
+        .or_insert(Value::String(query.to_string()));
+    Value::Object(map)
 }
 
 fn ensure_unified_search_grep_pattern(args: &Value) -> Result<()> {
@@ -1426,13 +1490,14 @@ mod git_diff_tests {
 #[cfg(test)]
 mod unified_action_error_tests {
     use super::{
-        CargoTestCommandKind, ExecOutputPreview, PtyEphemeralCapture,
+        CargoTestCommandKind, ExecOutputPreview, PtyEphemeralCapture, UnifiedWebDispatch,
         attach_exec_recovery_guidance, attach_failure_diagnostics_metadata,
         build_exec_output_preview, build_exec_response, build_head_tail_preview,
         cargo_selector_error_diagnostics, cargo_test_failure_diagnostics, cargo_test_rerun_hint,
-        clamp_inspect_lines, clamp_max_matches, ensure_unified_search_grep_pattern,
-        extract_run_session_id_from_read_file_error, extract_run_session_id_from_tool_output_path,
-        filter_lines, missing_unified_exec_action_error, missing_unified_search_action_error,
+        clamp_inspect_lines, clamp_max_matches, classify_unified_web_args,
+        ensure_unified_search_grep_pattern, extract_run_session_id_from_read_file_error,
+        extract_run_session_id_from_tool_output_path, filter_lines, merge_search_args,
+        missing_unified_exec_action_error, missing_unified_search_action_error,
         resolve_exec_run_session_id, summarized_arg_keys,
     };
     use crate::tools::types::VTCodeExecSession;
@@ -1490,6 +1555,97 @@ mod unified_action_error_tests {
             "path": "README.md"
         }))
         .expect("specific grep pattern should be accepted");
+    }
+
+    #[test]
+    fn unified_web_dispatch_routes_query_to_search() {
+        let args = json!({ "action": "web", "query": "who is vinhnx" });
+        let plan = classify_unified_web_args(&args).expect("query should dispatch");
+        match plan {
+            UnifiedWebDispatch::Search { query, extra } => {
+                assert_eq!(query, "who is vinhnx");
+                assert!(extra.get("max_results").is_none());
+            }
+            other => panic!("expected Search, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn unified_web_dispatch_routes_pattern_to_search() {
+        let args = json!({ "action": "web", "pattern": "vinhnx" });
+        let plan = classify_unified_web_args(&args).expect("pattern should dispatch");
+        match plan {
+            UnifiedWebDispatch::Search { query, extra } => {
+                assert_eq!(query, "vinhnx");
+                assert!(extra.get("max_results").is_none());
+            }
+            other => panic!("expected Search, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn unified_web_dispatch_forwards_search_extras() {
+        let args = json!({
+            "action": "web",
+            "query": "rust async runtime",
+            "max_results": 5
+        });
+        let plan = classify_unified_web_args(&args).expect("query with extras should dispatch");
+        let UnifiedWebDispatch::Search { extra, .. } = plan else {
+            panic!("expected Search dispatch");
+        };
+        assert_eq!(extra["max_results"], json!(5));
+    }
+
+    #[test]
+    fn unified_web_dispatch_routes_url_to_fetch() {
+        let args = json!({ "action": "web", "url": "https://example.com", "prompt": "summarize" });
+        let plan = classify_unified_web_args(&args).expect("url should dispatch");
+        match plan {
+            UnifiedWebDispatch::Fetch { args: forwarded } => {
+                assert_eq!(forwarded["url"], "https://example.com");
+                assert_eq!(forwarded["prompt"], "summarize");
+            }
+            other => panic!("expected Fetch, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn unified_web_dispatch_rejects_url_plus_query() {
+        let args = json!({
+            "action": "web",
+            "url": "https://example.com",
+            "query": "should not also search"
+        });
+        let err = classify_unified_web_args(&args)
+            .expect_err("both url and query must error with an actionable message");
+        let text = err.to_string();
+        assert!(text.contains("'url' and 'query'"), "msg was: {text}");
+        assert!(text.contains("not both"), "msg was: {text}");
+    }
+
+    #[test]
+    fn unified_web_dispatch_rejects_missing_arguments() {
+        let args = json!({ "action": "web" });
+        let err = classify_unified_web_args(&args).expect_err("missing url and query must error");
+        let text = err.to_string();
+        assert!(text.contains("requires either 'url'"), "msg was: {text}");
+    }
+
+    #[test]
+    fn unified_web_dispatch_rejects_empty_url_and_query() {
+        let args = json!({ "action": "web", "url": "  ", "query": "" });
+        let err = classify_unified_web_args(&args)
+            .expect_err("whitespace-only url and empty query must error");
+        let text = err.to_string();
+        assert!(text.contains("requires either 'url'"), "msg was: {text}");
+    }
+
+    #[test]
+    fn unified_web_merge_search_args_preserves_query() {
+        let merged = merge_search_args("rust", &json!({ "max_results": 3 }));
+        assert_eq!(merged["query"], "rust");
+        assert_eq!(merged["max_results"], json!(3));
     }
 
     #[test]

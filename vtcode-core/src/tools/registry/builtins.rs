@@ -10,6 +10,7 @@ use linkme::distributed_slice;
 use crate::config::constants::tools;
 use crate::config::types::CapabilityLevel;
 use crate::tool_policy::ToolPolicy;
+use crate::tools::defuddle::{DEFUDDLE_FETCH_DESCRIPTION, DefuddleTool};
 use crate::tools::handlers::{
     FinishPlanningTool, PlanningWorkflowState, StartPlanningTool, TaskTrackerTool,
 };
@@ -17,6 +18,7 @@ use crate::tools::native_memory;
 use crate::tools::request_user_input::RequestUserInputTool;
 use crate::tools::tool_intent::builtin_tool_behavior;
 use crate::tools::web_fetch::{WEB_FETCH_DESCRIPTION, WebFetchTool};
+use crate::tools::web_search::{WEB_SEARCH_DESCRIPTION, WebSearchTool};
 use serde_json::json;
 use vtcode_utility_tool_specs::{
     apply_patch_parameters, close_agent_parameters, cron_create_parameters, cron_delete_parameters,
@@ -26,7 +28,7 @@ use vtcode_utility_tool_specs::{
     wait_agent_parameters,
 };
 
-use super::distributed::BUILTIN_TOOLS;
+use super::distributed::{BUILTIN_TOOLS, tool_config};
 use super::registration::{ToolCatalogSource, ToolRegistration};
 use super::{ToolInventory, ToolRegistry, native_cgp_tool_factory};
 
@@ -323,7 +325,7 @@ fn register_unified_search(_plan_state: Option<&PlanningWorkflowState>) -> ToolR
         ToolRegistry::unified_search_executor,
     )
     .with_description(
-        "Search & discovery: grep, list, structural (ast-grep), tools, errors, web, skills. Use action=list for files.",
+        "Search & discovery: grep, list, structural (ast-grep), tools, errors, web, skills. Use action=list for files. For web: action=web with 'query' searches the web, or with 'url' fetches a page.",
     )
     .with_parameter_schema(unified_search_parameters())
     .with_permission(ToolPolicy::Allow)
@@ -347,7 +349,9 @@ fn register_unified_search(_plan_state: Option<&PlanningWorkflowState>) -> ToolR
 
 #[distributed_slice(BUILTIN_TOOLS)]
 fn register_web_fetch(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
-    let web_fetch = WebFetchTool::new();
+    let web_fetch = tool_config()
+        .map(|snapshot| WebFetchTool::from_config(&snapshot.web_fetch))
+        .unwrap_or_default();
     let web_fetch_for_factory = web_fetch.clone();
     let web_fetch_factory = native_cgp_tool_factory(move || web_fetch_for_factory.clone());
     ToolRegistration::from_tool_instance(
@@ -382,6 +386,81 @@ fn register_web_fetch(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegist
     }))
     .with_permission(ToolPolicy::Prompt)
     .with_aliases(["fetch_url", "web"])
+}
+
+// ---------------------------------------------------------------------------
+// WEB SEARCH (built-in, query -> ranked results, keyless DuckDuckGo only)
+// ---------------------------------------------------------------------------
+
+#[distributed_slice(BUILTIN_TOOLS)]
+fn register_web_search(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
+    let web_search = WebSearchTool::with_config(
+        tool_config()
+            .map(|snapshot| snapshot.web_search.clone())
+            .unwrap_or_default(),
+    );
+    let web_search_for_factory = web_search.clone();
+    let web_search_factory = native_cgp_tool_factory(move || web_search_for_factory.clone());
+    ToolRegistration::from_tool_instance(tools::WEB_SEARCH, CapabilityLevel::Basic, web_search)
+        .with_native_cgp_factory(web_search_factory)
+        .with_description(WEB_SEARCH_DESCRIPTION)
+        .with_parameter_schema(json!({
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "The search query (a topic, question, or keywords)."
+                },
+                "pattern": {
+                    "type": "string",
+                    "description": "Alias for 'query' (used by the unified_search tool)."
+                },
+                "max_results": {
+                    "type": "integer",
+                    "description": "Maximum number of results to return (default: 8, max: 20)."
+                }
+            },
+            "required": ["query"],
+            "additionalProperties": false
+        }))
+        .with_permission(ToolPolicy::Prompt)
+        .with_aliases(["search_web", "websearch"])
+}
+
+// ---------------------------------------------------------------------------
+// DEFUDDLE FETCH (built-in, one-shot markdown extraction via defuddle.md)
+// ---------------------------------------------------------------------------
+
+#[distributed_slice(BUILTIN_TOOLS)]
+fn register_defuddle_fetch(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
+    let defuddle = DefuddleTool::new();
+    let defuddle_for_factory = defuddle.clone();
+    let defuddle_factory = native_cgp_tool_factory(move || defuddle_for_factory.clone());
+    ToolRegistration::from_tool_instance(
+        tools::DEFUDDLE_FETCH,
+        CapabilityLevel::Basic,
+        defuddle,
+    )
+    .with_native_cgp_factory(defuddle_factory)
+    .with_description(DEFUDDLE_FETCH_DESCRIPTION)
+    .with_parameter_schema(json!({
+        "type": "object",
+        "properties": {
+            "url": {
+                "type": "string",
+                "format": "uri",
+                "description": "The URL to fetch through defuddle.md. Must be http(s)."
+            },
+            "max_bytes": {
+                "type": "integer",
+                "description": "Hard cap on the returned markdown size in bytes (default: 262144, max: 262144)."
+            }
+        },
+        "required": ["url"],
+        "additionalProperties": false
+    }))
+    .with_permission(ToolPolicy::Prompt)
+    .with_aliases(["defuddle", "extract_markdown"])
 }
 
 #[distributed_slice(BUILTIN_TOOLS)]

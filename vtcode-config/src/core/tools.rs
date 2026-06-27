@@ -54,6 +54,10 @@ pub struct ToolsConfig {
     #[serde(default)]
     pub web_fetch: WebFetchConfig,
 
+    /// Web Search tool configuration (provider selection, result caps, timeouts).
+    #[serde(default)]
+    pub web_search: WebSearchConfig,
+
     /// Dynamic plugin runtime configuration
     #[serde(default)]
     pub plugins: PluginRuntimeConfig,
@@ -98,9 +102,70 @@ pub enum WebFetchMode {
     Whitelist,
 }
 
+/// Web search provider identifier.
+///
+/// VT Code only targets the keyless DuckDuckGo HTML endpoint for web
+/// search, so the provider enum is intentionally minimal. `Auto` defers to
+/// the DDG default and is the recommended choice.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "snake_case")]
+pub enum WebSearchProvider {
+    /// Default; same as `Duckduckgo` for now (kept for back-compat).
+    #[default]
+    Auto,
+    /// Keyless DuckDuckGo HTML scraping (`https://html.duckduckgo.com/html/`).
+    Duckduckgo,
+}
+
+/// Web Search tool configuration.
+///
+/// VT Code only uses the keyless DuckDuckGo HTML endpoint. The defaults
+/// below are tuned to be polite to that endpoint and to keep the agent
+/// responsive under low-quota conditions:
+/// - `cooldown_ms`: minimum gap between consecutive live requests on the
+///   same tool instance (avoids bursty hammering that triggers the DDG
+///   anti-bot challenge).
+/// - `cache_ttl_secs`: how long successful results are served from memory
+///   before a fresh request is made.
+/// - `session_max_requests`: hard cap on outbound requests per tool
+///   instance (defends against runaway loops).
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct WebSearchConfig {
+    /// Provider selection. Currently the only supported backend is
+    /// DuckDuckGo; this field is kept for future extension.
+    #[serde(default)]
+    pub provider: WebSearchProvider,
+
+    /// Default cap on the number of results returned per call. Hard-capped
+    /// at 20 by the runtime to keep responses inline-friendly.
+    #[serde(default = "default_web_search_max_results")]
+    pub max_results: usize,
+
+    /// Per-request timeout in seconds. Capped at 60s by the runtime.
+    #[serde(default = "default_web_search_timeout_secs")]
+    pub timeout_secs: u64,
+
+    /// Minimum gap between consecutive live requests, in milliseconds.
+    /// Defaults to 3000ms (3s).
+    #[serde(default = "default_web_search_cooldown_ms")]
+    pub cooldown_ms: u64,
+
+    /// How long successful search results are cached before a fresh
+    /// request is made, in seconds. Defaults to 300s (5 min).
+    #[serde(default = "default_web_search_cache_ttl_secs")]
+    pub cache_ttl_secs: u64,
+
+    /// Hard cap on outbound network requests per tool instance. Defaults
+    /// to 12 to stay well below DDG's soft session quotas.
+    #[serde(default = "default_web_search_session_max_requests")]
+    pub session_max_requests: u32,
+}
+
 /// Web Fetch tool security configuration
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct WebFetchConfig {
     /// Security mode: restricted (blocklist) or whitelist (allowlist)
     #[serde(default = "default_web_fetch_mode")]
@@ -139,6 +204,7 @@ impl Default for ToolsConfig {
             max_tool_rate_per_second: default_max_tool_rate_per_second(),
             max_sequential_spool_chunk_reads: default_max_sequential_spool_chunk_reads(),
             web_fetch: WebFetchConfig::default(),
+            web_search: WebSearchConfig::default(),
             plugins: PluginRuntimeConfig::default(),
             editor: EditorToolConfig::default(),
             loop_thresholds: IndexMap::new(),
@@ -179,9 +245,45 @@ impl Default for WebFetchConfig {
         Self {
             mode: default_web_fetch_mode(),
             blocked_domains: Vec::new(),
-            allowed_domains: Vec::new(),
+            allowed_domains: default_web_fetch_allowed_domains(),
             blocked_patterns: Vec::new(),
             strict_https_only: true,
+        }
+    }
+}
+
+/// Default `WebFetchConfig::allowed_domains` value.
+///
+/// Sourced from the curated TOML allowlist (shipped with the crate at
+/// `data/network_allowlist.toml`) and filtered down to the categories
+/// that make sense as `web_fetch` targets: search engines, specialized
+/// knowledge bases, package registries, code-hosting platforms, and
+/// web-crawl relays other than `defuddle.md`. AI provider endpoints,
+/// OAuth flows, dev infrastructure, and OS-update mirrors are excluded
+/// (those need auth or aren't useful as fetch targets).
+///
+/// The result is cached in a process-global `OnceLock` so the TOML parse
+/// happens exactly once per process even though `WebFetchConfig::default`
+/// is called from serde paths, the tool registry, and tests.
+fn default_web_fetch_allowed_domains() -> Vec<String> {
+    use std::sync::OnceLock;
+    static CACHE: OnceLock<Vec<String>> = OnceLock::new();
+    CACHE
+        .get_or_init(|| {
+            crate::network_allowlist::NetworkAllowlist::load_default().web_fetch_relevant_domains()
+        })
+        .clone()
+}
+
+impl Default for WebSearchConfig {
+    fn default() -> Self {
+        Self {
+            provider: WebSearchProvider::default(),
+            max_results: default_web_search_max_results(),
+            timeout_secs: default_web_search_timeout_secs(),
+            cooldown_ms: default_web_search_cooldown_ms(),
+            cache_ttl_secs: default_web_search_cache_ttl_secs(),
+            session_max_requests: default_web_search_session_max_requests(),
         }
     }
 }
@@ -247,6 +349,31 @@ fn default_web_fetch_mode() -> WebFetchMode {
 
 fn default_strict_https() -> bool {
     true
+}
+
+#[inline]
+const fn default_web_search_max_results() -> usize {
+    8
+}
+
+#[inline]
+const fn default_web_search_timeout_secs() -> u64 {
+    20
+}
+
+#[inline]
+const fn default_web_search_cooldown_ms() -> u64 {
+    3_000
+}
+
+#[inline]
+const fn default_web_search_cache_ttl_secs() -> u64 {
+    300
+}
+
+#[inline]
+const fn default_web_search_session_max_requests() -> u32 {
+    12
 }
 
 #[inline]
@@ -361,5 +488,165 @@ suspend_tui = false
         assert!(!config.editor.enabled);
         assert_eq!(config.editor.preferred_editor, "code --wait");
         assert!(!config.editor.suspend_tui);
+    }
+
+    #[test]
+    fn web_search_config_deserializes_from_toml() {
+        let config: ToolsConfig = toml::from_str(
+            r#"
+default_policy = "prompt"
+
+[web_search]
+provider = "duckduckgo"
+max_results = 12
+timeout_secs = 25
+cooldown_ms = 1500
+cache_ttl_secs = 120
+session_max_requests = 5
+"#,
+        )
+        .expect("tools config should parse");
+
+        assert_eq!(config.web_search.provider, WebSearchProvider::Duckduckgo);
+        assert_eq!(config.web_search.max_results, 12);
+        assert_eq!(config.web_search.timeout_secs, 25);
+        assert_eq!(config.web_search.cooldown_ms, 1500);
+        assert_eq!(config.web_search.cache_ttl_secs, 120);
+        assert_eq!(config.web_search.session_max_requests, 5);
+    }
+
+    #[test]
+    fn web_search_config_defaults_are_polite() {
+        let config = WebSearchConfig::default();
+        assert_eq!(config.provider, WebSearchProvider::Auto);
+        assert_eq!(config.max_results, 8);
+        assert_eq!(config.timeout_secs, 20);
+        assert!(config.cooldown_ms >= 1_000);
+        assert!(config.cache_ttl_secs >= 60);
+        assert!(config.session_max_requests > 0);
+    }
+
+    #[test]
+    fn web_search_provider_serializes_lowercase() {
+        // Serde rename_all = "snake_case" means enum variants serialize
+        // lowercase, matching the LLM-facing schema strings.
+        let json = serde_json::to_value(WebSearchProvider::Duckduckgo).unwrap();
+        assert_eq!(json, serde_json::json!("duckduckgo"));
+    }
+
+    #[test]
+    fn web_fetch_default_allowed_domains_seed_common_dev_sites() {
+        // The defaults should include the sites the agent most commonly
+        // needs (looking up a user, fetching a crate's README, etc.).
+        // This is a regression test for the "who is vinhnx?" case where
+        // the default `Restricted` mode blocked github.com / npmjs.com /
+        // crates.io even though none of them are on the blocklist.
+        //
+        // After H1: the inline list was removed in favour of the TOML
+        // allowlist, filtered to web-fetch-relevant categories. Hosts
+        // that aren't in the TOML (`npmjs.com`, `www.npmjs.com`,
+        // `docs.rs`, etc.) are no longer in the defaults — that's
+        // intentional, see the allowlist policy in
+        // `NetworkAllowlist::web_fetch_relevant_domains`.
+        let allowed = WebFetchConfig::default().allowed_domains;
+        for host in [
+            "github.com",
+            "api.github.com",
+            "raw.githubusercontent.com",
+            "crates.io",
+            "index.crates.io",
+            "registry.npmjs.org",
+            "pypi.org",
+        ] {
+            assert!(
+                allowed.iter().any(|d| d == host),
+                "default allowed_domains should include {host}; got {allowed:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn web_fetch_default_allowed_domains_include_relevant_categories() {
+        // The TOML allowlist is filtered to web-friendly categories for the
+        // web_fetch defaults: search engines, package registries, code
+        // hosting, web-crawl relays (minus defuddle.md), MCP servers, and
+        // specialized knowledge bases. AI provider endpoints and dev
+        // infrastructure are explicitly excluded (those need auth or
+        // aren't useful as fetch targets).
+        let allowed = WebFetchConfig::default().allowed_domains;
+        for host in [
+            "github.com",
+            "crates.io",
+            "registry.npmjs.org",
+            "pypi.org",
+            "en.wikipedia.org",
+            "r.jina.ai",
+            "api.tavily.com",
+        ] {
+            assert!(
+                allowed.iter().any(|d| d == host),
+                "default allowed_domains should include {host}; got {allowed:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn web_fetch_default_allowed_domains_exclude_ai_and_dev_infra() {
+        // H1 (review): the old default merged every category. The new
+        // default must not include AI provider endpoints (LLM inference
+        // APIs that need auth), OAuth flows, dev infrastructure, OS-update
+        // mirrors, or `defuddle.md` (which is a relay, not a fetch
+        // target).
+        //
+        // Search APIs like `api.tavily.com` ARE allowed — those are
+        // legitimate fetch targets the agent might query directly.
+        let allowed = WebFetchConfig::default().allowed_domains;
+        for host in [
+            "api.anthropic.com",
+            "api.openai.com",
+            "api.fireworks.ai",
+            "api.deepseek.com",
+            "defuddle.md",
+            "*.auth0.com",
+            "*.workers.dev",
+            "*.vercel.app",
+            "us.i.posthog.com",
+            "security.ubuntu.com",
+            "archive.ubuntu.com",
+        ] {
+            assert!(
+                !allowed.iter().any(|d| d == host),
+                "default allowed_domains must NOT include {host}; got {allowed:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn web_fetch_default_allowed_domains_preserves_wildcards_in_relevant_categories() {
+        // The TOML has `*.vercel.app` in dev_infra and `*.clerk.accounts.dev`
+        // in auth. After filtering for web_fetch, neither should remain.
+        // A future TOML change that moves a wildcard into a web-relevant
+        // category will be picked up here.
+        let allowed = WebFetchConfig::default().allowed_domains;
+        let wildcards: Vec<&str> = allowed
+            .iter()
+            .map(|s| s.as_str())
+            .filter(|s| s.starts_with("*."))
+            .collect();
+        assert!(
+            wildcards.is_empty(),
+            "expected no wildcards in web_fetch defaults (dev_infra/auth are excluded); got {wildcards:?}"
+        );
+    }
+
+    #[test]
+    fn web_fetch_default_allowed_domains_returns_fresh_vec() {
+        // `default_web_fetch_allowed_domains` is cached in a OnceLock, but
+        // each call must return a fresh `Vec` so callers can mutate the
+        // returned value without affecting the cached snapshot.
+        let mut a = WebFetchConfig::default().allowed_domains;
+        a.push("evil.example".to_string());
+        let b = WebFetchConfig::default().allowed_domains;
+        assert!(!b.iter().any(|d| d == "evil.example"));
     }
 }

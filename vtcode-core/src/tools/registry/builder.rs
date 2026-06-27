@@ -21,6 +21,7 @@ use super::ToolRegistry;
 use super::assembly::ToolAssembly;
 use super::builtins::register_builtin_tools;
 use super::circuit_breaker;
+use super::distributed::ToolConfigSnapshot;
 use super::execution_history::ToolExecutionHistory;
 use super::harness::HarnessContext;
 use super::inventory::ToolInventory;
@@ -50,6 +51,26 @@ fn load_workspace_spooler_config(workspace_root: &Path) -> SpoolerConfig {
                 "Failed to load workspace config for output spooler; using defaults"
             );
             SpoolerConfig::default()
+        }
+    }
+}
+
+/// Load the per-tool config bits (`[web_search]`, `[web_fetch]`) from the
+/// workspace `vtcode.toml`. Falls back to defaults on any load/parse error
+/// so a malformed config never blocks tool registration.
+fn load_tool_config(workspace_root: &Path) -> ToolConfigSnapshot {
+    match ConfigManager::load_from_workspace(workspace_root) {
+        Ok(manager) => ToolConfigSnapshot {
+            web_search: manager.config().tools.web_search.clone(),
+            web_fetch: manager.config().tools.web_fetch.clone(),
+        },
+        Err(err) => {
+            tracing::debug!(
+                workspace = %workspace_root.display(),
+                error = %err,
+                "No workspace vtcode.toml found; using default web tool config"
+            );
+            ToolConfigSnapshot::default()
         }
     }
 }
@@ -90,6 +111,13 @@ impl ToolRegistry {
         pty_config: PtyConfig,
         policy_manager: Option<ToolPolicyManager>,
     ) -> Self {
+        // Install the user-config snapshot *before* constructing the
+        // inventory so `WebFetchTool`/`WebSearchTool` are built with the
+        // user's allow/block lists, cooldown, and session cap rather than
+        // defaulting out.
+        let tool_config = load_tool_config(&workspace_root);
+        super::distributed::install_tool_config(tool_config);
+
         let edited_file_monitor =
             Arc::new(crate::tools::edited_file_monitor::EditedFileMonitor::new());
         let inventory =

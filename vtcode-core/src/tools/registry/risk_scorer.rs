@@ -216,7 +216,7 @@ impl ToolRiskScorer {
     pub fn is_network_tool(tool_name: &str) -> bool {
         matches!(
             tool_name,
-            tools::WEB_SEARCH | tools::WEB_FETCH | tools::FETCH_URL
+            tools::WEB_SEARCH | tools::WEB_FETCH | tools::FETCH_URL | tools::DEFUDDLE_FETCH
         ) || tool_name == "unified_search:web"
     }
 
@@ -252,7 +252,11 @@ impl ToolRiskScorer {
             | tools::UNIFIED_EXEC => 35,
 
             // Network operations (base: 40)
-            tools::WEB_SEARCH | tools::WEB_FETCH | tools::FETCH_URL | "unified_search:web" => 40,
+            tools::WEB_SEARCH
+            | tools::WEB_FETCH
+            | tools::FETCH_URL
+            | tools::DEFUDDLE_FETCH
+            | "unified_search:web" => 40,
 
             // MCP tools (default to medium risk)
             _ if tool_name.starts_with("mcp_") => 30,
@@ -301,6 +305,7 @@ mod tests {
         assert!(ToolRiskScorer::is_network_tool(tools::WEB_FETCH));
         assert!(ToolRiskScorer::is_network_tool(tools::WEB_SEARCH));
         assert!(ToolRiskScorer::is_network_tool(tools::FETCH_URL));
+        assert!(ToolRiskScorer::is_network_tool(tools::DEFUDDLE_FETCH));
         assert!(ToolRiskScorer::is_network_tool("unified_search:web"));
         assert!(!ToolRiskScorer::is_network_tool(tools::UNIFIED_SEARCH));
         assert!(!ToolRiskScorer::is_network_tool(tools::READ_FILE));

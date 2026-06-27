@@ -161,6 +161,7 @@ pub mod pty;
 pub mod resilience;
 
 pub use resilience::rate_limiter;
+pub mod defuddle;
 pub mod registry;
 pub mod result;
 pub mod result_cache;
@@ -185,6 +186,7 @@ pub mod types;
 pub mod validation;
 pub mod validation_cache;
 pub mod web_fetch;
+pub mod web_search;
 
 // Production-grade improvements modules
 pub use resilience::adaptive_rate_limiter;
@@ -238,6 +240,7 @@ pub use search_runtime::{
     search_tool_bundle_status,
 };
 
+pub use defuddle::DefuddleTool;
 pub use optimized_registry::{CachedToolMetadata as OptimizedToolMetadata, OptimizedToolRegistry};
 pub use plugins::{PluginHandle, PluginId, PluginInstaller, PluginManifest, PluginRuntime};
 pub use pty::{PtyCommandRequest, PtyCommandResult, PtyManager};
@@ -274,6 +277,7 @@ pub use unified_error::{
     UnifiedErrorKind, UnifiedToolError, classify_error as classify_unified_error,
 };
 pub use web_fetch::WebFetchTool;
+pub use web_search::WebSearchTool;
 
 // Dynamic context discovery
 pub use output_spooler::{SpoolResult, SpoolerConfig, ToolOutputSpooler};

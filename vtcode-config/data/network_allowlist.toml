@@ -1,0 +1,708 @@
+# ============================================================
+# VT Code — Agent Network Allowlist
+# network_allowlist.toml
+#
+# Curated safe domains for AI agent egress filtering.
+# Suitable for macOS Seatbelt profiles, Linux Landlock/seccomp
+# rules, or embedding in VT Code's agent config schema.
+#
+# Sections:
+#   [ai_providers]       — LLM inference endpoints (cloud + local)
+#   [search]             — Web & specialized search APIs
+#   [web_crawl]          — Full-page fetch & content extraction
+#   [mcp_servers]        — MCP tool server endpoints
+#   [package_registries] — Language package managers
+#   [code_hosting]       — Git platforms & raw content
+#   [auth]               — OAuth & identity providers
+#   [dev_infra]          — Cloud infra, databases, observability
+#   [os_updates]         — System package mirrors (Ubuntu)
+#
+# Usage (Rust):
+#   let config: NetworkAllowlist = toml::from_str(include_str!("network_allowlist.toml"))?;
+# ============================================================
+
+[meta]
+version      = "1.1.0"
+last_updated = "2026-06-27"
+maintainer   = "vinhnx"
+repo         = "github.com/vinhnx/VTCode"
+description  = "Curated egress allowlist for VT Code agent sandboxing"
+
+# ============================================================
+# AI MODEL PROVIDERS — CLOUD
+# ============================================================
+
+[[ai_providers.cloud]]
+name     = "Anthropic"
+domain   = "api.anthropic.com"
+protocol = "https"
+notes    = "Claude models; primary Anthropic Messages API"
+
+[[ai_providers.cloud]]
+name     = "OpenAI"
+domain   = "api.openai.com"
+protocol = "https"
+notes    = "GPT-4o, o3, o4-mini series"
+
+[[ai_providers.cloud]]
+name     = "Google GenAI"
+domain   = "generativelanguage.googleapis.com"
+protocol = "https"
+notes    = "Gemini via Google AI Studio"
+
+[[ai_providers.cloud]]
+name     = "Google Vertex AI"
+domain   = "us-central1-aiplatform.googleapis.com"
+protocol = "https"
+notes    = "Gemini + third-party models via Vertex"
+
+[[ai_providers.cloud]]
+name     = "Mistral"
+domain   = "api.mistral.ai"
+protocol = "https"
+notes    = "Mistral Large, Codestral"
+
+[[ai_providers.cloud]]
+name     = "Groq"
+domain   = "api.groq.com"
+protocol = "https"
+notes    = "Ultra-fast LPU inference; Llama, Mixtral"
+
+[[ai_providers.cloud]]
+name     = "Cohere"
+domain   = "api.cohere.com"
+protocol = "https"
+notes    = "Command R+, embeddings, rerank"
+
+[[ai_providers.cloud]]
+name     = "Together AI"
+domain   = "api.together.xyz"
+protocol = "https"
+notes    = "OpenAI-compatible multi-model hosting"
+
+[[ai_providers.cloud]]
+name     = "Fireworks AI"
+domain   = "api.fireworks.ai"
+protocol = "https"
+notes    = "Fast open model serving; FireFunction"
+
+[[ai_providers.cloud]]
+name     = "DeepSeek"
+domain   = "api.deepseek.com"
+protocol = "https"
+# ACTION REQUIRED: migrate model strings before late-Jul 2026
+notes    = "DeepSeek V3, R1"
+
+[[ai_providers.cloud]]
+name     = "xAI (Grok)"
+domain   = "api.x.ai"
+protocol = "https"
+notes    = "Grok-3 series"
+
+[[ai_providers.cloud]]
+name     = "Perplexity"
+domain   = "api.perplexity.ai"
+protocol = "https"
+notes    = "Search-augmented models"
+
+[[ai_providers.cloud]]
+name     = "GitHub Copilot"
+domain   = "api.githubcopilot.com"
+protocol = "https"
+notes    = "Official copilot-language-server SDK path; BYOK-compliant"
+
+[[ai_providers.cloud]]
+name     = "OpenRouter"
+domain   = "openrouter.ai"
+protocol = "https"
+notes    = "Unified multi-provider routing"
+
+[[ai_providers.cloud]]
+name     = "Novita AI"
+domain   = "api.novita.ai"
+protocol = "https"
+notes    = "Open model hosting; serverless inference"
+
+[[ai_providers.cloud]]
+name     = "Cerebras"
+domain   = "api.cerebras.ai"
+protocol = "https"
+notes    = "Wafer-scale fast inference"
+
+[[ai_providers.cloud]]
+name     = "StepFun"
+domain   = "api.stepfun.com"
+protocol = "https"
+notes    = "Step-3.7 Flash; applied to Startup Program"
+
+[[ai_providers.cloud]]
+name     = "Zhipu AI (GLM)"
+domain   = "open.bigmodel.cn"
+protocol = "https"
+notes    = "GLM-5.2 series"
+
+[[ai_providers.cloud]]
+name     = "MiniMax"
+domain   = "api.minimax.chat"
+protocol = "https"
+notes    = "MiniMax-Text-01"
+
+[[ai_providers.cloud]]
+name     = "Moonshot (Kimi)"
+domain   = "api.moonshot.cn"
+protocol = "https"
+notes    = "Long-context models"
+
+[[ai_providers.cloud]]
+name     = "Baichuan"
+domain   = "api.baichuan-ai.com"
+protocol = "https"
+notes    = "Baichuan-4 series"
+
+[[ai_providers.cloud]]
+name     = "01.AI (Yi)"
+domain   = "api.lingyiwanwu.com"
+protocol = "https"
+notes    = "Yi-Large"
+
+[[ai_providers.cloud]]
+name     = "SambaNova"
+domain   = "api.sambanova.ai"
+protocol = "https"
+notes    = "RDU fast inference"
+
+[[ai_providers.cloud]]
+name     = "Poolside"
+domain   = "api.poolside.ai"
+protocol = "https"
+notes    = "Laguna model; code-focused"
+
+[[ai_providers.cloud]]
+name     = "MiMo"
+domain   = "api.mimo.ai"
+protocol = "https"
+verify   = true
+# ACTION REQUIRED: migrate MiMo V2.5 Pro/Flash model strings before end-Jun 2026
+notes    = "MiMo V2.5 Pro/Flash"
+
+[[ai_providers.cloud]]
+name     = "Atlas Cloud"
+domain   = "api.atlas.ai"
+protocol = "https"
+verify   = true
+notes    = "Verify domain before use"
+
+[[ai_providers.cloud]]
+name     = "EvoLink AI"
+domain   = "api.evokeai.com"
+protocol = "https"
+verify   = true
+notes    = "Verify domain before use"
+
+# ============================================================
+# AI MODEL PROVIDERS — LOCAL / SELF-HOSTED
+# ============================================================
+
+[[ai_providers.local]]
+name     = "LM Studio"
+host     = "localhost"
+port     = 1234
+protocol = "http"
+notes    = "OpenAI-compatible local server"
+
+[[ai_providers.local]]
+name     = "Ollama"
+host     = "localhost"
+port     = 11434
+protocol = "http"
+notes    = "Ollama REST API"
+
+[[ai_providers.local]]
+name     = "LlamaCpp"
+host     = "localhost"
+port     = 8080
+protocol = "http"
+notes    = "llama.cpp default HTTP server port"
+
+# ============================================================
+# SEARCH — WEB
+# ============================================================
+
+# Recommended primary for VT Code: agent-optimized, clean DX
+[[search.web]]
+name     = "Tavily"
+domain   = "api.tavily.com"
+protocol = "https"
+notes    = "Agent-optimized; best developer UX for RAG + tool-use stacks"
+
+# Neural/semantic search — good for code and research queries
+[[search.web]]
+name     = "Exa AI"
+domain   = "api.exa.ai"
+protocol = "https"
+notes    = "Neural semantic search"
+
+# Privacy-respecting — aligns with VT Code's local-first ethos
+[[search.web]]
+name     = "Brave Search"
+domain   = "api.search.brave.com"
+protocol = "https"
+notes    = "Privacy-first; no user tracking"
+
+[[search.web]]
+name     = "Serper"
+domain   = "google.serper.dev"
+protocol = "https"
+notes    = "Google SERP results; cost-effective"
+
+[[search.web]]
+name     = "SerpAPI"
+domain   = "serpapi.com"
+protocol = "https"
+notes    = "Multi-engine: Google, Bing, DuckDuckGo"
+
+[[search.web]]
+name     = "ValueSERP"
+domain   = "api.valueserp.com"
+protocol = "https"
+notes    = "Google SERP scraper API"
+
+[[search.web]]
+name     = "DataForSEO"
+domain   = "api.dataforseo.com"
+protocol = "https"
+notes    = "SERP data + keyword intelligence"
+
+[[search.web]]
+name     = "Bing Search"
+domain   = "api.bing.microsoft.com"
+protocol = "https"
+notes    = "Microsoft Azure Cognitive Search"
+
+[[search.web]]
+name     = "You.com"
+domain   = "api.you.com"
+protocol = "https"
+notes    = "LLM-native search results"
+
+[[search.web]]
+name     = "Kagi"
+domain   = "kagi.com"
+protocol = "https"
+notes    = "High signal-to-noise, ad-free"
+
+# No full web search API — Instant Answers only; for full SERP use via SerpAPI wrapper
+[[search.web]]
+name     = "DuckDuckGo"
+domain   = "api.duckduckgo.com"
+protocol = "https"
+notes    = "Instant Answers API; privacy-first, no tracking"
+
+# ============================================================
+# SEARCH — SPECIALIZED / VERTICAL
+# ============================================================
+
+[[search.specialized]]
+name     = "arXiv"
+domain   = "export.arxiv.org"
+protocol = "https"
+notes    = "Academic paper search and retrieval"
+
+[[search.specialized]]
+name     = "Semantic Scholar"
+domain   = "api.semanticscholar.org"
+protocol = "https"
+notes    = "Research papers + citation graph"
+
+[[search.specialized]]
+name     = "PubMed / NCBI"
+domain   = "eutils.ncbi.nlm.nih.gov"
+protocol = "https"
+notes    = "Biomedical literature"
+
+[[search.specialized]]
+name     = "Wikipedia API"
+domain   = "en.wikipedia.org"
+protocol = "https"
+notes    = "Encyclopedic lookups"
+
+[[search.specialized]]
+name     = "Wikidata"
+domain   = "www.wikidata.org"
+protocol = "https"
+notes    = "Structured knowledge graph queries"
+
+[[search.specialized]]
+name     = "NewsAPI"
+domain   = "newsapi.org"
+protocol = "https"
+notes    = "Global news article aggregation"
+
+[[search.specialized]]
+name     = "GDELT"
+domain   = "api.gdeltproject.org"
+protocol = "https"
+notes    = "Global event and news graph"
+
+[[search.specialized]]
+name     = "Hunter.io"
+domain   = "api.hunter.io"
+protocol = "https"
+notes    = "Email and domain search"
+
+[[search.specialized]]
+name     = "BuiltWith"
+domain   = "api.builtwith.com"
+protocol = "https"
+notes    = "Technology stack detection"
+
+# ============================================================
+# WEB CRAWL & CONTENT FETCH
+# ============================================================
+
+# Zero-setup URL-to-markdown; just prepend: r.jina.ai/<url>
+[[web_crawl]]
+name     = "Jina Reader"
+domain   = "r.jina.ai"
+protocol = "https"
+notes    = "Prepend to any URL for instant clean markdown"
+
+# URL-to-clean-Markdown; API pattern: defuddle.md/<url>
+# MIT-licensed by @kepano; also available as NPM package for self-hosting
+[[web_crawl]]
+name     = "Defuddle"
+domain   = "defuddle.md"
+protocol = "https"
+notes    = "Clean markdown extraction; same usage pattern as Jina Reader"
+
+[[web_crawl]]
+name     = "Firecrawl"
+domain   = "api.firecrawl.dev"
+protocol = "https"
+notes    = "Deep crawl + structured markdown extraction"
+
+[[web_crawl]]
+name     = "Browserbase"
+domain   = "api.browserbase.com"
+protocol = "https"
+notes    = "Headless browser cloud for JS-heavy pages"
+
+[[web_crawl]]
+name     = "Apify"
+domain   = "api.apify.com"
+protocol = "https"
+notes    = "Scraper actors + cloud storage"
+
+[[web_crawl]]
+name     = "ScrapingBee"
+domain   = "app.scrapingbee.com"
+protocol = "https"
+notes    = "Anti-bot bypass proxy"
+
+[[web_crawl]]
+name     = "Zyte"
+domain   = "api.zyte.com"
+protocol = "https"
+notes    = "Enterprise-grade structured scraping"
+
+# ============================================================
+# MCP / TOOL SERVERS
+# ============================================================
+
+[[mcp_servers]]
+name     = "Composio MCP"
+domain   = "mcp.composio.dev"
+protocol = "https"
+notes    = "Multi-service MCP hub"
+
+[[mcp_servers]]
+name     = "Zapier MCP"
+domain   = "mcp.zapier.com"
+protocol = "https"
+notes    = "Zapier automation via MCP"
+
+[[mcp_servers]]
+name     = "Asana MCP"
+domain   = "mcp.asana.com"
+protocol = "https"
+notes    = "Task and project management"
+
+[[mcp_servers]]
+name     = "Linear"
+domain   = "api.linear.app"
+protocol = "https"
+notes    = "Issue tracker MCP"
+
+[[mcp_servers]]
+name     = "Notion"
+domain   = "api.notion.com"
+protocol = "https"
+notes    = "Pages and databases"
+
+[[mcp_servers]]
+name     = "Slack"
+domain   = "api.slack.com"
+protocol = "https"
+notes    = "Slack messaging API; also slack.com for OAuth"
+
+[[mcp_servers]]
+name     = "Google Drive MCP"
+domain   = "drivemcp.googleapis.com"
+protocol = "https"
+notes    = "Google Drive file access"
+
+[[mcp_servers]]
+name     = "Google Calendar MCP"
+domain   = "calendarmcp.googleapis.com"
+protocol = "https"
+notes    = "Google Calendar events"
+
+[[mcp_servers]]
+name     = "Gmail MCP"
+domain   = "gmailmcp.googleapis.com"
+protocol = "https"
+notes    = "Gmail read/send"
+
+# ============================================================
+# PACKAGE REGISTRIES
+# ============================================================
+
+[[package_registries]]
+name     = "crates.io (index)"
+domain   = "index.crates.io"
+protocol = "https"
+notes    = "Rust crate sparse index"
+
+[[package_registries]]
+name     = "crates.io (registry)"
+domain   = "crates.io"
+protocol = "https"
+notes    = "Rust crate metadata"
+
+[[package_registries]]
+name     = "crates.io (static)"
+domain   = "static.crates.io"
+protocol = "https"
+notes    = "Rust .crate file downloads"
+
+[[package_registries]]
+name     = "npm"
+domain   = "registry.npmjs.org"
+protocol = "https"
+notes    = "Node.js packages"
+
+[[package_registries]]
+name     = "PyPI"
+domain   = "pypi.org"
+protocol = "https"
+notes    = "Python package index"
+
+[[package_registries]]
+name     = "PyPI (files)"
+domain   = "files.pythonhosted.org"
+protocol = "https"
+notes    = "Python package file downloads"
+
+[[package_registries]]
+name     = "Go Modules Proxy"
+domain   = "proxy.golang.org"
+protocol = "https"
+notes    = "Go module proxy"
+
+[[package_registries]]
+name     = "Go Checksum DB"
+domain   = "sum.golang.org"
+protocol = "https"
+notes    = "Go module checksum verification"
+
+[[package_registries]]
+name     = "Maven Central"
+domain   = "repo1.maven.org"
+protocol = "https"
+notes    = "JVM artifact repository"
+
+[[package_registries]]
+name     = "RubyGems"
+domain   = "rubygems.org"
+protocol = "https"
+notes    = "Ruby gem registry"
+
+[[package_registries]]
+name     = "NuGet"
+domain   = "api.nuget.org"
+protocol = "https"
+notes    = ".NET package registry"
+
+[[package_registries]]
+name     = "GHCR"
+domain   = "ghcr.io"
+protocol = "https"
+notes    = "GitHub Container Registry; Homebrew bottles + images"
+
+# ============================================================
+# CODE HOSTING & VERSION CONTROL
+# ============================================================
+
+[[code_hosting]]
+name     = "GitHub API"
+domain   = "api.github.com"
+protocol = "https"
+notes    = "REST + GraphQL API"
+
+[[code_hosting]]
+name     = "GitHub Raw"
+domain   = "raw.githubusercontent.com"
+protocol = "https"
+notes    = "Raw file content from repos"
+
+[[code_hosting]]
+name     = "GitHub Code Downloads"
+domain   = "codeload.github.com"
+protocol = "https"
+notes    = "Tarball/zip archive downloads"
+
+[[code_hosting]]
+name     = "GitHub Objects (LFS)"
+domain   = "objects.githubusercontent.com"
+protocol = "https"
+notes    = "Git LFS and release asset storage"
+
+[[code_hosting]]
+name     = "GitHub"
+domain   = "github.com"
+protocol = "https"
+notes    = "Web + OAuth + MCP server"
+
+[[code_hosting]]
+name     = "GitLab"
+domain   = "gitlab.com"
+protocol = "https"
+notes    = "GitLab API + web"
+
+[[code_hosting]]
+name     = "Bitbucket"
+domain   = "api.bitbucket.org"
+protocol = "https"
+notes    = "Bitbucket REST API"
+
+# ============================================================
+# AUTH & IDENTITY
+# ============================================================
+
+[[auth]]
+name     = "GitHub OAuth"
+domain   = "github.com"
+path     = "/login/oauth"
+protocol = "https"
+notes    = "GitHub OAuth token exchange"
+
+[[auth]]
+name     = "Google OAuth"
+domain   = "oauth2.googleapis.com"
+protocol = "https"
+notes    = "Google token exchange"
+
+[[auth]]
+name     = "Google Accounts"
+domain   = "accounts.google.com"
+protocol = "https"
+notes    = "Google sign-in flow"
+
+[[auth]]
+name     = "Auth0"
+domain   = "*.auth0.com"
+protocol = "https"
+# Wildcard — scope to your specific tenant subdomain in production
+notes    = "Scope to tenant subdomain in prod"
+
+[[auth]]
+name     = "Clerk (accounts)"
+domain   = "*.clerk.accounts.dev"
+protocol = "https"
+notes    = "Clerk hosted auth"
+
+[[auth]]
+name     = "Clerk API"
+domain   = "api.clerk.com"
+protocol = "https"
+notes    = "Clerk backend SDK"
+
+# ============================================================
+# DEV INFRASTRUCTURE
+# ============================================================
+
+[[dev_infra]]
+name     = "Cloudflare Workers"
+domain   = "*.workers.dev"
+protocol = "https"
+notes    = "Serverless edge functions"
+
+[[dev_infra]]
+name     = "Vercel"
+domain   = "vercel.com"
+protocol = "https"
+notes    = "Deployment platform + API"
+
+[[dev_infra]]
+name     = "Vercel Apps"
+domain   = "*.vercel.app"
+protocol = "https"
+notes    = "Deployed app subdomains"
+
+[[dev_infra]]
+name     = "Render"
+domain   = "*.onrender.com"
+protocol = "https"
+notes    = "Render hosted services"
+
+[[dev_infra]]
+name     = "Fly.io Machines"
+domain   = "api.machines.dev"
+protocol = "https"
+notes    = "Fly.io Machines API"
+
+[[dev_infra]]
+name     = "Supabase"
+domain   = "*.supabase.co"
+protocol = "https"
+notes    = "Postgres + auth + storage"
+
+[[dev_infra]]
+name     = "PlanetScale"
+domain   = "*.psdb.cloud"
+protocol = "https"
+notes    = "Serverless MySQL"
+
+[[dev_infra]]
+name     = "Upstash"
+domain   = "*.upstash.io"
+protocol = "https"
+notes    = "Serverless Redis + Kafka + Vector"
+
+[[dev_infra]]
+name     = "PostHog"
+domain   = "us.posthog.com"
+protocol = "https"
+notes    = "Product analytics"
+
+[[dev_infra]]
+name     = "PostHog Ingestion"
+domain   = "us.i.posthog.com"
+protocol = "https"
+notes    = "PostHog event ingestion endpoint"
+
+# ============================================================
+# OS / SYSTEM UPDATES (Ubuntu agent infra)
+# ============================================================
+
+[[os_updates]]
+name     = "Ubuntu Security"
+domain   = "security.ubuntu.com"
+protocol = "http"
+notes    = "Ubuntu security package mirror"
+
+[[os_updates]]
+name     = "Ubuntu Archive"
+domain   = "archive.ubuntu.com"
+protocol = "http"
+notes    = "Ubuntu main package archive"

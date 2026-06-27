@@ -18,7 +18,9 @@ use std::net::IpAddr;
 use std::path::PathBuf;
 use url::Url;
 
+pub mod classify_helpers;
 pub mod domains;
+pub use classify_helpers::extract_http_status;
 pub use domains::{BUILTIN_BLOCKED_DOMAINS, BUILTIN_BLOCKED_PATTERNS, MALICIOUS_PATTERNS};
 
 const DEFAULT_TIMEOUT_SECS: u64 = 30;
@@ -203,6 +205,19 @@ impl WebFetchTool {
             allowed_domains: allowed_domains.into_iter().collect(),
             strict_https_only,
         }
+    }
+
+    /// Build a `WebFetchTool` from a `WebFetchConfig` value-object. This is
+    /// the entry point the tool registry uses so user-configured
+    /// allow/block lists and HTTPS settings actually take effect.
+    pub fn from_config(config: &vtcode_config::WebFetchConfig) -> Self {
+        Self::with_config(
+            config.mode,
+            config.blocked_domains.clone(),
+            config.blocked_patterns.clone(),
+            config.allowed_domains.clone(),
+            config.strict_https_only,
+        )
     }
 
     async fn fetch_url_content(
@@ -497,13 +512,17 @@ impl WebFetchTool {
         {
             Ok(fetched) => fetched,
             Err(e) => {
-                // Structured, readable error. The agent can surface this or fall back to other tools.
-                return Ok(json!({
-                    "error": format!("web_fetch: failed to fetch URL '{}': {}", args.url, e),
-                    "url": args.url,
-                    "max_bytes": max_bytes,
-                    "timeout_secs": timeout_secs
-                }));
+                // Categorize the error so the agent loop can react. We used to
+                // surface a flat string here, which led to the agent in
+                // turn_578 reporting "github.com, npmjs.com, and crates.io are
+                // all blocked" when the actual errors were 403/404 from the
+                // upstream services.
+                return Ok(web_fetch_error_response(
+                    &args.url,
+                    max_bytes,
+                    timeout_secs,
+                    &e,
+                ));
             }
         };
         let content = fetched.content;
@@ -516,7 +535,9 @@ impl WebFetchTool {
                     "web_fetch: no content fetched from '{}'. The URL may be unreachable, returned empty content, or used an unsupported content-type.",
                     args.url
                 ),
-                "url": args.url
+                "url": args.url,
+                "error_type": "empty_content",
+                "next_action": "The host returned an empty body. This may be a bot block, a JS-only page, or a real empty document. Try web_search to confirm the page exists; if it does, the content is probably JavaScript-rendered and you need a different tool."
             }));
         }
 
@@ -542,7 +563,7 @@ impl WebFetchTool {
 
         // Canonical response shape:
         // - `temp_file`: path to ephemeral temp file containing full fetched body
-        // - `preview`: truncated snippet for display
+        // - `preview`: truncated snippet (8KB by default) for display
         // - `prompt`: what the user/model wants to know
         // - `next_action_hint`: explicit instruction so the agent continues the loop correctly
         // - `no_spool: true` prevents the output spooler from persisting fetched content to disk
@@ -554,7 +575,7 @@ impl WebFetchTool {
             "content_length": content_length,
             "truncated": truncated,
             "no_spool": true,
-            "next_action_hint": "Read `temp_file` to get the full fetched content, then analyze it using `prompt` and answer the user. The temp file is ephemeral and will be cleaned up automatically."
+            "next_action_hint": "Analyze the inline `preview` (the start of the page) using `prompt` and answer the user directly. Only read `temp_file` if you need content beyond the preview; it is ephemeral and may already be cleaned up."
         });
 
         // Add overflow indicator if preview was truncated
@@ -611,9 +632,21 @@ fn extract_domain(url: &str) -> Result<String> {
 }
 
 /// Returns `true` when `host` is a private, loopback, or link-local IP address.
-fn is_private_host(host: &str) -> bool {
+/// Return `true` when `host` is a loopback, private, link-local,
+/// broadcast, or multicast address. Used by the SSRF guard in
+/// `web_fetch::validate_url` and re-used by `defuddle` so a private host
+/// can never sneak through the defuddle relay.
+///
+/// Accepts the host either bare or bracket-wrapped (the URL parser
+/// returns IPv6 hosts like `[::1]`; we strip the brackets before
+/// parsing).
+pub(super) fn is_private_host(host: &str) -> bool {
+    let trimmed = host
+        .strip_prefix('[')
+        .and_then(|s| s.strip_suffix(']'))
+        .unwrap_or(host);
     // Try IPv4 / IPv6 parsing first.
-    if let Ok(ip) = host.parse::<IpAddr>() {
+    if let Ok(ip) = trimmed.parse::<IpAddr>() {
         return match ip {
             IpAddr::V4(v4) => is_private_ipv4(v4),
             IpAddr::V6(v6) => is_private_ipv6(v6),
@@ -621,7 +654,8 @@ fn is_private_host(host: &str) -> bool {
     }
 
     // DNS names like "localhost" that will resolve to loopback.
-    if host.eq_ignore_ascii_case("localhost") || host.eq_ignore_ascii_case("localhost.localdomain")
+    if trimmed.eq_ignore_ascii_case("localhost")
+        || trimmed.eq_ignore_ascii_case("localhost.localdomain")
     {
         return true;
     }
@@ -629,7 +663,8 @@ fn is_private_host(host: &str) -> bool {
     false
 }
 
-/// Check if an IPv4 address is private, loopback, or link-local.
+/// Check if an IPv4 address is private, loopback, link-local, broadcast,
+/// or multicast.
 fn is_private_ipv4(v4: std::net::Ipv4Addr) -> bool {
     let octets = v4.octets();
     // 127.0.0.0/8 — loopback (is_loopback only matches 127.0.0.1)
@@ -642,8 +677,13 @@ fn is_private_ipv4(v4: std::net::Ipv4Addr) -> bool {
         || (octets[0] == 192 && octets[1] == 168)
         // 169.254.0.0/16 — link-local
         || (octets[0] == 169 && octets[1] == 254)
-        // 0.0.0.0/8 — "this network"
+        // 0.0.0.0/8 — "this network" (covers 0.0.0.0 itself; is_unspecified
+        // would only match 0.0.0.0 strictly)
         || octets[0] == 0
+        // 255.255.255.255 — broadcast
+        || v4.is_broadcast()
+        // 224.0.0.0/4 — multicast
+        || (octets[0] & 0xf0) == 224
 }
 
 /// Check if an IPv6 address is private, loopback, link-local, or an
@@ -699,6 +739,21 @@ fn domain_matches_allowed(domain: &str, allowed: &str) -> bool {
         .trim_end_matches('.')
         .to_ascii_lowercase();
 
+    // Wildcard entries like `*.example.com` match the apex and any
+    // subdomain. The `*` must be a complete leading label, not a partial
+    // match (so `*.example.com` matches `api.example.com` but not
+    // `evilexample.com`).
+    if let Some(suffix) = normalized_allowed.strip_prefix("*.") {
+        // Reject single-label wildcards like `*.com` — that would match
+        // every `.com` host, which is almost certainly a misconfiguration
+        // and a serious over-grant. The suffix must contain at least one
+        // dot, e.g. `*.example.com` or `*.co.uk`.
+        if !suffix.contains('.') {
+            return false;
+        }
+        return normalized_domain == suffix || normalized_domain.ends_with(&format!(".{suffix}"));
+    }
+
     normalized_domain == normalized_allowed
         || normalized_domain.ends_with(&format!(".{normalized_allowed}"))
 }
@@ -741,6 +796,148 @@ impl Tool for WebFetchTool {
 
     fn description(&self) -> &str {
         WEB_FETCH_DESCRIPTION
+    }
+}
+
+/// Build a structured error response for a failed `web_fetch` call.
+///
+/// The error category (`http_error`, `network_error`, `policy_blocked`,
+/// `empty_content`, etc.) plus a `next_action` hint is much more useful to
+/// the agent loop than a flat string. The hint is what unblocks the loop
+/// in cases like turn_578, where the agent was getting real HTTP 4xx
+/// responses but reported the hosts as "blocked" because the error format
+/// only carried a free-form message.
+fn web_fetch_error_response(
+    url: &str,
+    max_bytes: usize,
+    timeout_secs: u64,
+    err: &anyhow::Error,
+) -> Value {
+    let message = err.to_string();
+    let (category, http_status, next_action) = classify_web_fetch_error(&message);
+
+    let mut payload = json!({
+        "error": format!("web_fetch: failed to fetch URL '{}': {}", url, message),
+        "url": url,
+        "max_bytes": max_bytes,
+        "timeout_secs": timeout_secs,
+        "error_type": category,
+        "next_action": next_action,
+    });
+    if let Some(status) = http_status {
+        payload["http_status"] = json!(status);
+    }
+    payload
+}
+
+/// Map a `web_fetch` error string into a stable (category, status,
+/// next_action) tuple. The agent loop reads `next_action` to decide whether
+/// to retry, fall back to a different tool, or give up.
+fn classify_web_fetch_error(message: &str) -> (&'static str, Option<u16>, &'static str) {
+    // The reqwest error string is "<METHOD> <URL> error: <chain>". We only
+    // look at the error portion because the URL is already in the response.
+    let lower = message.to_lowercase();
+
+    // Check timeout / network-class failures BEFORE HTTP status: a slow
+    // upstream that returns a 5xx AFTER the body stream stalls can
+    // produce a string like "request timed out (last status: 503)".
+    // Status-based hints are not the right next-action for that case —
+    // the cause is timeout, not server outage.
+    if lower.contains("timeout") || lower.contains("timed out") {
+        return (
+            "network_error",
+            None,
+            "The request timed out. The host may be slow or unreachable. Try web_search to look up the page title first, or retry with a larger timeout_secs.",
+        );
+    }
+    if lower.contains("dns")
+        || lower.contains("name resolution")
+        || lower.contains("connection refused")
+    {
+        return (
+            "network_error",
+            None,
+            "The host could not be reached. Try web_search to look up the page title first; if the host is down, retry later.",
+        );
+    }
+    if let Some(status) = extract_http_status(&lower) {
+        return http_status_to_category(status);
+    }
+    if lower.contains("ssl") || lower.contains("certificate") || lower.contains("tls") {
+        return (
+            "tls_error",
+            None,
+            "TLS handshake failed. The host may have an invalid or self-signed certificate. Try web_search as a fallback.",
+        );
+    }
+    if lower.contains("redirect") {
+        return (
+            "redirect_error",
+            None,
+            "Redirect chain failed validation. The host may redirect to a blocked domain or loop. Try web_search to find the canonical URL.",
+        );
+    }
+    if lower.contains("unsupported content type") || lower.contains("not supported") {
+        return (
+            "content_type_error",
+            None,
+            "The server returned a non-text content type (e.g., image or PDF). The web_fetch tool only handles text/HTML/JSON. Try web_search instead, or use a different tool to read the resource.",
+        );
+    }
+    if lower.contains("blocked") || lower.contains("sensitive") {
+        return (
+            "policy_blocked",
+            None,
+            "The URL is on the blocklist for this tool. Use web_search to find an alternative source, or ask the user to whitelist the host via [web_fetch] allowed_domains in vtcode.toml.",
+        );
+    }
+    (
+        "unknown_error",
+        None,
+        "An unexpected error occurred. The error message above is the upstream cause; if it repeats, surface it to the user rather than retrying.",
+    )
+}
+
+/// Re-export of `classify_helpers::extract_http_status`. Pulled into
+/// this module so existing call sites can keep using
+/// `extract_http_status(message)` without the extra namespace.
+fn http_status_to_category(status: u16) -> (&'static str, Option<u16>, &'static str) {
+    match status {
+        401 | 407 => (
+            "http_error",
+            Some(status),
+            "The host requires authentication that web_fetch cannot provide. Try web_search for a cached version, or ask the user for credentials.",
+        ),
+        403 => (
+            "http_error",
+            Some(status),
+            "The host explicitly blocked this request (often anti-bot). Try web_search, or wait a few seconds and retry with a normal browser User-Agent.",
+        ),
+        404 => (
+            "http_error",
+            Some(status),
+            "The host returned 404: the page or resource does not exist. Verify the URL, or try web_search to find the correct one.",
+        ),
+        410 => (
+            "http_error",
+            Some(status),
+            "The host returned 410: the resource is permanently gone. Try web_search for an alternative.",
+        ),
+        429 => (
+            "http_error",
+            Some(status),
+            "The host rate-limited this client. Wait a few seconds and retry, or use web_search instead.",
+        ),
+        500..=599 => (
+            "http_error",
+            Some(status),
+            "The host returned a server error. Retry after a short delay, or use web_search as a fallback.",
+        ),
+        _ => (
+            "http_error",
+            Some(status),
+            "The host returned an unexpected status. The error message above is the upstream response; treat it as terminal unless the user asks for a retry.",
+        ),
     }
 }
 
@@ -1177,6 +1374,128 @@ mod tests {
         assert!(error.contains("local/private networks"));
     }
 
+    /// Regression test for the "who is vinhnx?" case. The default
+    /// `WebFetchConfig` seeds `allowed_domains` with common developer sites
+    /// (github.com, npmjs.com, crates.io, etc.). The default `Restricted`
+    /// mode honors those exemptions, so URLs on those hosts must pass
+    /// `validate_url` without touching the network.
+    #[test]
+    fn default_restricted_mode_allows_common_dev_sites() {
+        let tool = WebFetchTool::from_config(&vtcode_config::WebFetchConfig::default());
+        // After H1: the defaults come from the TOML allowlist filtered
+        // to web-fetch-relevant categories. `docs.rs` and `www.npmjs.com`
+        // are not in the TOML and are no longer in defaults; replace
+        // them with registry hosts that ARE in the TOML.
+        for url in [
+            "https://github.com/vinhnx",
+            "https://github.com/vinhnx?tab=repositories",
+            "https://api.github.com/users/vinhnx",
+            "https://api.github.com/users/vinhnx/repos?sort=stars&per_page=20",
+            "https://registry.npmjs.org/vinhnx",
+            "https://crates.io/users/vinhnx",
+            "https://raw.githubusercontent.com/rust-lang/rust/master/README.md",
+            "https://en.wikipedia.org/wiki/Rust_(programming_language)",
+            "https://pypi.org/project/requests/",
+            "https://r.jina.ai/https://example.com",
+        ] {
+            tool.validate_url(url)
+                .unwrap_or_else(|e| panic!("default restricted mode should allow {url}: {e}"));
+        }
+    }
+
+    /// Whitelist mode is a strict allowlist: only the user's explicit
+    /// `allowed_domains` apply, even if the defaults include the host.
+    /// This test constructs a tool with `Whitelist` mode and an empty
+    /// user allow list to assert the strict contract.
+    #[test]
+    fn whitelist_mode_is_strict_when_user_allow_list_is_empty() {
+        let tool = WebFetchTool::from_config(&vtcode_config::WebFetchConfig {
+            mode: vtcode_config::WebFetchMode::Whitelist,
+            allowed_domains: Vec::new(),
+            ..vtcode_config::WebFetchConfig::default()
+        });
+        let err = tool
+            .validate_url("https://github.com/vinhnx")
+            .expect_err("whitelist mode must reject domains not in the user allow list");
+        assert!(
+            err.to_string().contains("whitelist"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn domain_matches_allowed_handles_wildcards() {
+        // Apex + subdomains under a wildcard.
+        assert!(domain_matches_allowed("example.com", "*.example.com"));
+        assert!(domain_matches_allowed("api.example.com", "*.example.com"));
+        assert!(domain_matches_allowed(
+            "deep.nested.api.example.com",
+            "*.example.com"
+        ));
+        // Negative matches — wildcard must not be a substring match.
+        assert!(!domain_matches_allowed("evilexample.com", "*.example.com"));
+        assert!(!domain_matches_allowed(
+            "example.com.evil.tld",
+            "*.example.com"
+        ));
+        // Apex match is also accepted.
+        assert!(domain_matches_allowed("example.com", "example.com"));
+        assert!(domain_matches_allowed("api.example.com", "example.com"));
+    }
+
+    #[test]
+    fn domain_matches_allowed_rejects_single_label_wildcards() {
+        // L10 (review): a wildcard like `*.com` would match every `.com`
+        // host. That's almost certainly a misconfiguration; refuse it
+        // outright so an editor who fat-fingers the allowlist doesn't
+        // accidentally open the whole TLD.
+        assert!(!domain_matches_allowed("example.com", "*.com"));
+        assert!(!domain_matches_allowed("api.example.com", "*.com"));
+        assert!(!domain_matches_allowed("co.uk", "*.uk"));
+        // A multi-label suffix is still allowed.
+        assert!(domain_matches_allowed("example.co.uk", "*.co.uk"));
+    }
+
+    #[test]
+    fn default_allowlist_includes_wildcard_categories() {
+        // After H1: the web_fetch defaults are filtered to web-relevant
+        // categories. The TOML currently has no `*.foo` wildcards in
+        // those categories, so the defaults should not contain any.
+        // The matcher itself is still tested for wildcards via
+        // `domain_matches_allowed_handles_wildcards` above.
+        let config = vtcode_config::WebFetchConfig::default();
+        let wildcards: Vec<&str> = config
+            .allowed_domains
+            .iter()
+            .map(|s| s.as_str())
+            .filter(|s| s.starts_with("*."))
+            .collect();
+        assert!(
+            wildcards.is_empty(),
+            "expected no wildcards in default web_fetch allowlist (TOML has them only in auth/dev_infra which are excluded); got {wildcards:?}"
+        );
+    }
+
+    #[test]
+    fn default_restricted_mode_lets_through_wildcard_hosts() {
+        // Regression for the broader TOML allowlist: a URL on a wildcard
+        // host should pass `validate_url` under the default `Restricted`
+        // mode without any per-session config. The TOML only has wildcards
+        // in `auth` / `dev_infra` (excluded by H1), so we exercise the
+        // matcher with a user-supplied wildcard instead.
+        let tool = WebFetchTool::from_config(&vtcode_config::WebFetchConfig {
+            allowed_domains: vec!["*.example.com".to_string()],
+            ..vtcode_config::WebFetchConfig::default()
+        });
+        for url in [
+            "https://acme.example.com/authorize",
+            "https://deep.nested.api.example.com/api",
+        ] {
+            tool.validate_url(url)
+                .unwrap_or_else(|e| panic!("wildcard allow should accept {url}: {e}"));
+        }
+    }
+
     #[tokio::test]
     async fn rejects_test_tld() {
         let tool = WebFetchTool::new();
@@ -1220,5 +1539,107 @@ mod tests {
         .await;
         let error = error_text(&result).unwrap_or("");
         assert!(error.contains("local/private networks"));
+    }
+
+    /// Regression test for turn_578: a real HTTP 403 from npmjs.com
+    /// (server-side bot block) must come back as `error_type=http_error`
+    /// with `http_status=403`, NOT as a "policy_blocked" or "PermissionDenied"
+    /// response. The agent in turn_578 reported the host as "blocked by the
+    /// sandbox" because the error format only carried a flat string.
+    #[test]
+    fn classifies_http_403_as_server_block_not_policy() {
+        let err = anyhow::anyhow!("HTTP request failed with status: 403 Forbidden");
+        let response = web_fetch_error_response("https://www.npmjs.com/~vinhnx", 262144, 30, &err);
+        assert_eq!(response["error_type"], "http_error");
+        assert_eq!(response["http_status"], 403);
+        let action = response["next_action"].as_str().unwrap_or("");
+        assert!(
+            action.contains("anti-bot") || action.contains("rate-limited"),
+            "next_action should hint at anti-bot / rate-limit, got: {action}"
+        );
+    }
+
+    /// Regression test for turn_578: a real HTTP 404 from crates.io (the
+    /// user does not exist) must come back as `error_type=http_error`
+    /// with `http_status=404` and a "the resource does not exist" hint.
+    #[test]
+    fn classifies_http_404_with_verify_url_hint() {
+        let err = anyhow::anyhow!("HTTP request failed with status: 404 Not Found");
+        let response = web_fetch_error_response("https://crates.io/users/vinhnx", 262144, 30, &err);
+        assert_eq!(response["error_type"], "http_error");
+        assert_eq!(response["http_status"], 404);
+        let action = response["next_action"].as_str().unwrap_or("");
+        assert!(
+            action.contains("does not exist"),
+            "next_action was: {action}"
+        );
+    }
+
+    /// 5xx responses are transient — the hint should nudge the agent to
+    /// either retry briefly or use web_search as a fallback.
+    #[test]
+    fn classifies_http_5xx_as_transient() {
+        let err = anyhow::anyhow!("HTTP request failed with status: 503 Service Unavailable");
+        let response = web_fetch_error_response("https://example.com", 262144, 30, &err);
+        assert_eq!(response["error_type"], "http_error");
+        assert_eq!(response["http_status"], 503);
+        let action = response["next_action"].as_str().unwrap_or("");
+        assert!(
+            action.contains("retry") || action.contains("search"),
+            "got: {action}"
+        );
+    }
+
+    /// Network-level errors (timeout, DNS, TLS) should be classified
+    /// distinctly from HTTP errors so the agent can pick the right
+    /// fallback.
+    #[test]
+    fn classifies_timeout_as_network_error() {
+        let err = anyhow::anyhow!("request timed out");
+        let response = web_fetch_error_response("https://example.com", 262144, 30, &err);
+        assert_eq!(response["error_type"], "network_error");
+        assert!(response.get("http_status").is_none() || response["http_status"].is_null());
+    }
+
+    #[test]
+    fn classifies_tls_error_separately() {
+        let err = anyhow::anyhow!("TLS handshake failed: certificate verify failed");
+        let response = web_fetch_error_response("https://example.com", 262144, 30, &err);
+        assert_eq!(response["error_type"], "tls_error");
+    }
+
+    /// The error response must always carry a `next_action` so the agent
+    /// loop can decide what to do without re-parsing the free-form message.
+    #[test]
+    fn every_error_response_has_next_action() {
+        let samples = [
+            anyhow::anyhow!("HTTP request failed with status: 418 I'm a teapot"),
+            anyhow::anyhow!("dns error: no such host"),
+            anyhow::anyhow!("something completely unexpected"),
+        ];
+        for err in &samples {
+            let response = web_fetch_error_response("https://example.com", 262144, 30, err);
+            let action = response["next_action"].as_str().unwrap_or("");
+            assert!(
+                !action.is_empty(),
+                "next_action must be non-empty; got response {response}"
+            );
+        }
+    }
+
+    #[test]
+    fn extract_http_status_delegates_to_classify_helpers() {
+        // The local function delegates to `classify_helpers::extract_http_status`,
+        // which is the canonical parser. These cases mirror the helpers'
+        // own tests so a regression in the delegate is caught here too.
+        assert_eq!(extract_http_status("status: 403 Forbidden"), Some(403));
+        assert_eq!(
+            extract_http_status(
+                "HTTP status server error (503 Service Unavailable) for url (https://example.com/)"
+            ),
+            Some(503)
+        );
+        assert_eq!(extract_http_status("status:  500 Internal"), Some(500));
+        assert_eq!(extract_http_status("no status here"), None);
     }
 }

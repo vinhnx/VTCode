@@ -40,6 +40,7 @@ pub mod ide_context;
 pub mod loader;
 pub mod mcp;
 pub mod models;
+pub mod network_allowlist;
 pub mod optimization;
 pub mod output_styles;
 pub mod root;
@@ -76,7 +77,8 @@ pub use core::{
     ProviderOverrideConfig, ProviderPromptCachingConfig, ResourceLimitsConfig,
     ResourceLimitsPreset, SandboxConfig, SandboxPolicy, SeccompConfig, SeccompProfilePreset,
     SecurityConfig, SensitivePathsConfig, SkillsConfig, SkillsRenderMode, ThinkingDisplayMode,
-    ToolPolicy, ToolSearchAlgorithm, ToolsConfig, WebFetchConfig, WebFetchMode,
+    ToolPolicy, ToolSearchAlgorithm, ToolsConfig, WebFetchConfig, WebFetchMode, WebSearchConfig,
+    WebSearchProvider,
 };
 pub use debug::{DebugConfig, TraceLevel};
 pub use defaults::{
@@ -107,6 +109,10 @@ pub use mcp::{
     McpUiMode,
 };
 pub use models::{MiMoAuthMethod, ModelId, OpenRouterMetadata};
+pub use network_allowlist::{
+    AiProviderCategories, AllowlistEntry, AllowlistMeta, DEFAULT_ALLOWLIST_TOML,
+    LocalAiProviderEntry, NetworkAllowlist, SearchCategories,
+};
 pub use optimization::{
     AgentExecutionConfig, AsyncPipelineConfig, CommandCacheConfig, FileReadCacheConfig,
     LLMClientConfig, MemoryPoolConfig, OptimizationConfig, ProfilingConfig, ToolRegistryConfig,

@@ -269,7 +269,7 @@ pub fn unified_search_parameters() -> Value {
             "action": {
                 "type": "string",
                 "enum": ["grep", "list", "structural", "tools", "errors", "agent", "web", "skill"],
-                "description": "Search action: grep (text), list (files), structural (ast-grep), tools, errors, agent, web, skill."
+                "description": "Search action: grep (text), list (files), structural (ast-grep), tools, errors, agent, web, skill. For 'web', provide 'query' to search the web, or 'url' to fetch a specific page."
             },
             "workflow": {
                 "type": "string",
@@ -334,8 +334,9 @@ pub fn unified_search_parameters() -> Value {
             "new_subcommand": {"type": "string", "enum": ["project", "rule", "test", "util"], "description": "Subcommand for structural `workflow=\"new\"`. `project` scaffolds sgconfig.yml and directories; `rule` creates a new rule YAML; `test` creates a new test YAML; `util` creates a new utility rule."},
             "new_name": {"type": "string", "description": "Name for the new rule, test, or utility. Required for `new` subcommands `rule`, `test`, and `util`."},
             "keyword": {"type": "string", "description": "Keyword for 'tools' search."},
-            "url": {"type": "string", "format": "uri", "description": "The URL to fetch content from (for 'web' action)."},
-            "prompt": {"type": "string", "description": "The prompt to run on the fetched content (for 'web' action)."},
+            "url": {"type": "string", "format": "uri", "description": "URL to fetch content from (for 'web' action). Mutually exclusive with 'query'."},
+            "query": {"type": "string", "description": "Search query for 'web' action. Uses keyless DuckDuckGo. Returns ranked results (title, url, snippet). Mutually exclusive with 'url'."},
+            "prompt": {"type": "string", "description": "The prompt to run on the fetched content (for 'web' action with 'url')."},
             "name": {"type": "string", "description": "Skill name to load (for 'skill' action)."},
             "detail_level": {
                 "type": "string",

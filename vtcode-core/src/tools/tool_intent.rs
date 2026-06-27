@@ -173,11 +173,9 @@ fn builtin_tool_behavior_canonical(tool: &str) -> Option<ToolBehavior> {
             true,
             false,
         )),
-        tools::WEB_FETCH | tools::FETCH_URL => Some(ToolBehavior::function(
-            ToolMutationModel::ReadOnly,
-            false,
-            false,
-        )),
+        tools::WEB_FETCH | tools::FETCH_URL | tools::WEB_SEARCH | tools::DEFUDDLE_FETCH => Some(
+            ToolBehavior::function(ToolMutationModel::ReadOnly, false, false),
+        ),
         tools::WRITE_FILE | tools::EDIT_FILE | tools::DELETE_FILE | tools::CREATE_FILE => Some(
             ToolBehavior::function(ToolMutationModel::Mutating, false, true),
         ),
