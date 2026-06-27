@@ -116,20 +116,20 @@ rig = { package = "rig-core", version = "0.39", default-features = false, featur
 ] }
 portable-pty = "0.9.0"
 ansi-to-tui = "8.0.1"
-vtcode-commons = { path = "../vtcode-commons", version = "0.133.17" }
-vtcode-ui = { path = "../vtcode-ui", version = "0.133.17" }
-vtcode-macros = { path = "../vtcode-macros", version = "0.133.17" }
-vtcode-exec-events = { path = "../vtcode-exec-events", version = "0.133.17" }
-vtcode-auth = { path = "../vtcode-auth", version = "0.133.17" }
-vtcode-config = { path = "../vtcode-config", version = "0.133.17" }
-vtcode-utility-tool-specs = { path = "../vtcode-utility-tool-specs", version = "0.133.17" }
-vtcode-indexer = { path = "../vtcode-indexer", version = "0.133.17" }
-vtcode-bash-runner = { path = "../vtcode-bash-runner", version = "0.133.17" }
-vtcode-safety = { path = "../vtcode-safety", version = "0.133.17" }
-vtcode-a2a = { path = "../vtcode-a2a", version = "0.133.17" }
-vtcode-mcp = { path = "../vtcode-mcp", version = "0.133.17" }
-vtcode-llm = { path = "../vtcode-llm", version = "0.133.17", features = ["copilot"] }
-vtcode-skills = { path = "../vtcode-skills", version = "0.133.17" }
+vtcode-commons = { path = "../vtcode-commons", version = "0.133.18" }
+vtcode-ui = { path = "../vtcode-ui", version = "0.133.18" }
+vtcode-macros = { path = "../vtcode-macros", version = "0.133.18" }
+vtcode-exec-events = { path = "../vtcode-exec-events", version = "0.133.18" }
+vtcode-auth = { path = "../vtcode-auth", version = "0.133.18" }
+vtcode-config = { path = "../vtcode-config", version = "0.133.18" }
+vtcode-utility-tool-specs = { path = "../vtcode-utility-tool-specs", version = "0.133.18" }
+vtcode-indexer = { path = "../vtcode-indexer", version = "0.133.18" }
+vtcode-bash-runner = { path = "../vtcode-bash-runner", version = "0.133.18" }
+vtcode-safety = { path = "../vtcode-safety", version = "0.133.18" }
+vtcode-a2a = { path = "../vtcode-a2a", version = "0.133.18" }
+vtcode-mcp = { path = "../vtcode-mcp", version = "0.133.18" }
+vtcode-llm = { path = "../vtcode-llm", version = "0.133.18", features = ["copilot"] }
+vtcode-skills = { path = "../vtcode-skills", version = "0.133.18" }
 
 # Schema generation
 schemars = { workspace = true, optional = true }
