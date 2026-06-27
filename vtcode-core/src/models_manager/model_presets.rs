@@ -1480,8 +1480,8 @@ fn opencode_go_presets() -> Vec<ModelPreset> {
             id: format!("opencode-go/{}", opencode_go_models::MINIMAX_M3),
             model: opencode_go_models::MINIMAX_M3.to_string(),
             display_name: "MiniMax-M3 (OpenCode Go)".to_string(),
-            description:
-                "MiniMax-M3 — frontier multimodal coding model on the OpenCode Go plan".to_string(),
+            description: "MiniMax-M3 — frontier multimodal coding model on the OpenCode Go plan"
+                .to_string(),
             provider: Provider::OpenCodeGo,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
             supported_reasoning_efforts: vec![ReasoningEffortPreset {
@@ -1571,8 +1571,8 @@ fn opencode_go_presets() -> Vec<ModelPreset> {
             id: format!("opencode-go/{}", opencode_go_models::DEEPSEEK_V4_PRO),
             model: opencode_go_models::DEEPSEEK_V4_PRO.to_string(),
             display_name: "DeepSeek V4 Pro (OpenCode Go)".to_string(),
-            description:
-                "DeepSeek V4 Pro — high-quality reasoning model on the OpenCode Go plan".to_string(),
+            description: "DeepSeek V4 Pro — high-quality reasoning model on the OpenCode Go plan"
+                .to_string(),
             provider: Provider::OpenCodeGo,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
             supported_reasoning_efforts: vec![ReasoningEffortPreset {
@@ -1589,9 +1589,8 @@ fn opencode_go_presets() -> Vec<ModelPreset> {
             id: format!("opencode-go/{}", opencode_go_models::DEEPSEEK_V4_FLASH),
             model: opencode_go_models::DEEPSEEK_V4_FLASH.to_string(),
             display_name: "DeepSeek V4 Flash (OpenCode Go)".to_string(),
-            description:
-                "DeepSeek V4 Flash — fast, low-cost coding model on the OpenCode Go plan"
-                    .to_string(),
+            description: "DeepSeek V4 Flash — fast, low-cost coding model on the OpenCode Go plan"
+                .to_string(),
             provider: Provider::OpenCodeGo,
             default_reasoning_effort: ReasoningEffortLevel::Low,
             supported_reasoning_efforts: vec![ReasoningEffortPreset {

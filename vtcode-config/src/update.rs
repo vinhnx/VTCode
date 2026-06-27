@@ -21,6 +21,9 @@ pub enum ReleaseChannel {
     Beta,
     /// Nightly builds (bleeding edge)
     Nightly,
+    /// Catch-all for unknown channels added by future versions.
+    #[serde(other)]
+    Unknown,
 }
 
 impl std::fmt::Display for ReleaseChannel {
@@ -29,6 +32,7 @@ impl std::fmt::Display for ReleaseChannel {
             Self::Stable => write!(f, "stable"),
             Self::Beta => write!(f, "beta"),
             Self::Nightly => write!(f, "nightly"),
+            Self::Unknown => write!(f, "unknown"),
         }
     }
 }

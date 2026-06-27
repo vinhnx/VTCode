@@ -285,7 +285,7 @@ impl NotificationManager {
         let is_terminal_active = self.terminal_focused.load(Ordering::Relaxed);
         let should_suppress_for_focus = match config.notification_condition {
             NotificationCondition::Unfocused => is_terminal_active && config.suppress_when_focused,
-            NotificationCondition::Always => false,
+            NotificationCondition::Always | NotificationCondition::Unknown => false,
         };
         if should_suppress_for_focus {
             return Ok(());
@@ -406,7 +406,7 @@ impl NotificationManager {
 
     async fn send_message(&self, message: &str, config: &NotificationConfig) -> Result<()> {
         match config.delivery_mode {
-            NotificationDeliveryMode::Terminal => {
+            NotificationDeliveryMode::Terminal | NotificationDeliveryMode::Unknown => {
                 self.send_terminal_bell(message).await;
             }
             NotificationDeliveryMode::Hybrid => {
@@ -584,7 +584,9 @@ impl NotificationManager {
                 }
             }
             NotificationBackend::NotifyRust => NOTIFY_RUST_DESKTOP_NOTIFICATION_BACKENDS,
-            NotificationBackend::Terminal => NO_DESKTOP_NOTIFICATION_BACKENDS,
+            NotificationBackend::Terminal | NotificationBackend::Unknown => {
+                NO_DESKTOP_NOTIFICATION_BACKENDS
+            }
         }
     }
 

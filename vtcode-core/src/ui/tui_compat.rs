@@ -43,7 +43,7 @@ pub fn to_tui_surface(preference: crate::config::types::UiSurfacePreference) -> 
 pub fn to_tui_keyboard_protocol(keyboard: KeyboardProtocolConfig) -> KeyboardProtocolSettings {
     KeyboardProtocolSettings {
         enabled: keyboard.enabled,
-        mode: keyboard.mode,
+        mode: keyboard.mode.as_str().to_owned(),
         disambiguate_escape_codes: keyboard.disambiguate_escape_codes,
         report_event_types: keyboard.report_event_types,
         report_alternate_keys: keyboard.report_alternate_keys,
@@ -114,7 +114,9 @@ pub fn to_tui_appearance(config: &VTCodeConfig) -> SessionAppearanceConfig {
         theme: config.agent.theme.clone(),
         ui_mode: match config.ui.display_mode {
             crate::config::UiDisplayMode::Full => UiMode::Full,
-            crate::config::UiDisplayMode::Minimal => UiMode::Minimal,
+            crate::config::UiDisplayMode::Minimal | crate::config::UiDisplayMode::Unknown => {
+                UiMode::Minimal
+            }
             crate::config::UiDisplayMode::Focused => UiMode::Focused,
         },
         show_sidebar: config.ui.show_sidebar,
@@ -129,14 +131,16 @@ pub fn to_tui_appearance(config: &VTCodeConfig) -> SessionAppearanceConfig {
             0
         },
         layout_mode: match config.ui.layout_mode {
-            crate::config::LayoutModeOverride::Auto => LayoutModeOverride::Auto,
+            crate::config::LayoutModeOverride::Auto
+            | crate::config::LayoutModeOverride::Unknown => LayoutModeOverride::Auto,
             crate::config::LayoutModeOverride::Compact => LayoutModeOverride::Compact,
             crate::config::LayoutModeOverride::Standard => LayoutModeOverride::Standard,
             crate::config::LayoutModeOverride::Wide => LayoutModeOverride::Wide,
         },
         reasoning_display_mode: match config.ui.reasoning_display_mode {
             crate::config::ReasoningDisplayMode::Always => ReasoningDisplayMode::Always,
-            crate::config::ReasoningDisplayMode::Toggle => ReasoningDisplayMode::Toggle,
+            crate::config::ReasoningDisplayMode::Toggle
+            | crate::config::ReasoningDisplayMode::Unknown => ReasoningDisplayMode::Toggle,
             crate::config::ReasoningDisplayMode::Hidden => ReasoningDisplayMode::Hidden,
         },
         reasoning_visible_default: config.ui.reasoning_visible_default,

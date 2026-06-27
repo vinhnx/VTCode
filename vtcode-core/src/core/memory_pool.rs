@@ -78,14 +78,11 @@ impl MemoryPool {
     /// Return a string to the pool after clearing it
     /// Optimization: Only clear if string has content, preserve capacity for reuse
     pub fn return_string(&self, mut s: String) {
-        // Optimization: Preserve capacity for strings with reasonable size
-        // This avoids reallocations when the string is reused
+        // Shrink large strings to avoid memory bloat, reuse existing allocation
         if s.capacity() > 4096 {
-            // Large strings: shrink to avoid memory bloat
-            s = String::with_capacity(256);
-        } else {
-            s.clear();
+            s.shrink_to(256);
         }
+        s.clear();
         let mut pool = self.string_pool.lock();
         // Use capacity as the limit to respect configuration
         if pool.len() < pool.capacity() {

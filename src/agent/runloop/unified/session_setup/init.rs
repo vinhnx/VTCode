@@ -92,8 +92,8 @@ pub(crate) fn resolve_provider_label(
     // MiMo auth method detection
     if config.provider.eq_ignore_ascii_case("mimo") {
         if let Some(vt_cfg) = vt_cfg
-            && let Some(method_str) = vt_cfg.provider.mimo_auth_method.as_deref()
-            && let Ok(method) = MiMoAuthMethod::from_str(method_str)
+            && let Some(method) = vt_cfg.provider.mimo_auth_method
+            && method != MiMoAuthMethod::Unknown
         {
             return format!("{} ({})", "Xiaomi MiMo", method.label());
         }

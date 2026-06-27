@@ -24,6 +24,9 @@ pub enum ItemType {
     Reasoning,
     /// An item reference.
     ItemReference,
+    /// Catch-all for unknown item types added by the OpenResponses spec.
+    #[serde(other)]
+    Unknown,
 }
 
 /// Role for message items.
@@ -34,6 +37,9 @@ pub enum MessageRole {
     Assistant,
     System,
     Developer,
+    /// Catch-all for unknown roles added by the OpenResponses spec.
+    #[serde(other)]
+    Unknown,
 }
 
 /// Status for items that have a lifecycle.
@@ -43,6 +49,9 @@ pub enum ItemStatus {
     InProgress,
     Completed,
     Failed,
+    /// Catch-all for unknown statuses added by the OpenResponses spec.
+    #[serde(other)]
+    Unknown,
 }
 
 /// Status for function calls.
@@ -52,6 +61,9 @@ pub enum FunctionCallStatus {
     InProgress,
     Completed,
     Failed,
+    /// Catch-all for unknown statuses added by the OpenResponses spec.
+    #[serde(other)]
+    Unknown,
 }
 
 // ============================================================================
@@ -111,6 +123,9 @@ pub enum ImageDetail {
     High,
     Auto,
     Original,
+    /// Catch-all for unknown detail levels.
+    #[serde(other)]
+    Unknown,
 }
 
 /// Input image content.
@@ -151,6 +166,9 @@ pub enum Annotation {
         #[serde(skip_serializing_if = "Option::is_none")]
         title: Option<String>,
     },
+    /// Catch-all for unknown annotation types added by the OpenResponses spec.
+    #[serde(other)]
+    Unknown,
 }
 
 /// Content part union for input messages.
@@ -409,6 +427,9 @@ pub enum ToolChoiceValue {
     Auto,
     None,
     Required,
+    /// Catch-all for unknown tool choice values.
+    #[serde(other)]
+    Unknown,
 }
 
 /// Specific function choice.
@@ -451,6 +472,9 @@ pub enum ResponseStatus {
     Completed,
     Failed,
     Cancelled,
+    /// Catch-all for unknown statuses added by the OpenResponses spec.
+    #[serde(other)]
+    Unknown,
 }
 
 /// OpenResponses API response body.

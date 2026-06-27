@@ -106,6 +106,9 @@ pub enum AnthropicContentBlock {
     TextEditorCodeExecutionToolResult { tool_use_id: String, content: Value },
     #[serde(rename = "web_search_tool_result")]
     WebSearchToolResult { tool_use_id: String, content: Value },
+    /// Catch-all for unknown content block types added by the Anthropic API.
+    #[serde(other)]
+    Unknown,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -235,10 +238,10 @@ pub fn convert_anthropic_to_llm_request(request: AnthropicMessagesRequest) -> LL
         .as_ref()
         .and_then(|config| config.effort.clone());
     let output_format = request.output_config.as_ref().and_then(|config| {
-        config
-            .format
-            .as_ref()
-            .map(|AnthropicOutputFormat::JsonSchema { schema }| schema.clone())
+        config.format.as_ref().and_then(|format| match format {
+            AnthropicOutputFormat::JsonSchema { schema } => Some(schema.clone()),
+            AnthropicOutputFormat::Unknown => None,
+        })
     });
     let task_budget_tokens = request
         .output_config
@@ -662,6 +665,8 @@ fn convert_anthropic_blocks(blocks: &[AnthropicContentBlock]) -> ConvertedAnthro
                 tool_use_id.clone(),
                 serialize_value(content),
             )),
+            // Unknown content block types are silently skipped.
+            AnthropicContentBlock::Unknown => {}
         }
     }
 
@@ -732,6 +737,7 @@ fn anthropic_block_text(block: &AnthropicContentBlock) -> String {
                 serialize_value(content)
             )
         }
+        AnthropicContentBlock::Unknown => "[Unknown Content Block]".to_string(),
     }
 }
 
@@ -744,7 +750,9 @@ fn compatibility_thinking_mode(
         Some(ThinkingConfig::Enabled { budget_tokens, .. }) => {
             AnthropicThinkingModeOverride::ManualBudget(*budget_tokens)
         }
-        Some(ThinkingConfig::Disabled) => AnthropicThinkingModeOverride::Disabled,
+        Some(ThinkingConfig::Disabled) | Some(ThinkingConfig::Unknown) => {
+            AnthropicThinkingModeOverride::Disabled
+        }
         None => AnthropicThinkingModeOverride::Disabled,
     }
 }
@@ -755,13 +763,13 @@ fn compatibility_thinking_display(
     let display = match thinking {
         Some(ThinkingConfig::Adaptive { display })
         | Some(ThinkingConfig::Enabled { display, .. }) => *display,
-        Some(ThinkingConfig::Disabled) | None => None,
+        Some(ThinkingConfig::Disabled) | Some(ThinkingConfig::Unknown) | None => None,
     };
 
     match display {
         Some(ThinkingDisplay::Summarized) => AnthropicThinkingDisplayOverride::Summarized,
         Some(ThinkingDisplay::Omitted) => AnthropicThinkingDisplayOverride::Omitted,
-        None => AnthropicThinkingDisplayOverride::Inherit,
+        Some(ThinkingDisplay::Unknown) | None => AnthropicThinkingDisplayOverride::Inherit,
     }
 }
 

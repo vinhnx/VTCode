@@ -34,7 +34,7 @@ pub struct ResolvedAgentRuntimeView {
     pub disallowed_tools: Vec<String>,
     pub permissions: AgentPermissionsConfig,
     pub model: Option<String>,
-    pub reasoning_effort: Option<String>,
+    pub reasoning_effort: Option<ReasoningEffortLevel>,
     pub hooks: Option<HooksConfig>,
     pub mcp_servers: Vec<SubagentMcpServer>,
     pub skills: Vec<String>,
@@ -59,7 +59,7 @@ impl ResolvedAgentRuntimeView {
             disallowed_tools: spec.disallowed_tools.clone(),
             permissions: spec.permissions.clone(),
             model: spec.model.clone(),
-            reasoning_effort: spec.reasoning_effort.clone(),
+            reasoning_effort: spec.reasoning_effort,
             hooks: spec.hooks.clone(),
             mcp_servers: spec.mcp_servers.clone(),
             skills: spec.skills.clone(),
@@ -168,12 +168,7 @@ pub fn prepare_child_runtime_config(
         build_child_config_from_runtime(parent, &runtime, &resolved_model.as_str(), max_turns);
     let child_reasoning_effort = reasoning_override
         .and_then(ReasoningEffortLevel::parse)
-        .or_else(|| {
-            runtime
-                .reasoning_effort
-                .as_deref()
-                .and_then(ReasoningEffortLevel::parse)
-        })
+        .or(runtime.reasoning_effort)
         .unwrap_or(parent_reasoning_effort);
     child_cfg.agent.default_model = resolved_model.to_string();
     child_cfg.agent.reasoning_effort = child_reasoning_effort;

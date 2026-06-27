@@ -188,6 +188,41 @@ impl std::fmt::Display for WorkspaceTrustLevel {
     }
 }
 
+/// ACP authentication method
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum AcpAuthMethod {
+    /// Agent handles authentication itself (e.g., OAuth flows)
+    #[default]
+    Agent,
+    /// User provides an API key via an environment variable
+    EnvVar,
+    /// Interactive terminal-based login
+    Terminal,
+    /// Forward-compatible catch-all for unknown method values
+    #[serde(other)]
+    Unknown,
+}
+
+impl AcpAuthMethod {
+    /// Returns the string representation of this auth method.
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::Agent => "agent",
+            Self::EnvVar => "env_var",
+            Self::Terminal => "terminal",
+            Self::Unknown => "unknown",
+        }
+    }
+}
+
+impl std::fmt::Display for AcpAuthMethod {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 /// ACP authentication configuration
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -195,7 +230,7 @@ pub struct AcpAuthConfig {
     /// Default authentication method for ACP agents
     /// Options: "agent" (default - agent handles auth), "env_var", "terminal"
     #[serde(default = "default_auth_method")]
-    pub default_method: String,
+    pub default_method: AcpAuthMethod,
 
     /// Environment variable name for auth (used when default_method is "env_var")
     /// Examples: "OPENAI_API_KEY", "ANTHROPIC_API_KEY"
@@ -207,8 +242,8 @@ pub struct AcpAuthConfig {
     pub auth_url: Option<String>,
 }
 
-fn default_auth_method() -> String {
-    "agent".to_string()
+fn default_auth_method() -> AcpAuthMethod {
+    AcpAuthMethod::Agent
 }
 
 impl Default for AcpAuthConfig {
@@ -243,7 +278,7 @@ mod tests {
     #[test]
     fn test_acp_auth_config_defaults() {
         let auth = AcpAuthConfig::default();
-        assert_eq!(auth.default_method, "agent");
+        assert_eq!(auth.default_method, AcpAuthMethod::Agent);
         assert!(auth.env_var_name.is_none());
         assert!(auth.auth_url.is_none());
     }
@@ -251,7 +286,7 @@ mod tests {
     #[test]
     fn test_acp_auth_config_in_zed_config() {
         let cfg = AgentClientProtocolZedConfig::default();
-        assert_eq!(cfg.auth.default_method, "agent");
+        assert_eq!(cfg.auth.default_method, AcpAuthMethod::Agent);
     }
 
     #[test]
@@ -262,7 +297,7 @@ env_var_name = "OPENAI_API_KEY"
 auth_url = "https://platform.openai.com/api-keys"
 "#;
         let auth: AcpAuthConfig = toml::from_str(toml_str).unwrap();
-        assert_eq!(auth.default_method, "env_var");
+        assert_eq!(auth.default_method, AcpAuthMethod::EnvVar);
         assert_eq!(auth.env_var_name, Some("OPENAI_API_KEY".to_string()));
         assert_eq!(
             auth.auth_url,

@@ -44,17 +44,15 @@ pub struct AstGrepBinaryOverrideGuard {
 
 impl Drop for AstGrepBinaryOverrideGuard {
     fn drop(&mut self) {
-        *AST_GREP_OVERRIDE
-            .lock()
-            .expect("ast-grep override mutex must not be poisoned") = self.previous.clone();
+        if let Ok(mut guard) = AST_GREP_OVERRIDE.lock() {
+            *guard = self.previous.clone();
+        }
     }
 }
 
 #[doc(hidden)]
 pub fn set_ast_grep_binary_override_for_tests(path: Option<PathBuf>) -> AstGrepBinaryOverrideGuard {
-    let mut state = AST_GREP_OVERRIDE
-        .lock()
-        .expect("ast-grep override mutex must not be poisoned");
+    let mut state = AST_GREP_OVERRIDE.lock().unwrap_or_else(|e| e.into_inner());
     let previous = state.clone();
     *state = match path {
         Some(path) => AstGrepBinaryOverride::Path(path),

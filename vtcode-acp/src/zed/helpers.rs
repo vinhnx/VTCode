@@ -167,7 +167,7 @@ fn title_case_identifier(id: &str) -> String {
 
 fn reasoning_effort_name(level: ReasoningEffortLevel) -> &'static str {
     match level {
-        ReasoningEffortLevel::None => "None",
+        ReasoningEffortLevel::None | ReasoningEffortLevel::Unknown => "None",
         ReasoningEffortLevel::Minimal => "Minimal",
         ReasoningEffortLevel::Low => "Low",
         ReasoningEffortLevel::Medium => "Medium",

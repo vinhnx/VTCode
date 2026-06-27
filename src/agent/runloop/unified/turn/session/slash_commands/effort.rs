@@ -296,7 +296,9 @@ fn provider_label_for_header(ctx: &SlashCommandContext<'_>) -> String {
 
 fn effort_description(level: ReasoningEffortLevel, model: &str) -> &'static str {
     match level {
-        ReasoningEffortLevel::None => "No additional reasoning overhead for the fastest responses",
+        ReasoningEffortLevel::None | ReasoningEffortLevel::Unknown => {
+            "No additional reasoning overhead for the fastest responses"
+        }
         ReasoningEffortLevel::Minimal => "Very light reasoning with minimal extra latency",
         ReasoningEffortLevel::Low => "Quick, straightforward implementation with minimal overhead",
         ReasoningEffortLevel::Medium => {

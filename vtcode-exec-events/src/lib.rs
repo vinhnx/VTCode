@@ -272,6 +272,10 @@ pub enum ThreadEvent {
     /// Represents a fatal error.
     #[serde(rename = "error")]
     Error(ThreadErrorEvent),
+    /// Catch-all for unknown event types added in newer schema versions.
+    /// Preserves forward compatibility when older binaries read newer event streams.
+    #[serde(other)]
+    Unknown,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -290,6 +294,9 @@ pub enum ThreadCompletionSubtype {
     ErrorMaxBudgetUsd,
     ErrorDuringExecution,
     Cancelled,
+    /// Catch-all for unknown completion subtypes added in newer schema versions.
+    #[serde(other)]
+    Unknown,
 }
 
 impl ThreadCompletionSubtype {
@@ -300,6 +307,7 @@ impl ThreadCompletionSubtype {
             Self::ErrorMaxBudgetUsd => "error_max_budget_usd",
             Self::ErrorDuringExecution => "error_during_execution",
             Self::Cancelled => "cancelled",
+            Self::Unknown => "unknown",
         }
     }
 
@@ -315,6 +323,9 @@ pub enum CompactionTrigger {
     Manual,
     Auto,
     Recovery,
+    /// Catch-all for unknown triggers added in newer schema versions.
+    #[serde(other)]
+    Unknown,
 }
 
 impl CompactionTrigger {
@@ -323,6 +334,7 @@ impl CompactionTrigger {
             Self::Manual => "manual",
             Self::Auto => "auto",
             Self::Recovery => "recovery",
+            Self::Unknown => "unknown",
         }
     }
 }
@@ -333,6 +345,9 @@ impl CompactionTrigger {
 pub enum CompactionMode {
     Provider,
     Local,
+    /// Catch-all for unknown modes added in newer schema versions.
+    #[serde(other)]
+    Unknown,
 }
 
 impl CompactionMode {
@@ -340,6 +355,7 @@ impl CompactionMode {
         match self {
             Self::Provider => "provider",
             Self::Local => "local",
+            Self::Unknown => "unknown",
         }
     }
 }

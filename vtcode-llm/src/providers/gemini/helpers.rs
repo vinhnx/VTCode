@@ -1165,7 +1165,7 @@ fn build_generation_config(provider: &GeminiProvider, request: &LLMRequest) -> G
     {
         let is_gemini3_flash = request.model.contains("gemini-3-flash");
         let thinking_level = match effort {
-            ReasoningEffortLevel::None => Some("low"),
+            ReasoningEffortLevel::None | ReasoningEffortLevel::Unknown => Some("low"),
             ReasoningEffortLevel::Minimal => {
                 if is_gemini3_flash {
                     Some("minimal")

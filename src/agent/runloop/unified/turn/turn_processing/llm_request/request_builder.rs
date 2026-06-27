@@ -648,8 +648,6 @@ fn resolve_effective_reasoning_effort(
     turn_snapshot
         .active_primary_agent
         .reasoning_effort
-        .as_deref()
-        .and_then(vtcode_core::config::types::ReasoningEffortLevel::parse)
         .or_else(|| cfg.map(|cfg| cfg.agent.reasoning_effort))
 }
 
@@ -676,13 +674,8 @@ async fn render_primary_agent_runtime_context(
     if let Some(effort) = reasoning_effort {
         lines.push(format!("- Request reasoning effort: {}", effort.as_str()));
     }
-    if let Some(raw_effort) = agent
-        .reasoning_effort
-        .as_deref()
-        .map(str::trim)
-        .filter(|effort| !effort.is_empty())
-    {
-        lines.push(format!("- Agent reasoning effort: {raw_effort}"));
+    if let Some(raw_effort) = agent.reasoning_effort {
+        lines.push(format!("- Agent reasoning effort: {}", raw_effort.as_str()));
     }
     lines.push(format!(
         "- Session state: planning_workflow={}, auto_permission={}, full_auto={}",
@@ -1773,7 +1766,7 @@ mod tests {
         let mut backing = TestTurnProcessingBacking::new(4).await;
         let mut spec = test_primary_agent_spec("planner", "Use agent metadata.");
         spec.model = Some("overlay-model".to_string());
-        spec.reasoning_effort = Some("high".to_string());
+        spec.reasoning_effort = Some(vtcode_config::ReasoningEffortLevel::High);
         backing.select_primary_agent_from_specs(&[spec], "planner");
 
         let mut cfg = VTCodeConfig::default();

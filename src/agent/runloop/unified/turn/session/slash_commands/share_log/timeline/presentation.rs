@@ -197,6 +197,21 @@ pub(super) fn timeline_rows_from_thread_events(records: &[ThreadEventRecord]) ->
                 pretty_json_string(&record.event),
                 false,
             ),
+            ThreadEvent::Unknown => timeline_row(
+                record.sequence,
+                TIMELINE_SOURCE_THREAD_EVENTS,
+                "unknown",
+                None,
+                "unknown",
+                None,
+                record.turn_id.as_deref(),
+                record.submission_id.as_ref().map(|value| value.as_str()),
+                "Unknown event".to_string(),
+                String::new(),
+                String::new(),
+                pretty_json_string(&record.event),
+                false,
+            ),
         })
         .collect()
 }
@@ -798,6 +813,7 @@ fn thread_completion_status(subtype: &ThreadCompletionSubtype) -> &'static str {
         ThreadCompletionSubtype::ErrorMaxTurns
         | ThreadCompletionSubtype::ErrorMaxBudgetUsd
         | ThreadCompletionSubtype::ErrorDuringExecution => "failed",
+        ThreadCompletionSubtype::Unknown => "unknown",
     }
 }
 

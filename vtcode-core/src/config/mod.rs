@@ -71,8 +71,8 @@ pub use types::{
 pub use validation::{ValidationResult, validate_config, validate_model_exists};
 pub use validator::ConfigValidator;
 pub use vtcode_config::root::{
-    KeyboardProtocolConfig, LayoutModeOverride, PtyConfig, ReasoningDisplayMode, ToolOutputMode,
-    UiConfig, UiDisplayMode,
+    KeyboardProtocolConfig, KeyboardProtocolMode, LayoutModeOverride, PtyConfig,
+    ReasoningDisplayMode, ToolOutputMode, UiConfig, UiDisplayMode,
 };
 pub use vtcode_config::status_line::{StatusLineConfig, StatusLineMode};
 pub use vtcode_config::terminal_title::{DEFAULT_TERMINAL_TITLE_ITEMS, TerminalTitleConfig};
@@ -109,20 +109,20 @@ fn keyboard_protocol_to_flags_for_terminal(
         return KeyboardEnhancementFlags::empty();
     }
 
-    let mut flags = match config.mode.as_str() {
-        "default" => {
+    let mut flags = match config.mode {
+        KeyboardProtocolMode::Default => {
             KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
                 | KeyboardEnhancementFlags::REPORT_EVENT_TYPES
                 | KeyboardEnhancementFlags::REPORT_ALTERNATE_KEYS
         }
-        "full" => {
+        KeyboardProtocolMode::Full => {
             KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
                 | KeyboardEnhancementFlags::REPORT_EVENT_TYPES
                 | KeyboardEnhancementFlags::REPORT_ALTERNATE_KEYS
                 | KeyboardEnhancementFlags::REPORT_ALL_KEYS_AS_ESCAPE_CODES
         }
-        "minimal" => KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES,
-        "custom" => {
+        KeyboardProtocolMode::Minimal => KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES,
+        KeyboardProtocolMode::Custom => {
             let mut flags = KeyboardEnhancementFlags::empty();
             if config.disambiguate_escape_codes {
                 flags |= KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES;
@@ -138,18 +138,9 @@ fn keyboard_protocol_to_flags_for_terminal(
             }
             flags
         }
-        _ => {
-            tracing::warn!(
-                "Invalid keyboard protocol mode '{}', using default",
-                config.mode
-            );
-            KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
-                | KeyboardEnhancementFlags::REPORT_EVENT_TYPES
-                | KeyboardEnhancementFlags::REPORT_ALTERNATE_KEYS
-        }
     };
 
-    if should_force_report_all_keys(config.mode.as_str(), is_macos, term_program, term) {
+    if should_force_report_all_keys(config.mode, is_macos, term_program, term) {
         flags |= KeyboardEnhancementFlags::REPORT_ALL_KEYS_AS_ESCAPE_CODES;
     }
 
@@ -158,12 +149,12 @@ fn keyboard_protocol_to_flags_for_terminal(
 
 #[cfg(feature = "tui")]
 fn should_force_report_all_keys(
-    mode: &str,
+    mode: KeyboardProtocolMode,
     is_macos: bool,
     term_program: Option<&str>,
     term: Option<&str>,
 ) -> bool {
-    if !is_macos || !matches!(mode, "default") {
+    if !is_macos || mode != KeyboardProtocolMode::Default {
         return false;
     }
 
@@ -180,7 +171,7 @@ mod keyboard_protocol_tests {
     fn default_keyboard_protocol_config() -> KeyboardProtocolConfig {
         KeyboardProtocolConfig {
             enabled: true,
-            mode: "default".to_string(),
+            mode: KeyboardProtocolMode::Default,
             disambiguate_escape_codes: true,
             report_event_types: true,
             report_alternate_keys: true,
@@ -219,7 +210,7 @@ mod keyboard_protocol_tests {
     fn test_keyboard_protocol_minimal_mode() {
         let config = KeyboardProtocolConfig {
             enabled: true,
-            mode: "minimal".to_string(),
+            mode: KeyboardProtocolMode::Minimal,
             disambiguate_escape_codes: true,
             report_event_types: true,
             report_alternate_keys: true,
@@ -243,7 +234,7 @@ mod keyboard_protocol_tests {
     fn test_keyboard_protocol_disabled() {
         let config = KeyboardProtocolConfig {
             enabled: false,
-            mode: "default".to_string(),
+            mode: KeyboardProtocolMode::Default,
             disambiguate_escape_codes: true,
             report_event_types: true,
             report_alternate_keys: true,
@@ -263,7 +254,7 @@ mod keyboard_protocol_tests {
     fn test_keyboard_protocol_custom_mode() {
         let config = KeyboardProtocolConfig {
             enabled: true,
-            mode: "custom".to_string(),
+            mode: KeyboardProtocolMode::Custom,
             disambiguate_escape_codes: true,
             report_event_types: false,
             report_alternate_keys: true,
@@ -285,18 +276,16 @@ mod keyboard_protocol_tests {
 
     #[test]
     fn test_keyboard_protocol_validation() {
-        let mut config = KeyboardProtocolConfig {
+        let config = KeyboardProtocolConfig {
             enabled: true,
-            mode: "invalid".to_string(),
+            mode: KeyboardProtocolMode::Default,
             disambiguate_escape_codes: true,
             report_event_types: true,
             report_alternate_keys: true,
             report_all_keys: false,
         };
 
-        assert!(config.validate().is_err());
-
-        config.mode = "default".to_string();
+        // All enum variants are valid; validation always succeeds.
         config.validate().unwrap();
     }
 }

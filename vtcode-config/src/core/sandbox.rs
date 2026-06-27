@@ -7,12 +7,13 @@
 //! - **Lifecycle**: What survives between runs
 
 use crate::env_helpers::default_true;
-use serde::{Deserialize, Serialize};
+use serde::de::{self, MapAccess, Visitor};
+use serde::{Deserialize, Deserializer, Serialize};
+use std::fmt;
 
 /// Sandbox configuration
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
 pub struct SandboxConfig {
     /// Enable sandboxing for command execution
     #[serde(default = "default_false")]
@@ -73,22 +74,127 @@ pub enum SandboxPolicy {
     External,
 }
 
+/// Network egress policy
+///
+/// Replaces the legacy `allow_all`/`block_all` bool pair with a single
+/// three-state enum. Config files using the old bool fields are still accepted
+/// for backward compatibility.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum NetworkPolicy {
+    /// Use the domain allowlist for network egress (default-deny outbound).
+    #[default]
+    AllowlistOnly,
+    /// Allow any network access (legacy `allow_all = true`).
+    AllowAll,
+    /// Block all network access, ignoring any allowlist (legacy `block_all = true`).
+    BlockAll,
+}
+
 /// Network egress configuration
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct NetworkConfig {
-    /// Allow any network access (legacy mode)
-    #[serde(default)]
-    pub allow_all: bool,
+    /// Network egress policy.
+    /// Defaults to [`NetworkPolicy::AllowlistOnly`] (default-deny, then allowlist).
+    pub policy: NetworkPolicy,
 
-    /// Domain allowlist for network egress
+    /// Domain allowlist for network egress.
     /// Following field guide: "Default-deny outbound network, then allowlist."
     #[serde(default)]
     pub allowlist: Vec<NetworkAllowlistEntryConfig>,
+}
 
-    /// Block all network access (overrides allowlist)
-    #[serde(default)]
-    pub block_all: bool,
+impl Default for NetworkConfig {
+    fn default() -> Self {
+        Self {
+            policy: NetworkPolicy::AllowlistOnly,
+            allowlist: Vec::new(),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for NetworkConfig {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(field_identifier, rename_all = "snake_case")]
+        enum Field {
+            Policy,
+            Allowlist,
+            AllowAll,
+            BlockAll,
+        }
+
+        struct NetworkConfigVisitor;
+
+        impl<'de> Visitor<'de> for NetworkConfigVisitor {
+            type Value = NetworkConfig;
+
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                f.write_str("NetworkConfig struct")
+            }
+
+            fn visit_map<V>(self, mut map: V) -> Result<NetworkConfig, V::Error>
+            where
+                V: MapAccess<'de>,
+            {
+                let mut policy: Option<NetworkPolicy> = None;
+                let mut allowlist: Option<Vec<NetworkAllowlistEntryConfig>> = None;
+                let mut allow_all: Option<bool> = None;
+                let mut block_all: Option<bool> = None;
+
+                while let Some(key) = map.next_key()? {
+                    match key {
+                        Field::Policy => {
+                            if policy.is_some() {
+                                return Err(de::Error::duplicate_field("policy"));
+                            }
+                            policy = Some(map.next_value()?);
+                        }
+                        Field::Allowlist => {
+                            if allowlist.is_some() {
+                                return Err(de::Error::duplicate_field("allowlist"));
+                            }
+                            allowlist = Some(map.next_value()?);
+                        }
+                        Field::AllowAll => {
+                            if allow_all.is_some() {
+                                return Err(de::Error::duplicate_field("allow_all"));
+                            }
+                            allow_all = Some(map.next_value()?);
+                        }
+                        Field::BlockAll => {
+                            if block_all.is_some() {
+                                return Err(de::Error::duplicate_field("block_all"));
+                            }
+                            block_all = Some(map.next_value()?);
+                        }
+                    }
+                }
+
+                // Legacy bool fields take precedence for backward compatibility:
+                // block_all > allow_all > policy field > default (AllowlistOnly).
+                let resolved_policy = if block_all.unwrap_or(false) {
+                    NetworkPolicy::BlockAll
+                } else if allow_all.unwrap_or(false) {
+                    NetworkPolicy::AllowAll
+                } else {
+                    policy.unwrap_or_default()
+                };
+
+                Ok(NetworkConfig {
+                    policy: resolved_policy,
+                    allowlist: allowlist.unwrap_or_default(),
+                })
+            }
+        }
+
+        deserializer.deserialize_map(NetworkConfigVisitor)
+    }
 }
 
 /// Network allowlist entry
@@ -274,18 +380,10 @@ pub struct DockerSandboxConfig {
     /// CPU limit for container
     #[serde(default)]
     pub cpu_limit: String,
-
-    /// Network mode
-    #[serde(default = "default_network_mode")]
-    pub network_mode: String,
 }
 
 fn default_docker_image() -> String {
     "ubuntu:22.04".to_string()
-}
-
-fn default_network_mode() -> String {
-    "none".to_string()
 }
 
 impl Default for DockerSandboxConfig {
@@ -294,8 +392,43 @@ impl Default for DockerSandboxConfig {
             image: default_docker_image(),
             memory_limit: String::new(),
             cpu_limit: String::new(),
-            network_mode: default_network_mode(),
         }
+    }
+}
+
+/// MicroVM provider (VMM) type
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum MicroVmProvider {
+    /// No VMM configured
+    #[default]
+    #[serde(rename = "")]
+    None,
+    /// Firecracker VMM
+    Firecracker,
+    /// Cloud Hypervisor VMM
+    CloudHypervisor,
+    /// Forward-compatible catch-all for unknown VMM values
+    #[serde(other)]
+    Unknown,
+}
+
+impl MicroVmProvider {
+    /// Returns the string representation of this VMM provider.
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::None => "",
+            Self::Firecracker => "firecracker",
+            Self::CloudHypervisor => "cloud-hypervisor",
+            Self::Unknown => "unknown",
+        }
+    }
+}
+
+impl fmt::Display for MicroVmProvider {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
     }
 }
 
@@ -305,7 +438,7 @@ impl Default for DockerSandboxConfig {
 pub struct MicroVMSandboxConfig {
     /// VMM to use (firecracker, cloud-hypervisor)
     #[serde(default)]
-    pub vmm: String,
+    pub vmm: MicroVmProvider,
 
     /// Kernel image path
     #[serde(default)]
@@ -335,7 +468,7 @@ fn default_vcpus() -> u32 {
 impl Default for MicroVMSandboxConfig {
     fn default() -> Self {
         Self {
-            vmm: String::new(),
+            vmm: MicroVmProvider::None,
             kernel_path: String::new(),
             rootfs_path: String::new(),
             memory_mb: default_microvm_memory(),
@@ -389,7 +522,9 @@ default_policy = "workspace_write"
     }
 
     #[test]
-    fn test_sandbox_config_rejects_removed_default_field() {
+    fn test_sandbox_config_ignores_unknown_fields_for_forward_compatibility() {
+        // Unknown fields are silently ignored so that a config written by a newer
+        // vtcode version does not break older binaries.
         let removed_field = format!("default_{}", "mode");
         let input = format!(
             r#"
@@ -397,21 +532,49 @@ enabled = true
 {removed_field} = "workspace_write"
 "#,
         );
-        let err = toml::from_str::<SandboxConfig>(&input)
-            .expect_err("sandbox config should reject removed default field");
-
-        assert!(
-            err.to_string()
-                .contains(&format!("unknown field `{removed_field}`"))
-        );
+        let config: SandboxConfig = toml::from_str(&input)
+            .expect("sandbox config should accept unknown fields for forward compatibility");
+        assert!(config.enabled);
     }
 
     #[test]
     fn test_network_config_default() {
         let config = NetworkConfig::default();
-        assert!(!config.allow_all);
-        assert!(!config.block_all);
+        assert_eq!(config.policy, NetworkPolicy::AllowlistOnly);
         assert!(config.allowlist.is_empty());
+    }
+
+    #[test]
+    fn test_network_config_policy_field() {
+        let config: NetworkConfig =
+            toml::from_str(r#"policy = "allow_all""#).expect("policy field should parse");
+        assert_eq!(config.policy, NetworkPolicy::AllowAll);
+    }
+
+    #[test]
+    fn test_network_config_legacy_allow_all() {
+        let config: NetworkConfig =
+            toml::from_str(r#"allow_all = true"#).expect("legacy allow_all should parse");
+        assert_eq!(config.policy, NetworkPolicy::AllowAll);
+    }
+
+    #[test]
+    fn test_network_config_legacy_block_all() {
+        let config: NetworkConfig =
+            toml::from_str(r#"block_all = true"#).expect("legacy block_all should parse");
+        assert_eq!(config.policy, NetworkPolicy::BlockAll);
+    }
+
+    #[test]
+    fn test_network_config_legacy_block_all_overrides_allow_all() {
+        let config: NetworkConfig = toml::from_str(
+            r#"
+allow_all = true
+block_all = true
+"#,
+        )
+        .expect("legacy bool combination should parse");
+        assert_eq!(config.policy, NetworkPolicy::BlockAll);
     }
 
     #[test]

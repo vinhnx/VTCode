@@ -220,6 +220,9 @@ pub enum ResponseStreamEvent {
         /// Custom event data.
         data: serde_json::Value,
     },
+    /// Catch-all for unknown streaming event types added by the Open Responses spec.
+    #[serde(other)]
+    Unknown,
 }
 
 impl ResponseStreamEvent {
@@ -243,6 +246,7 @@ impl ResponseStreamEvent {
             | Self::ReasoningDelta { response_id, .. }
             | Self::ReasoningDone { response_id, .. }
             | Self::CustomEvent { response_id, .. } => response_id,
+            Self::Unknown => "",
         }
     }
 
@@ -265,6 +269,7 @@ impl ResponseStreamEvent {
             Self::ReasoningDelta { .. } => "response.reasoning.delta",
             Self::ReasoningDone { .. } => "response.reasoning.done",
             Self::CustomEvent { .. } => "response.custom_event",
+            Self::Unknown => "unknown",
         }
     }
 
@@ -288,6 +293,11 @@ impl ResponseStreamEvent {
                 | Self::ResponseFailed { .. }
                 | Self::ResponseIncomplete { .. }
         )
+    }
+
+    /// Returns true if this is an unknown/unsupported event type.
+    pub fn is_unknown(&self) -> bool {
+        matches!(self, Self::Unknown)
     }
 }
 

@@ -34,7 +34,8 @@ pub(super) async fn determine_theme(args: &Cli, config: &VTCodeConfig) -> Result
 
     let config_theme = config.agent.theme.trim();
     let auto_theme = match config.ui.color_scheme_mode {
-        vtcode_config::root::ColorSchemeMode::Auto => {
+        vtcode_config::root::ColorSchemeMode::Auto
+        | vtcode_config::root::ColorSchemeMode::Unknown => {
             Some(ui_theme::suggest_theme_for_terminal().to_owned())
         }
         vtcode_config::root::ColorSchemeMode::Light => Some("vitesse-light".to_owned()),

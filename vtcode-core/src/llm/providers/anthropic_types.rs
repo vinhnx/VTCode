@@ -74,6 +74,9 @@ pub enum ThinkingConfig {
         display: Option<ThinkingDisplay>,
     },
     Disabled,
+    /// Catch-all for unknown thinking config types added by the Anthropic API.
+    #[serde(other)]
+    Unknown,
 }
 
 /// Controls how thinking content is returned in API responses.
@@ -86,6 +89,9 @@ pub enum ThinkingDisplay {
     /// still carries encrypted full thinking for multi-turn continuity
     /// (default on Claude Opus 4.7).
     Omitted,
+    /// Catch-all for unknown display modes added by the Anthropic API.
+    #[serde(other)]
+    Unknown,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -169,6 +175,9 @@ pub enum AnthropicContentBlock {
         from: AnthropicFallbackModel,
         to: AnthropicFallbackModel,
     },
+    /// Catch-all for unknown content block types added by the Anthropic API.
+    #[serde(other)]
+    Unknown,
 }
 
 /// Extracted struct for `AnthropicContentBlock::ToolUse` (boxed to reduce enum size).
@@ -200,6 +209,9 @@ pub enum ToolSearchResultContent {
     SearchResult { tool_references: Vec<ToolReference> },
     #[serde(rename = "tool_search_tool_result_error")]
     Error { error_code: String },
+    /// Catch-all for unknown tool search result types.
+    #[serde(other)]
+    Unknown,
 }
 
 /// A reference to a discovered tool from tool search
@@ -244,6 +256,9 @@ pub enum TextCitation {
         encrypted_index: Option<String>,
         cited_text: Option<String>,
     },
+    /// Catch-all for unknown citation types.
+    #[serde(other)]
+    Unknown,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -369,6 +384,9 @@ pub enum AnthropicStreamEvent {
     MessageStop,
     #[serde(rename = "error")]
     Error { error: AnthropicErrorBody },
+    /// Catch-all for unknown streaming event types added by the Anthropic API.
+    #[serde(other)]
+    Unknown,
 }
 
 #[derive(Debug, Deserialize)]
@@ -384,6 +402,9 @@ pub enum AnthropicStreamDelta {
     SignatureDelta { signature: String },
     #[serde(rename = "compaction_delta")]
     CompactionDelta { content: String },
+    /// Catch-all for unknown delta types added by the Anthropic API.
+    #[serde(other)]
+    Unknown,
 }
 
 #[derive(Debug, Deserialize)]
@@ -453,6 +474,9 @@ pub enum AnthropicUsageIteration {
         cache_creation_input_tokens: Option<u32>,
         cache_read_input_tokens: Option<u32>,
     },
+    /// Catch-all for unknown iteration types added by the Anthropic API.
+    #[serde(other)]
+    Unknown,
 }
 
 #[derive(Debug, Deserialize)]
@@ -494,7 +518,12 @@ pub struct AnthropicTaskBudget {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum AnthropicOutputFormat {
-    JsonSchema { schema: Value },
+    JsonSchema {
+        schema: Value,
+    },
+    /// Catch-all for unknown output format types added by the Anthropic API.
+    #[serde(other)]
+    Unknown,
 }
 
 /// Request body for Anthropic's count_tokens endpoint

@@ -212,6 +212,9 @@ impl ResponseBuilder {
                     .fail(OpenResponseError::server_error(&evt.message));
                 emitter.response_failed(self.response.clone());
             }
+
+            // Unknown events from newer schema versions are silently skipped.
+            ThreadEvent::Unknown => {}
         }
     }
 

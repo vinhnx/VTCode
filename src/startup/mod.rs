@@ -22,6 +22,7 @@ use validation::{
     apply_cli_permission_overrides, validate_full_auto_configuration,
     validate_startup_configuration,
 };
+use vtcode_config::PromptCacheRetention;
 use vtcode_config::auth::{OpenAIChatGptAuthHandle, resolve_openai_auth};
 use vtcode_core::cli::args::{Cli, Commands};
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
@@ -169,12 +170,12 @@ impl StartupContext {
 
         // CLI validation: warn if prompt_cache_retention is set but model does not use Responses API
         if agent_config.provider.eq_ignore_ascii_case("openai")
-            && let Some(ref retention) = agent_config
+            && let Some(retention) = agent_config
                 .prompt_cache
                 .providers
                 .openai
                 .prompt_cache_retention
-            && !retention.trim().is_empty()
+            && retention != PromptCacheRetention::Unknown
         {
             // Use constants list to identify which models use Responses API
             if let Some(msg) = check_prompt_cache_retention_compat(
@@ -517,7 +518,7 @@ mod validation_tests {
     #[test]
     fn retention_warning_for_non_responses_model() {
         let mut cfg = VTCodeConfig::default();
-        cfg.prompt_cache.providers.openai.prompt_cache_retention = Some("24h".to_owned());
+        cfg.prompt_cache.providers.openai.prompt_cache_retention = Some(PromptCacheRetention::H24);
         let model = "gpt-oss-20b"; // not in responses API list
         let provider = "openai";
         assert!(check_prompt_cache_retention_compat(&cfg, model, provider).is_some());
@@ -526,7 +527,7 @@ mod validation_tests {
     #[test]
     fn retention_ok_for_responses_model() {
         let mut cfg = VTCodeConfig::default();
-        cfg.prompt_cache.providers.openai.prompt_cache_retention = Some("24h".to_owned());
+        cfg.prompt_cache.providers.openai.prompt_cache_retention = Some(PromptCacheRetention::H24);
         let model = vtcode_core::config::constants::models::openai::GPT_5; // responses model
         let provider = "openai";
         assert!(check_prompt_cache_retention_compat(&cfg, model, provider).is_none());

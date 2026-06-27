@@ -335,7 +335,7 @@ fn effective_manual_thinking_budget(
 
     if let Some(effort) = request.reasoning_effort {
         return match effort {
-            ReasoningEffortLevel::None => 0,
+            ReasoningEffortLevel::None | ReasoningEffortLevel::Unknown => 0,
             ReasoningEffortLevel::Minimal => 1024,
             ReasoningEffortLevel::Low => 4096,
             ReasoningEffortLevel::Medium => 8192,

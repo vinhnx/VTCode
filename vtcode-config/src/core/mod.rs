@@ -35,24 +35,27 @@ pub use plugins::{PluginRuntimeConfig, PluginTrustLevel};
 pub use prompt_cache::{
     AnthropicPromptCacheSettings, DeepSeekPromptCacheSettings, GeminiPromptCacheMode,
     GeminiPromptCacheSettings, MoonshotPromptCacheSettings, OpenAIPromptCacheKeyMode,
-    OpenAIPromptCacheSettings, OpenRouterPromptCacheSettings, PromptCachingConfig,
-    ProviderPromptCachingConfig, ZaiPromptCacheSettings, build_openai_prompt_cache_key,
+    OpenAIPromptCacheSettings, OpenRouterPromptCacheSettings, PromptCacheRetention,
+    PromptCachingConfig, ProviderPromptCachingConfig, ZaiPromptCacheSettings,
+    build_openai_prompt_cache_key,
 };
 pub use provider::{
     AnthropicConfig, OpenAIConfig, OpenAIHostedShellConfig, OpenAIHostedShellDomainSecret,
     OpenAIHostedShellEnvironment, OpenAIHostedShellNetworkPolicy,
     OpenAIHostedShellNetworkPolicyType, OpenAIHostedSkill, OpenAIHostedSkillVersion,
-    OpenAIManualCompactionConfig, OpenAIServiceTier, OpenAIToolSearchConfig, ToolSearchConfig,
+    OpenAIManualCompactionConfig, OpenAIServiceTier, OpenAIToolSearchConfig, ThinkingDisplayMode,
+    ToolSearchAlgorithm, ToolSearchConfig,
 };
 pub use provider_override::ProviderOverrideConfig;
 pub use sandbox::{
     DockerSandboxConfig, ExternalSandboxConfig, ExternalSandboxType, MicroVMSandboxConfig,
-    NetworkAllowlistEntryConfig, NetworkConfig, ResourceLimitsConfig, ResourceLimitsPreset,
-    SandboxConfig, SandboxPolicy, SeccompConfig, SeccompProfilePreset, SensitivePathsConfig,
+    MicroVmProvider, NetworkAllowlistEntryConfig, NetworkConfig, NetworkPolicy,
+    ResourceLimitsConfig, ResourceLimitsPreset, SandboxConfig, SandboxPolicy, SeccompConfig,
+    SeccompProfilePreset, SensitivePathsConfig,
 };
 pub use security::{GatekeeperConfig, SecurityConfig};
 pub use skills::{BundledSkillsConfig, PromptFormat, SkillsConfig, SkillsRenderMode};
 pub use tools::{
-    EditorToolConfig, ToolPolicy, ToolsConfig, WebFetchConfig, tool_call_delay_for_rate,
-    tool_loop_limit_reached,
+    EditorToolConfig, ToolPolicy, ToolsConfig, WebFetchConfig, WebFetchMode,
+    tool_call_delay_for_rate, tool_loop_limit_reached,
 };

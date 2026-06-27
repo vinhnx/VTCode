@@ -122,7 +122,7 @@ impl EvolinkProvider {
 
     fn reasoning_effort_value(effort: ReasoningEffortLevel) -> Option<&'static str> {
         match effort {
-            ReasoningEffortLevel::None => None,
+            ReasoningEffortLevel::None | ReasoningEffortLevel::Unknown => None,
             ReasoningEffortLevel::Minimal | ReasoningEffortLevel::Low => Some("low"),
             ReasoningEffortLevel::Medium => Some("medium"),
             ReasoningEffortLevel::High

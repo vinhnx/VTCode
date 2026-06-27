@@ -53,7 +53,9 @@ pub(crate) fn resolve_reasoning_visibility(
     match cfg.ui.reasoning_display_mode {
         ReasoningDisplayMode::Always => true,
         ReasoningDisplayMode::Hidden => false,
-        ReasoningDisplayMode::Toggle => cfg.ui.reasoning_visible_default,
+        ReasoningDisplayMode::Toggle | ReasoningDisplayMode::Unknown => {
+            cfg.ui.reasoning_visible_default
+        }
     }
 }
 

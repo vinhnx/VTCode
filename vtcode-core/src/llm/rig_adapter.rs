@@ -123,7 +123,7 @@ impl RigProviderCapabilities {
             Provider::OpenAI => {
                 let mut reasoning = openai::responses_api::Reasoning::new();
                 let mapped = match effort {
-                    ReasoningEffortLevel::None => return None,
+                    ReasoningEffortLevel::None | ReasoningEffortLevel::Unknown => return None,
                     ReasoningEffortLevel::Minimal => {
                         let effort = if is_gpt5_codex_model(&self.model) {
                             "low"
@@ -149,7 +149,7 @@ impl RigProviderCapabilities {
                         | ReasoningEffortLevel::Max
                 );
                 let budget = match effort {
-                    ReasoningEffortLevel::None => return None,
+                    ReasoningEffortLevel::None | ReasoningEffortLevel::Unknown => return None,
                     ReasoningEffortLevel::Minimal => 16,
                     ReasoningEffortLevel::Low => 64,
                     ReasoningEffortLevel::Medium => 128,
@@ -167,7 +167,7 @@ impl RigProviderCapabilities {
                     .map(|value| json!({ "thinking_config": value }))
             }
             Provider::HuggingFace => match effort {
-                ReasoningEffortLevel::None => None,
+                ReasoningEffortLevel::None | ReasoningEffortLevel::Unknown => None,
                 ReasoningEffortLevel::Minimal => Some(json!({ "reasoning_effort": "minimal" })),
                 ReasoningEffortLevel::Low => Some(json!({ "reasoning_effort": "low" })),
                 ReasoningEffortLevel::Medium => Some(json!({ "reasoning_effort": "medium" })),
@@ -178,7 +178,7 @@ impl RigProviderCapabilities {
             // DeepSeek only accepts `high` and `max` for reasoning_effort.
             // Per DeepSeek docs: low/medium → high, xhigh → max.
             Provider::DeepSeek => match effort {
-                ReasoningEffortLevel::None => None,
+                ReasoningEffortLevel::None | ReasoningEffortLevel::Unknown => None,
                 ReasoningEffortLevel::Minimal
                 | ReasoningEffortLevel::Low
                 | ReasoningEffortLevel::Medium
@@ -193,7 +193,7 @@ impl RigProviderCapabilities {
             Provider::Ollama => None,
             Provider::LlamaCpp => None,
             Provider::ZAI => match effort {
-                ReasoningEffortLevel::None => None,
+                ReasoningEffortLevel::None | ReasoningEffortLevel::Unknown => None,
                 ReasoningEffortLevel::Minimal => Some(json!({
                     "thinking": { "type": "enabled" },
                     "thinking_effort": "minimal"
@@ -214,7 +214,7 @@ impl RigProviderCapabilities {
                 })),
             },
             Provider::StepFun => match effort {
-                ReasoningEffortLevel::None => None,
+                ReasoningEffortLevel::None | ReasoningEffortLevel::Unknown => None,
                 ReasoningEffortLevel::Minimal | ReasoningEffortLevel::Low => {
                     Some(json!({ "reasoning_effort": "low" }))
                 }
@@ -224,7 +224,7 @@ impl RigProviderCapabilities {
                 | ReasoningEffortLevel::Max => Some(json!({ "reasoning_effort": "high" })),
             },
             Provider::Evolink => match effort {
-                ReasoningEffortLevel::None => None,
+                ReasoningEffortLevel::None | ReasoningEffortLevel::Unknown => None,
                 ReasoningEffortLevel::Minimal | ReasoningEffortLevel::Low => {
                     Some(json!({ "reasoning_effort": "low" }))
                 }

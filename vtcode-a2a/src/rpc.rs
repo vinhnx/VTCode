@@ -447,6 +447,9 @@ pub enum StreamingEvent {
         #[serde(default)]
         r#final: bool,
     },
+    /// Catch-all for unknown streaming event types added by the A2A spec.
+    #[serde(other)]
+    Unknown,
 }
 
 fn default_message_kind() -> String {
@@ -464,6 +467,7 @@ impl StreamingEvent {
             StreamingEvent::Message { r#final, .. } => *r#final,
             StreamingEvent::TaskStatus { r#final, .. } => *r#final,
             StreamingEvent::TaskArtifact { r#final, .. } => *r#final,
+            StreamingEvent::Unknown => false,
         }
     }
 
@@ -473,6 +477,7 @@ impl StreamingEvent {
             StreamingEvent::Message { .. } => None,
             StreamingEvent::TaskStatus { task_id, .. } => Some(task_id),
             StreamingEvent::TaskArtifact { task_id, .. } => Some(task_id),
+            StreamingEvent::Unknown => None,
         }
     }
 
@@ -481,7 +486,7 @@ impl StreamingEvent {
         match self {
             StreamingEvent::Message { context_id, .. } => context_id.as_deref(),
             StreamingEvent::TaskStatus { context_id, .. } => context_id.as_deref(),
-            StreamingEvent::TaskArtifact { .. } => None,
+            StreamingEvent::TaskArtifact { .. } | StreamingEvent::Unknown => None,
         }
     }
 }

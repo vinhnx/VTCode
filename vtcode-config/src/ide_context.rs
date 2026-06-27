@@ -9,6 +9,9 @@ pub enum IdeContextProviderFamily {
     VscodeCompatible,
     Zed,
     Generic,
+    /// Catch-all for unknown provider families added by future versions.
+    #[serde(other)]
+    Unknown,
 }
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -20,6 +23,9 @@ pub enum IdeContextProviderMode {
     VscodeCompatible,
     Zed,
     Generic,
+    /// Catch-all for unknown provider modes added by future versions.
+    #[serde(other)]
+    Unknown,
 }
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -72,6 +78,7 @@ impl IdeContextConfig {
             IdeContextProviderFamily::VscodeCompatible => self.providers.vscode_compatible.enabled,
             IdeContextProviderFamily::Zed => self.providers.zed.enabled,
             IdeContextProviderFamily::Generic => self.providers.generic.enabled,
+            IdeContextProviderFamily::Unknown => false,
         }
     }
 
@@ -87,6 +94,7 @@ impl IdeContextConfig {
             }
             IdeContextProviderMode::Zed => family == IdeContextProviderFamily::Zed,
             IdeContextProviderMode::Generic => family == IdeContextProviderFamily::Generic,
+            IdeContextProviderMode::Unknown => false,
         }
     }
 }

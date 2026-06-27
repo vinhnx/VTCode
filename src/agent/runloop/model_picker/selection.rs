@@ -306,7 +306,7 @@ fn selection_from_resolved(
 
 pub(super) fn reasoning_level_label(level: ReasoningEffortLevel) -> &'static str {
     match level {
-        ReasoningEffortLevel::None => "None (Fast)",
+        ReasoningEffortLevel::None | ReasoningEffortLevel::Unknown => "None (Fast)",
         ReasoningEffortLevel::Minimal => "Minimal (Fastest)",
         ReasoningEffortLevel::Low => reasoning::LABEL_LOW,
         ReasoningEffortLevel::Medium => reasoning::LABEL_MEDIUM,
@@ -339,7 +339,9 @@ pub(super) fn supports_max_reasoning(model_id: &str) -> bool {
 
 pub(super) fn reasoning_level_description(level: ReasoningEffortLevel) -> &'static str {
     match level {
-        ReasoningEffortLevel::None => "No reasoning overhead - fastest responses",
+        ReasoningEffortLevel::None | ReasoningEffortLevel::Unknown => {
+            "No reasoning overhead - fastest responses"
+        }
         ReasoningEffortLevel::Minimal => "Minimal reasoning overhead - very fast responses",
         ReasoningEffortLevel::Low => reasoning::DESCRIPTION_LOW,
         ReasoningEffortLevel::Medium => reasoning::DESCRIPTION_MEDIUM,

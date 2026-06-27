@@ -528,6 +528,7 @@ fn build_statusline_preview(
 ) -> String {
     match draft.mode {
         StatusLineMode::Hidden => "hidden mode: status line disabled".to_string(),
+        StatusLineMode::Unknown => "unknown mode".to_string(),
         StatusLineMode::Command => {
             let command = draft
                 .command
@@ -585,6 +586,7 @@ fn statusline_mode_id(mode: &StatusLineMode) -> &'static str {
         StatusLineMode::Auto => "auto",
         StatusLineMode::Command => "command",
         StatusLineMode::Hidden => "hidden",
+        StatusLineMode::Unknown => "unknown",
     }
 }
 

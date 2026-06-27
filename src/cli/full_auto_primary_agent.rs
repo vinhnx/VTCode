@@ -67,7 +67,7 @@ mod tests {
         let mut auto = builtin_primary_auto_agent();
         auto.prompt = "Custom auto instructions".to_string();
         auto.model = Some("gpt-5".to_string());
-        auto.reasoning_effort = Some("high".to_string());
+        auto.reasoning_effort = Some(vtcode_config::ReasoningEffortLevel::High);
         auto.permissions = AgentPermissionsConfig::new(PermissionDefault::Deny);
 
         let resolved = resolve_full_auto_primary_agent_runtime_from_specs(

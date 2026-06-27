@@ -40,7 +40,7 @@ pub struct ActivePrimaryAgent {
     pub disallowed_tools: Vec<String>,
     pub permissions: AgentPermissionsConfig,
     pub model: Option<String>,
-    pub reasoning_effort: Option<String>,
+    pub reasoning_effort: Option<ReasoningEffortLevel>,
     pub hooks: Option<HooksConfig>,
     pub skills: Vec<String>,
     pub mcp_servers: Vec<SubagentMcpServer>,
@@ -71,7 +71,7 @@ impl ActivePrimaryAgent {
             disallowed_tools: runtime.disallowed_tools.clone(),
             permissions: runtime.permissions.clone(),
             model: runtime.model.clone(),
-            reasoning_effort: runtime.reasoning_effort.clone(),
+            reasoning_effort: runtime.reasoning_effort,
             hooks: runtime.hooks.clone(),
             skills: runtime.skills.clone(),
             mcp_servers: runtime.mcp_servers.clone(),
@@ -278,11 +278,7 @@ pub fn build_primary_agent_runtime_config(
     if let Some(model) = agent.model.as_ref() {
         config.agent.default_model = model.clone();
     }
-    if let Some(reasoning_effort) = agent
-        .reasoning_effort
-        .as_deref()
-        .and_then(ReasoningEffortLevel::parse)
-    {
+    if let Some(reasoning_effort) = agent.reasoning_effort {
         config.agent.reasoning_effort = reasoning_effort;
     }
     merge_primary_mcp_servers(&mut config, agent.mcp_servers.as_slice());
@@ -432,7 +428,7 @@ mod tests {
     use tempfile::TempDir;
     use vtcode_config::core::permissions::{AgentPermissionsConfig, PermissionDefault};
     use vtcode_config::{
-        HookCommandConfig, HooksConfig, SubagentDiscoveryInput, SubagentMcpServer,
+        HookCommandConfig, HooksConfig, IsolationMode, SubagentDiscoveryInput, SubagentMcpServer,
         SubagentMemoryScope, SubagentSource, builtin_plan_agent, builtin_primary_duck_agent,
         builtin_subagents, discover_subagents,
     };
@@ -456,7 +452,7 @@ mod tests {
         assert_eq!(active.disallowed_tools, vec!["unified_file".to_string()]);
         assert_eq!(active.permissions.default, PermissionDefault::Deny);
         assert_eq!(active.model.as_deref(), Some("gpt-5.1"));
-        assert_eq!(active.reasoning_effort.as_deref(), Some("high"));
+        assert_eq!(active.reasoning_effort, Some(ReasoningEffortLevel::High));
         assert!(active.hooks.is_none());
     }
 
@@ -516,7 +512,7 @@ mod tests {
         spec.nickname_candidates = vec!["w".to_string()];
         spec.initial_prompt = Some("start here".to_string());
         spec.memory = Some(SubagentMemoryScope::Project);
-        spec.isolation = Some("full".to_string());
+        spec.isolation = Some(IsolationMode::Full);
 
         let active = ActivePrimaryAgent::from_spec(&spec);
 
@@ -530,7 +526,7 @@ mod tests {
         assert_eq!(active.disallowed_tools, vec!["unified_file".to_string()]);
         assert_eq!(active.permissions.default, PermissionDefault::Deny);
         assert_eq!(active.model.as_deref(), Some("gpt-5.1"));
-        assert_eq!(active.reasoning_effort.as_deref(), Some("high"));
+        assert_eq!(active.reasoning_effort, Some(ReasoningEffortLevel::High));
         assert_eq!(active.skills, vec!["rust".to_string()]);
         assert_eq!(
             active.mcp_servers,
@@ -801,7 +797,7 @@ mod tests {
         let mut spec = test_spec("worker");
         spec.permissions = AgentPermissionsConfig::new(PermissionDefault::Auto);
         spec.model = Some("agent-model".to_string());
-        spec.reasoning_effort = Some("low".to_string());
+        spec.reasoning_effort = Some(ReasoningEffortLevel::Low);
         spec.mcp_servers = vec![SubagentMcpServer::Inline(BTreeMap::from([
             (
                 "global".to_string(),
@@ -1078,7 +1074,7 @@ mod tests {
             disallowed_tools: vec!["unified_file".to_string()],
             model: Some("gpt-5.1".to_string()),
             color: Some("blue".to_string()),
-            reasoning_effort: Some("high".to_string()),
+            reasoning_effort: Some(ReasoningEffortLevel::High),
             permissions: AgentPermissionsConfig::new(PermissionDefault::Deny),
             skills: Vec::new(),
             mcp_servers: Vec::new(),

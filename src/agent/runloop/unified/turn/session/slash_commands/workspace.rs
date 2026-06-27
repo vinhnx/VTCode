@@ -683,7 +683,7 @@ mod tests {
             disallowed_tools: vec!["unified_file".to_string()],
             model: Some("inherit".to_string()),
             color: Some("green".to_string()),
-            reasoning_effort: Some("medium".to_string()),
+            reasoning_effort: Some(vtcode_config::ReasoningEffortLevel::Medium),
             permissions: AgentPermissionsConfig::new(PermissionDefault::Deny),
             skills: vec!["repo-skill".to_string()],
             mcp_servers: Vec::new(),

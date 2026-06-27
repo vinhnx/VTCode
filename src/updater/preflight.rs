@@ -15,11 +15,13 @@ const PREFLIGHT_TIMEOUT_CAP_SECS: u64 = 10;
 static PREFLIGHT_NOTICE: Mutex<Option<StartupUpdateNotice>> = Mutex::new(None);
 
 pub(crate) fn set_preflight_notice(notice: Option<StartupUpdateNotice>) {
-    *PREFLIGHT_NOTICE.lock().unwrap() = notice;
+    if let Ok(mut guard) = PREFLIGHT_NOTICE.lock() {
+        *guard = notice;
+    }
 }
 
 pub(crate) fn get_preflight_notice() -> Option<StartupUpdateNotice> {
-    PREFLIGHT_NOTICE.lock().unwrap().clone()
+    PREFLIGHT_NOTICE.lock().ok().and_then(|guard| guard.clone())
 }
 
 /// Run a preflight update check at binary startup.

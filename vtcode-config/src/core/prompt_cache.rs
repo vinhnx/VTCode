@@ -1,6 +1,5 @@
 use crate::constants::prompt_cache;
 use crate::env_helpers::default_true;
-use anyhow::Context;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
@@ -115,6 +114,40 @@ pub struct ProviderPromptCachingConfig {
     pub zai: ZaiPromptCacheSettings,
 }
 
+/// OpenAI prompt cache retention policy.
+/// Controls the model-side prompt caching window.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum PromptCacheRetention {
+    /// In-memory caching (short-lived, free)
+    #[serde(rename = "in_memory")]
+    InMemory,
+    /// 24-hour persistent caching
+    #[default]
+    #[serde(rename = "24h")]
+    H24,
+    /// Forward-compatible catch-all for unknown retention values
+    #[serde(other)]
+    Unknown,
+}
+
+impl PromptCacheRetention {
+    /// Returns the string representation for the OpenAI API wire format.
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::InMemory => "in_memory",
+            Self::H24 => "24h",
+            Self::Unknown => "unknown",
+        }
+    }
+}
+
+impl std::fmt::Display for PromptCacheRetention {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 /// OpenAI prompt caching controls (automatic with metrics)
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -136,12 +169,12 @@ pub struct OpenAIPromptCacheSettings {
     #[serde(default = "default_openai_prompt_cache_key_mode")]
     pub prompt_cache_key_mode: OpenAIPromptCacheKeyMode,
 
-    /// Optional prompt cache retention string to pass directly into OpenAI Responses API.
+    /// Optional prompt cache retention policy to pass directly into OpenAI Responses API.
     /// Supported values are "in_memory" and "24h". If set, VT Code will include
     /// `prompt_cache_retention` in the request body to extend the model-side prompt
     /// caching window or request the explicit in-memory policy.
     #[serde(default)]
-    pub prompt_cache_retention: Option<String>,
+    pub prompt_cache_retention: Option<PromptCacheRetention>,
 }
 
 impl Default for OpenAIPromptCacheSettings {
@@ -158,11 +191,11 @@ impl Default for OpenAIPromptCacheSettings {
 }
 
 impl OpenAIPromptCacheSettings {
-    /// Validate OpenAI provider prompt cache settings. Returns Err if the retention value is invalid.
+    /// Validate OpenAI provider prompt cache settings.
+    /// With the typed enum, invalid values are caught at deserialization time.
     pub fn validate(&self) -> anyhow::Result<()> {
-        if let Some(ref retention) = self.prompt_cache_retention {
-            validate_openai_retention_policy(retention)
-                .with_context(|| format!("Invalid prompt_cache_retention: {}", retention))?;
+        if let Some(PromptCacheRetention::Unknown) = self.prompt_cache_retention {
+            anyhow::bail!("prompt_cache_retention must be one of: in_memory, 24h");
         }
         Ok(())
     }
@@ -428,11 +461,6 @@ fn default_openai_prompt_cache_key_mode() -> OpenAIPromptCacheKeyMode {
 }
 
 #[allow(dead_code)]
-fn default_anthropic_default_ttl() -> u64 {
-    prompt_cache::ANTHROPIC_DEFAULT_TTL_SECONDS
-}
-
-#[allow(dead_code)]
 fn default_anthropic_extended_ttl() -> Option<u64> {
     Some(prompt_cache::ANTHROPIC_EXTENDED_TTL_SECONDS)
 }
@@ -509,21 +537,6 @@ fn resolve_default_cache_dir() -> PathBuf {
     PathBuf::from(prompt_cache::DEFAULT_CACHE_DIR)
 }
 
-/// Validate the OpenAI Responses API prompt cache retention policy.
-/// The public API currently accepts only `in_memory` and `24h`.
-fn validate_openai_retention_policy(input: &str) -> anyhow::Result<()> {
-    let input = input.trim();
-    if input.is_empty() {
-        anyhow::bail!("Empty retention string");
-    }
-
-    if matches!(input, "in_memory" | "24h") {
-        return Ok(());
-    }
-
-    anyhow::bail!("prompt_cache_retention must be one of: in_memory, 24h");
-}
-
 impl PromptCachingConfig {
     /// Validate prompt cache config and provider overrides
     pub fn validate(&self) -> anyhow::Result<()> {
@@ -598,19 +611,45 @@ mod tests {
     }
 
     #[test]
-    fn validate_openai_retention_policy_valid_and_invalid() {
-        assert!(validate_openai_retention_policy("24h").is_ok());
-        assert!(validate_openai_retention_policy("in_memory").is_ok());
-        assert!(validate_openai_retention_policy("5m").is_err());
-        assert!(validate_openai_retention_policy("1d").is_err());
-        assert!(validate_openai_retention_policy("abc").is_err());
-        assert!(validate_openai_retention_policy("").is_err());
+    fn prompt_cache_retention_deserializes_valid_values() {
+        let cfg: OpenAIPromptCacheSettings = toml::from_str(
+            r#"
+            prompt_cache_retention = "in_memory"
+            "#,
+        )
+        .unwrap();
+        assert_eq!(
+            cfg.prompt_cache_retention,
+            Some(PromptCacheRetention::InMemory)
+        );
+
+        let cfg2: OpenAIPromptCacheSettings = toml::from_str(
+            r#"
+            prompt_cache_retention = "24h"
+            "#,
+        )
+        .unwrap();
+        assert_eq!(cfg2.prompt_cache_retention, Some(PromptCacheRetention::H24));
     }
 
     #[test]
-    fn validate_prompt_cache_rejects_invalid_retention() {
+    fn prompt_cache_retention_unknown_values_deserialize_as_unknown() {
+        let cfg: OpenAIPromptCacheSettings = toml::from_str(
+            r#"
+            prompt_cache_retention = "5m"
+            "#,
+        )
+        .unwrap();
+        assert_eq!(
+            cfg.prompt_cache_retention,
+            Some(PromptCacheRetention::Unknown)
+        );
+    }
+
+    #[test]
+    fn validate_prompt_cache_rejects_unknown_retention() {
         let mut cfg = PromptCachingConfig::default();
-        cfg.providers.openai.prompt_cache_retention = Some("invalid".to_string());
+        cfg.providers.openai.prompt_cache_retention = Some(PromptCacheRetention::Unknown);
         assert!(cfg.validate().is_err());
     }
 

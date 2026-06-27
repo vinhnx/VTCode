@@ -12,6 +12,9 @@ pub enum ToolOutputMode {
     #[default]
     Compact,
     Full,
+    /// Catch-all for unknown modes added by future versions.
+    #[serde(other)]
+    Unknown,
 }
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -23,6 +26,9 @@ pub enum ReasoningDisplayMode {
     #[default]
     Toggle,
     Hidden,
+    /// Catch-all for unknown modes added by future versions.
+    #[serde(other)]
+    Unknown,
 }
 
 /// Layout mode override for responsive UI
@@ -39,6 +45,9 @@ pub enum LayoutModeOverride {
     Standard,
     /// Force wide mode (sidebar + footer)
     Wide,
+    /// Catch-all for unknown layouts added by future versions.
+    #[serde(other)]
+    Unknown,
 }
 
 /// UI display mode variants for quick presets
@@ -53,6 +62,9 @@ pub enum UiDisplayMode {
     Minimal,
     /// Focused mode - transcript only, maximum content space
     Focused,
+    /// Catch-all for unknown modes added by future versions.
+    #[serde(other)]
+    Unknown,
 }
 
 /// Notification delivery mode for terminal attention events.
@@ -67,6 +79,9 @@ pub enum NotificationDeliveryMode {
     /// Desktop notifications only unless the terminal backend is selected explicitly.
     #[default]
     Desktop,
+    /// Catch-all for unknown modes added by future versions.
+    #[serde(other)]
+    Unknown,
 }
 
 /// Preferred notification backend for desktop delivery.
@@ -83,6 +98,9 @@ pub enum NotificationBackend {
     NotifyRust,
     /// Skip desktop notifications and use terminal attention only.
     Terminal,
+    /// Catch-all for unknown backends added by future versions.
+    #[serde(other)]
+    Unknown,
 }
 
 /// Notification preferences for terminal and desktop alerts.
@@ -365,6 +383,9 @@ pub enum ColorSchemeMode {
     Light,
     /// Force dark color scheme
     Dark,
+    /// Catch-all for unknown modes added by future versions.
+    #[serde(other)]
+    Unknown,
 }
 
 fn default_minimum_contrast() -> f32 {
@@ -832,6 +853,34 @@ fn default_reasoning_visible_default() -> bool {
 
 /// Kitty keyboard protocol configuration
 /// Reference: <https://sw.kovidgoyal.net/kitty/keyboard-protocol/>
+/// Keyboard protocol preset mode
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum KeyboardProtocolMode {
+    /// Standard enhancements (disambiguate + event types + alternate keys)
+    #[default]
+    Default,
+    /// All enhancements including report-all-keys
+    Full,
+    /// Minimal: disambiguate escape codes only
+    Minimal,
+    /// Custom: use individual toggle fields
+    Custom,
+}
+
+impl KeyboardProtocolMode {
+    /// Returns the snake_case string representation.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Default => "default",
+            Self::Full => "full",
+            Self::Minimal => "minimal",
+            Self::Custom => "custom",
+        }
+    }
+}
+
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct KeyboardProtocolConfig {
@@ -839,9 +888,9 @@ pub struct KeyboardProtocolConfig {
     #[serde(default = "default_keyboard_protocol_enabled")]
     pub enabled: bool,
 
-    /// Preset mode: "default", "full", "minimal", or "custom"
+    /// Preset mode: default, full, minimal, or custom
     #[serde(default = "default_keyboard_protocol_mode")]
-    pub mode: String,
+    pub mode: KeyboardProtocolMode,
 
     /// Resolve Esc key ambiguity (recommended for performance)
     #[serde(default = "default_disambiguate_escape_codes")]
@@ -875,13 +924,9 @@ impl Default for KeyboardProtocolConfig {
 
 impl KeyboardProtocolConfig {
     pub fn validate(&self) -> Result<()> {
-        match self.mode.as_str() {
-            "default" | "full" | "minimal" | "custom" => Ok(()),
-            _ => anyhow::bail!(
-                "Invalid keyboard protocol mode '{}'. Must be: default, full, minimal, or custom",
-                self.mode
-            ),
-        }
+        // All enum variants are valid; nothing to validate.
+        let _ = self.mode;
+        Ok(())
     }
 }
 
@@ -892,8 +937,17 @@ fn default_keyboard_protocol_enabled() -> bool {
         .unwrap_or(true)
 }
 
-fn default_keyboard_protocol_mode() -> String {
-    std::env::var("VTCODE_KEYBOARD_PROTOCOL_MODE").unwrap_or_else(|_| "default".to_string())
+fn default_keyboard_protocol_mode() -> KeyboardProtocolMode {
+    std::env::var("VTCODE_KEYBOARD_PROTOCOL_MODE")
+        .ok()
+        .and_then(|v| match v.to_ascii_lowercase().as_str() {
+            "default" => Some(KeyboardProtocolMode::Default),
+            "full" => Some(KeyboardProtocolMode::Full),
+            "minimal" => Some(KeyboardProtocolMode::Minimal),
+            "custom" => Some(KeyboardProtocolMode::Custom),
+            _ => None,
+        })
+        .unwrap_or_default()
 }
 
 fn default_disambiguate_escape_codes() -> bool {

@@ -14,7 +14,6 @@ use rustc_hash::FxHashSet;
 use serde::Serialize;
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
-use std::str::FromStr;
 use vtcode_utility_tool_specs::parse_tool_input_schema;
 
 use super::tool_handler::{ConfiguredToolSpec, ResponsesApiTool, ToolSpec};
@@ -125,12 +124,9 @@ pub fn deferred_tool_policy_for_runtime(
                 return DeferredToolPolicy::default();
             }
 
-            let algorithm = ToolSearchAlgorithm::from_str(
-                vtcode_config
-                    .map(|cfg| cfg.provider.anthropic.tool_search.algorithm.as_str())
-                    .unwrap_or("regex"),
-            )
-            .unwrap_or_default();
+            let algorithm = vtcode_config
+                .map(|cfg| cfg.provider.anthropic.tool_search.algorithm)
+                .unwrap_or_default();
             let always_available_tools = vtcode_config
                 .map(|cfg| {
                     cfg.provider

@@ -50,6 +50,8 @@ pub enum ReasoningEffortLevel {
     XHigh,
     /// Maximum reasoning effort - for Claude Opus 4.7 adaptive thinking
     Max,
+    /// Forward-compatible catch-all for unrecognized effort level values
+    Unknown,
 }
 
 impl ReasoningEffortLevel {
@@ -63,6 +65,7 @@ impl ReasoningEffortLevel {
             Self::High => constants::HIGH,
             Self::XHigh => constants::XHIGH,
             Self::Max => constants::MAX,
+            Self::Unknown => "unknown",
         }
     }
 
@@ -109,7 +112,7 @@ impl<'de> Deserialize<'de> for ReasoningEffortLevel {
         if let Some(parsed) = Self::parse(&raw) {
             Ok(parsed)
         } else {
-            Ok(Self::default())
+            Ok(Self::Unknown)
         }
     }
 }

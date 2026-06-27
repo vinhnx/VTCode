@@ -11,6 +11,9 @@ pub enum FileOpener {
     Vscode,
     VscodeInsiders,
     Windsurf,
+    /// Catch-all for unknown editors added by future versions.
+    #[serde(other)]
+    Unknown,
 }
 
 impl FileOpener {
@@ -21,6 +24,7 @@ impl FileOpener {
             Self::Cursor => Some("cursor"),
             Self::Windsurf => Some("windsurf"),
             Self::VscodeInsiders => Some("vscode-insiders"),
+            Self::Unknown => None,
         }
     }
 }
@@ -33,6 +37,9 @@ pub enum HistoryPersistence {
     #[default]
     File,
     None,
+    /// Catch-all for unknown persistence modes added by future versions.
+    #[serde(other)]
+    Unknown,
 }
 
 /// Codex-compatible history persistence settings.
@@ -54,6 +61,9 @@ pub enum TerminalNotificationMethod {
     Auto,
     Bel,
     Osc9,
+    /// Catch-all for unknown methods added by future versions.
+    #[serde(other)]
+    Unknown,
 }
 
 /// Alternate-screen preference for the TUI.
@@ -63,6 +73,9 @@ pub enum TerminalNotificationMethod {
 pub enum TuiAlternateScreen {
     Always,
     Never,
+    /// Catch-all for unknown modes added by future versions.
+    #[serde(other)]
+    Unknown,
 }
 
 /// TUI notification filters compatible with Codex config.
@@ -72,6 +85,9 @@ pub enum TuiAlternateScreen {
 pub enum TuiNotificationEvent {
     AgentTurnComplete,
     ApprovalRequested,
+    /// Catch-all for unknown events added by future versions.
+    #[serde(other)]
+    Unknown,
 }
 
 /// Accept either `true`/`false` or an allowlist of event names.
@@ -93,6 +109,9 @@ pub enum NotificationCondition {
     Unfocused,
     /// Always deliver regardless of focus state.
     Always,
+    /// Catch-all for unknown conditions added by future versions.
+    #[serde(other)]
+    Unknown,
 }
 
 /// Codex-compatible TUI settings.

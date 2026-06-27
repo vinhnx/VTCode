@@ -637,7 +637,7 @@ Use bundled resources when needed.
             report
                 .errors
                 .iter()
-                .any(|error| error.contains("Invalid YAML frontmatter")),
+                .any(|error| error.contains("Unexpected property")),
             "{}",
             report.format()
         );

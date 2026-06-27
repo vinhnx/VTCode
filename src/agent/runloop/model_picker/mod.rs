@@ -1210,6 +1210,7 @@ fn subagent_supports_reasoning_level(
 
     match level {
         ReasoningEffortLevel::None
+        | ReasoningEffortLevel::Unknown
         | ReasoningEffortLevel::Minimal
         | ReasoningEffortLevel::Low
         | ReasoningEffortLevel::Medium

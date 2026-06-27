@@ -13,6 +13,9 @@ pub enum StatusLineMode {
     Command,
     /// Hidden mode: disables the status line entirely
     Hidden,
+    /// Catch-all for unknown modes added by future versions.
+    #[serde(other)]
+    Unknown,
 }
 
 impl std::str::FromStr for StatusLineMode {
@@ -23,7 +26,7 @@ impl std::str::FromStr for StatusLineMode {
             "auto" => Ok(StatusLineMode::Auto),
             "command" => Ok(StatusLineMode::Command),
             "hidden" => Ok(StatusLineMode::Hidden),
-            _ => Err(format!("Invalid status line mode: {}", s)),
+            _ => Ok(StatusLineMode::Unknown),
         }
     }
 }

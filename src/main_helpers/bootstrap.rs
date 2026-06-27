@@ -1,5 +1,5 @@
-use anyhow::{Context, Result};
 use anstyle::{AnsiColor, Effects};
+use anyhow::{Context, Result};
 use clap::builder::Styles;
 use clap::builder::styling::{AnsiColor as ClapAnsiColor, Effects as ClapEffects};
 use clap::{ColorChoice as CliColorChoice, CommandFactory};
@@ -75,9 +75,21 @@ pub(crate) fn build_augmented_cli_command() -> clap::Command {
 
 fn clap_help_styles() -> Styles {
     Styles::styled()
-        .header(ClapAnsiColor::BrightBlue.on_default().effects(ClapEffects::BOLD))
-        .usage(ClapAnsiColor::BrightBlue.on_default().effects(ClapEffects::BOLD))
-        .literal(ClapAnsiColor::BrightGreen.on_default().effects(ClapEffects::BOLD))
+        .header(
+            ClapAnsiColor::BrightBlue
+                .on_default()
+                .effects(ClapEffects::BOLD),
+        )
+        .usage(
+            ClapAnsiColor::BrightBlue
+                .on_default()
+                .effects(ClapEffects::BOLD),
+        )
+        .literal(
+            ClapAnsiColor::BrightGreen
+                .on_default()
+                .effects(ClapEffects::BOLD),
+        )
         .placeholder(ClapAnsiColor::BrightCyan.on_default())
 }
 

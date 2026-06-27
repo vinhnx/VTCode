@@ -242,7 +242,8 @@ pub(crate) async fn initialize_session_ui(
                     vtcode_core::config::TuiAlternateScreen::Always => {
                         vtcode_ui::tui::app::SessionSurface::Alternate
                     }
-                    vtcode_core::config::TuiAlternateScreen::Never => {
+                    vtcode_core::config::TuiAlternateScreen::Never
+                    | vtcode_core::config::TuiAlternateScreen::Unknown => {
                         vtcode_ui::tui::app::SessionSurface::Inline
                     }
                 })

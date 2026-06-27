@@ -121,6 +121,9 @@ pub struct HookGroupConfig {
 pub enum HookCommandKind {
     #[default]
     Command,
+    /// Catch-all for unknown hook kinds added by future versions.
+    #[serde(other)]
+    Unknown,
 }
 
 /// Configuration for a single shell command hook

@@ -90,7 +90,12 @@ impl MiddlewareChain {
         err: &UnifiedToolError,
     ) -> MiddlewareResult<()> {
         for mw in self.middlewares.iter().rev() {
-            let _ = mw.on_error(req, err).await;
+            if let Err(handler_err) = mw.on_error(req, err).await {
+                tracing::warn!(
+                    error = %handler_err,
+                    "Middleware error handler itself failed"
+                );
+            }
         }
         Ok(())
     }

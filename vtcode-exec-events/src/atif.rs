@@ -436,7 +436,8 @@ impl AtifTrajectoryBuilder {
             ThreadEvent::TurnStarted(_)
             | ThreadEvent::ItemStarted(_)
             | ThreadEvent::ItemUpdated(_)
-            | ThreadEvent::PlanDelta(_) => {}
+            | ThreadEvent::PlanDelta(_)
+            | ThreadEvent::Unknown => {}
         }
     }
 

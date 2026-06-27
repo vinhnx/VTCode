@@ -777,10 +777,11 @@ impl SubagentController {
         let desired_max_turns =
             normalize_background_child_max_turns(request.max_turns.or(spec.max_turns), true);
         let desired_model_override = request.model.clone().or_else(|| spec.model.clone());
-        let desired_reasoning_override = request
-            .reasoning_effort
-            .clone()
-            .or_else(|| spec.reasoning_effort.clone());
+        let desired_reasoning_override = request.reasoning_effort.clone().or_else(|| {
+            spec.reasoning_effort
+                .as_ref()
+                .map(|e| e.as_str().to_string())
+        });
 
         let record_id = background_record_id(spec.name.as_str());
         let _ = self.refresh_background_processes().await?;
@@ -1171,7 +1172,11 @@ impl SubagentController {
             .as_ref()
             .and_then(|overrides| overrides.reasoning_override.clone())
             .or(previous_reasoning_override)
-            .or_else(|| spec.reasoning_effort.clone());
+            .or_else(|| {
+                spec.reasoning_effort
+                    .as_ref()
+                    .map(|e| e.as_str().to_string())
+            });
 
         {
             let mut state = self.state.write().await;
@@ -1484,7 +1489,7 @@ impl SubagentController {
             );
         }
         // Create a worktree for isolation if requested.
-        let worktree_path = if spec.isolation.as_deref() == Some("worktree") {
+        let worktree_path = if spec.isolation == Some(vtcode_config::IsolationMode::Worktree) {
             let wm = crate::git::WorktreeManager::new(&self.config.workspace_root);
             let wt_name = format!(
                 "{}-{}",
@@ -2844,7 +2849,7 @@ Inspect the repository.
             .find(|spec| spec.name == "worker")
             .expect("worker");
         spec.model = Some(models::openai::GPT_5_4_MINI.to_string());
-        spec.reasoning_effort = Some("high".to_string());
+        spec.reasoning_effort = Some(ReasoningEffortLevel::High);
 
         let (resolved_model, child_reasoning_effort, child_cfg) = prepare_child_runtime_config(
             &parent,

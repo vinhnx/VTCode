@@ -17,7 +17,7 @@ fn runtime_sandbox_config_maps_workspace_policy_overrides() {
         default_policy: vtcode_config::SandboxPolicy::WorkspaceWrite,
         ..Default::default()
     };
-    config.network.allow_all = false;
+    config.network.policy = vtcode_config::NetworkPolicy::AllowlistOnly;
     config.network.allowlist = vec![vtcode_config::NetworkAllowlistEntryConfig {
         domain: "api.github.com".to_string(),
         port: 443,
@@ -101,8 +101,7 @@ fn workspace_write_allow_all_network_is_not_blocked() {
         default_policy: vtcode_config::SandboxPolicy::WorkspaceWrite,
         ..Default::default()
     };
-    config.network.allow_all = true;
-    config.network.block_all = false;
+    config.network.policy = vtcode_config::NetworkPolicy::AllowAll;
 
     let policy =
         sandbox_policy_from_runtime_config(&config, PathBuf::from("/tmp/ws").as_path()).unwrap();
@@ -120,8 +119,7 @@ fn read_only_allow_all_network_is_not_blocked() {
         default_policy: vtcode_config::SandboxPolicy::ReadOnly,
         ..Default::default()
     };
-    config.network.allow_all = true;
-    config.network.block_all = false;
+    config.network.policy = vtcode_config::NetworkPolicy::AllowAll;
 
     let policy =
         sandbox_policy_from_runtime_config(&config, PathBuf::from("/tmp/ws").as_path()).unwrap();
@@ -139,7 +137,7 @@ fn read_only_allowlist_network_is_not_blocked() {
         default_policy: vtcode_config::SandboxPolicy::ReadOnly,
         ..Default::default()
     };
-    config.network.allow_all = false;
+    config.network.policy = vtcode_config::NetworkPolicy::AllowlistOnly;
     config.network.allowlist = vec![vtcode_config::NetworkAllowlistEntryConfig {
         domain: "api.github.com".to_string(),
         port: 443,

@@ -55,9 +55,9 @@ pub mod update;
 pub mod workspace_env;
 
 pub use acp::{
-    AgentClientProtocolConfig, AgentClientProtocolTransport, AgentClientProtocolZedConfig,
-    AgentClientProtocolZedToolsConfig, AgentClientProtocolZedWorkspaceTrustMode,
-    WorkspaceTrustLevel,
+    AcpAuthMethod, AgentClientProtocolConfig, AgentClientProtocolTransport,
+    AgentClientProtocolZedConfig, AgentClientProtocolZedToolsConfig,
+    AgentClientProtocolZedWorkspaceTrustMode, WorkspaceTrustLevel,
 };
 pub use api_keys::ApiKeySources;
 pub use context::{ContextFeaturesConfig, DynamicContextConfig, LedgerConfig};
@@ -66,16 +66,17 @@ pub use core::{
     AuthConfig, AutoPermissionConfig, AutoPermissionEnvironmentConfig, AutomationConfig,
     BundledSkillsConfig, CommandsConfig, CopilotAuthConfig, CustomProviderCommandAuthConfig,
     DockerSandboxConfig, EditorToolConfig, ExternalSandboxConfig, ExternalSandboxType,
-    FullAutoConfig, GatekeeperConfig, MemoriesConfig, MicroVMSandboxConfig, ModelConfig,
-    NetworkAllowlistEntryConfig, NetworkConfig, OpenAIAuthConfig, OpenAIConfig,
-    OpenAIHostedShellConfig, OpenAIHostedShellDomainSecret, OpenAIHostedShellEnvironment,
-    OpenAIHostedShellNetworkPolicy, OpenAIHostedShellNetworkPolicyType, OpenAIHostedSkill,
-    OpenAIManualCompactionConfig, OpenAIPreferredMethod, OpenAIServiceTier, OpenResponsesConfig,
-    OpenRouterAuthConfig, PluginRuntimeConfig, PluginTrustLevel, PromptCachingConfig,
+    FullAutoConfig, GatekeeperConfig, MemoriesConfig, MicroVMSandboxConfig, MicroVmProvider,
+    ModelConfig, NetworkAllowlistEntryConfig, NetworkConfig, NetworkPolicy, OpenAIAuthConfig,
+    OpenAIConfig, OpenAIHostedShellConfig, OpenAIHostedShellDomainSecret,
+    OpenAIHostedShellEnvironment, OpenAIHostedShellNetworkPolicy,
+    OpenAIHostedShellNetworkPolicyType, OpenAIHostedSkill, OpenAIManualCompactionConfig,
+    OpenAIPreferredMethod, OpenAIServiceTier, OpenResponsesConfig, OpenRouterAuthConfig,
+    PluginRuntimeConfig, PluginTrustLevel, PromptCacheRetention, PromptCachingConfig,
     ProviderOverrideConfig, ProviderPromptCachingConfig, ResourceLimitsConfig,
     ResourceLimitsPreset, SandboxConfig, SandboxPolicy, SeccompConfig, SeccompProfilePreset,
-    SecurityConfig, SensitivePathsConfig, SkillsConfig, SkillsRenderMode, ToolPolicy, ToolsConfig,
-    WebFetchConfig,
+    SecurityConfig, SensitivePathsConfig, SkillsConfig, SkillsRenderMode, ThinkingDisplayMode,
+    ToolPolicy, ToolSearchAlgorithm, ToolsConfig, WebFetchConfig, WebFetchMode,
 };
 pub use debug::{DebugConfig, TraceLevel};
 pub use defaults::{
@@ -120,8 +121,8 @@ pub use root::{
 pub use schema::{vtcode_config_schema, vtcode_config_schema_json, vtcode_config_schema_pretty};
 pub use status_line::{StatusLineConfig, StatusLineMode};
 pub use subagents::{
-    AgentMode, DiscoveredSubagents, SubagentDiscoveryInput, SubagentMcpServer, SubagentMemoryScope,
-    SubagentRuntimeLimits, SubagentSource, SubagentSpec, builtin_plan_agent,
+    AgentMode, DiscoveredSubagents, IsolationMode, SubagentDiscoveryInput, SubagentMcpServer,
+    SubagentMemoryScope, SubagentRuntimeLimits, SubagentSource, SubagentSpec, builtin_plan_agent,
     builtin_primary_auto_agent, builtin_primary_build_agent, builtin_primary_duck_agent,
     builtin_subagents, discover_subagents, load_subagent_from_file,
 };

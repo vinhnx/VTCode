@@ -283,9 +283,8 @@ impl AgentRunner {
         }
         if let Some(reasoning_effort) = active_primary_agent
             .reasoning_effort
-            .as_deref()
-            .map(str::trim)
-            .filter(|reasoning_effort| !reasoning_effort.is_empty())
+            .as_ref()
+            .map(|e| e.as_str())
         {
             system_prompt.push_str("\n- Agent reasoning effort: ");
             system_prompt.push_str(reasoning_effort);

@@ -34,7 +34,8 @@ pub enum TaskState {
     Rejected,
     /// Task requires authentication
     AuthRequired,
-    /// Task state is unknown
+    /// Task state is unknown or unrecognized from a remote A2A agent.
+    #[serde(other)]
     Unknown,
 }
 
@@ -198,6 +199,9 @@ pub enum Part {
         /// The structured data
         data: serde_json::Value,
     },
+    /// Catch-all for unknown part types added by the A2A spec.
+    #[serde(other)]
+    Unknown,
 }
 
 impl Part {
@@ -238,6 +242,11 @@ impl Part {
             Part::Text { text } => Some(text),
             _ => None,
         }
+    }
+
+    /// Returns true if this is an unknown/unsupported part type.
+    pub fn is_unknown(&self) -> bool {
+        matches!(self, Part::Unknown)
     }
 }
 

@@ -17,12 +17,10 @@ use super::super::capabilities::{
 fn resolve_configured_thinking_display(
     anthropic_config: &AnthropicConfig,
 ) -> Option<ThinkingDisplay> {
-    anthropic_config.thinking_display.as_deref().and_then(|d| {
-        match d.to_ascii_lowercase().as_str() {
-            "summarized" => Some(ThinkingDisplay::Summarized),
-            "omitted" => Some(ThinkingDisplay::Omitted),
-            _ => None,
-        }
+    anthropic_config.thinking_display.and_then(|d| match d {
+        vtcode_config::ThinkingDisplayMode::Summarized => Some(ThinkingDisplay::Summarized),
+        vtcode_config::ThinkingDisplayMode::Omitted => Some(ThinkingDisplay::Omitted),
+        vtcode_config::ThinkingDisplayMode::Unknown => None,
     })
 }
 
@@ -113,7 +111,7 @@ pub(crate) fn build_thinking_config(
             env_budget
         } else if let Some(effort) = request.reasoning_effort {
             match effort {
-                ReasoningEffortLevel::None => 0,
+                ReasoningEffortLevel::None | ReasoningEffortLevel::Unknown => 0,
                 ReasoningEffortLevel::Minimal => 1024,
                 ReasoningEffortLevel::Low => 4096,
                 ReasoningEffortLevel::Medium => 8192,
@@ -176,7 +174,7 @@ mod tests {
             ..Default::default()
         };
         let config = AnthropicConfig {
-            thinking_display: Some("summarized".to_string()),
+            thinking_display: Some(vtcode_config::ThinkingDisplayMode::Summarized),
             ..AnthropicConfig::default()
         };
         let (thinking, _) =
@@ -197,7 +195,7 @@ mod tests {
             ..Default::default()
         };
         let config = AnthropicConfig {
-            thinking_display: Some("omitted".to_string()),
+            thinking_display: Some(vtcode_config::ThinkingDisplayMode::Omitted),
             ..AnthropicConfig::default()
         };
         let (thinking, _) =
@@ -218,7 +216,7 @@ mod tests {
             ..Default::default()
         };
         let config = AnthropicConfig {
-            thinking_display: Some("summarized".to_string()),
+            thinking_display: Some(vtcode_config::ThinkingDisplayMode::Summarized),
             ..AnthropicConfig::default()
         };
         let (thinking, _) =

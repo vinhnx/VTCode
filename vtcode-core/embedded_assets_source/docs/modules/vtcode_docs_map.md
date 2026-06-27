@@ -639,6 +639,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: Overview, Binary Size Summary, Release-fast Binary Analysis (32 MiB), Debug Binary Analysis (84 MiB), Recommendations
   - **User Questions**: "What can you tell me about Bloaty Analysis Report for vtcode?", "How does Overview work?", "How does Binary Size Summary work?"
 
+- **File**: `docs/project/code-review-action-plan.md`
+  - **Content**: Code Review Action Plan
+  - **Topics**: MEDIUM SEVERITY, LOW SEVERITY, STYLE / QUALITY (bulk fixes), PRIORITY ORDER
+  - **User Questions**: "What can you tell me about Code Review Action Plan?", "How does MEDIUM SEVERITY work?", "How does LOW SEVERITY work?"
+
 - **File**: `docs/context/context_engineering.md`
   - **Content**: Context Engineering in VT Code
   - **Topics**: Overview, Context Engineering vs Prompt Engineering, VT Code's Three Context Primitives, Accuracy Optimization Loop, Core Principles

@@ -25,7 +25,6 @@ pub const SUPPORTED_FRONTMATTER_KEYS: &[&str] = &[
 
 /// YAML frontmatter structure for SKILL.md
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct SkillYaml {
     pub name: String,
     pub description: String,
@@ -93,6 +92,34 @@ pub fn parse_skill_file(skill_path: &Path) -> anyhow::Result<(SkillManifest, Str
     Ok((manifest, instructions))
 }
 
+/// Validate that all YAML frontmatter keys are in the supported set.
+/// Unknown keys are logged as warnings but do not fail parsing, preserving
+/// forward compatibility when newer vtcode versions add new fields.
+fn validate_frontmatter_keys(yaml_str: &str) {
+    // Quick line-based scan for top-level keys. This avoids a full YAML
+    // parse just for validation and handles the common case of flat keys.
+    for line in yaml_str.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+        // Only check top-level keys (no leading whitespace).
+        if let Some(colon_pos) = trimmed.find(':') {
+            let key = trimmed[..colon_pos].trim();
+            if !key.is_empty()
+                && !key.starts_with('#')
+                && !SUPPORTED_FRONTMATTER_KEYS.contains(&key)
+            {
+                tracing::warn!(
+                    key = key,
+                    "Unknown SKILL.md frontmatter key (supported: {:?})",
+                    SUPPORTED_FRONTMATTER_KEYS
+                );
+            }
+        }
+    }
+}
+
 /// Parse SKILL.md content string
 pub fn parse_skill_content(content: &str) -> anyhow::Result<(SkillManifest, String)> {
     // Split YAML frontmatter (between --- markers)
@@ -105,6 +132,11 @@ pub fn parse_skill_content(content: &str) -> anyhow::Result<(SkillManifest, Stri
 
     let yaml_str = parts[1].trim();
     let instructions = parts[2].trim_start().to_string();
+
+    // Validate frontmatter keys before parsing. This replaces the stricter
+    // #[serde(deny_unknown_fields)] with a forward-compatible approach:
+    // unknown keys are warned about but do not fail parsing.
+    validate_frontmatter_keys(yaml_str);
 
     // Parse YAML frontmatter
     let yaml: SkillYaml =
@@ -296,7 +328,9 @@ This is the instruction section.
     }
 
     #[test]
-    fn test_parse_skill_rejects_non_spec_fields() {
+    fn test_parse_skill_accepts_non_spec_fields_with_warning() {
+        // Unknown frontmatter keys are now warned about but do not fail parsing,
+        // preserving forward compatibility when newer vtcode versions add fields.
         let content = r#"---
 name: sandboxed-skill
 description: A skill with unsupported fields
@@ -309,8 +343,9 @@ permissions:
 # Instructions
 "#;
 
-        let result = parse_skill_content(content);
-        result.unwrap_err();
+        let (manifest, _) = parse_skill_content(content)
+            .expect("unknown frontmatter keys should be accepted for forward compatibility");
+        assert_eq!(manifest.name, "sandboxed-skill");
     }
 
     #[test]

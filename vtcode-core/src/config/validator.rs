@@ -13,6 +13,7 @@ use crate::config::constants::models::openai::RESPONSES_API_MODELS;
 use crate::config::loader::VTCodeConfig;
 use crate::config::models::{Provider, model_catalog_entry, supported_models_for_provider};
 use crate::utils::file_utils::read_file_with_context_sync;
+use vtcode_config::PromptCacheRetention;
 
 /// Loaded models database from docs/models.json
 #[derive(Debug, Clone)]
@@ -260,9 +261,9 @@ pub fn check_prompt_cache_retention_compat(
         return None;
     }
 
-    if let Some(ref retention) = config.prompt_cache.providers.openai.prompt_cache_retention {
-        if retention.trim().is_empty() {
-            return None;
+    if let Some(retention) = config.prompt_cache.providers.openai.prompt_cache_retention {
+        if retention == PromptCacheRetention::Unknown {
+            return Some("prompt_cache_retention must be one of: in_memory, 24h".to_string());
         }
         if !RESPONSES_API_MODELS.contains(&model) {
             return Some(format!(
@@ -475,7 +476,7 @@ mod tests {
     #[test]
     fn retention_warning_for_non_responses_model() {
         let mut cfg = VTCodeConfig::default();
-        cfg.prompt_cache.providers.openai.prompt_cache_retention = Some("24h".to_owned());
+        cfg.prompt_cache.providers.openai.prompt_cache_retention = Some(PromptCacheRetention::H24);
         let msg = check_prompt_cache_retention_compat(&cfg, "gpt-oss-20b", "openai");
         assert!(msg.is_some());
     }
@@ -483,7 +484,7 @@ mod tests {
     #[test]
     fn retention_ok_for_responses_model() {
         let mut cfg = VTCodeConfig::default();
-        cfg.prompt_cache.providers.openai.prompt_cache_retention = Some("24h".to_owned());
+        cfg.prompt_cache.providers.openai.prompt_cache_retention = Some(PromptCacheRetention::H24);
         let msg = check_prompt_cache_retention_compat(
             &cfg,
             crate::config::constants::models::openai::GPT_5,
@@ -495,7 +496,7 @@ mod tests {
     #[test]
     fn retention_ok_for_gpt_alias() {
         let mut cfg = VTCodeConfig::default();
-        cfg.prompt_cache.providers.openai.prompt_cache_retention = Some("24h".to_owned());
+        cfg.prompt_cache.providers.openai.prompt_cache_retention = Some(PromptCacheRetention::H24);
         let msg = check_prompt_cache_retention_compat(
             &cfg,
             crate::config::constants::models::openai::GPT,

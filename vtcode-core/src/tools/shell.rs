@@ -254,10 +254,11 @@ impl<E: CommandExecutor> ShellRunner<E> {
     pub fn cd(&mut self, path: &str) -> Result<()> {
         let target = self.resolve_path(path);
 
-        if !target.exists() {
-            bail!("directory `{}` does not exist", path);
-        }
-        if !target.is_dir() {
+        // Single metadata call avoids TOCTOU between exists() and is_dir()
+        let meta = target.metadata().map_err(|_| {
+            anyhow::anyhow!("directory `{}` does not exist or is not accessible", path)
+        })?;
+        if !meta.is_dir() {
             bail!("path `{}` is not a directory", path);
         }
 

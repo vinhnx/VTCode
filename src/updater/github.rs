@@ -101,7 +101,9 @@ pub(super) async fn fetch_latest_for_channel(
     channel: &ReleaseChannel,
 ) -> Result<UpdateInfo> {
     match channel {
-        ReleaseChannel::Stable => fetch_latest_release_info(timeout_secs).await,
+        ReleaseChannel::Stable | ReleaseChannel::Unknown => {
+            fetch_latest_release_info(timeout_secs).await
+        }
         ReleaseChannel::Beta | ReleaseChannel::Nightly => {
             fetch_latest_prerelease_info(timeout_secs, channel).await
         }
@@ -182,7 +184,7 @@ async fn fetch_latest_prerelease_info(
             .unwrap_or(false);
 
         let matches_channel = match channel {
-            ReleaseChannel::Stable => !is_prerelease,
+            ReleaseChannel::Stable | ReleaseChannel::Unknown => !is_prerelease,
             ReleaseChannel::Beta => is_prerelease,
             ReleaseChannel::Nightly => {
                 let tag_lower = tag_name.to_ascii_lowercase();

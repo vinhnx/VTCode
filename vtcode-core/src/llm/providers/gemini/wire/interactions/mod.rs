@@ -75,6 +75,9 @@ pub enum InteractionContent {
         #[serde(skip_serializing_if = "Option::is_none")]
         signature: Option<String>,
     },
+    /// Catch-all for unknown content types added by the Gemini API.
+    #[serde(other)]
+    Unknown,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

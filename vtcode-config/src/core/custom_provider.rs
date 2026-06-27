@@ -34,6 +34,18 @@ pub struct CustomProviderCommandAuthConfig {
     pub refresh_interval_ms: u64,
 }
 
+impl Default for CustomProviderCommandAuthConfig {
+    fn default() -> Self {
+        Self {
+            command: String::new(),
+            args: Vec::new(),
+            cwd: None,
+            timeout_ms: default_auth_timeout_ms(),
+            refresh_interval_ms: default_auth_refresh_interval_ms(),
+        }
+    }
+}
+
 impl CustomProviderCommandAuthConfig {
     fn validate(&self, provider_name: &str) -> Result<(), String> {
         if self.command.trim().is_empty() {

@@ -162,9 +162,9 @@ pub fn convert_to_anthropic_format(
                 })
                 .or_else(|| {
                     thinking_val.as_ref().and_then(|_| {
-                        let configured_effort = ctx.anthropic_config.effort.to_ascii_lowercase();
-                        if effort_allowed_for_model(resolved_model, ctx.model, &configured_effort) {
-                            Some(configured_effort)
+                        let configured_effort = ctx.anthropic_config.effort.as_str();
+                        if effort_allowed_for_model(resolved_model, ctx.model, configured_effort) {
+                            Some(configured_effort.to_string())
                         } else {
                             default_effort_for_model(resolved_model, ctx.model).map(str::to_string)
                         }

@@ -23,7 +23,7 @@ impl Default for OutputStyleConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct OutputStyleFileConfig {
     pub name: String,

@@ -20,7 +20,7 @@ use crate::defaults::{self, ConfigDefaultsProvider};
 use crate::hooks::HooksConfig;
 use crate::ide_context::IdeContextConfig;
 use crate::mcp::McpClientConfig;
-use crate::models::Provider;
+use crate::models::{MiMoAuthMethod, Provider};
 use crate::optimization::OptimizationConfig;
 use crate::output_styles::OutputStyleConfig;
 use crate::root::{ChatConfig, PtyConfig, UiConfig};
@@ -44,7 +44,7 @@ pub struct ProviderConfig {
 
     /// Xiaomi MiMo auth method: "payg" or "token-plan"
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub mimo_auth_method: Option<String>,
+    pub mimo_auth_method: Option<MiMoAuthMethod>,
 }
 
 /// Codex-compatible top-level feature flags.

@@ -783,7 +783,11 @@ impl OpenAIProvider {
             include_assistant_phase: is_native_openai,
             prompt_cache_key,
             include_prompt_cache_retention: backend_defaults.include_prompt_cache_retention,
-            prompt_cache_retention: self.prompt_cache_settings.prompt_cache_retention.as_deref(),
+            prompt_cache_retention: self
+                .prompt_cache_settings
+                .prompt_cache_retention
+                .as_ref()
+                .map(|r| r.as_str()),
             default_service_tier,
             default_response_store: self.responses_store,
             default_responses_include: (!self.responses_include.is_empty())

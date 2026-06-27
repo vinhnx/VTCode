@@ -23,6 +23,7 @@ use serde_json::{Value, json};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tempfile::TempDir;
+use vtcode_config::PromptCacheRetention;
 use vtcode_config::auth::{
     AuthCredentialsStoreMode, OpenAIChatGptAuthHandle, OpenAIChatGptSession,
 };
@@ -3000,7 +3001,7 @@ use crate::config::core::PromptCachingConfig;
 #[test]
 fn responses_payload_includes_prompt_cache_retention_for_native_openai() {
     let mut pc = PromptCachingConfig::default();
-    pc.providers.openai.prompt_cache_retention = Some("24h".to_owned());
+    pc.providers.openai.prompt_cache_retention = Some(PromptCacheRetention::H24);
     let provider = OpenAIProvider::from_config(
         Some("key".to_owned()),
         None,
@@ -3079,7 +3080,7 @@ fn prompt_cache_retention_excluded_when_not_set_and_for_unsupported_models() {
 
     // Unsupported model also omits it
     let mut pc2 = PromptCachingConfig::default();
-    pc2.providers.openai.prompt_cache_retention = Some("24h".to_string());
+    pc2.providers.openai.prompt_cache_retention = Some(PromptCacheRetention::H24);
     let provider2 = OpenAIProvider::from_config(
         Some("key".to_string()),
         None,
@@ -3100,7 +3101,7 @@ fn prompt_cache_retention_excluded_when_not_set_and_for_unsupported_models() {
 #[test]
 fn provider_from_config_respects_prompt_cache_and_websocket_gating() {
     let mut pc = PromptCachingConfig::default();
-    pc.providers.openai.prompt_cache_retention = Some("in_memory".to_owned());
+    pc.providers.openai.prompt_cache_retention = Some(PromptCacheRetention::InMemory);
     let provider = OpenAIProvider::from_config(
         Some("key".to_string()),
         None,
@@ -3114,7 +3115,7 @@ fn provider_from_config_respects_prompt_cache_and_websocket_gating() {
     );
     assert_eq!(
         provider.prompt_cache_settings.prompt_cache_retention,
-        Some("in_memory".to_owned())
+        Some(PromptCacheRetention::InMemory)
     );
 
     let native_ws = OpenAIProvider::from_config(

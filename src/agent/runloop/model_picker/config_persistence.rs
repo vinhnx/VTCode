@@ -29,7 +29,7 @@ pub(super) async fn persist_selection(
 
     // Store MiMo auth method when provider is MiMo
     if selection.provider_enum == Some(Provider::MiMo) {
-        config.provider.mimo_auth_method = selection.mimo_auth_method.map(|m| m.to_string());
+        config.provider.mimo_auth_method = selection.mimo_auth_method;
     }
 
     manager.save_config(&config)?;

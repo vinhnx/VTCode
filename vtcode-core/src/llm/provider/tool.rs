@@ -1,37 +1,8 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 
-/// Tool search algorithm for Anthropic's advanced-tool-use beta
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "lowercase")]
-pub enum ToolSearchAlgorithm {
-    /// Regex-based search using Python re.search() syntax
-    #[default]
-    Regex,
-    /// BM25-based natural language search
-    Bm25,
-}
-
-impl std::fmt::Display for ToolSearchAlgorithm {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Regex => write!(f, "regex"),
-            Self::Bm25 => write!(f, "bm25"),
-        }
-    }
-}
-
-impl std::str::FromStr for ToolSearchAlgorithm {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_lowercase().as_str() {
-            "regex" => Ok(Self::Regex),
-            "bm25" => Ok(Self::Bm25),
-            _ => Err(format!("Unknown tool search algorithm: {}", s)),
-        }
-    }
-}
+// Re-export from vtcode-config as the canonical definition
+pub use vtcode_config::ToolSearchAlgorithm;
 
 /// Universal tool definition that matches OpenAI/Anthropic/Gemini specifications
 /// Based on official API documentation from Context7
@@ -232,6 +203,10 @@ impl ToolDefinition {
             }
             ToolSearchAlgorithm::Bm25 => {
                 ("tool_search_tool_bm25_20251119", "tool_search_tool_bm25")
+            }
+            // Unknown algorithms default to regex
+            ToolSearchAlgorithm::Unknown => {
+                ("tool_search_tool_regex_20251119", "tool_search_tool_regex")
             }
         };
 

@@ -190,6 +190,7 @@ async fn send_task_to_agent(
                         crate::a2a::rpc::StreamingEvent::TaskArtifact { artifact, .. } => {
                             println!("Artifact: {}", artifact.id);
                         }
+                        crate::a2a::rpc::StreamingEvent::Unknown => {}
                     }
                 }
                 Err(e) => {
@@ -307,6 +308,7 @@ async fn get_agent_task(agent_url: String, task_id: String) -> anyhow::Result<()
                 crate::a2a::types::Part::Text { text } => println!("  Text: {}", text),
                 crate::a2a::types::Part::File { file } => println!("  File: {:?}", file),
                 crate::a2a::types::Part::Data { data } => println!("  Data: {}", data),
+                crate::a2a::types::Part::Unknown => {}
             }
         }
     }
@@ -329,6 +331,7 @@ async fn get_agent_task(agent_url: String, task_id: String) -> anyhow::Result<()
                             vtcode_commons::formatting::truncate_byte_budget(&s, 60, "...");
                         println!("    Data: {}", preview);
                     }
+                    crate::a2a::types::Part::Unknown => {}
                 }
             }
         }

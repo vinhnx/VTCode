@@ -331,7 +331,7 @@ impl ModelId {
             ModelId::Gemini35Flash
                 | ModelId::GPT54Mini
                 | ModelId::CopilotGPT54Mini
-                |             ModelId::ClaudeHaiku45
+                | ModelId::ClaudeHaiku45
                 | ModelId::OpenCodeZenGPT54Mini
                 | ModelId::DeepSeekV4Flash
                 | ModelId::HuggingFaceStep35Flash

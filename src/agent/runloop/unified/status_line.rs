@@ -91,7 +91,7 @@ pub(crate) fn status_line_shows_auto_components(status_config: Option<&StatusLin
         .map(|cfg| cfg.effective_mode())
         .unwrap_or(StatusLineMode::Auto)
     {
-        StatusLineMode::Auto => true,
+        StatusLineMode::Auto | StatusLineMode::Unknown => true,
         StatusLineMode::Command => status_config
             .and_then(|cfg| cfg.command.as_deref())
             .map(|command| command.trim().is_empty())
@@ -174,7 +174,7 @@ pub(crate) async fn update_input_status_if_changed(
             state.last_command_refresh = None;
             (None, None)
         }
-        StatusLineMode::Auto => auto_status_layout(state).into_status(),
+        StatusLineMode::Auto | StatusLineMode::Unknown => auto_status_layout(state).into_status(),
         StatusLineMode::Command => {
             if let Some(cfg) = status_config {
                 if let Some(command) = cfg

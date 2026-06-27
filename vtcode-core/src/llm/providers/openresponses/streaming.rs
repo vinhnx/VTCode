@@ -64,6 +64,9 @@ pub enum StreamEventType {
     // Error event
     #[serde(rename = "error")]
     Error,
+    /// Catch-all for unknown streaming event types added by the OpenResponses spec.
+    #[serde(other)]
+    Unknown,
 }
 
 /// A streaming event from the OpenResponses API.

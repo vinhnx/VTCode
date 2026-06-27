@@ -47,8 +47,8 @@ struct WebFetchArgs {
 /// WebFetch tool that fetches URL content and processes it with AI
 #[derive(Clone)]
 pub struct WebFetchTool {
-    /// Security mode: "restricted" (blocklist) or "whitelist" (allowlist)
-    pub mode: String,
+    /// Security mode: restricted (blocklist) or whitelist (allowlist)
+    pub mode: vtcode_config::WebFetchMode,
     /// Additional blocked domains (merged with builtin)
     pub blocked_domains: HashSet<String>,
     /// Additional blocked patterns (merged with builtin)
@@ -97,7 +97,7 @@ fn fetched_content_from_bytes(bytes: &[u8], max_bytes: usize) -> Result<FetchedW
 /// Creates the directory if it doesn't exist.
 async fn web_fetch_temp_dir() -> Result<PathBuf> {
     let base = dirs::home_dir()
-        .unwrap_or_else(|| std::env::temp_dir())
+        .unwrap_or_else(std::env::temp_dir)
         .join(".vtcode")
         .join("tmp")
         .join(TEMP_SUBDIR);
@@ -180,7 +180,7 @@ pub async fn cleanup_old_web_fetch_temps(max_age_secs: u64) -> Result<usize> {
 impl WebFetchTool {
     pub fn new() -> Self {
         Self {
-            mode: "restricted".to_string(),
+            mode: vtcode_config::WebFetchMode::Restricted,
             blocked_domains: HashSet::new(),
             blocked_patterns: Vec::new(),
             allowed_domains: HashSet::new(),
@@ -190,7 +190,7 @@ impl WebFetchTool {
 
     /// Create a WebFetchTool with custom configuration
     pub fn with_config(
-        mode: String,
+        mode: vtcode_config::WebFetchMode,
         blocked_domains: Vec<String>,
         blocked_patterns: Vec<String>,
         allowed_domains: Vec<String>,
@@ -344,10 +344,9 @@ impl WebFetchTool {
         let url_lower = url.to_lowercase();
 
         // Apply security policy based on mode
-        match self.mode.as_str() {
-            "whitelist" => self.validate_whitelist_mode(&url_lower)?,
-            "restricted" => self.validate_restricted_mode(&url_lower)?,
-            _ => return Err(anyhow!("Unknown web_fetch security mode: {}", self.mode)),
+        match self.mode {
+            vtcode_config::WebFetchMode::Whitelist => self.validate_whitelist_mode(&url_lower)?,
+            vtcode_config::WebFetchMode::Restricted => self.validate_restricted_mode(&url_lower)?,
         }
 
         Ok(())
@@ -468,7 +467,7 @@ impl WebFetchTool {
             .unwrap_or(&content_type_lower)
             .trim();
 
-        if allowed_types.iter().any(|&t| media_type == t) {
+        if allowed_types.contains(&media_type) {
             Ok(())
         } else {
             Err(anyhow!(
@@ -778,7 +777,7 @@ mod tests {
     #[tokio::test]
     async fn allows_http_when_https_disabled() {
         let tool = WebFetchTool::with_config(
-            "restricted".to_string(),
+            vtcode_config::WebFetchMode::Restricted,
             Vec::new(),
             Vec::new(),
             Vec::new(),
@@ -950,7 +949,7 @@ mod tests {
     #[tokio::test]
     async fn whitelist_mode_requires_allowed_domains() {
         let tool = WebFetchTool::with_config(
-            "whitelist".to_string(),
+            vtcode_config::WebFetchMode::Whitelist,
             Vec::new(),
             Vec::new(),
             Vec::new(), // No allowed domains
@@ -971,7 +970,7 @@ mod tests {
     #[tokio::test]
     async fn whitelist_mode_allows_whitelisted_domains() {
         let tool = WebFetchTool::with_config(
-            "whitelist".to_string(),
+            vtcode_config::WebFetchMode::Whitelist,
             Vec::new(),
             Vec::new(),
             vec!["example.com".to_string()], // Only example.com allowed
@@ -993,7 +992,7 @@ mod tests {
     #[tokio::test]
     async fn whitelist_mode_rejects_non_whitelisted_domains() {
         let tool = WebFetchTool::with_config(
-            "whitelist".to_string(),
+            vtcode_config::WebFetchMode::Whitelist,
             Vec::new(),
             Vec::new(),
             vec!["allowed.com".to_string()],
@@ -1014,7 +1013,7 @@ mod tests {
     #[tokio::test]
     async fn restricted_mode_allows_exemptions() {
         let tool = WebFetchTool::with_config(
-            "restricted".to_string(),
+            vtcode_config::WebFetchMode::Restricted,
             Vec::new(),
             Vec::new(),
             vec!["paypal.com".to_string()], // Exempt from blocklist
@@ -1036,7 +1035,7 @@ mod tests {
     #[tokio::test]
     async fn custom_blocked_domains_work() {
         let tool = WebFetchTool::with_config(
-            "restricted".to_string(),
+            vtcode_config::WebFetchMode::Restricted,
             vec!["custom-blocked.com".to_string()], // Custom blocked domain
             Vec::new(),
             Vec::new(),
@@ -1057,7 +1056,7 @@ mod tests {
     #[tokio::test]
     async fn custom_blocked_patterns_work() {
         let tool = WebFetchTool::with_config(
-            "restricted".to_string(),
+            vtcode_config::WebFetchMode::Restricted,
             Vec::new(),
             vec!["custom_secret=".to_string()], // Custom pattern
             Vec::new(),

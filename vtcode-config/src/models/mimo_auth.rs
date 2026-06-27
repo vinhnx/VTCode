@@ -1,19 +1,33 @@
 use std::fmt;
 use std::str::FromStr;
 
+use serde::{Deserialize, Serialize};
+
 use crate::constants::{env_vars, urls};
 
 /// The env key used by Provider::MiMo for pay-as-you-go
 const MIMO_API_KEY: &str = "MIMO_API_KEY";
 
 /// Authentication method for Xiaomi MiMo provider
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum MiMoAuthMethod {
     /// Pay-as-you-go: uses api-key header, sk- prefix, api.xiaomimimo.com/v1
     #[default]
+    #[serde(
+        alias = "payg",
+        alias = "pay_as_you_go",
+        alias = "apikey",
+        alias = "api_key"
+    )]
     PayAsYouGo,
     /// Token Plan: uses Authorization Bearer header, tp- prefix, token-plan-cn.xiaomimimo.com/v1
+    #[serde(alias = "token_plan", alias = "tokenplan", alias = "tp")]
     TokenPlan,
+    /// Forward-compatible catch-all for unknown auth methods
+    #[serde(other)]
+    Unknown,
 }
 
 impl MiMoAuthMethod {
@@ -22,6 +36,7 @@ impl MiMoAuthMethod {
         match self {
             Self::PayAsYouGo => "API Usage Billing",
             Self::TokenPlan => "Subscription Plan",
+            Self::Unknown => "Unknown",
         }
     }
 
@@ -32,6 +47,7 @@ impl MiMoAuthMethod {
             Self::TokenPlan => {
                 "Subscription-based access. Uses tp- key with Bearer token. Includes more models. Defaults to Europe cluster."
             }
+            Self::Unknown => "Unrecognized authentication method.",
         }
     }
 
@@ -40,6 +56,7 @@ impl MiMoAuthMethod {
         match self {
             Self::PayAsYouGo => MIMO_API_KEY,
             Self::TokenPlan => env_vars::MIMO_TOKEN_PLAN_KEY,
+            Self::Unknown => MIMO_API_KEY,
         }
     }
 
@@ -48,6 +65,7 @@ impl MiMoAuthMethod {
         match self {
             Self::PayAsYouGo => urls::MIMO_API_BASE,
             Self::TokenPlan => urls::MIMO_TOKEN_PLAN_API_BASE,
+            Self::Unknown => urls::MIMO_API_BASE,
         }
     }
 }
@@ -57,6 +75,7 @@ impl fmt::Display for MiMoAuthMethod {
         match self {
             Self::PayAsYouGo => write!(f, "api-usage-billing"),
             Self::TokenPlan => write!(f, "subscription-plan"),
+            Self::Unknown => write!(f, "unknown"),
         }
     }
 }

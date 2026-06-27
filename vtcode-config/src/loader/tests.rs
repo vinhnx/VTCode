@@ -1,6 +1,7 @@
 use super::*;
 
 use crate::core::CustomProviderConfig;
+use crate::core::prompt_cache::PromptCacheRetention;
 use crate::defaults::{self, SyntaxHighlightingDefaults, WorkspacePathsDefaults};
 use crate::ide_context::{
     IdeContextProviderConfig, IdeContextProviderMode, IdeContextProvidersConfig,
@@ -360,7 +361,7 @@ prompt_cache_key_mode = "off"
     let config = manager.config();
     assert_eq!(
         config.prompt_cache.providers.openai.prompt_cache_retention,
-        Some("24h".to_string())
+        Some(PromptCacheRetention::H24)
     );
     assert_eq!(
         config.prompt_cache.providers.openai.prompt_cache_key_mode,

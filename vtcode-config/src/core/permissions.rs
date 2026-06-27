@@ -16,7 +16,6 @@ pub enum PermissionDefault {
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
 pub struct AgentPermissionsConfig {
     /// Default permission for unmatched tool calls.
     /// Options: `"ask"`, `"allow"`, `"auto"`, `"deny"`.
@@ -165,7 +164,6 @@ pub fn normalize_permission_rule(raw: &str) -> String {
 /// Permission system configuration - Controls command resolution, audit logging, and caching
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
 pub struct PermissionsConfig {
     /// Classifier-backed auto permission review policy and environment settings.
     #[serde(
@@ -465,19 +463,21 @@ mod tests {
     }
 
     #[test]
-    fn rejects_removed_global_default_and_auto_rules() {
+    fn ignores_unknown_fields_for_forward_compatibility() {
+        // Unknown fields are silently ignored so that a config written by a newer
+        // vtcode version does not break older binaries.
         let removed_field = format!("default_{}", "mode");
         let input = format!(
             r#"
             {removed_field} = "ask"
             "#,
         );
-        let err = toml::from_str::<PermissionsConfig>(&input).unwrap_err();
-        assert!(
-            err.to_string()
-                .contains(&format!("unknown field `{removed_field}`"))
-        );
+        let config: PermissionsConfig = toml::from_str(&input).unwrap();
+        // The unknown field is ignored; defaults are used.
+        assert!(config.allow.is_empty());
 
+        // "auto" as a string value for the top-level field is still rejected
+        // because the struct field expects AutoPermissionConfig, not a list.
         let err = toml::from_str::<PermissionsConfig>(
             r#"
             auto = ["unified_exec"]

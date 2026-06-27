@@ -461,6 +461,7 @@ fn provider_family_label(family: IdeContextProviderFamily) -> &'static str {
         IdeContextProviderFamily::VscodeCompatible => "vscode_compatible",
         IdeContextProviderFamily::Zed => "zed",
         IdeContextProviderFamily::Generic => "generic",
+        IdeContextProviderFamily::Unknown => "unknown",
     }
 }
 

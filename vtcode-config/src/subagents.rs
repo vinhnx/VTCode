@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
+use vtcode_commons::reasoning::ReasoningEffortLevel;
 
 use crate::constants::tools;
 use crate::constants::ui;
@@ -143,6 +144,17 @@ pub enum AgentMode {
     All,
 }
 
+/// Subagent isolation mode
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum IsolationMode {
+    /// Full isolation (separate process)
+    Full,
+    /// Git worktree isolation
+    Worktree,
+}
+
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 #[serde(untagged)]
@@ -178,7 +190,7 @@ pub struct SubagentSpec {
     #[serde(default)]
     pub color: Option<String>,
     #[serde(default)]
-    pub reasoning_effort: Option<String>,
+    pub reasoning_effort: Option<ReasoningEffortLevel>,
     pub permissions: AgentPermissionsConfig,
     #[serde(default)]
     pub skills: Vec<String>,
@@ -199,7 +211,7 @@ pub struct SubagentSpec {
     #[serde(default)]
     pub memory: Option<SubagentMemoryScope>,
     #[serde(default)]
-    pub isolation: Option<String>,
+    pub isolation: Option<IsolationMode>,
     #[serde(default)]
     pub aliases: Vec<String>,
     pub source: SubagentSource,
@@ -212,6 +224,43 @@ pub struct SubagentSpec {
     /// Applied on top of (and overriding) the global `[tools.policies]` from vtcode.toml.
     #[serde(default)]
     pub tool_policy_overrides: BTreeMap<String, ToolPolicy>,
+}
+
+impl Default for SubagentSpec {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            description: String::new(),
+            prompt: String::new(),
+            tools: None,
+            disallowed_tools: Vec::new(),
+            model: None,
+            color: None,
+            reasoning_effort: None,
+            permissions: AgentPermissionsConfig {
+                default: PermissionDefault::Ask,
+                allow: Vec::new(),
+                ask: Vec::new(),
+                auto: Vec::new(),
+                deny: Vec::new(),
+            },
+            skills: Vec::new(),
+            mcp_servers: Vec::new(),
+            hooks: None,
+            background: false,
+            mode: AgentMode::default(),
+            max_turns: None,
+            nickname_candidates: Vec::new(),
+            initial_prompt: None,
+            memory: None,
+            isolation: None,
+            aliases: Vec::new(),
+            source: SubagentSource::Builtin,
+            file_path: None,
+            warnings: Vec::new(),
+            tool_policy_overrides: BTreeMap::new(),
+        }
+    }
 }
 
 impl SubagentSpec {
@@ -520,7 +569,7 @@ fn builtin_subagents_inner() -> Vec<SubagentSpec> {
             disallowed_tools: builtin_readonly_disallowed_tool_ids(),
             model: Some("small".to_string()),
             color: Some("cyan".to_string()),
-            reasoning_effort: Some("low".to_string()),
+            reasoning_effort: Some(ReasoningEffortLevel::Low),
             permissions: readonly_agent_permissions(),
             skills: Vec::new(),
             mcp_servers: Vec::new(),
@@ -810,7 +859,7 @@ fn load_cli_agents(value: &JsonValue) -> Result<Vec<SubagentSpec>> {
             .or_else(|| config.get("model_reasoning_effort"))
             .or_else(|| config.get("effort"))
             .and_then(JsonValue::as_str)
-            .map(ToString::to_string);
+            .and_then(ReasoningEffortLevel::parse);
         let permissions = parse_required_permissions(config)?;
         let skills = optional_string_list(config.get("skills"))?.unwrap_or_default();
         let mcp_servers = optional_mcp_servers(
@@ -849,7 +898,8 @@ fn load_cli_agents(value: &JsonValue) -> Result<Vec<SubagentSpec>> {
         let isolation = config
             .get("isolation")
             .and_then(JsonValue::as_str)
-            .map(ToString::to_string);
+            .map(parse_isolation_mode)
+            .transpose()?;
         let aliases = optional_string_list(config.get("aliases"))?.unwrap_or_default();
         let mut warnings = primary_agent_subagent_only_field_warnings(config, mode);
         warnings.extend(warn_legacy_permission_rules(&permissions));
@@ -978,7 +1028,7 @@ fn subagent_spec_from_json_map(
         .or_else(|| object.get("model_reasoning_effort"))
         .or_else(|| object.get("effort"))
         .and_then(JsonValue::as_str)
-        .map(ToString::to_string);
+        .and_then(ReasoningEffortLevel::parse);
     let permissions = parse_required_permissions(object)?;
     let skills = optional_string_list(object.get("skills"))?.unwrap_or_default();
     let mcp_servers = optional_mcp_servers(
@@ -1017,7 +1067,8 @@ fn subagent_spec_from_json_map(
     let isolation = object
         .get("isolation")
         .and_then(JsonValue::as_str)
-        .map(ToString::to_string);
+        .map(parse_isolation_mode)
+        .transpose()?;
     let aliases = optional_string_list(object.get("aliases"))?.unwrap_or_default();
     let mut warnings = primary_agent_subagent_only_field_warnings(object, mode);
     warnings.extend(warn_legacy_permission_rules(&permissions));
@@ -1446,6 +1497,14 @@ fn parse_agent_mode(value: &str) -> Result<AgentMode> {
     }
 }
 
+fn parse_isolation_mode(value: &str) -> Result<IsolationMode> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "full" => Ok(IsolationMode::Full),
+        "worktree" => Ok(IsolationMode::Worktree),
+        other => bail!("unsupported isolation mode '{other}'"),
+    }
+}
+
 fn toml_table_to_json_object(
     table: &toml::map::Map<String, toml::Value>,
 ) -> Result<JsonMap<String, JsonValue>> {
@@ -1499,10 +1558,11 @@ fn default_background_toggle_shortcut() -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        AgentMode, AgentSpecFieldClass, BackgroundSubagentConfig, SubagentDiscoveryInput,
-        SubagentMcpServer, SubagentMemoryScope, SubagentRuntimeLimits, SubagentSource,
-        builtin_plan_agent, builtin_primary_duck_agent, builtin_subagents,
-        classify_agent_spec_field, discover_subagents, load_cli_agents, load_subagent_from_file,
+        AgentMode, AgentSpecFieldClass, BackgroundSubagentConfig, IsolationMode,
+        ReasoningEffortLevel, SubagentDiscoveryInput, SubagentMcpServer, SubagentMemoryScope,
+        SubagentRuntimeLimits, SubagentSource, builtin_plan_agent, builtin_primary_duck_agent,
+        builtin_subagents, classify_agent_spec_field, discover_subagents, load_cli_agents,
+        load_subagent_from_file,
     };
     use crate::constants::tools;
     use crate::core::permissions::PermissionDefault;
@@ -1742,7 +1802,7 @@ Primary prompt."#,
         );
         assert_eq!(spec.permissions.deny, vec![tools::WRITE_FILE.to_string()]);
         assert_eq!(spec.model.as_deref(), Some("gpt-5.4"));
-        assert_eq!(spec.reasoning_effort.as_deref(), Some("high"));
+        assert_eq!(spec.reasoning_effort, Some(ReasoningEffortLevel::High));
         assert_eq!(spec.skills, vec!["rust".to_string(), "repo".to_string()]);
         assert_eq!(spec.mcp_servers.len(), 2);
         assert!(matches!(spec.mcp_servers[0], SubagentMcpServer::Named(_)));
@@ -1790,7 +1850,7 @@ Prompt."#,
         assert_eq!(spec.max_turns, Some(4));
         assert_eq!(spec.initial_prompt.as_deref(), Some("Start here"));
         assert_eq!(spec.nickname_candidates, vec!["helper".to_string()]);
-        assert_eq!(spec.isolation.as_deref(), Some("full"));
+        assert_eq!(spec.isolation, Some(IsolationMode::Full));
         assert_eq!(
             spec.warnings,
             vec![
@@ -1868,7 +1928,7 @@ reasoning_effort = "medium"
         assert!(spec.permissions.auto.is_empty());
         assert!(spec.permissions.deny.is_empty());
         assert_eq!(spec.model.as_deref(), Some("gpt-5.4"));
-        assert_eq!(spec.reasoning_effort.as_deref(), Some("medium"));
+        assert_eq!(spec.reasoning_effort, Some(ReasoningEffortLevel::Medium));
         assert_eq!(spec.prompt, "Baseline prompt");
         assert!(spec.warnings.is_empty());
         Ok(())
@@ -2001,7 +2061,7 @@ permissions = { default = "ask" }
         assert_eq!(spec.prompt, "Implement the assigned change.");
         assert_eq!(spec.model.as_deref(), Some("gpt-5.4"));
         assert_eq!(spec.color.as_deref(), Some("#4f8fd8"));
-        assert_eq!(spec.reasoning_effort.as_deref(), Some("high"));
+        assert_eq!(spec.reasoning_effort, Some(ReasoningEffortLevel::High));
         assert_eq!(spec.nickname_candidates, vec!["builder".to_string()]);
         Ok(())
     }

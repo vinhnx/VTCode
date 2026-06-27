@@ -1,116 +1,19 @@
+//! Re-exports of shared configuration types from their canonical definitions,
+//! plus locally-defined types that need to satisfy Rust's orphan rule for
+//! trait implementations.
+
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "lowercase")]
-pub enum ReasoningEffortLevel {
-    None,
-    Minimal,
-    Low,
-    #[default]
-    Medium,
-    High,
-    XHigh,
-    Max,
-}
+// Re-export from canonical sources.
+pub use vtcode_commons::reasoning::ReasoningEffortLevel;
+pub use vtcode_config::types::{SystemPromptMode, ToolDocumentationMode, VerbosityLevel};
 
-impl ReasoningEffortLevel {
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::None => "none",
-            Self::Minimal => "minimal",
-            Self::Low => "low",
-            Self::Medium => "medium",
-            Self::High => "high",
-            Self::XHigh => "xhigh",
-            Self::Max => "max",
-        }
-    }
-}
-
-impl fmt::Display for ReasoningEffortLevel {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "lowercase")]
-pub enum SystemPromptMode {
-    Minimal,
-    Lightweight,
-    #[default]
-    Default,
-    Specialized,
-}
-
-impl SystemPromptMode {
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Minimal => "minimal",
-            Self::Lightweight => "lightweight",
-            Self::Default => "default",
-            Self::Specialized => "specialized",
-        }
-    }
-}
-
-impl fmt::Display for SystemPromptMode {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "lowercase")]
-pub enum ToolDocumentationMode {
-    Minimal,
-    #[default]
-    Progressive,
-    Full,
-}
-
-impl ToolDocumentationMode {
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Minimal => "minimal",
-            Self::Progressive => "progressive",
-            Self::Full => "full",
-        }
-    }
-}
-
-impl fmt::Display for ToolDocumentationMode {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "lowercase")]
-pub enum VerbosityLevel {
-    Low,
-    #[default]
-    Medium,
-    High,
-}
-
-impl VerbosityLevel {
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Low => "low",
-            Self::Medium => "medium",
-            Self::High => "high",
-        }
-    }
-}
-
-impl fmt::Display for VerbosityLevel {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
+/// UI surface preference for rendering.
+///
+/// Kept as a local definition (rather than re-exported from vtcode-config)
+/// because `vtcode-ui` implements `From<SessionSurface>` and
+/// `From<UiSurfacePreference> for SessionSurface`, which require a local type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum UiSurfacePreference {

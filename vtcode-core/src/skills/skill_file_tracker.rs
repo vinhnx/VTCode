@@ -174,7 +174,7 @@ impl SkillFileTracker {
 
     /// Check if filename is a false positive
     fn is_false_positive(filename: &str) -> bool {
-        let false_positives = vec![
+        let false_positives = [
             "example.pdf",
             "template.xlsx",
             "sample.csv", // Template names

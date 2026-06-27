@@ -86,29 +86,25 @@ pub struct EditorToolConfig {
     pub suspend_tui: bool,
 }
 
+/// Web fetch security mode
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum WebFetchMode {
+    /// Blocklist mode: allow by default, block listed domains (default)
+    #[default]
+    Restricted,
+    /// Allowlist mode: block by default, allow only listed domains
+    Whitelist,
+}
+
 /// Web Fetch tool security configuration
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct WebFetchConfig {
-    /// Security mode: "restricted" (blocklist) or "whitelist" (allowlist)
+    /// Security mode: restricted (blocklist) or whitelist (allowlist)
     #[serde(default = "default_web_fetch_mode")]
-    pub mode: String,
-
-    /// Enable dynamic blocklist loading from external file
-    #[serde(default)]
-    pub dynamic_blocklist_enabled: bool,
-
-    /// Path to dynamic blocklist file
-    #[serde(default)]
-    pub dynamic_blocklist_path: String,
-
-    /// Enable dynamic whitelist loading from external file
-    #[serde(default)]
-    pub dynamic_whitelist_enabled: bool,
-
-    /// Path to dynamic whitelist file
-    #[serde(default)]
-    pub dynamic_whitelist_path: String,
+    pub mode: WebFetchMode,
 
     /// Inline blocklist - Additional domains to block
     #[serde(default)]
@@ -121,14 +117,6 @@ pub struct WebFetchConfig {
     /// Additional blocked patterns
     #[serde(default)]
     pub blocked_patterns: Vec<String>,
-
-    /// Enable audit logging of URL validation decisions
-    #[serde(default)]
-    pub enable_audit_logging: bool,
-
-    /// Path to audit log file
-    #[serde(default)]
-    pub audit_log_path: String,
 
     /// Strict HTTPS-only mode
     #[serde(default = "default_strict_https")]
@@ -186,23 +174,13 @@ pub fn tool_call_delay_for_rate(max_per_second: Option<usize>) -> Option<Duratio
     Some(Duration::from_nanos(nanos))
 }
 
-const DEFAULT_BLOCKLIST_PATH: &str = "~/.vtcode/web_fetch_blocklist.json";
-const DEFAULT_WHITELIST_PATH: &str = "~/.vtcode/web_fetch_whitelist.json";
-const DEFAULT_AUDIT_LOG_PATH: &str = "~/.vtcode/web_fetch_audit.log";
-
 impl Default for WebFetchConfig {
     fn default() -> Self {
         Self {
             mode: default_web_fetch_mode(),
-            dynamic_blocklist_enabled: false,
-            dynamic_blocklist_path: DEFAULT_BLOCKLIST_PATH.into(),
-            dynamic_whitelist_enabled: false,
-            dynamic_whitelist_path: DEFAULT_WHITELIST_PATH.into(),
             blocked_domains: Vec::new(),
             allowed_domains: Vec::new(),
             blocked_patterns: Vec::new(),
-            enable_audit_logging: false,
-            audit_log_path: DEFAULT_AUDIT_LOG_PATH.into(),
             strict_https_only: true,
         }
     }
@@ -263,8 +241,8 @@ const fn default_max_sequential_spool_chunk_reads() -> usize {
 }
 
 #[inline]
-fn default_web_fetch_mode() -> String {
-    "restricted".into()
+fn default_web_fetch_mode() -> WebFetchMode {
+    WebFetchMode::Restricted
 }
 
 fn default_strict_https() -> bool {

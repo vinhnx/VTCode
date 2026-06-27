@@ -188,9 +188,12 @@ fn workspace_write_policy_from_runtime_config(
 fn runtime_network_policy(
     sandbox_config: &vtcode_config::SandboxConfig,
 ) -> (bool, Vec<NetworkAllowlistEntry>) {
-    let network_blocked = sandbox_config.network.block_all;
-    let network_allow_all = !network_blocked && sandbox_config.network.allow_all;
-    let network_allowlist = if network_blocked || sandbox_config.network.allow_all {
+    use vtcode_config::NetworkPolicy;
+
+    let network_blocked = sandbox_config.network.policy == NetworkPolicy::BlockAll;
+    let network_allow_all =
+        !network_blocked && sandbox_config.network.policy == NetworkPolicy::AllowAll;
+    let network_allowlist = if network_blocked || network_allow_all {
         Vec::new()
     } else {
         sandbox_config

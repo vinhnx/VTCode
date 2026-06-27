@@ -1,5 +1,30 @@
-use crate::constants::reasoning;
 use serde::{Deserialize, Serialize};
+use vtcode_commons::reasoning::ReasoningEffortLevel;
+
+/// Controls how thinking content is returned in Anthropic API responses.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ThinkingDisplayMode {
+    /// Thinking blocks contain summarized thinking text (default on Claude 4 models).
+    Summarized,
+    /// Thinking blocks are returned with an empty `thinking` field (default on Claude Opus 4.7).
+    Omitted,
+    /// Catch-all for unknown display modes added by the Anthropic API.
+    #[serde(other)]
+    Unknown,
+}
+
+impl ThinkingDisplayMode {
+    /// Returns the string representation for the API wire format.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Summarized => "summarized",
+            Self::Omitted => "omitted",
+            Self::Unknown => "unknown",
+        }
+    }
+}
 
 /// Native OpenAI service tier selection.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -416,16 +441,6 @@ pub struct OpenAIConfig {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AnthropicConfig {
-    /// DEPRECATED: Model name validation has been removed. The Anthropic API validates
-    /// model names directly, avoiding maintenance burden and allowing flexibility.
-    /// This field is kept for backward compatibility but has no effect.
-    #[deprecated(
-        since = "0.75.0",
-        note = "Model validation removed. API validates model names directly."
-    )]
-    #[serde(default)]
-    pub skip_model_validation: bool,
-
     /// Enable adaptive or extended thinking for Anthropic models
     /// When enabled, Claude uses internal reasoning before responding, providing
     /// enhanced reasoning capabilities for complex tasks.
@@ -467,7 +482,7 @@ pub struct AnthropicConfig {
     /// The default config value keeps Claude Opus 4.7 on `xhigh`; models that do not
     /// support `xhigh` fall back to their supported model default, typically `high`.
     #[serde(default = "default_effort")]
-    pub effort: String,
+    pub effort: ReasoningEffortLevel,
 
     /// Optional Anthropic task budget token total for Claude Opus 4.7.
     /// When set, VT Code sends `output_config.task_budget = { type = "tokens", total = N }`
@@ -487,7 +502,7 @@ pub struct AnthropicConfig {
     /// When set, this overrides the model-specific default.
     /// See: <https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking#controlling-thinking-display>
     #[serde(default)]
-    pub thinking_display: Option<String>,
+    pub thinking_display: Option<ThinkingDisplayMode>,
 
     /// Enable token counting via the count_tokens endpoint
     /// When enabled, the agent can estimate input token counts before making API calls
@@ -496,11 +511,9 @@ pub struct AnthropicConfig {
     pub count_tokens_enabled: bool,
 }
 
-#[allow(deprecated)]
 impl Default for AnthropicConfig {
     fn default() -> Self {
         Self {
-            skip_model_validation: false,
             extended_thinking_enabled: default_extended_thinking_enabled(),
             interleaved_thinking_beta: default_interleaved_thinking_beta(),
             interleaved_thinking_budget_tokens: default_interleaved_thinking_budget_tokens(),
@@ -528,6 +541,38 @@ fn default_count_tokens_enabled() -> bool {
     false
 }
 
+/// Tool search algorithm for Anthropic's advanced-tool-use beta
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum ToolSearchAlgorithm {
+    /// Regex-based search using Python re.search() syntax
+    #[default]
+    Regex,
+    /// BM25-based natural language search
+    Bm25,
+    /// Forward-compatible catch-all for unknown algorithm values
+    #[serde(other)]
+    Unknown,
+}
+
+impl ToolSearchAlgorithm {
+    /// Returns the string representation of this algorithm variant.
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::Regex => "regex",
+            Self::Bm25 => "bm25",
+            Self::Unknown => "unknown",
+        }
+    }
+}
+
+impl std::fmt::Display for ToolSearchAlgorithm {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 /// Configuration for Anthropic's tool search feature (advanced-tool-use beta)
 /// Enables dynamic tool discovery for large tool catalogs (up to 10k tools)
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -539,7 +584,7 @@ pub struct ToolSearchConfig {
 
     /// Search algorithm: "regex" (Python regex patterns) or "bm25" (natural language)
     #[serde(default = "default_tool_search_algorithm")]
-    pub algorithm: String,
+    pub algorithm: ToolSearchAlgorithm,
 
     /// Automatically defer loading of all tools except core tools
     #[serde(default = "default_defer_by_default")]
@@ -572,8 +617,8 @@ fn default_tool_search_enabled() -> bool {
 }
 
 #[inline]
-fn default_tool_search_algorithm() -> String {
-    "regex".to_string()
+fn default_tool_search_algorithm() -> ToolSearchAlgorithm {
+    ToolSearchAlgorithm::Regex
 }
 
 #[inline]
@@ -607,8 +652,8 @@ fn default_interleaved_thinking_type() -> String {
 }
 
 #[inline]
-fn default_effort() -> String {
-    reasoning::XHIGH.to_string()
+fn default_effort() -> ReasoningEffortLevel {
+    ReasoningEffortLevel::XHigh
 }
 
 #[inline]
@@ -622,7 +667,7 @@ mod tests {
         AnthropicConfig, OpenAIConfig, OpenAIHostedShellConfig, OpenAIHostedShellDomainSecret,
         OpenAIHostedShellEnvironment, OpenAIHostedShellNetworkPolicy,
         OpenAIHostedShellNetworkPolicyType, OpenAIHostedSkill, OpenAIHostedSkillVersion,
-        OpenAIManualCompactionConfig, OpenAIServiceTier,
+        OpenAIManualCompactionConfig, OpenAIServiceTier, ToolSearchAlgorithm,
     };
 
     #[test]
@@ -851,7 +896,7 @@ always_available_tools = ["unified_search", "custom_tool"]
 
         assert!(config.tool_search.enabled);
         assert!(config.tool_search.defer_by_default);
-        assert_eq!(config.tool_search.algorithm, "regex");
+        assert_eq!(config.tool_search.algorithm, ToolSearchAlgorithm::Regex);
         assert!(config.tool_search.always_available_tools.is_empty());
     }
 

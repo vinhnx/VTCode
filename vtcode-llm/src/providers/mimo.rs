@@ -118,7 +118,7 @@ impl MiMoProvider {
 
         let default_base = auth_method.api_base();
         let env_var = match auth_method {
-            MiMoAuthMethod::PayAsYouGo => env_vars::MIMO_BASE_URL,
+            MiMoAuthMethod::PayAsYouGo | MiMoAuthMethod::Unknown => env_vars::MIMO_BASE_URL,
             MiMoAuthMethod::TokenPlan => env_vars::MIMO_TOKEN_PLAN_BASE_URL,
         };
 
@@ -233,7 +233,9 @@ impl MiMoProvider {
 
         // Use different header format based on auth method
         request = match self.auth_method {
-            MiMoAuthMethod::PayAsYouGo => request.header("api-key", &self.api_key),
+            MiMoAuthMethod::PayAsYouGo | MiMoAuthMethod::Unknown => {
+                request.header("api-key", &self.api_key)
+            }
             MiMoAuthMethod::TokenPlan => {
                 request.header("Authorization", format!("Bearer {}", &self.api_key))
             }
@@ -365,7 +367,7 @@ impl LLMProvider for MiMoProvider {
 
     fn supported_models(&self) -> Vec<String> {
         let model_list = match self.auth_method {
-            MiMoAuthMethod::PayAsYouGo => models::mimo::PAYG_MODELS,
+            MiMoAuthMethod::PayAsYouGo | MiMoAuthMethod::Unknown => models::mimo::PAYG_MODELS,
             MiMoAuthMethod::TokenPlan => models::mimo::TOKEN_PLAN_MODELS,
         };
         model_list.iter().map(|model| model.to_string()).collect()
@@ -373,7 +375,7 @@ impl LLMProvider for MiMoProvider {
 
     fn validate_request(&self, request: &LLMRequest) -> Result<(), LLMError> {
         let model_list = match self.auth_method {
-            MiMoAuthMethod::PayAsYouGo => models::mimo::PAYG_MODELS,
+            MiMoAuthMethod::PayAsYouGo | MiMoAuthMethod::Unknown => models::mimo::PAYG_MODELS,
             MiMoAuthMethod::TokenPlan => models::mimo::TOKEN_PLAN_MODELS,
         };
         validate_supported_models(request, PROVIDER_NAME, PROVIDER_KEY, model_list)

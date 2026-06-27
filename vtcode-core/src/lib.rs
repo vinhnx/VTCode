@@ -224,8 +224,8 @@ pub use cli::args::{Cli, Commands};
 pub use code::code_completion::{CompletionEngine, CompletionSuggestion};
 pub use commands::stats::handle_stats_command;
 pub use config::types::{
-    AnalysisDepth, CapabilityLevel, CommandResult, ContextConfig, LoggingConfig, OutputFormat,
-    PerformanceMetrics, ReasoningEffortLevel, SessionInfo, ToolConfig,
+    AnalysisDepth, CapabilityLevel, OutputFormat, PerformanceMetrics, ReasoningEffortLevel,
+    SessionInfo,
 };
 pub use config::{
     AgentClientProtocolConfig, AgentClientProtocolTransport, AgentClientProtocolZedConfig,
