@@ -97,30 +97,97 @@ where
 /// the buffer first.
 ///
 /// This avoids the double-write overhead of `vec![0u8; len]` followed by
-/// `read_exact` — the zeroing is wasted work since every byte is
-/// immediately overwritten by the read. For large payloads this can yield
+/// `read_exact` — `read_buf` appends directly into the `Vec`'s spare capacity,
+/// so the zeroing pass is skipped. For large payloads this can yield
 /// measurable performance gains.
 ///
 /// The returned `Vec` has exactly `len` initialized bytes.
 ///
+/// This used to be an `unsafe` function that handed `read_exact` a
+/// `&mut [u8]` over uninitialized memory via `from_raw_parts_mut`. That was
+/// unsound: `tokio::io::ReadBuf::new(&mut [u8])` asserts the whole buffer is
+/// initialized, so a reader conforming to the `ReadBuf` contract would be
+/// entitled to read the (uninitialized) `[filled, initialized)` region. The
+/// `read_buf`-based implementation below is fully safe and keeps the same
+/// zero-overhead property, miri-clean by construction.
+///
 /// # Errors
 ///
-/// Returns `io::Error` if the underlying reader's `read_exact` fails
-/// (e.g., unexpected EOF before `len` bytes are read).
-#[allow(unsafe_code)]
+/// Returns `io::ErrorKind::UnexpectedEof` if the reader reaches EOF before
+/// `len` bytes have been read.
 pub async fn read_exact_uninit<R>(reader: &mut R, len: usize) -> std::io::Result<Vec<u8>>
 where
     R: tokio::io::AsyncRead + Unpin,
 {
     let mut buf = Vec::with_capacity(len);
-    // SAFETY:
-    // - The Vec's allocation is valid and properly aligned for `len` bytes.
-    // - `read_exact` writes `len` bytes into `dst` before any read from `buf`,
-    //   so no uninitialized memory is ever observed.
-    // - The reference `dst` is never read — only written — by `read_exact`.
-    let dst = unsafe { std::slice::from_raw_parts_mut(buf.as_mut_ptr(), len) };
-    reader.read_exact(dst).await?;
-    // SAFETY: `read_exact` initializes exactly `len` bytes on success.
-    unsafe { buf.set_len(len) };
+    // `read_buf` fills the Vec's spare capacity without zero-initializing it,
+    // and is sound with respect to uninitialized memory by construction.
+    while buf.len() < len {
+        let n = reader.read_buf(&mut buf).await?;
+        if n == 0 {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::UnexpectedEof,
+                format!(
+                    "unexpected EOF before reading {len} bytes (got {})",
+                    buf.len()
+                ),
+            ));
+        }
+    }
     Ok(buf)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn read_exact_uninit_round_trips_known_payload() {
+        let payload: Vec<u8> = (0..64u8).collect();
+        let mut reader = std::io::Cursor::new(payload.clone());
+        let got = read_exact_uninit(&mut reader, payload.len())
+            .await
+            .expect("read full payload");
+        assert_eq!(got, payload);
+    }
+
+    #[tokio::test]
+    async fn read_exact_uninit_reads_across_multiple_poll_reads() {
+        // A payload larger than a single `read_buf` is likely to require
+        // several poll_read calls; the loop must still accumulate correctly.
+        let payload: Vec<u8> = (0..2000u32).map(|i| (i % 256) as u8).collect();
+        let mut reader = std::io::Cursor::new(payload.clone());
+        let got = read_exact_uninit(&mut reader, payload.len())
+            .await
+            .expect("read full payload");
+        assert_eq!(got, payload);
+    }
+
+    #[tokio::test]
+    async fn read_exact_uninit_returns_unexpected_eof_on_short_read() {
+        let payload = b"only ten!".to_vec();
+        let mut reader = std::io::Cursor::new(payload);
+        let err = read_exact_uninit(&mut reader, 64)
+            .await
+            .expect_err("short read must error");
+        assert_eq!(err.kind(), std::io::ErrorKind::UnexpectedEof);
+    }
+
+    #[tokio::test]
+    async fn read_exact_uninit_returns_unexpected_eof_on_empty_reader() {
+        let mut reader = std::io::Cursor::new(Vec::<u8>::new());
+        let err = read_exact_uninit(&mut reader, 1)
+            .await
+            .expect_err("empty reader must error");
+        assert_eq!(err.kind(), std::io::ErrorKind::UnexpectedEof);
+    }
+
+    #[tokio::test]
+    async fn read_exact_uninit_zero_len_returns_empty_vec() {
+        let mut reader = std::io::Cursor::new(Vec::<u8>::new());
+        let got = read_exact_uninit(&mut reader, 0)
+            .await
+            .expect("zero-length read must succeed");
+        assert!(got.is_empty());
+    }
 }

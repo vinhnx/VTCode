@@ -186,6 +186,15 @@ async fn read_response(reader: &mut BufReader<ChildStdout>, expected_id: i64) ->
     }
 }
 
+/// Upper bound on a single Copilot CLI JSON-RPC payload.
+///
+/// `Content-Length` arrives from the spawned Copilot CLI child process and is
+/// passed straight to `read_exact_uninit`, which allocates that many bytes up
+/// front. A malformed or hostile stream advertising an enormous length would
+/// otherwise drive the process into an out-of-memory abort. Copilot responses
+/// (model lists, completions) are well under this cap; reject anything larger.
+const MAX_COPILOT_PAYLOAD_BYTES: usize = 64 * 1024 * 1024;
+
 async fn read_message(reader: &mut BufReader<ChildStdout>) -> Result<Value> {
     let mut content_length = None;
     loop {
@@ -204,12 +213,16 @@ async fn read_message(reader: &mut BufReader<ChildStdout>) -> Result<Value> {
         }
 
         if let Some(value) = trimmed.strip_prefix("Content-Length:") {
-            content_length = Some(
-                value
-                    .trim()
-                    .parse::<usize>()
-                    .context("invalid copilot cli content length header")?,
-            );
+            let parsed = value
+                .trim()
+                .parse::<usize>()
+                .context("invalid copilot cli content length header")?;
+            if parsed > MAX_COPILOT_PAYLOAD_BYTES {
+                return Err(anyhow!(
+                    "copilot cli content length {parsed} exceeds {MAX_COPILOT_PAYLOAD_BYTES} byte limit"
+                ));
+            }
+            content_length = Some(parsed);
         }
     }
 

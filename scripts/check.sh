@@ -249,14 +249,38 @@ run_agent_legibility_checks() {
 }
 
 # Run Miri (detect undefined behavior)
+#
+# Methodology: Shnatsel, "The unreasonable effectiveness of LLMs for auditing
+# Rust code" — use miri to verify unsafe findings and eliminate false
+# positives. miri cannot execute FFI or most syscalls, so we scope to the
+# crate(s) that contain pure-Rust unsafe code. Pass extra crate names as args
+# to widen the scope, e.g. `./scripts/check.sh miri vtcode-skills`.
 run_miri() {
-    print_status "Running Miri (detecting Undefined Behavior/aliasing issues)..."
-    print_warning "Miri can be slow as it interprets the code. Running a subset by default."
-    if cargo miri test --locked; then
-        print_success "Miri found no Undefined Behavior!"
+    print_status "Running Miri (Tree Borrows aliasing model, detecting UB/aliasing issues)..."
+    print_warning "Miri interprets code and is slow. Scoped to pure-Rust unsafe by default."
+    print_warning "Requires the miri component: 'rustup component add miri' (or 'rustup +nightly component add miri' if the stable toolchain rejects -Z flags)."
+
+    # Tree Borrows avoids the false positives of the older Stacked Borrows
+    # model; disable-isolation lets env/fs-touching tests run under miri.
+    #
+    # Default to the crate(s) with pure-Rust unsafe (miri cannot run FFI/syscalls).
+    # Extra args widen the scope, e.g. `./scripts/check.sh miri vtcode-skills`.
+    # Use one `-p` per crate: `cargo test -p a b` treats `b` as a test-name filter.
+    local -a crates=("$@")
+    if [ "${#crates[@]}" -eq 0 ]; then
+        crates=("vtcode-commons")
+    fi
+    local -a pkg_args=()
+    local c
+    for c in "${crates[@]}"; do
+        pkg_args+=(-p "$c")
+    done
+
+    if MIRIFLAGS="-Zmiri-tree-borrows -Zmiri-disable-isolation" cargo miri test --locked "${pkg_args[@]}"; then
+        print_success "Miri found no Undefined Behavior (Tree Borrows)!"
         return 0
     else
-        print_error "Miri detected issues! Check output for Stacked Borrows/aliasing violations."
+        print_error "Miri detected issues! Check output for Tree Borrows/aliasing violations."
         return 1
     fi
 }
@@ -356,7 +380,7 @@ case "${1:-}" in
         echo "  legibility - Run agent legibility hotspot checks"
         echo "  workflow-security - Validate GitHub workflow trigger/action security policy"
         echo "  zen     - Run Zen governance checks (warn mode)"
-        echo "  miri    - Run Miri to detect Undefined Behavior (slow)"
+        echo "  miri    - Run Miri (Tree Borrows) to detect Undefined Behavior (slow; scoped to pure-Rust unsafe)"
         echo "  help    - Show this help message"
         echo ""
         echo "If no command is specified, runs all checks."
