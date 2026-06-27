@@ -546,7 +546,7 @@ fn chatgpt_auth_backend_setup_keeps_compatibility_auth_behind_boundary() {
 }
 
 #[test]
-fn chatgpt_auth_backend_setup_applies_account_and_session_headers() {
+fn chatgpt_auth_backend_setup_applies_account_headers_without_session_id() {
     let setup = OpenAIBackendSetup::from_chatgpt_subscription_config(None);
     let auth = setup.request_auth_from_session(OpenAIChatGptSession {
         openai_api_key: "exchanged-api-key".to_string(),
@@ -602,6 +602,10 @@ fn chatgpt_auth_backend_setup_applies_account_and_session_headers() {
             .get("originator")
             .and_then(|v| v.to_str().ok()),
         Some("codex_cli_rs")
+    );
+    assert!(
+        request.headers().get("session_id").is_none(),
+        "ChatGPT subscription auth must not forward VT_SESSION_ID or any other conversation/session identifier"
     );
 }
 
@@ -1014,6 +1018,7 @@ async fn chatgpt_responses_stream_accepts_empty_final_output_after_text_delta() 
                 "account": req.headers.get("chatgpt-account-id").and_then(|v| v.to_str().ok()),
                 "originator": req.headers.get("originator").and_then(|v| v.to_str().ok()),
                 "beta": req.headers.get("openai-beta").and_then(|v| v.to_str().ok()),
+                "has_session_id": req.headers.contains_key("session_id"),
             }));
             ResponseTemplate::new(200)
                 .insert_header("content-type", "text/event-stream")
@@ -1083,6 +1088,11 @@ async fn chatgpt_responses_stream_accepts_empty_final_output_after_text_delta() 
     assert_eq!(
         payload.get("beta").and_then(Value::as_str),
         Some("responses=v1")
+    );
+    assert_eq!(
+        payload.get("has_session_id").and_then(Value::as_bool),
+        Some(false),
+        "ChatGPT Responses requests must not include a session_id header"
     );
     let payload = payload.get("body").expect("body captured");
     assert_eq!(payload.get("store").and_then(Value::as_bool), Some(false));
