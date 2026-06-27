@@ -4,12 +4,13 @@ use crate::config::core::{AnthropicConfig, ModelConfig, PromptCachingConfig};
 use crate::config::models::model_catalog_entry;
 use crate::llm::client::LLMClient;
 use crate::llm::provider::{LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream};
+use crate::llm::vtcode_llm_provider_adapter::VtcodeLlmProviderAdapter;
 use async_trait::async_trait;
 use reqwest::Client as HttpClient;
 
 use super::common::{override_base_url, resolve_model};
 use super::opencode_shared::OpenCodeCompatibleProvider;
-use super::{AnthropicProvider, OpenAIProvider};
+use super::AnthropicProvider;
 
 const PROVIDER_NAME: &str = "OpenCode Zen";
 const PROVIDER_KEY: &str = "opencode-zen";
@@ -135,13 +136,15 @@ impl OpenCodeZenProvider {
     fn delegate_for_model(&self, model: &str) -> Box<dyn LLMProvider> {
         let requested = self.requested_model(model).to_string();
         match Self::protocol_for_model(requested.as_str()) {
-            ZenProtocol::OpenAI => Box::new(OpenAIProvider::new_with_client(
-                self.api_key.clone(),
-                None,
-                requested,
-                self.http_client.clone(),
-                self.base_url.clone(),
-                TimeoutsConfig::default(),
+            ZenProtocol::OpenAI => Box::new(VtcodeLlmProviderAdapter::new(
+                vtcode_llm::providers::OpenAIProvider::new_with_client(
+                    self.api_key.clone(),
+                    None,
+                    requested,
+                    self.http_client.clone(),
+                    self.base_url.clone(),
+                    TimeoutsConfig::default(),
+                ),
             )),
             ZenProtocol::Anthropic => Box::new(AnthropicProvider::new_with_client(
                 self.api_key.clone(),

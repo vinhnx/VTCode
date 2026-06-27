@@ -795,23 +795,22 @@ fn openai_and_chatgpt_replay_structured_history_on_continuation_turns() {
         assert_absent(&payload, "previous_response_id");
         let input = get_input_array(&payload);
         assert!(
-            input
-                .iter()
-                .any(|item| item.get("role").and_then(Value::as_str) == Some("user")
-                    && item.to_string().contains("Inspect the workspace.")),
+            input.iter().any(
+                |item| item.get("role").and_then(Value::as_str) == Some("user")
+                    && item.to_string().contains("Inspect the workspace.")
+            ),
             "continuation replay must keep the first user turn, not only the suffix"
         );
         assert!(
-            input
-                .iter()
-                .any(|item| item.get("role").and_then(Value::as_str) == Some("user")
-                    && item.to_string().contains("Continue with the next step.")),
+            input.iter().any(
+                |item| item.get("role").and_then(Value::as_str) == Some("user")
+                    && item.to_string().contains("Continue with the next step.")
+            ),
             "continuation replay must keep the latest user turn"
         );
         assert!(input.iter().any(|item| {
             item.get("type").and_then(Value::as_str) == Some("reasoning")
-                && item.get("encrypted_content").and_then(Value::as_str)
-                    == Some("opaque_reasoning")
+                && item.get("encrypted_content").and_then(Value::as_str) == Some("opaque_reasoning")
         }));
         assert!(input.iter().any(|item| {
             item.get("type").and_then(Value::as_str) == Some("function_call")
@@ -1930,17 +1929,15 @@ fn responses_payload_omits_previous_response_and_includes_optional_fields() {
 }
 
 #[test]
-fn compatible_responses_payload_includes_previous_response_id() {
+fn compatible_responses_payload_omits_previous_response_id() {
     let provider = compatible_endpoint_provider(models::openai::GPT_5, "https://compat.example/v1");
     let mut request = sample_request(models::openai::GPT_5);
     request.previous_response_id = Some("resp_previous_123".to_string());
     let payload = provider
         .convert_to_openai_responses_format(&request)
         .expect("conversion should succeed");
-    assert_eq!(
-        payload.get("previous_response_id").and_then(Value::as_str),
-        Some("resp_previous_123")
-    );
+    assert_absent(&payload, "previous_response_id");
+    assert_eq!(payload.get("store").and_then(Value::as_bool), Some(false));
 }
 
 #[test]

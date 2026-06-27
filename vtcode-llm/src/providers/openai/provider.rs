@@ -760,13 +760,8 @@ impl OpenAIProvider {
         } else {
             None
         };
-        let is_chatgpt_backend = self.is_chatgpt_backend();
         let backend_defaults = self.backend_setup.responses_defaults();
-        let supports_responses_continuation = !is_chatgpt_backend
-            && !matches!(
-                self.responses_api_state(&request.model),
-                ResponsesApiState::Disabled
-            );
+        let is_chatgpt_backend = self.is_chatgpt_backend();
         let ctx = request_builder::ResponsesRequestContext {
             supports_tools: self.supports_tools(&request.model),
             supports_allowed_tools: self.supports_responses_allowed_tools(&request.model),
@@ -776,10 +771,10 @@ impl OpenAIProvider {
             supports_reasoning: self.supports_reasoning(&request.model),
             is_responses_api_model: Self::is_responses_api_model(&request.model),
             include_max_output_tokens: is_native_openai,
-            include_previous_response_id: supports_responses_continuation,
+            include_previous_response_id: false,
             include_output_types: backend_defaults.include_output_types,
             include_sampling_parameters: backend_defaults.include_sampling_parameters,
-            force_response_store_false: backend_defaults.force_store_false,
+            force_response_store_false: true,
             include_assistant_phase: is_native_openai,
             prompt_cache_key,
             include_prompt_cache_retention: backend_defaults.include_prompt_cache_retention,

@@ -49,6 +49,10 @@ pub fn prepare_responses_continuation_request<'a>(
     messages: &'a [Message],
     continuation: Option<&ResponsesContinuationState>,
 ) -> PreparedResponsesRequest<'a> {
+    if provider_name.eq_ignore_ascii_case("openai") {
+        return prepare_openai_responses_request(messages, continuation);
+    }
+
     if !supports_responses_chaining(provider_name, provider_supports_responses_compaction) {
         return PreparedResponsesRequest {
             messages: Cow::Borrowed(messages),
@@ -65,10 +69,21 @@ pub fn prepare_responses_continuation_request<'a>(
         };
     }
 
-    prepare_openai_responses_request(messages, continuation)
+    prepare_incremental_responses_request(messages, continuation)
 }
 
 pub fn prepare_openai_responses_request<'a>(
+    messages: &'a [Message],
+    _continuation: Option<&ResponsesContinuationState>,
+) -> PreparedResponsesRequest<'a> {
+    PreparedResponsesRequest {
+        messages: Cow::Borrowed(messages),
+        previous_response_id: None,
+        clear_stale_chain: false,
+    }
+}
+
+fn prepare_incremental_responses_request<'a>(
     messages: &'a [Message],
     continuation: Option<&ResponsesContinuationState>,
 ) -> PreparedResponsesRequest<'a> {

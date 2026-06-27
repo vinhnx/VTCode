@@ -22,10 +22,11 @@ use super::provider_config::{
 use super::providers::{
     AnthropicProvider, CopilotProvider, DeepSeekProvider, EvolinkProvider, GeminiProvider,
     HuggingFaceProvider, LlamaCppProvider, LmStudioProvider, MiMoProvider, MinimaxProvider,
-    MistralProvider, MoonshotProvider, OllamaProvider, OpenAIProvider, OpenCodeGoProvider,
-    OpenCodeZenProvider, OpenResponsesProvider, OpenRouterProvider, PoolsideProvider, QwenProvider,
-    StepFunProvider, ZAIProvider,
+    MistralProvider, MoonshotProvider, OllamaProvider, OpenCodeGoProvider, OpenCodeZenProvider,
+    OpenResponsesProvider, OpenRouterProvider, PoolsideProvider, QwenProvider, StepFunProvider,
+    ZAIProvider,
 };
+use super::vtcode_llm_provider_adapter::VtcodeLlmProviderAdapter;
 use vtcode_commons::cgp::{ComponentProvider, HasComponent};
 use vtcode_config::TimeoutsConfig;
 use vtcode_config::core::{AnthropicConfig, ModelConfig, PromptCachingConfig};
@@ -193,16 +194,18 @@ impl ProviderBuildProvider<OpenAIProviderConfig> for OpenAIProviderBuild {
             ..
         } = config;
 
-        Box::new(OpenAIProvider::from_config(
-            api_key,
-            openai_chatgpt_auth,
-            model,
-            base_url,
-            prompt_cache,
-            timeouts,
-            anthropic,
-            openai,
-            model_behavior,
+        Box::new(VtcodeLlmProviderAdapter::new(
+            vtcode_llm::providers::OpenAIProvider::from_config(
+                api_key,
+                openai_chatgpt_auth,
+                model,
+                base_url,
+                prompt_cache,
+                timeouts,
+                anthropic,
+                openai,
+                model_behavior,
+            ),
         ))
     }
 }
