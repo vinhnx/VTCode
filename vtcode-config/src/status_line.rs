@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", schemars(rename_all = "lowercase"))]
+#[serde(rename_all = "lowercase")]
 #[derive(Default)]
 pub enum StatusLineMode {
     /// Automatic status line: displays git branch, model name, and context remaining (default)
@@ -76,4 +78,39 @@ fn default_status_line_refresh_interval_ms() -> u64 {
 
 fn default_status_line_command_timeout_ms() -> u64 {
     crate::constants::ui::STATUS_LINE_COMMAND_TIMEOUT_MS
+}
+
+#[cfg(test)]
+mod tests {
+    use super::StatusLineMode;
+
+    #[derive(Debug, serde::Deserialize)]
+    struct Wrapper {
+        mode: StatusLineMode,
+    }
+
+    #[test]
+    fn deserializes_lowercase_status_line_mode() {
+        for (input, expected) in [
+            ("\"auto\"", StatusLineMode::Auto),
+            ("\"command\"", StatusLineMode::Command),
+            ("\"hidden\"", StatusLineMode::Hidden),
+        ] {
+            let parsed: Wrapper = toml::from_str(&format!("mode = {input}"))
+                .expect("lowercase status line mode must parse");
+            assert_eq!(parsed.mode, expected, "input {input}");
+        }
+    }
+
+    #[test]
+    fn serializes_lowercase_status_line_mode() {
+        for (mode, expected) in [
+            (StatusLineMode::Auto, "\"auto\""),
+            (StatusLineMode::Command, "\"command\""),
+            (StatusLineMode::Hidden, "\"hidden\""),
+        ] {
+            let serialized = serde_json::to_string(&mode).expect("serialize");
+            assert_eq!(serialized, expected);
+        }
+    }
 }

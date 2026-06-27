@@ -386,7 +386,7 @@ allow_tool_ansi = false
 inline_viewport_rows = 16
 
 [ui.status_line]
-mode = "Auto"
+mode = "auto"
 refresh_interval_ms = 1000
 command_timeout_ms = 200
 
