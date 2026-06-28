@@ -4,6 +4,8 @@ use std::fmt::Write as _;
 use std::str::FromStr;
 use std::sync::Arc;
 
+use dirs::home_dir;
+
 use vtcode_core::config::{
     OpenAIPromptCacheKeyMode, PromptCachingConfig, build_openai_prompt_cache_key,
 };
@@ -21,8 +23,9 @@ use vtcode_core::permissions::{
     build_advertised_permission_requests, evaluate_effective_permissions,
 };
 use vtcode_core::prompts::{
-    PromptContext, append_runtime_tool_prompt_sections, temporal::generate_temporal_context,
-    upsert_harness_limits_section,
+    DEFAULT_FEW_SHOT_BUDGET_TOKENS, FewShotStore, PromptContext,
+    append_runtime_tool_prompt_sections, render_few_shot_section,
+    temporal::generate_temporal_context, upsert_harness_limits_section,
 };
 use vtcode_core::subagents::load_primary_memory_appendix;
 use vtcode_core::tools::handlers::anthropic_native_memory_enabled_for_runtime;
@@ -106,6 +109,37 @@ pub(super) struct TurnRequestBuildResult {
 
 fn uses_out_of_band_copilot_tools(provider_name: &str) -> bool {
     provider_name.eq_ignore_ascii_case(vtcode_core::copilot::COPILOT_PROVIDER_KEY)
+}
+
+/// Build the few-shot section for the current turn.
+///
+/// Returns `None` when no examples match or when selection is skipped
+/// (no query available, empty store). The selection uses keyword-tag
+/// overlap with the most recent user message and is bounded by
+/// [`DEFAULT_FEW_SHOT_BUDGET_TOKENS`].
+fn build_few_shot_section(ctx: &mut TurnProcessingContext<'_>) -> Option<String> {
+    let query = latest_user_query(ctx.working_history.as_slice())?;
+    let store = FewShotStore::load(Some(ctx.config.workspace.as_path()), home_dir().as_deref());
+    if store.is_empty() {
+        return None;
+    }
+    let chosen = store.select(&query, DEFAULT_FEW_SHOT_BUDGET_TOKENS);
+    if chosen.is_empty() {
+        return None;
+    }
+    Some(render_few_shot_section(&chosen))
+}
+
+/// Return the text of the most recent user message in `history`. Used as
+/// the query for few-shot selection. Returns `None` when no user message
+/// is present (e.g., empty / tool-only history).
+fn latest_user_query(history: &[uni::Message]) -> Option<String> {
+    history
+        .iter()
+        .rev()
+        .find(|message| matches!(message.role, uni::MessageRole::User))
+        .map(|message| message.content.as_text().into_owned())
+        .filter(|text: &String| !text.trim().is_empty())
 }
 
 fn append_copilot_runtime_guidance(system_prompt: &mut String) {
@@ -265,6 +299,16 @@ async fn build_prompt_output(
 
     if tool_snapshot.has_tools() && uses_out_of_band_copilot_tools(&input.turn.provider_name) {
         append_copilot_runtime_guidance(&mut system_prompt);
+    }
+
+    // Section 18.3.3 of the agentic-AI guide: inject at most
+    // DEFAULT_FEW_SHOT_BUDGET_TOKENS of relevant few-shot examples selected
+    // from `.vtcode/prompts/examples/`. Skip in recovery mode (the model is
+    // in "summarize only" mode and adding examples would distract).
+    if !input.turn.tool_free_recovery
+        && let Some(section) = build_few_shot_section(ctx)
+    {
+        let _ = writeln!(system_prompt, "\n{section}");
     }
 
     Ok(PromptAssemblyOutput {

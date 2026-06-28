@@ -744,6 +744,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: Overview, Module Structure, Usage Examples, Process Group Management, Security Features
   - **User Questions**: "What can you tell me about PTY and Pipe Infrastructure?", "How does Overview work?", "How does Module Structure work?"
 
+- **File**: `docs/harness/prompt-architecture.md`
+  - **Content**: Prompt Architecture
+  - **Topics**: Assembly order, Few-shot management (Section 18.3.3), Tool description contract (Section 18.3.4)
+  - **User Questions**: "What can you tell me about Prompt Architecture?", "How does Assembly order work?", "How does Few-shot management (Section 18.3.3) work?"
+
 - **File**: `docs/harness/QUALITY_SCORE.md`
   - **Content**: Quality Score
   - **Topics**: Snapshot, Dimensions, Scoring Method, LLM System, Tool System

@@ -127,7 +127,7 @@ fn register_cron_create(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegi
         ToolRegistry::cron_create_executor,
     )
     .with_description(
-        "Create a session-scoped scheduled prompt using a cron expression, fixed interval, or one-shot fire time.",
+        "Create a session-scoped scheduled prompt using a cron expression, fixed interval, or one-shot fire time. Use cron_create to defer work, schedule recurring checks, or fire a one-shot reminder. Do NOT schedule per-minute jobs — they exhaust the per-turn tool budget and will be rate-limited. Scheduled prompts are session-scoped; jobs die when the vtcode process exits.",
     )
     .with_parameter_schema(cron_create_parameters())
     .with_aliases(["schedule_task", "loop_create"])
@@ -219,6 +219,9 @@ fn register_task_tracker(plan_state: Option<&PlanningWorkflowState>) -> ToolRegi
             factory_state.clone(),
         )
     }))
+    .with_description(
+        "Track task progress through a single checklist API (action: create | update | list | add). Use task_tracker with action=create at the start of a multi-step plan; use action=update as work progresses; use action=list to review current state. Do NOT call action=create twice — subsequent calls update the existing checklist. Tracker state mirrors between `.vtcode/tasks/current_task.md` and active plan sidecar files when available.",
+    )
     .with_aliases(["plan_manager", "track_tasks", "checklist"])
 }
 
@@ -251,7 +254,9 @@ fn register_spawn_background_subprocess(
         false,
         ToolRegistry::spawn_background_subprocess_executor,
     )
-    .with_description("Launch a managed background subprocess that outlives the current turn.")
+    .with_description(
+        "Launch a managed background subprocess that outlives the current turn. Use this for long-running daemons (file watchers, dev servers, indexers) where you need to return control to the model immediately. Do NOT use this for one-shot shell commands — use unified_exec with action=run instead. Background subprocesses are session-scoped; they die with the vtcode process.",
+    )
     .with_parameter_schema(spawn_background_subprocess_parameters())
     .with_aliases(["background_subagent", "launch_background_helper"])
 }
@@ -264,7 +269,9 @@ fn register_send_input(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegis
         false,
         ToolRegistry::send_input_executor,
     )
-    .with_description("Send follow-up input to an existing child agent.")
+    .with_description(
+        "Send follow-up input to an existing child agent. Use to continue a delegated task with new context or direction. Do NOT use this to ask the model a one-off question — answer inline instead. Requires an existing agent_id from a prior spawn_agent call.",
+    )
     .with_parameter_schema(send_input_parameters())
     .with_aliases(["message_agent", "continue_agent"])
 }
@@ -277,7 +284,9 @@ fn register_wait_agent(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegis
         false,
         ToolRegistry::wait_agent_executor,
     )
-    .with_description("Wait for child agents to reach a terminal state.")
+    .with_description(
+        "Wait for child agents to reach a terminal state. Use this when you spawned an agent and need its result before continuing. Do NOT call wait_agent with an empty ids array — provide at least one agent id from a prior spawn_agent call. Default timeout 300s; pass timeout_ms to extend for long-running delegated tasks.",
+    )
     .with_parameter_schema(wait_agent_parameters())
     .with_aliases(["wait_subagent"])
 }
@@ -291,7 +300,7 @@ fn register_resume_agent(_plan_state: Option<&PlanningWorkflowState>) -> ToolReg
         ToolRegistry::resume_agent_executor,
     )
     .with_description(
-        "Resume a previously completed or closed child agent subtree from its saved context.",
+        "Resume a previously completed or closed child agent subtree from its saved context. Use this to continue work in a delegated agent after it has closed. Do NOT call resume_agent on a still-running child — use send_input instead. Resume is session-scoped: agents cannot be resumed across separate vtcode sessions.",
     )
     .with_parameter_schema(resume_agent_parameters())
     .with_aliases(["resume_subagent"])
@@ -306,7 +315,7 @@ fn register_close_agent(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegi
         ToolRegistry::close_agent_executor,
     )
     .with_description(
-        "Close a child agent subtree, cancelling any active work and marking the thread closed.",
+        "Close a child agent subtree, cancelling any active work and marking the thread closed. Use this when you are done with a delegated agent and want to free its tool budget. Do NOT close an agent you still need results from — call wait_agent first. Closed subtrees cannot be queried; resume_agent is required to bring one back.",
     )
     .with_parameter_schema(close_agent_parameters())
     .with_aliases(["close_subagent"])
@@ -325,7 +334,7 @@ fn register_unified_search(_plan_state: Option<&PlanningWorkflowState>) -> ToolR
         ToolRegistry::unified_search_executor,
     )
     .with_description(
-        "Search & discovery: grep, list, structural (ast-grep), tools, errors, web, skills. Use action=list for files. For web: action=web with 'query' searches the web, or with 'url' fetches a page.",
+        "Search and discovery: grep text, list files, structural (ast-grep), list available tools, list errors, web search/fetch, list skills. Use action=list to enumerate files; action=grep to search for a regex pattern across files; action=structural for AST-shaped code queries; action=web with a 'query' for web search; action=web with a 'url' to fetch a page. Do NOT use action=list to read file contents — use action=read via unified_file or read_file instead. Result lists are capped by the tool's max_results parameter; pass a higher limit only when you genuinely need more hits.",
     )
     .with_parameter_schema(unified_search_parameters())
     .with_permission(ToolPolicy::Allow)
@@ -516,7 +525,9 @@ fn register_mcp_connect_server(_plan_state: Option<&PlanningWorkflowState>) -> T
         false,
         ToolRegistry::mcp_connect_server_executor,
     )
-    .with_description("Connect one configured MCP server by name.")
+    .with_description(
+        "Connect one configured MCP server by name. Use this when an MCP tool is referenced but the server has not been initialized yet. Do NOT call connect_server unless the server's tools are needed — the connection has overhead. Requires user confirmation via the permissions system (ToolPolicy::Prompt).",
+    )
     .with_parameter_schema(mcp_server_name_parameters())
     .with_permission(ToolPolicy::Prompt)
 }
@@ -529,7 +540,9 @@ fn register_mcp_disconnect_server(_plan_state: Option<&PlanningWorkflowState>) -
         false,
         ToolRegistry::mcp_disconnect_server_executor,
     )
-    .with_description("Disconnect one active MCP server by name.")
+    .with_description(
+        "Disconnect one active MCP server by name. Use this to free resources or reset a misbehaving MCP connection. Do NOT disconnect servers mid-task — any in-flight tool calls from that server will fail. Requires user confirmation via the permissions system (ToolPolicy::Prompt).",
+    )
     .with_parameter_schema(mcp_server_name_parameters())
     .with_permission(ToolPolicy::Prompt)
 }
@@ -547,7 +560,7 @@ fn register_unified_exec(_plan_state: Option<&PlanningWorkflowState>) -> ToolReg
         ToolRegistry::unified_exec_executor,
     )
     .with_description(
-        "Shell & code execution. Actions: run, write, poll, continue, inspect, list, close, code.",
+        "Shell & code execution. Actions: run, write, poll, continue, inspect, list, close, code. Use action=run for one-shot commands; action=write + action=poll for interactive shells that outlive a single call. Do NOT use action=write without a follow-up poll/close — the session leaks. Default timeout is 180s; pass timeout explicitly for long-running commands (max 1800s). All shell calls run through the active sandbox policy; requires ToolPolicy::Prompt confirmation.",
     )
     .with_parameter_schema(unified_exec_parameters())
     .with_aliases([
@@ -574,7 +587,7 @@ fn register_unified_file(_plan_state: Option<&PlanningWorkflowState>) -> ToolReg
         ToolRegistry::unified_file_executor,
     )
     .with_description(
-        "File ops: read, write, edit, patch, delete, move, copy. Edit: exact old_str, max 800 chars/40 lines per side. For larger edits use patch.",
+        "Read, write, edit, patch, delete, move, or copy a single file. Use action=read to load file contents (with optional range); action=edit for surgical replacements (exact old_str, max 800 chars/40 lines per side); action=patch for larger or multi-hunk changes; action=write for new files or full replacement; action=delete to remove a file. Do NOT mix action=edit with action=patch in the same call. Requires ToolPolicy::Prompt confirmation for write/edit/patch/delete/move/copy actions.",
     )
     .with_parameter_schema(unified_file_parameters())
     .with_aliases([
@@ -988,5 +1001,166 @@ mod tests {
         assert!(description.contains("abc.com"));
         assert!(description.contains("https://abc.com/llms.txt"));
         assert!(description.contains("traverse"));
+    }
+
+    /// Tool descriptions are part of the prompt and directly drive tool
+    /// selection accuracy (Section 18.3.4 of the agentic-AI guide). This test
+    /// enforces a structural contract so that regressions in description
+    /// quality are caught at `cargo test` time rather than via observed
+    /// agent misbehavior.
+    ///
+    /// Every LLM-visible tool with a description must satisfy:
+    /// 1. Length is between 40 and 1200 characters.
+    /// 2. Contains at least one verb cue ("Use", "Create", "List", "Fetch",
+    ///    "Search", "Send", "Apply", "Read", "Edit", etc.) so the model can
+    ///    recognize the action the tool performs.
+    /// 3. For tools that mutate state, network-call, schedule work, or
+    ///    require confirmation, the description must contain either an
+    ///    anti-pattern cue ("Do NOT", "Avoid", "sparely", "Don't", etc.) OR
+    ///    a constraint cue ("max", "rate-limit", "session", "Prompt",
+    ///    "blocks", "timeout", etc.) so the model knows the limits and side
+    ///    effects.
+    ///
+    /// Tools exempted from rule 3 are simple read-only helpers where the
+    /// model can safely call them without explicit guard-rails.
+    #[test]
+    fn tool_descriptions_satisfy_documented_contract() {
+        let plan_state = PlanningWorkflowState::new(PathBuf::from("/workspace"));
+        let registrations = builtin_tool_registrations(Some(&plan_state));
+
+        let verb_cues = [
+            "Use ",
+            "Create ",
+            "List ",
+            "Fetch ",
+            "Search ",
+            "Send ",
+            "Apply ",
+            "Read ",
+            "Write ",
+            "Edit ",
+            "Patch ",
+            "Delete ",
+            "Move ",
+            "Copy ",
+            "Spawn ",
+            "Launch ",
+            "Close ",
+            "Resume ",
+            "Wait ",
+            "Connect ",
+            "Disconnect ",
+            "Schedule ",
+            "Inspect ",
+            "Persist ",
+            "Request ",
+            "Open ",
+            "Stop ",
+            "Run ",
+            "Track ",
+            "Update ",
+        ];
+        let anti_pattern_cues = [
+            "Do NOT",
+            "Do not",
+            "Don't",
+            "Avoid ",
+            "sparely",
+            "spareingly",
+            "must not",
+            "must only",
+            "never",
+            "refuse",
+            "Refuse ",
+            "Limit use",
+            "limit use",
+            "no need",
+            "Do not call",
+            "do not call",
+            "not for",
+            "not to be used",
+        ];
+        let constraint_cues = [
+            "max ",
+            "rate-limit",
+            "rate limit",
+            "session",
+            "Prompt",
+            "blocks",
+            "timeout",
+            "cap ",
+            "outlives",
+            "inherits",
+            "expires",
+            "Limited",
+            "limited to",
+            "max_bytes",
+            "max_results",
+            "max_lines",
+            "max chars",
+            "max size",
+            "Once per",
+            "once per",
+            "requires ",
+            "Permission",
+            "permission",
+            "approval",
+            "Prompt ",
+            "spareingly",
+            "exceeds",
+            "EXCLUSIVE",
+            "scoped",
+        ];
+        // Read-only / single-action helpers where explicit anti-pattern and
+        // constraint cues are not strictly required.
+        let rule3_allowlist: &[&str] = &[
+            tools::REQUEST_USER_INPUT,
+            tools::CRON_LIST,
+            tools::CRON_DELETE,
+            tools::MCP_LIST_SERVERS,
+            tools::MCP_GET_TOOL_DETAILS,
+            tools::MCP_SEARCH_TOOLS,
+            tools::TASK_TRACKER,
+            tools::FINISH_PLANNING,
+            tools::START_PLANNING,
+        ];
+
+        for registration in &registrations {
+            if !registration.expose_in_llm() {
+                continue;
+            }
+            let Some(description) = registration.metadata().description() else {
+                continue;
+            };
+            let tool_name = registration.name();
+
+            // Rule 1: length.
+            let len = description.chars().count();
+            assert!(
+                (40..=1500).contains(&len),
+                "{tool_name}: description length {len} outside [40, 1500]"
+            );
+
+            // Rule 2: verb cue (case-sensitive "Use " is the most common).
+            let has_verb = verb_cues.iter().any(|cue| description.contains(cue));
+            assert!(
+                has_verb,
+                "{tool_name}: description must contain a verb cue like 'Use ', 'Create ', 'Fetch ', etc.\nDescription: {description}"
+            );
+
+            // Rule 3: anti-pattern OR constraint cue for side-effect tools.
+            if rule3_allowlist.contains(&tool_name) {
+                continue;
+            }
+            let has_anti = anti_pattern_cues
+                .iter()
+                .any(|cue| description.contains(cue));
+            let has_constraint = constraint_cues.iter().any(|cue| description.contains(cue));
+            assert!(
+                has_anti || has_constraint,
+                "{tool_name}: side-effect description must contain an anti-pattern cue ('Do NOT', 'Avoid ', 'sparely', ...) \
+                 OR a constraint cue ('max ', 'rate-limit', 'session', 'Prompt', 'timeout', 'inherits', ...).\nDescription: {description}"
+            );
+        }
     }
 }

@@ -1409,7 +1409,7 @@ impl Tool for FinishPlanningTool {
     }
 
     fn description(&self) -> &str {
-        "Exit Planning workflow. Plan content shown to user for approval."
+        "Exit the Planning workflow and present the captured plan to the user for approval. Use finish_planning when the plan is complete enough to commit to, or when the user explicitly asks to leave planning mode. Do NOT call finish_planning with an empty plan — the harness requires at least one goal entry."
     }
 
     fn parameter_schema(&self) -> Option<Value> {

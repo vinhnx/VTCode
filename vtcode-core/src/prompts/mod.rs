@@ -6,6 +6,7 @@
 pub mod cache_aware;
 pub mod config;
 pub mod context;
+pub mod few_shot;
 pub mod guidelines;
 pub mod harness_limits;
 pub mod output_styles;
@@ -21,6 +22,9 @@ pub mod temporal;
 pub use cache_aware::sort_tool_definitions;
 pub use config::SystemPromptConfig;
 pub use context::PromptContext;
+pub use few_shot::{
+    DEFAULT_FEW_SHOT_BUDGET_TOKENS, FewShotExample, FewShotStore, render_few_shot_section,
+};
 pub use guidelines::{
     append_runtime_tool_prompt_sections, generate_tool_guidelines, infer_capability_level,
 };
