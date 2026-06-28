@@ -8,6 +8,23 @@ agent runtime. Downstream applications can deserialize these structures
 to drive dashboards, logging, or auditing pipelines without depending on
 the full `vtcode-core` crate.
 
+<!-- cargo-rdme start -->
+
+Structured execution telemetry events shared across VT Code crates.
+
+This crate exposes the serialized schema for thread lifecycle updates,
+command execution results, and other timeline artifacts emitted by the
+automation runtime. Downstream applications can deserialize these
+structures to drive dashboards, logging, or auditing pipelines without
+depending on the full `vtcode-core` crate.
+
+### Agent Trace Support
+
+This crate implements the [Agent Trace](https://agent-trace.dev/) specification
+for tracking AI-generated code attribution. See the `trace` module for details.
+
+<!-- cargo-rdme end -->
+
 ## Modules
 
 | Module | Purpose |

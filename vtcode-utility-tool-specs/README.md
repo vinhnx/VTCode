@@ -6,6 +6,12 @@ This crate provides ready-made `serde_json::Value` parameter schemas for the
 built-in tool surfaces (apply-patch, cron, file I/O, exec, search, and collaboration/HITL tools)
 so that callers never have to hand-roll JSON Schema objects.
 
+<!-- cargo-rdme start -->
+
+Passive JSON schemas for utility, file, scheduling, and collaboration tool surfaces.
+
+<!-- cargo-rdme end -->
+
 ## Usage
 
 ```rust

@@ -5,6 +5,15 @@ Skill types, discovery, loading, and validation for VT Code.
 Provides the core skill system including skill manifests, validation, bundling,
 template rendering, and native plugin support.
 
+<!-- cargo-rdme start -->
+
+### vtcode-skills - Skill Types, Discovery, and Validation
+
+Provides the core skill system for VT Code including skill manifests,
+validation, bundling, template rendering, and native plugin support.
+
+<!-- cargo-rdme end -->
+
 ## Modules
 
 | Module | Purpose |

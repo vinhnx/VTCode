@@ -9,6 +9,12 @@ It contains:
 - PKCE challenge generation for secure OAuth exchanges
 - Credential storage backed by the OS keyring and on-disk fallback
 
+<!-- cargo-rdme start -->
+
+Shared authentication and OAuth flows for VT Code.
+
+<!-- cargo-rdme end -->
+
 ## Usage
 
 Add the dependency to your `Cargo.toml`:

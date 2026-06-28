@@ -1,0 +1,34 @@
+# Override the README file path. When this is not set cargo rdme will use the file path defined
+# in the project's `Cargo.toml`.
+# readme-path = "MY-README.md"
+
+# What line terminator to use when generating the README file. This can be "lf" or "crlf".
+line-terminator = "lf"
+
+# Defines the base heading level to use when inserting the crate's documentation in the
+# README. If this is not set the crate's documentation will be inserted with its sections
+# belonging to the README section where the insertion happens.
+heading-base-level = 2
+
+# The default entrypoint will be `src/lib.rs`. You can change that in the `entrypoint` table.
+# [entrypoint]
+# The entrypoint type can be "lib" or "bin".
+# type = "bin"
+# When you set type to "bin" the entrypoint default to `src/main.rs`. If you have binary targets
+# specified in your cargo manifest you can select them by name with `bin-name`.
+# bin-name = "my-bin-name"
+
+[intralinks]
+# Defines the base url to use in intralinks urls. The default value is `https://docs.rs`.
+# docs-rs-base-url = "https://mydocs.rs"
+# Defines the version to use in intralinks urls. The default value is `latest`.
+# docs-rs-version = "1.0.0"
+# If this is set the intralinks will be stripping in the README file.
+strip-links = true
+
+# Enable all features when calling rustdoc to resolve intralinks.
+# all-features = true
+# Features to enable when calling rustdoc to resolve intralinks.
+# features = ["foo", "bar"]
+# Disable default features when calling rustdoc to resolve intralinks.
+# no-default-features = false

@@ -4,6 +4,24 @@ Model Context Protocol (MCP) client, connection pooling, and tool discovery
 for VT Code. Extracted from `vtcode-core` to isolate the MCP subsystem into an
 independently compilable crate.
 
+<!-- cargo-rdme start -->
+
+Model Context Protocol (MCP) client management built on top of the Codex MCP building blocks.
+
+This crate adapts the reference MCP client, server and type
+definitions from <https://github.com/openai/codex> to integrate them
+with VT Code's multi-provider configuration model. The original
+implementation inside this project had grown organically and mixed a
+large amount of bookkeeping logic with the lower level rmcp client
+transport. The rewritten version keeps the VT Code specific surface
+(allow lists, tool indexing, status reporting) but delegates the
+actual protocol interaction to a lightweight `RmcpClient` adapter
+that mirrors Codex' `mcp-client` crate. This dramatically reduces
+the amount of bespoke glue we have to maintain while aligning the
+behaviour with the upstream MCP implementations.
+
+<!-- cargo-rdme end -->
+
 ## Modules
 
 | Module | Purpose |

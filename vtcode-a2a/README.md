@@ -3,6 +3,12 @@
 Agent2Agent (A2A) Protocol support for VT Code. Provides client and server
 implementations for the A2A protocol, enabling inter-agent communication.
 
+<!-- cargo-rdme start -->
+
+Agent2Agent (A2A) Protocol support for VT Code.
+
+<!-- cargo-rdme end -->
+
 ## Modules
 
 | Module | Purpose |

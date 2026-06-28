@@ -23,7 +23,7 @@ default) to scaffold configuration directories with project-specific defaults.
 | `debug` | Debug and trace configuration |
 | `hooks` | Lifecycle hook configuration |
 | `ide_context` | IDE context provider configuration |
-| `mcp` | MCP server and client configuration |
+| `mcp` | MCP` | MCP server and client configuration |
 | `models` | Model identifiers and metadata |
 | `optimization` | Performance tuning knobs (caching, pooling, profiling) |
 | `subagents` | Sub-agent discovery and specs |
@@ -58,6 +58,30 @@ fn main() -> anyhow::Result<()> {
 | `bootstrap` | ✓ | Scaffold config directories on first load |
 | `schema` | — | JSON Schema generation via `schemars` |
 
-## API reference
+<!-- cargo-rdme start -->
 
-<https://docs.rs/vtcode-config>
+Shared configuration loader utilities for VT Code and downstream integrations.
+
+This crate exposes `VTCodeConfig` and `ConfigManager` for reading and
+validating `vtcode.toml` files while allowing applications to customize the
+filesystem layout via `ConfigDefaultsProvider`. Consumers can opt into the
+`bootstrap` feature (enabled by default) to scaffold
+configuration directories with project-specific defaults.
+Disable default features when you only need parsing/validation to omit the
+filesystem bootstrap helpers and reduce dependencies.
+
+### Examples
+```rust
+use vtcode_config::ConfigManager;
+
+let manager = ConfigManager::load_from_workspace(".")?;
+println!("Active provider: {}", manager.config().agent.provider);
+```
+
+Install a custom `ConfigDefaultsProvider` with
+`install_config_defaults_provider` when you need to override search paths
+or syntax highlighting defaults exposed by the loader.
+
+<!-- cargo-rdme end -->
+
+## Adding a Model

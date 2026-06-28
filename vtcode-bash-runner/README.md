@@ -7,6 +7,26 @@ the underlying process strategy (system shell, pure-Rust emulation, or dry-run
 logging) while reusing higher-level helpers for workspace-safe filesystem
 manipulation.
 
+<!-- cargo-rdme start -->
+
+Cross-platform command runner modeled after VT Code's original bash
+wrapper. The crate exposes a trait-based executor so downstream
+applications can swap the underlying process strategy (system shell,
+pure-Rust emulation, or dry-run logging) while reusing the higher-level
+helpers for workspace-safe filesystem manipulation.
+
+#### Modules
+
+- `executor` - Command execution strategies (process, dry-run, pure-rust)
+- `runner` - High-level `BashRunner` for workspace-safe operations
+- `background` - Background task management
+- `pipe` - Async pipe-based process spawning with unified handles
+- `process` - Process handle types for PTY and pipe backends
+- `process_group` - Process group management for reliable cleanup
+- `stream` - Stream utilities for reading output
+
+<!-- cargo-rdme end -->
+
 ## Modules
 
 - `executor` – Command execution strategies (process, dry-run, pure-rust)
