@@ -94,7 +94,10 @@ fn render_skills_lean(skills: &[SkillMetadata]) -> String {
     }
 
     if overflow > 0 {
-        let _ = write!(prompt, "\n(+{overflow} more skills available)");
+        let _ = write!(
+            prompt,
+            "\n(+{overflow} more skills available — call `list_skills` to see the full catalog)"
+        );
     }
 
     // Append usage rules (Codex pattern)
@@ -161,7 +164,10 @@ pub fn generate_skills_prompt_xml(skills: &[SkillMetadata]) -> String {
     }
 
     if overflow > 0 {
-        let _ = writeln!(xml, "  <!-- +{overflow} more skills available -->");
+        let _ = writeln!(
+            xml,
+            "  <!-- +{overflow} more skills available; call list_skills to see the full catalog -->"
+        );
     }
 
     xml.push_str("</available_skills>\n");

@@ -12,7 +12,9 @@ pub fn render_skills_section(skills: &[SkillMetadata]) -> Option<String> {
     );
 
     if overflow > 0 {
-        lines.push(format!("(+{overflow} more skills available)"));
+        lines.push(format!(
+            "(+{overflow} more skills available — call `list_skills` to see the full catalog)"
+        ));
     }
 
     lines.push(render_skills_usage_rules().to_string());
@@ -48,7 +50,9 @@ pub fn render_prompt_skills_section(skills: &[SkillMetadata]) -> Option<String> 
     }
 
     if overflow > 0 {
-        lines.push(format!("(+{overflow} more skills available)"));
+        lines.push(format!(
+            "(+{overflow} more skills available — call `list_skills` to see the full catalog)"
+        ));
     }
 
     Some(lines.join("\n"))
@@ -286,7 +290,8 @@ mod tests {
 
         assert!(approx_tokens < 110, "got ~{approx_tokens} tokens");
         assert!(!output.contains("/path/to/skill"));
-        assert!(output.contains("(+3 more skills available)"));
+        assert!(output.contains("(+3 more skills available"));
+        assert!(output.contains("call `list_skills`"));
     }
 
     #[test]
