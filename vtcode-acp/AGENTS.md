@@ -8,7 +8,7 @@
 
 ## Rules
 
-- `AcpClientV2` is the current API. `AcpClient` is deprecated since 0.60.0.
+- `AcpClientV2` is the current API. `AcpClient` is deprecated (legacy since 0.60.x).
 - `StandardAcpAdapter` / `ZedAcpAdapter` in `zed/` bridge protocol to Zed.
 - `register_acp_connection()` is a global `OnceLock` — call once from host protocol.
 - `acp` module in `vtcode-core` is the compatibility facade; canonical code lives here.
@@ -16,4 +16,4 @@
 ## Gotchas
 
 - `PROTOCOL_VERSION` + `SUPPORTED_VERSIONS` control negotiation — update both when protocol changes.
-- `messages/` module types are deprecated — use `jsonrpc/` module instead.
+- `messages.rs` types are deprecated — use `jsonrpc/` module instead.

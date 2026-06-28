@@ -4,7 +4,7 @@
 
 ## Key Modules
 
-`core/agent/` runtime | `llm/` + `models_manager/` providers | `tools/` + `tool_policy.rs` registry | `safety/` + `sandboxing/` + `exec_policy/` + `command_safety/` policies | `config/` + `constants.rs` | `context/` + `memory/` conversation | `prompts/` | `exec/events/` (re-exports `vtcode-exec-events::ThreadEvent`)
+`core/agent/` runtime | `llm/` + `models_manager/` providers | `tools/` + `tool_policy.rs` registry | `safety/` + `sandboxing/` + `exec_policy/` + `command_safety/` policies | `config/` + `constants.rs` | `context/` + `memory/` conversation | `prompts/` | `exec/events.rs` (re-exports `vtcode-exec-events::ThreadEvent`) | `git/` worktree management | `loop_memory.rs` + `loop_state.rs` loop persistence | `tools/web_search/` | `tools/defuddle/` | `tools/outline_search/`
 
 ## Rules
 
@@ -16,7 +16,7 @@
 
 ## Adding a Tool
 
-Implement in `tools/` → register in `tools::registry` → name in `tools::names` → classify in `ToolPolicy` → wire in `core/agent/`.
+Implement in `tools/` (web_search, defuddle, outline_search are reference patterns) → register in `tools::registry` → name in `tools::names` → classify in `ToolPolicy` → wire in `core/agent/`.
 
 ## Adding an LLM Provider
 
