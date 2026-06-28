@@ -61,24 +61,27 @@ fi
 # --- Fast iteration tuning -------------------------------------------------
 # For a local edit->run loop, incremental compilation rebuilds only changed
 # crates and is dramatically faster than a from-scratch cache lookup. sccache
-# requires incremental=false (see Cargo.toml [profile.dev]) and is the source
-# of the "Operation not permitted" failures, so we disable it here and let
-# incremental compilation drive fast rebuilds instead. Override by exporting
-# CARGO_INCREMENTAL=0 / RUSTC_WRAPPER=sccache before invoking this script.
-export CARGO_INCREMENTAL="${CARGO_INCREMENTAL:-1}"
-export RUSTC_WRAPPER="${RUSTC_WRAPPER:-}"
+# requires incremental=false (see Cargo.toml [profile.dev]) and rejects any
+# build with CARGO_INCREMENTAL=1, so we disable sccache here and let rust's
+# incremental cache drive fast rebuilds instead. Use ./scripts/rrf.sh for
+# release builds where sccache's cross-build cache wins.
 
-echo "Starting vtcode chat with advanced features..."
-echo "  - Async file operations enabled for better performance"
-echo "  - Real-time file diffs enabled in chat"
-echo "  - Type your coding questions and requests"
-echo "  - Press Ctrl+C to exit"
-echo "  - The agent has access to file operations and coding tools"
-echo ""
-echo "Tip: Use './scripts/rrf.sh' for fast optimized runs (release-fast profile)"
-echo "      Or add 'alias rrf=\"$(pwd)/scripts/rrf.sh\"' to your shell config for convenience"
-echo "      Or add '$(pwd)/bin' to your PATH and use 'rrf' from anywhere in the project"
-echo ""
+# `unset` actually clears a wrapper that may be set in the parent shell;
+# `${VAR:-}` only defaults on unset vars, so `export RUSTC_WRAPPER=""`
+# would not drop a pre-existing value.
+unset RUSTC_WRAPPER
+export CARGO_INCREMENTAL="${CARGO_INCREMENTAL:-1}"
+
+# On Apple Silicon, rustc is heavy enough per-thread that pinning cargo
+# jobs to the P-core count (vs. all logical CPUs) usually wins for the
+# small incremental rebuilds that drive an edit->run loop: cargo's
+# default counts E-cores too, and rustc threads thrashing the E-cores
+# end up slower than fewer-but-faster P-core threads. No-op on non-Darwin
+# hosts. Override via `CARGO_BUILD_JOBS=N ./scripts/run-debug.sh`.
+if [[ -z "${CARGO_BUILD_JOBS}" && "$(uname -s)" == "Darwin" ]] \
+   && sysctl -n hw.perflevel0.physicalcpu >/dev/null 2>&1; then
+  export CARGO_BUILD_JOBS="$(sysctl -n hw.perflevel0.physicalcpu)"
+fi
 
 # Build optional args from environment
 EXTRA_ARGS=()
