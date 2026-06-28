@@ -3248,11 +3248,13 @@ fn openai_models_support_streaming() {
 }
 
 #[test]
-fn native_gpt54_family_disables_non_streaming() {
+fn native_stream_required_models_disable_non_streaming() {
     for model in [
         models::openai::GPT,
         models::openai::GPT_5_4,
         models::openai::GPT_5_4_PRO,
+        models::openai::GPT_5_5,
+        models::openai::GPT_5_5_DATED,
     ] {
         let provider = test_provider("http://test", model);
         assert!(
