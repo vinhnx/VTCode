@@ -65,6 +65,12 @@ VT Code has undergone significant improvements:
 - **Provider Stream Refactoring** - Simplified stream handling across DeepSeek, StepFun, and ZAI providers
 - **Decision Transparency System** - Complete audit trail with reasoning and confidence scores
 - **Error Recovery & Resilience** - Intelligent error handling with pattern detection and multiple recovery strategies
+- **Ast-grep Outline Mode** - Token-efficient symbol maps (`action=outline`) via `unified_search` for cheap "what's in this file/directory?" queries, auto-installs ast-grep on first use
+- **Web Search & Fetch** - `web_search` and `defuddle_fetch` tools with TOML-driven network allowlist and domain-scoped approval caching
+- **Post-Tool Recovery Cycles** - Automatic detection and cap enforcement for post-tool recovery loops with temporary file cleanup
+- **CLI `did you mean?`** - Fuzzy suggestions for unrecognized commands with colorized output
+- **Session Resume** - `/continue` slash command to resume the most recent session
+- **Loop Detection Hardening** - Blocked-streak fuse prevents false positives; read-extent-aware duplicate detection
 
 See [CHANGELOG](../CHANGELOG.md) for complete details on these improvements.
 
@@ -119,7 +125,7 @@ Deploying VT Code in production? Focus on enterprise features:
 
 - **Semantic Analysis** - Deep code understanding across Rust, Python, JavaScript, TypeScript, Go, Java, and more
 - **Bash Safety Parsing** - Tree-sitter-bash for critical shell command validation
-- **Intelligent Search** - Ripgrep powered code analysis and discovery
+- **Intelligent Search** - Ripgrep text search and ast-grep AST outline symbol maps via `unified_search` (actions: `grep`, `outline`, `structural`)
 - **Fuzzy File Discovery** - Git-aware traversal using `ignore` with `nucleo-matcher` scoring
 - **Symbol Analysis** - LLM-native function, class, and variable extraction
 - **Dependency Mapping** - Import relationship analysis
@@ -129,7 +135,7 @@ Deploying VT Code in production? Focus on enterprise features:
 
 - **File Operations** - Safe, validated file system operations
 - **Terminal Integration** - Enhanced PTY support with color-coded tool/MCP status banners and interactive commands
-- **Search & Analysis** - Fast text and syntax-aware code search
+- **Search & Analysis** - Fast text/structural/outline code search via `unified_search` (grep, structural, outline actions)
 - **Batch Processing** - Efficient multi-file operations
 - **Configuration Management** - Dynamic TOML-based settings
 - **GPU Pod Manager** - Remote model pod lifecycle management over SSH ([feature guide](./features/GPU_POD_MANAGER.md))
@@ -334,15 +340,15 @@ VT Code builds upon key developments in AI agent technology:
 
 ---
 
-**Documentation Version:** 3.0.0
-**Last Updated:** June 2026
-**VT Code Version:** 0.132.0
+**Documentation Version:** 3.1.0
+**Last Updated:** June 28, 2026
+**VT Code Version:** 0.133.21
 
 **Ready to get started?** **[Installation Guide](../README.md#quick-start)**
 
 ## Documentation Version
 
-This documentation reflects version 0.132.0 of VT Code, which includes significant enhancements including:
+This documentation reflects version 0.133.21 of VT Code, which includes significant enhancements including:
 
 - GLM-5.2, Kimi K2.7, and GPT-5-Codex model support
 - Byte-range file reading for large files
@@ -352,3 +358,10 @@ This documentation reflects version 0.132.0 of VT Code, which includes significa
 - Error recovery and resilience with intelligent pattern detection
 - Conversation summarization for long-running sessions
 - Enhanced Terminal User Interface (TUI) with improved mouse support and text selection
+- `web_search` and `defuddle_fetch` tools with TOML-driven network allowlist
+- `unified_search` outline mode for token-efficient symbol maps (auto-installs ast-grep)
+- Post-tool recovery cycle tracking with cap checks and temporary file cleanup
+- CLI `did you mean?` suggestions for unrecognized commands
+- `/continue` command to resume the most recent session
+- Loop detection improvements with blocked-streak fuse and read-extent awareness
+- Colorized CLI suggestions and case-insensitive `StatusLineMode` deserialization

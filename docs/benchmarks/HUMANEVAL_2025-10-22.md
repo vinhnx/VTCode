@@ -246,5 +246,5 @@ export GEMINI_API_KEY="your_api_key_here"
 ---
 
 **Generated:** 2025-10-22
-**VT Code Version:** 0.132.0
+**VT Code Version:** 0.133.21
 **Benchmark Duration:** ~2 minutes (164 tasks × ~0.97s avg)

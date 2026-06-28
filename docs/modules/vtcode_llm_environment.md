@@ -107,7 +107,7 @@ implementation of the `LLMClient` trait designed for deterministic tests:
 
 ```toml
 # Cargo.toml
-vtcode-core = { version = "0.132.0", features = ["mock"] }
+vtcode-core = { version = "0.133.21", features = ["mock"] }
 ```
 
 ```rust

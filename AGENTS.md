@@ -117,5 +117,5 @@ Narrow commands: `cargo check`, `cargo nextest run`, `cargo fmt`, `cargo clippy`
 - Skills are invoked via the Skill tool; subagents are spawned via the Agent tool. Project slash commands live in `.claude/commands/`; agents live in `.claude/agents/`.
 - LLM providers: use the `adding-llm-providers` skill. The `/model` picker uses `ModelId::all_models()`; `builtin_model_presets()` is used by `ModelsManager`. Both may need updates.
 - New workspace crates: use the `adding-workspace-crate` skill. This affects more than `Cargo.toml`; all workspace path dependencies need `version` fields.
-- Structural code work: prefer `ast-grep` over text grep for code shape, calls, impls, and codemods. Use `rg` for prose, logs, and config strings. Always invoke `ast-grep`, not the `sg` alias.
+- Structural code work: prefer `ast-grep` over text grep for code shape, calls, impls, and codemods. Use `rg` for prose, logs, and config strings. Always invoke `ast-grep`, not the `sg` alias. For token-efficient symbol maps, use `action=outline` in `unified_search` (wraps `ast-grep outline`, auto-installs if missing).
 - Cap large command output: `COMMAND 2>&1 | head -c 4000`.

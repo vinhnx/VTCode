@@ -188,25 +188,25 @@ VT_ACP_ENABLED = "1"
 VT_ACP_ZED_ENABLED = "1"
 
 [agent_servers.vtcode.targets.darwin-aarch64]
-archive = "https://github.com/vinhnx/vtcode/releases/download/0.132.0/vtcode-darwin-aarch64.tar.gz"
+archive = "https://github.com/vinhnx/vtcode/releases/download/0.133.21/vtcode-darwin-aarch64.tar.gz"
 cmd = "./vtcode"
 args = ["acp"]
 sha256 = "replace-with-real-sha256"
 
 [agent_servers.vtcode.targets.darwin-x86_64]
-archive = "https://github.com/vinhnx/vtcode/releases/download/0.132.0/vtcode-darwin-x86_64.tar.gz"
+archive = "https://github.com/vinhnx/vtcode/releases/download/0.133.21/vtcode-darwin-x86_64.tar.gz"
 cmd = "./vtcode"
 args = ["acp"]
 sha256 = "replace-with-real-sha256"
 
 [agent_servers.vtcode.targets.linux-x86_64]
-archive = "https://github.com/vinhnx/vtcode/releases/download/0.132.0/vtcode-linux-x86_64.tar.gz"
+archive = "https://github.com/vinhnx/vtcode/releases/download/0.133.21/vtcode-linux-x86_64.tar.gz"
 cmd = "./vtcode"
 args = ["acp"]
 sha256 = "replace-with-real-sha256"
 
 [agent_servers.vtcode.targets.windows-x86_64]
-archive = "https://github.com/vinhnx/vtcode/releases/download/0.132.0/vtcode-windows-x86_64.zip"
+archive = "https://github.com/vinhnx/vtcode/releases/download/0.133.21/vtcode-windows-x86_64.zip"
 cmd = "./vtcode.exe"
 args = ["acp"]
 sha256 = "replace-with-real-sha256"

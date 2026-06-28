@@ -2,7 +2,7 @@
 
 Repository-wide entrypoint for VT Code documentation.
 
-Last reviewed: 2026-06-17
+Last reviewed: 2026-06-28
 
 ## Start Here
 

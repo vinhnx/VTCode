@@ -361,4 +361,4 @@ python3 scripts/bench_swe_lite_dry.py N_SWE=100
 ---
 
 **Last Updated:** October 22, 2025  
-**VT Code Version:** 0.132.0
+**VT Code Version:** 0.133.21
