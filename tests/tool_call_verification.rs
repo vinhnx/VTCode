@@ -254,9 +254,8 @@ fn test_gemini_tool_call_format() {
 #[test]
 fn test_all_providers_tool_validation() {
     let gemini = GeminiProvider::new("test_key".to_string());
-    let openai =
-        create_provider_for_model(models::GPT_OSS_20B, "test_key".to_string(), None, None)
-            .expect("openai provider");
+    let openai = create_provider_for_model(models::GPT_OSS_20B, "test_key".to_string(), None, None)
+        .expect("openai provider");
     let anthropic = AnthropicProvider::new("test_key".to_string());
     let openrouter = OpenRouterProvider::new("test_key".to_string());
     let ollama = OllamaProvider::from_config(None, None, None, None, None, None, None);

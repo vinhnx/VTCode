@@ -74,8 +74,7 @@ pub use response::{
 pub use responses_continuation::{
     PreparedResponsesRequest, ResponsesContinuationState, prepare_openai_responses_request,
     prepare_responses_continuation_request, records_responses_continuation_state,
-    responses_continuation_key,
-    supports_responses_chaining, uses_incremental_responses_history,
+    responses_continuation_key, supports_responses_chaining, uses_incremental_responses_history,
 };
 pub use tool::{
     FunctionDefinition, GrammarDefinition, ShellToolDefinition, ToolDefinition, ToolSearchAlgorithm,

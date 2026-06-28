@@ -329,9 +329,8 @@ fn test_provider_names() {
 #[ignore = "requires provider configuration"]
 fn test_request_validation() {
     let gemini = GeminiProvider::new("test_key".to_string());
-    let openai =
-        create_provider_for_model(models::GPT_OSS_20B, "test_key".to_string(), None, None)
-            .expect("openai provider");
+    let openai = create_provider_for_model(models::GPT_OSS_20B, "test_key".to_string(), None, None)
+        .expect("openai provider");
     let anthropic = AnthropicProvider::new("test_key".to_string());
     let _openrouter = OpenRouterProvider::new("test_key".to_string());
 

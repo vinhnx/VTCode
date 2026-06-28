@@ -320,8 +320,7 @@ pub(super) fn supports_gpt5_none_reasoning(model_id: &str) -> bool {
     matches!(
         model_id,
         "gpt-5.2" | "gpt-5.4" | "gpt-5.4-pro" | "gpt-5.5" | "gpt-5.5-2026-04-23"
-    )
-        || matches!(model_id, "gpt-5.2-codex" | "gpt-5.3-codex")
+    ) || matches!(model_id, "gpt-5.2-codex" | "gpt-5.3-codex")
 }
 
 pub(super) fn supports_xhigh_reasoning(model_id: &str) -> bool {

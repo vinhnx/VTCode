@@ -8,9 +8,9 @@ use crate::llm::vtcode_llm_provider_adapter::VtcodeLlmProviderAdapter;
 use async_trait::async_trait;
 use reqwest::Client as HttpClient;
 
+use super::AnthropicProvider;
 use super::common::{override_base_url, resolve_model};
 use super::opencode_shared::OpenCodeCompatibleProvider;
-use super::AnthropicProvider;
 
 const PROVIDER_NAME: &str = "OpenCode Zen";
 const PROVIDER_KEY: &str = "opencode-zen";

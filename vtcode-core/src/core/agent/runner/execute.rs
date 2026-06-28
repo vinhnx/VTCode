@@ -29,7 +29,7 @@ use crate::llm::model_resolver::ModelResolver;
 use crate::llm::provider::{
     FinishReason, Message, ResponsesContinuationState, ToolCall, ToolChoice, ToolDefinition,
     prepare_responses_continuation_request, records_responses_continuation_state,
-    responses_continuation_key,
+    responses_continuation_key, supports_responses_chaining,
 };
 use crate::llm::providers::gemini::wire::Part;
 use crate::prompts::{
