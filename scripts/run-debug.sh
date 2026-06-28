@@ -58,35 +58,15 @@ if [[ ! -f "Cargo.toml" ]]; then
     exit 1
 fi
 
-# Build and run in debug mode (much faster)
-echo "Building VT Code in debug mode..."
-
-# Try building with sccache first, fall back to regular cargo if sccache fails
-# Show build progress with cargo's default terminal output
-echo ""
-if ! cargo build 2>&1 | tee /tmp/vtcode_build.log; then
-    BUILD_ERROR=$(cat /tmp/vtcode_build.log)
-    if [[ "$BUILD_ERROR" == *"sccache: error: Operation not permitted"* ]]; then
-        echo "sccache permission error detected. Retrying without sccache..."
-        export RUSTC_WRAPPER=""
-        cargo build 2>&1 | tee /tmp/vtcode_build.log
-        RESULT=$?
-        if [ $RESULT -ne 0 ]; then
-            echo "Build failed even without sccache. Check errors above."
-            exit $RESULT
-        fi
-    else
-        echo "Build failed with non-sccache error:"
-        echo "$BUILD_ERROR"
-        exit 1
-    fi
-else
-    echo "Build completed successfully."
-fi
-
-echo ""
-echo "Debug build complete!"
-echo ""
+# --- Fast iteration tuning -------------------------------------------------
+# For a local edit->run loop, incremental compilation rebuilds only changed
+# crates and is dramatically faster than a from-scratch cache lookup. sccache
+# requires incremental=false (see Cargo.toml [profile.dev]) and is the source
+# of the "Operation not permitted" failures, so we disable it here and let
+# incremental compilation drive fast rebuilds instead. Override by exporting
+# CARGO_INCREMENTAL=0 / RUSTC_WRAPPER=sccache before invoking this script.
+export CARGO_INCREMENTAL="${CARGO_INCREMENTAL:-1}"
+export RUSTC_WRAPPER="${RUSTC_WRAPPER:-}"
 
 echo "Starting vtcode chat with advanced features..."
 echo "  - Async file operations enabled for better performance"
@@ -112,16 +92,10 @@ if [[ -n "$WORKSPACE" ]]; then
   EXTRA_ARGS+=(--workspace "$WORKSPACE")
 fi
 
-# Run with advanced features enabled by default
-# Note: Interactive chat is launched via the TUI without a subcommand
-# Increase stack floor for spawned threads in debug runs to reduce overflow risk
+# Run with advanced features enabled by default.
+# A single `cargo run` builds (incrementally) and launches in one pass; the
+# previous `cargo build` + `cargo run` duplicated dependency-graph resolution.
+# Note: Interactive chat is launched via the TUI without a subcommand.
+# Increase stack floor for spawned threads in debug runs to reduce overflow risk.
 export RUST_MIN_STACK="${RUST_MIN_STACK:-16777216}"
-if [[ "${RUSTC_WRAPPER:-}" == "" ]]; then
-    # If RUSTC_WRAPPER was set to empty string, run with it still empty
-    RUSTC_WRAPPER="" cargo run -- "${EXTRA_ARGS[@]}" --show-file-diffs --debug
-    # Clean up the environment variable after running
-    unset RUSTC_WRAPPER
-else
-    # Otherwise run normally
-    cargo run -- "${EXTRA_ARGS[@]}" --show-file-diffs --debug
-fi
+cargo run -- "${EXTRA_ARGS[@]}" --show-file-diffs --debug
