@@ -17,6 +17,7 @@ use crate::agent::runloop::unified::turn::turn_loop::{
     POST_TOOL_TIMEOUT_RECOVERY_REASON, prepare_post_tool_tool_free_recovery,
 };
 use crate::updater::{InlineUpdateOutcome, display_update_notice, run_inline_update_prompt};
+use hashbrown::HashSet;
 use vtcode_config::loader::SimpleConfigWatcher;
 use vtcode_core::core::agent::features::FeatureSet;
 use vtcode_core::core::agent::runtime::AgentRuntime;
@@ -529,6 +530,9 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             crate::updater::record_current_version_seen();
         }
 
+        let mut cross_turn_tracker =
+            crate::agent::runloop::unified::run_loop_context::CrossTurnTracker::new();
+
         if !startup_update_requested_restart {
             loop {
                 use crate::agent::runloop::unified::turn::session::interaction_loop::InteractionOutcome;
@@ -729,6 +733,11 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 let history_snapshot_bytes = estimate_history_bytes(&working_history);
                 let turn_history_checkpoint = TurnHistoryCheckpoint::capture(&working_history);
                 let mut turn_metadata_cache = None;
+                // Cross-turn tracking data extracted from harness_state before
+                // it goes out of scope at the end of the match block.
+                let mut cross_turn_read_sigs: Vec<String> = Vec::new();
+                let mut cross_turn_written: HashSet<String> = HashSet::new();
+                let mut cross_turn_shell_cmd: Option<String> = None;
                 let outcome = match loop {
                     let mut auto_finish_planning_attempted = false;
                     let planning_active = tool_registry.is_planning_active();
@@ -803,7 +812,19 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     .await;
 
                     match result {
-                        Ok(inner) => break inner,
+                        Ok(inner) => {
+                            // Extract cross-turn tracking data before harness_state
+                            // goes out of scope.
+                            cross_turn_read_sigs = harness_state
+                                .seen_successful_readonly_signatures
+                                .iter()
+                                .cloned()
+                                .collect();
+                            cross_turn_written = harness_state.recently_written_files.clone();
+                            cross_turn_shell_cmd =
+                                harness_state.last_shell_command_signature.clone();
+                            break inner;
+                        }
                         Err(_) => {
                             let active_pty_sessions_before_cancel =
                                 tool_registry.active_pty_sessions();
@@ -964,6 +985,20 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     }
                 };
                 remove_transient_system_notes(&mut working_history, &transient_system_notes);
+
+                // Cross-turn loop detection: fingerprint this turn's actions and
+                // inject a warning if a loop or stuck pattern is detected.
+                if let Some(cross_turn_warning) = cross_turn_tracker.seal_turn(
+                    &cross_turn_read_sigs,
+                    &cross_turn_written,
+                    cross_turn_shell_cmd.as_deref(),
+                ) {
+                    tracing::warn!(warning = %cross_turn_warning, "Cross-turn loop detector triggered");
+                    working_history.push(vtcode_core::llm::provider::Message::system(
+                        cross_turn_warning,
+                    ));
+                }
+
                 agent_touched_paths.extend(
                     outcome
                         .turn_modified_files

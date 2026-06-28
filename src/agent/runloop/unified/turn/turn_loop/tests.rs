@@ -3,9 +3,10 @@ use super::{
     HarnessUsage, POST_TOOL_RECOVERY_REASON, POST_TOOL_RESUME_DIRECTIVE,
     POST_TOOL_TIMEOUT_RECOVERY_REASON, PostToolFailureRecovery, RECOVERY_CONTRACT_VIOLATION_REASON,
     RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER, accumulate_turn_usage,
-    complete_turn_after_failed_tool_free_recovery, has_turn_usage,
-    maybe_recover_after_post_tool_llm_failure, normalize_tool_free_recovery_break_outcome,
-    prepare_post_tool_tool_free_recovery, run_turn_loop,
+    complete_turn_after_failed_tool_free_recovery, count_assistant_text_responses_in_turn,
+    has_turn_usage, maybe_recover_after_post_tool_llm_failure,
+    normalize_tool_free_recovery_break_outcome, prepare_post_tool_tool_free_recovery,
+    run_turn_loop,
 };
 use crate::agent::runloop::unified::turn::context::TurnLoopResult;
 use crate::agent::runloop::unified::turn::turn_processing::test_support::TestTurnProcessingBacking;
@@ -381,4 +382,71 @@ async fn turn_loop_preserves_legacy_loop_detector_state() {
         .expect("turn loop should complete");
 
     assert!(backing.is_hard_limit_exceeded(tool_names::READ_FILE));
+}
+
+#[test]
+fn count_assistant_text_responses_in_turn_zero_for_empty_history() {
+    let history: Vec<uni::Message> = Vec::new();
+    assert_eq!(count_assistant_text_responses_in_turn(&history), 0);
+}
+
+#[test]
+fn count_assistant_text_responses_in_turn_skips_tool_call_messages() {
+    let mut history: Vec<uni::Message> = Vec::new();
+    // First assistant message has a tool call -> not counted
+    history.push(uni::Message::assistant_with_tools(
+        String::new(),
+        vec![uni::ToolCall::function(
+            "tool_call_0".to_string(),
+            "unified_search".to_string(),
+            "{}".to_string(),
+        )],
+    ));
+    // Second assistant message is plain text -> counted
+    history.push(uni::Message::assistant(
+        "Functions and structs.".to_string(),
+    ));
+    // System message -> not counted
+    history.push(uni::Message::system("Tools disabled.".to_string()));
+    // Third assistant message is plain text -> counted
+    history.push(uni::Message::assistant(
+        "Functions and structs again.".to_string(),
+    ));
+    // Empty assistant content -> not counted
+    history.push(uni::Message::assistant(String::new()));
+    // Whitespace-only assistant content -> not counted
+    history.push(uni::Message::assistant("   \n  ".to_string()));
+
+    assert_eq!(count_assistant_text_responses_in_turn(&history), 2);
+}
+
+#[test]
+fn count_assistant_text_responses_in_turn_matches_observed_pattern() {
+    // Reproduces the checkpoint turn_594 failure mode: 4 long identical
+    // outline responses in a single turn.  The count must be 4 so the
+    // anti-runaway guard at MAX_ASSISTANT_TEXT_RESPONSES_PER_TURN (2) trips
+    // on the third iteration.
+    let mut history: Vec<uni::Message> = Vec::new();
+    for _ in 0..4 {
+        history.push(uni::Message::assistant(
+            "# Functions and Structs in vtcode-core/src/tools/registry\n\
+             \n\
+             The directory has 70 files, 23 structs, 69 functions, 11 enums.\n\
+             \n\
+             ## Structs (23)\n\
+             \n\
+             | File | Struct |\n\
+             |---|---|\n\
+             | mod.rs | ToolRegistry |\n\
+             | distributed.rs | ToolConfigSnapshot |\n\
+             ... (and many more rows)\n"
+                .to_string(),
+        ));
+    }
+    assert_eq!(count_assistant_text_responses_in_turn(&history), 4);
+    assert!(
+        count_assistant_text_responses_in_turn(&history)
+            >= super::MAX_ASSISTANT_TEXT_RESPONSES_PER_TURN,
+        "anti-runaway guard would trip on this history"
+    );
 }

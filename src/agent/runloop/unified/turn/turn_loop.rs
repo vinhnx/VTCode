@@ -79,6 +79,19 @@ const RECOVERY_SYNTHESIS_MAX_TOKENS: u32 = 1024;
 /// forces the user to nudge "continue". The extra pass only fires when the
 /// model keeps emitting tool calls during a tool-free recovery window.
 const MAX_RECOVERY_RETRIES: u8 = 3;
+/// Hard cap on how many assistant text responses the model may emit in a
+/// single turn.  Without this, the recovery / continuation logic can loop
+/// forever when the model has already produced a substantive final answer
+/// but the system keeps re-prompting it (e.g. tool-free recovery activates
+/// on a transient LLM stream timeout, the model re-summarizes the same
+/// outline 4+ times, wasting context and tokens).
+///
+/// Observed in checkpoint turn_594: a simple "what functions/structs are
+/// defined in vtcode-core/src/tools/registry?" task produced 4 identical
+/// 6500-token outline responses and burned ~90 seconds.  Capping at 2
+/// responses terminates the runaway loop while still allowing one retry
+/// for genuine recovery scenarios.
+const MAX_ASSISTANT_TEXT_RESPONSES_PER_TURN: u32 = 2;
 /// Maximum number of times the post-tool follow-up failure path may schedule
 /// a tool-free recovery pass within a single turn. This is a defense-in-depth
 /// backstop: the recovery pass itself is terminal (a text response ends the
@@ -123,6 +136,23 @@ fn check_recovery_cycle_cap(
         ));
     }
     None
+}
+
+/// Count how many assistant text responses the model has emitted in this
+/// turn so far.  Used by the anti-runaway guard to short-circuit when the
+/// recovery / continuation loop regenerates the same answer repeatedly.
+///
+/// Counts messages with `role == Assistant`, no `tool_calls`, and a
+/// non-empty trimmed text body.  System-recovery messages are ignored.
+fn count_assistant_text_responses_in_turn(history: &[uni::Message]) -> u32 {
+    history
+        .iter()
+        .filter(|message| {
+            message.role == uni::MessageRole::Assistant
+                && message.tool_calls.is_none()
+                && !message.content.as_text().trim().is_empty()
+        })
+        .count() as u32
 }
 
 pub(crate) struct TurnLoopOutcome {
@@ -493,6 +523,29 @@ pub(crate) async fn run_turn_loop(
         // (needed because turn_processing_ctx will mutably borrow input_status_state)
         let restore_status_left = ctx.input_status_state.left.clone();
         let restore_status_right = ctx.input_status_state.right.clone();
+
+        // Anti-runaway guard: if the model has already emitted
+        // MAX_ASSISTANT_TEXT_RESPONSES_PER_TURN text responses in this turn,
+        // the recovery / continuation loop is regenerating the same answer
+        // over and over.  Conclude the turn with the last response stored
+        // in working_history and emit a warning so users can see what
+        // happened.  See MAX_ASSISTANT_TEXT_RESPONSES_PER_TURN for the
+        // observed failure mode (checkpoint turn_594: 4 identical 6500-token
+        // outline responses, ~90s of wasted context).
+        let text_responses_so_far = count_assistant_text_responses_in_turn(working_history);
+        if text_responses_so_far >= MAX_ASSISTANT_TEXT_RESPONSES_PER_TURN {
+            tracing::warn!(
+                text_responses = text_responses_so_far,
+                cap = MAX_ASSISTANT_TEXT_RESPONSES_PER_TURN,
+                "Assistant text-response cap reached; ending turn to prevent runaway regeneration loop"
+            );
+            let _ = ctx.renderer.line(
+                MessageStyle::Warning,
+                "Recovery loop detected: capping repeated assistant responses to avoid wasted context.",
+            );
+            result = TurnLoopResult::Completed;
+            break;
+        }
 
         // Prepare turn processing context
         let mut turn_processing_ctx = ctx.as_turn_processing_context(working_history);

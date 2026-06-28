@@ -4,6 +4,8 @@ use crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSes
 use crate::agent::runloop::unified::state::SessionStats;
 use crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator;
 use hashbrown::{HashMap, HashSet};
+use std::collections::VecDeque;
+use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
@@ -154,6 +156,126 @@ pub(crate) struct TurnExecutionSnapshot {
     pub max_tool_retries: u32,
 }
 
+/// Tracks action patterns across turn boundaries to detect loops that span
+/// multiple turns.  Constructed once per session and carried forward across
+/// turns, unlike `HarnessTurnState` which is fresh each turn.
+///
+/// Each turn produces a "fingerprint" — a hash of the sorted set of tool
+/// signatures used in that turn.  If the same fingerprint appears 2+ times
+/// in the sliding window, a cross-turn loop is detected.
+///
+/// Also tracks consecutive turns with zero mutating tool calls to detect
+/// "stuck" states where the agent only reads without making progress.
+pub(crate) struct CrossTurnTracker {
+    /// Rolling window of per-turn action fingerprints.
+    turn_fingerprints: VecDeque<u64>,
+    /// Maximum window size for cross-turn loop detection.
+    window_size: usize,
+    /// Consecutive turns with zero mutating tool calls.
+    zero_mutation_turns: usize,
+}
+
+/// Number of consecutive zero-mutation turns before a HARD STOP fires.
+const STUCK_ZERO_MUTATION_THRESHOLD: usize = 3;
+
+impl CrossTurnTracker {
+    pub(crate) fn new() -> Self {
+        Self {
+            turn_fingerprints: VecDeque::with_capacity(8),
+            window_size: 8,
+            zero_mutation_turns: 0,
+        }
+    }
+
+    /// Seal the current turn: compute a fingerprint from the provided tool
+    /// signatures, check for cross-turn loops and stuck states.
+    ///
+    /// - `read_only_signatures`: signatures of read-only tool calls this turn.
+    /// - `written_files`: paths of files written this turn.
+    /// - `shell_command`: last shell command signature, if any.
+    ///
+    /// Returns a warning string if a loop or stuck pattern is detected.
+    pub(crate) fn seal_turn(
+        &mut self,
+        read_only_signatures: &[String],
+        written_files: &HashSet<String>,
+        shell_command: Option<&str>,
+    ) -> Option<String> {
+        let mut signatures: Vec<String> = read_only_signatures.to_vec();
+        for path in written_files {
+            signatures.push(format!("write::{path}"));
+        }
+        if let Some(cmd) = shell_command {
+            signatures.push(cmd.to_string());
+        }
+
+        let had_mutation = !written_files.is_empty();
+
+        // Compute fingerprint from sorted signatures so order doesn't matter.
+        let fingerprint = if signatures.is_empty() {
+            0
+        } else {
+            let mut sorted: Vec<&str> = signatures.iter().map(String::as_str).collect();
+            sorted.sort_unstable();
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            for sig in &sorted {
+                sig.hash(&mut hasher);
+            }
+            hasher.finish()
+        };
+
+        // Check cross-turn loop before pushing this turn's fingerprint.
+        let loop_warning = if fingerprint != 0 && self.turn_fingerprints.contains(&fingerprint) {
+            Some(
+                "Cross-turn loop detected: the same set of tool actions has repeated across \
+                 consecutive turns. Break the pattern by trying a different approach or \
+                 synthesizing a final answer from existing context."
+                    .to_string(),
+            )
+        } else {
+            None
+        };
+
+        if fingerprint != 0 {
+            if self.turn_fingerprints.len() >= self.window_size {
+                self.turn_fingerprints.pop_front();
+            }
+            self.turn_fingerprints.push_back(fingerprint);
+        }
+
+        // Track zero-mutation turns for stuck detection.
+        if !signatures.is_empty() {
+            if had_mutation {
+                self.zero_mutation_turns = 0;
+            } else {
+                self.zero_mutation_turns = self.zero_mutation_turns.saturating_add(1);
+            }
+        }
+
+        // Return loop warning first (higher priority), then stuck warning.
+        if loop_warning.is_some() {
+            return loop_warning;
+        }
+
+        if self.zero_mutation_turns >= STUCK_ZERO_MUTATION_THRESHOLD {
+            return Some(format!(
+                "No progress detected for {} consecutive turns (all read-only tool calls, \
+                 no file mutations or command executions). Synthesize a final answer from \
+                 existing context or ask the user for guidance.",
+                self.zero_mutation_turns
+            ));
+        }
+
+        None
+    }
+
+    /// Check if the tracker has detected a stuck pattern (for diagnostics).
+    #[allow(dead_code)]
+    pub(crate) fn zero_mutation_turns(&self) -> usize {
+        self.zero_mutation_turns
+    }
+}
+
 pub(crate) struct HarnessTurnState {
     pub run_id: TurnRunId,
     pub turn_id: TurnId,
@@ -163,12 +285,17 @@ pub(crate) struct HarnessTurnState {
     pub tool_calls: usize,
     pub blocked_tool_calls: usize,
     pub consecutive_blocked_tool_calls: usize,
+    /// Counts how many times the agent emitted an assistant *text* response
+    /// (no tool calls) in this turn.  Used to short-circuit the recovery
+    /// loop when the model has already produced a final answer but recovery
+    /// iteration keeps re-prompting it.  Reset every turn.
+    pub assistant_text_responses_in_turn: u32,
     pub consecutive_spool_chunk_reads: usize,
     pub consecutive_same_shell_command_runs: usize,
     pub last_shell_command_signature: Option<String>,
     pub consecutive_same_file_read_family_calls: usize,
     last_file_read_family_signature: Option<String>,
-    seen_successful_readonly_signatures: HashSet<String>,
+    pub(crate) seen_successful_readonly_signatures: HashSet<String>,
     streamed_tool_call_item_ids: HashMap<String, String>,
     pub stop_hook_active: bool,
     pub seen_task_tracker_create_signatures: HashSet<String>,
@@ -216,6 +343,7 @@ impl HarnessTurnState {
             tool_calls: 0,
             blocked_tool_calls: 0,
             consecutive_blocked_tool_calls: 0,
+            assistant_text_responses_in_turn: 0,
             consecutive_spool_chunk_reads: 0,
             consecutive_same_shell_command_runs: 0,
             last_shell_command_signature: None,
@@ -309,6 +437,17 @@ impl HarnessTurnState {
 
     pub(crate) fn record_tool_call_with_default_warning(&mut self) -> Option<ToolBudgetWarning> {
         self.record_tool_call_with_warning(TOOL_BUDGET_WARNING_THRESHOLD)
+    }
+
+    /// Record that the agent emitted a text response (no tool calls) in this
+    /// turn.  The turn loop also counts existing assistant messages in
+    /// `working_history` for the anti-runaway guard; this method exists
+    /// for symmetry with the other `record_*` helpers and is incremented
+    /// alongside the in-message tracking.
+    pub(crate) fn record_assistant_text_response(&mut self) -> u32 {
+        self.assistant_text_responses_in_turn =
+            self.assistant_text_responses_in_turn.saturating_add(1);
+        self.assistant_text_responses_in_turn
     }
 
     pub(crate) fn record_tool_budget_exhaustion_notice(
@@ -734,10 +873,11 @@ impl<'a> RunLoopContext<'a> {
 #[cfg(test)]
 mod tests {
     use super::{
-        HarnessTurnState, RecoveryMode, TOOL_BUDGET_WARNING_THRESHOLD, ToolBudgetExhaustion,
-        ToolBudgetExhaustionNotice, ToolBudgetWarning, ToolWallClockExhaustion, TurnExecutionPhase,
-        TurnId, TurnPhase, TurnRunId,
+        CrossTurnTracker, HarnessTurnState, RecoveryMode, TOOL_BUDGET_WARNING_THRESHOLD,
+        ToolBudgetExhaustion, ToolBudgetExhaustionNotice, ToolBudgetWarning,
+        ToolWallClockExhaustion, TurnExecutionPhase, TurnId, TurnPhase, TurnRunId,
     };
+    use hashbrown::HashSet;
     use std::time::{Duration, Instant};
 
     #[test]
@@ -1446,5 +1586,125 @@ mod tests {
         assert_eq!(snapshot.max_tool_calls, 6);
         assert_eq!(snapshot.max_tool_wall_clock_secs, 120);
         assert_eq!(snapshot.max_tool_retries, 2);
+    }
+
+    // --- CrossTurnTracker tests ---
+
+    #[test]
+    fn cross_turn_tracker_no_warning_on_first_turn() {
+        let mut tracker = CrossTurnTracker::new();
+        let read_sigs = vec!["unified_file::read::src/main.rs".to_string()];
+        let written = HashSet::new();
+        assert!(tracker.seal_turn(&read_sigs, &written, None).is_none());
+    }
+
+    #[test]
+    fn cross_turn_tracker_detects_repeated_turn() {
+        let mut tracker = CrossTurnTracker::new();
+        let read_sigs = vec!["unified_file::read::src/main.rs".to_string()];
+        let written = HashSet::new();
+
+        // First turn: no warning
+        assert!(tracker.seal_turn(&read_sigs, &written, None).is_none());
+
+        // Second turn with same signatures: cross-turn loop detected
+        let warning = tracker.seal_turn(&read_sigs, &written, None);
+        assert!(warning.is_some());
+        assert!(warning.unwrap().contains("Cross-turn loop detected"));
+    }
+
+    #[test]
+    fn cross_turn_tracker_no_false_positive_different_turns() {
+        let mut tracker = CrossTurnTracker::new();
+        let read_sigs_1 = vec!["unified_file::read::src/main.rs".to_string()];
+        let read_sigs_2 = vec!["unified_file::read::src/lib.rs".to_string()];
+        let written = HashSet::new();
+
+        assert!(tracker.seal_turn(&read_sigs_1, &written, None).is_none());
+        assert!(tracker.seal_turn(&read_sigs_2, &written, None).is_none());
+    }
+
+    #[test]
+    fn cross_turn_tracker_stuck_no_progress() {
+        let mut tracker = CrossTurnTracker::new();
+        let written = HashSet::new();
+
+        // Use different signatures each turn to avoid cross-turn loop detection
+        // and isolate the stuck (zero-mutation) detection.
+        let sigs_1 = vec!["unified_file::read::src/a.rs".to_string()];
+        let sigs_2 = vec!["unified_file::read::src/b.rs".to_string()];
+        let sigs_3 = vec!["unified_file::read::src/c.rs".to_string()];
+
+        assert!(tracker.seal_turn(&sigs_1, &written, None).is_none());
+        assert!(tracker.seal_turn(&sigs_2, &written, None).is_none());
+
+        // Third consecutive read-only turn: stuck warning
+        let warning = tracker.seal_turn(&sigs_3, &written, None);
+        assert!(warning.is_some());
+        assert!(warning.unwrap().contains("No progress detected"));
+    }
+
+    #[test]
+    fn cross_turn_tracker_mutation_resets_stuck_counter() {
+        let mut tracker = CrossTurnTracker::new();
+        let empty_written = HashSet::new();
+
+        // Two read-only turns with different signatures (avoid cross-turn loop)
+        let sigs_a = vec!["unified_file::read::src/a.rs".to_string()];
+        let sigs_b = vec!["unified_file::read::src/b.rs".to_string()];
+        assert!(tracker.seal_turn(&sigs_a, &empty_written, None).is_none());
+        assert!(tracker.seal_turn(&sigs_b, &empty_written, None).is_none());
+
+        // A mutating turn resets the counter
+        let mut written = HashSet::new();
+        written.insert("src/main.rs".to_string());
+        let sigs_c = vec!["unified_file::read::src/c.rs".to_string()];
+        assert!(tracker.seal_turn(&sigs_c, &written, None).is_none());
+
+        // Two more read-only turns: no stuck warning (counter was reset)
+        let sigs_d = vec!["unified_file::read::src/d.rs".to_string()];
+        let sigs_e = vec!["unified_file::read::src/e.rs".to_string()];
+        assert!(tracker.seal_turn(&sigs_d, &empty_written, None).is_none());
+        assert!(tracker.seal_turn(&sigs_e, &empty_written, None).is_none());
+    }
+
+    #[test]
+    fn cross_turn_tracker_empty_turn_no_warning() {
+        let mut tracker = CrossTurnTracker::new();
+        let empty_sigs: Vec<String> = Vec::new();
+        let empty_written = HashSet::new();
+
+        // Empty turns should not trigger warnings or corrupt state
+        assert!(
+            tracker
+                .seal_turn(&empty_sigs, &empty_written, None)
+                .is_none()
+        );
+        assert!(
+            tracker
+                .seal_turn(&empty_sigs, &empty_written, None)
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn cross_turn_tracker_order_independent_fingerprint() {
+        let mut tracker = CrossTurnTracker::new();
+        let written = HashSet::new();
+
+        // Same signatures in different order should produce same fingerprint
+        let sigs_a = vec![
+            "unified_file::read::src/main.rs".to_string(),
+            "unified_search::grep::fn".to_string(),
+        ];
+        let sigs_b = vec![
+            "unified_search::grep::fn".to_string(),
+            "unified_file::read::src/main.rs".to_string(),
+        ];
+
+        assert!(tracker.seal_turn(&sigs_a, &written, None).is_none());
+        let warning = tracker.seal_turn(&sigs_b, &written, None);
+        assert!(warning.is_some());
+        assert!(warning.unwrap().contains("Cross-turn loop detected"));
     }
 }

@@ -201,6 +201,11 @@ impl<'a> TurnProcessingContext<'a> {
             assistant_phase,
         )?;
 
+        // Count this text response so the recovery loop can short-circuit
+        // when the model has already produced a final answer but the loop
+        // keeps re-prompting. See `MAX_ASSISTANT_TEXT_RESPONSES_PER_TURN`.
+        self.harness_state.record_assistant_text_response();
+
         if recovery_pass_response {
             self.finish_recovery_pass();
         }
