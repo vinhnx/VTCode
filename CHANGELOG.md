@@ -2,6 +2,48 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.133.22 - 2026-06-28
+
+### Highlights
+#### Bug Fixes
+
+- Stream isolated review subcalls (a7ffd7f7) (@kernitus)
+- Ignore responses keepalive events (f33650f5) (@kernitus)
+- Update compatible responses retry test (7b73ba2c) (@kernitus)
+#### Documentation
+
+- Add web_search tool reference, document /continue and did-you-mean (90a321b2) 
+- Expand TODO with known tech debt items (144491a0) 
+- Add defuddle_fetch tool reference and web_search config fields (5040faca) 
+- Fix stale src/tui.rs references, update CONTRIBUTING.md and INDEX.md (8b0518e1) 
+- Audit and trim per-crate AGENTS.md files (018656ea) 
+- Align CI/CD docs with actual workflow files (5e39c041) 
+#### Features
+
+- Implement cross-turn tracking and limit assistant text responses to prevent runaway loops (466c0c24) 
+- Add tiktoken integration for token counting and hierarchical summarization (3d5af4ed) 
+### Other Changes
+#### Other
+
+- Convert stringly-typed ResponseId, OutputItemId, ContentPartId to newtypes (2df60016) 
+- Implement recovery fallback messages and enhance outline search with directory summaries (75429ee7) 
+- Implement few-shot example selection and rendering; enhance tool descriptions and documentation. (82f078bb) 
+- Add persistent audit logging and per-MCP-server sandboxing (086208e3) 
+- Implement async approval blocker and escalation gate for irreversible actions (32d15be6) 
+- Add task history, message metadata, pending actions, and state schema modules (b670e3a0) 
+- Enhance tool descriptions for clarity and guidance on usage (b071d6a5) 
+- Enhance agent execution flow with escalation handling and stagnation detection (209364a4) 
+- Optimize token count management and enhance loop detection efficiency (e1f90cec) 
+- Refactor escalation decision enum and clean up evaluator gate outcome handling (c27527db) 
+- Refine system prompt guidelines for clarity and simplicity in agent operations (ae9a8a81) 
+- Clarify description for 'follow' parameter in unified search schema (e86300cc) 
+- Enhance skill availability messages to include instructions for listing full catalog (5512d9df) 
+- Refactor tool outcome handling and improve skill overflow messages for clarity (782b8fc7) 
+- Refactor model ID matching and clean up import statements for clarity (764128be) 
+- Refactor string formatting for improved readability and consistency across tests and core modules (87a375f3) 
+#### Tests
+
+- Fix prompt cache retention fixtures (6d032016) (@kernitus)
 ## 0.133.21 - 2026-06-28
 
 ### Highlights
