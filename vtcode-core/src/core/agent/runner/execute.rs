@@ -2,6 +2,7 @@ use super::AgentRunner;
 use super::continuation::{
     CompletionAssessment, ContinuationController, VerificationResult, is_review_like_task,
 };
+use super::escalation::{EscalationDecision, EscalationGate};
 use super::helpers::detect_textual_exec_tool_call;
 use super::orchestration::EvaluatorGateOutcome;
 use super::prompt_alignment;
@@ -375,7 +376,10 @@ impl AgentRunner {
                 session_state.outcome = TaskOutcome::Success;
                 Ok(true)
             }
-            EvaluatorGateOutcome::Continue { prompt } => {
+            EvaluatorGateOutcome::Continue {
+                prompt,
+                artifacts: _,
+            } => {
                 session_state.add_user_message(prompt);
                 Ok(false)
             }
@@ -1002,6 +1006,78 @@ impl AgentRunner {
                 }
 
                 let is_gemini = matches!(provider_kind, ModelProvider::Gemini);
+
+                // --- Confidence-based escalation gate ---
+                // Evaluate tool calls before dispatching them.  If any tool call
+                // triggers the escalation formula, halt the loop and write a
+                // blocked handoff for human review.
+                #[allow(unused_assignments)] // compiler keeps flags but this is clear
+                if self.config().agent.harness.confidence_escalation.enabled
+                    && !runtime.state.is_completed
+                    && let Some(tool_calls) = effective_tool_calls.as_ref()
+                    && !tool_calls.is_empty()
+                {
+                    let escalation_config = &self.config().agent.harness.confidence_escalation;
+                    let orchestration_mode = if orchestration_enabled {
+                        "plan_build_evaluate"
+                    } else {
+                        "single"
+                    };
+
+                    // Reuse the per-turn cost estimate from the budget check above.
+                    let cost_estimate = runtime.state.total_cost_usd;
+
+                    let result = EscalationGate::decide(
+                        tool_calls,
+                        escalation_config,
+                        &runtime.state.error_recovery.lock(),
+                        cost_estimate,
+                        orchestration_mode,
+                    );
+
+                    if result.any_escalated {
+                        // Combine reasons from all escalated tool calls.
+                        let reasons: Vec<String> = result
+                            .decisions
+                            .iter()
+                            .filter_map(|d| match d {
+                                EscalationDecision::Escalate { reason, .. } => Some(reason.clone()),
+                                EscalationDecision::Proceed => None,
+                            })
+                            .collect();
+                        let summary = reasons.join("; ");
+
+                        self.runner_println(format_args!(
+                            "{} {}: {}",
+                            agent_prefix,
+                            style("[ESCALATION REQUIRED]").red().bold(),
+                            summary
+                        ));
+
+                        runtime.state.outcome =
+                            TaskOutcome::escalated(summary.clone(), "multi_tool".to_string());
+
+                        event_recorder.harness_event(
+                            HarnessEventKind::EscalationTriggered,
+                            Some(summary),
+                            None,
+                            None,
+                            None,
+                        );
+
+                        should_write_blocked_handoff = true;
+                        break;
+                    }
+
+                    // Track that we checked escalation and bypassed it.
+                    event_recorder.harness_event(
+                        HarnessEventKind::EscalationBypassed,
+                        Some("All tool calls passed escalation gate".into()),
+                        None,
+                        None,
+                        None,
+                    );
+                }
 
                 if !runtime.state.is_completed
                     && effective_tool_calls

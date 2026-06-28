@@ -715,6 +715,8 @@ pub enum HarnessEventKind {
     EvaluationPassed,
     EvaluationFailed,
     RevisionStarted,
+    EscalationTriggered,
+    EscalationBypassed,
     VerificationStarted,
     VerificationPassed,
     VerificationFailed,

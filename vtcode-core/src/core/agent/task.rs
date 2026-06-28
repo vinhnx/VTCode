@@ -59,6 +59,13 @@ pub enum TaskOutcome {
     },
     LoopDetected,
     Cancelled,
+    HandedOff {
+        target: String,
+    },
+    Escalated {
+        reason: String,
+        tool_name: String,
+    },
     Failed {
         reason: String,
     },
@@ -106,6 +113,10 @@ impl TaskOutcome {
             }
             Self::LoopDetected => "Stopped due to infinite loop detection".into(),
             Self::Cancelled => "Task cancelled by user".into(),
+            Self::HandedOff { target } => format!("Task handed off to `{target}`"),
+            Self::Escalated { reason, tool_name } => {
+                format!("Task escalated: {tool_name} — {reason}")
+            }
             Self::Failed { reason } => format!("Task failed: {reason}"),
             Self::Unknown => "Task outcome could not be determined".into(),
         }
@@ -120,6 +131,8 @@ impl TaskOutcome {
             Self::ToolLoopLimitReached { .. } => "tool_loop_limit_reached",
             Self::LoopDetected => "loop_detected",
             Self::Cancelled => "cancelled",
+            Self::HandedOff { .. } => "handed_off",
+            Self::Escalated { .. } => "escalated",
             Self::Failed { .. } => "failed",
             Self::Unknown => "unknown",
         }
@@ -133,6 +146,8 @@ impl TaskOutcome {
             Self::Cancelled => ThreadCompletionSubtype::Cancelled,
             Self::ToolLoopLimitReached { .. }
             | Self::LoopDetected
+            | Self::HandedOff { .. }
+            | Self::Escalated { .. }
             | Self::Failed { .. }
             | Self::Unknown => ThreadCompletionSubtype::ErrorDuringExecution,
         }
@@ -161,6 +176,14 @@ impl TaskOutcome {
             max_tool_loops,
             actual_tool_loops,
         }
+    }
+
+    pub fn escalated(reason: String, tool_name: String) -> Self {
+        Self::Escalated { reason, tool_name }
+    }
+
+    pub fn handed_off(target: String) -> Self {
+        Self::HandedOff { target }
     }
 }
 

@@ -13,6 +13,7 @@ pub mod display;
 pub mod error_recovery;
 pub mod events;
 pub mod features;
+pub mod handoff;
 pub mod runner;
 pub mod runtime;
 pub mod session;
@@ -24,8 +25,10 @@ pub mod task;
 pub mod types;
 
 // Re-export main types for convenience
+pub use blocked_handoff::{AsyncApprovalArtifacts, BlockedHandoffArtifacts};
 pub use bootstrap::{AgentComponentBuilder, AgentComponentSet};
 pub use features::{FeatureGate, FeatureSet, FeatureStage, OpenResponsesFeature};
+pub use handoff::{HandoffReceipt, HandoffRequest};
 pub use session_config::ResolvedSessionConfig;
 
 pub use types::*;

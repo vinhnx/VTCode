@@ -41,6 +41,7 @@ use vtcode_config::auth::OpenAIChatGptAuthHandle;
 mod config_helpers;
 mod constants;
 mod continuation;
+mod escalation;
 mod execute;
 mod execute_checks;
 mod helpers;

@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use chrono::Utc;
+use uuid::Uuid;
 
 use crate::utils::session_debug::sanitize_debug_component;
 
@@ -105,6 +106,70 @@ fn render_blocked_handoff(
     )
 }
 
+/// Artifacts produced by [`write_async_approval_blocker`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AsyncApprovalArtifacts {
+    pub current_path: PathBuf,
+    pub approval_token: String,
+}
+
+/// Write an async (deferred) approval blocker file.
+///
+/// Unlike [`write_blocked_handoff`] which signals a hard stop, this writes a
+/// blocker that can be resolved out-of-band via CLI (`vtcode approve <token>`).
+/// The blocker includes the approval question, tool details, and a unique token.
+pub fn write_async_approval_blocker(
+    workspace: &Path,
+    session_id: &str,
+    approval_question: &str,
+    tool_name: &str,
+    args: &serde_json::Value,
+    estimated_cost: Option<f64>,
+    notify_command: Option<&str>,
+) -> Result<AsyncApprovalArtifacts> {
+    let tasks_dir = workspace.join(TASKS_DIR);
+    let blockers_dir = tasks_dir.join(BLOCKERS_DIR);
+    fs::create_dir_all(&blockers_dir)
+        .with_context(|| format!("failed to create blockers dir {}", blockers_dir.display()))?;
+
+    let approval_token = Uuid::new_v4().to_string();
+    let timestamp = Utc::now();
+    let archive_name = format!(
+        "async-{}-{}.md",
+        sanitize_debug_component(session_id, "session"),
+        timestamp.format("%Y%m%dT%H%M%SZ")
+    );
+    let current_path = blockers_dir.join(archive_name);
+
+    let cost_line = estimated_cost
+        .map(|c| format!("Estimated cost: ${c:.4}"))
+        .unwrap_or_default();
+
+    let notify_line = notify_command
+        .map(|cmd| format!("Notify command: `{cmd}`"))
+        .unwrap_or_default();
+
+    let markdown = format!(
+        "---\ntoken: {approval_token}\nsession_id: {session_id}\ntool: {tool_name}\ncreated_at: {created_at}\ntype: async_approval\n---\n\n\
+         # Async Approval Request\n\n\
+         ## Question\n\n{approval_question}\n\n\
+         ## Tool\n- Name: `{tool_name}`\n- Arguments: ```json\n{args_json}\n```\n\
+         {cost_line}\n{notify_line}\n\n\
+         ## How to Approve\n\n\
+         ```\nvtcode approve {approval_token}\nvtcode reject {approval_token}\nvtcode approve list\n```\n",
+        created_at = timestamp.to_rfc3339(),
+        args_json = serde_json::to_string_pretty(args).unwrap_or_else(|_| args.to_string()),
+    );
+
+    fs::write(&current_path, &markdown)
+        .with_context(|| format!("failed to write async blocker {}", current_path.display()))?;
+
+    Ok(AsyncApprovalArtifacts {
+        current_path,
+        approval_token,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -139,5 +204,61 @@ mod tests {
         assert!(current.contains("# Current Task"));
         assert!(current.contains("vtcode --resume session-123"));
         assert!(current.contains("src/lib.rs"));
+    }
+
+    #[test]
+    fn write_async_approval_blocker_creates_file_with_token() {
+        let temp = tempfile::tempdir().expect("temp dir");
+        let tasks_dir = temp.path().join(".vtcode/tasks");
+        fs::create_dir_all(&tasks_dir).expect("tasks dir");
+
+        let artifacts = write_async_approval_blocker(
+            temp.path(),
+            "session-456",
+            "Push 50 commits to main?",
+            "git_push",
+            &serde_json::json!({"force": true, "branch": "main"}),
+            Some(0.50),
+            Some("/usr/local/bin/notify"),
+        )
+        .expect("write async blocker");
+
+        assert!(!artifacts.approval_token.is_empty());
+        assert!(artifacts.current_path.exists());
+
+        let content = fs::read_to_string(&artifacts.current_path).expect("read blocker");
+        assert!(content.contains("Push 50 commits to main?"));
+        assert!(content.contains("git_push"));
+        assert!(content.contains("Estimated cost: $0.50"));
+        assert!(content.contains("vtcode approve"));
+        assert!(content.contains(&artifacts.approval_token));
+    }
+
+    #[test]
+    fn write_async_approval_blocker_handles_minimal_input() {
+        let temp = tempfile::tempdir().expect("temp dir");
+        let tasks_dir = temp.path().join(".vtcode/tasks");
+        fs::create_dir_all(&tasks_dir).expect("tasks dir");
+
+        let artifacts = write_async_approval_blocker(
+            temp.path(),
+            "session-789",
+            "Delete the file?",
+            "delete_file",
+            &serde_json::json!({"path": "/tmp/x"}),
+            None,
+            None,
+        )
+        .expect("write async blocker");
+
+        assert!(!artifacts.approval_token.is_empty());
+        assert!(artifacts.current_path.exists());
+
+        let content = fs::read_to_string(&artifacts.current_path).expect("read blocker");
+        assert!(content.contains("Delete the file?"));
+        assert!(content.contains("delete_file"));
+        // No cost or notify section
+        assert!(!content.contains("Estimated cost:"));
+        assert!(!content.contains("Notify command:"));
     }
 }

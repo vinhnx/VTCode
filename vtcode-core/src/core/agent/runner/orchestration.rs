@@ -13,6 +13,7 @@ use serde::Deserialize;
 use serde::Deserializer;
 use serde_json::json;
 use std::fmt::Write;
+use tracing::warn;
 
 fn deserialize_string_or_vec<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
 where
@@ -64,8 +65,13 @@ pub(super) struct EvaluationArtifacts {
 #[derive(Debug, Clone)]
 pub(super) enum EvaluatorGateOutcome {
     Accept,
-    Continue { prompt: String },
-    Exhausted { reason: String },
+    Continue {
+        prompt: String,
+        artifacts: Option<PlannerArtifacts>,
+    },
+    Exhausted {
+        reason: String,
+    },
 }
 
 #[derive(Debug, Deserialize)]
@@ -339,6 +345,61 @@ impl AgentRunner {
         })
     }
 
+    /// Re-plan from the current state after an evaluator rejection.
+    ///
+    /// Appends evaluator feedback to the existing spec and contract files so the
+    /// generator can see what went wrong.  This is intentionally LLM-free —
+    /// the artifacts are updated in-place and the next continuation loop picks
+    /// them up transparently.
+    ///
+    /// TODO: Add an LLM-based planner call here that produces a genuinely
+    /// revised spec/contract/tracker.  The current implementation simply
+    /// annotates the existing artifacts with evaluator context.
+    pub(super) async fn replan_from_failure(
+        &mut self,
+        task: &Task,
+        evaluation: &EvaluationArtifacts,
+        revision_round: usize,
+    ) -> Option<PlannerArtifacts> {
+        let spec_path = harness_artifacts::current_spec_path(&self._workspace);
+        let contract_path = harness_artifacts::current_contract_path(&self._workspace);
+        let tracker_path = harness_artifacts::current_task_path(&self._workspace);
+
+        // Annotate the existing spec with evaluator feedback.
+        let existing_spec = tokio::fs::read_to_string(&spec_path)
+            .await
+            .unwrap_or_default();
+        let annotated_spec = format!(
+            "{existing_spec}\n\n\
+             --- Revision Round {revision_round} ---\n\
+             Evaluator feedback:\n{evaluation_summary}\n",
+            evaluation_summary = evaluation.summary,
+        );
+        let _ = harness_artifacts::write_spec(&self._workspace, &annotated_spec)
+            .await
+            .inspect_err(|e| warn!(error = %e, "replan_from_failure: failed to annotate spec"));
+
+        // Annotate the existing contract similarly.
+        let existing_contract = tokio::fs::read_to_string(&contract_path)
+            .await
+            .unwrap_or_default();
+        let annotated_contract = format!(
+            "{existing_contract}\n\n\
+             --- Revision Round {revision_round} ---\n\
+             Evaluator feedback:\n{evaluation_summary}\n",
+            evaluation_summary = evaluation.summary,
+        );
+        let _ = harness_artifacts::write_contract(&self._workspace, &annotated_contract)
+            .await
+            .inspect_err(|e| warn!(error = %e, "replan_from_failure: failed to annotate contract"));
+
+        Some(PlannerArtifacts {
+            spec_path,
+            contract_path,
+            tracker_path,
+        })
+    }
+
     pub(super) fn augment_generator_task(&self, task: &Task, artifacts: &PlannerArtifacts) -> Task {
         let mut effective_task = task.clone();
         let addendum = format!(
@@ -454,9 +515,41 @@ impl AgentRunner {
             None,
         );
 
-        Ok(EvaluatorGateOutcome::Continue {
-            prompt: self.evaluation_retry_prompt(&evaluation, *revision_rounds_used),
-        })
+        // Re-plan from the current state using evaluator feedback.
+        // Best-effort: if re-planning fails (e.g. mock provider in tests),
+        // fall back to the original retry prompt without updated artifacts.
+        let revised_artifacts = self
+            .replan_from_failure(task, &evaluation, *revision_rounds_used)
+            .await;
+
+        if let Some(ref artifacts) = revised_artifacts {
+            let prompt = format!(
+                "Evaluator rejected the candidate implementation in round {}.\n\n\
+                 The plan has been revised based on evaluator feedback.\n\
+                 Updated spec: {}\n\
+                 Updated contract: {}\n\
+                 Updated tracker: {}\n\n\
+                 Latest evaluation summary:\n{}\n\n\
+                 Evaluation artifact: {}\n\n\
+                 Work through the updated tracker items.",
+                *revision_rounds_used,
+                artifacts.spec_path.display(),
+                artifacts.contract_path.display(),
+                artifacts.tracker_path.display(),
+                evaluation.summary,
+                evaluation.evaluation_path.display(),
+            );
+
+            Ok(EvaluatorGateOutcome::Continue {
+                prompt,
+                artifacts: Some(artifacts.clone()),
+            })
+        } else {
+            Ok(EvaluatorGateOutcome::Continue {
+                prompt: self.evaluation_retry_prompt(&evaluation, *revision_rounds_used),
+                artifacts: None,
+            })
+        }
     }
 
     fn fallback_spec_markdown(&self, task: &Task) -> String {
