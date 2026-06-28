@@ -16,9 +16,7 @@ pub fn current_timestamp_rfc3339() -> String {
 
 fn format_rfc3339_utc_seconds(secs: u64) -> String {
     let (year, month, day, hour, minute, second) = civil_from_unix(secs);
-    format!(
-        "{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}Z"
-    )
+    format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}Z")
 }
 
 /// Convert seconds since the Unix epoch to (year, month, day, hour, minute,

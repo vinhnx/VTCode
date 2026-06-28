@@ -166,9 +166,7 @@ impl PipeSessionManager {
         }
 
         let pending = output.get(start..).map(ToOwned::to_owned).ok_or_else(|| {
-            anyhow!(
-                "pipe session '{session_id}' produced invalid output boundary"
-            )
+            anyhow!("pipe session '{session_id}' produced invalid output boundary")
         })?;
 
         if drain {

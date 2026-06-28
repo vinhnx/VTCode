@@ -126,9 +126,7 @@ impl TerminalAppLauncher {
             debug!("using configured preferred editor command: {}", preferred);
             Self::build_editor_command_from_string(preferred, &target, wait_for_editor)
                 .with_context(|| {
-                    format!(
-                        "failed to parse tools.editor.preferred_editor '{preferred}'"
-                    )
+                    format!("failed to parse tools.editor.preferred_editor '{preferred}'")
                 })?
         } else if let Some(env_command) = Self::editor_command_from_env() {
             debug!("using editor command from environment: {}", env_command);

@@ -263,9 +263,7 @@ impl DecisionTracker {
                             vtcode_commons::formatting::truncate_byte_budget(&s, 120, "…")
                         }
                     };
-                    format!(
-                        "- [turn {turn}] tool:{name} args={arg_preview} (t={ts})"
-                    )
+                    format!("- [turn {turn}] tool:{name} args={arg_preview} (t={ts})")
                 }
                 Action::Response {
                     response_type,
@@ -273,9 +271,7 @@ impl DecisionTracker {
                 } => {
                     let preview =
                         vtcode_commons::formatting::truncate_byte_budget(content, 120, "…");
-                    format!(
-                        "- [turn {turn}] response:{response_type:?} {preview} (t={ts})"
-                    )
+                    format!("- [turn {turn}] response:{response_type:?} {preview} (t={ts})")
                 }
                 Action::ErrorRecovery {
                     error_type,

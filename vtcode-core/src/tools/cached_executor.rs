@@ -259,9 +259,7 @@ impl CachedToolExecutor {
             Err(_) => {
                 let err = UnifiedToolError::new(
                     UnifiedErrorKind::Timeout,
-                    format!(
-                        "Tool '{tool_name}' timed out after {timeout_secs} seconds"
-                    ),
+                    format!("Tool '{tool_name}' timed out after {timeout_secs} seconds"),
                 )
                 .with_tool_name(tool_name);
                 self.record_error(tool_name, start.elapsed(), &req, &err)

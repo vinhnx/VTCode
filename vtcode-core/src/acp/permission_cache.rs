@@ -332,10 +332,7 @@ mod tests {
         let mut cache = AcpPermissionCache::new();
 
         for i in 0..5 {
-            cache.cache_grant(
-                test_path(&format!("file{i}.rs")),
-                PermissionGrant::Session,
-            );
+            cache.cache_grant(test_path(&format!("file{i}.rs")), PermissionGrant::Session);
         }
 
         assert_eq!(cache.stats().cached_entries, 5);

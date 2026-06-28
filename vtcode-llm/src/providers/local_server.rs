@@ -583,9 +583,7 @@ async fn start_llamacpp() -> Result<String> {
         .kill_on_drop(true);
 
     let child = cmd.spawn().with_context(|| {
-        format!(
-            "Failed to start llama-server (`{binary} -m <model> --port {port}`)"
-        )
+        format!("Failed to start llama-server (`{binary} -m <model> --port {port}`)")
     })?;
 
     store_managed_child(LocalProvider::LlamaCpp, child);

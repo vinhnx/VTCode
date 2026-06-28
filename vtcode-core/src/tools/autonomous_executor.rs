@@ -405,9 +405,7 @@ impl AutonomousExecutor {
     /// Validate shell command for safety
     fn validate_command_text(&self, cmd: &str) -> Result<()> {
         if self.is_destructive_command(cmd) {
-            anyhow::bail!(
-                "Destructive command requires explicit confirmation: {cmd}"
-            );
+            anyhow::bail!("Destructive command requires explicit confirmation: {cmd}");
         }
 
         Ok(())
@@ -458,9 +456,7 @@ impl AutonomousExecutor {
                 format!("\n  {}", content.lines().collect::<Vec<_>>().join("\n  "))
             };
 
-            format!(
-                "Will write {lines} lines ({size_kb} KB) to: {path}\nPreview:{preview}"
-            )
+            format!("Will write {lines} lines ({size_kb} KB) to: {path}\nPreview:{preview}")
         } else if tool_name == tools::EDIT_FILE
             || (tool_name == tools::UNIFIED_FILE && unified_file_action_is(args, "edit"))
         {

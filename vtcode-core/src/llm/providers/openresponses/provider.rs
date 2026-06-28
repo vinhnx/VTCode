@@ -564,10 +564,8 @@ impl OpenResponsesProvider {
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
-            let formatted_error = error_display::format_llm_error(
-                "OpenResponses",
-                &format!("HTTP {status}: {body}"),
-            );
+            let formatted_error =
+                error_display::format_llm_error("OpenResponses", &format!("HTTP {status}: {body}"));
             return Err(LLMError::Provider {
                 message: formatted_error,
                 metadata: None,
@@ -671,10 +669,8 @@ impl OpenResponsesProvider {
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
-            let formatted_error = error_display::format_llm_error(
-                "OpenResponses",
-                &format!("HTTP {status}: {body}"),
-            );
+            let formatted_error =
+                error_display::format_llm_error("OpenResponses", &format!("HTTP {status}: {body}"));
             return Err(LLMError::Provider {
                 message: formatted_error,
                 metadata: None,
@@ -855,10 +851,8 @@ impl LLMProvider for OpenResponsesProvider {
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
-            let formatted_error = error_display::format_llm_error(
-                "OpenResponses",
-                &format!("HTTP {status}: {body}"),
-            );
+            let formatted_error =
+                error_display::format_llm_error("OpenResponses", &format!("HTTP {status}: {body}"));
             return Err(LLMError::Provider {
                 message: formatted_error,
                 metadata: None,
@@ -898,10 +892,8 @@ impl LLMProvider for OpenResponsesProvider {
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
-            let formatted_error = error_display::format_llm_error(
-                "OpenResponses",
-                &format!("HTTP {status}: {body}"),
-            );
+            let formatted_error =
+                error_display::format_llm_error("OpenResponses", &format!("HTTP {status}: {body}"));
             return Err(LLMError::Provider {
                 message: formatted_error,
                 metadata: None,
@@ -1019,10 +1011,8 @@ impl LLMProvider for OpenResponsesProvider {
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
-            let formatted_error = error_display::format_llm_error(
-                "OpenResponses",
-                &format!("HTTP {status}: {body}"),
-            );
+            let formatted_error =
+                error_display::format_llm_error("OpenResponses", &format!("HTTP {status}: {body}"));
             return Err(LLMError::Provider {
                 message: formatted_error,
                 metadata: None,

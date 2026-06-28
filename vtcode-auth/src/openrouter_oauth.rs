@@ -583,9 +583,7 @@ impl AuthStatus {
                 let expiry_str = expires_in
                     .map(|e| format!(", expires in {}", humanize_duration(e)))
                     .unwrap_or_default();
-                format!(
-                    "Authenticated{label_str}, obtained {age_str}{expiry_str}"
-                )
+                format!("Authenticated{label_str}, obtained {age_str}{expiry_str}")
             }
             AuthStatus::NotAuthenticated => "Not authenticated".to_string(),
         }

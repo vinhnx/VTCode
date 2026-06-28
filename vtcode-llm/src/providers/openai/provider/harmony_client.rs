@@ -444,9 +444,7 @@ impl OpenAIProvider {
         .map_err(|e| {
             let formatted_error = error_display::format_llm_error(
                 "OpenAI",
-                &format!(
-                    "Failed to send request to harmony inference server at {server_url}: {e}"
-                ),
+                &format!("Failed to send request to harmony inference server at {server_url}: {e}"),
             );
             provider::LLMError::Network {
                 message: formatted_error,

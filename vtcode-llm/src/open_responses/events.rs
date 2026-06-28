@@ -227,13 +227,14 @@ pub enum ResponseStreamEvent {
 
 impl ResponseStreamEvent {
     /// Returns the response ID associated with this event.
-    pub fn response_id(&self) -> &str {
+    #[must_use]
+    pub fn response_id(&self) -> Option<&ResponseId> {
         match self {
             Self::ResponseCreated { response, .. }
             | Self::ResponseInProgress { response, .. }
             | Self::ResponseCompleted { response, .. }
             | Self::ResponseFailed { response, .. }
-            | Self::ResponseIncomplete { response, .. } => &response.id,
+            | Self::ResponseIncomplete { response, .. } => Some(&response.id),
 
             Self::OutputItemAdded { response_id, .. }
             | Self::OutputItemDone { response_id, .. }
@@ -245,8 +246,8 @@ impl ResponseStreamEvent {
             | Self::FunctionCallArgumentsDone { response_id, .. }
             | Self::ReasoningDelta { response_id, .. }
             | Self::ReasoningDone { response_id, .. }
-            | Self::CustomEvent { response_id, .. } => response_id,
-            Self::Unknown => "",
+            | Self::CustomEvent { response_id, .. } => Some(response_id),
+            Self::Unknown => None,
         }
     }
 
@@ -331,18 +332,28 @@ pub trait StreamEventEmitter: Send {
     }
 
     /// Emit an output item added event.
-    fn output_item_added(&mut self, response_id: &str, output_index: usize, item: OutputItem) {
+    fn output_item_added(
+        &mut self,
+        response_id: &ResponseId,
+        output_index: usize,
+        item: OutputItem,
+    ) {
         self.emit(ResponseStreamEvent::OutputItemAdded {
-            response_id: response_id.to_string(),
+            response_id: response_id.clone(),
             output_index,
             item,
         });
     }
 
     /// Emit an output item done event.
-    fn output_item_done(&mut self, response_id: &str, output_index: usize, item: OutputItem) {
+    fn output_item_done(
+        &mut self,
+        response_id: &ResponseId,
+        output_index: usize,
+        item: OutputItem,
+    ) {
         self.emit(ResponseStreamEvent::OutputItemDone {
-            response_id: response_id.to_string(),
+            response_id: response_id.clone(),
             output_index,
             item,
         });
@@ -351,14 +362,14 @@ pub trait StreamEventEmitter: Send {
     /// Emit a text delta event.
     fn output_text_delta(
         &mut self,
-        response_id: &str,
+        response_id: &ResponseId,
         item_id: &str,
         output_index: usize,
         content_index: usize,
         delta: &str,
     ) {
         self.emit(ResponseStreamEvent::OutputTextDelta {
-            response_id: response_id.to_string(),
+            response_id: response_id.clone(),
             item_id: item_id.to_string(),
             output_index,
             content_index,
@@ -369,13 +380,13 @@ pub trait StreamEventEmitter: Send {
     /// Emit a reasoning delta event.
     fn reasoning_delta(
         &mut self,
-        response_id: &str,
+        response_id: &ResponseId,
         item_id: &str,
         output_index: usize,
         delta: &str,
     ) {
         self.emit(ResponseStreamEvent::ReasoningDelta {
-            response_id: response_id.to_string(),
+            response_id: response_id.clone(),
             item_id: item_id.to_string(),
             output_index,
             delta: delta.to_string(),

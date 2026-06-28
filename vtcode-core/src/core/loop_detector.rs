@@ -1424,10 +1424,7 @@ mod tests {
         );
         assert!(r.is_some(), "HARD STOP should fire at call 6");
         let msg = r.unwrap();
-        assert!(
-            msg.contains("HARD STOP"),
-            "Expected HARD STOP, got: {msg}"
-        );
+        assert!(msg.contains("HARD STOP"), "Expected HARD STOP, got: {msg}");
         assert!(msg.contains("Cargo.lock"));
         assert!(msg.contains("offset/limit"));
         assert!(detector.is_hard_limit_exceeded(&read_tool));

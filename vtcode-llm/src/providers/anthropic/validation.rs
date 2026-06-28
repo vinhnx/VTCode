@@ -456,9 +456,7 @@ fn validate_anthropic_tool_name(name: &str) -> Result<(), LLMError> {
 
     let formatted_error = error_display::format_llm_error(
         "Anthropic",
-        &format!(
-            "tool name '{name}' must match ^[a-zA-Z0-9_-]{{1,64}}$ for Anthropic tool use"
-        ),
+        &format!("tool name '{name}' must match ^[a-zA-Z0-9_-]{{1,64}}$ for Anthropic tool use"),
     );
     Err(LLMError::InvalidRequest {
         message: formatted_error,

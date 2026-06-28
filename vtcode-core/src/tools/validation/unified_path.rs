@@ -22,9 +22,7 @@ pub async fn validate_and_resolve_path(workspace_root: &Path, path_str: &str) ->
     let normalized_root = crate::utils::path::normalize_path(workspace_root);
 
     if !normalized.starts_with(&normalized_root) {
-        bail!(
-            "Path '{path_str}' resolves outside the workspace boundary"
-        );
+        bail!("Path '{path_str}' resolves outside the workspace boundary");
     }
 
     // Step 3: Canonical resolve + re-check (catches symlink escapes)

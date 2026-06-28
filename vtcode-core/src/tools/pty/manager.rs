@@ -575,9 +575,10 @@ if output.len() > max_tokens * 4 {
             &extra_env,
         );
 
-        let child = pair.slave.spawn_command(builder).with_context(|| {
-            format!("failed to spawn PTY session command '{display_program}'")
-        })?;
+        let child = pair
+            .slave
+            .spawn_command(builder)
+            .with_context(|| format!("failed to spawn PTY session command '{display_program}'"))?;
 
         // Capture the child process ID for process group management
         let child_pid = child.process_id();

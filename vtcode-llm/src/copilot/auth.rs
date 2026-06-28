@@ -668,23 +668,17 @@ fn blocking_interactive_logout_command(
         thread::sleep(wait_granularity);
     }
 
-    let status = wait_thread.join().map_err(|panic| {
-        anyhow!(
-            "interactive copilot logout wait thread panicked: {panic:?}"
-        )
-    })?;
+    let status = wait_thread
+        .join()
+        .map_err(|panic| anyhow!("interactive copilot logout wait thread panicked: {panic:?}"))?;
 
-    let writer_result = writer_thread.join().map_err(|panic| {
-        anyhow!(
-            "interactive copilot logout writer thread panicked: {panic:?}"
-        )
-    })?;
+    let writer_result = writer_thread
+        .join()
+        .map_err(|panic| anyhow!("interactive copilot logout writer thread panicked: {panic:?}"))?;
 
-    let reader_result = reader_thread.join().map_err(|panic| {
-        anyhow!(
-            "interactive copilot logout reader thread panicked: {panic:?}"
-        )
-    })?;
+    let reader_result = reader_thread
+        .join()
+        .map_err(|panic| anyhow!("interactive copilot logout reader thread panicked: {panic:?}"))?;
 
     if auth_cleared {
         return Ok(());

@@ -594,9 +594,7 @@ impl ToolRegistry {
             self.exec_session_metadata(session_id)
                 .await
                 .with_context(|| {
-                    format!(
-                        "exec session '{session_id}' disappeared during settlement"
-                    )
+                    format!("exec session '{session_id}' disappeared during settlement")
                 })?;
         }
     }
@@ -622,11 +620,7 @@ impl ToolRegistry {
 
         let next = output
             .get(*peeked_bytes..)
-            .ok_or_else(|| {
-                anyhow!(
-                    "exec session '{session_id}' output boundary became invalid"
-                )
-            })?
+            .ok_or_else(|| anyhow!("exec session '{session_id}' output boundary became invalid"))?
             .to_string();
         *peeked_bytes = output.len();
         if next.is_empty() {

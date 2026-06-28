@@ -137,9 +137,7 @@ impl AutoSkillVerifier {
         details: &str,
         output_hint: Option<&str>,
     ) -> Result<String> {
-        let mut response = format!(
-            "✓ Skill '{skill_name}' executed successfully\n\n{details}"
-        );
+        let mut response = format!("✓ Skill '{skill_name}' executed successfully\n\n{details}");
 
         if let Some(hint) = output_hint {
             // Scan the hint for files

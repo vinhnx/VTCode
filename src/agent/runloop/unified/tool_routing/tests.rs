@@ -2,7 +2,7 @@ use super::{
     AutoPermissionRuntimeContext, SessionStats, ToolPermissionFlow, ToolPermissionsContext,
     approval_learning_target, approval_persistence::shell_command_has_persisted_approval_prefix,
     approval_policy_rejects_prompt, ensure_tool_permission, persist_segment_approval_cache_keys,
-    persist_shell_approval_prefix_rule, tool_display_labels,
+    persist_shell_approval_prefix_rule, persisted_segment_approval_hit_key, tool_display_labels,
 };
 use anyhow::Result;
 use async_trait::async_trait;
@@ -1661,6 +1661,35 @@ async fn permanent_shell_approval_persists_segmented_commands() {
                 "cargo check|sandbox_permissions=\"use_default\"|additional_permissions=null"
             )
             .await
+    );
+}
+
+#[tokio::test]
+async fn permanent_shell_approval_reuses_for_loop_body_commands() {
+    let temp_dir = tempfile::TempDir::new().expect("temp dir");
+    let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+    let approved_args = json!({
+        "action": "run",
+        "command": "cd vtcode-core/src/tools/registry && for f in *.rs; do echo \"=== $f ===\"; grep -nE '^(pub )?(struct|enum|fn)' \"$f\" | head -50; done",
+    });
+
+    persist_segment_approval_cache_keys(
+        &registry,
+        "unified_exec",
+        "unified_exec",
+        Some(&approved_args),
+    )
+    .await;
+
+    let later_args = json!({
+        "action": "run",
+        "command": "cd vtcode-core/src/tools/registry && for f in approval_recorder.rs assembly.rs; do echo \"=== $f ===\"; grep -nE '^(pub )?(struct|enum|fn)' \"$f\" | head -50; done",
+    });
+
+    assert!(
+        persisted_segment_approval_hit_key(&registry, "unified_exec", Some(&later_args))
+            .await
+            .is_some()
     );
 }
 

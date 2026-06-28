@@ -752,10 +752,8 @@ impl GeminiProvider {
     pub(super) fn map_streaming_error(error: StreamingError) -> LLMError {
         match error {
             StreamingError::NetworkError { message, .. } => {
-                let formatted = error_display::format_llm_error(
-                    "Gemini",
-                    &format!("Network error: {message}"),
-                );
+                let formatted =
+                    error_display::format_llm_error("Gemini", &format!("Network error: {message}"));
                 LLMError::Network {
                     message: formatted,
                     metadata: None,
@@ -802,9 +800,7 @@ impl GeminiProvider {
             } => {
                 let formatted = error_display::format_llm_error(
                     "Gemini",
-                    &format!(
-                        "Streaming timeout during {operation} after {duration:?}"
-                    ),
+                    &format!("Streaming timeout during {operation} after {duration:?}"),
                 );
                 LLMError::Network {
                     message: formatted,
@@ -812,10 +808,8 @@ impl GeminiProvider {
                 }
             }
             StreamingError::ContentError { message } => {
-                let formatted = error_display::format_llm_error(
-                    "Gemini",
-                    &format!("Content error: {message}"),
-                );
+                let formatted =
+                    error_display::format_llm_error("Gemini", &format!("Content error: {message}"));
                 LLMError::Provider {
                     message: formatted,
                     metadata: None,

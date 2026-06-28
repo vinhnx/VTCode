@@ -35,9 +35,7 @@ impl SandboxDebugResult {
             success: false,
             exit_code: None,
             stdout: String::new(),
-            stderr: format!(
-                "Sandbox type {sandbox_type:?} is not available on this platform"
-            ),
+            stderr: format!("Sandbox type {sandbox_type:?} is not available on this platform"),
             sandbox_type,
             sandbox_active: false,
         }

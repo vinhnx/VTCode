@@ -564,9 +564,7 @@ pub(super) fn resolve_workspace_scoped_path(
     let normalized = crate::utils::path::normalize_path(&absolute);
     let normalized_workspace = crate::utils::path::normalize_path(workspace_root);
     if !normalized.starts_with(&normalized_workspace) {
-        return Err(anyhow!(
-            "spool_path must stay within workspace: {raw_path}"
-        ));
+        return Err(anyhow!("spool_path must stay within workspace: {raw_path}"));
     }
 
     Ok(normalized)

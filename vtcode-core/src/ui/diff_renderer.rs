@@ -848,11 +848,7 @@ mod tests {
         // Create more files than MAX_INLINE_DIFF_FILES
         let mut changes = Vec::new();
         for i in 0..(diff_constants::MAX_INLINE_DIFF_FILES + 5) {
-            changes.push((
-                format!("file{i}.rs"),
-                format!("old{i}"),
-                format!("new{i}"),
-            ));
+            changes.push((format!("file{i}.rs"), format!("old{i}"), format!("new{i}")));
         }
 
         let check = renderer.check_suppression(&changes);
@@ -911,11 +907,7 @@ mod tests {
         // Create enough changes to trigger suppression
         let mut changes = Vec::new();
         for i in 0..(diff_constants::MAX_INLINE_DIFF_FILES + 2) {
-            changes.push((
-                format!("file{i}.rs"),
-                "old".to_string(),
-                "new".to_string(),
-            ));
+            changes.push((format!("file{i}.rs"), "old".to_string(), "new".to_string()));
         }
 
         let output = renderer.render_multiple_changes(changes);

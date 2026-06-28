@@ -6,9 +6,6 @@
 
 use serde::{Deserialize, Serialize};
 
-/// Unique identifier for a content part within an output item.
-pub type ContentPartId = String;
-
 /// Content part types supported by Open Responses.
 ///
 /// Content parts are the atomic units of content within message items.

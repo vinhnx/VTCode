@@ -5,12 +5,15 @@
 
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
+use vtcode_macros::StringNewtype;
 
 use super::{OpenResponseError, OpenUsage, OutputItem};
 use crate::provider::ToolDefinition;
 
 /// Unique identifier for a response.
-pub type ResponseId = String;
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, StringNewtype)]
+#[serde(transparent)]
+pub struct ResponseId(String);
 
 /// Status of a response.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
@@ -166,7 +169,7 @@ pub struct Response {
 
 impl Response {
     /// Creates a new response with the given ID and model.
-    pub fn new(id: impl Into<String>, model: impl Into<String>) -> Self {
+    pub fn new(id: impl Into<ResponseId>, model: impl Into<String>) -> Self {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map(|d| d.as_secs())
@@ -297,7 +300,7 @@ mod tests {
     #[test]
     fn test_response_creation() {
         let response = Response::new("resp_123", "gpt-5");
-        assert_eq!(response.id, "resp_123");
+        assert_eq!(response.id.as_str(), "resp_123");
         assert_eq!(response.model, "gpt-5");
         assert_eq!(response.object, "response");
         assert_eq!(response.status, ResponseStatus::InProgress);

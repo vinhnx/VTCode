@@ -797,9 +797,7 @@ impl PlanningTaskTrackerTool {
 
         self.persist_document_and_payload(
             "updated",
-            format!(
-                "Item {index_path} status changed: {old_status} -> {new_status_str}"
-            ),
+            format!("Item {index_path} status changed: {old_status} -> {new_status_str}"),
             &document,
         )
         .await

@@ -241,7 +241,7 @@ impl ToOpenResponse for crate::provider::LLMResponse {
             && !reasoning.is_empty()
         {
             let item = OutputItem::Reasoning(super::items::ReasoningItem {
-                id: super::response::generate_item_id(),
+                id: super::response::generate_item_id().into(),
                 status: super::ItemStatus::Completed,
                 summary: None,
                 content: Some(reasoning.clone()),
@@ -264,7 +264,7 @@ impl ToOpenResponse for crate::provider::LLMResponse {
                 };
 
                 let item = OutputItem::FunctionCall(super::items::FunctionCallItem {
-                    id: tc.id.clone(),
+                    id: tc.id.clone().into(),
                     status: super::ItemStatus::Completed,
                     name,
                     arguments,

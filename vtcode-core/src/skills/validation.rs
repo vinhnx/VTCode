@@ -557,8 +557,7 @@ impl SkillValidator {
                 {
                     for blocked in &self.config.blocked_commands {
                         if content.contains(blocked) {
-                            issues
-                                .push(format!("Potentially dangerous content found: {blocked}"));
+                            issues.push(format!("Potentially dangerous content found: {blocked}"));
                         }
                     }
                 }

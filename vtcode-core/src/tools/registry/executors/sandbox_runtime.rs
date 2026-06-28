@@ -578,9 +578,7 @@ fn map_sandbox_transform_error(
             sandbox_type
         ),
         SandboxTransformError::CreationFailed(msg) | SandboxTransformError::InvalidPolicy(msg) => {
-            anyhow!(
-                "Failed to initialize sandbox for command execution: {msg}"
-            )
+            anyhow!("Failed to initialize sandbox for command execution: {msg}")
         }
     }
 }

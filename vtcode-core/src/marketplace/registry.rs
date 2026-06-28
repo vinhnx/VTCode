@@ -174,9 +174,7 @@ impl MarketplaceRegistry {
             .send()
             .await
             .with_context(|| {
-                format!(
-                    "Failed to fetch manifest from GitHub: {owner}/{repo} (ref: {refspec})"
-                )
+                format!("Failed to fetch manifest from GitHub: {owner}/{repo} (ref: {refspec})")
             })?;
 
         if !response.status().is_success() {
@@ -194,9 +192,10 @@ impl MarketplaceRegistry {
         }
 
         // Parse the GitHub API response
-        let json_response: Value = response.json().await.with_context(|| {
-            format!("Failed to parse GitHub API response for {owner}/{repo}")
-        })?;
+        let json_response: Value = response
+            .json()
+            .await
+            .with_context(|| format!("Failed to parse GitHub API response for {owner}/{repo}"))?;
 
         // Extract the content from the response
         let content_encoded = json_response
@@ -208,15 +207,11 @@ impl MarketplaceRegistry {
         let content_bytes =
             base64::Engine::decode(&base64::engine::general_purpose::STANDARD, content_encoded)
                 .with_context(|| {
-                    format!(
-                        "Failed to decode base64 content from GitHub: {owner}/{repo}"
-                    )
+                    format!("Failed to decode base64 content from GitHub: {owner}/{repo}")
                 })?;
 
         let content = String::from_utf8(content_bytes).with_context(|| {
-            format!(
-                "Failed to decode UTF-8 content from GitHub: {owner}/{repo}"
-            )
+            format!("Failed to decode UTF-8 content from GitHub: {owner}/{repo}")
         })?;
 
         // Parse the manifest from the content

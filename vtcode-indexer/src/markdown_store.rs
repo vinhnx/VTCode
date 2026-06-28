@@ -262,8 +262,7 @@ impl SimpleKVStorage {
 
     pub fn put(&self, key: &str, value: &str) -> Result<()> {
         let data = IndexMap::from([("value".to_string(), value.to_string())]);
-        self.storage
-            .store(key, &data, &format!("Key-Value: {key}"))
+        self.storage.store(key, &data, &format!("Key-Value: {key}"))
     }
 
     pub fn get(&self, key: &str) -> Result<String> {

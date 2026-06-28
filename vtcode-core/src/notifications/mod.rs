@@ -475,9 +475,7 @@ impl NotificationManager {
                 let exit_code_str = exit_code
                     .map(|code| format!(" (exit code: {code})"))
                     .unwrap_or_default();
-                format!(
-                    "Command failed: {command}{exit_code_str} - Error: {error}"
-                )
+                format!("Command failed: {command}{exit_code_str} - Error: {error}")
             }
             NotificationEvent::ToolFailure {
                 tool_name,

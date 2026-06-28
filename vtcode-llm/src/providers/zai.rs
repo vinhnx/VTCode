@@ -277,10 +277,8 @@ impl LLMProvider for ZAIProvider {
             .send()
             .await
             .map_err(|e| {
-                let formatted_error = error_display::format_llm_error(
-                    PROVIDER_NAME,
-                    &format!("Network error: {e}"),
-                );
+                let formatted_error =
+                    error_display::format_llm_error(PROVIDER_NAME, &format!("Network error: {e}"));
                 LLMError::Network {
                     message: formatted_error,
                     metadata: None,
@@ -317,10 +315,8 @@ impl LLMProvider for ZAIProvider {
             .send()
             .await
             .map_err(|e| {
-                let formatted_error = error_display::format_llm_error(
-                    PROVIDER_NAME,
-                    &format!("Network error: {e}"),
-                );
+                let formatted_error =
+                    error_display::format_llm_error(PROVIDER_NAME, &format!("Network error: {e}"));
                 LLMError::Network {
                     message: formatted_error,
                     metadata: None,

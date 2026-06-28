@@ -22,7 +22,7 @@ use vtcode_config::core::CustomProviderCommandAuthConfig;
 use vtcode_config::core::{
     OpenAIHostedShellConfig, OpenAIHostedShellDomainSecret, OpenAIHostedShellEnvironment,
     OpenAIHostedShellNetworkPolicy, OpenAIHostedShellNetworkPolicyType, OpenAIHostedSkill,
-    OpenAIHostedSkillVersion, OpenAIServiceTier,
+    OpenAIHostedSkillVersion, OpenAIServiceTier, PromptCacheRetention,
 };
 use vtcode_config::{OpenAIAuthConfig, auth::OpenAIChatGptSessionRefresher};
 use wiremock::matchers::{header, method, path};

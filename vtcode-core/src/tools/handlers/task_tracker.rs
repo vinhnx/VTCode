@@ -933,9 +933,7 @@ impl TaskTrackerTool {
             .items
             .iter()
             .position(|i| i.index == index)
-            .with_context(|| {
-                format!("No item at index {index}. Valid range: 1-{item_count}")
-            })?;
+            .with_context(|| format!("No item at index {index}. Valid range: 1-{item_count}"))?;
 
         let old_status = checklist.items[pos].status.to_string();
         checklist.items[pos].status = new_status;

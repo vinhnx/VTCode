@@ -341,9 +341,7 @@ pub fn create_apply_patch_freeform_tool() -> ToolSpec {
 pub fn create_apply_patch_json_tool() -> ToolSpec {
     ToolSpec::Function(ResponsesApiTool {
         name: tools::APPLY_PATCH.to_string(),
-        description: format!(
-            "{APPLY_PATCH_DESCRIPTION}\n\n{APPLY_PATCH_GRAMMAR_HELP}"
-        ),
+        description: format!("{APPLY_PATCH_DESCRIPTION}\n\n{APPLY_PATCH_GRAMMAR_HELP}"),
         strict: false,
         parameters: json!({
             "type": "object",

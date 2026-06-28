@@ -348,10 +348,7 @@ impl TimeoutDetector {
 
         loop {
             let handle = self
-                .start_operation(
-                    format!("{operation_id}_{attempt}"),
-                    operation_type.clone(),
-                )
+                .start_operation(format!("{operation_id}_{attempt}"), operation_type.clone())
                 .await;
 
             let result = match time::timeout(config.timeout_duration, operation()).await {

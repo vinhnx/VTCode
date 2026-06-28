@@ -135,8 +135,7 @@ impl TraceStore {
     pub fn delete_trace(&self, filename: &str) -> Result<()> {
         let path = self.base_dir.join(filename);
         if path.exists() {
-            fs::remove_file(&path)
-                .with_context(|| format!("Failed to delete trace: {path:?}"))?;
+            fs::remove_file(&path).with_context(|| format!("Failed to delete trace: {path:?}"))?;
         }
         Ok(())
     }

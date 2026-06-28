@@ -644,9 +644,7 @@ impl SubagentController {
         };
 
         let effective_config = effective_config.ok_or_else(|| {
-            anyhow!(
-                "Subagent {target} does not have a captured runtime configuration yet"
-            )
+            anyhow!("Subagent {target} does not have a captured runtime configuration yet")
         })?;
         let snapshot = match thread_handle {
             Some(handle) => handle.snapshot(),
@@ -1522,9 +1520,7 @@ impl SubagentController {
             .max_concurrent
             .min(SUBAGENT_HARD_CONCURRENCY_LIMIT);
         if active_count >= effective_max_concurrent {
-            bail!(
-                "Subagent concurrency limit reached (max_concurrent={effective_max_concurrent})"
-            );
+            bail!("Subagent concurrency limit reached (max_concurrent={effective_max_concurrent})");
         }
         let is_background_child = background;
         let child_max_turns =
@@ -1992,7 +1988,9 @@ impl SubagentController {
 
                 let approved = if explicitly_rejected {
                     false
-                } else { explicitly_approved && issues.is_empty() };
+                } else {
+                    explicitly_approved && issues.is_empty()
+                };
 
                 Ok(VerificationResult {
                     approved,

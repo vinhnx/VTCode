@@ -248,9 +248,7 @@ mod memory_integration {
                 .sum::<f64>()
                 / stable_period_readings.len() as f64;
 
-            println!(
-                "Stable period: avg={stable_avg:.0}B, variance={stable_variance:.0}B"
-            );
+            println!("Stable period: avg={stable_avg:.0}B, variance={stable_variance:.0}B");
 
             // Variance should be relatively small compared to actual memory use
             assert!(

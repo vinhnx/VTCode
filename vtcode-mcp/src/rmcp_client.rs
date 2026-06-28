@@ -189,9 +189,7 @@ impl RmcpClient {
         }
 
         let http_client = client_builder.build().with_context(|| {
-            format!(
-                "failed to construct reqwest client for MCP provider '{provider_name}'"
-            )
+            format!("failed to construct reqwest client for MCP provider '{provider_name}'")
         })?;
 
         let transport = StreamableHttpClientTransport::with_client(http_client, config);

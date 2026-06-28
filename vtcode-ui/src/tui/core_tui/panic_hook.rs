@@ -198,8 +198,8 @@ pub fn init_panic_hook() {
                     .authors(format!("authored by {}", metadata.authors));
 
                 if let Some(repository) = metadata.repository {
-                    report_metadata = report_metadata
-                        .support(format!("Open a support request at {repository}"));
+                    report_metadata =
+                        report_metadata.support(format!("Open a support request at {repository}"));
                 }
 
                 let file_path = human_panic_dump(&report_metadata, panic_info);

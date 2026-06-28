@@ -7473,6 +7473,7 @@ dependencies = [
  "vtcode-commons",
  "vtcode-config",
  "vtcode-exec-events",
+ "vtcode-macros",
  "vtcode-utility-tool-specs",
  "which",
  "wiremock",

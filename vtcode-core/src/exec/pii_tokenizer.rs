@@ -83,9 +83,7 @@ static DEFAULT_PII_PATTERNS: Lazy<Result<Vec<(PiiType, Regex)>, String>> = Lazy:
         match Regex::new(pattern) {
             Ok(regex) => compiled.push((pii_type, regex)),
             Err(e) => {
-                return Err(format!(
-                    "Failed to compile PII regex for {pii_type:?}: {e}"
-                ));
+                return Err(format!("Failed to compile PII regex for {pii_type:?}: {e}"));
             }
         }
     }

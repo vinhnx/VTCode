@@ -21,3 +21,4 @@
 - `exec_policy/parser.rs` imports `vtcode_commons::fs::{parse_json_with_context, read_file_with_context}`.
 - `exec_policy/command_validation.rs` imports `vtcode_commons::paths::{canonicalize_workspace, normalize_path}`.
 - `sandboxing/` uses tree-sitter for Bash AST analysis — pinned to specific versions.
+- `command_safety::shell_parser` must extract nested simple commands from loops/conditionals so safety checks and approval caching see loop bodies, not just top-level shell syntax.

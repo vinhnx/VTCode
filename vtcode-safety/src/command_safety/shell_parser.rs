@@ -88,27 +88,34 @@ fn parse_with_tree_sitter(script: &str) -> Result<Vec<Vec<String>>, String> {
     let mut commands = Vec::new();
     let root = tree.root_node();
 
-    // Walk tree-sitter AST and extract command nodes
-    let mut cursor = root.walk();
-
-    for child in root.children(&mut cursor) {
-        if is_command_node(child)
-            && let Some(cmd) = extract_command_from_node(child, script)
-            && !cmd.is_empty()
-        {
-            commands.push(cmd);
-        }
-    }
+    // Walk the full tree so commands inside loops/conditionals are remembered
+    // for approval and checked for safety.  Top-level-only extraction misses
+    // common read loops such as `for f in ...; do grep ...; done`.
+    collect_commands_from_node(root, script, &mut commands);
 
     Ok(commands)
 }
 
-/// Checks if a tree-sitter node represents a command
-fn is_command_node(node: tree_sitter::Node) -> bool {
-    matches!(
-        node.kind(),
-        "command" | "pipeline" | "compound_command" | "simple_command"
-    )
+fn collect_commands_from_node(
+    node: tree_sitter::Node,
+    source: &str,
+    commands: &mut Vec<Vec<String>>,
+) {
+    match node.kind() {
+        "command" | "simple_command" => {
+            if let Some(cmd) = extract_command_from_node(node, source)
+                && !cmd.is_empty()
+            {
+                commands.push(cmd);
+            }
+        }
+        _ => {
+            let mut cursor = node.walk();
+            for child in node.children(&mut cursor) {
+                collect_commands_from_node(child, source, commands);
+            }
+        }
+    }
 }
 
 /// Extracts a command vector from a tree-sitter node
@@ -277,6 +284,29 @@ mod tests {
         assert_eq!(commands.len(), 2);
         assert_eq!(commands[0][0], "git");
         assert_eq!(commands[1][0], "cargo");
+    }
+
+    #[test]
+    fn parse_loop_body_commands() {
+        let script = "cd vtcode-core/src/tools/registry && for f in *.rs; do echo \"=== $f ===\"; grep -nE '^(pub )?(struct|enum|fn)' \"$f\" | head -50; done";
+        let commands = parse_shell_commands(script).unwrap();
+
+        assert_eq!(commands[0], vec!["cd", "vtcode-core/src/tools/registry"]);
+        assert!(
+            commands
+                .iter()
+                .any(|command| command.first().is_some_and(|name| name == "echo"))
+        );
+        assert!(
+            commands
+                .iter()
+                .any(|command| command.first().is_some_and(|name| name == "grep"))
+        );
+        assert!(
+            commands
+                .iter()
+                .any(|command| command.first().is_some_and(|name| name == "head"))
+        );
     }
 
     #[test]

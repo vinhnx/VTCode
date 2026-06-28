@@ -297,9 +297,7 @@ impl CopilotAcpClient {
             )
             .await
             .with_context(|| {
-                format!(
-                    "copilot acp startup with --model failed first: {primary_error}"
-                )
+                format!("copilot acp startup with --model failed first: {primary_error}")
             }),
             Err(error) => Err(error),
         }

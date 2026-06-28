@@ -31,9 +31,7 @@ impl ConfigManager {
             let trimmed = config_path.trim();
             if !trimmed.is_empty() {
                 return Self::load_from_file(trimmed).with_context(|| {
-                    format!(
-                        "Failed to load configuration from VTCODE_CONFIG_PATH={trimmed}"
-                    )
+                    format!("Failed to load configuration from VTCODE_CONFIG_PATH={trimmed}")
                 });
             }
         }

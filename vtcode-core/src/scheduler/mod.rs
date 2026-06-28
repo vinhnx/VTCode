@@ -482,9 +482,7 @@ impl SessionScheduler {
 
     fn ensure_capacity(&self) -> Result<()> {
         if self.tasks.len() >= MAX_SCHEDULED_TASKS {
-            bail!(
-                "A session can hold at most {MAX_SCHEDULED_TASKS} scheduled tasks"
-            );
+            bail!("A session can hold at most {MAX_SCHEDULED_TASKS} scheduled tasks");
         }
         Ok(())
     }
@@ -714,9 +712,7 @@ impl DurableTaskStore {
         self.paths.ensure_dirs()?;
         let current_count = self.definition_paths()?.len();
         if current_count >= MAX_SCHEDULED_TASKS {
-            bail!(
-                "VT Code supports at most {MAX_SCHEDULED_TASKS} durable scheduled tasks"
-            );
+            bail!("VT Code supports at most {MAX_SCHEDULED_TASKS} durable scheduled tasks");
         }
 
         let runtime = initialize_runtime_state(&definition)?;

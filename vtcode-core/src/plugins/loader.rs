@@ -114,9 +114,7 @@ impl PluginLoader {
             .arg(temp_path)
             .output()
             .await
-            .map_err(|e| {
-                PluginError::LoadingError(format!("Failed to execute git clone: {e}"))
-            })?;
+            .map_err(|e| PluginError::LoadingError(format!("Failed to execute git clone: {e}")))?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);

@@ -587,14 +587,14 @@ impl ResponseBuilder {
     fn convert_thread_item(&mut self, item: &ThreadItem, status: ItemStatus) -> OutputItem {
         match &item.details {
             ThreadItemDetails::AgentMessage(msg) => OutputItem::Message(MessageItem {
-                id: item.id.clone(),
+                id: item.id.clone().into(),
                 status,
                 role: MessageRole::Assistant,
                 content: vec![ContentPart::output_text(&msg.text)],
             }),
 
             ThreadItemDetails::Reasoning(r) => OutputItem::Reasoning(ReasoningItem {
-                id: item.id.clone(),
+                id: item.id.clone().into(),
                 status,
                 summary: None,
                 content: Some(r.text.clone()),
@@ -602,7 +602,7 @@ impl ResponseBuilder {
             }),
 
             ThreadItemDetails::Plan(plan) => OutputItem::Custom(CustomItem {
-                id: item.id.clone(),
+                id: item.id.clone().into(),
                 status,
                 custom_type: "vtcode:plan".to_string(),
                 data: json!({
@@ -611,7 +611,7 @@ impl ResponseBuilder {
             }),
 
             ThreadItemDetails::CommandExecution(cmd) => OutputItem::Custom(CustomItem {
-                id: item.id.clone(),
+                id: item.id.clone().into(),
                 status,
                 custom_type: "vtcode:command_execution".to_string(),
                 data: json!({
@@ -628,7 +628,7 @@ impl ResponseBuilder {
                     .unwrap_or(invocation.tool_name.as_str())
                     .to_string();
                 OutputItem::FunctionCall(FunctionCallItem {
-                    id: item.id.clone(),
+                    id: item.id.clone().into(),
                     status,
                     name: tool_name,
                     arguments: invocation.arguments.clone().unwrap_or(json!({})),
@@ -641,7 +641,7 @@ impl ResponseBuilder {
 
             ThreadItemDetails::ToolOutput(output) => {
                 OutputItem::FunctionCallOutput(crate::open_responses::FunctionCallOutputItem {
-                    id: item.id.clone(),
+                    id: item.id.clone().into(),
                     status,
                     call_id: Some(self.resolve_tool_call_correlation_id(
                         &output.call_id,
@@ -664,7 +664,7 @@ impl ResponseBuilder {
                     .collect();
 
                 OutputItem::Custom(CustomItem {
-                    id: item.id.clone(),
+                    id: item.id.clone().into(),
                     status,
                     custom_type: "vtcode:file_change".to_string(),
                     data: json!({
@@ -675,7 +675,7 @@ impl ResponseBuilder {
             }
 
             ThreadItemDetails::McpToolCall(tc) => OutputItem::FunctionCall(FunctionCallItem {
-                id: item.id.clone(),
+                id: item.id.clone().into(),
                 status,
                 name: tc.tool_name.clone(),
                 arguments: tc.arguments.clone().unwrap_or(json!({})),
@@ -683,7 +683,7 @@ impl ResponseBuilder {
             }),
 
             ThreadItemDetails::WebSearch(ws) => OutputItem::Custom(CustomItem {
-                id: item.id.clone(),
+                id: item.id.clone().into(),
                 status,
                 custom_type: "vtcode:web_search".to_string(),
                 data: json!({
@@ -694,7 +694,7 @@ impl ResponseBuilder {
             }),
 
             ThreadItemDetails::Harness(event) => OutputItem::Custom(CustomItem {
-                id: item.id.clone(),
+                id: item.id.clone().into(),
                 status,
                 custom_type: "vtcode:harness_event".to_string(),
                 data: json!({
@@ -709,7 +709,7 @@ impl ResponseBuilder {
             ThreadItemDetails::Error(err) => {
                 // Errors are represented as custom items
                 OutputItem::Custom(CustomItem {
-                    id: item.id.clone(),
+                    id: item.id.clone().into(),
                     status: ItemStatus::Failed,
                     custom_type: "vtcode:error".to_string(),
                     data: json!({
@@ -824,7 +824,7 @@ impl ResponseBuilder {
         let item_id = call_id.to_string();
         let output_index = self.allocate_output_index(&item_id);
         let item = OutputItem::FunctionCall(FunctionCallItem {
-            id: item_id.clone(),
+            id: item_id.clone().into(),
             status: ItemStatus::InProgress,
             name: name.unwrap_or_default().to_string(),
             arguments: serde_json::Value::String(String::new()),
@@ -1043,7 +1043,7 @@ impl ResponseBuilder {
         };
 
         let completed = OutputItem::Reasoning(ReasoningItem {
-            id: item_id.clone(),
+            id: item_id.clone().into(),
             status: ItemStatus::Completed,
             summary: None,
             content: Some(text.to_string()),
@@ -1115,7 +1115,7 @@ impl ResponseBuilder {
                 let item_id = call_id.to_string();
                 let output_index = self.allocate_output_index(&item_id);
                 let item = OutputItem::FunctionCall(FunctionCallItem {
-                    id: item_id.clone(),
+                    id: item_id.clone().into(),
                     status: ItemStatus::InProgress,
                     name: name.clone().unwrap_or_default(),
                     arguments: serde_json::Value::String(String::new()),
@@ -1128,7 +1128,7 @@ impl ResponseBuilder {
         };
 
         let completed = OutputItem::FunctionCall(FunctionCallItem {
-            id: item_id.clone(),
+            id: item_id.clone().into(),
             status: ItemStatus::Completed,
             name: final_name,
             arguments: normalized_tool_call_arguments(arguments),

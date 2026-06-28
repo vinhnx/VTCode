@@ -59,6 +59,31 @@ pub(crate) async fn is_workspace_trusted(workspace: &Path) -> bool {
     )
 }
 
+/// Grant full-auto trust for an already-running interactive TUI session.
+///
+/// The user is explicitly switching into an auto-permission agent, but the TUI
+/// cannot safely show the normal blocking trust prompt while crossterm owns the
+/// terminal. Persist the same trust bit the prompt would set so the switch can
+/// complete instead of stopping the session at an unrecoverable warning.
+pub(crate) async fn auto_grant_tui_full_auto_workspace_trust(workspace: &Path) -> Result<()> {
+    if !vtcode_core::ui::is_tui_mode() || is_workspace_trusted(workspace).await {
+        return Ok(());
+    }
+
+    if matches!(
+        parse_env_trust_override().ok().flatten(),
+        Some(EnvTrustOverride::Deny)
+    ) {
+        bail!(
+            "Workspace trust denied via {TRUST_OVERRIDE_ENV}=deny; auto agent switch cannot continue."
+        );
+    }
+
+    update_workspace_trust(workspace, WorkspaceTrustLevel::FullAuto)
+        .await
+        .context("Failed to persist full-auto workspace trust for auto agent switch")
+}
+
 /// Best-effort path used by `vtcode benchmark`: prompt the user interactively,
 /// fall back to env-var overrides, otherwise return `Ok(false)` so the caller
 /// can exit gracefully without a hard error.
@@ -439,5 +464,47 @@ mod tests {
             err.to_string().contains("not trusted"),
             "expected a not-trusted error, got: {err}"
         );
+    }
+
+    #[tokio::test]
+    async fn tui_auto_grant_persists_full_auto_workspace_trust() {
+        let temp = tempfile::TempDir::new().expect("tempdir");
+        let env_guard = vtcode_commons::env_lock::lock();
+        let previous_env = env::var_os(TRUST_OVERRIDE_ENV);
+        env_guard.remove_var(TRUST_OVERRIDE_ENV);
+        let was_tui = vtcode_core::ui::is_tui_mode();
+        vtcode_core::ui::set_tui_mode(true);
+
+        auto_grant_tui_full_auto_workspace_trust(temp.path())
+            .await
+            .expect("TUI auto grant should persist trust");
+
+        vtcode_core::ui::set_tui_mode(was_tui);
+        env_guard.restore_var(TRUST_OVERRIDE_ENV, previous_env);
+
+        assert_eq!(
+            load_workspace_trust_level(temp.path()).await.unwrap(),
+            Some(WorkspaceTrustLevel::FullAuto)
+        );
+    }
+
+    #[tokio::test]
+    async fn tui_auto_grant_respects_explicit_env_deny() {
+        let temp = tempfile::TempDir::new().expect("tempdir");
+        let env_guard = vtcode_commons::env_lock::lock();
+        let previous_env = env::var_os(TRUST_OVERRIDE_ENV);
+        env_guard.set_var(TRUST_OVERRIDE_ENV, "deny");
+        let was_tui = vtcode_core::ui::is_tui_mode();
+        vtcode_core::ui::set_tui_mode(true);
+
+        let err = auto_grant_tui_full_auto_workspace_trust(temp.path())
+            .await
+            .expect_err("explicit deny should block auto grant");
+
+        vtcode_core::ui::set_tui_mode(was_tui);
+        env_guard.restore_var(TRUST_OVERRIDE_ENV, previous_env);
+
+        assert!(err.to_string().contains("denied"));
+        assert_eq!(load_workspace_trust_level(temp.path()).await.unwrap(), None);
     }
 }

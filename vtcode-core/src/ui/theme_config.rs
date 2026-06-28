@@ -313,9 +313,7 @@ impl ThemeConfig {
         let mut extension_styles = hashbrown::HashMap::new();
         for (ext, color_str) in &self.files.extensions {
             let style = parser.parse_flexible(color_str).with_context(|| {
-                format!(
-                    "Failed to parse style for extension '{ext}': {color_str}"
-                )
+                format!("Failed to parse style for extension '{ext}': {color_str}")
             })?;
             extension_styles.insert(ext.clone(), style);
         }

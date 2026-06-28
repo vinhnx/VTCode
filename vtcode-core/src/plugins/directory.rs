@@ -126,9 +126,7 @@ This command demonstrates how to create a plugin command for VT Code.
                 fs::write(&example_command, example_content)
                     .await
                     .map_err(|e| {
-                        PluginError::LoadingError(format!(
-                            "Failed to create example command: {e}"
-                        ))
+                        PluginError::LoadingError(format!("Failed to create example command: {e}"))
                     })?;
             }
         }
@@ -170,9 +168,7 @@ This agent can be used to demonstrate how agents work in VT Code plugins.
         if skills_dir.exists() {
             let example_skill_dir = skills_dir.join("example-skill");
             fs::create_dir_all(&example_skill_dir).await.map_err(|e| {
-                PluginError::LoadingError(format!(
-                    "Failed to create example skill directory: {e}"
-                ))
+                PluginError::LoadingError(format!("Failed to create example skill directory: {e}"))
             })?;
 
             let skill_md = example_skill_dir.join("SKILL.md");

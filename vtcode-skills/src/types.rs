@@ -389,9 +389,7 @@ impl SkillManifest {
         let dir_name = parent_dir
             .file_name()
             .and_then(|name| name.to_str())
-            .ok_or_else(|| {
-                anyhow::anyhow!("Cannot extract directory name from: {parent_dir:?}")
-            })?;
+            .ok_or_else(|| anyhow::anyhow!("Cannot extract directory name from: {parent_dir:?}"))?;
 
         if dir_name != self.name {
             anyhow::bail!(

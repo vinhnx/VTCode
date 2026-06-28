@@ -57,9 +57,9 @@ impl FromStr for TaskTrackingStatus {
             "in_progress" => Ok(Self::InProgress),
             "completed" => Ok(Self::Completed),
             "blocked" => Ok(Self::Blocked),
-            other => bail!(
-                "Invalid status '{other}'. Use: pending, in_progress, completed, blocked"
-            ),
+            other => {
+                bail!("Invalid status '{other}'. Use: pending, in_progress, completed, blocked")
+            }
         }
     }
 }

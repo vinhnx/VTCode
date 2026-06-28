@@ -31,10 +31,7 @@ fn test_ansi_classic_theme_exists() {
 #[test]
 fn test_all_themes_resolvable() {
     for id in available_themes() {
-        assert!(
-            ensure_theme(id).is_ok(),
-            "Theme {id} should be resolvable"
-        );
+        assert!(ensure_theme(id).is_ok(), "Theme {id} should be resolvable");
     }
 }
 

@@ -53,9 +53,7 @@ fn write_config(path: &Path, provider: &str) -> Result<()> {
         fs::create_dir_all(parent)?;
     }
 
-    let contents = format!(
-        "[agent]\nprovider = \"{provider}\"\nmax_conversation_turns = 5\n"
-    );
+    let contents = format!("[agent]\nprovider = \"{provider}\"\nmax_conversation_turns = 5\n");
     fs::write(path, contents)?;
     Ok(())
 }

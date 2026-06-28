@@ -67,19 +67,13 @@ impl Default for McpOAuthConfig {
 impl McpOAuthConfig {
     pub fn validate(&self, provider_name: &str) -> Result<()> {
         if self.authorization_url.trim().is_empty() {
-            bail!(
-                "MCP provider '{provider_name}' is missing oauth.authorization_url"
-            );
+            bail!("MCP provider '{provider_name}' is missing oauth.authorization_url");
         }
         if self.token_url.trim().is_empty() {
-            bail!(
-                "MCP provider '{provider_name}' is missing oauth.token_url"
-            );
+            bail!("MCP provider '{provider_name}' is missing oauth.token_url");
         }
         if self.client_id.trim().is_empty() {
-            bail!(
-                "MCP provider '{provider_name}' is missing oauth.client_id"
-            );
+            bail!("MCP provider '{provider_name}' is missing oauth.client_id");
         }
         Ok(())
     }

@@ -118,9 +118,7 @@ impl CommandTool {
             return Err(anyhow!("Command executable cannot be empty"));
         }
         if program.contains(char::is_whitespace) {
-            return Err(anyhow!(
-                "Program name cannot contain whitespace: {program}"
-            ));
+            return Err(anyhow!("Program name cannot contain whitespace: {program}"));
         }
 
         let working_dir =
