@@ -51,6 +51,11 @@ This document describes the canonical public tool surface exposed to VT Code mod
   Accepts: `query` (string, required), `max_results` (number, optional).
   See [Web Search Tool](./web_search.md) for config and guard rails.
 
+- `defuddle_fetch`
+  Purpose: Fetch a URL through defuddle.md markdown extraction (fallback for complex pages).
+  Accepts: `url` (string, required), `max_bytes` (number, optional).
+  Hard-capped at one call per session. See [Defuddle Fetch](./defuddle_fetch.md).
+
 ## `unified_file`
 
 ### `read`

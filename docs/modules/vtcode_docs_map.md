@@ -944,6 +944,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: Overview, Architecture, Data Flow, Data Persistence, Integration Points
   - **User Questions**: "What can you tell me about Agent Justification System?", "How does Overview work?", "How does Architecture work?"
 
+- **File**: `docs/tools/defuddle_fetch.md`
+  - **Content**: Defuddle Fetch Tool
+  - **Topics**: Usage, Output, Guard Rails, Related Tools
+  - **User Questions**: "What can you tell me about Defuddle Fetch Tool?", "How does Usage work?", "How does Output work?"
+
 - **File**: `docs/tools/EDITOR_CONFIG.md`
   - **Content**: External Editor Configuration
   - **Topics**: Overview, Configuration, Editor Detection Order, Usage Examples, Setting Your Preferred Editor

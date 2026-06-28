@@ -683,6 +683,12 @@ python3 scripts/generate_config_field_reference.py
 | `tools.web_fetch.enable_audit_logging` | `boolean` | no | `false` | Enable audit logging of URL validation decisions |
 | `tools.web_fetch.mode` | `string` | no | `"restricted"` | Security mode: "restricted" (blocklist) or "whitelist" (allowlist) |
 | `tools.web_fetch.strict_https_only` | `boolean` | no | `true` | Strict HTTPS-only mode |
+| `tools.web_search.provider` | `string` | no | `"duckduckgo"` | Search provider (currently only "duckduckgo" is supported) |
+| `tools.web_search.max_results` | `integer` | no | `5` | Default results per call (hard cap: 20) |
+| `tools.web_search.timeout_secs` | `integer` | no | `15` | Per-request timeout in seconds (max: 60) |
+| `tools.web_search.cooldown_ms` | `integer` | no | `3000` | Minimum gap between consecutive requests in milliseconds |
+| `tools.web_search.cache_ttl_secs` | `integer` | no | `300` | How long results are cached before fresh request, in seconds |
+| `tools.web_search.session_max_requests` | `integer` | no | `12` | Hard cap on outbound network requests per tool instance |
 | `tui.alternate_screen` | `TuiAlternateScreen \| null` | no | `null` | - |
 | `tui.animations` | `boolean \| null` | no | `null` | - |
 | `tui.notification_condition` | `NotificationCondition \| null` | no | `null` | When to deliver desktop notifications relative to terminal focus. Defaults to `unfocused` (only deliver when terminal is not focused). Set to `always` to deliver notifications even when the terminal is focused. |

@@ -96,6 +96,7 @@ Contributing to VT Code? Understand the architecture and development processes:
 - **[Development Guide](./development/README.md)** - Development environment setup
 - **[Tool Reference](./tools/TOOL_SPECS.md)** - Technical reference for built-in tools
 - **[Web Search Tool](./tools/web_search.md)** - Web search configuration and guard rails
+- **[Defuddle Fetch](./tools/defuddle_fetch.md)** - Markdown extraction fallback for complex pages
 - **[Code Standards](../.github/copilot-instructions.md)** - Coding guidelines and best practices
 - **[Memory Management](./guides/memory-management.md)** - Configure authored guidance, `.vtcode/rules/`, and per-repository persistent memory
 
