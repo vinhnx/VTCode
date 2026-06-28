@@ -221,6 +221,23 @@ fn append_output_item_text(value: &Value, text: &mut String) {
     }
 }
 
+fn append_unique_replay_item(replay_items: &mut Vec<Value>, item: &Value) {
+    if !replay_items.iter().any(|existing| existing == item) {
+        replay_items.push(item.clone());
+    }
+}
+
+fn reasoning_entry_needs_replay_preservation(entry: &Value) -> bool {
+    let Some(entry_obj) = entry.as_object() else {
+        return false;
+    };
+
+    entry_obj.contains_key("encrypted_content")
+        || entry_obj
+            .keys()
+            .any(|key| key != "type" && key != "text" && key != "summary")
+}
+
 fn tool_result_history_text(message_content: &MessageContent) -> String {
     let tool_content = tool_result_content_from_message_content(message_content);
     if tool_content.is_empty() {
@@ -334,6 +351,9 @@ pub fn parse_responses_payload(
                                 {
                                     reasoning_text_fragments.push(text.to_string());
                                 }
+                                if reasoning_entry_needs_replay_preservation(entry) {
+                                    append_unique_replay_item(&mut reasoning_items, entry);
+                                }
                             }
                             "function_call" | "tool_call" | "custom_tool_call" => {
                                 if let Some(call) = parse_responses_tool_call(entry) {
@@ -384,7 +404,7 @@ pub fn parse_responses_payload(
                 }
             }
             "reasoning" => {
-                reasoning_items.push(item.clone());
+                append_unique_replay_item(&mut reasoning_items, item);
 
                 if let Some(summary_array) = item.get("summary").and_then(|v| v.as_array()) {
                     for summary_part in summary_array {
@@ -396,7 +416,11 @@ pub fn parse_responses_payload(
                     }
                 }
             }
-            _ => {}
+            _ => {
+                if !item_type.is_empty() {
+                    append_unique_replay_item(&mut reasoning_items, item);
+                }
+            }
         }
     }
 
@@ -691,6 +715,16 @@ mod tests {
         );
     }
 
+    fn parsed_reasoning_details(response: &crate::provider::LLMResponse) -> Vec<Value> {
+        response
+            .reasoning_details
+            .as_ref()
+            .expect("reasoning details should exist")
+            .iter()
+            .map(|item| serde_json::from_str(item).expect("reasoning detail should be JSON"))
+            .collect()
+    }
+
     #[test]
     fn standard_payload_normalizes_stringified_reasoning_details_items() {
         let request = LLMRequest {
@@ -983,6 +1017,152 @@ mod tests {
             tool_calls[0].raw_input(),
             Some("*** Begin Patch\n*** End Patch\n")
         );
+    }
+
+    #[test]
+    fn parse_responses_payload_preserves_nested_encrypted_reasoning_for_replay() {
+        let encrypted_reasoning = json!({
+            "type": "reasoning",
+            "id": "rs_msg_1",
+            "text": "checked constraints",
+            "encrypted_content": "opaque_reasoning_blob",
+            "future_state": {"provider": "openai"}
+        });
+        let response = json!({
+            "output": [
+                {
+                    "type": "message",
+                    "content": [
+                        encrypted_reasoning.clone(),
+                        {"type": "output_text", "text": "done"}
+                    ]
+                }
+            ]
+        });
+
+        let parsed = parse_responses_payload(response, "gpt-5.3-codex".to_string(), false)
+            .expect("payload should parse");
+
+        assert_eq!(parsed.content.as_deref(), Some("done"));
+        assert_eq!(parsed.reasoning.as_deref(), Some("checked constraints"));
+
+        let reasoning_details = parsed_reasoning_details(&parsed);
+        assert!(
+            reasoning_details
+                .iter()
+                .any(|item| item == &encrypted_reasoning),
+            "encrypted reasoning item should be preserved verbatim"
+        );
+
+        let payload = build_standard_responses_payload(
+            &LLMRequest {
+                model: "gpt-5.3-codex".to_string(),
+                messages: vec![
+                    Message::assistant(parsed.content.unwrap_or_default())
+                        .with_reasoning_details(Some(reasoning_details)),
+                ],
+                ..Default::default()
+            },
+            true,
+        )
+        .expect("payload should replay encrypted reasoning");
+
+        assert_eq!(payload.input[0], encrypted_reasoning);
+        assert_eq!(payload.input[1]["role"], "assistant");
+    }
+
+    #[test]
+    fn parse_responses_payload_preserves_unknown_replay_items() {
+        let unknown_replay_item = json!({
+            "type": "provider_replay_state",
+            "id": "prs_1",
+            "encrypted_content": "opaque_provider_state",
+            "future_field": {"preserve": true}
+        });
+        let response = json!({
+            "output": [
+                unknown_replay_item.clone(),
+                {
+                    "type": "message",
+                    "content": [{"type": "output_text", "text": "done"}]
+                }
+            ]
+        });
+
+        let parsed = parse_responses_payload(response, "gpt-5.3-codex".to_string(), false)
+            .expect("payload should parse");
+
+        let preserved_items = parsed_reasoning_details(&parsed);
+        assert!(
+            preserved_items
+                .iter()
+                .any(|item| item == &unknown_replay_item)
+        );
+
+        let payload = build_standard_responses_payload(
+            &LLMRequest {
+                model: "gpt-5.3-codex".to_string(),
+                messages: vec![
+                    Message::assistant(parsed.content.unwrap_or_default())
+                        .with_reasoning_details(Some(preserved_items)),
+                ],
+                ..Default::default()
+            },
+            true,
+        )
+        .expect("payload should replay unknown item");
+
+        assert_eq!(payload.input[0], unknown_replay_item);
+        assert_eq!(payload.input[1]["role"], "assistant");
+    }
+
+    #[test]
+    fn parse_responses_payload_tool_calls_replay_with_result_linkage() {
+        let response = json!({
+            "output": [
+                {
+                    "type": "function_call",
+                    "id": "fc_789",
+                    "call_id": "call_789",
+                    "name": "unified_exec",
+                    "arguments": "{\"command\":\"cargo test\"}"
+                }
+            ]
+        });
+
+        let parsed = parse_responses_payload(response, "gpt-5.3-codex".to_string(), false)
+            .expect("payload should parse");
+        let tool_calls = parsed.tool_calls.expect("tool calls should exist");
+
+        assert_eq!(tool_calls.len(), 1);
+        assert_eq!(tool_calls[0].id, "call_789");
+        let function = tool_calls[0].function.as_ref().expect("function call");
+        assert_eq!(function.name, "unified_exec");
+        assert_eq!(function.arguments, "{\"command\":\"cargo test\"}");
+
+        let payload = build_standard_responses_payload(
+            &LLMRequest {
+                model: "gpt-5.3-codex".to_string(),
+                messages: vec![
+                    Message::assistant_with_tools(String::new(), tool_calls),
+                    Message::tool_response("call_789".to_string(), "{\"exit_code\":0}".to_string()),
+                ],
+                ..Default::default()
+            },
+            true,
+        )
+        .expect("payload should replay tool call and output");
+
+        assert_eq!(payload.input[0]["type"], "function_call");
+        assert_eq!(payload.input[0]["call_id"], "call_789");
+        assert_eq!(payload.input[0]["name"], "unified_exec");
+        assert_eq!(
+            payload.input[0]["arguments"],
+            "{\"command\":\"cargo test\"}"
+        );
+        assert_eq!(payload.input[1]["type"], "function_call_output");
+        assert_eq!(payload.input[1]["call_id"], "call_789");
+        assert_eq!(payload.input[1]["output"], "{\"exit_code\":0}");
     }
 
     #[test]

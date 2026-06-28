@@ -8,7 +8,7 @@ use crate::llm::types as llm_types;
 use crate::llm::utils::extract_reasoning_content;
 use serde_json::{Value, json};
 
-use super::openai::tool_serialization::sanitize_openai_function_parameters;
+use vtcode_llm::providers::openai::tool_serialization::sanitize_openai_function_parameters;
 
 /// Returns the first present header among `names`, as an owned string.
 pub fn extract_header(headers: &reqwest::header::HeaderMap, names: &[&str]) -> Option<String> {

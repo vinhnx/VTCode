@@ -19,6 +19,7 @@ use crate::core::agent::runner::{AgentRunner, RunnerSettings};
 use crate::core::agent::task::Task;
 use crate::core::agent::types::AgentType;
 use crate::core::loop_detector::LoopDetector;
+use crate::llm::collect_single_response;
 use crate::llm::provider::{FinishReason, LLMProvider, LLMRequest, Message, ToolDefinition};
 use crate::sandboxing::{AdditionalPermissions, SandboxPermissions};
 use crate::skills::types::{Skill, SkillNetworkPolicy};
@@ -50,6 +51,17 @@ fn skill_tool_free_synthesis_prompt(reason: &str) -> String {
 
 fn should_force_tool_free_synthesis(error: &ToolExecutionError) -> bool {
     matches!(error.error_type, ToolErrorType::ToolNotFound)
+}
+
+fn ensure_visible_skill_content(skill: &Skill, content: String) -> Result<String> {
+    if content.trim().is_empty() {
+        return Err(anyhow!(
+            "Skill '{}' completed without a visible final response",
+            skill.name()
+        ));
+    }
+
+    Ok(content)
 }
 
 /// Network-capable tool names that should be filtered based on skill network policy
@@ -690,7 +702,7 @@ pub async fn execute_skill_with_sub_llm(
         }
 
         // Make LLM request
-        let response = provider.generate(request.clone()).await?;
+        let response = collect_single_response(provider, request.clone()).await?;
 
         // Extract content - handle Option
         let content = response.content.unwrap_or_default();
@@ -799,32 +811,33 @@ pub async fn execute_skill_with_sub_llm(
                 // Continue loop to process tool results
             } else {
                 // No tool calls, return the text response
-                return Ok(content);
+                return ensure_visible_skill_content(skill, content);
             }
         } else {
             // No tool calls, return the final response
-            return Ok(content);
+            return ensure_visible_skill_content(skill, content);
         }
 
         // Check finish reason
         match response.finish_reason {
             FinishReason::Stop => {
-                // Normal termination
-                return Ok(content);
+                // Some providers may report Stop even when tool calls were emitted.
+                // The tool results have already been appended, so continue and let
+                // the model produce visible final content on the next turn.
             }
             FinishReason::ToolCalls => {
                 // Continue to handle tool calls (already handled above)
             }
             FinishReason::Length => {
                 warn!("Skill '{}' hit token limit", skill.name());
-                return Ok(content);
+                return ensure_visible_skill_content(skill, content);
             }
             FinishReason::ContentFilter => {
                 warn!(
                     "Skill '{}' response filtered by content policy",
                     skill.name()
                 );
-                return Ok(content);
+                return ensure_visible_skill_content(skill, content);
             }
             FinishReason::Error(ref msg) => {
                 return Err(anyhow!("LLM error during skill execution: {}", msg));
@@ -987,11 +1000,13 @@ mod tests {
     use super::*;
     use crate::config::types::CapabilityLevel;
     use crate::llm::provider::{
-        FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, ToolCall,
+        FinishReason, LLMError, LLMNormalizedStream, LLMProvider, LLMRequest, LLMResponse,
+        NormalizedStreamEvent, ToolCall,
     };
     use crate::skills::types::{SkillFileSystemPermissions, SkillManifest, SkillPermissionProfile};
     use crate::tools::registry::ToolRegistration;
     use crate::tools::traits::Tool;
+    use futures::stream;
     use serde_json::json;
     use std::path::PathBuf;
     use std::sync::Mutex;
@@ -1009,6 +1024,18 @@ mod tests {
     }
     struct MaxIterationsThenFinalizeProvider {
         tool_names: Vec<String>,
+        calls: Mutex<usize>,
+    }
+    struct StreamingOnlySkillProvider {
+        stream_calls: Mutex<usize>,
+    }
+    struct EmptyFinalSkillProvider;
+    struct ToolOnlyThenFinalizeProvider {
+        tool_name: &'static str,
+        calls: Mutex<usize>,
+    }
+    struct StopWithToolCallsThenFinalizeProvider {
+        tool_name: &'static str,
         calls: Mutex<usize>,
     }
     struct CountingSkillTool {
@@ -1203,6 +1230,164 @@ mod tests {
     }
 
     #[async_trait]
+    impl LLMProvider for StreamingOnlySkillProvider {
+        fn name(&self) -> &str {
+            "streaming-only-skill"
+        }
+
+        fn supports_streaming(&self) -> bool {
+            true
+        }
+
+        fn supports_non_streaming(&self, _model: &str) -> bool {
+            false
+        }
+
+        fn supported_models(&self) -> Vec<String> {
+            vec!["gpt-5.2-codex".to_string()]
+        }
+
+        fn validate_request(&self, _request: &LLMRequest) -> Result<(), LLMError> {
+            Ok(())
+        }
+
+        async fn generate(&self, _request: LLMRequest) -> Result<LLMResponse, LLMError> {
+            panic!("generate should not be called for streaming-only skill provider")
+        }
+
+        async fn stream_normalized(
+            &self,
+            request: LLMRequest,
+        ) -> Result<LLMNormalizedStream, LLMError> {
+            let mut stream_calls = self.stream_calls.lock().expect("stream calls mutex");
+            *stream_calls += 1;
+
+            Ok(Box::pin(stream::iter(vec![
+                Ok(NormalizedStreamEvent::TextDelta {
+                    delta: "streamed ".to_string(),
+                }),
+                Ok(NormalizedStreamEvent::TextDelta {
+                    delta: "skill result".to_string(),
+                }),
+                Ok(NormalizedStreamEvent::Done {
+                    response: Box::new(LLMResponse {
+                        content: None,
+                        model: request.model,
+                        finish_reason: FinishReason::Stop,
+                        ..Default::default()
+                    }),
+                }),
+            ])))
+        }
+    }
+
+    #[async_trait]
+    impl LLMProvider for EmptyFinalSkillProvider {
+        fn name(&self) -> &str {
+            "empty-final-skill"
+        }
+
+        fn supported_models(&self) -> Vec<String> {
+            vec!["gpt-5.1-codex".to_string()]
+        }
+
+        fn validate_request(&self, _request: &LLMRequest) -> Result<(), LLMError> {
+            Ok(())
+        }
+
+        async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
+            Ok(LLMResponse {
+                content: None,
+                model: request.model,
+                finish_reason: FinishReason::Stop,
+                ..Default::default()
+            })
+        }
+    }
+
+    #[async_trait]
+    impl LLMProvider for ToolOnlyThenFinalizeProvider {
+        fn name(&self) -> &str {
+            "tool-only-then-finalize"
+        }
+
+        fn supported_models(&self) -> Vec<String> {
+            vec!["gpt-5.1-codex".to_string()]
+        }
+
+        fn validate_request(&self, _request: &LLMRequest) -> Result<(), LLMError> {
+            Ok(())
+        }
+
+        async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
+            let mut calls = self.calls.lock().expect("provider calls mutex");
+            *calls += 1;
+
+            match *calls {
+                1 => Ok(LLMResponse {
+                    content: None,
+                    model: request.model,
+                    tool_calls: Some(vec![ToolCall::function(
+                        "tool_only_call".to_string(),
+                        self.tool_name.to_string(),
+                        "{}".to_string(),
+                    )]),
+                    finish_reason: FinishReason::ToolCalls,
+                    ..Default::default()
+                }),
+                2 => Ok(LLMResponse {
+                    content: Some("finalized after tool-only response".to_string()),
+                    model: request.model,
+                    finish_reason: FinishReason::Stop,
+                    ..Default::default()
+                }),
+                _ => panic!("unexpected provider call count: {}", *calls),
+            }
+        }
+    }
+
+    #[async_trait]
+    impl LLMProvider for StopWithToolCallsThenFinalizeProvider {
+        fn name(&self) -> &str {
+            "stop-with-tool-calls-then-finalize"
+        }
+
+        fn supported_models(&self) -> Vec<String> {
+            vec!["gpt-5.1-codex".to_string()]
+        }
+
+        fn validate_request(&self, _request: &LLMRequest) -> Result<(), LLMError> {
+            Ok(())
+        }
+
+        async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
+            let mut calls = self.calls.lock().expect("provider calls mutex");
+            *calls += 1;
+
+            match *calls {
+                1 => Ok(LLMResponse {
+                    content: Some(String::new()),
+                    model: request.model,
+                    tool_calls: Some(vec![ToolCall::function(
+                        "stop_tool_call".to_string(),
+                        self.tool_name.to_string(),
+                        "{}".to_string(),
+                    )]),
+                    finish_reason: FinishReason::Stop,
+                    ..Default::default()
+                }),
+                2 => Ok(LLMResponse {
+                    content: Some("finalized after stop tool call".to_string()),
+                    model: request.model,
+                    finish_reason: FinishReason::Stop,
+                    ..Default::default()
+                }),
+                _ => panic!("unexpected provider call count: {}", *calls),
+            }
+        }
+    }
+
+    #[async_trait]
     impl ForkSkillExecutor for FakeForkExecutor {
         async fn execute(&self, skill: &Skill, user_input: Value) -> Result<Value> {
             Ok(serde_json::json!({
@@ -1368,6 +1553,186 @@ mod tests {
         .expect("non-empty input should be preserved");
 
         assert_eq!(result, "security");
+    }
+
+    #[tokio::test]
+    async fn skill_executor_uses_normalized_stream_when_non_streaming_is_unsupported() {
+        let manifest = SkillManifest {
+            name: "test-skill".to_string(),
+            description: "Test skill".to_string(),
+            vtcode_native: Some(true),
+            ..Default::default()
+        };
+        let skill = Skill::new(
+            manifest,
+            PathBuf::from("/tmp"),
+            "# Test Instructions".to_string(),
+        )
+        .expect("failed to create skill");
+        let workspace = tempdir().expect("temp workspace");
+        let mut registry = ToolRegistry::new(workspace.path().to_path_buf()).await;
+        let provider = StreamingOnlySkillProvider {
+            stream_calls: Mutex::new(0),
+        };
+
+        let result = execute_skill_with_sub_llm(
+            &skill,
+            "review".to_string(),
+            &provider,
+            &mut registry,
+            Vec::new(),
+            "gpt-5.2-codex".to_string(),
+        )
+        .await
+        .expect("streaming-only skill execution should succeed");
+
+        assert_eq!(result, "streamed skill result");
+        assert_eq!(
+            *provider.stream_calls.lock().expect("stream calls mutex"),
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn skill_executor_errors_when_final_response_has_no_visible_content() {
+        let manifest = SkillManifest {
+            name: "test-skill".to_string(),
+            description: "Test skill".to_string(),
+            vtcode_native: Some(true),
+            ..Default::default()
+        };
+        let skill = Skill::new(
+            manifest,
+            PathBuf::from("/tmp"),
+            "# Test Instructions".to_string(),
+        )
+        .expect("failed to create skill");
+        let workspace = tempdir().expect("temp workspace");
+        let mut registry = ToolRegistry::new(workspace.path().to_path_buf()).await;
+
+        let error = execute_skill_with_sub_llm(
+            &skill,
+            "review".to_string(),
+            &EmptyFinalSkillProvider,
+            &mut registry,
+            Vec::new(),
+            "gpt-5.1-codex".to_string(),
+        )
+        .await
+        .expect_err("empty final response should be visible as an error");
+
+        assert!(
+            error
+                .to_string()
+                .contains("completed without a visible final response")
+        );
+    }
+
+    #[tokio::test]
+    async fn skill_executor_allows_tool_only_response_before_final_content() {
+        let manifest = SkillManifest {
+            name: "test-skill".to_string(),
+            description: "Test skill".to_string(),
+            vtcode_native: Some(true),
+            ..Default::default()
+        };
+        let skill = Skill::new(
+            manifest,
+            PathBuf::from("/tmp"),
+            "# Test Instructions".to_string(),
+        )
+        .expect("failed to create skill");
+        let workspace = tempdir().expect("temp workspace");
+        let mut registry = ToolRegistry::new(workspace.path().to_path_buf()).await;
+        let tool_name = "tool_only_skill_test_tool";
+        let tool_calls = Arc::new(Mutex::new(0usize));
+        registry
+            .register_tool(ToolRegistration::from_tool_instance(
+                tool_name,
+                CapabilityLevel::CodeSearch,
+                CountingSkillTool {
+                    calls: Arc::clone(&tool_calls),
+                },
+            ))
+            .await
+            .expect("register tool");
+        registry.allow_all_tools().await.expect("allow tools");
+        let provider = ToolOnlyThenFinalizeProvider {
+            tool_name,
+            calls: Mutex::new(0),
+        };
+
+        let result = execute_skill_with_sub_llm(
+            &skill,
+            "review".to_string(),
+            &provider,
+            &mut registry,
+            vec![ToolDefinition::function(
+                tool_name.to_string(),
+                "Tool-only test tool".to_string(),
+                json!({"type": "object"}),
+            )],
+            "gpt-5.1-codex".to_string(),
+        )
+        .await
+        .expect("tool-only response should continue to final content");
+
+        assert_eq!(result, "finalized after tool-only response");
+        assert_eq!(*tool_calls.lock().expect("tool calls mutex"), 1);
+    }
+
+    #[tokio::test]
+    async fn skill_executor_continues_after_stop_response_with_tool_calls() {
+        let manifest = SkillManifest {
+            name: "test-skill".to_string(),
+            description: "Test skill".to_string(),
+            vtcode_native: Some(true),
+            ..Default::default()
+        };
+        let skill = Skill::new(
+            manifest,
+            PathBuf::from("/tmp"),
+            "# Test Instructions".to_string(),
+        )
+        .expect("failed to create skill");
+        let workspace = tempdir().expect("temp workspace");
+        let mut registry = ToolRegistry::new(workspace.path().to_path_buf()).await;
+        let tool_name = "stop_finish_reason_skill_test_tool";
+        let tool_calls = Arc::new(Mutex::new(0usize));
+        registry
+            .register_tool(ToolRegistration::from_tool_instance(
+                tool_name,
+                CapabilityLevel::CodeSearch,
+                CountingSkillTool {
+                    calls: Arc::clone(&tool_calls),
+                },
+            ))
+            .await
+            .expect("register tool");
+        registry.allow_all_tools().await.expect("allow tools");
+        let provider = StopWithToolCallsThenFinalizeProvider {
+            tool_name,
+            calls: Mutex::new(0),
+        };
+
+        let result = execute_skill_with_sub_llm(
+            &skill,
+            "review".to_string(),
+            &provider,
+            &mut registry,
+            vec![ToolDefinition::function(
+                tool_name.to_string(),
+                "Stop finish reason test tool".to_string(),
+                json!({"type": "object"}),
+            )],
+            "gpt-5.1-codex".to_string(),
+        )
+        .await
+        .expect("stop response with tool calls should continue to final content");
+
+        assert_eq!(result, "finalized after stop tool call");
+        assert_eq!(*provider.calls.lock().expect("provider calls mutex"), 2);
+        assert_eq!(*tool_calls.lock().expect("tool calls mutex"), 1);
     }
 
     #[tokio::test]

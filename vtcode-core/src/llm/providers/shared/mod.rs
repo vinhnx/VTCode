@@ -7,6 +7,7 @@ pub use crate::llm::providers::ReasoningBuffer;
 use crate::llm::providers::common::{
     extract_reasoning_text_from_serialized_details, map_finish_reason_common,
 };
+mod responses_adapter;
 mod responses_stream;
 mod tag_sanitizer;
 use crate::llm::providers::split_reasoning_from_text;
@@ -247,19 +248,6 @@ impl FunctionOutputContentItem {
             }),
         }
     }
-
-    pub(crate) fn to_tool_result_json(&self) -> Value {
-        match self {
-            Self::InputText { text } => serde_json::json!({
-                "type": "output_text",
-                "text": text
-            }),
-            Self::InputImage { image_url } => serde_json::json!({
-                "type": "input_image",
-                "image_url": image_url
-            }),
-        }
-    }
 }
 
 fn parse_function_output_content_items_array(
@@ -349,30 +337,6 @@ pub(crate) fn function_output_value_from_message_content(content: &MessageConten
             let items = function_output_items_from_parts(parts);
             function_output_value_from_items(items)
         }
-    }
-}
-
-pub(crate) fn tool_result_content_from_message_content(content: &MessageContent) -> Vec<Value> {
-    match content {
-        MessageContent::Text(text) => {
-            if text.trim().is_empty() {
-                return Vec::new();
-            }
-            if let Some(items) = parse_function_output_content_items_text(text) {
-                return items
-                    .iter()
-                    .map(FunctionOutputContentItem::to_tool_result_json)
-                    .collect();
-            }
-            vec![serde_json::json!({
-                "type": "output_text",
-                "text": text
-            })]
-        }
-        MessageContent::Parts(parts) => function_output_items_from_parts(parts)
-            .iter()
-            .map(FunctionOutputContentItem::to_tool_result_json)
-            .collect(),
     }
 }
 
@@ -1362,20 +1326,6 @@ mod tests {
         let text = parsed[0].content.as_text();
         assert!(text.contains("\"input_image\""));
         assert!(text.contains("inline image note"));
-    }
-
-    #[test]
-    fn tool_result_content_parses_multimodal_tool_output_text() {
-        let content = MessageContent::Text(
-            r#"[{"type":"input_text","text":"note"},{"type":"input_image","image_url":"data:image/png;base64,abc"}]"#
-                .to_string(),
-        );
-        let parts = tool_result_content_from_message_content(&content);
-        assert_eq!(parts.len(), 2);
-        assert_eq!(parts[0]["type"], "output_text");
-        assert_eq!(parts[0]["text"], "note");
-        assert_eq!(parts[1]["type"], "input_image");
-        assert_eq!(parts[1]["image_url"], "data:image/png;base64,abc");
     }
 
     #[test]

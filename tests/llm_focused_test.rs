@@ -4,7 +4,7 @@ use vtcode_core::config::constants::models;
 use vtcode_core::config::types::VerbosityLevel;
 use vtcode_core::llm::{
     factory::{LLMFactory, create_provider_for_model},
-    provider::{LLMProvider, LLMRequest, Message, MessageRole},
+    provider::{ExtractedLLMProvider as _, LLMProvider, LLMRequest, Message, MessageRole},
     providers::{
         AnthropicProvider, GeminiProvider, LmStudioProvider, MoonshotProvider, OllamaProvider,
         OpenAIProvider, OpenRouterProvider,

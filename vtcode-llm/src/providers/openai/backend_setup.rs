@@ -9,7 +9,6 @@
 use crate::providers::common::override_base_url;
 use reqwest::RequestBuilder;
 use rig::providers::chatgpt::ChatGPTAuth as RigChatGptAuth;
-use std::env;
 use std::sync::Arc;
 use vtcode_config::auth::OpenAIChatGptSession;
 use vtcode_config::constants::{env_vars, urls};
@@ -19,7 +18,6 @@ pub(crate) const CHATGPT_CODEX_BASE: &str = "https://chatgpt.com/backend-api/cod
 const CHATGPT_ACCOUNT_HEADER: &str = "ChatGPT-Account-Id";
 const CHATGPT_ORIGINATOR_HEADER: &str = "originator";
 const CHATGPT_ORIGINATOR_VALUE: &str = "codex_cli_rs";
-const CHATGPT_SESSION_HEADER: &str = "session_id";
 const CHATGPT_USER_AGENT: &str = "VT Code/1.0";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -36,7 +34,7 @@ pub(crate) enum ChatGptSubscriptionAuthSource {
     /// ChatGPT auth primitive for request authorisation. Rig's lower refresh
     /// store is not public, so VT Code keeps the stored-session boundary.
     /// Protected by `chatgpt_auth_backend_setup_uses_rig_chatgpt_by_default`,
-    /// `chatgpt_auth_backend_setup_applies_account_and_session_headers`, and
+    /// `chatgpt_auth_backend_setup_applies_account_headers_without_session_id`, and
     /// `external_chatgpt_auth_retries_with_refreshed_tokens_after_401`.
     /// Remove when Rig exposes equivalent refresh/session metadata hooks.
     RigChatGpt,
@@ -311,11 +309,6 @@ impl OpenAIBackendSetup {
             builder = builder
                 .header(CHATGPT_ORIGINATOR_HEADER, CHATGPT_ORIGINATOR_VALUE)
                 .header("User-Agent", CHATGPT_USER_AGENT);
-            if let Ok(session_id) = env::var("VT_SESSION_ID")
-                && !session_id.trim().is_empty()
-            {
-                builder = builder.header(CHATGPT_SESSION_HEADER, session_id);
-            }
         }
 
         builder

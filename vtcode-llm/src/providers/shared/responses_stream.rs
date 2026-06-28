@@ -393,6 +393,7 @@ fn response_stream_event_policy_for_type(event_type: &str) -> ResponsesStreamEve
         | "error" => ResponsesStreamEventPolicy::MeaningfulConversion,
         "response.created"
         | "response.in_progress"
+        | "keepalive"
         | "response.queued"
         | "response.content_part.added"
         | "response.content_part.done"
@@ -962,6 +963,10 @@ mod tests {
         );
         assert_eq!(
             super::response_stream_event_policy_for_type("response.queued"),
+            ResponsesStreamEventPolicy::DocumentedStatusMarkerNoop
+        );
+        assert_eq!(
+            super::response_stream_event_policy_for_type("keepalive"),
             ResponsesStreamEventPolicy::DocumentedStatusMarkerNoop
         );
 

@@ -15,7 +15,7 @@ use vtcode_core::core::agent::harness_kernel::{
 use vtcode_core::core::agent::runner::prompt_alignment;
 use vtcode_core::llm::provider::{
     self as uni, ParallelToolConfig, prepare_responses_continuation_request,
-    supports_responses_chaining,
+    records_responses_continuation_state,
 };
 use vtcode_core::permissions::{
     build_advertised_permission_requests, evaluate_effective_permissions,
@@ -593,7 +593,7 @@ pub(super) fn update_previous_response_chain_after_success(
     response_request_id: Option<&str>,
     messages: &[uni::Message],
 ) {
-    if supports_responses_chaining(provider_name, provider_supports_responses_compaction) {
+    if records_responses_continuation_state(provider_name, provider_supports_responses_compaction) {
         session_stats.set_previous_response_chain(
             provider_name,
             active_model,
@@ -1176,9 +1176,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn openai_responses_chain_uses_incremental_history_only() {
+    async fn openai_responses_replays_full_structured_history_without_suffixing() {
         let mut backing = TestTurnProcessingBacking::new(4).await;
-        let prior_messages = vec![uni::Message::user("hello".to_string())];
+        let prior_messages = vec![
+            uni::Message::user("hello".to_string()),
+            uni::Message::assistant("hi".to_string()),
+        ];
         let mut ctx = backing.turn_processing_context();
         ctx.working_history.extend(prior_messages.clone());
         ctx.working_history
@@ -1196,18 +1199,39 @@ mod tests {
                 .await
                 .expect("openai request should build");
 
-        assert_eq!(
-            built.request.previous_response_id.as_deref(),
-            Some("resp_123")
-        );
+        assert_eq!(built.request.previous_response_id, None);
         assert_eq!(
             non_runtime_request_messages(&built.request),
-            vec![uni::Message::user("continue".to_string())]
+            vec![
+                uni::Message::user("hello".to_string()),
+                uni::Message::assistant("hi".to_string()),
+                uni::Message::user("continue".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn openai_session_stats_does_not_record_previous_response_chain() {
+        let mut session_stats = crate::agent::runloop::unified::state::SessionStats::default();
+        let messages = vec![uni::Message::user("hello".to_string())];
+
+        update_previous_response_chain_after_success(
+            &mut session_stats,
+            "openai",
+            true,
+            "gpt-5.4",
+            Some("resp_123"),
+            &messages,
+        );
+
+        assert_eq!(
+            session_stats.previous_response_chain_for("openai", "gpt-5.4"),
+            None
         );
     }
 
     #[tokio::test]
-    async fn compatible_provider_responses_chain_uses_incremental_history_only() {
+    async fn compatible_provider_responses_keeps_full_history_without_previous_response_id() {
         let mut backing = TestTurnProcessingBacking::new(4).await;
         let prior_messages = vec![uni::Message::user("hello".to_string())];
         let mut ctx = backing.turn_processing_context();
@@ -1229,13 +1253,13 @@ mod tests {
                 .await
                 .expect("compatible provider request should build");
 
-        assert_eq!(
-            built.request.previous_response_id.as_deref(),
-            Some("resp_123")
-        );
+        assert_eq!(built.request.previous_response_id, None);
         assert_eq!(
             non_runtime_request_messages(&built.request),
-            vec![uni::Message::user("continue".to_string())]
+            vec![
+                uni::Message::user("hello".to_string()),
+                uni::Message::user("continue".to_string())
+            ]
         );
     }
 
@@ -1625,7 +1649,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn active_primary_agent_runtime_state_does_not_stale_response_chains() {
+    async fn active_primary_agent_runtime_state_ignores_openai_response_chain() {
         let mut backing = TestTurnProcessingBacking::new(4).await;
         let spec = test_primary_agent_spec("planner", "Use the active primary agent.");
         backing.select_primary_agent_from_specs(&[spec], "planner");
@@ -1648,14 +1672,13 @@ mod tests {
                 .expect("request should build")
         };
 
+        assert_eq!(built.request.previous_response_id, None);
         assert_eq!(
-            built.request.previous_response_id.as_deref(),
-            Some("resp_123")
-        );
-        assert_eq!(built.request.messages.len(), 1);
-        assert_eq!(
-            built.request.messages[0],
-            uni::Message::user("continue".to_string())
+            non_runtime_request_messages(&built.request),
+            vec![
+                uni::Message::user("hello".to_string()),
+                uni::Message::user("continue".to_string())
+            ]
         );
         assert!(
             system_prompt_text(&built.request).contains("## Active Primary Agent Runtime State")
@@ -1796,7 +1819,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn editor_context_does_not_stale_openai_response_chains() {
+    async fn editor_context_replays_full_openai_history_without_previous_response_chain() {
         let workspace = tempfile::TempDir::new().expect("workspace");
         let mut backing = TestTurnProcessingBacking::new(4).await;
         let mut ctx = backing.turn_processing_context();
@@ -1856,12 +1879,9 @@ mod tests {
                 .await
                 .expect("second request should build");
 
-        assert_eq!(
-            second.request.previous_response_id.as_deref(),
-            Some("resp_123")
-        );
+        assert_eq!(second.request.previous_response_id, None);
         let non_runtime_messages = non_runtime_request_messages(&second.request);
-        assert_eq!(non_runtime_messages.len(), 2);
+        assert_eq!(non_runtime_messages.len(), 3);
         assert_eq!(non_runtime_messages[0].role, uni::MessageRole::User);
         assert!(
             non_runtime_messages[0]
@@ -1877,6 +1897,10 @@ mod tests {
         );
         assert_eq!(
             non_runtime_messages[1],
+            uni::Message::user("hello".to_string())
+        );
+        assert_eq!(
+            non_runtime_messages[2],
             uni::Message::user("continue".to_string())
         );
         assert_eq!(

@@ -1,6 +1,6 @@
 use crate::llm::error_display;
 use crate::llm::provider::{LLMError, LLMNormalizedStream, LLMResponse, NormalizedStreamEvent};
-use crate::llm::providers::openai::responses_adapter::{
+use crate::llm::providers::shared::responses_adapter::{
     ResponsesStreamAdapter, ResponsesStreamEvent,
 };
 use crate::llm::providers::shared::{Utf8StreamDecoder, extract_data_payload, find_sse_boundary};

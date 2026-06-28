@@ -14,7 +14,6 @@ pub mod minimax;
 pub mod mistral;
 pub mod moonshot;
 pub mod ollama;
-pub mod openai;
 pub mod opencode_go;
 mod opencode_shared;
 pub mod opencode_zen;
@@ -55,7 +54,6 @@ pub use minimax::MinimaxProvider;
 pub use mistral::MistralProvider;
 pub use moonshot::MoonshotProvider;
 pub use ollama::OllamaProvider;
-pub use openai::OpenAIProvider;
 pub use opencode_go::OpenCodeGoProvider;
 pub use opencode_zen::OpenCodeZenProvider;
 pub use openresponses::OpenResponsesProvider;
@@ -66,4 +64,5 @@ pub use stepfun::StepFunProvider;
 pub use streaming_progress::{
     StreamingProgressBuilder, StreamingProgressCallback, StreamingProgressTracker,
 };
+pub use vtcode_llm::providers::OpenAIProvider;
 pub use zai::ZAIProvider;

@@ -1217,7 +1217,7 @@ async fn exec_full_auto_continues_until_tracker_is_completed() {
 }
 
 #[tokio::test]
-async fn runner_reuses_openai_response_chain_and_session_cache_key() {
+async fn runner_keeps_openai_requests_stateless_and_reuses_session_cache_key() {
     let temp = TempDir::new().expect("tempdir");
     let workspace = workspace_root(&temp);
     seed_tracker(&workspace, json!(["Cache-aware tracker step"])).await;
@@ -1260,10 +1260,8 @@ async fn runner_reuses_openai_response_chain_and_session_cache_key() {
         requests[0].prompt_cache_key.as_deref(),
         Some("vtcode:openai:thread-cache-lineage")
     );
-    assert_eq!(
-        requests[1].previous_response_id.as_deref(),
-        Some("resp_first_turn")
-    );
+    assert_eq!(requests[1].previous_response_id, None);
+    assert!(requests[1].messages.starts_with(&requests[0].messages));
     assert_eq!(requests[1].prompt_cache_key, requests[0].prompt_cache_key);
 }
 

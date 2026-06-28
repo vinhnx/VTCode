@@ -1,6 +1,5 @@
 use super::common::resolve_model;
 use super::ollama::base_url_to_host_root;
-use super::openai::OpenAIProvider;
 use crate::config::TimeoutsConfig;
 use crate::config::constants::{env_vars, models, urls};
 use crate::config::core::{AnthropicConfig, ModelConfig, PromptCachingConfig};
@@ -8,6 +7,7 @@ use crate::llm::client::LLMClient;
 use crate::llm::error_display;
 use crate::llm::provider::{LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, Message};
 use crate::llm::providers::common::override_base_url;
+use crate::llm::vtcode_llm_provider_adapter::VtcodeLlmProviderAdapter;
 use crate::utils::http_client;
 use anyhow::{Context, Result};
 use async_trait::async_trait;
@@ -172,9 +172,10 @@ pub async fn fetch_llamacpp_models(base_url: Option<String>) -> Result<Vec<Strin
 }
 
 pub struct LlamaCppProvider {
-    inner: OpenAIProvider,
+    inner: VtcodeLlmProviderAdapter,
     api_key: Option<String>,
     configured_model: Option<String>,
+    model_id: String,
     base_url: String,
     prompt_cache: Option<PromptCachingConfig>,
     timeouts: Option<TimeoutsConfig>,
@@ -199,20 +200,22 @@ impl LlamaCppProvider {
         timeouts: Option<TimeoutsConfig>,
         anthropic: Option<AnthropicConfig>,
         model_behavior: Option<ModelConfig>,
-    ) -> OpenAIProvider {
+    ) -> (VtcodeLlmProviderAdapter, String) {
         let resolved_model = resolve_model(model, models::llamacpp::DEFAULT_MODEL);
         let resolved_base = Self::resolve_base_url(base_url);
-        OpenAIProvider::from_config(
-            api_key,
-            None,
-            Some(resolved_model),
-            Some(resolved_base),
-            prompt_cache,
-            timeouts,
-            anthropic,
-            None,
-            model_behavior,
-        )
+        let inner =
+            VtcodeLlmProviderAdapter::new(vtcode_llm::providers::OpenAIProvider::from_config(
+                api_key,
+                None,
+                Some(resolved_model.clone()),
+                Some(resolved_base),
+                prompt_cache,
+                timeouts,
+                anthropic,
+                None,
+                model_behavior,
+            ));
+        (inner, resolved_model)
     }
 
     fn managed_server_for(base_url: &str) -> Arc<ManagedLlamaCppServer> {
@@ -606,7 +609,7 @@ impl LlamaCppProvider {
         }
     }
 
-    fn build_request_provider(&self, model: String) -> OpenAIProvider {
+    fn build_request_provider(&self, model: String) -> VtcodeLlmProviderAdapter {
         Self::build_inner(
             self.api_key.clone(),
             Some(model),
@@ -616,12 +619,13 @@ impl LlamaCppProvider {
             self.anthropic.clone(),
             self.model_behavior.clone(),
         )
+        .0
     }
 
     async fn prepare_request(
         &self,
         mut request: LLMRequest,
-    ) -> Result<(OpenAIProvider, LLMRequest), LLMError> {
+    ) -> Result<(VtcodeLlmProviderAdapter, LLMRequest), LLMError> {
         let discovered_model = self.ensure_server_ready().await?;
         let discovered_models = vec![discovered_model.clone()];
 
@@ -646,18 +650,20 @@ impl LlamaCppProvider {
         model_behavior: Option<ModelConfig>,
     ) -> Self {
         let resolved_base_url = Self::resolve_base_url(base_url.clone());
+        let (inner, model_id) = Self::build_inner(
+            api_key.clone(),
+            model.clone(),
+            base_url,
+            prompt_cache.clone(),
+            timeouts.clone(),
+            anthropic.clone(),
+            model_behavior.clone(),
+        );
         Self {
-            inner: Self::build_inner(
-                api_key.clone(),
-                model.clone(),
-                base_url,
-                prompt_cache.clone(),
-                timeouts.clone(),
-                anthropic.clone(),
-                model_behavior.clone(),
-            ),
+            inner,
             api_key,
             configured_model: model,
+            model_id,
             base_url: resolved_base_url,
             prompt_cache,
             timeouts,
@@ -752,6 +758,6 @@ impl LLMClient for LlamaCppProvider {
     }
 
     fn model_id(&self) -> &str {
-        self.inner.model_id()
+        &self.model_id
     }
 }

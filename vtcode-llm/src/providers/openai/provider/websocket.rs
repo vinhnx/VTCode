@@ -18,13 +18,12 @@ const WEBSOCKET_CONNECTION_LIMIT_REACHED_CODE: &str = "websocket_connection_limi
 const PREVIOUS_RESPONSE_NOT_FOUND_CODE: &str = "previous_response_not_found";
 const WEBSOCKET_AUTH_RETRY_STATUSES: [&str; 2] = ["401", "403"];
 
-// Retained custom WebSocket transport.
-// Rig 0.38.2 depends on websocket crates, but this project has not enabled or
-// proven a Rig WebSocket path with VTCode's `responses=v2` header, warm-up
-// `generate=false` request, continuation cache, active-response reconnect,
-// auth refresh retry, and connection-limit retry semantics. Protected by the
-// websocket tests in this module and provider websocket gating tests. Remove
-// only once Rig demonstrates identical Responses WebSocket protocol behaviour.
+// Retained custom WebSocket transport while VTCode migrates the optional path
+// to Rig. Local Rig 0.39 exposes `client.responses_websocket()` behind its
+// `websocket` feature, including warm-up requests, but it does not yet cover
+// VTCode's custom auth refresh and retry policy. Keep this path separate from
+// normal HTTP/SSE request shaping: it may use `previous_response_id` only as
+// connection-local state, and every websocket request still sends `store=false`.
 fn is_websocket_active_response_error(err: &LLMError) -> bool {
     let message = match err {
         LLMError::Provider { message, .. } | LLMError::Network { message, .. } => message,
@@ -77,7 +76,6 @@ pub(crate) struct OpenAIResponsesWebSocketContinuationCache {
     model: String,
     instructions: Option<String>,
     tools: Option<Value>,
-    store: bool,
 }
 
 impl OpenAIResponsesWebSocketContinuationCache {
@@ -111,24 +109,17 @@ impl OpenAIResponsesWebSocketContinuationCache {
                     .map(str::to_owned)
             });
         let tools = prepared.event.get("tools").cloned();
-        let store = prepared
-            .event
-            .get("store")
-            .and_then(Value::as_bool)
-            .unwrap_or(false);
-
         Some(Self {
             response_id,
             full_input: prepared.full_input.clone(),
             model,
             instructions,
             tools,
-            store,
         })
     }
 
     fn can_resume_after_reconnect(&self) -> bool {
-        self.store
+        false
     }
 
     fn can_continue_from(&self, payload: &Value) -> bool {
@@ -401,9 +392,7 @@ fn prepare_websocket_event(
 
     request_obj.remove("stream");
     request_obj.remove("background");
-    request_obj
-        .entry("store".to_string())
-        .or_insert(Value::Bool(false));
+    request_obj.insert("store".to_string(), Value::Bool(false));
     apply_generate_mode(&mut request_obj, warmup);
 
     let full_input = request_obj
@@ -701,6 +690,7 @@ mod tests {
             "model": "gpt-5.2",
             "input": [{"role": "user", "content": "hello"}],
             "previous_response_id": "resp_prev",
+            "store": true,
             "stream": false,
             "background": false,
         });
@@ -715,6 +705,10 @@ mod tests {
         assert_eq!(
             prepared.event.get("input").and_then(Value::as_array),
             Some(&prepared.full_input)
+        );
+        assert_eq!(
+            prepared.event.get("store").and_then(Value::as_bool),
+            Some(false)
         );
         assert!(!prepared.used_previous_response_id);
     }
@@ -731,7 +725,6 @@ mod tests {
             model: "gpt-5.2".to_string(),
             instructions: None,
             tools: None,
-            store: true,
         };
         let payload = json!({
             "model": "gpt-5.2",
@@ -762,7 +755,6 @@ mod tests {
             model: "gpt-5.2".to_string(),
             instructions: None,
             tools: None,
-            store: true,
         };
         let payload = json!({
             "model": "gpt-5.2",
@@ -776,6 +768,10 @@ mod tests {
         assert_eq!(
             prepared.event.get("input").and_then(Value::as_array),
             Some(&prepared.full_input)
+        );
+        assert_eq!(
+            prepared.event.get("store").and_then(Value::as_bool),
+            Some(false)
         );
         assert!(!prepared.used_previous_response_id);
     }
@@ -961,6 +957,22 @@ mod tests {
         );
     }
 
+    #[test]
+    fn websocket_cache_does_not_affect_normal_http_sse_payload() {
+        let provider = websocket_test_provider("https://api.openai.com/v1".to_string());
+        let mut request = websocket_test_request();
+        request.previous_response_id = Some("resp_http_caller".to_string());
+        request.response_store = Some(true);
+        seed_continuation_cache(&provider, &request, "resp_cached", false);
+
+        let payload = provider
+            .convert_to_openai_responses_format(&request)
+            .expect("normal responses payload should build");
+
+        assert!(payload.get("previous_response_id").is_none());
+        assert_eq!(payload.get("store").and_then(Value::as_bool), Some(false));
+    }
+
     #[tokio::test]
     async fn websocket_reconnects_after_connection_limit_error() {
         let Some((base_url, recorded, handle)) = spawn_scripted_websocket_server(vec![
@@ -968,10 +980,16 @@ mod tests {
                 code: WEBSOCKET_CONNECTION_LIMIT_REACHED_CODE,
                 message: "Responses websocket connection limit reached (60 minutes).",
             }],
-            vec![ScriptedReply::Completed {
-                response_id: "resp_reconnected",
-                text: "ok",
-            }],
+            vec![
+                ScriptedReply::Completed {
+                    response_id: "resp_warmup",
+                    text: "",
+                },
+                ScriptedReply::Completed {
+                    response_id: "resp_reconnected",
+                    text: "ok",
+                },
+            ],
         ])
         .await
         else {
@@ -988,18 +1006,29 @@ mod tests {
         assert_eq!(response.content.as_deref(), Some("ok"));
         {
             let recorded = recorded.lock().expect("recorded lock");
-            assert_eq!(recorded.len(), 2);
+            assert_eq!(recorded.len(), 3);
             assert_eq!(
                 recorded[0]
                     .get("previous_response_id")
                     .and_then(Value::as_str),
                 Some("resp_cached")
             );
+            assert!(recorded[1].get("previous_response_id").is_none());
             assert_eq!(
-                recorded[1]
+                recorded[1].get("generate").and_then(Value::as_bool),
+                Some(false)
+            );
+            assert_eq!(
+                recorded[2]
                     .get("previous_response_id")
                     .and_then(Value::as_str),
-                Some("resp_cached")
+                Some("resp_warmup")
+            );
+            assert!(
+                recorded
+                    .iter()
+                    .all(|payload| payload.get("store").and_then(Value::as_bool) == Some(false)),
+                "websocket requests must enforce store=false"
             );
         }
         handle.await.expect("server task");
@@ -1054,10 +1083,16 @@ mod tests {
                 code: "invalid_request_error",
                 message: "Conversation already has an active response in progress: resp_active.",
             }],
-            vec![ScriptedReply::Completed {
-                response_id: "resp_after_active",
-                text: "retried ok",
-            }],
+            vec![
+                ScriptedReply::Completed {
+                    response_id: "resp_warmup",
+                    text: "",
+                },
+                ScriptedReply::Completed {
+                    response_id: "resp_after_active",
+                    text: "retried ok",
+                },
+            ],
         ])
         .await
         else {
@@ -1074,18 +1109,23 @@ mod tests {
         assert_eq!(response.content.as_deref(), Some("retried ok"));
         {
             let recorded = recorded.lock().expect("recorded lock");
-            assert_eq!(recorded.len(), 2);
+            assert_eq!(recorded.len(), 3);
             assert_eq!(
                 recorded[0]
                     .get("previous_response_id")
                     .and_then(Value::as_str),
                 Some("resp_cached")
             );
+            assert!(recorded[1].get("previous_response_id").is_none());
             assert_eq!(
-                recorded[1]
+                recorded[1].get("generate").and_then(Value::as_bool),
+                Some(false)
+            );
+            assert_eq!(
+                recorded[2]
                     .get("previous_response_id")
                     .and_then(Value::as_str),
-                Some("resp_cached")
+                Some("resp_warmup")
             );
         }
         handle.await.expect("server task");
@@ -1207,10 +1247,16 @@ mod tests {
             vec![ScriptedReply::Close {
                 reason: "limit reached",
             }],
-            vec![ScriptedReply::Completed {
-                response_id: "resp_after_close",
-                text: "closed then ok",
-            }],
+            vec![
+                ScriptedReply::Completed {
+                    response_id: "resp_warmup",
+                    text: "",
+                },
+                ScriptedReply::Completed {
+                    response_id: "resp_after_close",
+                    text: "closed then ok",
+                },
+            ],
         ])
         .await
         else {
@@ -1227,12 +1273,17 @@ mod tests {
         assert_eq!(response.content.as_deref(), Some("closed then ok"));
         {
             let recorded = recorded.lock().expect("recorded lock");
-            assert_eq!(recorded.len(), 2);
+            assert_eq!(recorded.len(), 3);
+            assert!(recorded[1].get("previous_response_id").is_none());
             assert_eq!(
-                recorded[1]
+                recorded[1].get("generate").and_then(Value::as_bool),
+                Some(false)
+            );
+            assert_eq!(
+                recorded[2]
                     .get("previous_response_id")
                     .and_then(Value::as_str),
-                Some("resp_cached")
+                Some("resp_warmup")
             );
         }
         handle.await.expect("server task");

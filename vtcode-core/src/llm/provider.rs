@@ -51,7 +51,6 @@ mod message;
 mod provider_trait;
 mod request;
 mod response;
-mod responses_continuation;
 #[cfg(test)]
 mod tests;
 mod tool;
@@ -61,6 +60,7 @@ pub use message::{AssistantPhase, ContentPart, Message, MessageContent, MessageR
 pub use provider_trait::{
     LLMError, LLMErrorMetadata, LLMProvider, ProviderCapabilities, get_cached_capabilities,
 };
+pub use vtcode_llm::provider::LLMProvider as ExtractedLLMProvider;
 pub use request::{
     AnthropicOptionalStringOverride, AnthropicOptionalU32Override, AnthropicRequestOverrides,
     AnthropicThinkingConfig, AnthropicThinkingDisplayOverride, AnthropicThinkingModeOverride,
@@ -71,11 +71,13 @@ pub use response::{
     BorrowedLLMStream, FinishReason, LLMNormalizedStream, LLMResponse, LLMStream, LLMStreamEvent,
     NormalizedStreamEvent, Usage,
 };
-pub use responses_continuation::{
-    PreparedResponsesRequest, ResponsesContinuationState, prepare_openai_responses_request,
-    prepare_responses_continuation_request, responses_continuation_key,
-    supports_responses_chaining, uses_incremental_responses_history,
-};
+pub type PreparedResponsesRequest<'a> = vtcode_llm::provider::PreparedResponsesRequest<'a, Message>;
+pub type ResponsesContinuationState = vtcode_llm::provider::ResponsesContinuationState<Message>;
 pub use tool::{
     FunctionDefinition, GrammarDefinition, ShellToolDefinition, ToolDefinition, ToolSearchAlgorithm,
+};
+pub use vtcode_llm::provider::{
+    prepare_openai_responses_request, prepare_responses_continuation_request,
+    records_responses_continuation_state, responses_continuation_key,
+    supports_responses_chaining, uses_incremental_responses_history,
 };

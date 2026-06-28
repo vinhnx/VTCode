@@ -185,6 +185,7 @@ mod single_response;
 pub mod tool_bridge;
 pub mod types;
 pub mod utils; // Shared utilities for request/response processing // Centralized HTTP client factory
+pub(crate) mod vtcode_llm_provider_adapter;
 
 #[cfg(test)]
 mod error_display_test;

@@ -5,7 +5,11 @@ use std::sync::Arc;
 use vtcode_core::config::constants::models;
 use vtcode_core::config::types::VerbosityLevel;
 use vtcode_core::llm::{
-    provider::{LLMProvider, LLMRequest, Message, ToolCall, ToolChoice, ToolDefinition},
+    factory::create_provider_for_model,
+    provider::{
+        ExtractedLLMProvider as _, LLMProvider, LLMRequest, Message, ToolCall, ToolChoice,
+        ToolDefinition,
+    },
     providers::{
         AnthropicProvider, GeminiProvider, LmStudioProvider, OllamaProvider, OpenAIProvider,
         OpenRouterProvider,
@@ -14,7 +18,9 @@ use vtcode_core::llm::{
 
 #[test]
 fn test_openai_tool_call_format() {
-    let provider = OpenAIProvider::new("test_key".to_string());
+    let provider =
+        create_provider_for_model(models::GPT_OSS_20B, "test_key".to_string(), None, None)
+            .expect("openai provider");
 
     // Test tool definition
     let tool = ToolDefinition::function(
@@ -248,7 +254,9 @@ fn test_gemini_tool_call_format() {
 #[test]
 fn test_all_providers_tool_validation() {
     let gemini = GeminiProvider::new("test_key".to_string());
-    let openai = OpenAIProvider::new("test_key".to_string());
+    let openai =
+        create_provider_for_model(models::GPT_OSS_20B, "test_key".to_string(), None, None)
+            .expect("openai provider");
     let anthropic = AnthropicProvider::new("test_key".to_string());
     let openrouter = OpenRouterProvider::new("test_key".to_string());
     let ollama = OllamaProvider::from_config(None, None, None, None, None, None, None);

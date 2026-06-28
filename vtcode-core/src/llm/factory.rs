@@ -1,12 +1,12 @@
 use super::cgp::{CanBuildProvider, CanDescribeProvider, register_builtin_cgp_providers};
 use super::model_resolver::{ModelResolver, heuristic_provider_from_model};
 use super::provider::{LLMError, LLMProvider};
-use super::providers::OpenAIProvider;
-use super::providers::openai::CustomProviderAuthHandle;
+use super::vtcode_llm_provider_adapter::VtcodeLlmProviderAdapter;
 use hashbrown::HashMap;
 use vtcode_commons::ctx_err;
 use vtcode_config::core::{ModelConfig, PromptCachingConfig};
 use vtcode_config::models::Provider;
+use vtcode_llm::providers::openai::CustomProviderAuthHandle;
 
 // ProviderConfig is the canonical factory config imported from vtcode-llm.
 // The struct was consolidated here to eliminate the duplicate definition.
@@ -279,18 +279,20 @@ pub fn register_custom_providers(custom_providers: &[vtcode_config::core::Custom
                 None
             };
 
-            Box::new(OpenAIProvider::from_custom_config(
-                key.clone(),
-                display_name.clone(),
-                api_key,
-                Some(model),
-                Some(base_url),
-                prompt_cache,
-                timeouts,
-                openai,
-                model_behavior,
-                custom_provider_auth,
-                models_override,
+            Box::new(VtcodeLlmProviderAdapter::new(
+                vtcode_llm::providers::OpenAIProvider::from_custom_config(
+                    key.clone(),
+                    display_name.clone(),
+                    api_key,
+                    Some(model),
+                    Some(base_url),
+                    prompt_cache,
+                    timeouts,
+                    openai,
+                    model_behavior,
+                    custom_provider_auth,
+                    models_override,
+                ),
             ))
         });
 
