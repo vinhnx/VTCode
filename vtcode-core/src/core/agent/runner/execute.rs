@@ -628,6 +628,7 @@ impl AgentRunner {
             );
             session_state.conversation = conversation;
             session_state.messages = conversation_messages;
+            session_state.reconcile_token_count();
             session_state.last_processed_message_idx = session_state.conversation.len();
 
             let mut runtime = AgentRuntime::new(session_state, None, steering_receiver);
@@ -821,27 +822,35 @@ impl AgentRunner {
                 if matches!(provider_kind, ModelProvider::Gemini)
                     && runtime.state.conversation.len() > runtime.state.last_processed_message_idx
                 {
-                    for content in
-                        &runtime.state.conversation[runtime.state.last_processed_message_idx..]
-                    {
-                        let mut text = String::new();
-                        for part in &content.parts {
-                            if let Part::Text {
-                                text: part_text, ..
-                            } = part
-                            {
-                                if !text.is_empty() {
-                                    text.push('\n');
+                    // Collect new messages first to avoid borrow conflict:
+                    // conversation is immutably borrowed in the loop, but
+                    // adjust_token_count/push need &mut state.
+                    let new_messages: Vec<Message> = runtime.state.conversation
+                        [runtime.state.last_processed_message_idx..]
+                        .iter()
+                        .map(|content| {
+                            let mut text = String::new();
+                            for part in &content.parts {
+                                if let Part::Text {
+                                    text: part_text, ..
+                                } = part
+                                {
+                                    if !text.is_empty() {
+                                        text.push('\n');
+                                    }
+                                    text.push_str(part_text);
                                 }
-                                text.push_str(part_text);
                             }
-                        }
-                        let message = match content.role.as_str() {
-                            "model" => Message::assistant(text),
-                            _ => Message::user(text),
-                        };
-                        runtime.state.messages.push(message);
-                    }
+                            match content.role.as_str() {
+                                "model" => Message::assistant(text),
+                                _ => Message::user(text),
+                            }
+                        })
+                        .collect();
+                    let batch_tokens: usize =
+                        new_messages.iter().map(|m| m.estimate_tokens()).sum();
+                    runtime.state.adjust_token_count(batch_tokens as isize);
+                    runtime.state.messages.extend(new_messages);
                     runtime.state.last_processed_message_idx = runtime.state.conversation.len();
                 }
 
@@ -1300,8 +1309,7 @@ impl AgentRunner {
 
                 // --- Emit tool latency events ---
                 if !runtime.state.turn_tool_latencies.is_empty() {
-                    let latencies =
-                        std::mem::take(&mut runtime.state.turn_tool_latencies);
+                    let latencies = std::mem::take(&mut runtime.state.turn_tool_latencies);
                     for (tool_name, duration_ms) in &latencies {
                         event_recorder.record_tool_latency(tool_name, *duration_ms);
                     }

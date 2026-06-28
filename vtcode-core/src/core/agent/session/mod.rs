@@ -2,7 +2,7 @@
 
 use crate::core::agent::error_recovery::ErrorRecoveryState;
 use crate::core::agent::task::{TaskOutcome, TaskResults};
-use crate::core::pending_actions::{ExpectedOutcome, PendingAction, PendingActions};
+use crate::core::pending_actions::PendingActions;
 use crate::core::state_schema::SchemaVersion;
 use crate::exec::events::Usage;
 use crate::llm::provider::{Message, ResponsesContinuationState, responses_continuation_key};
@@ -84,6 +84,10 @@ pub struct AgentSessionState {
     /// Per-tool execution latencies recorded during the current turn.
     /// Entries are (tool_name, duration_ms).
     pub turn_tool_latencies: Vec<(String, u64)>,
+
+    /// Cached total estimated token count for the conversation history.
+    /// Updated incrementally on each push to avoid O(n) scans per turn.
+    cached_total_tokens: usize,
 }
 
 /// Statistics tracked during an agent session.
@@ -175,6 +179,7 @@ impl AgentSessionState {
             turn_max_ms: 0,
             turn_durations_ms: Vec::with_capacity(max_turns),
             turn_tool_latencies: Vec::with_capacity(32),
+            cached_total_tokens: 0,
         }
     }
 
@@ -294,8 +299,11 @@ impl AgentSessionState {
         let tokens = text.len().saturating_div(4); // rough estimate: ~4 chars per token
         let metadata = crate::core::message_metadata::MessageMetadata::user_input(now, tokens);
         self.conversation.push(Content::user_text(text.as_str()));
-        self.messages
-            .push(Message::user(text).with_metadata(metadata));
+        let msg = Message::user(text).with_metadata(metadata);
+        // Role overhead (~4 tokens) + content tokens
+        let msg_tokens = msg.estimate_tokens();
+        self.cached_total_tokens = self.cached_total_tokens.saturating_add(msg_tokens);
+        self.messages.push(msg);
     }
 
     /// Threshold for consecutive identical progress hashes before stagnation is declared.
@@ -383,8 +391,27 @@ impl AgentSessionState {
     }
 
     /// Calculate total estimated tokens in the conversation.
+    /// Returns the cached value updated incrementally on each push.
+    /// Use [`reconcile_token_count`] after mutations that bypass push methods.
+    #[inline]
     pub fn total_tokens(&self) -> usize {
-        self.messages.iter().map(|m| m.estimate_tokens()).sum()
+        self.cached_total_tokens
+    }
+
+    /// Recompute the cached token count from scratch by scanning all messages.
+    /// Call this after mutations that bypass push methods (e.g., `normalize_history`,
+    /// direct `messages` field access, or deserialization).
+    pub fn reconcile_token_count(&mut self) {
+        self.cached_total_tokens = self.messages.iter().map(|m| m.estimate_tokens()).sum();
+    }
+
+    /// Manually adjust the cached token count. Use when a message is added
+    /// or removed outside of the standard push methods.
+    #[inline]
+    pub fn adjust_token_count(&mut self, delta: isize) {
+        self.cached_total_tokens = (self.cached_total_tokens as isize)
+            .saturating_add(delta)
+            .max(0) as usize;
     }
 
     /// Pre-flight check: does the assembled prompt fit within the context window?
@@ -423,6 +450,7 @@ impl AgentSessionState {
     /// Normalize history to enforce call/output pairing invariants.
     pub fn normalize(&mut self) {
         crate::core::agent::state::normalize_history(&mut self.messages);
+        self.reconcile_token_count();
     }
 
     pub fn into_results(
@@ -460,11 +488,38 @@ impl AgentSessionState {
         }
     }
 
-    /// Push a successful tool result to both conversation (for Gemini) and messages.
+    /// Push a tool event (result or error) to both conversation (for Gemini) and messages.
     ///
-    /// Accepts a `&Value` to avoid redundant serialize/deserialize cycles for
-    /// Gemini providers — the value is used directly in `FunctionResponse`
-    /// instead of being serialized to a string and then re-parsed.
+    /// Shared implementation for `push_tool_result` and `push_tool_error` to
+    /// eliminate the duplicated Gemini FunctionResponse construction.
+    fn push_tool_event(
+        &mut self,
+        call_id: String,
+        tool_name: &str,
+        value: &serde_json::Value,
+        is_gemini: bool,
+    ) {
+        if is_gemini {
+            self.conversation.push(Content {
+                role: "function".to_string(),
+                parts: vec![Part::FunctionResponse {
+                    function_response: FunctionResponse {
+                        name: tool_name.to_string(),
+                        response: value.clone(),
+                        id: Some(call_id.clone()),
+                    },
+                    thought_signature: None,
+                }],
+            });
+        }
+        let serialized = serde_json::to_string(value).expect("Value serialization is infallible");
+        let msg = Message::tool_response(call_id, serialized);
+        let tokens = msg.estimate_tokens();
+        self.cached_total_tokens = self.cached_total_tokens.saturating_add(tokens);
+        self.messages.push(msg);
+    }
+
+    /// Push a successful tool result to both conversation (for Gemini) and messages.
     pub fn push_tool_result(
         &mut self,
         call_id: String,
@@ -472,29 +527,11 @@ impl AgentSessionState {
         result: &serde_json::Value,
         is_gemini: bool,
     ) {
-        if is_gemini {
-            self.conversation.push(Content {
-                role: "function".to_string(),
-                parts: vec![Part::FunctionResponse {
-                    function_response: FunctionResponse {
-                        name: tool_name.to_string(),
-                        response: result.clone(),
-                        id: Some(call_id.clone()),
-                    },
-                    thought_signature: None,
-                }],
-            });
-        }
-        let serialized = serde_json::to_string(result).expect("Value serialization is infallible");
-        self.messages
-            .push(Message::tool_response(call_id, serialized));
+        self.push_tool_event(call_id, tool_name, result, is_gemini);
         self.executed_commands.push(tool_name.to_owned());
     }
 
     /// Push a tool error to both conversation (for Gemini) and messages.
-    ///
-    /// Accepts a `&Value` to avoid redundant serialize/deserialize cycles for
-    /// Gemini providers.
     pub fn push_tool_error(
         &mut self,
         call_id: String,
@@ -502,23 +539,7 @@ impl AgentSessionState {
         error_payload: &serde_json::Value,
         is_gemini: bool,
     ) {
-        if is_gemini {
-            self.conversation.push(Content {
-                role: "function".to_string(),
-                parts: vec![Part::FunctionResponse {
-                    function_response: FunctionResponse {
-                        name: tool_name.to_string(),
-                        response: error_payload.clone(),
-                        id: Some(call_id.clone()),
-                    },
-                    thought_signature: None,
-                }],
-            });
-        }
-        let serialized =
-            serde_json::to_string(error_payload).expect("Value serialization is infallible");
-        self.messages
-            .push(Message::tool_response(call_id, serialized));
+        self.push_tool_event(call_id, tool_name, error_payload, is_gemini);
     }
 }
 
@@ -620,5 +641,59 @@ mod tests {
             state.messages[0],
             Message::tool_response("call_1".to_string(), expected_serialized)
         );
+    }
+
+    #[test]
+    fn cached_total_tokens_matches_direct_computation() {
+        let mut state = AgentSessionState::new("session".to_string(), 4, 4, 16_000);
+
+        // Add messages through the standard push methods
+        state.add_user_message("Hello, how are you?".to_string());
+        state.push_tool_result(
+            "call_1".to_string(),
+            "read_file",
+            &serde_json::json!({"content": "test file content"}),
+            false,
+        );
+        state.push_tool_error(
+            "call_2".to_string(),
+            "write_file",
+            &serde_json::json!({"error": "permission denied"}),
+            false,
+        );
+
+        // Cached value should match direct computation
+        let direct = state
+            .messages
+            .iter()
+            .map(|m| m.estimate_tokens())
+            .sum::<usize>();
+        assert_eq!(state.total_tokens(), direct);
+        assert!(state.total_tokens() > 0);
+    }
+
+    #[test]
+    fn reconcile_token_count_resyncs_after_external_mutation() {
+        let mut state = AgentSessionState::new("session".to_string(), 4, 4, 16_000);
+        state.add_user_message("test message".to_string());
+        let before = state.total_tokens();
+
+        // Simulate external mutation (bypassing push methods)
+        state
+            .messages
+            .push(Message::assistant("extra response".to_string()));
+        assert_ne!(
+            state.total_tokens(),
+            before + Message::assistant("extra response".to_string()).estimate_tokens()
+        );
+
+        // Reconcile should fix it
+        state.reconcile_token_count();
+        let expected = state
+            .messages
+            .iter()
+            .map(|m| m.estimate_tokens())
+            .sum::<usize>();
+        assert_eq!(state.total_tokens(), expected);
     }
 }

@@ -708,6 +708,8 @@ impl AgentRuntime {
             }
         }
 
+        self.state
+            .adjust_token_count(assistant_message.estimate_tokens() as isize);
         self.state.messages.push(assistant_message);
 
         self.state.conversation.push(Content {
