@@ -14,6 +14,7 @@
 
 mod client;
 pub mod connection_pool;
+pub mod conversion;
 pub mod enhanced_config;
 pub mod errors;
 mod provider;

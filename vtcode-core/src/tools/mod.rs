@@ -207,10 +207,14 @@ pub mod improvements_errors;
 pub mod improvements_registry_ext;
 mod install_support;
 pub mod optimized_registry;
+pub mod output_envelope;
+pub mod output_limits;
+pub mod output_pipeline;
 pub mod output_spooler;
 pub mod pattern_engine;
 pub mod request_response;
 pub mod unified_error;
+pub mod untrusted_data;
 
 /// Internal helper IDs for apply_patch and tracker constructors.
 pub const CREATE_APPLY_PATCH_FREEFORM_TOOL_ID: &str = "create_apply_patch_freeform_tool";

@@ -35,7 +35,7 @@ use super::common::{extract_prompt_cache_settings, override_base_url, resolve_mo
 use super::error_handling::{format_network_error, format_parse_error, is_rate_limit_error};
 
 mod client;
-mod helpers;
+pub(crate) mod helpers;
 mod llm_provider;
 mod provider;
 mod sanitize;

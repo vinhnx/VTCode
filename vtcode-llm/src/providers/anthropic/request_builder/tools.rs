@@ -5,6 +5,87 @@ use crate::providers::anthropic_types::{
 };
 use serde_json::{Map, Value, json};
 
+/// Format a slice of tool definitions for the Anthropic wire format.
+///
+/// This is the entry point used by [`crate::providers::tool_format::AnthropicFormatter`]
+/// and lets the runloop project tool definitions without first assembling a full
+/// `LLMRequest`. Cache control markers are intentionally omitted — callers that
+/// need them should use [`build_tools`] directly with an `LLMRequest`.
+pub(crate) fn build_tools_via_formatter(tools: &[ToolDefinition]) -> Option<Value> {
+    if tools.is_empty() {
+        return None;
+    }
+
+    let mut built_tools = Vec::with_capacity(tools.len());
+    for tool in tools.iter() {
+        if let Err(err) = push_anthropic_tool(&mut built_tools, tool) {
+            tracing::warn!(
+                error = %err,
+                tool = %tool.tool_type,
+                "AnthropicFormatter: failed to build tool entry, dropping tool"
+            );
+        }
+    }
+
+    serde_json::to_value(built_tools).ok()
+}
+
+fn push_anthropic_tool(
+    built_tools: &mut Vec<AnthropicTool>,
+    tool: &ToolDefinition,
+) -> Result<(), LLMError> {
+    if tool.is_tool_search() {
+        let Some(func) = tool.function.as_ref() else {
+            return Ok(());
+        };
+        built_tools.push(AnthropicTool::ToolSearch(AnthropicToolSearchTool {
+            tool_type: tool.tool_type.clone(),
+            name: func.name.clone(),
+        }));
+        return Ok(());
+    }
+
+    if tool.is_anthropic_web_search() {
+        built_tools.push(AnthropicTool::WebSearch(AnthropicWebSearchTool {
+            tool_type: tool.tool_type.clone(),
+            name: "web_search".to_string(),
+            options: anthropic_web_search_options(tool)?,
+        }));
+        return Ok(());
+    }
+
+    if tool.is_anthropic_code_execution() {
+        built_tools.push(AnthropicTool::CodeExecution(AnthropicCodeExecutionTool {
+            tool_type: tool.tool_type.clone(),
+            name: "code_execution".to_string(),
+        }));
+        return Ok(());
+    }
+
+    if tool.is_anthropic_memory_tool() {
+        built_tools.push(AnthropicTool::Memory(AnthropicMemoryTool {
+            tool_type: tool.tool_type.clone(),
+            name: "memory".to_string(),
+        }));
+        return Ok(());
+    }
+
+    let Some(func) = tool.function.as_ref() else {
+        return Ok(());
+    };
+    built_tools.push(AnthropicTool::Function(AnthropicFunctionTool {
+        name: func.name.clone(),
+        description: func.description.clone(),
+        input_schema: func.parameters.clone(),
+        input_examples: tool.input_examples.clone(),
+        strict: tool.strict,
+        allowed_callers: tool.allowed_callers.clone(),
+        cache_control: None,
+        defer_loading: tool.defer_loading,
+    }));
+    Ok(())
+}
+
 pub(crate) fn build_tools(
     request: &LLMRequest,
     cache_control: &Option<CacheControl>,
@@ -19,55 +100,7 @@ pub(crate) fn build_tools(
 
     let mut built_tools = Vec::with_capacity(request_tools.len());
     for tool in request_tools.iter() {
-        if tool.is_tool_search() {
-            let Some(func) = tool.function.as_ref() else {
-                continue;
-            };
-            built_tools.push(AnthropicTool::ToolSearch(AnthropicToolSearchTool {
-                tool_type: tool.tool_type.clone(),
-                name: func.name.clone(),
-            }));
-            continue;
-        }
-
-        if tool.is_anthropic_web_search() {
-            built_tools.push(AnthropicTool::WebSearch(AnthropicWebSearchTool {
-                tool_type: tool.tool_type.clone(),
-                name: "web_search".to_string(),
-                options: anthropic_web_search_options(tool)?,
-            }));
-            continue;
-        }
-
-        if tool.is_anthropic_code_execution() {
-            built_tools.push(AnthropicTool::CodeExecution(AnthropicCodeExecutionTool {
-                tool_type: tool.tool_type.clone(),
-                name: "code_execution".to_string(),
-            }));
-            continue;
-        }
-
-        if tool.is_anthropic_memory_tool() {
-            built_tools.push(AnthropicTool::Memory(AnthropicMemoryTool {
-                tool_type: tool.tool_type.clone(),
-                name: "memory".to_string(),
-            }));
-            continue;
-        }
-
-        let Some(func) = tool.function.as_ref() else {
-            continue;
-        };
-        built_tools.push(AnthropicTool::Function(AnthropicFunctionTool {
-            name: func.name.clone(),
-            description: func.description.clone(),
-            input_schema: func.parameters.clone(),
-            input_examples: tool.input_examples.clone(),
-            strict: tool.strict,
-            allowed_callers: tool.allowed_callers.clone(),
-            cache_control: None,
-            defer_loading: tool.defer_loading,
-        }));
+        push_anthropic_tool(&mut built_tools, tool)?;
     }
 
     if *breakpoints_remaining > 0

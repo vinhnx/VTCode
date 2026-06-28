@@ -44,6 +44,7 @@ pub mod network_allowlist;
 pub mod optimization;
 pub mod output_styles;
 pub mod root;
+pub mod safety;
 #[cfg(feature = "schema")]
 pub mod schema;
 pub mod status_line;

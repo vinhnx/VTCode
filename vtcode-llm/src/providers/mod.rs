@@ -24,6 +24,7 @@ pub mod poolside;
 pub mod qwen;
 pub mod stepfun;
 pub mod streaming_progress;
+pub mod tool_format;
 pub mod zai;
 
 pub mod common;

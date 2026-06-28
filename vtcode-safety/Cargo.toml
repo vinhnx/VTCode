@@ -23,6 +23,7 @@ once_cell = { workspace = true }
 rustc-hash = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+sha2 = { workspace = true }
 shell-words = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["fs", "io-util", "macros", "rt-multi-thread", "sync"] }
@@ -34,6 +35,7 @@ tracing = { workspace = true }
 vtcode-commons = { path = "../vtcode-commons", version = "0.133.21" }
 
 [dev-dependencies]
+serde_json = { workspace = true }
 tempfile = { workspace = true }
 
 [package.metadata.docs.rs]

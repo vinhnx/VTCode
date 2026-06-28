@@ -19,7 +19,7 @@ pub mod compat;
 mod headers;
 mod prompt_cache;
 mod provider;
-mod request_builder;
+pub mod request_builder;
 mod response_parser;
 mod stream_decoder;
 mod validation;

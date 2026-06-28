@@ -1486,3 +1486,24 @@ fn apply_interaction_delta(
         _ => {}
     }
 }
+
+/// Format a slice of tool definitions for the Gemini wire shape.
+///
+/// This is the entry point used by
+/// [`crate::providers::tool_format::GeminiFormatter`] and lets the runloop project
+/// tool definitions without going through a full `LLMRequest`. Returns the JSON
+/// representation of the `generateContent.tools` array (a bare array when tools
+/// are present, `None` when the slice is empty).
+///
+/// Callers that need access to `interaction_tools` or the
+/// `uses_server_side_tools` flag should use `collect_gemini_tool_spec` directly
+/// via the build helpers in [`crate::providers::gemini`].
+pub fn serialize_gemini_tools(tools: &[ToolDefinition]) -> Option<Value> {
+    if tools.is_empty() {
+        return None;
+    }
+
+    let spec = collect_gemini_tool_spec(Some(tools));
+    let generate_tools = spec.generate_tools?;
+    serde_json::to_value(generate_tools).ok()
+}

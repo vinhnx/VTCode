@@ -3,7 +3,7 @@
 mod messages;
 mod system;
 mod thinking;
-mod tools;
+pub mod tools;
 
 use crate::provider::{
     AnthropicOptionalStringOverride, AnthropicOptionalU32Override, AnthropicThinkingConfig,
