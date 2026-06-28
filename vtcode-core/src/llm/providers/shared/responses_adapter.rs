@@ -485,6 +485,7 @@ fn response_stream_event_policy_for_type(event_type: &str) -> ResponsesStreamEve
         | "response.reasoning_text.done"
         | "response.reasoning_content.delta" => ResponsesStreamEventPolicy::VtcodeOverlayConversion,
         "response.queued"
+        | "keepalive"
         | "response.content_part.added"
         | "response.content_part.done"
         | "response.output_text.done"
@@ -634,6 +635,10 @@ mod tests {
         );
         assert_eq!(
             super::response_stream_event_policy_for_type("response.queued"),
+            Policy::DocumentedStatusMarkerNoop
+        );
+        assert_eq!(
+            super::response_stream_event_policy_for_type("keepalive"),
             Policy::DocumentedStatusMarkerNoop
         );
 
