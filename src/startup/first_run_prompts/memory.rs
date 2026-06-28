@@ -92,7 +92,7 @@ fn prompt_persistent_memory_text(
 
     loop {
         let default_label = if default_enabled { "on" } else { "off" };
-        let input = prompt_with_placeholder(&format!("Persistent memory [{}]", default_label))?;
+        let input = prompt_with_placeholder(&format!("Persistent memory [{default_label}]"))?;
         let trimmed = input.trim();
         if trimmed.is_empty() {
             return Ok(default_enabled);

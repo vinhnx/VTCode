@@ -21,8 +21,7 @@ fn circuit_breaker_default_blocked(
         tool_call_id,
         build_validation_error_content_with_fallback(
             format!(
-                "Tool '{}' is temporarily disabled due to high failure rate (Circuit Breaker OPEN).",
-                canonical_tool_name
+                "Tool '{canonical_tool_name}' is temporarily disabled due to high failure rate (Circuit Breaker OPEN)."
             ),
             "circuit_breaker",
             fallback_tool,

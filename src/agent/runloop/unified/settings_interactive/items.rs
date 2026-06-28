@@ -46,7 +46,7 @@ pub(super) fn build_settings_items(
         }
 
         let node = get_node(draft, view_path)
-            .ok_or_else(|| anyhow!("Could not resolve settings path {}", view_path))?;
+            .ok_or_else(|| anyhow!("Could not resolve settings path {view_path}"))?;
         append_node_items(&mut items, view_path, node, draft)?;
     } else if let TomlValue::Table(table) = draft {
         items.push(section_item("Quick Access"));
@@ -54,7 +54,7 @@ pub(super) fn build_settings_items(
             "Model Config",
             "Edit main and lightweight model settings in one focused tree",
             Some("Section"),
-            &format!("{}{}", ACTION_PREFIX_OPEN, SETTINGS_MODEL_CONFIG_PATH),
+            &format!("{ACTION_PREFIX_OPEN}{SETTINGS_MODEL_CONFIG_PATH}"),
         ));
         items.push(action_item(
             "External Editor",
@@ -66,13 +66,13 @@ pub(super) fn build_settings_items(
             "Editor Mode",
             "Toggle Vim-style prompt editing (ui.vim_mode)",
             Some("Section"),
-            &format!("{}ui", ACTION_PREFIX_OPEN),
+            &format!("{ACTION_PREFIX_OPEN}ui"),
         ));
         items.push(action_item(
             "Codex App Server",
             "Review the local Codex sidecar command, startup timeout, and experimental switches",
             Some("Section"),
-            &format!("{}agent.codex_app_server", ACTION_PREFIX_OPEN),
+            &format!("{ACTION_PREFIX_OPEN}agent.codex_app_server"),
         ));
         append_table_items(&mut items, table, None, None, draft);
     }
@@ -95,18 +95,18 @@ fn append_node_items(
                 "Add item",
                 "Append a new default item to this array",
                 Some("Array"),
-                &format!("{}{}", ACTION_PREFIX_ARRAY_ADD, path),
+                &format!("{ACTION_PREFIX_ARRAY_ADD}{path}"),
             ));
             items.push(action_item(
                 "Remove last item",
                 "Remove the final array entry",
                 Some("Array"),
-                &format!("{}{}", ACTION_PREFIX_ARRAY_POP, path),
+                &format!("{ACTION_PREFIX_ARRAY_POP}{path}"),
             ));
 
             for (index, value) in entries.iter().enumerate() {
-                let child_path = format!("{}[{}]", path, index);
-                let label = format!("[{}]", index);
+                let child_path = format!("{path}[{index}]");
+                let label = format!("[{index}]");
                 items.push(item_for_value(&label, &child_path, value, draft_root));
             }
         }
@@ -130,15 +130,14 @@ fn append_synthetic_model_config_items(
                 "Main Model",
                 "Provider and default model for the active conversation model",
                 Some("Section"),
-                &format!("{}{}", ACTION_PREFIX_OPEN, SETTINGS_MODEL_CONFIG_MAIN_PATH),
+                &format!("{ACTION_PREFIX_OPEN}{SETTINGS_MODEL_CONFIG_MAIN_PATH}"),
             ));
             items.push(action_item(
                 "Lightweight Model",
                 "Shared lower-cost route for memory, prompt suggestions, and smaller delegated tasks",
                 Some("Section"),
                 &format!(
-                    "{}{}",
-                    ACTION_PREFIX_OPEN, SETTINGS_MODEL_CONFIG_LIGHTWEIGHT_PATH
+                    "{ACTION_PREFIX_OPEN}{SETTINGS_MODEL_CONFIG_LIGHTWEIGHT_PATH}"
                 ),
             ));
             Ok(true)
@@ -296,8 +295,7 @@ fn item_for_value(
             badge: Some("On/Off".to_string()),
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!(
-                "{}{}:toggle",
-                ACTION_PREFIX_SET, path
+                "{ACTION_PREFIX_SET}{path}:toggle"
             ))),
             search_value: Some(search_value),
         },
@@ -307,8 +305,7 @@ fn item_for_value(
             badge: Some("Step".to_string()),
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!(
-                "{}{}:inc",
-                ACTION_PREFIX_SET, path
+                "{ACTION_PREFIX_SET}{path}:inc"
             ))),
             search_value: Some(search_value),
         },
@@ -320,10 +317,7 @@ fn item_for_value(
                 badge: has_options.then(|| "Pick".to_string()),
                 indent: 0,
                 selection: has_options.then(|| {
-                    InlineListSelection::ConfigAction(format!(
-                        "{}{}:cycle",
-                        ACTION_PREFIX_SET, path
-                    ))
+                    InlineListSelection::ConfigAction(format!("{ACTION_PREFIX_SET}{path}:cycle"))
                 }),
                 search_value: Some(search_value),
             }
@@ -341,8 +335,7 @@ fn item_for_value(
             badge: Some("List".to_string()),
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!(
-                "{}{}",
-                ACTION_PREFIX_OPEN, path
+                "{ACTION_PREFIX_OPEN}{path}"
             ))),
             search_value: Some(search_value),
         },
@@ -352,8 +345,7 @@ fn item_for_value(
             badge: Some("Section".to_string()),
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!(
-                "{}{}",
-                ACTION_PREFIX_OPEN, path
+                "{ACTION_PREFIX_OPEN}{path}"
             ))),
             search_value: Some(search_value),
         },
@@ -384,9 +376,8 @@ fn item_for_missing_doc_value(label: &str, path: &str) -> InlineListItem {
             "Unset".to_string()
         }),
         indent: 0,
-        selection: has_options.then(|| {
-            InlineListSelection::ConfigAction(format!("{}{}:cycle", ACTION_PREFIX_SET, path))
-        }),
+        selection: has_options
+            .then(|| InlineListSelection::ConfigAction(format!("{ACTION_PREFIX_SET}{path}:cycle"))),
         search_value: Some(search_value_for_missing_doc(path, label, doc)),
     }
 }

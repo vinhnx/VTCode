@@ -124,7 +124,7 @@ async fn apply_skill_command_outcome(
             {
                 ctx.renderer.line(
                     MessageStyle::Error,
-                    &format!("Failed to activate skill: {}", e),
+                    &format!("Failed to activate skill: {e}"),
                 )?;
                 return Ok(SlashCommandControl::Continue);
             }
@@ -137,9 +137,9 @@ async fn apply_skill_command_outcome(
                 .deactivate_skill(ctx.loaded_skills, &name)
                 .await?;
             let message = if removed {
-                format!("Unloaded skill: {}", name)
+                format!("Unloaded skill: {name}")
             } else {
-                format!("Skill was not active: {}", name)
+                format!("Skill was not active: {name}")
             };
             ctx.renderer.line(MessageStyle::Info, &message)?;
             Ok(SlashCommandControl::Continue)
@@ -172,8 +172,7 @@ async fn apply_skill_command_outcome(
                     ctx.renderer
                         .render_markdown_output(MessageStyle::Output, &result)?;
                     ctx.conversation_history.push(uni::Message::user(format!(
-                        "/skills use {} [executed]",
-                        skill_name
+                        "/skills use {skill_name} [executed]"
                     )));
 
                     let limited = truncate_message_content(&result);
@@ -186,7 +185,7 @@ async fn apply_skill_command_outcome(
                     drop(loading_spinner);
                     ctx.renderer.line(
                         MessageStyle::Error,
-                        &format!("Failed to execute skill: {}", e),
+                        &format!("Failed to execute skill: {e}"),
                     )?;
                     Ok(SlashCommandControl::Continue)
                 }
@@ -229,7 +228,7 @@ async fn apply_skill_command_outcome(
                 SlashCommandControl::BreakWithReason(reason) => {
                     ctx.renderer.line(
                         MessageStyle::Info,
-                        &format!("Built-in command skill '{}' exited the session.", name),
+                        &format!("Built-in command skill '{name}' exited the session."),
                     )?;
                     Ok(SlashCommandControl::BreakWithReason(reason))
                 }
@@ -251,9 +250,9 @@ async fn apply_skill_command_outcome(
 fn skill_invocation_status_message(skill_name: &str) -> String {
     let invocation_target = skill_name
         .strip_prefix("cmd-")
-        .map(|slash_name| format!("/{}", slash_name))
+        .map(|slash_name| format!("/{slash_name}"))
         .unwrap_or_else(|| skill_name.to_string());
-    format!("Running {}...", invocation_target)
+    format!("Running {invocation_target}...")
 }
 
 fn skill_runtime(
@@ -527,7 +526,7 @@ async fn run_skill_browser(ctx: &mut SlashCommandContext<'_>) -> Result<()> {
         if let Some(name) = skill_action.strip_prefix(SKILL_USE_PREFIX) {
             if let Some(input) = prompt_optional_text(
                 ctx,
-                &format!("Run Skill: {}", name),
+                &format!("Run Skill: {name}"),
                 "Provide input for this skill run (optional).",
                 "Input:",
                 "Type skill input (optional)",
@@ -783,8 +782,7 @@ fn show_skills_manager_actions_modal(ctx: &mut SlashCommandContext<'_>) {
             badge: Some("Recommended".to_string()),
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!(
-                "{}browse",
-                SKILL_ACTION_PREFIX
+                "{SKILL_ACTION_PREFIX}browse"
             ))),
             search_value: Some("browse catalog skills".to_string()),
         },
@@ -794,8 +792,7 @@ fn show_skills_manager_actions_modal(ctx: &mut SlashCommandContext<'_>) {
             badge: None,
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!(
-                "{}list",
-                SKILL_ACTION_PREFIX
+                "{SKILL_ACTION_PREFIX}list"
             ))),
             search_value: Some("list skills".to_string()),
         },
@@ -805,8 +802,7 @@ fn show_skills_manager_actions_modal(ctx: &mut SlashCommandContext<'_>) {
             badge: None,
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!(
-                "{}search",
-                SKILL_ACTION_PREFIX
+                "{SKILL_ACTION_PREFIX}search"
             ))),
             search_value: Some("search query".to_string()),
         },
@@ -816,8 +812,7 @@ fn show_skills_manager_actions_modal(ctx: &mut SlashCommandContext<'_>) {
             badge: None,
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!(
-                "{}create",
-                SKILL_ACTION_PREFIX
+                "{SKILL_ACTION_PREFIX}create"
             ))),
             search_value: Some("create scaffold".to_string()),
         },
@@ -827,8 +822,7 @@ fn show_skills_manager_actions_modal(ctx: &mut SlashCommandContext<'_>) {
             badge: None,
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!(
-                "{}load",
-                SKILL_ACTION_PREFIX
+                "{SKILL_ACTION_PREFIX}load"
             ))),
             search_value: Some("enable load".to_string()),
         },
@@ -838,8 +832,7 @@ fn show_skills_manager_actions_modal(ctx: &mut SlashCommandContext<'_>) {
             badge: None,
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!(
-                "{}unload",
-                SKILL_ACTION_PREFIX
+                "{SKILL_ACTION_PREFIX}unload"
             ))),
             search_value: Some("disable unload".to_string()),
         },
@@ -849,8 +842,7 @@ fn show_skills_manager_actions_modal(ctx: &mut SlashCommandContext<'_>) {
             badge: None,
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!(
-                "{}info",
-                SKILL_ACTION_PREFIX
+                "{SKILL_ACTION_PREFIX}info"
             ))),
             search_value: Some("details info metadata".to_string()),
         },
@@ -860,8 +852,7 @@ fn show_skills_manager_actions_modal(ctx: &mut SlashCommandContext<'_>) {
             badge: None,
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!(
-                "{}use",
-                SKILL_ACTION_PREFIX
+                "{SKILL_ACTION_PREFIX}use"
             ))),
             search_value: Some("run execute use".to_string()),
         },
@@ -871,8 +862,7 @@ fn show_skills_manager_actions_modal(ctx: &mut SlashCommandContext<'_>) {
             badge: None,
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!(
-                "{}validate",
-                SKILL_ACTION_PREFIX
+                "{SKILL_ACTION_PREFIX}validate"
             ))),
             search_value: Some("validate lint".to_string()),
         },
@@ -882,8 +872,7 @@ fn show_skills_manager_actions_modal(ctx: &mut SlashCommandContext<'_>) {
             badge: None,
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!(
-                "{}package",
-                SKILL_ACTION_PREFIX
+                "{SKILL_ACTION_PREFIX}package"
             ))),
             search_value: Some("package bundle".to_string()),
         },
@@ -893,8 +882,7 @@ fn show_skills_manager_actions_modal(ctx: &mut SlashCommandContext<'_>) {
             badge: None,
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!(
-                "{}regen",
-                SKILL_ACTION_PREFIX
+                "{SKILL_ACTION_PREFIX}regen"
             ))),
             search_value: Some("index regenerate".to_string()),
         },
@@ -904,8 +892,7 @@ fn show_skills_manager_actions_modal(ctx: &mut SlashCommandContext<'_>) {
             badge: None,
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!(
-                "{}help",
-                SKILL_ACTION_PREFIX
+                "{SKILL_ACTION_PREFIX}help"
             ))),
             search_value: Some("help commands".to_string()),
         },
@@ -929,8 +916,7 @@ fn show_skills_manager_actions_modal(ctx: &mut SlashCommandContext<'_>) {
         ],
         items,
         Some(InlineListSelection::ConfigAction(format!(
-            "{}browse",
-            SKILL_ACTION_PREFIX
+            "{SKILL_ACTION_PREFIX}browse"
         ))),
         None,
     );

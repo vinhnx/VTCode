@@ -58,17 +58,11 @@ pub(super) fn build_partial_timeout_messages(
     };
 
     let renderer_message = format!(
-        "Turn timed out after {} seconds in phase {:?}. PTY sessions cancelled; {} (calls={}, active_pty_before_cancel={})",
-        timeout_secs,
-        timed_out_phase,
-        timeout_note,
-        attempted_tool_calls,
-        active_pty_sessions_before_cancel
+        "Turn timed out after {timeout_secs} seconds in phase {timed_out_phase:?}. PTY sessions cancelled; {timeout_note} (calls={attempted_tool_calls}, active_pty_before_cancel={active_pty_sessions_before_cancel})"
     );
 
     let mut error_message = format!(
-        "Turn timed out after {} seconds in phase {:?} after partial tool execution (calls={}, active_pty_before_cancel={})",
-        timeout_secs, timed_out_phase, attempted_tool_calls, active_pty_sessions_before_cancel
+        "Turn timed out after {timeout_secs} seconds in phase {timed_out_phase:?} after partial tool execution (calls={attempted_tool_calls}, active_pty_before_cancel={active_pty_sessions_before_cancel})"
     );
     if continuing_with_recovery {
         error_message.push_str(

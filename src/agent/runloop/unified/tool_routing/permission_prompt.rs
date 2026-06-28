@@ -460,10 +460,10 @@ fn build_tool_permission_options(
                 "Remember approval for this tool in this workspace".to_string()
             }
             PersistentApprovalTarget::ExactInvocation { display_label } => {
-                format!("Remember approval for {} in this workspace", display_label)
+                format!("Remember approval for {display_label} in this workspace")
             }
             PersistentApprovalTarget::PrefixRule { display_label, .. } => {
-                format!("Remember approval for {} in this workspace", display_label)
+                format!("Remember approval for {display_label} in this workspace")
             }
         };
         options.push(InlineListItem {
@@ -567,7 +567,7 @@ pub(super) async fn prompt_tool_permission<S: UiSession + ?Sized>(
     ];
 
     if let Some(source_label) = source_thread_label {
-        description_lines.push(format!("Source: {}", source_label));
+        description_lines.push(format!("Source: {source_label}"));
     }
 
     if let Some(args) = tool_args
@@ -581,9 +581,9 @@ pub(super) async fn prompt_tool_permission<S: UiSession + ?Sized>(
                 if let Some(str_val) = value.as_str() {
                     description_lines.push(format!("  {}: {}", key, truncate_arg_preview(str_val)));
                 } else if let Some(bool_val) = value.as_bool() {
-                    description_lines.push(format!("  {}: {}", key, bool_val));
+                    description_lines.push(format!("  {key}: {bool_val}"));
                 } else if let Some(num_val) = value.as_number() {
-                    description_lines.push(format!("  {}: {}", key, num_val));
+                    description_lines.push(format!("  {key}: {num_val}"));
                 }
             }
             if obj.len() > 3 {
@@ -594,11 +594,11 @@ pub(super) async fn prompt_tool_permission<S: UiSession + ?Sized>(
 
     if let Some(reason) = approval_reason {
         description_lines.push(String::new());
-        description_lines.push(format!("Reason: {}", reason));
+        description_lines.push(format!("Reason: {reason}"));
     }
 
     if let Some(shell_justification) = extract_shell_approval_justification(tool_name, tool_args) {
-        description_lines.push(format!("Justification: {}", shell_justification));
+        description_lines.push(format!("Justification: {shell_justification}"));
     }
 
     if let Some(just) = justification {
@@ -612,7 +612,7 @@ pub(super) async fn prompt_tool_permission<S: UiSession + ?Sized>(
             .await
     {
         description_lines.push(String::new());
-        description_lines.push(format!("Suggestion: {}", suggestion));
+        description_lines.push(format!("Suggestion: {suggestion}"));
     }
 
     description_lines.push(String::new());
@@ -723,16 +723,16 @@ pub(super) async fn prompt_policy_denied_tool<S: UiSession + ?Sized>(
 
     if let Some(diag) = &diagnostic {
         if let Some(impact) = diag["impact"].as_str() {
-            description_lines.push(format!("Impact: {}", impact));
+            description_lines.push(format!("Impact: {impact}"));
         }
         if let Some(fix_action) = diag["fix"]["action"].as_str() {
             description_lines.push(String::new());
-            description_lines.push(format!("Fix: {}", fix_action));
+            description_lines.push(format!("Fix: {fix_action}"));
         }
         if let Some(files) = diag["fix"]["files"].as_array() {
             for file in files {
                 if let Some(f) = file.as_str() {
-                    description_lines.push(format!("  - {}", f));
+                    description_lines.push(format!("  - {f}"));
                 }
             }
         }
@@ -771,7 +771,7 @@ pub(super) async fn prompt_policy_denied_tool<S: UiSession + ?Sized>(
     let navigation_hint = "Use ↑↓ or Tab to navigate • Enter to select • Esc to deny".to_string();
 
     let request = ListOverlayRequest {
-        title: format!("Tool Policy: {}", tool_name),
+        title: format!("Tool Policy: {tool_name}"),
         lines: description_lines,
         footer_hint: Some(navigation_hint),
         items: options,

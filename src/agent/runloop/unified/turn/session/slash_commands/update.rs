@@ -28,7 +28,7 @@ pub(crate) async fn handle_update(
 
     ctx.renderer.line(
         MessageStyle::Info,
-        &format!("Checking for updates (current: v{})...", current_version),
+        &format!("Checking for updates (current: v{current_version})..."),
     )?;
 
     match updater.check_for_updates().await {
@@ -97,7 +97,7 @@ pub(crate) async fn handle_update(
         Err(err) => {
             ctx.renderer.line(
                 MessageStyle::Error,
-                &format!("Failed to check updates: {}", err),
+                &format!("Failed to check updates: {err}"),
             )?;
             ctx.header_context
                 .highlights

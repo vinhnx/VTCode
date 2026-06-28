@@ -138,10 +138,7 @@ pub(super) fn validate_startup_configuration(
     if let Err(e) = validator.validate(config)
         && !quiet
     {
-        eprintln!(
-            "vtcode: warning: could not validate configured model catalog: {}",
-            e
-        );
+        eprintln!("vtcode: warning: could not validate configured model catalog: {e}");
     }
 
     Ok(())

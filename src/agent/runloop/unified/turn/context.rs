@@ -271,7 +271,7 @@ impl<'a> TurnProcessingContext<'a> {
         error_type: vtcode_core::core::agent::error_recovery::ErrorType,
     ) {
         let mut recovery = self.error_recovery.write().await;
-        recovery.record_error(scope, format!("{:#}", error), error_type);
+        recovery.record_error(scope, format!("{error:#}"), error_type);
     }
 
     pub(crate) async fn record_recovery_tool_error(

@@ -476,7 +476,7 @@ impl<'a> PaletteCoordinator<'a> {
                 ) => {
                     renderer.line(
                         MessageStyle::Info,
-                        &format!("Resuming session: {}", session_id),
+                        &format!("Resuming session: {session_id}"),
                     )?;
                     return Ok(InlineLoopAction::ResumeSession(session_id.clone()));
                 }
@@ -512,7 +512,7 @@ impl<'a> PaletteCoordinator<'a> {
                     };
                     renderer.line(
                         MessageStyle::Info,
-                        &format!("Forking session: {} ({mode_label})", session_id),
+                        &format!("Forking session: {session_id} ({mode_label})"),
                     )?;
                     return Ok(InlineLoopAction::ForkSession {
                         session_id: session_id.clone(),
@@ -673,14 +673,14 @@ impl<'a> ModelPickerCoordinator<'a> {
                 {
                     renderer.line(
                         MessageStyle::Error,
-                        &format!("Failed to apply model selection: {}", err),
+                        &format!("Failed to apply model selection: {err}"),
                     )?;
                 }
             }
             Err(err) => {
                 renderer.line(
                     MessageStyle::Error,
-                    &format!("Failed to start model picker: {}", err),
+                    &format!("Failed to start model picker: {err}"),
                 )?;
             }
         }
@@ -738,7 +738,7 @@ impl<'a> ModelPickerCoordinator<'a> {
                 {
                     renderer.line(
                         MessageStyle::Error,
-                        &format!("Failed to apply model selection: {}", err),
+                        &format!("Failed to apply model selection: {err}"),
                     )?;
                 }
             }

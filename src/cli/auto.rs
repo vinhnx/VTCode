@@ -86,7 +86,7 @@ pub async fn handle_auto_task_command(
         "{AUTO_SESSION_PREFIX}-{}",
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .map_err(|err| anyhow!("Failed to derive session identifier timestamp: {}", err))?
+            .map_err(|err| anyhow!("Failed to derive session identifier timestamp: {err}"))?
             .as_secs()
     );
 

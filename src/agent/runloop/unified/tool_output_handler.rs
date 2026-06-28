@@ -143,7 +143,7 @@ fn compact_run_completion_line(
         if exit_code == 0 {
             return Some("✓ run completed (exit code: 0)".to_string());
         }
-        return Some(format!("✗ run error, exit code: {}", exit_code));
+        return Some(format!("✗ run error, exit code: {exit_code}"));
     }
 
     if output.get("is_exited").and_then(serde_json::Value::as_bool) == Some(true) {
@@ -411,7 +411,7 @@ fn render_error_common(
     error: &str,
     error_type: &str,
 ) -> Result<()> {
-    let err_msg = format!("Tool '{}' {}: {}", name, error_type, error);
+    let err_msg = format!("Tool '{name}' {error_type}: {error}");
     renderer.line(MessageStyle::Error, &err_msg)?;
     Ok(())
 }

@@ -106,7 +106,7 @@ impl ActionMatcher {
 
             // Try two-word phrases using peek (avoids allocating a Vec of words)
             if let Some(&next) = iter.peek() {
-                let phrase = format!("{} {}", word, next);
+                let phrase = format!("{word} {next}");
                 if let Some(&action) = self.verbs.get(phrase.as_str()) {
                     let match_len = phrase.len();
                     if best_match.is_none_or(|(_, best_len)| match_len > best_len) {

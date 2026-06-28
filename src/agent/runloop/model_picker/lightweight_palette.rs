@@ -109,14 +109,14 @@ pub(crate) fn build_lightweight_model_palette_view(
 
     if let Some(provider) = provider {
         if let Some(warning) = dynamic_models.warning_for(provider) {
-            lines.push(format!("Live model notice: {}", warning));
+            lines.push(format!("Live model notice: {warning}"));
         } else if let Some(error) = dynamic_models.error_for(provider) {
-            lines.push(format!("Live model notice: {}", error));
+            lines.push(format!("Live model notice: {error}"));
         }
     }
 
     if let Some(warning) = resolution.warning {
-        lines.push(format!("Route warning: {}", warning));
+        lines.push(format!("Route warning: {warning}"));
     }
 
     LightweightModelPaletteView {
@@ -245,7 +245,7 @@ fn custom_provider_items(
             selection: Some(InlineListSelection::ConfigAction(format!(
                 "{action_prefix}{model}"
             ))),
-            search_value: Some(format!("{} {} lightweight model", current_provider, model)),
+            search_value: Some(format!("{current_provider} {model} lightweight model")),
         });
     }
 
@@ -263,8 +263,7 @@ fn base_items(
         InlineListItem {
             title: "Automatic (recommended)".to_string(),
             subtitle: Some(format!(
-                "Use {} for lower-cost side tasks and fall back to {}.",
-                auto_model, main_model
+                "Use {auto_model} for lower-cost side tasks and fall back to {main_model}."
             )),
             badge: Some(
                 if matches!(current_setting, ConfiguredLightweightSetting::Automatic) {
@@ -278,15 +277,13 @@ fn base_items(
                 "{action_prefix}auto"
             ))),
             search_value: Some(format!(
-                "{} {} automatic lightweight model recommended",
-                current_provider, auto_model
+                "{current_provider} {auto_model} automatic lightweight model recommended"
             )),
         },
         InlineListItem {
             title: "Use main model".to_string(),
             subtitle: Some(format!(
-                "Keep lightweight work on {} for accuracy-first behavior.",
-                main_model
+                "Keep lightweight work on {main_model} for accuracy-first behavior."
             )),
             badge: Some(
                 if matches!(current_setting, ConfiguredLightweightSetting::Main) {
@@ -300,8 +297,7 @@ fn base_items(
                 "{action_prefix}main"
             ))),
             search_value: Some(format!(
-                "{} {} main accuracy lightweight model",
-                current_provider, main_model
+                "{current_provider} {main_model} main accuracy lightweight model"
             )),
         },
     ]

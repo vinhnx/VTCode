@@ -40,7 +40,7 @@ pub(crate) fn render_write_file_preview(
     }
 
     if let Some(encoding) = get_string(payload, "encoding") {
-        renderer.line(MessageStyle::ToolDetail, &format!("encoding: {}", encoding))?;
+        renderer.line(MessageStyle::ToolDetail, &format!("encoding: {encoding}"))?;
     }
 
     // Handle diff preview
@@ -54,10 +54,10 @@ pub(crate) fn render_write_file_preview(
         if let Some(detail) = get_string(diff_value, "detail") {
             renderer.line(
                 MessageStyle::ToolDetail,
-                &format!("diff: {} ({})", reason, detail),
+                &format!("diff: {reason} ({detail})"),
             )?;
         } else {
-            renderer.line(MessageStyle::ToolDetail, &format!("diff: {}", reason))?;
+            renderer.line(MessageStyle::ToolDetail, &format!("diff: {reason}"))?;
         }
         return Ok(());
     }
@@ -78,7 +78,7 @@ pub(crate) fn render_write_file_preview(
         if let Some(omitted) = get_u64(diff_value, "omitted_line_count") {
             renderer.line(
                 MessageStyle::ToolDetail,
-                &format!("… +{} lines (use unified_file for full view)", omitted),
+                &format!("… +{omitted} lines (use unified_file for full view)"),
             )?;
         } else {
             renderer.line(MessageStyle::ToolDetail, "… diff truncated")?;
@@ -120,9 +120,9 @@ pub(crate) fn render_list_dir_output(
 
         // Simplified summary without pagination details that confuse the agent
         let summary = if total > count {
-            format!("Showing {} of {} items", count, total)
+            format!("Showing {count} of {total} items")
         } else {
-            format!("{} items total", count)
+            format!("{count} items total")
         };
         renderer.line(MessageStyle::ToolDetail, &summary)?;
     }
@@ -214,7 +214,7 @@ pub(crate) fn render_list_dir_output(
             if !directories.is_empty() {
                 renderer.line(MessageStyle::ToolDetail, "[Directories]")?;
                 for (name, _size) in &directories {
-                    let name_with_slash = format!("{}/", name);
+                    let name_with_slash = format!("{name}/");
                     let display =
                         preview::pad_to_display_width(&name_with_slash, max_name_width, ' ');
                     renderer.line(MessageStyle::ToolDetail, &display)?;
@@ -240,7 +240,7 @@ pub(crate) fn render_list_dir_output(
             if omitted > 0 {
                 renderer.line(
                     MessageStyle::ToolDetail,
-                    &format!("+ {} more items not shown", omitted),
+                    &format!("+ {omitted} more items not shown"),
                 )?;
             }
         }
@@ -265,7 +265,7 @@ pub(crate) fn render_read_file_output(renderer: &mut AnsiRenderer, val: &Value) 
             if files_ok == 1 { "" } else { "s" }
         );
         if failed > 0 {
-            summary.push_str(&format!(", {} failed", failed));
+            summary.push_str(&format!(", {failed} failed"));
         }
         render_tree_detail(renderer, &summary)?;
 
@@ -273,7 +273,7 @@ pub(crate) fn render_read_file_output(renderer: &mut AnsiRenderer, val: &Value) 
             if let Some(fp) = item.get("file_path").and_then(Value::as_str) {
                 let short = shorten_path(fp, 60);
                 if item.get("error").is_some() {
-                    renderer.line(MessageStyle::ToolError, &format!("  ✗ {}", short))?;
+                    renderer.line(MessageStyle::ToolError, &format!("  ✗ {short}"))?;
                 } else {
                     let lines_info = item
                         .get("ranges")
@@ -283,12 +283,12 @@ pub(crate) fn render_read_file_output(renderer: &mut AnsiRenderer, val: &Value) 
                                 .iter()
                                 .filter_map(|r| r.get("lines_read").and_then(Value::as_u64))
                                 .sum();
-                            format!(" ({} lines)", total_lines)
+                            format!(" ({total_lines} lines)")
                         })
                         .unwrap_or_default();
                     renderer.line(
                         MessageStyle::ToolDetail,
-                        &format!("  ✓ {}{}", short, lines_info),
+                        &format!("  ✓ {short}{lines_info}"),
                     )?;
                 }
             }
@@ -313,16 +313,16 @@ pub(crate) fn render_read_file_output(renderer: &mut AnsiRenderer, val: &Value) 
 
     let summary = if let Some(n) = lines_read {
         if has_more {
-            format!("Read {} lines (more available)", n)
+            format!("Read {n} lines (more available)")
         } else {
-            format!("Read {} lines", n)
+            format!("Read {n} lines")
         }
     } else if let (Some(start), Some(end)) = (start_line, end_line) {
         let count = end.saturating_sub(start) + 1;
-        format!("Read lines {}-{} ({} lines)", start, end, count)
+        format!("Read lines {start}-{end} ({count} lines)")
     } else if let Some(content) = get_string(val, "content") {
         let count = content.lines().count();
-        format!("Read {} lines", count)
+        format!("Read {count} lines")
     } else {
         return Ok(());
     };
@@ -345,7 +345,7 @@ fn shorten_path(path: &str, max_len: usize) -> String {
             let budget = max_len.saturating_sub(reserved);
             if budget > 0 && preview::display_width(parent_str.as_ref()) > budget {
                 let parent_tail = preview::suffix_for_display_width(parent_str.as_ref(), budget);
-                return format!("…{}/{}", parent_tail, name_str);
+                return format!("…{parent_tail}/{name_str}");
             }
         }
         return name_str.to_string();

@@ -107,10 +107,7 @@ fn unified_file_write_fallback(args: &Value) -> Option<(String, Value)> {
 
     let delimiter = unique_heredoc_delimiter(content)?;
     let escaped_path = path.replace('\'', "'\\''");
-    let command = format!(
-        "cat > '{}' << '{}'\n{}\n{}",
-        escaped_path, delimiter, content, delimiter
-    );
+    let command = format!("cat > '{escaped_path}' << '{delimiter}'\n{content}\n{delimiter}");
     Some((
         tool_names::UNIFIED_EXEC.to_string(),
         json!({

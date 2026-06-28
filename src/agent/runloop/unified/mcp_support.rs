@@ -56,12 +56,12 @@ pub(crate) async fn display_mcp_config_summary(
         if let Some(seconds) = mcp_cfg.startup_timeout_seconds {
             renderer.line(
                 MessageStyle::Info,
-                &format!("  startup timeout: {}s", seconds),
+                &format!("  startup timeout: {seconds}s"),
             )?;
         }
 
         if let Some(seconds) = mcp_cfg.tool_timeout_seconds {
-            renderer.line(MessageStyle::Info, &format!("  tool timeout: {}s", seconds))?;
+            renderer.line(MessageStyle::Info, &format!("  tool timeout: {seconds}s"))?;
         }
 
         if mcp_cfg.server.enabled {
@@ -181,7 +181,7 @@ pub(crate) async fn repair_mcp_runtime(
             Err(err) => {
                 renderer.line(
                     MessageStyle::Error,
-                    &format!("  Configuration validation failed: {}", err),
+                    &format!("  Configuration validation failed: {err}"),
                 )?;
                 renderer.line(
                     MessageStyle::Info,
@@ -227,7 +227,7 @@ pub(crate) async fn repair_mcp_runtime(
     if let Err(err) = manager.start_initialization() {
         renderer.line(
             MessageStyle::Error,
-            &format!("  Failed to restart MCP manager: {}", err),
+            &format!("  Failed to restart MCP manager: {err}"),
         )?;
         return Ok(false);
     }
@@ -247,7 +247,7 @@ pub(crate) async fn repair_mcp_runtime(
             McpInitStatus::Error { message } => {
                 renderer.line(
                     MessageStyle::Error,
-                    &format!("  MCP restart error: {}", message),
+                    &format!("  MCP restart error: {message}"),
                 )?;
                 return Ok(false);
             }
@@ -299,7 +299,7 @@ pub(crate) async fn diagnose_mcp(
             Ok(_) => renderer.line(MessageStyle::Info, "  Configuration validation: ok")?,
             Err(err) => renderer.line(
                 MessageStyle::Error,
-                &format!("  Configuration validation failed: {}", err),
+                &format!("  Configuration validation failed: {err}"),
             )?,
         }
     } else {
@@ -344,10 +344,7 @@ pub(crate) fn render_mcp_login_guidance(
     let action = if is_login { "login" } else { "logout" };
     renderer.line(
         MessageStyle::Status,
-        &format!(
-            "OAuth {} flow requested for provider '{}'.",
-            action, trimmed
-        ),
+        &format!("OAuth {action} flow requested for provider '{trimmed}'."),
     )?;
     renderer.line(
         MessageStyle::Info,
@@ -355,7 +352,7 @@ pub(crate) fn render_mcp_login_guidance(
     )?;
     renderer.line(
         MessageStyle::Info,
-        &format!("Run: vtcode mcp {} {}", action, trimmed),
+        &format!("Run: vtcode mcp {action} {trimmed}"),
     )?;
     renderer.line(
         MessageStyle::Info,

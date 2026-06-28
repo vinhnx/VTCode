@@ -18,18 +18,12 @@ use serde::{Deserialize, Serialize};
 /// max_size_bytes = 32 * 1024 * 1024
 /// max_files = 4
 /// ```
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct SafetyConfig {
     /// Audit log configuration. `None` ⇒ audit disabled, equivalent to a
     /// disabled [`ToolAuditConfig`].
     #[serde(default)]
     pub audit: Option<ToolAuditConfig>,
-}
-
-impl Default for SafetyConfig {
-    fn default() -> Self {
-        Self { audit: None }
-    }
 }
 
 /// Subset of `[safety.audit]` controlling the [`JsonlFileSink`](vtcode_safety::audit_log::JsonlFileSink).

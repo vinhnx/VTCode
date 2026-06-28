@@ -78,7 +78,7 @@ pub(crate) async fn display_mcp_status(
             McpInitStatus::Initializing { progress } => {
                 renderer.line(
                     MessageStyle::Status,
-                    &format!("  • Initializing: {}", progress),
+                    &format!("  • Initializing: {progress}"),
                 )?;
             }
             McpInitStatus::Ready { client } => {
@@ -115,7 +115,7 @@ pub(crate) async fn display_mcp_status(
                             }
                             let extra = tools.len().saturating_sub(samples.len());
                             let suffix = if extra > 0 {
-                                format!(" and {} more", extra)
+                                format!(" and {extra} more")
                             } else {
                                 String::new()
                             };
@@ -128,7 +128,7 @@ pub(crate) async fn display_mcp_status(
                     Err(err) => {
                         renderer.line(
                             MessageStyle::Error,
-                            &format!("  • Failed to list MCP tools: {}", err),
+                            &format!("  • Failed to list MCP tools: {err}"),
                         )?;
                     }
                 }
@@ -136,7 +136,7 @@ pub(crate) async fn display_mcp_status(
             McpInitStatus::Error { message } => {
                 renderer.line(
                     MessageStyle::Error,
-                    &format!("  • MCP initialization failed: {}", message),
+                    &format!("  • MCP initialization failed: {message}"),
                 )?;
             }
         }
@@ -159,9 +159,9 @@ pub(crate) async fn display_mcp_status(
                 {
                     let preview: String = args.chars().take(80).collect();
                     if preview.len() < args.len() {
-                        let _ = write!(detail, " · args {}…", preview);
+                        let _ = write!(detail, " · args {preview}…");
                     } else {
-                        let _ = write!(detail, " · args {}", preview);
+                        let _ = write!(detail, " · args {preview}");
                     }
                 }
 
@@ -259,10 +259,10 @@ pub(crate) async fn display_mcp_providers(
                 }
                 renderer.line(
                     MessageStyle::Info,
-                    &format!("    transport: stdio · {}", command_desc),
+                    &format!("    transport: stdio · {command_desc}"),
                 )?;
                 if let Some(dir) = &stdio.working_directory {
-                    renderer.line(MessageStyle::Info, &format!("    working_dir: {}", dir))?;
+                    renderer.line(MessageStyle::Info, &format!("    working_dir: {dir}"))?;
                 }
             }
             McpTransportConfig::Http(http) => {
@@ -271,10 +271,7 @@ pub(crate) async fn display_mcp_providers(
                     &format!("    transport: http · {}", http.endpoint),
                 )?;
                 if let Some(env) = &http.api_key_env {
-                    renderer.line(
-                        MessageStyle::Info,
-                        &format!("    bearer token env: {}", env),
-                    )?;
+                    renderer.line(MessageStyle::Info, &format!("    bearer token env: {env}"))?;
                 }
                 if !http.http_headers.is_empty() {
                     renderer.line(
@@ -362,7 +359,7 @@ pub(crate) async fn display_mcp_tools(
         Err(err) => {
             renderer.line(
                 MessageStyle::Error,
-                &format!("Failed to list MCP tools: {}", err),
+                &format!("Failed to list MCP tools: {err}"),
             )?;
         }
     }
@@ -386,7 +383,7 @@ pub(crate) async fn refresh_mcp_tools(
                 Err(err) => {
                     renderer.line(
                         MessageStyle::Error,
-                        &format!("Refreshed but failed to list tools: {}", err),
+                        &format!("Refreshed but failed to list tools: {err}"),
                     )?;
                 }
             }
@@ -399,7 +396,7 @@ pub(crate) async fn refresh_mcp_tools(
         Err(err) => {
             renderer.line(
                 MessageStyle::Error,
-                &format!("Failed to refresh MCP tools: {}", err),
+                &format!("Failed to refresh MCP tools: {err}"),
             )?;
             Ok(false)
         }

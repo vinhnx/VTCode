@@ -159,7 +159,7 @@ impl IncrementalSystemPrompt {
                 )
                 .await
             {
-                let _ = writeln!(prompt, "\n# INSTRUCTIONS\n{}", unified);
+                let _ = writeln!(prompt, "\n# INSTRUCTIONS\n{unified}");
             }
         } else if !context.discovered_skills.is_empty() {
             let _ = writeln!(

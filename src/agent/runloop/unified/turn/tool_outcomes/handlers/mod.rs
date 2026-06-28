@@ -179,12 +179,12 @@ async fn run_safety_validation_loop(
         Err(SafetyValidationFailure::Validation(err)) => {
             ctx.renderer.line(
                 MessageStyle::Error,
-                &format!("Safety validation failed: {}", err),
+                &format!("Safety validation failed: {err}"),
             )?;
             ctx.push_tool_response(
                 tool_call_id,
                 build_failure_error_content(
-                    format!("Safety validation failed: {}", err),
+                    format!("Safety validation failed: {err}"),
                     "safety_validation",
                 ),
             );
@@ -397,7 +397,7 @@ pub(crate) async fn validate_tool_call<'a>(
                 ctx.push_tool_response(
                     tool_call_id,
                     build_validation_error_content_with_fallback(
-                        format!("Tool preflight validation failed: {}", err),
+                        format!("Tool preflight validation failed: {err}"),
                         "preflight",
                         fallback_tool,
                         fallback_tool_args,
@@ -416,8 +416,7 @@ pub(crate) async fn validate_tool_call<'a>(
                 &ToolExecutionError::policy_violation(
                     canonical_tool_name.clone(),
                     format!(
-                        "Tool '{}' execution denied by active primary agent policy",
-                        canonical_tool_name
+                        "Tool '{canonical_tool_name}' execution denied by active primary agent policy"
                     ),
                 )
                 .to_json_value(),
@@ -504,8 +503,7 @@ pub(crate) async fn validate_tool_call<'a>(
             })
             .unwrap_or((None, None));
         let block_reason = format!(
-            "Circuit breaker blocked '{}' due to high failure rate. Switching to autonomous fallback strategy.",
-            display_tool
+            "Circuit breaker blocked '{display_tool}' due to high failure rate. Switching to autonomous fallback strategy."
         );
         tracing::warn!(tool = %canonical_tool_name, "Circuit breaker open, tool disabled");
 

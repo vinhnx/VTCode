@@ -189,7 +189,7 @@ pub(super) fn set_workspace_small_model_model(
 }
 
 fn usize_to_toml_integer(value: usize, label: &str) -> Result<i64> {
-    i64::try_from(value).with_context(|| format!("{} is too large to persist", label))
+    i64::try_from(value).with_context(|| format!("{label} is too large to persist"))
 }
 
 pub(super) fn preferred_user_config_path(manager: &ConfigManager) -> Option<PathBuf> {
@@ -216,9 +216,9 @@ pub(super) fn parse_positive_usize(value: &str, label: &str) -> Result<usize> {
     let parsed = value
         .trim()
         .parse::<usize>()
-        .with_context(|| format!("Failed to parse {}", label))?;
+        .with_context(|| format!("Failed to parse {label}"))?;
     if parsed == 0 {
-        bail!("{} must be greater than 0", label);
+        bail!("{label} must be greater than 0");
     }
     Ok(parsed)
 }

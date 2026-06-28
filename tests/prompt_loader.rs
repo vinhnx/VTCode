@@ -81,7 +81,7 @@ fn prompt_file_content_variations() {
 
         let loaded = fs::read_to_string(&prompt_path).expect("Failed to load test file");
 
-        assert_eq!(loaded, content, "Content mismatch for test: {}", test_name);
+        assert_eq!(loaded, content, "Content mismatch for test: {test_name}");
     }
 }
 
@@ -160,7 +160,7 @@ fn prompt_directory_structure() {
             }
 
             if !prompt_files.is_empty() {
-                println!("[FILES] Found prompt files: {:?}", prompt_files);
+                println!("[FILES] Found prompt files: {prompt_files:?}");
 
                 // Verify system.md is among them if any exist
                 if prompt_files.len() > 1 {

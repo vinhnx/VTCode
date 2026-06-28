@@ -124,10 +124,7 @@ impl ZedAgent {
                 },
                 acp::ContentBlock::Image(image) => {
                     let identifier = image.uri.as_deref().unwrap_or(image.mime_type.as_str());
-                    let placeholder = format!(
-                        "{RESOURCE_FALLBACK_LABEL} image ({identifier})",
-                        identifier = identifier
-                    );
+                    let placeholder = format!("{RESOURCE_FALLBACK_LABEL} image ({identifier})");
                     Self::append_segment(&mut aggregated, &placeholder);
                 }
                 acp::ContentBlock::Audio(audio) => {

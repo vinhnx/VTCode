@@ -198,7 +198,7 @@ impl<'a> InlineEventContext<'a> {
                 InlineLoopAction::OpenTranscriptReviewScrollback(text)
             }
             InlineEvent::OpenFileInEditor(path) => {
-                self.input_processor().submit(format!("/edit {}", path))
+                self.input_processor().submit(format!("/edit {path}"))
             }
             InlineEvent::OpenUrl(url) => {
                 self.state.reset_interrupt_state();

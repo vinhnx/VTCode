@@ -41,7 +41,7 @@ pub async fn handle_cleanup_snapshots_command(
     let mut cfg = snapshot_config(config);
     if let Some(m) = max {
         cfg.max_snapshots = m;
-        println!("Keeping maximum {} snapshots...", m);
+        println!("Keeping maximum {m} snapshots...");
     }
     let manager = snapshot_manager(cfg)?;
     manager.cleanup_old_snapshots().await?;

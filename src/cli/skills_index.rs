@@ -68,14 +68,14 @@ pub async fn handle_skills_regenerate_index(options: &SkillsCommandOptions) -> R
                     }
                 }
                 Err(e) => {
-                    eprintln!("Could not list skills: {}", e);
+                    eprintln!("Could not list skills: {e}");
                     println!("Skills index regenerated successfully!");
                     println!("Index file: {}", index_path.display());
                 }
             }
         }
         Err(e) => {
-            eprintln!("Failed to regenerate skills index: {}", e);
+            eprintln!("Failed to regenerate skills index: {e}");
             return Err(e);
         }
     }
@@ -104,7 +104,7 @@ pub async fn generate_comprehensive_skills_index(workspace: &Path) -> Result<std
         content.push_str("*No skills available yet.*\n\n");
         content.push_str("Create skills using the `save_skill` tool.\n");
     } else {
-        content.push_str(&format!("## Available Skills ({} total)\n\n", total_skills));
+        content.push_str(&format!("## Available Skills ({total_skills} total)\n\n"));
 
         if !discovery_result.skills.is_empty() {
             content.push_str("### Traditional Skills\n\n");
@@ -191,8 +191,7 @@ pub async fn generate_comprehensive_skills_index(workspace: &Path) -> Result<std
                     .unwrap_or("-");
                 let _ = writeln!(
                     content,
-                    "- **Type**: Built-in command skill\n- **Slash Alias**: `{}`\n- **Usage**: `{}`\n",
-                    slash_alias, usage
+                    "- **Type**: Built-in command skill\n- **Slash Alias**: `{slash_alias}`\n- **Usage**: `{usage}`\n"
                 );
             } else {
                 let skill_md = skill_ctx.path().join("SKILL.md");

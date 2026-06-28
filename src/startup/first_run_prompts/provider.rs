@@ -58,7 +58,7 @@ fn prompt_provider_text(
     let default_label = default.to_string();
 
     loop {
-        let input = prompt_with_placeholder(&format!("Provider [{}]", default_label))?;
+        let input = prompt_with_placeholder(&format!("Provider [{default_label}]"))?;
         let trimmed = input.trim();
         if trimmed.is_empty() {
             return Ok(default);

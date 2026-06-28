@@ -38,8 +38,7 @@ use styles::{GitStyles, LsStyles};
 
 pub(crate) fn spooled_output_hint(path: &str) -> String {
     format!(
-        "Large output was spooled to \"{}\". Use unified_file (action='read') or unified_search (action='grep') to inspect details.",
-        path
+        "Large output was spooled to \"{path}\". Use unified_file (action='read') or unified_search (action='grep') to inspect details."
     )
 }
 
@@ -358,7 +357,7 @@ pub(crate) fn tracker_view_lines(val: &Value) -> Vec<String> {
         .unwrap_or("Task tracker");
 
     let mut lines = Vec::new();
-    lines.push(format!("• {}", title));
+    lines.push(format!("• {title}"));
     lines.extend(summary_lines);
     if let Some(view_lines) = view
         .and_then(|obj| obj.get("lines"))
@@ -395,14 +394,14 @@ fn tracker_summary_lines(val: &Value) -> Vec<String> {
     if let Some(status) = val.get("status").and_then(Value::as_str)
         && !status.trim().is_empty()
     {
-        lines.push(format!("  Tracker status: {}", status));
+        lines.push(format!("  Tracker status: {status}"));
     }
 
     let Some(checklist) = val.get("checklist").and_then(Value::as_object) else {
         if let Some(message) = val.get("message").and_then(Value::as_str)
             && !message.trim().is_empty()
         {
-            lines.push(format!("  Update: {}", message));
+            lines.push(format!("  Update: {message}"));
         }
         return lines;
     };
@@ -431,12 +430,10 @@ fn tracker_summary_lines(val: &Value) -> Vec<String> {
             .and_then(Value::as_u64)
             .unwrap_or_else(|| (completed * 100) / total.max(1));
         lines.push(format!(
-            "  Progress: {}/{} complete ({}%)",
-            completed, total, progress_percent
+            "  Progress: {completed}/{total} complete ({progress_percent}%)"
         ));
         lines.push(format!(
-            "  Breakdown: {} in progress, {} pending, {} blocked",
-            in_progress, pending, blocked
+            "  Breakdown: {in_progress} in progress, {pending} pending, {blocked} blocked"
         ));
     }
 
@@ -455,7 +452,7 @@ fn tracker_summary_lines(val: &Value) -> Vec<String> {
                     .and_then(Value::as_str)
                     .unwrap_or("Unnamed task");
                 if index > 0 {
-                    format!("#{} {}", index, description)
+                    format!("#{index} {description}")
                 } else {
                     description.to_string()
                 }
@@ -465,7 +462,7 @@ fn tracker_summary_lines(val: &Value) -> Vec<String> {
         if !active_items.is_empty() {
             lines.push("  Active items:".to_string());
             for item in active_items.iter().take(3) {
-                lines.push(format!("    - {}", item));
+                lines.push(format!("    - {item}"));
             }
             if active_items.len() > 3 {
                 lines.push(format!("    - ... and {} more", active_items.len() - 3));
@@ -476,7 +473,7 @@ fn tracker_summary_lines(val: &Value) -> Vec<String> {
     if let Some(message) = val.get("message").and_then(Value::as_str)
         && !message.trim().is_empty()
     {
-        lines.push(format!("  Update: {}", message));
+        lines.push(format!("  Update: {message}"));
     }
 
     lines
@@ -535,7 +532,7 @@ fn render_error_details(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> 
                 .filter(|msg| !msg.trim().is_empty())
         })
     {
-        renderer.line(MessageStyle::ToolError, &format!("Error: {}", error_msg))?;
+        renderer.line(MessageStyle::ToolError, &format!("Error: {error_msg}"))?;
     }
 
     if let Some(error_type) = val.get("error_type").and_then(|v| v.as_str()) {
@@ -554,7 +551,7 @@ fn render_error_details(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> 
         };
         renderer.line(
             MessageStyle::ToolDetail,
-            &format!("Type: {}", type_description),
+            &format!("Type: {type_description}"),
         )?;
     }
 
@@ -564,25 +561,22 @@ fn render_error_details(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> 
         let display_error = vtcode_commons::formatting::truncate_byte_budget(original, 197, "...");
         renderer.line(
             MessageStyle::ToolDetail,
-            &format!("Details: {}", display_error),
+            &format!("Details: {display_error}"),
         )?;
     }
 
     if let Some(path) = val.get("path").and_then(|v| v.as_str()) {
-        renderer.line(MessageStyle::ToolDetail, &format!("Path: {}", path))?;
+        renderer.line(MessageStyle::ToolDetail, &format!("Path: {path}"))?;
     }
 
     if let Some(line) = val.get("line").and_then(|v| v.as_u64()) {
         if let Some(col) = val.get("column").and_then(|v| v.as_u64()) {
             renderer.line(
                 MessageStyle::ToolDetail,
-                &format!("Location: line {}, column {}", line, col),
+                &format!("Location: line {line}, column {col}"),
             )?;
         } else {
-            renderer.line(
-                MessageStyle::ToolDetail,
-                &format!("Location: line {}", line),
-            )?;
+            renderer.line(MessageStyle::ToolDetail, &format!("Location: line {line}"))?;
         }
     }
 

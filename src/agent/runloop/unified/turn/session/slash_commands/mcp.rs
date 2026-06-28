@@ -194,8 +194,7 @@ fn show_mcp_actions_modal(ctx: &mut SlashCommandContext<'_>) {
             badge: Some("Recommended".to_string()),
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!(
-                "{}status",
-                MCP_ACTION_PREFIX
+                "{MCP_ACTION_PREFIX}status"
             ))),
             search_value: Some("status overview health".to_string()),
         },
@@ -205,8 +204,7 @@ fn show_mcp_actions_modal(ctx: &mut SlashCommandContext<'_>) {
             badge: None,
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!(
-                "{}providers",
-                MCP_ACTION_PREFIX
+                "{MCP_ACTION_PREFIX}providers"
             ))),
             search_value: Some("providers list".to_string()),
         },
@@ -216,8 +214,7 @@ fn show_mcp_actions_modal(ctx: &mut SlashCommandContext<'_>) {
             badge: None,
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!(
-                "{}tools",
-                MCP_ACTION_PREFIX
+                "{MCP_ACTION_PREFIX}tools"
             ))),
             search_value: Some("tools list".to_string()),
         },
@@ -227,8 +224,7 @@ fn show_mcp_actions_modal(ctx: &mut SlashCommandContext<'_>) {
             badge: None,
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!(
-                "{}refresh",
-                MCP_ACTION_PREFIX
+                "{MCP_ACTION_PREFIX}refresh"
             ))),
             search_value: Some("refresh reload".to_string()),
         },
@@ -238,8 +234,7 @@ fn show_mcp_actions_modal(ctx: &mut SlashCommandContext<'_>) {
             badge: None,
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!(
-                "{}config",
-                MCP_ACTION_PREFIX
+                "{MCP_ACTION_PREFIX}config"
             ))),
             search_value: Some("config show".to_string()),
         },
@@ -249,8 +244,7 @@ fn show_mcp_actions_modal(ctx: &mut SlashCommandContext<'_>) {
             badge: None,
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!(
-                "{}edit",
-                MCP_ACTION_PREFIX
+                "{MCP_ACTION_PREFIX}edit"
             ))),
             search_value: Some("edit config".to_string()),
         },
@@ -260,8 +254,7 @@ fn show_mcp_actions_modal(ctx: &mut SlashCommandContext<'_>) {
             badge: None,
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!(
-                "{}repair",
-                MCP_ACTION_PREFIX
+                "{MCP_ACTION_PREFIX}repair"
             ))),
             search_value: Some("repair fix runtime".to_string()),
         },
@@ -271,8 +264,7 @@ fn show_mcp_actions_modal(ctx: &mut SlashCommandContext<'_>) {
             badge: None,
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!(
-                "{}diagnose",
-                MCP_ACTION_PREFIX
+                "{MCP_ACTION_PREFIX}diagnose"
             ))),
             search_value: Some("diagnose diagnostics".to_string()),
         },
@@ -296,8 +288,7 @@ fn show_mcp_actions_modal(ctx: &mut SlashCommandContext<'_>) {
         ],
         items,
         Some(InlineListSelection::ConfigAction(format!(
-            "{}status",
-            MCP_ACTION_PREFIX
+            "{MCP_ACTION_PREFIX}status"
         ))),
         None,
     );

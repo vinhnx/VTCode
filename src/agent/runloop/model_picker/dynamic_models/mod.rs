@@ -341,13 +341,13 @@ async fn fetch_openai_models(
         .unwrap_or_else(|| endpoints::default_provider_base(Provider::OpenAI).to_string())
         .trim_end_matches('/')
         .to_string();
-    let models_url = format!("{}/models", resolved_base);
+    let models_url = format!("{resolved_base}/models");
     let response = reqwest::Client::new()
         .get(&models_url)
         .bearer_auth(api_key)
         .send()
         .await
-        .map_err(|err| anyhow!("failed to connect to OpenAI models endpoint: {}", err))?;
+        .map_err(|err| anyhow!("failed to connect to OpenAI models endpoint: {err}"))?;
 
     if response.status() == StatusCode::UNAUTHORIZED || response.status() == StatusCode::FORBIDDEN {
         return Err(anyhow!(
@@ -364,7 +364,7 @@ async fn fetch_openai_models(
     let parsed: ModelsResponse = response
         .json()
         .await
-        .map_err(|err| anyhow!("failed to parse OpenAI models response: {}", err))?;
+        .map_err(|err| anyhow!("failed to parse OpenAI models response: {err}"))?;
 
     Ok(parsed
         .data

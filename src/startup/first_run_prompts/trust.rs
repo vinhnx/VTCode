@@ -42,7 +42,7 @@ fn prompt_trust_text(
     };
 
     loop {
-        let input = prompt_with_placeholder(&format!("Trust level [{}]", default_choice))?;
+        let input = prompt_with_placeholder(&format!("Trust level [{default_choice}]"))?;
         let trimmed = input.trim();
         if trimmed.is_empty() {
             return Ok(default);

@@ -205,13 +205,13 @@ fn format_resume_tool_header(tool_name: &str, tool_call_id: Option<&str>) -> Str
         .unwrap_or(tool_name);
     match tool_call_id {
         Some(id) if !id.trim().is_empty() && tool_name.trim().eq_ignore_ascii_case("tool") => {
-            format!("Tool [tool_call_id: {}]:", id)
+            format!("Tool [tool_call_id: {id}]:")
         }
         Some(id) if !id.trim().is_empty() => {
-            format!("Tool {} [tool_call_id: {}]:", tool_name, id)
+            format!("Tool {tool_name} [tool_call_id: {id}]:")
         }
         _ if tool_name.trim().eq_ignore_ascii_case("tool") => "Tool:".to_string(),
-        _ => format!("Tool {}:", tool_name),
+        _ => format!("Tool {tool_name}:"),
     }
 }
 
@@ -222,13 +222,13 @@ fn format_tool_arguments_for_resume(arguments: &str) -> String {
     }
 
     let Ok(value) = serde_json::from_str::<serde_json::Value>(trimmed) else {
-        return format!("```text\n{}\n```", trimmed);
+        return format!("```text\n{trimmed}\n```");
     };
 
     let Some(obj) = value.as_object() else {
         return serde_json::to_string_pretty(&value)
-            .map(|pretty| format!("```json\n{}\n```", pretty))
-            .unwrap_or_else(|_| format!("```json\n{}\n```", trimmed));
+            .map(|pretty| format!("```json\n{pretty}\n```"))
+            .unwrap_or_else(|_| format!("```json\n{trimmed}\n```"));
     };
 
     // Build a concise summary from key fields instead of showing raw JSON
@@ -240,28 +240,28 @@ fn format_tool_arguments_for_resume(arguments: &str) -> String {
         .or_else(|| obj.get("cmd"))
         .and_then(|v| v.as_str())
     {
-        summary_parts.push(format!("command: {}", cmd));
+        summary_parts.push(format!("command: {cmd}"));
     }
     // For unified_file / task_tracker: show action and related fields
     if let Some(action) = obj.get("action").and_then(|v| v.as_str()) {
-        summary_parts.push(format!("action: {}", action));
+        summary_parts.push(format!("action: {action}"));
         if let Some(path) = obj.get("path").and_then(|v| v.as_str()) {
-            summary_parts.push(format!("path: {}", path));
+            summary_parts.push(format!("path: {path}"));
         }
         if let Some(subject) = obj.get("subject").and_then(|v| v.as_str()) {
-            summary_parts.push(format!("subject: {}", subject));
+            summary_parts.push(format!("subject: {subject}"));
         }
         if let Some(status) = obj.get("status").and_then(|v| v.as_str()) {
-            summary_parts.push(format!("status: {}", status));
+            summary_parts.push(format!("status: {status}"));
         }
     }
     // For unified_search: show query
     if let Some(query) = obj.get("query").and_then(|v| v.as_str()) {
-        summary_parts.push(format!("query: {}", query));
+        summary_parts.push(format!("query: {query}"));
     }
     // For unified_exec: show session_id if present
     if let Some(sid) = obj.get("session_id").and_then(|v| v.as_str()) {
-        summary_parts.push(format!("session: {}", sid));
+        summary_parts.push(format!("session: {sid}"));
     }
 
     if !summary_parts.is_empty() {
@@ -270,8 +270,8 @@ fn format_tool_arguments_for_resume(arguments: &str) -> String {
 
     // Fallback: show pretty-printed JSON in a code block
     serde_json::to_string_pretty(&value)
-        .map(|pretty| format!("```json\n{}\n```", pretty))
-        .unwrap_or_else(|_| format!("```json\n{}\n```", trimmed))
+        .map(|pretty| format!("```json\n{pretty}\n```"))
+        .unwrap_or_else(|_| format!("```json\n{trimmed}\n```"))
 }
 
 /// Format tool output content for resume display.
@@ -291,13 +291,13 @@ fn format_tool_output_for_resume(content: &uni::MessageContent) -> Option<String
     if let Some(error) = obj.get("error").and_then(|v| v.as_str()) {
         let mut parts = vec![format!("Error: {}", error)];
         if let Some(kind) = obj.get("failure_kind").and_then(|v| v.as_str()) {
-            parts.push(format!("Kind: {}", kind));
+            parts.push(format!("Kind: {kind}"));
         }
         if let Some(class) = obj.get("error_class").and_then(|v| v.as_str()) {
-            parts.push(format!("Class: {}", class));
+            parts.push(format!("Class: {class}"));
         }
         if let Some(recoverable) = obj.get("is_recoverable").and_then(|v| v.as_bool()) {
-            parts.push(format!("Recoverable: {}", recoverable));
+            parts.push(format!("Recoverable: {recoverable}"));
         }
         return Some(parts.join("\n"));
     }
@@ -326,7 +326,7 @@ fn format_tool_output_for_resume(content: &uni::MessageContent) -> Option<String
         if let Some(code) = obj.get("exit_code").and_then(|v| v.as_i64())
             && code != 0
         {
-            parts.push(format!("Exit code: {}", code));
+            parts.push(format!("Exit code: {code}"));
         }
 
         if parts.is_empty() {
@@ -370,7 +370,7 @@ fn project_content_text(content: &uni::MessageContent) -> Option<String> {
                         }
                     }
                     uni::ContentPart::Image { mime_type, .. } => {
-                        fragments.push(format!("[image content: {}]", mime_type));
+                        fragments.push(format!("[image content: {mime_type}]"));
                     }
                     uni::ContentPart::File {
                         filename,
@@ -379,11 +379,11 @@ fn project_content_text(content: &uni::MessageContent) -> Option<String> {
                         ..
                     } => {
                         if let Some(name) = filename {
-                            fragments.push(format!("[file attachment: {}]", name));
+                            fragments.push(format!("[file attachment: {name}]"));
                         } else if let Some(id) = file_id {
-                            fragments.push(format!("[file attachment id: {}]", id));
+                            fragments.push(format!("[file attachment id: {id}]"));
                         } else if let Some(url) = file_url {
-                            fragments.push(format!("[file attachment url: {}]", url));
+                            fragments.push(format!("[file attachment url: {url}]"));
                         } else {
                             fragments.push("[file attachment]".to_string());
                         }

@@ -175,7 +175,7 @@ fn emit_loop_hard_cap_break_metric(
 
 pub(super) async fn handle_steering_messages(
     ctx: &mut TurnLoopContext<'_>,
-    _working_history: &mut Vec<uni::Message>,
+    _working_history: &mut [uni::Message],
     result: &mut TurnLoopResult,
 ) -> Result<bool> {
     let renderer = &mut *ctx.renderer;
@@ -253,7 +253,7 @@ fn queue_follow_up_input(
     runtime_steering: &mut vtcode_core::core::agent::runtime::RuntimeSteering,
     input: String,
 ) -> Result<()> {
-    display_status(renderer, &format!("Queued Follow-up Input: {}", input))?;
+    display_status(renderer, &format!("Queued Follow-up Input: {input}"))?;
     runtime_steering.queue_follow_up_input(input);
     Ok(())
 }

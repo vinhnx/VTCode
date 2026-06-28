@@ -255,8 +255,8 @@ impl<E: CommandExecutor> ShellRunner<E> {
         let target = self.resolve_path(path);
 
         // Single metadata call avoids TOCTOU between exists() and is_dir()
-        let meta = target.metadata().map_err(|_| {
-            anyhow::anyhow!("directory `{path}` does not exist or is not accessible")
+        let meta = target.metadata().map_err(|e| {
+            anyhow::anyhow!("directory `{path}` does not exist or is not accessible: {e}")
         })?;
         if !meta.is_dir() {
             bail!("path `{path}` is not a directory");

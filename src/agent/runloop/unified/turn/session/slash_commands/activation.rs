@@ -31,7 +31,7 @@ pub(super) async fn ensure_mcp_activated(ctx: &mut SlashCommandContext<'_>) -> R
         warn!("Failed to start MCP initialization: {}", err);
         ctx.renderer.line(
             MessageStyle::Error,
-            &format!("Failed to start MCP runtime: {}", err),
+            &format!("Failed to start MCP runtime: {err}"),
         )?;
         return Ok(());
     }
@@ -84,7 +84,7 @@ pub(super) async fn try_attach_ready_mcp(ctx: &mut SlashCommandContext<'_>) -> R
         McpInitStatus::Error { message } => {
             ctx.renderer.line(
                 MessageStyle::Error,
-                &format!("MCP activation failed: {}", message),
+                &format!("MCP activation failed: {message}"),
             )?;
             Ok(false)
         }

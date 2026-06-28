@@ -214,7 +214,7 @@ fn tokenize(text: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
+
     use tempfile::TempDir;
 
     fn sample_results() -> TaskResults {

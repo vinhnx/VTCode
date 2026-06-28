@@ -94,8 +94,8 @@ impl JsonRpcId {
 impl std::fmt::Display for JsonRpcId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            JsonRpcId::String(s) => write!(f, "{}", s),
-            JsonRpcId::Number(n) => write!(f, "{}", n),
+            JsonRpcId::String(s) => write!(f, "{s}"),
+            JsonRpcId::Number(n) => write!(f, "{n}"),
         }
     }
 }

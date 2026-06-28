@@ -137,7 +137,7 @@ pub(crate) fn validate_tool_args_security(
             if is_missing_required_arg(name, args, key) {
                 failures
                     .get_or_insert_with(|| Vec::with_capacity(required.len()))
-                    .push(format!("Missing required argument: {}", key));
+                    .push(format!("Missing required argument: {key}"));
             }
         }
     }
@@ -150,7 +150,7 @@ pub(crate) fn validate_tool_args_security(
                 .extend(
                     exec_failures
                         .into_iter()
-                        .map(|key| format!("Missing required argument: {}", key)),
+                        .map(|key| format!("Missing required argument: {key}")),
                 );
         }
     }
@@ -177,7 +177,7 @@ pub(crate) fn validate_tool_args_security(
     {
         failures
             .get_or_insert_with(|| Vec::with_capacity(2))
-            .push(format!("Path security check failed: {}", e));
+            .push(format!("Path security check failed: {e}"));
     }
 
     // Command safety checks
@@ -191,7 +191,7 @@ pub(crate) fn validate_tool_args_security(
     {
         failures
             .get_or_insert_with(|| Vec::with_capacity(2))
-            .push(format!("Command security check failed: {}", e));
+            .push(format!("Command security check failed: {e}"));
     }
 
     // Update cache if valid
@@ -434,8 +434,7 @@ pub(crate) async fn handle_turn_balancer(
         && repeated_tool_attempts.consecutive_navigations >= effective_repeat_limit
     {
         let recovery_reason = format!(
-            "Repeated low-signal navigation calls reached the per-turn fast-path cap ({}). Tools are disabled on the next pass; summarize only from collected evidence.",
-            effective_repeat_limit
+            "Repeated low-signal navigation calls reached the per-turn fast-path cap ({effective_repeat_limit}). Tools are disabled on the next pass; summarize only from collected evidence."
         );
         ctx.activate_recovery(recovery_reason.clone());
         ctx.renderer

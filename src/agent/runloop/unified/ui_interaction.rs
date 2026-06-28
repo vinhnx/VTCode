@@ -55,7 +55,7 @@ pub(crate) async fn display_session_status(
         Err(err) => {
             renderer.line(
                 MessageStyle::Warning,
-                &format!("OpenAI OAuth refresh failed during /status: {}", err),
+                &format!("OpenAI OAuth refresh failed during /status: {err}"),
             )?;
             crate::cli::auth::load_openai_session(ctx.vt_cfg)?
         }
@@ -79,7 +79,7 @@ pub(crate) async fn display_session_status(
         MessageStyle::Info,
         &format!("  Version: {}", env!("CARGO_PKG_VERSION")),
     )?;
-    renderer.line(MessageStyle::Info, &format!("  Session ID: {}", session_id))?;
+    renderer.line(MessageStyle::Info, &format!("  Session ID: {session_id}"))?;
     renderer.line(
         MessageStyle::Info,
         &format!("  Directory: {}", ctx.config.workspace.display()),
@@ -95,31 +95,25 @@ pub(crate) async fn display_session_status(
             label
         }
     };
-    renderer.line(
-        MessageStyle::Info,
-        &format!("  Provider: {}", provider_label),
-    )?;
+    renderer.line(MessageStyle::Info, &format!("  Provider: {provider_label}"))?;
     renderer.line(
         MessageStyle::Info,
         &format!("  Model: {}", ctx.config.model),
     )?;
     render_auth_usage_status(renderer, &ctx, openai_session.as_ref()).await?;
-    renderer.line(MessageStyle::Info, &format!("  IDE: {}", ide_info))?;
+    renderer.line(MessageStyle::Info, &format!("  IDE: {ide_info}"))?;
+    renderer.line(MessageStyle::Info, &format!("  Terminal: {terminal_info}"))?;
+    renderer.line(MessageStyle::Info, &format!("  MCP servers: {mcp_info}"))?;
+    renderer.line(MessageStyle::Info, &format!("  Skills: {skills_info}"))?;
     renderer.line(
         MessageStyle::Info,
-        &format!("  Terminal: {}", terminal_info),
-    )?;
-    renderer.line(MessageStyle::Info, &format!("  MCP servers: {}", mcp_info))?;
-    renderer.line(MessageStyle::Info, &format!("  Skills: {}", skills_info))?;
-    renderer.line(
-        MessageStyle::Info,
-        &format!("  Loaded AGENTS.md sources: {}", agents_info),
+        &format!("  Loaded AGENTS.md sources: {agents_info}"),
     )?;
     renderer.line(MessageStyle::Info, "")?;
-    renderer.line(MessageStyle::Info, &format!("  Memory: {}", memory_info))?;
+    renderer.line(MessageStyle::Info, &format!("  Memory: {memory_info}"))?;
     renderer.line(
         MessageStyle::Info,
-        &format!("  Setting sources: {}", settings_info),
+        &format!("  Setting sources: {settings_info}"),
     )?;
     renderer.line(
         MessageStyle::Info,
@@ -181,10 +175,10 @@ async fn render_auth_usage_status(
     )?;
     if let Some(session) = openai_session {
         if let Some(email) = session.email.as_deref() {
-            renderer.line(MessageStyle::Info, &format!("    Account: {}", email))?;
+            renderer.line(MessageStyle::Info, &format!("    Account: {email}"))?;
         }
         if let Some(plan) = session.plan.as_deref() {
-            renderer.line(MessageStyle::Info, &format!("    Plan: {}", plan))?;
+            renderer.line(MessageStyle::Info, &format!("    Plan: {plan}"))?;
         }
     }
     renderer.line(
@@ -237,12 +231,12 @@ async fn render_auth_usage_status(
             ),
         )?;
         if let Some(notice) = overview.notice.as_deref() {
-            renderer.line(MessageStyle::Info, &format!("  Notice: {}", notice))?;
+            renderer.line(MessageStyle::Info, &format!("  Notice: {notice}"))?;
         }
         if let Some(recommendation) = overview.recommendation.as_deref() {
             renderer.line(
                 MessageStyle::Info,
-                &format!("  Recommendation: {}", recommendation),
+                &format!("  Recommendation: {recommendation}"),
             )?;
         }
     } else if ctx.config.provider.eq_ignore_ascii_case("openrouter") {
@@ -256,7 +250,7 @@ async fn render_auth_usage_status(
         };
         renderer.line(
             MessageStyle::Info,
-            &format!("  Usage status: {}", usage_status),
+            &format!("  Usage status: {usage_status}"),
         )?;
     } else if ctx.config.provider.eq_ignore_ascii_case("copilot") {
         let usage_status = match copilot_status.kind {
@@ -269,12 +263,12 @@ async fn render_auth_usage_status(
         };
         renderer.line(
             MessageStyle::Info,
-            &format!("  Usage status: {}", usage_status),
+            &format!("  Usage status: {usage_status}"),
         )?;
         if let Some(message) = copilot_status.message.as_deref()
             && !message.trim().is_empty()
         {
-            renderer.line(MessageStyle::Info, &format!("  Notice: {}", message))?;
+            renderer.line(MessageStyle::Info, &format!("  Notice: {message}"))?;
         }
     }
 
@@ -369,7 +363,7 @@ fn detect_terminal_info() -> String {
 
     match version {
         Some(version) => format!("{} {}", base_name, version.trim()),
-        None => format!("{} (version unknown)", base_name),
+        None => format!("{base_name} (version unknown)"),
     }
 }
 
@@ -397,8 +391,8 @@ fn detect_command_version(command: &str, args: &[&str]) -> Option<String> {
 
 fn format_tool_version_label(name: &str, version: Option<String>) -> String {
     match version {
-        Some(version) => format!("{} {}", name, version),
-        None => format!("{} (version unknown)", name),
+        Some(version) => format!("{name} {version}"),
+        None => format!("{name} (version unknown)"),
     }
 }
 
@@ -597,10 +591,7 @@ fn summarize_setting_sources(workspace: &Path) -> String {
         format!("{} (missing)", vtcode_path.display())
     };
 
-    format!(
-        "user: {}, project: {}, .vtcode: {}",
-        user_label, project_label, vtcode_label
-    )
+    format!("user: {user_label}, project: {project_label}, .vtcode: {vtcode_label}")
 }
 
 fn truncate_status_value(value: &str, max_len: usize) -> String {
@@ -663,7 +654,7 @@ async fn build_spinner_display(
     if progress_info.is_empty() {
         current_message.to_string()
     } else {
-        format!("{}: {}", current_message, progress_info)
+        format!("{current_message}: {progress_info}")
     }
 }
 

@@ -83,8 +83,7 @@ pub(crate) async fn handle_mcp_updates(
                         renderer.line(
                             MessageStyle::Info,
                             &format!(
-                                "MCP tools ready ({} registered). Use /mcp tools to inspect the catalog.",
-                                registered_tools
+                                "MCP tools ready ({registered_tools} registered). Use /mcp tools to inspect the catalog."
                             ),
                         )?;
                         renderer.line_if_not_empty(MessageStyle::Output)?;
@@ -93,7 +92,7 @@ pub(crate) async fn handle_mcp_updates(
                         tracing::warn!("Failed to refresh MCP tools after initialization: {err}");
                         renderer.line(
                             MessageStyle::Error,
-                            &format!("Failed to index MCP tools: {}", err),
+                            &format!("Failed to index MCP tools: {err}"),
                         )?;
                         renderer.line_if_not_empty(MessageStyle::Output)?;
                     }
@@ -101,7 +100,7 @@ pub(crate) async fn handle_mcp_updates(
                 *mcp_catalog_initialized = true;
             }
             McpInitStatus::Error { message } => {
-                renderer.line(MessageStyle::Error, &format!("MCP Error: {}", message))?;
+                renderer.line(MessageStyle::Error, &format!("MCP Error: {message}"))?;
                 renderer.line_if_not_empty(MessageStyle::Output)?;
                 *mcp_catalog_initialized = true;
             }

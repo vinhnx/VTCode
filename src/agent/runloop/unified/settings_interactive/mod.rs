@@ -203,7 +203,7 @@ pub(crate) fn apply_settings_action(
     if let Some(rest) = action.strip_prefix(ACTION_PREFIX_SET) {
         let (path, op) = rest
             .rsplit_once(':')
-            .ok_or_else(|| anyhow!("Invalid settings action: {}", action))?;
+            .ok_or_else(|| anyhow!("Invalid settings action: {action}"))?;
 
         let operation = match op {
             "toggle" => ScalarOperation::Toggle,
@@ -211,7 +211,7 @@ pub(crate) fn apply_settings_action(
             "dec" => ScalarOperation::Decrement,
             "cycle" => ScalarOperation::CycleNext,
             "cycle_prev" => ScalarOperation::CyclePrev,
-            _ => bail!("Unsupported settings operation: {}", op),
+            _ => bail!("Unsupported settings operation: {op}"),
         };
 
         mutate_draft_and_persist(state, |draft| {
@@ -221,7 +221,7 @@ pub(crate) fn apply_settings_action(
         return Ok(outcome);
     }
 
-    bail!("Unknown settings action: {}", action)
+    bail!("Unknown settings action: {action}")
 }
 
 pub(crate) fn resolve_settings_view_path(path: &str) -> String {

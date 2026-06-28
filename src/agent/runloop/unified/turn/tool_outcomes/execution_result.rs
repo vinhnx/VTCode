@@ -374,7 +374,7 @@ async fn handle_cancelled(
     args_val: &serde_json::Value,
 ) -> Result<()> {
     let display_tool = tool_action_label(tool_name, args_val);
-    let error_msg = format!("Tool '{}' execution cancelled", display_tool);
+    let error_msg = format!("Tool '{display_tool}' execution cancelled");
     t_ctx.ctx.renderer.line(MessageStyle::Info, &error_msg)?;
 
     let error_content = serde_json::json!({"error": error_msg});
@@ -419,7 +419,7 @@ async fn run_post_tool_hooks<'a>(
             Err(err) => {
                 ctx.renderer.line(
                     MessageStyle::Error,
-                    &format!("Failed to run post-tool hooks: {}", err),
+                    &format!("Failed to run post-tool hooks: {err}"),
                 )?;
             }
         }

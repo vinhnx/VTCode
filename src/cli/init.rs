@@ -161,7 +161,7 @@ fn prompt_guided_answers(questions: &[GuidedInitQuestion]) -> Result<GuidedInitA
 
         let custom_index = question.options.len() + 1;
         if question.allow_custom {
-            println!("  {}) Custom", custom_index);
+            println!("  {custom_index}) Custom");
             println!("     Type your own answer.");
         }
 
@@ -175,7 +175,7 @@ fn prompt_guided_answers(questions: &[GuidedInitQuestion]) -> Result<GuidedInitA
             print!(
                 "Select an option{}: ",
                 recommended_index
-                    .map(|index| format!(" [{}]", index))
+                    .map(|index| format!(" [{index}]"))
                     .unwrap_or_default()
             );
             io::stdout()

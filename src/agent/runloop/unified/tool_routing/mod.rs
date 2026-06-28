@@ -1063,7 +1063,7 @@ pub(crate) async fn ensure_tool_permission_with_call_id<S: UiSession + ?Sized>(
             Err(err) => {
                 renderer.line(
                     MessageStyle::Error,
-                    &format!("Failed to run pre-tool hooks: {}", err),
+                    &format!("Failed to run pre-tool hooks: {err}"),
                 )?;
             }
         }
@@ -1404,7 +1404,7 @@ pub(crate) async fn ensure_tool_permission_with_call_id<S: UiSession + ?Sized>(
             }
             Err(err) => renderer.line(
                 MessageStyle::Error,
-                &format!("Failed to run permission request hooks: {}", err),
+                &format!("Failed to run permission request hooks: {err}"),
             )?,
         }
     }

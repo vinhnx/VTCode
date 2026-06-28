@@ -106,7 +106,7 @@ pub(crate) async fn render_terminal_command_panel(
     {
         let stdin_trimmed = stdin.trim();
         if stdin_trimmed != command.trim() {
-            let prompt = format!("$ {}", stdin_trimmed);
+            let prompt = format!("$ {stdin_trimmed}");
             renderer.line(MessageStyle::ToolDetail, &prompt)?;
         }
     }
@@ -183,12 +183,12 @@ pub(crate) async fn render_terminal_command_panel(
             if code == 0 {
                 "exit 0".to_string()
             } else {
-                format!("exit {}", code)
+                format!("exit {code}")
             }
         } else {
             "done".to_string()
         };
-        renderer.line(MessageStyle::ToolDetail, &format!("✓ {}", exit_badge))?;
+        renderer.line(MessageStyle::ToolDetail, &format!("✓ {exit_badge}"))?;
     }
 
     let rendered_follow_up_body = [

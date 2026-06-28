@@ -278,10 +278,7 @@ fn render_prompt(workspace: &Path, require_full_auto_upgrade: bool) {
     println!();
 
     let workspace_display = workspace.display();
-    print_prompt_line(
-        &format!("Workspace: {}", workspace_display),
-        PromptTone::Body,
-    );
+    print_prompt_line(&format!("Workspace: {workspace_display}"), PromptTone::Body);
     println!();
 
     let requirement_line = if require_full_auto_upgrade {

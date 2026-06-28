@@ -66,7 +66,7 @@ impl McpEvent {
     /// Create a new MCP event
     pub(crate) fn new(provider: String, method: String, args_preview: Option<String>) -> Self {
         Self {
-            id: format!("mcp_{}_{}", provider, method),
+            id: format!("mcp_{provider}_{method}"),
             provider,
             method,
             status: McpEventStatus::Pending,

@@ -91,8 +91,7 @@ pub(crate) const PLANNING_WORKFLOW_MANUAL_SWITCH_FALLBACK_HINT: &str =
 
 pub(crate) fn short_confirmation_hint_with_fallback() -> String {
     format!(
-        "{} {}",
-        PLANNING_WORKFLOW_SHORT_CONFIRMATION_HINT, PLANNING_WORKFLOW_MANUAL_SWITCH_FALLBACK_HINT
+        "{PLANNING_WORKFLOW_SHORT_CONFIRMATION_HINT} {PLANNING_WORKFLOW_MANUAL_SWITCH_FALLBACK_HINT}"
     )
 }
 

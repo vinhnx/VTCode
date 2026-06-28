@@ -880,12 +880,6 @@ fn modal_instruction_lines(
     }
 
     let mut rendered_lines = Vec::new();
-    if !ui::MODAL_INSTRUCTIONS_TITLE.is_empty() {
-        rendered_lines.push(Line::from(Span::styled(
-            ui::MODAL_INSTRUCTIONS_TITLE.to_owned(),
-            styles.instruction_title,
-        )));
-    }
 
     for lines in items {
         rendered_lines.extend(lines);

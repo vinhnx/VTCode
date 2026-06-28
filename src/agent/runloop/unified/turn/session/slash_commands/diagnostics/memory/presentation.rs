@@ -200,7 +200,7 @@ pub(super) fn show_memory_actions_modal(
         lightweight_route.effective_label
     ));
     if let Some(warning) = &lightweight_route.warning {
-        lines.push(format!("Route warning: {}", warning));
+        lines.push(format!("Route warning: {warning}"));
     }
 
     let mut items = vec![];
@@ -212,8 +212,7 @@ pub(super) fn show_memory_actions_modal(
         badge: Some("Toggle".to_string()),
         indent: 0,
         selection: Some(InlineListSelection::ConfigAction(format!(
-            "{}toggle_enabled",
-            MEMORY_ACTION_PREFIX
+            "{MEMORY_ACTION_PREFIX}toggle_enabled"
         ))),
         search_value: Some("memory enabled disable toggle".to_string()),
     });
@@ -225,8 +224,7 @@ pub(super) fn show_memory_actions_modal(
         badge: Some("Toggle".to_string()),
         indent: 0,
         selection: Some(InlineListSelection::ConfigAction(format!(
-            "{}toggle_auto_write",
-            MEMORY_ACTION_PREFIX
+            "{MEMORY_ACTION_PREFIX}toggle_auto_write"
         ))),
         search_value: Some("memory auto write toggle".to_string()),
     });
@@ -242,8 +240,7 @@ pub(super) fn show_memory_actions_modal(
         badge: Some("Toggle".to_string()),
         indent: 0,
         selection: Some(InlineListSelection::ConfigAction(format!(
-            "{}toggle_small_model",
-            MEMORY_ACTION_PREFIX
+            "{MEMORY_ACTION_PREFIX}toggle_small_model"
         ))),
         search_value: Some("memory lightweight model toggle".to_string()),
     });
@@ -259,8 +256,7 @@ pub(super) fn show_memory_actions_modal(
         badge: Some("Pick".to_string()),
         indent: 0,
         selection: Some(InlineListSelection::ConfigAction(format!(
-            "{}{}auto",
-            MEMORY_ACTION_PREFIX, MEMORY_LIGHTWEIGHT_MODEL_PREFIX
+            "{MEMORY_ACTION_PREFIX}{MEMORY_LIGHTWEIGHT_MODEL_PREFIX}auto"
         ))),
         search_value: Some("memory triage lightweight model pick".to_string()),
     });
@@ -278,8 +274,7 @@ pub(super) fn show_memory_actions_modal(
         }),
         indent: 0,
         selection: Some(InlineListSelection::ConfigAction(format!(
-            "{}{}auto",
-            MEMORY_ACTION_PREFIX, MEMORY_LIGHTWEIGHT_MODEL_PREFIX
+            "{MEMORY_ACTION_PREFIX}{MEMORY_LIGHTWEIGHT_MODEL_PREFIX}auto"
         ))),
         search_value: Some("memory lightweight model automatic".to_string()),
     });
@@ -296,8 +291,7 @@ pub(super) fn show_memory_actions_modal(
         }),
         indent: 0,
         selection: Some(InlineListSelection::ConfigAction(format!(
-            "{}{}main",
-            MEMORY_ACTION_PREFIX, MEMORY_LIGHTWEIGHT_MODEL_PREFIX
+            "{MEMORY_ACTION_PREFIX}{MEMORY_LIGHTWEIGHT_MODEL_PREFIX}main"
         ))),
         search_value: Some("memory lightweight model main".to_string()),
     });
@@ -317,10 +311,9 @@ pub(super) fn show_memory_actions_modal(
             ),
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!(
-                "{}{}{model}",
-                MEMORY_ACTION_PREFIX, MEMORY_LIGHTWEIGHT_MODEL_PREFIX
+                "{MEMORY_ACTION_PREFIX}{MEMORY_LIGHTWEIGHT_MODEL_PREFIX}{model}"
             ))),
-            search_value: Some(format!("memory lightweight triage {}", model)),
+            search_value: Some(format!("memory lightweight triage {model}")),
         }
     }));
     items.extend([
@@ -333,8 +326,7 @@ pub(super) fn show_memory_actions_modal(
             badge: Some("Prompt".to_string()),
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!(
-                "{}set_lines",
-                MEMORY_ACTION_PREFIX
+                "{MEMORY_ACTION_PREFIX}set_lines"
             ))),
             search_value: Some("memory startup line limit".to_string()),
         },
@@ -347,8 +339,7 @@ pub(super) fn show_memory_actions_modal(
             badge: Some("Prompt".to_string()),
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!(
-                "{}set_bytes",
-                MEMORY_ACTION_PREFIX
+                "{MEMORY_ACTION_PREFIX}set_bytes"
             ))),
             search_value: Some("memory startup byte limit".to_string()),
         },
@@ -363,8 +354,7 @@ pub(super) fn show_memory_actions_modal(
             badge: Some("Prompt".to_string()),
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!(
-                "{}set_import_depth",
-                MEMORY_ACTION_PREFIX
+                "{MEMORY_ACTION_PREFIX}set_import_depth"
             ))),
             search_value: Some("memory instruction import depth".to_string()),
         },
@@ -372,7 +362,7 @@ pub(super) fn show_memory_actions_modal(
             title: "Set Directory Override".to_string(),
             subtitle: Some(
                 match agent_config.persistent_memory.directory_override.as_deref() {
-                    Some(value) if !value.trim().is_empty() => format!("Current: {}", value),
+                    Some(value) if !value.trim().is_empty() => format!("Current: {value}"),
                     _ => {
                         "Write a user-level override for the memory storage directory.".to_string()
                     }
@@ -381,8 +371,7 @@ pub(super) fn show_memory_actions_modal(
             badge: Some("Prompt".to_string()),
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!(
-                "{}set_directory_override",
-                MEMORY_ACTION_PREFIX
+                "{MEMORY_ACTION_PREFIX}set_directory_override"
             ))),
             search_value: Some("memory directory override set".to_string()),
         },
@@ -392,8 +381,7 @@ pub(super) fn show_memory_actions_modal(
             badge: Some("Action".to_string()),
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!(
-                "{}clear_directory_override",
-                MEMORY_ACTION_PREFIX
+                "{MEMORY_ACTION_PREFIX}clear_directory_override"
             ))),
             search_value: Some("memory directory override clear".to_string()),
         },
@@ -406,8 +394,7 @@ pub(super) fn show_memory_actions_modal(
             badge: Some("Prompt".to_string()),
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!(
-                "{}add_instruction_exclude",
-                MEMORY_ACTION_PREFIX
+                "{MEMORY_ACTION_PREFIX}add_instruction_exclude"
             ))),
             search_value: Some("memory instruction excludes add".to_string()),
         },
@@ -417,8 +404,7 @@ pub(super) fn show_memory_actions_modal(
             badge: Some("Prompt".to_string()),
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!(
-                "{}remove_instruction_exclude",
-                MEMORY_ACTION_PREFIX
+                "{MEMORY_ACTION_PREFIX}remove_instruction_exclude"
             ))),
             search_value: Some("memory instruction excludes remove".to_string()),
         },
@@ -436,8 +422,7 @@ pub(super) fn show_memory_actions_modal(
             badge: Some("Action".to_string()),
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!(
-                "{}cleanup",
-                MEMORY_ACTION_PREFIX
+                "{MEMORY_ACTION_PREFIX}cleanup"
             ))),
             search_value: Some("memory cleanup legacy normalize".to_string()),
         },
@@ -450,8 +435,7 @@ pub(super) fn show_memory_actions_modal(
             badge: Some("Action".to_string()),
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!(
-                "{}scaffold",
-                MEMORY_ACTION_PREFIX
+                "{MEMORY_ACTION_PREFIX}scaffold"
             ))),
             search_value: Some("memory scaffold files".to_string()),
         },
@@ -464,8 +448,7 @@ pub(super) fn show_memory_actions_modal(
             badge: Some("Action".to_string()),
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!(
-                "{}rebuild",
-                MEMORY_ACTION_PREFIX
+                "{MEMORY_ACTION_PREFIX}rebuild"
             ))),
             search_value: Some("memory rebuild summary".to_string()),
         },
@@ -478,8 +461,7 @@ pub(super) fn show_memory_actions_modal(
             badge: Some("Nav".to_string()),
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!(
-                "{}open_settings_section",
-                MEMORY_ACTION_PREFIX
+                "{MEMORY_ACTION_PREFIX}open_settings_section"
             ))),
             search_value: Some("memory open config section".to_string()),
         },
@@ -489,8 +471,7 @@ pub(super) fn show_memory_actions_modal(
             badge: Some("Edit".to_string()),
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!(
-                "{}open_summary",
-                MEMORY_ACTION_PREFIX
+                "{MEMORY_ACTION_PREFIX}open_summary"
             ))),
             search_value: Some("memory open summary file".to_string()),
         },
@@ -500,8 +481,7 @@ pub(super) fn show_memory_actions_modal(
             badge: Some("Edit".to_string()),
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!(
-                "{}open_directory",
-                MEMORY_ACTION_PREFIX
+                "{MEMORY_ACTION_PREFIX}open_directory"
             ))),
             search_value: Some("memory open directory".to_string()),
         },
@@ -522,8 +502,7 @@ pub(super) fn show_memory_actions_modal(
         lines,
         items,
         Some(InlineListSelection::ConfigAction(format!(
-            "{}toggle_enabled",
-            MEMORY_ACTION_PREFIX
+            "{MEMORY_ACTION_PREFIX}toggle_enabled"
         ))),
         None,
     );

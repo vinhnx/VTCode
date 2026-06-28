@@ -5,7 +5,7 @@ pub(super) fn generate_suggested_options(
 ) -> Option<Vec<RequestUserInputOption>> {
     let question_context = question.question.to_lowercase();
     let metadata_context = format!("{} {}", question.id, question.header).to_lowercase();
-    let local_context = format!("{} {}", question_context, metadata_context);
+    let local_context = format!("{question_context} {metadata_context}");
     let mut global_context = String::new();
     if let Some(focus_area) = question.focus_area.as_ref() {
         global_context.push(' ');

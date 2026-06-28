@@ -163,8 +163,7 @@ fn show_doctor_actions_modal(ctx: &mut SlashCommandContext<'_>) {
             badge: Some("Recommended".to_string()),
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!(
-                "{}full",
-                DOCTOR_ACTION_PREFIX
+                "{DOCTOR_ACTION_PREFIX}full"
             ))),
             search_value: Some("doctor full all checks mcp dependencies".to_string()),
         },
@@ -176,8 +175,7 @@ fn show_doctor_actions_modal(ctx: &mut SlashCommandContext<'_>) {
             badge: Some("Fast".to_string()),
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!(
-                "{}quick",
-                DOCTOR_ACTION_PREFIX
+                "{DOCTOR_ACTION_PREFIX}quick"
             ))),
             search_value: Some("doctor quick fast checks".to_string()),
         },
@@ -201,8 +199,7 @@ fn show_doctor_actions_modal(ctx: &mut SlashCommandContext<'_>) {
         ],
         items,
         Some(InlineListSelection::ConfigAction(format!(
-            "{}full",
-            DOCTOR_ACTION_PREFIX
+            "{DOCTOR_ACTION_PREFIX}full"
         ))),
         None,
     );

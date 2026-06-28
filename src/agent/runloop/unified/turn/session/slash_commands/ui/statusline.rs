@@ -229,7 +229,7 @@ pub(crate) async fn handle_start_statusline_setup(
                 draft.mode = StatusLineMode::Command;
                 ctx.renderer.line(
                     MessageStyle::Info,
-                    &format!("Command set to `{}`.", script_command),
+                    &format!("Command set to `{script_command}`."),
                 )?;
             }
             StatuslineSetupAction::ClearCommand => {
@@ -683,7 +683,7 @@ fn parse_statusline_millis(value: &str, label: &str) -> Result<u64> {
     value
         .trim()
         .parse::<u64>()
-        .with_context(|| format!("Failed to parse {} as milliseconds", label))
+        .with_context(|| format!("Failed to parse {label} as milliseconds"))
 }
 
 async fn persist_statusline_config(

@@ -275,7 +275,7 @@ async fn test_tui_backend_smoke_header_variations() {
         handle.append_line(
             InlineMessageKind::Agent,
             vec![InlineSegment {
-                text: format!("Session initialized with {} context", name),
+                text: format!("Session initialized with {name} context"),
                 style: InlineTextStyle::default().into(),
             }],
         );

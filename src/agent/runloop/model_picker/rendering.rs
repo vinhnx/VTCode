@@ -50,13 +50,7 @@ pub(super) fn model_search_value(
     let provider_model_name = format!("{provider_key} {model_display}");
     let provider_model_id = format!("{provider_key}/{model_id}");
     let mut value = format!(
-        "{} {} {} {} {} {}",
-        provider_label,
-        provider_key,
-        model_display,
-        model_id,
-        provider_model_name,
-        provider_model_id
+        "{provider_label} {provider_key} {model_display} {model_id} {provider_model_name} {provider_model_id}"
     );
     if let Some(description_text) = description {
         value.push(' ');
@@ -270,7 +264,7 @@ pub(super) fn current_model_line(current_provider: &str, current_model: &str) ->
         return "Pick a model provider and model id.".to_string();
     }
 
-    let base = format!("Current: {} / {}", current_provider, current_model);
+    let base = format!("Current: {current_provider} / {current_model}");
     if let Some(context_window) = context_window_segment(current_provider, current_model) {
         format!("{base} • {context_window}")
     } else {
@@ -512,7 +506,7 @@ pub(super) fn render_step_one_plain(
             }
 
             if let Some(warning) = dynamic_models.warning_for(provider) {
-                renderer.line(MessageStyle::Info, &format!("      note: {}", warning))?;
+                renderer.line(MessageStyle::Info, &format!("      note: {warning}"))?;
             }
             let dynamic_indexes = dynamic_models.indexes_for(provider);
             let provider_label = provider.label();
@@ -521,12 +515,11 @@ pub(super) fn render_step_one_plain(
                     renderer.line(
                         MessageStyle::Info,
                         &format!(
-                            "{} server not reachable ({error}) • Setup instructions:",
-                            provider_label
+                            "{provider_label} server not reachable ({error}) • Setup instructions:"
                         ),
                     )?;
                     for line in provider.local_install_instructions().unwrap_or("").lines() {
-                        renderer.line(MessageStyle::Info, &format!("      {}", line))?;
+                        renderer.line(MessageStyle::Info, &format!("      {line}"))?;
                     }
                 }
             } else {
@@ -549,7 +542,7 @@ pub(super) fn render_step_one_plain(
                         )?;
                         renderer.line(
                             MessageStyle::Info,
-                            &format!("      Locally available {} model", provider_label),
+                            &format!("      Locally available {provider_label} model"),
                         )?;
                     }
                 }

@@ -28,7 +28,7 @@ mod parallel_execution_tests {
         let write_tools = vec!["write_file", "edit_file", "run_pty_cmd"];
 
         for tool in write_tools {
-            println!("Tool '{}' uses sequential execution (safety)", tool);
+            println!("Tool '{tool}' uses sequential execution (safety)");
         }
     }
 

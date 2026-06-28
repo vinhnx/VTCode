@@ -191,7 +191,7 @@ impl WebSearchTool {
             let state = self
                 .state
                 .lock()
-                .map_err(|_| anyhow!("web_search state lock poisoned"))?;
+                .map_err(|e| anyhow!("web_search state lock poisoned: {e}"))?;
             if state.requests_made >= session_cap {
                 return Ok(session_cap_reached_response(&query, session_cap));
             }

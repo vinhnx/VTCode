@@ -68,16 +68,16 @@ pub(crate) async fn handle_open_docs(ctx: SlashCommandContext<'_>) -> Result<Sla
         ExternalUrlOpenOutcome::Opened => {
             ctx.renderer.line(
                 MessageStyle::Info,
-                &format!("Opening documentation in browser: {}", DOCS_URL),
+                &format!("Opening documentation in browser: {DOCS_URL}"),
             )?;
         }
         ExternalUrlOpenOutcome::OpenFailed(err) => {
             ctx.renderer.line(
                 MessageStyle::Error,
-                &format!("Failed to open browser: {}", err),
+                &format!("Failed to open browser: {err}"),
             )?;
             ctx.renderer
-                .line(MessageStyle::Info, &format!("Please visit: {}", DOCS_URL))?;
+                .line(MessageStyle::Info, &format!("Please visit: {DOCS_URL}"))?;
         }
         ExternalUrlOpenOutcome::Cancelled => {
             ctx.renderer
@@ -256,7 +256,7 @@ pub(crate) async fn launch_editor_from_context(
         Ok(None) => (MessageStyle::Info, "Editor closed.".to_owned()),
         Err(err) => (
             MessageStyle::Error,
-            format!("Failed to launch editor: {}", err),
+            format!("Failed to launch editor: {err}"),
         ),
     };
 

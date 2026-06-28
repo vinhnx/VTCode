@@ -75,7 +75,7 @@ pub(super) async fn finalize_session(
             Err(err) => {
                 renderer.line(
                     MessageStyle::Error,
-                    &format!("Failed to save session: {}", err),
+                    &format!("Failed to save session: {err}"),
                 )?;
                 renderer.line_if_not_empty(MessageStyle::Output)?;
             }
@@ -105,7 +105,7 @@ pub(super) async fn finalize_session(
             Ok(Err(err)) => {
                 renderer.line(
                     MessageStyle::Error,
-                    &format!("Failed to run session end hooks: {}", err),
+                    &format!("Failed to run session end hooks: {err}"),
                 )?;
             }
             Err(_elapsed) => {
@@ -162,7 +162,7 @@ pub(super) async fn finalize_session(
             &format!("Open Circuit Breakers ({}):", open_circuits.len()),
         )?;
         for tool in &open_circuits {
-            renderer.line(MessageStyle::Warning, &format!("  - {}", tool))?;
+            renderer.line(MessageStyle::Warning, &format!("  - {tool}"))?;
         }
         renderer.line_if_not_empty(MessageStyle::Output)?;
     }
@@ -184,7 +184,7 @@ pub(super) async fn finalize_session(
         for (name, _) in unhealthy_tools {
             let (_, reason) = session_stats.tool_health_tracker.check_health(name);
             if let Some(r) = reason {
-                renderer.line(MessageStyle::Warning, &format!("  - {}: {}", name, r))?;
+                renderer.line(MessageStyle::Warning, &format!("  - {name}: {r}"))?;
             }
         }
         renderer.line_if_not_empty(MessageStyle::Output)?;

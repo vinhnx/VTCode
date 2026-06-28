@@ -56,7 +56,7 @@ pub async fn handle_skills_create(skill_path: &Path) -> Result<()> {
     println!("{}", messages::hint("Add scripts to scripts/ if needed."));
     println!(
         "{}",
-        messages::hint(&format!("Load with: vtcode skills load {}", skill_name))
+        messages::hint(&format!("Load with: vtcode skills load {skill_name}"))
     );
 
     Ok(())

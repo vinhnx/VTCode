@@ -275,7 +275,7 @@ async fn test_pty_command_not_found_handling() {
     // Check that we have error information in message or output
     let message = response["message"].as_str().unwrap_or_default();
     let output = response["output"].as_str().unwrap_or_default();
-    let combined = format!("{} {}", message, output).to_lowercase();
+    let combined = format!("{message} {output}").to_lowercase();
 
     // Should indicate command not found in some way
     assert!(
@@ -283,9 +283,7 @@ async fn test_pty_command_not_found_handling() {
             || combined.contains("not exist")
             || combined.contains("127")
             || output.contains("this_command_definitely_does_not_exist_12345"),
-        "Should indicate command not found. message='{}', output='{}'",
-        message,
-        output
+        "Should indicate command not found. message='{message}', output='{output}'"
     );
 }
 

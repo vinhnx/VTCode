@@ -140,7 +140,7 @@ pub(crate) async fn apply_turn_outcome(
                             let _ = emitter.emit(
                                 crate::agent::runloop::unified::inline_events::harness::harness_event(
                                     HarnessEventKind::SnapshotCreated,
-                                    Some(format!("Turn {} snapshot saved", turn_number)),
+                                    Some(format!("Turn {turn_number} snapshot saved")),
                                     None,
                                     None,
                                     None,

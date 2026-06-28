@@ -31,7 +31,7 @@ pub(super) async fn close_subagent_entry(
     refresh_local_agents(ctx.handle, controller).await?;
     ctx.renderer.line(
         MessageStyle::Info,
-        &format!("Closed delegated agent {}.", display_label),
+        &format!("Closed delegated agent {display_label}."),
     )?;
     Ok(SlashCommandControl::Continue)
 }
@@ -164,7 +164,7 @@ pub(super) async fn show_threads_modal(
                     .iter()
                     .find(|entry| entry.id == id)
                     .cloned()
-                    .ok_or_else(|| anyhow!("Unknown delegated thread {}", id))?;
+                    .ok_or_else(|| anyhow!("Unknown delegated thread {id}"))?;
                 if matches!(action.kind, InspectorActionKind::Inspect) {
                     return show_active_agent_inspector(&mut ctx, entry).await;
                 }
@@ -332,7 +332,7 @@ pub(super) async fn show_active_agent_inspector(
                     format!("Live updates: {}", inspector_live_updates_label(refresh_after)),
                     "Live preview: sidebar panel".to_string(),
                     if let Some(error) = current_entry.error.as_deref() {
-                        format!("Error: {}", error)
+                        format!("Error: {error}")
                     } else {
                         "Error: none".to_string()
                     },
@@ -463,7 +463,7 @@ pub(super) async fn show_background_subprocess_inspector(
                     format!("Summary: {}", background_subprocess_summary(current_entry)),
                     format!("Live updates: {}", inspector_live_updates_label(refresh_after)),
                     if let Some(error) = current_entry.error.as_deref() {
-                        format!("Error: {}", error)
+                        format!("Error: {error}")
                     } else {
                         "Error: none".to_string()
                     },
@@ -1071,7 +1071,7 @@ pub(super) fn render_background_subprocess_status_text(
         snapshot.preview.clone()
     };
     ctx.renderer
-        .line(MessageStyle::Output, &format!("Preview: {}", preview))?;
+        .line(MessageStyle::Output, &format!("Preview: {preview}"))?;
     Ok(())
 }
 
@@ -1097,7 +1097,7 @@ pub(super) fn render_subprocess_status(
     )?;
     if let Some(error) = entry.error.as_deref() {
         ctx.renderer
-            .line(MessageStyle::Error, &format!("Error: {}", error))?;
+            .line(MessageStyle::Error, &format!("Error: {error}"))?;
     }
     Ok(())
 }
@@ -1193,7 +1193,7 @@ pub(super) async fn handle_list_threads_text(
         let suffix = if summary.is_empty() {
             String::new()
         } else {
-            format!(" - {}", summary)
+            format!(" - {summary}")
         };
         ctx.renderer.line(
             MessageStyle::Output,

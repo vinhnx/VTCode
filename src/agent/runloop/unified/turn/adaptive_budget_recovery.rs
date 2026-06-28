@@ -115,14 +115,13 @@ pub(crate) async fn decide_recovery_action(
         .collect();
 
     let system_prompt = format!(
-        "Budget nearly exhausted. Call the `{}` tool to pick a recovery action. \
+        "Budget nearly exhausted. Call the `{RECOVERY_DECISION}` tool to pick a recovery action. \
          Keep your response concise.\n\n\
          - summarize_and_conclude: summarize evidence collected so far.\n\
          - compact_context: compact history, then re-evaluate.\n\
          - request_more_resources: pause and ask the user for more budget.\n\
          - adjust_plan: produce a reduced-scope answer (completed/deferred/resume).\n\n\
-         Default: summarize_and_conclude.",
-        RECOVERY_DECISION
+         Default: summarize_and_conclude."
     );
 
     let request = LLMRequest {

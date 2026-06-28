@@ -8,7 +8,7 @@ use crate::agent::runloop::unified::config_section_headings::{
 use super::docs::FieldDoc;
 pub(super) fn display_title(label: &str, path: &str, value: &TomlValue) -> String {
     if label.starts_with('[') {
-        return format!("Item {}", label);
+        return format!("Item {label}");
     }
 
     match value {
@@ -34,7 +34,7 @@ pub(super) fn section_subtitle(path: &str, value: &TomlValue) -> String {
 
 pub(super) fn setting_subtitle(summary: &str, description: &str, adjustable: bool) -> String {
     let value_display = if adjustable {
-        format!("<- {} ->", summary)
+        format!("<- {summary} ->")
     } else {
         summary.to_string()
     };
@@ -93,7 +93,7 @@ pub(super) fn action_item(
         badge: badge.map(str::to_string),
         indent: 0,
         selection: Some(InlineListSelection::ConfigAction(action.to_string())),
-        search_value: Some(format!("{} {}", title, subtitle)),
+        search_value: Some(format!("{title} {subtitle}")),
     }
 }
 
@@ -140,7 +140,7 @@ fn collect_search_terms(path: &str, value: &TomlValue, parts: &mut Vec<String>) 
         }
         TomlValue::Array(values) => {
             for (index, child) in values.iter().enumerate() {
-                let child_path = format!("{}[{}]", path, index);
+                let child_path = format!("{path}[{index}]");
                 parts.push(child_path.clone());
                 collect_search_terms(&child_path, child, parts);
             }
@@ -150,7 +150,7 @@ fn collect_search_terms(path: &str, value: &TomlValue, parts: &mut Vec<String>) 
                 let Some(child) = table.get(key) else {
                     continue;
                 };
-                let child_path = format!("{}.{}", path, key);
+                let child_path = format!("{path}.{key}");
                 parts.push(child_path.clone());
                 parts.push(humanize_identifier(key));
                 collect_search_terms(&child_path, child, parts);

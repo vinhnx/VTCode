@@ -99,8 +99,7 @@ async fn run_standard_stream_attempt(
         Ok(Ok((response, emitted_tokens))) => Ok((response, emitted_tokens)),
         Ok(Err(err)) => Err(anyhow::Error::new(err)),
         Err(_) => Err(anyhow::anyhow!(
-            "LLM request timed out after {} seconds",
-            request_timeout_secs
+            "LLM request timed out after {request_timeout_secs} seconds"
         )),
     }
 }
@@ -383,7 +382,7 @@ pub(crate) async fn execute_llm_request(
             let timeout_budget = Duration::from_secs(request_timeout_secs);
             let warning_delay = llm_timeout_warning_delay(timeout_budget);
             let mut timeout_warning_emitted = false;
-            let wait_subject = format!("LLM request for model '{}'", active_model);
+            let wait_subject = format!("LLM request for model '{active_model}'");
 
             loop {
                 let cancel_notifier = ctx.ctrl_c_notify.notified();
@@ -395,8 +394,7 @@ pub(crate) async fn execute_llm_request(
                     res = &mut generate_future => Some(match res {
                         Ok(inner) => inner.map_err(anyhow::Error::from),
                         Err(_) => Err(anyhow::anyhow!(
-                            "LLM request timed out after {} seconds",
-                            request_timeout_secs
+                            "LLM request timed out after {request_timeout_secs} seconds"
                         )),
                     }),
                     _ = &mut cancel_notifier => {

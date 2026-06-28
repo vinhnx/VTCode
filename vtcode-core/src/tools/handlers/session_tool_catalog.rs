@@ -702,8 +702,8 @@ fn remove_schema_descriptions_impl(value: &mut Value, inside_properties_map: boo
 
 #[cfg(test)]
 pub(crate) use vtcode_utility_tool_specs::{
-    apply_patch_parameters, list_files_parameters, read_file_parameters, unified_exec_parameters,
-    unified_file_parameters, unified_search_parameters,
+    apply_patch_parameters, list_files_parameters, read_file_parameters, unified_file_parameters,
+    unified_search_parameters,
 };
 
 #[cfg(test)]

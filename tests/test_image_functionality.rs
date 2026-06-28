@@ -10,16 +10,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Example 1: Create a message with a local image
     match create_message_with_image().await {
         Ok(_) => println!("✓ Created message with local image successfully"),
-        Err(e) => println!("✗ Failed to create message with local image: {}", e),
+        Err(e) => println!("✗ Failed to create message with local image: {e}"),
     }
 
     // Example 2: Create a message with text and local image
     match create_message_with_text_and_image().await {
         Ok(_) => println!("✓ Created message with text and local image successfully"),
-        Err(e) => println!(
-            "✗ Failed to create message with text and local image: {}",
-            e
-        ),
+        Err(e) => println!("✗ Failed to create message with text and local image: {e}"),
     }
 
     println!("Image functionality test completed!");

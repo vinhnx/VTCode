@@ -143,7 +143,7 @@ Shortcuts:
                 ),
             }),
             Err(e) => Ok(SkillCommandOutcome::Error {
-                message: format!("Failed to create skill: {}", e),
+                message: format!("Failed to create skill: {e}"),
             }),
         },
 
@@ -160,7 +160,7 @@ Shortcuts:
                     message: report.format(),
                 }),
                 Err(e) => Ok(SkillCommandOutcome::Error {
-                    message: format!("Validation error: {}", e),
+                    message: format!("Validation error: {e}"),
                 }),
             }
         }
@@ -178,7 +178,7 @@ Shortcuts:
                     message: format!("✓ Packaged skill to: {}", output_file.display()),
                 }),
                 Err(e) => Ok(SkillCommandOutcome::Error {
-                    message: format!("Packaging failed: {}", e),
+                    message: format!("Packaging failed: {e}"),
                 }),
             }
         }
@@ -250,30 +250,27 @@ Shortcuts:
                     vtcode_core::skills::loader::EnhancedSkill::CliTool(_) => {
                         Ok(SkillCommandOutcome::Error {
                             message: format!(
-                                "Skill '{}' is a CLI tool, not a traditional skill",
-                                name
+                                "Skill '{name}' is a CLI tool, not a traditional skill"
                             ),
                         })
                     }
                     vtcode_core::skills::loader::EnhancedSkill::BuiltInCommand(_) => {
                         Ok(SkillCommandOutcome::Error {
                             message: format!(
-                                "Skill '{}' is a built-in command skill and cannot be loaded into the persistent session prompt. Use `/skills use {}` instead.",
-                                name, name
+                                "Skill '{name}' is a built-in command skill and cannot be loaded into the persistent session prompt. Use `/skills use {name}` instead."
                             ),
                         })
                     }
                     vtcode_core::skills::loader::EnhancedSkill::NativePlugin(_) => {
                         Ok(SkillCommandOutcome::Error {
                             message: format!(
-                                "Skill '{}' is a native plugin, not a traditional skill",
-                                name
+                                "Skill '{name}' is a native plugin, not a traditional skill"
                             ),
                         })
                     }
                 },
                 Err(e) => Ok(SkillCommandOutcome::Error {
-                    message: format!("Failed to load skill '{}': {}", name, e),
+                    message: format!("Failed to load skill '{name}': {e}"),
                 }),
             }
         }
@@ -290,10 +287,10 @@ Shortcuts:
                         output.push_str(&format!("Skill: {}\n", skill.name()));
                         output.push_str(&format!("Description: {}\n", skill.description()));
                         if let Some(license) = &skill.manifest.license {
-                            output.push_str(&format!("License: {}\n", license));
+                            output.push_str(&format!("License: {license}\n"));
                         }
                         if let Some(compatibility) = &skill.manifest.compatibility {
-                            output.push_str(&format!("Compatibility: {}\n", compatibility));
+                            output.push_str(&format!("Compatibility: {compatibility}\n"));
                         }
 
                         output.push_str("\n--- Instructions ---\n");
@@ -302,7 +299,7 @@ Shortcuts:
                         if !skill.list_resources().is_empty() {
                             output.push_str("\n\n--- Resources ---\n");
                             for resource in skill.list_resources() {
-                                output.push_str(&format!("  • {}\n", resource));
+                                output.push_str(&format!("  • {resource}\n"));
                             }
                         }
 
@@ -338,7 +335,7 @@ Shortcuts:
                     }
                 },
                 Err(e) => Ok(SkillCommandOutcome::Error {
-                    message: format!("Failed to load skill '{}': {}", name, e),
+                    message: format!("Failed to load skill '{name}': {e}"),
                 }),
             }
         }
@@ -353,7 +350,7 @@ Shortcuts:
                 }
                 vtcode_core::skills::loader::EnhancedSkill::CliTool(_) => {
                     Ok(SkillCommandOutcome::Error {
-                        message: format!("Skill '{}' is a CLI tool, not a traditional skill", name),
+                        message: format!("Skill '{name}' is a CLI tool, not a traditional skill"),
                     })
                 }
                 vtcode_core::skills::loader::EnhancedSkill::BuiltInCommand(skill) => {
@@ -365,12 +362,12 @@ Shortcuts:
                 }
                 vtcode_core::skills::loader::EnhancedSkill::NativePlugin(_) => {
                     Ok(SkillCommandOutcome::Error {
-                        message: format!("Skill '{}' is a native plugin, not a traditional skill", name),
+                        message: format!("Skill '{name}' is a native plugin, not a traditional skill"),
                     })
                 }
             },
             Err(e) => Ok(SkillCommandOutcome::Error {
-                message: format!("Failed to load skill '{}': {}", name, e),
+                message: format!("Failed to load skill '{name}': {e}"),
             }),
         },
 
@@ -390,7 +387,7 @@ Shortcuts:
                     Ok(SkillCommandOutcome::Handled { message })
                 }
                 Err(e) => Ok(SkillCommandOutcome::Error {
-                    message: format!("Failed to regenerate skills index: {}", e),
+                    message: format!("Failed to regenerate skills index: {e}"),
                 }),
             }
         }

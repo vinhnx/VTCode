@@ -21,7 +21,7 @@ pub(super) fn handle_mcp_command(
         Err(err) => {
             renderer.line(
                 MessageStyle::Error,
-                &format!("Failed to parse arguments: {}", err),
+                &format!("Failed to parse arguments: {err}"),
             )?;
             return Ok(SlashCommandOutcome::Handled);
         }
@@ -141,7 +141,7 @@ pub(super) fn handle_local_command(
         Err(err) => {
             renderer.line(
                 MessageStyle::Error,
-                &format!("Failed to parse arguments: {}", err),
+                &format!("Failed to parse arguments: {err}"),
             )?;
             render_local_usage(renderer)?;
             return Ok(SlashCommandOutcome::Handled);

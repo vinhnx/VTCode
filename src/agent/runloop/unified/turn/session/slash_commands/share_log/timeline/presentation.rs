@@ -42,14 +42,14 @@ pub(super) fn timeline_rows_from_thread_events(records: &[ThreadEventRecord]) ->
                 let _ = writeln!(&mut body, "Outcome: {}", event.outcome_code);
                 let _ = writeln!(&mut body, "Subtype: {}", event.subtype.as_str());
                 if let Some(stop_reason) = &event.stop_reason {
-                    let _ = writeln!(&mut body, "Stop reason: {}", stop_reason);
+                    let _ = writeln!(&mut body, "Stop reason: {stop_reason}");
                 }
                 if let Some(total_cost_usd) = &event.total_cost_usd {
-                    let _ = writeln!(&mut body, "Total cost (USD): {}", total_cost_usd);
+                    let _ = writeln!(&mut body, "Total cost (USD): {total_cost_usd}");
                 }
                 let _ = writeln!(&mut body, "Turns: {}", event.num_turns);
                 let usage_summary = format_usage_summary(&event.usage);
-                let _ = writeln!(&mut body, "Usage: {}", usage_summary);
+                let _ = writeln!(&mut body, "Usage: {usage_summary}");
                 if let Some(result) = &event.result {
                     append_text_section(&mut body, "Result", result);
                 }
@@ -97,7 +97,7 @@ pub(super) fn timeline_rows_from_thread_events(records: &[ThreadEventRecord]) ->
                         event.original_message_count, event.compacted_message_count
                     );
                     if let Some(path) = &event.history_artifact_path {
-                        let _ = writeln!(&mut body, "History artifact: {}", path);
+                        let _ = writeln!(&mut body, "History artifact: {path}");
                     }
                     body
                 },
@@ -307,7 +307,7 @@ pub(super) fn timeline_row_from_item(
                 append_json_section(&mut body, "Arguments", arguments);
             }
             if let Some(tool_call_id) = &tool.tool_call_id {
-                let _ = write!(&mut body, "Tool call id: {}", tool_call_id);
+                let _ = write!(&mut body, "Tool call id: {tool_call_id}");
             }
             timeline_row(
                 record.sequence,
@@ -329,10 +329,10 @@ pub(super) fn timeline_row_from_item(
             let status = tool_status_label(&tool_output.status);
             let mut body = String::new();
             if let Some(tool_call_id) = &tool_output.tool_call_id {
-                let _ = writeln!(&mut body, "Tool call id: {}", tool_call_id);
+                let _ = writeln!(&mut body, "Tool call id: {tool_call_id}");
             }
             if let Some(spool_path) = &tool_output.spool_path {
-                let _ = writeln!(&mut body, "Spool path: {}", spool_path);
+                let _ = writeln!(&mut body, "Spool path: {spool_path}");
             }
             append_text_section(&mut body, "Output", &tool_output.output);
             if body.trim().is_empty() {
@@ -407,7 +407,7 @@ pub(super) fn timeline_row_from_item(
             let mut body = String::new();
             let _ = writeln!(&mut body, "Query: {}", search.query);
             if let Some(provider) = &search.provider {
-                let _ = writeln!(&mut body, "Provider: {}", provider);
+                let _ = writeln!(&mut body, "Provider: {provider}");
             }
             if let Some(results) = &search.results {
                 let _ = writeln!(&mut body, "Results: {}", results.len());
@@ -889,16 +889,16 @@ fn harness_summary(event: &vtcode_core::exec::events::HarnessEventItem) -> Strin
 fn harness_body(event: &vtcode_core::exec::events::HarnessEventItem) -> String {
     let mut body = String::new();
     if let Some(message) = &event.message {
-        let _ = writeln!(&mut body, "Message: {}", message);
+        let _ = writeln!(&mut body, "Message: {message}");
     }
     if let Some(command) = &event.command {
-        let _ = writeln!(&mut body, "Command: {}", command);
+        let _ = writeln!(&mut body, "Command: {command}");
     }
     if let Some(path) = &event.path {
-        let _ = writeln!(&mut body, "Path: {}", path);
+        let _ = writeln!(&mut body, "Path: {path}");
     }
     if let Some(exit_code) = event.exit_code {
-        let _ = writeln!(&mut body, "Exit code: {}", exit_code);
+        let _ = writeln!(&mut body, "Exit code: {exit_code}");
     }
     body.trim_end().to_string()
 }

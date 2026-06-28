@@ -329,7 +329,7 @@ pub(super) async fn run_interaction_loop_impl(
                         );
                         ctx.renderer.line(
                             MessageStyle::Warning,
-                            &format!("Durable scheduler poll failed: {}", error),
+                            &format!("Durable scheduler poll failed: {error}"),
                         )?;
                         last_durable_scheduler_error = Some(error);
                     }
@@ -343,7 +343,7 @@ pub(super) async fn run_interaction_loop_impl(
                         );
                         ctx.renderer.line(
                             MessageStyle::Warning,
-                            &format!("Durable scheduler task failed: {}", error),
+                            &format!("Durable scheduler task failed: {error}"),
                         )?;
                         last_durable_scheduler_error = Some(error);
                     }
@@ -431,7 +431,7 @@ pub(super) async fn run_interaction_loop_impl(
             tracing::warn!("Failed to refresh workspace configuration: {}", err);
             ctx.renderer.line(
                 MessageStyle::Error,
-                &format!("Failed to reload configuration: {}", err),
+                &format!("Failed to reload configuration: {err}"),
             )?;
         }
 
@@ -452,7 +452,7 @@ pub(super) async fn run_interaction_loop_impl(
                 && let Some(error_msg) = mcp_status.get_error_message()
             {
                 ctx.renderer
-                    .line(MessageStyle::Error, &format!("MCP Error: {}", error_msg))?;
+                    .line(MessageStyle::Error, &format!("MCP Error: {error_msg}"))?;
                 ctx.renderer.line(
                     MessageStyle::Info,
                     "Use /mcp to check status or update your vtcode.toml configuration.",
@@ -499,7 +499,7 @@ pub(super) async fn run_interaction_loop_impl(
                 Err(err) => {
                     ctx.renderer.line(
                         MessageStyle::Error,
-                        &format!("Failed to run prompt hooks: {}", err),
+                        &format!("Failed to run prompt hooks: {err}"),
                     )?;
                 }
             }
@@ -566,7 +566,7 @@ pub(super) async fn run_interaction_loop_impl(
                     {
                         ctx.renderer.line(
                             MessageStyle::Error,
-                            &format!("Failed to apply model selection: {}", err),
+                            &format!("Failed to apply model selection: {err}"),
                         )?;
                         if let Some(env_key) = &env_key_for_recovery
                             && !env_key.is_empty()
@@ -653,8 +653,7 @@ pub(super) async fn run_interaction_loop_impl(
                 if let Some((tool, args)) = fallback_hint.as_ref() {
                     let args_preview = fallback_args_preview(args);
                     ctx.conversation_history.push(uni::Message::system(format!(
-                        "Recovered fallback hint from recent tool error: call tool '{}' with args {} as the first adjusted strategy.",
-                        tool, args_preview
+                        "Recovered fallback hint from recent tool error: call tool '{tool}' with args {args_preview} as the first adjusted strategy."
                     )));
                 }
                 ctx.session_stats.suppress_next_follow_up_prompt();

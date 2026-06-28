@@ -69,8 +69,7 @@ pub(super) fn maybe_recover_after_post_tool_llm_failure(
         ""
     };
     let summary = format!(
-        "Tool execution completed, but the model follow-up failed{}. Output above is valid.",
-        transient_hint,
+        "Tool execution completed, but the model follow-up failed{transient_hint}. Output above is valid.",
     );
     renderer.line(MessageStyle::Info, &summary)?;
     renderer.line(

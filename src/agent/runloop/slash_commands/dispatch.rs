@@ -57,7 +57,7 @@ pub(crate) async fn execute_command_skill_by_name(
 ) -> Result<SlashCommandOutcome> {
     let command_key = normalize_command_key(slash_name.trim());
     let Some(spec) = find_command_skill_by_slash_name(command_key) else {
-        anyhow::bail!("unknown command skill '{}'", slash_name);
+        anyhow::bail!("unknown command skill '{slash_name}'");
     };
 
     execute_command_skill_spec(spec, input.trim(), input.trim(), renderer, workspace).await

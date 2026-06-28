@@ -130,7 +130,7 @@ pub(super) fn parse_skill_command(input: &str) -> Result<Option<SkillCommandActi
         "regenerate-index" | "--regenerate-index" | "regen" | "--regen" => {
             Ok(Some(SkillCommandAction::RegenerateIndex))
         }
-        cmd => Err(anyhow::anyhow!("unknown skills subcommand: {}", cmd)),
+        cmd => Err(anyhow::anyhow!("unknown skills subcommand: {cmd}")),
     }
 }
 

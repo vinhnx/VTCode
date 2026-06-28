@@ -52,12 +52,12 @@ pub(super) async fn determine_theme(args: &Cli, config: &VTCodeConfig) -> Result
 
     if let Err(err) = ui_theme::set_active_theme(&theme_selection) {
         if args.theme.is_some() {
-            return Err(err.context(format!("Failed to activate theme '{}'", theme_selection)));
+            return Err(err.context(format!("Failed to activate theme '{theme_selection}'")));
         }
 
         theme_selection = DEFAULT_THEME_ID.to_owned();
         ui_theme::set_active_theme(&theme_selection)
-            .with_context(|| format!("Failed to activate theme '{}'", theme_selection))?;
+            .with_context(|| format!("Failed to activate theme '{theme_selection}'"))?;
     }
 
     let validation = ui_theme::validate_theme_contrast(&theme_selection);

@@ -37,7 +37,7 @@ pub async fn handle_init_project_command(
             .unwrap_or_else(|| "unnamed-project".to_string())
     };
 
-    println!("Project name: {}", project_name);
+    println!("Project name: {project_name}");
 
     // Check if project already exists
     let project_dir = project_manager.project_data_dir(&project_name);

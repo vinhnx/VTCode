@@ -37,7 +37,7 @@ impl ZedAgent {
             );
             return ToolExecutionReport::failure(
                 tool_name,
-                &format!("Tool '{}' is not available to external clients", tool_name),
+                &format!("Tool '{tool_name}' is not available to external clients"),
             );
         }
 
@@ -280,7 +280,7 @@ impl ZedAgent {
             output.get("count").and_then(Value::as_u64),
             output.get("total").and_then(Value::as_u64),
         ) {
-            lines.push(format!("Showing {} of {} items", count, total));
+            lines.push(format!("Showing {count} of {total} items"));
         }
 
         if let Some(items) = output

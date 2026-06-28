@@ -210,8 +210,7 @@ fn max_consecutive_identical_shell_command_runs_per_turn(ctx: &TurnProcessingCon
 fn build_repeated_shell_run_error_content(max_repeated_runs: usize) -> String {
     super::super::execution_result::build_error_content(
         format!(
-            "Repeated identical shell command runs exceeded per-turn cap ({}). Reuse prior output or change command before retrying.",
-            max_repeated_runs
+            "Repeated identical shell command runs exceeded per-turn cap ({max_repeated_runs}). Reuse prior output or change command before retrying."
         ),
         None,
         None,
@@ -242,7 +241,7 @@ fn repeated_file_read_family_key(canonical_tool_name: &str, args: &Value) -> Opt
             }
             // Use the full command as the family key so different files are tracked separately
             let command_str = parts.join(" ");
-            Some(format!("{}::run::{}", canonical_tool_name, command_str))
+            Some(format!("{canonical_tool_name}::run::{command_str}"))
         }
         _ => None,
     }
@@ -252,8 +251,7 @@ fn repeated_file_read_family_key(canonical_tool_name: &str, args: &Value) -> Opt
 fn build_repeated_file_read_family_error_content(target: &str) -> String {
     super::super::execution_result::build_error_content(
         format!(
-            "File '{}' already read. Content is in conversation history above. Synthesize your answer from existing data. Do NOT re-read.",
-            target
+            "File '{target}' already read. Content is in conversation history above. Synthesize your answer from existing data. Do NOT re-read."
         ),
         None,
         None,
@@ -298,8 +296,7 @@ fn is_plan_artifact_read(canonical_tool_name: &str, args: &Value) -> Option<Stri
 fn build_read_after_write_error(path: &str) -> String {
     super::super::execution_result::build_error_content(
         format!(
-            "File '{}' was just written in this turn. The write response includes a diff preview. Reuse the diff output or specify offset/limit for a specific range.",
-            path
+            "File '{path}' was just written in this turn. The write response includes a diff preview. Reuse the diff output or specify offset/limit for a specific range."
         ),
         None,
         None,
@@ -374,8 +371,7 @@ pub(super) fn enforce_repeated_read_only_call_guard(
         if streak >= MAX_CONSECUTIVE_SAME_FILE_READ_FAMILY_CALLS {
             let target = family_key.rsplit("::").next().unwrap_or("current file");
             let block_reason = format!(
-                "Repeated read-only exploration of '{}' hit the per-turn family cap ({}). Scheduling a final recovery pass without more tools.",
-                target, MAX_CONSECUTIVE_SAME_FILE_READ_FAMILY_CALLS
+                "Repeated read-only exploration of '{target}' hit the per-turn family cap ({MAX_CONSECUTIVE_SAME_FILE_READ_FAMILY_CALLS}). Scheduling a final recovery pass without more tools."
             );
             ctx.activate_recovery(block_reason.clone());
             push_guard_failure_messages(
@@ -500,8 +496,7 @@ pub(super) fn enforce_repeated_shell_run_guard(
 
     let display_tool = tool_action_label(canonical_tool_name, args);
     let block_reason = format!(
-        "Repeated shell command guard stopped '{}' after {} identical runs (max {}). Scheduling a final recovery pass without more tools.",
-        display_tool, streak, max_repeated_runs
+        "Repeated shell command guard stopped '{display_tool}' after {streak} identical runs (max {max_repeated_runs}). Scheduling a final recovery pass without more tools."
     );
     ctx.activate_recovery(block_reason.clone());
     push_guard_failure_messages(
@@ -551,8 +546,7 @@ fn build_spool_chunk_guard_error_content(path: &str, max_reads_per_turn: usize) 
 
     let mut payload = super::super::execution_result::build_error_content(
         format!(
-            "Spool chunk reads exceeded per-turn cap ({}). Use targeted extraction before reading more from '{}'.",
-            max_reads_per_turn, path
+            "Spool chunk reads exceeded per-turn cap ({max_reads_per_turn}). Use targeted extraction before reading more from '{path}'."
         ),
         fallback_tool.clone(),
         Some(fallback_args),
@@ -616,8 +610,7 @@ pub(super) fn enforce_spool_chunk_read_guard(
                 build_previous_turn_error_spool_content(spool_path, &head),
             );
             ctx.push_system_message(format!(
-                "Spool file '{}' contains a tool error from an earlier turn. Use the error payload already in your conversation history instead of re-reading the spool.",
-                spool_path
+                "Spool file '{spool_path}' contains a tool error from an earlier turn. Use the error payload already in your conversation history instead of re-reading the spool."
             ));
             // Do not increment the streak for this short-circuit — the model
             // is being told to stop reading the spool, not to try again.
@@ -639,8 +632,7 @@ pub(super) fn enforce_spool_chunk_read_guard(
 
     let display_tool = tool_action_label(canonical_tool_name, args);
     let block_reason = format!(
-        "Spool chunk guard stopped repeated '{}' calls for this turn. Scheduling a final recovery pass without more tools.",
-        display_tool
+        "Spool chunk guard stopped repeated '{display_tool}' calls for this turn. Scheduling a final recovery pass without more tools."
     );
 
     ctx.activate_recovery(block_reason.clone());

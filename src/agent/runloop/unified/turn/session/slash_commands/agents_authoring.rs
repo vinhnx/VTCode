@@ -775,8 +775,7 @@ async fn prompt_background_mode(
         },
     ];
     let selected = Some(InlineListSelection::ConfigAction(format!(
-        "agents:author:background:{}",
-        current
+        "agents:author:background:{current}"
     )));
     ctx.handle.show_list_modal(
         "Background mode".to_string(),
@@ -890,14 +889,14 @@ async fn prompt_text_value(
         let current_trimmed = current.trim();
         if !current_trimmed.is_empty() {
             items.push(InlineListItem {
-                title: format!("Keep current ({})", current_trimmed),
+                title: format!("Keep current ({current_trimmed})"),
                 subtitle: Some("Leave this field unchanged.".to_string()),
                 badge: Some("Current".to_string()),
                 indent: 0,
                 selection: Some(InlineListSelection::ConfigAction(
                     KEEP_CURRENT_ACTION.to_string(),
                 )),
-                search_value: Some(format!("keep {}", current_trimmed)),
+                search_value: Some(format!("keep {current_trimmed}")),
             });
         }
         if allow_clear {
@@ -1206,7 +1205,7 @@ async fn resolve_named_custom_agent(
         .await
         .into_iter()
         .find(|spec| spec.matches_name(name))
-        .ok_or_else(|| anyhow!("Unknown agent {}", name))
+        .ok_or_else(|| anyhow!("Unknown agent {name}"))
 }
 
 fn is_native_vtcode_spec(spec: &SubagentSpec) -> bool {
@@ -1404,7 +1403,7 @@ fn memory_item(title: &str, subtitle: &str, scope: Option<SubagentMemoryScope>) 
         selection: Some(InlineListSelection::ConfigAction(memory_action_key(
             scope.as_ref(),
         ))),
-        search_value: Some(format!("{} {}", title, subtitle)),
+        search_value: Some(format!("{title} {subtitle}")),
     }
 }
 
@@ -1446,7 +1445,7 @@ fn author_action_item(
         selection: Some(InlineListSelection::ConfigAction(format!(
             "{AUTHOR_ACTION_PREFIX}{action}"
         ))),
-        search_value: Some(format!("{} {}", title, subtitle)),
+        search_value: Some(format!("{title} {subtitle}")),
     }
 }
 

@@ -58,7 +58,7 @@ pub(crate) async fn refine_user_prompt_if_enabled(
         return raw.to_string();
     }
     if std::env::var("VTCODE_PROMPT_REFINER_STUB").is_ok() {
-        return format!("[REFINED] {}", raw);
+        return format!("[REFINED] {raw}");
     }
 
     if !should_attempt_refinement(raw) {
@@ -148,8 +148,7 @@ fn finalize_refined_prompt(text: String) -> String {
     ];
     if debug_triggers.iter().any(|token| lower.contains(token)) {
         format!(
-            "{}\n\nNote: For diagnostics, prefer `unified_search` for inspection and `unified_exec` for verification commands.",
-            text
+            "{text}\n\nNote: For diagnostics, prefer `unified_search` for inspection and `unified_exec` for verification commands."
         )
     } else {
         text
@@ -254,7 +253,7 @@ impl EnrichedPrompt {
         if !self.inferred_values.is_empty() {
             prompt.push_str("Inferred values:\n");
             for (expr, value) in &self.inferred_values {
-                let _ = writeln!(prompt, "- \"{}\" → {}", expr, value);
+                let _ = writeln!(prompt, "- \"{expr}\" → {value}");
             }
             prompt.push('\n');
         }
@@ -262,7 +261,7 @@ impl EnrichedPrompt {
         if !self.recent_files.is_empty() {
             prompt.push_str("Recent context:\n");
             for file in self.recent_files.iter().take(5) {
-                let _ = writeln!(prompt, "- Last edited: {}", file);
+                let _ = writeln!(prompt, "- Last edited: {file}");
             }
             prompt.push('\n');
         }
@@ -270,7 +269,7 @@ impl EnrichedPrompt {
         if !self.context_hints.is_empty() {
             prompt.push_str("Context hints:\n");
             for hint in &self.context_hints {
-                let _ = writeln!(prompt, "- {}", hint);
+                let _ = writeln!(prompt, "- {hint}");
             }
             prompt.push('\n');
         }

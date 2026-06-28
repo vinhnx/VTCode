@@ -258,17 +258,14 @@ impl McpSandboxWrapper {
                 SandboxPolicy::ReadOnly {
                     network_allowlist, ..
                 } => format!(
-                    "(version 1) (allow default) (deny file-write*) (allow network* (remote ip {allowlist:?}))",
-                    allowlist = network_allowlist
+                    "(version 1) (allow default) (deny file-write*) (allow network* (remote ip {network_allowlist:?}))",
                 ),
                 SandboxPolicy::WorkspaceWrite {
                     writable_roots,
                     network_allowlist,
                     ..
                 } => format!(
-                    "(version 1) (allow default) (allow file-write* (subpath {roots:?})) (allow network* (remote ip {allowlist:?}))",
-                    roots = writable_roots,
-                    allowlist = network_allowlist
+                    "(version 1) (allow default) (allow file-write* (subpath {writable_roots:?})) (allow network* (remote ip {network_allowlist:?}))",
                 ),
                 SandboxPolicy::DangerFullAccess => "(version 1) (allow default)".to_owned(),
                 SandboxPolicy::ExternalSandbox { description } => description.clone(),

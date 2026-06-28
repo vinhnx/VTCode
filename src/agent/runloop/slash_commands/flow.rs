@@ -126,7 +126,7 @@ async fn handle_session_palette_command(
         Err(err) => {
             renderer.line(
                 MessageStyle::Error,
-                &format!("Failed to load session archives: {}", err),
+                &format!("Failed to load session archives: {err}"),
             )?;
         }
     }
@@ -201,8 +201,7 @@ pub(super) fn handle_rewind_command(
                 renderer.line(
                     MessageStyle::Error,
                     &format!(
-                        "Unknown revert scope '{}'. Use conversation, code, or both.",
-                        scope_str
+                        "Unknown revert scope '{scope_str}'. Use conversation, code, or both."
                     ),
                 )?;
                 return Ok(SlashCommandOutcome::Handled);
@@ -297,10 +296,7 @@ pub(super) fn handle_login_command(
     if !supports_auth_provider(&provider) {
         renderer.line(
             MessageStyle::Error,
-            &format!(
-                "Provider '{}' does not support VT Code authentication.",
-                provider
-            ),
+            &format!("Provider '{provider}' does not support VT Code authentication."),
         )?;
         renderer.line(
             MessageStyle::Info,
@@ -336,10 +332,7 @@ pub(super) fn handle_logout_command(
     if !supports_auth_provider(&provider) {
         renderer.line(
             MessageStyle::Error,
-            &format!(
-                "Provider '{}' does not use VT Code-managed authentication.",
-                provider
-            ),
+            &format!("Provider '{provider}' does not use VT Code-managed authentication."),
         )?;
         return Ok(SlashCommandOutcome::Handled);
     }
@@ -364,7 +357,7 @@ pub(super) fn handle_refresh_oauth_command(
     if provider != OPENAI_PROVIDER && provider != OPENROUTER_PROVIDER {
         renderer.line(
             MessageStyle::Error,
-            &format!("Provider '{}' does not support refresh-oauth.", provider),
+            &format!("Provider '{provider}' does not support refresh-oauth."),
         )?;
         return Ok(SlashCommandOutcome::Handled);
     }

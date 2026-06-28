@@ -161,7 +161,7 @@ pub(crate) fn render_tool_call_summary(
     if is_run_command {
         summary = command_line_candidate
             .as_ref()
-            .map(|command| format!("Ran {}", command))
+            .map(|command| format!("Ran {command}"))
             .unwrap_or(summary);
     }
     if is_run_command && run_summary_is_placeholder(&summary) {
@@ -311,7 +311,7 @@ fn render_run_command_segment(segment: &str, command_color: Color, args_color: C
     let mut rendered = String::new();
     rendered.push_str(&render_styled(command, command_color, None));
     if !args.is_empty() {
-        rendered.push_str(&render_styled(&format!(" {}", args), args_color, None));
+        rendered.push_str(&render_styled(&format!(" {args}"), args_color, None));
     }
     rendered
 }
@@ -339,7 +339,7 @@ fn build_tool_summary(action_label: &str, headline: &str) -> String {
         if normalized.is_empty() {
             return "Ran command".to_string();
         }
-        return format!("Ran {}", normalized);
+        return format!("Ran {normalized}");
     }
     if normalized.is_empty() {
         return action_label.to_string();
@@ -355,7 +355,7 @@ fn build_tool_summary(action_label: &str, headline: &str) -> String {
     {
         return action_label.to_string();
     }
-    format!("{} {}", action_label, normalized)
+    format!("{action_label} {normalized}")
 }
 
 fn run_summary_is_placeholder(summary: &str) -> bool {
@@ -657,10 +657,10 @@ pub(crate) fn describe_tool_action(tool_name: &str, args: &Value) -> (String, Ha
             let prefix = if is_mcp_tool { "MCP " } else { "" };
             match extract_first_patch_file_path(args) {
                 Some(path) => (
-                    format!("{}Apply patch to {}", prefix, path),
+                    format!("{prefix}Apply patch to {path}"),
                     HashSet::from(["path".to_string()]),
                 ),
-                None => (format!("{}Apply workspace patch", prefix), HashSet::new()),
+                None => (format!("{prefix}Apply workspace patch"), HashSet::new()),
             }
         }
         "fetch" | tool_names::WEB_FETCH => {

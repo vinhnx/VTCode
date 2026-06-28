@@ -104,7 +104,7 @@ pub(crate) async fn execute_request_user_input_tool(
 
             let response = RequestUserInputResponse { answers };
             serde_json::to_value(response)
-                .map_err(|e| anyhow::anyhow!("Failed to serialize response: {}", e))
+                .map_err(|e| anyhow::anyhow!("Failed to serialize response: {e}"))
         }
         WizardModalOutcome::Cancelled { signal } => {
             if let Some(signal) = signal {
@@ -205,8 +205,7 @@ fn append_summary_lines(
     handle.append_line(
         InlineMessageKind::Info,
         vec![summary_segment(format!(
-            "• Questions {}/{} answered",
-            answered_count, total_count
+            "• Questions {answered_count}/{total_count} answered"
         ))],
     );
 
@@ -231,7 +230,7 @@ fn append_summary_lines(
                     if parts.is_empty() {
                         parts.push(other.to_string());
                     } else {
-                        parts.push(format!("notes: {}", other));
+                        parts.push(format!("notes: {other}"));
                     }
                 }
                 if parts.is_empty() {
@@ -243,7 +242,7 @@ fn append_summary_lines(
             .unwrap_or_else(|| "(unanswered)".to_string());
         handle.append_line(
             InlineMessageKind::Info,
-            vec![summary_segment(format!("    answer: {}", answer_text))],
+            vec![summary_segment(format!("    answer: {answer_text}"))],
         );
     }
 }

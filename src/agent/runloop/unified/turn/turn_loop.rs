@@ -704,7 +704,7 @@ pub(crate) async fn run_turn_loop(
                         let hint = suggestions.join("; ");
                         turn_processing_ctx
                             .renderer
-                            .line(MessageStyle::Info, &format!("Hint: {}", hint))?;
+                            .line(MessageStyle::Info, &format!("Hint: {hint}"))?;
                     }
                 }
                 // Log error via tracing instead of polluting conversation history
@@ -830,7 +830,7 @@ pub(crate) async fn run_turn_loop(
                     let mut recovery = turn_processing_ctx.error_recovery.write().await;
                     recovery.record_error(
                         "llm_response_parse",
-                        format!("{:#}", err),
+                        format!("{err:#}"),
                         ErrorType::Other,
                     );
                 }
@@ -963,7 +963,7 @@ pub(crate) async fn run_turn_loop(
                 // Record result-handler errors for diagnostics (mirrors llm_request recording)
                 ctx.error_recovery.write().await.record_error(
                     "turn_result_handler",
-                    format!("{:#}", err),
+                    format!("{err:#}"),
                     ErrorType::ToolExecution,
                 );
                 let tool_free_recovery = ctx.harness_state.recovery_pass_used()

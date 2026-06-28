@@ -115,7 +115,7 @@ pub(crate) async fn finalize_model_selection(
     {
         renderer.line(
             MessageStyle::Info,
-            &format!("Rig reasoning configuration prepared: {}", payload),
+            &format!("Rig reasoning configuration prepared: {payload}"),
         )?;
     }
 
@@ -249,11 +249,11 @@ pub(crate) async fn finalize_lightweight_model_selection(
 
     renderer.line(
         MessageStyle::Info,
-        &format!("Lightweight model set to {}.", configured_label),
+        &format!("Lightweight model set to {configured_label}."),
     )?;
     renderer.line(
         MessageStyle::Info,
-        &format!("Effective lightweight route: {}.", effective_route),
+        &format!("Effective lightweight route: {effective_route}."),
     )?;
     if let Some(warning) = resolution.warning {
         renderer.line(MessageStyle::Warning, &warning)?;
@@ -358,7 +358,7 @@ async fn resolve_runtime_api_key(
 
 fn read_workspace_api_key(workspace: &Path, env_key: &str) -> Result<Option<String>> {
     read_workspace_env_value(workspace, env_key)
-        .with_context(|| format!("Failed to read workspace .env value for {}", env_key))
+        .with_context(|| format!("Failed to read workspace .env value for {env_key}"))
 }
 
 fn sync_runtime_custom_api_key(config: &mut CoreAgentConfig, selection: &ModelSelectionResult) {

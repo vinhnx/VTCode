@@ -40,16 +40,13 @@ pub(super) fn parse_path_tokens(path: &str) -> Result<Vec<PathToken>> {
 
                 let after_start = &rest[index_start + 1..];
                 let Some(index_end) = after_start.find(']') else {
-                    bail!(
-                        "Invalid path segment '{}': missing closing bracket",
-                        segment
-                    );
+                    bail!("Invalid path segment '{segment}': missing closing bracket");
                 };
 
                 let index_text = &after_start[..index_end];
                 let index = index_text
                     .parse::<usize>()
-                    .with_context(|| format!("Invalid array index '{}'", index_text))?;
+                    .with_context(|| format!("Invalid array index '{index_text}'"))?;
                 tokens.push(PathToken::Index(index));
 
                 rest = &after_start[index_end + 1..];

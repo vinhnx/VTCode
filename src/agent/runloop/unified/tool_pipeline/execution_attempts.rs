@@ -321,13 +321,13 @@ async fn run_single_tool_attempt(
     );
 
     progress_reporter
-        .set_message(format!("Preparing {}...", name))
+        .set_message(format!("Preparing {name}..."))
         .await;
     progress_reporter.set_progress(5).await;
 
     if let Err(_e) = tokens.state.check_cancellation() {
         progress_reporter
-            .set_message(format!("{} cancelled", name))
+            .set_message(format!("{name} cancelled"))
             .await;
         progress_reporter.set_progress(100).await;
         warning_guard.cancel().await;
@@ -335,7 +335,7 @@ async fn run_single_tool_attempt(
     }
 
     progress_reporter
-        .set_message(format!("Setting up {} execution...", name))
+        .set_message(format!("Setting up {name} execution..."))
         .await;
     progress_reporter.set_progress(20).await;
 
@@ -350,7 +350,7 @@ async fn run_single_tool_attempt(
     let status = loop {
         if let Err(_e) = tokens.state.check_cancellation() {
             progress_reporter
-                .set_message(format!("{} cancelled", name))
+                .set_message(format!("{name} cancelled"))
                 .await;
             progress_reporter.set_progress(100).await;
             warning_guard.cancel().await;
@@ -358,7 +358,7 @@ async fn run_single_tool_attempt(
         }
 
         progress_reporter
-            .set_message(format!("Executing {}...", name))
+            .set_message(format!("Executing {name}..."))
             .await;
 
         let token = CancellationToken::new();
@@ -389,7 +389,7 @@ async fn run_single_tool_attempt(
             };
 
             progress_reporter
-                .set_message(format!("Processing {} results...", name))
+                .set_message(format!("Processing {name} results..."))
                 .await;
             progress_reporter.set_progress(90).await;
             result
@@ -410,7 +410,7 @@ async fn run_single_tool_attempt(
         let mut exec_future = Box::pin(tokio::time::timeout(tool_timeout, exec_future));
         let keepalive_started_at = tokio::time::Instant::now();
         let mut next_keepalive_at = keepalive_started_at + WAIT_KEEPALIVE_INITIAL;
-        let wait_subject = format!("Tool '{}'", name);
+        let wait_subject = format!("Tool '{name}'");
 
         let control = loop {
             let cancel_notifier = tokens.notify.notified();
@@ -452,7 +452,7 @@ async fn run_single_tool_attempt(
             ExecutionControl::Cancelled => {
                 terminate_active_exec_sessions(registry, name, "cancelled").await;
                 progress_reporter
-                    .set_message(format!("{} cancelled", name))
+                    .set_message(format!("{name} cancelled"))
                     .await;
                 progress_reporter.set_progress(100).await;
                 break ToolExecutionStatus::Cancelled;
@@ -461,14 +461,14 @@ async fn run_single_tool_attempt(
                 break match result {
                     Ok(output) => {
                         progress_reporter
-                            .set_message(format!("{} completed", name))
+                            .set_message(format!("{name} completed"))
                             .await;
                         progress_reporter.set_progress(100).await;
                         process_llm_tool_output(output)
                     }
                     Err(error) => {
                         progress_reporter
-                            .set_message(format!("{} failed", name))
+                            .set_message(format!("{name} failed"))
                             .await;
                         ToolExecutionStatus::Failure {
                             error: ToolExecutionError::from_anyhow(
@@ -488,7 +488,7 @@ async fn run_single_tool_attempt(
                 token.cancel();
                 terminate_active_exec_sessions(registry, name, "timed out").await;
                 progress_reporter
-                    .set_message(format!("{} timed out", name))
+                    .set_message(format!("{name} timed out"))
                     .await;
                 let timeout_category = registry.timeout_category_for(name).await;
                 break create_timeout_error(name, timeout_category, Some(tool_timeout));

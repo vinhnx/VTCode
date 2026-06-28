@@ -81,7 +81,7 @@ fn test_ui_component_serialization() {
         .into(),
     };
     assert_snapshot!(
-        &format!("{:?}", normal_segment),
+        &format!("{normal_segment:?}"),
         @"InlineSegment { text: \"Normal text\", style: InlineTextStyle { color: None, bg_color: None, effects: Effects() } }"
     );
 
@@ -95,7 +95,7 @@ fn test_ui_component_serialization() {
         .into(),
     };
     assert_snapshot!(
-        &format!("{:?}", bold_segment),
+        &format!("{bold_segment:?}"),
         @"InlineSegment { text: \"Bold text\", style: InlineTextStyle { color: None, bg_color: None, effects: Effects(BOLD) } }"
     );
 
@@ -109,7 +109,7 @@ fn test_ui_component_serialization() {
         .into(),
     };
     assert_snapshot!(
-        &format!("{:?}", italic_segment),
+        &format!("{italic_segment:?}"),
         @"InlineSegment { text: \"Italic text\", style: InlineTextStyle { color: None, bg_color: None, effects: Effects(ITALIC) } }"
     );
 }
@@ -201,7 +201,7 @@ async fn test_tui_session_creation() {
 
     // Snapshot the creation result
     assert_snapshot!(
-        &format!("{:?}", startup_ok),
+        &format!("{startup_ok:?}"),
         @"true"
     );
 }

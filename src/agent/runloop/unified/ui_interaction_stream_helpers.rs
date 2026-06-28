@@ -7,7 +7,7 @@ use vtcode_core::llm::providers::clean_reasoning_text;
 pub(super) fn map_render_error(provider_name: &str, err: Error) -> uni::LLMError {
     let formatted_error = error_display::format_llm_error(
         provider_name,
-        &format!("Failed to render streaming output: {}", err),
+        &format!("Failed to render streaming output: {err}"),
     );
     uni::LLMError::Provider {
         message: formatted_error,

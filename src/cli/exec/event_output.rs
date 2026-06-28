@@ -345,7 +345,7 @@ pub(super) fn human_event_line(event: &ThreadEvent) -> Option<String> {
                         .clone()
                         .unwrap_or_else(|| "harness event".to_string()),
                 };
-                Some(format!("{} {}", label, detail))
+                Some(format!("{label} {detail}"))
             }
             ThreadItemDetails::Error(item) => Some(format!(
                 "{} {}",

@@ -59,7 +59,7 @@ pub(super) fn print_traditional_skills(rows: &[TraditionalSkillRow], warnings: &
 
     println!("\nCompatibility Notes:");
     for warning in warnings {
-        println!("  {}", warning);
+        println!("  {warning}");
     }
     println!("\n  Use 'vtcode skills info <name>' for details and alternatives.");
 }
@@ -107,14 +107,13 @@ pub(super) fn print_list_usage() {
 pub(super) fn print_loaded_skill(summary: &LoadedSkillSummary) {
     println!("{}", summary.headline);
     for detail in &summary.details {
-        println!("  {}", detail);
+        println!("  {detail}");
     }
 }
 
 pub(super) fn print_skill_ready(name: &str) {
     println!(
-        "\nSkill is ready to use. Use it in chat mode or with: vtcode ask 'Use {} for...'",
-        name
+        "\nSkill is ready to use. Use it in chat mode or with: vtcode ask 'Use {name} for...'"
     );
 }
 

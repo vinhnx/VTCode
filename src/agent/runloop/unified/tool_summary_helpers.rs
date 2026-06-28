@@ -82,7 +82,7 @@ pub(super) fn describe_list_files(args: &Value) -> Option<(String, HashSet<Strin
         } else {
             truncate_path_middle(&path, 60)
         };
-        return Some((format!("List files in {}", location), used));
+        return Some((format!("List files in {location}"), used));
     }
     if let Some(pattern) = lookup_string(args, "name_pattern") {
         let mut used = HashSet::new();
@@ -140,7 +140,7 @@ pub(super) fn describe_path_action(
             used.insert((*key).to_string());
             let summary = truncate_path_middle(&value, 60);
             let annotated_summary = annotate_skill_doc_summary(&value, summary);
-            return Some((format!("{} {}", verb, annotated_summary), used));
+            return Some((format!("{verb} {annotated_summary}"), used));
         }
     }
     None
@@ -165,7 +165,7 @@ fn annotate_skill_doc_summary(raw_path: &str, summary: String) -> String {
         return summary;
     };
 
-    format!("{} ({} skill)", summary, skill_name)
+    format!("{summary} ({skill_name} skill)")
 }
 
 pub(super) fn lookup_string(args: &Value, key: &str) -> Option<String> {
@@ -266,7 +266,7 @@ pub(super) fn truncate_path_middle(path: &str, max_len: usize) -> String {
         .rev()
         .collect();
 
-    format!("{}…{}", head, tail)
+    format!("{head}…{tail}")
 }
 
 pub(super) fn collect_param_details(args: &Value, keys: &HashSet<String>) -> Vec<String> {

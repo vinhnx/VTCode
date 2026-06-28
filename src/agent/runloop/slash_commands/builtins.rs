@@ -40,14 +40,13 @@ pub(in crate::agent::runloop::slash_commands) async fn execute_built_in_command_
                 match theme::set_active_theme(&desired) {
                     Ok(()) => {
                         let label = theme::active_theme_label();
-                        renderer
-                            .line(MessageStyle::Info, &format!("Theme switched to {}", label))?;
+                        renderer.line(MessageStyle::Info, &format!("Theme switched to {label}"))?;
                         return Ok(SlashCommandOutcome::ThemeChanged(theme::active_theme_id()));
                     }
                     Err(err) => {
                         renderer.line(
                             MessageStyle::Error,
-                            &format!("Theme '{}' not available: {}", next_theme, err),
+                            &format!("Theme '{next_theme}' not available: {err}"),
                         )?;
                     }
                 }
@@ -72,7 +71,7 @@ pub(in crate::agent::runloop::slash_commands) async fn execute_built_in_command_
                     unknown => {
                         renderer.line(
                             MessageStyle::Error,
-                            &format!("Unknown flag '{}' for /init", unknown),
+                            &format!("Unknown flag '{unknown}' for /init"),
                         )?;
                         return Ok(SlashCommandOutcome::Handled);
                     }
@@ -295,7 +294,7 @@ pub(in crate::agent::runloop::slash_commands) async fn execute_built_in_command_
         }
         "exit" => Ok(SlashCommandOutcome::Exit),
         "skills" => {
-            let full_command = format!("/{}", input);
+            let full_command = format!("/{input}");
             match crate::agent::runloop::parse_skill_command(&full_command) {
                 Ok(Some(action)) => Ok(SlashCommandOutcome::ManageSkills { action }),
                 Ok(None) => {
@@ -305,7 +304,7 @@ pub(in crate::agent::runloop::slash_commands) async fn execute_built_in_command_
                 Err(error) => {
                     renderer.line(
                         MessageStyle::Error,
-                        &format!("Skills command error: {}", error),
+                        &format!("Skills command error: {error}"),
                     )?;
                     Ok(SlashCommandOutcome::Handled)
                 }
@@ -481,7 +480,7 @@ pub(in crate::agent::runloop::slash_commands) fn parse_effort_args(
             "--persist" | "persist" => persist = true,
             _ => {
                 let Some(parsed) = ReasoningEffortLevel::parse(token) else {
-                    return Err(format!("Unknown effort value '{}'", token));
+                    return Err(format!("Unknown effort value '{token}'"));
                 };
                 if level.replace(parsed).is_some() {
                     return Err("Specify at most one effort level.".to_string());

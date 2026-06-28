@@ -32,7 +32,7 @@ pub(crate) struct Updater {
 impl Updater {
     pub(crate) fn new(current_version_str: &str) -> Result<Self> {
         let current_version = Version::parse(current_version_str)
-            .with_context(|| format!("Invalid version format: {}", current_version_str))?;
+            .with_context(|| format!("Invalid version format: {current_version_str}"))?;
 
         let config = UpdateConfig::load().unwrap_or_else(|e| {
             debug!("Failed to load update config, using defaults: {}", e);

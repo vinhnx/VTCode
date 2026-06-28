@@ -20,7 +20,7 @@ pub async fn handle_config_command(output: Option<&Path>, use_home_dir: bool) ->
         if !created_files.is_empty() {
             println!("Configuration files created in user home directory:");
             for file in created_files {
-                println!("  - {}", file);
+                println!("  - {file}");
             }
         } else {
             println!("Configuration files already exist in user home directory");

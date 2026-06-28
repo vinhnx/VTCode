@@ -112,7 +112,7 @@ pub async fn handle_skills_load(
     name: &str,
     path: Option<PathBuf>,
 ) -> Result<()> {
-    println!("Loading skill: {}...", name);
+    println!("Loading skill: {name}...");
 
     let skill = resolve_skill_load(options, name, path.as_deref()).await?;
     let loaded_name = print_loaded_skill_summary(skill);
@@ -126,27 +126,27 @@ pub async fn handle_skills_load(
 pub async fn handle_skills_info(options: &SkillsCommandOptions, name: &str) -> Result<()> {
     let mut loader = prepare_loader(options).await?;
 
-    println!("Loading skill: {}...\n", name);
+    println!("Loading skill: {name}...\n");
 
     let skill = loader
         .get_skill(name)
         .await
-        .with_context(|| format!("Failed to load skill '{}'", name))?;
+        .with_context(|| format!("Failed to load skill '{name}'"))?;
 
     match skill {
         EnhancedSkill::Traditional(skill) => {
             println!("Skill: {}", skill.name());
             println!("Description: {}", skill.description());
             if let Some(license) = &skill.manifest.license {
-                println!("License: {}", license);
+                println!("License: {license}");
             }
             if let Some(compatibility) = &skill.manifest.compatibility {
-                println!("Compatibility: {}", compatibility);
+                println!("Compatibility: {compatibility}");
             }
             if let Some(allowed_tools) = &skill.manifest.allowed_tools
                 && !allowed_tools.is_empty()
             {
-                println!("Allowed tools: {}", allowed_tools);
+                println!("Allowed tools: {allowed_tools}");
             }
             if let Some(metadata) = &skill.manifest.metadata
                 && !metadata.is_empty()
@@ -178,7 +178,7 @@ pub async fn handle_skills_info(options: &SkillsCommandOptions, name: &str) -> R
             if !analysis.recommendations.is_empty() {
                 println!("\n--- Recommendations ---");
                 for rec in &analysis.recommendations {
-                    println!("{}", rec);
+                    println!("{rec}");
                 }
             }
 
@@ -188,7 +188,7 @@ pub async fn handle_skills_info(options: &SkillsCommandOptions, name: &str) -> R
             if !skill.list_resources().is_empty() {
                 println!("\n--- Available Resources ---");
                 for resource in skill.list_resources() {
-                    println!("  • {}", resource);
+                    println!("  • {resource}");
                 }
             }
         }
@@ -262,18 +262,16 @@ async fn resolve_skill_load(
     let skill = loader
         .get_skill(requested_name)
         .await
-        .with_context(|| messages::error(&format!("Failed to load skill '{}'.", requested_name)))?;
+        .with_context(|| messages::error(&format!("Failed to load skill '{requested_name}'.")))?;
 
     if matches!(skill, EnhancedSkill::BuiltInCommand(_)) {
         bail!(
             "{}\n{}",
             messages::error(&format!(
-                "Skill '{}' is a built-in command skill and cannot be loaded.",
-                requested_name
+                "Skill '{requested_name}' is a built-in command skill and cannot be loaded."
             )),
             messages::hint(&format!(
-                "Use `/skills use {}` in chat mode instead.",
-                requested_name
+                "Use `/skills use {requested_name}` in chat mode instead."
             ))
         );
     }
@@ -316,7 +314,7 @@ fn print_loaded_skill_summary(skill: EnhancedSkill) -> String {
         EnhancedSkill::Traditional(skill) => {
             let name = skill.name().to_string();
             let summary = LoadedSkillSummary {
-                headline: format!("Loaded skill: {}", name),
+                headline: format!("Loaded skill: {name}"),
                 details: vec![
                     format!("Description: {}", skill.description()),
                     format!("Resources: {} files", skill.list_resources().len()),
@@ -328,7 +326,7 @@ fn print_loaded_skill_summary(skill: EnhancedSkill) -> String {
         EnhancedSkill::CliTool(bridge) => {
             let name = bridge.config.name.clone();
             let summary = LoadedSkillSummary {
-                headline: format!("Loaded CLI tool skill: {}", name),
+                headline: format!("Loaded CLI tool skill: {name}"),
                 details: vec![format!("Description: {}", bridge.config.description)],
             };
             print_loaded_skill(&summary);
@@ -337,7 +335,7 @@ fn print_loaded_skill_summary(skill: EnhancedSkill) -> String {
         EnhancedSkill::BuiltInCommand(skill) => {
             let name = skill.name().to_string();
             let summary = LoadedSkillSummary {
-                headline: format!("Built-in command skill: {}", name),
+                headline: format!("Built-in command skill: {name}"),
                 details: vec![
                     format!("Slash alias: /{}", skill.slash_name()),
                     format!("Usage: {}", skill.usage()),
@@ -350,7 +348,7 @@ fn print_loaded_skill_summary(skill: EnhancedSkill) -> String {
             let meta = plugin.metadata();
             let name = meta.name.clone();
             let summary = LoadedSkillSummary {
-                headline: format!("Loaded native plugin: {}", name),
+                headline: format!("Loaded native plugin: {name}"),
                 details: vec![format!("Description: {}", meta.description)],
             };
             print_loaded_skill(&summary);
@@ -363,7 +361,7 @@ async fn refresh_skill_index(options: &SkillsCommandOptions) {
     if let Err(err) =
         crate::cli::skills_index::generate_comprehensive_skills_index(&options.workspace).await
     {
-        eprintln!("Warning: Failed to regenerate skills index: {}", err);
+        eprintln!("Warning: Failed to regenerate skills index: {err}");
     }
 }
 

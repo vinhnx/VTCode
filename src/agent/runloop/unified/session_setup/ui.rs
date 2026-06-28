@@ -402,7 +402,7 @@ pub(crate) async fn initialize_session_ui(
             Err(err) => {
                 renderer.line(
                     MessageStyle::Error,
-                    &format!("Failed to run session start hooks: {}", err),
+                    &format!("Failed to run session start hooks: {err}"),
                 )?;
             }
         }

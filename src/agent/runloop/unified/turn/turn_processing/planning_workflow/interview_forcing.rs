@@ -109,7 +109,7 @@ pub(super) fn inject_planning_workflow_interview(
         })
     });
     let args_json = serde_json::to_string(&args).unwrap_or_else(|_| "{}".to_string());
-    let call_id = format!("call_plan_interview_{}", conversation_len);
+    let call_id = format!("call_plan_interview_{conversation_len}");
     let call = uni::ToolCall::function(call_id, tools::REQUEST_USER_INPUT.to_string(), args_json);
 
     plan_session.mark_interview_shown();

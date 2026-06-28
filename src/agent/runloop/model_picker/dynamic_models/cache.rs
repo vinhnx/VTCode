@@ -137,7 +137,7 @@ impl CachedDynamicModelStore {
     }
 
     fn cache_key(provider: Provider, base_url: &str) -> String {
-        format!("{}::{}", provider, base_url)
+        format!("{provider}::{base_url}")
     }
 }
 

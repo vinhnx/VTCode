@@ -225,14 +225,7 @@ async fn review_prompt(
         transcript.join("\n")
     };
     let mut prompt = format!(
-        "Environment:\n{}\n\nBlock rules:\n{}\n\nAllow exceptions:\n{}\n\nTranscript:\n{}\n\nPending tool: {}\nPending action:\n{}\n\n{}",
-        environment,
-        block_rules,
-        allow_exceptions,
-        transcript,
-        tool_name,
-        pending_action,
-        response_format,
+        "Environment:\n{environment}\n\nBlock rules:\n{block_rules}\n\nAllow exceptions:\n{allow_exceptions}\n\nTranscript:\n{transcript}\n\nPending tool: {tool_name}\nPending action:\n{pending_action}\n\n{response_format}",
     );
     if let Some(script_context) = script_context {
         prompt.push_str("\n\nEarlier in-session script content related to this action:\n");
@@ -392,7 +385,7 @@ fn normalized_tool_payload(
             )
         }
         vtcode_core::permissions::PermissionRequestKind::Mcp { server, tool } => {
-            format!("mcp {}::{}", server, tool)
+            format!("mcp {server}::{tool}")
         }
         vtcode_core::permissions::PermissionRequestKind::Other => {
             let rendered_args = tool_args

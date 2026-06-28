@@ -30,7 +30,7 @@ async fn list_files_pagination_and_default_response_format() {
 
     let registry = ToolRegistry::new(ws.clone()).await;
     registry.allow_all_tools().await.unwrap_or_else(|err| {
-        panic!("tool policy should be available for test: {}", err);
+        panic!("tool policy should be available for test: {err}");
     });
     let out = registry
         .execute_tool(

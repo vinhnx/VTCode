@@ -98,7 +98,7 @@ async fn handle_delete(startup: &StartupContext, id: &str) -> Result<()> {
     ensure_scheduler_enabled(startup)?;
     let store = DurableTaskStore::new_default()?;
     let Some(task) = store.delete(id)? else {
-        bail!("No scheduled task with id '{}'", id);
+        bail!("No scheduled task with id '{id}'");
     };
     println!("Deleted scheduled task {} ({})", task.id, task.name);
     Ok(())

@@ -32,10 +32,10 @@ pub(crate) fn strip_dsml_markup(text: &str) -> String {
 }
 
 pub(super) fn parse_dsml_tool_call(text: &str) -> Option<(String, Value)> {
-    let invoke_open = format!("{}invoke name=\"", DSML_TAG_PREFIX);
-    let invoke_close = format!("{}invoke>", DSML_CLOSE_PREFIX);
-    let param_open = format!("{}parameter", DSML_TAG_PREFIX);
-    let param_close = format!("{}parameter>", DSML_CLOSE_PREFIX);
+    let invoke_open = format!("{DSML_TAG_PREFIX}invoke name=\"");
+    let invoke_close = format!("{DSML_CLOSE_PREFIX}invoke>");
+    let param_open = format!("{DSML_TAG_PREFIX}parameter");
+    let param_close = format!("{DSML_CLOSE_PREFIX}parameter>");
 
     let invoke_start = text.find(&invoke_open)?;
     let after_prefix = &text[invoke_start + invoke_open.len()..];

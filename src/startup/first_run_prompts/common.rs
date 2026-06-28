@@ -10,7 +10,7 @@ use vtcode_ui::tui::ui::interactive_list::{
 pub(super) struct SetupInterrupted;
 
 pub(super) fn prompt_with_placeholder(prompt: &str) -> Result<String> {
-    print!("{}: ", prompt);
+    print!("{prompt}: ");
     io::stdout()
         .flush()
         .context("Failed to flush prompt to stdout")?;

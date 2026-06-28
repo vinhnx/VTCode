@@ -35,7 +35,7 @@ pub async fn handle_create_project_command(
     // Create vtcode configuration
     create_vtcode_config(&project_path)?;
 
-    println!("Project '{}' created successfully!", name);
+    println!("Project '{name}' created successfully!");
 
     Ok(())
 }
@@ -63,7 +63,7 @@ This is a new project created with VT Code.
 ## Features
 
 {}"#,
-        features.iter().map(|f| format!("- {}\n", f)).join("")
+        features.iter().map(|f| format!("- {f}\n")).join("")
     );
 
     write_file_with_context_sync(

@@ -138,10 +138,7 @@ pub(crate) fn prompt_reasoning_plain(
         renderer.line(
             MessageStyle::Info,
             &format!(
-                "Step 2 – reasoning effort (current: {}). Choose {}{} or type 'skip' if the model does not expose configurable reasoning.",
-                current,
-                prefix,
-                reasoning_suffix
+                "Step 2 – reasoning effort (current: {current}). Choose {prefix}{reasoning_suffix} or type 'skip' if the model does not expose configurable reasoning."
             ),
         )?;
     } else if let Some(alternative) = selection.reasoning_off_model.clone() {

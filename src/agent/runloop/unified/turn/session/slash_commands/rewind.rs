@@ -95,7 +95,7 @@ pub(crate) async fn handle_rewind_latest(
         Err(err) => {
             ctx.renderer.line(
                 MessageStyle::Error,
-                &format!("Failed to list checkpoints: {}", err),
+                &format!("Failed to list checkpoints: {err}"),
             )?;
             return Ok(SlashCommandControl::Continue);
         }
@@ -170,11 +170,11 @@ async fn restore_rewind_from_checkpoint(
         ),
         Ok(None) => renderer.line(
             MessageStyle::Error,
-            &format!("No checkpoint found for turn {}", turn),
+            &format!("No checkpoint found for turn {turn}"),
         ),
         Err(err) => renderer.line(
             MessageStyle::Error,
-            &format!("Failed to restore checkpoint for turn {}: {}", turn, err),
+            &format!("Failed to restore checkpoint for turn {turn}: {err}"),
         ),
     }
 }
@@ -225,16 +225,13 @@ fn render_rewind_restore_success(
     if scope.includes_code() {
         renderer.line(
             MessageStyle::Info,
-            &format!("Applied code changes from turn {}", turn),
+            &format!("Applied code changes from turn {turn}"),
         )?;
     }
 
     renderer.line(
         MessageStyle::Info,
-        &format!(
-            "Successfully rewound to turn {} with scope {:?}",
-            turn, scope
-        ),
+        &format!("Successfully rewound to turn {turn} with scope {scope:?}"),
     )?;
     Ok(())
 }
@@ -246,7 +243,7 @@ fn render_rewind_cli_guidance(
 ) -> Result<()> {
     renderer.line(
         MessageStyle::Info,
-        &format!("Rewinding to turn {} with scope {:?}...", turn, scope),
+        &format!("Rewinding to turn {turn} with scope {scope:?}..."),
     )?;
     renderer.line(
         MessageStyle::Info,

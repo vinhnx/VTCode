@@ -151,7 +151,7 @@ fn should_show_loading_ui_for_tool_call(name: &str, args: &Value) -> bool {
 }
 
 fn set_tool_execution_status(handle: &vtcode_ui::tui::app::InlineHandle, tool_name: &str) {
-    let left = format!("Running {}...", tool_name);
+    let left = format!("Running {tool_name}...");
     handle.set_input_status(Some(left), None);
 }
 
@@ -258,7 +258,7 @@ async fn execute_with_cache_and_streaming_inner(
         progress_reporter.set_total(100).await;
         progress_reporter.set_progress(0).await;
         progress_reporter
-            .set_message(format!("Starting {}...", name))
+            .set_message(format!("Starting {name}..."))
             .await;
         Some(progress_reporter)
     } else {

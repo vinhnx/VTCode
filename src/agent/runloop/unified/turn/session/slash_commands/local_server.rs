@@ -14,7 +14,7 @@ const LOCAL_PROVIDER_PREFIX: &str = "local.provider.";
 const LOCAL_DETAIL_BACK: &str = "local.detail.back";
 
 fn action_key(action: &str) -> String {
-    format!("{}{}", LOCAL_ACTION_PREFIX, action)
+    format!("{LOCAL_ACTION_PREFIX}{action}")
 }
 
 fn provider_key(provider: &LocalProvider) -> String {
@@ -178,7 +178,7 @@ fn show_local_providers_modal(ctx: &mut SlashCommandContext<'_>, statuses: &[Loc
                 let model_text = if model_count == 1 {
                     "1 model".to_string()
                 } else {
-                    format!("{} models", model_count)
+                    format!("{model_count} models")
                 };
                 (
                     "Running".to_string(),
@@ -248,7 +248,7 @@ fn show_local_actions_modal(
         let ver = status
             .version
             .as_deref()
-            .map(|v| format!(" v{}", v))
+            .map(|v| format!(" v{v}"))
             .unwrap_or_default();
         let mut header = format!("{} | {}{}", status.endpoint, model_info, ver);
         if !status.running_models.is_empty() {
@@ -368,10 +368,7 @@ fn resolve_provider<'a>(
         None => {
             ctx.renderer.line(
                 MessageStyle::Error,
-                &format!(
-                    "Unknown provider '{}'. Use: ollama, lmstudio, llamacpp",
-                    key
-                ),
+                &format!("Unknown provider '{key}'. Use: ollama, lmstudio, llamacpp"),
             )?;
             Ok(None)
         }
@@ -487,7 +484,7 @@ fn render_provider_status_text(
         let ver = status
             .version
             .as_deref()
-            .map(|v| format!(" v{}", v))
+            .map(|v| format!(" v{v}"))
             .unwrap_or_default();
         ctx.renderer.line(
             MessageStyle::Info,
@@ -527,7 +524,7 @@ fn render_provider_config_text(
         .line(MessageStyle::Info, &format!("{}:", provider.display_name()))?;
     for line in format_provider_config(provider) {
         ctx.renderer
-            .line(MessageStyle::Info, &format!("  {}", line))?;
+            .line(MessageStyle::Info, &format!("  {line}"))?;
     }
     Ok(())
 }
@@ -542,7 +539,7 @@ fn format_provider_status(status: &LocalServerStatus) -> Vec<String> {
     if status.running {
         lines.push(format!("Endpoint:  {}", status.endpoint));
         if let Some(ver) = &status.version {
-            lines.push(format!("Version:   {}", ver));
+            lines.push(format!("Version:   {ver}"));
         }
         lines.push(format!(
             "Models:    {}",
@@ -558,7 +555,7 @@ fn format_provider_status(status: &LocalServerStatus) -> Vec<String> {
     } else {
         lines.push("Status:    Not running".to_string());
         if let Some(err) = &status.error {
-            lines.push(format!("Reason:    {}", err));
+            lines.push(format!("Reason:    {err}"));
         }
         lines.push(String::new());
         lines.push(format!(

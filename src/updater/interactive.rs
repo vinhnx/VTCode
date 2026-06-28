@@ -112,7 +112,7 @@ fn format_release_notes_text(version: &semver::Version, highlights: &[String]) -
     let mut lines = vec![format!("VT Code v{}", version)];
     lines.push(String::new());
     for item in highlights {
-        lines.push(format!(" {}", item));
+        lines.push(format!(" {item}"));
     }
     lines.join("\n")
 }
@@ -255,19 +255,19 @@ pub(crate) async fn execute_inline_update(
             queue_runtime_relaunch(relaunch_preference(notice));
             renderer.line(
                 MessageStyle::Info,
-                &format!("Update installed (v{}). Restarting VT Code...", version),
+                &format!("Update installed (v{version}). Restarting VT Code..."),
             )?;
             Ok(InlineUpdateOutcome::RestartRequested)
         }
         Ok(InstallOutcome::UpToDate(version)) => {
             renderer.line(
                 MessageStyle::Info,
-                &format!("Already on the latest version (v{}).", version),
+                &format!("Already on the latest version (v{version})."),
             )?;
             Ok(InlineUpdateOutcome::Continue)
         }
         Err(err) => {
-            renderer.line(MessageStyle::Error, &format!("Failed to update: {}", err))?;
+            renderer.line(MessageStyle::Error, &format!("Failed to update: {err}"))?;
             Ok(InlineUpdateOutcome::Continue)
         }
     }
@@ -315,7 +315,7 @@ fn execute_managed_update(
         Err(err) => {
             renderer.line(
                 MessageStyle::Error,
-                &format!("Failed to run update command: {}", err),
+                &format!("Failed to run update command: {err}"),
             )?;
             Ok(InlineUpdateOutcome::Continue)
         }

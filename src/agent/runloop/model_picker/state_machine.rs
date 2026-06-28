@@ -79,8 +79,7 @@ impl ModelPickerState {
                 renderer.line(
                     MessageStyle::Info,
                     &format!(
-                        "Interactive reasoning selector unavailable ({}). Falling back to manual input.",
-                        err
+                        "Interactive reasoning selector unavailable ({err}). Falling back to manual input."
                     ),
                 )?;
                 prompt_reasoning_plain(renderer, selection, self.current_reasoning)?;
@@ -132,8 +131,7 @@ impl ModelPickerState {
                 renderer.line(
                     MessageStyle::Info,
                     &format!(
-                        "Interactive service tier selector unavailable ({}). Falling back to manual input.",
-                        err
+                        "Interactive service tier selector unavailable ({err}). Falling back to manual input."
                     ),
                 )?;
                 prompt_service_tier_plain(renderer, selection, self.current_service_tier)?;
@@ -341,10 +339,7 @@ impl ModelPickerState {
         let progress = self.process_model_selection(renderer, new_selection)?;
         renderer.line(
             MessageStyle::Info,
-            &format!(
-                "Reasoning disabled by switching to {} ({}).",
-                alt_display, alt_id
-            ),
+            &format!("Reasoning disabled by switching to {alt_display} ({alt_id})."),
         )?;
         Ok(progress)
     }
@@ -559,7 +554,7 @@ impl ModelPickerState {
                     renderer.hyperlink_line(MessageStyle::Response, &auth_url)?;
                     renderer.line(
                         MessageStyle::Error,
-                        &format!("Failed to open browser automatically: {}", err),
+                        &format!("Failed to open browser automatically: {err}"),
                     )?;
                     renderer.line(
                         MessageStyle::Info,

@@ -19,12 +19,9 @@ pub async fn handle_revert_command(
     match manager.restore_snapshot(turn, scope).await? {
         Some(restored) => {
             if scope.includes_code() {
-                println!("Applied code changes from checkpoint turn {}.", turn);
+                println!("Applied code changes from checkpoint turn {turn}.");
             } else {
-                println!(
-                    "Loaded checkpoint turn {} without applying code changes.",
-                    turn
-                );
+                println!("Loaded checkpoint turn {turn} without applying code changes.");
             }
             if scope.includes_conversation() {
                 println!(
@@ -34,7 +31,7 @@ pub async fn handle_revert_command(
             }
         }
         None => {
-            println!("Snapshot not found for turn {}", turn);
+            println!("Snapshot not found for turn {turn}");
         }
     }
     Ok(())

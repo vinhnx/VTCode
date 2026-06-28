@@ -63,8 +63,8 @@ fn render_session_log_markdown(
 ) -> String {
     let mut markdown = String::new();
     markdown.push_str("# VT Code Session Log\n\n");
-    markdown.push_str(&format!("- Exported at: {}\n", exported_at));
-    markdown.push_str(&format!("- Model: `{}`\n", model));
+    markdown.push_str(&format!("- Exported at: {exported_at}\n"));
+    markdown.push_str(&format!("- Model: `{model}`\n"));
     markdown.push_str(&format!(
         "- Workspace: `{}`\n",
         redact_sensitive_text(&workspace.display().to_string())
@@ -103,7 +103,7 @@ fn render_session_log_markdown(
                     .and_then(Value::as_str)
                     .map(canonical_tool_name)
                     .unwrap_or_else(|| "unknown".to_string());
-                markdown.push_str(&format!("- `{}`: `{}`\n", id, function_name));
+                markdown.push_str(&format!("- `{id}`: `{function_name}`\n"));
 
                 if let Some(arguments) = function.and_then(|value| value.get("arguments")) {
                     let arguments_text = serde_json::to_string_pretty(arguments)
@@ -117,7 +117,7 @@ fn render_session_log_markdown(
         }
 
         if let Some(tool_call_id) = message.get("tool_call_id").and_then(Value::as_str) {
-            markdown.push_str(&format!("Tool call id: `{}`\n\n", tool_call_id));
+            markdown.push_str(&format!("Tool call id: `{tool_call_id}`\n\n"));
         }
     }
 
@@ -184,15 +184,15 @@ pub(crate) async fn handle_share_log(
     let json_output_path = ctx
         .config
         .workspace
-        .join(format!("vtcode-session-log-{}.json", timestamp));
+        .join(format!("vtcode-session-log-{timestamp}.json"));
     let markdown_output_path = ctx
         .config
         .workspace
-        .join(format!("vtcode-session-log-{}.md", timestamp));
+        .join(format!("vtcode-session-log-{timestamp}.md"));
     let html_output_path = ctx
         .config
         .workspace
-        .join(format!("vtcode-session-timeline-{}.html", timestamp));
+        .join(format!("vtcode-session-timeline-{timestamp}.html"));
 
     if matches!(
         format,

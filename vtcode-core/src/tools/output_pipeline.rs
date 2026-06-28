@@ -324,7 +324,7 @@ mod tests {
         let mut custom = policy();
         custom.limits.read_head_bytes = 8;
         custom.limits.read_tail_bytes = 4;
-        let input = ToolOutputInput::success_text("c", "t", &"x".repeat(1024));
+        let input = ToolOutputInput::success_text("c", "t", "x".repeat(1024));
         let env = process_tool_output(input, &custom);
 
         assert!(env.truncated.is_some());

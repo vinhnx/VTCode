@@ -191,10 +191,7 @@ fn usage_tips_highlight(tips: &[String]) -> Option<InlineHeaderHighlight> {
         return None;
     }
 
-    let lines = entries
-        .into_iter()
-        .map(|tip| format!("- {}", tip))
-        .collect();
+    let lines = entries.into_iter().map(|tip| format!("- {tip}")).collect();
 
     Some(InlineHeaderHighlight {
         title: "Usage Tips".to_string(),
@@ -210,7 +207,7 @@ fn recommended_actions_highlight(actions: &[String]) -> Option<InlineHeaderHighl
 
     let lines = entries
         .into_iter()
-        .map(|action| format!("- {}", action))
+        .map(|action| format!("- {action}"))
         .collect();
 
     Some(InlineHeaderHighlight {
@@ -227,9 +224,9 @@ fn slash_commands_highlight() -> Option<InlineHeaderHighlight> {
 
     let prefix = ui_constants::WELCOME_SLASH_COMMAND_PREFIX;
     let mut commands: Vec<(String, String)> = vec![
-        (format!("{}{{command}}", prefix), String::new()),
+        (format!("{prefix}{{command}}"), String::new()),
         (
-            format!("{}help", prefix),
+            format!("{prefix}help"),
             find_visible_command("help")
                 .map(|info| info.description.trim().to_string())
                 .unwrap_or_default(),
@@ -267,11 +264,11 @@ fn slash_commands_highlight() -> Option<InlineHeaderHighlight> {
     let mut lines = Vec::with_capacity(10); // Estimate 10 lines for usage tips
 
     if !intro.is_empty() {
-        lines.push(format!("{}{}", indent, intro));
+        lines.push(format!("{indent}{intro}"));
     }
 
     for segment in segments {
-        lines.push(format!("{}- {}", indent, segment));
+        lines.push(format!("{indent}- {segment}"));
     }
 
     Some(InlineHeaderHighlight {
@@ -350,7 +347,7 @@ fn build_prompt_addendum(
         && let Some(summary) = language_summary
     {
         lines.push("### Detected Languages".to_string());
-        lines.push(format!("- {}", summary));
+        lines.push(format!("- {summary}"));
     }
 
     if onboarding_cfg.include_guideline_highlights
@@ -359,7 +356,7 @@ fn build_prompt_addendum(
     {
         lines.push("### Key Guidelines".to_string());
         for item in highlights.iter().take(2) {
-            lines.push(format!("- {}", item));
+            lines.push(format!("- {item}"));
         }
     }
 
@@ -387,7 +384,7 @@ fn push_prompt_usage_tips(lines: &mut Vec<String>, tips: &[String]) {
 
     lines.push("### Usage Tips".to_string());
     for tip in entries {
-        lines.push(format!("- {}", tip));
+        lines.push(format!("- {tip}"));
     }
 }
 
@@ -399,7 +396,7 @@ fn push_prompt_recommended_actions(lines: &mut Vec<String>, actions: &[String]) 
 
     lines.push("### Suggested Next Actions".to_string());
     for action in entries {
-        lines.push(format!("- {}", action));
+        lines.push(format!("- {action}"));
     }
 }
 

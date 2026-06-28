@@ -524,16 +524,15 @@ pub(crate) async fn handle_login_command(
             let session = complete_openai_login_with_cli_fallback(prepared, started).await?;
             println!("OpenAI ChatGPT authentication complete.");
             if let Some(email) = session.email.as_deref() {
-                println!("Account: {}", email);
+                println!("Account: {email}");
             }
             if let Some(plan) = session.plan.as_deref() {
-                println!("Plan: {}", plan);
+                println!("Plan: {plan}");
             }
             Ok(())
         }
         Err(()) => Err(anyhow!(
-            "Authentication is not supported for provider '{}'. Supported providers: openai, openrouter, copilot, codex",
-            provider
+            "Authentication is not supported for provider '{provider}'. Supported providers: openai, openrouter, copilot, codex"
         )),
     }
 }
@@ -591,8 +590,7 @@ pub(crate) async fn handle_logout_command(
             Ok(())
         }
         Err(()) => Err(anyhow!(
-            "Authentication is not supported for provider '{}'. Supported providers: openai, openrouter, copilot, codex",
-            provider
+            "Authentication is not supported for provider '{provider}'. Supported providers: openai, openrouter, copilot, codex"
         )),
     }
 }
@@ -626,8 +624,7 @@ pub(crate) async fn handle_show_auth_command(
             Ok(OAuthProvider::OpenAi) => render_openai_auth_status(openai_auth_status(vt_cfg)?),
             Err(()) => {
                 return Err(anyhow!(
-                    "Authentication is not supported for provider '{}'. Supported providers: openai, openrouter, copilot, codex",
-                    value
+                    "Authentication is not supported for provider '{value}'. Supported providers: openai, openrouter, copilot, codex"
                 ));
             }
         },
@@ -752,7 +749,7 @@ pub(crate) fn open_browser_or_print_url(url: &str) -> Result<()> {
     }
 
     if let Err(err) = open_external_url(url) {
-        eprintln!("warning: {}", err);
+        eprintln!("warning: {err}");
     }
 
     Ok(())
@@ -859,7 +856,7 @@ fn confirm_cli_browser_open(url: &str) -> Result<bool> {
     }
 
     for line in prompt.cli_lines() {
-        println!("{}", line);
+        println!("{line}");
     }
 
     print!("Open in browser now? [y/N]: ");
@@ -882,7 +879,7 @@ fn render_openrouter_auth_status(status: AuthStatus) {
         } => {
             println!("OpenRouter: authenticated (OAuth)");
             if let Some(label) = label {
-                println!("  Label: {}", label);
+                println!("  Label: {label}");
             }
             println!("  Token obtained: {}", format_auth_duration(age_seconds));
             if let Some(expires_in) = expires_in {
@@ -908,7 +905,7 @@ fn render_openai_auth_status(status: OpenAIChatGptAuthStatus) {
         } => {
             println!("OpenAI: authenticated (ChatGPT)");
             if let Some(label) = label {
-                println!("  Label: {}", label);
+                println!("  Label: {label}");
             }
             println!("  Session obtained: {}", format_auth_duration(age_seconds));
             if let Some(expires_in) = expires_in {
@@ -938,13 +935,12 @@ fn render_copilot_auth_status(status: CopilotAuthStatus) {
     if let Some(message) = status.message.as_deref()
         && !message.trim().is_empty()
     {
-        println!("  Details: {}", message);
+        println!("  Details: {message}");
     }
 
     if matches!(status.kind, CopilotAuthStatusKind::ServerUnavailable) {
         println!(
-            "  Help: install `copilot` or configure `[auth.copilot].command`; see {}",
-            COPILOT_AUTH_DOC_PATH
+            "  Help: install `copilot` or configure `[auth.copilot].command`; see {COPILOT_AUTH_DOC_PATH}"
         );
     }
 }
@@ -952,22 +948,22 @@ fn render_copilot_auth_status(status: CopilotAuthStatus) {
 fn print_copilot_auth_event(event: CopilotAuthEvent) -> Result<()> {
     match event {
         CopilotAuthEvent::VerificationCode { url, user_code } => {
-            println!("GitHub device code (copy this): {}", user_code);
+            println!("GitHub device code (copy this): {user_code}");
             vtcode_commons::ansi_codes::notify_attention(
                 true,
                 Some(&format!("GitHub device code: {user_code}")),
             );
             println!("Open this URL to continue:");
-            println!("{}", url);
+            println!("{url}");
         }
-        CopilotAuthEvent::Progress { message } => println!("{}", message),
+        CopilotAuthEvent::Progress { message } => println!("{message}"),
         CopilotAuthEvent::Success { account } => {
             if let Some(account) = account {
-                println!("GitHub Copilot account: {}", account);
+                println!("GitHub Copilot account: {account}");
             }
         }
         CopilotAuthEvent::Failure { message } => {
-            eprintln!("GitHub Copilot auth failed: {}", message)
+            eprintln!("GitHub Copilot auth failed: {message}")
         }
     }
 

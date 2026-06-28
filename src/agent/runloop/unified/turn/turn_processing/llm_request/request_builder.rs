@@ -255,7 +255,7 @@ async fn build_prompt_output(
             "\n[Recovery Mode]\n- tools_disabled: true\n- answer_mode: summarize only from evidence already collected in this turn\n- if evidence is incomplete, say so explicitly\n- do_not_request_more_tools: true\n- keep_response_brief: true"
         );
         if let Some(reason) = input.turn.recovery_reason.as_deref() {
-            let _ = writeln!(system_prompt, "- recovery_reason: {}", reason);
+            let _ = writeln!(system_prompt, "- recovery_reason: {reason}");
         }
         SessionToolCatalogSnapshot::new(
             ctx.tool_catalog.current_version(),

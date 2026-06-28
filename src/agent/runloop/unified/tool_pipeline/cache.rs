@@ -53,7 +53,7 @@ pub(super) fn create_enhanced_cache_key(
         cache_target.to_string()
     } else {
         // Relative path - prefix with workspace to ensure uniqueness
-        format!("{}/{}", workspace, cache_target)
+        format!("{workspace}/{cache_target}")
     };
 
     ToolCacheKey::from_json(tool_name, args, &enhanced_target)

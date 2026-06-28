@@ -1806,14 +1806,14 @@ fn tool_exceeded_budget_response(
 fn tool_failed_response(tool_name: &str, error: &str) -> CopilotToolCallResponse {
     CopilotToolCallResponse::Failure(CopilotToolCallFailure {
         text_result_for_llm: format!("VT Code failed to execute the tool `{tool_name}`."),
-        error: format!("tool '{tool_name}' failed: {}", error),
+        error: format!("tool '{tool_name}' failed: {error}"),
     })
 }
 
 fn tool_timed_out_response(tool_name: &str, error: &str) -> CopilotToolCallResponse {
     CopilotToolCallResponse::Failure(CopilotToolCallFailure {
         text_result_for_llm: format!("VT Code timed out while executing the tool `{tool_name}`."),
-        error: format!("tool '{tool_name}' timed out: {}", error),
+        error: format!("tool '{tool_name}' timed out: {error}"),
     })
 }
 

@@ -81,10 +81,10 @@ pub(super) fn no_config_source_label(workspace: &Path) -> String {
 
 pub(super) fn add_array_item(root: &mut TomlValue, path: &str) -> Result<()> {
     let node =
-        get_node_mut(root, path).ok_or_else(|| anyhow!("Array path '{}' was not found", path))?;
+        get_node_mut(root, path).ok_or_else(|| anyhow!("Array path '{path}' was not found"))?;
 
     let TomlValue::Array(values) = node else {
-        bail!("Path '{}' is not an array", path);
+        bail!("Path '{path}' is not an array");
     };
 
     let value = default_array_item(path, values);
@@ -120,7 +120,7 @@ fn default_custom_provider_item(existing: &[TomlValue]) -> TomlValue {
 
     let mut suffix = existing.len().max(1);
     let name = loop {
-        let candidate = format!("custom-provider-{}", suffix);
+        let candidate = format!("custom-provider-{suffix}");
         if !used_names.contains(&candidate) {
             break candidate;
         }
@@ -131,7 +131,7 @@ fn default_custom_provider_item(existing: &[TomlValue]) -> TomlValue {
     table.insert("name".to_string(), TomlValue::String(name));
     table.insert(
         "display_name".to_string(),
-        TomlValue::String(format!("Custom Provider {}", suffix)),
+        TomlValue::String(format!("Custom Provider {suffix}")),
     );
     table.insert(
         "base_url".to_string(),
@@ -144,14 +144,14 @@ fn default_custom_provider_item(existing: &[TomlValue]) -> TomlValue {
 
 pub(super) fn pop_array_item(root: &mut TomlValue, path: &str) -> Result<()> {
     let node =
-        get_node_mut(root, path).ok_or_else(|| anyhow!("Array path '{}' was not found", path))?;
+        get_node_mut(root, path).ok_or_else(|| anyhow!("Array path '{path}' was not found"))?;
 
     let TomlValue::Array(values) = node else {
-        bail!("Path '{}' is not an array", path);
+        bail!("Path '{path}' is not an array");
     };
 
     if values.pop().is_none() {
-        bail!("Array '{}' is already empty", path);
+        bail!("Array '{path}' is already empty");
     }
 
     Ok(())
@@ -174,7 +174,7 @@ pub(super) fn apply_scalar_operation(
     match node {
         TomlValue::Boolean(value) => {
             if operation != ScalarOperation::Toggle {
-                bail!("{} supports toggle only", path);
+                bail!("{path} supports toggle only");
             }
             *value = !*value;
             Ok(())
@@ -183,7 +183,7 @@ pub(super) fn apply_scalar_operation(
             match operation {
                 ScalarOperation::Increment => *value = value.saturating_add(1),
                 ScalarOperation::Decrement => *value = value.saturating_sub(1),
-                _ => bail!("{} supports numeric increment/decrement", path),
+                _ => bail!("{path} supports numeric increment/decrement"),
             }
             Ok(())
         }
@@ -191,7 +191,7 @@ pub(super) fn apply_scalar_operation(
             match operation {
                 ScalarOperation::Increment => *value += 0.1,
                 ScalarOperation::Decrement => *value -= 0.1,
-                _ => bail!("{} supports numeric increment/decrement", path),
+                _ => bail!("{path} supports numeric increment/decrement"),
             }
             Ok(())
         }
@@ -200,13 +200,13 @@ pub(super) fn apply_scalar_operation(
                 .clone()
                 .unwrap_or_else(|| resolve_cycle_options(None, path, current));
             if options.is_empty() {
-                bail!("{} has no predefined values to cycle", path);
+                bail!("{path} has no predefined values to cycle");
             }
             let next = cycle_string_option(current, &options, operation)?;
             *current = next;
             Ok(())
         }
-        _ => bail!("{} is not a scalar setting", path),
+        _ => bail!("{path} is not a scalar setting"),
     }
 }
 
@@ -219,7 +219,7 @@ fn apply_missing_scalar_operation(
         ScalarOperation::CycleNext | ScalarOperation::CyclePrev => {
             let mut options = resolve_cycle_options(Some(root), path, "");
             if options.is_empty() {
-                bail!("Settings path '{}' was not found", path);
+                bail!("Settings path '{path}' was not found");
             }
             options.sort();
             options.dedup();
@@ -228,18 +228,18 @@ fn apply_missing_scalar_operation(
                 ScalarOperation::CyclePrev => options.last().cloned(),
                 _ => None,
             }
-            .ok_or_else(|| anyhow!("{} has no predefined values to cycle", path))?;
+            .ok_or_else(|| anyhow!("{path} has no predefined values to cycle"))?;
             insert_missing_string_value(root, path, value)?;
             Ok(())
         }
-        _ => bail!("Settings path '{}' was not found", path),
+        _ => bail!("Settings path '{path}' was not found"),
     }
 }
 
 fn insert_missing_string_value(root: &mut TomlValue, path: &str, value: String) -> Result<()> {
     let tokens = parse_path_tokens(path)?;
     if tokens.is_empty() {
-        bail!("Settings path '{}' was not found", path);
+        bail!("Settings path '{path}' was not found");
     }
 
     let mut current = root;
@@ -247,26 +247,26 @@ fn insert_missing_string_value(root: &mut TomlValue, path: &str, value: String) 
         match token {
             PathToken::Key(key) => {
                 let TomlValue::Table(table) = current else {
-                    bail!("Parent path for '{}' is not a table", path);
+                    bail!("Parent path for '{path}' is not a table");
                 };
                 current = table
                     .entry(key.clone())
                     .or_insert_with(|| TomlValue::Table(toml::map::Map::new()));
             }
-            PathToken::Index(_) => bail!("Cannot create missing array path '{}'", path),
+            PathToken::Index(_) => bail!("Cannot create missing array path '{path}'"),
         }
     }
 
     match tokens.last() {
         Some(PathToken::Key(key)) => {
             let TomlValue::Table(table) = current else {
-                bail!("Parent path for '{}' is not a table", path);
+                bail!("Parent path for '{path}' is not a table");
             };
             table.insert(key.clone(), TomlValue::String(value));
             Ok(())
         }
-        Some(PathToken::Index(_)) => bail!("Cannot create missing array path '{}'", path),
-        None => bail!("Settings path '{}' was not found", path),
+        Some(PathToken::Index(_)) => bail!("Cannot create missing array path '{path}'"),
+        None => bail!("Settings path '{path}' was not found"),
     }
 }
 
@@ -455,7 +455,7 @@ fn render_table_with_comments(
         && !path.is_empty()
     {
         write_section_comments(output, path);
-        writeln!(output, "[{}]", path).context("Failed to render table header")?;
+        writeln!(output, "[{path}]").context("Failed to render table header")?;
     }
 
     let mut scalar_keys = Vec::new();
@@ -537,7 +537,7 @@ fn write_doc_comments(output: &mut String, doc: &FieldDoc, include_type_and_opti
 
 fn push_comment_lines(output: &mut String, description: &str) {
     for line in wrap_comment(description, 100) {
-        let _ = writeln!(output, "# {}", line);
+        let _ = writeln!(output, "# {line}");
     }
 }
 
@@ -569,7 +569,7 @@ fn wrap_comment(text: &str, max_width: usize) -> Vec<String> {
 
 fn build_path(prefix: Option<&str>, key: &str) -> String {
     match prefix {
-        Some(prefix) if !prefix.is_empty() => format!("{}.{}", prefix, key),
+        Some(prefix) if !prefix.is_empty() => format!("{prefix}.{key}"),
         _ => key.to_string(),
     }
 }

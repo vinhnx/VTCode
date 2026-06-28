@@ -215,7 +215,7 @@ impl ProgressInfo {
 fn format_eta(duration: Duration) -> String {
     let secs = duration.as_secs();
     if secs < 60 {
-        format!("{}s", secs)
+        format!("{secs}s")
     } else if secs < 3600 {
         format!("{}m", (secs as f64 / 60.0).ceil().max(0.0) as u64)
     } else {
@@ -224,7 +224,7 @@ fn format_eta(duration: Duration) -> String {
         if minutes >= 60 {
             format!("{}h", hours + 1)
         } else {
-            format!("{}h {}m", hours, minutes)
+            format!("{hours}h {minutes}m")
         }
     }
 }
@@ -252,10 +252,7 @@ pub(crate) fn spawn_elapsed_time_updater(
             };
 
             reporter
-                .set_message(format!(
-                    "Running {}... ({} elapsed)",
-                    task_name, duration_str
-                ))
+                .set_message(format!("Running {task_name}... ({duration_str} elapsed)"))
                 .await;
         }
     })

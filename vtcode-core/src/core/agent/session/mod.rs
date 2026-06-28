@@ -409,9 +409,16 @@ impl AgentSessionState {
     /// or removed outside of the standard push methods.
     #[inline]
     pub fn adjust_token_count(&mut self, delta: isize) {
-        self.cached_total_tokens = (self.cached_total_tokens as isize)
-            .saturating_add(delta)
-            .max(0) as usize;
+        if delta >= 0 {
+            // `delta >= 0` is checked above, so the conversion is infallible
+            self.cached_total_tokens = self
+                .cached_total_tokens
+                .saturating_add(usize::try_from(delta).unwrap());
+        } else {
+            self.cached_total_tokens = self
+                .cached_total_tokens
+                .saturating_sub(delta.unsigned_abs());
+        }
     }
 
     /// Pre-flight check: does the assembled prompt fit within the context window?

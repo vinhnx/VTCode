@@ -117,7 +117,7 @@ impl AcpClientV2Builder {
         let http_client = HttpClient::builder()
             .timeout(self.timeout)
             .build()
-            .map_err(|e| AcpError::ConfigError(format!("Failed to create HTTP client: {}", e)))?;
+            .map_err(|e| AcpError::ConfigError(format!("Failed to create HTTP client: {e}")))?;
 
         Ok(AcpClientV2 {
             http_client,
@@ -198,7 +198,7 @@ impl AcpClientV2 {
         let response = req_builder
             .send()
             .await
-            .map_err(|e| AcpError::NetworkError(format!("Request failed: {}", e)))?;
+            .map_err(|e| AcpError::NetworkError(format!("Request failed: {e}")))?;
 
         let status = response.status();
 
@@ -211,9 +211,8 @@ impl AcpClientV2 {
 
                 trace!(body_len = body.len(), "Received JSON-RPC response");
 
-                let rpc_response: JsonRpcResponse = serde_json::from_str(&body).map_err(|e| {
-                    AcpError::SerializationError(format!("Invalid response: {}", e))
-                })?;
+                let rpc_response: JsonRpcResponse = serde_json::from_str(&body)
+                    .map_err(|e| AcpError::SerializationError(format!("Invalid response: {e}")))?;
 
                 if let Some(error) = rpc_response.error {
                     return Err(AcpError::RemoteError {
@@ -225,7 +224,7 @@ impl AcpClientV2 {
 
                 let result = rpc_response.result.unwrap_or(Value::Null);
                 serde_json::from_value(result)
-                    .map_err(|e| AcpError::SerializationError(format!("Result parse error: {}", e)))
+                    .map_err(|e| AcpError::SerializationError(format!("Result parse error: {e}")))
             }
 
             StatusCode::UNAUTHORIZED => Err(AcpError::RemoteError {

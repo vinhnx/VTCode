@@ -225,7 +225,7 @@ pub(super) fn generate_session_hash(session_id: Option<&str>) -> String {
     let result = hasher.finalize();
     // Convert to hex string manually
     result.iter().fold(String::new(), |mut output, b| {
-        let _ = std::fmt::write(&mut output, format_args!("{:02x}", b));
+        let _ = std::fmt::write(&mut output, format_args!("{b:02x}"));
         output
     })
 }
@@ -249,7 +249,7 @@ fn generate_call_id() -> String {
     result[..12]
         .iter()
         .fold(String::with_capacity(24), |mut output, b| {
-            let _ = std::fmt::write(&mut output, format_args!("{:02x}", b));
+            let _ = std::fmt::write(&mut output, format_args!("{b:02x}"));
             output
         })
 }
@@ -281,7 +281,7 @@ pub(crate) fn spool_large_output(
 
     // Generate unique call ID
     let call_id = generate_call_id();
-    let filename = format!("call_{}.output", call_id);
+    let filename = format!("call_{call_id}.output");
     let file_path = session_dir.join(&filename);
 
     // Write content to file
@@ -386,10 +386,8 @@ pub(crate) fn cleanup_old_temp_spools(base_dir: &Path, max_age_secs: u64) -> Res
             Err(_) => continue,
         };
         let modified = metadata.modified().unwrap_or(UNIX_EPOCH);
-        if modified <= cutoff {
-            if fs::remove_dir_all(&path).is_ok() {
-                removed += 1;
-            }
+        if modified <= cutoff && fs::remove_dir_all(&path).is_ok() {
+            removed += 1;
         }
     }
 

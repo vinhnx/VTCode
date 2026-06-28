@@ -111,12 +111,12 @@ pub(super) fn render_theme_list(renderer: &mut AnsiRenderer) -> Result<()> {
         if let Some(label) = theme::theme_label(theme_id) {
             renderer.line(
                 MessageStyle::Info,
-                &format!("  /theme {} – {}", theme_id, label),
+                &format!("  /theme {theme_id} – {label}"),
             )?;
         } else {
             renderer.line(
                 MessageStyle::Info,
-                &format!("  /theme {} – {}", theme_id, theme_id),
+                &format!("  /theme {theme_id} – {theme_id}"),
             )?;
         }
     }
@@ -158,8 +158,7 @@ pub(super) async fn render_help(
             renderer.line(
                 MessageStyle::Error,
                 &format!(
-                    "Unknown command '{}'. Use /help without arguments to see all commands.",
-                    cmd_name
+                    "Unknown command '{cmd_name}'. Use /help without arguments to see all commands."
                 ),
             )?;
         }

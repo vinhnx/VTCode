@@ -135,7 +135,7 @@ pub(super) async fn fetch_latest_release_info(timeout_secs: u64) -> Result<Updat
 
     let version_str = tag_name.trim_start_matches('v');
     let version = Version::parse(version_str)
-        .with_context(|| format!("Invalid version in GitHub release: {}", tag_name))?;
+        .with_context(|| format!("Invalid version in GitHub release: {tag_name}"))?;
 
     Ok(UpdateInfo {
         version,
@@ -217,10 +217,7 @@ async fn fetch_latest_prerelease_info(
 }
 
 pub(super) async fn list_versions(limit: usize, timeout_secs: u64) -> Result<Vec<VersionInfo>> {
-    let url = format!(
-        "https://api.github.com/repos/{REPO_SLUG}/releases?per_page={}",
-        limit
-    );
+    let url = format!("https://api.github.com/repos/{REPO_SLUG}/releases?per_page={limit}");
     let timeout = effective_timeout(timeout_secs);
 
     let json = try_fetch_json_with_auth_fallback(&url, timeout).await?;

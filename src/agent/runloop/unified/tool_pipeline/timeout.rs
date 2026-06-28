@@ -96,7 +96,7 @@ pub(super) fn spawn_timeout_warning_task(
                     .saturating_sub(Duration::from_secs(elapsed_secs))
                     .as_secs();
                 if let Some(progress_reporter) = progress_reporter {
-                    let wait_subject = format!("Tool '{}'", tool_name);
+                    let wait_subject = format!("Tool '{tool_name}'");
                     progress_reporter
                         .set_message(wait_timeout_warning_message(
                             &wait_subject,

@@ -29,7 +29,7 @@ pub async fn handle_skills_validate_all(options: &SkillsCommandOptions) -> Resul
             }
         }
         Err(err) => {
-            println!(" Failed to generate validation report: {}", err);
+            println!(" Failed to generate validation report: {err}");
             return Err(err);
         }
     }

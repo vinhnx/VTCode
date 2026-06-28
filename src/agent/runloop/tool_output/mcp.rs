@@ -129,7 +129,7 @@ pub(crate) fn render_generic_output(renderer: &mut AnsiRenderer, val: &Value) ->
                 ));
                 if let Some(mime) = item.get("mimeType").and_then(|v| v.as_str()) {
                     block_lines.push(PanelContentLine::new(
-                        format!("type: {}", mime),
+                        format!("type: {mime}"),
                         MessageStyle::ToolDetail,
                     ));
                 }
@@ -137,7 +137,7 @@ pub(crate) fn render_generic_output(renderer: &mut AnsiRenderer, val: &Value) ->
                 && let Some(uri) = item.get("uri").and_then(|v| v.as_str())
             {
                 block_lines.push(PanelContentLine::new(
-                    format!("[resource: {}]", uri),
+                    format!("[resource: {uri}]"),
                     MessageStyle::ToolDetail,
                 ));
             }
@@ -161,7 +161,7 @@ pub(crate) fn render_generic_output(renderer: &mut AnsiRenderer, val: &Value) ->
                 ));
             } else if let Some(num) = value.as_u64() {
                 block_lines.push(PanelContentLine::new(
-                    format!("{}: {}", key, num),
+                    format!("{key}: {num}"),
                     MessageStyle::ToolDetail,
                 ));
             }
@@ -187,7 +187,7 @@ fn collect_text_with_code_blocks(lines: &mut Vec<PanelContentLine>, text: &str) 
                 let lang = line.trim_start().trim_start_matches("```").trim();
                 if !lang.is_empty() {
                     lines.push(PanelContentLine::new(
-                        format!("[{}]", lang),
+                        format!("[{lang}]"),
                         MessageStyle::ToolDetail,
                     ));
                 }
@@ -209,12 +209,12 @@ fn collect_formatted_json_lines(lines: &mut Vec<PanelContentLine>, json: &Value)
                 }
 
                 let entry = match value {
-                    Value::String(s) => format!("{}: {}", key, s),
-                    Value::Number(n) => format!("{}: {}", key, n),
-                    Value::Bool(b) => format!("{}: {}", key, b),
-                    Value::Null => format!("{}: null", key),
+                    Value::String(s) => format!("{key}: {s}"),
+                    Value::Number(n) => format!("{key}: {n}"),
+                    Value::Bool(b) => format!("{key}: {b}"),
+                    Value::Null => format!("{key}: null"),
                     Value::Array(arr) => format!("{}: [] ({} items)", key, arr.len()),
-                    Value::Object(_) => format!("{}: {{...}}", key),
+                    Value::Object(_) => format!("{key}: {{...}}"),
                 };
                 lines.push(PanelContentLine::new(entry, MessageStyle::ToolDetail));
             }

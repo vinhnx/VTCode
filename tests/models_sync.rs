@@ -78,49 +78,36 @@ fn constants_cover_models_json() {
 
             assert!(
                 missing_in_constants.is_empty(),
-                "Missing models in constants.rs for provider '{}': {:?}\n\
-                 Add these models to models::{}::SUPPORTED_MODELS in vtcode-core/src/config/constants.rs",
-                provider_name,
-                missing_in_constants,
-                provider_name
+                "Missing models in constants.rs for provider '{provider_name}': {missing_in_constants:?}\n\
+                 Add these models to models::{provider_name}::SUPPORTED_MODELS in vtcode-core/src/config/constants.rs"
             );
 
             assert!(
                 extra_in_constants.is_empty(),
-                "Extra models in constants.rs for provider '{}' not found in docs/models.json: {:?}\n\
-                 Remove these models from models::{}::SUPPORTED_MODELS or add them to docs/models.json",
-                provider_name,
-                extra_in_constants,
-                provider_name
+                "Extra models in constants.rs for provider '{provider_name}' not found in docs/models.json: {extra_in_constants:?}\n\
+                 Remove these models from models::{provider_name}::SUPPORTED_MODELS or add them to docs/models.json"
             );
 
             // Validate that model_helpers functions work correctly
             for &model_id in constants_models {
                 assert!(
                     model_helpers::is_valid(provider_name, model_id),
-                    "Model validation failed for {}:{} - model_helpers::is_valid should return true",
-                    provider_name,
-                    model_id
+                    "Model validation failed for {provider_name}:{model_id} - model_helpers::is_valid should return true"
                 );
             }
 
             // Validate default model
-            let default_model = model_helpers::default_for(provider_name).unwrap_or_else(|| {
-                panic!("No default model found for provider '{}'", provider_name)
-            });
+            let default_model = model_helpers::default_for(provider_name)
+                .unwrap_or_else(|| panic!("No default model found for provider '{provider_name}'"));
 
             assert!(
                 model_helpers::is_valid(provider_name, default_model),
-                "Default model '{}' for provider '{}' is not in the supported models list",
-                default_model,
-                provider_name
+                "Default model '{default_model}' for provider '{provider_name}' is not in the supported models list"
             );
 
             assert!(
                 constants_models.contains(&default_model),
-                "Default model '{}' for provider '{}' is not in SUPPORTED_MODELS",
-                default_model,
-                provider_name
+                "Default model '{default_model}' for provider '{provider_name}' is not in SUPPORTED_MODELS"
             );
 
             println!(
@@ -143,8 +130,7 @@ fn constants_cover_models_json() {
     for expected in &expected_providers {
         assert!(
             validated_providers.contains(expected),
-            "Expected to validate provider '{}' but it was not found in docs/models.json or was skipped",
-            expected
+            "Expected to validate provider '{expected}' but it was not found in docs/models.json or was skipped"
         );
     }
 

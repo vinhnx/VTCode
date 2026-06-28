@@ -117,7 +117,7 @@ pub(crate) fn show_theme_palette(
         };
         items.push(InlineListItem {
             title: label.to_string(),
-            subtitle: Some(format!("id: {} • {}", id, scheme_hint)),
+            subtitle: Some(format!("id: {id} • {scheme_hint}")),
             badge,
             indent: 0,
             selection: Some(InlineListSelection::Theme(id.to_string())),
@@ -201,8 +201,7 @@ pub(crate) fn show_mode_palette(
         ],
         items,
         Some(InlineListSelection::ConfigAction(format!(
-            "{}{}",
-            MODE_ACTION_PREFIX, canonical_current
+            "{MODE_ACTION_PREFIX}{canonical_current}"
         ))),
         Some(InlineListSearchConfig {
             label: MODE_SEARCH_LABEL.to_string(),
@@ -538,10 +537,8 @@ pub(crate) async fn handle_palette_selection(
                     match theme::set_active_theme(&theme_id) {
                         Ok(()) => {
                             let label = theme::active_theme_label();
-                            renderer.line(
-                                MessageStyle::Info,
-                                &format!("Theme switched to {}", label),
-                            )?;
+                            renderer
+                                .line(MessageStyle::Info, &format!("Theme switched to {label}"))?;
                             sync_runtime_theme_selection(config, vt_cfg.as_mut(), &theme_id);
                             persist_theme_preference(renderer, &config.workspace, &theme_id)
                                 .await?;
@@ -553,7 +550,7 @@ pub(crate) async fn handle_palette_selection(
                         Err(err) => {
                             renderer.line(
                                 MessageStyle::Error,
-                                &format!("Theme '{}' not available: {}", theme_id, err),
+                                &format!("Theme '{theme_id}' not available: {err}"),
                             )?;
                         }
                     }
@@ -694,7 +691,7 @@ pub(crate) fn handle_palette_preview(
                         if let Err(err) = theme::set_active_theme(&theme_id) {
                             renderer.line(
                                 MessageStyle::Error,
-                                &format!("Theme '{}' not available: {}", theme_id, err),
+                                &format!("Theme '{theme_id}' not available: {err}"),
                             )?;
                         } else {
                             let styles = theme::active_styles();
@@ -834,12 +831,12 @@ pub(crate) fn format_duration_label(duration: Duration) -> String {
 
     let mut parts = Vec::new();
     if hours > 0 {
-        parts.push(format!("{}h", hours));
+        parts.push(format!("{hours}h"));
     }
     if minutes > 0 || hours > 0 {
-        parts.push(format!("{}m", minutes));
+        parts.push(format!("{minutes}m"));
     }
-    parts.push(format!("{}s", seconds));
+    parts.push(format!("{seconds}s"));
     parts.join(" ")
 }
 

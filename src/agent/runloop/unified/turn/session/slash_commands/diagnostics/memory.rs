@@ -137,10 +137,8 @@ pub(super) async fn render_memory_status_lines(
         ),
     )?;
     if let Some(warning) = lightweight_route.warning {
-        ctx.renderer.line(
-            MessageStyle::Warning,
-            &format!("Route warning: {}", warning),
-        )?;
+        ctx.renderer
+            .line(MessageStyle::Warning, &format!("Route warning: {warning}"))?;
     }
     if include_config_hint {
         ctx.renderer.line(
@@ -195,10 +193,8 @@ pub(super) async fn render_memory_config_lines(ctx: &mut SlashCommandContext<'_>
         &format!("Effective route: {}", lightweight_route.effective_label),
     )?;
     if let Some(warning) = lightweight_route.warning {
-        ctx.renderer.line(
-            MessageStyle::Warning,
-            &format!("Route warning: {}", warning),
-        )?;
+        ctx.renderer
+            .line(MessageStyle::Warning, &format!("Route warning: {warning}"))?;
     }
 
     Ok(())
@@ -502,7 +498,7 @@ async fn handle_memory_action(
             ctx.renderer
                 .line(MessageStyle::Info, "Rebuilt memory summary and registry.")?;
         }
-        _ => bail!("Unknown memory action: {}", action_key),
+        _ => bail!("Unknown memory action: {action_key}"),
     }
 
     Ok(None)

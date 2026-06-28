@@ -128,8 +128,7 @@ async fn maybe_run_external_turn_complete_notify(
         Ok(())
     } else {
         Err(anyhow::anyhow!(
-            "notify command exited with status {}",
-            status
+            "notify command exited with status {status}"
         ))
     }
 }

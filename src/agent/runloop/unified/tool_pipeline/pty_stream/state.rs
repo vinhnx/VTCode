@@ -361,15 +361,15 @@ fn format_command_header_lines(command: &str) -> Vec<String> {
     let mut lines = Vec::with_capacity(wrapped.len());
     lines.push(format!("• Ran {}", wrapped[0]));
     for segment in wrapped.iter().skip(1) {
-        lines.push(format!("  │ {}", segment));
+        lines.push(format!("  │ {segment}"));
     }
     lines
 }
 
 fn prefix_stream_line(line: &str, is_first_output_line: bool) -> String {
     if is_first_output_line {
-        format!("  └ {}", line)
+        format!("  └ {line}")
     } else {
-        format!("    {}", line)
+        format!("    {line}")
     }
 }

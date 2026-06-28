@@ -249,10 +249,7 @@ fn validate_encoding_invariants(schema: &Value) -> Result<()> {
         && let Some(desc_str) = desc.as_str()
         && desc_str != desc_str.trim()
     {
-        anyhow::bail!(
-            "Tool description has leading/trailing whitespace: '{}'",
-            desc_str
-        );
+        anyhow::bail!("Tool description has leading/trailing whitespace: '{desc_str}'");
     }
 
     Ok(())
@@ -392,9 +389,9 @@ mod tests {
 
         for (tool_name, schema) in &schemas {
             validate_whitespace_consistency(schema)
-                .unwrap_or_else(|e| panic!("Tool {} failed whitespace check: {}", tool_name, e));
+                .unwrap_or_else(|e| panic!("Tool {tool_name} failed whitespace check: {e}"));
             validate_encoding_invariants(schema)
-                .unwrap_or_else(|e| panic!("Tool {} failed encoding check: {}", tool_name, e));
+                .unwrap_or_else(|e| panic!("Tool {tool_name} failed encoding check: {e}"));
         }
     }
 
@@ -405,18 +402,15 @@ mod tests {
         for (tool_name, schema) in &schemas {
             assert!(
                 schema.get("name").is_some(),
-                "Tool {} missing 'name' field",
-                tool_name
+                "Tool {tool_name} missing 'name' field"
             );
             assert!(
                 schema.get("description").is_some(),
-                "Tool {} missing 'description' field",
-                tool_name
+                "Tool {tool_name} missing 'description' field"
             );
             assert!(
                 schema.get("parameters").is_some(),
-                "Tool {} missing 'parameters' field",
-                tool_name
+                "Tool {tool_name} missing 'parameters' field"
             );
         }
     }
@@ -429,13 +423,11 @@ mod tests {
             let params = schema.get("parameters").expect("missing parameters");
             assert!(
                 params.get("type").is_some(),
-                "Tool {} parameters missing 'type'",
-                tool_name
+                "Tool {tool_name} parameters missing 'type'"
             );
             assert!(
                 params.get("properties").is_some(),
-                "Tool {} parameters missing 'properties'",
-                tool_name
+                "Tool {tool_name} parameters missing 'properties'"
             );
         }
     }
@@ -457,12 +449,12 @@ mod ci_tests {
             let schemas = snapshot_current_tool_schemas().unwrap();
 
             for (tool_name, schema) in schemas {
-                let file_path = snapshot_path.join(format!("{}.json", tool_name));
+                let file_path = snapshot_path.join(format!("{tool_name}.json"));
                 let content = serde_json::to_string_pretty(&schema).unwrap();
                 fs::write(file_path, content).unwrap();
             }
 
-            println!("Created baseline snapshots in {}", SNAPSHOT_DIR);
+            println!("Created baseline snapshots in {SNAPSHOT_DIR}");
             return;
         }
 
@@ -470,12 +462,11 @@ mod ci_tests {
         let current_schemas = snapshot_current_tool_schemas().unwrap();
 
         for (tool_name, current_schema) in current_schemas {
-            let snapshot_file = snapshot_path.join(format!("{}.json", tool_name));
+            let snapshot_file = snapshot_path.join(format!("{tool_name}.json"));
 
             if !snapshot_file.exists() {
                 panic!(
-                    "No snapshot found for tool '{}' - run with --update-snapshots to create",
-                    tool_name
+                    "No snapshot found for tool '{tool_name}' - run with --update-snapshots to create"
                 );
             }
 
@@ -497,12 +488,12 @@ pub fn update_schema_snapshots() -> Result<()> {
     let count = schemas.len();
 
     for (tool_name, schema) in schemas {
-        let file_path = snapshot_path.join(format!("{}.json", tool_name));
+        let file_path = snapshot_path.join(format!("{tool_name}.json"));
         let content = serde_json::to_string_pretty(&schema)?;
         fs::write(file_path, content)?;
     }
 
-    println!("Updated {} tool schema snapshots", count);
+    println!("Updated {count} tool schema snapshots");
     Ok(())
 }
 
@@ -552,8 +543,7 @@ mod integration_tests {
                 assert_eq!(
                     desc.trim(),
                     desc,
-                    "Tool '{}' description should be trimmed",
-                    tool_name
+                    "Tool '{tool_name}' description should be trimmed"
                 );
             }
         }
@@ -567,29 +557,25 @@ mod integration_tests {
             // Validate parameter schema structure
             let params = schema
                 .get("parameters")
-                .unwrap_or_else(|| panic!("Tool '{}' missing parameters", tool_name));
+                .unwrap_or_else(|| panic!("Tool '{tool_name}' missing parameters"));
 
             assert!(
                 params.get("type").is_some(),
-                "Tool '{}' parameters missing type",
-                tool_name
+                "Tool '{tool_name}' parameters missing type"
             );
 
             assert!(
                 params.get("properties").is_some(),
-                "Tool '{}' parameters missing properties",
-                tool_name
+                "Tool '{tool_name}' parameters missing properties"
             );
 
             // Validate encoding
-            validate_encoding_invariants(&schema).unwrap_or_else(|e| {
-                panic!("Tool '{}' failed encoding validation: {}", tool_name, e)
-            });
+            validate_encoding_invariants(&schema)
+                .unwrap_or_else(|e| panic!("Tool '{tool_name}' failed encoding validation: {e}"));
 
             // Validate whitespace
-            validate_whitespace_consistency(&schema).unwrap_or_else(|e| {
-                panic!("Tool '{}' failed whitespace validation: {}", tool_name, e)
-            });
+            validate_whitespace_consistency(&schema)
+                .unwrap_or_else(|e| panic!("Tool '{tool_name}' failed whitespace validation: {e}"));
         }
     }
 }

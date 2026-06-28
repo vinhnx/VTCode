@@ -169,10 +169,7 @@ fn handle_set_channel(channel_str: String) -> Result<()> {
         "beta" => ReleaseChannel::Beta,
         "nightly" => ReleaseChannel::Nightly,
         _ => {
-            anyhow::bail!(
-                "Invalid channel '{}'. Must be one of: stable, beta, nightly",
-                channel_str
-            );
+            anyhow::bail!("Invalid channel '{channel_str}'. Must be one of: stable, beta, nightly");
         }
     };
 
@@ -232,7 +229,7 @@ async fn handle_list_versions(limit: usize) -> Result<()> {
         );
 
         if let Some(published) = &version_info.published_at {
-            println!("   {}", format!("Published: {}", published).dim());
+            println!("   {}", format!("Published: {published}").dim());
         }
 
         if i < versions.len() - 1 {
@@ -257,7 +254,7 @@ async fn handle_list_versions(limit: usize) -> Result<()> {
 /// Pin to a specific version
 fn handle_pin_version(version_str: String) -> Result<()> {
     let version = semver::Version::parse(&version_str)
-        .with_context(|| format!("Invalid version format: {}", version_str))?;
+        .with_context(|| format!("Invalid version format: {version_str}"))?;
 
     let current_version = env!("CARGO_PKG_VERSION");
     let mut updater = Updater::new(current_version)?;

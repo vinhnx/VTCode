@@ -603,8 +603,7 @@ pub(crate) async fn render_stream_with_options_and_copilot_runtime_impl(
                     spinner.update_message("Receiving response...");
                     spinner_message_updated = true;
                 } else if last_progress_update.elapsed() >= Duration::from_millis(500) {
-                    spinner
-                        .update_message(format!("Receiving response... ({} tokens)", token_count));
+                    spinner.update_message(format!("Receiving response... ({token_count} tokens)"));
                     last_progress_update = Instant::now();
                 }
                 finish_spinner(&mut spinner_active, false);
@@ -655,8 +654,7 @@ pub(crate) async fn render_stream_with_options_and_copilot_runtime_impl(
                     spinner_message_updated = true;
                 } else if last_progress_update.elapsed() >= Duration::from_millis(500) {
                     spinner.update_message(format!(
-                        "Processing reasoning... ({} tokens)",
-                        reasoning_token_count
+                        "Processing reasoning... ({reasoning_token_count} tokens)"
                     ));
                     last_progress_update = Instant::now();
                 }

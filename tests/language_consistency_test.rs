@@ -36,8 +36,7 @@ fn validate_json_language_consistency(json: &Value) -> Result<()> {
     // but flag suspicious patterns
     if script_count > 2 {
         eprintln!(
-            "Warning: JSON contains {} different scripts - possible language mixing",
-            script_count
+            "Warning: JSON contains {script_count} different scripts - possible language mixing"
         );
     }
 
@@ -59,11 +58,9 @@ fn validate_json_keys(value: &Value) -> Result<()> {
                 {
                     let suggestion = sanitize_key_name(key);
                     anyhow::bail!(
-                        "JSON key '{}' contains non-identifier characters - possible language mixing.\n\
+                        "JSON key '{key}' contains non-identifier characters - possible language mixing.\n\
                         Keys must be valid identifiers (ASCII alphanumeric + underscore/hyphen).\n\
-                        Suggestion: Rename to '{}' or use camelCase.",
-                        key,
-                        suggestion
+                        Suggestion: Rename to '{suggestion}' or use camelCase."
                     );
                 }
                 validate_json_keys(val)?;
@@ -130,8 +127,7 @@ fn validate_markdown_language_consistency(markdown: &str) -> Result<()> {
         for (idx, &script) in section_scripts.iter().enumerate().skip(1) {
             if script != first_script && script != Script::Mixed {
                 eprintln!(
-                    "Warning: Markdown section {} changed from {:?} to {:?}",
-                    idx, first_script, script
+                    "Warning: Markdown section {idx} changed from {first_script:?} to {script:?}"
                 );
             }
         }
@@ -233,8 +229,7 @@ mod unit_tests {
         let err_msg = result.unwrap_err().to_string();
         assert!(
             err_msg.contains("non-identifier") || err_msg.contains("language mixing"),
-            "Expected error about non-identifier characters, got: {}",
-            err_msg
+            "Expected error about non-identifier characters, got: {err_msg}"
         );
     }
 
@@ -303,8 +298,7 @@ This is in English.
         // Should be either Mixed or one of the predominant scripts
         assert!(
             matches!(script, Script::Mixed | Script::Latin | Script::Cjk),
-            "Expected Mixed, Latin, or Cjk, got {:?}",
-            script
+            "Expected Mixed, Latin, or Cjk, got {script:?}"
         );
     }
 
@@ -434,7 +428,7 @@ This is in English.
 pub fn validate_conversation_language_consistency(responses: &[Value]) -> Result<()> {
     for (idx, response) in responses.iter().enumerate() {
         validate_json_language_consistency(response)
-            .map_err(|e| anyhow::anyhow!("Response {} failed validation: {}", idx, e))?;
+            .map_err(|e| anyhow::anyhow!("Response {idx} failed validation: {e}"))?;
     }
     Ok(())
 }
@@ -453,8 +447,7 @@ pub fn validate_tool_response_language(tool_name: &str, response: &Value) -> Res
 
         if !has_success && !has_error && !has_message {
             eprintln!(
-                "Warning: Tool '{}' response missing standard fields (success/error/message)",
-                tool_name
+                "Warning: Tool '{tool_name}' response missing standard fields (success/error/message)"
             );
         }
     }

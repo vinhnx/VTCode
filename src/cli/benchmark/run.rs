@@ -62,7 +62,7 @@ pub async fn handle_benchmark_command(
         "benchmark-{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .map_err(|err| anyhow!("Failed to derive session identifier timestamp: {}", err))?
+            .map_err(|err| anyhow!("Failed to derive session identifier timestamp: {err}"))?
             .as_secs()
     );
 
@@ -117,6 +117,6 @@ pub async fn handle_benchmark_command(
         write_file_with_context_sync(path, &serialized, "benchmark report")?;
     }
 
-    println!("{}", serialized);
+    println!("{serialized}");
     Ok(())
 }

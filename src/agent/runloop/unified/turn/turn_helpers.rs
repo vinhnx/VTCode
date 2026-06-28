@@ -27,7 +27,7 @@ pub(crate) fn display_error(
     {
         let human = llm_error_human_message(llm_err);
         if raw_body != human {
-            renderer.line(MessageStyle::Error, &format!("Full response: {}", raw_body))?;
+            renderer.line(MessageStyle::Error, &format!("Full response: {raw_body}"))?;
         }
     }
     Ok(())

@@ -92,10 +92,7 @@ pub(crate) fn process_llm_response(
             let failures_list = validation_failures.join("; ");
             crate::agent::runloop::unified::turn::turn_helpers::display_status(
                 renderer,
-                &format!(
-                    "Detected {} but validation failed: {}",
-                    tool_display, failures_list
-                ),
+                &format!("Detected {tool_display} but validation failed: {failures_list}"),
             )?;
         } else {
             let args_json = serde_json::to_string(&args).unwrap_or_else(|_| "{}".to_string());
@@ -118,7 +115,7 @@ pub(crate) fn process_llm_response(
                 format!("Detected {headline}")
             };
             crate::agent::runloop::unified::turn::turn_helpers::display_status(renderer, &notice)?;
-            let call_id = format!("call_textual_{}", conversation_len);
+            let call_id = format!("call_textual_{conversation_len}");
             tool_calls.push(uni::ToolCall::function(
                 call_id.clone(),
                 name.clone(),
@@ -138,7 +135,7 @@ pub(crate) fn process_llm_response(
         && let Some(args) = build_interview_args_from_text(text)
     {
         let args_json = serde_json::to_string(&args).unwrap_or_else(|_| "{}".to_string());
-        let call_id = format!("call_interview_{}", conversation_len);
+        let call_id = format!("call_interview_{conversation_len}");
         tool_calls.push(uni::ToolCall::function(
             call_id.clone(),
             tools::REQUEST_USER_INPUT.to_string(),

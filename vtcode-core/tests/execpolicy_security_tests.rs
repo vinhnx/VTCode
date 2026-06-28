@@ -204,8 +204,7 @@ async fn test_ls_safe_usage() {
     let result = validate_command(&command, &root, &working_dir, false).await;
     assert!(
         result.is_ok(),
-        "safe ls usage should be allowed: {:?}",
-        result
+        "safe ls usage should be allowed: {result:?}"
     );
 }
 
@@ -258,11 +257,10 @@ async fn test_git_reset_hard_requires_confirm() {
     );
 
     let result_confirmed = validate_command(&command, &root, &working_dir, true).await;
-    eprintln!("Result with confirm=true: {:?}", result_confirmed);
+    eprintln!("Result with confirm=true: {result_confirmed:?}");
     assert!(
         result_confirmed.is_ok(),
-        "git reset --hard should be allowed with confirm=true: {:?}",
-        result_confirmed
+        "git reset --hard should be allowed with confirm=true: {result_confirmed:?}"
     );
 }
 

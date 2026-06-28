@@ -412,7 +412,6 @@ fn clone_non_empty_boxed_string(value: &Option<Box<String>>) -> Option<String> {
         .and_then(|value| (!value.is_empty()).then_some(value.to_owned()))
 }
 
-#[expect(clippy::box_collection)]
 fn deserialize_boxed_metadata_opt<'de, D>(
     deserializer: D,
 ) -> Result<Option<Box<crate::core::message_metadata::MessageMetadata>>, D::Error>

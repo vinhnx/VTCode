@@ -219,11 +219,11 @@ pub(crate) async fn handle_oauth_login(
             }
             if let Some(email) = session.email.as_deref() {
                 ctx.renderer
-                    .line(MessageStyle::Output, &format!("Account: {}", email))?;
+                    .line(MessageStyle::Output, &format!("Account: {email}"))?;
             }
             if let Some(plan) = session.plan.as_deref() {
                 ctx.renderer
-                    .line(MessageStyle::Output, &format!("Plan: {}", plan))?;
+                    .line(MessageStyle::Output, &format!("Plan: {plan}"))?;
             }
         }
         _ => {}
@@ -365,11 +365,11 @@ pub(crate) async fn handle_refresh_oauth(
             )?;
             if let Some(email) = session.email.as_deref() {
                 ctx.renderer
-                    .line(MessageStyle::Output, &format!("Account: {}", email))?;
+                    .line(MessageStyle::Output, &format!("Account: {email}"))?;
             }
             if let Some(plan) = session.plan.as_deref() {
                 ctx.renderer
-                    .line(MessageStyle::Output, &format!("Plan: {}", plan))?;
+                    .line(MessageStyle::Output, &format!("Plan: {plan}"))?;
             }
         }
         OPENROUTER_PROVIDER => {
@@ -395,8 +395,7 @@ pub(crate) async fn handle_show_auth_status(
         ctx.renderer.line(
             MessageStyle::Error,
             &format!(
-                "Authentication status not supported for provider: {}. Supported providers: openai, openrouter, copilot",
-                provider_name
+                "Authentication status not supported for provider: {provider_name}. Supported providers: openai, openrouter, copilot"
             ),
         )?;
         return Ok(SlashCommandControl::Continue);
@@ -489,7 +488,7 @@ async fn open_browser_with_guidance(
                 .hyperlink_line(MessageStyle::Response, auth_url)?;
             ctx.renderer.line(
                 MessageStyle::Error,
-                &format!("Failed to open browser automatically: {}", err),
+                &format!("Failed to open browser automatically: {err}"),
             )?;
             ctx.renderer.line(
                 MessageStyle::Info,
@@ -607,8 +606,7 @@ async fn show_oauth_provider_modal(
             badge: Some(copilot_modal_badge(action, &copilot_status)),
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!(
-                "{}{}",
-                OAUTH_PROVIDER_PREFIX, COPILOT_PROVIDER
+                "{OAUTH_PROVIDER_PREFIX}{COPILOT_PROVIDER}"
             ))),
             search_value: Some("github copilot cli auth".to_string()),
         },
@@ -618,8 +616,7 @@ async fn show_oauth_provider_modal(
             badge: Some(openai_modal_badge(action, &openai_status, &openai_overview)),
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!(
-                "{}{}",
-                OAUTH_PROVIDER_PREFIX, OPENAI_PROVIDER
+                "{OAUTH_PROVIDER_PREFIX}{OPENAI_PROVIDER}"
             ))),
             search_value: Some("openai chatgpt oauth subscription".to_string()),
         },
@@ -629,8 +626,7 @@ async fn show_oauth_provider_modal(
             badge: Some(openrouter_modal_badge(action, &openrouter_status)),
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!(
-                "{}{}",
-                OAUTH_PROVIDER_PREFIX, OPENROUTER_PROVIDER
+                "{OAUTH_PROVIDER_PREFIX}{OPENROUTER_PROVIDER}"
             ))),
             search_value: Some("openrouter oauth".to_string()),
         },
@@ -657,8 +653,7 @@ async fn show_oauth_provider_modal(
         oauth_modal_lines(action),
         items,
         Some(InlineListSelection::ConfigAction(format!(
-            "{}{}",
-            OAUTH_PROVIDER_PREFIX, COPILOT_PROVIDER
+            "{OAUTH_PROVIDER_PREFIX}{COPILOT_PROVIDER}"
         ))),
         None,
     );
@@ -843,7 +838,7 @@ fn openai_modal_subtitle(action: OAuthProviderAction, status: &OpenAIChatGptAuth
                 "Connected{}; re-authenticate to replace the stored ChatGPT session.",
                 label
                     .as_deref()
-                    .map(|value| format!(" as {}", value))
+                    .map(|value| format!(" as {value}"))
                     .unwrap_or_default()
             ),
             OpenAIChatGptAuthStatus::NotAuthenticated => {
@@ -855,7 +850,7 @@ fn openai_modal_subtitle(action: OAuthProviderAction, status: &OpenAIChatGptAuth
                 "Remove the stored ChatGPT session{}.",
                 label
                     .as_deref()
-                    .map(|value| format!(" for {}", value))
+                    .map(|value| format!(" for {value}"))
                     .unwrap_or_default()
             ),
             OpenAIChatGptAuthStatus::NotAuthenticated => {
@@ -903,7 +898,7 @@ fn openrouter_modal_subtitle(action: OAuthProviderAction, status: &AuthStatus) -
                 "Connected{}; re-authenticate to replace the stored OpenRouter token.",
                 label
                     .as_deref()
-                    .map(|value| format!(" as {}", value))
+                    .map(|value| format!(" as {value}"))
                     .unwrap_or_default()
             ),
             AuthStatus::NotAuthenticated => "Sign in with OpenRouter OAuth.".to_string(),
@@ -942,7 +937,7 @@ fn render_openrouter_auth_status(renderer: &mut AnsiRenderer, status: AuthStatus
         } => {
             renderer.line(MessageStyle::Info, "OpenRouter: authenticated (OAuth)")?;
             if let Some(label) = label {
-                renderer.line(MessageStyle::Output, &format!("  Label: {}", label))?;
+                renderer.line(MessageStyle::Output, &format!("  Label: {label}"))?;
             }
             renderer.line(
                 MessageStyle::Output,
@@ -978,7 +973,7 @@ fn render_openai_auth_status(
         } => {
             renderer.line(MessageStyle::Info, "OpenAI: authenticated (ChatGPT)")?;
             if let Some(label) = label {
-                renderer.line(MessageStyle::Output, &format!("  Label: {}", label))?;
+                renderer.line(MessageStyle::Output, &format!("  Label: {label}"))?;
             }
             renderer.line(
                 MessageStyle::Output,
@@ -1027,7 +1022,7 @@ fn render_copilot_auth_status(
     if let Some(message) = status.message.as_deref()
         && !message.trim().is_empty()
     {
-        renderer.line(MessageStyle::Output, &format!("  Details: {}", message))?;
+        renderer.line(MessageStyle::Output, &format!("  Details: {message}"))?;
     }
 
     if matches!(status.kind, CopilotAuthStatusKind::ServerUnavailable) {
@@ -1088,17 +1083,17 @@ fn render_openai_credential_overview(
     if current_provider_is_openai {
         renderer.line(
             MessageStyle::Output,
-            &format!("  Current session: {}", usage_status),
+            &format!("  Current session: {usage_status}"),
         )?;
     }
 
     if let Some(notice) = overview.notice.as_deref() {
-        renderer.line(MessageStyle::Info, &format!("  Notice: {}", notice))?;
+        renderer.line(MessageStyle::Info, &format!("  Notice: {notice}"))?;
     }
     if let Some(recommendation) = overview.recommendation.as_deref() {
         renderer.line(
             MessageStyle::Output,
-            &format!("  Recommendation: {}", recommendation),
+            &format!("  Recommendation: {recommendation}"),
         )?;
     }
     Ok(())

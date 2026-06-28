@@ -27,14 +27,14 @@ async fn main() -> Result<()> {
 
     match registry.execute_tool("run_pty_cmd", args).await {
         Ok(result) => {
-            println!("Success: {:?}", result);
+            println!("Success: {result:?}");
             assert_eq!(result["success"], true);
             assert_eq!(result["code"], 0);
             assert!(result["output"].as_str().unwrap().contains("Hello, PTY!"));
             println!("✓ Test 1 passed");
         }
         Err(e) => {
-            println!("Error: {}", e);
+            println!("Error: {e}");
             return Err(e);
         }
     }
@@ -52,7 +52,7 @@ async fn main() -> Result<()> {
 
     match registry.execute_tool("run_pty_cmd", args).await {
         Ok(result) => {
-            println!("Success: {:?}", result);
+            println!("Success: {result:?}");
             assert_eq!(result["success"], true);
             assert_eq!(result["code"], 0);
             assert!(
@@ -64,7 +64,7 @@ async fn main() -> Result<()> {
             println!("✓ Test 2 passed");
         }
         Err(e) => {
-            println!("Error: {}", e);
+            println!("Error: {e}");
             return Err(e);
         }
     }
@@ -80,13 +80,13 @@ async fn main() -> Result<()> {
 
     match registry.execute_tool("create_pty_session", args).await {
         Ok(result) => {
-            println!("Create session result: {:?}", result);
+            println!("Create session result: {result:?}");
             assert_eq!(result["success"], true);
             assert_eq!(result["session_id"], "test_session");
             println!("✓ Session created");
         }
         Err(e) => {
-            println!("Error creating session: {}", e);
+            println!("Error creating session: {e}");
             return Err(e);
         }
     }
@@ -95,7 +95,7 @@ async fn main() -> Result<()> {
     let args = json!({});
     match registry.execute_tool("list_pty_sessions", args).await {
         Ok(result) => {
-            println!("List sessions result: {:?}", result);
+            println!("List sessions result: {result:?}");
             assert!(
                 result["sessions"]
                     .as_array()
@@ -105,7 +105,7 @@ async fn main() -> Result<()> {
             println!("✓ Session listed");
         }
         Err(e) => {
-            println!("Error listing sessions: {}", e);
+            println!("Error listing sessions: {e}");
             return Err(e);
         }
     }
@@ -117,13 +117,13 @@ async fn main() -> Result<()> {
 
     match registry.execute_tool("close_pty_session", args).await {
         Ok(result) => {
-            println!("Close session result: {:?}", result);
+            println!("Close session result: {result:?}");
             assert_eq!(result["success"], true);
             assert_eq!(result["session_id"], "test_session");
             println!("✓ Session closed");
         }
         Err(e) => {
-            println!("Error closing session: {}", e);
+            println!("Error closing session: {e}");
             return Err(e);
         }
     }

@@ -32,10 +32,10 @@ pub async fn handle_skills_ref_validate(path: &Path) -> Result<()> {
     println!("  Name: {}", manifest.name);
     println!("  Description: {}", manifest.description);
     if let Some(license) = &manifest.license {
-        println!("  License: {}", license);
+        println!("  License: {license}");
     }
     if let Some(compatibility) = &manifest.compatibility {
-        println!("  Compatibility: {}", compatibility);
+        println!("  Compatibility: {compatibility}");
     }
     if let Some(tools) = &manifest.tools {
         println!("  Tools: {}", tools.join(", "));
@@ -84,7 +84,7 @@ pub async fn handle_skills_ref_to_prompt(paths: &[PathBuf]) -> Result<()> {
 
     // Generate XML output
     let xml = generate_skills_prompt_xml(&skills);
-    println!("{}", xml);
+    println!("{xml}");
 
     Ok(())
 }

@@ -229,7 +229,7 @@ impl ToolOutputEnvelope {
         out.push_str(prefix);
         out.push(':');
         out.push_str(&bytes.to_string());
-        out.push_str("b");
+        out.push('b');
         out
     }
 }

@@ -31,7 +31,7 @@ pub(super) async fn run_status_line_command(
 
     let mut child = process
         .spawn()
-        .with_context(|| format!("failed to spawn status line command `{}`", command))?;
+        .with_context(|| format!("failed to spawn status line command `{command}`"))?;
 
     let mut stdout_pipe = child
         .stdout
@@ -65,21 +65,16 @@ pub(super) async fn run_status_line_command(
 
     let status = match wait_result {
         Ok(status_res) => status_res
-            .with_context(|| format!("failed to wait for status line command `{}`", command))?,
+            .with_context(|| format!("failed to wait for status line command `{command}`"))?,
         Err(_) => {
             child.start_kill().with_context(|| {
-                format!("failed to kill timed out status line command `{}`", command)
+                format!("failed to kill timed out status line command `{command}`")
             })?;
             child.wait().await.with_context(|| {
-                format!(
-                    "failed to wait for killed status line command `{}` after timeout",
-                    command
-                )
+                format!("failed to wait for killed status line command `{command}` after timeout")
             })?;
             return Err(anyhow!(
-                "status line command `{}` timed out after {}ms",
-                command,
-                timeout_ms
+                "status line command `{command}` timed out after {timeout_ms}ms"
             ));
         }
     };
@@ -91,7 +86,7 @@ pub(super) async fn run_status_line_command(
         .context("failed to read status line command stdout")?;
 
     if !status.success() {
-        return Err(anyhow!("status line command exited with status {}", status));
+        return Err(anyhow!("status line command exited with status {status}"));
     }
 
     let stdout = String::from_utf8_lossy(&stdout_bytes);

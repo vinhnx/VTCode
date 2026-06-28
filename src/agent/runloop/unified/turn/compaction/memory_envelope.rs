@@ -117,11 +117,11 @@ fn derive_continuity_summary(
 
     match (objective, latest) {
         (Some(obj), Some((role, text))) => {
-            format!("Working on: {}. Latest {} action: {}.", obj, role, text)
+            format!("Working on: {obj}. Latest {role} action: {text}.")
         }
-        (Some(obj), None) => format!("Working on: {}. Session continuity preserved.", obj),
+        (Some(obj), None) => format!("Working on: {obj}. Session continuity preserved."),
         (None, Some((role, text))) => {
-            format!("Latest {} action: {}.", role, text)
+            format!("Latest {role} action: {text}.")
         }
         (None, None) => prior_envelope
             .map(|envelope| envelope.summary.clone())

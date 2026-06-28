@@ -58,10 +58,7 @@ pub(crate) async fn handle_initialize_workspace(
 
     ctx.renderer.line(
         MessageStyle::Info,
-        &format!(
-            "Initializing VT Code configuration in {}...",
-            workspace_label
-        ),
+        &format!("Initializing VT Code configuration in {workspace_label}..."),
     )?;
 
     let created_files = match bootstrap_config_files(workspace_path.clone(), force).await {
@@ -69,7 +66,7 @@ pub(crate) async fn handle_initialize_workspace(
         Err(err) => {
             ctx.renderer.line(
                 MessageStyle::Error,
-                &format!("Failed to initialize configuration: {}", err),
+                &format!("Failed to initialize configuration: {err}"),
             )?;
             return Ok(SlashCommandControl::Continue);
         }
@@ -103,7 +100,7 @@ pub(crate) async fn handle_initialize_workspace(
                 Err(err) => {
                     ctx.renderer.line(
                         MessageStyle::Info,
-                        &format!("Skipped VT Code explorer grounding for `/init`: {}", err),
+                        &format!("Skipped VT Code explorer grounding for `/init`: {err}"),
                     )?;
                     plan
                 }
@@ -113,7 +110,7 @@ pub(crate) async fn handle_initialize_workspace(
         Err(err) => {
             ctx.renderer.line(
                 MessageStyle::Error,
-                &format!("Failed to analyze workspace for AGENTS.md: {}", err),
+                &format!("Failed to analyze workspace for AGENTS.md: {err}"),
             )?;
         }
     }
@@ -134,7 +131,7 @@ pub(crate) async fn handle_initialize_workspace(
         Err(err) => {
             ctx.renderer.line(
                 MessageStyle::Error,
-                &format!("Failed to scaffold persistent memory: {}", err),
+                &format!("Failed to scaffold persistent memory: {err}"),
             )?;
         }
     }
@@ -153,7 +150,7 @@ pub(crate) async fn handle_initialize_workspace(
         Err(err) => {
             ctx.renderer.line(
                 MessageStyle::Error,
-                &format!("Failed to index workspace: {}", err),
+                &format!("Failed to index workspace: {err}"),
             )?;
         }
     }
@@ -197,7 +194,7 @@ async fn maybe_ground_project_context(
         Err(err) => {
             ctx.renderer.line(
                 MessageStyle::Info,
-                &format!("VT Code explorer grounding unavailable: {}", err),
+                &format!("VT Code explorer grounding unavailable: {err}"),
             )?;
             return Ok(None);
         }
@@ -249,8 +246,7 @@ async fn wait_for_init_grounding(
     ctx.renderer.line(
         MessageStyle::Info,
         &format!(
-            "VT Code explorer grounding finished without usable structured output ({}).",
-            status_message
+            "VT Code explorer grounding finished without usable structured output ({status_message})."
         ),
     )?;
     Ok(None)
@@ -446,7 +442,7 @@ async fn run_guided_agents_generation(
         Err(err) => {
             ctx.renderer.line(
                 MessageStyle::Error,
-                &format!("Failed to scaffold AGENTS.md: {}", err),
+                &format!("Failed to scaffold AGENTS.md: {err}"),
             )?;
         }
     }

@@ -296,8 +296,7 @@ impl ModelPickerState {
                         renderer.line(
                             MessageStyle::Info,
                             &format!(
-                                "Interactive model picker unavailable ({}). Falling back to manual input.",
-                                err
+                                "Interactive model picker unavailable ({err}). Falling back to manual input."
                             ),
                         )?;
                         state.plain_mode_active = true;

@@ -94,11 +94,9 @@ pub(crate) fn agent_prefix_spans(
         .chars()
         .last()
         .is_some_and(|ch| ch.is_whitespace());
-    if !ui::INLINE_AGENT_QUOTE_PREFIX.is_empty() {
-        spans.push(Span::styled(ui::INLINE_AGENT_QUOTE_PREFIX, prefix_style));
-        if has_label && !prefix_has_trailing_space {
-            spans.push(Span::styled(" ", prefix_style));
-        }
+    spans.push(Span::styled(ui::INLINE_AGENT_QUOTE_PREFIX, prefix_style));
+    if has_label && !prefix_has_trailing_space {
+        spans.push(Span::styled(" ", prefix_style));
     }
 
     if let Some(label) = &labels.agent

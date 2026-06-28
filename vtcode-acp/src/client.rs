@@ -172,10 +172,7 @@ impl AcpClient {
                 }
 
                 serde_json::from_str(&body).map_err(|e| {
-                    AcpError::SerializationError(format!(
-                        "Failed to parse response: {}: {}",
-                        e, body
-                    ))
+                    AcpError::SerializationError(format!("Failed to parse response: {e}: {body}",))
                 })
             }
 
@@ -209,7 +206,7 @@ impl AcpClient {
             .get(&url)
             .send()
             .await
-            .map_err(|e| AcpError::NetworkError(format!("Discovery failed: {}", e)))?;
+            .map_err(|e| AcpError::NetworkError(format!("Discovery failed: {e}")))?;
 
         if !response.status().is_success() {
             return Err(AcpError::NetworkError(format!(

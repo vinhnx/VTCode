@@ -42,7 +42,7 @@ pub(super) fn ensure_selection_ui_available(
     if ctx.model_picker_state.is_some() {
         ctx.renderer.line(
             MessageStyle::Error,
-            &format!("Close the active model picker before {}.", activity),
+            &format!("Close the active model picker before {activity}."),
         )?;
         return Ok(false);
     }
@@ -150,7 +150,7 @@ pub(crate) async fn handle_start_session_palette(
         Err(err) => {
             ctx.renderer.line(
                 MessageStyle::Error,
-                &format!("Failed to load session archives: {}", err),
+                &format!("Failed to load session archives: {err}"),
             )?;
         }
     }
@@ -196,7 +196,7 @@ pub(crate) async fn handle_start_file_browser(
     ctx.handle.close_modal();
     ctx.handle.force_redraw();
     if let Some(filter) = initial_filter {
-        ctx.handle.set_input(format!("@{}", filter));
+        ctx.handle.set_input(format!("@{filter}"));
     } else {
         ctx.handle.set_input("@".to_string());
     }
@@ -401,14 +401,14 @@ pub(super) async fn start_model_picker(
             {
                 ctx.renderer.line(
                     MessageStyle::Error,
-                    &format!("Failed to apply model selection: {}", err),
+                    &format!("Failed to apply model selection: {err}"),
                 )?;
             }
         }
         Err(err) => {
             ctx.renderer.line(
                 MessageStyle::Error,
-                &format!("Failed to start model picker: {}", err),
+                &format!("Failed to start model picker: {err}"),
             )?;
         }
     }
@@ -432,7 +432,7 @@ pub(crate) async fn handle_start_mode_palette(
             Err(err) => {
                 ctx.renderer.line(
                     MessageStyle::Error,
-                    &format!("Failed to discover agents: {}", err),
+                    &format!("Failed to discover agents: {err}"),
                 )?;
                 return Ok(SlashCommandControl::Continue);
             }

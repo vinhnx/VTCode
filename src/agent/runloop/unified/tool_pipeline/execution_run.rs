@@ -162,7 +162,7 @@ pub(crate) async fn run_tool_call_with_args(
                     ToolExecutionStatus::Failure {
                         error: structured_failure(
                             requested_name,
-                            &anyhow!("Tool argument validation failed: {}", err),
+                            &anyhow!("Tool argument validation failed: {err}"),
                         ),
                     },
                 ));

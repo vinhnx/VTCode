@@ -419,14 +419,12 @@ fn missing_api_key_message(
         let env_var = custom_provider.resolved_api_key_env();
         if first_run_occurred {
             return format!(
-                "API key not found for {}. To fix:\n  1. Set {} environment variable, or\n  2. Add to .env file, or\n  3. Configure in vtcode.toml under [[custom_providers]]\n\nRun `/init` anytime to reconfigure.",
-                provider_name, env_var
+                "API key not found for {provider_name}. To fix:\n  1. Set {env_var} environment variable, or\n  2. Add to .env file, or\n  3. Configure in vtcode.toml under [[custom_providers]]\n\nRun `/init` anytime to reconfigure."
             );
         }
 
         return format!(
-            "API key not found for custom provider '{}'. Set {} environment variable (or add to .env file) or configure it in vtcode.toml under [[custom_providers]].",
-            provider_name, env_var
+            "API key not found for custom provider '{provider_name}'. Set {env_var} environment variable (or add to .env file) or configure it in vtcode.toml under [[custom_providers]]."
         );
     }
 
@@ -445,8 +443,7 @@ fn missing_api_key_message(
 
     if first_run_occurred {
         format!(
-            "API key not found for {}. To fix:\n  1. Set {} environment variable, or\n  2. Add to .env file, or\n  3. Configure in vtcode.toml\n\nRun `/init` anytime to reconfigure.",
-            provider_name, env_var
+            "API key not found for {provider_name}. To fix:\n  1. Set {env_var} environment variable, or\n  2. Add to .env file, or\n  3. Configure in vtcode.toml\n\nRun `/init` anytime to reconfigure."
         )
     } else {
         format!(

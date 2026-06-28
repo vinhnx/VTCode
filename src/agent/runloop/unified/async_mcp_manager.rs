@@ -79,9 +79,9 @@ impl Display for McpInitStatus {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             McpInitStatus::Disabled => write!(f, "MCP is disabled"),
-            McpInitStatus::Initializing { progress } => write!(f, "MCP initializing: {}", progress),
+            McpInitStatus::Initializing { progress } => write!(f, "MCP initializing: {progress}"),
             McpInitStatus::Ready { .. } => write!(f, "MCP ready with active connections"),
-            McpInitStatus::Error { message } => write!(f, "MCP error: {}", message),
+            McpInitStatus::Error { message } => write!(f, "MCP error: {message}"),
         }
     }
 }
@@ -208,9 +208,9 @@ impl AsyncMcpManager {
                         || error_msg.contains("Broken pipe")
                         || error_msg.contains("write EPIPE")
                     {
-                        format!("MCP server startup failed: {}", e)
+                        format!("MCP server startup failed: {e}")
                     } else {
-                        format!("MCP initialization error: {}", e)
+                        format!("MCP initialization error: {e}")
                     };
 
                     let mut status_guard = status.write().await;
@@ -343,8 +343,7 @@ impl AsyncMcpManager {
             }
             Ok(Err(e)) => Err(e).context("MCP client initialization failed"),
             Err(_) => Err(anyhow::anyhow!(
-                "MCP client initialization timed out after {} seconds",
-                startup_timeout_secs
+                "MCP client initialization timed out after {startup_timeout_secs} seconds"
             )),
         }
     }

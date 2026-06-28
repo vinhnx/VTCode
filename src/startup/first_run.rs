@@ -164,7 +164,7 @@ async fn run_first_run_setup(
                 MessageStyle::Info,
                 &format!("Provider: {}", provider.label()),
             )?;
-            renderer.line(MessageStyle::Info, &format!("Model: {}", model))?;
+            renderer.line(MessageStyle::Info, &format!("Model: {model}"))?;
             renderer.line(
                 MessageStyle::Info,
                 "Lightweight model: Automatic (same-provider lightweight route)",

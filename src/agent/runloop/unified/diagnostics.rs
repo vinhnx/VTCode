@@ -229,8 +229,7 @@ pub(crate) async fn run_doctor_diagnostics(
             &mut summary,
             "Provider",
             DoctorCheckOutcome::Pass(format!(
-                "Configured '{}', runtime adapter '{}'",
-                configured_provider, runtime_provider
+                "Configured '{configured_provider}', runtime adapter '{runtime_provider}'"
             )),
         )?;
     } else if configured_provider == runtime_provider {
@@ -238,7 +237,7 @@ pub(crate) async fn run_doctor_diagnostics(
             renderer,
             &mut summary,
             "Provider",
-            DoctorCheckOutcome::Pass(format!("Configured and active: {}", runtime_provider)),
+            DoctorCheckOutcome::Pass(format!("Configured and active: {runtime_provider}")),
         )?;
     } else {
         render_doctor_check(
@@ -246,8 +245,7 @@ pub(crate) async fn run_doctor_diagnostics(
             &mut summary,
             "Provider",
             DoctorCheckOutcome::Warn(format!(
-                "Configured '{}', active '{}'",
-                configured_provider, runtime_provider
+                "Configured '{configured_provider}', active '{runtime_provider}'"
             )),
         )?;
     }
@@ -265,15 +263,13 @@ pub(crate) async fn run_doctor_diagnostics(
     } else if provider_requires_api_key(provider_for_api_check) {
         match get_api_key(provider_for_api_check, &ApiKeySources::default()) {
             Ok(_) => DoctorCheckOutcome::Pass(format!(
-                "API key configured for '{}'",
-                provider_for_api_check
+                "API key configured for '{provider_for_api_check}'"
             )),
             Err(err) => {
                 let detail = err.to_string();
                 if detail.contains("Unsupported provider") {
                     DoctorCheckOutcome::Warn(format!(
-                        "Skipped API-key validation for unsupported provider '{}'",
-                        provider_for_api_check
+                        "Skipped API-key validation for unsupported provider '{provider_for_api_check}'"
                     ))
                 } else {
                     DoctorCheckOutcome::Fail(format!(
@@ -287,8 +283,7 @@ pub(crate) async fn run_doctor_diagnostics(
         }
     } else {
         DoctorCheckOutcome::Pass(format!(
-            "Not required for local provider '{}'",
-            provider_for_api_check
+            "Not required for local provider '{provider_for_api_check}'"
         ))
     };
     render_doctor_check(renderer, &mut summary, "API Key", api_key_result)?;
@@ -305,13 +300,13 @@ pub(crate) async fn run_doctor_diagnostics(
         renderer.line(MessageStyle::Status, "[Dependencies]")?;
 
         let node_result = match detect_command_version("node", &["--version"]) {
-            Ok(version) => DoctorCheckOutcome::Pass(format!("Node.js {}", version)),
+            Ok(version) => DoctorCheckOutcome::Pass(format!("Node.js {version}")),
             Err(err) => DoctorCheckOutcome::Warn(err),
         };
         render_doctor_check(renderer, &mut summary, "Node.js", node_result)?;
 
         let npm_result = match detect_command_version("npm", &["--version"]) {
-            Ok(version) => DoctorCheckOutcome::Pass(format!("npm {}", version)),
+            Ok(version) => DoctorCheckOutcome::Pass(format!("npm {version}")),
             Err(err) => DoctorCheckOutcome::Warn(err),
         };
         render_doctor_check(renderer, &mut summary, "npm", npm_result)?;
@@ -350,10 +345,10 @@ pub(crate) async fn run_doctor_diagnostics(
                             ))
                         }
                         McpInitStatus::Initializing { progress } => {
-                            DoctorCheckOutcome::Warn(format!("Initializing: {}", progress))
+                            DoctorCheckOutcome::Warn(format!("Initializing: {progress}"))
                         }
                         McpInitStatus::Error { message } => {
-                            DoctorCheckOutcome::Fail(format!("Init error: {}", message))
+                            DoctorCheckOutcome::Fail(format!("Init error: {message}"))
                         }
                         McpInitStatus::Disabled => {
                             DoctorCheckOutcome::Pass("Disabled in config".to_string())
@@ -497,18 +492,18 @@ fn render_doctor_check(
     summary.record(&outcome);
     match outcome {
         DoctorCheckOutcome::Pass(detail) => {
-            renderer.line(MessageStyle::Status, &format!("✓  {}: {}", label, detail))?
+            renderer.line(MessageStyle::Status, &format!("✓  {label}: {detail}"))?
         }
         DoctorCheckOutcome::Warn(detail) => {
-            renderer.line(MessageStyle::Warning, &format!("!  {}: {}", label, detail))?;
+            renderer.line(MessageStyle::Warning, &format!("!  {label}: {detail}"))?;
             if let Some(suggestion) = get_suggestion_for_issue(label, &detail) {
-                renderer.line(MessageStyle::Info, &format!("   -> {}", suggestion))?;
+                renderer.line(MessageStyle::Info, &format!("   -> {suggestion}"))?;
             }
         }
         DoctorCheckOutcome::Fail(detail) => {
-            renderer.line(MessageStyle::Error, &format!("✗  {}: {}", label, detail))?;
+            renderer.line(MessageStyle::Error, &format!("✗  {label}: {detail}"))?;
             if let Some(suggestion) = get_suggestion_for_issue(label, &detail) {
-                renderer.line(MessageStyle::Info, &format!("   -> {}", suggestion))?;
+                renderer.line(MessageStyle::Info, &format!("   -> {suggestion}"))?;
             }
         }
     }
@@ -621,9 +616,9 @@ fn detect_command_version(command: &str, args: &[&str]) -> std::result::Result<S
         }
         Err(err) => {
             if err.kind() == std::io::ErrorKind::NotFound {
-                Err(format!("{} not found in PATH", command))
+                Err(format!("{command} not found in PATH"))
             } else {
-                Err(format!("Failed to execute {}: {}", command, err))
+                Err(format!("Failed to execute {command}: {err}"))
             }
         }
     }

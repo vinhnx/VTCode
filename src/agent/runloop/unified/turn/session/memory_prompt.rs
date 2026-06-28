@@ -165,8 +165,7 @@ pub(crate) async fn handle_memory_prompt(
                 ),
                 Ok(None) => "No memory note was added.".to_string(),
                 Err(err) => format!(
-                    "Couldn't save memory. VT Code blocks memory writes unless the LLM planner succeeds: {}",
-                    err
+                    "Couldn't save memory. VT Code blocks memory writes unless the LLM planner succeeds: {err}"
                 ),
             };
             drop(save_spinner);
@@ -223,8 +222,7 @@ pub(crate) async fn handle_memory_prompt(
                         ctx,
                         input,
                         &format!(
-                            "Couldn't remove memory. VT Code blocks memory writes unless the LLM planner succeeds: {}",
-                            err
+                            "Couldn't remove memory. VT Code blocks memory writes unless the LLM planner succeeds: {err}"
                         ),
                     )?;
                     return Ok(Some(InteractionOutcome::DirectToolHandled));
@@ -284,8 +282,7 @@ pub(crate) async fn handle_memory_prompt(
                     "No matching persistent memory notes were removed.".to_string()
                 }
                 Err(err) => format!(
-                    "Couldn't remove memory. VT Code blocks memory writes unless the LLM planner succeeds: {}",
-                    err
+                    "Couldn't remove memory. VT Code blocks memory writes unless the LLM planner succeeds: {err}"
                 ),
             };
             drop(remove_spinner);
@@ -455,8 +452,7 @@ async fn maybe_cleanup_before_memory_mutation(
                 ctx,
                 input,
                 &format!(
-                    "Persistent memory cleanup failed, so VT Code did not change memory: {}",
-                    err
+                    "Persistent memory cleanup failed, so VT Code did not change memory: {err}"
                 ),
             )?;
             Ok(false)
@@ -492,8 +488,7 @@ async fn resolve_remember_plan(
                     ctx,
                     input,
                     &format!(
-                        "Couldn't save memory. VT Code blocks memory writes unless the LLM planner succeeds: {}",
-                        err
+                        "Couldn't save memory. VT Code blocks memory writes unless the LLM planner succeeds: {err}"
                     ),
                 )?;
                 return Ok(None);
@@ -603,13 +598,10 @@ async fn confirm_memory_plan(
 
     let confirm_step = WizardStep {
         title: "Confirm".to_string(),
-        question: format!(
-            "Review the normalized memory action below, then confirm.\n\n{}",
-            body
-        ),
+        question: format!("Review the normalized memory action below, then confirm.\n\n{body}"),
         items: vec![
             InlineListItem {
-                title: format!("Confirm {}", action_label),
+                title: format!("Confirm {action_label}"),
                 subtitle: Some("Apply the memory change now.".to_string()),
                 badge: Some("Confirm".to_string()),
                 indent: 0,

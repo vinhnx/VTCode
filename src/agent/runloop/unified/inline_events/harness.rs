@@ -270,7 +270,7 @@ impl HarnessEventEmitter {
                     // SSE format
                     let _ = writeln!(writer, "event: {}", stream_event.event_type());
                     if let Ok(json) = serde_json::to_string(&sequenced) {
-                        let _ = writeln!(writer, "data: {}", json);
+                        let _ = writeln!(writer, "data: {json}");
                     }
                     let _ = writeln!(writer);
                     let _ = writer.flush();

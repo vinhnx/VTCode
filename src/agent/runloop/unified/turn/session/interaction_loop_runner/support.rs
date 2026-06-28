@@ -249,7 +249,7 @@ async fn launch_input_editor_with_draft(
         }
         Err(err) => (
             MessageStyle::Error,
-            format!("Failed to launch editor: {}", err),
+            format!("Failed to launch editor: {err}"),
         ),
     };
 
@@ -359,13 +359,11 @@ pub(super) fn stalled_follow_up_recovery_prompt(
 ) -> String {
     if has_fallback_hint {
         format!(
-            "Continue autonomously from the last stalled turn. Stall reason: {}. Use the recovered fallback hint as the first adjusted strategy, then continue until you can provide a concrete conclusion and final review.",
-            stall_reason
+            "Continue autonomously from the last stalled turn. Stall reason: {stall_reason}. Use the recovered fallback hint as the first adjusted strategy, then continue until you can provide a concrete conclusion and final review."
         )
     } else {
         format!(
-            "Continue autonomously from the last stalled turn. Stall reason: {}. Keep working until you can provide a concrete conclusion and final review.",
-            stall_reason
+            "Continue autonomously from the last stalled turn. Stall reason: {stall_reason}. Keep working until you can provide a concrete conclusion and final review."
         )
     }
 }
@@ -482,7 +480,7 @@ fn build_file_reference_metadata(input: &str, workspace: &Path) -> Option<String
 
     let mut metadata = String::from("\n\n[file_reference_metadata]\n");
     for (alias, full_path) in &alias_to_full_path {
-        metadata.push_str(&format!("{}={}\n", alias, full_path));
+        metadata.push_str(&format!("{alias}={full_path}\n"));
     }
     metadata.push_str("Hint: Read each referenced file once using the resolved path above. Do not re-read unless truncated.\n");
 
@@ -753,14 +751,14 @@ async fn try_resume_archived_session(
         Ok(None) => {
             renderer.line(
                 MessageStyle::Error,
-                &format!("Session not found: {}", session_id),
+                &format!("Session not found: {session_id}"),
             )?;
             Ok(None)
         }
         Err(err) => {
             renderer.line(
                 MessageStyle::Error,
-                &format!("Failed to load session: {}", err),
+                &format!("Failed to load session: {err}"),
             )?;
             Ok(None)
         }

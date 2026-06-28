@@ -359,7 +359,7 @@ async fn show_agent_catalog(mut ctx: SlashCommandContext<'_>) -> Result<SlashCom
     let spec = specs
         .into_iter()
         .find(|spec| spec.name == name)
-        .ok_or_else(|| anyhow!("Unknown agent {}", name))?;
+        .ok_or_else(|| anyhow!("Unknown agent {name}"))?;
     render_agent_details(
         &mut ctx,
         &spec,
@@ -605,12 +605,9 @@ async fn resolve_custom_agent_path(ctx: &SlashCommandContext<'_>, name: &str) ->
         .await
         .into_iter()
         .find(|spec| spec.matches_name(name))
-        .ok_or_else(|| anyhow!("Unknown agent {}", name))?;
+        .ok_or_else(|| anyhow!("Unknown agent {name}"))?;
     let path = spec.file_path.ok_or_else(|| {
-        anyhow!(
-            "Agent {} is built-in or plugin-provided and cannot be edited here",
-            name
-        )
+        anyhow!("Agent {name} is built-in or plugin-provided and cannot be edited here")
     })?;
     Ok(path)
 }
@@ -651,7 +648,7 @@ fn render_agent_details(
     }
     for warning in &spec.warnings {
         ctx.renderer
-            .line(MessageStyle::Warning, &format!("Warning: {}", warning))?;
+            .line(MessageStyle::Warning, &format!("Warning: {warning}"))?;
     }
     Ok(())
 }

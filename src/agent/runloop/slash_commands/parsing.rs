@@ -34,8 +34,7 @@ pub(super) fn parse_prompt_template_args(args: &str) -> Result<Vec<String>, Stri
         return Ok(Vec::new());
     }
 
-    shell_words::split(trimmed)
-        .map_err(|err| format!("Failed to parse template arguments: {}", err))
+    shell_words::split(trimmed).map_err(|err| format!("Failed to parse template arguments: {err}"))
 }
 
 pub(super) fn parse_compact_command(args: &str) -> Result<CompactConversationCommand, String> {
@@ -48,7 +47,7 @@ pub(super) fn parse_compact_command(args: &str) -> Result<CompactConversationCom
     }
 
     let tokens =
-        shell_words::split(trimmed).map_err(|err| format!("Failed to parse arguments: {}", err))?;
+        shell_words::split(trimmed).map_err(|err| format!("Failed to parse arguments: {err}"))?;
     if tokens.len() == 1 {
         match tokens[0].as_str() {
             "edit-prompt" => return Ok(CompactConversationCommand::EditDefaultPrompt),
@@ -65,7 +64,7 @@ pub(super) fn parse_compact_command(args: &str) -> Result<CompactConversationCom
         let token = &tokens[index];
         let next_value = |flag: &str, index: &mut usize| -> Result<String, String> {
             let Some(value) = tokens.get(*index + 1) else {
-                return Err(format!("Missing value for {}", flag));
+                return Err(format!("Missing value for {flag}"));
             };
             *index += 2;
             Ok(value.clone())
@@ -84,16 +83,16 @@ pub(super) fn parse_compact_command(args: &str) -> Result<CompactConversationCom
             }
             "--reasoning-effort" => {
                 let value = next_value("--reasoning-effort", &mut index)?;
-                options.reasoning_effort =
-                    Some(ReasoningEffortLevel::parse(&value).ok_or_else(|| {
-                        format!("Invalid value for --reasoning-effort: {}", value)
-                    })?);
+                options.reasoning_effort = Some(
+                    ReasoningEffortLevel::parse(&value)
+                        .ok_or_else(|| format!("Invalid value for --reasoning-effort: {value}"))?,
+                );
             }
             "--verbosity" => {
                 let value = next_value("--verbosity", &mut index)?;
                 options.verbosity = Some(
                     VerbosityLevel::parse(&value)
-                        .ok_or_else(|| format!("Invalid value for --verbosity: {}", value))?,
+                        .ok_or_else(|| format!("Invalid value for --verbosity: {value}"))?,
                 );
             }
             "--native-only" => {
@@ -105,12 +104,11 @@ pub(super) fn parse_compact_command(args: &str) -> Result<CompactConversationCom
             // pointer to the supported flags.
             "--include" | "--store" | "--no-store" | "--service-tier" | "--prompt-cache-key" => {
                 return Err(format!(
-                    "`{}` is no longer supported by the unified `/compact` command. \
+                    "`{token}` is no longer supported by the unified `/compact` command. \
                      `/compact` now works across all providers using only --instructions, \
                      --max-output-tokens, --reasoning-effort, --verbosity, and --native-only. \
                      OpenAI-native server-side options are applied automatically when compacting \
-                     against the native OpenAI API.",
-                    token
+                     against the native OpenAI API."
                 ));
             }
             _ => {
@@ -125,19 +123,19 @@ pub(super) fn parse_compact_command(args: &str) -> Result<CompactConversationCom
                 } else if let Some(value) = token.strip_prefix("--reasoning-effort=") {
                     options.reasoning_effort =
                         Some(ReasoningEffortLevel::parse(value).ok_or_else(|| {
-                            format!("Invalid value for --reasoning-effort: {}", value)
+                            format!("Invalid value for --reasoning-effort: {value}")
                         })?);
                     index += 1;
                 } else if let Some(value) = token.strip_prefix("--verbosity=") {
                     options.verbosity = Some(
                         VerbosityLevel::parse(value)
-                            .ok_or_else(|| format!("Invalid value for --verbosity: {}", value))?,
+                            .ok_or_else(|| format!("Invalid value for --verbosity: {value}"))?,
                     );
                     index += 1;
                 } else if token.starts_with('-') {
-                    return Err(format!("Unknown option: {}", token));
+                    return Err(format!("Unknown option: {token}"));
                 } else {
-                    return Err(format!("Unexpected argument: {}", token));
+                    return Err(format!("Unexpected argument: {token}"));
                 }
             }
         }
@@ -158,7 +156,7 @@ pub(super) fn parse_session_log_export_format(
     }
 
     let tokens =
-        shell_words::split(trimmed).map_err(|err| format!("Failed to parse arguments: {}", err))?;
+        shell_words::split(trimmed).map_err(|err| format!("Failed to parse arguments: {err}"))?;
 
     if tokens.is_empty() {
         return Ok(SessionLogExportFormat::Both);
@@ -191,7 +189,7 @@ pub(super) fn parse_review_spec(args: &str) -> Result<ReviewSpec, String> {
     }
 
     let tokens =
-        shell_words::split(trimmed).map_err(|err| format!("Failed to parse arguments: {}", err))?;
+        shell_words::split(trimmed).map_err(|err| format!("Failed to parse arguments: {err}"))?;
 
     let mut last_diff = false;
     let mut target: Option<String> = None;
@@ -246,7 +244,7 @@ pub(super) fn parse_review_spec(args: &str) -> Result<ReviewSpec, String> {
             continue;
         }
         if token.starts_with('-') {
-            return Err(format!("Unknown option: {}", token));
+            return Err(format!("Unknown option: {token}"));
         }
 
         files.push(token.clone());
@@ -263,7 +261,7 @@ pub(super) fn parse_analyze_scope(args: &str) -> Result<Option<String>, String> 
     }
 
     let tokens =
-        shell_words::split(trimmed).map_err(|err| format!("Failed to parse arguments: {}", err))?;
+        shell_words::split(trimmed).map_err(|err| format!("Failed to parse arguments: {err}"))?;
 
     if tokens.len() != 1 {
         return Err("Usage: /analyze [full|security|performance]".to_string());

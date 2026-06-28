@@ -137,7 +137,7 @@ async fn load_specific_session(
 ) -> Result<SessionContinuation> {
     crate::agent::agents::load_resume_session(identifier, intent)
         .await?
-        .ok_or_else(|| anyhow!("No session with identifier '{}' was found.", identifier))
+        .ok_or_else(|| anyhow!("No session with identifier '{identifier}' was found."))
 }
 
 async fn select_session_interactively(
@@ -349,10 +349,10 @@ fn format_listing(listing: &SessionListing) -> String {
         ended, listing.snapshot.metadata.model, listing.snapshot.total_messages
     );
     if let Some(prompt) = listing.first_prompt_preview() {
-        summary.push_str(&format!("\n  prompt: {}", prompt));
+        summary.push_str(&format!("\n  prompt: {prompt}"));
     }
     if let Some(reply) = listing.first_reply_preview() {
-        summary.push_str(&format!("\n  reply: {}", reply));
+        summary.push_str(&format!("\n  reply: {reply}"));
     }
     summary
 }

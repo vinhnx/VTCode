@@ -391,7 +391,7 @@ pub(crate) async fn build_inline_header_context(
         chain_entries.push(label);
     }
     if let Some(tip) = workspace_signals.custom_hint {
-        chain_entries.push(format!("Tip: {}", tip));
+        chain_entries.push(format!("Tip: {tip}"));
     }
 
     let context = InlineHeaderContext {

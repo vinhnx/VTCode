@@ -691,7 +691,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                                 );
                                 renderer.line(
                                     MessageStyle::Error,
-                                    &format!("Failed to reload configuration: {}", err),
+                                    &format!("Failed to reload configuration: {err}"),
                                 )?;
                             }
 
@@ -939,34 +939,29 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                                 renderer.line(
                                     MessageStyle::Error,
                                     &format!(
-                                        "Turn timed out after {} seconds during the compacted recovery pass. PTY sessions cancelled; stopping turn.",
-                                        timeout_secs
+                                        "Turn timed out after {timeout_secs} seconds during the compacted recovery pass. PTY sessions cancelled; stopping turn."
                                     ),
                                 )?;
                                 break Err(anyhow::anyhow!(
-                                    "Turn timed out after {} seconds during the compacted recovery pass",
-                                    timeout_secs
+                                    "Turn timed out after {timeout_secs} seconds during the compacted recovery pass"
                                 ));
                             }
                             if attempts >= 2 {
                                 renderer.line(
                                   MessageStyle::Error,
                                   &format!(
-                                      "Turn timed out after {} seconds. PTY sessions cancelled; stopping turn.",
-                                    timeout_secs
+                                      "Turn timed out after {timeout_secs} seconds. PTY sessions cancelled; stopping turn."
                                 ),
                             )?;
                                 break Err(anyhow::anyhow!(
-                                    "Turn timed out after {} seconds",
-                                    timeout_secs
+                                    "Turn timed out after {timeout_secs} seconds"
                                 ));
                             }
                             turn_history_checkpoint.rollback(&mut working_history);
                             renderer.line(
                             MessageStyle::Error,
                             &format!(
-                                "Turn timed out after {} seconds. PTY sessions cancelled; retrying once.",
-                                timeout_secs
+                                "Turn timed out after {timeout_secs} seconds. PTY sessions cancelled; retrying once."
                             ),
                         )?;
                         }
@@ -977,7 +972,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                         handle.set_input_status(None, None);
                         let _ = renderer.line_if_not_empty(MessageStyle::Output);
                         tracing::error!("Turn execution error: {}", err);
-                        let _ = renderer.line(MessageStyle::Error, &format!("Error: {}", err));
+                        let _ = renderer.line(MessageStyle::Error, &format!("Error: {err}"));
                         TurnLoopOutcome {
                             result: RunLoopTurnLoopResult::Aborted,
                             turn_modified_files: std::collections::BTreeSet::new(),
@@ -1040,7 +1035,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     renderer
                         .line(
                             MessageStyle::Error,
-                            &format!("Failed to finalize turn: {}", err),
+                            &format!("Failed to finalize turn: {err}"),
                         )
                         .ok();
                 }
@@ -1257,7 +1252,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 renderer
                     .line(
                         MessageStyle::Error,
-                        &format!("Failed to finalize session: {}", err),
+                        &format!("Failed to finalize session: {err}"),
                     )
                     .ok();
                 None

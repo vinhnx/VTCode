@@ -31,8 +31,7 @@ async fn create_file_rejects_workspace_escape() {
     let message = value.to_string();
     assert!(
         message.contains("outside the workspace"),
-        "expected workspace guard in error, got: {}",
-        message
+        "expected workspace guard in error, got: {message}"
     );
     assert!(
         !outside.exists(),

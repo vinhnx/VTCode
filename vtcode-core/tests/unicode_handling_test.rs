@@ -30,7 +30,7 @@ mod tests {
         match str::from_utf8(invalid_sequence) {
             Ok(_) => panic!("Should not be valid UTF-8"),
             Err(error) => {
-                println!("UTF-8 error: {:?}", error);
+                println!("UTF-8 error: {error:?}");
                 println!("Valid up to: {}", error.valid_up_to());
                 println!("Error length: {:?}", error.error_len());
 
@@ -39,11 +39,11 @@ mod tests {
                 if valid_up_to > 0 {
                     let valid_part = &invalid_sequence[..valid_up_to];
                     let valid_str = str::from_utf8(valid_part).unwrap();
-                    println!("Valid part: '{:?}'", valid_str);
+                    println!("Valid part: '{valid_str:?}'");
                 }
 
                 if let Some(error_len) = error.error_len() {
-                    println!("Invalid sequence length: {}", error_len);
+                    println!("Invalid sequence length: {error_len}");
                     // push_utf8 would push "\u{FFFD}" here
                 }
             }
@@ -84,7 +84,7 @@ mod tests {
         assert_eq!(replacement, "�");
 
         // Test how it appears with other characters
-        let mixed = format!("Hello{}World", replacement);
+        let mixed = format!("Hello{replacement}World");
         assert!(mixed.contains("�"));
         assert!(mixed.contains("Hello"));
         assert!(mixed.contains("World"));
@@ -99,11 +99,11 @@ mod tests {
         // This should be invalid/replaced in proper UTF-8 handling
         match str::from_utf8(&overlong_a) {
             Ok(s) => {
-                println!("Overlong encoding accepted as: '{:?}'", s);
+                println!("Overlong encoding accepted as: '{s:?}'");
                 // Some UTF-8 decoders might accept this, but they shouldn't
             }
             Err(e) => {
-                println!("Overlong encoding correctly rejected: {:?}", e);
+                println!("Overlong encoding correctly rejected: {e:?}");
             }
         }
     }

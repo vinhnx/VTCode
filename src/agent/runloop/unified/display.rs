@@ -19,13 +19,13 @@ pub(crate) async fn persist_theme_preference(
     if let Err(err) = update_theme_preference(theme_id).await {
         renderer.line(
             MessageStyle::Error,
-            &format!("Failed to persist theme preference: {}", err),
+            &format!("Failed to persist theme preference: {err}"),
         )?;
     }
     if let Err(err) = persist_theme_config(workspace, theme_id) {
         renderer.line(
             MessageStyle::Error,
-            &format!("Failed to persist theme in vtcode.toml: {}", err),
+            &format!("Failed to persist theme in vtcode.toml: {err}"),
         )?;
     }
     Ok(())

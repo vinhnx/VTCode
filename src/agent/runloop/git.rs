@@ -313,7 +313,7 @@ pub(crate) async fn confirm_changes_with_git_diff(
         })
         .await
         .context("Failed to spawn blocking git diff")?
-        .with_context(|| format!("Failed to run git diff for {}", file))?;
+        .with_context(|| format!("Failed to run git diff for {file}"))?;
 
         let diff = String::from_utf8_lossy(&output.stdout);
         if !diff.is_empty() {
@@ -324,7 +324,7 @@ pub(crate) async fn confirm_changes_with_git_diff(
                 continue;
             }
 
-            println!("Changes to {}:\n{}", file, diff);
+            println!("Changes to {file}:\n{diff}");
             print!("Apply these changes? (y/n): ");
             io::stdout().flush()?;
             let mut input = String::new();
@@ -338,7 +338,7 @@ pub(crate) async fn confirm_changes_with_git_diff(
                 })
                 .await
                 .context("Failed to spawn blocking git checkout")?
-                .with_context(|| format!("Failed to revert {}", file))?;
+                .with_context(|| format!("Failed to revert {file}"))?;
                 return Ok(false);
             }
         }

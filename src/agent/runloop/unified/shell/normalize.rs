@@ -76,7 +76,7 @@ fn normalize_cargo_test_phrase(tokens: &[&str], lowered_tokens: &[String]) -> Op
         let test_name_joined = tokens[7..].join(" ");
         let test_name = trim_token(&test_name_joined);
         if !bin_name.is_empty() && !test_name.is_empty() {
-            return Some(format!("cargo test --bin {} {}", bin_name, test_name));
+            return Some(format!("cargo test --bin {bin_name} {test_name}"));
         }
     }
 
@@ -86,7 +86,7 @@ fn normalize_cargo_test_phrase(tokens: &[&str], lowered_tokens: &[String]) -> Op
     {
         let package_name = trim_token(tokens[3]);
         if !package_name.is_empty() {
-            return Some(format!("cargo test -p {}", package_name));
+            return Some(format!("cargo test -p {package_name}"));
         }
     }
 
@@ -100,14 +100,14 @@ fn normalize_cargo_check_phrase(tokens: &[&str], lowered_tokens: &[String]) -> O
     {
         let package_name = trim_token(tokens[3]);
         if !package_name.is_empty() {
-            return Some(format!("cargo check -p {}", package_name));
+            return Some(format!("cargo check -p {package_name}"));
         }
     }
 
     if lowered_tokens.len() >= 5 && lowered_tokens[2] == "on" && lowered_tokens[4] == "bin" {
         let bin_name = trim_token(tokens[3]);
         if !bin_name.is_empty() {
-            return Some(format!("cargo check --bin {}", bin_name));
+            return Some(format!("cargo check --bin {bin_name}"));
         }
     }
 
@@ -142,7 +142,7 @@ fn normalize_node_package_manager_phrase(command_part: &str) -> Option<String> {
             if target.is_empty() {
                 return None;
             }
-            Some(format!("{} test --workspace {}", pm, target))
+            Some(format!("{pm} test --workspace {target}"))
         }
         Some("run")
             if lowered_tokens.len() >= 6
@@ -157,7 +157,7 @@ fn normalize_node_package_manager_phrase(command_part: &str) -> Option<String> {
             if script.is_empty() || target.is_empty() {
                 return None;
             }
-            Some(format!("{} run {} --workspace {}", pm, script, target))
+            Some(format!("{pm} run {script} --workspace {target}"))
         }
         _ => None,
     }
@@ -187,7 +187,7 @@ fn normalize_pytest_phrase(command_part: &str) -> Option<String> {
         if path.is_empty() || test_name.is_empty() {
             return None;
         }
-        return Some(format!("pytest {} -k {}", path, test_name));
+        return Some(format!("pytest {path} -k {test_name}"));
     }
 
     if lowered_tokens.len() >= 3 && lowered_tokens[1] == "on" {
@@ -196,7 +196,7 @@ fn normalize_pytest_phrase(command_part: &str) -> Option<String> {
         if path.is_empty() {
             return None;
         }
-        return Some(format!("pytest {}", path));
+        return Some(format!("pytest {path}"));
     }
 
     if lowered_tokens.len() >= 4
@@ -211,7 +211,7 @@ fn normalize_pytest_phrase(command_part: &str) -> Option<String> {
         if test_name.is_empty() {
             return None;
         }
-        return Some(format!("pytest -k {}", test_name));
+        return Some(format!("pytest -k {test_name}"));
     }
 
     None
@@ -267,7 +267,7 @@ fn normalize_unix_phrase(command_part: &str) -> Option<String> {
         let pattern_joined = tokens[for_idx + 1..].join(" ");
         let pattern = trim_token(&pattern_joined);
         if !base.is_empty() && !pattern.is_empty() {
-            return Some(format!("find {} -name {}", base, pattern));
+            return Some(format!("find {base} -name {pattern}"));
         }
     }
 

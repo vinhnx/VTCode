@@ -27,9 +27,9 @@ pub(super) fn build_tool_status_message(tool_name: &str, args: &Value) -> String
             .get("command")
             .and_then(|value| value.as_str())
             .unwrap_or(tool_name);
-        format!("Running command: {}", command)
+        format!("Running command: {command}")
     } else {
-        format!("Running tool: {}", tool_name)
+        format!("Running tool: {tool_name}")
     }
 }
 

@@ -33,14 +33,9 @@ pub(super) fn build_read_file_definition(workspace_root: &Path) -> ToolDefinitio
     let workspace_display = workspace_root.display().to_string();
     let sample_path = workspace_root.join("README.md");
     let sample_path_string = sample_path.to_string_lossy().into_owned();
-    let sample_uri = format!("file://{}", sample_path_string);
+    let sample_uri = format!("file://{sample_path_string}");
     let description = format!(
-        "{TOOL_READ_FILE_DESCRIPTION}. Workspace root: {workspace}. Provide {path} or {uri} inside the workspace. Paths must be absolute (see ACP file system spec). Optional {line} and {limit} control slicing.",
-        workspace = workspace_display,
-        path = TOOL_READ_FILE_PATH_ARG,
-        uri = TOOL_READ_FILE_URI_ARG,
-        line = TOOL_READ_FILE_LINE_ARG,
-        limit = TOOL_READ_FILE_LIMIT_ARG,
+        "{TOOL_READ_FILE_DESCRIPTION}. Workspace root: {workspace_display}. Provide {TOOL_READ_FILE_PATH_ARG} or {TOOL_READ_FILE_URI_ARG} inside the workspace. Paths must be absolute (see ACP file system spec). Optional {TOOL_READ_FILE_LINE_ARG} and {TOOL_READ_FILE_LIMIT_ARG} control slicing.",
     );
     let examples = vec![
         json!({

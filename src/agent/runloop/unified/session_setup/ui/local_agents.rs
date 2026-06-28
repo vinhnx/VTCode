@@ -303,7 +303,7 @@ fn thread_event_preview_line(event: &ThreadEvent) -> Option<(String, String)> {
             )
         }
         ThreadItemDetails::ToolOutput(output) => summarize_preview_text(&output.output)
-            .map(|text| format!("tool output: {}", text))
+            .map(|text| format!("tool output: {text}"))
             .unwrap_or_else(|| {
                 format!("tool output: {}", tool_status_label(output.status.clone()))
             }),

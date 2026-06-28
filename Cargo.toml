@@ -171,7 +171,7 @@ unimplemented = "warn"
 unreachable = "warn"
 get_unwrap = "warn"
 unwrap_in_result = "allow"
-unchecked_time_subtraction = "warn"
+unchecked_duration_subtraction = "warn"
 panic_in_result_fn = "allow"
 
 # Don't Fail Silently - prevent dropped futures and swallowed errors
@@ -214,7 +214,7 @@ rc_mutex = "warn"
 debug_assert_with_mut_call = "warn"
 iter_not_returning_iterator = "warn"
 expl_impl_clone_on_copy = "warn"
-infallible_try_from = "warn"
+fallible_impl_from = "warn"
 dbg_macro = "warn"
 
 # Don't `allow` Your Way Around These Lints

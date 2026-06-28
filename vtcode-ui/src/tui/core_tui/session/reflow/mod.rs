@@ -451,7 +451,6 @@ impl Session {
                 stripped.trim().is_empty() || text_utils::is_list_item(stripped.as_ref())
             });
         if suppress_prefix_bullet
-            && !ui::INLINE_AGENT_QUOTE_PREFIX.is_empty()
             && let Some(prefix_span) = prefix_spans
                 .first_mut()
                 .filter(|span| AsRef::<str>::as_ref(&span.content) == ui::INLINE_AGENT_QUOTE_PREFIX)
@@ -482,9 +481,7 @@ impl Session {
             };
             if index == 0 {
                 spans.append(&mut prefix_spans);
-                if !left_padding.is_empty() {
-                    spans.push(Span::raw(left_padding));
-                }
+                spans.push(Span::raw(left_padding));
             } else if !indent.is_empty() {
                 spans.push(Span::raw(indent.clone()));
             }

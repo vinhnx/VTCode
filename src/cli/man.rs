@@ -8,7 +8,7 @@ pub async fn handle_man_command(
 ) -> Result<()> {
     let content = match command.as_deref() {
         Some(cmd) => ManPageGenerator::generate_command_man_page(cmd)
-            .with_context(|| format!("Failed to generate man page for {}", cmd))?,
+            .with_context(|| format!("Failed to generate man page for {cmd}"))?,
         None => ManPageGenerator::generate_main_man_page()
             .context("Failed to generate main man page")?,
     };
@@ -17,7 +17,7 @@ pub async fn handle_man_command(
         write_file_with_context_sync(&path, &content, "man page")?;
         println!("Wrote man page to {}", path.display());
     } else {
-        println!("{}", content);
+        println!("{content}");
     }
 
     Ok(())

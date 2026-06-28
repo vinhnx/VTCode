@@ -59,7 +59,7 @@ pub(crate) async fn handle_input_commands(
                             tracing::error!("slash command parse/dispatch failed: {err:#}");
                             ctx.renderer.line(
                                 MessageStyle::Error,
-                                &format!("Slash command failed: {}", err),
+                                &format!("Slash command failed: {err}"),
                             )?;
                             return Ok(CommandProcessingResult::ContinueLoop);
                         }
@@ -109,10 +109,8 @@ pub(crate) async fn handle_input_commands(
                     Ok(result) => result,
                     Err(err) => {
                         tracing::error!("slash command execution failed: {err:#}");
-                        ctx.renderer.line(
-                            MessageStyle::Error,
-                            &format!("Slash command failed: {}", err),
-                        )?;
+                        ctx.renderer
+                            .line(MessageStyle::Error, &format!("Slash command failed: {err}"))?;
                         return Ok(CommandProcessingResult::ContinueLoop);
                     }
                 };

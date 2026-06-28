@@ -420,8 +420,7 @@ async fn llm_prompt_suggestions_from_provider(
 
     let request = uni::LLMRequest {
         messages: vec![uni::Message::user(format!(
-            "Generate 3 short follow-up prompts for this VT Code session. Return one prompt per line.\n\nRecent session context:\n{}",
-            context
+            "Generate 3 short follow-up prompts for this VT Code session. Return one prompt per line.\n\nRecent session context:\n{context}"
         ))],
         system_prompt: Some(std::sync::Arc::new(
             "You write concise follow-up prompts for a coding assistant UI. Return plain text only, one prompt per line, no bullets or numbering.".to_string(),

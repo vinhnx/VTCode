@@ -204,10 +204,7 @@ pub(super) fn validate_questions(questions: &[RequestUserInputQuestion]) -> Resu
             bail!("question header cannot be empty");
         }
         if header.chars().count() > 12 {
-            bail!(
-                "question header '{}' must be 12 characters or fewer",
-                header
-            );
+            bail!("question header '{header}' must be 12 characters or fewer");
         }
 
         let prompt = question.question.trim();

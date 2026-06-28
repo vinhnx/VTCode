@@ -150,7 +150,7 @@ fn parse_spec(source: &str, workspace: &Path) -> Result<Vec<PreparedTask>> {
 
     Ok(vec![PreparedTask {
         task: Task {
-            id: format!("{}-1", TASK_PREFIX),
+            id: format!("{TASK_PREFIX}-1"),
             title: DEFAULT_TASK_TITLE.to_string(),
             description: trimmed.to_string(),
             instructions: None,

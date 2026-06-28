@@ -173,8 +173,7 @@ fn select_model_with_ratatui(options: &[String], default_model: &'static str) ->
         .unwrap_or(0);
 
     let instructions = format!(
-        "Default: {}. Use ↑/↓ or j/k to choose, Enter to confirm, Esc to keep the default.",
-        default_model
+        "Default: {default_model}. Use ↑/↓ or j/k to choose, Enter to confirm, Esc to keep the default."
     );
     let selected_index = run_selection("Models", &instructions, &entries, default_index)?;
     Ok(options[selected_index].clone())
@@ -209,7 +208,7 @@ fn prompt_model_text(
         }
     }
 
-    let input = prompt_with_placeholder(&format!("Model [{}]", default_model))?;
+    let input = prompt_with_placeholder(&format!("Model [{default_model}]"))?;
     let trimmed = input.trim();
     if trimmed.is_empty() {
         return Ok(default_model.to_owned());
@@ -278,8 +277,7 @@ fn explicit_lightweight_subtitle(provider: Provider, model: &str, auto_model: &s
 
     let provider_label = provider.label();
     format!(
-        "Explicit {} lightweight route for faster, cheaper memory and suggestion tasks.",
-        provider_label
+        "Explicit {provider_label} lightweight route for faster, cheaper memory and suggestion tasks."
     )
 }
 

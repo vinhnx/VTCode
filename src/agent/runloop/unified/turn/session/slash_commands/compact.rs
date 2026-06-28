@@ -163,7 +163,7 @@ async fn execute_manual_compaction(
         Ok(outcome) => outcome,
         Err(err) => {
             ctx.renderer
-                .line(MessageStyle::Error, &format!("Compaction failed: {}", err))?;
+                .line(MessageStyle::Error, &format!("Compaction failed: {err}"))?;
             return Ok(SlashCommandControl::Continue);
         }
     };
