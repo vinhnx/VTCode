@@ -984,6 +984,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: Security Modes, Dynamic Configuration Files, Inline Configuration, HTTPS Enforcement, Security Best Practices
   - **User Questions**: "What can you tell me about Web Fetch Tool Security Configuration?", "How does Security Modes work?", "How does Dynamic Configuration Files work?"
 
+- **File**: `docs/tools/web_search.md`
+  - **Content**: Web Search Tool
+  - **Topics**: Usage, Output, Configuration, Guard Rails, Related Tools
+  - **User Questions**: "What can you tell me about Web Search Tool?", "How does Usage work?", "How does Output work?"
+
 ### User Workflows & Commands
 
 - **File**: `docs/user-guide/commands.md`

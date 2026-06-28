@@ -100,6 +100,7 @@ Press `Alt+O` to open the fullscreen transcript review surface. It builds a plai
 
 ### Session Context Commands
 
+- `/continue` resumes the most recently archived session in a new conversation. Equivalent to `vtcode --continue` from the CLI.
 - `/compact` compacts the current session history immediately when you want to shed context manually.
 - `/compact edit-prompt` and `/compact reset-prompt` manage the saved default prompt for manual compaction requests.
 - For providers with native Responses compaction, VT Code uses the provider-owned compacted state.

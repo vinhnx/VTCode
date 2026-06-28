@@ -38,7 +38,7 @@ VT Code represents a modern approach to AI-powered software development, featuri
 - **Decision Ledger** - Structured, compact record of key decisions injected each turn for consistency
 - **Error Recovery & Resilience** - Intelligent error handling with pattern detection and context preservation
 - **Conversation Summarization** - Automatic compression when exceeding thresholds with quality assessment
-- **Multi-Provider LLM Support** - 20+ providers including Gemini, OpenAI, Anthropic, DeepSeek, OpenRouter, Evolink, Qwen, StepFun, Poolside, Ollama, LM Studio, Xiaomi MiMo, Z.AI, Moonshot, MiniMax, HuggingFace
+- **Multi-Provider LLM Support** - 21+ providers including Gemini, OpenAI, Anthropic, DeepSeek, OpenRouter, Evolink, Qwen, StepFun, Poolside, Ollama, LM Studio, Xiaomi MiMo, Z.AI, Moonshot, MiniMax, HuggingFace
 - **LLM-Native Code Understanding** - Precise semantic analysis across all modern languages
 - **Bash Safety Parsing** - Accurate shell command validation via tree-sitter-bash
 - **Enterprise-Grade Safety** - Comprehensive security controls and path validation
@@ -65,12 +65,12 @@ VT Code has undergone significant improvements:
 - **Provider Stream Refactoring** - Simplified stream handling across DeepSeek, StepFun, and ZAI providers
 - **Decision Transparency System** - Complete audit trail with reasoning and confidence scores
 - **Error Recovery & Resilience** - Intelligent error handling with pattern detection and multiple recovery strategies
-- **Ast-grep Outline Mode** - Token-efficient symbol maps (`action=outline`) via `unified_search` for cheap "what's in this file/directory?" queries, auto-installs ast-grep on first use
-- **Web Search & Fetch** - `web_search` and `defuddle_fetch` tools with TOML-driven network allowlist and domain-scoped approval caching
-- **Post-Tool Recovery Cycles** - Automatic detection and cap enforcement for post-tool recovery loops with temporary file cleanup
-- **CLI `did you mean?`** - Fuzzy suggestions for unrecognized commands with colorized output
-- **Session Resume** - `/continue` slash command to resume the most recent session
-- **Loop Detection Hardening** - Blocked-streak fuse prevents false positives; read-extent-aware duplicate detection
+- **Ast-grep Outline Mode** — Token-efficient symbol maps (`action=outline`) via `unified_search` for cheap "what's in this file/directory?" queries, auto-installs ast-grep on first use
+- **Web Search & Fetch** — `web_search` and `defuddle_fetch` tools with TOML-driven network allowlist and domain-scoped approval caching
+- **Post-Tool Recovery Cycles** — Automatic detection and cap enforcement for post-tool recovery loops with temporary file cleanup
+- **CLI `did you mean?`** — Fuzzy suggestions for unrecognized commands with colorized output
+- **Session Resume** — `/continue` slash command to resume the most recent session
+- **Loop Detection Hardening** — Blocked-streak fuse prevents false positives; read-extent-aware duplicate detection
 
 See [CHANGELOG](../CHANGELOG.md) for complete details on these improvements.
 
@@ -95,6 +95,7 @@ Contributing to VT Code? Understand the architecture and development processes:
 - **[Architecture Overview](./ARCHITECTURE.md)** - System design and core components
 - **[Development Guide](./development/README.md)** - Development environment setup
 - **[Tool Reference](./tools/TOOL_SPECS.md)** - Technical reference for built-in tools
+- **[Web Search Tool](./tools/web_search.md)** - Web search configuration and guard rails
 - **[Code Standards](../.github/copilot-instructions.md)** - Coding guidelines and best practices
 - **[Memory Management](./guides/memory-management.md)** - Configure authored guidance, `.vtcode/rules/`, and per-repository persistent memory
 

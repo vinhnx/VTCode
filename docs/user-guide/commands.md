@@ -322,6 +322,30 @@ vtcode pods logs --name llama
 - `vtcode pods logs` - Stream the remote log for a model
 - `vtcode pods known-models` - Show compatible and incompatible profiles
 
+## Did You Mean?
+
+When you type an unrecognized `vtcode` subcommand, VT Code suggests the closest match:
+
+```bash
+$ vtcode initilize
+# Did you mean?
+#   vtcode init
+```
+
+Suggestions use fuzzy matching and are colorized. This also applies to slash commands inside interactive sessions.
+
+## Continue / Resume
+
+Resume the most recent archived session:
+
+```bash
+vtcode --continue
+# or in interactive mode:
+# /continue
+```
+
+This starts a fresh conversation with the context preserved from the last session. Use it to pick up where you left off after closing VT Code.
+
 ## Tips
 
 -   The agent respects `.vtcodegitignore` to exclude files from search and I/O.

@@ -46,6 +46,11 @@ This document describes the canonical public tool surface exposed to VT Code mod
 - `apply_patch`
   Purpose: First-class patch application for models that support the freeform patch surface.
 
+- `web_search`
+  Purpose: Searches the web via DuckDuckGo (keyless) and returns ranked results.
+  Accepts: `query` (string, required), `max_results` (number, optional).
+  See [Web Search Tool](./web_search.md) for config and guard rails.
+
 ## `unified_file`
 
 ### `read`
