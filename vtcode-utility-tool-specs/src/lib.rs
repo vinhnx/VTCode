@@ -310,7 +310,7 @@ pub fn unified_search_parameters() -> Value {
             },
             "match": {"type": "string", "description": "Regex for `outline` to filter item names/signatures/first lines."},
             "pub_members": {"type": "boolean", "description": "In `outline`, show only public members.", "default": false},
-            "follow": {"type": "boolean", "description": "Follow symbolic links in `outline`.", "default": false},
+            "follow": {"type": "boolean", "description": "Follow symbolic links while traversing directories. Used by `outline` and structural workflows.", "default": false},
             "debug_query": {
                 "type": "string",
                 "enum": ["pattern", "ast", "cst", "sexp"],
@@ -384,7 +384,6 @@ pub fn unified_search_parameters() -> Value {
                 "items": {"type": "string", "enum": ["hidden", "dot", "exclude", "global", "parent", "vcs"]},
                 "description": "Ignore file overrides: hidden, dot, exclude, global, parent, vcs."
             },
-            "follow": {"type": "boolean", "description": "Follow symbolic links while traversing directories for structural workflows.", "default": false},
             "threads": {"type": "integer", "description": "Number of threads for ast-grep scan parallelism. 0 means auto. Only for `workflow=\"scan\"`.", "minimum": 0, "maximum": 256, "default": 0},
             "format": {"type": "string", "enum": ["github", "sarif", "files_with_matches", "count"], "description": "Output format for structural `workflow=\"scan\"`. `github`/`sarif`: CI pipeline formats (raw output). `files_with_matches`: return only unique file paths. `count`: return match counts per file."},
             "report_style": {"type": "string", "enum": ["rich", "medium", "short"], "description": "Diagnostic report style for structural `workflow=\"scan\"`. Controls verbosity of diagnostic output."},
