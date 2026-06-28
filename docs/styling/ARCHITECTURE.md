@@ -149,7 +149,7 @@ vtcode-core
            file_palette.rs (FUTURE: Phase 3)
            FileColorizer [not yet added]
        
-        tui.rs (existing)
+        tui/ (existing, moved to vtcode-ui)
     
      diff_renderer.rs (FUTURE: Phase 2)
          GitColorConfig [not yet added]

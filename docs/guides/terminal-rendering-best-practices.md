@@ -354,5 +354,5 @@ Use `TestBackend` for offline rendering tests (no terminal needed).
 - [Ratatui: Widgets](https://ratatui.rs/how-to/render/widgets/)
 - [Ratatui: Styling](https://ratatui.rs/how-to/render/styling/)
 - [Ratatui: Custom Widgets](https://ratatui.rs/how-to/render/custom-widgets/)
-- `src/tui.rs` - Terminal event handler
+- `vtcode-ui/src/tui/core_tui/runner/` - Terminal event handler
 - `vtcode-core/src/ui/tui/session.rs` - Main render orchestration

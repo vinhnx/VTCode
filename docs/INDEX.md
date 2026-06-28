@@ -16,6 +16,9 @@ Last reviewed: 2026-06-28
 
 - [Configuration Precedence](config/CONFIGURATION_PRECEDENCE.md) - Runtime config loading order.
 - [Config Field Reference](config/CONFIG_FIELD_REFERENCE.md) - Field-level schema reference.
+- [Tool Specifications](tools/TOOL_SPECS.md) - Canonical tool surface reference.
+- [Web Search Tool](tools/web_search.md) - Web search configuration and guard rails.
+- [Defuddle Fetch](tools/defuddle_fetch.md) - Markdown extraction fallback for complex pages.
 - [Scheduled Tasks](user-guide/scheduled-tasks.md) - Reminder and durable scheduler flows.
 - [Permissions Guide](guides/permissions.md) - Granular agent permissions and rule grammar.
 - [Provider Guides](providers/PROVIDER_GUIDES.md) - LLM provider setup and behavior.

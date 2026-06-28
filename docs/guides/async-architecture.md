@@ -21,7 +21,7 @@ VT Code's main loop must handle three independent timers and one blocking I/O re
 
 Without async, polling each source would require sleeping, causing latency. With `tokio::select!`, VT Code reacts to whichever is ready first.
 
-**File:** `src/tui.rs:164-179`
+**File:** `vtcode-ui/src/tui/core_tui/runner/`
 
 ```rust
 tokio::select! {
@@ -113,7 +113,7 @@ Synchronous main
 
 ### Pattern 1: Spawned Event Handler
 
-**File:** `src/tui.rs:118-182`
+**File:** `vtcode-ui/src/tui/core_tui/runner/`
 
 ```rust
 fn start(&mut self) {
@@ -135,7 +135,7 @@ fn start(&mut self) {
 
 ### Pattern 2: Blocking I/O in Async Context
 
-**File:** `src/tui.rs:162`
+**File:** `vtcode-ui/src/tui/core_tui/runner/`
 
 ```rust
 let event_fut = tokio::task::spawn_blocking(|| {
@@ -174,7 +174,7 @@ let results = tokio::join_all(tool_tasks).await;
 
 ### Pattern 4: Graceful Shutdown with CancellationToken
 
-**File:** `src/tui.rs:233-236`
+**File:** `vtcode-ui/src/tui/`
 
 ```rust
 pub fn cancel(&self) {
@@ -452,5 +452,5 @@ Tokio's work-stealing scheduler minimizes context switches. Most of VT Code's as
 - [Tokio Tutorial](https://tokio.rs/tokio/tutorial)
 - [Tokio Select Documentation](https://tokio.rs/tokio/tutorial/select)
 - [Rust Async Book](https://rust-lang.github.io/async-book/)
-- `src/tui.rs` - Event loop implementation
+- `vtcode-ui/src/tui/` - Event loop implementation
 - `src/agent/runloop/unified/tool_pipeline.rs` - Concurrent tool execution

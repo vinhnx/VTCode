@@ -26,10 +26,10 @@ I successfully updated the controller.rs file to handle the new variants. I also
 ### 2. Error Reporting
 
 **Bad**:
-The file `src/main.rs` is too long (600 lines). Please fix it.
+The file `src/main.rs` is too long. Please fix it.
 
 **Good**:
-**Violation**: File `src/main.rs` exceeds 500-line invariant (602 lines).
+**Violation**: File `src/main.rs` exceeds 500-line invariant (currently 602 lines).
 **Remediation**: Split `src/main.rs` into focused submodules. Extract logical sections into separate files and re-export from `mod.rs`.
 
 ## Why It Matters

@@ -8,7 +8,7 @@ Based on best practices from Ratatui and terminal UI development, this FAQ addre
 
 VT Code correctly filters key events to only process `KeyEventKind::Press`, avoiding duplicate events from both press and release.
 
-See `src/tui.rs:153`:
+See `vtcode-ui/src/tui/core_tui/runner/`:
 ```rust
 if key.kind == KeyEventKind::Press {
     let _ = _event_tx.send(Event::Key(key));
@@ -37,7 +37,7 @@ VT Code's multi-agent coordination and tool execution justify async.
 
 ### Why use stderr instead of stdout for terminal rendering?
 
-VT Code renders to `stderr` (via `CrosstermBackend::new(std::io::stderr())` in `src/tui.rs:73`).
+VT Code renders to `stderr` (via `CrosstermBackend::new(std::io::stderr())` in the TUI runner).
 
 **Rationale:**
 - Allows piping output: `vtcode ask "task" | jq` doesn't break the TUI
@@ -158,7 +158,7 @@ trace_level = "debug"
 trace_targets = ["vtcode_core", "vtcode"]
 ```
 
-See `src/main.rs:244` and `src/main.rs:260` for initialization.
+See `src/main.rs` for initialization.
 
 ### How does VT Code handle buffer overruns?
 
@@ -170,8 +170,8 @@ The Ratatui FAQ recommends using `area.intersection(buf.area)` to prevent out-of
 
 ### What's VT Code's frame and tick rate?
 
-- **Frame rate:** 60 FPS (default in `src/tui.rs:72`)
-- **Tick rate:** 4 Hz (default in `src/tui.rs:71`)
+- **Frame rate:** 60 FPS (default in `vtcode-ui`)
+- **Tick rate:** 4 Hz (default in `vtcode-ui`)
 
 Both are configurable via builder methods:
 ```rust
@@ -180,7 +180,7 @@ tui.frame_rate(60.0).tick_rate(4.0)
 
 ### How does VT Code reduce latency?
 
-1. **Async event handling:** Non-blocking `tokio::select!` in `src/tui.rs:138`
+1. **Async event handling:** Non-blocking `tokio::select!` in the TUI event loop
 2. **Double buffering:** Ratatui only renders diffs, not full redraws
 3. **Lazy rendering:** Only recompute UI when state changes (not every frame)
 
@@ -190,7 +190,7 @@ Yes. VT Code detects when stdout is a pipe (not a TTY) and adapts:
 - **Interactive mode:** Full TUI if terminal is available
 - **Pipe mode:** Text output (if piped)
 
-Check `src/main.rs:228` for TTY detection.
+Check `src/main.rs` for TTY detection.
 
 ## See Also
 

@@ -21,9 +21,10 @@ VT Code is a Rust-based terminal coding agent with LLM-native code understanding
 Before contributing, please familiarize yourself with:
 
 1. The [README.md](README.md) for an overview of the project
-2. The [Architecture documentation](./ARCHITECTURE.md) for understanding the system design
-3. The [Extension Boundaries guide](./development/EXTENSION_BOUNDARIES.md) before adding new trait- or provider-shaped extension points
-4. The [Development Guide](./development/README.md) for detailed development processes
+2. The [AGENTS.md](../AGENTS.md) and [CLAUDE.md](../CLAUDE.md) for agent governance, workspace conventions, and per-crate guidance
+3. The [Architecture documentation](./ARCHITECTURE.md) for understanding the system design
+4. The [Extension Boundaries guide](./development/EXTENSION_BOUNDARIES.md) before adding new trait- or provider-shaped extension points
+5. The [Development Guide](./development/README.md) for detailed development processes
 
 ## Development Setup
 

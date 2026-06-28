@@ -13,7 +13,7 @@ VT Code is built on Ratatui and uses its terminal UI patterns extensively. The R
 **Ratatui FAQ:** [Why am I getting duplicate key events on Windows?](https://ratatui.rs/faq/#why-am-i-getting-duplicate-key-events-on-windows)
 
 **VT Code Implementation:**
-- **File:** `src/tui.rs:152-159`
+- **File:** `vtcode-ui/src/tui/core_tui/runner/`
 - **Pattern:** Filter crossterm events to `KeyEventKind::Press` only
 - **Benefit:** Prevents duplicate key events on Windows while working correctly on macOS/Linux
 
@@ -28,7 +28,7 @@ if key.kind == KeyEventKind::Press {
 **Ratatui FAQ:** [When should I use tokio and async/await?](https://ratatui.rs/faq/#when-should-i-use-tokio-and-async--await-)
 
 **VT Code Implementation:**
-- **File:** `src/tui.rs:118-182` (event loop), `src/agent/runloop/unified/` (tool execution)
+- **File:** `vtcode-ui/src/tui/core_tui/runner/` (event loop), `src/agent/runloop/unified/` (tool execution)
 - **Pattern:** Use `tokio::select!` to multiplex independent event sources
 - **Benefit:** Non-blocking event handling, concurrent tool execution, streaming responses
 
@@ -67,7 +67,7 @@ terminal.draw(|f| {
 **Ratatui FAQ:** [Should I use stdout or stderr?](https://ratatui.rs/faq/#should-i-use-stdout-or-stderr)
 
 **VT Code Implementation:**
-- **File:** `src/tui.rs:73`
+- **File:** `vtcode-ui/src/tui/core_tui/runner/`
 - **Choice:** Renders to `stderr` (via `CrosstermBackend::new(std::io::stderr())`)
 - **Benefit:** Allows piping output (`vtcode ask "task" | jq`) without breaking the TUI
 
@@ -81,7 +81,7 @@ terminal.draw(|f| {
 **Ratatui FAQ:** [Can you change font size in a terminal using ratatui?](https://ratatui.rs/faq/#can-you-change-font-size-in-a-terminal-using-ratatui)
 
 **VT Code Implementation:**
-- **File:** `src/tui.rs:44` (Resize event definition)
+- **File:** `vtcode-ui/src/tui/core_tui/runner/` (Resize event handling)
 - **Pattern:** Listen for `Event::Resize(w, h)` and recalculate layout
 - **Benefit:** VT Code adapts gracefully to terminal size changes
 
@@ -90,7 +90,7 @@ terminal.draw(|f| {
 **Ratatui FAQ:** [Spawn vim from Ratatui](https://ratatui.rs/recipes/apps/spawn-vim/) (recipe, not FAQ)
 
 **VT Code Implementation:**
-- **File:** `src/tui.rs:303-357` (ExternalAppLauncher trait)
+- **File:** `vtcode-ui/src/tui/` (ExternalAppLauncher trait)
 - **Pattern:** Suspend TUI → disable raw mode → run external app → resume TUI
 - **Critical step:** Drain pending events before disabling raw mode
 - **Benefit:** Clean terminal state for external editors/git clients
@@ -143,7 +143,7 @@ Guide to widget rendering and UI composition:
 
 ## Code Comments
 
-Added clarifying comments to `src/tui.rs` explaining the cross-platform key event filtering:
+Added clarifying comments to `vtcode-ui/src/tui/core_tui/runner/` explaining the cross-platform key event filtering:
 
 ```rust
 // Filter to Press events only for cross-platform compatibility.
