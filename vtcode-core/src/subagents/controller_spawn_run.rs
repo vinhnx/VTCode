@@ -354,7 +354,7 @@ impl SubagentController {
         Ok(record.build_status_entry())
     }
 
-    pub(crate) async fn spawn_child_ids_for_parent(&self, parent_thread_id: &str) -> Vec<String> {
+    pub(super) async fn spawn_child_ids_for_parent(&self, parent_thread_id: &str) -> Vec<String> {
         let state = self.state.read().await;
         let mut child_ids = state
             .children
@@ -366,7 +366,7 @@ impl SubagentController {
         child_ids
     }
 
-    pub(crate) async fn collect_spawn_subtree_ids(
+    pub(super) async fn collect_spawn_subtree_ids(
         &self,
         root_thread_id: &str,
     ) -> Result<Vec<String>> {
@@ -384,7 +384,7 @@ impl SubagentController {
         Ok(subtree_ids)
     }
 
-    pub(crate) async fn reopen_single(&self, target: &str) -> Result<bool> {
+    pub(super) async fn reopen_single(&self, target: &str) -> Result<bool> {
         let mut state = self.state.write().await;
         let record = state
             .children
@@ -408,7 +408,7 @@ impl SubagentController {
         Ok(true)
     }
 
-    pub(crate) async fn close_single(&self, target: &str) -> Result<SubagentStatusEntry> {
+    pub(super) async fn close_single(&self, target: &str) -> Result<SubagentStatusEntry> {
         let mut state = self.state.write().await;
         let record = state
             .children
@@ -427,7 +427,7 @@ impl SubagentController {
         Ok(record.build_status_entry())
     }
 
-    pub(crate) async fn background_status_for(
+    pub(super) async fn background_status_for(
         &self,
         target: &str,
     ) -> Result<BackgroundSubprocessEntry> {
@@ -439,7 +439,7 @@ impl SubagentController {
         Ok(record.build_status_entry())
     }
 
-    pub(crate) async fn ensure_background_record_running(
+    pub(super) async fn ensure_background_record_running(
         &self,
         agent_name: &str,
         stable_id: Option<&str>,
@@ -622,7 +622,7 @@ impl SubagentController {
         self.background_status_for(&record_id).await
     }
 
-    pub(crate) async fn refresh_background_archive_metadata(&self, target: &str) -> Result<()> {
+    pub(super) async fn refresh_background_archive_metadata(&self, target: &str) -> Result<()> {
         let session_id = {
             let state = self.state.read().await;
             state
@@ -649,7 +649,7 @@ impl SubagentController {
         self.shutdown_requested.store(true, Ordering::Relaxed);
     }
 
-    pub(crate) async fn save_background_state(&self) -> Result<()> {
+    pub(super) async fn save_background_state(&self) -> Result<()> {
         if self.shutdown_requested.load(Ordering::Relaxed) {
             return Ok(());
         }
@@ -665,7 +665,7 @@ impl SubagentController {
         persist_background_state(&self.config.workspace_root, records).await
     }
 
-    pub(crate) async fn find_spec(&self, candidate: &str) -> Option<SubagentSpec> {
+    pub(super) async fn find_spec(&self, candidate: &str) -> Option<SubagentSpec> {
         self.state
             .read()
             .await
@@ -676,7 +676,7 @@ impl SubagentController {
             .cloned()
     }
 
-    pub(crate) async fn resolve_requested_spec(
+    pub(super) async fn resolve_requested_spec(
         &self,
         requested: Option<&str>,
     ) -> Result<SubagentSpec> {
@@ -686,7 +686,7 @@ impl SubagentController {
             .ok_or_else(|| anyhow!("Unknown subagent type {requested}"))
     }
 
-    pub(crate) async fn prepare_delegation_context(
+    pub(super) async fn prepare_delegation_context(
         &self,
         requested_agent: Option<String>,
         items: &mut Vec<SubagentInputItem>,
@@ -719,7 +719,7 @@ impl SubagentController {
         })
     }
 
-    pub(crate) fn prepare_delegation_prompt(
+    pub(super) fn prepare_delegation_prompt(
         &self,
         spec: &SubagentSpec,
         delegation: &PreparedDelegationContext,
@@ -787,7 +787,7 @@ impl SubagentController {
         Ok(prompt)
     }
 
-    pub(crate) fn active_background_launch_conflicts(
+    pub(super) fn active_background_launch_conflicts(
         record: &BackgroundRecord,
         prompt: &str,
         max_turns: Option<usize>,
@@ -810,7 +810,7 @@ impl SubagentController {
         conflicts
     }
 
-    pub(crate) async fn spawn_with_spec(
+    pub(super) async fn spawn_with_spec(
         &self,
         spec: SubagentSpec,
         prompt: String,
@@ -936,7 +936,7 @@ impl SubagentController {
         self.status_for(&id).await
     }
 
-    pub(crate) async fn restart_child(&self, target: &str) -> Result<()> {
+    pub(super) async fn restart_child(&self, target: &str) -> Result<()> {
         let has_queued_input = {
             let mut state = self.state.write().await;
             let record = state

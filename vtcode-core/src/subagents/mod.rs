@@ -44,19 +44,19 @@ pub fn is_subagent_tool(name: &str) -> bool {
 }
 
 #[derive(Clone, Default)]
-pub(crate) struct BackgroundLaunchOverrides {
-    pub(crate) prompt: Option<String>,
-    pub(crate) max_turns: Option<usize>,
-    pub(crate) model_override: Option<String>,
-    pub(crate) reasoning_override: Option<String>,
+pub(super) struct BackgroundLaunchOverrides {
+    pub(super) prompt: Option<String>,
+    pub(super) max_turns: Option<usize>,
+    pub(super) model_override: Option<String>,
+    pub(super) reasoning_override: Option<String>,
 }
 
 #[derive(Clone, Default)]
-pub(crate) struct PreparedDelegationContext {
-    pub(crate) requested_agent: Option<String>,
-    pub(crate) explicit_mentions: Vec<String>,
-    pub(crate) explicit_request: bool,
-    pub(crate) current_input: String,
+pub(super) struct PreparedDelegationContext {
+    pub(super) requested_agent: Option<String>,
+    pub(super) explicit_mentions: Vec<String>,
+    pub(super) explicit_request: bool,
+    pub(super) current_input: String,
 }
 
 /// Result of a propose/verify cycle.
@@ -221,7 +221,7 @@ mod controller_spawn_run;
 mod controller_verify;
 
 #[allow(unused_imports)]
-pub(crate) use controller_helpers::*;
+pub(super) use controller_helpers::*;
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
 

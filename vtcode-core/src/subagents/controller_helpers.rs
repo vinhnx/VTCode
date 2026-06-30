@@ -31,7 +31,7 @@ use vtcode_config::subagents::SUBAGENT_HARD_CONCURRENCY_LIMIT;
 #[allow(unused_imports)]
 use super::*;
 
-pub(crate) fn sanitize_component(value: &str) -> String {
+pub(super) fn sanitize_component(value: &str) -> String {
     value
         .chars()
         .map(|ch| {
@@ -46,7 +46,7 @@ pub(crate) fn sanitize_component(value: &str) -> String {
         .to_string()
 }
 
-pub(crate) async fn load_session_listing(
+pub(super) async fn load_session_listing(
     path: &std::path::Path,
 ) -> Result<crate::utils::session_archive::SessionListing> {
     use anyhow::Context;
@@ -61,7 +61,7 @@ pub(crate) async fn load_session_listing(
     })
 }
 
-pub(crate) async fn checkpoint_subagent_archive_start(
+pub(super) async fn checkpoint_subagent_archive_start(
     archive: &SessionArchive,
     messages: &[Message],
 ) -> Result<()> {
@@ -85,7 +85,7 @@ pub(crate) async fn checkpoint_subagent_archive_start(
     Ok(())
 }
 
-pub(crate) async fn persist_child_archive(
+pub(super) async fn persist_child_archive(
     archive: &SessionArchive,
     messages: &[Message],
     agent_name: &str,
@@ -109,7 +109,7 @@ pub(crate) async fn persist_child_archive(
     Ok(Some(path))
 }
 
-pub(crate) fn transcript_line_from_message(message: &Message) -> Option<String> {
+pub(super) fn transcript_line_from_message(message: &Message) -> Option<String> {
     let role = message.role.to_string();
     let content = message.content.trim();
     if content.is_empty() {
@@ -123,7 +123,7 @@ pub(crate) fn transcript_line_from_message(message: &Message) -> Option<String> 
 /// Looks for lines starting with common issue markers (e.g. "- ISSUE:",
 /// "- REJECT:", numbered items) and collects them. Returns an empty vec
 /// if no structured issues are found.
-pub(crate) fn extract_issues_from_summary(summary: &str) -> Vec<String> {
+pub(super) fn extract_issues_from_summary(summary: &str) -> Vec<String> {
     let mut issues = Vec::new();
     for line in summary.lines() {
         let trimmed = line.trim();

@@ -157,7 +157,7 @@ impl SubagentController {
     /// with a synchronous verify closure. This avoids borrowing `&self` across
     /// spawn boundaries, which would make the parent `tokio::spawn` future
     /// non-Send due to the recursive spawn chain through `verify_proposed_change`.
-    pub(crate) async fn run_worktree_reconciliation(
+    pub(super) async fn run_worktree_reconciliation(
         &self,
         child_id: &str,
         wt_path: &std::path::Path,

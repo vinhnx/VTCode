@@ -32,7 +32,7 @@ use vtcode_config::subagents::SUBAGENT_HARD_CONCURRENCY_LIMIT;
 use super::*;
 
 impl SubagentController {
-    pub(crate) async fn launch_child(&self, child_id: &str) -> Result<()> {
+    pub(super) async fn launch_child(&self, child_id: &str) -> Result<()> {
         // Acquire the lock first to set up the record state, then release it
         // before spawning the task. This avoids the spawned task immediately
         // contending on the write lock.
@@ -87,7 +87,7 @@ impl SubagentController {
         Ok(())
     }
 
-    pub(crate) async fn child_loop(&self, child_id: &str) {
+    pub(super) async fn child_loop(&self, child_id: &str) {
         loop {
             let request = {
                 let mut state = self.state.write().await;
@@ -169,7 +169,7 @@ impl SubagentController {
         }
     }
 
-    pub(crate) async fn run_child_once(
+    pub(super) async fn run_child_once(
         &self,
         child_id: &str,
         prompt: String,

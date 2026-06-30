@@ -242,7 +242,7 @@ impl SubagentController {
         Ok(self.background_status_entries().await)
     }
 
-    pub(crate) async fn update_background_record_state(
+    pub(super) async fn update_background_record_state(
         &self,
         record_id: &str,
         snapshot: Option<crate::tools::types::VTCodeExecSession>,
@@ -294,7 +294,7 @@ impl SubagentController {
         Ok(None)
     }
 
-    pub(crate) fn handle_missing_background_snapshot(
+    pub(super) fn handle_missing_background_snapshot(
         record: &mut BackgroundRecord,
         config: &SubagentControllerConfig,
     ) -> Result<Option<(String, String, u8)>> {
@@ -325,7 +325,7 @@ impl SubagentController {
         Ok(None)
     }
 
-    pub(crate) fn mark_background_record_stopped_or_error(
+    pub(super) fn mark_background_record_stopped_or_error(
         record: &mut BackgroundRecord,
         snapshot: &crate::tools::types::VTCodeExecSession,
         _config: &SubagentControllerConfig,
