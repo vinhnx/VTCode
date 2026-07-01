@@ -3,10 +3,10 @@ use super::{
     HarnessUsage, POST_TOOL_RECOVERY_REASON, POST_TOOL_RESUME_DIRECTIVE,
     POST_TOOL_TIMEOUT_RECOVERY_REASON, PostToolFailureRecovery, RECOVERY_CONTRACT_VIOLATION_REASON,
     RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER, accumulate_turn_usage,
-    complete_turn_after_failed_tool_free_recovery, count_assistant_text_responses_in_turn,
-    has_turn_usage, maybe_recover_after_post_tool_llm_failure,
-    normalize_tool_free_recovery_break_outcome, prepare_post_tool_tool_free_recovery,
-    run_turn_loop,
+    complete_turn_after_failed_tool_free_recovery, count_assistant_text_responses_for_guard,
+    count_assistant_text_responses_in_turn, has_turn_usage,
+    maybe_recover_after_post_tool_llm_failure, normalize_tool_free_recovery_break_outcome,
+    prepare_post_tool_tool_free_recovery, run_turn_loop,
 };
 use crate::agent::runloop::unified::turn::context::TurnLoopResult;
 use crate::agent::runloop::unified::turn::turn_processing::test_support::TestTurnProcessingBacking;
@@ -387,7 +387,7 @@ async fn turn_loop_preserves_legacy_loop_detector_state() {
 #[test]
 fn count_assistant_text_responses_in_turn_zero_for_empty_history() {
     let history: Vec<uni::Message> = Vec::new();
-    assert_eq!(count_assistant_text_responses_in_turn(&history), 0);
+    assert_eq!(count_assistant_text_responses_in_turn(&history, 0), 0);
 }
 
 #[test]
@@ -418,7 +418,127 @@ fn count_assistant_text_responses_in_turn_skips_tool_call_messages() {
     // Whitespace-only assistant content -> not counted
     history.push(uni::Message::assistant("   \n  ".to_string()));
 
-    assert_eq!(count_assistant_text_responses_in_turn(&history), 2);
+    assert_eq!(count_assistant_text_responses_in_turn(&history, 0), 2);
+}
+
+#[test]
+fn count_assistant_text_responses_in_turn_ignores_history_before_baseline() {
+    let mut history = vec![
+        uni::Message::user("previous request".to_string()),
+        uni::Message::assistant("previous answer one".to_string()),
+        uni::Message::assistant("previous answer two".to_string()),
+    ];
+    let turn_history_start_len = history.len();
+
+    assert_eq!(
+        count_assistant_text_responses_in_turn(&history, turn_history_start_len),
+        0,
+        "historical assistant text before the current turn must not count"
+    );
+    assert_eq!(
+        count_assistant_text_responses_for_guard(&history, turn_history_start_len, 0),
+        0,
+        "the guard must not count historical assistant text when the per-turn floor is empty"
+    );
+
+    history.push(uni::Message::assistant("current answer one".to_string()));
+    assert_eq!(
+        count_assistant_text_responses_in_turn(&history, turn_history_start_len),
+        1
+    );
+
+    history.push(uni::Message::assistant_with_tools(
+        String::new(),
+        vec![uni::ToolCall::function(
+            "tool_call_0".to_string(),
+            "unified_search".to_string(),
+            "{}".to_string(),
+        )],
+    ));
+    history.push(uni::Message::assistant("current answer two".to_string()));
+
+    assert_eq!(
+        count_assistant_text_responses_in_turn(&history, turn_history_start_len),
+        super::MAX_ASSISTANT_TEXT_RESPONSES_PER_TURN,
+        "current-turn assistant text after the baseline still trips the cap"
+    );
+}
+
+#[test]
+fn count_assistant_text_responses_in_turn_counts_after_compaction_rebase() {
+    let stale_turn_history_start_len = 5;
+    let mut compacted_history = vec![
+        uni::Message::system("Compacted history summary.".to_string()),
+        uni::Message::user("current request".to_string()),
+    ];
+    let rebased_turn_history_start_len = compacted_history.len();
+
+    compacted_history.push(uni::Message::assistant(
+        "current answer after compaction".to_string(),
+    ));
+
+    assert_eq!(
+        count_assistant_text_responses_in_turn(&compacted_history, stale_turn_history_start_len),
+        0,
+        "a stale pre-compaction baseline misses newly appended assistant text"
+    );
+    assert_eq!(
+        count_assistant_text_responses_in_turn(&compacted_history, rebased_turn_history_start_len),
+        1,
+        "rebasing to the compacted length counts current-turn assistant text promptly"
+    );
+}
+
+#[test]
+fn count_assistant_text_responses_for_guard_preserves_pre_compaction_turn_floor() {
+    let compacted_history = vec![
+        uni::Message::system("Compacted history summary.".to_string()),
+        uni::Message::user("current request".to_string()),
+    ];
+    let rebased_turn_history_start_len = compacted_history.len();
+    let recorded_text_responses_in_turn = 1;
+
+    assert_eq!(
+        count_assistant_text_responses_in_turn(&compacted_history, rebased_turn_history_start_len),
+        0,
+        "history slice cannot see same-turn assistant text removed by compaction"
+    );
+    assert_eq!(
+        count_assistant_text_responses_for_guard(
+            &compacted_history,
+            rebased_turn_history_start_len,
+            recorded_text_responses_in_turn,
+        ),
+        recorded_text_responses_in_turn,
+        "guard uses the per-turn counter as a compaction-safe floor"
+    );
+}
+
+#[test]
+fn count_assistant_text_responses_for_guard_counts_post_compaction_growth_above_floor() {
+    let mut compacted_history = vec![
+        uni::Message::system("Compacted history summary.".to_string()),
+        uni::Message::user("current request".to_string()),
+    ];
+    let rebased_turn_history_start_len = compacted_history.len();
+    let recorded_text_responses_in_turn = 1;
+
+    compacted_history.push(uni::Message::assistant(
+        "current answer after compaction".to_string(),
+    ));
+    compacted_history.push(uni::Message::assistant(
+        "second current answer after compaction".to_string(),
+    ));
+
+    assert_eq!(
+        count_assistant_text_responses_for_guard(
+            &compacted_history,
+            rebased_turn_history_start_len,
+            recorded_text_responses_in_turn,
+        ),
+        2,
+        "new assistant text appended after compaction still counts promptly"
+    );
 }
 
 #[test]
@@ -444,9 +564,9 @@ fn count_assistant_text_responses_in_turn_matches_observed_pattern() {
                 .to_string(),
         ));
     }
-    assert_eq!(count_assistant_text_responses_in_turn(&history), 4);
+    assert_eq!(count_assistant_text_responses_in_turn(&history, 0), 4);
     assert!(
-        count_assistant_text_responses_in_turn(&history)
+        count_assistant_text_responses_in_turn(&history, 0)
             >= super::MAX_ASSISTANT_TEXT_RESPONSES_PER_TURN,
         "anti-runaway guard would trip on this history"
     );

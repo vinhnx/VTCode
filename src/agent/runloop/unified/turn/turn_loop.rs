@@ -142,10 +142,16 @@ fn check_recovery_cycle_cap(
 /// turn so far.  Used by the anti-runaway guard to short-circuit when the
 /// recovery / continuation loop regenerates the same answer repeatedly.
 ///
-/// Counts messages with `role == Assistant`, no `tool_calls`, and a
-/// non-empty trimmed text body.  System-recovery messages are ignored.
-fn count_assistant_text_responses_in_turn(history: &[uni::Message]) -> u32 {
+/// Counts messages appended after `turn_history_start_len` with
+/// `role == Assistant`, no `tool_calls`, and a non-empty trimmed text body.
+/// System-recovery messages are ignored.
+fn count_assistant_text_responses_in_turn(
+    history: &[uni::Message],
+    turn_history_start_len: usize,
+) -> u32 {
     history
+        .get(turn_history_start_len..)
+        .unwrap_or_default()
         .iter()
         .filter(|message| {
             message.role == uni::MessageRole::Assistant
@@ -153,6 +159,21 @@ fn count_assistant_text_responses_in_turn(history: &[uni::Message]) -> u32 {
                 && !message.content.as_text().trim().is_empty()
         })
         .count() as u32
+}
+
+/// Count assistant text responses for the anti-runaway guard.
+///
+/// The history slice excludes assistant replies from earlier turns and, after
+/// compaction rebases `turn_history_start_len`, promptly counts new assistant
+/// text appended after compaction. The per-turn counter is a compaction-safe
+/// floor for assistant text already emitted earlier in this turn.
+fn count_assistant_text_responses_for_guard(
+    history: &[uni::Message],
+    turn_history_start_len: usize,
+    recorded_text_responses_in_turn: u32,
+) -> u32 {
+    count_assistant_text_responses_in_turn(history, turn_history_start_len)
+        .max(recorded_text_responses_in_turn)
 }
 
 pub(crate) struct TurnLoopOutcome {
@@ -439,7 +460,7 @@ pub(crate) async fn run_turn_loop(
 
     let mut step_count = 0;
     let mut current_max_tool_loops = turn_config.max_tool_loops;
-    let turn_history_start_len = working_history.len();
+    let mut turn_history_start_len = working_history.len();
     let mut turn_usage = HarnessUsage::default();
     // Optimization: Interned signatures with exponential backoff for loop detection
     let mut repeated_tool_attempts = LoopTracker::new();
@@ -504,9 +525,11 @@ pub(crate) async fn run_turn_loop(
         .await
         {
             Ok(Some(outcome)) => {
+                turn_history_start_len = outcome.compacted_len;
                 tracing::info!(
                     original_len = outcome.original_len,
                     compacted_len = outcome.compacted_len,
+                    turn_history_start_len,
                     "Applied local fallback compaction before the next turn request"
                 );
             }
@@ -532,7 +555,11 @@ pub(crate) async fn run_turn_loop(
         // happened.  See MAX_ASSISTANT_TEXT_RESPONSES_PER_TURN for the
         // observed failure mode (checkpoint turn_594: 4 identical 6500-token
         // outline responses, ~90s of wasted context).
-        let text_responses_so_far = count_assistant_text_responses_in_turn(working_history);
+        let text_responses_so_far = count_assistant_text_responses_for_guard(
+            working_history,
+            turn_history_start_len,
+            ctx.harness_state.assistant_text_responses_in_turn,
+        );
         if text_responses_so_far >= MAX_ASSISTANT_TEXT_RESPONSES_PER_TURN {
             tracing::warn!(
                 text_responses = text_responses_so_far,
