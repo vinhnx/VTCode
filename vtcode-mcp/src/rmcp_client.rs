@@ -6,9 +6,9 @@ use hashbrown::HashMap;
 use jsonschema::Validator;
 use rmcp::handler::client::ClientHandler;
 use rmcp::model::{
-    CallToolRequestParams, CallToolResult, CancelledNotificationParam, ClientResult,
-    CreateElicitationRequestParams, CustomResult, ElicitationAction, GetPromptRequestParams,
-    GetPromptResult, InitializeRequestParams, InitializeResult, ListRootsResult, LoggingLevel,
+    CallToolRequestParams, CallToolResult, CancelledNotificationParam, ClientResult, CustomResult,
+    ElicitRequestParams, ElicitationAction, GetPromptRequestParams, GetPromptResult,
+    InitializeRequestParams, InitializeResult, ListRootsResult, LoggingLevel,
     LoggingMessageNotificationParam, Meta, ProgressNotificationParam, Prompt,
     ReadResourceRequestParams, ReadResourceResult, Resource, ResourceTemplate,
     ResourceUpdatedNotificationParam, Root, ServerNotification, ServerRequest, Tool,
@@ -265,6 +265,7 @@ impl RmcpClient {
             .peer()
             .peer_info()
             .ok_or_else(|| anyhow!("Handshake succeeded but server info missing"))?
+            .as_ref()
             .clone();
 
         let mut guard = self.state.lock().await;
@@ -432,7 +433,7 @@ impl ElicitationClientService {
 
     async fn create_elicitation(
         &self,
-        request: CreateElicitationRequestParams,
+        request: ElicitRequestParams,
         context: RequestContext<RoleClient>,
     ) -> Result<super::McpElicitationResponse, rmcp::ErrorData> {
         let request = restore_context_meta(request, context.meta);
@@ -447,7 +448,7 @@ impl Service<RoleClient> for ElicitationClientService {
         context: RequestContext<RoleClient>,
     ) -> Result<ClientResult, rmcp::ErrorData> {
         match request {
-            ServerRequest::CreateElicitationRequest(request) => {
+            ServerRequest::ElicitRequest(request) => {
                 let response = self.create_elicitation(request.params, context).await?;
                 Ok(ClientResult::CustomResult(elicitation_response_result(
                     response,
@@ -511,7 +512,7 @@ impl LoggingClientHandler {
 
     async fn process_elicitation_request(
         &self,
-        request: CreateElicitationRequestParams,
+        request: ElicitRequestParams,
     ) -> Result<super::McpElicitationResponse, rmcp::ErrorData> {
         let provider = self.provider.clone();
 
@@ -523,7 +524,7 @@ impl LoggingClientHandler {
 
         if let Some(handler) = &self.elicitation_handler {
             let (message, schema_value, request_meta) = match &request {
-                CreateElicitationRequestParams::FormElicitationParams {
+                ElicitRequestParams::FormElicitationParams {
                     meta,
                     message,
                     requested_schema,
@@ -545,7 +546,7 @@ impl LoggingClientHandler {
                         serialize_elicitation_meta(provider.as_str(), meta.as_ref()),
                     )
                 }
-                CreateElicitationRequestParams::UrlElicitationParams {
+                ElicitRequestParams::UrlElicitationParams {
                     meta, message, url, ..
                 } => {
                     let schema_value = json!({
@@ -561,6 +562,17 @@ impl LoggingClientHandler {
                         message.clone(),
                         schema_value,
                         serialize_elicitation_meta(provider.as_str(), meta.as_ref()),
+                    )
+                }
+                _ => {
+                    warn!(
+                        provider = provider.as_str(),
+                        "Unknown elicitation request type; using default empty response"
+                    );
+                    (
+                        "".to_owned(),
+                        Value::Null,
+                        serialize_elicitation_meta(provider.as_str(), None),
                     )
                 }
             };
@@ -599,12 +611,9 @@ impl LoggingClientHandler {
             }
         } else {
             let message_str = match &request {
-                CreateElicitationRequestParams::FormElicitationParams { message, .. } => {
-                    message.as_str()
-                }
-                CreateElicitationRequestParams::UrlElicitationParams { message, .. } => {
-                    message.as_str()
-                }
+                ElicitRequestParams::FormElicitationParams { message, .. } => message.as_str(),
+                ElicitRequestParams::UrlElicitationParams { message, .. } => message.as_str(),
+                _ => "unknown",
             };
             info!(
                 provider = provider.as_str(),
@@ -664,10 +673,9 @@ impl LoggingClientHandler {
 impl ClientHandler for LoggingClientHandler {
     fn create_elicitation(
         &self,
-        request: CreateElicitationRequestParams,
+        request: ElicitRequestParams,
         context: RequestContext<RoleClient>,
-    ) -> impl Future<Output = Result<rmcp::model::CreateElicitationResult, rmcp::ErrorData>> + Send + '_
-    {
+    ) -> impl Future<Output = Result<rmcp::model::ElicitResult, rmcp::ErrorData>> + Send + '_ {
         let request = restore_context_meta(request, context.meta);
         async move {
             self.process_elicitation_request(request)
@@ -682,10 +690,11 @@ impl ClientHandler for LoggingClientHandler {
                             None
                         })
                     });
-                    rmcp::model::CreateElicitationResult {
-                        action: response.action,
-                        content: response.content,
-                        meta,
+                    {
+                        let mut result = rmcp::model::ElicitResult::new(response.action);
+                        result.content = response.content;
+                        result.meta = meta;
+                        result
                     }
                 })
         }
@@ -730,7 +739,7 @@ impl ClientHandler for LoggingClientHandler {
     ) -> impl Future<Output = ()> + Send + '_ {
         debug!(
             provider = self.provider.as_str(),
-            request_id = %params.request_id,
+            request_id = ?params.request_id,
             reason = ?params.reason,
             "MCP provider cancelled request"
         );
@@ -827,19 +836,20 @@ impl ClientHandler for LoggingClientHandler {
 }
 
 fn restore_context_meta(
-    mut request: CreateElicitationRequestParams,
+    mut request: ElicitRequestParams,
     mut context_meta: Meta,
-) -> CreateElicitationRequestParams {
+) -> ElicitRequestParams {
     context_meta.remove(MCP_PROGRESS_TOKEN_META_KEY);
     if context_meta.is_empty() {
         return request;
     }
 
     match &mut request {
-        CreateElicitationRequestParams::FormElicitationParams { meta, .. }
-        | CreateElicitationRequestParams::UrlElicitationParams { meta, .. } => {
+        ElicitRequestParams::FormElicitationParams { meta, .. }
+        | ElicitRequestParams::UrlElicitationParams { meta, .. } => {
             meta.get_or_insert_with(Meta::new).extend(context_meta);
         }
+        _ => {}
     }
 
     request
@@ -981,7 +991,7 @@ mod tests {
             })),
         );
 
-        let CreateElicitationRequestParams::FormElicitationParams { meta, .. } = restored else {
+        let ElicitRequestParams::FormElicitationParams { meta, .. } = restored else {
             panic!("expected form elicitation request");
         };
 
@@ -1037,8 +1047,8 @@ mod tests {
         assert!(!state.take_prompts_changed());
     }
 
-    fn form_request(meta: Option<Meta>) -> CreateElicitationRequestParams {
-        CreateElicitationRequestParams::FormElicitationParams {
+    fn form_request(meta: Option<Meta>) -> ElicitRequestParams {
+        ElicitRequestParams::FormElicitationParams {
             meta,
             message: "Confirm?".to_string(),
             requested_schema: ElicitationSchema::builder()

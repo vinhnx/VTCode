@@ -1130,18 +1130,17 @@ impl McpClient {
 
     fn build_initialize_params(&self, _provider: &McpProvider) -> InitializeRequestParams {
         let mut capabilities = ClientCapabilities::default();
-        capabilities.roots = Some(RootsCapabilities {
-            list_changed: Some(true),
-        });
+        {
+            let mut roots_cap = RootsCapabilities::default();
+            roots_cap.list_changed = Some(true);
+            capabilities.roots = Some(roots_cap);
+        }
 
         if self.elicitation_handler.is_some() {
             // Elicitation is now a first-class capability in rmcp
-            capabilities.elicitation = Some(rmcp::model::ElicitationCapability {
-                form: Some(rmcp::model::FormElicitationCapability {
-                    schema_validation: Some(true),
-                }),
-                ..Default::default()
-            });
+            capabilities.elicitation = Some(rmcp::model::ElicitationCapability::new().with_form(
+                rmcp::model::FormElicitationCapability::new().with_schema_validation(true),
+            ));
         }
 
         InitializeRequestParams::new(capabilities, super::utils::build_client_implementation())
