@@ -14,7 +14,7 @@ use vtcode_config::core::AnthropicConfig;
 use vtcode_config::types::ReasoningEffortLevel;
 
 use super::capabilities::{
-    adaptive_thinking_is_default, allowed_efforts_for_model, claude_thinking_profile,
+    adaptive_thinking_always_on, allowed_efforts_for_model, claude_thinking_profile,
     effort_allowed_for_model, matches_model, resolve_model_name, supports_assistant_prefill,
     supports_effort, supports_manual_interleaved_beta, supports_manual_thinking_budget,
     supports_structured_output, supports_task_budget,
@@ -67,7 +67,9 @@ pub fn validate_request(
     let effective_thinking_mode =
         resolve_effective_thinking_mode(request, default_model, anthropic_config);
 
-    if adaptive_thinking_is_default(resolved_model, default_model)
+    // Models with adaptive thinking always on (Fable 5, Mythos 5, Opus 4.8) reject disabled thinking.
+    // Sonnet 5 has default thinking on but allows disabling via `thinking: {type: "disabled"}`.
+    if adaptive_thinking_always_on(resolved_model, default_model)
         && matches!(effective_thinking_mode, EffectiveThinkingMode::Disabled)
     {
         let formatted_error = error_display::format_llm_error(
@@ -84,6 +86,15 @@ pub fn validate_request(
 
     let rejects_sampling = matches_model(
         resolved_model,
+        vtcode_config::constants::models::anthropic::CLAUDE_SONNET_5,
+    ) || matches_model(
+        resolved_model,
+        vtcode_config::constants::models::anthropic::CLAUDE_FABLE_5,
+    ) || matches_model(
+        resolved_model,
+        vtcode_config::constants::models::anthropic::CLAUDE_MYTHOS_5,
+    ) || matches_model(
+        resolved_model,
         vtcode_config::constants::models::anthropic::CLAUDE_OPUS_4_8,
     );
     if rejects_sampling
@@ -91,7 +102,7 @@ pub fn validate_request(
     {
         let formatted_error = error_display::format_llm_error(
             "Anthropic",
-            "Claude Opus 4.8 rejects explicit temperature, top_p, and top_k values; omit sampling parameters entirely.",
+            "Claude Sonnet 5, Fable 5, Mythos 5, and Opus 4.8 reject explicit temperature, top_p, and top_k values; omit sampling parameters entirely.",
         );
         return Err(LLMError::InvalidRequest {
             message: formatted_error,
@@ -176,7 +187,7 @@ pub fn validate_request(
         let formatted_error = error_display::format_llm_error(
             "Anthropic",
             &format!(
-                "task_budget_tokens ({task_budget}) must be at least 20000 for Claude Opus 4.7/4.8."
+                "task_budget_tokens ({task_budget}) must be at least 20000 for Claude Opus 4.7/4.8, Fable 5, and Mythos 5."
             ),
         );
         return Err(LLMError::InvalidRequest {

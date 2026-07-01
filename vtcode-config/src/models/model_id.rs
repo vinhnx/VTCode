@@ -26,7 +26,6 @@ pub enum ModelId {
     /// Gemini 3.1 Pro Preview Custom Tools - Optimized for custom tools & bash
     Gemini31ProPreviewCustomTools,
     /// Gemini 3.5 Flash - High-efficiency frontier model for fast inference
-    #[default]
     Gemini35Flash,
 
     // OpenAI models
@@ -48,6 +47,13 @@ pub enum ModelId {
     OpenAIGptOss120b,
 
     // Anthropic models
+    /// Claude Sonnet 5 - The best combination of speed and intelligence with adaptive thinking on by default
+    #[default]
+    ClaudeSonnet5,
+    /// Claude Fable 5 - Anthropic's most capable widely released model for demanding reasoning and long-horizon agentic work
+    ClaudeFable5,
+    /// Claude Mythos 5 - Fable 5-class model without safety classifiers, limited availability through Project Glasswing
+    ClaudeMythos5,
     /// Claude Opus 4.8 - Anthropic's most capable model for complex reasoning and agentic coding
     ClaudeOpus48,
     /// Claude Sonnet 4.6 - Balanced flagship Anthropic model in VT Code's conservative rollout
@@ -262,6 +268,8 @@ pub enum ModelId {
 
     /// Claude Sonnet 4.6 - Anthropic Claude Sonnet 4.6 listing
     OpenRouterAnthropicClaudeSonnet46,
+    /// Claude Sonnet 5 - Anthropic Claude Sonnet 5 listing
+    OpenRouterAnthropicClaudeSonnet5,
     /// Claude Haiku 4.5 - Anthropic Claude Haiku 4.5 listing
     OpenRouterAnthropicClaudeHaiku45,
     /// Mistral Large 3 2512 - Mistral Large 3 2512 model via OpenRouter

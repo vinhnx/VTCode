@@ -229,9 +229,9 @@ fn test_provider_defaults() {
 
 #[test]
 fn test_model_defaults() {
-    assert_eq!(ModelId::default(), ModelId::Gemini35Flash);
-    assert_eq!(ModelId::default_model(), ModelId::Gemini35Flash);
-    assert_eq!(ModelId::default_orchestrator(), ModelId::Gemini31ProPreview);
+    assert_eq!(ModelId::default(), ModelId::ClaudeSonnet5);
+    assert_eq!(ModelId::default_model(), ModelId::ClaudeSonnet5);
+    assert_eq!(ModelId::default_orchestrator(), ModelId::ClaudeSonnet5);
 }
 
 #[test]

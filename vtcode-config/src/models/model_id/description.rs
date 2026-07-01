@@ -48,6 +48,15 @@ impl ModelId {
                 "OpenAI's open-source 120B parameter GPT-OSS model using harmony tokenization",
             ),
             // Anthropic models
+            ModelId::ClaudeSonnet5 => Cow::Borrowed(
+                "Anthropic's best combination of speed and intelligence with adaptive thinking on by default, 1M context, and new tokenizer",
+            ),
+            ModelId::ClaudeFable5 => Cow::Borrowed(
+                "Anthropic's most capable widely released model, for the most demanding reasoning and long-horizon agentic work",
+            ),
+            ModelId::ClaudeMythos5 => Cow::Borrowed(
+                "Shares Claude Fable 5's capabilities without safety classifiers. Limited availability through Project Glasswing",
+            ),
             ModelId::ClaudeOpus48 => Cow::Borrowed(
                 "Anthropic's most capable model for complex reasoning, long-horizon agentic coding, and high-autonomy work",
             ),

@@ -28,6 +28,9 @@ impl ModelId {
             ModelId::OpenAIGptOss20b => Cow::Borrowed("GPT-OSS 20B"),
             ModelId::OpenAIGptOss120b => Cow::Borrowed("GPT-OSS 120B"),
             // Anthropic models
+            ModelId::ClaudeSonnet5 => Cow::Borrowed("Claude Sonnet 5"),
+            ModelId::ClaudeFable5 => Cow::Borrowed("Claude Fable 5"),
+            ModelId::ClaudeMythos5 => Cow::Borrowed("Claude Mythos 5"),
             ModelId::ClaudeOpus48 => Cow::Borrowed("Claude Opus 4.8"),
             ModelId::ClaudeSonnet46 => Cow::Borrowed("Claude Sonnet 4.6"),
             ModelId::ClaudeHaiku45 => Cow::Borrowed("Claude Haiku 4.5"),

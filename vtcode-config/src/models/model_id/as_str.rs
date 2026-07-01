@@ -30,6 +30,9 @@ impl ModelId {
             ModelId::OpenAIGptOss20b => Cow::Borrowed(models::openai::GPT_OSS_20B),
             ModelId::OpenAIGptOss120b => Cow::Borrowed(models::openai::GPT_OSS_120B),
             // Anthropic models
+            ModelId::ClaudeSonnet5 => Cow::Borrowed(models::CLAUDE_SONNET_5),
+            ModelId::ClaudeFable5 => Cow::Borrowed(models::CLAUDE_FABLE_5),
+            ModelId::ClaudeMythos5 => Cow::Borrowed(models::CLAUDE_MYTHOS_5),
             ModelId::ClaudeOpus48 => Cow::Borrowed(models::CLAUDE_OPUS_4_8),
             ModelId::ClaudeSonnet46 => Cow::Borrowed(models::CLAUDE_SONNET_4_6),
             ModelId::ClaudeHaiku45 => Cow::Borrowed(models::CLAUDE_HAIKU_4_5),

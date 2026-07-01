@@ -6,6 +6,7 @@ impl ModelId {
     /// Get recommended fallback models in order of preference
     pub fn fallback_models() -> Vec<ModelId> {
         vec![
+            ModelId::ClaudeSonnet5,
             ModelId::Gemini35Flash,
             ModelId::GPT54,
             ModelId::GPT55,
@@ -19,12 +20,12 @@ impl ModelId {
 
     /// Get the default model for general use
     pub fn default_model() -> Self {
-        ModelId::Gemini35Flash
+        ModelId::ClaudeSonnet5
     }
 
     /// Get the default orchestrator model (more capable)
     pub fn default_orchestrator() -> Self {
-        ModelId::Gemini31ProPreview
+        ModelId::ClaudeSonnet5
     }
 
     /// Get provider-specific defaults for orchestrator
@@ -59,7 +60,7 @@ impl ModelId {
         match provider {
             Provider::Gemini => ModelId::Gemini35Flash,
             Provider::OpenAI => ModelId::GPT54,
-            Provider::Anthropic => ModelId::ClaudeSonnet46,
+            Provider::Anthropic => ModelId::ClaudeSonnet5,
             Provider::Copilot => ModelId::CopilotAuto,
             Provider::Minimax => ModelId::MinimaxM3,
             Provider::MiMo => ModelId::MiMoV25Pro,

@@ -148,7 +148,11 @@ impl ModelId {
             ModelId::GPT55 | ModelId::GPT54 | ModelId::GPT54Pro => Some(ModelId::GPT54Mini),
             ModelId::OpenCodeZenGPT54 => Some(ModelId::OpenCodeZenGPT54Mini),
             ModelId::GPT53Codex => Some(ModelId::GPT54Mini),
-            ModelId::ClaudeOpus48 | ModelId::ClaudeSonnet46 => Some(ModelId::ClaudeHaiku45),
+            ModelId::ClaudeSonnet5
+            | ModelId::ClaudeFable5
+            | ModelId::ClaudeMythos5
+            | ModelId::ClaudeOpus48
+            | ModelId::ClaudeSonnet46 => Some(ModelId::ClaudeHaiku45),
             ModelId::CopilotGPT54 => Some(ModelId::CopilotGPT54Mini),
             ModelId::CopilotGPT52Codex | ModelId::CopilotGPT51CodexMax => {
                 Some(ModelId::CopilotGPT54Mini)
@@ -244,7 +248,11 @@ impl ModelId {
                 Some(ModelId::HuggingFaceDeepseekV4FlashNovita)
             }
             ModelId::OllamaDeepseekV4ProCloud => Some(ModelId::OllamaDeepseekV4FlashCloud),
-            ModelId::ClaudeOpus48 | ModelId::ClaudeSonnet46 => Some(ModelId::ClaudeSonnet46),
+            ModelId::ClaudeSonnet5
+            | ModelId::ClaudeFable5
+            | ModelId::ClaudeMythos5
+            | ModelId::ClaudeOpus48
+            | ModelId::ClaudeSonnet46 => Some(ModelId::ClaudeSonnet46),
             ModelId::MinimaxM27 => None,
             _ => None,
         };
@@ -287,6 +295,9 @@ impl ModelId {
                 | ModelId::CopilotGPT51CodexMax
                 | ModelId::CopilotGPT54
                 | ModelId::CopilotClaudeSonnet46
+                | ModelId::ClaudeSonnet5
+                | ModelId::ClaudeFable5
+                | ModelId::ClaudeMythos5
                 | ModelId::ClaudeOpus48
                 | ModelId::ClaudeSonnet46
                 | ModelId::OpenCodeZenGPT54
@@ -359,6 +370,9 @@ impl ModelId {
                 | ModelId::GPT54
                 | ModelId::GPT54Pro
                 | ModelId::GPT53Codex
+                | ModelId::ClaudeSonnet5
+                | ModelId::ClaudeFable5
+                | ModelId::ClaudeMythos5
                 | ModelId::ClaudeOpus48
                 | ModelId::ClaudeSonnet46
                 | ModelId::OpenCodeZenGPT54
@@ -433,6 +447,9 @@ impl ModelId {
             ModelId::GPT53Codex => "5.3",
             ModelId::OpenAIGptOss20b | ModelId::OpenAIGptOss120b => "5",
             // Anthropic generations
+            ModelId::ClaudeSonnet5 => "5",
+            ModelId::ClaudeFable5 => "5",
+            ModelId::ClaudeMythos5 => "5",
             ModelId::ClaudeOpus48 => "4.8",
             ModelId::ClaudeSonnet46 => "4.6",
             ModelId::ClaudeHaiku45 => "4.5",

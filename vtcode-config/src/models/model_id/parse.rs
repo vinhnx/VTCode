@@ -84,6 +84,9 @@ impl FromStr for ModelId {
             s if s == models::openai::GPT_OSS_20B => Ok(ModelId::OpenAIGptOss20b),
             s if s == models::openai::GPT_OSS_120B => Ok(ModelId::OpenAIGptOss120b),
             // Anthropic models
+            s if s == models::CLAUDE_SONNET_5 => Ok(ModelId::ClaudeSonnet5),
+            s if s == models::CLAUDE_FABLE_5 => Ok(ModelId::ClaudeFable5),
+            s if s == models::CLAUDE_MYTHOS_5 => Ok(ModelId::ClaudeMythos5),
             s if s == models::CLAUDE_OPUS_4_8 => Ok(ModelId::ClaudeOpus48),
             s if s == models::CLAUDE_SONNET_4_6 => Ok(ModelId::ClaudeSonnet46),
             s if s == models::CLAUDE_HAIKU_4_5 => Ok(ModelId::ClaudeHaiku45),

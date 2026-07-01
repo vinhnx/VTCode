@@ -64,6 +64,54 @@ pub(crate) fn claude_thinking_profile(
 ) -> Option<ClaudeThinkingProfile> {
     let requested = resolve_model_name(model, default_model);
 
+    if matches_model(requested, models::anthropic::CLAUDE_SONNET_5) {
+        return Some(ClaudeThinkingProfile {
+            mode: ClaudeThinkingMode::Adaptive,
+            supports_manual_budget: false,
+            adaptive_only: false,
+            default_thinking_enabled: true,
+            manual_interleaved_beta: false,
+            supports_effort: true,
+            supports_task_budget: false,
+            default_display: ThinkingDisplay::Summarized,
+            default_effort: reasoning::HIGH,
+            supports_xhigh_effort: true,
+            supports_max_effort: true,
+        });
+    }
+
+    if matches_model(requested, models::anthropic::CLAUDE_FABLE_5) {
+        return Some(ClaudeThinkingProfile {
+            mode: ClaudeThinkingMode::Adaptive,
+            supports_manual_budget: false,
+            adaptive_only: true,
+            default_thinking_enabled: true,
+            manual_interleaved_beta: false,
+            supports_effort: true,
+            supports_task_budget: true,
+            default_display: ThinkingDisplay::Omitted,
+            default_effort: reasoning::HIGH,
+            supports_xhigh_effort: true,
+            supports_max_effort: true,
+        });
+    }
+
+    if matches_model(requested, models::anthropic::CLAUDE_MYTHOS_5) {
+        return Some(ClaudeThinkingProfile {
+            mode: ClaudeThinkingMode::Adaptive,
+            supports_manual_budget: false,
+            adaptive_only: true,
+            default_thinking_enabled: true,
+            manual_interleaved_beta: false,
+            supports_effort: true,
+            supports_task_budget: true,
+            default_display: ThinkingDisplay::Omitted,
+            default_effort: reasoning::HIGH,
+            supports_xhigh_effort: true,
+            supports_max_effort: true,
+        });
+    }
+
     if matches_model(requested, models::anthropic::CLAUDE_OPUS_4_8) {
         return Some(ClaudeThinkingProfile {
             mode: ClaudeThinkingMode::Adaptive,
@@ -116,7 +164,10 @@ pub(crate) fn claude_thinking_profile(
 }
 
 fn supports_native_1m_context(model: &str) -> bool {
-    matches_model(model, models::anthropic::CLAUDE_SONNET_4_6)
+    matches_model(model, models::anthropic::CLAUDE_SONNET_5)
+        || matches_model(model, models::anthropic::CLAUDE_FABLE_5)
+        || matches_model(model, models::anthropic::CLAUDE_MYTHOS_5)
+        || matches_model(model, models::anthropic::CLAUDE_SONNET_4_6)
         || matches_model(model, models::anthropic::CLAUDE_OPUS_4_8)
 }
 
@@ -183,9 +234,8 @@ pub(crate) fn supports_mid_conversation_system_messages(model: &str, default_mod
     matches_model(requested, models::anthropic::CLAUDE_OPUS_4_8)
 }
 
-pub(crate) fn adaptive_thinking_is_default(model: &str, default_model: &str) -> bool {
-    claude_thinking_profile(model, default_model)
-        .is_some_and(|profile| profile.default_thinking_enabled)
+pub(crate) fn adaptive_thinking_always_on(model: &str, default_model: &str) -> bool {
+    claude_thinking_profile(model, default_model).is_some_and(|profile| profile.adaptive_only)
 }
 
 pub(crate) fn default_effort_for_model(model: &str, default_model: &str) -> Option<&'static str> {
@@ -219,7 +269,10 @@ pub(crate) fn effort_allowed_for_model(model: &str, default_model: &str, effort:
 }
 
 pub fn supports_compaction(model: &str) -> bool {
-    matches_model(model, models::anthropic::CLAUDE_OPUS_4_8)
+    matches_model(model, models::anthropic::CLAUDE_SONNET_5)
+        || matches_model(model, models::anthropic::CLAUDE_FABLE_5)
+        || matches_model(model, models::anthropic::CLAUDE_MYTHOS_5)
+        || matches_model(model, models::anthropic::CLAUDE_OPUS_4_8)
         || matches_model(model, models::anthropic::CLAUDE_SONNET_4_6)
 }
 

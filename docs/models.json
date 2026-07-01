@@ -1508,6 +1508,69 @@
     "doc": "https://docs.anthropic.com/claude/docs/models-overview",
     "default_model": "claude-opus-4-8",
     "models": {
+      "claude-sonnet-5": {
+        "id": "claude-sonnet-5",
+        "name": "Claude Sonnet 5",
+        "description": "The best combination of speed and intelligence with adaptive thinking on by default, 1M context, and new tokenizer",
+        "reasoning": true,
+        "effort": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1000000,
+        "output_tokens": 128000,
+        "status": "current",
+        "version": "5"
+      },
+      "claude-fable-5": {
+        "id": "claude-fable-5",
+        "name": "Claude Fable 5",
+        "description": "Anthropic's most capable widely released model, for the most demanding reasoning and long-horizon agentic work",
+        "reasoning": true,
+        "effort": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1000000,
+        "output_tokens": 128000,
+        "status": "current",
+        "version": "5"
+      },
+      "claude-mythos-5": {
+        "id": "claude-mythos-5",
+        "name": "Claude Mythos 5",
+        "description": "Shares Claude Fable 5's capabilities without safety classifiers. Available through Project Glasswing (limited access).",
+        "reasoning": true,
+        "effort": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1000000,
+        "output_tokens": 128000,
+        "status": "limited",
+        "version": "5"
+      },
       "claude-opus-4-8": {
         "id": "claude-opus-4-8",
         "name": "Claude Opus 4.8",
@@ -2198,6 +2261,39 @@
           "top_tier": true,
           "generation": "2026-02-20",
           "doc_comment": "Claude Sonnet 4.6 - Anthropic Claude Sonnet 4.6 listing"
+        }
+      },
+      "anthropic/claude-sonnet-5": {
+        "id": "anthropic/claude-sonnet-5",
+        "name": "Anthropic: Claude Sonnet 5",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "file"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1000000,
+        "max_output_tokens": 128000,
+        "cost": {
+          "input": 3e-06,
+          "output": 1.5e-05
+        },
+        "vtcode": {
+          "variant": "OpenRouterAnthropicClaudeSonnet5",
+          "constant": "ANTHROPIC_CLAUDE_SONNET_5",
+          "vendor": "anthropic",
+          "display": "Claude Sonnet 5",
+          "description": "Anthropic Claude Sonnet 5 listing",
+          "efficient": false,
+          "top_tier": true,
+          "generation": "5",
+          "doc_comment": "Claude Sonnet 5 - Anthropic Claude Sonnet 5 listing"
         }
       },
       "deepseek/deepseek-v4-flash": {
