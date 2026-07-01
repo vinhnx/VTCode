@@ -95,11 +95,11 @@ anstream = "1.0"
 anstyle-git = { workspace = true }
 anstyle-ls = "1.0"
 colorchoice-clap = "1.0"
-quick_cache = "0.6"
+quick_cache = "0.7"
 roff = "1.1"
 unicode-width = { workspace = true }
 crossterm = { workspace = true, features = ["event-stream"], optional = true }
-rusqlite = { version = "0.35", features = ["bundled"], optional = true }
+rusqlite = { version = "0.40", features = ["bundled"], optional = true }
 nix = { version = "0.31", features = ["user", "signal", "poll", "term"] }
 ratatui = { workspace = true, features = [
     "crossterm",
@@ -152,7 +152,7 @@ ring = { workspace = true }
 # A2A (Agent2Agent) Protocol HTTP server support
 axum = { version = "0.8", features = ["json", "macros"], optional = true }
 tower = { version = "0.5", optional = true }
-tower-http = { version = "0.6", features = ["cors", "trace"], optional = true }
+tower-http = { version = "0.7", features = ["cors", "trace"], optional = true }
 tokio-stream = { version = "0.1", optional = true }
 tokio-tungstenite = { version = "0.29", default-features = false, features = [
     "connect",

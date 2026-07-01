@@ -34,7 +34,7 @@ thiserror = { workspace = true }
 tokio = { workspace = true, features = ["fs", "io-util", "macros", "rt-multi-thread", "sync"] }
 tokio-stream = { version = "0.1", optional = true }
 tower = { version = "0.5", optional = true }
-tower-http = { version = "0.6", features = ["cors", "trace"], optional = true }
+tower-http = { version = "0.7", features = ["cors", "trace"], optional = true }
 tracing = { workspace = true }
 uuid = { workspace = true, features = ["v4", "serde"] }
 
