@@ -73,7 +73,7 @@ pub(crate) fn claude_thinking_profile(
             manual_interleaved_beta: false,
             supports_effort: true,
             supports_task_budget: false,
-            default_display: ThinkingDisplay::Summarized,
+            default_display: ThinkingDisplay::Omitted,
             default_effort: reasoning::HIGH,
             supports_xhigh_effort: true,
             supports_max_effort: true,
@@ -116,8 +116,8 @@ pub(crate) fn claude_thinking_profile(
         return Some(ClaudeThinkingProfile {
             mode: ClaudeThinkingMode::Adaptive,
             supports_manual_budget: false,
-            adaptive_only: true,
-            default_thinking_enabled: true,
+            adaptive_only: false,
+            default_thinking_enabled: false,
             manual_interleaved_beta: false,
             supports_effort: true,
             supports_task_budget: true,
@@ -222,7 +222,7 @@ pub(crate) fn supports_assistant_prefill(model: &str, default_model: &str) -> bo
     match claude_thinking_profile(requested, default_model) {
         Some(profile) => {
             // Haiku 4.5 is the only thinking-profile model that supports prefill.
-            // All others (Opus 4.8, Sonnet 4.6) do not.
+            // All others (Sonnet 5, Fable 5, Mythos 5, Opus 4.8, Sonnet 4.6) do not.
             !profile.adaptive_only && matches_model(requested, models::anthropic::CLAUDE_HAIKU_4_5)
         }
         None => true,

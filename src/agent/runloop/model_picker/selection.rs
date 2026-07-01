@@ -333,12 +333,22 @@ pub(super) fn supports_xhigh_reasoning(model_id: &str) -> bool {
             | "gpt-5.5"
             | "gpt-5.5-2026-04-23"
             | "gpt-5.3-codex"
+            | "claude-sonnet-5"
+            | "claude-fable-5"
+            | "claude-mythos-5"
             | "claude-opus-4-8"
     )
 }
 
 pub(super) fn supports_max_reasoning(model_id: &str) -> bool {
-    matches!(model_id, "claude-opus-4-8" | "claude-sonnet-4-6")
+    matches!(
+        model_id,
+        "claude-sonnet-5"
+            | "claude-fable-5"
+            | "claude-mythos-5"
+            | "claude-opus-4-8"
+            | "claude-sonnet-4-6"
+    )
 }
 
 pub(super) fn reasoning_level_description(level: ReasoningEffortLevel) -> &'static str {
