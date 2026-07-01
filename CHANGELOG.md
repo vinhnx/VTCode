@@ -2,6 +2,16 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.134.3 - 2026-07-01
+
+### Highlights
+#### Bug Fixes
+
+- Revert agent-client-protocol 0.10.4 and rusqlite 0.35 to fix 0.134.2 build (f8dddd4f) 
+#### Features
+
+- Migrate agent-client-protocol from 0.10.4 to 1.0.1 (SACP builder API) (210b1ca5) 
+### Other Changes
 ## 0.134.2 - 2026-07-01
 
 ### Highlights
