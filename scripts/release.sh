@@ -1302,21 +1302,30 @@ main() {
             "$binaries_dir"/*.tar.gz
             "$binaries_dir"/*.zip
             "$binaries_dir"/*.sha256
-            "$binaries_dir"/checksums.txt
             "$SCRIPT_DIR/install.sh"
             "$SCRIPT_DIR/install.ps1"
         )
         shopt -u nullglob
 
-        # Ensure install scripts are executable
-        chmod +x "$SCRIPT_DIR/install.sh" 2>/dev/null || true
-        chmod +x "$SCRIPT_DIR/install.ps1" 2>/dev/null || true
+        # Only include checksums.txt if it has content
+        if [[ -s "$binaries_dir/checksums.txt" ]]; then
+            release_files+=("$binaries_dir/checksums.txt")
+        fi
 
-        if gh release upload "$released_version" "${release_files[@]}" --clobber; then
-            print_success "All binaries, checksums.txt, and install scripts uploaded successfully"
+        # Skip upload if there are no binary files
+        if [[ ${#release_files[@]} -eq 0 ]]; then
+            print_warning "No binaries to upload"
         else
-            print_error "Failed to upload binaries to GitHub Release"
-            exit 1
+            # Ensure install scripts are executable
+            chmod +x "$SCRIPT_DIR/install.sh" 2>/dev/null || true
+            chmod +x "$SCRIPT_DIR/install.ps1" 2>/dev/null || true
+
+            if gh release upload "$released_version" "${release_files[@]}" --clobber; then
+                print_success "All binaries, checksums.txt, and install scripts uploaded successfully"
+            else
+                print_error "Failed to upload binaries to GitHub Release"
+                exit 1
+            fi
         fi
 
         # Extract checksums before cleanup for Homebrew formula update

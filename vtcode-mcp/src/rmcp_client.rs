@@ -5,6 +5,7 @@ use futures::FutureExt;
 use hashbrown::HashMap;
 use jsonschema::Validator;
 use rmcp::handler::client::ClientHandler;
+#[allow(deprecated)]
 use rmcp::model::{
     CallToolRequestParams, CallToolResult, CancelledNotificationParam, ClientResult, CustomResult,
     ElicitRequestParams, ElicitationAction, GetPromptRequestParams, GetPromptResult,
@@ -625,6 +626,7 @@ impl LoggingClientHandler {
         Ok(default_response)
     }
 
+    #[allow(deprecated)]
     fn handle_logging(&self, params: LoggingMessageNotificationParam) {
         let logger = params.logger.unwrap_or_default();
         let summary = params
@@ -700,6 +702,7 @@ impl ClientHandler for LoggingClientHandler {
         }
     }
 
+    #[allow(deprecated)]
     fn list_roots(
         &self,
         _context: RequestContext<RoleClient>,
@@ -762,6 +765,7 @@ impl ClientHandler for LoggingClientHandler {
         async move {}
     }
 
+    #[allow(deprecated)]
     fn on_logging_message(
         &self,
         params: LoggingMessageNotificationParam,

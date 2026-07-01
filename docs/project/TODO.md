@@ -1,3 +1,7 @@
+migrate agent-client-protocol from 0.10.4 to 1.0.1 (breaking change) https://agentclientprotocol.com/llms.txt
+
+--
+
 ## fix techdebt
 
 - Converting stringly-typed IDs (PluginId, MarketplaceId, etc.) to newtypes.
