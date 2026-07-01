@@ -2,6 +2,27 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.134.0 - 2026-07-01
+
+### Highlights
+#### Bug Fixes
+
+- Downgrade subagents visibility from pub(crate) to pub(super) (6c1da4d4) 
+- Add xhigh/max effort picker support for Sonnet 5, Fable 5, Mythos 5; fix adaptive thinking profiles per Anthropic docs (9eff2382) 
+#### Documentation
+
+- Refresh stale structural_search/subagents file paths after split (4a1d7283) 
+#### Features
+
+- Add Claude Sonnet 5, Fable 5, and Mythos 5 to Anthropic provider (12ebfcc7) 
+### Other Changes
+#### Other
+
+- Revert "refactor: remove Claude Fable 5 references and update to Claude Opus 4.8 across models and capabilities" (537a0e75) 
+#### Refactors
+
+- Split structural_search.rs into focused submodules (717f75f7) 
+- Split subagents/mod.rs impl into controller submodules (f5203b6e) 
 ## 0.133.23 - 2026-06-29
 
 ### Highlights
