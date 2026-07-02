@@ -1,4 +1,11 @@
-//! Shared retry policy and classification helpers for VT Code.
+//! Domain-specific retry adapters for VT Code.
+//!
+//! The retry *policy math* (attempt budgets, backoff, jitter, category-based
+//! decisions) lives in [`vtcode_commons::retry`]; this module re-exports the
+//! canonical [`RetryPolicy`] / [`RetryDecision`] and layers the workspace's
+//! domain knowledge on top via [`RetryPolicyCoreExt`]: typed error downcasts
+//! (`VtCodeError`, `LLMError`, tool errors), LLM `Retry-After` extraction,
+//! and the tool-aware command-timeout rule.
 
 use std::future::Future;
 use std::result::Result as StdResult;
@@ -10,101 +17,71 @@ use crate::tools::registry::ToolExecutionError;
 use crate::tools::unified_error::UnifiedToolError;
 use vtcode_commons::llm::{LLMError, LLMErrorMetadata};
 
-/// Typed retry policy shared across runtime layers.
-#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
-pub struct RetryPolicy {
-    /// Maximum number of total attempts, including the initial call.
-    pub max_attempts: u32,
-    pub initial_delay: Duration,
-    pub max_delay: Duration,
-    pub multiplier: f64,
-    pub jitter: f64,
+pub use vtcode_commons::retry::{RetryDecision, RetryPolicy};
+
+/// Domain-aware retry decisions layered over the shared [`RetryPolicy`].
+///
+/// Import this trait to call the `decision_for_*` / `step_for_*` methods on
+/// a policy; the policy struct itself is defined in `vtcode-commons`.
+pub trait RetryPolicyCoreExt {
+    fn decision_for_vtcode_error(
+        &self,
+        error: &VtCodeError,
+        attempt_index: u32,
+        tool_name: Option<&str>,
+    ) -> RetryDecision;
+
+    fn decision_for_anyhow(
+        &self,
+        error: &anyhow::Error,
+        attempt_index: u32,
+        tool_name: Option<&str>,
+    ) -> RetryDecision;
+
+    fn decision_for_llm_error(&self, error: &LLMError, attempt_index: u32) -> RetryDecision;
+
+    fn decision_for_tool_error(
+        &self,
+        error: &UnifiedToolError,
+        attempt_index: u32,
+    ) -> RetryDecision;
+
+    fn decision_for_tool_execution_error(
+        &self,
+        error: &ToolExecutionError,
+        attempt_index: u32,
+    ) -> RetryDecision;
+
+    /// Classify a `VtCodeError` failure into a typed [`RetryStep`].
+    ///
+    /// This consolidates the "decision -> sleep or give-up" branching used by
+    /// agent-level retry loops, removing the brittle
+    /// `decision.delay.expect("retryable decisions need delay")` calls and
+    /// guaranteeing a delay is always available for retryable steps.
+    fn step_for_vtcode_error(
+        &self,
+        error: VtCodeError,
+        attempt_index: u32,
+        tool_name: Option<&str>,
+    ) -> RetryStep;
+
+    fn apply_to_tool_execution_error(
+        &self,
+        error: ToolExecutionError,
+        attempt_index: u32,
+        tool_name: Option<&str>,
+    ) -> ToolExecutionError;
 }
 
-impl RetryPolicy {
-    pub fn new(
-        max_attempts: u32,
-        initial_delay: Duration,
-        max_delay: Duration,
-        multiplier: f64,
-    ) -> Self {
-        Self {
-            max_attempts: max_attempts.max(1),
-            initial_delay,
-            max_delay,
-            multiplier: multiplier.max(1.0),
-            jitter: 0.0,
-        }
-    }
-
-    pub fn from_retries(
-        max_retries: u32,
-        initial_delay: Duration,
-        max_delay: Duration,
-        multiplier: f64,
-    ) -> Self {
-        Self::new(
-            max_retries.saturating_add(1),
-            initial_delay,
-            max_delay,
-            multiplier,
-        )
-    }
-
-    pub fn delay_for_attempt(&self, attempt_index: u32) -> Duration {
-        let multiplier = self.multiplier.powi(attempt_index as i32);
-        let base_delay = Duration::try_from_secs_f64(self.initial_delay.as_secs_f64() * multiplier)
-            .unwrap_or(self.max_delay)
-            .min(self.max_delay);
-
-        if !self.jitter.is_finite() || self.jitter <= 0.0 {
-            return base_delay;
-        }
-
-        #[allow(clippy::cast_sign_loss)]
-        let max_jitter_ms = (base_delay.as_millis() as f64 * self.jitter)
-            .round()
-            .clamp(0.0, u64::MAX as f64) as u64;
-        if max_jitter_ms == 0 {
-            return base_delay;
-        }
-
-        let offset = (u64::from(attempt_index) * 31) % max_jitter_ms.saturating_add(1);
-        base_delay.saturating_add(Duration::from_millis(offset))
-    }
-
-    pub fn decision_for_category(
-        &self,
-        category: ErrorCategory,
-        attempt_index: u32,
-        retry_after: Option<Duration>,
-    ) -> RetryDecision {
-        let has_remaining_attempts = attempt_index.saturating_add(1) < self.max_attempts;
-        if !category.is_retryable() || !has_remaining_attempts {
-            return RetryDecision {
-                category,
-                retryable: false,
-                delay: None,
-                retry_after,
-            };
-        }
-
-        let delay = retry_after.unwrap_or_else(|| self.delay_for_attempt(attempt_index));
-        RetryDecision {
-            category,
-            retryable: true,
-            delay: Some(delay),
-            retry_after,
-        }
-    }
-
-    pub fn decision_for_vtcode_error(
+impl RetryPolicyCoreExt for RetryPolicy {
+    fn decision_for_vtcode_error(
         &self,
         error: &VtCodeError,
         attempt_index: u32,
         tool_name: Option<&str>,
     ) -> RetryDecision {
-        self.decision_for_category_with_tool(
+        decision_for_category_with_tool(
+            self,
             error.category,
             attempt_index,
             error.retry_after(),
@@ -112,7 +89,7 @@ impl RetryPolicy {
         )
     }
 
-    pub fn decision_for_anyhow(
+    fn decision_for_anyhow(
         &self,
         error: &anyhow::Error,
         attempt_index: u32,
@@ -132,7 +109,8 @@ impl RetryPolicy {
                     .map(|ctx| ctx.tool_name.as_str())
                     .filter(|tool_name| !tool_name.is_empty())
             });
-            return self.decision_for_category_with_tool(
+            return decision_for_category_with_tool(
+                self,
                 tool_error.category(),
                 attempt_index,
                 None,
@@ -141,12 +119,13 @@ impl RetryPolicy {
         }
 
         let category = vtcode_commons::classify_anyhow_error(error);
-        self.decision_for_category_with_tool(category, attempt_index, None, tool_name)
+        decision_for_category_with_tool(self, category, attempt_index, None, tool_name)
     }
 
-    pub fn decision_for_llm_error(&self, error: &LLMError, attempt_index: u32) -> RetryDecision {
+    fn decision_for_llm_error(&self, error: &LLMError, attempt_index: u32) -> RetryDecision {
         let retry_after = llm_metadata(error).and_then(retry_after_from_llm_metadata);
-        self.decision_for_category_with_tool(
+        decision_for_category_with_tool(
+            self,
             ErrorCategory::from(error),
             attempt_index,
             retry_after,
@@ -154,7 +133,7 @@ impl RetryPolicy {
         )
     }
 
-    pub fn decision_for_tool_error(
+    fn decision_for_tool_error(
         &self,
         error: &UnifiedToolError,
         attempt_index: u32,
@@ -164,15 +143,16 @@ impl RetryPolicy {
             .as_ref()
             .map(|ctx| ctx.tool_name.as_str())
             .filter(|tool_name| !tool_name.is_empty());
-        self.decision_for_category_with_tool(error.category(), attempt_index, None, tool_name)
+        decision_for_category_with_tool(self, error.category(), attempt_index, None, tool_name)
     }
 
-    pub fn decision_for_tool_execution_error(
+    fn decision_for_tool_execution_error(
         &self,
         error: &ToolExecutionError,
         attempt_index: u32,
     ) -> RetryDecision {
-        self.decision_for_category_with_tool(
+        decision_for_category_with_tool(
+            self,
             error.category,
             attempt_index,
             error.retry_after(),
@@ -180,13 +160,7 @@ impl RetryPolicy {
         )
     }
 
-    /// Classify a `VtCodeError` failure into a typed [`RetryStep`].
-    ///
-    /// This consolidates the "decision -> sleep or give-up" branching used by
-    /// agent-level retry loops, removing the brittle
-    /// `decision.delay.expect("retryable decisions need delay")` calls and
-    /// guaranteeing a delay is always available for retryable steps.
-    pub fn step_for_vtcode_error(
+    fn step_for_vtcode_error(
         &self,
         error: VtCodeError,
         attempt_index: u32,
@@ -207,13 +181,14 @@ impl RetryPolicy {
         }
     }
 
-    pub fn apply_to_tool_execution_error(
+    fn apply_to_tool_execution_error(
         &self,
         error: ToolExecutionError,
         attempt_index: u32,
         tool_name: Option<&str>,
     ) -> ToolExecutionError {
-        let decision = self.decision_for_category_with_tool(
+        let decision = decision_for_category_with_tool(
+            self,
             error.category,
             attempt_index,
             error.retry_after(),
@@ -221,25 +196,25 @@ impl RetryPolicy {
         );
         error.with_retry_decision(decision)
     }
+}
 
-    fn decision_for_category_with_tool(
-        &self,
-        category: ErrorCategory,
-        attempt_index: u32,
-        retry_after: Option<Duration>,
-        tool_name: Option<&str>,
-    ) -> RetryDecision {
-        if is_non_retryable_command_timeout(category, tool_name) {
-            return RetryDecision {
-                category,
-                retryable: false,
-                delay: None,
-                retry_after,
-            };
-        }
-
-        self.decision_for_category(category, attempt_index, retry_after)
+fn decision_for_category_with_tool(
+    policy: &RetryPolicy,
+    category: ErrorCategory,
+    attempt_index: u32,
+    retry_after: Option<Duration>,
+    tool_name: Option<&str>,
+) -> RetryDecision {
+    if is_non_retryable_command_timeout(category, tool_name) {
+        return RetryDecision {
+            category,
+            retryable: false,
+            delay: None,
+            retry_after,
+        };
     }
+
+    policy.decision_for_category(category, attempt_index, retry_after)
 }
 
 /// The single tool-aware retry rule: command tool timeouts are never
@@ -252,22 +227,7 @@ pub(crate) fn is_non_retryable_command_timeout(
     matches!(category, ErrorCategory::Timeout) && tool_name.is_some_and(is_command_tool)
 }
 
-impl Default for RetryPolicy {
-    fn default() -> Self {
-        Self::from_retries(2, Duration::from_secs(1), Duration::from_secs(60), 2.0)
-    }
-}
-
-/// Result of classifying a failure for retry handling.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RetryDecision {
-    pub category: ErrorCategory,
-    pub retryable: bool,
-    pub delay: Option<Duration>,
-    pub retry_after: Option<Duration>,
-}
-
-/// Typed step produced by [`RetryPolicy::step_for_vtcode_error`].
+/// Typed step produced by [`RetryPolicyCoreExt::step_for_vtcode_error`].
 ///
 /// Callers match on this instead of re-deriving the
 /// `if decision.retryable { sleep(decision.delay.expect(...)) }` pattern.
@@ -504,32 +464,6 @@ mod tests {
         assert!(decision.retryable);
         assert_eq!(decision.retry_after, Some(Duration::from_secs(7)));
         assert_eq!(decision.delay, Some(Duration::from_secs(7)));
-    }
-
-    #[test]
-    fn delay_for_attempt_clamps_overflowing_backoff_to_max_delay() {
-        let policy =
-            RetryPolicy::from_retries(3, Duration::from_secs(1), Duration::from_secs(8), f64::MAX);
-
-        assert_eq!(policy.delay_for_attempt(2), Duration::from_secs(8));
-    }
-
-    #[test]
-    fn delay_for_attempt_ignores_non_finite_jitter() {
-        let mut policy =
-            RetryPolicy::from_retries(3, Duration::from_secs(1), Duration::from_secs(8), 2.0);
-        policy.jitter = f64::INFINITY;
-
-        assert_eq!(policy.delay_for_attempt(1), Duration::from_secs(2));
-    }
-
-    #[test]
-    fn delay_for_attempt_handles_huge_finite_jitter() {
-        let mut policy =
-            RetryPolicy::from_retries(3, Duration::from_secs(1), Duration::from_secs(8), 2.0);
-        policy.jitter = f64::MAX;
-
-        assert!(policy.delay_for_attempt(1) >= Duration::from_secs(2));
     }
 
     #[test]

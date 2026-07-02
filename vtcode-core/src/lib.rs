@@ -309,7 +309,7 @@ pub use pods::*;
 pub use prompts::{
     generate_lightweight_instruction, generate_specialized_instruction, generate_system_instruction,
 };
-pub use retry::{RetryDecision, RetryPolicy};
+pub use retry::{RetryDecision, RetryPolicy, RetryPolicyCoreExt};
 pub use security::{IntegrityTag, PayloadEnvelope, ZeroTrustContext};
 pub use telemetry::{TelemetryEvent, TelemetryPipeline};
 pub use zsh_exec_bridge::maybe_run_zsh_exec_wrapper_mode;

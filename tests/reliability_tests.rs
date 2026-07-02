@@ -1,7 +1,7 @@
 use std::time::Duration;
 
-use vtcode_core::RetryPolicy;
 use vtcode_core::llm::provider::{LLMError, LLMErrorMetadata};
+use vtcode_core::{RetryPolicy, RetryPolicyCoreExt};
 
 #[test]
 fn retry_policy_uses_retry_after_and_blocks_quota_exhaustion() {

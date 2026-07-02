@@ -336,7 +336,7 @@ impl AgentRunner {
 
 #[cfg(test)]
 mod tests {
-    use crate::retry::RetryPolicy;
+    use crate::retry::{RetryPolicy, RetryPolicyCoreExt};
     use std::time::Duration;
     use vtcode_commons::ErrorCategory;
 

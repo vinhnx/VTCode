@@ -5,7 +5,7 @@
 
 use crate::config::models::ModelId;
 use crate::error::{ErrorCode, Result as VtCodeResult, VtCodeError};
-use crate::retry::{RetryEvent, RetryPolicy, RetryStep};
+use crate::retry::{RetryEvent, RetryPolicy, RetryPolicyCoreExt, RetryStep};
 use std::future::Future;
 use std::result::Result as StdResult;
 use std::time::{Duration, Instant};

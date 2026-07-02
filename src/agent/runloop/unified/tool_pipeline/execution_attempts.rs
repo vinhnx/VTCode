@@ -6,6 +6,8 @@ use serde_json::Value;
 use tokio_util::sync::CancellationToken;
 use tracing::debug;
 use vtcode_core::retry::RetryPolicy;
+#[cfg(test)]
+use vtcode_core::retry::RetryPolicyCoreExt;
 use vtcode_core::tools::registry::ToolTimeoutCategory;
 use vtcode_core::tools::registry::{
     ExecSettlementMode, ExecutionPolicySnapshot, ToolExecutionError, ToolExecutionRequest,

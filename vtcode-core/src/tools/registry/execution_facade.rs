@@ -17,6 +17,7 @@ use crate::config::constants::tools;
 use crate::core::agent::harness_kernel::PreparedToolCall;
 use crate::core::memory_pool::SizeRecommendation;
 use crate::mcp::McpToolExecutor;
+use crate::retry::RetryPolicyCoreExt;
 use crate::tool_policy::ToolExecutionDecision;
 use crate::tools::error_messages::agent_execution;
 use crate::tools::invocation::ToolInvocationId;

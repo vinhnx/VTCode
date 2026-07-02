@@ -5,7 +5,7 @@ use std::borrow::Cow;
 use vtcode_commons::ErrorCategory;
 
 use crate::retry::is_command_tool;
-use crate::retry::{RetryDecision, RetryPolicy};
+use crate::retry::{RetryDecision, RetryPolicy, RetryPolicyCoreExt};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ToolErrorDebugContext {
