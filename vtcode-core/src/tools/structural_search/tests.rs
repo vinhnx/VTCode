@@ -1,13 +1,14 @@
 use super::{
-    AstGrepByteOffset, AstGrepLabel, AstGrepMatch, AstGrepMetaVar, AstGrepMetaVariables,
-    AstGrepPoint, AstGrepRange, AstGrepRewriteMatch, AstGrepScanFinding, AstGrepSeverity,
-    FixConfig, FixExpandRule, StructuralSearchRequest, StructuralWorkflow, build_atomic_rule_yaml,
-    build_fixconfig_rule_yaml, build_query_result, build_scan_result, build_scan_summary,
-    execute_structural_search, extract_custom_languages, extract_language_globs,
-    extract_language_injections, extract_rule_summary, format_ast_grep_failure, normalize_match,
-    normalize_rewrite_match, normalize_scan_finding, parse_compact_matches,
-    parse_test_failure_details, parse_test_rule_results, preflight_parseable_pattern,
-    sanitize_pattern_for_tree_sitter, yaml_escape_scalar,
+    AstGrepByteOffset, AstGrepFailureKind, AstGrepFailureOrigin, AstGrepLabel, AstGrepMatch,
+    AstGrepMetaVar, AstGrepMetaVariables, AstGrepPoint, AstGrepRange, AstGrepRewriteMatch,
+    AstGrepScanFinding, AstGrepSeverity, FixConfig, FixExpandRule, StructuralSearchRequest,
+    StructuralWorkflow, build_atomic_rule_yaml, build_fixconfig_rule_yaml, build_query_result,
+    build_scan_result, build_scan_summary, classify_ast_grep_failure, execute_structural_search,
+    extract_custom_languages, extract_language_globs, extract_language_injections,
+    extract_rule_summary, format_ast_grep_failure, normalize_match, normalize_rewrite_match,
+    normalize_scan_finding, parse_compact_matches, parse_test_failure_details,
+    parse_test_rule_results, preflight_parseable_pattern, sanitize_pattern_for_tree_sitter,
+    yaml_escape_scalar,
 };
 use crate::tools::ast_grep_binary::AST_GREP_INSTALL_COMMAND;
 use crate::tools::editing::patch::set_ast_grep_binary_override_for_tests;
@@ -1432,8 +1433,9 @@ fn structural_path_defaults_to_workspace_root() {
 }
 
 #[test]
-fn structural_failure_message_includes_faq_guidance() {
+fn structural_failure_message_includes_pattern_guidance() {
     let text = format_ast_grep_failure(
+        AstGrepFailureOrigin::Search,
         "ast-grep structural search failed",
         "parse error".to_string(),
     );
@@ -1450,31 +1452,144 @@ fn structural_failure_message_includes_faq_guidance() {
     assert!(text.contains("`smart` default"));
     assert!(text.contains("`debug_query`"));
     assert!(text.contains("not scope/type/data-flow analysis"));
-    assert!(text.contains("transform"));
-    assert!(text.contains("replace for regex substitution"));
-    assert!(text.contains("substring for Python-style"));
-    assert!(text.contains("convert for identifier case changes"));
     assert!(text.contains("Retry `unified_search`"));
     assert!(text.contains("`unified_exec`"));
+    // Rewrite guidance only appears for rewrite/apply workflow failures.
+    assert!(!text.contains("fix_config"));
+    assert!(
+        text.len() < 2_200,
+        "pattern-parse failure message should stay compact, got {} chars",
+        text.len()
+    );
+}
+
+#[test]
+fn structural_failure_classifier_maps_details_to_kinds() {
+    // Preflight failures are always pattern-parse errors, even when the
+    // detail carries no recognized marker.
+    assert_eq!(
+        classify_ast_grep_failure(AstGrepFailureOrigin::Preflight, "unexpected node shape"),
+        AstGrepFailureKind::PatternParse
+    );
+    assert_eq!(
+        classify_ast_grep_failure(
+            AstGrepFailureOrigin::Preflight,
+            "pattern is not parseable as Rust syntax"
+        ),
+        AstGrepFailureKind::PatternParse
+    );
+    assert_eq!(
+        classify_ast_grep_failure(AstGrepFailureOrigin::Search, "parse error near token"),
+        AstGrepFailureKind::PatternParse
+    );
+    assert_eq!(
+        classify_ast_grep_failure(AstGrepFailureOrigin::Search, "unsupported language: mojo"),
+        AstGrepFailureKind::LanguageSupport
+    );
+    assert_eq!(
+        classify_ast_grep_failure(AstGrepFailureOrigin::Search, "sg: command not found"),
+        AstGrepFailureKind::Other
+    );
+    assert_eq!(
+        classify_ast_grep_failure(AstGrepFailureOrigin::Rewrite, "permission denied"),
+        AstGrepFailureKind::Other
+    );
+}
+
+#[test]
+fn structural_failure_message_stays_small_for_unclassified_errors() {
+    let text = format_ast_grep_failure(
+        AstGrepFailureOrigin::Search,
+        "ast-grep structural search failed",
+        "permission denied".to_string(),
+    );
+
+    assert!(text.contains("Retry `unified_search`"));
+    assert!(text.contains("bundled `ast-grep` skill"));
+    // No targeted hints for unclassified failures.
+    assert!(!text.contains("valid parseable code"));
+    assert!(!text.contains("customLanguages"));
+    assert!(!text.contains("fix_config"));
+    assert!(
+        text.len() < 800,
+        "unclassified failure message should stay compact, got {} chars",
+        text.len()
+    );
+}
+
+#[test]
+fn structural_failure_message_adds_rewrite_guidance_for_rewrite_workflows() {
+    let rewrite_text = format_ast_grep_failure(
+        AstGrepFailureOrigin::Rewrite,
+        "ast-grep structural rewrite failed",
+        "permission denied".to_string(),
+    );
+    assert!(rewrite_text.contains("fix_config"));
+    assert!(rewrite_text.contains("`workflow='apply'`"));
+
+    let apply_text = format_ast_grep_failure(
+        AstGrepFailureOrigin::Rewrite,
+        "ast-grep structural apply failed",
+        "permission denied".to_string(),
+    );
+    assert!(apply_text.contains("fix_config"));
+}
+
+#[test]
+fn structural_failure_messages_never_include_removed_faq_content() {
+    for (origin, prefix, detail) in [
+        (
+            AstGrepFailureOrigin::Preflight,
+            "structural pattern preflight failed",
+            "pattern is not parseable as C syntax",
+        ),
+        (
+            AstGrepFailureOrigin::Search,
+            "ast-grep structural search failed",
+            "parse error",
+        ),
+        (
+            AstGrepFailureOrigin::Search,
+            "ast-grep structural search failed",
+            "unsupported language: mojo",
+        ),
+        (
+            AstGrepFailureOrigin::Rewrite,
+            "ast-grep structural rewrite failed",
+            "permission denied",
+        ),
+        (
+            AstGrepFailureOrigin::Search,
+            "ast-grep structural search failed",
+            "permission denied",
+        ),
+    ] {
+        let text = format_ast_grep_failure(origin, prefix, detail.to_string());
+        // macro_type_specifier is unique to the retired monolithic FAQ.
+        assert!(!text.contains("macro_type_specifier"), "{prefix}: {detail}");
+        assert!(!text.contains("cyclic `matches`"), "{prefix}: {detail}");
+    }
 }
 
 #[test]
 fn structural_failure_message_skips_project_config_hint_for_parse_errors() {
     let text = format_ast_grep_failure(
+        AstGrepFailureOrigin::Search,
         "ast-grep structural search failed",
         "parse error near pattern".to_string(),
     );
 
     // "tree-sitter dynamic library" is unique to AST_GREP_PROJECT_CONFIG_HINT
     // and should NOT appear for generic parse errors (only for language support
-    // issues). Strings like "customLanguages" or "languageInjections" may
-    // appear in AST_GREP_FAQ_HINT and are not reliable discriminators.
+    // issues).
     assert!(!text.contains("tree-sitter dynamic library"));
+    assert!(!text.contains("customLanguages"));
 }
 
 #[test]
 fn structural_failure_message_includes_custom_language_guidance() {
     let text = format_ast_grep_failure(
+        AstGrepFailureOrigin::Search,
         "ast-grep structural search failed",
         "unsupported language: mojo".to_string(),
     );
@@ -1496,11 +1611,13 @@ fn structural_failure_message_includes_custom_language_guidance() {
     assert!(text.contains("Retry `unified_search`"));
     assert!(text.contains("bundled `ast-grep` skill"));
     assert!(text.contains("`unified_exec`"));
+    // Language-support failures should not carry the pattern-authoring hint.
+    assert!(!text.contains("not scope/type/data-flow analysis"));
 }
 
 #[tokio::test]
 #[serial]
-async fn structural_search_failure_surfaces_faq_guidance() {
+async fn structural_search_failure_surfaces_pattern_guidance() {
     let temp = TempDir::new().expect("workspace tempdir");
     let (_script_dir, script_path) =
         write_fake_sg("#!/bin/sh\nprintf 'parse error near pattern' >&2\nexit 2\n");

@@ -45,6 +45,7 @@ pub(super) async fn execute_structural_query(
             bail!(
                 "{}",
                 format_ast_grep_failure(
+                    AstGrepFailureOrigin::Search,
                     "ast-grep debug query failed",
                     stderr_or_stdout(&output.stderr, &output.stdout)
                 )
@@ -102,6 +103,7 @@ pub(super) async fn execute_structural_query(
         bail!(
             "{}",
             format_ast_grep_failure(
+                AstGrepFailureOrigin::Search,
                 "ast-grep structural search failed",
                 stderr_or_stdout(&output.stderr, &output.stdout)
             )
@@ -214,6 +216,7 @@ pub(super) async fn execute_structural_scan(
         bail!(
             "{}",
             format_ast_grep_failure(
+                AstGrepFailureOrigin::Search,
                 "ast-grep structural scan failed",
                 stderr_or_stdout(&output.stderr, &output.stdout)
             )
@@ -380,6 +383,7 @@ pub(super) async fn execute_structural_rewrite(
         bail!(
             "{}",
             format_ast_grep_failure(
+                AstGrepFailureOrigin::Rewrite,
                 "ast-grep structural rewrite failed",
                 stderr_or_stdout(&output.stderr, &output.stdout)
             )
@@ -449,6 +453,7 @@ pub(super) async fn execute_structural_count(
         bail!(
             "{}",
             format_ast_grep_failure(
+                AstGrepFailureOrigin::Search,
                 "ast-grep structural count failed",
                 stderr_or_stdout(&output.stderr, &output.stdout)
             )
@@ -546,6 +551,7 @@ pub(super) async fn execute_atomic_rule_count(
         bail!(
             "{}",
             format_ast_grep_failure(
+                AstGrepFailureOrigin::Search,
                 "ast-grep atomic rule count failed",
                 stderr_or_stdout(&output.stderr, &output.stdout)
             )
@@ -648,6 +654,7 @@ pub(super) async fn execute_atomic_rule_query(
         bail!(
             "{}",
             format_ast_grep_failure(
+                AstGrepFailureOrigin::Search,
                 "ast-grep atomic rule query failed",
                 stderr_or_stdout(&output.stderr, &output.stdout)
             )
@@ -795,6 +802,7 @@ pub(super) async fn execute_fixconfig_rewrite_to_matches(
         bail!(
             "{}",
             format_ast_grep_failure(
+                AstGrepFailureOrigin::Rewrite,
                 "ast-grep FixConfig rewrite scan failed",
                 stderr_or_stdout(&output.stderr, &output.stdout)
             )
@@ -918,6 +926,7 @@ pub(super) async fn execute_fixconfig_rewrite(
         bail!(
             "{}",
             format_ast_grep_failure(
+                AstGrepFailureOrigin::Rewrite,
                 "ast-grep FixConfig rewrite scan failed",
                 stderr_or_stdout(&output.stderr, &output.stdout)
             )
@@ -1118,6 +1127,7 @@ pub(super) async fn execute_structural_new(
         bail!(
             "{}",
             format_ast_grep_failure(
+                AstGrepFailureOrigin::Search,
                 "ast-grep new failed",
                 stderr_or_stdout(&output.stderr, &output.stdout)
             )
@@ -1182,6 +1192,7 @@ pub(super) async fn execute_structural_apply(
             bail!(
                 "{}",
                 format_ast_grep_failure(
+                    AstGrepFailureOrigin::Rewrite,
                     "ast-grep structural apply failed",
                     stderr_or_stdout(&output.stderr, &output.stdout)
                 )

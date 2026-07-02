@@ -3,17 +3,77 @@
 #[allow(unused_imports)]
 use super::*;
 
-#[cold]
-pub(super) fn format_ast_grep_failure(prefix: &str, detail: String) -> String {
-    let needs_project_config_hint = looks_like_language_support_issue(&detail);
-    let mut message = format!("{prefix}: {detail}. {AST_GREP_FAQ_HINT}");
-    if needs_project_config_hint {
-        message.push(' ');
-        message.push_str(AST_GREP_PROJECT_CONFIG_HINT);
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum AstGrepFailureKind {
+    PatternParse,
+    LanguageSupport,
+    Other,
+}
+
+/// Where the failure came from, passed explicitly by each call site so hint
+/// routing never depends on the wording of the display prefix.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum AstGrepFailureOrigin {
+    /// Local pattern preflight rejected the pattern before invoking ast-grep.
+    Preflight,
+    /// Read-only invocation: search, scan, count, debug query, rule query, new.
+    Search,
+    /// Rewrite-family invocation: rewrite preview, FixConfig rewrite, apply.
+    Rewrite,
+}
+
+pub(super) fn classify_ast_grep_failure(
+    origin: AstGrepFailureOrigin,
+    detail: &str,
+) -> AstGrepFailureKind {
+    let lowered = detail.to_ascii_lowercase();
+    if language_support_markers_present(&lowered) {
+        return AstGrepFailureKind::LanguageSupport;
     }
-    message.push_str(
-        " Retry `unified_search` with a refined structural pattern before switching tools. For simple rewrites, use `workflow='rewrite'` on the public structural surface. For FixConfig rewrites with range expansion, use `workflow='rewrite'` with `fix_config` on the public surface. For `sg scan`, `sg test`, `sg new`, `sgconfig.yml`, or advanced rewrite-oriented ast-grep tasks with `transform` or `rewriters`, load the bundled `ast-grep` skill first and use `unified_exec` only when the public structural surface and skill guidance still cannot express the needed CLI flow.",
-    );
+    if origin == AstGrepFailureOrigin::Preflight || pattern_parse_markers_present(&lowered) {
+        return AstGrepFailureKind::PatternParse;
+    }
+    AstGrepFailureKind::Other
+}
+
+fn pattern_parse_markers_present(lowered: &str) -> bool {
+    lowered.contains("not parseable")
+        || lowered.contains("cannot parse")
+        || lowered.contains("fail to parse")
+        || lowered.contains("failed to parse")
+        || lowered.contains("parse error")
+        || lowered.contains("invalid pattern")
+        || lowered.contains("error in pattern")
+        || lowered.contains("contains an error")
+        || lowered.contains("invalid rule")
+        || lowered.contains("cannot parse rule")
+}
+
+#[cold]
+pub(super) fn format_ast_grep_failure(
+    origin: AstGrepFailureOrigin,
+    prefix: &str,
+    detail: String,
+) -> String {
+    let kind = classify_ast_grep_failure(origin, &detail);
+    let mut message = format!("{prefix}: {detail}.");
+    match kind {
+        AstGrepFailureKind::PatternParse => {
+            message.push(' ');
+            message.push_str(AST_GREP_PATTERN_HINT);
+        }
+        AstGrepFailureKind::LanguageSupport => {
+            message.push(' ');
+            message.push_str(AST_GREP_PROJECT_CONFIG_HINT);
+        }
+        AstGrepFailureKind::Other => {}
+    }
+    if origin == AstGrepFailureOrigin::Rewrite {
+        message.push(' ');
+        message.push_str(AST_GREP_REWRITE_HINT);
+    }
+    message.push(' ');
+    message.push_str(AST_GREP_GENERIC_TAIL);
     if !detail.contains(AST_GREP_INSTALL_COMMAND) {
         message.push(' ');
         message.push_str(&format!(
@@ -23,15 +83,14 @@ pub(super) fn format_ast_grep_failure(prefix: &str, detail: String) -> String {
     message
 }
 
-pub(super) fn looks_like_language_support_issue(detail: &str) -> bool {
-    let detail = detail.to_ascii_lowercase();
-    (detail.contains("lang") || detail.contains("language") || detail.contains("extension"))
-        && (detail.contains("unsupported")
-            || detail.contains("invalid value")
-            || detail.contains("unknown")
-            || detail.contains("unrecognized")
-            || detail.contains("not built in")
-            || detail.contains("not supported"))
+fn language_support_markers_present(lowered: &str) -> bool {
+    (lowered.contains("lang") || lowered.contains("language") || lowered.contains("extension"))
+        && (lowered.contains("unsupported")
+            || lowered.contains("invalid value")
+            || lowered.contains("unknown")
+            || lowered.contains("unrecognized")
+            || lowered.contains("not built in")
+            || lowered.contains("not supported"))
 }
 
 /// Returns true when a Go pattern looks like a bare function call that

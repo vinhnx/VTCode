@@ -115,6 +115,7 @@ pub(super) fn preflight_parseable_pattern(
             bail!(
                 "{}",
                 format_ast_grep_failure(
+                    AstGrepFailureOrigin::Preflight,
                     "structural pattern preflight failed",
                     format!(
                         "pattern is not parseable as {} syntax ({detail})",
@@ -133,6 +134,7 @@ pub(super) fn preflight_parseable_pattern(
         bail!(
             "{}",
             format_ast_grep_failure(
+                AstGrepFailureOrigin::Preflight,
                 "structural pattern preflight failed",
                 format!(
                     "pattern is not parseable as {} syntax",
