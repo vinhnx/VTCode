@@ -65,16 +65,13 @@ pub enum UnifiedErrorKind {
 }
 
 impl UnifiedErrorKind {
-    /// Whether this error kind is retryable
+    /// Whether this error kind is retryable.
+    ///
+    /// Delegates to [`ErrorCategory::is_retryable`] so the retry set has a
+    /// single source of truth in `vtcode-commons`.
     #[inline]
-    pub const fn is_retryable(&self) -> bool {
-        matches!(
-            self,
-            UnifiedErrorKind::Timeout
-                | UnifiedErrorKind::Network
-                | UnifiedErrorKind::RateLimit
-                | UnifiedErrorKind::CircuitOpen
-        )
+    pub fn is_retryable(&self) -> bool {
+        ErrorCategory::from(*self).is_retryable()
     }
 
     /// Whether this is an LLM mistake (argument error) vs tool failure
@@ -210,21 +207,16 @@ impl UnifiedToolError {
     }
 }
 
-/// Classify an `anyhow::Error` into a `UnifiedErrorKind`.
-///
-/// This is the crate-level error classifier. The registry-level equivalent is
-/// `registry::error::classify_error` which produces `ToolErrorType`. Both delegate
-/// to `vtcode_commons::classify_anyhow_error` and convert to their respective types.
-/// `UnifiedErrorKind` is used by the crate-level error envelope (`UnifiedToolError`);
-/// `ToolErrorType` is used by the registry execution facade for retry semantics.
-#[cold]
-pub fn classify_error(err: &anyhow::Error) -> UnifiedErrorKind {
-    let category = vtcode_commons::classify_anyhow_error(err);
-    UnifiedErrorKind::from(category)
-}
-
 // === Bridge conversions between ErrorCategory and UnifiedErrorKind ===
+//
+// Classification of raw errors happens once, in
+// `vtcode_commons::classify_anyhow_error`; these impls only translate the
+// canonical `ErrorCategory` into this crate's envelope view and back.
 
+/// Lossy: `ServiceUnavailable` collapses into `Network` and `ResourceNotFound`
+/// collapses into `ToolNotFound`, because `UnifiedErrorKind` has no dedicated
+/// variants for them. Round-tripping through `ErrorCategory` does not restore
+/// the original category for those inputs.
 impl From<ErrorCategory> for UnifiedErrorKind {
     fn from(cat: ErrorCategory) -> Self {
         match cat {
@@ -247,6 +239,8 @@ impl From<ErrorCategory> for UnifiedErrorKind {
     }
 }
 
+/// Lossy: `InternalError`, `ExecutionFailed`, and `Unknown` all collapse into
+/// `ExecutionError`, so distinct kinds can map to the same category.
 impl From<UnifiedErrorKind> for ErrorCategory {
     fn from(kind: UnifiedErrorKind) -> Self {
         match kind {
@@ -281,7 +275,7 @@ impl From<crate::tools::handlers::ToolCallError> for UnifiedToolError {
                 UnifiedToolError::new(UnifiedErrorKind::InternalError, msg)
             }
             ToolCallError::Internal(e) => {
-                let kind = classify_error(&e);
+                let kind = UnifiedErrorKind::from(vtcode_commons::classify_anyhow_error(&e));
                 UnifiedToolError::new(kind, e.to_string()).with_source(e)
             }
             ToolCallError::Timeout(ms) => {
@@ -300,7 +294,7 @@ impl From<crate::tools::handlers::sandboxing::ToolError> for UnifiedToolError {
                 UnifiedToolError::new(UnifiedErrorKind::PermissionDenied, msg)
             }
             ToolError::Codex(e) => {
-                let kind = classify_error(&e);
+                let kind = UnifiedErrorKind::from(vtcode_commons::classify_anyhow_error(&e));
                 UnifiedToolError::new(kind, e.to_string()).with_source(e)
             }
             ToolError::SandboxDenied(msg) => {
@@ -317,24 +311,59 @@ impl From<crate::tools::handlers::sandboxing::ToolError> for UnifiedToolError {
 mod tests {
     use super::*;
 
+    fn classify(err: &anyhow::Error) -> UnifiedErrorKind {
+        UnifiedErrorKind::from(vtcode_commons::classify_anyhow_error(err))
+    }
+
     #[test]
     fn test_error_classification() {
         assert_eq!(
-            classify_error(&anyhow::anyhow!("Connection timeout")),
+            classify(&anyhow::anyhow!("Connection timeout")),
             UnifiedErrorKind::Timeout
         );
         assert_eq!(
-            classify_error(&anyhow::anyhow!("Rate limit exceeded")),
+            classify(&anyhow::anyhow!("Rate limit exceeded")),
             UnifiedErrorKind::RateLimit
         );
         assert_eq!(
-            classify_error(&anyhow::anyhow!("Permission denied")),
+            classify(&anyhow::anyhow!("Permission denied")),
             UnifiedErrorKind::PermissionDenied
         );
         assert_eq!(
-            classify_error(&anyhow::anyhow!("Invalid argument: missing path")),
+            classify(&anyhow::anyhow!("Invalid argument: missing path")),
             UnifiedErrorKind::ArgumentValidation
         );
+    }
+
+    #[test]
+    fn test_retryable_parity_with_error_category() {
+        let kinds = [
+            UnifiedErrorKind::Timeout,
+            UnifiedErrorKind::Network,
+            UnifiedErrorKind::RateLimit,
+            UnifiedErrorKind::ArgumentValidation,
+            UnifiedErrorKind::ToolNotFound,
+            UnifiedErrorKind::PermissionDenied,
+            UnifiedErrorKind::SandboxFailure,
+            UnifiedErrorKind::InternalError,
+            UnifiedErrorKind::CircuitOpen,
+            UnifiedErrorKind::ResourceExhausted,
+            UnifiedErrorKind::Cancelled,
+            UnifiedErrorKind::PolicyViolation,
+            UnifiedErrorKind::PlanningPolicyViolation,
+            UnifiedErrorKind::ExecutionFailed,
+            UnifiedErrorKind::Unknown,
+        ];
+        for kind in kinds {
+            let expected = matches!(
+                kind,
+                UnifiedErrorKind::Timeout
+                    | UnifiedErrorKind::Network
+                    | UnifiedErrorKind::RateLimit
+                    | UnifiedErrorKind::CircuitOpen
+            );
+            assert_eq!(kind.is_retryable(), expected, "kind: {kind:?}");
+        }
     }
 
     #[test]

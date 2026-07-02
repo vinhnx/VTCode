@@ -33,7 +33,7 @@ pub struct ToolExecutionError {
     pub original_error: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)] // Added Copy since it's a simple enum
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ToolErrorType {
     InvalidParameters,
     ToolNotFound,
@@ -70,15 +70,42 @@ impl ToolExecutionError {
         error_type: ToolErrorType,
         message: impl Into<String>,
     ) -> Self {
-        let tool_name = tool_name.into();
-        let message = message.into();
-        let category = ErrorCategory::from(error_type);
+        Self::from_parts(
+            tool_name.into(),
+            ErrorCategory::from(error_type),
+            error_type,
+            message.into(),
+        )
+    }
+
+    /// Construct from a full-fidelity `ErrorCategory`, deriving the lossy
+    /// `error_type` view from it. Prefer this over [`Self::new`] when the
+    /// category came from `vtcode_commons::classify_anyhow_error` /
+    /// `classify_error_message`, so distinctions such as `RateLimit` vs
+    /// `Network` are preserved on the struct.
+    #[must_use]
+    fn from_category(
+        tool_name: impl Into<String>,
+        category: ErrorCategory,
+        message: impl Into<String>,
+    ) -> Self {
+        Self::from_parts(
+            tool_name.into(),
+            category,
+            ToolErrorType::from(category),
+            message.into(),
+        )
+    }
+
+    fn from_parts(
+        tool_name: String,
+        category: ErrorCategory,
+        error_type: ToolErrorType,
+        message: String,
+    ) -> Self {
         let (retryable, is_recoverable, recovery_suggestions) =
             generate_recovery_info(tool_name.as_str(), category, error_type);
 
-        // PTY/command tool timeouts should NOT be retried - the underlying process
-        // may still be running and retrying will cause Cargo.lock contention or
-        // other resource conflicts
         Self {
             tool_name,
             error_type,
@@ -120,12 +147,11 @@ impl ToolExecutionError {
         surface: Option<&str>,
     ) -> Self {
         let tool_name = tool_name.into();
-        let mut structured = Self::with_original_error(
-            tool_name.clone(),
-            classify_error(error),
-            error.to_string(),
-            format!("{error:#}"),
-        );
+        // Classify exactly once into the canonical category; the wire-visible
+        // `error_type` is derived from it inside `from_category`.
+        let category = vtcode_commons::classify_anyhow_error(error);
+        let mut structured = Self::from_category(tool_name.clone(), category, error.to_string());
+        structured.original_error = Some(format!("{error:#}"));
         structured = RetryPolicy::default().apply_to_tool_execution_error(
             structured,
             attempt_index,
@@ -148,6 +174,11 @@ impl ToolExecutionError {
     #[must_use]
     pub fn with_retry_decision(mut self, decision: RetryDecision) -> Self {
         self.category = decision.category;
+        // Keep the derived view in lockstep with the authoritative category.
+        // `ToolErrorType::from` is the identity on every ToolErrorType ->
+        // ErrorCategory -> ToolErrorType round trip, so this only changes
+        // `error_type` when the decision actually recategorized the error.
+        self.error_type = ToolErrorType::from(decision.category);
         self.retryable = decision.retryable;
         self.retry_delay_ms = decision.delay.map(|delay| delay.as_millis() as u64);
         self.retry_after_ms = decision.retry_after.map(|delay| delay.as_millis() as u64);
@@ -389,17 +420,6 @@ impl std::fmt::Display for ToolExecutionError {
 
 impl std::error::Error for ToolExecutionError {}
 
-/// Classify an `anyhow::Error` into a `ToolErrorType`.
-///
-/// This is the registry-level error classifier used by the execution facade for
-/// retry semantics. The crate-level equivalent is `unified_error::classify_error`
-/// which produces `UnifiedErrorKind`. Both delegate to the same underlying
-/// `vtcode_commons::classify_anyhow_error` and convert to their respective types.
-pub fn classify_error(error: &Error) -> ToolErrorType {
-    let category = vtcode_commons::classify_anyhow_error(error);
-    ToolErrorType::from(category)
-}
-
 // Use static string slices to avoid allocations for recovery suggestions.
 // Delegates to the shared `ErrorCategory` recovery suggestions where possible.
 #[inline]
@@ -415,11 +435,8 @@ fn generate_recovery_info(
                 | ToolErrorType::PermissionDenied
                 | ToolErrorType::ResourceNotFound
         );
-    let retryable = if matches!(error_type, ToolErrorType::Timeout) && is_command_tool(tool_name) {
-        false
-    } else {
-        category.is_retryable()
-    };
+    let retryable = category.is_retryable()
+        && !crate::retry::is_non_retryable_command_timeout(category, Some(tool_name));
     (retryable, is_recoverable, category.recovery_suggestions())
 }
 
@@ -516,40 +533,104 @@ mod tests {
     use super::*;
     use anyhow::anyhow;
 
+    fn classify(err: &Error) -> ToolErrorType {
+        ToolErrorType::from(vtcode_commons::classify_anyhow_error(err))
+    }
+
     #[test]
     fn classify_error_marks_rate_limit_as_network_error() {
         let err = anyhow!("provider returned 429 Too Many Requests");
-        assert!(matches!(classify_error(&err), ToolErrorType::NetworkError));
+        assert!(matches!(classify(&err), ToolErrorType::NetworkError));
     }
 
     #[test]
     fn classify_error_marks_service_unavailable_as_network_error() {
         let err = anyhow!("503 Service Unavailable");
-        assert!(matches!(classify_error(&err), ToolErrorType::NetworkError));
+        assert!(matches!(classify(&err), ToolErrorType::NetworkError));
     }
 
     #[test]
     fn classify_error_marks_weekly_usage_limit_as_execution_error() {
         let err = anyhow!("you have reached your weekly usage limit");
-        assert!(matches!(
-            classify_error(&err),
-            ToolErrorType::ExecutionError
-        ));
+        assert!(matches!(classify(&err), ToolErrorType::ExecutionError));
     }
 
     #[test]
     fn classify_error_marks_tool_not_found() {
         let err = anyhow!("unknown tool: ask_questions");
-        assert!(matches!(classify_error(&err), ToolErrorType::ToolNotFound));
+        assert!(matches!(classify(&err), ToolErrorType::ToolNotFound));
     }
 
     #[test]
     fn classify_error_marks_policy_violation_before_permission() {
         let err = anyhow!("tool permission denied by policy");
-        assert!(matches!(
-            classify_error(&err),
-            ToolErrorType::PolicyViolation
-        ));
+        assert!(matches!(classify(&err), ToolErrorType::PolicyViolation));
+    }
+
+    const ALL_TOOL_ERROR_TYPES: [ToolErrorType; 8] = [
+        ToolErrorType::InvalidParameters,
+        ToolErrorType::ToolNotFound,
+        ToolErrorType::PermissionDenied,
+        ToolErrorType::ResourceNotFound,
+        ToolErrorType::NetworkError,
+        ToolErrorType::Timeout,
+        ToolErrorType::ExecutionError,
+        ToolErrorType::PolicyViolation,
+    ];
+
+    #[test]
+    fn error_type_wire_string_round_trips() {
+        for error_type in ALL_TOOL_ERROR_TYPES {
+            assert_eq!(parse_error_type(error_type.as_str()), error_type);
+        }
+    }
+
+    #[test]
+    fn error_type_category_round_trip_is_identity() {
+        // Guarantees `with_retry_decision` never changes error_type unless the
+        // decision actually recategorized the error.
+        for error_type in ALL_TOOL_ERROR_TYPES {
+            assert_eq!(
+                ToolErrorType::from(ErrorCategory::from(error_type)),
+                error_type
+            );
+        }
+    }
+
+    #[test]
+    fn from_anyhow_derives_error_type_from_category() {
+        let err = anyhow!("provider returned 429 Too Many Requests");
+        let structured =
+            ToolExecutionError::from_anyhow("grep_search", &err, 0, false, false, None);
+        assert_eq!(structured.category, ErrorCategory::RateLimit);
+        assert_eq!(
+            structured.error_type,
+            ToolErrorType::from(structured.category)
+        );
+    }
+
+    #[test]
+    fn retryable_matches_error_category_predicate() {
+        for error_type in ALL_TOOL_ERROR_TYPES {
+            let category = ErrorCategory::from(error_type);
+            let structured =
+                ToolExecutionError::new("grep_search".to_string(), error_type, "boom".to_string());
+            assert_eq!(
+                structured.retryable,
+                category.is_retryable(),
+                "retryable mismatch for {error_type:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn command_tool_timeouts_are_not_retryable() {
+        let structured = ToolExecutionError::new(
+            crate::config::constants::tools::CREATE_PTY_SESSION.to_string(),
+            ToolErrorType::Timeout,
+            "command timed out".to_string(),
+        );
+        assert!(!structured.retryable);
     }
 
     #[test]

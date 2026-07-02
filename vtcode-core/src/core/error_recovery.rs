@@ -17,10 +17,14 @@ pub struct ExecutionError {
     pub resolved: bool,
 }
 
-/// Type of error that can occur
+/// Operation domain in which an error occurred.
 ///
-/// Canonical error type used across both the global error recovery manager
-/// and agent-specific error state tracking. Superset of all error categories.
+/// Used by the global error recovery manager and agent-specific error state
+/// tracking to group failures by *where* they happened (tool execution, API
+/// call, file system, ...). This is a different axis from
+/// [`vtcode_commons::ErrorCategory`], which classifies *why* an operation
+/// failed (rate limit, timeout, permission denied, ...); do not use this enum
+/// for failure classification or retry decisions.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Eq, Hash, PartialEq)]
 pub enum ErrorType {
     ToolExecution,

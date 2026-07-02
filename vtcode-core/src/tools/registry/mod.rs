@@ -68,7 +68,7 @@ pub use approval_recorder::ApprovalRecorder;
 pub use cgp_facade::CgpRuntimeMode;
 pub use cgp_facade::native_cgp_tool_factory;
 pub use cgp_facade::wrap_registered_native_tool;
-pub use error::{ToolErrorType, ToolExecutionError, classify_error};
+pub use error::{ToolErrorType, ToolExecutionError};
 pub use execution_history::{HarnessContextSnapshot, ToolExecutionHistory, ToolExecutionRecord};
 pub use execution_kernel::ToolPreflightOutcome;
 pub use execution_request::{

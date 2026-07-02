@@ -229,7 +229,7 @@ impl RetryPolicy {
         retry_after: Option<Duration>,
         tool_name: Option<&str>,
     ) -> RetryDecision {
-        if matches!(category, ErrorCategory::Timeout) && tool_name.is_some_and(is_command_tool) {
+        if is_non_retryable_command_timeout(category, tool_name) {
             return RetryDecision {
                 category,
                 retryable: false,
@@ -240,6 +240,16 @@ impl RetryPolicy {
 
         self.decision_for_category(category, attempt_index, retry_after)
     }
+}
+
+/// The single tool-aware retry rule: command tool timeouts are never
+/// retryable because the underlying process may still be running, so a
+/// retry can contend for locks or duplicate side effects.
+pub(crate) fn is_non_retryable_command_timeout(
+    category: ErrorCategory,
+    tool_name: Option<&str>,
+) -> bool {
+    matches!(category, ErrorCategory::Timeout) && tool_name.is_some_and(is_command_tool)
 }
 
 impl Default for RetryPolicy {

@@ -279,7 +279,7 @@ pub use traits::{Tool, ToolExecutor};
 pub use types::*;
 pub use unified_error::{
     DebugContext as UnifiedToolDebugContext, ErrorSeverity as UnifiedErrorSeverity,
-    UnifiedErrorKind, UnifiedToolError, classify_error as classify_unified_error,
+    UnifiedErrorKind, UnifiedToolError,
 };
 pub use web_fetch::WebFetchTool;
 pub use web_search::WebSearchTool;
