@@ -238,6 +238,10 @@ pub struct ToolCatalogEntry {
     pub source: ToolCatalogSource,
     pub kind: CatalogToolKind,
     pub configured_spec: ConfiguredToolSpec,
+    /// Optional per-tool description length cap. When set, overrides the
+    /// documentation mode's default max length. Used for MCP tools whose
+    /// descriptions can be arbitrarily long.
+    pub max_description_length: Option<usize>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -286,6 +290,7 @@ impl SessionToolCatalog {
                 description: compact_tool_description(
                     entry.description.as_str(),
                     config.documentation_mode,
+                    entry.max_description_length,
                 ),
                 parameters: compact_parameters(entry.parameters.clone(), config.documentation_mode),
             })
@@ -323,6 +328,7 @@ impl SessionToolCatalog {
                     let mut tool = ToolDefinition::apply_patch(compact_tool_description(
                         entry.description.as_str(),
                         config.documentation_mode,
+                        entry.max_description_length,
                     ));
                     if defer_loading && !expose_tools_directly {
                         tool = tool.with_defer_loading(true);
@@ -339,6 +345,7 @@ impl SessionToolCatalog {
                             compact_tool_description(
                                 entry.description.as_str(),
                                 config.documentation_mode,
+                                entry.max_description_length,
                             ),
                             compact_parameters(entry.parameters.clone(), config.documentation_mode),
                         )
@@ -421,7 +428,7 @@ impl ToolCatalogEntry {
                 .find(|alias| alias.starts_with(MCP_QUALIFIED_TOOL_PREFIX))
                 .cloned()
                 .or_else(|| aliases.first().cloned())?;
-            return Some(Self::new(
+            let mut entry = Self::new(
                 public_name,
                 registration.name().to_string(),
                 description,
@@ -432,7 +439,11 @@ impl ToolCatalogEntry {
                 supports_parallel_tool_calls,
                 source,
                 kind,
-            ));
+            );
+            // MCP tool descriptions from external servers can be arbitrarily
+            // long. Cap them to prevent token inflation.
+            entry.max_description_length = Some(MCP_TOOL_DESCRIPTION_MAX_LEN);
+            return Some(entry);
         }
 
         if !registration.expose_in_llm() {
@@ -520,6 +531,7 @@ impl ToolCatalogEntry {
             source,
             kind,
             configured_spec,
+            max_description_length: None,
         }
     }
 
@@ -639,12 +651,23 @@ fn default_parameter_schema() -> Value {
     })
 }
 
-fn compact_tool_description(original: &str, mode: ToolDocumentationMode) -> String {
-    let max_len = match mode {
+/// Default max description length for MCP tool descriptions in Full mode.
+/// MCP tools from external servers can have arbitrarily long descriptions;
+/// capping them prevents token inflation.
+const MCP_TOOL_DESCRIPTION_MAX_LEN: usize = 512;
+
+fn compact_tool_description(
+    original: &str,
+    mode: ToolDocumentationMode,
+    per_tool_max: Option<usize>,
+) -> String {
+    let mode_max = match mode {
         ToolDocumentationMode::Minimal => 64,
         ToolDocumentationMode::Progressive => 120,
         ToolDocumentationMode::Full => usize::MAX,
     };
+    // Per-tool cap takes precedence over mode default
+    let max_len = per_tool_max.unwrap_or(mode_max);
 
     let sentence = original
         .split('.')

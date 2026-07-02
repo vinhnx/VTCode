@@ -100,6 +100,7 @@ fn anthropic_web_search_tool_definition_accepts_object_config() {
         grammar: None,
         strict: None,
         defer_loading: None,
+        namespace: None,
     };
 
     tool.validate().unwrap();
@@ -118,6 +119,7 @@ fn anthropic_web_search_tool_definition_rejects_non_object_config() {
         grammar: None,
         strict: None,
         defer_loading: None,
+        namespace: None,
     };
 
     assert!(tool.validate().is_err());
@@ -139,6 +141,7 @@ fn anthropic_web_search_tool_definition_rejects_mixed_domain_filters() {
         grammar: None,
         strict: None,
         defer_loading: None,
+        namespace: None,
     };
 
     assert!(tool.validate().is_err());
@@ -157,6 +160,7 @@ fn anthropic_code_execution_tool_definition_is_supported() {
         grammar: None,
         strict: None,
         defer_loading: None,
+        namespace: None,
     };
 
     tool.validate().unwrap();
@@ -176,6 +180,7 @@ fn anthropic_memory_tool_definition_is_supported() {
         grammar: None,
         strict: None,
         defer_loading: None,
+        namespace: None,
     };
 
     tool.validate().unwrap();

@@ -81,6 +81,10 @@ pub struct OpenAIProvider {
     hosted_shell: OpenAIHostedShellConfig,
     websocket_session: AsyncMutex<Option<OpenAIResponsesWebSocketSession>>,
     websocket_continuation_cache: Mutex<Option<OpenAIResponsesWebSocketContinuationCache>>,
+    /// Cache of models where `service_tier=flex` was rejected by the backend.
+    /// Once a model is marked unsupported, subsequent requests skip the flex
+    /// tier entirely, avoiding the wasted first request + retry round-trip.
+    service_tier_unsupported_cache: Mutex<HashMap<String, bool>>,
 }
 
 impl OpenAIProvider {
@@ -199,6 +203,7 @@ impl OpenAIProvider {
             hosted_shell: OpenAIHostedShellConfig::default(),
             websocket_session: AsyncMutex::new(None),
             websocket_continuation_cache: Mutex::new(None),
+            service_tier_unsupported_cache: Mutex::new(HashMap::new()),
         }
     }
 
@@ -350,6 +355,7 @@ impl OpenAIProvider {
             hosted_shell,
             websocket_session: AsyncMutex::new(None),
             websocket_continuation_cache: Mutex::new(None),
+            service_tier_unsupported_cache: Mutex::new(HashMap::new()),
         }
     }
 

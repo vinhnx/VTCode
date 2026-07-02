@@ -49,6 +49,11 @@ pub(crate) fn build_messages(
         .as_ref()
         .is_some_and(|tools| tools.iter().any(|tool| tool.is_anthropic_code_execution()));
 
+    // Rolling-anchor strategy: build all messages first without breakpoints,
+    // then place cache_control on only the last two qualifying user messages.
+    // This matches the article's recommendation: "a pair of rolling anchors on
+    // the two most recent cacheable messages" where the second anchor is a safety
+    // net that preserves cache coverage when the primary anchor misses.
     for msg in messages_to_process {
         if msg.role == MessageRole::System && !allow_mid_conversation_system {
             continue;
@@ -121,21 +126,9 @@ pub(crate) fn build_messages(
                 }
             }
             _ => {
-                let mut cache_ctrl = None;
-                let should_cache = msg.role == MessageRole::User
-                    && prompt_cache_settings.cache_user_messages
-                    && *breakpoints_remaining > 0
-                    && msg.content.as_text().len()
-                        >= prompt_cache_settings.min_message_length_for_cache;
-
-                if should_cache && let Some(cc) = messages_cache_control.as_ref() {
-                    cache_ctrl = Some(cc.clone());
-                    *breakpoints_remaining -= 1;
-                }
-
                 let blocks = content_blocks_from_message_content(
                     &msg.content,
-                    cache_ctrl,
+                    None,
                     allow_container_uploads,
                 );
                 if blocks.is_empty() {
@@ -146,6 +139,46 @@ pub(crate) fn build_messages(
                     role: msg.role.as_anthropic_str().to_string(),
                     content: blocks,
                 });
+            }
+        }
+    }
+
+    // Rolling-anchor placement: identify qualifying user messages and place
+    // breakpoints on the last two (primary + safety net anchor).
+    if prompt_cache_settings.cache_user_messages {
+        if let Some(cc) = messages_cache_control.as_ref() {
+            let qualifying: Vec<usize> = messages
+                .iter()
+                .enumerate()
+                .filter(|(_, msg)| {
+                    msg.role == "user" && msg.content.iter().any(|block| {
+                        matches!(
+                            block,
+                            AnthropicContentBlock::Text { text, .. }
+                                if text.len() >= prompt_cache_settings.min_message_length_for_cache
+                        )
+                    })
+                })
+                .map(|(idx, _)| idx)
+                .collect();
+
+            // Place breakpoints on the last two qualifying messages (rolling anchors).
+            // The second anchor is a safety net: if the primary misses, it still
+            // covers everything up to the older message.
+            let anchor_count = qualifying.len().min(2);
+            for &idx in qualifying.iter().rev().take(anchor_count) {
+                if *breakpoints_remaining == 0 {
+                    break;
+                }
+                if let Some(AnthropicContentBlock::Text { cache_control, .. }) =
+                    messages[idx].content.iter_mut().find(|block| {
+                        matches!(block, AnthropicContentBlock::Text { text, .. }
+                        if text.len() >= prompt_cache_settings.min_message_length_for_cache)
+                    })
+                {
+                    *cache_control = Some(cc.clone());
+                    *breakpoints_remaining -= 1;
+                }
             }
         }
     }

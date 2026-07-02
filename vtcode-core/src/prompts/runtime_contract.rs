@@ -40,10 +40,8 @@ fn append_full_auto_notice(prompt: &mut String, contract: RuntimePromptContract)
         prompt,
         "- Stay within the exposed tool list and adapt when a tool is unavailable or denied."
     );
-    let _ = writeln!(
-        prompt,
-        "- Treat completion language as a checkpoint, not proof; only stop when `task_tracker`, verification, and resumable state agree."
-    );
+    // Checkpoint guidance is already in the operating profiles; omit here to
+    // avoid token waste from duplication.
     if !contract.request_user_input_enabled {
         let _ = writeln!(
             prompt,

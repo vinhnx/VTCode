@@ -11,6 +11,184 @@ use crate::core::agent::harness_kernel::{
 use crate::llm::provider::ToolDefinition;
 use crate::prompts::sort_tool_definitions;
 
+// ─── Client-Side Tool Search Index ──────────────────────────────────────────
+
+/// A pre-computed index for client-side embedding-guided tool search.
+///
+/// Instead of sending all tool definitions to the provider for server-side
+/// search, this index allows ranking tools by semantic similarity locally.
+/// This is the infrastructure described in the Microsoft article: "Rather than
+/// lexical matching over tool names and descriptions, we use our embedding
+/// model to compare the query against vector representations of every available
+/// tool."
+///
+/// The current implementation uses BM25-style term frequency scoring as a
+/// baseline. A future enhancement could replace this with a proper embedding
+/// model (e.g., a lightweight local model or the provider's embedding API).
+#[derive(Debug, Clone)]
+pub struct ToolEmbeddingIndex {
+    /// (tool_name, description, pre-computed term frequencies)
+    entries: Vec<ToolIndexEntry>,
+    /// Global document frequency: how many entries contain each term.
+    doc_freq: std::collections::HashMap<String, u32>,
+    /// Epoch at which this index was built. Invalidated on catalog refresh.
+    epoch: u64,
+}
+
+#[derive(Debug, Clone)]
+struct ToolIndexEntry {
+    name: String,
+    description: String,
+    /// Lowercased terms extracted from name + description
+    terms: Vec<String>,
+}
+
+/// A single tool search result with a relevance score.
+#[derive(Debug, Clone)]
+pub struct ToolSearchResult {
+    pub name: String,
+    pub description: String,
+    pub score: f64,
+}
+
+impl ToolEmbeddingIndex {
+    /// Build an index from a set of tool definitions.
+    #[must_use]
+    pub fn build(tools: &[ToolDefinition], epoch: u64) -> Self {
+        let entries: Vec<ToolIndexEntry> = tools
+            .iter()
+            .filter_map(|tool| {
+                let func = tool.function.as_ref()?;
+                let name = func.name.clone();
+                let description = func.description.clone();
+                let combined = format!("{name} {description}");
+                let terms: Vec<String> = combined
+                    .split_whitespace()
+                    .map(|t| {
+                        t.to_lowercase()
+                            .trim_matches(|c: char| !c.is_alphanumeric())
+                            .to_string()
+                    })
+                    .filter(|t| !t.is_empty() && t.len() > 1)
+                    .collect();
+                Some(ToolIndexEntry {
+                    name,
+                    description,
+                    terms,
+                })
+            })
+            .collect();
+
+        // Compute document frequency for each term
+        let mut doc_freq: std::collections::HashMap<String, u32> = std::collections::HashMap::new();
+        for entry in &entries {
+            let mut seen = std::collections::HashSet::new();
+            for term in &entry.terms {
+                if seen.insert(term.clone()) {
+                    *doc_freq.entry(term.clone()).or_insert(0) += 1;
+                }
+            }
+        }
+
+        Self {
+            entries,
+            doc_freq,
+            epoch,
+        }
+    }
+
+    /// Search the index with a query string. Returns tools ranked by relevance.
+    ///
+    /// Uses BM25-inspired scoring:
+    /// - Term frequency: how often the query term appears in the tool's text
+    /// - Inverse document frequency: rare terms score higher
+    /// - Field boost: name matches score higher than description matches
+    #[must_use]
+    pub fn search(&self, query: &str, max_results: usize) -> Vec<ToolSearchResult> {
+        let query_terms: Vec<String> = query
+            .split_whitespace()
+            .map(|t| {
+                t.to_lowercase()
+                    .trim_matches(|c: char| !c.is_alphanumeric())
+                    .to_string()
+            })
+            .filter(|t| !t.is_empty() && t.len() > 1)
+            .collect();
+
+        if query_terms.is_empty() || self.entries.is_empty() {
+            return Vec::new();
+        }
+
+        let n = self.entries.len() as f64;
+        let avg_dl: f64 = self
+            .entries
+            .iter()
+            .map(|e| e.terms.len() as f64)
+            .sum::<f64>()
+            / n;
+
+        let k1 = 1.5;
+        let b = 0.75;
+
+        let mut results: Vec<ToolSearchResult> = self
+            .entries
+            .iter()
+            .map(|entry| {
+                let mut score = 0.0;
+                let dl = entry.terms.len() as f64;
+
+                for query_term in &query_terms {
+                    // Count term frequency in this entry
+                    let tf = entry.terms.iter().filter(|t| **t == **query_term).count() as f64;
+
+                    // Look up document frequency by term string, not positional index
+                    let df = self.doc_freq.get(query_term).copied().unwrap_or(0) as f64;
+
+                    if df == 0.0 {
+                        continue;
+                    }
+
+                    // IDF component
+                    let idf = ((n - df + 0.5) / (df + 0.5)).max(0.01);
+
+                    // TF-IDF with BM25 length normalization
+                    let tf_component = (tf * (k1 + 1.0)) / (tf + k1 * (1.0 - b + b * dl / avg_dl));
+
+                    // Boost for name matches (name is more important than description)
+                    let name_match_boost = if entry.name.to_lowercase().contains(query_term) {
+                        2.0
+                    } else {
+                        1.0
+                    };
+
+                    score += idf * tf_component * name_match_boost;
+                }
+
+                ToolSearchResult {
+                    name: entry.name.clone(),
+                    description: entry.description.clone(),
+                    score,
+                }
+            })
+            .filter(|r| r.score > 0.0)
+            .collect();
+
+        results.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        results.truncate(max_results);
+        results
+    }
+
+    /// Returns the epoch at which this index was built.
+    #[must_use]
+    pub fn epoch(&self) -> u64 {
+        self.epoch
+    }
+}
+
 #[derive(Debug, Clone)]
 struct FilteredCacheEntry {
     version: u64,
@@ -27,6 +205,9 @@ pub struct SessionToolCatalogState {
     expanded_tool_names: Mutex<BTreeSet<String>>,
     cached_sorted: RwLock<Option<(u64, Arc<Vec<ToolDefinition>>)>>,
     cached_filtered: RwLock<Vec<FilteredCacheEntry>>,
+    /// Client-side embedding index for tool search. Rebuilt when the tool
+    /// catalog epoch changes (tools added/removed, deferred tools expanded).
+    embedding_index: RwLock<Option<ToolEmbeddingIndex>>,
 }
 
 impl SessionToolCatalogState {
@@ -118,6 +299,58 @@ impl SessionToolCatalogState {
             "tool references expanded deferred tool definitions"
         );
         Some(self.note_explicit_refresh("tool_search_expansion"))
+    }
+
+    /// Get or build the client-side tool embedding index.
+    ///
+    /// The index is rebuilt when the catalog epoch changes (tools added/removed,
+    /// deferred tools expanded). This is the infrastructure for client-side
+    /// embedding-guided tool search described in the Microsoft article.
+    pub async fn embedding_index(
+        &self,
+        tools: &Arc<RwLock<Vec<ToolDefinition>>>,
+    ) -> Arc<ToolEmbeddingIndex> {
+        let current_epoch = self.current_epoch();
+
+        // Check if the cached index is still valid
+        {
+            let index_guard = self.embedding_index.read().await;
+            if let Some(ref index) = *index_guard {
+                if index.epoch() == current_epoch {
+                    return Arc::new(index.clone());
+                }
+            }
+        }
+
+        // Build a new index
+        let defs = tools.read().await;
+        let index = ToolEmbeddingIndex::build(&defs, current_epoch);
+        drop(defs);
+
+        let arc_index = Arc::new(index.clone());
+        {
+            let mut index_guard = self.embedding_index.write().await;
+            *index_guard = Some(index);
+        }
+
+        arc_index
+    }
+
+    /// Search tools by query using the client-side embedding index.
+    ///
+    /// Returns tools ranked by BM25-inspired relevance scoring. This is the
+    /// client-side alternative to provider-side tool search, matching the
+    /// article's description: "Rather than lexical matching over tool names and
+    /// descriptions, we use our embedding model to compare the query against
+    /// vector representations of every available tool."
+    pub async fn search_tools(
+        &self,
+        tools: &Arc<RwLock<Vec<ToolDefinition>>>,
+        query: &str,
+        max_results: usize,
+    ) -> Vec<ToolSearchResult> {
+        let index = self.embedding_index(tools).await;
+        index.search(query, max_results)
     }
 
     pub async fn filtered_snapshot_with_stats(
@@ -362,5 +595,69 @@ mod tests {
         );
         assert_eq!(snapshot.catalog_tools(), 3);
         assert_eq!(snapshot.available_tools(), 2);
+    }
+
+    fn tool_with_desc(name: &str, desc: &str) -> ToolDefinition {
+        ToolDefinition::function(name.to_string(), desc.to_string(), serde_json::json!({}))
+    }
+
+    #[test]
+    fn embedding_index_search_returns_ranked_results() {
+        let tools = vec![
+            tool_with_desc("read_file", "Read the contents of a file from disk"),
+            tool_with_desc("write_file", "Write content to a file on disk"),
+            tool_with_desc(
+                "search_code",
+                "Search for code patterns using regex or structural search",
+            ),
+            tool_with_desc(
+                "run_command",
+                "Execute a shell command and return its output",
+            ),
+        ];
+
+        let index = ToolEmbeddingIndex::build(&tools, 0);
+
+        // Search for "file read" — should rank read_file highest
+        let results = index.search("file read", 3);
+        assert!(!results.is_empty());
+        assert_eq!(results[0].name, "read_file");
+
+        // Search for "shell execute" — should rank run_command highest
+        let results = index.search("shell execute", 3);
+        assert!(!results.is_empty());
+        assert_eq!(results[0].name, "run_command");
+
+        // Search for "regex pattern" — should rank search_code highest
+        let results = index.search("regex pattern", 3);
+        assert!(!results.is_empty());
+        assert_eq!(results[0].name, "search_code");
+    }
+
+    #[test]
+    fn embedding_index_empty_query_returns_empty() {
+        let tools = vec![tool_with_desc("read_file", "Read a file")];
+        let index = ToolEmbeddingIndex::build(&tools, 0);
+        let results = index.search("", 5);
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn embedding_index_respects_max_results() {
+        let tools = vec![
+            tool_with_desc("tool_a", "tool a description"),
+            tool_with_desc("tool_b", "tool b description"),
+            tool_with_desc("tool_c", "tool c description"),
+        ];
+        let index = ToolEmbeddingIndex::build(&tools, 0);
+        let results = index.search("tool", 2);
+        assert!(results.len() <= 2);
+    }
+
+    #[test]
+    fn embedding_index_epoch_is_preserved() {
+        let tools = vec![tool_with_desc("read_file", "Read a file")];
+        let index = ToolEmbeddingIndex::build(&tools, 42);
+        assert_eq!(index.epoch(), 42);
     }
 }

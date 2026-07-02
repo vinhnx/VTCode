@@ -342,6 +342,7 @@ pub fn convert_anthropic_to_llm_request(request: AnthropicMessagesRequest) -> LL
                             grammar: None,
                             strict: None,
                             defer_loading: None,
+                            namespace: None,
                         }
                     } else if tool_type.starts_with("code_execution_")
                         || tool_type.starts_with("memory_")
@@ -357,6 +358,7 @@ pub fn convert_anthropic_to_llm_request(request: AnthropicMessagesRequest) -> LL
                             grammar: None,
                             strict: None,
                             defer_loading: None,
+                            namespace: None,
                         }
                     } else {
                         continue;

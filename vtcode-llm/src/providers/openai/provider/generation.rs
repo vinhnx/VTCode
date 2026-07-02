@@ -98,6 +98,41 @@ async fn collect_streamed_response(
 }
 
 impl OpenAIProvider {
+    /// Check if `service_tier=flex` is known to be unsupported for this model.
+    /// Returns `true` if the model was previously rejected with flex tier.
+    fn is_flex_unsupported_for_model(&self, model: &str) -> bool {
+        self.service_tier_unsupported_cache
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(model)
+            .copied()
+            .unwrap_or(false)
+    }
+
+    /// Mark `service_tier=flex` as unsupported for this model so future
+    /// requests skip it entirely, avoiding the wasted first request + retry.
+    fn mark_flex_unsupported_for_model(&self, model: &str) {
+        self.service_tier_unsupported_cache
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(model.to_string(), true);
+        tracing::info!(model = %model, "cached service_tier=flex unsupported for model");
+    }
+
+    /// Strip `service_tier` from the payload if it was previously rejected
+    /// for this model. Returns the (possibly modified) payload.
+    fn maybe_strip_flex_service_tier(&self, model: &str, payload: &Value) -> Value {
+        if self.is_flex_unsupported_for_model(model) && payload_uses_flex_service_tier(payload) {
+            tracing::debug!(
+                model = %model,
+                "skipping service_tier=flex (previously unsupported)"
+            );
+            payload_without_service_tier(payload)
+        } else {
+            payload.clone()
+        }
+    }
+
     async fn retry_without_service_tier(
         &self,
         url: &str,
@@ -310,6 +345,9 @@ impl OpenAIProvider {
             }
 
             let openai_request = self.convert_to_openai_responses_format(&request)?;
+            // Skip flex tier if it was previously rejected for this model
+            let openai_request =
+                self.maybe_strip_flex_service_tier(&request.model, &openai_request);
             let url = format!("{}/responses", self.base_url);
             let client_request_id = Self::new_client_request_id();
 
@@ -337,6 +375,8 @@ impl OpenAIProvider {
                 if payload_uses_flex_service_tier(&openai_request)
                     && is_flex_service_tier_unsupported(status, &error_text)
                 {
+                    // Cache this so future requests skip flex tier entirely
+                    self.mark_flex_unsupported_for_model(&request.model);
                     tracing::warn!(
                         model = %request.model,
                         client_request_id = %client_request_id,
@@ -534,6 +574,8 @@ impl OpenAIProvider {
             if payload_uses_flex_service_tier(&openai_request)
                 && is_flex_service_tier_unsupported(status, &error_text)
             {
+                // Cache this so future requests skip flex tier entirely
+                self.mark_flex_unsupported_for_model(&request.model);
                 tracing::warn!(
                     model = %request.model,
                     client_request_id = %client_request_id,

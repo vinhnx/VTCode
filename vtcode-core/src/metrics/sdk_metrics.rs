@@ -7,6 +7,11 @@ pub struct SdkMetrics {
     pub cache_hits: u64,
     pub tools_total_generated: u64,
     pub max_tools_per_generation: u64,
+    /// Estimated total tokens consumed by tool definitions across all turns.
+    /// Tool definitions are a fixed overhead per turn; tracking this helps
+    /// identify when the toolset is growing beyond efficient bounds.
+    #[serde(default)]
+    pub total_tool_definition_tokens: u64,
 }
 
 impl SdkMetrics {
@@ -17,6 +22,7 @@ impl SdkMetrics {
             cache_hits: 0,
             tools_total_generated: 0,
             max_tools_per_generation: 0,
+            total_tool_definition_tokens: 0,
         }
     }
 
@@ -31,6 +37,12 @@ impl SdkMetrics {
 
     pub fn record_cache_hit(&mut self) {
         self.cache_hits += 1;
+    }
+
+    /// Record estimated tokens consumed by tool definitions in a single turn.
+    pub fn record_tool_definition_tokens(&mut self, tokens: u64) {
+        self.total_tool_definition_tokens =
+            self.total_tool_definition_tokens.saturating_add(tokens);
     }
 
     pub fn avg_generation_time_ms(&self) -> u64 {
@@ -54,6 +66,15 @@ impl SdkMetrics {
             self.cache_hits as f64 / self.total_generations as f64
         } else {
             0.0
+        }
+    }
+
+    /// Average tool definition tokens per generation.
+    pub fn avg_tool_definition_tokens_per_generation(&self) -> u64 {
+        if self.total_generations > 0 {
+            self.total_tool_definition_tokens / self.total_generations
+        } else {
+            0
         }
     }
 }

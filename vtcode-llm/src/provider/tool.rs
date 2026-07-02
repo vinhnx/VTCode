@@ -4,6 +4,22 @@ use serde_json::{Map, Value, json};
 // Re-export from vtcode-config as the canonical definition
 pub use vtcode_config::ToolSearchAlgorithm;
 
+/// A namespace grouping for deferred tools. When a tool has a namespace and
+/// `defer_loading` is true, only the namespace metadata (name + description)
+/// is sent upfront. The full tool definitions are loaded when the model
+/// searches for a tool in that namespace.
+///
+/// This is the infrastructure for the article's description: "when deferred
+/// functions are grouped into a namespace, only the namespace's name and
+/// description" are sent to the model.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ToolNamespace {
+    /// The namespace name (e.g., "file_operations", "code_search")
+    pub name: String,
+    /// A short description of what tools in this namespace do
+    pub description: String,
+}
+
 /// Universal tool definition that matches OpenAI/Anthropic/Gemini specifications
 /// Based on official API documentation from Context7
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -59,6 +75,12 @@ pub struct ToolDefinition {
     /// This enables dynamic tool discovery for large tool catalogs (10k+ tools)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub defer_loading: Option<bool>,
+
+    /// Optional namespace grouping for deferred tools. When present and
+    /// `defer_loading` is true, only this namespace metadata is sent upfront
+    /// instead of the full tool definition.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub namespace: Option<ToolNamespace>,
 }
 
 /// Shell tool definition for GPT-5.1 shell tool type
@@ -155,6 +177,7 @@ impl ToolDefinition {
             grammar: None,
             strict: None,
             defer_loading: None,
+            namespace: None,
         }
     }
 
@@ -191,6 +214,14 @@ impl ToolDefinition {
     /// Set whether the tool should be deferred (Anthropic tool search)
     pub fn with_defer_loading(mut self, defer: bool) -> Self {
         self.defer_loading = Some(defer);
+        self
+    }
+
+    /// Assign this tool to a namespace for grouped deferred loading.
+    /// When both `defer_loading` and `namespace` are set, only the namespace
+    /// metadata is sent upfront; the full definition is loaded on search.
+    pub fn with_namespace(mut self, namespace: ToolNamespace) -> Self {
+        self.namespace = Some(namespace);
         self
     }
 

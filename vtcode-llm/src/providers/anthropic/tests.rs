@@ -895,6 +895,7 @@ mod request_builder_tests {
                 grammar: None,
                 strict: None,
                 defer_loading: None,
+                namespace: None,
             }])),
             ..Default::default()
         };
@@ -934,6 +935,7 @@ mod request_builder_tests {
                 grammar: None,
                 strict: None,
                 defer_loading: None,
+                namespace: None,
             }])),
             ..Default::default()
         };
@@ -965,6 +967,7 @@ mod request_builder_tests {
                 grammar: None,
                 strict: None,
                 defer_loading: None,
+                namespace: None,
             }])),
             ..Default::default()
         };
@@ -1023,6 +1026,7 @@ mod request_builder_tests {
                 grammar: None,
                 strict: None,
                 defer_loading: None,
+                namespace: None,
             }])),
             ..Default::default()
         };

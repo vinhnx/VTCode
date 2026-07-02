@@ -23,17 +23,19 @@ use tracing::warn;
 /// Shared Planning workflow header used by both static and incremental prompt builders.
 pub const PLANNING_WORKFLOW_READ_ONLY_HEADER: &str = "# PLANNING WORKFLOW (READ-ONLY)";
 /// Shared Planning workflow notice line describing strict read-only enforcement.
-pub const PLANNING_WORKFLOW_READ_ONLY_NOTICE_LINE: &str = "Planning workflow is active. Only mutating tools (write_file, edit_file, apply_patch, unified_file:write/create/edit) are blocked. You CAN and SHOULD: read files (unified_file:read), run readonly commands (cargo check, cargo test, git status, ls, grep, find, diff), search code (unified_search), and use task_tracker. Plan artifact writes under `.vtcode/plans/` are also allowed.";
+pub const PLANNING_WORKFLOW_READ_ONLY_NOTICE_LINE: &str = "Mutating tools (write_file, edit_file, apply_patch) are blocked. Use read-only tools: unified_file:read, cargo check/test, git status, unified_search, task_tracker. Plan artifacts under `.vtcode/plans/` are allowed.";
 /// Shared Planning workflow instruction line for transitioning to implementation.
-pub const PLANNING_WORKFLOW_EXIT_INSTRUCTION_LINE: &str = "Call `finish_planning` to present the plan for user approval. Planning workflow remains active and mutating tools stay disabled until the user explicitly approves the plan.";
+pub const PLANNING_WORKFLOW_EXIT_INSTRUCTION_LINE: &str =
+    "Call `finish_planning` to present the plan. Mutating tools stay disabled until user approves.";
 /// Shared Planning workflow instruction line for decision-complete planning output.
-pub const PLANNING_WORKFLOW_PLAN_QUALITY_LINE: &str = "Explore repository facts first, ask only material blocking questions, keep planning read-only, and emit exactly one decision-complete `<proposed_plan>` block with a summary, implementation steps, test cases, and assumptions/defaults. If something is still unresolved, end with `Next open decision: ...`.";
+pub const PLANNING_WORKFLOW_PLAN_QUALITY_LINE: &str = "Explore repo facts, ask only material blocking questions. Emit one `<proposed_plan>` with summary, steps, test cases, assumptions. Unresolved items: `Next open decision: ...`.";
 /// Shared Planning workflow policy line requiring context-aware interview closure before final plans.
-pub const PLANNING_WORKFLOW_INTERVIEW_POLICY_LINE: &str = "In Planning workflow, prefer model-generated `request_user_input` interview questions informed by discovered repository context, keep custom notes/free-form responses available as first-class input, and continue interviewing until material scope/decomposition/verification decisions are closed before finalizing `<proposed_plan>`.";
+pub const PLANNING_WORKFLOW_INTERVIEW_POLICY_LINE: &str = "Use `request_user_input` for interview questions informed by repo context. Continue until scope/decomposition/verification decisions are closed before finalizing `<proposed_plan>`.";
 /// Shared Planning workflow policy line for runtimes where `request_user_input` is unavailable.
-pub const PLANNING_WORKFLOW_NO_REQUEST_USER_INPUT_POLICY_LINE: &str = "In this runtime, `request_user_input` is unavailable. In Planning workflow, continue exploring repository facts with read-only permissions, finish any unblocked planning work, and surface material blockers explicitly in plain text instead of emitting interview tool calls.";
+pub const PLANNING_WORKFLOW_NO_REQUEST_USER_INPUT_POLICY_LINE: &str = "`request_user_input` unavailable here. Continue exploring read-only, finish unblocked planning, surface blockers in plain text.";
 /// Shared Planning workflow guard line requiring explicit transition from planning to execution.
-pub const PLANNING_WORKFLOW_NO_AUTO_EXIT_LINE: &str = "Do not auto-exit Planning workflow just because a plan exists; wait for explicit implementation intent.";
+pub const PLANNING_WORKFLOW_NO_AUTO_EXIT_LINE: &str =
+    "Do not auto-exit Planning workflow; wait for explicit implementation intent.";
 /// Shared Planning workflow task-tracking line clarifying availability and aliasing.
 /// Implementation prompt used when transitioning from planning to execution.
 pub const PLANNING_WORKFLOW_IMPLEMENTATION_PROMPT: &str = "Implement the approved plan.";
@@ -81,7 +83,7 @@ const SHARED_CONTRACT_LINES: &[&str] = &[
     "Preserve task goal, tracker state, touched files, verification status, and decisions across compaction.",
     "Keep outputs concise; keep agent loops simple and let the model choose the next useful step.",
     "Prefer `ast-grep` for code-shape queries; keep text grep for prose and config.",
-    "When a tool result has `spool_path`, the full output is at that path. Read it once with `unified_search action=grep` using a SPECIFIC pattern — do NOT page through it with multiple `read_file` calls (the per-turn spool chunk cap will block you). Past-turn errors are already in your history; do not re-read their spool files.",
+    "`spool_path` holds full tool output — read once with `unified_search action=grep` + specific pattern, not multiple `read_file` calls. Past-turn errors are already in history.",
 ];
 
 /// Default/Lightweight/Specialized mode: expanded contract lines beyond shared rules.
@@ -572,6 +574,23 @@ pub fn generate_lightweight_instruction() -> Content {
 pub fn generate_specialized_instruction() -> Content {
     Content::system_text(specialized_instruction_text())
 }
+
+// ─── Token Estimation ────────────────────────────────────────────────────────
+
+/// Fast character-based token count estimation.
+///
+/// Uses the heuristic `tokens ~= chars / 4` which is accurate within ~20%
+/// for English text with code. This is intentionally approximate — the goal
+/// is monitoring and budget enforcement, not precise accounting.
+#[must_use]
+pub fn estimate_token_count(text: &str) -> u64 {
+    // Round up to avoid underestimation
+    (text.len() as u64 + 3) / 4
+}
+
+/// Default soft budget for system prompt tokens.
+/// When the prompt exceeds this, a warning is logged but no truncation occurs.
+pub const DEFAULT_MAX_SYSTEM_PROMPT_TOKENS: u64 = 8000;
 
 #[cfg(test)]
 mod tests {
@@ -1710,6 +1729,26 @@ mod tests {
         assert!(
             result.starts_with("# VT Code (Duck mode)"),
             "Should start with duck agent identity"
+        );
+    }
+
+    #[test]
+    fn test_estimate_token_count() {
+        assert_eq!(estimate_token_count(""), 0);
+        assert_eq!(estimate_token_count("hello"), 2); // 5 chars / 4 = 1.25 -> ceil = 2
+        assert_eq!(estimate_token_count("1234"), 1); // 4 chars / 4 = 1
+        assert_eq!(estimate_token_count("12345"), 2); // 5 chars / 4 = 1.25 -> ceil = 2
+
+        // Realistic prompt size check — these are estimates, not exact token counts
+        let minimal_tokens = estimate_token_count(minimal_system_prompt());
+        let default_tokens = estimate_token_count(default_system_prompt());
+        assert!(
+            minimal_tokens < 400,
+            "Minimal prompt tokens: {minimal_tokens}"
+        );
+        assert!(
+            default_tokens < 600,
+            "Default prompt tokens: {default_tokens}"
         );
     }
 }

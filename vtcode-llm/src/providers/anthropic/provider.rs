@@ -820,6 +820,7 @@ mod tests {
                 grammar: None,
                 strict: None,
                 defer_loading: None,
+                namespace: None,
             }])),
             ..Default::default()
         };
@@ -849,6 +850,7 @@ mod tests {
                 grammar: None,
                 strict: None,
                 defer_loading: None,
+                namespace: None,
             }])),
             ..Default::default()
         };
