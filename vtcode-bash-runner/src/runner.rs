@@ -416,13 +416,16 @@ where
     }
 
     fn ensure_within_workspace(&self, candidate: &Path) -> Result<()> {
-        if !candidate.starts_with(&self.workspace_root) {
-            bail!(
-                "path `{}` escapes workspace root `{}`",
-                candidate.display(),
-                self.workspace_root.display()
-            );
-        }
+        // `workspace_root` is canonicalized in the constructor and candidates
+        // arrive canonicalized, so the lexical check is sufficient here.
+        vtcode_commons::paths::ensure_path_within_workspace(candidate, &self.workspace_root)
+            .map_err(|error| {
+                error.context(format!(
+                    "path `{}` escapes workspace root `{}`",
+                    candidate.display(),
+                    self.workspace_root.display()
+                ))
+            })?;
         Ok(())
     }
 }

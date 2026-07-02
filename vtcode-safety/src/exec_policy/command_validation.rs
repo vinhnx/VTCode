@@ -1,10 +1,9 @@
 use std::env;
-use std::io;
 use std::path::{Path, PathBuf};
 use tokio::fs;
 
 use anyhow::{Context, Result, anyhow};
-use vtcode_commons::paths::{canonicalize_workspace, normalize_path};
+use vtcode_commons::paths::normalize_path;
 
 /// Helper to validate flags in arguments (reduces duplication in 10+ validators)
 /// Returns error if any flag not in allowed_flags is found
@@ -936,79 +935,9 @@ fn ensure_safe_sed_command(value: &str) -> Result<()> {
 }
 
 async fn ensure_within_workspace(normalized_root: &Path, candidate: &Path) -> Result<()> {
-    let canonical_root = tokio::task::spawn_blocking({
-        let root = normalized_root.to_path_buf();
-        move || canonicalize_workspace(&root)
-    })
-    .await
-    .context("failed to spawn canonicalization task")?;
-
-    if normalized_root == candidate {
-        return Ok(());
-    }
-
-    let relative = candidate
-        .strip_prefix(normalized_root)
-        .map_err(|_e| anyhow!("path '{}' escapes the workspace root", candidate.display()))?;
-
-    let mut prefix = normalized_root.to_path_buf();
-    let mut components = relative.components().peekable();
-
-    while let Some(component) = components.next() {
-        prefix.push(component.as_os_str());
-
-        let metadata = match fs::symlink_metadata(&prefix).await {
-            Ok(metadata) => metadata,
-            Err(error) => {
-                if error.kind() == io::ErrorKind::NotFound {
-                    break;
-                }
-                return Err(error).with_context(|| {
-                    format!("failed to inspect path component '{}'", prefix.display())
-                });
-            }
-        };
-
-        if metadata.file_type().is_symlink() {
-            let resolved = fs::canonicalize(&prefix).await.with_context(|| {
-                format!(
-                    "failed to canonicalize path component '{}'",
-                    prefix.display()
-                )
-            })?;
-            if !resolved.starts_with(&canonical_root) {
-                return Err(anyhow!(
-                    "path '{}' escapes the workspace root via symlink '{}'",
-                    candidate.display(),
-                    prefix.display()
-                ));
-            }
-        } else {
-            let resolved = fs::canonicalize(&prefix).await.with_context(|| {
-                format!(
-                    "failed to canonicalize path component '{}'",
-                    prefix.display()
-                )
-            })?;
-            if !resolved.starts_with(&canonical_root) {
-                return Err(anyhow!(
-                    "path '{}' escapes the workspace root via component '{}'",
-                    candidate.display(),
-                    prefix.display()
-                ));
-            }
-
-            if metadata.is_file() && components.peek().is_some() {
-                return Err(anyhow!(
-                    "path '{}' traverses through file component '{}'",
-                    candidate.display(),
-                    prefix.display()
-                ));
-            }
-        }
-    }
-
-    Ok(())
+    vtcode_commons::paths::ensure_path_within_workspace_resolved(candidate, normalized_root)
+        .await
+        .map(|_| ())
 }
 
 fn parse_sed_section(

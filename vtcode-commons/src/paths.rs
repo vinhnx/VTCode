@@ -90,6 +90,11 @@ pub fn secure_path(workspace_root: &Path, user_path: &Path) -> Result<PathBuf> {
 /// Ensure a candidate path is inside the workspace root after lexical
 /// normalization.
 ///
+/// This is the cheap, filesystem-free tier of workspace containment: it
+/// resolves `.`/`..` components lexically but does not follow symlinks. Use
+/// [`ensure_path_within_workspace_resolved`] when the candidate may traverse
+/// symlinks that point outside the workspace.
+///
 /// Returns the normalized candidate path on success.
 pub fn ensure_path_within_workspace(candidate: &Path, workspace_root: &Path) -> Result<PathBuf> {
     let normalized_candidate = normalize_path(candidate);
@@ -101,6 +106,106 @@ pub fn ensure_path_within_workspace(candidate: &Path, workspace_root: &Path) -> 
             candidate.display(),
             workspace_root.display()
         );
+    }
+
+    Ok(normalized_candidate)
+}
+
+/// Ensure a candidate path is inside the workspace root, resolving symlinks
+/// component by component.
+///
+/// This is the strict, filesystem-aware tier of workspace containment. On top
+/// of the lexical check performed by [`ensure_path_within_workspace`], it
+/// walks each component of the candidate below the workspace root and:
+///
+/// - canonicalizes every existing component and verifies the resolved path
+///   still starts with the canonical workspace root (catches symlinks that
+///   point outside the workspace);
+/// - tolerates nonexistent tail components (paths about to be created);
+/// - rejects traversal through a file component (e.g. `file.txt/child`).
+///
+/// The candidate must already be lexically inside `workspace_root` (both
+/// sides are normalized before comparison).
+///
+/// Returns the normalized candidate path on success.
+pub async fn ensure_path_within_workspace_resolved(
+    candidate: &Path,
+    workspace_root: &Path,
+) -> Result<PathBuf> {
+    let normalized_root = normalize_path(workspace_root);
+    let normalized_candidate = normalize_path(candidate);
+
+    let canonical_root = match tokio::fs::canonicalize(&normalized_root).await {
+        Ok(resolved) => resolved,
+        Err(error) => {
+            warn!(
+                path = %normalized_root.display(),
+                %error,
+                "Failed to canonicalize workspace root; falling back to provided path"
+            );
+            normalized_root.clone()
+        }
+    };
+
+    if normalized_root == normalized_candidate {
+        return Ok(normalized_candidate);
+    }
+
+    let relative = normalized_candidate
+        .strip_prefix(&normalized_root)
+        .map_err(|_error| anyhow!("path '{}' escapes the workspace root", candidate.display()))?
+        .to_path_buf();
+
+    let mut prefix = normalized_root.clone();
+    let mut components = relative.components().peekable();
+
+    while let Some(component) = components.next() {
+        prefix.push(component.as_os_str());
+
+        let metadata = match tokio::fs::symlink_metadata(&prefix).await {
+            Ok(metadata) => metadata,
+            Err(error) => {
+                if error.kind() == std::io::ErrorKind::NotFound {
+                    break;
+                }
+                return Err(error).with_context(|| {
+                    format!("failed to inspect path component '{}'", prefix.display())
+                });
+            }
+        };
+
+        let resolved = tokio::fs::canonicalize(&prefix).await.with_context(|| {
+            format!(
+                "failed to canonicalize path component '{}'",
+                prefix.display()
+            )
+        })?;
+
+        if metadata.file_type().is_symlink() {
+            if !resolved.starts_with(&canonical_root) {
+                return Err(anyhow!(
+                    "path '{}' escapes the workspace root via symlink '{}'",
+                    candidate.display(),
+                    prefix.display()
+                ));
+            }
+        } else {
+            if !resolved.starts_with(&canonical_root) {
+                return Err(anyhow!(
+                    "path '{}' escapes the workspace root via component '{}'",
+                    candidate.display(),
+                    prefix.display()
+                ));
+            }
+
+            if metadata.is_file() && components.peek().is_some() {
+                return Err(anyhow!(
+                    "path '{}' traverses through file component '{}'",
+                    candidate.display(),
+                    prefix.display()
+                ));
+            }
+        }
     }
 
     Ok(normalized_candidate)
@@ -518,6 +623,94 @@ mod tests {
         let workspace = Path::new("/tmp/project");
         let candidate = Path::new("/tmp/project/../../etc/passwd");
         assert!(ensure_path_within_workspace(candidate, workspace).is_err());
+    }
+
+    #[tokio::test]
+    async fn resolved_check_accepts_nested_existing_path() {
+        let workspace = tempfile::tempdir().unwrap();
+        let root = workspace.path().canonicalize().unwrap();
+        let nested = root.join("src");
+        tokio::fs::create_dir_all(&nested).await.unwrap();
+        let file = nested.join("lib.rs");
+        tokio::fs::write(&file, b"test").await.unwrap();
+
+        let result = ensure_path_within_workspace_resolved(&file, &root).await;
+        assert_eq!(result.unwrap(), file);
+    }
+
+    #[tokio::test]
+    async fn resolved_check_accepts_missing_tail_components() {
+        let workspace = tempfile::tempdir().unwrap();
+        let root = workspace.path().canonicalize().unwrap();
+        let missing = root.join("new_dir/new_file.txt");
+
+        let result = ensure_path_within_workspace_resolved(&missing, &root).await;
+        assert_eq!(result.unwrap(), missing);
+    }
+
+    #[tokio::test]
+    async fn resolved_check_rejects_lexical_escape() {
+        let workspace = tempfile::tempdir().unwrap();
+        let root = workspace.path().canonicalize().unwrap();
+        let escape = root.join("../outside.txt");
+
+        assert!(
+            ensure_path_within_workspace_resolved(&escape, &root)
+                .await
+                .is_err()
+        );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn resolved_check_rejects_symlink_escape() {
+        let workspace = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        let root = workspace.path().canonicalize().unwrap();
+        let outside_dir = outside.path().canonicalize().unwrap();
+
+        let link = root.join("escape");
+        tokio::fs::symlink(&outside_dir, &link).await.unwrap();
+
+        let candidate = link.join("secret.txt");
+        assert!(
+            ensure_path_within_workspace_resolved(&candidate, &root)
+                .await
+                .is_err()
+        );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn resolved_check_accepts_symlink_within_workspace() {
+        let workspace = tempfile::tempdir().unwrap();
+        let root = workspace.path().canonicalize().unwrap();
+        let target = root.join("real");
+        tokio::fs::create_dir_all(&target).await.unwrap();
+        let link = root.join("alias");
+        tokio::fs::symlink(&target, &link).await.unwrap();
+
+        let candidate = link.join("file.txt");
+        assert!(
+            ensure_path_within_workspace_resolved(&candidate, &root)
+                .await
+                .is_ok()
+        );
+    }
+
+    #[tokio::test]
+    async fn resolved_check_rejects_traversal_through_file() {
+        let workspace = tempfile::tempdir().unwrap();
+        let root = workspace.path().canonicalize().unwrap();
+        let file = root.join("data.txt");
+        tokio::fs::write(&file, b"test").await.unwrap();
+
+        let candidate = file.join("child.txt");
+        assert!(
+            ensure_path_within_workspace_resolved(&candidate, &root)
+                .await
+                .is_err()
+        );
     }
 
     #[tokio::test]

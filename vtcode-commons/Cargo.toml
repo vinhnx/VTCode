@@ -53,6 +53,7 @@ schemars = { workspace = true, optional = true }
 tiktoken = { workspace = true }
 
 [dev-dependencies]
+tempfile = { workspace = true }
 tokio = { workspace = true, features = ["fs", "io-util", "macros", "rt"] }
 
 [lints]
