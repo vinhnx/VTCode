@@ -204,7 +204,10 @@ pub(super) async fn render_help(
             MessageStyle::Info,
             "  /history – Open command history picker",
         )?;
-        renderer.line(MessageStyle::Info, "  Ctrl+V – Paste image from clipboard")?;
+        renderer.line(
+            MessageStyle::Info,
+            "  Ctrl+V or Alt+V: App-level image paste (image-enabled sessions only; no text fallback)",
+        )?;
         renderer.line(
             MessageStyle::Info,
             "  Up/Down arrows – Navigate command history",

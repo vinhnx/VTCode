@@ -231,6 +231,7 @@ Once Alt keys are working, these shortcuts should be available:
 | Alt+a | Alternative action |
 | Alt+j | Jump/navigation down |
 | Alt+k | Jump/navigation up |
+| Alt+v | Paste clipboard image through VT Code (image-enabled sessions only) |
 | Alt+↑ | Scroll up (if applicable) |
 | Alt+↓ | Scroll down (if applicable) |
 | Ctrl+c | Interrupt/cancel (always works) |

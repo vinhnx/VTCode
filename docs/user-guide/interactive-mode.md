@@ -25,7 +25,7 @@ The VT Code terminal UI includes an interactive mode that combines keyboard-firs
 | `Ctrl+K`                                    | Delete from cursor to line end.                                                 | UNIX/readline-style editing.                                                                                                              |
 | `Alt+Left/Right`                            | Move cursor by word.                                                            | UNIX/readline-style navigation.                                                                                                           |
 | `Ctrl+R`                                    | Reverse search the command history.                                             | Matches previous prompts and bash commands.                                                                                               |
-| `Ctrl+V` (macOS/Linux) or `Alt+V` (Windows) | Paste an image from the clipboard.                                              | Works with image-enabled sessions.                                                                                                        |
+| `Ctrl+V` or `Alt+V`                         | Paste a clipboard image through VT Code.                                        | App-level shortcut; works only in image-enabled sessions. Use your terminal's paste shortcut for text.                                     |
 | `Ctrl+Z` (Unix)                             | Suspend VT Code to the shell; run `fg` to resume.                               | Job-control support for terminal workflows.                                                                                               |
 | `Up/Down arrows`                            | Navigate through command history.                                               | Recall previous prompts or commands.                                                                                                      |
 | `Esc` + `Esc`                               | Open the rewind picker for checkpoint restore or summarize actions.             | Idle context only (while no task/PTY is running).                                                                                         |
@@ -45,6 +45,13 @@ The VT Code terminal UI includes an interactive mode that combines keyboard-firs
 | Paste mode           | Paste directly | Ideal for code blocks or long transcripts.                                                        |
 
 > Tip: `Shift+Enter` works natively in `Ghostty`, `Kitty`, `WezTerm`, `iTerm2`, and `Warp`. Run `/terminal-setup` in supported terminals such as `VS Code`, `Alacritty`, or `Zed` when you want VT Code's guided setup flow.
+
+### Clipboard Paste
+
+- `Ctrl+V` and `Alt+V` are VT Code shortcuts for image paste. They read a clipboard image and attach it to the current draft when the selected session supports image input.
+- Text paste still uses the terminal bracketed paste path. In many terminals this is `Ctrl+Shift+V`; use the paste shortcut configured by your terminal.
+- If the selected model does not support image input, VT Code rejects both image paste and image submission, then shows a warning.
+- On WSL, VT Code first tries direct Linux clipboard access. If that cannot read an image, it tries a Windows clipboard image fallback through PowerShell.
 
 ### Quick Commands
 
