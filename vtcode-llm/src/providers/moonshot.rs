@@ -1,252 +1,139 @@
-use crate::provider::{LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream};
-use async_trait::async_trait;
-use reqwest::Client as HttpClient;
 use serde_json::{Map, Value};
-use vtcode_config::TimeoutsConfig;
 use vtcode_config::constants::{env_vars, models, urls};
-use vtcode_config::core::{AnthropicConfig, ModelConfig, PromptCachingConfig};
 
-use super::common::{
-    chat_completions_url, ensure_model, impl_llm_client, override_base_url, parse_json_response,
-    parse_response_openai_format, resolve_model, serialize_messages_openai_format,
-    spawn_openai_compatible_stream,
+use super::openai_compat::{
+    OpenAiCompatCore, OpenAiCompatSpec, SystemPromptPlacement, impl_openai_compat_provider,
 };
-use super::error_handling::{format_network_error, handle_openai_http_error};
+use crate::provider::{LLMError, LLMRequest};
 
-const PROVIDER_NAME: &str = "Moonshot";
-const PROVIDER_KEY: &str = "moonshot";
+pub struct MoonshotSpec;
 
-pub struct MoonshotProvider {
-    api_key: String,
-    http_client: HttpClient,
-    base_url: String,
-    model: String,
+fn is_thinking_model(model: &str) -> bool {
+    model.contains("k2-thinking") || model.contains("kimi-k2-thinking")
 }
 
-impl MoonshotProvider {
-    pub fn new(api_key: String) -> Self {
-        Self::with_model_internal(
-            api_key,
-            models::moonshot::DEFAULT_MODEL.to_string(),
-            None,
-            None,
-            None,
-        )
+impl OpenAiCompatSpec for MoonshotSpec {
+    const NAME: &'static str = "Moonshot";
+    const KEY: &'static str = "moonshot";
+    const API_KEY_ENV: &'static str = "MOONSHOT_API_KEY";
+    const DEFAULT_MODEL: &'static str = models::moonshot::DEFAULT_MODEL;
+    const DEFAULT_BASE_URL: &'static str = urls::MOONSHOT_API_BASE;
+    const BASE_URL_ENV: Option<&'static str> = Some(env_vars::MOONSHOT_BASE_URL);
+    const LISTED_MODELS: &'static [&'static str] = models::moonshot::SUPPORTED_MODELS;
+    // Moonshot publishes new official aliases and preview slugs faster than VT Code's
+    // curated picker list is refreshed, so let the upstream API be the source of truth
+    // for model identifiers and keep local validation focused on request shape.
+    const VALIDATION_ALLOWLIST: Option<&'static [&'static str]> = None;
+
+    const SYSTEM_PROMPT: SystemPromptPlacement = SystemPromptPlacement::Omitted;
+    const INCLUDE_TOP_P: bool = false;
+    const SUPPRESS_SAMPLING_WHEN_REASONING: bool = false;
+
+    fn normalize_model(model: String) -> String {
+        model.trim().to_string()
     }
 
-    pub fn with_model(api_key: String, model: String) -> Self {
-        Self::with_model_internal(api_key, model, None, None, None)
+    fn float_number(value: f32) -> Result<serde_json::Number, LLMError> {
+        serde_json::Number::from_f64(f64::from(value)).ok_or_else(|| LLMError::InvalidRequest {
+            message: "Invalid temperature value".to_string(),
+            metadata: None,
+        })
     }
 
-    pub fn new_with_client(
-        api_key: String,
-        model: String,
-        http_client: reqwest::Client,
-        base_url: String,
-        _timeouts: TimeoutsConfig,
-    ) -> Self {
-        Self {
-            api_key,
-            http_client,
-            base_url,
-            model: model.trim().to_string(),
-        }
-    }
-
-    pub fn from_config(
-        api_key: Option<String>,
-        model: Option<String>,
-        base_url: Option<String>,
-        _prompt_cache: Option<PromptCachingConfig>,
-        timeouts: Option<TimeoutsConfig>,
-        _anthropic: Option<AnthropicConfig>,
-        _model_behavior: Option<ModelConfig>,
-    ) -> Self {
-        let api_key_value = api_key.unwrap_or_default();
-        let model_value = resolve_model(model, models::moonshot::DEFAULT_MODEL);
-
-        Self::with_model_internal(
-            api_key_value,
-            model_value,
-            base_url,
-            timeouts,
-            _model_behavior,
-        )
-    }
-
-    fn with_model_internal(
-        api_key: String,
-        model: String,
-        base_url: Option<String>,
-        timeouts: Option<TimeoutsConfig>,
-        _model_behavior: Option<ModelConfig>,
-    ) -> Self {
-        use crate::http_client::HttpClientFactory;
-
-        let timeouts = timeouts.unwrap_or_default();
-
-        Self {
-            api_key,
-            http_client: HttpClientFactory::for_llm(&timeouts),
-            base_url: override_base_url(
-                urls::MOONSHOT_API_BASE,
-                base_url,
-                Some(env_vars::MOONSHOT_BASE_URL),
-            ),
-            model: model.trim().to_string(),
-        }
-    }
-
-    fn convert_to_moonshot_format(&self, request: &LLMRequest) -> Result<Value, LLMError> {
-        let mut payload = Map::new();
-
-        payload.insert("model".to_owned(), Value::String(request.model.clone()));
-        payload.insert(
-            "messages".to_owned(),
-            Value::Array(serialize_messages_openai_format(request, PROVIDER_KEY)?),
-        );
-
-        if let Some(max_tokens) = request.max_tokens {
-            payload.insert(
-                "max_tokens".to_owned(),
-                Value::Number(serde_json::Number::from(max_tokens as u64)),
-            );
-        }
-
-        if let Some(temperature) = request.temperature {
-            payload.insert(
-                "temperature".to_owned(),
-                Value::Number(serde_json::Number::from_f64(temperature as f64).ok_or_else(
-                    || LLMError::InvalidRequest {
-                        message: "Invalid temperature value".to_string(),
-                        metadata: None,
-                    },
-                )?),
-            );
-        }
-
+    fn insert_reasoning(
+        _core: &OpenAiCompatCore<Self>,
+        request: &LLMRequest,
+        payload: &mut Map<String, Value>,
+    ) -> Result<(), LLMError> {
         // Add reasoning_effort for Kimi K2 Thinking model
         if let Some(effort) = request.reasoning_effort
-            && self.supports_reasoning_effort(&request.model)
+            && is_thinking_model(&request.model)
         {
             payload.insert(
                 "reasoning_effort".to_string(),
                 Value::String(effort.as_str().to_string()),
             );
         }
-
-        if request.stream {
-            payload.insert("stream".to_string(), Value::Bool(true));
-        }
-
-        // Add tools if present (Moonshot supports function calling)
-        if let Some(tools) = &request.tools
-            && let Some(serialized_tools) = super::common::serialize_tools_openai_format(tools)
-        {
-            payload.insert("tools".to_string(), Value::Array(serialized_tools));
-        }
-
-        if let Some(choice) = &request.tool_choice {
-            payload.insert(
-                "tool_choice".to_string(),
-                choice.to_provider_format(PROVIDER_KEY),
-            );
-        }
-
-        Ok(Value::Object(payload))
+        Ok(())
     }
 }
 
-#[async_trait]
-impl LLMProvider for MoonshotProvider {
-    fn name(&self) -> &str {
-        "moonshot"
-    }
-
+impl_openai_compat_provider!(MoonshotProvider, MoonshotSpec, {
     fn supports_reasoning(&self, model: &str) -> bool {
-        model.contains("k2-thinking") || model.contains("kimi-k2-thinking")
+        is_thinking_model(model)
     }
 
     fn supports_reasoning_effort(&self, model: &str) -> bool {
-        model.contains("k2-thinking") || model.contains("kimi-k2-thinking")
+        is_thinking_model(model)
     }
+});
 
-    async fn generate(&self, mut request: LLMRequest) -> Result<LLMResponse, LLMError> {
-        ensure_model(&mut request, &self.model);
-        request.model = request.model.trim().to_string();
-        let model = request.model.clone();
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::provider::{Message, ToolChoice};
+    use std::sync::Arc;
+    use vtcode_config::types::ReasoningEffortLevel;
 
-        let payload = self.convert_to_moonshot_format(&request)?;
-        let url = chat_completions_url(&self.base_url);
-
-        let response = self
-            .http_client
-            .post(&url)
-            .bearer_auth(&self.api_key)
-            .json(&payload)
-            .send()
-            .await
-            .map_err(|e| format_network_error(PROVIDER_NAME, &e))?;
-
-        let response =
-            handle_openai_http_error(response, PROVIDER_NAME, "MOONSHOT_API_KEY").await?;
-        let response_json = parse_json_response(response, PROVIDER_NAME).await?;
-
-        parse_response_openai_format::<fn(&Value, &Value) -> Option<String>>(
-            response_json,
-            PROVIDER_NAME,
-            model,
-            false,
+    fn provider() -> MoonshotProvider {
+        MoonshotProvider::from_config(
+            Some("test-key".to_string()),
+            Some("kimi-k2.7".to_string()),
+            Some("https://example.test/v1".to_string()),
+            None,
+            None,
+            None,
             None,
         )
     }
 
-    async fn stream(&self, mut request: LLMRequest) -> Result<LLMStream, LLMError> {
-        ensure_model(&mut request, &self.model);
-        request.model = request.model.trim().to_string();
-        let model = request.model.clone();
-
-        self.validate_request(&request)?;
-        request.stream = true;
-
-        let payload = self.convert_to_moonshot_format(&request)?;
-        let url = chat_completions_url(&self.base_url);
-
-        let response = self
-            .http_client
-            .post(&url)
-            .bearer_auth(&self.api_key)
-            .json(&payload)
-            .send()
-            .await
-            .map_err(|e| format_network_error(PROVIDER_NAME, &e))?;
-
-        let response =
-            handle_openai_http_error(response, PROVIDER_NAME, "MOONSHOT_API_KEY").await?;
-
-        Ok(spawn_openai_compatible_stream(
-            response,
-            PROVIDER_NAME,
-            model,
-            &["reasoning_content"],
-            super::shared::OpenAiDeltaOrder::ReasoningFirst,
-            false,
-        ))
+    fn base_request(model: &str) -> LLMRequest {
+        LLMRequest {
+            messages: vec![Message::user("hello".to_string())],
+            system_prompt: Some(Arc::new("system guidance".to_string())),
+            model: model.to_string(),
+            max_tokens: Some(512),
+            temperature: Some(0.5),
+            stream: true,
+            tool_choice: Some(ToolChoice::Auto),
+            ..Default::default()
+        }
     }
 
-    fn supported_models(&self) -> Vec<String> {
-        models::moonshot::SUPPORTED_MODELS
-            .iter()
-            .map(|model| model.to_string())
-            .collect()
+    #[test]
+    fn golden_payload_basic_shape() {
+        let payload = provider()
+            .core
+            .convert_request(&base_request("kimi-k2.7"))
+            .unwrap();
+
+        assert_eq!(payload["model"], "kimi-k2.7");
+        // Moonshot does not inject the system prompt into messages.
+        let messages = payload["messages"].as_array().unwrap();
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0]["role"], "user");
+        assert_eq!(messages[0]["content"], "hello");
+        assert_eq!(payload["max_tokens"], 512);
+        assert_eq!(payload["temperature"], 0.5);
+        assert_eq!(payload["stream"], true);
+        assert!(payload.get("stream_options").is_none());
+        assert!(payload.get("top_p").is_none());
+        assert!(payload.get("reasoning_effort").is_none());
+        assert_eq!(payload["tool_choice"], "auto");
     }
 
-    fn validate_request(&self, request: &LLMRequest) -> Result<(), LLMError> {
-        // Moonshot publishes new official aliases and preview slugs faster than VT Code's
-        // curated picker list is refreshed, so let the upstream API be the source of truth
-        // for model identifiers and keep local validation focused on request shape.
-        super::common::validate_request_common(request, PROVIDER_NAME, PROVIDER_KEY, None)
+    #[test]
+    fn golden_payload_reasoning_effort_for_thinking_models() {
+        let mut request = base_request("kimi-k2-thinking");
+        request.reasoning_effort = Some(ReasoningEffortLevel::Low);
+        let payload = provider().core.convert_request(&request).unwrap();
+        assert_eq!(payload["reasoning_effort"], "low");
+        // Sampling parameters are not suppressed for reasoning requests.
+        assert_eq!(payload["temperature"], 0.5);
+
+        let mut request = base_request("kimi-k2.7");
+        request.reasoning_effort = Some(ReasoningEffortLevel::Low);
+        let payload = provider().core.convert_request(&request).unwrap();
+        assert!(payload.get("reasoning_effort").is_none());
     }
 }
-
-impl_llm_client!(MoonshotProvider);

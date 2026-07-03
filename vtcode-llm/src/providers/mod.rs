@@ -15,6 +15,7 @@ pub mod mistral;
 pub mod moonshot;
 pub mod ollama;
 pub mod openai;
+mod openai_compat;
 pub mod opencode_go;
 mod opencode_shared;
 pub mod opencode_zen;
