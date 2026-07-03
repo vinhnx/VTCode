@@ -168,6 +168,9 @@ fn handle_image_paste_shortcut_with(
     match image_reader() {
         Ok(image) => {
             session.core.input_manager.push_attachment(image);
+            session
+                .core
+                .set_input_compact_mode(session.core.input_compact_placeholder().is_some());
             session.update_input_triggers();
             session.mark_dirty();
         }

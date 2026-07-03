@@ -44,6 +44,44 @@ fn ctrl_v_attaches_clipboard_image_when_enabled() {
 }
 
 #[test]
+fn pasted_image_renders_immediately_as_numbered_chip() {
+    let mut session = app_session_with_input("", 0);
+    set_image_input_enabled(&mut session, true);
+
+    let event = session
+        .process_key_with_clipboard_image_reader(image_paste_key(KeyModifiers::CONTROL), || {
+            Ok(image_part())
+        });
+
+    assert!(event.is_none());
+    let data = session.core.build_input_widget_data(VIEW_WIDTH, VIEW_ROWS);
+    let rendered = text_content(&data.text);
+    assert!(rendered.contains("[Image #1]"));
+    assert!(!rendered.contains("attachment"));
+}
+
+#[test]
+fn pasted_images_keep_numbered_chips_after_typing() {
+    let mut session = app_session_with_input("", 0);
+    set_image_input_enabled(&mut session, true);
+
+    for _ in 0..2 {
+        let event = session.process_key_with_clipboard_image_reader(
+            image_paste_key(KeyModifiers::CONTROL),
+            || Ok(image_part()),
+        );
+        assert!(event.is_none());
+    }
+    let event = session.process_key(KeyEvent::new(KeyCode::Char('o'), KeyModifiers::NONE));
+
+    assert!(event.is_none());
+    let data = session.core.build_input_widget_data(VIEW_WIDTH, VIEW_ROWS);
+    let rendered = text_content(&data.text);
+    assert!(rendered.contains("[Image #1] [Image #2] o"));
+    assert!(!rendered.contains("attachments"));
+}
+
+#[test]
 fn pasted_image_is_included_in_submit_payload() {
     let mut session = app_session_with_input("describe this", "describe this".len());
     let attachment = image_part();

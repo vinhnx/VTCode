@@ -805,18 +805,14 @@ impl Session {
         }
 
         if attachment_count > 0 {
-            let label = if attachment_count == 1 {
-                "1 attachment".to_string()
-            } else {
-                format!("{attachment_count} attachments")
-            };
+            let label = image_attachment_placeholder(attachment_count);
             if trimmed.is_empty() {
-                return Some(format!("[Image: {label}]"));
+                return Some(label);
             }
             if let Some(compact) = compact_image_placeholders(content) {
-                return Some(format!("[Image: {label}] {compact}"));
+                return Some(format!("{label} {compact}"));
             }
-            return Some(format!("[Image: {label}] {trimmed}"));
+            return Some(format!("{label} {trimmed}"));
         }
 
         if let Some(preview) = self.input_compact_preview() {
@@ -1287,6 +1283,17 @@ fn compact_image_placeholders(content: &str) -> Option<String> {
     }
 
     Some(result)
+}
+
+fn image_attachment_placeholder(attachment_count: usize) -> String {
+    let mut result = String::new();
+    for index in 1..=attachment_count {
+        if !result.is_empty() {
+            result.push(' ');
+        }
+        let _ = write!(result, "[Image #{index}]");
+    }
+    result
 }
 
 fn image_label_for_path(raw: &str) -> Option<String> {
