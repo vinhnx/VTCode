@@ -62,6 +62,7 @@ mod command;
 mod editing;
 
 pub mod action;
+pub(crate) mod clipboard_image;
 pub mod config;
 mod driver;
 mod events;

@@ -33,6 +33,7 @@ workspace = true
 
 # Override sections to consolidate duplicate dependencies
 [workspace.dependencies]
+arboard = { version = "3.6.1", features = ["wayland-data-control"] }
 base64 = "0.22.1"
 crossterm = "0.29"
 schemars = "1.2"
@@ -53,6 +54,7 @@ rand = "0.10"
 semver = "1.0"
 fs2 = "0.4"
 hashbrown = { version = "0.17", features = ["serde"] }
+image = { version = "0.25.10", default-features = false, features = ["jpeg", "png", "gif", "webp"] }
 rustc-hash = "2.1"
 keyring-core = "1"
 libloading = "0.9"
