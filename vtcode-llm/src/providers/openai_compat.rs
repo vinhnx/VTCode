@@ -350,7 +350,10 @@ impl<S: OpenAiCompatSpec> OpenAiCompatCore<S> {
         Ok(Value::Object(payload))
     }
 
-    async fn dispatch(&self, request: &LLMRequest) -> Result<reqwest::Response, LLMError> {
+    pub(crate) async fn dispatch(
+        &self,
+        request: &LLMRequest,
+    ) -> Result<reqwest::Response, LLMError> {
         let payload = self.convert_request(request)?;
         let url = chat_completions_url(&self.base_url);
         let builder = S::apply_auth(self, self.http_client.post(&url));

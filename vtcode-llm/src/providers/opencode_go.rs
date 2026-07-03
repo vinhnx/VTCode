@@ -9,11 +9,10 @@ use vtcode_config::models::model_catalog_entry;
 
 use super::AnthropicProvider;
 use super::common::{override_base_url, resolve_model};
-use super::opencode_shared::OpenCodeCompatibleProvider;
+use super::opencode_shared::{OpenCodeCompatibleProvider, OpenCodeGoInnerSpec};
 
 const PROVIDER_NAME: &str = "OpenCode Go";
 const PROVIDER_KEY: &str = "opencode-go";
-const API_KEY_ENV: &str = "OPENCODE_GO_API_KEY";
 
 enum GoProtocol {
     MessagesApi,
@@ -138,16 +137,14 @@ impl OpenCodeGoProvider {
                 self.base_url.clone(),
                 TimeoutsConfig::default(),
             )),
-            GoProtocol::OpenAICompatible => Box::new(OpenCodeCompatibleProvider::new(
-                PROVIDER_NAME,
-                PROVIDER_KEY,
-                API_KEY_ENV,
-                self.api_key.clone(),
-                self.http_client.clone(),
-                self.base_url.clone(),
-                requested,
-                models::opencode_go::SUPPORTED_MODELS,
-            )),
+            GoProtocol::OpenAICompatible => {
+                Box::new(OpenCodeCompatibleProvider::<OpenCodeGoInnerSpec>::new(
+                    self.api_key.clone(),
+                    self.http_client.clone(),
+                    self.base_url.clone(),
+                    requested,
+                ))
+            }
         }
     }
 }

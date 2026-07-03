@@ -9,11 +9,10 @@ use vtcode_config::models::model_catalog_entry;
 
 use super::AnthropicProvider;
 use super::common::{override_base_url, resolve_model};
-use super::opencode_shared::OpenCodeCompatibleProvider;
+use super::opencode_shared::{OpenCodeCompatibleProvider, OpenCodeZenInnerSpec};
 
 const PROVIDER_NAME: &str = "OpenCode Zen";
 const PROVIDER_KEY: &str = "opencode-zen";
-const API_KEY_ENV: &str = "OPENCODE_ZEN_API_KEY";
 
 enum ZenProtocol {
     OpenAI,
@@ -150,16 +149,14 @@ impl OpenCodeZenProvider {
                 self.base_url.clone(),
                 TimeoutsConfig::default(),
             )),
-            ZenProtocol::OpenAICompatible => Box::new(OpenCodeCompatibleProvider::new(
-                PROVIDER_NAME,
-                PROVIDER_KEY,
-                API_KEY_ENV,
-                self.api_key.clone(),
-                self.http_client.clone(),
-                self.base_url.clone(),
-                requested,
-                models::opencode_zen::SUPPORTED_MODELS,
-            )),
+            ZenProtocol::OpenAICompatible => {
+                Box::new(OpenCodeCompatibleProvider::<OpenCodeZenInnerSpec>::new(
+                    self.api_key.clone(),
+                    self.http_client.clone(),
+                    self.base_url.clone(),
+                    requested,
+                ))
+            }
         }
     }
 }

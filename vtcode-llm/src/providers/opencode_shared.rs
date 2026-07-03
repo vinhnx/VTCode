@@ -1,114 +1,81 @@
-use crate::provider::{LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent};
-use async_stream::try_stream;
-use async_trait::async_trait;
-use reqwest::Client as HttpClient;
-use serde_json::{Map, Value};
+use vtcode_config::constants::{env_vars, models, urls};
 use vtcode_config::models::model_catalog_entry;
 
-use super::common::{
-    chat_completions_url, ensure_model, map_finish_reason_common, parse_json_response,
-    parse_response_openai_format, serialize_messages_openai_format, validate_supported_models,
-};
-use super::error_handling::{format_network_error, handle_openai_http_error};
+use crate::provider::{LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent};
 
-pub(crate) struct OpenCodeCompatibleProvider {
-    provider_name: &'static str,
-    provider_key: &'static str,
-    api_key_env: &'static str,
-    api_key: String,
-    http_client: HttpClient,
-    base_url: String,
-    model: String,
-    supported_models: &'static [&'static str],
+use super::common::map_finish_reason_common;
+use super::openai_compat::{OpenAiCompatCore, OpenAiCompatSpec, SystemPromptPlacement};
+
+/// Wire-dialect spec for the OpenCode Go OpenAI-compatible protocol.
+pub(crate) struct OpenCodeGoInnerSpec;
+
+impl OpenAiCompatSpec for OpenCodeGoInnerSpec {
+    const NAME: &'static str = "OpenCode Go";
+    const KEY: &'static str = "opencode-go";
+    const API_KEY_ENV: &'static str = "OPENCODE_GO_API_KEY";
+    const DEFAULT_MODEL: &'static str = models::opencode_go::DEFAULT_MODEL;
+    const DEFAULT_BASE_URL: &'static str = urls::OPENCODE_GO_API_BASE;
+    const BASE_URL_ENV: Option<&'static str> = Some(env_vars::OPENCODE_GO_BASE_URL);
+    const LISTED_MODELS: &'static [&'static str] = models::opencode_go::SUPPORTED_MODELS;
+    const VALIDATION_ALLOWLIST: Option<&'static [&'static str]> =
+        Some(models::opencode_go::SUPPORTED_MODELS);
+
+    const SYSTEM_PROMPT: SystemPromptPlacement = SystemPromptPlacement::Omitted;
+    const INCLUDE_TOP_P: bool = false;
+    const SUPPRESS_SAMPLING_WHEN_REASONING: bool = false;
 }
 
-impl OpenCodeCompatibleProvider {
+/// Wire-dialect spec for the OpenCode Zen OpenAI-compatible protocol.
+pub(crate) struct OpenCodeZenInnerSpec;
+
+impl OpenAiCompatSpec for OpenCodeZenInnerSpec {
+    const NAME: &'static str = "OpenCode Zen";
+    const KEY: &'static str = "opencode-zen";
+    const API_KEY_ENV: &'static str = "OPENCODE_ZEN_API_KEY";
+    const DEFAULT_MODEL: &'static str = models::opencode_zen::DEFAULT_MODEL;
+    const DEFAULT_BASE_URL: &'static str = urls::OPENCODE_ZEN_API_BASE;
+    const BASE_URL_ENV: Option<&'static str> = Some(env_vars::OPENCODE_ZEN_BASE_URL);
+    const LISTED_MODELS: &'static [&'static str] = models::opencode_zen::SUPPORTED_MODELS;
+    const VALIDATION_ALLOWLIST: Option<&'static [&'static str]> =
+        Some(models::opencode_zen::SUPPORTED_MODELS);
+
+    const SYSTEM_PROMPT: SystemPromptPlacement = SystemPromptPlacement::Omitted;
+    const INCLUDE_TOP_P: bool = false;
+    const SUPPRESS_SAMPLING_WHEN_REASONING: bool = false;
+}
+
+/// Shared OpenAI-compatible provider shell used by the OpenCode Go and
+/// OpenCode Zen protocol dispatchers for the models that speak plain
+/// chat-completions.
+pub(crate) struct OpenCodeCompatibleProvider<S: OpenAiCompatSpec> {
+    core: OpenAiCompatCore<S>,
+}
+
+impl<S: OpenAiCompatSpec> OpenCodeCompatibleProvider<S> {
     pub(crate) fn new(
-        provider_name: &'static str,
-        provider_key: &'static str,
-        api_key_env: &'static str,
         api_key: String,
-        http_client: HttpClient,
+        http_client: reqwest::Client,
         base_url: String,
         model: String,
-        supported_models: &'static [&'static str],
     ) -> Self {
         Self {
-            provider_name,
-            provider_key,
-            api_key_env,
-            api_key,
-            http_client,
-            base_url,
-            model,
-            supported_models,
+            core: OpenAiCompatCore::from_parts(api_key, model, http_client, base_url),
         }
     }
 
     fn requested_model<'a>(&'a self, model: &'a str) -> &'a str {
         if model.trim().is_empty() {
-            &self.model
+            &self.core.model
         } else {
             model
         }
     }
-
-    fn convert_to_format(&self, request: &LLMRequest) -> Result<Value, LLMError> {
-        let mut payload = Map::new();
-
-        payload.insert("model".to_owned(), Value::String(request.model.clone()));
-        payload.insert(
-            "messages".to_owned(),
-            Value::Array(serialize_messages_openai_format(
-                request,
-                self.provider_key,
-            )?),
-        );
-
-        if let Some(max_tokens) = request.max_tokens {
-            payload.insert(
-                "max_tokens".to_owned(),
-                Value::Number(serde_json::Number::from(max_tokens as u64)),
-            );
-        }
-
-        if let Some(temperature) = request.temperature {
-            payload.insert(
-                "temperature".to_owned(),
-                Value::Number(serde_json::Number::from_f64(temperature as f64).ok_or_else(
-                    || LLMError::InvalidRequest {
-                        message: "Invalid temperature value".to_string(),
-                        metadata: None,
-                    },
-                )?),
-            );
-        }
-
-        if request.stream {
-            payload.insert("stream".to_string(), Value::Bool(true));
-        }
-
-        if let Some(tools) = &request.tools
-            && let Some(serialized_tools) = super::common::serialize_tools_openai_format(tools)
-        {
-            payload.insert("tools".to_string(), Value::Array(serialized_tools));
-        }
-
-        if let Some(choice) = &request.tool_choice {
-            payload.insert(
-                "tool_choice".to_string(),
-                choice.to_provider_format(self.provider_key),
-            );
-        }
-
-        Ok(Value::Object(payload))
-    }
 }
 
-#[async_trait]
-impl LLMProvider for OpenCodeCompatibleProvider {
+#[async_trait::async_trait]
+impl<S: OpenAiCompatSpec> LLMProvider for OpenCodeCompatibleProvider<S> {
     fn name(&self) -> &str {
-        self.provider_key
+        S::KEY
     }
 
     fn supports_streaming(&self) -> bool {
@@ -116,89 +83,54 @@ impl LLMProvider for OpenCodeCompatibleProvider {
     }
 
     fn supports_reasoning(&self, model: &str) -> bool {
-        model_catalog_entry(self.provider_key, self.requested_model(model))
+        model_catalog_entry(S::KEY, self.requested_model(model))
             .map(|entry| entry.reasoning)
             .unwrap_or(false)
     }
 
     fn supports_tools(&self, model: &str) -> bool {
-        model_catalog_entry(self.provider_key, self.requested_model(model))
+        model_catalog_entry(S::KEY, self.requested_model(model))
             .map(|entry| entry.tool_call)
             .unwrap_or(true)
     }
 
     fn supports_structured_output(&self, model: &str) -> bool {
-        model_catalog_entry(self.provider_key, self.requested_model(model))
+        model_catalog_entry(S::KEY, self.requested_model(model))
             .map(|entry| entry.structured_output)
             .unwrap_or(false)
     }
 
     fn supports_context_caching(&self, model: &str) -> bool {
-        model_catalog_entry(self.provider_key, self.requested_model(model))
+        model_catalog_entry(S::KEY, self.requested_model(model))
             .map(|entry| entry.caching)
             .unwrap_or(false)
     }
 
     fn supports_vision(&self, model: &str) -> bool {
-        model_catalog_entry(self.provider_key, self.requested_model(model))
+        model_catalog_entry(S::KEY, self.requested_model(model))
             .map(|entry| entry.vision)
             .unwrap_or(false)
     }
 
     fn effective_context_size(&self, model: &str) -> usize {
-        model_catalog_entry(self.provider_key, self.requested_model(model))
+        model_catalog_entry(S::KEY, self.requested_model(model))
             .map(|entry| entry.context_window)
             .filter(|value| *value > 0)
             .unwrap_or(128_000)
     }
 
     async fn generate(&self, mut request: LLMRequest) -> Result<LLMResponse, LLMError> {
-        let model = ensure_model(&mut request, &self.model);
-
-        let payload = self.convert_to_format(&request)?;
-        let url = chat_completions_url(&self.base_url);
-
-        let response = self
-            .http_client
-            .post(&url)
-            .bearer_auth(&self.api_key)
-            .json(&payload)
-            .send()
-            .await
-            .map_err(|error| format_network_error(self.provider_name, &error))?;
-
-        let response =
-            handle_openai_http_error(response, self.provider_name, self.api_key_env).await?;
-        let response_json = parse_json_response(response, self.provider_name).await?;
-
-        parse_response_openai_format::<fn(&Value, &Value) -> Option<String>>(
-            response_json,
-            self.provider_name,
-            model,
-            false,
-            None,
-        )
+        self.core.prepare(&mut request);
+        self.core.generate_prepared(request).await
     }
 
     async fn stream(&self, mut request: LLMRequest) -> Result<LLMStream, LLMError> {
-        let model = ensure_model(&mut request, &self.model);
+        self.core.prepare(&mut request);
         self.validate_request(&request)?;
         request.stream = true;
 
-        let payload = self.convert_to_format(&request)?;
-        let url = chat_completions_url(&self.base_url);
-
-        let response = self
-            .http_client
-            .post(&url)
-            .bearer_auth(&self.api_key)
-            .json(&payload)
-            .send()
-            .await
-            .map_err(|error| format_network_error(self.provider_name, &error))?;
-
-        let response =
-            handle_openai_http_error(response, self.provider_name, self.api_key_env).await?;
+        let model = request.model.clone();
+        let response = self.core.dispatch(&request).await?;
 
         let bytes_stream = response.bytes_stream();
         let (event_tx, event_rx) =
@@ -206,7 +138,7 @@ impl LLMProvider for OpenCodeCompatibleProvider {
         let tx = event_tx.clone();
 
         let model_clone = model.clone();
-        let provider_name = self.provider_name;
+        let provider_name = S::NAME;
         // Timeout for the entire streaming task (5 minutes).
         // Prevents indefinite hangs when upstream server stops responding.
         let stream_timeout = std::time::Duration::from_secs(300);
@@ -275,7 +207,7 @@ impl LLMProvider for OpenCodeCompatibleProvider {
             }
         });
 
-        let stream = try_stream! {
+        let stream = async_stream::try_stream! {
             let mut receiver = event_rx;
             while let Some(event) = receiver.recv().await {
                 yield event?;
@@ -286,18 +218,67 @@ impl LLMProvider for OpenCodeCompatibleProvider {
     }
 
     fn supported_models(&self) -> Vec<String> {
-        self.supported_models
-            .iter()
-            .map(|model| model.to_string())
-            .collect()
+        self.core.supported_models()
     }
 
     fn validate_request(&self, request: &LLMRequest) -> Result<(), LLMError> {
-        validate_supported_models(
-            request,
-            self.provider_name,
-            self.provider_key,
-            self.supported_models,
-        )
+        self.core.validate(request)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{OpenCodeCompatibleProvider, OpenCodeGoInnerSpec};
+    use crate::provider::{LLMRequest, Message, ToolChoice};
+    use std::sync::Arc;
+    use vtcode_config::types::ReasoningEffortLevel;
+
+    fn base_request() -> LLMRequest {
+        LLMRequest {
+            messages: vec![Message::user("hello".to_string())],
+            system_prompt: Some(Arc::new("system guidance".to_string())),
+            model: "some-model".to_string(),
+            max_tokens: Some(512),
+            temperature: Some(0.5),
+            top_p: Some(0.25),
+            stream: true,
+            tool_choice: Some(ToolChoice::Auto),
+            reasoning_effort: Some(ReasoningEffortLevel::High),
+            metadata: Some(serde_json::json!({"user_id": "user-42"})),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn golden_payload_basic_shape() {
+        let provider = OpenCodeCompatibleProvider::<OpenCodeGoInnerSpec>::new(
+            "test-key".to_string(),
+            reqwest::Client::new(),
+            "https://example.test/v1".to_string(),
+            "some-model".to_string(),
+        );
+
+        let payload = provider.core.convert_request(&base_request()).unwrap();
+
+        assert_eq!(payload["model"], "some-model");
+        let messages = payload["messages"].as_array().unwrap();
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0]["role"], "user");
+        // The system prompt is dropped entirely by the old hand-rolled path.
+        assert!(payload.get("system").is_none());
+
+        assert_eq!(payload["max_tokens"], 512);
+        // Sampling suppression is not implemented in the old path.
+        assert_eq!(payload["temperature"], 0.5);
+        assert!(payload.get("top_p").is_none());
+
+        assert_eq!(payload["stream"], true);
+        assert!(payload.get("stream_options").is_none());
+        assert!(payload.get("user_id").is_none());
+        assert!(payload.get("thinking").is_none());
+        assert!(payload.get("reasoning").is_none());
+        assert!(payload.get("reasoning_effort").is_none());
+
+        assert_eq!(payload["tool_choice"], "auto");
     }
 }
