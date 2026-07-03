@@ -19,6 +19,76 @@ fn configure_textarea(textarea: &mut TextArea<'static>) {
     textarea.set_tab_length(4);
 }
 
+fn image_attachment_placeholder(number: usize) -> String {
+    format!("[Image #{number}]")
+}
+
+fn image_attachment_placeholders(content: &str) -> Vec<(usize, String)> {
+    let marker = "[Image #";
+    let mut placeholders = Vec::new();
+    let mut search_start = 0;
+
+    while let Some(offset) = content[search_start..].find(marker) {
+        let start = search_start + offset;
+        let digits_start = start + marker.len();
+        let rest = &content[digits_start..];
+        let digits_len = rest
+            .bytes()
+            .take_while(|byte| byte.is_ascii_digit())
+            .count();
+        let placeholder_end = digits_start + digits_len + 1;
+
+        if digits_len > 0 && content.as_bytes().get(placeholder_end - 1) == Some(&b']') {
+            if let Ok(number) = content[digits_start..digits_start + digits_len].parse::<usize>() {
+                if number > 0 {
+                    placeholders.push((number, content[start..placeholder_end].to_owned()));
+                }
+            }
+            search_start = placeholder_end;
+        } else {
+            search_start = digits_start;
+        }
+    }
+
+    placeholders
+}
+
+fn attachment_placeholders_for_content(
+    content: &str,
+    attachment_count: usize,
+) -> Vec<Option<String>> {
+    let placeholders = image_attachment_placeholders(content);
+    let mut sorted_visible_placeholders = placeholders.clone();
+    sorted_visible_placeholders.sort_by_key(|(number, _)| *number);
+    sorted_visible_placeholders.dedup_by_key(|(number, _)| *number);
+
+    if sorted_visible_placeholders.len() >= attachment_count {
+        return sorted_visible_placeholders
+            .into_iter()
+            .take(attachment_count)
+            .map(|(_, placeholder)| Some(placeholder))
+            .collect();
+    }
+
+    (0..attachment_count)
+        .map(|index| {
+            let expected_number = index + 1;
+            placeholders
+                .iter()
+                .find_map(|(number, placeholder)| {
+                    (*number == expected_number).then(|| placeholder.clone())
+                })
+                .or_else(|| {
+                    if attachment_count == 1 && placeholders.len() == 1 {
+                        Some(placeholders[0].1.clone())
+                    } else {
+                        None
+                    }
+                })
+        })
+        .collect()
+}
+
 #[derive(Clone, Debug)]
 pub struct InputHistoryEntry {
     content: String,
@@ -96,6 +166,11 @@ pub struct InputManager {
     selection_copied: bool,
     /// Non-text input elements (e.g. image attachments)
     attachments: Vec<ContentPart>,
+    /// Inline placeholder text for pasted image attachments.
+    ///
+    /// `None` means the attachment was restored or set without inline
+    /// placeholder provenance and should keep the legacy attachment behaviour.
+    attachment_placeholders: Vec<Option<String>>,
     /// Byte range for a large paste that should render as a compact marker.
     compact_paste_range: Option<Range<usize>>,
     /// Command history entries
@@ -120,6 +195,7 @@ impl InputManager {
             selection_anchor: None,
             selection_copied: false,
             attachments: Vec::new(),
+            attachment_placeholders: Vec::new(),
             compact_paste_range: None,
             history: Vec::new(),
             history_index: None,
@@ -676,6 +752,7 @@ impl InputManager {
         configure_textarea(&mut self.textarea);
         self.clear_selection();
         self.attachments.clear();
+        self.attachment_placeholders.clear();
         self.compact_paste_range = None;
         self.reset_history_navigation();
     }
@@ -821,21 +898,67 @@ impl InputManager {
             .into_iter()
             .filter(ContentPart::is_image)
             .collect();
+        let content = self.content().to_owned();
+        self.attachment_placeholders =
+            attachment_placeholders_for_content(&content, self.attachments.len());
     }
 
     pub fn push_attachment(&mut self, attachment: ContentPart) -> Option<usize> {
         if attachment.is_image() {
+            let placeholder_number = self.next_image_attachment_placeholder_number();
+            let placeholder = image_attachment_placeholder(placeholder_number);
             self.attachments.push(attachment);
-            return Some(self.attachments.len());
+            self.attachment_placeholders.push(Some(placeholder));
+            return Some(placeholder_number);
         }
         None
     }
 
+    fn next_image_attachment_placeholder_number(&self) -> usize {
+        let visible_max = image_attachment_placeholders(&self.content())
+            .into_iter()
+            .map(|(number, _)| number)
+            .max()
+            .unwrap_or(0);
+        let tracked_max = self
+            .attachment_placeholders
+            .iter()
+            .filter_map(|placeholder| placeholder.as_deref())
+            .flat_map(image_attachment_placeholders)
+            .map(|(number, _)| number)
+            .max()
+            .unwrap_or(0);
+
+        visible_max
+            .max(tracked_max)
+            .max(self.attachments.len())
+            .saturating_add(1)
+    }
+
     pub fn current_history_entry(&self) -> InputHistoryEntry {
+        let content = self.content().to_string();
         InputHistoryEntry::from_content_and_attachments(
-            self.content().to_string(),
-            self.attachments.clone(),
+            content.clone(),
+            self.attachments_for_content(&content),
         )
+    }
+
+    fn attachments_for_content(&self, content: &str) -> Vec<ContentPart> {
+        self.attachments
+            .iter()
+            .enumerate()
+            .filter_map(|(index, attachment)| {
+                if !attachment.is_image() {
+                    return Some(attachment.clone());
+                }
+
+                let Some(Some(placeholder)) = self.attachment_placeholders.get(index) else {
+                    return Some(attachment.clone());
+                };
+
+                content.contains(placeholder).then(|| attachment.clone())
+            })
+            .collect()
     }
 
     pub fn apply_history_entry(&mut self, entry: InputHistoryEntry) {
@@ -846,6 +969,8 @@ impl InputManager {
         self.textarea.move_cursor(CursorMove::End);
         self.clear_selection();
         self.attachments = entry.attachment_elements();
+        self.attachment_placeholders =
+            attachment_placeholders_for_content(&entry.content, self.attachments.len());
         self.compact_paste_range = None;
     }
 

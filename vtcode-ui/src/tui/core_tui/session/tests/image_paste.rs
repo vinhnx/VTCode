@@ -1,9 +1,14 @@
 use super::helpers::*;
 use crate::tui::core_tui::session::clipboard_image::ClipboardImageError;
+use crate::tui::core_tui::session::input_manager::InputHistoryEntry;
 use crate::tui::core_tui::types::ContentPart;
 
 fn image_part() -> ContentPart {
-    ContentPart::image("png-data", "image/png")
+    image_part_with_data("png-data")
+}
+
+fn image_part_with_data(data: &str) -> ContentPart {
+    ContentPart::image(data, "image/png")
 }
 
 fn set_image_input_enabled(session: &mut AppSession, enabled: bool) {
@@ -12,6 +17,22 @@ fn set_image_input_enabled(session: &mut AppSession, enabled: bool) {
 
 fn image_paste_key(modifiers: KeyModifiers) -> KeyEvent {
     KeyEvent::new(KeyCode::Char('v'), modifiers)
+}
+
+fn paste_image(session: &mut AppSession, attachment: &ContentPart) {
+    let event = session
+        .process_key_with_clipboard_image_reader(image_paste_key(KeyModifiers::CONTROL), || {
+            Ok(attachment.clone())
+        });
+    assert!(event.is_none());
+}
+
+fn submit(session: &mut AppSession) -> app_types::SubmittedInput {
+    let event = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    let Some(app_types::InlineEvent::Submit(submitted)) = event else {
+        panic!("expected submit event, got {event:?}");
+    };
+    submitted
 }
 
 fn warning_text(session: &AppSession) -> String {
@@ -132,6 +153,160 @@ fn pasted_image_is_included_in_submit_payload() {
     assert_eq!(submitted.attachments, vec![attachment]);
     assert!(session.core.input_manager.content().is_empty());
     assert!(session.core.input_manager.attachments().is_empty());
+}
+
+#[test]
+fn orphaned_first_pasted_image_placeholder_deleted_is_not_submitted() {
+    let mut session = app_session_with_input("", 0);
+    let first_attachment = image_part_with_data("first-image");
+    let second_attachment = image_part_with_data("second-image");
+    set_image_input_enabled(&mut session, true);
+
+    paste_image(&mut session, &first_attachment);
+    paste_image(&mut session, &second_attachment);
+    session
+        .core
+        .input_manager
+        .set_content("[Image #2] describe remaining".to_owned());
+
+    let submitted = submit(&mut session);
+
+    assert_eq!(submitted.text, "[Image #2] describe remaining");
+    assert_eq!(submitted.attachments, vec![second_attachment]);
+}
+
+#[test]
+fn orphaned_second_pasted_image_placeholder_deleted_keeps_first_attachment() {
+    let mut session = app_session_with_input("", 0);
+    let first_attachment = image_part_with_data("first-image");
+    let second_attachment = image_part_with_data("second-image");
+    set_image_input_enabled(&mut session, true);
+
+    paste_image(&mut session, &first_attachment);
+    paste_image(&mut session, &second_attachment);
+    session
+        .core
+        .input_manager
+        .set_content("[Image #1] describe first".to_owned());
+
+    let submitted = submit(&mut session);
+
+    assert_eq!(submitted.text, "[Image #1] describe first");
+    assert_eq!(submitted.attachments, vec![first_attachment]);
+}
+
+#[test]
+fn reordered_pasted_image_placeholders_keep_original_attachment_order() {
+    let mut session = app_session_with_input("", 0);
+    let first_attachment = image_part_with_data("first-image");
+    let second_attachment = image_part_with_data("second-image");
+    set_image_input_enabled(&mut session, true);
+
+    paste_image(&mut session, &first_attachment);
+    paste_image(&mut session, &second_attachment);
+    session
+        .core
+        .input_manager
+        .set_content("[Image #2] then [Image #1]".to_owned());
+
+    let submitted = submit(&mut session);
+
+    assert_eq!(submitted.text, "[Image #2] then [Image #1]");
+    assert_eq!(
+        submitted.attachments,
+        vec![first_attachment, second_attachment]
+    );
+}
+
+#[test]
+fn orphaned_restored_single_attachment_uses_visible_compacted_placeholder_provenance() {
+    let mut session = app_session_with_input("", 0);
+    let attachment = image_part_with_data("second-image");
+
+    session.handle_command(app_types::InlineCommand::RestoreInputDraft(
+        app_types::SubmittedInput::new("[Image #2] describe remaining", vec![attachment]),
+    ));
+    session
+        .core
+        .input_manager
+        .set_content("describe remaining".to_owned());
+
+    let submitted = submit(&mut session);
+
+    assert_eq!(submitted.text, "describe remaining");
+    assert!(submitted.attachments.is_empty());
+}
+
+#[test]
+fn orphaned_history_restored_single_attachment_uses_visible_compacted_placeholder_provenance() {
+    let mut session = app_session_with_input("", 0);
+    let attachment = image_part_with_data("second-image");
+    let entry = InputHistoryEntry::from_content_and_attachments(
+        "[Image #2] describe remaining".to_owned(),
+        vec![attachment],
+    );
+
+    session.core.input_manager.apply_history_entry(entry);
+    session
+        .core
+        .input_manager
+        .set_content("describe remaining".to_owned());
+
+    let submitted = submit(&mut session);
+
+    assert_eq!(submitted.text, "describe remaining");
+    assert!(submitted.attachments.is_empty());
+}
+
+#[test]
+fn orphaned_restored_non_contiguous_placeholders_keep_visible_attachment() {
+    let mut session = app_session_with_input("", 0);
+    let second_attachment = image_part_with_data("second-image");
+    let third_attachment = image_part_with_data("third-image");
+
+    session.handle_command(app_types::InlineCommand::RestoreInputDraft(
+        app_types::SubmittedInput::new(
+            "[Image #2][Image #3] describe remaining",
+            vec![second_attachment.clone(), third_attachment],
+        ),
+    ));
+    session
+        .core
+        .input_manager
+        .set_content("[Image #2] describe remaining".to_owned());
+
+    let submitted = submit(&mut session);
+
+    assert_eq!(submitted.text, "[Image #2] describe remaining");
+    assert_eq!(submitted.attachments, vec![second_attachment]);
+}
+
+#[test]
+fn orphaned_later_paste_after_restored_placeholder_keeps_restored_attachment() {
+    let mut session = app_session_with_input("", 0);
+    let restored_attachment = image_part_with_data("restored-image");
+    let pasted_attachment = image_part_with_data("pasted-image");
+    set_image_input_enabled(&mut session, true);
+
+    session.handle_command(app_types::InlineCommand::RestoreInputDraft(
+        app_types::SubmittedInput::new("[Image #2] restored", vec![restored_attachment.clone()]),
+    ));
+    paste_image(&mut session, &pasted_attachment);
+
+    assert_eq!(
+        session.core.input_manager.content(),
+        "[Image #2] restored[Image #3]"
+    );
+
+    session
+        .core
+        .input_manager
+        .set_content("[Image #2] restored".to_owned());
+
+    let submitted = submit(&mut session);
+
+    assert_eq!(submitted.text, "[Image #2] restored");
+    assert_eq!(submitted.attachments, vec![restored_attachment]);
 }
 
 #[test]
