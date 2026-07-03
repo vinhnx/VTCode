@@ -26,7 +26,13 @@ struct InputRender {
 struct CompactInputPreview {
     before: String,
     placeholder: String,
-    after: String,
+    after_lines: Vec<String>,
+}
+
+impl CompactInputPreview {
+    fn line_count(&self) -> usize {
+        self.after_lines.len().max(1)
+    }
 }
 
 #[derive(Default)]
@@ -320,9 +326,13 @@ impl Session {
 
         if self.input_compact_mode
             && self.input_manager.cursor() == self.input_manager.content().len()
-            && self.input_compact_placeholder().is_some()
         {
-            return 1;
+            if let Some(preview) = self.input_compact_preview() {
+                return preview.line_count().min(ui::INLINE_INPUT_MAX_LINES.max(1)) as u16;
+            }
+            if self.input_compact_placeholder().is_some() {
+                return 1;
+            }
         }
 
         if self.input_manager.content().is_empty() {
@@ -499,7 +509,7 @@ impl Session {
                     .map(|placeholder| CompactInputPreview {
                         before: String::new(),
                         placeholder,
-                        after: String::new(),
+                        after_lines: Vec::new(),
                     })
             })
         {
@@ -521,24 +531,49 @@ impl Session {
                     spans.push(Span::styled(" ".to_string(), accent_style));
                 }
             }
+            let first_after = preview
+                .after_lines
+                .first()
+                .map(String::as_str)
+                .unwrap_or_default();
             let needs_after_space =
-                !preview.after.is_empty() && !preview.after.starts_with(char::is_whitespace);
+                !first_after.is_empty() && !first_after.starts_with(char::is_whitespace);
             spans.push(Span::styled(preview.placeholder, style));
             if needs_after_space {
                 spans.push(Span::styled(" ".to_string(), accent_style));
             }
-            if !preview.after.is_empty() {
-                spans.push(Span::styled(preview.after, accent_style));
+            if !first_after.is_empty() {
+                spans.push(Span::styled(first_after.to_string(), accent_style));
             }
-            let cursor_x = spans
-                .iter()
-                .skip(1)
-                .map(|span| UnicodeWidthStr::width(span.content.as_ref()) as u16)
-                .fold(prompt_display_width, u16::saturating_add);
+            let indent_prefix = " ".repeat(prompt_display_width as usize);
+            let mut lines = vec![Line::from(spans)];
+            for line in preview.after_lines.iter().skip(1) {
+                let mut spans = vec![Span::styled(indent_prefix.clone(), prompt_style)];
+                if !line.is_empty() {
+                    spans.push(Span::styled(line.clone(), accent_style));
+                }
+                lines.push(Line::from(spans));
+            }
+            let cursor_y = lines.len().saturating_sub(1) as u16;
+            let cursor_x = if cursor_y == 0 {
+                lines[0]
+                    .spans
+                    .iter()
+                    .skip(1)
+                    .map(|span| UnicodeWidthStr::width(span.content.as_ref()) as u16)
+                    .fold(prompt_display_width, u16::saturating_add)
+            } else {
+                let last_line = preview
+                    .after_lines
+                    .last()
+                    .map(String::as_str)
+                    .unwrap_or_default();
+                prompt_display_width.saturating_add(UnicodeWidthStr::width(last_line) as u16)
+            };
             return InputRender {
-                text: Text::from(vec![Line::from(spans)]),
+                text: Text::from(lines),
                 cursor_x,
-                cursor_y: 0,
+                cursor_y,
             };
         }
 
@@ -818,12 +853,15 @@ impl Session {
         }
 
         let before = compact_inline_segment(&content[..range.start]);
-        let after = compact_inline_segment(&content[range.end..]);
+        let after_lines = content[range.end..]
+            .split('\n')
+            .map(compact_inline_segment)
+            .collect();
         let char_count = pasted.chars().count();
         Some(CompactInputPreview {
             before,
             placeholder: format!("[Pasted Content {char_count} chars]"),
-            after,
+            after_lines,
         })
     }
 
