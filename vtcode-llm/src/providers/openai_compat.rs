@@ -91,8 +91,9 @@ pub(crate) trait OpenAiCompatSpec: Sized + Send + Sync + 'static {
         api_key.unwrap_or_default()
     }
 
-    /// Resolves the effective base URL from configuration.
-    fn resolve_base_url(base_url: Option<String>) -> String {
+    /// Resolves the effective base URL from configuration. Receives the
+    /// resolved API key for providers whose endpoint depends on it.
+    fn resolve_base_url(_api_key: &str, base_url: Option<String>) -> String {
         override_base_url(Self::DEFAULT_BASE_URL, base_url, Self::BASE_URL_ENV)
     }
 
@@ -172,6 +173,12 @@ pub(crate) trait OpenAiCompatSpec: Sized + Send + Sync + 'static {
         Self::API_KEY_ENV
     }
 
+    /// Models advertised through `supported_models()`; instance-dependent
+    /// providers override this instead of [`LISTED_MODELS`](Self::LISTED_MODELS).
+    fn listed_models(_core: &OpenAiCompatCore<Self>) -> &'static [&'static str] {
+        Self::LISTED_MODELS
+    }
+
     /// Validates a request before dispatch.
     fn validate(_core: &OpenAiCompatCore<Self>, request: &LLMRequest) -> Result<(), LLMError> {
         match Self::VALIDATION_ALLOWLIST {
@@ -224,10 +231,11 @@ impl<S: OpenAiCompatSpec> OpenAiCompatCore<S> {
         use crate::http_client::HttpClientFactory;
 
         let timeouts = timeouts.unwrap_or_default();
+        let base_url = S::resolve_base_url(&api_key, base_url);
         Self {
             api_key,
             http_client: HttpClientFactory::for_llm(&timeouts),
-            base_url: S::resolve_base_url(base_url),
+            base_url,
             model: S::normalize_model(model),
             prompt_cache_enabled: false,
             model_behavior,
@@ -382,7 +390,7 @@ impl<S: OpenAiCompatSpec> OpenAiCompatCore<S> {
     }
 
     pub(crate) fn supported_models(&self) -> Vec<String> {
-        S::LISTED_MODELS
+        S::listed_models(self)
             .iter()
             .map(|model| model.to_string())
             .collect()
