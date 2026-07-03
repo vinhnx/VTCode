@@ -1,6 +1,7 @@
 use super::action::InlineLoopAction;
 use super::queue::InlineQueueState;
 use super::state::InlineEventState;
+use vtcode_ui::tui::app::SubmittedInput;
 
 pub(crate) struct InlineInputProcessor<'a, 'state> {
     state: &'a mut InlineEventState<'state>,
@@ -11,24 +12,24 @@ impl<'a, 'state> InlineInputProcessor<'a, 'state> {
         Self { state }
     }
 
-    pub(crate) fn submit(self, text: String) -> InlineLoopAction {
+    pub(crate) fn submit(self, input: SubmittedInput) -> InlineLoopAction {
         self.state.reset_interrupt_state();
-        InlineLoopAction::Submit(text.trim().to_string())
+        InlineLoopAction::Submit(input.trim_text())
     }
 
     pub(crate) fn queue_submit(
         self,
-        text: String,
+        input: SubmittedInput,
         queue: &mut InlineQueueState<'_>,
         primary_agent: Option<String>,
     ) -> InlineLoopAction {
         self.state.reset_interrupt_state();
-        let trimmed = text.trim().to_string();
-        if trimmed.is_empty() {
+        let input = input.trim_text();
+        if input.is_empty() {
             return InlineLoopAction::Continue;
         }
 
-        queue.push(trimmed, primary_agent);
+        queue.push(input, primary_agent);
         InlineLoopAction::Continue
     }
 

@@ -8,7 +8,7 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::llm::provider::{self as uni};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
-use vtcode_ui::tui::app::{InlineHandle, InlineHeaderContext, InlineListSelection};
+use vtcode_ui::tui::app::{InlineHandle, InlineHeaderContext, InlineListSelection, SubmittedInput};
 
 use crate::agent::runloop::model_picker::{
     ModelPickerProgress, ModelPickerStart, ModelPickerState,
@@ -81,6 +81,10 @@ impl<'a> InlineModalProcessor<'a> {
 
     pub(crate) fn active_primary_agent_name(&self) -> Option<String> {
         self.model_picker.header_context.primary_agent.clone()
+    }
+
+    pub(crate) fn restore_input_draft(&self, input: SubmittedInput) {
+        self.model_picker.handle.restore_input_draft(input);
     }
 
     pub(crate) fn request_url_guard(
@@ -442,7 +446,7 @@ impl<'a> InlineModalProcessor<'a> {
                 if action == ACTION_CONFIGURE_EDITOR =>
             {
                 self.palette.state.take();
-                Some(InlineLoopAction::Submit("/config tools.editor".to_string()))
+                Some(InlineLoopAction::Submit("/config tools.editor".into()))
             }
             _ => None,
         }

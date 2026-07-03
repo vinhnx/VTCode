@@ -26,8 +26,8 @@ use vtcode_core::core::agent::snapshots::{
 use vtcode_core::llm::provider::{self as uni, LLMRequest, LLMResponse};
 use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_ui::tui::app::{
-    InlineCommand, InlineEvent, InlineHandle, InlineListSelection, TransientEvent,
-    TransientRequest, TransientSubmission,
+    ContentPart, InlineCommand, InlineEvent, InlineHandle, InlineListSelection, SubmittedInput,
+    TransientEvent, TransientRequest, TransientSubmission,
 };
 
 #[derive(Clone)]
@@ -156,7 +156,7 @@ async fn launch_editor_event_submits_edit_command() {
         .expect("process launch editor");
     assert!(matches!(
         action,
-        InlineLoopAction::Submit(ref command) if command == "/edit"
+        InlineLoopAction::Submit(ref command) if command.text == "/edit"
     ));
 }
 
@@ -250,7 +250,7 @@ async fn open_file_in_editor_event_submits_edit_command_with_path() {
         .expect("process open file in editor");
     assert!(matches!(
         action,
-        InlineLoopAction::Submit(ref command) if command == &format!("/edit {path}")
+        InlineLoopAction::Submit(ref command) if command.text == format!("/edit {path}")
     ));
 }
 
@@ -571,7 +571,7 @@ async fn settings_editor_selection_submits_editor_config_command() {
 
     assert!(matches!(
         action,
-        InlineLoopAction::Submit(ref command) if command == "/config tools.editor"
+        InlineLoopAction::Submit(ref command) if command.text == "/config tools.editor"
     ));
     assert!(palette_state.is_none());
 }
@@ -838,7 +838,7 @@ async fn steering_events_are_passive_in_idle_loop() {
     for event in [
         InlineEvent::Pause,
         InlineEvent::Resume,
-        InlineEvent::Steer("keep going".to_string()),
+        InlineEvent::Steer("keep going".into()),
     ] {
         let action = context
             .process_event(event, &mut queue)
@@ -846,6 +846,78 @@ async fn steering_events_are_passive_in_idle_loop() {
             .expect("process steering event");
         assert!(matches!(action, InlineLoopAction::Continue));
     }
+}
+
+#[tokio::test]
+async fn steer_with_attachments_restores_full_draft_and_continues() {
+    let (handle, mut commands, mut renderer) = renderer_with_handle_and_commands();
+    let (ctrl_c_state, ctrl_c_notify) = ctrl_c_handles();
+    let interrupts = InlineInterruptCoordinator::new(ctrl_c_state.as_ref());
+    let mut ctrl_c_notice_displayed = false;
+    let mut model_picker_state: Option<ModelPickerState> = None;
+    let mut palette_state: Option<ActivePalette> = None;
+    let mut config = runtime_config();
+    let mut vt_cfg = None;
+    let mut provider_client: Box<dyn uni::LLMProvider> = Box::new(DummyProvider);
+    let session_bootstrap = SessionBootstrap::default();
+    let mut header_context = vtcode_ui::tui::app::InlineHeaderContext::default();
+    let mut context = InlineEventContext::new(
+        &mut renderer,
+        &handle,
+        interrupts,
+        &mut ctrl_c_notice_displayed,
+        &mut header_context,
+        &mut model_picker_state,
+        &mut palette_state,
+        &mut config,
+        &mut vt_cfg,
+        &mut provider_client,
+        &ctrl_c_state,
+        &ctrl_c_notify,
+        &session_bootstrap,
+        false,
+        0,
+    );
+    let mut queued_inputs = VecDeque::new();
+    let mut prefer_latest_once = false;
+    let mut queue = InlineQueueState::new(&handle, &mut queued_inputs, &mut prefer_latest_once);
+
+    let first_attachment = ContentPart::image("first-image", "image/png");
+    let second_attachment = ContentPart::image("second-image", "image/png");
+    let input = SubmittedInput::new(
+        "keep going",
+        vec![first_attachment.clone(), second_attachment.clone()],
+    );
+    let action = context
+        .process_event(InlineEvent::Steer(input.clone()), &mut queue)
+        .await
+        .expect("process steer with attachment");
+
+    assert!(matches!(action, InlineLoopAction::Continue));
+    let mut restored_draft = false;
+    let mut warning_rendered = false;
+    while let Ok(command) = commands.try_recv() {
+        if let InlineCommand::AppendLine { segments, .. } = &command
+            && segments.iter().any(|segment| {
+                segment.text.contains(
+                    "Live steering supports text only. Remove image attachments before steering.",
+                )
+            })
+        {
+            warning_rendered = true;
+        }
+        if let InlineCommand::RestoreInputDraft(restored_input) = command {
+            assert_eq!(restored_input.text, "keep going");
+            assert_eq!(
+                restored_input.attachments,
+                vec![first_attachment.clone(), second_attachment.clone()]
+            );
+            assert_eq!(restored_input, input);
+            restored_draft = true;
+        }
+    }
+    assert!(warning_rendered);
+    assert!(restored_draft);
 }
 
 #[tokio::test]
@@ -879,8 +951,8 @@ async fn process_latest_queued_event_primes_newest_queue_priority() {
         0,
     );
     let mut queued_inputs = VecDeque::from([
-        QueuedInput::new("first".to_string(), Some("duck".to_string())),
-        QueuedInput::new("latest".to_string(), Some("builder".to_string())),
+        QueuedInput::new("first".into(), Some("duck".to_string())),
+        QueuedInput::new("latest".into(), Some("builder".to_string())),
     ]);
     let mut prefer_latest_once = false;
     let mut queue = InlineQueueState::new(&handle, &mut queued_inputs, &mut prefer_latest_once);
@@ -970,6 +1042,7 @@ fn other_name(command: &InlineCommand) -> &'static str {
         InlineCommand::SetCursorVisible(_) => "SetCursorVisible",
         InlineCommand::SetInputEnabled(_) => "SetInputEnabled",
         InlineCommand::SetInput(_) => "SetInput",
+        InlineCommand::RestoreInputDraft(_) => "RestoreInputDraft",
         InlineCommand::ApplySuggestedPrompt(_) => "ApplySuggestedPrompt",
         InlineCommand::SetInlinePromptSuggestion { .. } => "SetInlinePromptSuggestion",
         InlineCommand::ClearInlinePromptSuggestion => "ClearInlinePromptSuggestion",

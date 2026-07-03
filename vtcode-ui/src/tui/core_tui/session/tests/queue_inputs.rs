@@ -1,5 +1,6 @@
 use super::super::*;
 use super::helpers::*;
+use crate::tui::core_tui::types::{ContentPart, SubmittedInput};
 
 #[test]
 fn shift_enter_inserts_newline() {
@@ -611,6 +612,47 @@ fn busy_control_enter_steers_active_run() {
 
     let event = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::CONTROL));
     assert!(matches!(event, Some(InlineEvent::Steer(value)) if value == "keep searching in docs/"));
+}
+
+#[test]
+fn restore_input_draft_command_preserves_attachments_in_order() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    let first_attachment = ContentPart::image("first-image", "image/png");
+    let second_attachment = ContentPart::image("second-image", "image/png");
+
+    session.handle_command(InlineCommand::RestoreInputDraft(SubmittedInput::new(
+        "keep searching in docs/",
+        vec![first_attachment.clone(), second_attachment.clone()],
+    )));
+
+    assert_eq!(session.input_manager.content(), "keep searching in docs/");
+    assert_eq!(
+        session.input_manager.attachments(),
+        &[first_attachment, second_attachment]
+    );
+}
+
+#[test]
+fn app_restore_input_draft_command_preserves_attachments_in_order() {
+    let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
+    let first_attachment = ContentPart::image("first-image", "image/png");
+    let second_attachment = ContentPart::image("second-image", "image/png");
+
+    session.handle_command(app_types::InlineCommand::RestoreInputDraft(
+        SubmittedInput::new(
+            "keep searching in docs/",
+            vec![first_attachment.clone(), second_attachment.clone()],
+        ),
+    ));
+
+    assert_eq!(
+        session.core.input_manager.content(),
+        "keep searching in docs/"
+    );
+    assert_eq!(
+        session.core.input_manager.attachments(),
+        &[first_attachment, second_attachment]
+    );
 }
 
 #[test]

@@ -14,7 +14,7 @@ use crate::tui::core_tui::session::reverse_search;
 use crate::tui::core_tui::style::theme_from_styles;
 use crate::tui::core_tui::types::InlineSegment;
 use crate::tui::core_tui::types::{
-    InlineEvent as CoreInlineEvent, OverlayEvent, OverlaySelectionChange,
+    InlineEvent as CoreInlineEvent, OverlayEvent, OverlaySelectionChange, SubmittedInput,
 };
 use crate::tui::ui::theme;
 
@@ -51,7 +51,7 @@ pub(super) fn handle_paste(session: &mut Session, content: &str) -> Option<Inlin
         // while the event is in-flight to the interaction loop.
         session.close_overlay();
         session.mark_dirty();
-        return Some(InlineEvent::Submit(submitted));
+        return Some(InlineEvent::Submit(submitted.into()));
     }
 
     if let Some(review) = session.transcript_review_state_mut()
@@ -429,11 +429,11 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         }
         KeyCode::Char('m') | KeyCode::Char('M') if has_control && !has_alt && !has_command => {
             session.mark_dirty();
-            Some(InlineEvent::Submit("/model".to_string()))
+            Some(InlineEvent::Submit("/model".into()))
         }
         KeyCode::Char('s') | KeyCode::Char('S') if has_alt && !has_control && !has_command => {
             session.mark_dirty();
-            Some(InlineEvent::Submit("/subprocesses".to_string()))
+            Some(InlineEvent::Submit("/subprocesses".into()))
         }
         KeyCode::Char('a') | KeyCode::Char('A') if has_control && !has_command && !has_alt => {
             if session.core.input_enabled() {
@@ -495,7 +495,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         }
         KeyCode::Char('l') | KeyCode::Char('L') if has_control => {
             session.mark_dirty();
-            Some(InlineEvent::Submit("/clear".to_string()))
+            Some(InlineEvent::Submit("/clear".into()))
         }
         KeyCode::BackTab => {
             session.clear_inline_prompt_suggestion();
@@ -529,7 +529,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 if is_double_esc {
                     session.core.last_esc_press = None;
                     session.mark_dirty();
-                    Some(InlineEvent::Submit("/rewind".to_string()))
+                    Some(InlineEvent::Submit("/rewind".into()))
                 } else {
                     session.core.last_esc_press = Some(now);
                     session.mark_dirty();
@@ -633,7 +633,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 && session.active_pty_session_count() > 0
             {
                 session.mark_dirty();
-                return Some(InlineEvent::Submit("/jobs".to_string()));
+                return Some(InlineEvent::Submit("/jobs".into()));
             }
 
             // Check for backslash + Enter quick escape (insert newline without submitting)
@@ -688,7 +688,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             // If a turn is actively running, queue the message so it starts immediately after
             // the current turn completes. Otherwise submit directly so the turn starts now.
             if session.is_running_activity() {
-                session.push_queued_input(submitted.clone());
+                session.push_queued_input(submitted.text.clone());
                 Some(InlineEvent::QueueSubmit(submitted))
             } else {
                 Some(InlineEvent::Submit(submitted))
@@ -821,7 +821,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         KeyCode::Char('o') | KeyCode::Char('O') if has_control && !has_alt && !has_command => {
             // Ctrl+O: Copy last agent response as markdown to clipboard
             session.mark_dirty();
-            Some(InlineEvent::Submit("/copy".to_string()))
+            Some(InlineEvent::Submit("/copy".into()))
         }
         KeyCode::Char('t') | KeyCode::Char('T') if has_control => {
             session.toggle_logs();
@@ -1209,17 +1209,18 @@ fn can_cycle_primary_agent(session: &Session, key: &KeyEvent) -> bool {
         && !session.has_active_overlay()
 }
 
-fn take_submitted_input(session: &mut Session) -> Option<String> {
+fn take_submitted_input(session: &mut Session) -> Option<SubmittedInput> {
     let submitted = session.core.input_manager.content().to_owned();
     let submitted_entry = session.core.input_manager.current_history_entry();
     clear_submitted_input(session);
 
-    if submitted.trim().is_empty() {
+    if submitted_entry.is_empty() {
         return None;
     }
 
+    let attachments = submitted_entry.attachment_elements();
     session.remember_submitted_input(submitted_entry);
-    Some(submitted)
+    Some(SubmittedInput::new(submitted, attachments))
 }
 
 fn clear_submitted_input(session: &mut Session) {

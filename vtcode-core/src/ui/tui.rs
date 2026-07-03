@@ -36,13 +36,14 @@ mod headless {
     };
 
     use crate::ui::theme::ThemeStyles;
+    pub use vtcode_ui::tui::app::{ContentPart, SubmittedInput};
 
     /// Headless `InlineEvent` — all variants present so match arms compile.
     #[derive(Clone, Debug, PartialEq, Eq)]
     pub enum InlineEvent {
-        Submit(String),
-        QueueSubmit(String),
-        Steer(String),
+        Submit(SubmittedInput),
+        QueueSubmit(SubmittedInput),
+        Steer(SubmittedInput),
         ProcessLatestQueued,
         EditQueue,
         Cancel,
@@ -85,6 +86,7 @@ mod headless {
             kind: InlineMessageKind,
             lines: Vec<Vec<InlineSegment>>,
         },
+        RestoreInputDraft(SubmittedInput),
         ForceRedraw,
         Shutdown,
         ClearScreen,
@@ -164,6 +166,9 @@ mod headless {
         }
         pub fn close_modal(&self) {
             self.send_command(InlineCommand::CloseModal);
+        }
+        pub fn restore_input_draft(&self, input: SubmittedInput) {
+            self.send_command(InlineCommand::RestoreInputDraft(input));
         }
         pub fn set_reasoning_stage(&self, stage: Option<String>) {
             self.send_command(InlineCommand::SetReasoningStage(stage));

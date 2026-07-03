@@ -1,8 +1,9 @@
 use vtcode_core::hooks::SessionEndReason;
+use vtcode_ui::tui::app::SubmittedInput;
 
 pub(crate) enum InlineLoopAction {
     Continue,
-    Submit(String),
+    Submit(SubmittedInput),
     SubmitQueued(super::queue::QueuedInput),
     CyclePrimaryAgent,
     CyclePrimaryAgentPrevious,

@@ -21,6 +21,7 @@ use vtcode_core::ui::theme;
 use vtcode_core::ui::{inline_theme_from_core_styles, to_tui_appearance};
 use vtcode_core::utils::ansi::MessageStyle;
 use vtcode_core::{build_primary_agent_hook_config, build_primary_agent_runtime_config};
+use vtcode_ui::tui::app::{ContentPart as UiContentPart, SubmittedInput};
 
 use crate::agent::runloop::prompt::refine_and_enrich_prompt;
 use crate::agent::runloop::unified::async_mcp_manager::{
@@ -67,7 +68,7 @@ pub(super) struct LiveIdeContextUpdate {
 
 pub(super) enum InlineLoopActionResolution {
     ContinueLoop,
-    Submit(String),
+    Submit(SubmittedInput),
     Outcome(InteractionOutcome),
 }
 
@@ -561,6 +562,43 @@ pub(super) async fn build_user_message_content(
     append_agent_reference_metadata(refined_content, selected_agents.as_slice())
 }
 
+pub(super) async fn build_submitted_user_message_content(
+    ctx: &mut InteractionLoopContext<'_>,
+    input: &SubmittedInput,
+) -> uni::MessageContent {
+    let content = build_user_message_content(ctx, input.text.as_str()).await;
+    append_submitted_attachments(content, input.attachments.as_slice())
+}
+
+fn append_submitted_attachments(
+    content: uni::MessageContent,
+    attachments: &[UiContentPart],
+) -> uni::MessageContent {
+    if attachments.is_empty() {
+        return content;
+    }
+
+    let mut parts = match content {
+        uni::MessageContent::Text(text) => {
+            if text.is_empty() {
+                Vec::new()
+            } else {
+                vec![uni::ContentPart::text(text)]
+            }
+        }
+        uni::MessageContent::Parts(parts) => parts,
+    };
+
+    parts.extend(attachments.iter().map(|attachment| match attachment {
+        UiContentPart::Text { text } => uni::ContentPart::text(text.clone()),
+        UiContentPart::Image { data, media_type } => {
+            uni::ContentPart::image(data.clone(), media_type.clone())
+        }
+    }));
+
+    uni::MessageContent::parts(parts)
+}
+
 pub(super) fn refresh_ide_context_before_user_turn(
     ctx: &mut InteractionLoopContext<'_>,
     input_status_state: &mut InputStatusState,
@@ -777,7 +815,7 @@ pub(super) async fn resolve_inline_loop_action(
             if let Some(primary_agent) = queued.primary_agent {
                 handle_select_primary_agent(ctx, state, Some(primary_agent)).await?;
             }
-            InlineLoopActionResolution::Submit(queued.text)
+            InlineLoopActionResolution::Submit(queued.input)
         }
         InlineLoopAction::CyclePrimaryAgent => {
             handle_cycle_primary_agent(ctx, state).await?;

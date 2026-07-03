@@ -176,6 +176,14 @@ impl Session {
                     self.scroll_manager.set_offset(0);
                 }
             }
+            InlineCommand::RestoreInputDraft(input) => {
+                self.clear_suggested_prompt_state();
+                self.clear_inline_prompt_suggestion();
+                self.input_manager.set_content(input.text);
+                self.input_manager.set_attachments(input.attachments);
+                self.input_compact_mode = self.input_compact_placeholder().is_some();
+                self.scroll_manager.set_offset(0);
+            }
             InlineCommand::ApplySuggestedPrompt(content) => {
                 self.apply_suggested_prompt(content);
                 self.scroll_manager.set_offset(0);

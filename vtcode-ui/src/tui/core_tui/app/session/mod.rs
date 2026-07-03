@@ -650,6 +650,12 @@ impl AppSession {
                     .handle_command(crate::tui::core_tui::types::InlineCommand::SetInput(value));
                 self.update_input_triggers();
             }
+            InlineCommand::RestoreInputDraft(input) => {
+                self.core.handle_command(
+                    crate::tui::core_tui::types::InlineCommand::RestoreInputDraft(input),
+                );
+                self.update_input_triggers();
+            }
             InlineCommand::ApplySuggestedPrompt(value) => {
                 self.core.handle_command(
                     crate::tui::core_tui::types::InlineCommand::ApplySuggestedPrompt(value),
@@ -793,6 +799,7 @@ fn to_core_command(command: &InlineCommand) -> Option<crate::tui::core_tui::type
         InlineCommand::SetCursorVisible(value) => CoreCommand::SetCursorVisible(*value),
         InlineCommand::SetInputEnabled(value) => CoreCommand::SetInputEnabled(*value),
         InlineCommand::SetInput(value) => CoreCommand::SetInput(value.clone()),
+        InlineCommand::RestoreInputDraft(input) => CoreCommand::RestoreInputDraft(input.clone()),
         InlineCommand::ApplySuggestedPrompt(value) => {
             CoreCommand::ApplySuggestedPrompt(value.clone())
         }

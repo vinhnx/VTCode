@@ -1,7 +1,9 @@
+use std::ops::Deref;
 use std::sync::Arc;
 
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
+use super::ContentPart;
 use super::overlay::{ListOverlayRequest, ModalOverlayRequest, OverlayEvent, OverlayRequest};
 use super::selection::{
     InlineListItem, InlineListSearchConfig, InlineListSelection, SecurePromptConfig,
@@ -12,6 +14,84 @@ use super::style::{
 use crate::tui::core_tui::session::config::AppearanceConfig;
 
 pub use vtcode_commons::ui_protocol::InlineMessageKind;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SubmittedInput {
+    pub text: String,
+    pub attachments: Vec<ContentPart>,
+}
+
+impl SubmittedInput {
+    pub fn new(text: impl Into<String>, attachments: Vec<ContentPart>) -> Self {
+        Self {
+            text: text.into(),
+            attachments,
+        }
+    }
+
+    pub fn text_only(text: impl Into<String>) -> Self {
+        Self::new(text, Vec::new())
+    }
+
+    pub fn trim_text(self) -> Self {
+        Self {
+            text: self.text.trim().to_string(),
+            attachments: self.attachments,
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.text.trim().is_empty() && self.attachments.is_empty()
+    }
+
+    pub fn has_attachments(&self) -> bool {
+        !self.attachments.is_empty()
+    }
+}
+
+impl From<String> for SubmittedInput {
+    fn from(text: String) -> Self {
+        Self::text_only(text)
+    }
+}
+
+impl From<&str> for SubmittedInput {
+    fn from(text: &str) -> Self {
+        Self::text_only(text)
+    }
+}
+
+impl Deref for SubmittedInput {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        &self.text
+    }
+}
+
+impl PartialEq<&str> for SubmittedInput {
+    fn eq(&self, other: &&str) -> bool {
+        self.text == *other
+    }
+}
+
+impl PartialEq<&str> for &SubmittedInput {
+    fn eq(&self, other: &&str) -> bool {
+        self.text == *other
+    }
+}
+
+impl PartialEq<String> for SubmittedInput {
+    fn eq(&self, other: &String) -> bool {
+        self.text == *other
+    }
+}
+
+impl PartialEq<&String> for SubmittedInput {
+    fn eq(&self, other: &&String) -> bool {
+        self.text == **other
+    }
+}
 
 pub enum InlineCommand {
     AppendLine {
@@ -84,6 +164,7 @@ pub enum InlineCommand {
     SetCursorVisible(bool),
     SetInputEnabled(bool),
     SetInput(String),
+    RestoreInputDraft(SubmittedInput),
     ApplySuggestedPrompt(String),
     SetInlinePromptSuggestion {
         suggestion: String,
@@ -111,9 +192,9 @@ pub enum InlineCommand {
 
 #[derive(Debug, Clone)]
 pub enum InlineEvent {
-    Submit(String),
-    QueueSubmit(String),
-    Steer(String),
+    Submit(SubmittedInput),
+    QueueSubmit(SubmittedInput),
+    Steer(SubmittedInput),
     ProcessLatestQueued,
     /// Edit the newest queued input (pop into input buffer)
     EditQueue,
@@ -307,6 +388,10 @@ impl InlineHandle {
 
     pub fn set_input(&self, content: String) {
         self.send_command(InlineCommand::SetInput(content));
+    }
+
+    pub fn restore_input_draft(&self, input: SubmittedInput) {
+        self.send_command(InlineCommand::RestoreInputDraft(input));
     }
 
     pub fn apply_suggested_prompt(&self, content: String) {

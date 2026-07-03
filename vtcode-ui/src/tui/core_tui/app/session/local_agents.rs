@@ -201,14 +201,17 @@ impl AppSession {
     fn selected_local_agent_inspect_event(&mut self) -> Option<InlineEvent> {
         let entry = self.local_agents_state.selected_entry()?.clone();
         self.mark_dirty();
-        Some(InlineEvent::Submit(match entry.kind {
-            crate::tui::core_tui::types::LocalAgentKind::Delegated => {
-                format!("/agent inspect {}", entry.id)
+        Some(InlineEvent::Submit(
+            match entry.kind {
+                crate::tui::core_tui::types::LocalAgentKind::Delegated => {
+                    format!("/agent inspect {}", entry.id)
+                }
+                crate::tui::core_tui::types::LocalAgentKind::Background => {
+                    format!("/subprocesses inspect {}", entry.id)
+                }
             }
-            crate::tui::core_tui::types::LocalAgentKind::Background => {
-                format!("/subprocesses inspect {}", entry.id)
-            }
-        }))
+            .into(),
+        ))
     }
 
     fn selected_local_agent_transcript_event(&mut self) -> Option<InlineEvent> {
@@ -226,26 +229,32 @@ impl AppSession {
     fn selected_local_agent_stop_event(&mut self) -> Option<InlineEvent> {
         let entry = self.local_agents_state.selected_entry()?.clone();
         self.mark_dirty();
-        Some(InlineEvent::Submit(match entry.kind {
-            crate::tui::core_tui::types::LocalAgentKind::Delegated => {
-                format!("/agent close {}", entry.id)
+        Some(InlineEvent::Submit(
+            match entry.kind {
+                crate::tui::core_tui::types::LocalAgentKind::Delegated => {
+                    format!("/agent close {}", entry.id)
+                }
+                crate::tui::core_tui::types::LocalAgentKind::Background => {
+                    format!("/subprocesses stop {}", entry.id)
+                }
             }
-            crate::tui::core_tui::types::LocalAgentKind::Background => {
-                format!("/subprocesses stop {}", entry.id)
-            }
-        }))
+            .into(),
+        ))
     }
 
     fn selected_local_agent_force_cancel_event(&mut self) -> Option<InlineEvent> {
         let entry = self.local_agents_state.selected_entry()?.clone();
         self.mark_dirty();
-        Some(InlineEvent::Submit(match entry.kind {
-            crate::tui::core_tui::types::LocalAgentKind::Delegated => {
-                format!("/agent close {}", entry.id)
+        Some(InlineEvent::Submit(
+            match entry.kind {
+                crate::tui::core_tui::types::LocalAgentKind::Delegated => {
+                    format!("/agent close {}", entry.id)
+                }
+                crate::tui::core_tui::types::LocalAgentKind::Background => {
+                    format!("/subprocesses cancel {}", entry.id)
+                }
             }
-            crate::tui::core_tui::types::LocalAgentKind::Background => {
-                format!("/subprocesses cancel {}", entry.id)
-            }
-        }))
+            .into(),
+        ))
     }
 }

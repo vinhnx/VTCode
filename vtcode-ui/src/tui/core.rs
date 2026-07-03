@@ -16,7 +16,7 @@ pub use crate::tui::core_tui::types::{
     InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme, ListOverlayRequest,
     ModalOverlayRequest, OpenAIServiceTierChoice, OverlayEvent, OverlayHotkey, OverlayHotkeyAction,
     OverlayHotkeyKey, OverlayRequest, OverlaySelectionChange, OverlaySubmission, RewindAction,
-    SecurePromptConfig, WizardModalMode, WizardOverlayRequest, WizardStep,
+    SecurePromptConfig, SubmittedInput, WizardModalMode, WizardOverlayRequest, WizardStep,
 };
 pub use crate::tui::options::{
     FullscreenInteractionSettings, KeyboardProtocolSettings, SessionSurface,
