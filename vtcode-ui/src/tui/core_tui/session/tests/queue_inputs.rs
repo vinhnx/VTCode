@@ -117,6 +117,31 @@ fn input_compact_preview_for_large_paste() {
 }
 
 #[test]
+fn input_compact_preview_keeps_text_after_large_paste_visible() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.set_input("before".to_string());
+    let line_total = ui::INLINE_PASTE_COLLAPSE_LINE_THRESHOLD + 1;
+    let pasted_lines: Vec<String> = (1..=line_total).map(|idx| format!("line-{idx}")).collect();
+    let pasted_text = pasted_lines.join("\n");
+
+    session.insert_paste_text(&pasted_text);
+    session.insert_char(' ');
+    for ch in "after".chars() {
+        session.insert_char(ch);
+    }
+
+    let data = session.build_input_widget_data(VIEW_WIDTH, VIEW_ROWS);
+    let rendered = text_content(&data.text);
+    assert!(rendered.contains("before"));
+    assert!(rendered.contains("[Pasted Content"));
+    assert!(rendered.contains("after"));
+    assert_eq!(
+        session.input_manager.content(),
+        format!("before{pasted_text} after")
+    );
+}
+
+#[test]
 fn idle_enter_submits_immediately() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
 

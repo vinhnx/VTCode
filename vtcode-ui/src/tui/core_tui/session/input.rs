@@ -23,6 +23,12 @@ struct InputRender {
     cursor_y: u16,
 }
 
+struct CompactInputPreview {
+    before: String,
+    placeholder: String,
+    after: String,
+}
+
 #[derive(Default)]
 struct InputLineBuffer {
     prefix: String,
@@ -482,11 +488,20 @@ impl Session {
         let prompt_style = ratatui_style_from_inline(&prompt_style, self.theme.foreground);
         let prompt_width = UnicodeWidthStr::width(self.prompt_prefix.as_str()) as u16;
         let prompt_display_width = prompt_width.min(width);
+        let accent_style =
+            ratatui_style_from_inline(&self.styles.accent_inline_style(), self.theme.foreground);
 
         let cursor_at_end = self.input_manager.cursor() == self.input_manager.content().len();
         if self.input_compact_mode
             && cursor_at_end
-            && let Some(placeholder) = self.input_compact_placeholder()
+            && let Some(preview) = self.input_compact_preview().or_else(|| {
+                self.input_compact_placeholder()
+                    .map(|placeholder| CompactInputPreview {
+                        before: String::new(),
+                        placeholder,
+                        after: String::new(),
+                    })
+            })
         {
             let placeholder_style = InlineTextStyle {
                 color: Some(AnsiColorEnum::Rgb(PLACEHOLDER_COLOR)),
@@ -497,13 +512,32 @@ impl Session {
                 &placeholder_style,
                 Some(AnsiColorEnum::Rgb(PLACEHOLDER_COLOR)),
             );
-            let placeholder_width = UnicodeWidthStr::width(placeholder.as_str()) as u16;
+            let mut spans = Vec::new();
+            spans.push(Span::styled(self.prompt_prefix.clone(), prompt_style));
+            if !preview.before.is_empty() {
+                let needs_space = !preview.before.ends_with(char::is_whitespace);
+                spans.push(Span::styled(preview.before, accent_style));
+                if needs_space {
+                    spans.push(Span::styled(" ".to_string(), accent_style));
+                }
+            }
+            let needs_after_space =
+                !preview.after.is_empty() && !preview.after.starts_with(char::is_whitespace);
+            spans.push(Span::styled(preview.placeholder, style));
+            if needs_after_space {
+                spans.push(Span::styled(" ".to_string(), accent_style));
+            }
+            if !preview.after.is_empty() {
+                spans.push(Span::styled(preview.after, accent_style));
+            }
+            let cursor_x = spans
+                .iter()
+                .skip(1)
+                .map(|span| UnicodeWidthStr::width(span.content.as_ref()) as u16)
+                .fold(prompt_display_width, u16::saturating_add);
             return InputRender {
-                text: Text::from(vec![Line::from(vec![
-                    Span::styled(self.prompt_prefix.clone(), prompt_style),
-                    Span::styled(placeholder, style),
-                ])]),
-                cursor_x: prompt_display_width.saturating_add(placeholder_width),
+                text: Text::from(vec![Line::from(spans)]),
+                cursor_x,
                 cursor_y: 0,
             };
         }
@@ -542,8 +576,6 @@ impl Session {
             };
         }
 
-        let accent_style =
-            ratatui_style_from_inline(&self.styles.accent_inline_style(), self.theme.foreground);
         let slash_style = accent_style.fg(Color::Yellow).add_modifier(Modifier::BOLD);
         let file_ref_style = accent_style
             .fg(Color::Cyan)
@@ -752,6 +784,10 @@ impl Session {
             return Some(format!("[Image: {label}] {trimmed}"));
         }
 
+        if let Some(preview) = self.input_compact_preview() {
+            return Some(preview.placeholder);
+        }
+
         let line_count = content.split('\n').count();
         if line_count >= ui::INLINE_PASTE_COLLAPSE_LINE_THRESHOLD {
             let char_count = content.chars().count();
@@ -763,6 +799,32 @@ impl Session {
         }
 
         None
+    }
+
+    fn input_compact_preview(&self) -> Option<CompactInputPreview> {
+        let content = self.input_manager.content();
+        let range = self.input_manager.compact_paste_range()?;
+        if range.start >= range.end
+            || range.end > content.len()
+            || !content.is_char_boundary(range.start)
+            || !content.is_char_boundary(range.end)
+        {
+            return None;
+        }
+
+        let pasted = &content[range.clone()];
+        if pasted.split('\n').count() < ui::INLINE_PASTE_COLLAPSE_LINE_THRESHOLD {
+            return None;
+        }
+
+        let before = compact_inline_segment(&content[..range.start]);
+        let after = compact_inline_segment(&content[range.end..]);
+        let char_count = pasted.chars().count();
+        Some(CompactInputPreview {
+            before,
+            placeholder: format!("[Pasted Content {char_count} chars]"),
+            after,
+        })
     }
 
     pub(crate) fn visible_inline_prompt_suggestion_suffix(&self) -> Option<String> {
@@ -1295,6 +1357,13 @@ fn char_index_to_byte_index(content: &str, char_index: usize) -> usize {
 
 fn byte_index_to_char_index(content: &str, byte_index: usize) -> usize {
     content[..byte_index.min(content.len())].chars().count()
+}
+
+fn compact_inline_segment(content: &str) -> String {
+    content
+        .chars()
+        .map(|ch| if ch == '\n' || ch == '\r' { ' ' } else { ch })
+        .collect()
 }
 
 fn display_width_for_char_range(content: &str, char_count: usize) -> u16 {

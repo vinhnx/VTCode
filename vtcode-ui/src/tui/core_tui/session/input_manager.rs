@@ -5,6 +5,7 @@
 /// delegated to [`ratatui_textarea::TextArea`], which provides undo/redo,
 /// proper UTF-8 handling, and a battle-tested editing model.
 use std::collections::HashSet;
+use std::ops::Range;
 
 use chrono::{DateTime, Utc};
 use ratatui_textarea::{CursorMove, DataCursor, TextArea};
@@ -95,6 +96,8 @@ pub struct InputManager {
     selection_copied: bool,
     /// Non-text input elements (e.g. image attachments)
     attachments: Vec<ContentPart>,
+    /// Byte range for a large paste that should render as a compact marker.
+    compact_paste_range: Option<Range<usize>>,
     /// Command history entries
     history: Vec<InputHistoryEntry>,
     /// Current position in history (None = viewing current input)
@@ -117,6 +120,7 @@ impl InputManager {
             selection_anchor: None,
             selection_copied: false,
             attachments: Vec::new(),
+            compact_paste_range: None,
             history: Vec::new(),
             history_index: None,
             history_draft: None,
@@ -141,8 +145,43 @@ impl InputManager {
         self.textarea = TextArea::from(content.split('\n'));
         configure_textarea(&mut self.textarea);
         self.textarea.move_cursor(CursorMove::End);
+        self.compact_paste_range = None;
         self.clear_selection();
         self.reset_history_navigation();
+    }
+
+    pub(crate) fn compact_paste_range(&self) -> Option<Range<usize>> {
+        self.compact_paste_range.clone()
+    }
+
+    pub(crate) fn set_compact_paste_range(&mut self, range: Range<usize>) {
+        self.compact_paste_range = Some(range);
+    }
+
+    fn track_compact_paste_replace(&mut self, start: usize, end: usize, replacement_len: usize) {
+        let Some(range) = self.compact_paste_range.as_mut() else {
+            return;
+        };
+
+        if end <= range.start {
+            let removed_len = end.saturating_sub(start);
+            if replacement_len >= removed_len {
+                let delta = replacement_len - removed_len;
+                range.start = range.start.saturating_add(delta);
+                range.end = range.end.saturating_add(delta);
+            } else {
+                let delta = removed_len - replacement_len;
+                range.start = range.start.saturating_sub(delta);
+                range.end = range.end.saturating_sub(delta);
+            }
+            return;
+        }
+
+        if start >= range.end {
+            return;
+        }
+
+        self.compact_paste_range = None;
     }
 
     pub fn cursor(&self) -> usize {
@@ -239,6 +278,7 @@ impl InputManager {
     // ------------------------------------------------------------------
 
     pub(crate) fn replace_range(&mut self, start: usize, end: usize, replacement: &str) {
+        self.track_compact_paste_replace(start, end, replacement.len());
         let lines: Vec<String> = self.textarea.lines().to_vec();
         let (start_line, start_col) = textarea_bridge::byte_offset_to_row_col(&lines, start);
         let (end_line, end_col) = textarea_bridge::byte_offset_to_row_col(&lines, end);
@@ -391,6 +431,8 @@ impl InputManager {
             let mut buf = [0_u8; 4];
             self.replace_range(start, end, ch.encode_utf8(&mut buf));
         } else {
+            let cursor = self.cursor();
+            self.track_compact_paste_replace(cursor, cursor, ch.len_utf8());
             self.textarea.insert_char(ch);
         }
     }
@@ -399,6 +441,8 @@ impl InputManager {
         if let Some((start, end)) = self.selection_range() {
             self.replace_range(start, end, text);
         } else {
+            let cursor = self.cursor();
+            self.track_compact_paste_replace(cursor, cursor, text.len());
             self.textarea.insert_str(text);
         }
     }
@@ -407,12 +451,30 @@ impl InputManager {
         if self.delete_selection() {
             return;
         }
+        let cursor = self.cursor();
+        if cursor > 0 {
+            let content = self.content();
+            let start = content[..cursor]
+                .char_indices()
+                .next_back()
+                .map_or(0, |(idx, _)| idx);
+            self.track_compact_paste_replace(start, cursor, 0);
+        }
         self.textarea.delete_char();
     }
 
     pub fn delete(&mut self) {
         if self.delete_selection() {
             return;
+        }
+        let cursor = self.cursor();
+        let content = self.content();
+        if cursor < content.len() {
+            let end = content[cursor..]
+                .char_indices()
+                .nth(1)
+                .map_or(content.len(), |(idx, _)| cursor + idx);
+            self.track_compact_paste_replace(cursor, end, 0);
         }
         self.textarea.delete_next_char();
     }
@@ -614,6 +676,7 @@ impl InputManager {
         configure_textarea(&mut self.textarea);
         self.clear_selection();
         self.attachments.clear();
+        self.compact_paste_range = None;
         self.reset_history_navigation();
     }
 
@@ -622,11 +685,19 @@ impl InputManager {
     // ------------------------------------------------------------------
 
     pub fn undo(&mut self) -> bool {
-        self.textarea.undo()
+        let changed = self.textarea.undo();
+        if changed {
+            self.compact_paste_range = None;
+        }
+        changed
     }
 
     pub fn redo(&mut self) -> bool {
-        self.textarea.redo()
+        let changed = self.textarea.redo();
+        if changed {
+            self.compact_paste_range = None;
+        }
+        changed
     }
 
     // ------------------------------------------------------------------
@@ -767,6 +838,7 @@ impl InputManager {
         self.textarea.move_cursor(CursorMove::End);
         self.clear_selection();
         self.attachments = entry.attachment_elements();
+        self.compact_paste_range = None;
     }
 
     pub fn apply_history_index(&mut self, index: usize) -> bool {

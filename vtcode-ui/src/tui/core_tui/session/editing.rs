@@ -182,7 +182,17 @@ impl Session {
             return;
         }
 
+        let paste_start = self
+            .input_manager
+            .selection_range()
+            .map_or_else(|| self.input_manager.cursor(), |(start, _)| start);
+        let paste_end = paste_start.saturating_add(sanitized.len());
+        let line_count = sanitized.split('\n').count();
         self.input_manager.insert_text(&sanitized);
+        if line_count >= ui::INLINE_PASTE_COLLAPSE_LINE_THRESHOLD {
+            self.input_manager
+                .set_compact_paste_range(paste_start..paste_end);
+        }
         self.refresh_input_edit_state();
     }
 
