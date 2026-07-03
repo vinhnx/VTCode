@@ -38,13 +38,16 @@ fn ctrl_v_attaches_clipboard_image_when_enabled() {
         });
 
     assert!(event.is_none());
-    assert_eq!(session.core.input_manager.content(), "describe this");
+    assert_eq!(
+        session.core.input_manager.content(),
+        "describe this[Image #1]"
+    );
     assert_eq!(session.core.input_manager.attachments(), &[attachment]);
     assert!(warning_text(&session).is_empty());
 }
 
 #[test]
-fn pasted_image_renders_immediately_as_numbered_chip() {
+fn pasted_image_renders_immediately_as_inline_text_placeholder() {
     let mut session = app_session_with_input("", 0);
     set_image_input_enabled(&mut session, true);
 
@@ -54,6 +57,7 @@ fn pasted_image_renders_immediately_as_numbered_chip() {
         });
 
     assert!(event.is_none());
+    assert_eq!(session.core.input_manager.content(), "[Image #1]");
     let data = session.core.build_input_widget_data(VIEW_WIDTH, VIEW_ROWS);
     let rendered = text_content(&data.text);
     assert!(rendered.contains("[Image #1]"));
@@ -61,7 +65,36 @@ fn pasted_image_renders_immediately_as_numbered_chip() {
 }
 
 #[test]
-fn pasted_images_keep_numbered_chips_after_typing() {
+fn pasted_images_insert_placeholders_at_cursor_and_keep_typed_order() {
+    let mut session = app_session_with_input("", 0);
+    set_image_input_enabled(&mut session, true);
+
+    let first_paste = session
+        .process_key_with_clipboard_image_reader(image_paste_key(KeyModifiers::CONTROL), || {
+            Ok(image_part())
+        });
+    assert!(first_paste.is_none());
+    let event = session.process_key(KeyEvent::new(KeyCode::Char('o'), KeyModifiers::NONE));
+    assert!(event.is_none());
+    session.core.set_cursor(0);
+    let second_paste = session
+        .process_key_with_clipboard_image_reader(image_paste_key(KeyModifiers::CONTROL), || {
+            Ok(image_part())
+        });
+
+    assert!(second_paste.is_none());
+    assert_eq!(
+        session.core.input_manager.content(),
+        "[Image #2][Image #1]o"
+    );
+    let data = session.core.build_input_widget_data(VIEW_WIDTH, VIEW_ROWS);
+    let rendered = text_content(&data.text);
+    assert!(rendered.contains("[Image #2][Image #1]o"));
+    assert!(!rendered.contains("attachments"));
+}
+
+#[test]
+fn consecutive_pasted_images_insert_consecutive_placeholders() {
     let mut session = app_session_with_input("", 0);
     set_image_input_enabled(&mut session, true);
 
@@ -72,18 +105,13 @@ fn pasted_images_keep_numbered_chips_after_typing() {
         );
         assert!(event.is_none());
     }
-    let event = session.process_key(KeyEvent::new(KeyCode::Char('o'), KeyModifiers::NONE));
 
-    assert!(event.is_none());
-    let data = session.core.build_input_widget_data(VIEW_WIDTH, VIEW_ROWS);
-    let rendered = text_content(&data.text);
-    assert!(rendered.contains("[Image #1] [Image #2] o"));
-    assert!(!rendered.contains("attachments"));
+    assert_eq!(session.core.input_manager.content(), "[Image #1][Image #2]");
 }
 
 #[test]
 fn pasted_image_is_included_in_submit_payload() {
-    let mut session = app_session_with_input("describe this", "describe this".len());
+    let mut session = app_session_with_input("", 0);
     let attachment = image_part();
     set_image_input_enabled(&mut session, true);
 
@@ -93,13 +121,14 @@ fn pasted_image_is_included_in_submit_payload() {
         });
 
     assert!(paste_event.is_none());
+    session.core.input_manager.insert_text(" and here?");
 
     let submit_event = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
     let Some(app_types::InlineEvent::Submit(submitted)) = submit_event else {
         panic!("expected submit event with pasted image, got {submit_event:?}");
     };
-    assert_eq!(submitted.text, "describe this");
+    assert_eq!(submitted.text, "[Image #1] and here?");
     assert_eq!(submitted.attachments, vec![attachment]);
     assert!(session.core.input_manager.content().is_empty());
     assert!(session.core.input_manager.attachments().is_empty());
@@ -117,6 +146,10 @@ fn alt_v_attaches_clipboard_image_when_enabled() {
         });
 
     assert!(event.is_none());
+    assert_eq!(
+        session.core.input_manager.content(),
+        "describe this[Image #1]"
+    );
     assert_eq!(session.core.input_manager.attachments(), &[attachment]);
 }
 

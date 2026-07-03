@@ -1881,6 +1881,34 @@ mod tests {
     }
 
     #[test]
+    fn inline_image_placeholder_text_stays_before_pasted_image_part() {
+        let mut content = uni::MessageContent::text("[Image #1] and here?".to_string());
+
+        append_submitted_attachments(
+            &mut content,
+            &[UiContentPart::image("pasted-image", "image/png")],
+        );
+
+        match content {
+            uni::MessageContent::Parts(parts) => {
+                assert!(matches!(
+                    parts.as_slice(),
+                    [
+                        uni::ContentPart::Text { .. },
+                        uni::ContentPart::Image { .. }
+                    ]
+                ));
+                assert_eq!(parts[0].as_text(), Some("[Image #1] and here?"));
+                assert_eq!(
+                    image_payloads(&uni::MessageContent::parts(parts)),
+                    vec!["pasted-image".to_string()]
+                );
+            }
+            uni::MessageContent::Text(_) => panic!("expected parts"),
+        }
+    }
+
+    #[test]
     fn metadata_remains_trailing_after_all_image_parts() {
         let temp_dir = TempDir::new().expect("temp dir");
         let file_path = temp_dir.path().join("README.md");
