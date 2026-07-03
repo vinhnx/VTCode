@@ -5,6 +5,7 @@
     "cron_create",
     "cron_delete",
     "cron_list",
+    "defuddle_fetch",
     "finish_planning",
     "mcp_connect_server",
     "mcp_disconnect_server",
@@ -17,7 +18,8 @@
     "unified_exec",
     "unified_file",
     "unified_search",
-    "web_fetch"
+    "web_fetch",
+    "web_search"
   ],
   "policies": {
     "apply_patch": "prompt",
@@ -37,6 +39,8 @@
     "unified_file": "prompt",
     "unified_search": "allow",
     "web_fetch": "prompt",
+    "defuddle_fetch": "prompt",
+    "web_search": "prompt",
     "list_files": "allow",
     "memory": "allow",
     "read_file": "allow"
