@@ -173,7 +173,9 @@ fn handle_image_paste_shortcut_with(
                     .input_manager
                     .insert_text(&format!("[Image #{attachment_number}]"));
             }
-            session.core.set_input_compact_mode(false);
+            session
+                .core
+                .set_input_compact_mode(session.core.input_compact_placeholder().is_some());
             session.update_input_triggers();
             session.mark_dirty();
         }

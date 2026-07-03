@@ -115,6 +115,33 @@ fn pasted_images_insert_placeholders_at_cursor_and_keep_typed_order() {
 }
 
 #[test]
+fn pasted_image_keeps_large_text_paste_collapsed() {
+    let mut session = app_session_with_input("before", "before".len());
+    set_image_input_enabled(&mut session, true);
+    let line_total = ui::INLINE_PASTE_COLLAPSE_LINE_THRESHOLD + 1;
+    let pasted_lines: Vec<String> = (1..=line_total).map(|idx| format!("line-{idx}")).collect();
+    let pasted_text = pasted_lines.join("\n");
+
+    session.core.insert_paste_text(&pasted_text);
+    session.core.insert_char(' ');
+    for ch in "after".chars() {
+        session.core.insert_char(ch);
+    }
+    paste_image(&mut session, &image_part());
+
+    assert_eq!(
+        session.core.input_manager.content(),
+        format!("before{pasted_text} after[Image #1]")
+    );
+    let data = session.core.build_input_widget_data(VIEW_WIDTH, VIEW_ROWS);
+    let rendered = text_content(&data.text);
+    assert!(rendered.contains("before"));
+    assert!(rendered.contains("[Pasted Content"));
+    assert!(rendered.contains("after[Image #1]"));
+    assert!(!rendered.contains("line-1\nline-2"));
+}
+
+#[test]
 fn consecutive_pasted_images_insert_consecutive_placeholders() {
     let mut session = app_session_with_input("", 0);
     set_image_input_enabled(&mut session, true);
