@@ -1,5 +1,3 @@
-use async_trait::async_trait;
-use reqwest::Client as HttpClient;
 use serde_json::{Map, Value};
 
 use crate::client::LLMClient;
@@ -7,54 +5,117 @@ use crate::error_display;
 use crate::provider::{
     FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent,
 };
-use vtcode_config::TimeoutsConfig;
 use vtcode_config::constants::{env_vars, models, urls};
-use vtcode_config::core::{AnthropicConfig, ModelConfig, PromptCachingConfig};
+use vtcode_config::core::PromptCachingConfig;
 use vtcode_config::types::ReasoningEffortLevel;
 
-use super::common::{
-    chat_completions_url, override_base_url, parse_response_openai_format, resolve_model,
-    send_chat_completions, serialize_messages_openai_format, serialize_tools_openai_format,
-    spawn_openai_compatible_stream, validate_request_common,
-};
 use super::error_handling::{format_network_error, handle_openai_http_error};
 use super::extract_reasoning_trace;
+use super::openai_compat::{OpenAiCompatCore, OpenAiCompatSpec};
 
 const PROVIDER_NAME: &str = "Evolink";
 const PROVIDER_KEY: &str = "evolink";
 const PRIMARY_API_KEY_ENV: &str = "EVOLINK_API_KEY";
 
-pub struct EvolinkProvider {
-    api_key: String,
-    http_client: HttpClient,
-    base_url: String,
-    model: String,
-    model_behavior: Option<ModelConfig>,
+pub struct EvolinkSpec;
+
+/// Evolink's gateway expects bare upstream model names (e.g. `gpt-5.2`).
+/// The curated `ModelId` catalog namespaces entries as `evolink/<model>`, so
+/// strip that prefix before sending the request upstream.
+fn normalize(model: &str) -> &str {
+    model
+        .trim()
+        .strip_prefix("evolink/")
+        .unwrap_or(model.trim())
 }
 
-impl EvolinkProvider {
+fn evolink_reasoning(message: &Value, choice: &Value) -> Option<String> {
+    message
+        .get("reasoning")
+        .and_then(extract_reasoning_trace)
+        .or_else(|| {
+            message
+                .get("reasoning_content")
+                .and_then(extract_reasoning_trace)
+        })
+        .or_else(|| choice.get("reasoning").and_then(extract_reasoning_trace))
+}
+
+fn reasoning_effort_value(effort: ReasoningEffortLevel) -> Option<&'static str> {
+    match effort {
+        ReasoningEffortLevel::None | ReasoningEffortLevel::Unknown => None,
+        ReasoningEffortLevel::Minimal | ReasoningEffortLevel::Low => Some("low"),
+        ReasoningEffortLevel::Medium => Some("medium"),
+        ReasoningEffortLevel::High | ReasoningEffortLevel::XHigh | ReasoningEffortLevel::Max => {
+            Some("high")
+        }
+    }
+}
+
+impl OpenAiCompatSpec for EvolinkSpec {
+    const NAME: &'static str = PROVIDER_NAME;
+    const KEY: &'static str = PROVIDER_KEY;
+    const API_KEY_ENV: &'static str = PRIMARY_API_KEY_ENV;
+    const DEFAULT_MODEL: &'static str = models::evolink::DEFAULT_MODEL;
+    const DEFAULT_BASE_URL: &'static str = urls::EVOLINK_API_BASE;
+    const BASE_URL_ENV: Option<&'static str> = Some(env_vars::EVOLINK_BASE_URL);
+    const LISTED_MODELS: &'static [&'static str] = models::evolink::SUPPORTED_MODELS;
+    // Evolink is a gateway whose upstream catalog changes over time, so do
+    // not constrain requests to the curated `SUPPORTED_MODELS` list.
+    const VALIDATION_ALLOWLIST: Option<&'static [&'static str]> = None;
+
+    const STREAM_REASONING_FIELDS: &'static [&'static str] = &["reasoning", "reasoning_content"];
+    const RESPONSE_REASONING_EXTRACTOR: Option<super::openai_compat::ReasoningExtractor> =
+        Some(evolink_reasoning);
+
+    fn resolve_api_key(api_key: Option<String>) -> String {
+        api_key
+            .filter(|key| !key.trim().is_empty())
+            .or_else(|| std::env::var(Self::API_KEY_ENV).ok())
+            .unwrap_or_default()
+    }
+
     /// Evolink's gateway expects bare upstream model names (e.g. `gpt-5.2`).
     /// The curated `ModelId` catalog namespaces entries as `evolink/<model>`, so
     /// strip that prefix before sending the request upstream.
-    fn normalize_model(model: &str) -> &str {
-        model
-            .trim()
-            .strip_prefix("evolink/")
-            .unwrap_or(model.trim())
+    fn normalize_model(model: String) -> String {
+        normalize(&model).to_string()
     }
 
+    fn prompt_cache_enabled(_prompt_cache: Option<&PromptCachingConfig>) -> bool {
+        false
+    }
+
+    fn insert_reasoning(
+        _core: &OpenAiCompatCore<Self>,
+        request: &LLMRequest,
+        payload: &mut Map<String, Value>,
+    ) -> Result<(), LLMError> {
+        if let Some(effort) = request.reasoning_effort
+            && let Some(mapped) = reasoning_effort_value(effort)
+        {
+            payload.insert(
+                "reasoning_effort".to_owned(),
+                Value::String(mapped.to_string()),
+            );
+        }
+        Ok(())
+    }
+}
+
+pub struct EvolinkProvider {
+    core: OpenAiCompatCore<EvolinkSpec>,
+}
+
+impl EvolinkProvider {
     pub fn new(api_key: String) -> Self {
-        Self::with_model_internal(
-            api_key,
-            models::evolink::DEFAULT_MODEL.to_string(),
-            None,
-            None,
-            None,
-        )
+        Self::with_model(api_key, models::evolink::DEFAULT_MODEL.to_string())
     }
 
     pub fn with_model(api_key: String, model: String) -> Self {
-        Self::with_model_internal(api_key, model, None, None, None)
+        Self {
+            core: OpenAiCompatCore::direct(api_key, model),
+        }
     }
 
     pub fn new_with_client(
@@ -62,14 +123,10 @@ impl EvolinkProvider {
         model: String,
         http_client: reqwest::Client,
         base_url: String,
-        _timeouts: TimeoutsConfig,
+        _timeouts: vtcode_config::TimeoutsConfig,
     ) -> Self {
         Self {
-            api_key,
-            http_client,
-            base_url,
-            model: Self::normalize_model(&model).to_string(),
-            model_behavior: None,
+            core: OpenAiCompatCore::from_parts(api_key, model, http_client, base_url),
         }
     }
 
@@ -78,134 +135,20 @@ impl EvolinkProvider {
         model: Option<String>,
         base_url: Option<String>,
         _prompt_cache: Option<PromptCachingConfig>,
-        timeouts: Option<TimeoutsConfig>,
-        _anthropic: Option<AnthropicConfig>,
-        model_behavior: Option<ModelConfig>,
+        timeouts: Option<vtcode_config::TimeoutsConfig>,
+        _anthropic: Option<vtcode_config::core::AnthropicConfig>,
+        model_behavior: Option<vtcode_config::core::ModelConfig>,
     ) -> Self {
-        let api_key_value = api_key
-            .filter(|key| !key.trim().is_empty())
-            .or_else(|| std::env::var(PRIMARY_API_KEY_ENV).ok())
-            .unwrap_or_default();
-
-        Self::with_model_internal(
-            api_key_value,
-            resolve_model(model, models::evolink::DEFAULT_MODEL),
-            base_url,
-            timeouts,
-            model_behavior,
-        )
-    }
-
-    fn with_model_internal(
-        api_key: String,
-        model: String,
-        base_url: Option<String>,
-        timeouts: Option<TimeoutsConfig>,
-        model_behavior: Option<ModelConfig>,
-    ) -> Self {
-        use crate::http_client::HttpClientFactory;
-
-        let timeouts = timeouts.unwrap_or_default();
-
         Self {
-            api_key,
-            http_client: HttpClientFactory::for_llm(&timeouts),
-            base_url: override_base_url(
-                urls::EVOLINK_API_BASE,
+            core: OpenAiCompatCore::from_config(
+                api_key,
+                model,
                 base_url,
-                Some(env_vars::EVOLINK_BASE_URL),
+                _prompt_cache,
+                timeouts,
+                model_behavior,
             ),
-            model: Self::normalize_model(&model).to_string(),
-            model_behavior,
         }
-    }
-
-    fn reasoning_effort_value(effort: ReasoningEffortLevel) -> Option<&'static str> {
-        match effort {
-            ReasoningEffortLevel::None | ReasoningEffortLevel::Unknown => None,
-            ReasoningEffortLevel::Minimal | ReasoningEffortLevel::Low => Some("low"),
-            ReasoningEffortLevel::Medium => Some("medium"),
-            ReasoningEffortLevel::High
-            | ReasoningEffortLevel::XHigh
-            | ReasoningEffortLevel::Max => Some("high"),
-        }
-    }
-
-    fn is_reasoning_enabled(request: &LLMRequest) -> bool {
-        request
-            .reasoning_effort
-            .is_some_and(|effort| effort != ReasoningEffortLevel::None)
-    }
-
-    fn convert_to_evolink_format(&self, request: &LLMRequest) -> Result<Value, LLMError> {
-        let mut payload = Map::with_capacity(10);
-        payload.insert(
-            "model".to_owned(),
-            Value::String(Self::normalize_model(&request.model).to_string()),
-        );
-
-        let mut messages = serialize_messages_openai_format(request, PROVIDER_KEY)?;
-        if let Some(system_prompt) = &request.system_prompt {
-            let trimmed = system_prompt.trim();
-            if !trimmed.is_empty() {
-                messages.insert(
-                    0,
-                    serde_json::json!({ "role": "system", "content": trimmed }),
-                );
-            }
-        }
-        payload.insert("messages".to_owned(), Value::Array(messages));
-
-        if let Some(max_tokens) = request.max_tokens {
-            payload.insert(
-                "max_tokens".to_owned(),
-                Value::Number(serde_json::Number::from(max_tokens as u64)),
-            );
-        }
-
-        if !Self::is_reasoning_enabled(request) {
-            if let Some(temperature) = request.temperature {
-                payload.insert(
-                    "temperature".to_owned(),
-                    Value::Number(super::common::float_to_json_number(temperature)?),
-                );
-            }
-
-            if let Some(top_p) = request.top_p {
-                payload.insert(
-                    "top_p".to_owned(),
-                    Value::Number(super::common::float_to_json_number(top_p)?),
-                );
-            }
-        }
-
-        if request.stream {
-            payload.insert("stream".to_owned(), Value::Bool(true));
-        }
-
-        if let Some(tools) = &request.tools
-            && let Some(serialized_tools) = serialize_tools_openai_format(tools)
-        {
-            payload.insert("tools".to_owned(), Value::Array(serialized_tools));
-        }
-
-        if let Some(choice) = &request.tool_choice {
-            payload.insert(
-                "tool_choice".to_owned(),
-                choice.to_provider_format(PROVIDER_KEY),
-            );
-        }
-
-        if let Some(effort) = request.reasoning_effort
-            && let Some(mapped) = Self::reasoning_effort_value(effort)
-        {
-            payload.insert(
-                "reasoning_effort".to_owned(),
-                Value::String(mapped.to_string()),
-            );
-        }
-
-        Ok(Value::Object(payload))
     }
 
     fn is_anthropic_model(model: &str) -> bool {
@@ -214,7 +157,7 @@ impl EvolinkProvider {
 
     fn convert_to_anthropic_format(&self, request: &LLMRequest) -> Result<Value, LLMError> {
         let mut payload = Map::with_capacity(8);
-        let model = Self::normalize_model(&request.model).to_string();
+        let model = normalize(&request.model).to_string();
         payload.insert("model".to_owned(), Value::String(model));
 
         // Anthropic uses top-level `system` field, not a system message
@@ -338,12 +281,13 @@ impl EvolinkProvider {
     ) -> Result<LLMResponse, LLMError> {
         request.stream = false;
         let payload = self.convert_to_anthropic_format(&request)?;
-        let url = format!("{}/messages", self.base_url.trim_end_matches('/'));
+        let url = format!("{}/messages", self.core.base_url.trim_end_matches('/'));
 
         let response = self
+            .core
             .http_client
             .post(&url)
-            .bearer_auth(&self.api_key)
+            .bearer_auth(&self.core.api_key)
             .header("anthropic-version", "2023-06-01")
             .json(&payload)
             .send()
@@ -365,10 +309,10 @@ impl EvolinkProvider {
     }
 }
 
-#[async_trait]
+#[async_trait::async_trait]
 impl LLMProvider for EvolinkProvider {
     fn name(&self) -> &str {
-        PROVIDER_KEY
+        EvolinkSpec::KEY
     }
 
     fn supports_streaming(&self) -> bool {
@@ -389,12 +333,13 @@ impl LLMProvider for EvolinkProvider {
 
     fn supports_reasoning(&self, model: &str) -> bool {
         let requested = if model.trim().is_empty() {
-            self.model.as_str()
+            self.core.model.as_str()
         } else {
-            Self::normalize_model(model)
+            normalize(model)
         };
 
-        self.model_behavior
+        self.core
+            .model_behavior
             .as_ref()
             .and_then(|behavior| behavior.model_supports_reasoning)
             .unwrap_or(false)
@@ -403,12 +348,13 @@ impl LLMProvider for EvolinkProvider {
 
     fn supports_reasoning_effort(&self, model: &str) -> bool {
         let requested = if model.trim().is_empty() {
-            self.model.as_str()
+            self.core.model.as_str()
         } else {
-            Self::normalize_model(model)
+            normalize(model)
         };
 
-        self.model_behavior
+        self.core
+            .model_behavior
             .as_ref()
             .and_then(|behavior| behavior.model_supports_reasoning_effort)
             .unwrap_or(false)
@@ -416,62 +362,20 @@ impl LLMProvider for EvolinkProvider {
     }
 
     async fn generate(&self, mut request: LLMRequest) -> Result<LLMResponse, LLMError> {
-        if request.model.trim().is_empty() {
-            request.model = self.model.clone();
-        }
-        let model = Self::normalize_model(&request.model).to_string();
+        self.core.prepare(&mut request);
+        let model = request.model.clone();
 
         if Self::is_anthropic_model(&model) {
             return self.generate_anthropic(request, model).await;
         }
 
-        let payload = self.convert_to_evolink_format(&request)?;
-        let url = chat_completions_url(&self.base_url);
-
-        let response = self
-            .http_client
-            .post(&url)
-            .bearer_auth(&self.api_key)
-            .json(&payload)
-            .send()
-            .await
-            .map_err(|error| format_network_error(PROVIDER_NAME, &error))?;
-
-        let response =
-            handle_openai_http_error(response, PROVIDER_NAME, PRIMARY_API_KEY_ENV).await?;
-
-        let response_json: Value = response.json().await.map_err(|error| LLMError::Provider {
-            message: error_display::format_llm_error(
-                PROVIDER_NAME,
-                &format!("failed to parse response: {error}"),
-            ),
-            metadata: None,
-        })?;
-
-        let reasoning_extractor = |message: &Value, choice: &Value| {
-            message
-                .get("reasoning")
-                .or_else(|| message.get("reasoning_content"))
-                .and_then(extract_reasoning_trace)
-                .or_else(|| choice.get("reasoning").and_then(extract_reasoning_trace))
-        };
-
-        parse_response_openai_format(
-            response_json,
-            PROVIDER_NAME,
-            model,
-            false,
-            Some(reasoning_extractor),
-        )
+        self.core.generate_prepared(request).await
     }
 
     async fn stream(&self, mut request: LLMRequest) -> Result<LLMStream, LLMError> {
-        if request.model.trim().is_empty() {
-            request.model = self.model.clone();
-        }
-
+        self.core.prepare(&mut request);
         self.validate_request(&request)?;
-        let model = Self::normalize_model(&request.model).to_string();
+        let model = request.model.clone();
 
         // Anthropic models: fall back to non-streaming via generate_anthropic
         if Self::is_anthropic_model(&model) {
@@ -492,60 +396,38 @@ impl LLMProvider for EvolinkProvider {
         }
 
         request.stream = true;
-
-        let payload = self.convert_to_evolink_format(&request)?;
-        let url = chat_completions_url(&self.base_url);
-
-        let response = send_chat_completions(
-            self.http_client.post(&url).bearer_auth(&self.api_key),
-            &payload,
-            PROVIDER_NAME,
-        )
-        .await?;
-
-        let response =
-            handle_openai_http_error(response, PROVIDER_NAME, PRIMARY_API_KEY_ENV).await?;
-
-        Ok(spawn_openai_compatible_stream(
-            response,
-            PROVIDER_NAME,
-            model,
-            &["reasoning", "reasoning_content"],
-            super::shared::OpenAiDeltaOrder::ReasoningFirst,
-            false,
-        ))
+        self.core.stream_prepared(request).await
     }
 
     fn supported_models(&self) -> Vec<String> {
-        models::evolink::SUPPORTED_MODELS
-            .iter()
-            .map(|model| model.to_string())
-            .collect()
+        self.core.supported_models()
     }
 
     fn validate_request(&self, request: &LLMRequest) -> Result<(), LLMError> {
         // Evolink is a gateway whose upstream catalog changes over time, so do
-        // not constrain requests to the curated `SUPPORTED_MODELS` list.
-        validate_request_common(request, PROVIDER_NAME, PROVIDER_KEY, None)
+        // not constrain requests to the curated `SUPPORTED_MODELS` list (see
+        // `EvolinkSpec::VALIDATION_ALLOWLIST`).
+        self.core.validate(request)
     }
 }
 
-#[async_trait]
+#[async_trait::async_trait]
 impl LLMClient for EvolinkProvider {
     async fn generate(&mut self, prompt: &str) -> Result<LLMResponse, LLMError> {
-        let request = super::common::make_default_request(prompt, &self.model);
+        let request = super::common::make_default_request(prompt, &self.core.model);
         Ok(LLMProvider::generate(self, request).await?)
     }
 
     fn model_id(&self) -> &str {
-        &self.model
+        &self.core.model
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::EvolinkProvider;
-    use crate::provider::{LLMRequest, Message};
+    use crate::provider::{LLMRequest, Message, ToolChoice};
+    use std::sync::Arc;
     use vtcode_config::constants::{models, urls};
     use vtcode_config::types::ReasoningEffortLevel;
 
@@ -565,13 +447,16 @@ mod tests {
     #[test]
     fn payload_strips_prefix_and_maps_reasoning_effort() {
         let provider = EvolinkProvider::new("test-key".to_string());
+        let mut request = LLMRequest {
+            model: "evolink/deepseek-v4-pro".to_string(),
+            messages: vec![Message::user("hello".to_string())],
+            reasoning_effort: Some(ReasoningEffortLevel::High),
+            ..Default::default()
+        };
+        provider.core.prepare(&mut request);
         let payload = provider
-            .convert_to_evolink_format(&LLMRequest {
-                model: "evolink/deepseek-v4-pro".to_string(),
-                messages: vec![Message::user("hello".to_string())],
-                reasoning_effort: Some(ReasoningEffortLevel::High),
-                ..Default::default()
-            })
+            .core
+            .convert_request(&request)
             .expect("payload should be valid");
 
         assert_eq!(
@@ -587,13 +472,75 @@ mod tests {
         assert!(payload.get("temperature").is_none());
     }
 
+    #[test]
+    fn golden_payload_basic_shape() {
+        let provider = EvolinkProvider::new("test-key".to_string());
+        let mut request = LLMRequest {
+            model: "evolink/gpt-5.2".to_string(),
+            messages: vec![Message::user("hello".to_string())],
+            system_prompt: Some(Arc::new("system guidance".to_string())),
+            max_tokens: Some(512),
+            temperature: Some(0.5),
+            top_p: Some(0.25),
+            stream: true,
+            tool_choice: Some(ToolChoice::Auto),
+            metadata: Some(serde_json::json!({"user_id": "user-42"})),
+            ..Default::default()
+        };
+        provider.core.prepare(&mut request);
+        let payload = provider
+            .core
+            .convert_request(&request)
+            .expect("payload should be valid");
+
+        assert_eq!(
+            payload.get("model").and_then(|value| value.as_str()),
+            Some(models::evolink::GPT_5_2)
+        );
+        let messages = payload.get("messages").and_then(|v| v.as_array()).unwrap();
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0]["role"], "system");
+        assert_eq!(messages[0]["content"], "system guidance");
+        assert_eq!(payload["max_tokens"], 512);
+        assert_eq!(payload["temperature"], 0.5);
+        assert_eq!(payload["top_p"], 0.25);
+        assert_eq!(payload["stream"], true);
+        assert!(payload.get("stream_options").is_none());
+        assert!(payload.get("user_id").is_none());
+        assert_eq!(payload["tool_choice"], "auto");
+        assert!(payload.get("reasoning_effort").is_none());
+    }
+
+    #[test]
+    fn golden_anthropic_payload_shape() {
+        let provider = EvolinkProvider::new("test-key".to_string());
+        let payload = provider
+            .convert_to_anthropic_format(&LLMRequest {
+                model: "evolink/claude-x".to_string(),
+                messages: vec![Message::user("hello".to_string())],
+                system_prompt: Some(Arc::new("system guidance".to_string())),
+                temperature: Some(0.5),
+                stream: false,
+                ..Default::default()
+            })
+            .expect("payload should be valid");
+
+        assert_eq!(payload["system"], "system guidance");
+        let messages = payload.get("messages").and_then(|v| v.as_array()).unwrap();
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0]["role"], "user");
+        assert_eq!(payload["max_tokens"], 8192);
+        assert_eq!(payload["temperature"], 0.5);
+        assert!(payload.get("stream").is_none());
+    }
+
     impl EvolinkProvider {
         fn model_id_for_test(&self) -> &str {
-            &self.model
+            &self.core.model
         }
 
         fn base_url_for_test(&self) -> &str {
-            &self.base_url
+            &self.core.base_url
         }
     }
 }
