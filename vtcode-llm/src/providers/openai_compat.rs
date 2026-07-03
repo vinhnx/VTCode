@@ -188,8 +188,6 @@ pub(crate) struct OpenAiCompatCore<S: OpenAiCompatSpec> {
     pub(crate) base_url: String,
     pub(crate) model: String,
     pub(crate) prompt_cache_enabled: bool,
-    // Read by specs whose capability gates depend on configured model behavior.
-    #[allow(dead_code)]
     pub(crate) model_behavior: Option<ModelConfig>,
     spec: PhantomData<S>,
 }

@@ -1,183 +1,60 @@
-use async_trait::async_trait;
-use reqwest::Client as HttpClient;
 use serde_json::{Map, Value};
-
-use crate::provider::{LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream};
-use vtcode_config::TimeoutsConfig;
 use vtcode_config::constants::{env_vars, models, urls};
-use vtcode_config::core::{AnthropicConfig, ModelConfig, PromptCachingConfig};
 
-use super::{
-    common::{
-        chat_completions_url, ensure_model, extract_prompt_cache_settings_default, impl_llm_client,
-        override_base_url, parse_json_response, parse_response_openai_format, resolve_model,
-        send_chat_completions, serialize_messages_openai_format, serialize_tools_openai_format,
-        spawn_openai_compatible_stream, validate_supported_models,
-    },
-    error_handling::handle_openai_http_error,
-};
+use super::openai_compat::{OpenAiCompatCore, OpenAiCompatSpec, impl_openai_compat_provider};
+use crate::provider::{LLMError, LLMRequest};
 
-const PROVIDER_NAME: &str = "Mistral";
-const PROVIDER_KEY: &str = "mistral";
+pub struct MistralSpec;
 
-pub struct MistralProvider {
-    api_key: String,
-    http_client: HttpClient,
-    base_url: String,
-    model: String,
-    prompt_cache_enabled: bool,
-    model_behavior: Option<ModelConfig>,
-}
+impl OpenAiCompatSpec for MistralSpec {
+    const NAME: &'static str = "Mistral";
+    const KEY: &'static str = "mistral";
+    const API_KEY_ENV: &'static str = "MISTRAL_API_KEY";
+    const DEFAULT_MODEL: &'static str = models::mistral::DEFAULT_MODEL;
+    const DEFAULT_BASE_URL: &'static str = urls::MISTRAL_API_BASE;
+    const BASE_URL_ENV: Option<&'static str> = Some(env_vars::MISTRAL_BASE_URL);
+    const LISTED_MODELS: &'static [&'static str] = models::mistral::SUPPORTED_MODELS;
+    const VALIDATION_ALLOWLIST: Option<&'static [&'static str]> =
+        Some(models::mistral::SUPPORTED_MODELS);
 
-impl MistralProvider {
-    pub fn new(api_key: String) -> Self {
-        Self::with_model_internal(
-            api_key,
-            models::mistral::DEFAULT_MODEL.to_string(),
-            None,
-            None,
-            TimeoutsConfig::default(),
-            None,
-        )
+    const SUPPRESS_SAMPLING_WHEN_REASONING: bool = false;
+    const STREAM_OPTIONS_INCLUDE_USAGE: bool = true;
+    const INCLUDE_USER_ID: bool = true;
+    const DELTA_ORDER: super::shared::OpenAiDeltaOrder =
+        super::shared::OpenAiDeltaOrder::ContentFirst;
+
+    fn response_cache_metrics(core: &OpenAiCompatCore<Self>) -> bool {
+        core.prompt_cache_enabled
     }
 
-    pub fn with_model(api_key: String, model: String) -> Self {
-        Self::with_model_internal(api_key, model, None, None, TimeoutsConfig::default(), None)
+    fn stream_cache_metrics(_core: &OpenAiCompatCore<Self>) -> bool {
+        true
     }
 
-    pub fn new_with_client(
-        api_key: String,
-        model: String,
-        http_client: reqwest::Client,
-        base_url: String,
-        _timeouts: TimeoutsConfig,
-    ) -> Self {
-        Self {
-            api_key,
-            http_client,
-            base_url,
-            model,
-            prompt_cache_enabled: false,
-            model_behavior: None,
-        }
-    }
-
-    pub fn from_config(
-        api_key: Option<String>,
-        model: Option<String>,
-        base_url: Option<String>,
-        prompt_cache: Option<PromptCachingConfig>,
-        timeouts: Option<TimeoutsConfig>,
-        _anthropic: Option<AnthropicConfig>,
-        model_behavior: Option<ModelConfig>,
-    ) -> Self {
-        let api_key_value = api_key.unwrap_or_default();
-        let model_value = resolve_model(model, models::mistral::DEFAULT_MODEL);
-
-        Self::with_model_internal(
-            api_key_value,
-            model_value,
-            prompt_cache,
-            base_url,
-            timeouts.unwrap_or_default(),
-            model_behavior,
-        )
-    }
-
-    fn with_model_internal(
-        api_key: String,
-        model: String,
-        prompt_cache: Option<PromptCachingConfig>,
-        base_url: Option<String>,
-        timeouts: TimeoutsConfig,
-        model_behavior: Option<ModelConfig>,
-    ) -> Self {
-        use crate::http_client::HttpClientFactory;
-
-        let (prompt_cache_enabled, _) =
-            extract_prompt_cache_settings_default(prompt_cache, "mistral");
-
-        Self {
-            api_key,
-            http_client: HttpClientFactory::for_llm(&timeouts),
-            base_url: override_base_url(
-                urls::MISTRAL_API_BASE,
-                base_url,
-                Some(env_vars::MISTRAL_BASE_URL),
-            ),
-            model,
-            prompt_cache_enabled,
-            model_behavior,
-        }
-    }
-
-    fn convert_to_mistral_format(&self, request: &LLMRequest) -> Result<Value, LLMError> {
-        let mut payload = Map::with_capacity(12);
-
-        let mut messages = self.serialize_messages(request)?;
-
-        // Mistral API does not support a top-level "system" field.
-        // Inject the system prompt as a system-role message at the start.
-        if let Some(system_prompt) = &request.system_prompt {
-            let trimmed = system_prompt.trim();
-            if !trimmed.is_empty() {
-                messages.insert(0, serde_json::json!({"role": "system", "content": trimmed}));
-            }
-        }
-
-        payload.insert("model".to_owned(), Value::String(request.model.clone()));
-        payload.insert("messages".to_owned(), Value::Array(messages));
-
-        if let Some(max_tokens) = request.max_tokens {
-            payload.insert(
-                "max_tokens".to_owned(),
-                Value::Number(serde_json::Number::from(max_tokens as u64)),
-            );
-        }
-
-        if let Some(temperature) = request.temperature {
-            payload.insert(
-                "temperature".to_owned(),
-                Value::Number(super::common::float_to_json_number(temperature)?),
-            );
-        }
-
-        if let Some(top_p) = request.top_p {
-            payload.insert(
-                "top_p".to_owned(),
-                Value::Number(super::common::float_to_json_number(top_p)?),
-            );
-        }
-
-        if request.stream {
-            payload.insert("stream".to_string(), Value::Bool(true));
-            payload.insert(
-                "stream_options".to_string(),
-                serde_json::json!({"include_usage": true}),
-            );
-        }
-
-        if let Some(tools) = &request.tools
-            && let Some(serialized_tools) = serialize_tools_openai_format(tools)
-        {
-            payload.insert("tools".to_string(), Value::Array(serialized_tools));
-            payload.insert("parallel_tool_calls".to_string(), Value::Bool(false));
-        }
-
-        let has_explicit_choice = request.tool_choice.is_some();
+    fn insert_tool_choice(
+        _core: &OpenAiCompatCore<Self>,
+        request: &LLMRequest,
+        payload: &mut Map<String, Value>,
+    ) {
         if let Some(choice) = &request.tool_choice {
             payload.insert(
-                "tool_choice".to_string(),
-                choice.to_provider_format(PROVIDER_KEY),
+                "tool_choice".to_owned(),
+                choice.to_provider_format(Self::KEY),
             );
+        } else if request.tools.as_ref().is_some_and(|t| !t.is_empty()) {
+            // Mistral's default "auto" tool_choice sometimes causes the model
+            // to emit tool call arguments as plain text content. Setting it
+            // explicitly when tools are present helps the model use
+            // structured tool_calls.
+            payload.insert("tool_choice".to_owned(), Value::String("auto".to_owned()));
         }
-        // Mistral's default "auto" tool_choice sometimes causes the model to
-        // emit tool call arguments as plain text content. Setting it explicitly
-        // when tools are present helps the model use structured tool_calls.
-        if !has_explicit_choice && request.tools.as_ref().is_some_and(|t| !t.is_empty()) {
-            payload.insert("tool_choice".to_string(), Value::String("auto".to_owned()));
-        }
+    }
 
+    fn insert_reasoning(
+        _core: &OpenAiCompatCore<Self>,
+        request: &LLMRequest,
+        payload: &mut Map<String, Value>,
+    ) -> Result<(), LLMError> {
         if let Some(effort) = request.reasoning_effort
             && effort != vtcode_config::types::ReasoningEffortLevel::None
         {
@@ -186,52 +63,23 @@ impl MistralProvider {
                 Value::String("high".to_owned()),
             );
         }
+        Ok(())
+    }
 
-        if let Some(meta) = &request.metadata
-            && let Some(user_id) = meta.get("user_id").and_then(|v| v.as_str())
-        {
-            payload.insert("user_id".to_owned(), Value::String(user_id.to_owned()));
+    fn finish_payload(
+        _core: &OpenAiCompatCore<Self>,
+        _request: &LLMRequest,
+        payload: &mut Map<String, Value>,
+    ) -> Result<(), LLMError> {
+        if payload.contains_key("tools") {
+            payload.insert("parallel_tool_calls".to_owned(), Value::Bool(false));
         }
-
-        Ok(Value::Object(payload))
-    }
-
-    async fn send_request(&self, payload: &Value) -> Result<reqwest::Response, LLMError> {
-        let url = chat_completions_url(&self.base_url);
-        send_chat_completions(
-            self.http_client.post(&url).bearer_auth(&self.api_key),
-            payload,
-            PROVIDER_NAME,
-        )
-        .await
-    }
-
-    fn serialize_messages(&self, request: &LLMRequest) -> Result<Vec<Value>, LLMError> {
-        serialize_messages_openai_format(request, PROVIDER_KEY)
-    }
-
-    fn parse_response(&self, response_json: Value, model: String) -> Result<LLMResponse, LLMError> {
-        parse_response_openai_format(
-            response_json,
-            PROVIDER_NAME,
-            model,
-            self.prompt_cache_enabled,
-            None as Option<fn(&Value, &Value) -> Option<String>>,
-        )
+        Ok(())
     }
 }
 
-#[async_trait]
-impl LLMProvider for MistralProvider {
-    fn name(&self) -> &str {
-        PROVIDER_KEY
-    }
-
+impl_openai_compat_provider!(MistralProvider, MistralSpec, {
     fn supports_streaming(&self) -> bool {
-        true
-    }
-
-    fn supports_tools(&self, _model: &str) -> bool {
         true
     }
 
@@ -245,12 +93,13 @@ impl LLMProvider for MistralProvider {
 
     fn supports_reasoning(&self, model: &str) -> bool {
         let requested = if model.trim().is_empty() {
-            &self.model
+            &self.core.model
         } else {
             model
         };
 
-        self.model_behavior
+        self.core
+            .model_behavior
             .as_ref()
             .and_then(|b| b.model_supports_reasoning)
             .unwrap_or(false)
@@ -258,7 +107,8 @@ impl LLMProvider for MistralProvider {
     }
 
     fn supports_reasoning_effort(&self, _model: &str) -> bool {
-        self.model_behavior
+        self.core
+            .model_behavior
             .as_ref()
             .and_then(|b| b.model_supports_reasoning_effort)
             .unwrap_or(false)
@@ -267,53 +117,102 @@ impl LLMProvider for MistralProvider {
     fn effective_context_size(&self, _model: &str) -> usize {
         256_000
     }
+});
 
-    async fn generate(&self, mut request: LLMRequest) -> Result<LLMResponse, LLMError> {
-        let model = ensure_model(&mut request, &self.model);
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::provider::{Message, ToolChoice, ToolDefinition};
+    use std::sync::Arc;
+    use vtcode_config::types::ReasoningEffortLevel;
 
-        let payload = self.convert_to_mistral_format(&request)?;
-        let response = self.send_request(&payload).await?;
-        let response = handle_openai_http_error(response, PROVIDER_NAME, "MISTRAL_API_KEY").await?;
-
-        let response_json = parse_json_response(response, PROVIDER_NAME).await?;
-        self.parse_response(response_json, model)
-    }
-
-    async fn stream(&self, mut request: LLMRequest) -> Result<LLMStream, LLMError> {
-        ensure_model(&mut request, &self.model);
-        self.validate_request(&request)?;
-        request.stream = true;
-        let model = request.model.clone();
-
-        let payload = self.convert_to_mistral_format(&request)?;
-        let response = self.send_request(&payload).await?;
-        let response = handle_openai_http_error(response, PROVIDER_NAME, "MISTRAL_API_KEY").await?;
-
-        Ok(spawn_openai_compatible_stream(
-            response,
-            PROVIDER_NAME,
-            model,
-            &["reasoning_content"],
-            super::shared::OpenAiDeltaOrder::ContentFirst,
-            true,
-        ))
-    }
-
-    fn supported_models(&self) -> Vec<String> {
-        models::mistral::SUPPORTED_MODELS
-            .iter()
-            .map(|model| model.to_string())
-            .collect()
-    }
-
-    fn validate_request(&self, request: &LLMRequest) -> Result<(), LLMError> {
-        validate_supported_models(
-            request,
-            PROVIDER_NAME,
-            PROVIDER_KEY,
-            models::mistral::SUPPORTED_MODELS,
+    fn provider() -> MistralProvider {
+        MistralProvider::from_config(
+            Some("test-key".to_string()),
+            Some("mistral-large-latest".to_string()),
+            Some("https://example.test/v1".to_string()),
+            None,
+            None,
+            None,
+            None,
         )
     }
-}
 
-impl_llm_client!(MistralProvider);
+    fn base_request() -> LLMRequest {
+        LLMRequest {
+            messages: vec![Message::user("hello".to_string())],
+            system_prompt: Some(Arc::new("system guidance".to_string())),
+            model: "mistral-large-latest".to_string(),
+            max_tokens: Some(512),
+            temperature: Some(0.5),
+            top_p: Some(0.25),
+            stream: true,
+            metadata: Some(serde_json::json!({"user_id": "user-42"})),
+            ..Default::default()
+        }
+    }
+
+    fn sample_tools() -> Arc<Vec<ToolDefinition>> {
+        Arc::new(vec![ToolDefinition::function(
+            "lookup".to_string(),
+            "Look things up".to_string(),
+            serde_json::json!({"type": "object", "properties": {}}),
+        )])
+    }
+
+    #[test]
+    fn golden_payload_basic_shape() {
+        let payload = provider().core.convert_request(&base_request()).unwrap();
+
+        assert_eq!(payload["model"], "mistral-large-latest");
+        let messages = payload["messages"].as_array().unwrap();
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0]["role"], "system");
+        assert_eq!(messages[0]["content"], "system guidance");
+        assert_eq!(payload["max_tokens"], 512);
+        assert_eq!(payload["temperature"], 0.5);
+        assert_eq!(payload["top_p"], 0.25);
+        assert_eq!(payload["stream"], true);
+        assert_eq!(payload["stream_options"]["include_usage"], true);
+        assert_eq!(payload["user_id"], "user-42");
+        assert!(payload.get("tools").is_none());
+        assert!(payload.get("tool_choice").is_none());
+        assert!(payload.get("parallel_tool_calls").is_none());
+        assert!(payload.get("reasoning_effort").is_none());
+    }
+
+    #[test]
+    fn golden_payload_tools_disable_parallel_calls_and_default_to_auto() {
+        let mut request = base_request();
+        request.tools = Some(sample_tools());
+        let payload = provider().core.convert_request(&request).unwrap();
+        assert_eq!(payload["tools"].as_array().unwrap().len(), 1);
+        assert_eq!(payload["parallel_tool_calls"], false);
+        // Implicit tool_choice defaults to auto when tools are present.
+        assert_eq!(payload["tool_choice"], "auto");
+
+        let mut request = base_request();
+        request.tools = Some(sample_tools());
+        request.tool_choice = Some(ToolChoice::Any);
+        let payload = provider().core.convert_request(&request).unwrap();
+        assert_eq!(
+            payload["tool_choice"],
+            ToolChoice::Any.to_provider_format("mistral")
+        );
+    }
+
+    #[test]
+    fn golden_payload_reasoning_effort_pinned_to_high() {
+        let mut request = base_request();
+        request.reasoning_effort = Some(ReasoningEffortLevel::Low);
+        let payload = provider().core.convert_request(&request).unwrap();
+        assert_eq!(payload["reasoning_effort"], "high");
+        // Sampling parameters are not suppressed.
+        assert_eq!(payload["temperature"], 0.5);
+
+        let mut request = base_request();
+        request.reasoning_effort = Some(ReasoningEffortLevel::None);
+        let payload = provider().core.convert_request(&request).unwrap();
+        assert!(payload.get("reasoning_effort").is_none());
+    }
+}
