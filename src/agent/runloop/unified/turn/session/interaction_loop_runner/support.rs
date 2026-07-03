@@ -7,7 +7,7 @@ use std::fs;
 use std::io::{self, Write};
 use std::path::Path;
 
-use vtcode_config::models::Provider;
+use vtcode_config::models::{ModelId, Provider};
 use vtcode_core::config::EditorToolConfig;
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::config::loader::VTCodeConfig;
@@ -603,9 +603,15 @@ pub(super) fn selected_model_supports_image_input(
     model: &str,
     provider_supports_vision: bool,
 ) -> bool {
-    let Ok(provider) = provider_key.trim().parse::<Provider>() else {
+    let Some(provider) = parse_image_capability_provider(provider_key) else {
         return provider_supports_vision;
     };
+
+    if let Some(input_modalities) = model_id_input_modalities_for_provider(provider, model) {
+        return input_modalities
+            .iter()
+            .any(|modality| modality.eq_ignore_ascii_case("image"));
+    }
 
     let Some(resolved) = ModelResolver::resolve(Some(provider.as_ref()), model, &[], None) else {
         return provider_supports_vision;
@@ -618,6 +624,65 @@ pub(super) fn selected_model_supports_image_input(
     input_modalities
         .iter()
         .any(|modality| modality.eq_ignore_ascii_case("image"))
+}
+
+fn parse_image_capability_provider(provider_key: &str) -> Option<Provider> {
+    let trimmed = provider_key.trim();
+    if let Ok(provider) = trimmed.parse::<Provider>() {
+        return Some(provider);
+    }
+
+    // Runtime header labels may include the auth mode. Capability checks should
+    // still use the selected provider's model metadata.
+    trimmed.starts_with("OpenAI").then_some(Provider::OpenAI)
+}
+
+fn model_id_input_modalities_for_provider(
+    provider: Provider,
+    model: &str,
+) -> Option<&'static [&'static str]> {
+    for candidate in model_id_candidates(model) {
+        let Ok(model_id) = candidate.parse::<ModelId>() else {
+            continue;
+        };
+        if model_id.provider() != provider {
+            continue;
+        }
+        let input_modalities = model_id.input_modalities();
+        if !input_modalities.is_empty() {
+            return Some(input_modalities);
+        }
+    }
+
+    None
+}
+
+fn model_id_candidates(model: &str) -> Vec<String> {
+    let trimmed = model.trim();
+    let mut candidates = Vec::new();
+    push_unique_candidate(&mut candidates, trimmed);
+
+    let lower = trimmed.to_ascii_lowercase();
+    push_unique_candidate(&mut candidates, &lower);
+
+    if let Some((prefix, _)) = trimmed.split_once(" (") {
+        let prefix = prefix.trim();
+        push_unique_candidate(&mut candidates, prefix);
+        let lower_prefix = prefix.to_ascii_lowercase();
+        push_unique_candidate(&mut candidates, &lower_prefix);
+    }
+
+    candidates
+}
+
+fn push_unique_candidate(candidates: &mut Vec<String>, value: &str) {
+    if value.is_empty() {
+        return;
+    }
+    if candidates.iter().any(|candidate| candidate == value) {
+        return;
+    }
+    candidates.push(value.to_string());
 }
 
 pub(super) fn replace_submitted_input_text(input: &mut SubmittedInput, text: String) {
@@ -1903,6 +1968,33 @@ mod tests {
     fn selected_model_image_support_uses_image_modality_metadata() {
         assert!(selected_model_supports_image_input(
             "openai", "gpt-5.4", false
+        ));
+    }
+
+    #[test]
+    fn selected_model_image_support_uses_alias_modality_metadata() {
+        assert!(selected_model_supports_image_input(
+            "openai",
+            "gpt-5.5-2026-04-23",
+            false
+        ));
+    }
+
+    #[test]
+    fn selected_model_image_support_accepts_chatgpt_provider_label() {
+        assert!(selected_model_supports_image_input(
+            "OpenAI (ChatGPT)",
+            "gpt-5.5",
+            false
+        ));
+    }
+
+    #[test]
+    fn selected_model_image_support_accepts_display_model_label() {
+        assert!(selected_model_supports_image_input(
+            "OpenAI (ChatGPT)",
+            "GPT-5.5 (128K)",
+            false
         ));
     }
 

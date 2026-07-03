@@ -530,10 +530,10 @@
         },
         "context": 131072
       },
-      "gpt-5.5-2026-04-23": {
-        "id": "gpt-5.5-2026-04-23",
+      "gpt-5.5": {
+        "id": "gpt-5.5",
         "name": "GPT-5.5",
-        "description": "Next-gen OpenAI model with frontier reasoning and long context (2026-04-23 dated release).",
+        "description": "Next-gen OpenAI model with frontier reasoning and long context.",
         "reasoning": true,
         "tool_call": true,
         "modalities": {

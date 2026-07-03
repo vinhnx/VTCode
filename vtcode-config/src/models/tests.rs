@@ -476,6 +476,10 @@ fn test_generated_model_capability_lookup() {
     assert_eq!(gpt54_catalog.context_window, 1_050_000);
     assert!(gpt54_catalog.tool_call);
     assert_eq!(gpt54_catalog.input_modalities, &["text", "image"]);
+    let gpt55_catalog = model_catalog_entry("openai", "gpt-5.5").expect("gpt-5.5 metadata");
+    assert_eq!(gpt55_catalog.context_window, 1_050_000);
+    assert!(gpt55_catalog.tool_call);
+    assert_eq!(gpt55_catalog.input_modalities, &["text", "image"]);
 
     let gemini_catalog = model_catalog_entry("google", "gemini-3-flash-preview")
         .expect("gemini-3-flash-preview metadata");
@@ -523,6 +527,7 @@ fn test_gpt_5_5_dated_alias_round_trips_to_gpt55_capabilities() {
         ModelId::from_str(models::openai::GPT_5_5_DATED).unwrap(),
         ModelId::GPT55
     );
+    assert_eq!(ModelId::GPT55.input_modalities(), &["text", "image"]);
     assert!(
         models::openai::RESPONSES_API_MODELS.contains(&models::openai::GPT_5_5_DATED),
         "dated GPT-5.5 alias should stay on the Responses API path"
