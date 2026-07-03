@@ -1,183 +1,68 @@
-use crate::provider::{LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream};
-use async_trait::async_trait;
-use vtcode_config::TimeoutsConfig;
-use vtcode_config::constants::{env_vars, models, urls};
-use vtcode_config::core::{AnthropicConfig, ModelConfig, PromptCachingConfig};
-
-use reqwest::Client as HttpClient;
+use reqwest::RequestBuilder;
 use serde_json::{Map, Value};
-use std::borrow::Cow;
+use vtcode_config::constants::{env_vars, models, urls};
 
-use super::common::{
-    chat_completions_url, ensure_model, impl_llm_client, parse_json_response,
-    parse_response_openai_format, resolve_model, serialize_messages_openai_format,
-    serialize_tools_openai_format, spawn_openai_compatible_stream, validate_supported_models,
+use super::openai_compat::{
+    OpenAiCompatCore, OpenAiCompatSpec, SystemPromptPlacement, impl_openai_compat_provider,
 };
-use super::error_handling::{format_network_error, handle_openai_http_error};
+use crate::provider::{LLMError, LLMRequest};
 
-const PROVIDER_NAME: &str = "Z.AI";
-const PROVIDER_KEY: &str = "zai";
+pub struct ZaiSpec;
 
-pub struct ZAIProvider {
-    api_key: String,
-    http_client: HttpClient,
-    base_url: String,
-    model: String,
-    model_behavior: Option<ModelConfig>,
+fn resolve_zai_base_url(base_url: Option<String>) -> String {
+    if let Some(url) = base_url {
+        let trimmed = url.trim();
+        if !trimmed.is_empty() {
+            return trimmed.to_string();
+        }
+    }
+
+    if let Ok(value) = std::env::var(env_vars::ZAI_BASE_URL) {
+        let trimmed = value.trim();
+        if !trimmed.is_empty() {
+            return trimmed.to_string();
+        }
+    }
+
+    if let Ok(legacy) = std::env::var(env_vars::Z_AI_BASE_URL) {
+        let trimmed = legacy.trim();
+        if !trimmed.is_empty() {
+            return trimmed.to_string();
+        }
+    }
+
+    urls::ZAI_API_BASE.to_string()
 }
 
-impl ZAIProvider {
-    pub fn new(api_key: String) -> Self {
-        Self::with_model_internal(
-            api_key,
-            models::zai::DEFAULT_MODEL.to_string(),
-            None,
-            None,
-            None,
-        )
+impl OpenAiCompatSpec for ZaiSpec {
+    const NAME: &'static str = "Z.AI";
+    const KEY: &'static str = "zai";
+    const API_KEY_ENV: &'static str = "ZAI_API_KEY";
+    const DEFAULT_MODEL: &'static str = models::zai::DEFAULT_MODEL;
+    const DEFAULT_BASE_URL: &'static str = urls::ZAI_API_BASE;
+    const BASE_URL_ENV: Option<&'static str> = Some(env_vars::ZAI_BASE_URL);
+    const LISTED_MODELS: &'static [&'static str] = models::zai::SUPPORTED_MODELS;
+    const VALIDATION_ALLOWLIST: Option<&'static [&'static str]> =
+        Some(models::zai::SUPPORTED_MODELS);
+
+    const SYSTEM_PROMPT: SystemPromptPlacement = SystemPromptPlacement::Omitted;
+    const SUPPRESS_SAMPLING_WHEN_REASONING: bool = false;
+    const DELTA_ORDER: super::shared::OpenAiDeltaOrder =
+        super::shared::OpenAiDeltaOrder::ContentFirst;
+
+    fn resolve_base_url(_api_key: &str, base_url: Option<String>) -> String {
+        resolve_zai_base_url(base_url)
     }
 
-    pub fn with_model(api_key: String, model: String) -> Self {
-        Self::with_model_internal(api_key, model, None, None, None)
-    }
-
-    pub fn new_with_client(
-        api_key: String,
-        model: String,
-        http_client: reqwest::Client,
-        base_url: String,
-        _timeouts: TimeoutsConfig,
-    ) -> Self {
-        Self {
-            api_key,
-            http_client,
-            base_url,
-            model,
-            model_behavior: None,
-        }
-    }
-
-    pub fn from_config(
-        api_key: Option<String>,
-        model: Option<String>,
-        base_url: Option<String>,
-        _prompt_cache: Option<PromptCachingConfig>,
-        timeouts: Option<TimeoutsConfig>,
-        _anthropic: Option<AnthropicConfig>,
-        model_behavior: Option<ModelConfig>,
-    ) -> Self {
-        let api_key_value = api_key.unwrap_or_default();
-        let model_value = resolve_model(model, models::zai::DEFAULT_MODEL);
-
-        Self::with_model_internal(
-            api_key_value,
-            model_value,
-            base_url,
-            timeouts,
-            model_behavior,
-        )
-    }
-
-    fn with_model_internal(
-        api_key: String,
-        model: String,
-        base_url: Option<String>,
-        timeouts: Option<TimeoutsConfig>,
-        model_behavior: Option<ModelConfig>,
-    ) -> Self {
-        use crate::http_client::HttpClientFactory;
-
-        let timeouts = timeouts.unwrap_or_default();
-
-        Self {
-            api_key,
-            http_client: HttpClientFactory::for_llm(&timeouts),
-            base_url: resolve_zai_base_url(base_url),
-            model,
-            model_behavior,
-        }
-    }
-
-    fn convert_to_zai_format(&self, request: &LLMRequest) -> Result<Value, LLMError> {
-        let mut payload = Map::new();
-        let normalized_model = normalize_model_id(&request.model);
-        let has_preserved_reasoning = request.messages.iter().any(|message| {
-            message.role == crate::provider::MessageRole::Assistant
-                && message
-                    .reasoning
-                    .as_ref()
-                    .is_some_and(|reasoning| !reasoning.is_empty())
-        });
-
-        payload.insert(
-            "model".to_owned(),
-            Value::String(normalized_model.into_owned()),
-        );
-        payload.insert(
-            "messages".to_owned(),
-            Value::Array(serialize_messages_openai_format(request, PROVIDER_KEY)?),
-        );
-
-        if let Some(max_tokens) = request.max_tokens {
-            payload.insert(
-                "max_tokens".to_owned(),
-                Value::Number(serde_json::Number::from(max_tokens as u64)),
-            );
-        }
-
-        if let Some(temperature) = request.temperature {
-            payload.insert(
-                "temperature".to_owned(),
-                Value::Number(serde_json::Number::from_f64(temperature as f64).ok_or_else(
-                    || LLMError::InvalidRequest {
-                        message: "Invalid temperature value".to_string(),
-                        metadata: None,
-                    },
-                )?),
-            );
-        }
-        if let Some(top_p) = request.top_p {
-            payload.insert(
-                "top_p".to_owned(),
-                Value::Number(serde_json::Number::from_f64(top_p as f64).ok_or_else(|| {
-                    LLMError::InvalidRequest {
-                        message: "Invalid top_p value".to_string(),
-                        metadata: None,
-                    }
-                })?),
-            );
-        }
-        if let Some(do_sample) = request.do_sample {
-            payload.insert("do_sample".to_owned(), Value::Bool(do_sample));
-        }
-
-        if request.stream {
-            payload.insert("stream".to_string(), Value::Bool(true));
-            if request
-                .tools
-                .as_ref()
-                .is_some_and(|tools| !tools.is_empty())
-            {
-                payload.insert("tool_stream".to_string(), Value::Bool(true));
-            }
-        }
-
-        if let Some(tools) = &request.tools
-            && let Some(serialized_tools) = serialize_tools_openai_format(tools)
-        {
-            payload.insert("tools".to_string(), Value::Array(serialized_tools));
-        }
-
-        if request.output_format.is_some() {
-            payload.insert(
-                "response_format".to_owned(),
-                serde_json::json!({ "type": "json_object" }),
-            );
-        }
-
+    fn insert_tool_choice(
+        _core: &OpenAiCompatCore<Self>,
+        request: &LLMRequest,
+        payload: &mut Map<String, Value>,
+    ) {
         if let Some(choice) = &request.tool_choice {
+            // Z.AI only supports "auto"; any other requested mode is coerced.
             let tool_choice_value = match choice {
-                crate::provider::ToolChoice::Auto => choice.to_provider_format(PROVIDER_KEY),
+                crate::provider::ToolChoice::Auto => choice.to_provider_format(Self::KEY),
                 _ => Value::String("auto".to_string()),
             };
             payload.insert("tool_choice".to_string(), tool_choice_value);
@@ -188,6 +73,20 @@ impl ZAIProvider {
         {
             payload.insert("tool_choice".to_string(), Value::String("auto".to_string()));
         }
+    }
+
+    fn insert_reasoning(
+        _core: &OpenAiCompatCore<Self>,
+        request: &LLMRequest,
+        payload: &mut Map<String, Value>,
+    ) -> Result<(), LLMError> {
+        let has_preserved_reasoning = request.messages.iter().any(|message| {
+            message.role == crate::provider::MessageRole::Assistant
+                && message
+                    .reasoning
+                    .as_ref()
+                    .is_some_and(|reasoning| !reasoning.is_empty())
+        });
 
         if let Some(effort) = request.reasoning_effort {
             if effort == vtcode_config::types::ReasoningEffortLevel::None {
@@ -195,7 +94,7 @@ impl ZAIProvider {
                     "thinking".to_owned(),
                     serde_json::json!({"type": "disabled"}),
                 );
-                return Ok(Value::Object(payload));
+                return Ok(());
             }
 
             use crate::rig_adapter::RigProviderCapabilities;
@@ -225,25 +124,51 @@ impl ZAIProvider {
             }
         }
 
-        Ok(Value::Object(payload))
+        Ok(())
+    }
+
+    fn finish_payload(
+        _core: &OpenAiCompatCore<Self>,
+        request: &LLMRequest,
+        payload: &mut Map<String, Value>,
+    ) -> Result<(), LLMError> {
+        if let Some(do_sample) = request.do_sample {
+            payload.insert("do_sample".to_owned(), Value::Bool(do_sample));
+        }
+
+        if request.stream
+            && request
+                .tools
+                .as_ref()
+                .is_some_and(|tools| !tools.is_empty())
+        {
+            payload.insert("tool_stream".to_string(), Value::Bool(true));
+        }
+
+        if request.output_format.is_some() {
+            payload.insert(
+                "response_format".to_owned(),
+                serde_json::json!({ "type": "json_object" }),
+            );
+        }
+
+        Ok(())
+    }
+
+    fn apply_auth(core: &OpenAiCompatCore<Self>, builder: RequestBuilder) -> RequestBuilder {
+        builder
+            .bearer_auth(&core.api_key)
+            .header("Accept-Language", "en-US,en")
     }
 }
 
-fn normalize_model_id<'a>(model: &'a str) -> Cow<'a, str> {
-    Cow::Borrowed(model)
-}
-
-#[async_trait]
-impl LLMProvider for ZAIProvider {
-    fn name(&self) -> &str {
-        PROVIDER_KEY
-    }
-
+impl_openai_compat_provider!(ZAIProvider, ZaiSpec, {
     fn supports_reasoning(&self, model: &str) -> bool {
         // Codex-inspired robustness: Setting model_supports_reasoning to false
         // does NOT disable it for known reasoning models.
         model.contains("glm")
             || self
+                .core
                 .model_behavior
                 .as_ref()
                 .and_then(|b| b.model_supports_reasoning)
@@ -254,135 +179,21 @@ impl LLMProvider for ZAIProvider {
         // Same robustness logic for reasoning effort
         model.contains("glm")
             || self
+                .core
                 .model_behavior
                 .as_ref()
                 .and_then(|b| b.model_supports_reasoning_effort)
                 .unwrap_or(false)
     }
-
-    async fn generate(&self, mut request: LLMRequest) -> Result<LLMResponse, LLMError> {
-        let model = ensure_model(&mut request, &self.model);
-
-        let payload = self.convert_to_zai_format(&request)?;
-        let url = chat_completions_url(&self.base_url);
-
-        let response = self
-            .http_client
-            .post(&url)
-            .bearer_auth(&self.api_key)
-            .header("Accept-Language", "en-US,en")
-            .json(&payload)
-            .send()
-            .await
-            .map_err(|e| format_network_error(PROVIDER_NAME, &e))?;
-
-        let response = handle_openai_http_error(response, PROVIDER_NAME, "ZAI_API_KEY").await?;
-        let response_json = parse_json_response(response, PROVIDER_NAME).await?;
-
-        parse_response_openai_format::<fn(&Value, &Value) -> Option<String>>(
-            response_json,
-            PROVIDER_NAME,
-            model,
-            false,
-            None,
-        )
-    }
-
-    async fn stream(&self, mut request: LLMRequest) -> Result<LLMStream, LLMError> {
-        let model = ensure_model(&mut request, &self.model);
-
-        self.validate_request(&request)?;
-        request.stream = true;
-
-        let payload = self.convert_to_zai_format(&request)?;
-        let url = chat_completions_url(&self.base_url);
-
-        let response = self
-            .http_client
-            .post(&url)
-            .bearer_auth(&self.api_key)
-            .header("Accept-Language", "en-US,en")
-            .json(&payload)
-            .send()
-            .await
-            .map_err(|e| format_network_error(PROVIDER_NAME, &e))?;
-
-        let response = handle_openai_http_error(response, PROVIDER_NAME, "ZAI_API_KEY").await?;
-
-        Ok(spawn_openai_compatible_stream(
-            response,
-            PROVIDER_NAME,
-            model,
-            &["reasoning_content"],
-            super::shared::OpenAiDeltaOrder::ContentFirst,
-            false,
-        ))
-    }
-
-    fn supported_models(&self) -> Vec<String> {
-        models::zai::SUPPORTED_MODELS
-            .iter()
-            .map(|model| model.to_string())
-            .collect()
-    }
-
-    fn validate_request(&self, request: &LLMRequest) -> Result<(), LLMError> {
-        validate_supported_models(
-            request,
-            PROVIDER_NAME,
-            PROVIDER_KEY,
-            models::zai::SUPPORTED_MODELS,
-        )
-    }
-}
-
-fn resolve_zai_base_url(base_url: Option<String>) -> String {
-    if let Some(url) = base_url {
-        let trimmed = url.trim();
-        if !trimmed.is_empty() {
-            return trimmed.to_string();
-        }
-    }
-
-    if let Ok(value) = std::env::var(env_vars::ZAI_BASE_URL) {
-        let trimmed = value.trim();
-        if !trimmed.is_empty() {
-            return trimmed.to_string();
-        }
-    }
-
-    if let Ok(legacy) = std::env::var(env_vars::Z_AI_BASE_URL) {
-        let trimmed = legacy.trim();
-        if !trimmed.is_empty() {
-            return trimmed.to_string();
-        }
-    }
-
-    urls::ZAI_API_BASE.to_string()
-}
-
-impl_llm_client!(ZAIProvider);
+});
 
 #[cfg(test)]
 mod tests {
-    use super::{ZAIProvider, normalize_model_id, resolve_zai_base_url};
+    use super::{ZAIProvider, resolve_zai_base_url};
     use crate::provider::{LLMRequest, Message, ToolChoice, ToolDefinition};
     use std::sync::Arc;
     use vtcode_config::constants::models;
     use vtcode_config::types::ReasoningEffortLevel;
-
-    #[test]
-    fn keeps_canonical_glm51_model_id() {
-        assert_eq!(
-            normalize_model_id(models::zai::GLM_5_1),
-            models::zai::GLM_5_1
-        );
-    }
-
-    #[test]
-    fn keeps_glm47_model_id() {
-        assert_eq!(normalize_model_id(models::zai::GLM_47), models::zai::GLM_47);
-    }
 
     #[test]
     fn payload_includes_top_p() {
@@ -395,7 +206,8 @@ mod tests {
         };
 
         let payload = provider
-            .convert_to_zai_format(&request)
+            .core
+            .convert_request(&request)
             .expect("payload should be valid");
         let top_p = payload
             .get("top_p")
@@ -426,7 +238,8 @@ mod tests {
         };
 
         let payload = provider
-            .convert_to_zai_format(&request)
+            .core
+            .convert_request(&request)
             .expect("payload should be valid");
         assert_eq!(payload.get("stream").and_then(|v| v.as_bool()), Some(true));
         assert_eq!(
@@ -446,7 +259,8 @@ mod tests {
         };
 
         let payload = provider
-            .convert_to_zai_format(&request)
+            .core
+            .convert_request(&request)
             .expect("payload should be valid");
         assert_eq!(payload.get("stream").and_then(|v| v.as_bool()), Some(true));
         assert!(payload.get("tool_stream").is_none());
@@ -470,7 +284,8 @@ mod tests {
         };
 
         let payload = provider
-            .convert_to_zai_format(&request)
+            .core
+            .convert_request(&request)
             .expect("payload should be valid");
         assert_eq!(
             payload.get("do_sample").and_then(|v| v.as_bool()),
@@ -489,7 +304,8 @@ mod tests {
         };
 
         let payload = provider
-            .convert_to_zai_format(&request)
+            .core
+            .convert_request(&request)
             .expect("payload should be valid");
         assert_eq!(
             payload
@@ -511,7 +327,8 @@ mod tests {
         };
 
         let payload = provider
-            .convert_to_zai_format(&request)
+            .core
+            .convert_request(&request)
             .expect("payload should be valid");
         assert_eq!(
             payload
@@ -539,7 +356,8 @@ mod tests {
         };
 
         let payload = provider
-            .convert_to_zai_format(&request)
+            .core
+            .convert_request(&request)
             .expect("payload should be valid");
         assert_eq!(
             payload
@@ -570,7 +388,8 @@ mod tests {
         };
 
         let payload = provider
-            .convert_to_zai_format(&request)
+            .core
+            .convert_request(&request)
             .expect("payload should be valid");
         let messages = payload
             .get("messages")
@@ -600,7 +419,8 @@ mod tests {
         };
 
         let payload = provider
-            .convert_to_zai_format(&request)
+            .core
+            .convert_request(&request)
             .expect("payload should be valid");
         let tools = payload
             .get("tools")
@@ -631,7 +451,8 @@ mod tests {
         };
 
         let payload = provider
-            .convert_to_zai_format(&request)
+            .core
+            .convert_request(&request)
             .expect("payload should be valid");
         assert_eq!(
             payload.get("tool_choice").and_then(|v| v.as_str()),
@@ -650,7 +471,8 @@ mod tests {
         };
 
         let payload = provider
-            .convert_to_zai_format(&request)
+            .core
+            .convert_request(&request)
             .expect("payload should be valid");
         assert_eq!(
             payload.get("tool_choice").and_then(|v| v.as_str()),
@@ -679,7 +501,8 @@ mod tests {
         };
 
         let payload = provider
-            .convert_to_zai_format(&request)
+            .core
+            .convert_request(&request)
             .expect("payload should be valid");
         assert_eq!(
             payload.get("tool_choice").and_then(|v| v.as_str()),
@@ -703,7 +526,8 @@ mod tests {
         };
 
         let payload = provider
-            .convert_to_zai_format(&request)
+            .core
+            .convert_request(&request)
             .expect("payload should be valid");
         assert_eq!(
             payload
@@ -731,7 +555,8 @@ mod tests {
         };
 
         let payload = provider
-            .convert_to_zai_format(&request)
+            .core
+            .convert_request(&request)
             .expect("payload should be valid");
         assert_eq!(
             payload
