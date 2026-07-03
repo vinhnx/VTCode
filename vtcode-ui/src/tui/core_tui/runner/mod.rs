@@ -283,11 +283,8 @@ where
 
     let keyboard_flags = crate::tui::config::keyboard_protocol_to_flags(&options.keyboard_protocol);
     let mut stderr = io::stderr();
-    let mut mode_restore_guard = TerminalModeRestoreGuard::new(enable_terminal_modes(
-        &mut stderr,
-        keyboard_flags,
-        &options.fullscreen,
-    )?);
+    let mut mode_restore_guard =
+        TerminalModeRestoreGuard::new(enable_terminal_modes(&mut stderr, &options.fullscreen)?);
     mode_restore_guard
         .state_mut()
         .save_cursor_position(&mut stderr);
@@ -296,6 +293,9 @@ where
             .state_mut()
             .enter_alternate_screen(&mut stderr)?;
     }
+    mode_restore_guard
+        .state_mut()
+        .push_keyboard_enhancement_flags(&mut stderr, keyboard_flags);
 
     session.update_terminal_title();
 

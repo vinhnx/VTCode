@@ -64,6 +64,28 @@ impl TerminalModeState {
         self.alternate_screen_active = true;
         Ok(())
     }
+
+    pub(super) fn push_keyboard_enhancement_flags(
+        &mut self,
+        stderr: &mut io::Stderr,
+        keyboard_flags: crossterm::event::KeyboardEnhancementFlags,
+    ) {
+        use ratatui::crossterm::event::PushKeyboardEnhancementFlags;
+
+        if keyboard_flags.is_empty() {
+            return;
+        }
+
+        match execute!(stderr, PushKeyboardEnhancementFlags(keyboard_flags)) {
+            Ok(_) => {
+                self.keyboard_enhancements_pushed = true;
+                crate::tui::ui::tui::panic_hook::mark_keyboard_enhancements_pushed(true);
+            }
+            Err(error) => {
+                tracing::debug!(%error, "failed to push keyboard enhancement flags");
+            }
+        }
+    }
 }
 
 impl Default for TerminalModeState {
@@ -74,11 +96,8 @@ impl Default for TerminalModeState {
 
 pub(super) fn enable_terminal_modes(
     stderr: &mut io::Stderr,
-    keyboard_flags: crossterm::event::KeyboardEnhancementFlags,
     fullscreen: &FullscreenInteractionSettings,
 ) -> Result<TerminalModeState> {
-    use ratatui::crossterm::event::PushKeyboardEnhancementFlags;
-
     let mut state = TerminalModeState::new();
 
     // Enable bracketed paste
@@ -114,19 +133,6 @@ pub(super) fn enable_terminal_modes(
         }
     }
 
-    // Push keyboard enhancement flags
-    if !keyboard_flags.is_empty() {
-        match execute!(stderr, PushKeyboardEnhancementFlags(keyboard_flags)) {
-            Ok(_) => {
-                state.keyboard_enhancements_pushed = true;
-                crate::tui::ui::tui::panic_hook::mark_keyboard_enhancements_pushed(true);
-            }
-            Err(error) => {
-                tracing::debug!(%error, "failed to push keyboard enhancement flags");
-            }
-        }
-    }
-
     Ok(state)
 }
 
@@ -138,13 +144,6 @@ pub(super) fn restore_terminal_modes(state: &TerminalModeState) -> Result<()> {
 
     // Restore in reverse order of enabling/entering.
 
-    if state.alternate_screen_active
-        && let Err(error) = execute!(stderr, LeaveAlternateScreen)
-    {
-        tracing::debug!(%error, "failed to leave alternate screen");
-        errors.push(format!("alternate screen: {error}"));
-    }
-
     // 1. Pop keyboard enhancement flags (if they were pushed)
     if state.keyboard_enhancements_pushed {
         crate::tui::ui::tui::panic_hook::mark_keyboard_enhancements_pushed(false);
@@ -152,6 +151,13 @@ pub(super) fn restore_terminal_modes(state: &TerminalModeState) -> Result<()> {
             tracing::debug!(%error, "failed to pop keyboard enhancement flags");
             errors.push(format!("keyboard enhancements: {error}"));
         }
+    }
+
+    if state.alternate_screen_active
+        && let Err(error) = execute!(stderr, LeaveAlternateScreen)
+    {
+        tracing::debug!(%error, "failed to leave alternate screen");
+        errors.push(format!("alternate screen: {error}"));
     }
 
     // 2. Disable focus change events (if they were enabled)

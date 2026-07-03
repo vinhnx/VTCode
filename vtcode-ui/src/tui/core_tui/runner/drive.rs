@@ -77,6 +77,11 @@ fn suspend_to_shell<B: Backend, S: TuiSessionDriver>(
 
     let suspend_result = (|| -> Result<()> {
         let mut stderr = io::stderr();
+        if !keyboard_flags.is_empty()
+            && let Err(error) = execute!(stderr, PopKeyboardEnhancementFlags)
+        {
+            tracing::debug!(%error, "failed to suspend keyboard enhancement flags");
+        }
         if use_alternate_screen {
             execute!(stderr, LeaveAlternateScreen)
                 .context("failed to leave alternate screen before suspend")?;
@@ -89,11 +94,6 @@ fn suspend_to_shell<B: Backend, S: TuiSessionDriver>(
             && let Err(error) = execute!(stderr, DisableMouseCapture)
         {
             tracing::debug!(%error, "failed to disable mouse capture before suspend");
-        }
-        if !keyboard_flags.is_empty()
-            && let Err(error) = execute!(stderr, PopKeyboardEnhancementFlags)
-        {
-            tracing::debug!(%error, "failed to suspend keyboard enhancement flags");
         }
         // Drain any terminal responses from the disable sequences above
         // while raw mode is still active so individual bytes remain readable.
@@ -114,17 +114,17 @@ fn suspend_to_shell<B: Backend, S: TuiSessionDriver>(
         {
             tracing::debug!(%error, "failed to restore mouse capture after resume");
         }
-        if !keyboard_flags.is_empty()
-            && let Err(error) = execute!(stderr, PushKeyboardEnhancementFlags(keyboard_flags))
-        {
-            tracing::debug!(%error, "failed to restore keyboard enhancement flags after resume");
-        }
         if use_alternate_screen {
             execute!(stderr, EnterAlternateScreen)
                 .context("failed to re-enter alternate screen after resume")?;
             terminal.clear().map_err(|error| {
                 anyhow::anyhow!("failed to clear terminal after resume: {error}")
             })?;
+        }
+        if !keyboard_flags.is_empty()
+            && let Err(error) = execute!(stderr, PushKeyboardEnhancementFlags(keyboard_flags))
+        {
+            tracing::debug!(%error, "failed to restore keyboard enhancement flags after resume");
         }
 
         Ok(())
