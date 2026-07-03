@@ -86,6 +86,7 @@ mod headless {
             kind: InlineMessageKind,
             lines: Vec<Vec<InlineSegment>>,
         },
+        SetImageInputEnabled(bool),
         RestoreInputDraft(SubmittedInput),
         ForceRedraw,
         Shutdown,
@@ -169,6 +170,9 @@ mod headless {
         }
         pub fn restore_input_draft(&self, input: SubmittedInput) {
             self.send_command(InlineCommand::RestoreInputDraft(input));
+        }
+        pub fn set_image_input_enabled(&self, enabled: bool) {
+            self.send_command(InlineCommand::SetImageInputEnabled(enabled));
         }
         pub fn set_reasoning_stage(&self, stage: Option<String>) {
             self.send_command(InlineCommand::SetReasoningStage(stage));

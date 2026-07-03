@@ -163,6 +163,7 @@ pub enum InlineCommand {
     },
     SetCursorVisible(bool),
     SetInputEnabled(bool),
+    SetImageInputEnabled(bool),
     SetInput(String),
     RestoreInputDraft(SubmittedInput),
     ApplySuggestedPrompt(String),
@@ -384,6 +385,10 @@ impl InlineHandle {
 
     pub fn set_input_enabled(&self, enabled: bool) {
         self.send_command(InlineCommand::SetInputEnabled(enabled));
+    }
+
+    pub fn set_image_input_enabled(&self, enabled: bool) {
+        self.send_command(InlineCommand::SetImageInputEnabled(enabled));
     }
 
     pub fn set_input(&self, content: String) {

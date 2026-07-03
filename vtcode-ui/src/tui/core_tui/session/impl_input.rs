@@ -162,6 +162,9 @@ impl Session {
             InlineCommand::SetInputEnabled(value) => {
                 self.input_enabled = value;
             }
+            InlineCommand::SetImageInputEnabled(value) => {
+                self.image_input_enabled = value;
+            }
             InlineCommand::SetInput(content) => {
                 // Check if the content appears to be an error message
                 // If it looks like an error, redirect to transcript instead

@@ -823,6 +823,12 @@ impl InputManager {
             .collect();
     }
 
+    pub fn push_attachment(&mut self, attachment: ContentPart) {
+        if attachment.is_image() {
+            self.attachments.push(attachment);
+        }
+    }
+
     pub fn current_history_entry(&self) -> InputHistoryEntry {
         InputHistoryEntry::from_content_and_attachments(
             self.content().to_string(),

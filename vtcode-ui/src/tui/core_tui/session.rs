@@ -229,6 +229,7 @@ pub struct Session {
     #[expect(dead_code)]
     navigation_state: ListState,
     input_enabled: bool,
+    image_input_enabled: bool,
     cursor_visible: bool,
     pub(crate) needs_redraw: bool,
     pub(crate) needs_full_clear: bool,

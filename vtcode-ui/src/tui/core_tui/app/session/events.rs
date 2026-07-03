@@ -9,6 +9,7 @@ use super::super::types::{
 };
 use crate::tui::core_tui::app::session::transient::TransientSurface;
 use crate::tui::core_tui::app::types::InlineMessageKind;
+use crate::tui::core_tui::session::clipboard_image::{ClipboardImageError, read_clipboard_image};
 use crate::tui::core_tui::session::modal::{ModalKeyModifiers, ModalListKeyResult};
 use crate::tui::core_tui::session::reverse_search;
 use crate::tui::core_tui::style::theme_from_styles;
@@ -116,7 +117,73 @@ fn copy_selected_input_if_requested(
     false
 }
 
+fn image_paste_warning(error: ClipboardImageError) -> &'static str {
+    match error {
+        ClipboardImageError::NoImage => "No image found in clipboard.",
+        ClipboardImageError::ClipboardUnavailable => {
+            "Clipboard image paste is unavailable in this terminal or desktop session."
+        }
+        ClipboardImageError::UnsupportedModel => "The selected model does not support image input.",
+        ClipboardImageError::WslFallbackFailure => {
+            "Could not read a clipboard image from Windows via PowerShell."
+        }
+    }
+}
+
+fn push_warning_line(session: &mut Session, text: &'static str) {
+    session.push_line(
+        InlineMessageKind::Warning,
+        vec![InlineSegment {
+            text: text.to_string(),
+            style: Arc::new(InlineTextStyle::default()),
+        }],
+    );
+    session.core.request_transcript_clear();
+    session.mark_dirty();
+}
+
+fn is_image_paste_shortcut(
+    key: &KeyEvent,
+    has_control: bool,
+    has_alt: bool,
+    has_command: bool,
+) -> bool {
+    matches!(key.code, KeyCode::Char('v') | KeyCode::Char('V'))
+        && !has_command
+        && ((has_control && !has_alt) || (has_alt && !has_control))
+}
+
+fn handle_image_paste_shortcut_with(
+    session: &mut Session,
+    mut image_reader: impl FnMut() -> Result<ContentPart, ClipboardImageError>,
+) {
+    if !session.core.image_input_enabled() {
+        push_warning_line(
+            session,
+            image_paste_warning(ClipboardImageError::UnsupportedModel),
+        );
+        return;
+    }
+
+    match image_reader() {
+        Ok(image) => {
+            session.core.input_manager.push_attachment(image);
+            session.update_input_triggers();
+            session.mark_dirty();
+        }
+        Err(error) => push_warning_line(session, image_paste_warning(error)),
+    }
+}
+
 pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<InlineEvent> {
+    process_key_with_clipboard_image_reader(session, key, read_clipboard_image)
+}
+
+pub(super) fn process_key_with_clipboard_image_reader(
+    session: &mut Session,
+    key: KeyEvent,
+    image_reader: impl FnMut() -> Result<ContentPart, ClipboardImageError>,
+) -> Option<InlineEvent> {
     let modifiers = key.modifiers;
     let has_control = modifiers.contains(KeyModifiers::CONTROL);
     let has_shift = modifiers.contains(KeyModifiers::SHIFT);
@@ -129,6 +196,13 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
     let has_alt = raw_alt && !has_command;
 
     if copy_selected_input_if_requested(session, &key, has_command) {
+        return None;
+    }
+
+    if is_image_paste_shortcut(&key, has_control, has_alt, has_command) {
+        if session.core.input_enabled() {
+            handle_image_paste_shortcut_with(session, image_reader);
+        }
         return None;
     }
 

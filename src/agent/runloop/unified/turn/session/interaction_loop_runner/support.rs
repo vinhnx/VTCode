@@ -7,11 +7,13 @@ use std::fs;
 use std::io::{self, Write};
 use std::path::Path;
 
+use vtcode_config::models::Provider;
 use vtcode_core::config::EditorToolConfig;
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::core::threads::ArchivedSessionIntent;
 use vtcode_core::hooks::{LifecycleHookEngine, SessionStartTrigger};
+use vtcode_core::llm::ModelResolver;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::notifications::set_global_notification_hook_engine;
 use vtcode_core::scheduler::{DurableTaskStore, SchedulerDaemon};
@@ -594,6 +596,28 @@ pub(super) fn submitted_images_are_unsupported(
             .iter()
             .any(vtcode_ui::tui::app::ContentPart::is_image)
             || vtcode_core::utils::at_pattern::input_may_parse_image_parts(&input.text, workspace))
+}
+
+pub(super) fn selected_model_supports_image_input(
+    provider_key: &str,
+    model: &str,
+    provider_supports_vision: bool,
+) -> bool {
+    let Ok(provider) = provider_key.trim().parse::<Provider>() else {
+        return provider_supports_vision;
+    };
+
+    let Some(resolved) = ModelResolver::resolve(Some(provider.as_ref()), model, &[], None) else {
+        return provider_supports_vision;
+    };
+    let input_modalities = resolved.input_modalities();
+    if input_modalities.is_empty() {
+        return provider_supports_vision;
+    }
+
+    input_modalities
+        .iter()
+        .any(|modality| modality.eq_ignore_ascii_case("image"))
 }
 
 pub(super) fn replace_submitted_input_text(input: &mut SubmittedInput, text: String) {
@@ -1873,6 +1897,36 @@ mod tests {
         ));
         assert_eq!(input.text, "look data:image/png;base64,parsedimage");
         assert!(input.attachments.is_empty());
+    }
+
+    #[test]
+    fn selected_model_image_support_uses_image_modality_metadata() {
+        assert!(selected_model_supports_image_input(
+            "openai", "gpt-5.4", false
+        ));
+    }
+
+    #[test]
+    fn selected_model_image_support_rejects_text_only_metadata() {
+        assert!(!selected_model_supports_image_input(
+            "openai",
+            "gpt-oss-20b",
+            true
+        ));
+    }
+
+    #[test]
+    fn selected_model_image_support_falls_back_without_metadata() {
+        assert!(selected_model_supports_image_input(
+            "openai",
+            "custom-vision-model",
+            true
+        ));
+        assert!(!selected_model_supports_image_input(
+            "custom-provider",
+            "gpt-5.4",
+            false
+        ));
     }
 
     #[test]

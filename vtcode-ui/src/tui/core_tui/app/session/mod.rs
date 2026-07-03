@@ -798,6 +798,7 @@ fn to_core_command(command: &InlineCommand) -> Option<crate::tui::core_tui::type
         },
         InlineCommand::SetCursorVisible(value) => CoreCommand::SetCursorVisible(*value),
         InlineCommand::SetInputEnabled(value) => CoreCommand::SetInputEnabled(*value),
+        InlineCommand::SetImageInputEnabled(value) => CoreCommand::SetImageInputEnabled(*value),
         InlineCommand::SetInput(value) => CoreCommand::SetInput(value.clone()),
         InlineCommand::RestoreInputDraft(input) => CoreCommand::RestoreInputDraft(input.clone()),
         InlineCommand::ApplySuggestedPrompt(value) => {

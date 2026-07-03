@@ -32,8 +32,8 @@ use support::{
     build_user_message_content, extract_recent_follow_up_hint, fallback_args_preview,
     refresh_ide_context_before_user_turn, refresh_live_ide_context_update,
     replace_submitted_input_text, resolve_inline_loop_action, scheduler_enabled,
-    stalled_follow_up_recovery_prompt, submitted_images_are_unsupported,
-    sync_mcp_approval_policy_for_context,
+    selected_model_supports_image_input, stalled_follow_up_recovery_prompt,
+    submitted_images_are_unsupported, sync_mcp_approval_policy_for_context,
 };
 pub(crate) use support::{handle_select_primary_agent, try_resume_latest_session};
 
@@ -94,6 +94,15 @@ pub(super) async fn run_interaction_loop_impl(
         }
 
         if should_refresh_status {
+            let provider_supports_vision = ctx.provider_client.supports_vision(&ctx.config.model);
+            let model_supports_image_input = selected_model_supports_image_input(
+                &ctx.config.provider,
+                &ctx.config.model,
+                provider_supports_vision,
+            );
+            ctx.handle
+                .set_image_input_enabled(model_supports_image_input);
+
             let live_ide_context = refresh_live_ide_context_update(ctx.ide_context_bridge);
             if live_ide_context.changed || workspace_config_reloaded {
                 apply_ide_context_snapshot(
@@ -481,7 +490,11 @@ pub(super) async fn run_interaction_loop_impl(
 
         if submitted_images_are_unsupported(
             &submitted_input,
-            ctx.provider_client.supports_vision(&ctx.config.model),
+            selected_model_supports_image_input(
+                &ctx.config.provider,
+                &ctx.config.model,
+                ctx.provider_client.supports_vision(&ctx.config.model),
+            ),
             &ctx.config.workspace,
         ) {
             ctx.renderer.line(

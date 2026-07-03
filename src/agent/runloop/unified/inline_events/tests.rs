@@ -1041,6 +1041,7 @@ fn other_name(command: &InlineCommand) -> &'static str {
         InlineCommand::SetArchivedHistory { .. } => "SetArchivedHistory",
         InlineCommand::SetCursorVisible(_) => "SetCursorVisible",
         InlineCommand::SetInputEnabled(_) => "SetInputEnabled",
+        InlineCommand::SetImageInputEnabled(_) => "SetImageInputEnabled",
         InlineCommand::SetInput(_) => "SetInput",
         InlineCommand::RestoreInputDraft(_) => "RestoreInputDraft",
         InlineCommand::ApplySuggestedPrompt(_) => "ApplySuggestedPrompt",
