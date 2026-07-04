@@ -385,7 +385,7 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 - **File**: `docs/guides/terminal-optimization.md`
   - **Content**: VT Code Terminal Optimization Guide
-  - **Topics**: Table of Contents, Theme and Appearance, Line Break Options, Notification Setup, Handling Large Inputs
+  - **Topics**: Table of Contents, Theme and Appearance, Line Break Options, Paste Handling, Notification Setup
   - **User Questions**: "What can you tell me about VT Code Terminal Optimization Guide?", "How does Table of Contents work?", "How does Theme and Appearance work?"
 
 - **File**: `docs/guides/UPDATE_SYSTEM.md`
