@@ -5,6 +5,7 @@ use crate::agent::runloop::text_tools::canonical::{
     apply_unified_exec_defaults, unified_exec_defaults_for_name,
 };
 use crate::agent::runloop::text_tools::parse_args::parse_textual_arguments;
+use crate::agent::runloop::text_tools::parser::{ParsedToolCall, TextualToolParser};
 
 pub(super) fn parse_channel_tool_call(text: &str) -> Option<(String, Value)> {
     // Harmony format: <|start|>{header}<|message|>{content}<|end|>
@@ -162,5 +163,26 @@ fn normalize_harmony_command_value(command: &Value) -> Result<Value, String> {
             }
         }
         _ => Err("command must be a string or array of strings".to_string()),
+    }
+}
+
+/// Parser for Harmony/GPT-OSS channel format tool calls.
+pub(crate) struct ChannelToolParser;
+
+impl TextualToolParser for ChannelToolParser {
+    fn name(&self) -> &'static str {
+        "channel"
+    }
+
+    fn try_parse(&self, text: &str) -> Option<ParsedToolCall> {
+        let result = parse_channel_tool_call(text);
+        if result.is_none() {
+            tracing::debug!(
+                parser = "channel",
+                reason = "no matching <|start|> pattern",
+                "Rejected textual tool call"
+            );
+        }
+        result.map(|(name, args)| ParsedToolCall { name, args })
     }
 }

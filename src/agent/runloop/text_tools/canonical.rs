@@ -28,7 +28,15 @@ pub(super) fn canonicalize_tool_name(raw: &str) -> Option<String> {
     }
 }
 
-pub(super) fn canonicalize_tool_result(name: String, mut args: Value) -> Option<(String, Value)> {
+/// Canonicalize a tool call and optionally validate against known tools.
+///
+/// When `validate` is true, the result is checked against the known-tool allowlist.
+/// When `validate` is false, only canonicalization and unified_exec defaults are applied.
+pub(super) fn canonicalize_tool_result(
+    name: String,
+    mut args: Value,
+    validate: bool,
+) -> Option<(String, Value)> {
     let normalized = canonicalize_normalized_name(&name)?;
     let canonical = canonicalize_tool_name(&name)?;
     if canonical == tools::UNIFIED_EXEC
@@ -37,14 +45,18 @@ pub(super) fn canonicalize_tool_result(name: String, mut args: Value) -> Option<
     {
         apply_unified_exec_defaults(payload, defaults);
     }
-    if is_known_textual_tool(&canonical) {
-        Some((canonical, args))
+    if validate {
+        if is_known_textual_tool(&canonical) {
+            Some((canonical, args))
+        } else {
+            None
+        }
     } else {
-        None
+        Some((canonical, args))
     }
 }
 
-pub(super) fn is_known_textual_tool(name: &str) -> bool {
+pub(crate) fn is_known_textual_tool(name: &str) -> bool {
     matches!(
         name,
         tools::WRITE_FILE

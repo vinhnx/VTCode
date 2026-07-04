@@ -8,6 +8,7 @@ mod parse_dsml;
 mod parse_structured;
 mod parse_tagged;
 mod parse_yaml;
+mod parser;
 
 #[cfg(test)]
 mod tests;

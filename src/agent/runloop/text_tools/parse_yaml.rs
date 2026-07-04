@@ -1,6 +1,7 @@
 use serde_json::{Map, Value};
 
 use crate::agent::runloop::text_tools::parse_args::parse_scalar_value;
+use crate::agent::runloop::text_tools::parser::{ParsedToolCall, TextualToolParser};
 
 pub(super) fn parse_yaml_tool_call(text: &str) -> Option<(String, Value)> {
     for segment in text.split("```") {
@@ -123,5 +124,26 @@ fn parse_yaml_tool_block(block: &str) -> Option<(String, Value)> {
         None
     } else {
         Some((name, Value::Object(object)))
+    }
+}
+
+/// Parser for YAML-style tool calls.
+pub(crate) struct YamlToolParser;
+
+impl TextualToolParser for YamlToolParser {
+    fn name(&self) -> &'static str {
+        "yaml"
+    }
+
+    fn try_parse(&self, text: &str) -> Option<ParsedToolCall> {
+        let result = parse_yaml_tool_call(text);
+        if result.is_none() {
+            tracing::debug!(
+                parser = "yaml",
+                reason = "no matching YAML tool call pattern",
+                "Rejected textual tool call"
+            );
+        }
+        result.map(|(name, args)| ParsedToolCall { name, args })
     }
 }

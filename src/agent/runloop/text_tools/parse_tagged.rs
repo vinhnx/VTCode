@@ -2,10 +2,13 @@ use std::collections::BTreeMap;
 
 use serde_json::{Map, Value};
 
-use crate::agent::runloop::text_tools::canonical::canonicalize_tool_result;
 use crate::agent::runloop::text_tools::parse_args::{
-    normalize_command_string, parse_key_value_arguments, parse_scalar_value, split_indexed_key,
+    find_matching_delimiter, normalize_command_string, parse_key_value_arguments,
+    parse_scalar_value, split_indexed_key,
 };
+use crate::agent::runloop::text_tools::parser::{ParsedToolCall, TextualToolParser};
+
+const MAX_TAGGED_NESTING_DEPTH: usize = 256;
 
 pub(super) fn parse_tagged_tool_call(text: &str) -> Option<(String, Value)> {
     parse_standard_tagged_tool_call(text).or_else(|| parse_minimax_tool_call(text))
@@ -92,28 +95,20 @@ fn parse_standard_tagged_tool_call(text: &str) -> Option<(String, Value)> {
             // Try parsing as JSON first
             if let Some(json_start) = content.find('{') {
                 let json_content = &content[json_start..];
-                // Find matching closing brace
-                let mut depth = 0;
-                let mut json_end = None;
-                for (idx, ch) in json_content.char_indices() {
-                    match ch {
-                        '{' => depth += 1,
-                        '}' => {
-                            depth -= 1;
-                            if depth == 0 {
-                                json_end = Some(idx + 1);
-                                break;
-                            }
+                // Use shared delimiter matcher to find matching closing brace
+                if let Some(json_end) = find_matching_delimiter(
+                    json_content,
+                    0,
+                    '{',
+                    '}',
+                    MAX_TAGGED_NESTING_DEPTH,
+                ) {
+                    if let Ok(parsed) = serde_json::from_str::<Value>(&json_content[..json_end + 1])
+                        && let Some(obj) = parsed.as_object()
+                    {
+                        for (k, v) in obj {
+                            object.insert(k.clone(), v.clone());
                         }
-                        _ => {}
-                    }
-                }
-                if let Some(end) = json_end
-                    && let Ok(parsed) = serde_json::from_str::<Value>(&json_content[..end])
-                    && let Some(obj) = parsed.as_object()
-                {
-                    for (k, v) in obj {
-                        object.insert(k.clone(), v.clone());
                     }
                 }
             }
@@ -159,7 +154,7 @@ fn parse_standard_tagged_tool_call(text: &str) -> Option<(String, Value)> {
         object.insert("command".to_string(), Value::Array(array));
     }
 
-    canonicalize_tool_result(name.to_string(), Value::Object(object))
+    Some((name.to_string(), Value::Object(object)))
 }
 
 fn parse_minimax_tool_call(text: &str) -> Option<(String, Value)> {
@@ -168,8 +163,12 @@ fn parse_minimax_tool_call(text: &str) -> Option<(String, Value)> {
     const PARAMETER_TAG: &str = "<parameter name=\"";
     const PARAMETER_CLOSE: &str = "</parameter>";
 
-    let invoke_start = text.find(INVOKE_TAG)?;
-    let invoke_rest = &text[invoke_start + INVOKE_TAG.len()..];
+    // Strip the ]<]minimax[>[ noise prefix if present
+    let cleaned_text = text.replace("]<]minimax[>[", "");
+    let working_text = cleaned_text.as_str();
+
+    let invoke_start = working_text.find(INVOKE_TAG)?;
+    let invoke_rest = &working_text[invoke_start + INVOKE_TAG.len()..];
     let name_end = invoke_rest.find('"')?;
     let name = invoke_rest[..name_end].trim().to_string();
     if name.is_empty() {
@@ -187,7 +186,11 @@ fn parse_minimax_tool_call(text: &str) -> Option<(String, Value)> {
     let mut object = Map::new();
     let mut indexed_values: BTreeMap<String, BTreeMap<usize, Value>> = BTreeMap::new();
 
+    // First, try parsing <parameter name="..."> tags (old format)
+    let mut found_parameter_tags = false;
+    let original_rest = rest;
     while let Some(parameter_start) = rest.find(PARAMETER_TAG) {
+        found_parameter_tags = true;
         rest = &rest[parameter_start + PARAMETER_TAG.len()..];
 
         let parameter_name_end = match rest.find('"') {
@@ -224,6 +227,76 @@ fn parse_minimax_tool_call(text: &str) -> Option<(String, Value)> {
         rest = &rest[value_end + PARAMETER_CLOSE.len()..];
     }
 
+    // If no <parameter name="..."> tags were found, try parsing child elements (new format)
+    if !found_parameter_tags {
+        rest = original_rest.trim();
+        // Parse direct child elements as parameters
+        while !rest.is_empty() {
+            // Skip whitespace
+            rest = rest.trim_start();
+            if rest.is_empty() {
+                break;
+            }
+
+            // Check if this starts with '<'
+            if !rest.starts_with('<') {
+                break;
+            }
+
+            // Check if this is a closing tag - if so, we're done
+            if rest.starts_with("</") {
+                break;
+            }
+
+            // Extract the tag name
+            rest = &rest[1..]; // Skip the '<'
+            let tag_name_end = rest
+                .find(['>', ' ', '\t', '\n'])
+                .unwrap_or(rest.len());
+            let tag_name = &rest[..tag_name_end].trim();
+
+            // Skip attributes if any and find the '>'
+            let content_start = match rest.find('>') {
+                Some(pos) => pos,
+                None => break,
+            };
+            rest = &rest[content_start + 1..];
+
+            // Find the matching closing tag
+            let close_tag = format!("</{tag_name}>");
+            let content_end = match rest.find(&close_tag) {
+                Some(pos) => pos,
+                None => break,
+            };
+            let content = rest[..content_end].trim();
+
+            // Parse the value - special handling for "command" to preserve quotes
+            let value = if *tag_name == "command" {
+                // For command, normalize it to an array but don't strip quotes via parse_scalar_value
+                if let Some(array) = normalize_command_string(content) {
+                    Value::Array(array)
+                } else {
+                    Value::String(content.to_string())
+                }
+            } else {
+                parse_scalar_value(content)
+            };
+
+            // Add to object or indexed_values
+            if let Some((base, index)) = split_indexed_key(tag_name) {
+                indexed_values
+                    .entry(base.to_string())
+                    .or_default()
+                    .insert(index, value);
+            } else {
+                object.insert(tag_name.to_string(), value);
+            }
+
+            // Move past the closing tag
+            rest = &rest[content_end + close_tag.len()..];
+        }
+    }
+
     for (base, entries) in indexed_values {
         let offset = if entries.contains_key(&0) {
             0usize
@@ -253,7 +326,7 @@ fn parse_minimax_tool_call(text: &str) -> Option<(String, Value)> {
         object.insert("command".to_string(), Value::Array(array));
     }
 
-    canonicalize_tool_result(name, Value::Object(object))
+    Some((name, Value::Object(object)))
 }
 
 fn read_tag_text(input: &str) -> (String, &str) {
@@ -270,5 +343,26 @@ fn read_tag_text(input: &str) -> (String, &str) {
         )
     } else {
         (trimmed.trim().to_string(), "")
+    }
+}
+
+/// Parser for XML-style tagged tool calls.
+pub(crate) struct TaggedToolParser;
+
+impl TextualToolParser for TaggedToolParser {
+    fn name(&self) -> &'static str {
+        "tagged"
+    }
+
+    fn try_parse(&self, text: &str) -> Option<ParsedToolCall> {
+        let result = parse_tagged_tool_call(text);
+        if result.is_none() {
+            tracing::debug!(
+                parser = "tagged",
+                reason = "no matching <tool_call> or <invoke> pattern",
+                "Rejected textual tool call"
+            );
+        }
+        result.map(|(name, args)| ParsedToolCall { name, args })
     }
 }

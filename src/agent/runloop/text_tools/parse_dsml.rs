@@ -1,6 +1,6 @@
 use serde_json::{Map, Value};
 
-use crate::agent::runloop::text_tools::canonical::canonicalize_tool_result;
+use crate::agent::runloop::text_tools::parser::{ParsedToolCall, TextualToolParser};
 
 const DSML_TAG_PREFIX: &str = "<\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}";
 const DSML_CLOSE_PREFIX: &str = "</\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}";
@@ -31,7 +31,13 @@ pub(crate) fn strip_dsml_markup(text: &str) -> String {
     out
 }
 
+/// Public wrapper for tests
+#[cfg(test)]
 pub(super) fn parse_dsml_tool_call(text: &str) -> Option<(String, Value)> {
+    parse_dsml_tool_call_raw(text)
+}
+
+fn parse_dsml_tool_call_raw(text: &str) -> Option<(String, Value)> {
     let invoke_open = format!("{DSML_TAG_PREFIX}invoke name=\"");
     let invoke_close = format!("{DSML_CLOSE_PREFIX}invoke>");
     let param_open = format!("{DSML_TAG_PREFIX}parameter");
@@ -98,7 +104,28 @@ pub(super) fn parse_dsml_tool_call(text: &str) -> Option<(String, Value)> {
         return None;
     }
 
-    canonicalize_tool_result(name, Value::Object(object))
+    Some((name, Value::Object(object)))
+}
+
+/// Parser for DeepSeek DSML v2 format tool calls.
+pub(crate) struct DsmlToolParser;
+
+impl TextualToolParser for DsmlToolParser {
+    fn name(&self) -> &'static str {
+        "dsml"
+    }
+
+    fn try_parse(&self, text: &str) -> Option<ParsedToolCall> {
+        let result = parse_dsml_tool_call_raw(text);
+        if result.is_none() {
+            tracing::debug!(
+                parser = "dsml",
+                reason = "no matching DSML v2 pattern",
+                "Rejected textual tool call"
+            );
+        }
+        result.map(|(name, args)| ParsedToolCall { name, args })
+    }
 }
 
 #[cfg(test)]

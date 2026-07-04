@@ -1,68 +1,12 @@
 use serde_json::Value;
 
-use crate::agent::runloop::text_tools::parse_args::parse_textual_arguments;
+use crate::agent::runloop::text_tools::parse_args::{
+    find_matching_delimiter, parse_textual_arguments,
+};
 use crate::agent::runloop::text_tools::parse_channel::parse_tool_name_from_reference;
+use crate::agent::runloop::text_tools::parser::{ParsedToolCall, TextualToolParser};
 
 const MAX_BRACKETED_NESTING_DEPTH: usize = 256;
-
-fn find_matching_delimiter(input: &str, open: char, close: char) -> Option<usize> {
-    let mut depth = 0usize;
-    let mut in_string: Option<char> = None;
-    let mut escaped = false;
-
-    for (idx, ch) in input.char_indices() {
-        if let Some(delimiter) = in_string {
-            if escaped {
-                escaped = false;
-                continue;
-            }
-            if ch == '\\' {
-                escaped = true;
-                continue;
-            }
-            if ch == delimiter {
-                in_string = None;
-            }
-            continue;
-        }
-
-        if ch == '"' || ch == '\'' {
-            in_string = Some(ch);
-            continue;
-        }
-
-        if ch == open {
-            depth += 1;
-            if depth > MAX_BRACKETED_NESTING_DEPTH {
-                tracing::warn!(
-                    nesting_depth = depth,
-                    max_nesting_depth = MAX_BRACKETED_NESTING_DEPTH,
-                    open = %open,
-                    close = %close,
-                    "Rejected bracketed tool call due to excessive nesting"
-                );
-                return None;
-            }
-            continue;
-        }
-
-        if ch == close {
-            if depth == 0 {
-                tracing::debug!(
-                    close = %close,
-                    "Rejected bracketed tool call due to unmatched closing delimiter"
-                );
-                return None;
-            }
-            depth -= 1;
-            if depth == 0 {
-                return Some(idx);
-            }
-        }
-    }
-
-    None
-}
 
 pub(super) fn parse_bracketed_tool_call(text: &str) -> Option<(String, Value)> {
     let start_tag = "[tool: ";
@@ -88,7 +32,9 @@ pub(super) fn parse_bracketed_tool_call(text: &str) -> Option<(String, Value)> {
 
     if after_name.starts_with('{') {
         // Try to parse as JSON
-        if let Some(idx) = find_matching_delimiter(after_name, '{', '}') {
+        if let Some(idx) =
+            find_matching_delimiter(after_name, 0, '{', '}', MAX_BRACKETED_NESTING_DEPTH)
+        {
             let json_str = &after_name[..idx + 1];
             if let Ok(args) = serde_json::from_str::<Value>(json_str) {
                 return Some((tool_name, args));
@@ -96,7 +42,9 @@ pub(super) fn parse_bracketed_tool_call(text: &str) -> Option<(String, Value)> {
         }
     } else if after_name.starts_with('(') {
         // Try to parse as function arguments
-        if let Some(idx) = find_matching_delimiter(after_name, '(', ')') {
+        if let Some(idx) =
+            find_matching_delimiter(after_name, 0, '(', ')', MAX_BRACKETED_NESTING_DEPTH)
+        {
             let args_str = &after_name[1..idx];
             if let Some(args) = parse_textual_arguments(args_str) {
                 return Some((tool_name, args));
@@ -105,6 +53,27 @@ pub(super) fn parse_bracketed_tool_call(text: &str) -> Option<(String, Value)> {
     }
 
     None
+}
+
+/// Parser for bracketed tool call format.
+pub(crate) struct BracketedToolParser;
+
+impl TextualToolParser for BracketedToolParser {
+    fn name(&self) -> &'static str {
+        "bracketed"
+    }
+
+    fn try_parse(&self, text: &str) -> Option<ParsedToolCall> {
+        let result = parse_bracketed_tool_call(text);
+        if result.is_none() {
+            tracing::debug!(
+                parser = "bracketed",
+                reason = "no matching [tool: ...] pattern",
+                "Rejected textual tool call"
+            );
+        }
+        result.map(|(name, args)| ParsedToolCall { name, args })
+    }
 }
 
 #[cfg(test)]

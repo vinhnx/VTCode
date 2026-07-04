@@ -391,6 +391,68 @@ Please review the summary."#;
 }
 
 #[test]
+fn test_detect_minimax_child_element_parameters() {
+    let message = r#"
+<minimax:tool_call>
+<invoke name="unified_exec">
+<action>run</action>
+<command>python3 -c "print('hello')"</command>
+</invoke>
+</minimax:tool_call>
+"#;
+    let (name, args) =
+        detect_textual_tool_call(message).expect("should parse child-element format");
+    assert_eq!(name, tools::UNIFIED_EXEC);
+    assert_eq!(
+        args,
+        serde_json::json!({
+            "action": "run",
+            "command": ["python3", "-c", "print('hello')"]
+        })
+    );
+}
+
+#[test]
+fn test_detect_minimax_noisy_format() {
+    let message = r#"]<]minimax[>[<tool_call>
+]<]minimax[>[<invoke name="unified_search">]<]minimax[>[<action>grep]<]minimax[>[</action>]<]minimax[>[<path>.vtcode/context/tool_outputs/unified_search_1782625284532136.txt</path>]<]minimax[>[<pattern>^(pub |fn |struct |impl |pub struct |pub fn |pub trait )</pattern>]<]minimax[>[</invoke>
+]<]minimax[>[</tool_call>"#;
+    let (name, args) = detect_textual_tool_call(message).expect("should parse noisy format");
+    assert_eq!(name, tools::UNIFIED_SEARCH);
+    assert_eq!(
+        args,
+        serde_json::json!({
+            "action": "grep",
+            "path": ".vtcode/context/tool_outputs/unified_search_1782625284532136.txt",
+            "pattern": "^(pub |fn |struct |impl |pub struct |pub fn |pub trait )"
+        })
+    );
+}
+
+#[test]
+fn test_detect_minimax_parameter_name_format_still_works() {
+    // Regression test: ensure the old <parameter name="..."> format still works
+    let message = r#"
+<minimax:tool_call>
+<invoke name="unified_file">
+<parameter name="action">read</parameter>
+<parameter name="path">README.md</parameter>
+</invoke>
+</minimax:tool_call>
+"#;
+    let (name, args) =
+        detect_textual_tool_call(message).expect("should parse parameter name format");
+    assert_eq!(name, tools::UNIFIED_FILE);
+    assert_eq!(
+        args,
+        serde_json::json!({
+            "action": "read",
+            "path": "README.md"
+        })
+    );
+}
+
+#[test]
 fn test_strip_textual_tool_call_regions_removes_channel_and_function_markup() {
     let message = concat!(
         "Summary before.\n",
@@ -850,7 +912,8 @@ fn test_parse_tagged_tool_call_handles_nested_json() {
     // Nested JSON should be parsed correctly
     let message =
         r#"<tool_call>run_pty_cmd{"command": "echo", "env": {"PATH": "/usr/bin"}}</tool_call>"#;
-    let result = parse_tagged::parse_tagged_tool_call(message);
+    // Use detect_textual_tool_call which applies canonicalization
+    let result = detect_textual_tool_call(message);
     assert!(result.is_some(), "Should parse nested JSON");
     let (name, args) = result.unwrap();
     assert_eq!(name, tools::UNIFIED_EXEC);

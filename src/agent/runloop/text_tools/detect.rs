@@ -1,211 +1,55 @@
 use memchr::{memchr, memmem};
 use serde_json::Value;
+use std::sync::OnceLock;
 
 use crate::agent::runloop::text_tools::canonical::{
-    DIRECT_FUNCTION_ALIASES, TEXTUAL_TOOL_PREFIXES, canonicalize_tool_name,
-    canonicalize_tool_result,
+    DIRECT_FUNCTION_ALIASES, TEXTUAL_TOOL_PREFIXES, canonicalize_tool_result,
 };
-use crate::agent::runloop::text_tools::parse_args::parse_textual_arguments;
-use crate::agent::runloop::text_tools::parse_bracketed::parse_bracketed_tool_call;
-use crate::agent::runloop::text_tools::parse_channel::parse_channel_tool_call;
-use crate::agent::runloop::text_tools::parse_dsml::parse_dsml_tool_call;
-use crate::agent::runloop::text_tools::parse_structured::parse_rust_struct_tool_call;
-use crate::agent::runloop::text_tools::parse_tagged::parse_tagged_tool_call;
-use crate::agent::runloop::text_tools::parse_yaml::parse_yaml_tool_call;
+use crate::agent::runloop::text_tools::parse_args::{
+    find_matching_delimiter, parse_textual_arguments,
+};
+use crate::agent::runloop::text_tools::parse_bracketed::BracketedToolParser;
+use crate::agent::runloop::text_tools::parse_channel::ChannelToolParser;
+use crate::agent::runloop::text_tools::parse_dsml::DsmlToolParser;
+use crate::agent::runloop::text_tools::parse_structured::StructuredToolParser;
+use crate::agent::runloop::text_tools::parse_tagged::TaggedToolParser;
+use crate::agent::runloop::text_tools::parse_yaml::YamlToolParser;
+use crate::agent::runloop::text_tools::parser::{
+    ParsedToolCall, TextualToolParser, TextualToolParserRegistry,
+};
 
 const MAX_TEXTUAL_NESTING_DEPTH: usize = 256;
 
-fn matching_open_delimiter(close: char) -> Option<char> {
-    match close {
-        ')' => Some('('),
-        '}' => Some('{'),
-        ']' => Some('['),
-        _ => None,
-    }
-}
+/// Creates the default parser registry with all textual tool parsers
+/// registered in priority order.
+static DEFAULT_PARSER_REGISTRY: OnceLock<TextualToolParserRegistry> = OnceLock::new();
 
-fn find_matching_paren_end_with_depth_limit(text: &str, args_start: usize) -> Option<usize> {
-    let mut stack = Vec::with_capacity(8);
-    stack.push('(');
+fn default_parser_registry() -> &'static TextualToolParserRegistry {
+    DEFAULT_PARSER_REGISTRY.get_or_init(|| {
+        let mut registry = TextualToolParserRegistry::new();
 
-    let mut in_string: Option<char> = None;
-    let mut escaped = false;
+        // Register parsers in priority order (same as hardcoded chain before)
+        registry.register(Box::new(ChannelToolParser));
+        registry.register(Box::new(DsmlToolParser));
+        registry.register(Box::new(TaggedToolParser));
+        registry.register(Box::new(StructuredToolParser));
+        registry.register(Box::new(YamlToolParser));
+        registry.register(Box::new(BracketedToolParser));
+        registry.register(Box::new(PrefixedToolParser));
+        registry.register(Box::new(DirectFunctionAliasParser));
 
-    for (relative, ch) in text[args_start..].char_indices() {
-        if let Some(delimiter) = in_string {
-            if escaped {
-                escaped = false;
-                continue;
-            }
-            if ch == '\\' {
-                escaped = true;
-                continue;
-            }
-            if ch == delimiter {
-                in_string = None;
-            }
-            continue;
-        }
-
-        if ch == '"' || ch == '\'' {
-            in_string = Some(ch);
-            continue;
-        }
-
-        match ch {
-            '(' | '{' | '[' => {
-                stack.push(ch);
-                if stack.len() > MAX_TEXTUAL_NESTING_DEPTH {
-                    tracing::warn!(
-                        nesting_depth = stack.len(),
-                        max_nesting_depth = MAX_TEXTUAL_NESTING_DEPTH,
-                        "Rejected textual tool call due to excessive delimiter nesting"
-                    );
-                    return None;
-                }
-            }
-            ')' | '}' | ']' => {
-                let expected = match matching_open_delimiter(ch) {
-                    Some(value) => value,
-                    None => {
-                        tracing::debug!(
-                            delimiter = %ch,
-                            "Rejected textual tool call due to unsupported closing delimiter"
-                        );
-                        return None;
-                    }
-                };
-                let current = match stack.pop() {
-                    Some(value) => value,
-                    None => {
-                        tracing::debug!(
-                            delimiter = %ch,
-                            "Rejected textual tool call due to unmatched closing delimiter"
-                        );
-                        return None;
-                    }
-                };
-                if current != expected {
-                    tracing::debug!(
-                        current_open = %current,
-                        expected_open = %expected,
-                        close = %ch,
-                        "Rejected textual tool call due to mismatched delimiters"
-                    );
-                    return None;
-                }
-                if stack.is_empty() {
-                    return Some(args_start + relative);
-                }
-            }
-            _ => {}
-        }
-    }
-
-    None
+        registry
+    })
 }
 
 pub(crate) fn detect_textual_tool_call(text: &str) -> Option<(String, Value)> {
-    // Try gpt-oss channel format first
-    if let Some((name, args)) = parse_channel_tool_call(text)
-        && let Some(result) = canonicalize_tool_result(name, args)
-    {
-        return Some(result);
+    let registry = default_parser_registry();
+
+    if let Some((parsed, should_validate)) = registry.try_parse(text) {
+        canonicalize_tool_result(parsed.name, parsed.args, should_validate)
+    } else {
+        None
     }
-
-    // DeepSeek DSML v2 format: <||DSML||invoke name="...">
-    if let Some((name, args)) = parse_dsml_tool_call(text)
-        && let Some(result) = canonicalize_tool_result(name, args)
-    {
-        return Some(result);
-    }
-
-    if let Some((name, args)) = parse_tagged_tool_call(text)
-        && let Some(result) = canonicalize_tool_result(name, args)
-    {
-        return Some(result);
-    }
-
-    if let Some((name, args)) = parse_rust_struct_tool_call(text)
-        && let Some(result) = canonicalize_tool_result(name, args)
-    {
-        return Some(result);
-    }
-
-    if let Some((name, args)) = parse_yaml_tool_call(text)
-        && let Some(result) = canonicalize_tool_result(name, args)
-    {
-        return Some(result);
-    }
-
-    if let Some((name, args)) = parse_bracketed_tool_call(text)
-        && let Some(result) = canonicalize_tool_result(name, args)
-    {
-        return Some(result);
-    }
-
-    for prefix in TEXTUAL_TOOL_PREFIXES {
-        let prefix_bytes = prefix.as_bytes();
-        let text_bytes = text.as_bytes();
-        let mut search_start = 0usize;
-
-        while search_start < text_bytes.len() {
-            if let Some(offset) = memmem::find(&text_bytes[search_start..], prefix_bytes) {
-                let prefix_index = search_start + offset;
-                let start = prefix_index + prefix.len();
-                if start >= text.len() {
-                    break;
-                }
-                let tail = &text[start..];
-                let mut name_len = 0usize;
-                for ch in tail.chars() {
-                    if ch.is_ascii_alphanumeric() || ch == '_' {
-                        name_len += ch.len_utf8();
-                    } else {
-                        break;
-                    }
-                }
-                if name_len == 0 {
-                    search_start = prefix_index + prefix.len();
-                    continue;
-                }
-
-                let name = tail[..name_len].to_string();
-                let after_name = &tail[name_len..];
-
-                // Use memchr to search for the opening parenthesis
-                let paren_pos = memchr(b'(', after_name.as_bytes());
-                let paren_offset = if let Some(pos) = paren_pos {
-                    pos
-                } else {
-                    search_start = start;
-                    continue;
-                };
-
-                let args_start = start + name_len + paren_offset + 1;
-                let Some(args_end) = find_matching_paren_end_with_depth_limit(text, args_start)
-                else {
-                    search_start = start;
-                    continue;
-                };
-                let raw_args = &text[args_start..args_end];
-                if let Some(args) = parse_textual_arguments(raw_args)
-                    && let Some(canonical) = canonicalize_tool_name(&name)
-                {
-                    return Some((canonical, args));
-                }
-
-                search_start = prefix_index + prefix.len() + name_len;
-            } else {
-                break; // No more matches
-            }
-        }
-    }
-
-    if let Some(result) = detect_direct_function_alias(text) {
-        return Some(result);
-    }
-    None
 }
 
 /// Check whether `text` contains raw pseudo-tool-call markup markers that
@@ -405,7 +249,10 @@ fn collect_bracketed_regions(text: &str, regions: &mut Vec<(usize, usize)>) {
                 continue;
             }
         };
-        let Some(args_end) = find_matching_delimiter_end(text, args_start, open, close) else {
+        // Use shared delimiter matcher
+        let Some(args_end) =
+            find_matching_delimiter(text, args_start, open, close, MAX_TEXTUAL_NESTING_DEPTH)
+        else {
             search_start = after_header;
             continue;
         };
@@ -431,8 +278,15 @@ fn collect_prefixed_function_regions(text: &str, prefix: &str, regions: &mut Vec
         let Some(paren_relative) = text[after_prefix..].find('(') else {
             break;
         };
-        let args_start = after_prefix + paren_relative + 1;
-        let Some(args_end) = find_matching_paren_end_with_depth_limit(text, args_start) else {
+        let paren_index = after_prefix + paren_relative;
+        // Use shared delimiter matcher (pass paren index, not args_start)
+        let Some(args_end) =
+            find_matching_delimiter(text, paren_index, '(', ')', MAX_TEXTUAL_NESTING_DEPTH)
+        else {
+            tracing::debug!(
+                prefix = %prefix,
+                "Rejected prefixed function call due to unmatched parentheses"
+            );
             search_start = after_prefix;
             continue;
         };
@@ -471,7 +325,14 @@ fn collect_direct_function_regions(text: &str, alias: &str, regions: &mut Vec<(u
             search_start = alias_end;
             continue;
         };
-        let Some(args_end) = find_matching_paren_end_with_depth_limit(text, paren_pos + 1) else {
+        // Use shared delimiter matcher (pass paren index, not args_start)
+        let Some(args_end) =
+            find_matching_delimiter(text, paren_pos, '(', ')', MAX_TEXTUAL_NESTING_DEPTH)
+        else {
+            tracing::debug!(
+                alias = %alias,
+                "Rejected direct function call due to unmatched parentheses"
+            );
             search_start = alias_end;
             continue;
         };
@@ -514,48 +375,6 @@ fn expand_wrapping_function_region(text: &str, start: usize, end: usize) -> (usi
     }
 }
 
-fn find_matching_delimiter_end(
-    text: &str,
-    open_index: usize,
-    open: char,
-    close: char,
-) -> Option<usize> {
-    let mut depth = 0usize;
-    let mut in_string: Option<char> = None;
-    let mut escaped = false;
-
-    for (relative, ch) in text[open_index..].char_indices() {
-        if let Some(delimiter) = in_string {
-            if escaped {
-                escaped = false;
-                continue;
-            }
-            if ch == '\\' {
-                escaped = true;
-                continue;
-            }
-            if ch == delimiter {
-                in_string = None;
-            }
-            continue;
-        }
-
-        if ch == '"' || ch == '\'' {
-            in_string = Some(ch);
-            continue;
-        }
-        if ch == open {
-            depth += 1;
-        } else if ch == close {
-            depth = depth.checked_sub(1)?;
-            if depth == 0 {
-                return Some(open_index + relative);
-            }
-        }
-    }
-    None
-}
-
 fn add_valid_region(text: &str, start: usize, end: usize, regions: &mut Vec<(usize, usize)>) {
     if start >= end || end > text.len() {
         return;
@@ -565,7 +384,114 @@ fn add_valid_region(text: &str, start: usize, end: usize, regions: &mut Vec<(usi
     }
 }
 
-fn detect_direct_function_alias(text: &str) -> Option<(String, Value)> {
+/// Parser for prefixed tool calls (e.g., "default_api.tool_name(...)").
+struct PrefixedToolParser;
+
+impl TextualToolParser for PrefixedToolParser {
+    fn name(&self) -> &'static str {
+        "prefixed"
+    }
+
+    fn try_parse(&self, text: &str) -> Option<ParsedToolCall> {
+        for prefix in TEXTUAL_TOOL_PREFIXES {
+            let prefix_bytes = prefix.as_bytes();
+            let text_bytes = text.as_bytes();
+            let mut search_start = 0usize;
+
+            while search_start < text_bytes.len() {
+                if let Some(offset) = memmem::find(&text_bytes[search_start..], prefix_bytes) {
+                    let prefix_index = search_start + offset;
+                    let start = prefix_index + prefix.len();
+                    if start >= text.len() {
+                        break;
+                    }
+                    let tail = &text[start..];
+                    let mut name_len = 0usize;
+                    for ch in tail.chars() {
+                        if ch.is_ascii_alphanumeric() || ch == '_' {
+                            name_len += ch.len_utf8();
+                        } else {
+                            break;
+                        }
+                    }
+                    if name_len == 0 {
+                        search_start = prefix_index + prefix.len();
+                        continue;
+                    }
+
+                    let name = tail[..name_len].to_string();
+                    let after_name = &tail[name_len..];
+
+                    let paren_pos = memchr(b'(', after_name.as_bytes());
+                    let paren_offset = if let Some(pos) = paren_pos {
+                        pos
+                    } else {
+                        tracing::debug!(
+                            parser = "prefixed",
+                            reason = "no opening parenthesis",
+                            "Rejected prefixed tool call"
+                        );
+                        search_start = start;
+                        continue;
+                    };
+
+                    let paren_index = start + name_len + paren_offset;
+                    // Use shared delimiter matcher (pass paren index, not args_start)
+                    let Some(args_end) = find_matching_delimiter(
+                        text,
+                        paren_index,
+                        '(',
+                        ')',
+                        MAX_TEXTUAL_NESTING_DEPTH,
+                    ) else {
+                        tracing::debug!(
+                            parser = "prefixed",
+                            reason = "unmatched parentheses",
+                            "Rejected prefixed tool call"
+                        );
+                        search_start = start;
+                        continue;
+                    };
+                    let args_start = paren_index + 1;
+                    let raw_args = &text[args_start..args_end];
+                    if let Some(args) = parse_textual_arguments(raw_args) {
+                        // Return raw name/args; canonicalization happens in detect_textual_tool_call
+                        return Some(ParsedToolCall { name, args });
+                    }
+
+                    search_start = prefix_index + prefix.len() + name_len;
+                } else {
+                    break;
+                }
+            }
+        }
+        tracing::debug!(
+            parser = "prefixed",
+            reason = "no matching prefix pattern found",
+            "Rejected textual tool call"
+        );
+        None
+    }
+
+    fn should_validate_tool_name(&self) -> bool {
+        false // Skip validation for prefixed tools (backward compatibility)
+    }
+}
+
+/// Parser for direct function aliases (e.g., "run(...)", "terminal_cmd(...)").
+struct DirectFunctionAliasParser;
+
+impl TextualToolParser for DirectFunctionAliasParser {
+    fn name(&self) -> &'static str {
+        "direct_alias"
+    }
+
+    fn try_parse(&self, text: &str) -> Option<ParsedToolCall> {
+        detect_direct_function_alias(text)
+    }
+}
+
+fn detect_direct_function_alias(text: &str) -> Option<ParsedToolCall> {
     let lowered = text.to_ascii_lowercase();
 
     for alias in DIRECT_FUNCTION_ALIASES {
@@ -600,22 +526,42 @@ fn detect_direct_function_alias(text: &str) -> Option<(String, Value)> {
                 }
 
                 let Some(paren_pos) = paren_index else {
+                    tracing::debug!(
+                        parser = "direct_alias",
+                        alias = %alias,
+                        reason = "no opening parenthesis",
+                        "Rejected direct function alias"
+                    );
+                    search_start = end;
+                    continue;
+                };
+
+                // Use shared delimiter matcher (pass paren index, not args_start)
+                let Some(end_pos) = find_matching_delimiter(
+                    text,
+                    paren_pos,
+                    '(',
+                    ')',
+                    MAX_TEXTUAL_NESTING_DEPTH,
+                ) else {
+                    tracing::debug!(
+                        parser = "direct_alias",
+                        alias = %alias,
+                        reason = "unmatched parentheses",
+                        "Rejected direct function alias"
+                    );
                     search_start = end;
                     continue;
                 };
 
                 let args_start = paren_pos + 1;
-                let Some(end_pos) = find_matching_paren_end_with_depth_limit(text, args_start)
-                else {
-                    search_start = end;
-                    continue;
-                };
-
                 let raw_args = &text[args_start..end_pos];
-                if let Some(args) = parse_textual_arguments(raw_args)
-                    && let Some(result) = canonicalize_tool_result(alias.to_string(), args)
-                {
-                    return Some(result);
+                if let Some(args) = parse_textual_arguments(raw_args) {
+                    // Return raw name/args; canonicalization happens in detect_textual_tool_call
+                    return Some(ParsedToolCall {
+                        name: alias.to_string(),
+                        args,
+                    });
                 }
 
                 search_start = end;
@@ -625,5 +571,10 @@ fn detect_direct_function_alias(text: &str) -> Option<(String, Value)> {
         }
     }
 
+    tracing::debug!(
+        parser = "direct_alias",
+        reason = "no matching alias pattern found",
+        "Rejected textual tool call"
+    );
     None
 }

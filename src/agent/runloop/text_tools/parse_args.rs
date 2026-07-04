@@ -1,6 +1,81 @@
 use serde_json::{Map, Number, Value};
 use shell_words::split as shell_split;
 
+/// Shared delimiter matcher for all parsers.
+/// Returns the index of the matching close delimiter in `text`.
+/// `start` is the index of the open delimiter.
+/// Tracks both the specific delimiter pair AND total nesting depth across all delimiter types
+/// to detect excessively deep mixed nesting.
+pub(super) fn find_matching_delimiter(
+    text: &str,
+    start: usize,
+    open: char,
+    close: char,
+    max_depth: usize,
+) -> Option<usize> {
+    let mut target_depth = 0usize;
+    let mut total_depth = 0usize;
+    let mut in_string: Option<char> = None;
+    let mut escaped = false;
+
+    for (relative, ch) in text[start..].char_indices() {
+        if let Some(delimiter) = in_string {
+            if escaped {
+                escaped = false;
+                continue;
+            }
+            if ch == '\\' {
+                escaped = true;
+                continue;
+            }
+            if ch == delimiter {
+                in_string = None;
+            }
+            continue;
+        }
+
+        if ch == '"' || ch == '\'' {
+            in_string = Some(ch);
+            continue;
+        }
+
+        // Track all opening delimiters for total depth
+        if matches!(ch, '(' | '{' | '[') {
+            total_depth += 1;
+            if total_depth > max_depth {
+                tracing::warn!(
+                    total_nesting_depth = total_depth,
+                    max_nesting_depth = max_depth,
+                    open = %open,
+                    close = %close,
+                    "Rejected delimiter matching due to excessive mixed nesting"
+                );
+                return None;
+            }
+            if ch == open {
+                target_depth += 1;
+            }
+        } else if matches!(ch, ')' | '}' | ']') {
+            total_depth = total_depth.saturating_sub(1);
+            if ch == close {
+                if target_depth == 0 {
+                    tracing::debug!(
+                        close = %close,
+                        "Rejected delimiter matching due to unmatched closing delimiter"
+                    );
+                    return None;
+                }
+                target_depth -= 1;
+                if target_depth == 0 {
+                    return Some(start + relative);
+                }
+            }
+        }
+    }
+
+    None
+}
+
 pub(super) fn parse_textual_arguments(raw: &str) -> Option<Value> {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
@@ -20,20 +95,74 @@ pub(super) fn try_parse_json_value(input: &str) -> Option<Value> {
         return Some(Value::Object(Map::new()));
     }
 
-    serde_json::from_str(trimmed).ok().or_else(|| {
-        if trimmed.contains('\'') {
-            let normalized = trimmed.replace('\'', "\"");
-            serde_json::from_str(&normalized).ok()
-        } else {
-            None
+    // Try standard JSON parsing first
+    if let Ok(val) = serde_json::from_str(trimmed) {
+        return Some(val);
+    }
+
+    // If input contains single quotes and no double quotes inside strings,
+    // attempt single-quoted JSON parsing (minimal tokenizer)
+    if trimmed.contains('\'') && !has_double_quotes_in_strings(trimmed) {
+        let normalized = convert_single_quoted_json(trimmed);
+        if let Ok(val) = serde_json::from_str(&normalized) {
+            return Some(val);
         }
-    })
+    }
+
+    None
+}
+
+fn has_double_quotes_in_strings(input: &str) -> bool {
+    let mut in_single = false;
+    let mut escaped = false;
+    for ch in input.chars() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+        if ch == '\\' {
+            escaped = true;
+            continue;
+        }
+        if ch == '\'' {
+            in_single = !in_single;
+        } else if ch == '"' && in_single {
+            return true;
+        }
+    }
+    false
+}
+
+fn convert_single_quoted_json(input: &str) -> String {
+    let mut result = String::with_capacity(input.len());
+    let mut in_single = false;
+    let mut escaped = false;
+    for ch in input.chars() {
+        if escaped {
+            result.push(ch);
+            escaped = false;
+            continue;
+        }
+        if ch == '\\' {
+            result.push(ch);
+            escaped = true;
+            continue;
+        }
+        if ch == '\'' {
+            result.push('"');
+            in_single = !in_single;
+        } else {
+            result.push(ch);
+        }
+    }
+    result
 }
 
 pub(super) fn parse_key_value_arguments(input: &str) -> Option<Value> {
     let mut map = Map::new();
 
-    for segment in input.split(',') {
+    // Use quote-aware splitting instead of naive split(',') to handle values like "a,b"
+    for segment in split_function_arguments(input) {
         let pair = segment.trim().trim_end_matches(';').trim();
         if pair.is_empty() {
             continue;

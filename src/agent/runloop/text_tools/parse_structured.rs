@@ -5,6 +5,7 @@ use crate::agent::runloop::text_tools::canonical::canonicalize_tool_name;
 use crate::agent::runloop::text_tools::parse_args::{
     normalize_command_string, parse_scalar_value, split_function_arguments, split_top_level_entries,
 };
+use crate::agent::runloop::text_tools::parser::{ParsedToolCall, TextualToolParser};
 
 pub(super) fn parse_rust_struct_tool_call(text: &str) -> Option<(String, Value)> {
     let mut search = text;
@@ -251,4 +252,25 @@ fn parse_function_call_block(block: &str) -> Option<(String, Value)> {
     }
 
     Some((name.to_string(), Value::Object(object)))
+}
+
+/// Parser for Rust struct-style tool calls in code fences.
+pub(crate) struct StructuredToolParser;
+
+impl TextualToolParser for StructuredToolParser {
+    fn name(&self) -> &'static str {
+        "structured"
+    }
+
+    fn try_parse(&self, text: &str) -> Option<ParsedToolCall> {
+        let result = parse_rust_struct_tool_call(text);
+        if result.is_none() {
+            tracing::debug!(
+                parser = "structured",
+                reason = "no matching Rust struct pattern",
+                "Rejected textual tool call"
+            );
+        }
+        result.map(|(name, args)| ParsedToolCall { name, args })
+    }
 }
