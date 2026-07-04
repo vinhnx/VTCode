@@ -7,7 +7,6 @@ use serde_json::Value;
 use std::sync::Arc;
 use tokio::sync::Semaphore;
 
-use crate::core::memory_pool::global_pool;
 use crate::tools::registry::ToolExecutionRecord;
 
 /// Lock-free tool metadata cache
@@ -28,34 +27,43 @@ pub struct OptimizedToolRegistry {
     /// Execution semaphore to limit concurrent tool executions
     execution_semaphore: Arc<Semaphore>,
 
-    /// Hot path cache for frequently accessed tools
-    hot_cache: Arc<RwLock<HashMap<String, Arc<CachedToolMetadata>>>>,
+    /// Hot path LRU cache for frequently accessed tools.
+    /// Uses an LRU cache so that stale entries are evicted when the
+    /// capacity is reached, instead of silently refusing new entries.
+    hot_cache: Arc<RwLock<lru::LruCache<String, Arc<CachedToolMetadata>>>>,
 
     /// Execution statistics (append-only for performance)
     execution_stats: Arc<RwLock<Vec<ToolExecutionRecord>>>,
 }
+
+/// Maximum number of entries in the hot-path tool metadata cache.
+const HOT_CACHE_CAPACITY: usize = 16;
 
 impl OptimizedToolRegistry {
     pub fn new(max_concurrent_tools: usize) -> Self {
         Self {
             tool_metadata: Arc::new(RwLock::new(HashMap::with_capacity(64))),
             execution_semaphore: Arc::new(Semaphore::new(max_concurrent_tools)),
-            hot_cache: Arc::new(RwLock::new(HashMap::with_capacity(16))),
+            hot_cache: Arc::new(RwLock::new(lru::LruCache::new(
+                std::num::NonZeroUsize::new(HOT_CACHE_CAPACITY)
+                    .unwrap_or(std::num::NonZeroUsize::MIN),
+            ))),
             execution_stats: Arc::new(RwLock::new(Vec::with_capacity(1024))),
         }
     }
 
     /// Fast tool lookup with hot cache optimization
     pub fn get_tool_metadata(&self, tool_name: &str) -> Option<Arc<CachedToolMetadata>> {
-        // Try hot cache first (most frequently used tools)
-        if let Some(metadata) = self.hot_cache.read().get(tool_name) {
+        // Try hot cache first (most frequently used tools).
+        // `get` on LRU promotes the entry to most-recently-used automatically.
+        if let Some(metadata) = self.hot_cache.write().get(tool_name) {
             return Some(Arc::clone(metadata));
         }
 
         // Fallback to main cache
         let metadata = self.tool_metadata.read().get(tool_name).cloned()?;
 
-        // Promote to hot cache if accessed frequently
+        // Promote to hot cache
         self.promote_to_hot_cache(tool_name, &metadata);
 
         Some(metadata)
@@ -76,10 +84,6 @@ impl OptimizedToolRegistry {
 
         let start_time = std::time::Instant::now();
 
-        // Get reusable memory from pool
-        let pool = global_pool();
-        let result_string = pool.get_string();
-
         // Simulate tool execution (replace with actual implementation)
         let result = self.execute_tool_impl(tool_name, _args).await;
 
@@ -88,18 +92,16 @@ impl OptimizedToolRegistry {
         // Record execution statistics inline to keep behavior deterministic.
         self.record_execution_stats(tool_name, execution_time, result.is_ok());
 
-        // Return memory to pool
-        pool.return_string(result_string);
-
         result
     }
 
-    /// Promote frequently accessed tools to hot cache
+    /// Promote frequently accessed tools to hot cache.
+    /// The LRU cache automatically evicts the least-recently-used entry
+    /// when capacity is reached.
     fn promote_to_hot_cache(&self, tool_name: &str, metadata: &Arc<CachedToolMetadata>) {
-        let mut hot_cache = self.hot_cache.write();
-        if hot_cache.len() < 16 {
-            hot_cache.insert(tool_name.to_string(), Arc::clone(metadata));
-        }
+        self.hot_cache
+            .write()
+            .push(tool_name.to_string(), Arc::clone(metadata));
     }
 
     /// Record execution statistics with minimal blocking

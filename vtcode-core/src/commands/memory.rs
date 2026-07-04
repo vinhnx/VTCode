@@ -38,7 +38,7 @@ fn display_memory_report(report: &MemoryReport) {
     );
 
     println!("\n{} Pressure Status:", style("[PRESSURE]").dim());
-    let pressure_str = format!("{}", report.pressure);
+    let pressure_str = report.pressure.to_string();
     let pressure_colored = match report.pressure {
         MemoryPressure::Normal => style(pressure_str).green(),
         MemoryPressure::Warning => style(pressure_str).red(),

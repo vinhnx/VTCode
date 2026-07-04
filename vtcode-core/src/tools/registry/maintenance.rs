@@ -81,15 +81,16 @@ impl ToolRegistry {
     }
 
     pub async fn initialize_async(&self) -> Result<()> {
-        let mcp_client_is_none = self.mcp_client.read().is_none();
+        // Acquire the MCP client lock once and derive both flags from it,
+        // avoiding a second read-lock acquisition below.
+        let mcp_client_held = self.mcp_client.read().is_some();
         if self.initialized.load(std::sync::atomic::Ordering::Relaxed)
-            && (mcp_client_is_none || !self.mcp_tool_index.read().await.is_empty())
+            && (!mcp_client_held || !self.mcp_tool_index.read().await.is_empty())
         {
             return Ok(());
         }
 
-        let mcp_client_is_some = self.mcp_client.read().is_some();
-        if mcp_client_is_some
+        if mcp_client_held
             && self.mcp_tool_index.read().await.is_empty()
             && let Err(err) = self.refresh_mcp_tools().await
         {

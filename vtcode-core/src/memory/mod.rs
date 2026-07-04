@@ -158,23 +158,21 @@ impl MemoryMonitor {
     pub fn record_checkpoint(&self, label: String) -> Result<(), MemoryError> {
         let rss = Self::get_rss_bytes()?;
 
-        // Only record if change is significant (> 1 MB)
+        // Only record if change is significant (> 1 MB).
+        // Hold a single lock for both the threshold check and the push to
+        // avoid acquiring the mutex twice.
         let min_threshold = vtcode_config::constants::memory::MIN_RSS_CHECKPOINT_BYTES;
-        if let Ok(state) = self.state.lock() {
+        if let Ok(mut state) = self.state.lock() {
             let diff = (rss as i64 - state.last_rss_bytes as i64).unsigned_abs() as usize;
             if diff < min_threshold {
                 return Ok(());
             }
-        }
 
-        let checkpoint = MemoryCheckpoint {
-            timestamp: current_timestamp(),
-            rss_bytes: rss,
-            label,
-        };
-
-        if let Ok(mut state) = self.state.lock() {
-            state.checkpoints.push_back(checkpoint);
+            state.checkpoints.push_back(MemoryCheckpoint {
+                timestamp: current_timestamp(),
+                rss_bytes: rss,
+                label,
+            });
 
             // Enforce max checkpoint history
             let max_history = vtcode_config::constants::memory::MAX_CHECKPOINT_HISTORY;

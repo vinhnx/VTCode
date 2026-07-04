@@ -144,11 +144,12 @@ impl ToolOutputSpooler {
             .join("context")
             .join("tool_outputs");
 
+        let max_files = config.max_files;
         Self {
             workspace_root: workspace_root.to_path_buf(),
             output_dir,
             config,
-            spooled_files: Arc::new(RwLock::new(Vec::new())),
+            spooled_files: Arc::new(RwLock::new(Vec::with_capacity(max_files))),
             spool_count: std::sync::atomic::AtomicU64::new(0),
         }
     }

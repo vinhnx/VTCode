@@ -336,7 +336,7 @@ impl ToolExecutionHistory {
     /// Create a new execution history with a maximum record count.
     pub fn new(max_records: usize) -> Self {
         Self {
-            records: Arc::new(RwLock::new(VecDeque::new())),
+            records: Arc::new(RwLock::new(VecDeque::with_capacity(max_records))),
             max_records,
             detect_window: Arc::new(std::sync::atomic::AtomicUsize::new(
                 DEFAULT_LOOP_DETECT_WINDOW,

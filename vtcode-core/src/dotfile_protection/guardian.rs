@@ -291,7 +291,7 @@ impl DotfileGuardian {
         if self.config.prevent_cascading_modifications && context.is_cascading {
             let violation = ProtectionViolation {
                 file_path: context.file_path.to_string_lossy().into_owned(),
-                access_type: format!("{}", context.access_type),
+                access_type: context.access_type.to_string(),
                 reason: format!(
                     "Cascading modification blocked. This change was triggered by modifying '{}'",
                     context
@@ -311,7 +311,7 @@ impl DotfileGuardian {
         if self.config.block_during_automation && context.is_automated {
             let violation = ProtectionViolation {
                 file_path: context.file_path.to_string_lossy().into_owned(),
-                access_type: format!("{}", context.access_type),
+                access_type: context.access_type.to_string(),
                 reason: format!(
                     "Dotfile modification blocked during automated operation ({})",
                     context.initiator
@@ -325,7 +325,7 @@ impl DotfileGuardian {
         // Build confirmation request
         let request = ConfirmationRequest {
             file_path: context.file_path.to_string_lossy().into_owned(),
-            access_type: format!("{}", context.access_type),
+            access_type: context.access_type.to_string(),
             proposed_changes: context
                 .proposed_changes
                 .clone()
@@ -474,7 +474,7 @@ impl DotfileGuardian {
     async fn log_access(&self, context: &AccessContext, outcome: AuditOutcome) -> Result<()> {
         if let Some(ref log) = self.audit_log {
             let mut entry = AuditEntry::new(
-                context.file_path.to_string_lossy().to_string(),
+                context.file_path.to_string_lossy(),
                 context.access_type,
                 outcome,
                 &context.initiator,

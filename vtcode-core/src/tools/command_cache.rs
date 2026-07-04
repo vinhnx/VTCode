@@ -100,7 +100,9 @@ impl CommandCache {
         let trimmed = command.trim();
         cfg.allowlist.iter().any(|entry| {
             let entry = entry.trim();
-            trimmed == entry || trimmed.starts_with(&format!("{entry} "))
+            trimmed == entry
+                || (trimmed.starts_with(entry)
+                    && trimmed.as_bytes().get(entry.len()) == Some(&b' '))
         })
     }
 

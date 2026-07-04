@@ -147,6 +147,14 @@ impl ToolRegistry {
             load_workspace_spooler_config(&workspace_root),
         ));
 
+        // Pre-allocate FxHashMaps with expected capacity for typical MCP tool sets.
+        // Most sessions register 10-50 MCP tools; start with room for 32 to
+        // avoid rehashing during initial discovery without wasting memory.
+        let mcp_tool_index =
+            rustc_hash::FxHashMap::with_capacity_and_hasher(32, rustc_hash::FxBuildHasher);
+        let mcp_reverse_index =
+            rustc_hash::FxHashMap::with_capacity_and_hasher(32, rustc_hash::FxBuildHasher);
+
         let registry = Self {
             inventory,
             edited_file_monitor,
@@ -154,8 +162,8 @@ impl ToolRegistry {
             pty_sessions,
             exec_sessions,
             mcp_client: Arc::new(parking_lot::RwLock::new(None)),
-            mcp_tool_index: Arc::new(tokio::sync::RwLock::new(rustc_hash::FxHashMap::default())),
-            mcp_reverse_index: Arc::new(tokio::sync::RwLock::new(rustc_hash::FxHashMap::default())),
+            mcp_tool_index: Arc::new(tokio::sync::RwLock::new(mcp_tool_index)),
+            mcp_reverse_index: Arc::new(tokio::sync::RwLock::new(mcp_reverse_index)),
             timeout_policy: Arc::new(parking_lot::RwLock::new(ToolTimeoutPolicy::default())),
             execution_history: ToolExecutionHistory::new(100),
             harness_context: HarnessContext::default(),

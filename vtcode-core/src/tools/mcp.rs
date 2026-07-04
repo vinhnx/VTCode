@@ -49,7 +49,7 @@ pub fn build_mcp_registration(
 
     let mut metadata = crate::tools::registry::ToolMetadata::default()
         .with_description(desc_with_hint)
-        .with_parameter_schema(tool.input_schema.clone())
+        .with_parameter_schema(input_schema.clone())
         .with_permission(ToolPolicy::Prompt)
         .with_aliases(aliases);
     if let Some(hint) = server_hint {
