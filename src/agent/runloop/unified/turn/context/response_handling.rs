@@ -137,6 +137,19 @@ impl<'a> TurnProcessingContext<'a> {
     ) -> anyhow::Result<TurnHandlerOutcome> {
         let recovery_pass_response = self.is_recovery_active() && self.recovery_pass_used();
         let tool_free_recovery_pass = recovery_pass_response && self.recovery_is_tool_free();
+        // Tool-free recovery is terminal: the model's text IS the final answer.
+        // Some providers (e.g. MiniMax) emit a noise prefix like `]<]minimax[>[`
+        // before/instead of real content. When the model has nothing to
+        // synthesize, this residue becomes the user-visible final answer — the
+        // "agent just stops with garbage" symptom (checkpoints turn_609/613).
+        // Strip known noise and, if nothing meaningful remains, substitute a
+        // clear fallback so the user gets an actionable message instead of
+        // provider noise.
+        let text = if tool_free_recovery_pass {
+            sanitize_recovery_final_answer(text)
+        } else {
+            text
+        };
         let final_text = text.clone();
         let consecutive_relaxed = self.harness_state.consecutive_relaxed_continuations;
         let continuation_decision = if tool_free_recovery_pass {
@@ -304,5 +317,86 @@ impl<'a> TurnProcessingContext<'a> {
         let _ = emitter.emit(ThreadEvent::ItemCompleted(ItemCompletedEvent {
             item: completed_item,
         }));
+    }
+}
+
+/// Provider noise prefixes that leak into tool-free recovery final answers
+/// when the model has nothing to synthesize. Keep this aligned with the
+/// textual tool parsers (`text_tools::parse_tagged` strips `]<]minimax[>[`
+/// from tool-call bodies); here we strip it from plain-text final answers.
+const RECOVERY_FINAL_ANSWER_NOISE_PREFIXES: &[&str] = &["]<]minimax[>["];
+
+/// Deterministic fallback shown to the user when a tool-free recovery pass
+/// produces only provider noise or empty text. Mirrors the intent of
+/// `turn_loop::RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER` without coupling
+/// these modules.
+const RECOVERY_FINAL_ANSWER_NOISE_FALLBACK: &str = "I was unable to complete this task from the available context. Re-run the request, \
+or provide more specific guidance so I can proceed without re-reading the same resources.";
+
+/// Strip known provider noise prefixes from a tool-free recovery final
+/// answer. If nothing meaningful remains after stripping, return a clear
+/// fallback message instead of letting empty/garbage text become the
+/// user-visible answer.
+///
+/// This is a safety net for the "agent just stops" symptom seen in
+/// checkpoints turn_609 and turn_613: a guard forced a tool-free recovery
+/// pass, the model emitted only a noise prefix, and `handle_text_response`
+/// committed that noise as the final answer. The real fix is upstream
+/// (slice-aware family cap so the guard trips less often), but this net
+/// catches every trigger path that reaches a tool-free pass.
+fn sanitize_recovery_final_answer(text: String) -> String {
+    let mut cleaned = text;
+    for prefix in RECOVERY_FINAL_ANSWER_NOISE_PREFIXES {
+        // The noise prefix may appear at the start, mid-text, or repeated.
+        // Strip every occurrence (small, bounded input from a single pass).
+        cleaned = cleaned.replace(prefix, "");
+    }
+    if cleaned.trim().is_empty() {
+        RECOVERY_FINAL_ANSWER_NOISE_FALLBACK.to_string()
+    } else {
+        cleaned
+    }
+}
+
+#[cfg(test)]
+mod recovery_final_answer_tests {
+    use super::{RECOVERY_FINAL_ANSWER_NOISE_FALLBACK, sanitize_recovery_final_answer};
+
+    #[test]
+    fn strips_minimax_noise_prefix() {
+        let cleaned =
+            sanitize_recovery_final_answer("]<]minimax[>[Here is my summary.".to_string());
+        assert_eq!(cleaned, "Here is my summary.");
+    }
+
+    #[test]
+    fn strips_repeated_noise_and_keeps_real_content() {
+        let cleaned =
+            sanitize_recovery_final_answer("]<]minimax[>[]<]minimax[>[Real answer".to_string());
+        assert_eq!(cleaned, "Real answer");
+    }
+
+    #[test]
+    fn substitutes_fallback_when_only_noise_remains() {
+        let cleaned = sanitize_recovery_final_answer("]<]minimax[>[".to_string());
+        assert_eq!(cleaned, RECOVERY_FINAL_ANSWER_NOISE_FALLBACK);
+    }
+
+    #[test]
+    fn substitutes_fallback_for_empty_input() {
+        let cleaned = sanitize_recovery_final_answer(String::new());
+        assert_eq!(cleaned, RECOVERY_FINAL_ANSWER_NOISE_FALLBACK);
+    }
+
+    #[test]
+    fn substitutes_fallback_for_whitespace_only_input() {
+        let cleaned = sanitize_recovery_final_answer("   \n\t ".to_string());
+        assert_eq!(cleaned, RECOVERY_FINAL_ANSWER_NOISE_FALLBACK);
+    }
+
+    #[test]
+    fn preserves_legitimate_text_without_noise() {
+        let cleaned = sanitize_recovery_final_answer("All tests pass.".to_string());
+        assert_eq!(cleaned, "All tests pass.");
     }
 }

@@ -20,3 +20,11 @@ check and improve the first time lauch onboarding, improve the error message for
 ```
 
 check existing /model selecting flow and improve it to be more user friendly and easier to setup API keys and model selection. Consider adding a guided setup wizard that walks users through the process of entering their API keys, selecting models, and configuring settings. Provide clear instructions and tooltips to help users understand each step.
+
+
+---
+
+6. Remaining Technical Debt / Next Steps
+Move tool-schema validation out of parse_structured.rs so the parser does not know which parameters are required for which tool.
+Consider a ParseResult enum instead of Option so rejection reasons are first-class.
+Optimize strip_textual_tool_call_regions further by having parsers report consumed spans directly, eliminating the per-region parse validation loop.

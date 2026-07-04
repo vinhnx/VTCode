@@ -262,6 +262,106 @@ fn build_repeated_file_read_family_error_content(target: &str) -> String {
     .to_string()
 }
 
+/// Decision returned by [`check_read_family_cap`]. Pure data — no `ctx`
+/// mutations — so the cap logic is independently testable without the full
+/// [`TurnProcessingContext`] harness.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ReadFamilyCapDecision {
+    /// No family-key applies (non-read tool), or the streak is still under
+    /// the cap. The caller must continue to the next guard stage.
+    BelowCap,
+    /// The streak reached the cap. The caller must activate recovery, push
+    /// the guard-failure messages, and return `ValidationResult::Blocked`.
+    Tripped {
+        /// Human-readable target extracted from the family key (the trailing
+        /// `::` segment, e.g. the path or `path::off=N::lim=M::raw=bool`).
+        target: String,
+        /// System-facing reason describing why recovery was scheduled.
+        block_reason: String,
+        /// Model-facing error payload (serialized JSON) describing the block.
+        error_content: String,
+    },
+}
+
+/// Extract a human-readable target from a read-family key for use in
+/// guard messages.
+///
+/// Family keys look like:
+///   - `read_file::<path>`
+///   - `unified_file::read::<path>`
+///   - `unified_file::read::<path>::off=N::lim=M::raw=bool`
+///   - `unified_exec::run::<command>`
+///
+/// The slice-suffix segments (`off=`, `lim=`, `raw=`) are not useful in a
+/// user-facing "repeated exploration of '<target>'" message, so they are
+/// stripped. The target is the first segment after the tool name (and the
+/// `read`/`run` action marker when present). Returns `current file` as a
+/// fallback if no readable segment is found.
+fn read_family_target(family_key: &str) -> String {
+    let mut segments = family_key.split("::");
+    // Skip the leading tool name (`read_file`/`unified_file`/`unified_exec`).
+    segments.next();
+    // The next segment is the action marker (`read`/`run`) for unified tools,
+    // or the path itself for `read_file`. Skip it only if it is an action.
+    let second = segments.next().unwrap_or("");
+    if !matches!(second, "read" | "run") {
+        // `read_file::<path>` — the second segment IS the target.
+        if !second.is_empty()
+            && !second.starts_with("off=")
+            && !second.starts_with("lim=")
+            && !second.starts_with("raw=")
+        {
+            return second.to_string();
+        }
+    }
+    segments
+        .filter(|segment| {
+            !segment.is_empty()
+                && !segment.starts_with("off=")
+                && !segment.starts_with("lim=")
+                && !segment.starts_with("raw=")
+        })
+        .next()
+        .unwrap_or("current file")
+        .to_string()
+}
+
+/// Pure decision: does this read-family streak trip the per-turn cap?
+///
+/// Extracted from `enforce_repeated_read_only_call_guard` so the cap logic
+/// (the most failure-prone piece — it held the slice-awareness bug) can be
+/// tested directly. The caller owns all `ctx` mutations; this function only
+/// computes *what* should happen.
+///
+/// Returns [`ReadFamilyCapDecision::BelowCap`] when the tool is not a read
+/// family member or the streak has not yet reached `cap`. Returns
+/// [`ReadFamilyCapDecision::Tripped`] with the target/reason/error when the
+/// streak is at or above `cap`.
+fn check_read_family_cap(
+    canonical_tool_name: &str,
+    effective_args: &Value,
+    streak: usize,
+    cap: usize,
+) -> ReadFamilyCapDecision {
+    let Some(family_key) = repeated_file_read_family_key(canonical_tool_name, effective_args)
+    else {
+        return ReadFamilyCapDecision::BelowCap;
+    };
+    if streak < cap {
+        return ReadFamilyCapDecision::BelowCap;
+    }
+    let target = read_family_target(&family_key);
+    let block_reason = format!(
+        "Repeated read-only exploration of '{target}' hit the per-turn family cap ({cap}). Scheduling a final recovery pass without more tools."
+    );
+    let error_content = build_repeated_file_read_family_error_content(&target);
+    ReadFamilyCapDecision::Tripped {
+        target,
+        block_reason,
+        error_content,
+    }
+}
+
 fn is_read_action(canonical_tool_name: &str, args: &Value) -> bool {
     match canonical_tool_name {
         tool_names::READ_FILE => true,
@@ -367,20 +467,26 @@ pub(super) fn enforce_repeated_read_only_call_guard(
     }
 
     if let Some(family_key) = repeated_file_read_family_key(canonical_tool_name, effective_args) {
-        let streak = ctx
-            .harness_state
-            .record_file_read_family_call(family_key.clone());
-        if streak >= MAX_CONSECUTIVE_SAME_FILE_READ_FAMILY_CALLS {
-            let target = family_key.rsplit("::").next().unwrap_or("current file");
-            let block_reason = format!(
-                "Repeated read-only exploration of '{target}' hit the per-turn family cap ({MAX_CONSECUTIVE_SAME_FILE_READ_FAMILY_CALLS}). Scheduling a final recovery pass without more tools."
-            );
+        // The streak mutation is stateful and stays here; the cap *decision*
+        // is delegated to the pure `check_read_family_cap` helper so it can be
+        // tested without the full TurnProcessingContext harness.
+        let streak = ctx.harness_state.record_file_read_family_call(family_key);
+        if let ReadFamilyCapDecision::Tripped {
+            target: _,
+            block_reason,
+            error_content,
+        } = check_read_family_cap(
+            canonical_tool_name,
+            effective_args,
+            streak,
+            MAX_CONSECUTIVE_SAME_FILE_READ_FAMILY_CALLS,
+        ) {
             ctx.activate_recovery(block_reason.clone());
             push_guard_failure_messages(
                 ctx,
                 tool_call_id,
                 canonical_tool_name,
-                build_repeated_file_read_family_error_content(target),
+                error_content,
                 &block_reason,
             );
             return Some(ValidationResult::Blocked);
@@ -806,5 +912,107 @@ mod tests {
         let args = serde_json::json!({});
         let key = repeated_file_read_family_key(tool_names::UNIFIED_EXEC, &args);
         assert_eq!(key, None);
+    }
+
+    #[test]
+    fn read_family_cap_decision_below_cap_for_non_read_tool() {
+        // Non-read family tools (e.g. unified_exec ls) have no family key, so
+        // the decision is always BelowCap regardless of streak.
+        let decision = check_read_family_cap(
+            tool_names::UNIFIED_EXEC,
+            &serde_json::json!({"command": "ls -la"}),
+            99,
+            MAX_CONSECUTIVE_SAME_FILE_READ_FAMILY_CALLS,
+        );
+        assert_eq!(decision, ReadFamilyCapDecision::BelowCap);
+    }
+
+    #[test]
+    fn read_family_cap_decision_below_cap_when_streak_under_cap() {
+        let decision = check_read_family_cap(
+            tool_names::UNIFIED_FILE,
+            &serde_json::json!({"action": "read", "path": "src/lib.rs", "offset": 0, "limit": 100}),
+            MAX_CONSECUTIVE_SAME_FILE_READ_FAMILY_CALLS - 1,
+            MAX_CONSECUTIVE_SAME_FILE_READ_FAMILY_CALLS,
+        );
+        assert_eq!(decision, ReadFamilyCapDecision::BelowCap);
+    }
+
+    #[test]
+    fn read_family_cap_decision_tripped_at_cap() {
+        let decision = check_read_family_cap(
+            tool_names::UNIFIED_FILE,
+            &serde_json::json!({"action": "read", "path": "src/lib.rs", "offset": 0, "limit": 100}),
+            MAX_CONSECUTIVE_SAME_FILE_READ_FAMILY_CALLS,
+            MAX_CONSECUTIVE_SAME_FILE_READ_FAMILY_CALLS,
+        );
+        match decision {
+            ReadFamilyCapDecision::Tripped {
+                target,
+                block_reason,
+                error_content,
+            } => {
+                // The slice-suffix segments (off=, lim=, raw=) are stripped
+                // from the user-facing target, so the target is the path.
+                assert_eq!(target, "src/lib.rs");
+                assert!(block_reason.contains("per-turn family cap"));
+                assert!(error_content.contains("repeated_read_family"));
+                assert!(error_content.contains("already read"));
+            }
+            ReadFamilyCapDecision::BelowCap => panic!("expected Tripped at cap"),
+        }
+    }
+
+    #[test]
+    fn read_family_target_strips_slice_suffix() {
+        // Direct unit test for the target extractor: paginated reads should
+        // report the path as the target, not the slice-suffix fields.
+        assert_eq!(
+            read_family_target("unified_file::read::src/cli/update.rs::off=81::lim=229"),
+            "src/cli/update.rs"
+        );
+        assert_eq!(
+            read_family_target("read_file::src/main.rs::off=80::lim=200::raw=true"),
+            "src/main.rs"
+        );
+        assert_eq!(
+            read_family_target("unified_file::read::src/cli/update.rs"),
+            "src/cli/update.rs"
+        );
+        assert_eq!(
+            read_family_target("unified_exec::run::cat README.md"),
+            "cat README.md"
+        );
+        // `read_file` has no action marker — the second segment is the path.
+        assert_eq!(read_family_target("read_file::src/lib.rs"), "src/lib.rs");
+    }
+
+    #[test]
+    fn read_family_cap_decision_tripped_above_cap() {
+        let decision = check_read_family_cap(
+            tool_names::READ_FILE,
+            &serde_json::json!({"path": "src/main.rs"}),
+            MAX_CONSECUTIVE_SAME_FILE_READ_FAMILY_CALLS + 5,
+            MAX_CONSECUTIVE_SAME_FILE_READ_FAMILY_CALLS,
+        );
+        assert!(matches!(decision, ReadFamilyCapDecision::Tripped { .. }));
+    }
+
+    #[test]
+    fn read_family_cap_decision_uses_bare_path_target_when_unpaginated() {
+        // A bare read (no offset/limit/raw) has a clean path as the trailing
+        // family-key segment, so the target message names the file directly.
+        let decision = check_read_family_cap(
+            tool_names::UNIFIED_FILE,
+            &serde_json::json!({"action": "read", "path": "src/cli/update.rs"}),
+            MAX_CONSECUTIVE_SAME_FILE_READ_FAMILY_CALLS,
+            MAX_CONSECUTIVE_SAME_FILE_READ_FAMILY_CALLS,
+        );
+        match decision {
+            ReadFamilyCapDecision::Tripped { target, .. } => {
+                assert_eq!(target, "src/cli/update.rs");
+            }
+            ReadFamilyCapDecision::BelowCap => panic!("expected Tripped at cap"),
+        }
     }
 }

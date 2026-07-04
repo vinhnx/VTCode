@@ -458,7 +458,17 @@ impl ReadFileHandler {
         };
 
         let original_len = collected.len();
-        let (condensed, omitted) = condense_for_batch(&mut collected);
+        // Skip condensation for paginated reads (caller advanced past line 1).
+        // When the caller passes an explicit offset > 1, they are following an
+        // omit-hint to retrieve a specific slice. Re-condensing that slice
+        // would produce *another* omit-hint pointing at a new offset, trapping
+        // the agent in an infinite pagination regress (checkpoint turn_613).
+        let is_paginated = offset > 1;
+        let (condensed, omitted) = if is_paginated {
+            (false, 0)
+        } else {
+            condense_for_batch(&mut collected)
+        };
 
         Ok(RangeResult {
             offset,
@@ -519,8 +529,14 @@ impl ReadFileHandler {
         let lines_read = collected.len();
 
         if condense {
-            // Condense large outputs (>100 lines) to head + tail
-            condense_collected_lines(&mut collected);
+            // Skip condensation for paginated reads (caller advanced past
+            // line 1). When the caller passes an explicit offset > 1, they are
+            // following an omit-hint to retrieve a specific slice. Re-condensing
+            // that slice would produce another omit-hint, trapping the agent
+            // in an infinite pagination regress (checkpoint turn_613).
+            if offset <= 1 {
+                condense_collected_lines(&mut collected);
+            }
         }
 
         Ok(ReadFileOutcome {
@@ -1195,6 +1211,77 @@ mod tests {
 
         assert!(!content.contains("lines omitted"));
         assert_eq!(content.lines().count(), 60);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn read_file_handler_skips_condense_for_paginated_read() -> Result<()> {
+        // Regression: when the caller follows an omit-hint and reads a
+        // specific slice (offset > 1), the handler must NOT re-condense the
+        // result. Re-condensing would emit another omit-hint and trap the
+        // agent in an infinite pagination regress (checkpoint turn_613).
+        let mut temp = NamedTempFile::new()?;
+        for idx in 1..=300 {
+            writeln!(temp, "line-{idx}")?;
+        }
+
+        let args = ReadFileArgs {
+            file_path: temp.path().to_string_lossy().to_string(),
+            offset: 81,
+            limit: 229,
+            mode: ReadMode::Slice,
+            indentation: None,
+            max_tokens: None,
+            condense: true,
+            offset_bytes: None,
+            page_size_bytes: None,
+        };
+        let handler = ReadFileHandler;
+        let content = handler.handle(args).await?;
+
+        // No re-condensation: the requested slice is returned verbatim.
+        assert!(
+            !content.contains("lines omitted"),
+            "paginated read must not be re-condensed; got: {content}"
+        );
+        // The slice starts at line 81 (1-indexed), so line-81 must be present.
+        assert!(
+            content.contains("line-81"),
+            "paginated read must include the requested offset; got first line: {:?}",
+            content.lines().next()
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn read_file_handler_still_condenses_default_overview_read() -> Result<()> {
+        // The default overview path (offset == 1) must still condense large
+        // outputs so the catalog stays bounded. This guards against the fix
+        // over-correcting and never condensing.
+        let mut temp = NamedTempFile::new()?;
+        for idx in 1..=300 {
+            writeln!(temp, "line-{idx}")?;
+        }
+
+        let args = ReadFileArgs {
+            file_path: temp.path().to_string_lossy().to_string(),
+            offset: 1,
+            limit: 2000,
+            mode: ReadMode::Slice,
+            indentation: None,
+            max_tokens: None,
+            condense: true,
+            offset_bytes: None,
+            page_size_bytes: None,
+        };
+        let handler = ReadFileHandler;
+        let content = handler.handle(args).await?;
+
+        assert!(
+            content.contains("lines omitted"),
+            "default overview read must condense large output; got {} lines",
+            content.lines().count()
+        );
         Ok(())
     }
 

@@ -417,7 +417,12 @@ async fn repeated_identical_readonly_call_in_same_turn_reuses_recent_result() {
 }
 
 #[tokio::test]
-async fn repeated_same_file_read_variants_activate_recovery_at_read_family_cap() {
+async fn repeated_same_file_paginated_reads_do_not_trip_read_family_cap() {
+    // Regression: reading different slices of the same file (different
+    // offset/limit) is legitimate pagination, not a retry loop. The family
+    // cap must NOT trip on these — otherwise the agent is forced into a
+    // tool-free recovery pass that produces a garbage final answer.
+    // Reproduces the failure seen in checkpoint turn_613.
     let read_family_cap = 4;
     let mut backing = TestContextBacking::new(read_family_cap).await;
     backing.select_build_primary_agent();
@@ -440,50 +445,118 @@ async fn repeated_same_file_read_variants_activate_recovery_at_read_family_cap()
         turn_modified_files: &mut turn_modified_files,
     };
 
-    let build_read_args = |line: usize| {
-        if line == 1 {
-            json!({
-                "action": "read",
-                "path": sample_path.clone()
-            })
-        } else {
-            json!({
-                "action": "read",
-                "path": sample_path.clone(),
-                "line_start": line,
-                "line_end": line
-            })
-        }
+    let build_paginated_read_args = |line: usize| {
+        json!({
+            "action": "read",
+            "path": sample_path.clone(),
+            "line_start": line,
+            "line_end": line
+        })
     };
 
-    for idx in 1..read_family_cap {
+    // Paginated reads: each variant targets a different line range, so each
+    // gets a distinct family key (`unified_file::read::<path>::off=<line>`).
+    for idx in 1..=read_family_cap {
         let outcome = handle_single_tool_call(
             &mut outcome_ctx,
             &format!("read_variant_{idx}"),
             tool_names::UNIFIED_FILE,
-            build_read_args(idx),
+            build_paginated_read_args(idx),
         )
         .await
-        .expect("read variant should complete");
+        .expect("paginated read variant should complete");
 
-        assert!(outcome.is_none());
+        assert!(
+            outcome.is_none(),
+            "paginated read {idx} must not be blocked by the family cap"
+        );
     }
 
-    let execution_history_len_before_block = outcome_ctx.ctx.tool_registry.execution_history_len();
-    let tool_calls_before_block = outcome_ctx.ctx.harness_state.tool_calls;
+    // No pagination burst should have tripped recovery: the streak resets on
+    // every distinct slice, so it never reaches the cap.
     assert_eq!(
         outcome_ctx
             .ctx
             .harness_state
             .consecutive_same_file_read_family_calls,
-        read_family_cap - 1
+        1,
+        "paginated reads must reset the family streak, not accumulate it"
     );
+    assert!(
+        !outcome_ctx.ctx.is_recovery_active(),
+        "recovery must not activate for legitimate pagination"
+    );
+    assert!(
+        !outcome_ctx
+            .ctx
+            .working_history
+            .iter()
+            .any(|message| { message.content.as_text().contains("repeated_read_family") }),
+        "no repeated_read_family error should be emitted for pagination"
+    );
+}
+
+#[tokio::test]
+async fn repeated_identical_slice_read_trips_read_family_cap() {
+    // True retry loop: same path + same slice, repeated verbatim. The cap must
+    // trip here — this is the guard's reason for existing.
+    let read_family_cap = 4;
+    let mut backing = TestContextBacking::new(read_family_cap).await;
+    backing.select_build_primary_agent();
+    let sample_file = backing.sample_file.clone();
+    std::fs::write(
+        &sample_file,
+        (1..=16)
+            .map(|idx| format!("line {idx}\n"))
+            .collect::<String>(),
+    )
+    .expect("rewrite sample file");
+    let sample_path = sample_file.to_string_lossy().to_string();
+
+    let mut repeated_tool_attempts = LoopTracker::new();
+    let mut turn_modified_files = BTreeSet::new();
+    let mut tp_ctx = backing.turn_processing_context();
+    let mut outcome_ctx = ToolOutcomeContext {
+        ctx: &mut tp_ctx,
+        repeated_tool_attempts: &mut repeated_tool_attempts,
+        turn_modified_files: &mut turn_modified_files,
+    };
+
+    // Identical slice every time -> same family key -> streak accumulates.
+    let identical_args = json!({
+        "action": "read",
+        "path": sample_path.clone(),
+        "offset": 0,
+        "limit": 4
+    });
+
+    for idx in 1..read_family_cap {
+        let outcome = handle_single_tool_call(
+            &mut outcome_ctx,
+            &format!("read_repeat_{idx}"),
+            tool_names::UNIFIED_FILE,
+            identical_args.clone(),
+        )
+        .await
+        .expect("identical read should complete");
+        assert!(outcome.is_none(), "read {idx} below cap should not block");
+    }
+    assert_eq!(
+        outcome_ctx
+            .ctx
+            .harness_state
+            .consecutive_same_file_read_family_calls,
+        read_family_cap - 1,
+    );
+
+    let execution_history_len_before_block = outcome_ctx.ctx.tool_registry.execution_history_len();
+    let tool_calls_before_block = outcome_ctx.ctx.harness_state.tool_calls;
 
     let blocked = handle_single_tool_call(
         &mut outcome_ctx,
-        "read_variant_blocked",
+        "read_repeat_blocked",
         tool_names::UNIFIED_FILE,
-        build_read_args(read_family_cap),
+        identical_args.clone(),
     )
     .await
     .expect("read-family cap attempt should be handled");

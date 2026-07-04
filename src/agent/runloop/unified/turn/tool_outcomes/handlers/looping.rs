@@ -8,8 +8,30 @@ use crate::agent::runloop::unified::tool_reads::{is_read_file_style_call, read_f
 
 pub(super) use crate::agent::runloop::unified::tool_reads::spool_chunk_read_path;
 
-const READ_FILE_OFFSET_KEYS: &[&str] = &["offset", "offset_lines", "offset_bytes"];
-const READ_FILE_LIMIT_KEYS: &[&str] = &["limit", "page_size_lines", "max_lines", "chunk_lines"];
+// Read-offset field aliases recognized across read_file / unified_file.
+// Keep this aligned with `helpers::READ_OFFSET_KEYS` — the two lists must
+// agree on what counts as a "where to start reading" field, otherwise the
+// family-cap slice suffix would miss idioms like `line_start`/`start_line`
+// and falsely collapse paginated reads into one family key (issue: agent
+// deadlocks when paginating a large file, emitting a garbage final answer).
+const READ_FILE_OFFSET_KEYS: &[&str] = &[
+    "offset",
+    "offset_lines",
+    "offset_bytes",
+    "line_start",
+    "line_end",
+    "start_line",
+];
+// Read-limit field aliases. `helpers::READ_OFFSET_KEYS` lumps limit fields
+// into the same normalization list; we keep them separate here because the
+// slice suffix distinguishes `off=` from `lim=`.
+const READ_FILE_LIMIT_KEYS: &[&str] = &[
+    "limit",
+    "limit_lines",
+    "page_size_lines",
+    "max_lines",
+    "chunk_lines",
+];
 
 fn compact_loop_key_part(value: &str, max_chars: usize) -> String {
     value.trim().chars().take(max_chars).collect()
@@ -96,6 +118,59 @@ fn read_file_offset_value(args: &Value) -> Option<usize> {
 
 fn read_file_has_limit_arg(args: &Value) -> bool {
     has_any_arg_by_keys(args, READ_FILE_LIMIT_KEYS)
+}
+
+fn read_file_limit_value(args: &Value) -> Option<usize> {
+    first_arg_value_by_keys(args, READ_FILE_LIMIT_KEYS).and_then(|value| {
+        value
+            .as_u64()
+            .and_then(|n| usize::try_from(n).ok())
+            .or_else(|| value.as_str().and_then(|s| s.parse::<usize>().ok()))
+    })
+}
+
+/// Read-only flag. `unified_file`/`read_file` honor `raw` (bypass LLM
+/// summarization). Two reads of the same path + same slice but different `raw`
+/// modes return *different* payloads, so they must not be treated as the same
+/// family call. `true`/`false`/absent are all distinct suffixes.
+fn read_file_raw_flag(args: &Value) -> Option<bool> {
+    args.get("raw").and_then(Value::as_bool)
+}
+
+/// Build a slice descriptor for a read-file call so the family-cap can
+/// distinguish paginated reads of the same path.
+///
+/// The cap exists to stop true retry loops (same path + same slice, repeated
+/// verbatim). When the model paginates — same path, different `offset`/`limit`
+/// — or flips `raw` to bypass summarization, those are *different* logical
+/// reads, not retries. Without this suffix, four reads of one large file with
+/// four different `offset`/`limit` pairs all collapse into one family key and
+/// trip the cap at 4, even though no slice was read twice. That forces a
+/// tool-free recovery pass that produces a garbage final answer.
+///
+/// The suffix includes only fields that change *what* is read:
+///   - `offset`/`offset_lines`/`offset_bytes` -> `off=<n>`
+///   - `limit`/`page_size_lines`/`max_lines`/`chunk_lines` -> `lim=<n>`
+///   - `raw` -> `raw=<bool>`
+/// Fields that are absent contribute nothing, so a bare default read
+/// (`{path}` with no offset/limit/raw) still produces the same key it did
+/// before — only paginated/raw-flipped reads gain suffixes.
+fn read_file_slice_suffix(args: &Value) -> String {
+    let mut parts: Vec<String> = Vec::new();
+    if let Some(offset) = read_file_offset_value(args) {
+        parts.push(format!("off={offset}"));
+    }
+    if let Some(limit) = read_file_limit_value(args) {
+        parts.push(format!("lim={limit}"));
+    }
+    if let Some(raw) = read_file_raw_flag(args) {
+        parts.push(format!("raw={raw}"));
+    }
+    if parts.is_empty() {
+        String::new()
+    } else {
+        format!("::{}", parts.join("::"))
+    }
 }
 
 pub(super) fn shell_run_signature(canonical_tool_name: &str, args: &Value) -> Option<String> {
@@ -189,8 +264,9 @@ pub(crate) fn low_signal_family_key(canonical_tool_name: &str, args: &Value) -> 
     match canonical_tool_name {
         tool_names::READ_FILE => read_file_path_arg(args).map(|path| {
             format!(
-                "{canonical_tool_name}::{}",
-                compact_loop_key_part(path, 120)
+                "{canonical_tool_name}::{}{}",
+                compact_loop_key_part(path, 120),
+                read_file_slice_suffix(args),
             )
         }),
         tool_names::UNIFIED_FILE => {
@@ -200,8 +276,9 @@ pub(crate) fn low_signal_family_key(canonical_tool_name: &str, args: &Value) -> 
             }
             read_file_path_arg(args).map(|path| {
                 format!(
-                    "{canonical_tool_name}::read::{}",
-                    compact_loop_key_part(path, 120)
+                    "{canonical_tool_name}::read::{}{}",
+                    compact_loop_key_part(path, 120),
+                    read_file_slice_suffix(args),
                 )
             })
         }
@@ -244,8 +321,13 @@ pub(crate) fn low_signal_family_key(canonical_tool_name: &str, args: &Value) -> 
 
 #[cfg(test)]
 mod tests {
-    use super::{read_file_has_limit_arg, read_file_has_offset_arg, read_file_offset_value};
+    use super::{
+        read_file_has_limit_arg, read_file_has_offset_arg, read_file_limit_value,
+        read_file_offset_value, read_file_raw_flag, read_file_slice_suffix,
+    };
+    use crate::agent::runloop::unified::turn::tool_outcomes::handlers::low_signal_family_key;
     use serde_json::json;
+    use vtcode_core::config::constants::tools as tool_names;
 
     #[test]
     fn read_file_offset_value_accepts_alias_keys() {
@@ -271,5 +353,162 @@ mod tests {
         assert!(read_file_has_limit_arg(&json!({"max_lines": 10})));
         assert!(read_file_has_limit_arg(&json!({"chunk_lines": 10})));
         assert!(!read_file_has_limit_arg(&json!({"path": "src/main.rs"})));
+    }
+
+    #[test]
+    fn read_file_limit_value_accepts_alias_keys() {
+        assert_eq!(read_file_limit_value(&json!({"limit": 10})), Some(10));
+        assert_eq!(
+            read_file_limit_value(&json!({"page_size_lines": "20"})),
+            Some(20)
+        );
+        assert_eq!(read_file_limit_value(&json!({"max_lines": 5})), Some(5));
+        assert_eq!(read_file_limit_value(&json!({"chunk_lines": 3})), Some(3));
+        assert_eq!(read_file_limit_value(&json!({"path": "src/main.rs"})), None);
+    }
+
+    #[test]
+    fn read_file_raw_flag_reads_optional_bool() {
+        assert_eq!(read_file_raw_flag(&json!({"raw": true})), Some(true));
+        assert_eq!(read_file_raw_flag(&json!({"raw": false})), Some(false));
+        assert_eq!(read_file_raw_flag(&json!({"path": "x"})), None);
+    }
+
+    #[test]
+    fn read_file_slice_suffix_is_empty_when_unpaginated() {
+        // A bare read with no offset/limit/raw must keep the legacy key
+        // unchanged so true retry loops (same path, no slice) still collide.
+        assert_eq!(read_file_slice_suffix(&json!({"path": "src/lib.rs"})), "");
+    }
+
+    #[test]
+    fn read_file_slice_suffix_distinguishes_offsets() {
+        let off0 = read_file_slice_suffix(&json!({"path": "x", "offset": 0}));
+        let off80 = read_file_slice_suffix(&json!({"path": "x", "offset": 80}));
+        assert_eq!(off0, "::off=0");
+        assert_eq!(off80, "::off=80");
+        assert_ne!(off0, off80);
+    }
+
+    #[test]
+    fn read_file_slice_suffix_distinguishes_limits() {
+        let lim100 = read_file_slice_suffix(&json!({"path": "x", "limit": 100}));
+        let lim200 = read_file_slice_suffix(&json!({"path": "x", "limit": 200}));
+        assert_eq!(lim100, "::lim=100");
+        assert_eq!(lim200, "::lim=200");
+        assert_ne!(lim100, lim200);
+    }
+
+    #[test]
+    fn read_file_slice_suffix_distinguishes_raw_flag() {
+        let no_raw = read_file_slice_suffix(&json!({"path": "x"}));
+        let raw_true = read_file_slice_suffix(&json!({"path": "x", "raw": true}));
+        let raw_false = read_file_slice_suffix(&json!({"path": "x", "raw": false}));
+        assert_eq!(no_raw, "");
+        assert_eq!(raw_true, "::raw=true");
+        assert_eq!(raw_false, "::raw=false");
+        assert_ne!(raw_true, raw_false);
+        assert_ne!(raw_true, no_raw);
+    }
+
+    #[test]
+    fn read_file_slice_suffix_combines_all_present_fields() {
+        let suffix = read_file_slice_suffix(&json!({
+            "path": "x",
+            "offset": 80,
+            "limit": 200,
+            "raw": true
+        }));
+        assert_eq!(suffix, "::off=80::lim=200::raw=true");
+    }
+
+    #[test]
+    fn low_signal_family_key_distinguishes_paginated_reads_of_same_path() {
+        // Reproduces turn_613: four reads of the same file with different
+        // offset/limit/raw must produce four distinct family keys, so the
+        // per-turn family cap does not trip on legitimate pagination.
+        let base = low_signal_family_key(
+            tool_names::UNIFIED_FILE,
+            &json!({"action": "read", "path": "src/cli/update.rs"}),
+        );
+        let off81 = low_signal_family_key(
+            tool_names::UNIFIED_FILE,
+            &json!({"action": "read", "path": "src/cli/update.rs", "offset": 81, "limit": 229}),
+        );
+        let off80 = low_signal_family_key(
+            tool_names::UNIFIED_FILE,
+            &json!({"action": "read", "path": "src/cli/update.rs", "offset": 80, "limit": 200}),
+        );
+        let raw = low_signal_family_key(
+            tool_names::UNIFIED_FILE,
+            &json!({
+                "action": "read",
+                "path": "src/cli/update.rs",
+                "offset": 80,
+                "limit": 200,
+                "raw": true
+            }),
+        );
+
+        let keys = [base.clone(), off81.clone(), off80.clone(), raw.clone()];
+        let unique: std::collections::HashSet<_> = keys.iter().cloned().collect();
+        assert_eq!(
+            unique.len(),
+            4,
+            "paginated reads must have distinct family keys, got: {keys:?}"
+        );
+
+        // Sanity: the bare read keeps the legacy key (no slice suffix).
+        assert_eq!(
+            base.as_deref(),
+            Some("unified_file::read::src/cli/update.rs")
+        );
+        assert!(off81.unwrap().ends_with("::off=81::lim=229"));
+        assert!(off80.unwrap().ends_with("::off=80::lim=200"));
+        assert!(raw.unwrap().ends_with("::off=80::lim=200::raw=true"));
+    }
+
+    #[test]
+    fn low_signal_family_key_collides_for_identical_slice_retry() {
+        // True retry loop: same path + same slice must still collide so the
+        // cap can stop it. This is the guard's reason for existing.
+        let first = low_signal_family_key(
+            tool_names::UNIFIED_FILE,
+            &json!({
+                "action": "read",
+                "path": "src/lib.rs",
+                "offset": 0,
+                "limit": 100
+            }),
+        );
+        let second = low_signal_family_key(
+            tool_names::UNIFIED_FILE,
+            &json!({
+                "action": "read",
+                "path": "src/lib.rs",
+                "offset": 0,
+                "limit": 100
+            }),
+        );
+        assert_eq!(
+            first, second,
+            "identical slice retries must share a family key"
+        );
+    }
+
+    #[test]
+    fn low_signal_family_key_read_file_distinguishes_paginated_reads() {
+        // read_file (not unified_file) must also be slice-aware.
+        let off0 = low_signal_family_key(
+            tool_names::READ_FILE,
+            &json!({"path": "src/lib.rs", "offset": 0}),
+        );
+        let off80 = low_signal_family_key(
+            tool_names::READ_FILE,
+            &json!({"path": "src/lib.rs", "offset": 80}),
+        );
+        assert_ne!(off0, off80, "different offsets must produce different keys");
+        assert!(off0.unwrap().ends_with("::off=0"));
+        assert!(off80.unwrap().ends_with("::off=80"));
     }
 }

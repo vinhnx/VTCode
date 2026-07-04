@@ -537,13 +537,9 @@ fn detect_direct_function_alias(text: &str) -> Option<ParsedToolCall> {
                 };
 
                 // Use shared delimiter matcher (pass paren index, not args_start)
-                let Some(end_pos) = find_matching_delimiter(
-                    text,
-                    paren_pos,
-                    '(',
-                    ')',
-                    MAX_TEXTUAL_NESTING_DEPTH,
-                ) else {
+                let Some(end_pos) =
+                    find_matching_delimiter(text, paren_pos, '(', ')', MAX_TEXTUAL_NESTING_DEPTH)
+                else {
                     tracing::debug!(
                         parser = "direct_alias",
                         alias = %alias,

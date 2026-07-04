@@ -96,13 +96,9 @@ fn parse_standard_tagged_tool_call(text: &str) -> Option<(String, Value)> {
             if let Some(json_start) = content.find('{') {
                 let json_content = &content[json_start..];
                 // Use shared delimiter matcher to find matching closing brace
-                if let Some(json_end) = find_matching_delimiter(
-                    json_content,
-                    0,
-                    '{',
-                    '}',
-                    MAX_TAGGED_NESTING_DEPTH,
-                ) {
+                if let Some(json_end) =
+                    find_matching_delimiter(json_content, 0, '{', '}', MAX_TAGGED_NESTING_DEPTH)
+                {
                     if let Ok(parsed) = serde_json::from_str::<Value>(&json_content[..json_end + 1])
                         && let Some(obj) = parsed.as_object()
                     {
@@ -250,9 +246,7 @@ fn parse_minimax_tool_call(text: &str) -> Option<(String, Value)> {
 
             // Extract the tag name
             rest = &rest[1..]; // Skip the '<'
-            let tag_name_end = rest
-                .find(['>', ' ', '\t', '\n'])
-                .unwrap_or(rest.len());
+            let tag_name_end = rest.find(['>', ' ', '\t', '\n']).unwrap_or(rest.len());
             let tag_name = &rest[..tag_name_end].trim();
 
             // Skip attributes if any and find the '>'

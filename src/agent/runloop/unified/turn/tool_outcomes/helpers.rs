@@ -1171,6 +1171,12 @@ mod tests {
             ),
         });
 
+        // Two reads of the same path with different offsets are *different*
+        // slices (paginated exploration), not a retry loop. The slice-aware
+        // family key keeps them as distinct families, each with count 1.
+        // Regression: previously both collapsed into one family with count 2,
+        // which falsely tripped the family cap when the model paginated a
+        // missing file (checkpoint turn_613 pattern).
         update_repetition_tracker(
             &mut tracker,
             &miss,
@@ -1184,7 +1190,35 @@ mod tests {
             &json!({"action":"read","path":"vtcode-tui/src/main.rs","offset":40}),
         );
 
-        assert_eq!(tracker.max_low_signal_count(), 2);
+        assert_eq!(
+            tracker.max_low_signal_count(),
+            1,
+            "paginated reads (different offset) must be distinct families, not one family with count 2"
+        );
+    }
+
+    #[test]
+    fn low_signal_tracker_counts_identical_missing_read_failures() {
+        // True retry loop: same path + same slice, repeated. The low-signal
+        // count must accumulate so the turn balancer can stop the churn.
+        let mut tracker = LoopTracker::new();
+        let miss = ToolPipelineOutcome::from_status(ToolExecutionStatus::Failure {
+            error: vtcode_core::tools::registry::ToolExecutionError::new(
+                tools::UNIFIED_FILE.to_string(),
+                vtcode_core::tools::registry::ToolErrorType::ResourceNotFound,
+                "Resource not found: vtcode-tui/src/main.rs".to_string(),
+            ),
+        });
+
+        let identical_args = json!({"action":"read","path":"vtcode-tui/src/main.rs"});
+        update_repetition_tracker(&mut tracker, &miss, tools::UNIFIED_FILE, &identical_args);
+        update_repetition_tracker(&mut tracker, &miss, tools::UNIFIED_FILE, &identical_args);
+
+        assert_eq!(
+            tracker.max_low_signal_count(),
+            2,
+            "identical retry reads must accumulate into one family with count 2"
+        );
     }
 
     #[test]
