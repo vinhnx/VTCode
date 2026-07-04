@@ -160,6 +160,7 @@ pub mod git; // Git worktree management for loop isolation
 pub mod git_info; // Git repository information collection
 pub mod hooks;
 pub mod http_client;
+mod id_newtype;
 pub mod ide_context;
 pub mod instructions;
 pub mod llm;

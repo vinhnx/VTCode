@@ -25,8 +25,10 @@ pub use manifest::*;
 pub use runtime::*;
 pub use validation::*;
 
-/// Type alias for plugin identifiers
-pub type PluginId = String;
+crate::id_newtype::define_id_newtype! {
+    /// Identifier for a plugin.
+    pub struct PluginId
+}
 
 /// Type alias for plugin names
 pub type PluginName = String;

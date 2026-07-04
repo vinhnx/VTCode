@@ -13,7 +13,10 @@ use crate::tools::registry::ToolRegistration;
 use crate::utils::error_messages::{ERR_DESERIALIZE, ERR_READ_FILE};
 use crate::utils::file_utils::read_file_with_context;
 
-pub type PluginId = String;
+crate::id_newtype::define_id_newtype! {
+    /// Identifier for a tool plugin.
+    pub struct PluginId
+}
 
 /// Declarative metadata for a plugin manifest.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -54,7 +57,7 @@ pub struct PluginManifest {
 impl PluginManifest {
     fn normalized(mut self, default_trust: PluginTrustLevel) -> Self {
         if self.id.is_empty() {
-            self.id = std::mem::take(&mut self.name);
+            self.id = std::mem::take(&mut self.name).into();
         }
 
         if self.trust_level.is_none() {
@@ -173,7 +176,7 @@ impl PluginRuntime {
             .config
             .deny
             .iter()
-            .any(|blocked| blocked == &manifest.id)
+            .any(|blocked| blocked.as_str() == manifest.id.as_str())
         {
             bail!("plugin {} is blocked by deny list", manifest.id);
         }
@@ -183,7 +186,7 @@ impl PluginRuntime {
                 .config
                 .allow
                 .iter()
-                .any(|allowed| allowed == &manifest.id)
+                .any(|allowed| allowed.as_str() == manifest.id.as_str())
         {
             bail!("plugin {} not present in allow list", manifest.id);
         }

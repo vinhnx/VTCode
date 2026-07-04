@@ -19,11 +19,10 @@ pub use installer::PluginInstaller;
 pub use manifest::{MarketplaceManifest, PluginManifest};
 pub use registry::{MarketplaceRegistry, MarketplaceSource};
 
-/// Type alias for marketplace identifiers
-pub type MarketplaceId = String;
-
-/// Type alias for plugin identifiers
-pub type PluginId = String;
+crate::id_newtype::define_id_newtype! {
+    /// Identifier for a marketplace.
+    pub struct MarketplaceId
+}
 
 /// Configuration for marketplace system
 #[derive(Debug, Clone, Deserialize, Serialize)]

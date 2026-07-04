@@ -70,7 +70,7 @@ impl MarketplaceRegistry {
     /// Add a new marketplace source
     pub async fn add_marketplace(&self, source: MarketplaceSource) -> Result<()> {
         let mut marketplaces = self.marketplaces.write().await;
-        marketplaces.insert(source.id().to_string(), source);
+        marketplaces.insert(MarketplaceId::from(source.id()), source);
         Ok(())
     }
 
@@ -115,7 +115,7 @@ impl MarketplaceRegistry {
         let manifest = self.fetch_manifest(&source).await?;
 
         let mut cache = self.manifest_cache.write().await;
-        cache.insert(id.to_string(), manifest);
+        cache.insert(MarketplaceId::from(id), manifest);
 
         Ok(())
     }
@@ -307,7 +307,7 @@ impl MarketplaceRegistry {
         for marketplace in marketplaces {
             if let Some(manifest) = self.get_cached_manifest(marketplace.id()).await {
                 for plugin in manifest.plugins {
-                    all_plugins.push((marketplace.id().to_string(), plugin));
+                    all_plugins.push((MarketplaceId::from(marketplace.id()), plugin));
                 }
             }
         }

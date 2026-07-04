@@ -235,7 +235,7 @@ impl PluginLoader {
         let plugin_dir = self.plugins_dir.join(plugin_name);
 
         if !plugin_dir.exists() {
-            return Err(PluginError::NotFound(plugin_name.to_string()));
+            return Err(PluginError::NotFound(plugin_name.to_string().into()));
         }
 
         // Unload the plugin from runtime first

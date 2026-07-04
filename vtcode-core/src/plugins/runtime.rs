@@ -59,7 +59,9 @@ impl PluginRuntime {
     pub async fn load_plugin(&self, plugin_path: &Path) -> PluginResult<PluginHandle> {
         // Validate plugin path
         if !plugin_path.exists() {
-            return Err(PluginError::NotFound(plugin_path.display().to_string()));
+            return Err(PluginError::NotFound(
+                plugin_path.display().to_string().into(),
+            ));
         }
 
         // Load the plugin manifest
@@ -70,7 +72,7 @@ impl PluginRuntime {
 
         // Create plugin handle
         let handle = PluginHandle {
-            id: manifest.name.clone(),
+            id: manifest.name.clone().into(),
             manifest: manifest.clone(),
             path: plugin_path.to_path_buf(),
             state: PluginState::Active,
@@ -80,7 +82,7 @@ impl PluginRuntime {
         // Store in runtime
         {
             let mut plugins = self.plugins.write().await;
-            plugins.insert(manifest.name.clone(), handle.clone());
+            plugins.insert(manifest.name.clone().into(), handle.clone());
         }
 
         Ok(handle)
@@ -140,7 +142,7 @@ impl PluginRuntime {
     pub async fn unload_plugin(&self, plugin_id: &str) -> PluginResult<()> {
         let mut plugins = self.plugins.write().await;
         if plugins.remove(plugin_id).is_none() {
-            return Err(PluginError::NotFound(plugin_id.to_string()));
+            return Err(PluginError::NotFound(plugin_id.to_string().into()));
         }
         Ok(())
     }
@@ -151,7 +153,7 @@ impl PluginRuntime {
         plugins
             .get(plugin_id)
             .cloned()
-            .ok_or_else(|| PluginError::NotFound(plugin_id.to_string()))
+            .ok_or_else(|| PluginError::NotFound(plugin_id.to_string().into()))
     }
 
     /// List all loaded plugins
@@ -167,7 +169,7 @@ impl PluginRuntime {
             handle.state = PluginState::Active;
             Ok(())
         } else {
-            Err(PluginError::NotFound(plugin_id.to_string()))
+            Err(PluginError::NotFound(plugin_id.to_string().into()))
         }
     }
 
@@ -178,7 +180,7 @@ impl PluginRuntime {
             handle.state = PluginState::Disabled;
             Ok(())
         } else {
-            Err(PluginError::NotFound(plugin_id.to_string()))
+            Err(PluginError::NotFound(plugin_id.to_string().into()))
         }
     }
 
