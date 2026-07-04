@@ -1,3 +1,4 @@
+use std::fmt::Write;
 use std::sync::LazyLock;
 
 use anyhow::{Context, Result};
@@ -63,13 +64,14 @@ fn render_session_log_markdown(
 ) -> String {
     let mut markdown = String::new();
     markdown.push_str("# VT Code Session Log\n\n");
-    markdown.push_str(&format!("- Exported at: {exported_at}\n"));
-    markdown.push_str(&format!("- Model: `{model}`\n"));
-    markdown.push_str(&format!(
-        "- Workspace: `{}`\n",
+    let _ = writeln!(markdown, "- Exported at: {exported_at}");
+    let _ = writeln!(markdown, "- Model: `{model}`");
+    let _ = writeln!(
+        markdown,
+        "- Workspace: `{}`",
         redact_sensitive_text(&workspace.display().to_string())
-    ));
-    markdown.push_str(&format!("- Total messages: {}\n\n", messages.len()));
+    );
+    let _ = writeln!(markdown, "- Total messages: {}\n", messages.len());
     markdown.push_str("## Messages\n\n");
 
     for (index, message) in messages.iter().enumerate() {
@@ -79,7 +81,7 @@ fn render_session_log_markdown(
             .unwrap_or("Unknown");
         let content = message.get("content").and_then(Value::as_str).unwrap_or("");
 
-        markdown.push_str(&format!("### {}. {}\n\n", index + 1, role));
+        let _ = writeln!(markdown, "### {}. {}\n", index + 1, role);
         if content.trim().is_empty() {
             markdown.push_str("_No textual content._\n\n");
         } else {
@@ -103,7 +105,7 @@ fn render_session_log_markdown(
                     .and_then(Value::as_str)
                     .map(canonical_tool_name)
                     .unwrap_or_else(|| "unknown".to_string());
-                markdown.push_str(&format!("- `{id}`: `{function_name}`\n"));
+                let _ = writeln!(markdown, "- `{id}`: `{function_name}`");
 
                 if let Some(arguments) = function.and_then(|value| value.get("arguments")) {
                     let arguments_text = serde_json::to_string_pretty(arguments)
@@ -117,7 +119,7 @@ fn render_session_log_markdown(
         }
 
         if let Some(tool_call_id) = message.get("tool_call_id").and_then(Value::as_str) {
-            markdown.push_str(&format!("Tool call id: `{tool_call_id}`\n\n"));
+            let _ = writeln!(markdown, "Tool call id: `{tool_call_id}`\n");
         }
     }
 

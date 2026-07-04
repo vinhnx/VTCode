@@ -377,41 +377,54 @@ pub(in crate::agent::runloop::slash_commands) fn parse_agents_command(
         return Ok(AgentManagerAction::Threads);
     }
 
-    let parts = trimmed.split_whitespace().collect::<Vec<_>>();
-    match parts.as_slice() {
-        ["inspect", id] => Ok(AgentManagerAction::Inspect {
-            id: (*id).to_string(),
+    let mut parts = trimmed.split_whitespace();
+    let Some(first) = parts.next() else {
+        return Ok(AgentManagerAction::List);
+    };
+
+    match first {
+        "inspect" => {
+            let id = parts.next().ok_or("Usage: /agents inspect <id>")?;
+            Ok(AgentManagerAction::Inspect {
+                id: id.to_string(),
+            })
+        }
+        "close" => {
+            let id = parts.next().ok_or("Usage: /agents close <id>")?;
+            Ok(AgentManagerAction::Close {
+                id: id.to_string(),
+            })
+        }
+        "edit" => Ok(AgentManagerAction::Edit {
+            name: parts.next().map(|n| n.to_string()),
         }),
-        ["close", id] => Ok(AgentManagerAction::Close {
-            id: (*id).to_string(),
-        }),
-        ["edit"] => Ok(AgentManagerAction::Edit { name: None }),
-        ["edit", name] => Ok(AgentManagerAction::Edit {
-            name: Some((*name).to_string()),
-        }),
-        ["delete", name] => Ok(AgentManagerAction::Delete {
-            name: (*name).to_string(),
-        }),
-        ["create"] => Ok(AgentManagerAction::Create {
-            scope: None,
-            name: None,
-        }),
-        ["create", "project"] => Ok(AgentManagerAction::Create {
-            scope: Some(AgentDefinitionScope::Project),
-            name: None,
-        }),
-        ["create", "user"] => Ok(AgentManagerAction::Create {
-            scope: Some(AgentDefinitionScope::User),
-            name: None,
-        }),
-        ["create", "project", name] => Ok(AgentManagerAction::Create {
-            scope: Some(AgentDefinitionScope::Project),
-            name: Some((*name).to_string()),
-        }),
-        ["create", "user", name] => Ok(AgentManagerAction::Create {
-            scope: Some(AgentDefinitionScope::User),
-            name: Some((*name).to_string()),
-        }),
+        "delete" => {
+            let name = parts.next().ok_or("Usage: /agents delete <name>")?;
+            Ok(AgentManagerAction::Delete {
+                name: name.to_string(),
+            })
+        }
+        "create" => {
+            let scope = match parts.next() {
+                Some("project") => Some(AgentDefinitionScope::Project),
+                Some("user") => Some(AgentDefinitionScope::User),
+                Some(other) => {
+                    // Treat as name with no scope
+                    return Ok(AgentManagerAction::Create {
+                        scope: None,
+                        name: Some(other.to_string()),
+                    });
+                }
+                None => {
+                    return Ok(AgentManagerAction::Create {
+                        scope: None,
+                        name: None,
+                    });
+                }
+            };
+            let name = parts.next().map(|n| n.to_string());
+            Ok(AgentManagerAction::Create { scope, name })
+        }
         _ => Err(
             "Usage: /agents [list|threads|inspect <id>|close <id>|create [project|user] [name]|edit [name]|delete <name>]".to_string(),
         ),
@@ -421,19 +434,27 @@ pub(in crate::agent::runloop::slash_commands) fn parse_agents_command(
 pub(in crate::agent::runloop::slash_commands) fn parse_subprocesses_command(
     args: &str,
 ) -> std::result::Result<SubprocessManagerAction, String> {
-    match args.split_whitespace().collect::<Vec<_>>().as_slice() {
-        [] | ["list"] | ["panel"] => Ok(SubprocessManagerAction::List),
-        ["toggle"] => Ok(SubprocessManagerAction::ToggleDefault),
-        ["refresh"] => Ok(SubprocessManagerAction::Refresh),
-        ["inspect", id] => Ok(SubprocessManagerAction::Inspect {
-            id: (*id).to_string(),
-        }),
-        ["stop", id] => Ok(SubprocessManagerAction::Stop {
-            id: (*id).to_string(),
-        }),
-        ["cancel", id] => Ok(SubprocessManagerAction::Cancel {
-            id: (*id).to_string(),
-        }),
+    let mut parts = args.split_whitespace();
+    let Some(first) = parts.next() else {
+        return Ok(SubprocessManagerAction::List);
+    };
+
+    match first {
+        "list" | "panel" => Ok(SubprocessManagerAction::List),
+        "toggle" => Ok(SubprocessManagerAction::ToggleDefault),
+        "refresh" => Ok(SubprocessManagerAction::Refresh),
+        "inspect" => {
+            let id = parts.next().ok_or("Usage: /subprocesses inspect <id>")?;
+            Ok(SubprocessManagerAction::Inspect { id: id.to_string() })
+        }
+        "stop" => {
+            let id = parts.next().ok_or("Usage: /subprocesses stop <id>")?;
+            Ok(SubprocessManagerAction::Stop { id: id.to_string() })
+        }
+        "cancel" => {
+            let id = parts.next().ok_or("Usage: /subprocesses cancel <id>")?;
+            Ok(SubprocessManagerAction::Cancel { id: id.to_string() })
+        }
         _ => Err(
             "Usage: /subprocesses [list|toggle|refresh|inspect <id>|stop <id>|cancel <id>]"
                 .to_string(),

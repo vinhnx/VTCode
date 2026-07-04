@@ -482,20 +482,20 @@ async fn run_interactive_session(
                 if let Some(warning) =
                     persist_archive_progress(archive.as_ref(), &messages, turn_number)
                 {
-                    eprintln!("warning: {warning}");
+                    tracing::warn!("{warning}");
                 }
                 if planning_active {
                     println!("{PLANNING_WORKFLOW_HINT}");
                 }
             }
             Err(err) => {
-                eprintln!("error: {err}");
+                tracing::error!("{err}");
             }
         }
     }
 
     if let Some(warning) = finalize_archive(archive.take(), messages) {
-        eprintln!("warning: {warning}");
+        tracing::warn!("{warning}");
     }
     Ok(())
 }

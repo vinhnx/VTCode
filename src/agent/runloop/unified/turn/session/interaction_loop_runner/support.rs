@@ -3,8 +3,9 @@ use anyhow::Result;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
+use std::fmt::Write;
 use std::fs;
-use std::io::{self, Write};
+use std::io::{self, Write as _};
 use std::path::Path;
 
 use vtcode_config::models::{ModelId, Provider};
@@ -397,7 +398,7 @@ fn append_agent_reference_metadata(content: &mut uni::MessageContent, selected_a
 
     let mut metadata = String::from("\n\n[agent_reference_metadata]\n");
     for mention in selected_agents {
-        metadata.push_str(&format!("selected=@agent-{mention}\n"));
+        let _ = writeln!(metadata, "selected=@agent-{mention}");
     }
 
     append_trailing_text_part(content, metadata);
@@ -475,7 +476,7 @@ fn build_file_reference_metadata(input: &str, workspace: &Path) -> Option<String
 
     let mut metadata = String::from("\n\n[file_reference_metadata]\n");
     for (alias, full_path) in &alias_to_full_path {
-        metadata.push_str(&format!("{alias}={full_path}\n"));
+        let _ = writeln!(metadata, "{alias}={full_path}");
     }
     metadata.push_str("Hint: Read each referenced file once using the resolved path above. Do not re-read unless truncated.\n");
 

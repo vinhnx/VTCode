@@ -123,9 +123,10 @@ pub async fn dispatch(
         && !is_interactive_chat
         && let Some(notice) = crate::updater::get_preflight_notice()
     {
-        eprintln!(
-            "info: VT Code v{} -> v{} available. Run `vtcode update` to upgrade.",
-            notice.current_version, notice.latest_version
+        tracing::info!(
+            "VT Code v{} -> v{} available. Run `vtcode update` to upgrade.",
+            notice.current_version,
+            notice.latest_version
         );
     }
 

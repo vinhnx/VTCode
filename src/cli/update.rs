@@ -86,7 +86,7 @@ pub async fn handle_update_command(options: UpdateCommandOptions) -> Result<()> 
             Ok(())
         }
         Err(err) => {
-            eprintln!("{} Failed to check for updates: {:#}", "✗".red(), err);
+            tracing::error!("Failed to check for updates: {:#}", err);
             Err(err)
         }
     }

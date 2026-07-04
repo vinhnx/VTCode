@@ -749,7 +749,7 @@ pub(crate) fn open_browser_or_print_url(url: &str) -> Result<()> {
     }
 
     if let Err(err) = open_external_url(url) {
-        eprintln!("warning: {err}");
+        tracing::warn!("{err}");
     }
 
     Ok(())
@@ -963,7 +963,7 @@ fn print_copilot_auth_event(event: CopilotAuthEvent) -> Result<()> {
             }
         }
         CopilotAuthEvent::Failure { message } => {
-            eprintln!("GitHub Copilot auth failed: {message}")
+            tracing::error!("GitHub Copilot auth failed: {message}")
         }
     }
 

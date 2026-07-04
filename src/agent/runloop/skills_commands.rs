@@ -7,6 +7,7 @@
 //! mention detection (`$pdf-analyzer` or description keyword matching).
 
 use anyhow::Result;
+use std::fmt::Write;
 use std::path::PathBuf;
 #[cfg(test)]
 use vtcode_core::config::loader::ConfigManager;
@@ -212,17 +213,18 @@ Shortcuts:
             let mut output = String::from("Available Skills:\n");
             for skill_ctx in &skills {
                 let manifest = skill_ctx.manifest();
-                output.push_str(&format!(
-                    "  • {} [{}] - {}\n",
+                let _ = writeln!(
+                    output,
+                    "  • {} [{}] - {}",
                     manifest.name,
                     list_label_for_manifest(manifest),
                     manifest.description
-                ));
+                );
             }
             if !cli_tools.is_empty() {
                 output.push_str("\nSystem Utilities:\n");
                 for tool in &cli_tools {
-                    output.push_str(&format!("  • {} - {}\n", tool.name, tool.description));
+                    let _ = writeln!(output, "  • {} - {}", tool.name, tool.description);
                 }
             }
             output.push_str(
@@ -284,13 +286,13 @@ Shortcuts:
                 Ok(enhanced_skill) => match enhanced_skill {
                     vtcode_core::skills::loader::EnhancedSkill::Traditional(skill) => {
                         let mut output = String::new();
-                        output.push_str(&format!("Skill: {}\n", skill.name()));
-                        output.push_str(&format!("Description: {}\n", skill.description()));
+                        let _ = writeln!(output, "Skill: {}", skill.name());
+                        let _ = writeln!(output, "Description: {}", skill.description());
                         if let Some(license) = &skill.manifest.license {
-                            output.push_str(&format!("License: {license}\n"));
+                            let _ = writeln!(output, "License: {license}");
                         }
                         if let Some(compatibility) = &skill.manifest.compatibility {
-                            output.push_str(&format!("Compatibility: {compatibility}\n"));
+                            let _ = writeln!(output, "Compatibility: {compatibility}");
                         }
 
                         output.push_str("\n--- Instructions ---\n");
@@ -299,7 +301,7 @@ Shortcuts:
                         if !skill.list_resources().is_empty() {
                             output.push_str("\n\n--- Resources ---\n");
                             for resource in skill.list_resources() {
-                                output.push_str(&format!("  • {resource}\n"));
+                                let _ = writeln!(output, "  • {resource}");
                             }
                         }
 
@@ -307,19 +309,19 @@ Shortcuts:
                     }
                     vtcode_core::skills::loader::EnhancedSkill::CliTool(bridge) => {
                         let mut output = String::new();
-                        output.push_str(&format!("CLI Tool Skill: {}\n", bridge.config.name));
-                        output.push_str(&format!("Description: {}\n", bridge.config.description));
+                        let _ = writeln!(output, "CLI Tool Skill: {}", bridge.config.name);
+                        let _ = writeln!(output, "Description: {}", bridge.config.description);
                         output.push_str("\n--- Tool Configuration ---\n");
                         output.push_str("Tool available for execution");
                         Ok(SkillCommandOutcome::Handled { message: output })
                     }
                     vtcode_core::skills::loader::EnhancedSkill::BuiltInCommand(skill) => {
                         let mut output = String::new();
-                        output.push_str(&format!("Built-In Command Skill: {}\n", skill.name()));
-                        output.push_str(&format!("Description: {}\n", skill.description()));
-                        output.push_str(&format!("Slash alias: /{}\n", skill.slash_name()));
-                        output.push_str(&format!("Usage: {}\n", skill.usage()));
-                        output.push_str(&format!("Category: {}\n", skill.category()));
+                        let _ = writeln!(output, "Built-In Command Skill: {}", skill.name());
+                        let _ = writeln!(output, "Description: {}", skill.description());
+                        let _ = writeln!(output, "Slash alias: /{}", skill.slash_name());
+                        let _ = writeln!(output, "Usage: {}", skill.usage());
+                        let _ = writeln!(output, "Category: {}", skill.category());
                         output.push_str("\n--- Backend ---\n");
                         output.push_str("Executes the existing slash command backend");
                         Ok(SkillCommandOutcome::Handled { message: output })
@@ -327,8 +329,8 @@ Shortcuts:
                     vtcode_core::skills::loader::EnhancedSkill::NativePlugin(plugin) => {
                         let meta = plugin.metadata();
                         let mut output = String::new();
-                        output.push_str(&format!("Native Plugin: {}\n", meta.name));
-                        output.push_str(&format!("Description: {}\n", meta.description));
+                        let _ = writeln!(output, "Native Plugin: {}", meta.name);
+                        let _ = writeln!(output, "Description: {}", meta.description);
                         output.push_str("\n--- Plugin Configuration ---\n");
                         output.push_str("Native plugin available for execution");
                         Ok(SkillCommandOutcome::Handled { message: output })

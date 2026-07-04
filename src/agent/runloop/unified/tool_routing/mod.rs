@@ -8,6 +8,7 @@ mod permission_prompt;
 mod shell_approval;
 
 use std::borrow::Cow;
+use std::fmt::Write;
 #[cfg(test)]
 use std::future::Future;
 use std::sync::Arc;
@@ -787,10 +788,10 @@ fn headless_auto_permission_fallback_reason(
         denial.reason
     );
     if let Some(rule) = denial.matched_rule.as_deref() {
-        reason.push_str(&format!(" (matched rule: {rule})"));
+        let _ = write!(reason, " (matched rule: {rule})");
     }
     if let Some(exception) = denial.matched_exception.as_deref() {
-        reason.push_str(&format!(" (matched exception: {exception})"));
+        let _ = write!(reason, " (matched exception: {exception})");
     }
     reason
 }

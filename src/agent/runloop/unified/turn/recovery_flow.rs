@@ -1,3 +1,4 @@
+use std::fmt::Write;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
@@ -354,20 +355,22 @@ fn build_error_summary(diagnostics: &RecoveryDiagnostics) -> String {
             ErrorType::Validation => "Validation Error",
             ErrorType::Other => "Other",
         };
-        summary.push_str(&format!(
-            "{}. {} ({}) - {}\n",
+        let _ = writeln!(
+            summary,
+            "{}. {} ({}) - {}",
             i + 1,
             error.tool_name,
             error_type,
             error.error_message
-        ));
+        );
     }
 
     if diagnostics.recent_errors.len() > 5 {
-        summary.push_str(&format!(
-            "... and {} more errors\n",
+        let _ = writeln!(
+            summary,
+            "... and {} more errors",
             diagnostics.recent_errors.len() - 5
-        ));
+        );
     }
 
     summary

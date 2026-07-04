@@ -207,7 +207,7 @@ impl StartupContext {
         if let Some(notice) = codex_fallback_notice
             && !args.quiet
         {
-            eprintln!("warning: {notice}");
+            tracing::warn!("{notice}");
         }
 
         Ok(StartupContext {

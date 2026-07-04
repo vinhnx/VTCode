@@ -361,7 +361,7 @@ async fn refresh_skill_index(options: &SkillsCommandOptions) {
     if let Err(err) =
         crate::cli::skills_index::generate_comprehensive_skills_index(&options.workspace).await
     {
-        eprintln!("Warning: Failed to regenerate skills index: {err}");
+        tracing::warn!("Failed to regenerate skills index: {err}");
     }
 }
 

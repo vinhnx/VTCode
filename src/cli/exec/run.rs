@@ -267,8 +267,8 @@ async fn handle_codex_exec_command_impl(
     let task_spec = task_spec(&options.command, options.dry_run);
 
     if options.events_path.is_some() || run_vt_cfg.agent.harness.event_log_path.is_some() {
-        eprintln!(
-            "warning: provider=codex does not yet emit exec event logs; continuing without events output"
+        tracing::warn!(
+            "provider=codex does not yet emit exec event logs; continuing without events output"
         );
     }
 

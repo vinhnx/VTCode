@@ -67,11 +67,7 @@ pub async fn handle_skills_ref_to_prompt(paths: &[PathBuf]) -> Result<()> {
                     });
                 }
                 Err(e) => {
-                    eprintln!(
-                        "Warning: Failed to parse skill at {}: {}",
-                        path.display(),
-                        e
-                    );
+                    tracing::warn!("Failed to parse skill at {}: {}", path.display(), e);
                 }
             }
         }

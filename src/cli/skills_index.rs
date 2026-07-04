@@ -68,14 +68,14 @@ pub async fn handle_skills_regenerate_index(options: &SkillsCommandOptions) -> R
                     }
                 }
                 Err(e) => {
-                    eprintln!("Could not list skills: {e}");
+                    tracing::warn!("Could not list skills: {e}");
                     println!("Skills index regenerated successfully!");
                     println!("Index file: {}", index_path.display());
                 }
             }
         }
         Err(e) => {
-            eprintln!("Failed to regenerate skills index: {e}");
+            tracing::error!("Failed to regenerate skills index: {e}");
             return Err(e);
         }
     }
