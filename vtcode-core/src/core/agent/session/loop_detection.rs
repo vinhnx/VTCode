@@ -181,22 +181,28 @@ mod tests {
 
     #[test]
     fn should_halt_on_loop_limit() {
-        let mut state = LoopDetectionState::default();
-        state.tool_loop_limit_hit = true;
+        let state = LoopDetectionState {
+            tool_loop_limit_hit: true,
+            ..Default::default()
+        };
         assert!(state.should_halt(10, 5));
     }
 
     #[test]
     fn should_halt_on_excessive_loops() {
-        let mut state = LoopDetectionState::default();
-        state.consecutive_tool_loops = 10;
+        let state = LoopDetectionState {
+            consecutive_tool_loops: 10,
+            ..Default::default()
+        };
         assert!(state.should_halt(10, 5));
     }
 
     #[test]
     fn should_halt_on_stagnation() {
-        let mut state = LoopDetectionState::default();
-        state.stagnant_turns = 5;
+        let state = LoopDetectionState {
+            stagnant_turns: 5,
+            ..Default::default()
+        };
         assert!(state.should_halt(10, 5));
     }
 

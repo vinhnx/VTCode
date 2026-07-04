@@ -2,8 +2,4 @@
 
 ---
 
-- Enabling #![warn(missing_docs)] project-wide.
-
----
-
 implement automatically download any new updates when vtcode starts up.

@@ -86,13 +86,13 @@ mod tests {
         let mut metrics = TurnMetrics::default();
         metrics.record_turn(100);
         metrics.record_turn(200);
-        assert_eq!(metrics.avg_turn_ms(), 150.0);
+        assert!((metrics.avg_turn_ms() - 150.0).abs() < f64::EPSILON);
     }
 
     #[test]
     fn avg_turn_ms_zero_when_empty() {
         let metrics = TurnMetrics::default();
-        assert_eq!(metrics.avg_turn_ms(), 0.0);
+        assert!((metrics.avg_turn_ms() - 0.0).abs() < f64::EPSILON);
     }
 
     #[test]
