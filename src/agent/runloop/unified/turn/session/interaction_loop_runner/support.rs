@@ -7,11 +7,13 @@ use std::fs;
 use std::io::{self, Write};
 use std::path::Path;
 
+use vtcode_config::models::{ModelId, Provider};
 use vtcode_core::config::EditorToolConfig;
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::core::threads::ArchivedSessionIntent;
 use vtcode_core::hooks::{LifecycleHookEngine, SessionStartTrigger};
+use vtcode_core::llm::ModelResolver;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::notifications::set_global_notification_hook_engine;
 use vtcode_core::scheduler::{DurableTaskStore, SchedulerDaemon};
@@ -21,6 +23,7 @@ use vtcode_core::ui::theme;
 use vtcode_core::ui::{inline_theme_from_core_styles, to_tui_appearance};
 use vtcode_core::utils::ansi::MessageStyle;
 use vtcode_core::{build_primary_agent_hook_config, build_primary_agent_runtime_config};
+use vtcode_ui::tui::app::{ContentPart as UiContentPart, SubmittedInput};
 
 use crate::agent::runloop::prompt::refine_and_enrich_prompt;
 use crate::agent::runloop::unified::async_mcp_manager::{
@@ -67,7 +70,7 @@ pub(super) struct LiveIdeContextUpdate {
 
 pub(super) enum InlineLoopActionResolution {
     ContinueLoop,
-    Submit(String),
+    Submit(SubmittedInput),
     Outcome(InteractionOutcome),
 }
 
@@ -368,30 +371,28 @@ pub(super) fn stalled_follow_up_recovery_prompt(
     }
 }
 
-fn append_file_reference_metadata(
-    content: uni::MessageContent,
-    input: &str,
-    workspace: &Path,
-) -> uni::MessageContent {
-    let Some(metadata) = build_file_reference_metadata(input, workspace) else {
-        return content;
-    };
-
+fn append_trailing_text_part(content: &mut uni::MessageContent, trailing_text: String) {
     match content {
-        uni::MessageContent::Text(text) => uni::MessageContent::text(format!("{text}{metadata}")),
-        uni::MessageContent::Parts(mut parts) => {
-            parts.push(uni::ContentPart::text(metadata));
-            uni::MessageContent::parts(parts)
-        }
+        uni::MessageContent::Text(text) => text.push_str(&trailing_text),
+        uni::MessageContent::Parts(parts) => parts.push(uni::ContentPart::text(trailing_text)),
     }
 }
 
-fn append_agent_reference_metadata(
-    content: uni::MessageContent,
-    selected_agents: &[String],
-) -> uni::MessageContent {
+fn append_file_reference_metadata(
+    content: &mut uni::MessageContent,
+    input: &str,
+    workspace: &Path,
+) {
+    let Some(metadata) = build_file_reference_metadata(input, workspace) else {
+        return;
+    };
+
+    append_trailing_text_part(content, metadata);
+}
+
+fn append_agent_reference_metadata(content: &mut uni::MessageContent, selected_agents: &[String]) {
     if selected_agents.is_empty() {
-        return content;
+        return;
     }
 
     let mut metadata = String::from("\n\n[agent_reference_metadata]\n");
@@ -399,13 +400,7 @@ fn append_agent_reference_metadata(
         metadata.push_str(&format!("selected=@agent-{mention}\n"));
     }
 
-    match content {
-        uni::MessageContent::Text(text) => uni::MessageContent::text(format!("{text}{metadata}")),
-        uni::MessageContent::Parts(mut parts) => {
-            parts.push(uni::ContentPart::text(metadata));
-            uni::MessageContent::parts(parts)
-        }
-    }
+    append_trailing_text_part(content, metadata);
 }
 
 fn supports_native_openai_file_inputs(
@@ -505,15 +500,16 @@ fn resolve_full_path_for_alias(alias: &str, workspace: &Path) -> Option<String> 
 
 pub(super) async fn build_user_message_content(
     ctx: &mut InteractionLoopContext<'_>,
-    input: &str,
+    input: &SubmittedInput,
 ) -> uni::MessageContent {
+    let text = input.text.as_str();
     let allow_structured_non_image_file_inputs = supports_native_openai_file_inputs(
         &ctx.config.provider,
         ctx.provider_client
             .supports_responses_compaction(&ctx.config.model),
     );
     let processed_content = match vtcode_core::utils::at_pattern::parse_at_patterns_with_options(
-        input,
+        text,
         &ctx.config.workspace,
         vtcode_core::utils::at_pattern::AtPatternOptions {
             allow_local_non_image_file_inputs: allow_structured_non_image_file_inputs,
@@ -525,7 +521,7 @@ pub(super) async fn build_user_message_content(
         Ok(content) => content,
         Err(err) => {
             tracing::warn!("Failed to parse @ patterns: {}", err);
-            uni::MessageContent::text(input.to_string())
+            uni::MessageContent::text(text.to_string())
         }
     };
 
@@ -552,13 +548,145 @@ pub(super) async fn build_user_message_content(
     };
     let selected_agents: Vec<String> =
         if let Some(controller) = ctx.tool_registry.subagent_controller() {
-            controller.set_turn_delegation_hints_from_input(input).await
+            controller.set_turn_delegation_hints_from_input(text).await
         } else {
             Vec::new()
         };
-    let refined_content =
-        append_file_reference_metadata(refined_content, input, &ctx.config.workspace);
-    append_agent_reference_metadata(refined_content, selected_agents.as_slice())
+    let mut refined_content = refined_content;
+    append_submitted_attachments(&mut refined_content, input.attachments.as_slice());
+    append_file_reference_metadata(&mut refined_content, text, &ctx.config.workspace);
+    append_agent_reference_metadata(&mut refined_content, selected_agents.as_slice());
+    refined_content
+}
+
+fn append_submitted_attachments(content: &mut uni::MessageContent, attachments: &[UiContentPart]) {
+    if attachments.is_empty() {
+        return;
+    }
+
+    let mut parts = match std::mem::take(content) {
+        uni::MessageContent::Text(text) => {
+            if text.is_empty() {
+                Vec::new()
+            } else {
+                vec![uni::ContentPart::text(text)]
+            }
+        }
+        uni::MessageContent::Parts(parts) => parts,
+    };
+
+    parts.extend(attachments.iter().map(|attachment| match attachment {
+        UiContentPart::Text { text } => uni::ContentPart::text(text.clone()),
+        UiContentPart::Image { data, media_type } => {
+            uni::ContentPart::image(data.clone(), media_type.clone())
+        }
+    }));
+
+    *content = uni::MessageContent::parts(parts);
+}
+
+pub(super) fn submitted_images_are_unsupported(
+    input: &SubmittedInput,
+    model_supports_vision: bool,
+    workspace: &Path,
+) -> bool {
+    !model_supports_vision
+        && (input
+            .attachments
+            .iter()
+            .any(vtcode_ui::tui::app::ContentPart::is_image)
+            || vtcode_core::utils::at_pattern::input_may_parse_image_parts(&input.text, workspace))
+}
+
+pub(super) fn selected_model_supports_image_input(
+    provider_key: &str,
+    model: &str,
+    provider_supports_vision: bool,
+) -> bool {
+    let Some(provider) = parse_image_capability_provider(provider_key) else {
+        return provider_supports_vision;
+    };
+
+    if let Some(input_modalities) = model_id_input_modalities_for_provider(provider, model) {
+        return input_modalities
+            .iter()
+            .any(|modality| modality.eq_ignore_ascii_case("image"));
+    }
+
+    let Some(resolved) = ModelResolver::resolve(Some(provider.as_ref()), model, &[], None) else {
+        return provider_supports_vision;
+    };
+    let input_modalities = resolved.input_modalities();
+    if input_modalities.is_empty() {
+        return provider_supports_vision;
+    }
+
+    input_modalities
+        .iter()
+        .any(|modality| modality.eq_ignore_ascii_case("image"))
+}
+
+fn parse_image_capability_provider(provider_key: &str) -> Option<Provider> {
+    let trimmed = provider_key.trim();
+    if let Ok(provider) = trimmed.parse::<Provider>() {
+        return Some(provider);
+    }
+
+    // Runtime header labels may include the auth mode. Capability checks should
+    // still use the selected provider's model metadata.
+    trimmed.starts_with("OpenAI").then_some(Provider::OpenAI)
+}
+
+fn model_id_input_modalities_for_provider(
+    provider: Provider,
+    model: &str,
+) -> Option<&'static [&'static str]> {
+    for candidate in model_id_candidates(model) {
+        let Ok(model_id) = candidate.parse::<ModelId>() else {
+            continue;
+        };
+        if model_id.provider() != provider {
+            continue;
+        }
+        let input_modalities = model_id.input_modalities();
+        if !input_modalities.is_empty() {
+            return Some(input_modalities);
+        }
+    }
+
+    None
+}
+
+fn model_id_candidates(model: &str) -> Vec<String> {
+    let trimmed = model.trim();
+    let mut candidates = Vec::new();
+    push_unique_candidate(&mut candidates, trimmed);
+
+    let lower = trimmed.to_ascii_lowercase();
+    push_unique_candidate(&mut candidates, &lower);
+
+    if let Some((prefix, _)) = trimmed.split_once(" (") {
+        let prefix = prefix.trim();
+        push_unique_candidate(&mut candidates, prefix);
+        let lower_prefix = prefix.to_ascii_lowercase();
+        push_unique_candidate(&mut candidates, &lower_prefix);
+    }
+
+    candidates
+}
+
+fn push_unique_candidate(candidates: &mut Vec<String>, value: &str) {
+    if value.is_empty() {
+        return;
+    }
+    if candidates.iter().any(|candidate| candidate == value) {
+        return;
+    }
+    candidates.push(value.to_string());
+}
+
+pub(super) fn replace_submitted_input_text(input: &mut SubmittedInput, text: String) {
+    input.text = text;
 }
 
 pub(super) fn refresh_ide_context_before_user_turn(
@@ -777,7 +905,7 @@ pub(super) async fn resolve_inline_loop_action(
             if let Some(primary_agent) = queued.primary_agent {
                 handle_select_primary_agent(ctx, state, Some(primary_agent)).await?;
             }
-            InlineLoopActionResolution::Submit(queued.text)
+            InlineLoopActionResolution::Submit(queued.input)
         }
         InlineLoopAction::CyclePrimaryAgent => {
             handle_cycle_primary_agent(ctx, state).await?;
@@ -1627,9 +1755,8 @@ mod tests {
         let file_path = temp_dir.path().join("README.md");
         fs::write(&file_path, "# test\n").expect("write file");
 
-        let content = uni::MessageContent::text("check @README.md".to_string());
-        let augmented =
-            append_file_reference_metadata(content, "check @README.md", temp_dir.path());
+        let mut augmented = uni::MessageContent::text("check @README.md".to_string());
+        append_file_reference_metadata(&mut augmented, "check @README.md", temp_dir.path());
 
         match augmented {
             uni::MessageContent::Text(text) => {
@@ -1644,8 +1771,8 @@ mod tests {
 
     #[test]
     fn append_agent_reference_metadata_adds_selected_agent_hint() {
-        let content = uni::MessageContent::text("use rust-engineer agent".to_string());
-        let augmented = append_agent_reference_metadata(content, &[String::from("rust-engineer")]);
+        let mut augmented = uni::MessageContent::text("use rust-engineer agent".to_string());
+        append_agent_reference_metadata(&mut augmented, &[String::from("rust-engineer")]);
 
         match augmented {
             uni::MessageContent::Text(text) => {
@@ -1669,6 +1796,350 @@ mod tests {
         let temp_dir = TempDir::new().expect("temp dir");
         let metadata = build_file_reference_metadata("check @/tmp/example.rs", temp_dir.path());
         assert!(metadata.is_none());
+    }
+
+    #[test]
+    fn append_submitted_attachments_leaves_text_only_content_unchanged() {
+        let mut content = uni::MessageContent::text("plain prompt".to_string());
+
+        append_submitted_attachments(&mut content, &[]);
+
+        assert_eq!(
+            content,
+            uni::MessageContent::text("plain prompt".to_string())
+        );
+    }
+
+    #[tokio::test]
+    async fn parsed_at_image_stays_before_pasted_image() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let image_path = temp_dir.path().join("sample.png");
+        fs::write(&image_path, tiny_png_bytes()).expect("write image");
+        let mut content = vtcode_core::utils::at_pattern::parse_at_patterns_with_options(
+            "look @sample.png",
+            temp_dir.path(),
+            vtcode_core::utils::at_pattern::AtPatternOptions::default(),
+        )
+        .await
+        .expect("parse image");
+
+        append_submitted_attachments(
+            &mut content,
+            &[UiContentPart::image("pasted-image", "image/png")],
+        );
+
+        assert_image_payload_order(&content, &["iVBOR", "pasted-image"]);
+    }
+
+    #[tokio::test]
+    async fn data_image_stays_before_pasted_image() {
+        let mut content = vtcode_core::utils::at_pattern::parse_at_patterns_with_options(
+            "look data:image/png;base64,parsedimage",
+            Path::new("."),
+            vtcode_core::utils::at_pattern::AtPatternOptions::default(),
+        )
+        .await
+        .expect("parse data image");
+
+        append_submitted_attachments(
+            &mut content,
+            &[UiContentPart::image("pasted-image", "image/png")],
+        );
+
+        assert_image_payload_order(&content, &["parsedimage", "pasted-image"]);
+    }
+
+    #[test]
+    fn clipboard_images_are_appended_after_refined_text_and_parsed_parts() {
+        let mut content = uni::MessageContent::parts(vec![
+            uni::ContentPart::text("refined prompt".to_string()),
+            uni::ContentPart::image("parsed-image".to_string(), "image/png".to_string()),
+        ]);
+
+        append_submitted_attachments(
+            &mut content,
+            &[UiContentPart::image("pasted-image", "image/png")],
+        );
+
+        match content {
+            uni::MessageContent::Parts(parts) => {
+                assert!(matches!(
+                    parts.as_slice(),
+                    [
+                        uni::ContentPart::Text { .. },
+                        uni::ContentPart::Image { .. },
+                        uni::ContentPart::Image { .. }
+                    ]
+                ));
+                assert_eq!(
+                    image_payloads(&uni::MessageContent::parts(parts)),
+                    vec!["parsed-image".to_string(), "pasted-image".to_string()]
+                );
+            }
+            uni::MessageContent::Text(_) => panic!("expected parts"),
+        }
+    }
+
+    #[test]
+    fn inline_image_placeholder_text_stays_before_pasted_image_part() {
+        let mut content = uni::MessageContent::text("[Image #1] and here?".to_string());
+
+        append_submitted_attachments(
+            &mut content,
+            &[UiContentPart::image("pasted-image", "image/png")],
+        );
+
+        match content {
+            uni::MessageContent::Parts(parts) => {
+                assert!(matches!(
+                    parts.as_slice(),
+                    [
+                        uni::ContentPart::Text { .. },
+                        uni::ContentPart::Image { .. }
+                    ]
+                ));
+                assert_eq!(parts[0].as_text(), Some("[Image #1] and here?"));
+                assert_eq!(
+                    image_payloads(&uni::MessageContent::parts(parts)),
+                    vec!["pasted-image".to_string()]
+                );
+            }
+            uni::MessageContent::Text(_) => panic!("expected parts"),
+        }
+    }
+
+    #[test]
+    fn metadata_remains_trailing_after_all_image_parts() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let file_path = temp_dir.path().join("README.md");
+        fs::write(&file_path, "# test\n").expect("write file");
+        let mut content = uni::MessageContent::parts(vec![
+            uni::ContentPart::text("check @README.md".to_string()),
+            uni::ContentPart::image("parsed-image".to_string(), "image/png".to_string()),
+        ]);
+        append_submitted_attachments(
+            &mut content,
+            &[UiContentPart::image("pasted-image", "image/png")],
+        );
+
+        append_file_reference_metadata(&mut content, "check @README.md", temp_dir.path());
+        append_agent_reference_metadata(&mut content, &[String::from("rust-engineer")]);
+
+        match content {
+            uni::MessageContent::Parts(parts) => {
+                assert!(matches!(parts[1], uni::ContentPart::Image { .. }));
+                assert!(matches!(parts[2], uni::ContentPart::Image { .. }));
+                assert!(matches!(parts[3], uni::ContentPart::Text { .. }));
+                assert!(matches!(parts[4], uni::ContentPart::Text { .. }));
+                assert!(
+                    parts[3]
+                        .as_text()
+                        .unwrap_or("")
+                        .contains("[file_reference_metadata]")
+                );
+                assert!(
+                    parts[4]
+                        .as_text()
+                        .unwrap_or("")
+                        .contains("[agent_reference_metadata]")
+                );
+            }
+            uni::MessageContent::Text(_) => panic!("expected parts"),
+        }
+    }
+
+    #[test]
+    fn unsupported_model_rejects_submitted_image_attachments() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let input = SubmittedInput::new(
+            "please inspect this",
+            vec![UiContentPart::image("pasted-image", "image/png")],
+        );
+
+        assert!(submitted_images_are_unsupported(
+            &input,
+            false,
+            temp_dir.path()
+        ));
+        assert!(!submitted_images_are_unsupported(
+            &input,
+            true,
+            temp_dir.path()
+        ));
+        assert_eq!(input.text, "please inspect this");
+        assert_eq!(
+            input.attachments,
+            vec![UiContentPart::image("pasted-image", "image/png")]
+        );
+    }
+
+    #[test]
+    fn unsupported_model_rejects_text_data_image() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let input = SubmittedInput::from("look data:image/png;base64,parsedimage".to_string());
+
+        assert!(submitted_images_are_unsupported(
+            &input,
+            false,
+            temp_dir.path()
+        ));
+        assert!(!submitted_images_are_unsupported(
+            &input,
+            true,
+            temp_dir.path()
+        ));
+        assert_eq!(input.text, "look data:image/png;base64,parsedimage");
+        assert!(input.attachments.is_empty());
+    }
+
+    #[test]
+    fn selected_model_image_support_uses_image_modality_metadata() {
+        assert!(selected_model_supports_image_input(
+            "openai", "gpt-5.4", false
+        ));
+    }
+
+    #[test]
+    fn selected_model_image_support_uses_alias_modality_metadata() {
+        assert!(selected_model_supports_image_input(
+            "openai",
+            "gpt-5.5-2026-04-23",
+            false
+        ));
+    }
+
+    #[test]
+    fn selected_model_image_support_accepts_chatgpt_provider_label() {
+        assert!(selected_model_supports_image_input(
+            "OpenAI (ChatGPT)",
+            "gpt-5.5",
+            false
+        ));
+    }
+
+    #[test]
+    fn selected_model_image_support_accepts_display_model_label() {
+        assert!(selected_model_supports_image_input(
+            "OpenAI (ChatGPT)",
+            "GPT-5.5 (128K)",
+            false
+        ));
+    }
+
+    #[test]
+    fn selected_model_image_support_rejects_text_only_metadata() {
+        assert!(!selected_model_supports_image_input(
+            "openai",
+            "gpt-oss-20b",
+            true
+        ));
+    }
+
+    #[test]
+    fn selected_model_image_support_falls_back_without_metadata() {
+        assert!(selected_model_supports_image_input(
+            "openai",
+            "custom-vision-model",
+            true
+        ));
+        assert!(!selected_model_supports_image_input(
+            "custom-provider",
+            "gpt-5.4",
+            false
+        ));
+    }
+
+    #[test]
+    fn unsupported_model_rejects_text_at_image_path() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let image_path = temp_dir.path().join("sample.png");
+        fs::write(&image_path, tiny_png_bytes()).expect("write image");
+        let input = SubmittedInput::from("look @sample.png".to_string());
+
+        assert!(submitted_images_are_unsupported(
+            &input,
+            false,
+            temp_dir.path()
+        ));
+        assert!(input.attachments.is_empty());
+    }
+
+    #[test]
+    fn unsupported_model_rejects_text_raw_image_path() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let image_path = temp_dir.path().join("raw.png");
+        fs::write(&image_path, tiny_png_bytes()).expect("write image");
+        let input = SubmittedInput::from(format!("look {}", image_path.display()));
+
+        assert!(submitted_images_are_unsupported(
+            &input,
+            false,
+            temp_dir.path()
+        ));
+        assert!(input.attachments.is_empty());
+    }
+
+    #[test]
+    fn unsupported_model_rejects_text_image_url() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let input =
+            SubmittedInput::from("look @https://example.com/sample.png?cache=1".to_string());
+
+        assert!(submitted_images_are_unsupported(
+            &input,
+            false,
+            temp_dir.path()
+        ));
+        assert!(input.attachments.is_empty());
+    }
+
+    #[test]
+    fn update_input_text_preserves_attachments_for_submit_time_gating() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let image = UiContentPart::image("pasted-image", "image/png");
+        let mut input = SubmittedInput::new("/compact please inspect this", vec![image.clone()]);
+
+        replace_submitted_input_text(&mut input, "please inspect this".to_string());
+
+        assert_eq!(input.text, "please inspect this");
+        assert_eq!(input.attachments, vec![image]);
+        assert!(submitted_images_are_unsupported(
+            &input,
+            false,
+            temp_dir.path()
+        ));
+    }
+
+    fn tiny_png_bytes() -> &'static [u8] {
+        &[
+            137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1,
+            8, 6, 0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 10, 73, 68, 65, 84, 120, 156, 99, 0, 1, 0, 0,
+            5, 0, 1, 13, 10, 45, 180, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130,
+        ]
+    }
+
+    fn image_payloads(content: &uni::MessageContent) -> Vec<String> {
+        let uni::MessageContent::Parts(parts) = content else {
+            return Vec::new();
+        };
+        parts
+            .iter()
+            .filter_map(|part| match part {
+                uni::ContentPart::Image { data, .. } => Some(data.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn assert_image_payload_order(content: &uni::MessageContent, expected_prefixes: &[&str]) {
+        let payloads = image_payloads(content);
+        assert_eq!(payloads.len(), expected_prefixes.len());
+        for (payload, expected_prefix) in payloads.iter().zip(expected_prefixes) {
+            assert!(
+                payload.starts_with(expected_prefix),
+                "payload {payload:?} should start with {expected_prefix:?}"
+            );
+        }
     }
 
     #[test]

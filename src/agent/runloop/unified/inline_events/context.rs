@@ -5,7 +5,7 @@ use tokio::sync::Notify;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::llm::provider::{self as uni};
-use vtcode_core::utils::ansi::AnsiRenderer;
+use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_ui::tui::app::{
     InlineEvent, InlineHandle, InlineHeaderContext, TransientEvent, TransientHotkeyAction,
     TransientSelectionChange, TransientSubmission,
@@ -90,7 +90,20 @@ impl<'a> InlineEventContext<'a> {
                 queue.prefer_latest_next();
                 InlineLoopAction::Continue
             }
-            InlineEvent::Steer(_) | InlineEvent::Pause | InlineEvent::Resume => {
+            InlineEvent::Steer(input) => {
+                if input.has_attachments() {
+                    self.state.reset_interrupt_state();
+                    self.state.renderer().line(
+                        MessageStyle::Warning,
+                        "Live steering supports text only. Remove image attachments before steering.",
+                    )?;
+                    self.modal.restore_input_draft(input);
+                    InlineLoopAction::Continue
+                } else {
+                    self.input_processor().passive()
+                }
+            }
+            InlineEvent::Pause | InlineEvent::Resume => {
                 self.state.reset_interrupt_state();
                 self.input_processor().passive()
             }
@@ -139,7 +152,7 @@ impl<'a> InlineEventContext<'a> {
                     self.state.reset_interrupt_state();
                     match action {
                         TransientHotkeyAction::LaunchEditor => {
-                            self.input_processor().submit("/edit".to_string())
+                            self.input_processor().submit("/edit".into())
                         }
                         TransientHotkeyAction::ReloadSubagentInspector
                         | TransientHotkeyAction::GracefulStopSubagent
@@ -163,12 +176,12 @@ impl<'a> InlineEventContext<'a> {
             }
             InlineEvent::Exit => self.control_processor().exit()?,
             InlineEvent::Interrupt => self.handle_interrupt(),
-            InlineEvent::BackgroundOperation => self
-                .input_processor()
-                .submit("/subprocesses toggle".to_string()),
+            InlineEvent::BackgroundOperation => {
+                self.input_processor().submit("/subprocesses toggle".into())
+            }
             InlineEvent::LaunchEditor { draft } => {
                 if draft.is_empty() {
-                    self.input_processor().submit("/edit".to_string())
+                    self.input_processor().submit("/edit".into())
                 } else {
                     InlineLoopAction::LaunchEditorWithDraft { draft }
                 }
@@ -197,9 +210,9 @@ impl<'a> InlineEventContext<'a> {
                 self.state.reset_interrupt_state();
                 InlineLoopAction::OpenTranscriptReviewScrollback(text)
             }
-            InlineEvent::OpenFileInEditor(path) => {
-                self.input_processor().submit(format!("/edit {path}"))
-            }
+            InlineEvent::OpenFileInEditor(path) => self
+                .input_processor()
+                .submit(format!("/edit {path}").into()),
             InlineEvent::OpenUrl(url) => {
                 self.state.reset_interrupt_state();
                 self.modal.request_url_guard(self.state.renderer(), url)?

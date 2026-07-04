@@ -4,6 +4,7 @@ mod file_palette;
 mod header_status;
 mod helpers;
 mod history;
+mod image_paste;
 mod input_navigation;
 mod local_agents;
 mod misc;

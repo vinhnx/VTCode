@@ -182,7 +182,17 @@ impl Session {
             return;
         }
 
+        let paste_start = self
+            .input_manager
+            .selection_range()
+            .map_or_else(|| self.input_manager.cursor(), |(start, _)| start);
+        let paste_end = paste_start.saturating_add(sanitized.len());
+        let line_count = sanitized.split('\n').count();
         self.input_manager.insert_text(&sanitized);
+        if line_count >= ui::INLINE_PASTE_COLLAPSE_LINE_THRESHOLD {
+            self.input_manager
+                .set_compact_paste_range(paste_start..paste_end);
+        }
         self.refresh_input_edit_state();
     }
 
@@ -214,9 +224,19 @@ impl Session {
 
     /// Calculate remaining newline capacity in the input field
     pub(crate) fn remaining_newline_capacity(&self) -> usize {
+        let content = self.input_manager.content();
+        let mut newline_count = content.matches('\n').count();
+        if let Some(range) = self.input_manager.compact_paste_range()
+            && range.end <= content.len()
+            && content.is_char_boundary(range.start)
+            && content.is_char_boundary(range.end)
+        {
+            newline_count = newline_count.saturating_sub(content[range].matches('\n').count());
+        }
+
         ui::INLINE_INPUT_MAX_LINES
             .saturating_sub(1)
-            .saturating_sub(self.input_manager.content().matches('\n').count())
+            .saturating_sub(newline_count)
     }
 
     /// Check if a newline can be inserted

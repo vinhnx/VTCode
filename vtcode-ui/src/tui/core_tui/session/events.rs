@@ -1,7 +1,7 @@
 use super::*;
 use ratatui::crossterm::event::KeyModifiers;
 
-use super::super::types::{OverlayEvent, OverlaySubmission};
+use super::super::types::{OverlayEvent, OverlaySubmission, SubmittedInput};
 use crate::tui::ui::tui::session::modal::{ModalKeyModifiers, ModalListKeyResult};
 
 pub(super) fn handle_paste(session: &mut Session, content: &str) {
@@ -91,11 +91,11 @@ fn dispatch_action(session: &mut Session, action: Action) -> Option<InlineEvent>
         }
         Action::OpenModelPicker => {
             session.mark_dirty();
-            Some(InlineEvent::Submit("/model".to_string()))
+            Some(InlineEvent::Submit("/model".into()))
         }
         Action::ClearScreen => {
             session.mark_dirty();
-            Some(InlineEvent::Submit("/clear".to_string()))
+            Some(InlineEvent::Submit("/clear".into()))
         }
         Action::ScrollPageUp => {
             session.scroll_page_up();
@@ -485,7 +485,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 if is_double_esc {
                     session.last_esc_press = None;
                     session.mark_dirty();
-                    Some(InlineEvent::Submit("/rewind".to_string()))
+                    Some(InlineEvent::Submit("/rewind".into()))
                 } else {
                     session.last_esc_press = Some(now);
                     session.mark_dirty();
@@ -505,7 +505,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 && session.active_pty_session_count() > 0
             {
                 session.mark_dirty();
-                return Some(InlineEvent::Submit("/jobs".to_string()));
+                return Some(InlineEvent::Submit("/jobs".into()));
             }
 
             // Check for backslash + Enter quick escape (insert newline without submitting)
@@ -553,7 +553,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             // If a turn is actively running, queue the message so it starts immediately after
             // the current turn completes. Otherwise submit directly so the turn starts now.
             if session.is_running_activity() {
-                session.push_queued_input(submitted.clone());
+                session.push_queued_input(submitted.text.clone());
                 Some(InlineEvent::QueueSubmit(submitted))
             } else {
                 Some(InlineEvent::Submit(submitted))
@@ -759,17 +759,18 @@ fn can_cycle_primary_agent(session: &Session, key: &KeyEvent) -> bool {
     key.modifiers == KeyModifiers::NONE && !session.has_active_overlay()
 }
 
-fn take_submitted_input(session: &mut Session) -> Option<String> {
+fn take_submitted_input(session: &mut Session) -> Option<SubmittedInput> {
     let submitted = session.input_manager.content().to_owned();
     let submitted_entry = session.input_manager.current_history_entry();
     clear_submitted_input(session);
 
-    if submitted.trim().is_empty() {
+    if submitted_entry.is_empty() {
         return None;
     }
 
+    let attachments = submitted_entry.attachment_elements();
     session.remember_submitted_input(submitted_entry);
-    Some(submitted)
+    Some(SubmittedInput::new(submitted, attachments))
 }
 
 fn clear_submitted_input(session: &mut Session) {

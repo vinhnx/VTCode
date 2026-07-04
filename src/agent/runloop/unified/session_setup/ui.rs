@@ -180,9 +180,11 @@ pub(crate) async fn initialize_session_ui(
                     let _ = sender.send(SteeringMessage::Resume);
                 }
             }
-            InlineEvent::Steer(text) => {
-                if let Some(sender) = steering_sender.as_ref() {
-                    let _ = sender.send(SteeringMessage::FollowUpInput(text.clone()));
+            InlineEvent::Steer(input) => {
+                if !input.has_attachments()
+                    && let Some(sender) = steering_sender.as_ref()
+                {
+                    let _ = sender.send(SteeringMessage::FollowUpInput(input.text.clone()));
                 }
             }
             _ => {}

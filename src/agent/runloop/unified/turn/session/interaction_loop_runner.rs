@@ -31,8 +31,9 @@ use support::{
     InlineLoopActionResolution, apply_live_theme_and_appearance, build_durable_scheduler_daemon,
     build_user_message_content, extract_recent_follow_up_hint, fallback_args_preview,
     refresh_ide_context_before_user_turn, refresh_live_ide_context_update,
-    resolve_inline_loop_action, scheduler_enabled, stalled_follow_up_recovery_prompt,
-    sync_mcp_approval_policy_for_context,
+    replace_submitted_input_text, resolve_inline_loop_action, scheduler_enabled,
+    selected_model_supports_image_input, stalled_follow_up_recovery_prompt,
+    submitted_images_are_unsupported, sync_mcp_approval_policy_for_context,
 };
 pub(crate) use support::{handle_select_primary_agent, try_resume_latest_session};
 
@@ -93,6 +94,15 @@ pub(super) async fn run_interaction_loop_impl(
         }
 
         if should_refresh_status {
+            let provider_supports_vision = ctx.provider_client.supports_vision(&ctx.config.model);
+            let model_supports_image_input = selected_model_supports_image_input(
+                &ctx.config.provider,
+                &ctx.config.model,
+                provider_supports_vision,
+            );
+            ctx.handle
+                .set_image_input_enabled(model_supports_image_input);
+
             let live_ide_context = refresh_live_ide_context_update(ctx.ide_context_bridge);
             if live_ide_context.changed || workspace_config_reloaded {
                 apply_ide_context_snapshot(
@@ -392,7 +402,7 @@ pub(super) async fn run_interaction_loop_impl(
             for task in due {
                 state.queued_inputs.push_back(
                     crate::agent::runloop::unified::inline_events::QueuedInput::new(
-                        task.prompt,
+                        task.prompt.into(),
                         Some(ctx.active_primary_agent.active().display_name.clone()),
                     ),
                 );
@@ -406,13 +416,15 @@ pub(super) async fn run_interaction_loop_impl(
             }
         }
 
-        let mut input_owned = match resolve_inline_loop_action(ctx, state, inline_action).await? {
-            InlineLoopActionResolution::ContinueLoop => continue,
-            InlineLoopActionResolution::Submit(text) => text,
-            InlineLoopActionResolution::Outcome(outcome) => return Ok(outcome),
-        };
+        let mut submitted_input =
+            match resolve_inline_loop_action(ctx, state, inline_action).await? {
+                InlineLoopActionResolution::ContinueLoop => continue,
+                InlineLoopActionResolution::Submit(input) => input,
+                InlineLoopActionResolution::Outcome(outcome) => return Ok(outcome),
+            };
+        let mut input_owned = submitted_input.text.clone();
 
-        if input_owned.is_empty() {
+        if submitted_input.is_empty() {
             continue;
         }
 
@@ -470,9 +482,27 @@ pub(super) async fn run_interaction_loop_impl(
             slash_command_handler::CommandProcessingResult::Outcome(outcome) => return Ok(outcome),
             slash_command_handler::CommandProcessingResult::ContinueLoop => continue,
             slash_command_handler::CommandProcessingResult::UpdateInput(new_input) => {
-                input_owned = new_input;
+                replace_submitted_input_text(&mut submitted_input, new_input);
+                input_owned.clone_from(&submitted_input.text);
             }
             slash_command_handler::CommandProcessingResult::NotHandled => {}
+        }
+
+        if submitted_images_are_unsupported(
+            &submitted_input,
+            selected_model_supports_image_input(
+                &ctx.config.provider,
+                &ctx.config.model,
+                ctx.provider_client.supports_vision(&ctx.config.model),
+            ),
+            &ctx.config.workspace,
+        ) {
+            ctx.renderer.line(
+                MessageStyle::Warning,
+                "The selected model does not support image input. Choose a vision-capable model or remove image attachments before submitting.",
+            )?;
+            ctx.handle.restore_input_draft(submitted_input);
+            continue;
         }
 
         let turn_id = SessionId::generate().into_inner();
@@ -674,9 +704,10 @@ pub(super) async fn run_interaction_loop_impl(
                 )?;
             }
         }
-        let input = input_owned.as_str();
+        submitted_input.text = input_owned;
+        let input = submitted_input.text.as_str();
 
-        let refined_content = build_user_message_content(ctx, input).await;
+        let refined_content = build_user_message_content(ctx, &submitted_input).await;
         refresh_ide_context_before_user_turn(ctx, state.input_status_state);
 
         display_user_message(ctx.renderer, input)?;

@@ -62,6 +62,7 @@ mod command;
 mod editing;
 
 pub mod action;
+pub(crate) mod clipboard_image;
 pub mod config;
 mod driver;
 mod events;
@@ -228,6 +229,7 @@ pub struct Session {
     #[expect(dead_code)]
     navigation_state: ListState,
     input_enabled: bool,
+    image_input_enabled: bool,
     cursor_visible: bool,
     pub(crate) needs_redraw: bool,
     pub(crate) needs_full_clear: bool,

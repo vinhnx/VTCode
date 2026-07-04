@@ -9,6 +9,7 @@ use super::overlay::{
     TaskPanelTransientRequest, TransientEvent, TransientRequest,
 };
 use crate::tui::core_tui::session::config::AppearanceConfig;
+pub use crate::tui::core_tui::types::SubmittedInput;
 use crate::tui::core_tui::types::{
     InlineHeaderContext, InlineLinkRange, InlineListItem, InlineListSearchConfig,
     InlineListSelection, InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme,
@@ -100,7 +101,9 @@ pub enum InlineCommand {
     },
     SetCursorVisible(bool),
     SetInputEnabled(bool),
+    SetImageInputEnabled(bool),
     SetInput(String),
+    RestoreInputDraft(SubmittedInput),
     ApplySuggestedPrompt(String),
     SetInlinePromptSuggestion {
         suggestion: String,
@@ -127,9 +130,9 @@ pub enum InlineCommand {
 
 #[derive(Debug, Clone)]
 pub enum InlineEvent {
-    Submit(String),
-    QueueSubmit(String),
-    Steer(String),
+    Submit(SubmittedInput),
+    QueueSubmit(SubmittedInput),
+    Steer(SubmittedInput),
     ProcessLatestQueued,
     /// Edit the newest queued input (pop into input buffer)
     EditQueue,
@@ -380,8 +383,16 @@ impl InlineHandle {
         self.send_command(InlineCommand::SetInputEnabled(enabled));
     }
 
+    pub fn set_image_input_enabled(&self, enabled: bool) {
+        self.send_command(InlineCommand::SetImageInputEnabled(enabled));
+    }
+
     pub fn set_input(&self, content: String) {
         self.send_command(InlineCommand::SetInput(content));
+    }
+
+    pub fn restore_input_draft(&self, input: SubmittedInput) {
+        self.send_command(InlineCommand::RestoreInputDraft(input));
     }
 
     pub fn apply_suggested_prompt(&self, content: String) {

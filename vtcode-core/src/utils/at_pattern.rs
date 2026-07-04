@@ -220,6 +220,37 @@ pub async fn parse_at_patterns_with_options(
     Ok(MessageContent::parts(parts))
 }
 
+/// Returns true when `input` contains an image reference that this parser would
+/// attempt to turn into an image content part.
+pub fn input_may_parse_image_parts(input: &str, base_dir: &Path) -> bool {
+    let at_matches = vtcode_commons::at_pattern::find_at_patterns(input);
+    let protected_ranges: Vec<(usize, usize)> =
+        at_matches.iter().map(|m| (m.start, m.end)).collect();
+
+    if at_matches.iter().any(|m| {
+        let path = m.path;
+        if path.starts_with("http://") || path.starts_with("https://") {
+            looks_like_image_url(path)
+        } else {
+            resolve_image_path(path, base_dir).is_some_and(|file_path| {
+                crate::utils::image_processing::has_supported_image_extension(&file_path)
+                    && file_path.exists()
+            })
+        }
+    }) {
+        return true;
+    }
+
+    if find_raw_image_path_matches(input, &protected_ranges)
+        .iter()
+        .any(|m| resolve_image_path(&m.raw, base_dir).is_some_and(|image_path| image_path.exists()))
+    {
+        return true;
+    }
+
+    !find_data_url_matches(input, &protected_ranges).is_empty()
+}
+
 #[derive(Debug)]
 struct RawPathMatch {
     start: usize,

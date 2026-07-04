@@ -6,6 +6,7 @@ This guide covers the terminal-specific settings that matter most when using VT 
 
 - [Theme and Appearance](#theme-and-appearance)
 - [Line Break Options](#line-break-options)
+- [Paste Handling](#paste-handling)
 - [Notification Setup](#notification-setup)
 - [Handling Large Inputs](#handling-large-inputs)
 
@@ -65,6 +66,13 @@ VT Code supports several multiline input paths:
 - Use `/vim`, `/vim on`, or `/vim off` to change Vim mode for the current session only.
 - VT Code currently supports a focused subset with `INSERT` and `NORMAL` modes only.
 - VT Code-specific controls such as `Enter`, `Tab`, `Ctrl+Enter`, `/`, `@`, and `!` still keep their existing behavior.
+
+## Paste Handling
+
+- Text paste stays on the terminal's bracketed paste path, so use the terminal paste shortcut, commonly `Ctrl+Shift+V`.
+- `Ctrl+V` and `Alt+V` are VT Code app-level shortcuts for pasting clipboard images. They work only in image-enabled sessions.
+- Models without image input reject pasted images and submitted image attachments with a warning.
+- On WSL, VT Code attempts a Windows clipboard image fallback through PowerShell when direct Linux clipboard access cannot read an image.
 
 ## Notification Setup
 

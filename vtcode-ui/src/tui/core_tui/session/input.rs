@@ -23,6 +23,18 @@ struct InputRender {
     cursor_y: u16,
 }
 
+struct CompactInputPreview {
+    before: String,
+    placeholder: String,
+    after_lines: Vec<String>,
+}
+
+impl CompactInputPreview {
+    fn line_count(&self) -> usize {
+        self.after_lines.len().max(1)
+    }
+}
+
 #[derive(Default)]
 struct InputLineBuffer {
     prefix: String,
@@ -314,9 +326,13 @@ impl Session {
 
         if self.input_compact_mode
             && self.input_manager.cursor() == self.input_manager.content().len()
-            && self.input_compact_placeholder().is_some()
         {
-            return 1;
+            if let Some(preview) = self.input_compact_preview() {
+                return preview.line_count().min(ui::INLINE_INPUT_MAX_LINES.max(1)) as u16;
+            }
+            if self.input_compact_placeholder().is_some() {
+                return 1;
+            }
         }
 
         if self.input_manager.content().is_empty() {
@@ -482,11 +498,20 @@ impl Session {
         let prompt_style = ratatui_style_from_inline(&prompt_style, self.theme.foreground);
         let prompt_width = UnicodeWidthStr::width(self.prompt_prefix.as_str()) as u16;
         let prompt_display_width = prompt_width.min(width);
+        let accent_style =
+            ratatui_style_from_inline(&self.styles.accent_inline_style(), self.theme.foreground);
 
         let cursor_at_end = self.input_manager.cursor() == self.input_manager.content().len();
         if self.input_compact_mode
             && cursor_at_end
-            && let Some(placeholder) = self.input_compact_placeholder()
+            && let Some(preview) = self.input_compact_preview().or_else(|| {
+                self.input_compact_placeholder()
+                    .map(|placeholder| CompactInputPreview {
+                        before: String::new(),
+                        placeholder,
+                        after_lines: Vec::new(),
+                    })
+            })
         {
             let placeholder_style = InlineTextStyle {
                 color: Some(AnsiColorEnum::Rgb(PLACEHOLDER_COLOR)),
@@ -497,14 +522,58 @@ impl Session {
                 &placeholder_style,
                 Some(AnsiColorEnum::Rgb(PLACEHOLDER_COLOR)),
             );
-            let placeholder_width = UnicodeWidthStr::width(placeholder.as_str()) as u16;
+            let mut spans = Vec::new();
+            spans.push(Span::styled(self.prompt_prefix.clone(), prompt_style));
+            if !preview.before.is_empty() {
+                let needs_space = !preview.before.ends_with(char::is_whitespace);
+                spans.push(Span::styled(preview.before, accent_style));
+                if needs_space {
+                    spans.push(Span::styled(" ".to_string(), accent_style));
+                }
+            }
+            let first_after = preview
+                .after_lines
+                .first()
+                .map(String::as_str)
+                .unwrap_or_default();
+            let needs_after_space =
+                !first_after.is_empty() && !first_after.starts_with(char::is_whitespace);
+            spans.push(Span::styled(preview.placeholder, style));
+            if needs_after_space {
+                spans.push(Span::styled(" ".to_string(), accent_style));
+            }
+            if !first_after.is_empty() {
+                spans.push(Span::styled(first_after.to_string(), accent_style));
+            }
+            let indent_prefix = " ".repeat(prompt_display_width as usize);
+            let mut lines = vec![Line::from(spans)];
+            for line in preview.after_lines.iter().skip(1) {
+                let mut spans = vec![Span::styled(indent_prefix.clone(), prompt_style)];
+                if !line.is_empty() {
+                    spans.push(Span::styled(line.clone(), accent_style));
+                }
+                lines.push(Line::from(spans));
+            }
+            let cursor_y = lines.len().saturating_sub(1) as u16;
+            let cursor_x = if cursor_y == 0 {
+                lines[0]
+                    .spans
+                    .iter()
+                    .skip(1)
+                    .map(|span| UnicodeWidthStr::width(span.content.as_ref()) as u16)
+                    .fold(prompt_display_width, u16::saturating_add)
+            } else {
+                let last_line = preview
+                    .after_lines
+                    .last()
+                    .map(String::as_str)
+                    .unwrap_or_default();
+                prompt_display_width.saturating_add(UnicodeWidthStr::width(last_line) as u16)
+            };
             return InputRender {
-                text: Text::from(vec![Line::from(vec![
-                    Span::styled(self.prompt_prefix.clone(), prompt_style),
-                    Span::styled(placeholder, style),
-                ])]),
-                cursor_x: prompt_display_width.saturating_add(placeholder_width),
-                cursor_y: 0,
+                text: Text::from(lines),
+                cursor_x,
+                cursor_y,
             };
         }
 
@@ -542,8 +611,6 @@ impl Session {
             };
         }
 
-        let accent_style =
-            ratatui_style_from_inline(&self.styles.accent_inline_style(), self.theme.foreground);
         let slash_style = accent_style.fg(Color::Yellow).add_modifier(Modifier::BOLD);
         let file_ref_style = accent_style
             .fg(Color::Cyan)
@@ -728,8 +795,7 @@ impl Session {
     pub(crate) fn input_compact_placeholder(&self) -> Option<String> {
         let content = self.input_manager.content();
         let trimmed = content.trim();
-        let attachment_count = self.input_manager.attachments().len();
-        if trimmed.is_empty() && attachment_count == 0 {
+        if trimmed.is_empty() {
             return None;
         }
 
@@ -737,19 +803,8 @@ impl Session {
             return Some(format!("[Image: {label}]"));
         }
 
-        if attachment_count > 0 {
-            let label = if attachment_count == 1 {
-                "1 attachment".to_string()
-            } else {
-                format!("{attachment_count} attachments")
-            };
-            if trimmed.is_empty() {
-                return Some(format!("[Image: {label}]"));
-            }
-            if let Some(compact) = compact_image_placeholders(content) {
-                return Some(format!("[Image: {label}] {compact}"));
-            }
-            return Some(format!("[Image: {label}] {trimmed}"));
+        if let Some(preview) = self.input_compact_preview() {
+            return Some(preview.placeholder);
         }
 
         let line_count = content.split('\n').count();
@@ -763,6 +818,35 @@ impl Session {
         }
 
         None
+    }
+
+    fn input_compact_preview(&self) -> Option<CompactInputPreview> {
+        let content = self.input_manager.content();
+        let range = self.input_manager.compact_paste_range()?;
+        if range.start >= range.end
+            || range.end > content.len()
+            || !content.is_char_boundary(range.start)
+            || !content.is_char_boundary(range.end)
+        {
+            return None;
+        }
+
+        let pasted = &content[range.clone()];
+        if pasted.split('\n').count() < ui::INLINE_PASTE_COLLAPSE_LINE_THRESHOLD {
+            return None;
+        }
+
+        let before = compact_inline_segment(&content[..range.start]);
+        let after_lines = content[range.end..]
+            .split('\n')
+            .map(compact_inline_segment)
+            .collect();
+        let char_count = pasted.chars().count();
+        Some(CompactInputPreview {
+            before,
+            placeholder: format!("[Pasted Content {char_count} chars]"),
+            after_lines,
+        })
     }
 
     pub(crate) fn visible_inline_prompt_suggestion_suffix(&self) -> Option<String> {
@@ -1295,6 +1379,13 @@ fn char_index_to_byte_index(content: &str, char_index: usize) -> usize {
 
 fn byte_index_to_char_index(content: &str, byte_index: usize) -> usize {
     content[..byte_index.min(content.len())].chars().count()
+}
+
+fn compact_inline_segment(content: &str) -> String {
+    content
+        .chars()
+        .map(|ch| if ch == '\n' || ch == '\r' { ' ' } else { ch })
+        .collect()
 }
 
 fn display_width_for_char_range(content: &str, char_count: usize) -> u16 {

@@ -125,6 +125,7 @@ impl Session {
             // --- UI State ---
             navigation_state: ListState::default(), // Kept for backward compatibility
             input_enabled: true,
+            image_input_enabled: false,
             cursor_visible: true,
             needs_redraw: true,
             needs_full_clear: false,

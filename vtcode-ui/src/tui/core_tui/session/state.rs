@@ -212,6 +212,10 @@ impl Session {
         self.input_enabled = enabled;
     }
 
+    pub(crate) fn image_input_enabled(&self) -> bool {
+        self.image_input_enabled
+    }
+
     pub(crate) fn input_compact_mode(&self) -> bool {
         self.input_compact_mode
     }

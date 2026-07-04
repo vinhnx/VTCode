@@ -26,7 +26,7 @@ pub use types::{
     InlineSession, InlineTextStyle, InlineTheme, ListOverlayRequest, ModalOverlayRequest,
     OverlayEvent, OverlayHotkey, OverlayHotkeyAction, OverlayHotkeyKey, OverlayRequest,
     OverlaySelectionChange, OverlaySubmission, PreviewCallback, RewindAction, SecurePromptConfig,
-    WizardModalMode, WizardOverlayRequest, WizardStep,
+    SubmittedInput, WizardModalMode, WizardOverlayRequest, WizardStep,
 };
 
 use runner::{TuiOptions, run_tui};

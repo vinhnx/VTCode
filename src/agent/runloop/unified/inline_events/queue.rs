@@ -1,25 +1,25 @@
 use std::collections::VecDeque;
 
-use vtcode_ui::tui::app::InlineHandle;
+use vtcode_ui::tui::app::{InlineHandle, SubmittedInput};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct QueuedInput {
-    pub(crate) text: String,
+    pub(crate) input: SubmittedInput,
     pub(crate) primary_agent: Option<String>,
 }
 
 impl QueuedInput {
-    pub(crate) fn new(text: String, primary_agent: Option<String>) -> Self {
+    pub(crate) fn new(input: SubmittedInput, primary_agent: Option<String>) -> Self {
         Self {
-            text,
+            input,
             primary_agent: primary_agent.filter(|name| !name.trim().is_empty()),
         }
     }
 
     fn display_label(&self) -> String {
         match self.primary_agent.as_deref() {
-            Some(agent) => format!("{agent}: {}", self.text),
-            None => self.text.clone(),
+            Some(agent) => format!("{agent}: {}", self.input.text),
+            None => self.input.text.clone(),
         }
     }
 }
@@ -43,9 +43,9 @@ impl<'a> InlineQueueState<'a> {
         }
     }
 
-    pub(crate) fn push(&mut self, text: String, primary_agent: Option<String>) {
+    pub(crate) fn push(&mut self, input: SubmittedInput, primary_agent: Option<String>) {
         self.queued_inputs
-            .push_back(QueuedInput::new(text, primary_agent));
+            .push_back(QueuedInput::new(input, primary_agent));
         *self.prefer_latest_once = true;
         self.sync_handle_queue();
     }
@@ -66,7 +66,10 @@ impl<'a> InlineQueueState<'a> {
     }
 
     pub(crate) fn edit_latest(&mut self) -> Option<String> {
-        let result = self.queued_inputs.pop_back().map(|queued| queued.text);
+        let result = self
+            .queued_inputs
+            .pop_back()
+            .map(|queued| queued.input.text);
         if result.is_some() {
             *self.prefer_latest_once = false;
         }
@@ -102,28 +105,28 @@ mod tests {
         let mut prefer_latest_once = false;
         let mut queue = InlineQueueState::new(&handle, &mut queued_inputs, &mut prefer_latest_once);
 
-        queue.push("first".to_string(), Some("duck".to_string()));
-        queue.push("second".to_string(), Some("build".to_string()));
-        queue.push("third".to_string(), Some("review".to_string()));
+        queue.push("first".into(), Some("duck".to_string()));
+        queue.push("second".into(), Some("build".to_string()));
+        queue.push("third".into(), Some("review".to_string()));
 
         assert_eq!(
             queue
                 .take_next_submission()
-                .map(|queued| queued.text)
+                .map(|queued| queued.input.text)
                 .as_deref(),
             Some("third")
         );
         assert_eq!(
             queue
                 .take_next_submission()
-                .map(|queued| queued.text)
+                .map(|queued| queued.input.text)
                 .as_deref(),
             Some("first")
         );
         assert_eq!(
             queue
                 .take_next_submission()
-                .map(|queued| queued.text)
+                .map(|queued| queued.input.text)
                 .as_deref(),
             Some("second")
         );
@@ -134,9 +137,9 @@ mod tests {
         let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
         let handle = InlineHandle::new_for_tests(tx);
         let mut queued_inputs = VecDeque::from([
-            QueuedInput::new("first".to_string(), Some("duck".to_string())),
-            QueuedInput::new("second".to_string(), Some("build".to_string())),
-            QueuedInput::new("third".to_string(), Some("review".to_string())),
+            QueuedInput::new("first".into(), Some("duck".to_string())),
+            QueuedInput::new("second".into(), Some("build".to_string())),
+            QueuedInput::new("third".into(), Some("review".to_string())),
         ]);
         let mut prefer_latest_once = false;
         let mut queue = InlineQueueState::new(&handle, &mut queued_inputs, &mut prefer_latest_once);
@@ -146,21 +149,21 @@ mod tests {
         assert_eq!(
             queue
                 .take_next_submission()
-                .map(|queued| queued.text)
+                .map(|queued| queued.input.text)
                 .as_deref(),
             Some("third")
         );
         assert_eq!(
             queue
                 .take_next_submission()
-                .map(|queued| queued.text)
+                .map(|queued| queued.input.text)
                 .as_deref(),
             Some("first")
         );
         assert_eq!(
             queue
                 .take_next_submission()
-                .map(|queued| queued.text)
+                .map(|queued| queued.input.text)
                 .as_deref(),
             Some("second")
         );
@@ -174,15 +177,35 @@ mod tests {
         let mut prefer_latest_once = false;
         let mut queue = InlineQueueState::new(&handle, &mut queued_inputs, &mut prefer_latest_once);
 
-        queue.push("first".to_string(), Some("planner".to_string()));
-        queue.push("second".to_string(), Some("builder".to_string()));
+        queue.push("first".into(), Some("planner".to_string()));
+        queue.push("second".into(), Some("builder".to_string()));
 
         let latest = queue.take_next_submission().expect("latest queued input");
-        assert_eq!(latest.text, "second");
+        assert_eq!(latest.input.text, "second");
         assert_eq!(latest.primary_agent.as_deref(), Some("builder"));
 
         let first = queue.take_next_submission().expect("first queued input");
-        assert_eq!(first.text, "first");
+        assert_eq!(first.input.text, "first");
         assert_eq!(first.primary_agent.as_deref(), Some("planner"));
+    }
+
+    #[test]
+    fn queued_input_preserves_attachments_in_order() {
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let handle = InlineHandle::new_for_tests(tx);
+        let mut queued_inputs = VecDeque::new();
+        let mut prefer_latest_once = false;
+        let mut queue = InlineQueueState::new(&handle, &mut queued_inputs, &mut prefer_latest_once);
+
+        let first = vtcode_ui::tui::app::ContentPart::image("first", "image/png");
+        let second = vtcode_ui::tui::app::ContentPart::image("second", "image/jpeg");
+        queue.push(
+            SubmittedInput::new("see images", vec![first.clone(), second.clone()]),
+            None,
+        );
+
+        let queued = queue.take_next_submission().expect("queued input");
+        assert_eq!(queued.input.text, "see images");
+        assert_eq!(queued.input.attachments, vec![first, second]);
     }
 }

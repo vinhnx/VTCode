@@ -15,7 +15,7 @@ pub use overlay::{
 pub use plan::{PlanContent, PlanPhase, PlanStep};
 pub use protocol::{
     ArchivedPromptEntry, InlineCommand, InlineEvent, InlineEventCallback, InlineHandle,
-    InlineSession,
+    InlineSession, SubmittedInput,
 };
 pub use slash::SlashCommandItem;
 

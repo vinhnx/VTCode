@@ -198,7 +198,7 @@ impl<'a> InlineEventLoop<'a> {
 
     fn take_queued_submission(&mut self) -> Option<InlineLoopAction> {
         self.queue.take_next_submission().map(|queued| {
-            if queued.text.is_empty() {
+            if queued.input.is_empty() {
                 InlineLoopAction::Continue
             } else {
                 InlineLoopAction::SubmitQueued(queued)
