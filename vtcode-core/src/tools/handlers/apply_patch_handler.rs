@@ -5,7 +5,6 @@
 
 use hashbrown::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -24,17 +23,6 @@ use super::tool_handler::{
 use super::tool_orchestrator::ToolOrchestrator;
 use crate::config::constants::tools;
 use crate::tools::editing::{Patch, PatchOperation};
-
-/// Context for intercepting apply_patch commands
-pub struct InterceptApplyPatchContext<'a> {
-    pub cwd: &'a Path,
-    pub timeout_ms: Option<u64>,
-    pub session: Arc<dyn super::tool_handler::ToolSession>,
-    pub turn: Arc<super::tool_handler::TurnContext>,
-    pub tracker: Option<&'a Arc<tokio::sync::Mutex<super::tool_handler::DiffTracker>>>,
-    pub call_id: &'a str,
-    pub tool_name: &'a str,
-}
 
 /// Apply patch handler
 pub struct ApplyPatchHandler;
@@ -322,6 +310,14 @@ fn convert_patch_to_changes(patch: &Patch, cwd: &Path) -> HashMap<PathBuf, FileC
     changes
 }
 
+fn map_approval_policy(policy: ApprovalPolicy) -> AskForApproval {
+    match policy {
+        ApprovalPolicy::Never => AskForApproval::Never,
+        ApprovalPolicy::OnMutation => AskForApproval::OnRequest,
+        ApprovalPolicy::Always => AskForApproval::UnlessTrusted,
+    }
+}
+
 /// Create freeform apply_patch tool spec (for GPT-5 style models)
 pub fn create_apply_patch_freeform_tool() -> ToolSpec {
     ToolSpec::Freeform(FreeformTool {
@@ -359,99 +355,6 @@ pub fn create_apply_patch_json_tool() -> ToolSpec {
             "additionalProperties": false
         }),
     })
-}
-
-/// Intercept apply_patch from shell command
-///
-/// This checks if a shell command is actually an apply_patch invocation
-/// and handles it through the apply_patch handler instead.
-pub async fn intercept_apply_patch(
-    command: &[String],
-    ctx: InterceptApplyPatchContext<'_>,
-) -> Result<Option<ToolOutput>, ToolCallError> {
-    // Check if this is an apply_patch command
-    let (is_apply_patch, patch_content) = parse_apply_patch_command(command);
-
-    if !is_apply_patch {
-        return Ok(None);
-    }
-
-    let Some(patch_input) = patch_content else {
-        return Ok(None);
-    };
-
-    // Log warning about using shell for apply_patch
-    ctx.session
-        .record_warning(format!(
-            "apply_patch was requested via {}. Use the apply_patch tool instead of shell command execution.",
-            ctx.tool_name
-        ))
-        .await;
-
-    // Parse the patch
-    let patch = Patch::parse(&patch_input)
-        .map_err(|e| ToolCallError::respond(format!("Failed to parse patch: {e}")))?;
-
-    let changes = convert_patch_to_changes(&patch, ctx.cwd);
-
-    // Create emitter
-    let emitter = ToolEmitter::apply_patch(changes.clone(), true);
-    let event_ctx = ToolEventCtx::new(
-        ctx.session.as_ref(),
-        ctx.turn.as_ref(),
-        ctx.call_id,
-        ctx.tracker,
-    );
-    emitter.begin(event_ctx).await;
-
-    // Execute
-    let req = ApplyPatchRequest {
-        patch: patch_input,
-        cwd: ctx.cwd.to_path_buf(),
-        timeout_ms: ctx.timeout_ms,
-        user_explicitly_approved: true,
-    };
-
-    let mut orchestrator = ToolOrchestrator::new();
-    let mut runtime = ApplyPatchRuntime::new();
-    let tool_ctx = ToolCtx {
-        session: ctx.session.clone(),
-        turn: ctx.turn.clone(),
-        call_id: ctx.call_id.to_string(),
-        tool_name: ctx.tool_name.to_string(),
-    };
-
-    let result = orchestrator
-        .run(
-            &mut runtime,
-            &req,
-            &tool_ctx,
-            ctx.turn.as_ref(),
-            map_approval_policy(ctx.turn.approval_policy.value()),
-        )
-        .await;
-
-    let event_ctx = ToolEventCtx::new(
-        ctx.session.as_ref(),
-        ctx.turn.as_ref(),
-        ctx.call_id,
-        ctx.tracker,
-    );
-    let content = emitter.finish(event_ctx, result).await?;
-
-    Ok(Some(ToolOutput::Function {
-        content,
-        content_items: None,
-        success: Some(true),
-    }))
-}
-
-fn map_approval_policy(policy: ApprovalPolicy) -> AskForApproval {
-    match policy {
-        ApprovalPolicy::Never => AskForApproval::Never,
-        ApprovalPolicy::OnMutation => AskForApproval::OnRequest,
-        ApprovalPolicy::Always => AskForApproval::UnlessTrusted,
-    }
 }
 
 /// Parse a shell command to check if it's an apply_patch invocation

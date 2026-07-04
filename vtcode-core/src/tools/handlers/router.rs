@@ -59,7 +59,14 @@ fn normalize_router_tool_name(tool_name: &str) -> Option<String> {
             tools::UNIFIED_EXEC
         }
         "exec_code" | "run_code" | "run_command" | "run_command_pty" => tools::UNIFIED_EXEC,
-        "search_text" => tools::GREP_FILE,
+        "search_text" | "search" | "find" => tools::GREP_FILE,
+        "applypatch" | "apply_patch" => tools::APPLY_PATCH,
+        "create_file" | "new_file" => tools::CREATE_FILE,
+        "delete_file" | "remove_file" => tools::DELETE_FILE,
+        "move_file" | "rename_file" => tools::MOVE_FILE,
+        "copy_file" | "duplicate_file" => tools::COPY_FILE,
+        "search_replace" | "find_replace" => tools::SEARCH_REPLACE,
+        "file_op" | "file_operation" => tools::FILE_OP,
         tools::READ_FILE => tools::READ_FILE,
         tools::WRITE_FILE => tools::WRITE_FILE,
         tools::EDIT_FILE => tools::EDIT_FILE,
@@ -500,6 +507,64 @@ mod tests {
         assert_eq!(
             normalize_router_tool_name("container.exec").as_deref(),
             Some("unified_exec")
+        );
+    }
+
+    #[test]
+    fn test_normalize_router_tool_name_apply_patch_variants() {
+        // Already canonical - returns None
+        assert_eq!(normalize_router_tool_name("apply_patch").as_deref(), None);
+        // Case-insensitive normalization - returns None since lowered matches
+        assert_eq!(normalize_router_tool_name("Apply_Patch").as_deref(), None);
+        // Hyphen to underscore normalization
+        assert_eq!(
+            normalize_router_tool_name("apply-patch").as_deref(),
+            Some("apply_patch")
+        );
+        // Alias normalization
+        assert_eq!(
+            normalize_router_tool_name("applypatch").as_deref(),
+            Some("apply_patch")
+        );
+    }
+
+    #[test]
+    fn test_normalize_router_tool_name_file_ops() {
+        // Space to underscore normalization
+        assert_eq!(
+            normalize_router_tool_name("Create File").as_deref(),
+            Some("create_file")
+        );
+        // Hyphen to underscore normalization
+        assert_eq!(
+            normalize_router_tool_name("delete-file").as_deref(),
+            Some("delete_file")
+        );
+        // Space to underscore normalization
+        assert_eq!(
+            normalize_router_tool_name("move file").as_deref(),
+            Some("move_file")
+        );
+        // Already canonical - returns None
+        assert_eq!(normalize_router_tool_name("copy_file").as_deref(), None);
+    }
+
+    #[test]
+    fn test_normalize_router_tool_name_search_variants() {
+        // Alias normalization
+        assert_eq!(
+            normalize_router_tool_name("search_text").as_deref(),
+            Some("grep_file")
+        );
+        // Case-insensitive + alias normalization
+        assert_eq!(
+            normalize_router_tool_name("Search").as_deref(),
+            Some("grep_file")
+        );
+        // Alias normalization
+        assert_eq!(
+            normalize_router_tool_name("find").as_deref(),
+            Some("grep_file")
         );
     }
 
