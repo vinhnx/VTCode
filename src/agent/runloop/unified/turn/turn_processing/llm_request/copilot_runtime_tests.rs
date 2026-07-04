@@ -359,8 +359,9 @@ async fn observed_tool_calls_emit_incremental_output_updates() {
     let payload = std::fs::read_to_string(harness_path).expect("read harness log");
     let events: Vec<serde_json::Value> = payload
         .lines()
-        .map(|line| serde_json::from_str(line).expect("parse harness event"))
-        .collect();
+        .map(serde_json::from_str)
+        .collect::<Result<Vec<_>, _>>()
+        .expect("harness event lines should be valid JSON");
 
     assert!(events.iter().any(|entry| {
         entry["event"]["type"] == "item.updated"
@@ -578,8 +579,9 @@ async fn copilot_terminal_sessions_bind_local_pty_output_and_release_cleanly() {
     let payload = std::fs::read_to_string(&harness_path).expect("read harness log");
     let events: Vec<serde_json::Value> = payload
         .lines()
-        .map(|line| serde_json::from_str(line).expect("parse harness event"))
-        .collect();
+        .map(serde_json::from_str)
+        .collect::<Result<Vec<_>, _>>()
+        .expect("harness event lines should be valid JSON");
 
     assert!(events.iter().any(|entry| {
         entry["event"]["type"] == "item.started"

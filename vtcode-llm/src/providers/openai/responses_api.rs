@@ -721,8 +721,9 @@ mod tests {
             .as_ref()
             .expect("reasoning details should exist")
             .iter()
-            .map(|item| serde_json::from_str(item).expect("reasoning detail should be JSON"))
-            .collect()
+            .map(|item| serde_json::from_str(item))
+            .collect::<Result<Vec<_>, _>>()
+            .expect("reasoning detail should be valid JSON")
     }
 
     #[test]

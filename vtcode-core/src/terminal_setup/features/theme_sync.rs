@@ -826,11 +826,15 @@ mod tests {
 
         assert_eq!(palette.len(), 256);
 
-        let expected_base16 = theme
+        let expected_base16: Vec<String> = theme
             .base16_colors()
             .iter()
-            .map(|c| Rgb::from_hex(c).unwrap().to_hex())
-            .collect::<Vec<_>>();
+            .map(|c| Rgb::from_hex(c))
+            .collect::<Result<Vec<_>, _>>()
+            .expect("base16 colors should be valid hex")
+            .into_iter()
+            .map(|rgb| rgb.to_hex())
+            .collect();
         let actual_base16 = palette
             .iter()
             .take(16)
