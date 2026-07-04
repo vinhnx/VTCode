@@ -53,7 +53,6 @@ use crate::agent::runloop::mcp_events;
 use crate::agent::runloop::unified::turn::tool_outcomes::helpers::LoopTracker;
 use crate::agent::runloop::unified::turn::turn_helpers::{display_error, error_message_for_user};
 use notifications::emit_turn_outcome_notification;
-pub(crate) use post_tool_recovery::prepare_post_tool_tool_free_recovery;
 use post_tool_recovery::{
     PostToolFailureRecovery, complete_turn_after_failed_tool_free_recovery,
     maybe_recover_after_post_tool_llm_failure, normalize_tool_free_recovery_break_outcome,
@@ -96,7 +95,6 @@ const MAX_ASSISTANT_TEXT_RESPONSES_PER_TURN: u32 = 2;
 /// the post-tool failure path cyclically.
 const MAX_POST_TOOL_RECOVERY_CYCLES: u8 = 2;
 pub(crate) const POST_TOOL_RECOVERY_REASON: &str = "Tool follow-up failed. Tools disabled; respond with text using context and recent tool outputs.";
-pub(crate) const POST_TOOL_TIMEOUT_RECOVERY_REASON: &str = "Tool follow-up timed out. Tools disabled; respond with text using context and recent tool outputs.";
 const RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER: &str = "Recovery synthesis failed; no tool call applied. Reuse recent tool outputs or re-state your request.";
 /// Reason set on `TurnLoopResult::Blocked` when the model emits tool calls or
 /// textual tool-call markup during a tool-free recovery pass.  Shared between

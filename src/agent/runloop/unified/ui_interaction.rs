@@ -9,7 +9,9 @@ use super::progress::ProgressReporter;
 use anstyle::Effects;
 
 use anyhow::Result;
-use tokio::sync::{Notify, RwLock, watch};
+#[cfg(test)]
+use tokio::sync::Notify;
+use tokio::sync::{RwLock, watch};
 use tokio::task;
 use tokio::time::MissedTickBehavior;
 use vtcode_commons::stop_hints::with_stop_hint;
@@ -22,13 +24,16 @@ use vtcode_core::config::mcp::McpTransportConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::copilot::{CopilotAuthStatusKind, probe_auth_status};
 use vtcode_core::instructions::{InstructionSourceKind, format_instruction_path};
+#[cfg(test)]
 use vtcode_core::llm::provider as uni;
 use vtcode_core::project_doc::load_instruction_appendix;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_ui::tui::app::InlineHandle;
 
 use super::async_mcp_manager::{AsyncMcpManager, McpInitStatus};
-use super::state::{CtrlCState, SessionStats};
+#[cfg(test)]
+use super::state::CtrlCState;
+use super::state::SessionStats;
 use super::status_line::InputStatusState;
 
 type LoadedSkillsMap = hashbrown::HashMap<String, vtcode_core::skills::types::Skill>;
@@ -856,6 +861,7 @@ pub(crate) async fn stream_and_render_response_with_options(
     .await
 }
 
+#[cfg(test)]
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn stream_and_render_response_with_options_and_progress(
     provider: &dyn uni::LLMProvider,

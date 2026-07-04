@@ -515,6 +515,7 @@ impl HarnessTurnState {
         )
     }
 
+    #[cfg(test)]
     pub(crate) fn recovery_mode(&self) -> Option<RecoveryMode> {
         self.recovery_mode
     }

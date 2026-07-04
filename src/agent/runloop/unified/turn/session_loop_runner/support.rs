@@ -15,6 +15,7 @@ use vtcode_ui::tui::app::{
 const STARTUP_PLANNING_WORKFLOW_ENTER_ACTION: &str = "planning_active:start_enter";
 const STARTUP_PLANNING_WORKFLOW_STAY_ACTION: &str = "planning_active:start_stay";
 
+#[cfg(test)]
 #[derive(Clone)]
 pub(super) struct TurnHistoryCheckpoint {
     pub(super) baseline_len: usize,
@@ -22,6 +23,7 @@ pub(super) struct TurnHistoryCheckpoint {
     prefix_fingerprint: u64,
 }
 
+#[cfg(test)]
 impl TurnHistoryCheckpoint {
     pub(super) fn capture(history: &[vtcode_core::llm::provider::Message]) -> Self {
         Self {

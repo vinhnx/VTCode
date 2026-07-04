@@ -468,6 +468,7 @@ pub(crate) async fn manual_compact_history_in_place(
     .map(Some)
 }
 
+#[cfg(test)]
 pub(crate) async fn compact_history_for_recovery_in_place(
     context: CompactionContext<'_>,
     state: CompactionState<'_>,
@@ -678,6 +679,7 @@ async fn apply_compacted_history(
     })
 }
 
+#[cfg(test)]
 async fn compact_history_before_index_in_place(
     context: CompactionContext<'_>,
     state: CompactionState<'_>,

@@ -313,6 +313,7 @@ fn normalized_to_legacy_stream(
     (Box::pin(stream), progress_rx)
 }
 
+#[cfg(test)]
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn stream_and_render_response_with_options_impl(
     provider: &dyn uni::LLMProvider,
