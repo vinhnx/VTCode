@@ -9,7 +9,6 @@ mod helpers;
 mod session;
 mod types;
 
-// pub(crate) use agent::ZedAgent;
 use session::run_acp_agent;
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -39,6 +38,7 @@ impl AcpClientAdapter for StandardAcpAdapter {
 
 #[cfg(test)]
 mod tests {
+    use super::agent::ZedAgent;
     use super::*;
     use crate::tooling::{
         TOOL_LIST_FILES_ITEMS_KEY, TOOL_LIST_FILES_RESULT_KEY, TOOL_LIST_FILES_URI_ARG,

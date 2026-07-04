@@ -237,11 +237,11 @@ async fn read_only_primary_agents_hide_local_tools() {
     let temp = TempDir::new().unwrap();
     let agent = build_agent(temp.path()).await;
     let enabled_tools: Vec<_> = agent
-        .tool_availability(true, false, "test-provider", "test-model")
+        .tool_availability(true, false)
         .into_iter()
         .filter_map(|(tool, runtime)| match runtime {
             ToolRuntime::Enabled => Some(tool),
-            ToolRuntime::Disabled(_) => None,
+            ToolRuntime::Disabled => None,
         })
         .collect();
 
@@ -303,11 +303,11 @@ Reader prompt."#,
     .unwrap();
     let agent = build_agent(temp.path()).await;
     let enabled_tools: Vec<_> = agent
-        .tool_availability(true, false, "test-provider", "test-model")
+        .tool_availability(true, false)
         .into_iter()
         .filter_map(|(tool, runtime)| match runtime {
             ToolRuntime::Enabled => Some(tool),
-            ToolRuntime::Disabled(_) => None,
+            ToolRuntime::Disabled => None,
         })
         .collect();
 

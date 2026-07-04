@@ -1,11 +1,9 @@
 use super::ZedAgent;
-use crate::acp;
 use crate::reports::TOOL_FAILURE_PREFIX;
 use crate::tooling::{SupportedTool, TOOL_READ_FILE_PATH_ARG, TOOL_READ_FILE_URI_ARG};
 use anyhow::Result;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
-use tracing::warn;
 use vtcode_core::config::tool_loop_limit_reached;
 use vtcode_core::llm::provider::ToolChoice;
 use vtcode_core::llm::provider::ToolDefinition;
@@ -13,8 +11,7 @@ use vtcode_core::tools::command_args;
 use vtcode_core::utils::path::ensure_path_within_workspace;
 
 use super::super::constants::*;
-use super::super::helpers::text_chunk;
-use super::super::types::{RunTerminalMode, ToolDisableReason, ToolRuntime};
+use super::super::types::{RunTerminalMode, ToolRuntime};
 
 impl ZedAgent {
     pub(super) fn local_tools_available(&self, primary_agent: &str) -> bool {
@@ -82,33 +79,21 @@ impl ZedAgent {
             .unwrap_or(false)
     }
 
-    pub(super) fn tool_availability<'a>(
-        &'a self,
+    pub(super) fn tool_availability(
+        &self,
         provider_supports_tools: bool,
         client_supports_read_text_file: bool,
-        provider_name: &'a str,
-        model_name: &'a str,
-    ) -> Vec<(SupportedTool, ToolRuntime<'a>)> {
+    ) -> Vec<(SupportedTool, ToolRuntime)> {
         self.acp_tool_registry
             .registered_tools()
             .into_iter()
             .map(|tool| {
-                let runtime = if !provider_supports_tools {
-                    ToolRuntime::Disabled(ToolDisableReason::Provider {
-                        provider: provider_name,
-                        model: model_name,
-                    })
+                let runtime = if provider_supports_tools
+                    && (tool != SupportedTool::ReadFile || client_supports_read_text_file)
+                {
+                    ToolRuntime::Enabled
                 } else {
-                    match tool {
-                        SupportedTool::ReadFile => {
-                            if client_supports_read_text_file {
-                                ToolRuntime::Enabled
-                            } else {
-                                ToolRuntime::Disabled(ToolDisableReason::ClientCapabilities)
-                            }
-                        }
-                        SupportedTool::ListFiles => ToolRuntime::Enabled,
-                    }
+                    ToolRuntime::Disabled
                 };
                 (tool, runtime)
             })
@@ -215,78 +200,6 @@ impl ZedAgent {
 
     pub(super) fn argument_message(template: &str, argument: &str) -> String {
         template.replace("{argument}", argument)
-    }
-
-    #[allow(dead_code)]
-    pub(super) fn render_tool_disable_notice(
-        &self,
-        tool: SupportedTool,
-        reason: &ToolDisableReason<'_>,
-    ) -> String {
-        let tool_name = tool.function_name();
-        match reason {
-            ToolDisableReason::Provider { provider, model } => TOOL_DISABLED_PROVIDER_NOTICE
-                .replace("{tool}", tool_name)
-                .replace("{model}", model)
-                .replace("{provider}", provider),
-            ToolDisableReason::ClientCapabilities => {
-                TOOL_DISABLED_CAPABILITY_NOTICE.replace("{tool}", tool_name)
-            }
-        }
-    }
-
-    #[allow(dead_code)]
-    pub(super) fn log_tool_disable_reason(
-        &self,
-        tool: SupportedTool,
-        reason: &ToolDisableReason<'_>,
-    ) {
-        match reason {
-            ToolDisableReason::Provider { provider, model } => {
-                warn!(
-                    tool = tool.function_name(),
-                    provider = %provider,
-                    model = %model,
-                    "{}",
-                    TOOL_DISABLED_PROVIDER_LOG_MESSAGE
-                );
-            }
-            ToolDisableReason::ClientCapabilities => {
-                warn!(
-                    tool = tool.function_name(),
-                    "{}", TOOL_DISABLED_CAPABILITY_LOG_MESSAGE
-                );
-            }
-        }
-    }
-
-    #[allow(dead_code)]
-    pub(super) async fn send_tool_disable_notices(
-        &self,
-        session_id: &acp::SessionId,
-        reasons: &[(SupportedTool, ToolDisableReason<'_>)],
-    ) -> Result<(), acp::Error> {
-        if reasons.is_empty() {
-            return Ok(());
-        }
-
-        let mut combined = String::new();
-        for (index, (tool, reason)) in reasons.iter().enumerate() {
-            let mut notice = self.render_tool_disable_notice(*tool, reason);
-            if !notice.ends_with('.') {
-                notice.push('.');
-            }
-            if index > 0 {
-                combined.push(' ');
-            }
-            combined.push_str(&notice);
-        }
-
-        self.send_update(
-            session_id,
-            acp::SessionUpdate::AgentThoughtChunk(text_chunk(combined)),
-        )
-        .await
     }
 
     pub(super) fn workspace_root(&self) -> &Path {

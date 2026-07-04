@@ -812,7 +812,7 @@ Research primary prompt."#,
         let session_id = agent.register_session();
         let session = agent.session_handle(&session_id).unwrap();
 
-        assert_eq!(self::primary_agent(&session), "research");
+        assert_eq!(primary_agent(&session), "research");
     }
 
     #[tokio::test]

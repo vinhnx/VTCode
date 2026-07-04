@@ -8,19 +8,9 @@ use vtcode_core::core::threads::ThreadRuntimeHandle;
 
 use super::constants::{PLAN_STEP_ANALYZE, PLAN_STEP_GATHER_CONTEXT, PLAN_STEP_RESPOND};
 
-pub(crate) enum ToolRuntime<'a> {
+pub(crate) enum ToolRuntime {
     Enabled,
-    Disabled(ToolDisableReason<'a>),
-}
-
-#[derive(Clone, Copy)]
-pub(crate) enum ToolDisableReason<'a> {
-    #[allow(dead_code)]
-    Provider {
-        provider: &'a str,
-        model: &'a str,
-    },
-    ClientCapabilities,
+    Disabled,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]

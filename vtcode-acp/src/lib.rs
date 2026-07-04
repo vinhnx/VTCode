@@ -20,11 +20,10 @@ pub mod workspace;
 mod zed;
 
 /// Compatibility facade re-exporting the upstream
-/// [`agent_client_protocol`](https://docs.rs/agent-client-protocol) types that
-/// the ACP bridge uses internally. The protocol schema types now live under
-/// [`agent_client_protocol::schema::v1`], and the role/transport types are at
-/// the crate root. Re-exporting them here keeps the historical `acp::Foo` paths
-/// working while we migrate call sites to the new API.
+/// [`agent_client_protocol`](https://docs.rs/agent-client-protocol) schema types
+/// that the ACP bridge uses internally. The protocol schema types live under
+/// [`agent_client_protocol::schema::v1`]; the role/transport types are imported
+/// directly from the crate root.
 pub(crate) mod acp {
     pub(crate) use agent_client_protocol::schema::ProtocolVersion;
     pub(crate) use agent_client_protocol::schema::v1::*;

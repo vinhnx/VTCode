@@ -6,18 +6,6 @@ pub(crate) const RESOURCE_CONTEXT_CLOSE: &str = "</context>";
 pub(crate) const RESOURCE_CONTEXT_URI_ATTR: &str = "uri";
 pub(crate) const RESOURCE_CONTEXT_NAME_ATTR: &str = "name";
 pub(crate) const MAX_TOOL_RESPONSE_CHARS: usize = 32_768;
-#[allow(dead_code)]
-pub(crate) const TOOL_DISABLED_PROVIDER_NOTICE: &str =
-    "Skipping {tool} tool: model {model} on {provider} does not support function calling";
-#[allow(dead_code)]
-pub(crate) const TOOL_DISABLED_CAPABILITY_NOTICE: &str =
-    "Skipping {tool} tool: client does not advertise fs.readTextFile capability";
-#[allow(dead_code)]
-pub(crate) const TOOL_DISABLED_PROVIDER_LOG_MESSAGE: &str =
-    "ACP tool disabled because the selected model does not support function calling";
-#[allow(dead_code)]
-pub(crate) const TOOL_DISABLED_CAPABILITY_LOG_MESSAGE: &str =
-    "ACP tool disabled because the client lacks fs.readTextFile support";
 pub(crate) const INITIALIZE_VERSION_MISMATCH_LOG: &str =
     "Client requested unsupported ACP protocol version; responding with v1";
 pub(crate) const TOOL_READ_FILE_INVALID_INTEGER_TEMPLATE: &str =

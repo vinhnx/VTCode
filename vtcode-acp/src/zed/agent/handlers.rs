@@ -29,7 +29,7 @@
 
 use super::super::constants::*;
 use super::super::helpers::{agent_implementation_info, text_chunk};
-use super::super::types::PlanProgress;
+use super::super::types::{PlanProgress, ToolRuntime};
 use super::ZedAgent;
 use crate::acp;
 use crate::acp::Error as SdkError;
@@ -390,23 +390,14 @@ async fn run_prompt(agent: Arc<ZedAgent>, args: PromptRequest) -> Result<PromptR
             .map_err(|_err| SdkError::internal_error())?;
         data.primary_agent.clone()
     };
-    let availability = agent.tool_availability(
-        provider_supports_tools,
-        client_supports_read_text_file,
-        &session_provider_name,
-        &session_model,
-    );
+    let availability =
+        agent.tool_availability(provider_supports_tools, client_supports_read_text_file);
     let mut enabled_tools = Vec::with_capacity(5);
-    let mut disabled_tools = Vec::with_capacity(5);
     for (tool, runtime) in availability {
-        match runtime {
-            super::super::types::ToolRuntime::Enabled => enabled_tools.push(tool),
-            super::super::types::ToolRuntime::Disabled(reason) => {
-                disabled_tools.push((tool, reason))
-            }
+        if matches!(runtime, ToolRuntime::Enabled) {
+            enabled_tools.push(tool);
         }
     }
-    disabled_tools.sort_by_key(|(tool, _)| tool.sort_key());
 
     let mut has_local_tools = agent.local_tools_available(&primary_agent);
     let mut tools_allowed =
