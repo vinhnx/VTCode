@@ -1,3 +1,4 @@
+#![cfg_attr(test, allow(missing_docs))]
 //! Workspace-friendly file indexer and file utilities for VT Code.
 //!
 //! `vtcode-indexer` provides:

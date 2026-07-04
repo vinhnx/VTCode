@@ -160,6 +160,7 @@ rust.unused_results = "allow"  # Too verbose for development
 rust.trivial_numeric_casts = "warn"
 rust.unsafe_code = "warn"
 rust.unstable_features = "warn"
+rust.missing_docs = "warn"
 
 [workspace.lints.clippy]
 # Don't Panic - prevent panics from unwraps and unsafe slicing or indexing

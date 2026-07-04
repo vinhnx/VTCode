@@ -1,4 +1,4 @@
-#![cfg_attr(test, allow(clippy::unreachable))]
+#![cfg_attr(test, allow(clippy::unreachable, missing_docs))]
 #![cfg_attr(not(test), allow(clippy::map_err_ignore))]
 //! Shared configuration loader utilities for VT Code and downstream integrations.
 //!

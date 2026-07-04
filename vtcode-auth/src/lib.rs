@@ -1,4 +1,5 @@
 #![allow(clippy::unreachable, clippy::map_err_ignore)]
+#![cfg_attr(test, allow(missing_docs))]
 //! Shared authentication and OAuth flows for VT Code.
 
 mod auth_service;

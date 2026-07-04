@@ -1,3 +1,4 @@
+#![cfg_attr(test, allow(missing_docs))]
 //! # vtcode-llm - LLM Provider Abstraction
 //!
 //! Provides a unified interface for multiple LLM providers including

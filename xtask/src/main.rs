@@ -1,3 +1,4 @@
+#![cfg_attr(test, allow(missing_docs))]
 use std::{
     env, fs, panic,
     path::{Path, PathBuf},

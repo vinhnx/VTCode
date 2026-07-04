@@ -1,3 +1,4 @@
+#![cfg_attr(test, allow(missing_docs))]
 //! # VT Code - Terminal Coding Agent
 //!
 //! VT Code is a Rust-based terminal coding agent that pairs a streamlined

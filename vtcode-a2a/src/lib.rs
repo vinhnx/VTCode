@@ -1,3 +1,4 @@
+#![cfg_attr(test, allow(missing_docs))]
 //! Agent2Agent (A2A) Protocol support for VT Code.
 
 pub mod agent_card;

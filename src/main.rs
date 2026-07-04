@@ -2,6 +2,7 @@
 //!
 //! Thin binary entry point that delegates to modular CLI handlers.
 #![allow(clippy::large_futures)] // deep async call stacks are an architectural trade-off
+#![cfg_attr(test, allow(missing_docs))]
 
 use anyhow::{Context, Result};
 

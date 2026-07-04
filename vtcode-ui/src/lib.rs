@@ -1,3 +1,4 @@
+#![cfg_attr(test, allow(missing_docs))]
 //! Unified UI crate for VT Code: design system, theme registry, and TUI framework.
 //!
 //! # Module layout

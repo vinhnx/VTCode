@@ -1,3 +1,4 @@
+#![cfg_attr(test, allow(missing_docs))]
 //! Command safety detection, execution policies, and sandboxing for VT Code.
 //!
 //! This crate provides the safety subsystem extracted from `vtcode-core`:

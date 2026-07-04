@@ -1,3 +1,4 @@
+#![cfg_attr(test, allow(missing_docs))]
 //! # vtcode-skills - Skill Types, Discovery, and Validation
 //!
 //! Provides the core skill system for VT Code including skill manifests,

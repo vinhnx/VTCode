@@ -1,4 +1,5 @@
 #![allow(clippy::large_futures)]
+#![cfg_attr(test, allow(missing_docs))]
 //! Model Context Protocol (MCP) client management built on top of the Codex MCP building blocks.
 //!
 //! This crate adapts the reference MCP client, server and type

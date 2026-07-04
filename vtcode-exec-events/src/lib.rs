@@ -1,3 +1,4 @@
+#![cfg_attr(test, allow(missing_docs))]
 //! Structured execution telemetry events shared across VT Code crates.
 //!
 //! This crate exposes the serialized schema for thread lifecycle updates,
