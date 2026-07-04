@@ -6,7 +6,7 @@ use crate::agent::runloop::text_tools::parse_args::{
     find_matching_delimiter, normalize_command_string, parse_key_value_arguments,
     parse_scalar_value, split_indexed_key,
 };
-use crate::agent::runloop::text_tools::parser::{ParsedToolCall, TextualToolParser};
+use crate::agent::runloop::text_tools::parser::{ParseResult, ParsedToolCall, TextualToolParser};
 
 const MAX_TAGGED_NESTING_DEPTH: usize = 256;
 
@@ -340,6 +340,33 @@ fn read_tag_text(input: &str) -> (String, &str) {
     }
 }
 
+/// Collects XML-style tagged tool-call regions for stripping.
+pub(super) fn collect_tagged_regions(text: &str, regions: &mut Vec<(usize, usize)>) {
+    collect_enclosed_regions(text, "<tool_call>", "</tool_call>", regions);
+    collect_enclosed_regions(text, "<invoke name=\"", "</invoke>", regions);
+}
+
+fn collect_enclosed_regions(
+    text: &str,
+    open_marker: &str,
+    close_marker: &str,
+    regions: &mut Vec<(usize, usize)>,
+) {
+    let mut search_start = 0usize;
+    while let Some(relative_start) = text[search_start..].find(open_marker) {
+        let start = search_start + relative_start;
+        let content_start = start + open_marker.len();
+        let end = text[content_start..]
+            .find(close_marker)
+            .map(|idx| content_start + idx + close_marker.len())
+            .unwrap_or(text.len());
+        if start < end && end <= text.len() {
+            regions.push((start, end));
+        }
+        search_start = end.max(content_start);
+    }
+}
+
 /// Parser for XML-style tagged tool calls.
 pub(crate) struct TaggedToolParser;
 
@@ -348,15 +375,23 @@ impl TextualToolParser for TaggedToolParser {
         "tagged"
     }
 
-    fn try_parse(&self, text: &str) -> Option<ParsedToolCall> {
-        let result = parse_tagged_tool_call(text);
-        if result.is_none() {
-            tracing::debug!(
-                parser = "tagged",
-                reason = "no matching <tool_call> or <invoke> pattern",
-                "Rejected textual tool call"
-            );
+    fn try_parse(&self, text: &str) -> ParseResult {
+        match parse_tagged_tool_call(text) {
+            Some((name, args)) => ParseResult::Success(ParsedToolCall { name, args }),
+            None => {
+                tracing::debug!(
+                    parser = "tagged",
+                    reason = "no matching <tool_call> or <invoke> pattern",
+                    "Rejected textual tool call"
+                );
+                ParseResult::Reject("no matching <tool_call> or <invoke> pattern")
+            }
         }
-        result.map(|(name, args)| ParsedToolCall { name, args })
+    }
+
+    fn find_consumed_spans(&self, text: &str) -> Vec<(usize, usize)> {
+        let mut regions = Vec::new();
+        collect_tagged_regions(text, &mut regions);
+        regions
     }
 }

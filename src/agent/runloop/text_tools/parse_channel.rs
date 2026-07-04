@@ -5,7 +5,7 @@ use crate::agent::runloop::text_tools::canonical::{
     apply_unified_exec_defaults, unified_exec_defaults_for_name,
 };
 use crate::agent::runloop::text_tools::parse_args::parse_textual_arguments;
-use crate::agent::runloop::text_tools::parser::{ParsedToolCall, TextualToolParser};
+use crate::agent::runloop::text_tools::parser::{ParseResult, ParsedToolCall, TextualToolParser};
 
 pub(super) fn parse_channel_tool_call(text: &str) -> Option<(String, Value)> {
     // Harmony format: <|start|>{header}<|message|>{content}<|end|>
@@ -166,6 +166,31 @@ fn normalize_harmony_command_value(command: &Value) -> Result<Value, String> {
     }
 }
 
+/// Collects channel-format tool-call regions for stripping.
+pub(super) fn collect_channel_regions(text: &str, regions: &mut Vec<(usize, usize)>) {
+    let mut search_start = 0usize;
+    while let Some(relative_start) = text[search_start..].find("<|start|>") {
+        let start = search_start + relative_start;
+        let tail = &text[start..];
+        let end = tail
+            .find("<|call|>")
+            .map(|idx| start + idx + "<|call|>".len())
+            .or_else(|| {
+                tail.find("<|end|>")
+                    .map(|idx| start + idx + "<|end|>".len())
+            })
+            .or_else(|| {
+                tail.find("<|return|>")
+                    .map(|idx| start + idx + "<|return|>".len())
+            })
+            .unwrap_or(text.len());
+        if start < end && end <= text.len() {
+            regions.push((start, end));
+        }
+        search_start = end.max(start + "<|start|>".len());
+    }
+}
+
 /// Parser for Harmony/GPT-OSS channel format tool calls.
 pub(crate) struct ChannelToolParser;
 
@@ -174,15 +199,23 @@ impl TextualToolParser for ChannelToolParser {
         "channel"
     }
 
-    fn try_parse(&self, text: &str) -> Option<ParsedToolCall> {
-        let result = parse_channel_tool_call(text);
-        if result.is_none() {
-            tracing::debug!(
-                parser = "channel",
-                reason = "no matching <|start|> pattern",
-                "Rejected textual tool call"
-            );
+    fn try_parse(&self, text: &str) -> ParseResult {
+        match parse_channel_tool_call(text) {
+            Some((name, args)) => ParseResult::Success(ParsedToolCall { name, args }),
+            None => {
+                tracing::debug!(
+                    parser = "channel",
+                    reason = "no matching <|start|> pattern",
+                    "Rejected textual tool call"
+                );
+                ParseResult::Reject("no matching <|start|> pattern")
+            }
         }
-        result.map(|(name, args)| ParsedToolCall { name, args })
+    }
+
+    fn find_consumed_spans(&self, text: &str) -> Vec<(usize, usize)> {
+        let mut regions = Vec::new();
+        collect_channel_regions(text, &mut regions);
+        regions
     }
 }

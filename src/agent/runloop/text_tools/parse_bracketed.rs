@@ -4,9 +4,49 @@ use crate::agent::runloop::text_tools::parse_args::{
     find_matching_delimiter, parse_textual_arguments,
 };
 use crate::agent::runloop::text_tools::parse_channel::parse_tool_name_from_reference;
-use crate::agent::runloop::text_tools::parser::{ParsedToolCall, TextualToolParser};
+use crate::agent::runloop::text_tools::parser::{ParseResult, ParsedToolCall, TextualToolParser};
 
 const MAX_BRACKETED_NESTING_DEPTH: usize = 256;
+
+/// Collects bracketed tool-call regions for stripping.
+pub(super) fn collect_bracketed_regions(text: &str, regions: &mut Vec<(usize, usize)>) {
+    let mut search_start = 0usize;
+    while let Some(relative_start) = text[search_start..].find("[tool: ") {
+        let start = search_start + relative_start;
+        let Some(header_end_relative) = text[start..].find(']') else {
+            break;
+        };
+        let after_header = start + header_end_relative + 1;
+        let args_start = after_header
+            + text[after_header..]
+                .chars()
+                .take_while(|ch| ch.is_whitespace())
+                .map(char::len_utf8)
+                .sum::<usize>();
+        let Some(open) = text[args_start..].chars().next() else {
+            break;
+        };
+        let close = match open {
+            '{' => '}',
+            '(' => ')',
+            _ => {
+                search_start = after_header;
+                continue;
+            }
+        };
+        // Use shared delimiter matcher
+        let Some(args_end) =
+            find_matching_delimiter(text, args_start, open, close, MAX_BRACKETED_NESTING_DEPTH)
+        else {
+            search_start = after_header;
+            continue;
+        };
+        if start < args_end + 1 && args_end < text.len() {
+            regions.push((start, args_end + 1));
+        }
+        search_start = args_end + 1;
+    }
+}
 
 pub(super) fn parse_bracketed_tool_call(text: &str) -> Option<(String, Value)> {
     let start_tag = "[tool: ";
@@ -63,16 +103,24 @@ impl TextualToolParser for BracketedToolParser {
         "bracketed"
     }
 
-    fn try_parse(&self, text: &str) -> Option<ParsedToolCall> {
-        let result = parse_bracketed_tool_call(text);
-        if result.is_none() {
-            tracing::debug!(
-                parser = "bracketed",
-                reason = "no matching [tool: ...] pattern",
-                "Rejected textual tool call"
-            );
+    fn try_parse(&self, text: &str) -> ParseResult {
+        match parse_bracketed_tool_call(text) {
+            Some((name, args)) => ParseResult::Success(ParsedToolCall { name, args }),
+            None => {
+                tracing::debug!(
+                    parser = "bracketed",
+                    reason = "no matching [tool: ...] pattern",
+                    "Rejected textual tool call"
+                );
+                ParseResult::Reject("no matching [tool: ...] pattern")
+            }
         }
-        result.map(|(name, args)| ParsedToolCall { name, args })
+    }
+
+    fn find_consumed_spans(&self, text: &str) -> Vec<(usize, usize)> {
+        let mut regions = Vec::new();
+        collect_bracketed_regions(text, &mut regions);
+        regions
     }
 }
 

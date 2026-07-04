@@ -1,43 +1,68 @@
 use serde_json::{Map, Value};
-use vtcode_core::config::constants::tools;
 
 use crate::agent::runloop::text_tools::canonical::canonicalize_tool_name;
 use crate::agent::runloop::text_tools::parse_args::{
     normalize_command_string, parse_scalar_value, split_function_arguments, split_top_level_entries,
 };
-use crate::agent::runloop::text_tools::parser::{ParsedToolCall, TextualToolParser};
+use crate::agent::runloop::text_tools::parser::{ParseResult, ParsedToolCall, TextualToolParser};
+use crate::agent::runloop::text_tools::validate::normalize_and_validate_tool_args;
 
-pub(super) fn parse_rust_struct_tool_call(text: &str) -> Option<(String, Value)> {
-    let mut search = text;
-    while let Some(start) = search.find("```") {
-        let mut rest = &search[start + 3..];
-        if let Some(newline) = rest.find('\n') {
-            rest = &rest[newline + 1..];
-        } else {
-            return None;
-        }
+/// A code-fence span together with the parsed tool call it contains.
+pub(super) type RustStructToolCallSpan = ((usize, usize), (String, Value, Vec<Value>));
 
-        let end = rest.find("```")?;
-        let (block, after) = rest.split_at(end);
-        search = &after[3..];
-
-        if let Some((name, args)) = parse_structured_block(block) {
-            return Some((name, args));
-        }
-    }
-    None
+pub(super) fn parse_rust_struct_tool_call(text: &str) -> Option<(String, Value, Vec<Value>)> {
+    find_rust_struct_tool_call_spans(text)
+        .into_iter()
+        .next()
+        .map(|(_span, result)| result)
 }
 
-fn parse_structured_block(block: &str) -> Option<(String, Value)> {
+/// Finds all code-fence spans that contain a parseable Rust-struct-style tool
+/// call.
+pub(super) fn find_rust_struct_tool_call_spans(text: &str) -> Vec<RustStructToolCallSpan> {
+    let mut results = Vec::new();
+    let mut search_start = 0usize;
+    while let Some(relative_start) = text[search_start..].find("```") {
+        let fence_start = search_start + relative_start;
+        let after_open = &text[fence_start + 3..];
+        let Some(newline) = after_open.find('\n') else {
+            break;
+        };
+        let block_start_in_text = fence_start + 3 + newline + 1;
+        let after_newline = &after_open[newline + 1..];
+
+        let Some(end_relative) = after_newline.find("```") else {
+            break;
+        };
+        let block = &after_newline[..end_relative];
+        let fence_end = block_start_in_text + end_relative + 3;
+
+        if let Some(result) = parse_structured_block(block) {
+            results.push(((fence_start, fence_end), result));
+        }
+
+        search_start = fence_end;
+    }
+    results
+}
+
+fn parse_structured_block(block: &str) -> Option<(String, Value, Vec<Value>)> {
     let trimmed = block.trim();
     if trimmed.is_empty() {
         return None;
     }
 
     if let Some(result) = parse_function_call_block(trimmed) {
-        return Some(result);
+        return validate_structured_result(result);
     }
 
+    // Struct-style blocks (e.g. `run_pty_cmd { command: "ls" }`) are parsed
+    // without schema validation to preserve the original behavior where only
+    // function-call-shaped blocks had required-parameter checks.
+    parse_struct_style_block(trimmed)
+}
+
+fn parse_struct_style_block(trimmed: &str) -> Option<(String, Value, Vec<Value>)> {
     let brace_index = trimmed.find('{')?;
     let raw_name = trimmed[..brace_index]
         .lines()
@@ -108,10 +133,20 @@ fn parse_structured_block(block: &str) -> Option<(String, Value)> {
         object.insert("command".to_string(), Value::Array(array));
     }
 
-    Some((name, Value::Object(object)))
+    Some((name, Value::Object(object), Vec::new()))
 }
 
-fn parse_function_call_block(block: &str) -> Option<(String, Value)> {
+fn validate_structured_result(
+    (name, mut args, positional): (String, Value, Vec<Value>),
+) -> Option<(String, Value, Vec<Value>)> {
+    let canonical = canonicalize_tool_name(&name)?;
+    if !normalize_and_validate_tool_args(&canonical, &mut args, positional) {
+        return None;
+    }
+    Some((name, args, Vec::new()))
+}
+
+fn parse_function_call_block(block: &str) -> Option<(String, Value, Vec<Value>)> {
     let trimmed = block.trim();
     if !trimmed.contains('(') {
         return None;
@@ -148,8 +183,10 @@ fn parse_function_call_block(block: &str) -> Option<(String, Value)> {
     let close_index = close_index?;
     let args_body = trimmed[open_index + 1..close_index].trim();
 
-    let canonical = canonicalize_tool_name(name);
-    canonical.as_ref()?;
+    // Reject function-call-shaped blocks whose name does not canonicalize to a
+    // known tool. This prevents non-tool code like `printf!("hi")` from being
+    // accepted as a tool call while still allowing aliases such as `run(...)`.
+    canonicalize_tool_name(name)?;
 
     let mut object = Map::new();
     let mut positional: Vec<Value> = Vec::new();
@@ -173,85 +210,7 @@ fn parse_function_call_block(block: &str) -> Option<(String, Value)> {
         }
     }
 
-    // Validate required parameters based on tool type
-    match canonical.as_deref() {
-        Some(tools::UNIFIED_EXEC | tools::RUN_PTY_CMD) => {
-            if !positional.is_empty() && !object.contains_key("command") {
-                let mut positional_parts = Vec::new();
-                let mut all_strings = true;
-                for value in &positional {
-                    if let Value::String(part) = value {
-                        positional_parts.push(part.clone());
-                    } else {
-                        all_strings = false;
-                        break;
-                    }
-                }
-
-                if all_strings && !positional_parts.is_empty() {
-                    if positional_parts.len() == 1 {
-                        let command = &positional_parts[0];
-                        if let Some(array) = normalize_command_string(command) {
-                            object.insert("command".to_string(), Value::Array(array));
-                        } else {
-                            object.insert("command".to_string(), Value::String(command.clone()));
-                        }
-                    } else {
-                        let array = positional_parts
-                            .into_iter()
-                            .map(Value::String)
-                            .collect::<Vec<_>>();
-                        object.insert("command".to_string(), Value::Array(array));
-                    }
-                } else if let Some(Value::String(command)) = positional.first() {
-                    if let Some(array) = normalize_command_string(command) {
-                        object.insert("command".to_string(), Value::Array(array));
-                    } else {
-                        object.insert("command".to_string(), Value::String(command.clone()));
-                    }
-                }
-            }
-            // Validate that command is present and not empty
-            if !object.contains_key("command") {
-                return None;
-            }
-        }
-        Some(tools::GREP_FILE) => {
-            // For grep_file, ensure pattern is present
-            if !positional.is_empty()
-                && let Value::String(pattern) = &positional[0]
-            {
-                object
-                    .entry("pattern".to_string())
-                    .or_insert_with(|| Value::String(pattern.clone()));
-            }
-            // Validate that pattern is required
-            if !object.contains_key("pattern") {
-                return None;
-            }
-        }
-        Some(tools::READ_FILE | tools::WRITE_FILE | tools::EDIT_FILE) => {
-            // These tools require a 'path' parameter
-            if !positional.is_empty()
-                && let Value::String(path) = &positional[0]
-            {
-                object
-                    .entry("path".to_string())
-                    .or_insert_with(|| Value::String(path.clone()));
-            }
-            if !object.contains_key("path") {
-                return None;
-            }
-        }
-        _ => {
-            // For other tools, only reject if there are positional args but no handler
-            if !positional.is_empty() {
-                return None;
-            }
-        }
-    }
-
-    Some((name.to_string(), Value::Object(object)))
+    Some((name.to_string(), Value::Object(object), positional))
 }
 
 /// Parser for Rust struct-style tool calls in code fences.
@@ -262,15 +221,24 @@ impl TextualToolParser for StructuredToolParser {
         "structured"
     }
 
-    fn try_parse(&self, text: &str) -> Option<ParsedToolCall> {
-        let result = parse_rust_struct_tool_call(text);
-        if result.is_none() {
-            tracing::debug!(
-                parser = "structured",
-                reason = "no matching Rust struct pattern",
-                "Rejected textual tool call"
-            );
+    fn try_parse(&self, text: &str) -> ParseResult {
+        match parse_rust_struct_tool_call(text) {
+            Some((name, args, _positional)) => ParseResult::Success(ParsedToolCall { name, args }),
+            None => {
+                tracing::debug!(
+                    parser = "structured",
+                    reason = "no matching Rust struct pattern",
+                    "Rejected textual tool call"
+                );
+                ParseResult::Reject("no matching Rust struct pattern")
+            }
         }
-        result.map(|(name, args)| ParsedToolCall { name, args })
+    }
+
+    fn find_consumed_spans(&self, text: &str) -> Vec<(usize, usize)> {
+        find_rust_struct_tool_call_spans(text)
+            .into_iter()
+            .map(|(span, _result)| span)
+            .collect()
     }
 }

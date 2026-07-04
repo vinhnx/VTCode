@@ -15,7 +15,7 @@ use crate::agent::runloop::text_tools::parse_structured::StructuredToolParser;
 use crate::agent::runloop::text_tools::parse_tagged::TaggedToolParser;
 use crate::agent::runloop::text_tools::parse_yaml::YamlToolParser;
 use crate::agent::runloop::text_tools::parser::{
-    ParsedToolCall, TextualToolParser, TextualToolParserRegistry,
+    ParseResult, ParsedToolCall, TextualToolParser, TextualToolParserRegistry,
 };
 
 const MAX_TEXTUAL_NESTING_DEPTH: usize = 256;
@@ -74,16 +74,17 @@ pub(crate) fn contains_pseudo_tool_call_markers(text: &str) -> bool {
 }
 
 pub(crate) fn strip_textual_tool_call_regions(text: &str) -> String {
-    let mut regions = Vec::new();
-    collect_channel_regions(text, &mut regions);
-    collect_code_fence_regions(text, &mut regions);
+    let registry = default_parser_registry();
+    let mut regions = registry.consumed_spans(text);
+
+    // Pseudo-marker regions are not parseable as tool calls but still indicate
+    // tool-call intent, so they are stripped separately.
     collect_enclosed_regions(
         text,
         "<minimax:tool_call>",
         "</minimax:tool_call>",
         &mut regions,
     );
-    collect_enclosed_regions(text, "<invoke name=\"", "</invoke>", &mut regions);
     collect_pseudo_marker_regions(text, "<tool_call>", "</tool_call", &mut regions);
     // Strip <function=name>...</function> and <parameter=name>...</parameter>
     // blocks that models emit as pseudo-tool-call markup when tools are
@@ -97,8 +98,6 @@ pub(crate) fn strip_textual_tool_call_regions(text: &str) -> String {
     // consumed in full; the scanner advances past any suffix to the next ">".
     collect_pseudo_marker_regions(text, "<function=", "</function", &mut regions);
     collect_pseudo_marker_regions(text, "<parameter=", "</parameter", &mut regions);
-    collect_bracketed_regions(text, &mut regions);
-    collect_function_call_regions(text, &mut regions);
 
     if regions.is_empty() {
         return text.to_string();
@@ -129,42 +128,6 @@ pub(crate) fn strip_textual_tool_call_regions(text: &str) -> String {
     stripped
 }
 
-fn collect_channel_regions(text: &str, regions: &mut Vec<(usize, usize)>) {
-    let mut search_start = 0usize;
-    while let Some(relative_start) = text[search_start..].find("<|start|>") {
-        let start = search_start + relative_start;
-        let tail = &text[start..];
-        let end = tail
-            .find("<|call|>")
-            .map(|idx| start + idx + "<|call|>".len())
-            .or_else(|| {
-                tail.find("<|end|>")
-                    .map(|idx| start + idx + "<|end|>".len())
-            })
-            .or_else(|| {
-                tail.find("<|return|>")
-                    .map(|idx| start + idx + "<|return|>".len())
-            })
-            .unwrap_or(text.len());
-        add_valid_region(text, start, end, regions);
-        search_start = end.max(start + "<|start|>".len());
-    }
-}
-
-fn collect_code_fence_regions(text: &str, regions: &mut Vec<(usize, usize)>) {
-    let mut search_start = 0usize;
-    while let Some(relative_start) = text[search_start..].find("```") {
-        let start = search_start + relative_start;
-        let body_start = start + 3;
-        let Some(relative_end) = text[body_start..].find("```") else {
-            break;
-        };
-        let end = body_start + relative_end + 3;
-        add_valid_region(text, start, end, regions);
-        search_start = end;
-    }
-}
-
 fn collect_enclosed_regions(
     text: &str,
     open_marker: &str,
@@ -179,7 +142,9 @@ fn collect_enclosed_regions(
             .find(close_marker)
             .map(|idx| content_start + idx + close_marker.len())
             .unwrap_or(text.len());
-        add_valid_region(text, start, end, regions);
+        if start < end && end <= text.len() {
+            regions.push((start, end));
+        }
         search_start = end.max(content_start);
     }
 }
@@ -224,52 +189,6 @@ fn collect_pseudo_marker_regions(
     }
 }
 
-fn collect_bracketed_regions(text: &str, regions: &mut Vec<(usize, usize)>) {
-    let mut search_start = 0usize;
-    while let Some(relative_start) = text[search_start..].find("[tool: ") {
-        let start = search_start + relative_start;
-        let Some(header_end_relative) = text[start..].find(']') else {
-            break;
-        };
-        let after_header = start + header_end_relative + 1;
-        let args_start = after_header
-            + text[after_header..]
-                .chars()
-                .take_while(|ch| ch.is_whitespace())
-                .map(char::len_utf8)
-                .sum::<usize>();
-        let Some(open) = text[args_start..].chars().next() else {
-            break;
-        };
-        let close = match open {
-            '{' => '}',
-            '(' => ')',
-            _ => {
-                search_start = after_header;
-                continue;
-            }
-        };
-        // Use shared delimiter matcher
-        let Some(args_end) =
-            find_matching_delimiter(text, args_start, open, close, MAX_TEXTUAL_NESTING_DEPTH)
-        else {
-            search_start = after_header;
-            continue;
-        };
-        add_valid_region(text, start, args_end + 1, regions);
-        search_start = args_end + 1;
-    }
-}
-
-fn collect_function_call_regions(text: &str, regions: &mut Vec<(usize, usize)>) {
-    for prefix in TEXTUAL_TOOL_PREFIXES {
-        collect_prefixed_function_regions(text, prefix, regions);
-    }
-    for alias in DIRECT_FUNCTION_ALIASES {
-        collect_direct_function_regions(text, alias, regions);
-    }
-}
-
 fn collect_prefixed_function_regions(text: &str, prefix: &str, regions: &mut Vec<(usize, usize)>) {
     let mut search_start = 0usize;
     while let Some(relative_start) = text[search_start..].find(prefix) {
@@ -292,7 +211,9 @@ fn collect_prefixed_function_regions(text: &str, prefix: &str, regions: &mut Vec
         };
         let end = args_end + 1;
         let (region_start, region_end) = expand_wrapping_function_region(text, start, end);
-        add_valid_region(text, region_start, region_end, regions);
+        if region_start < region_end && region_end <= text.len() {
+            regions.push((region_start, region_end));
+        }
         search_start = end;
     }
 }
@@ -338,7 +259,9 @@ fn collect_direct_function_regions(text: &str, alias: &str, regions: &mut Vec<(u
         };
         let end = args_end + 1;
         let (region_start, region_end) = expand_wrapping_function_region(text, start, end);
-        add_valid_region(text, region_start, region_end, regions);
+        if region_start < region_end && region_end <= text.len() {
+            regions.push((region_start, region_end));
+        }
         search_start = end;
     }
 }
@@ -375,15 +298,6 @@ fn expand_wrapping_function_region(text: &str, start: usize, end: usize) -> (usi
     }
 }
 
-fn add_valid_region(text: &str, start: usize, end: usize, regions: &mut Vec<(usize, usize)>) {
-    if start >= end || end > text.len() {
-        return;
-    }
-    if detect_textual_tool_call(&text[start..end]).is_some() {
-        regions.push((start, end));
-    }
-}
-
 /// Parser for prefixed tool calls (e.g., "default_api.tool_name(...)").
 struct PrefixedToolParser;
 
@@ -392,7 +306,7 @@ impl TextualToolParser for PrefixedToolParser {
         "prefixed"
     }
 
-    fn try_parse(&self, text: &str) -> Option<ParsedToolCall> {
+    fn try_parse(&self, text: &str) -> ParseResult {
         for prefix in TEXTUAL_TOOL_PREFIXES {
             let prefix_bytes = prefix.as_bytes();
             let text_bytes = text.as_bytes();
@@ -456,7 +370,7 @@ impl TextualToolParser for PrefixedToolParser {
                     let raw_args = &text[args_start..args_end];
                     if let Some(args) = parse_textual_arguments(raw_args) {
                         // Return raw name/args; canonicalization happens in detect_textual_tool_call
-                        return Some(ParsedToolCall { name, args });
+                        return ParseResult::Success(ParsedToolCall { name, args });
                     }
 
                     search_start = prefix_index + prefix.len() + name_len;
@@ -470,11 +384,19 @@ impl TextualToolParser for PrefixedToolParser {
             reason = "no matching prefix pattern found",
             "Rejected textual tool call"
         );
-        None
+        ParseResult::Reject("no matching prefix pattern found")
     }
 
     fn should_validate_tool_name(&self) -> bool {
         false // Skip validation for prefixed tools (backward compatibility)
+    }
+
+    fn find_consumed_spans(&self, text: &str) -> Vec<(usize, usize)> {
+        let mut regions = Vec::new();
+        for prefix in TEXTUAL_TOOL_PREFIXES {
+            collect_prefixed_function_regions(text, prefix, &mut regions);
+        }
+        regions
     }
 }
 
@@ -486,12 +408,20 @@ impl TextualToolParser for DirectFunctionAliasParser {
         "direct_alias"
     }
 
-    fn try_parse(&self, text: &str) -> Option<ParsedToolCall> {
+    fn try_parse(&self, text: &str) -> ParseResult {
         detect_direct_function_alias(text)
+    }
+
+    fn find_consumed_spans(&self, text: &str) -> Vec<(usize, usize)> {
+        let mut regions = Vec::new();
+        for alias in DIRECT_FUNCTION_ALIASES {
+            collect_direct_function_regions(text, alias, &mut regions);
+        }
+        regions
     }
 }
 
-fn detect_direct_function_alias(text: &str) -> Option<ParsedToolCall> {
+fn detect_direct_function_alias(text: &str) -> ParseResult {
     let lowered = text.to_ascii_lowercase();
 
     for alias in DIRECT_FUNCTION_ALIASES {
@@ -554,7 +484,7 @@ fn detect_direct_function_alias(text: &str) -> Option<ParsedToolCall> {
                 let raw_args = &text[args_start..end_pos];
                 if let Some(args) = parse_textual_arguments(raw_args) {
                     // Return raw name/args; canonicalization happens in detect_textual_tool_call
-                    return Some(ParsedToolCall {
+                    return ParseResult::Success(ParsedToolCall {
                         name: alias.to_string(),
                         args,
                     });
@@ -572,5 +502,5 @@ fn detect_direct_function_alias(text: &str) -> Option<ParsedToolCall> {
         reason = "no matching alias pattern found",
         "Rejected textual tool call"
     );
-    None
+    ParseResult::Reject("no matching alias pattern found")
 }

@@ -1,6 +1,6 @@
 use serde_json::{Map, Value};
 
-use crate::agent::runloop::text_tools::parser::{ParsedToolCall, TextualToolParser};
+use crate::agent::runloop::text_tools::parser::{ParseResult, ParsedToolCall, TextualToolParser};
 
 const DSML_TAG_PREFIX: &str = "<\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}";
 const DSML_CLOSE_PREFIX: &str = "</\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}";
@@ -107,6 +107,25 @@ fn parse_dsml_tool_call_raw(text: &str) -> Option<(String, Value)> {
     Some((name, Value::Object(object)))
 }
 
+/// Collects DSML invoke regions for stripping.
+pub(super) fn collect_dsml_regions(text: &str, regions: &mut Vec<(usize, usize)>) {
+    let invoke_open = format!("{DSML_TAG_PREFIX}invoke name=\"");
+    let invoke_close = format!("{DSML_CLOSE_PREFIX}invoke>");
+    let mut search_start = 0usize;
+    while let Some(relative_start) = text[search_start..].find(&invoke_open) {
+        let start = search_start + relative_start;
+        let content_start = start + invoke_open.len();
+        let end = text[content_start..]
+            .find(&invoke_close)
+            .map(|idx| content_start + idx + invoke_close.len())
+            .unwrap_or(text.len());
+        if start < end && end <= text.len() {
+            regions.push((start, end));
+        }
+        search_start = end.max(content_start);
+    }
+}
+
 /// Parser for DeepSeek DSML v2 format tool calls.
 pub(crate) struct DsmlToolParser;
 
@@ -115,16 +134,24 @@ impl TextualToolParser for DsmlToolParser {
         "dsml"
     }
 
-    fn try_parse(&self, text: &str) -> Option<ParsedToolCall> {
-        let result = parse_dsml_tool_call_raw(text);
-        if result.is_none() {
-            tracing::debug!(
-                parser = "dsml",
-                reason = "no matching DSML v2 pattern",
-                "Rejected textual tool call"
-            );
+    fn try_parse(&self, text: &str) -> ParseResult {
+        match parse_dsml_tool_call_raw(text) {
+            Some((name, args)) => ParseResult::Success(ParsedToolCall { name, args }),
+            None => {
+                tracing::debug!(
+                    parser = "dsml",
+                    reason = "no matching DSML v2 pattern",
+                    "Rejected textual tool call"
+                );
+                ParseResult::Reject("no matching DSML v2 pattern")
+            }
         }
-        result.map(|(name, args)| ParsedToolCall { name, args })
+    }
+
+    fn find_consumed_spans(&self, text: &str) -> Vec<(usize, usize)> {
+        let mut regions = Vec::new();
+        collect_dsml_regions(text, &mut regions);
+        regions
     }
 }
 
