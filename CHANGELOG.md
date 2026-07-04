@@ -2,6 +2,33 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.134.5 - 2026-07-04
+
+### Highlights
+#### Documentation
+
+- Document user AGENTS loading  (bb56bfa3) (@kernitus)
+### Other Changes
+#### Other
+
+- Add tracking state and turn metrics for agent sessions; implement tool registry interfaces and trait implementations (c624c3a8) 
+- Enhance tool registration and UI components with detailed documentation and new features (44f400bc) 
+- Enhance tool call ID generation and validation across providers; update tests for uniqueness and consistency (0970ee36) 
+- Add parser infrastructure for textual tool calls and enhance argument parsing (2dc72e9b) 
+- Refactor read family cap logic to distinguish paginated reads and prevent false trip conditions (d7dc7404) 
+- Refactor text tool parsers to use ParseResult for improved error handling and add consumed span tracking (eca6ddd8) 
+- Implement interactive API key prompt during first-run setup and enhance error guidance for authentication issues (e039e878) 
+- Update TODO (2ffd4a00) 
+#### Refactors
+
+- Streamline test setup for loop detection and turn metrics (c12ac368) 
+- Update unwrap/expect/panic handling to use context for better error messages (c7268b71) 
+- Simplify task and context conversion using iterator methods (9c162eca) 
+- Improve JSON parsing in tests for better error handling (0198b3ba) 
+- Implement actor pattern for async tasks and improve channel handling (83e78171) 
+- Optimize string formatting and memory allocation in various modules (b79564e4) 
+- Replace string formatting with writeln! for improved performance and readability (83bc46d4) 
+- Streamline tool name normalization and enhance test coverage for apply_patch and file operations (998e762c) 
 ## 0.134.4 - 2026-07-04
 
 ### Highlights
