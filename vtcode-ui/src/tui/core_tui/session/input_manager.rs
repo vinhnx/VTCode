@@ -397,7 +397,10 @@ impl InputManager {
                         for mid in &rep_parts[1..rep_parts.len() - 1] {
                             new_lines.push(mid.to_string());
                         }
-                        let last = rep_parts.last().unwrap();
+                        // SAFETY: has_newlines is true (rep_parts.len() > 1), so .last() is guaranteed Some
+                        let last = rep_parts
+                            .last()
+                            .expect("rep_parts has at least 2 elements when has_newlines");
                         let mut last_line = String::with_capacity(last.len() + remaining.len());
                         last_line.push_str(last);
                         last_line.push_str(remaining);
@@ -435,7 +438,10 @@ impl InputManager {
                         for mid in &rep_parts[1..rep_parts.len() - 1] {
                             new_lines.push(mid.to_string());
                         }
-                        let last = rep_parts.last().unwrap();
+                        // SAFETY: has_newlines is true (rep_parts.len() > 1), so .last() is guaranteed Some
+                        let last = rep_parts
+                            .last()
+                            .expect("rep_parts has at least 2 elements when has_newlines");
                         let mut last_line = String::with_capacity(last.len() + remaining.len());
                         last_line.push_str(last);
                         last_line.push_str(remaining);

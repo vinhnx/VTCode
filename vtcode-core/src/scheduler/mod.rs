@@ -550,7 +550,9 @@ impl ScheduleCreateInput {
         if matches!(action, ScheduledTaskAction::Prompt { .. })
             && workspace.as_ref().is_some_and(|path| !path.is_dir())
         {
-            let workspace = workspace.as_ref().expect("prompt workspace should exist");
+            let workspace = workspace
+                .as_ref()
+                .context("prompt workspace should exist")?;
             bail!(
                 "Prompt task workspace does not exist or is not a directory: {}",
                 workspace.display()

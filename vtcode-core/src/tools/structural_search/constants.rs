@@ -42,15 +42,23 @@ pub(super) const MAX_THREADS: u32 = 256;
 /// ast-grep exit code for "no matches found" (not a real error).
 pub(super) const AST_GREP_NO_MATCHES_EXIT: i32 = 1;
 pub(super) static AST_GREP_METAVARIABLE_RE: Lazy<Regex> = Lazy::new(|| {
+    // SAFETY: regex is a static string literal, compilation is guaranteed to succeed
     Regex::new(r"\$\$?\$?[A-Za-z_][A-Za-z0-9_]*").expect("ast-grep metavariable regex must compile")
 });
 /// Valid ast-grep metavariable: `$` or `$$` followed by uppercase/startunderscore,
 /// then uppercase/digits/underscores. Multi-metavariable `$$$` is also valid.
-pub(super) static AST_GREP_VALID_METAVAR_RE: Lazy<Regex> = Lazy::new(|| {
+pub(super) // SAFETY: regex is a static string literal, compilation is guaranteed to succeed
+static AST_GREP_VALID_METAVAR_RE: Lazy<Regex> = Lazy::new(|| {
+    // SAFETY: regex is a static string literal, compilation is guaranteed to succeed
     Regex::new(r"^\$\$?(\$?[A-Z_][A-Z0-9_]*)$").expect("ast-grep valid metavar regex must compile")
 });
+// SAFETY: regex is a static string literal, compilation is guaranteed to succeed
 pub(super) static ANSI_ESCAPE_RE: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"\x1b\[[0-9;?]*[ -/]*[@-~]").expect("ansi escape regex must compile"));
+    // SAFETY: regex is a static string literal, compilation is guaranteed to succeed
+    Lazy::new(|| {
+        Regex::new(r"\x1b\[[0-9;?]*[ -/]*[@-~]").expect("ansi escape regex must compile")
+    });
+// SAFETY: regex is a static string literal, compilation is guaranteed to succeed
 pub(super) static AST_GREP_TEST_RESULT_RE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"test result:\s*(ok|failed)\.\s*(\d+)\s+passed;\s*(\d+)\s+failed;")
         .expect("ast-grep test summary regex must compile")

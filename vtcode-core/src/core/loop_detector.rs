@@ -98,7 +98,8 @@ fn canonicalize_command_for_detection(command: &str) -> Option<String> {
     // `<tool> --help`, `<tool> -h`, `<tool> --version`, `<tool> -V`
     // Also handles `env VAR=val <tool> --help` by skipping env prefix.
     if tokens.len() >= 2 {
-        let last = tokens.last().unwrap();
+        // SAFETY: tokens.len() >= 2 is checked above, so .last() is guaranteed Some
+        let last = tokens.last().expect("tokens.len() >= 2 checked above");
         if matches!(*last, "--help" | "-h" | "--version" | "-V" | "version") {
             // Skip leading `env` and its VAR=val flags to find the actual tool
             let tool_token = if tokens[0] == "env" {

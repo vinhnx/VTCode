@@ -173,6 +173,7 @@ pub(super) fn looks_like_java_declaration_fragment(pattern: &str) -> bool {
         let parts: Vec<&str> = inner.split_whitespace().collect();
         if parts.len() >= 2 {
             // Last part should look like a metavariable or identifier
+            // SAFETY: parts.len() >= 2 is checked above, so .last() is guaranteed Some
             let last = parts.last().expect("parts.len() >= 2 guarantees non-empty");
             if last.starts_with('$') || last.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
             {

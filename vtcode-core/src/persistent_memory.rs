@@ -720,7 +720,7 @@ pub async fn rebuild_generated_memory_files(
     let directory = tokio::task::spawn_blocking(move || resolve_persistent_memory_dir(&cfg, &ws))
         .await
         .context("Persistent memory directory resolution task panicked")??
-        .expect("persistent memory directory should resolve");
+        .context("persistent memory directory should resolve")?;
     let files = PersistentMemoryFiles::new(directory);
     let mut created_files = Vec::new();
     ensure_memory_layout(&files, &mut created_files).await?;
@@ -834,7 +834,7 @@ pub async fn cleanup_persistent_memory(
     })
     .await
     .context("Persistent memory directory resolution task panicked")??
-    .expect("persistent memory directory should resolve when enabled");
+    .context("persistent memory directory should resolve when enabled")?;
     let files = PersistentMemoryFiles::new(directory);
     let mut created_files = Vec::new();
     ensure_memory_layout(&files, &mut created_files).await?;
@@ -900,7 +900,7 @@ pub async fn list_persistent_memory_candidates(
     let directory = tokio::task::spawn_blocking(move || resolve_persistent_memory_dir(&cfg, &ws))
         .await
         .context("Persistent memory directory resolution task panicked")??
-        .expect("persistent memory directory should resolve when enabled");
+        .context("persistent memory directory should resolve when enabled")?;
     if !directory.exists() {
         return Ok(Some(Vec::new()));
     }
@@ -925,7 +925,7 @@ pub async fn find_persistent_memory_matches(
     let directory = tokio::task::spawn_blocking(move || resolve_persistent_memory_dir(&cfg, &ws))
         .await
         .context("Persistent memory directory resolution task panicked")??
-        .expect("persistent memory directory should resolve when enabled");
+        .context("persistent memory directory should resolve when enabled")?;
     if !directory.exists() {
         return Ok(Some(Vec::new()));
     }
@@ -1026,7 +1026,7 @@ pub async fn forget_planned_persistent_memory_matches(
     })
     .await
     .context("Persistent memory directory resolution task panicked")??
-    .expect("persistent memory directory should resolve when enabled");
+    .context("persistent memory directory should resolve when enabled")?;
     let files = PersistentMemoryFiles::new(directory);
     if !files.directory.exists() {
         return Ok(Some(PersistentMemoryForgetReport {
@@ -1112,7 +1112,7 @@ async fn persist_memory_internal(
     let directory = tokio::task::spawn_blocking(move || resolve_persistent_memory_dir(&cfg, &ws))
         .await
         .context("Persistent memory directory resolution task panicked")??
-        .expect("persistent memory directory should resolve when enabled");
+        .context("persistent memory directory should resolve when enabled")?;
     let files = PersistentMemoryFiles::new(directory);
     let mut created_files = Vec::new();
     ensure_memory_layout(&files, &mut created_files).await?;

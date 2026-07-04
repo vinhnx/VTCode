@@ -209,14 +209,14 @@ fn handle_model_override_failure(
         error = %err,
         "Failed to resolve subagent model override; falling back"
     );
-    Ok(resolve_subagent_model(
+    let model = resolve_subagent_model(
         vt_cfg,
         parent_model,
         parent_provider,
         spec_model,
         agent_name,
     )
-    .unwrap_or_else(|_| {
+    .or_else(|_| {
         resolve_subagent_model(
             vt_cfg,
             parent_model,
@@ -224,8 +224,8 @@ fn handle_model_override_failure(
             Some("inherit"),
             agent_name,
         )
-        .expect("inherit fallback should succeed")
-    }))
+    })?;
+    Ok(model)
 }
 
 fn normalize_subagent_model_alias(model: &str) -> &str {

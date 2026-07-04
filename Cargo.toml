@@ -166,8 +166,9 @@ rust.unstable_features = "warn"
 # Note: string_slice and indexing_slicing are phased in; high-noise on existing codebase.
 string_slice = "allow"  # TODO: Phase in after cleanup pass
 indexing_slicing = "allow"  # TODO: Phase in after cleanup pass
-unwrap_used = "allow"
-panic = "allow"
+unwrap_used = "warn"
+expect_used = "warn"
+panic = "warn"
 todo = "warn"
 unimplemented = "warn"
 unreachable = "warn"
