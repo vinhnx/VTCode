@@ -58,7 +58,6 @@ pub(crate) enum RecoveryPhase {
 pub(crate) enum RecoveryMode {
     ToolEnabledRetry,
     ToolFreeSynthesis,
-    AdaptiveBudgetDecision,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -281,7 +280,6 @@ pub(crate) struct HarnessTurnState {
     pub turn_id: TurnId,
     pub phase: TurnPhase,
     pub turn_started_at: Instant,
-    pub turn_timeout: Duration,
     pub tool_calls: usize,
     pub blocked_tool_calls: usize,
     pub consecutive_blocked_tool_calls: usize,
@@ -307,7 +305,6 @@ pub(crate) struct HarnessTurnState {
     recovery_phase: RecoveryPhase,
     recovery_mode: Option<RecoveryMode>,
     recovery_retry_count: u8,
-    adaptive_recovery_decisions: u8,
     /// Counts how many times the post-tool follow-up failure path has
     /// scheduled a tool-free recovery pass within a single turn. Bounded by
     /// `MAX_POST_TOOL_RECOVERY_CYCLES` in the turn loop as a defense-in-depth
@@ -339,7 +336,6 @@ impl HarnessTurnState {
             turn_id,
             phase: TurnPhase::Preparing,
             turn_started_at: Instant::now(),
-            turn_timeout: Duration::from_secs(max_tool_wall_clock_secs.max(1)),
             tool_calls: 0,
             blocked_tool_calls: 0,
             consecutive_blocked_tool_calls: 0,
@@ -361,7 +357,6 @@ impl HarnessTurnState {
             recovery_phase: RecoveryPhase::Inactive,
             recovery_mode: None,
             recovery_retry_count: 0,
-            adaptive_recovery_decisions: 0,
             post_tool_recovery_cycles: 0,
             max_tool_calls,
             max_tool_wall_clock: Duration::from_secs(max_tool_wall_clock_secs),
@@ -396,21 +391,6 @@ impl HarnessTurnState {
             .then_some(ToolWallClockExhaustion {
                 max_secs: self.max_tool_wall_clock.as_secs(),
             })
-    }
-
-    pub(crate) fn set_turn_timeout_secs(&mut self, turn_timeout_secs: u64) {
-        self.turn_timeout = Duration::from_secs(turn_timeout_secs.max(1));
-    }
-
-    pub(crate) fn remaining_turn_timeout(&self) -> Duration {
-        self.turn_timeout
-            .saturating_sub(self.turn_started_at.elapsed())
-    }
-
-    pub(crate) fn should_force_recovery_before_turn_timeout(&self, reserve: Duration) -> bool {
-        self.tool_calls > 0
-            && !self.is_recovery_active()
-            && self.turn_started_at.elapsed() >= self.turn_timeout.saturating_sub(reserve)
     }
 
     pub(crate) fn record_tool_call(&mut self) {
@@ -535,26 +515,23 @@ impl HarnessTurnState {
         )
     }
 
+    #[cfg(test)]
     pub(crate) fn recovery_mode(&self) -> Option<RecoveryMode> {
         self.recovery_mode
-    }
-
-    pub(crate) fn set_recovery_mode(&mut self, mode: RecoveryMode) {
-        self.recovery_mode = Some(mode);
     }
 
     /// Switch to tool-free synthesis mode and reset the recovery phase back to
     /// `Pending` so the next loop iteration can consume it.
     ///
     /// Unlike `activate_recovery_with_mode` (which is a guarded no-op once a
-    /// pass is in flight), this unconditionally forces the phase to `Pending`
-    /// — covering `Inactive`, `InPass`, and `Completed`. This is required
+    /// pass is in flight), this unconditionally forces the phase to `Pending`,
+    /// covering `Inactive`, `InPass`, and `Completed`. This is required
     /// because the post-tool follow-up failure path runs from a *non-recovery*
     /// turn (phase == `Inactive`): `activate_recovery_with_mode` would set the
-    /// reason/mode but `reset_recovery_phase_to_pending` alone would leave the
-    /// phase as `Inactive`, so `consume_recovery_pass()` would return `false`,
-    /// `tool_free_recovery` would evaluate to `false`, and tools would never be
-    /// disabled at the API level — producing an infinite retry loop.
+    /// reason and mode but leave the phase as `Inactive`, so
+    /// `consume_recovery_pass()` would return `false`, `tool_free_recovery`
+    /// would evaluate to `false`, and tools would never be disabled at the API
+    /// level.
     ///
     /// When transitioning from `Inactive`, this also resets the retry counter
     /// and seeds a default `recovery_reason` (mirroring
@@ -574,23 +551,6 @@ impl HarnessTurnState {
             }
         }
         changed
-    }
-
-    pub(crate) fn increment_adaptive_recovery_decisions(&mut self) -> u8 {
-        self.adaptive_recovery_decisions = self.adaptive_recovery_decisions.saturating_add(1);
-        self.adaptive_recovery_decisions
-    }
-
-    pub(crate) fn reset_recovery_phase_to_pending(&mut self) -> bool {
-        if matches!(
-            self.recovery_phase,
-            RecoveryPhase::InPass | RecoveryPhase::Completed
-        ) {
-            self.recovery_phase = RecoveryPhase::Pending;
-            true
-        } else {
-            false
-        }
     }
 
     pub(crate) fn recovery_is_tool_free(&self) -> bool {
@@ -1139,41 +1099,6 @@ mod tests {
     }
 
     #[test]
-    fn harness_state_force_recovery_before_turn_timeout_requires_tool_activity() {
-        let mut state = HarnessTurnState::new(
-            TurnRunId("run-1".to_string()),
-            TurnId("turn-1".to_string()),
-            4,
-            10,
-            1,
-        );
-        state.set_turn_timeout_secs(60);
-        state.turn_started_at = Instant::now().checked_sub(Duration::from_secs(45)).unwrap();
-
-        assert!(!state.should_force_recovery_before_turn_timeout(Duration::from_secs(20)));
-
-        state.record_tool_call();
-        assert!(state.should_force_recovery_before_turn_timeout(Duration::from_secs(20)));
-    }
-
-    #[test]
-    fn harness_state_force_recovery_before_turn_timeout_skips_active_recovery() {
-        let mut state = HarnessTurnState::new(
-            TurnRunId("run-1".to_string()),
-            TurnId("turn-1".to_string()),
-            4,
-            10,
-            1,
-        );
-        state.set_turn_timeout_secs(60);
-        state.turn_started_at = Instant::now().checked_sub(Duration::from_secs(50)).unwrap();
-        state.record_tool_call();
-        state.activate_recovery("loop detector");
-
-        assert!(!state.should_force_recovery_before_turn_timeout(Duration::from_secs(20)));
-    }
-
-    #[test]
     fn harness_state_supports_tool_enabled_recovery_retries() {
         let mut state = HarnessTurnState::new(
             TurnRunId("run-1".to_string()),
@@ -1193,85 +1118,15 @@ mod tests {
     }
 
     #[test]
-    fn harness_state_recovery_is_tool_free_false_for_adaptive() {
-        let mut state = HarnessTurnState::new(
-            TurnRunId("run-1".to_string()),
-            TurnId("turn-1".to_string()),
-            4,
-            10,
-            1,
-        );
-
-        state.activate_recovery_with_mode("budget low", RecoveryMode::AdaptiveBudgetDecision);
-        assert!(state.is_recovery_active());
-        assert_eq!(
-            state.recovery_mode(),
-            Some(RecoveryMode::AdaptiveBudgetDecision)
-        );
-        assert!(!state.recovery_is_tool_free());
-    }
-
-    #[test]
-    fn harness_state_resets_recovery_phase_to_pending() {
-        let mut state = HarnessTurnState::new(
-            TurnRunId("run-1".to_string()),
-            TurnId("turn-1".to_string()),
-            4,
-            10,
-            1,
-        );
-
-        state.activate_recovery_with_mode("budget low", RecoveryMode::AdaptiveBudgetDecision);
-        assert!(state.consume_recovery_pass());
-        assert!(state.reset_recovery_phase_to_pending());
-        assert!(state.is_recovery_active());
-        assert!(state.consume_recovery_pass());
-    }
-
-    #[test]
-    fn harness_state_activate_is_noop_once_pass_in_flight_but_set_mode_switches() {
-        // Regression guard for the adaptive-budget-recovery infinite loop:
-        // once a recovery pass has been consumed (phase == InPass),
-        // `activate_recovery_with_mode` must NOT change the mode (it is guarded
-        // by phase == Inactive), so the turn loop must use `set_recovery_mode`
-        // to switch out of AdaptiveBudgetDecision mid-pass.
-        let mut state = HarnessTurnState::new(
-            TurnRunId("run-1".to_string()),
-            TurnId("turn-1".to_string()),
-            4,
-            10,
-            1,
-        );
-
-        state.activate_recovery_with_mode("budget low", RecoveryMode::AdaptiveBudgetDecision);
-        assert!(state.consume_recovery_pass());
-        assert_eq!(
-            state.recovery_mode(),
-            Some(RecoveryMode::AdaptiveBudgetDecision)
-        );
-
-        // activate_recovery_with_mode is a no-op while a pass is in flight.
-        state.activate_recovery_with_mode("try to switch", RecoveryMode::ToolFreeSynthesis);
-        assert_eq!(
-            state.recovery_mode(),
-            Some(RecoveryMode::AdaptiveBudgetDecision),
-            "activate_recovery_with_mode must not switch mode mid-pass"
-        );
-
-        // set_recovery_mode switches unconditionally and is the correct escape.
-        state.set_recovery_mode(RecoveryMode::ToolFreeSynthesis);
-        assert_eq!(state.recovery_mode(), Some(RecoveryMode::ToolFreeSynthesis));
-    }
-
-    #[test]
     fn harness_state_switch_to_tool_free_recovery_from_inactive() {
         // Regression guard for the post-tool follow-up infinite loop:
         // `switch_to_tool_free_recovery` must transition `Inactive -> Pending`
-        // (not just `InPass/Completed -> Pending`). When a normal (non-recovery)
+        // (not just `InPass` or `Completed` to `Pending`). When a normal
+        // (non-recovery)
         // turn's follow-up LLM phase fails, the phase is `Inactive`; if the
         // switch left it there, `consume_recovery_pass()` would return false,
         // `tool_free_recovery` would evaluate to false, and tools would never
-        // be disabled at the API level — producing an infinite retry loop.
+        // be disabled at the API level.
         let mut state = HarnessTurnState::new(
             TurnRunId("run-1".to_string()),
             TurnId("turn-1".to_string()),
@@ -1293,7 +1148,7 @@ mod tests {
         assert_eq!(state.recovery_mode(), Some(RecoveryMode::ToolFreeSynthesis));
         assert!(state.recovery_is_tool_free());
 
-        // The pass must be consumable — this is what the turn loop checks to
+        // The pass must be consumable. This is what the turn loop checks to
         // decide `tool_free_recovery = true` and disable tools at the API level.
         assert!(
             state.consume_recovery_pass(),
@@ -1310,9 +1165,8 @@ mod tests {
 
     #[test]
     fn harness_state_switch_to_tool_free_recovery_from_in_pass_keeps_consumable() {
-        // No-regression guard for the adaptive-budget-recovery path: switching
-        // from InPass (a pass already in flight) must still reset to Pending so
-        // the next loop iteration can consume it.
+        // Switching from InPass (a pass already in flight) must still reset to
+        // Pending so the next loop iteration can consume it.
         let mut state = HarnessTurnState::new(
             TurnRunId("run-1".to_string()),
             TurnId("turn-1".to_string()),
@@ -1321,12 +1175,9 @@ mod tests {
             1,
         );
 
-        state.activate_recovery_with_mode("budget low", RecoveryMode::AdaptiveBudgetDecision);
+        state.activate_recovery_with_mode("empty response", RecoveryMode::ToolEnabledRetry);
         assert!(state.consume_recovery_pass()); // -> InPass
-        assert_eq!(
-            state.recovery_mode(),
-            Some(RecoveryMode::AdaptiveBudgetDecision)
-        );
+        assert_eq!(state.recovery_mode(), Some(RecoveryMode::ToolEnabledRetry));
 
         assert!(state.switch_to_tool_free_recovery());
         assert_eq!(state.recovery_mode(), Some(RecoveryMode::ToolFreeSynthesis));
@@ -1347,7 +1198,7 @@ mod tests {
             1,
         );
 
-        state.activate_recovery_with_mode("budget low", RecoveryMode::AdaptiveBudgetDecision);
+        state.activate_recovery_with_mode("empty response", RecoveryMode::ToolEnabledRetry);
         assert!(state.consume_recovery_pass()); // -> InPass
         assert!(state.finish_recovery_pass()); // -> Completed
         assert!(!state.is_recovery_active());
@@ -1369,7 +1220,7 @@ mod tests {
             1,
         );
 
-        state.activate_recovery_with_mode("budget low", RecoveryMode::AdaptiveBudgetDecision);
+        state.activate_recovery("loop detector");
         assert!(state.is_recovery_active()); // Pending
 
         assert!(
@@ -1396,16 +1247,16 @@ mod tests {
         // Fresh state: retry_count is 0, phase is Inactive.
         assert_eq!(state.recovery_retry_count(), 0);
 
-        // Switch from Inactive → Pending: retry count stays 0.
+        // Switch from Inactive to Pending: retry count stays 0.
         state.switch_to_tool_free_recovery();
         assert_eq!(state.recovery_retry_count(), 0);
 
         // Complete this pass and start a second cycle.
         assert!(state.consume_recovery_pass());
-        assert!(state.retry_recovery_pass()); // retry_count → 1
+        assert!(state.retry_recovery_pass()); // retry_count becomes 1
         assert_eq!(state.recovery_retry_count(), 1);
 
-        // Switch from Completed → Pending: retry count is NOT reset
+        // Switch from Completed to Pending: retry count is not reset
         // (only Inactive triggers the reset).
         assert!(state.consume_recovery_pass());
         assert!(state.finish_recovery_pass());
@@ -1439,20 +1290,6 @@ mod tests {
         assert_eq!(state.post_tool_recovery_cycles(), 2);
         assert_eq!(state.increment_post_tool_recovery_cycle(), 3);
         assert_eq!(state.post_tool_recovery_cycles(), 3);
-    }
-
-    #[test]
-    fn harness_state_tracks_adaptive_recovery_decision_count() {
-        let mut state = HarnessTurnState::new(
-            TurnRunId("run-1".to_string()),
-            TurnId("turn-1".to_string()),
-            4,
-            10,
-            1,
-        );
-
-        assert_eq!(state.increment_adaptive_recovery_decisions(), 1);
-        assert_eq!(state.increment_adaptive_recovery_decisions(), 2);
     }
 
     #[test]

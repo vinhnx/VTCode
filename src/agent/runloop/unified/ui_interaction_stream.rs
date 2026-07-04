@@ -22,6 +22,35 @@ use super::ui_interaction::{PlaceholderSpinner, StreamProgressEvent, StreamSpinn
 use super::ui_interaction_stream_helpers::{
     common_prefix_len, map_render_error, reasoning_matches_content,
 };
+
+#[derive(Clone, Copy)]
+pub(crate) struct FirstProgressTimeout {
+    pub(crate) deadline: tokio::time::Instant,
+    budget: Duration,
+}
+
+impl FirstProgressTimeout {
+    pub(crate) fn starting_now(budget: Duration) -> Self {
+        Self {
+            deadline: tokio::time::Instant::now() + budget,
+            budget,
+        }
+    }
+}
+
+fn first_progress_timeout_error(provider_name: &str, budget: Duration) -> uni::LLMError {
+    uni::LLMError::Provider {
+        message: error_display::format_llm_error(
+            provider_name,
+            &format!(
+                "LLM first token timed out after {} seconds",
+                budget.as_secs()
+            ),
+        ),
+        metadata: None,
+    }
+}
+
 #[derive(Default)]
 struct StreamingReasoningState {
     buffered: String,
@@ -284,10 +313,37 @@ fn normalized_to_legacy_stream(
     (Box::pin(stream), progress_rx)
 }
 
+#[cfg(test)]
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn stream_and_render_response_with_options_impl(
     provider: &dyn uni::LLMProvider,
     request: uni::LLMRequest,
+    spinner: &PlaceholderSpinner,
+    renderer: &mut AnsiRenderer,
+    ctrl_c_state: &Arc<CtrlCState>,
+    ctrl_c_notify: &Arc<Notify>,
+    options: StreamSpinnerOptions,
+    on_progress: Option<&mut (dyn FnMut(StreamProgressEvent) + Send)>,
+) -> Result<(uni::LLMResponse, bool), uni::LLMError> {
+    stream_and_render_response_with_options_impl_first_progress_timeout(
+        provider,
+        request,
+        None,
+        spinner,
+        renderer,
+        ctrl_c_state,
+        ctrl_c_notify,
+        options,
+        on_progress,
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) async fn stream_and_render_response_with_options_impl_first_progress_timeout(
+    provider: &dyn uni::LLMProvider,
+    request: uni::LLMRequest,
+    first_progress_timeout: Option<Duration>,
     spinner: &PlaceholderSpinner,
     renderer: &mut AnsiRenderer,
     ctrl_c_state: &Arc<CtrlCState>,
@@ -307,6 +363,7 @@ pub(crate) async fn stream_and_render_response_with_options_impl(
 
     let stream_future = provider.stream_normalized(request);
     tokio::pin!(stream_future);
+    let first_progress_timeout = first_progress_timeout.map(FirstProgressTimeout::starting_now);
 
     if ctrl_c_state.is_cancel_requested() || ctrl_c_state.is_exit_requested() {
         spinner.finish_with_restore(true);
@@ -322,6 +379,18 @@ pub(crate) async fn stream_and_render_response_with_options_impl(
             spinner.finish_with_restore(true);
             return Err(uni::LLMError::Provider { message: error_display::format_llm_error(provider_name, "Interrupted by user"), metadata: None });
         }
+        _ = async {
+            match first_progress_timeout {
+                Some(timeout) => tokio::time::sleep_until(timeout.deadline).await,
+                None => std::future::pending().await,
+            }
+        } => {
+            spinner.finish_with_restore(true);
+            return Err(first_progress_timeout_error(
+                provider_name,
+                first_progress_timeout.map_or(Duration::ZERO, |timeout| timeout.budget),
+            ));
+        }
         result = stream_future => result?,
     };
     let (mut stream, mut progress_events) = normalized_to_legacy_stream(normalized_stream);
@@ -330,6 +399,7 @@ pub(crate) async fn stream_and_render_response_with_options_impl(
         provider_name,
         &mut stream,
         Some(&mut progress_events),
+        first_progress_timeout,
         spinner,
         renderer,
         ctrl_c_state,
@@ -345,6 +415,7 @@ pub(crate) async fn render_stream_with_options_and_progress_impl(
     provider_name: &str,
     stream: &mut uni::BorrowedLLMStream<'_>,
     progress_events: Option<&mut mpsc::UnboundedReceiver<StreamProgressEvent>>,
+    first_progress_timeout: Option<FirstProgressTimeout>,
     spinner: &PlaceholderSpinner,
     renderer: &mut AnsiRenderer,
     ctrl_c_state: &Arc<CtrlCState>,
@@ -358,7 +429,7 @@ pub(crate) async fn render_stream_with_options_and_progress_impl(
         progress_events,
         None,
         None,
-        None,
+        first_progress_timeout,
         spinner,
         renderer,
         ctrl_c_state,
@@ -376,7 +447,7 @@ pub(crate) async fn render_stream_with_options_and_copilot_runtime_impl(
     progress_events: Option<&mut mpsc::UnboundedReceiver<StreamProgressEvent>>,
     runtime_requests: Option<&mut mpsc::UnboundedReceiver<CopilotRuntimeRequest>>,
     mut runtime_handler: Option<&mut dyn CopilotRuntimeRequestHandler>,
-    timeout_budget: Option<Duration>,
+    first_progress_timeout: Option<FirstProgressTimeout>,
     spinner: &PlaceholderSpinner,
     renderer: &mut AnsiRenderer,
     ctrl_c_state: &Arc<CtrlCState>,
@@ -439,7 +510,7 @@ pub(crate) async fn render_stream_with_options_and_copilot_runtime_impl(
     let mut harmony_stream_mode = false;
     let mut harmony_raw_stream = String::new();
     let mut harmony_visible_stream = String::new();
-    let mut timeout_deadline = timeout_budget.map(|budget| tokio::time::Instant::now() + budget);
+    let mut first_progress_timeout = first_progress_timeout;
 
     loop {
         if ctrl_c_state.is_cancel_requested() || ctrl_c_state.is_exit_requested() {
@@ -463,8 +534,8 @@ pub(crate) async fn render_stream_with_options_and_copilot_runtime_impl(
                 return Err(uni::LLMError::Provider { message: error_display::format_llm_error(provider_name, "Interrupted by user"), metadata: None });
             }
             _ = async {
-                match timeout_deadline {
-                    Some(deadline) => tokio::time::sleep_until(deadline).await,
+                match first_progress_timeout {
+                    Some(timeout) => tokio::time::sleep_until(timeout.deadline).await,
                     None => std::future::pending().await,
                 }
             } => {
@@ -472,16 +543,10 @@ pub(crate) async fn render_stream_with_options_and_copilot_runtime_impl(
                 reasoning_state
                     .handle_stream_failure(renderer)
                     .map_err(|err| map_render_error(provider_name, err))?;
-                return Err(uni::LLMError::Provider {
-                    message: error_display::format_llm_error(
-                        provider_name,
-                        &format!(
-                            "LLM request timed out after {} seconds",
-                            timeout_budget.unwrap_or_default().as_secs()
-                        ),
-                    ),
-                    metadata: None,
-                });
+                return Err(first_progress_timeout_error(
+                    provider_name,
+                    first_progress_timeout.map_or(Duration::ZERO, |timeout| timeout.budget),
+                ));
             }
             request = async {
                 match runtime_requests.as_deref_mut() {
@@ -491,6 +556,7 @@ pub(crate) async fn render_stream_with_options_and_copilot_runtime_impl(
             } => {
                 match request {
                     Some(request) => {
+                        first_progress_timeout = None;
                         finish_spinner(&mut spinner_active, true);
                         let Some(handler) = runtime_handler.as_deref_mut() else {
                             return Err(uni::LLMError::Provider {
@@ -501,11 +567,7 @@ pub(crate) async fn render_stream_with_options_and_copilot_runtime_impl(
                                 metadata: None,
                             });
                         };
-                        let blocked_started_at = tokio::time::Instant::now();
                         handler.handle_runtime_request(renderer, request).await?;
-                        if let Some(deadline) = timeout_deadline.as_mut() {
-                            *deadline += blocked_started_at.elapsed();
-                        }
                         continue;
                     }
                     None => {
@@ -522,6 +584,7 @@ pub(crate) async fn render_stream_with_options_and_copilot_runtime_impl(
             } => {
                 match progress_event {
                     Some(StreamProgressEvent::ToolCallStarted { call_id, name }) => {
+                        first_progress_timeout = None;
                         finish_spinner(&mut spinner_active, false);
                         if let Some(tool_name) = name.as_deref().filter(|value| !value.is_empty()) {
                             spinner.update_message(format!("Preparing tool call: {tool_name}"));
@@ -533,6 +596,7 @@ pub(crate) async fn render_stream_with_options_and_copilot_runtime_impl(
                         continue;
                     }
                     Some(StreamProgressEvent::ToolCallDelta { call_id, delta }) => {
+                        first_progress_timeout = None;
                         if let Some(callback) = on_progress.as_deref_mut() {
                             callback(StreamProgressEvent::ToolCallDelta { call_id, delta });
                         }
@@ -542,7 +606,10 @@ pub(crate) async fn render_stream_with_options_and_copilot_runtime_impl(
                         StreamProgressEvent::OutputDelta(_)
                         | StreamProgressEvent::ReasoningDelta(_)
                         | StreamProgressEvent::ReasoningStage(_),
-                    ) => continue,
+                    ) => {
+                        first_progress_timeout = None;
+                        continue;
+                    }
                     None => {
                         progress_events = None;
                         continue;
@@ -558,6 +625,7 @@ pub(crate) async fn render_stream_with_options_and_copilot_runtime_impl(
 
         match event_result {
             Ok(LLMStreamEvent::Token { delta }) => {
+                first_progress_timeout = None;
                 token_count += 1;
                 let mut visible_delta = if let Some(parser) = plan_parser.as_mut() {
                     parser.consume(&delta)
@@ -648,6 +716,7 @@ pub(crate) async fn render_stream_with_options_and_copilot_runtime_impl(
                 }
             }
             Ok(LLMStreamEvent::Reasoning { delta }) => {
+                first_progress_timeout = None;
                 reasoning_token_count += 1;
                 if !spinner_message_updated {
                     spinner.update_message("Processing reasoning...");
@@ -683,6 +752,7 @@ pub(crate) async fn render_stream_with_options_and_copilot_runtime_impl(
                 }
             }
             Ok(LLMStreamEvent::ReasoningStage { stage }) => {
+                first_progress_timeout = None;
                 if stream_reasoning_deltas && !pending_reasoning_delta.is_empty() {
                     flush_pending_reasoning(
                         provider_name,
@@ -959,7 +1029,8 @@ pub(crate) async fn render_stream_with_options_and_copilot_runtime_impl(
 #[cfg(test)]
 mod tests {
     use super::{
-        CopilotRuntimeRequestHandler, render_stream_with_options_and_copilot_runtime_impl,
+        CopilotRuntimeRequestHandler, FirstProgressTimeout,
+        render_stream_with_options_and_copilot_runtime_impl,
     };
     use crate::agent::runloop::unified::state::CtrlCState;
     use crate::agent::runloop::unified::ui_interaction::{
@@ -1016,7 +1087,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn copilot_runtime_prompt_time_does_not_consume_timeout_budget() {
+    async fn copilot_runtime_request_counts_as_first_progress() {
         let spinner = build_spinner();
         let mut renderer = AnsiRenderer::stdout();
         let ctrl_c_state = Arc::new(CtrlCState::new());
@@ -1054,7 +1125,9 @@ mod tests {
             None,
             Some(&mut runtime_rx),
             Some(&mut handler),
-            Some(Duration::from_millis(20)),
+            Some(FirstProgressTimeout::starting_now(Duration::from_millis(
+                20,
+            ))),
             &spinner,
             &mut renderer,
             &ctrl_c_state,
@@ -1066,7 +1139,41 @@ mod tests {
 
         assert!(
             result.is_ok(),
-            "runtime prompt handling should pause timeout"
+            "runtime request should clear the first-progress timeout"
         );
+    }
+
+    #[tokio::test]
+    async fn stream_times_out_before_first_progress() {
+        let spinner = build_spinner();
+        let mut renderer = AnsiRenderer::stdout();
+        let ctrl_c_state = Arc::new(CtrlCState::new());
+        let ctrl_c_notify = Arc::new(Notify::new());
+
+        let mut stream: uni::LLMStream = Box::pin(stream::once(async {
+            tokio::time::sleep(Duration::from_millis(40)).await;
+            Ok(LLMStreamEvent::Completed {
+                response: Box::new(completed_response("ok")),
+            })
+        }));
+
+        let result = render_stream_with_options_and_copilot_runtime_impl(
+            "mock",
+            &mut stream,
+            None,
+            None,
+            None,
+            Some(FirstProgressTimeout::starting_now(Duration::from_millis(5))),
+            &spinner,
+            &mut renderer,
+            &ctrl_c_state,
+            &ctrl_c_notify,
+            StreamSpinnerOptions::default(),
+            None,
+        )
+        .await;
+
+        let err = result.expect_err("stream should time out before first progress");
+        assert!(err.to_string().contains("first token timed out"));
     }
 }

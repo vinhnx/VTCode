@@ -1,4 +1,3 @@
-pub(crate) mod adaptive_budget_recovery;
 pub(crate) mod compaction;
 pub(crate) mod context;
 mod finalization;

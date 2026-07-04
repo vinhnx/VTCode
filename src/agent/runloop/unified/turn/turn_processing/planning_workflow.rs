@@ -6,8 +6,6 @@
 //! - Constraints: This file remains an active TD-005 hotspot; keep new helpers in support modules when possible.
 //! - Verify: `cargo check -p vtcode && cargo test -p vtcode --bin vtcode inline_events::tests`
 
-use std::time::Duration;
-
 use serde_json::Value;
 use vtcode_core::config::constants::tools;
 use vtcode_core::llm::provider as uni;
@@ -48,7 +46,6 @@ use super::response_processing::prepare_tool_calls;
 const MIN_PLANNING_WORKFLOW_TURNS_BEFORE_INTERVIEW: usize = 1;
 const PLANNING_WORKFLOW_REMINDER: &str =
     vtcode_core::prompts::system::PLANNING_WORKFLOW_IMPLEMENT_REMINDER;
-const INTERVIEW_SYNTHESIS_TIMEOUT_SECS: u64 = 20;
 const MAX_RESEARCH_SNIPPETS_PER_BUCKET: usize = 6;
 const CUSTOM_NOTE_POLICY: &str =
     "Users can always type custom notes/free-form responses for every question.";
@@ -187,22 +184,16 @@ Return JSON only.",
         ..Default::default()
     };
 
-    let response = tokio::time::timeout(
-        Duration::from_secs(INTERVIEW_SYNTHESIS_TIMEOUT_SECS),
-        provider_client.generate(request),
-    )
-    .await;
-
-    if response.is_err() {
-        tracing::warn!(
-            timeout_secs = INTERVIEW_SYNTHESIS_TIMEOUT_SECS,
-            "Interview synthesis LLM call timed out; falling back to adaptive interview"
-        );
-    }
-
-    let generated = response
+    let generated = provider_client
+        .generate(request)
+        .await
+        .inspect_err(|err| {
+            tracing::warn!(
+                error = %err,
+                "Interview synthesis LLM call failed; falling back to adaptive interview"
+            );
+        })
         .ok()
-        .and_then(Result::ok)
         .and_then(|response| response.content)
         .and_then(|content| parse_interview_payload_from_text(&content))
         .and_then(|payload| sanitize_generated_interview_payload(payload, &context));

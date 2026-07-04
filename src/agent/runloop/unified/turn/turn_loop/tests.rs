@@ -1,12 +1,12 @@
+use super::post_tool_recovery::prepare_post_tool_tool_free_recovery;
 use super::post_tool_recovery::{ensure_post_tool_resume_directive, has_tool_response_since};
 use super::{
-    HarnessUsage, POST_TOOL_RECOVERY_REASON, POST_TOOL_RESUME_DIRECTIVE,
-    POST_TOOL_TIMEOUT_RECOVERY_REASON, PostToolFailureRecovery, RECOVERY_CONTRACT_VIOLATION_REASON,
-    RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER, accumulate_turn_usage,
-    complete_turn_after_failed_tool_free_recovery, count_assistant_text_responses_for_guard,
-    count_assistant_text_responses_in_turn, has_turn_usage,
-    maybe_recover_after_post_tool_llm_failure, normalize_tool_free_recovery_break_outcome,
-    prepare_post_tool_tool_free_recovery, run_turn_loop,
+    HarnessUsage, POST_TOOL_RECOVERY_REASON, POST_TOOL_RESUME_DIRECTIVE, PostToolFailureRecovery,
+    RECOVERY_CONTRACT_VIOLATION_REASON, RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER,
+    accumulate_turn_usage, complete_turn_after_failed_tool_free_recovery,
+    count_assistant_text_responses_for_guard, count_assistant_text_responses_in_turn,
+    has_turn_usage, maybe_recover_after_post_tool_llm_failure,
+    normalize_tool_free_recovery_break_outcome, run_turn_loop,
 };
 use crate::agent::runloop::unified::turn::context::TurnLoopResult;
 use crate::agent::runloop::unified::turn::turn_processing::test_support::TestTurnProcessingBacking;
@@ -80,8 +80,8 @@ fn prepare_post_tool_tool_free_recovery_is_idempotent_near_history_tail() {
         uni::Message::tool_response("call_1".to_string(), "{\"ok\":true}".to_string()),
     ];
 
-    prepare_post_tool_tool_free_recovery(&mut history, POST_TOOL_TIMEOUT_RECOVERY_REASON);
-    prepare_post_tool_tool_free_recovery(&mut history, POST_TOOL_TIMEOUT_RECOVERY_REASON);
+    prepare_post_tool_tool_free_recovery(&mut history, POST_TOOL_RECOVERY_REASON);
+    prepare_post_tool_tool_free_recovery(&mut history, POST_TOOL_RECOVERY_REASON);
 
     let resume_directive_count = history
         .iter()
@@ -96,7 +96,7 @@ fn prepare_post_tool_tool_free_recovery_is_idempotent_near_history_tail() {
         .iter()
         .filter(|message| {
             message.role == uni::MessageRole::System
-                && message.content.as_text() == POST_TOOL_TIMEOUT_RECOVERY_REASON
+                && message.content.as_text() == POST_TOOL_RECOVERY_REASON
         })
         .count();
     assert_eq!(recovery_reason_count, 1);

@@ -7,7 +7,6 @@ use tokio_util::sync::CancellationToken;
 
 use tokio::time::{Duration, sleep, timeout};
 use vtcode_core::config::loader::VTCodeConfig;
-use vtcode_core::config::resolve_timeout;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::interfaces::session::PlanningEntrySource;
 use vtcode_core::hooks::{SessionEndReason, SessionStartTrigger};
