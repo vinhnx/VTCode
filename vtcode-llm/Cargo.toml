@@ -40,11 +40,11 @@ tokio-tungstenite = { version = "0.29", default-features = false, features = ["c
 tracing = { workspace = true }
 url = { workspace = true }
 uuid = { workspace = true, features = ["v4"] }
-vtcode-commons = { path = "../vtcode-commons", version = "0.134.3" }
-vtcode-config = { path = "../vtcode-config", version = "0.134.3" }
-vtcode-exec-events = { path = "../vtcode-exec-events", version = "0.134.3" }
-vtcode-macros = { path = "../vtcode-macros", version = "0.134.3" }
-vtcode-utility-tool-specs = { path = "../vtcode-utility-tool-specs", version = "0.134.3" }
+vtcode-commons = { path = "../vtcode-commons", version = "0.134.4" }
+vtcode-config = { path = "../vtcode-config", version = "0.134.4" }
+vtcode-exec-events = { path = "../vtcode-exec-events", version = "0.134.4" }
+vtcode-macros = { path = "../vtcode-macros", version = "0.134.4" }
+vtcode-utility-tool-specs = { path = "../vtcode-utility-tool-specs", version = "0.134.4" }
 anstyle = { workspace = true }
 lru = "0.18"
 which = "8.0.2"
