@@ -223,6 +223,88 @@ tokio::spawn(async move {
 
 **Note:** Use `tokio::sync::*`, not `std::sync::*` for async code.
 
+### Pattern 6: Actor Pattern (Handle + Background Task)
+
+The actor pattern separates the handle (what callers interact with) from the background task (which owns state and performs I/O). This is the recommended pattern when a component needs to own exclusive access to a resource while accepting messages from multiple callers.
+
+**Core recipe:**
+
+```rust
+// --- Actor message enum ---
+enum ActorMessage {
+    DoWork { data: String, respond_to: oneshot::Sender<Result<()>> },
+    Shutdown,
+}
+
+// --- Handle: what callers see ---
+#[derive(Clone)]
+struct MyActorHandle {
+    tx: mpsc::Sender<ActorMessage>,
+}
+
+impl MyActorHandle {
+    fn new() -> Self {
+        let (tx, rx) = mpsc::channel(64); // bounded for backpressure
+        tokio::spawn(actor_loop(rx));
+        Self { tx }
+    }
+
+    async fn do_work(&self, data: String) -> Result<()> {
+        let (respond_to, response) = oneshot::channel();
+        let _ = self.tx.send(ActorMessage::DoWork { data, respond_to }).await;
+        response.await.expect("actor task panicked")
+    }
+}
+
+// --- Background task: owns state ---
+async fn actor_loop(mut rx: mpsc::Receiver<ActorMessage>) {
+    while let Some(msg) = rx.recv().await {
+        match msg {
+            ActorMessage::DoWork { data, respond_to } => {
+                let result = process(data).await;
+                let _ = respond_to.send(result);
+            }
+            ActorMessage::Shutdown => break,
+        }
+    }
+}
+```
+
+**Key principles (from [Actors with Tokio](https://ryhl.io/blog/actors-with-tokio/)):**
+
+1. **Handle is separate from task.** The handle struct holds only a channel sender. The background task owns all mutable state. This enforces single-ownership of state at compile time.
+
+2. **Handle is Clone.** Because `mpsc::Sender` is `Clone`, multiple callers can talk to the same actor concurrently without locks.
+
+3. **Bounded channels for backpressure.** Use `mpsc::channel(N)` with a reasonable capacity. If the channel is full, the caller blocks (or you can use `try_send` for fire-and-forget paths). Never use unbounded channels for data that could grow without bound.
+
+4. **`oneshot` for request-response.** When a caller needs a result, include a `oneshot::Sender` in the message. The actor sends the result back on that channel. The caller awaits the receiver.
+
+5. **Graceful shutdown via dropped sender.** When all handles are dropped, the channel closes, `rx.recv()` returns `None`, and the loop exits. No explicit shutdown signal needed for the common case.
+
+6. **Never `tokio::spawn` inside `Drop`.** Spawning from `Drop` creates fire-and-forget tasks that cannot be awaited and are lost during shutdown. Instead, send a message on a channel (unbounded `send` is sync and non-blocking).
+
+7. **Avoid cycles of bounded channels.** If Actor A sends to Actor B and B sends to A, both using bounded channels, a deadlock can occur if both channels fill up. Break cycles with `tokio::select!` on a "primary" channel, or use `try_send` for the cycle-closing path.
+
+**Real examples in vtcode:**
+
+| Component | File | Pattern |
+|---|---|---|
+| `StdioTransport` | `vtcode-acp/src/transport.rs` | Handle sends JSON-RPC via `mpsc::UnboundedSender`; background tasks handle stdin write, stdout read, stderr log. Uses `oneshot` for RPC responses. |
+| `AsyncLineWriter` | `vtcode-core/src/utils/async_line_writer.rs` | Cloneable handle sends `LogMessage` via bounded `mpsc`; background task buffers and flushes via `spawn_blocking`. |
+| `TimeoutDetector` | `vtcode-core/src/core/timeout_detector.rs` | Global detector with `mpsc::UnboundedSender<String>` cleanup channel; background task processes end-operation requests from dropped `TimeoutHandle`s. |
+| `ProcessHandle` | `vtcode-bash-runner/src/pipe.rs` | Handle wraps channels for stdin, output broadcast, and exit status; separate writer, reader, and wait tasks. |
+
+**When to use the actor pattern vs. simpler alternatives:**
+
+| Scenario | Recommended approach |
+|---|---|
+| One-shot background work (e.g. prefetch) | `tokio::spawn` + `JoinHandle` |
+| Shared read-only state | `Arc<RwLock<T>>` |
+| Exclusive ownership of a resource | Actor pattern |
+| Multiple producers, single consumer event stream | `mpsc` channel (bounded) |
+| Broadcasting to multiple subscribers | `broadcast` channel |
+
 ## Anti-Patterns to Avoid
 
 ### Anti-Pattern 1: Mixing Blocking I/O with Async
@@ -285,7 +367,34 @@ tokio::spawn(async move {
 });
 ```
 
-### Anti-Pattern 4: Not Handling Cancellation
+### Anti-Pattern 4: tokio::spawn in Drop
+
+**Bad:**
+```rust
+impl Drop for MyHandle {
+    fn drop(&mut self) {
+        let resource = self.resource.clone();
+        tokio::spawn(async move {
+            resource.cleanup().await;  // Fire-and-forget, lost on shutdown
+        });
+    }
+}
+```
+
+**Good:** Use a channel-based cleanup task instead:
+```rust
+impl Drop for MyHandle {
+    fn drop(&mut self) {
+        // Channel send is synchronous and non-blocking
+        let _ = self.cleanup_tx.send(self.operation_id.clone());
+    }
+}
+// A background actor task receives these messages and does the async work.
+```
+
+**Why?** `tokio::spawn` in `Drop` creates a fire-and-forget task. If the runtime is shutting down, the task is silently lost. You cannot await its completion, and there is no way to handle errors.
+
+### Anti-Pattern 5: Not Handling Cancellation
 
   **Bad:**
 ```rust

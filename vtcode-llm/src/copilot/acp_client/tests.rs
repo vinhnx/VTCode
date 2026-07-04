@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
 
-fn make_inner(write_tx: mpsc::UnboundedSender<String>) -> Arc<CopilotAcpClientInner> {
+fn make_inner(write_tx: mpsc::Sender<String>) -> Arc<CopilotAcpClientInner> {
     Arc::new(CopilotAcpClientInner {
         transport: StdioTransport::new_for_testing(write_tx, Duration::from_secs(1)),
         active_prompt: StdMutex::new(None),
@@ -216,7 +216,7 @@ fn parses_observed_tool_call_raw_output_detailed_content_fallback() {
 
 #[tokio::test]
 async fn handle_terminal_create_request_dispatches_runtime_request() {
-    let (write_tx, mut write_rx) = mpsc::unbounded_channel();
+    let (write_tx, mut write_rx) = mpsc::channel(64);
     let (updates, _updates_rx) = mpsc::unbounded_channel::<PromptUpdate>();
     let (runtime_requests, mut runtime_requests_rx) =
         mpsc::unbounded_channel::<CopilotRuntimeRequest>();
@@ -287,7 +287,7 @@ async fn handle_terminal_create_request_dispatches_runtime_request() {
 
 #[test]
 fn enqueue_runtime_request_clears_stale_active_prompt_when_receiver_is_gone() {
-    let (write_tx, _write_rx) = mpsc::unbounded_channel();
+    let (write_tx, _write_rx) = mpsc::channel(64);
     let (updates, updates_rx) = mpsc::unbounded_channel::<PromptUpdate>();
     let (runtime_requests, runtime_requests_rx) =
         mpsc::unbounded_channel::<CopilotRuntimeRequest>();
@@ -328,7 +328,7 @@ fn enqueue_runtime_request_clears_stale_active_prompt_when_receiver_is_gone() {
 
 #[test]
 fn handle_permission_request_falls_back_when_runtime_receiver_is_gone() {
-    let (write_tx, mut write_rx) = mpsc::unbounded_channel();
+    let (write_tx, mut write_rx) = mpsc::channel(64);
     let (updates, _updates_rx) = mpsc::unbounded_channel::<PromptUpdate>();
     let (runtime_requests, runtime_requests_rx) =
         mpsc::unbounded_channel::<CopilotRuntimeRequest>();
@@ -373,7 +373,7 @@ fn handle_permission_request_falls_back_when_runtime_receiver_is_gone() {
 
 #[tokio::test]
 async fn prompt_session_cancel_handle_cancels_active_prompt_and_aborts_completion() {
-    let (write_tx, mut write_rx) = mpsc::unbounded_channel();
+    let (write_tx, mut write_rx) = mpsc::channel(64);
     let (updates, _updates_rx) = mpsc::unbounded_channel::<PromptUpdate>();
     let (runtime_requests, _runtime_requests_rx) =
         mpsc::unbounded_channel::<CopilotRuntimeRequest>();
@@ -424,7 +424,7 @@ async fn prompt_session_cancel_handle_cancels_active_prompt_and_aborts_completio
 
 #[test]
 fn make_inner_helper_creates_valid_inner() {
-    let (tx, _rx) = mpsc::unbounded_channel();
+    let (tx, _rx) = mpsc::channel(64);
     let inner = make_inner(tx);
     assert!(inner.active_prompt.lock().unwrap().is_none());
     assert!(inner.session_id.lock().unwrap().is_none());

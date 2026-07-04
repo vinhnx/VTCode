@@ -82,9 +82,9 @@ impl TrajectoryLogger {
     }
 
     #[cfg(test)]
-    pub fn flush(&self) {
+    pub async fn flush(&self) {
         if let Some(writer) = self.writer.as_ref() {
-            writer.flush();
+            writer.flush().await;
         }
     }
 
@@ -277,8 +277,8 @@ mod tests {
     use super::*;
     use tempfile::TempDir;
 
-    #[test]
-    fn test_trajectory_logger_log_route_integration() {
+    #[tokio::test]
+    async fn test_trajectory_logger_log_route_integration() {
         let temp_dir = TempDir::new().unwrap();
         let logger = TrajectoryLogger::new(temp_dir.path());
 
@@ -288,7 +288,7 @@ mod tests {
             "standard",
             "test user input for logging",
         );
-        logger.flush();
+        logger.flush().await;
 
         let log_path = temp_dir.path().join(".vtcode/logs/trajectory.jsonl");
         assert!(log_path.exists());
@@ -306,8 +306,8 @@ mod tests {
         assert!(record["ts"].is_number());
     }
 
-    #[test]
-    fn test_rotation_renames_existing_log() {
+    #[tokio::test]
+    async fn test_rotation_renames_existing_log() {
         let temp_dir = TempDir::new().unwrap();
         let logs_dir = temp_dir.path().join(".vtcode").join("logs");
         fs::create_dir_all(&logs_dir).unwrap();
@@ -353,8 +353,8 @@ mod tests {
         assert!(remaining.len() <= 3, "Should keep at most 3 files");
     }
 
-    #[test]
-    fn test_empty_trajectory_not_rotated() {
+    #[tokio::test]
+    async fn test_empty_trajectory_not_rotated() {
         let temp_dir = TempDir::new().unwrap();
         let logs_dir = temp_dir.path().join(".vtcode").join("logs");
         fs::create_dir_all(&logs_dir).unwrap();

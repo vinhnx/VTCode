@@ -16,6 +16,13 @@
 //!
 //! Stderr lines are forwarded to `tracing::debug!` under the
 //! `vtcode.stdio_transport.stderr` target.
+//!
+//! ## Backpressure
+//!
+//! The write channel is bounded (capacity 64) to prevent unbounded memory growth
+//! if the subprocess is slow to consume stdin. [`send_raw`](Self::send_raw) uses
+//! `try_send` and returns an error if the channel is full, rather than blocking
+//! or growing without bound.
 
 use std::collections::HashMap;
 use std::fmt;
@@ -30,6 +37,10 @@ use tokio::sync::{mpsc, oneshot};
 use tokio::time::timeout;
 
 use super::error::{AcpError, AcpResult};
+
+/// Capacity of the bounded write channel. Limits in-flight JSON-RPC messages
+/// to prevent unbounded memory growth when the subprocess is slow.
+const WRITE_CHANNEL_CAPACITY: usize = 64;
 
 /// Callback type for incoming server→client requests and notifications.
 ///
@@ -49,7 +60,7 @@ type NotificationHandler = Arc<dyn Fn(Value) -> anyhow::Result<()> + Send + Sync
 ///
 /// The child process is killed when this struct is dropped.
 pub struct StdioTransport {
-    write_tx: mpsc::UnboundedSender<String>,
+    write_tx: mpsc::Sender<String>,
     pending: Arc<StdMutex<HashMap<i64, oneshot::Sender<AcpResult<Value>>>>>,
     request_counter: AtomicI64,
     notification_handler: Arc<StdMutex<Option<NotificationHandler>>>,
@@ -69,7 +80,7 @@ impl StdioTransport {
         stderr: ChildStderr,
         rpc_timeout: Duration,
     ) -> Self {
-        let (write_tx, write_rx) = mpsc::unbounded_channel();
+        let (write_tx, write_rx) = mpsc::channel(WRITE_CHANNEL_CAPACITY);
         let pending = Arc::new(StdMutex::new(HashMap::new()));
         let notification_handler = Arc::new(StdMutex::new(None));
 
@@ -96,7 +107,7 @@ impl StdioTransport {
     /// No subprocess is spawned and no background tasks are started. The caller
     /// can drive the mock by reading from the paired receiver.
     #[cfg(test)]
-    pub fn new_for_testing(write_tx: mpsc::UnboundedSender<String>, rpc_timeout: Duration) -> Self {
+    pub fn new_for_testing(write_tx: mpsc::Sender<String>, rpc_timeout: Duration) -> Self {
         Self {
             write_tx,
             pending: Arc::new(StdMutex::new(HashMap::new())),
@@ -204,9 +215,14 @@ impl StdioTransport {
 
     fn send_raw(&self, payload: Value) -> AcpResult<()> {
         let text = serde_json::to_string(&payload)?;
-        self.write_tx
-            .send(text)
-            .map_err(|_e| AcpError::Internal("stdio transport writer channel closed".into()))
+        self.write_tx.try_send(text).map_err(|e| match e {
+            mpsc::error::TrySendError::Full(_) => AcpError::Internal(
+                "stdio transport write channel full; subprocess may be slow".into(),
+            ),
+            mpsc::error::TrySendError::Closed(_) => {
+                AcpError::Internal("stdio transport writer channel closed".into())
+            }
+        })
     }
 }
 
@@ -236,7 +252,7 @@ impl Drop for StdioTransport {
 // Background tasks
 // ============================================================================
 
-fn spawn_writer(mut write_rx: mpsc::UnboundedReceiver<String>, mut stdin: ChildStdin) {
+fn spawn_writer(mut write_rx: mpsc::Receiver<String>, mut stdin: ChildStdin) {
     tokio::spawn(async move {
         while let Some(payload) = write_rx.recv().await {
             if stdin.write_all(payload.as_bytes()).await.is_err()
@@ -419,7 +435,7 @@ mod tests {
 
     #[test]
     fn notify_serialises_payload_to_write_channel() {
-        let (tx, mut rx) = mpsc::unbounded_channel();
+        let (tx, mut rx) = mpsc::channel(WRITE_CHANNEL_CAPACITY);
         let transport = StdioTransport::new_for_testing(tx, Duration::from_secs(5));
 
         transport
@@ -438,7 +454,7 @@ mod tests {
 
     #[test]
     fn respond_writes_jsonrpc_result() {
-        let (tx, mut rx) = mpsc::unbounded_channel();
+        let (tx, mut rx) = mpsc::channel(WRITE_CHANNEL_CAPACITY);
         let transport = StdioTransport::new_for_testing(tx, Duration::from_secs(5));
 
         transport
@@ -454,7 +470,7 @@ mod tests {
 
     #[test]
     fn respond_error_writes_jsonrpc_error() {
-        let (tx, mut rx) = mpsc::unbounded_channel();
+        let (tx, mut rx) = mpsc::channel(WRITE_CHANNEL_CAPACITY);
         let transport = StdioTransport::new_for_testing(tx, Duration::from_secs(5));
 
         transport

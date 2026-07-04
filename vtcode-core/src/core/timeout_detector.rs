@@ -7,7 +7,7 @@ use hashbrown::HashMap;
 use std::sync::Arc;
 
 use std::time::{Duration, Instant};
-use tokio::sync::RwLock;
+use tokio::sync::{RwLock, mpsc};
 use tokio::time;
 
 /// Represents different types of operations that can timeout
@@ -142,10 +142,17 @@ pub struct TimeoutStats {
 }
 
 /// Main timeout detector and retry manager
+///
+/// Manages operation timeouts as an actor: a background cleanup task processes
+/// end-operation requests sent via a channel, so `TimeoutHandle::drop` never
+/// needs to call `tokio::spawn`.
 pub struct TimeoutDetector {
     configs: Arc<RwLock<HashMap<OperationType, TimeoutConfig>>>,
     active_operations: Arc<RwLock<HashMap<String, TimeoutEvent>>>,
     stats: Arc<RwLock<TimeoutStats>>,
+    /// Sender for the background cleanup task. Every `TimeoutHandle` clones this
+    /// so it can report completion without blocking or spawning.
+    cleanup_tx: mpsc::UnboundedSender<String>,
 }
 
 impl Default for TimeoutDetector {
@@ -156,25 +163,68 @@ impl Default for TimeoutDetector {
 
 impl TimeoutDetector {
     /// Create a new timeout detector with default configurations for each operation type.
+    ///
+    /// Spawns a background cleanup task that receives end-operation requests from
+    /// `TimeoutHandle` instances, avoiding the need for `tokio::spawn` in `Drop`.
     pub fn new() -> Self {
-        let mut configs = HashMap::new();
-
-        // Set default configurations for different operation types
-        configs.insert(OperationType::ApiCall, TimeoutConfig::api_call());
-        configs.insert(
+        // Build default configs outside the Arc so we don't need blocking_write.
+        let mut configs_map = HashMap::new();
+        configs_map.insert(OperationType::ApiCall, TimeoutConfig::api_call());
+        configs_map.insert(
             OperationType::FileOperation,
             TimeoutConfig::file_operation(),
         );
-        configs.insert(OperationType::CodeAnalysis, TimeoutConfig::analysis());
-        configs.insert(OperationType::ToolExecution, TimeoutConfig::default());
-        configs.insert(OperationType::NetworkRequest, TimeoutConfig::api_call());
-        configs.insert(OperationType::Processing, TimeoutConfig::analysis());
+        configs_map.insert(OperationType::CodeAnalysis, TimeoutConfig::analysis());
+        configs_map.insert(OperationType::ToolExecution, TimeoutConfig::default());
+        configs_map.insert(OperationType::NetworkRequest, TimeoutConfig::api_call());
+        configs_map.insert(OperationType::Processing, TimeoutConfig::analysis());
+
+        let configs = Arc::new(RwLock::new(configs_map));
+        let active_operations: Arc<RwLock<HashMap<String, TimeoutEvent>>> =
+            Arc::new(RwLock::new(HashMap::new()));
+        let stats = Arc::new(RwLock::new(TimeoutStats::default()));
+        let (cleanup_tx, cleanup_rx) = mpsc::unbounded_channel();
+
+        // Spawn a background cleanup actor that processes end-operation requests.
+        // This avoids the tokio::spawn-in-Drop anti-pattern: handles send on the
+        // channel synchronously, and the background task does the async work.
+        let cleanup_active = Arc::clone(&active_operations);
+        let cleanup_stats = Arc::clone(&stats);
+        tokio::spawn(async move {
+            Self::run_cleanup_loop(cleanup_rx, cleanup_active, cleanup_stats).await;
+        });
 
         Self {
-            configs: Arc::new(RwLock::new(configs)),
-            active_operations: Arc::new(RwLock::new(HashMap::new())),
-            stats: Arc::new(RwLock::new(TimeoutStats::default())),
+            configs,
+            active_operations,
+            stats,
+            cleanup_tx,
         }
+    }
+
+    /// Background task that processes end-operation requests from dropped handles.
+    ///
+    /// Runs until the channel is closed (all senders dropped), which happens
+    /// when the `TimeoutDetector` is dropped.
+    async fn run_cleanup_loop(
+        mut cleanup_rx: mpsc::UnboundedReceiver<String>,
+        active_operations: Arc<RwLock<HashMap<String, TimeoutEvent>>>,
+        stats: Arc<RwLock<TimeoutStats>>,
+    ) {
+        while let Some(operation_id) = cleanup_rx.recv().await {
+            let mut active_ops = active_operations.write().await;
+            if let Some(event) = active_ops.remove(&operation_id) {
+                let duration = event.start_time.elapsed();
+                let mut stats_guard = stats.write().await;
+                if stats_guard.total_operations > 0 {
+                    let total_duration = stats_guard.average_timeout_duration
+                        * (stats_guard.total_operations - 1) as u32;
+                    stats_guard.average_timeout_duration =
+                        (total_duration + duration) / stats_guard.total_operations as u32;
+                }
+            }
+        }
+        tracing::trace!("timeout detector cleanup loop exited");
     }
 
     /// Set configuration for a specific operation type
@@ -214,7 +264,7 @@ impl TimeoutDetector {
 
         TimeoutHandle {
             operation_id,
-            detector: Arc::new(self.clone()),
+            end_tx: Some(self.cleanup_tx.clone()),
         }
     }
 
@@ -426,20 +476,31 @@ impl Clone for TimeoutDetector {
             configs: Arc::clone(&self.configs),
             active_operations: Arc::clone(&self.active_operations),
             stats: Arc::clone(&self.stats),
+            cleanup_tx: self.cleanup_tx.clone(),
         }
     }
 }
 
-/// Handle for tracking an operation's lifecycle
+/// Handle for tracking an operation's lifecycle.
+///
+/// Uses a channel-based actor pattern to report completion: sending on the
+/// channel is synchronous, so `Drop` never needs to call `tokio::spawn`.
 pub struct TimeoutHandle {
     operation_id: String,
-    detector: Arc<TimeoutDetector>,
+    /// Channel sender for cleanup notification. `None` after `end()` has been
+    /// called, which prevents duplicate cleanup in `Drop`.
+    end_tx: Option<mpsc::UnboundedSender<String>>,
 }
 
 impl TimeoutHandle {
-    /// End monitoring for this operation
-    pub async fn end(self) {
-        self.detector.end_operation(&self.operation_id).await;
+    /// End monitoring for this operation.
+    ///
+    /// Sends the operation ID to the background cleanup task. Takes `self` by
+    /// value so that `Drop` will not also send a duplicate.
+    pub async fn end(mut self) {
+        if let Some(tx) = self.end_tx.take() {
+            let _ = tx.send(self.operation_id.clone());
+        }
     }
 
     /// Get the operation ID
@@ -450,13 +511,12 @@ impl TimeoutHandle {
 
 impl Drop for TimeoutHandle {
     fn drop(&mut self) {
-        // Note: We can't make this async in Drop, so we spawn a task
-        let operation_id = self.operation_id.clone();
-        let detector = Arc::clone(&self.detector);
-
-        tokio::spawn(async move {
-            detector.end_operation(&operation_id).await;
-        });
+        // Send the operation ID to the cleanup task synchronously.
+        // The channel is unbounded so this never blocks, avoiding the
+        // need for tokio::spawn in Drop (see blog post "Actors with Tokio").
+        if let Some(tx) = self.end_tx.take() {
+            let _ = tx.send(self.operation_id.clone());
+        }
     }
 }
 
