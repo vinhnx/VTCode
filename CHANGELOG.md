@@ -2,6 +2,13 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.134.6 - 2026-07-04
+
+### Highlights
+### Other Changes
+#### Other
+
+- Fix/tool budget  (05b182c9) (@kernitus)
 ## 0.134.5 - 2026-07-04
 
 ### Highlights
