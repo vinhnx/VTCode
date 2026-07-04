@@ -215,7 +215,7 @@ top_p = 0.9                # Top-P sampling parameter
 
 VT Code separates authored guidance from learned persistent memory.
 
-- Authored guidance comes from `AGENTS.md`, `.vtcode/rules/`, and any extra instruction files you configure.
+- Authored guidance automatically includes `~/.vtcode/AGENTS.md`, project `AGENTS.md`, project `.vtcode/rules/`, and any `agent.instruction_files` entries you configure.
 - Persistent memory is a per-repository memory store summarized into a compact startup section after authored guidance.
 
 ### Instruction discovery controls
@@ -233,7 +233,7 @@ instruction_import_max_depth = 5
 - `instruction_excludes` removes matching `AGENTS.md` or `.vtcode/rules/` files from discovery.
 - `instruction_import_max_depth` limits recursive `@path` imports inside guidance files.
 
-Workspace rules live under `.vtcode/rules/`. Rules without frontmatter are always loaded. Rules with YAML `paths` frontmatter are loaded only when the current instruction context matches those paths.
+Workspace rules live under project `.vtcode/rules/`. Rules without frontmatter are always loaded. Rules with YAML `paths` frontmatter are loaded only when the current instruction context matches those paths.
 
 ### Persistent memory controls
 
