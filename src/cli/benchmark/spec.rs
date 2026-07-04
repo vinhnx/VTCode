@@ -160,11 +160,11 @@ fn parse_spec(source: &str, workspace: &Path) -> Result<Vec<PreparedTask>> {
 }
 
 fn convert_tasks(raw_tasks: Vec<RawTaskSpec>, workspace: &Path) -> Result<Vec<PreparedTask>> {
-    let mut prepared = Vec::with_capacity(raw_tasks.len());
-    for (index, raw) in raw_tasks.into_iter().enumerate() {
-        prepared.push(prepare_task(raw, index, workspace)?);
-    }
-    Ok(prepared)
+    raw_tasks
+        .into_iter()
+        .enumerate()
+        .map(|(index, raw)| prepare_task(raw, index, workspace))
+        .collect()
 }
 
 fn prepare_task(mut raw: RawTaskSpec, index: usize, workspace: &Path) -> Result<PreparedTask> {
@@ -235,11 +235,11 @@ fn build_contexts(
         }
     }
 
-    let mut contexts = Vec::with_capacity(entries.len());
-    for (index, entry) in entries.into_iter().enumerate() {
-        contexts.push(convert_context_entry(entry, workspace, index)?);
-    }
-    Ok(contexts)
+    entries
+        .into_iter()
+        .enumerate()
+        .map(|(index, entry)| convert_context_entry(entry, workspace, index))
+        .collect()
 }
 
 fn convert_context_entry(

@@ -192,10 +192,7 @@ impl LoopMemoryStore for SqliteLoopMemory {
             Ok(format!("- [{ts}] {content}"))
         })?;
 
-        let mut entries = Vec::new();
-        for row in rows {
-            entries.push(row?);
-        }
+        let entries: Vec<String> = rows.collect::<Result<Vec<_>, _>>()?;
         // Match Markdown behavior: return empty string when no entries exist.
         if entries.is_empty() {
             return Ok(String::new());
@@ -237,10 +234,7 @@ impl LoopMemoryStore for SqliteLoopMemory {
             Ok(format!("- [{ts}] {content}"))
         })?;
 
-        let mut entries = Vec::new();
-        for row in rows {
-            entries.push(row?);
-        }
+        let entries: Vec<String> = rows.collect::<Result<Vec<_>, _>>()?;
         if entries.is_empty() {
             return Ok(String::new());
         }
