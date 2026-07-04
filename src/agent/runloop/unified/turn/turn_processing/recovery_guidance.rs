@@ -25,7 +25,7 @@ pub(super) fn empty_response_recovery_reason(mode: RecoveryMode) -> &'static str
         RecoveryMode::ToolEnabledRetry => {
             "Model returned no answer. Continue autonomously with the next concrete action now. Tools remain available if needed; do not stop with a status update."
         }
-        RecoveryMode::ToolFreeSynthesis | RecoveryMode::AdaptiveBudgetDecision => {
+        RecoveryMode::ToolFreeSynthesis => {
             "Model returned no answer after tool activity. Tools are disabled on the next pass; provide a direct textual response from the current context."
         }
     }
@@ -36,7 +36,7 @@ pub(super) fn empty_response_notice(mode: RecoveryMode) -> &'static str {
         RecoveryMode::ToolEnabledRetry => {
             "[!] Empty model response detected; scheduling a retry pass with tools still enabled."
         }
-        RecoveryMode::ToolFreeSynthesis | RecoveryMode::AdaptiveBudgetDecision => {
+        RecoveryMode::ToolFreeSynthesis => {
             "[!] Empty model response detected; scheduling a final recovery pass."
         }
     }
@@ -47,7 +47,7 @@ fn recovery_empty_response_fallback_intro(mode: RecoveryMode) -> &'static str {
         RecoveryMode::ToolEnabledRetry => {
             "I couldn't continue because the model returned no answer twice in a row."
         }
-        RecoveryMode::ToolFreeSynthesis | RecoveryMode::AdaptiveBudgetDecision => {
+        RecoveryMode::ToolFreeSynthesis => {
             "I couldn't produce a final synthesis because the model returned no answer on the recovery pass."
         }
     }
@@ -56,7 +56,7 @@ fn recovery_empty_response_fallback_intro(mode: RecoveryMode) -> &'static str {
 fn recovery_empty_response_fallback_guidance(mode: RecoveryMode) -> &'static str {
     match mode {
         RecoveryMode::ToolEnabledRetry => "Retry the turn from the current context.",
-        RecoveryMode::ToolFreeSynthesis | RecoveryMode::AdaptiveBudgetDecision => {
+        RecoveryMode::ToolFreeSynthesis => {
             "Reuse the latest tool outputs already collected in this turn before retrying, and follow any `hint`, `next_action`, `fallback_tool`, or `fallback_tool_args` they already provide."
         }
     }
@@ -90,11 +90,11 @@ pub(super) fn recovery_empty_fallback_safety_message(mode: RecoveryMode) -> Stri
     match mode {
         RecoveryMode::ToolEnabledRetry => {
             "I couldn't generate a response on this turn because the model returned an \
-             empty answer twice in a row. Please retry the request — the prior turn \
+             empty answer twice in a row. Please retry the request. The prior turn \
              state has been preserved."
                 .to_string()
         }
-        RecoveryMode::ToolFreeSynthesis | RecoveryMode::AdaptiveBudgetDecision => {
+        RecoveryMode::ToolFreeSynthesis => {
             "I couldn't synthesize a final answer from this turn. The most recent tool \
              outputs (if any) are in the conversation history above. Please retry with \
              a more specific question or rephrase the request."
@@ -129,7 +129,6 @@ mod tests {
         for mode in [
             RecoveryMode::ToolEnabledRetry,
             RecoveryMode::ToolFreeSynthesis,
-            RecoveryMode::AdaptiveBudgetDecision,
         ] {
             let msg = recovery_empty_fallback_safety_message(mode);
             assert!(!msg.trim().is_empty(), "safety message must be non-empty");
@@ -146,7 +145,6 @@ mod tests {
         for mode in [
             RecoveryMode::ToolEnabledRetry,
             RecoveryMode::ToolFreeSynthesis,
-            RecoveryMode::AdaptiveBudgetDecision,
         ] {
             let intro = recovery_empty_response_fallback_intro(mode);
             let guidance = recovery_empty_response_fallback_guidance(mode);

@@ -18,13 +18,9 @@ use crate::agent::runloop::unified::inline_events::harness::{
     turn_completed_event, turn_failed_event, turn_started_event,
 };
 use crate::agent::runloop::unified::run_loop_context::HarnessTurnState;
-use crate::agent::runloop::unified::run_loop_context::RecoveryMode;
 use crate::agent::runloop::unified::run_loop_context::RunLoopContext;
 use crate::agent::runloop::unified::run_loop_context::TurnPhase;
 use crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator;
-use crate::agent::runloop::unified::turn::adaptive_budget_recovery::{
-    self, AdaptiveRecoveryOutcome,
-};
 use crate::agent::runloop::unified::turn::context::TurnLoopResult;
 use crate::agent::runloop::unified::turn::turn_loop_helpers::{
     ToolLoopLimitAction, extract_turn_config, handle_steering_messages,
@@ -115,7 +111,7 @@ const RECOVERY_TOOL_CALL_RETRY_DIRECTIVE: &str =
 ///
 /// Checks the post-tool recovery cycle cap. If the cap is reached, completes
 /// the turn with a deterministic fallback answer and returns `Some(result)`.
-/// Otherwise returns `None` — the caller should increment the cycle counter,
+/// Otherwise returns `None`. The caller should increment the cycle counter,
 /// switch to tool-free recovery, and `continue` the turn loop.
 fn check_recovery_cycle_cap(
     cycles: u8,
@@ -585,70 +581,6 @@ pub(crate) async fn run_turn_loop(
         let active_model = turn_processing_ctx.config.model.clone();
         let recovery_pass = turn_processing_ctx.consume_recovery_pass();
 
-        // Handle adaptive budget recovery decision before the normal LLM request.
-        if recovery_pass
-            && turn_processing_ctx.recovery_mode() == Some(RecoveryMode::AdaptiveBudgetDecision)
-        {
-            // Budget guard: if remaining budget is critically low, skip the
-            // decision LLM call and go straight to a tool-free synthesis. This
-            // avoids burning the reserve on the decision call and re-triggering
-            // the policy-violation loop the adaptive path exists to prevent.
-            let remaining = turn_processing_ctx.harness_state.remaining_turn_timeout();
-            if adaptive_budget_recovery::should_short_circuit_recovery(remaining) {
-                let _ = turn_processing_ctx.renderer.line(
-                    MessageStyle::Warning,
-                    "Remaining budget critically low; synthesizing final answer now.",
-                );
-                // Switch the recovery mode to a tool-free synthesis pass.
-                // NOTE: use the unconditional switch helper, not
-                // activate_recovery_with_mode — the latter is a guarded no-op
-                // when a recovery pass is already in flight (phase == InPass),
-                // which would leave the mode as AdaptiveBudgetDecision and spin
-                // the loop forever.
-                turn_processing_ctx.switch_to_tool_free_recovery();
-                continue;
-            }
-            match adaptive_budget_recovery::decide_recovery_action(
-                &mut turn_processing_ctx,
-                &active_model,
-            )
-            .await
-            {
-                Ok((decision, usage)) => {
-                    if usage.is_some() {
-                        accumulate_turn_usage(&mut turn_usage, &usage);
-                        turn_processing_ctx.session_stats.record_usage(&usage);
-                        turn_processing_ctx
-                            .context_manager
-                            .update_token_usage(&usage);
-                    }
-                    match adaptive_budget_recovery::apply_recovery_decision(
-                        &mut turn_processing_ctx,
-                        decision,
-                        turn_history_start_len,
-                    )
-                    .await?
-                    {
-                        AdaptiveRecoveryOutcome::Continue => continue,
-                        AdaptiveRecoveryOutcome::AwaitUser { reason } => {
-                            result = TurnLoopResult::AwaitingUser {
-                                reason: Some(reason),
-                            };
-                            break;
-                        }
-                    }
-                }
-                Err(err) => {
-                    tracing::warn!(error = %err, "Adaptive recovery decision failed; falling back to synthesis");
-                    // See note above: switch_to_tool_free_recovery is unconditional;
-                    // activate_recovery_with_mode is a no-op mid-pass and would
-                    // loop forever re-calling decide_recovery_action.
-                    turn_processing_ctx.switch_to_tool_free_recovery();
-                    continue;
-                }
-            }
-        }
-
         let tool_free_recovery = recovery_pass && turn_processing_ctx.recovery_is_tool_free();
         let (response, response_streamed) = match execute_llm_request(
             &mut turn_processing_ctx,
@@ -1077,8 +1009,6 @@ pub(crate) async fn run_turn_loop(
                 "turn blocked",
                 has_turn_usage(&turn_usage).then_some(turn_usage.clone()),
             ),
-            // A voluntary pause is graceful, not a failure.
-            TurnLoopResult::AwaitingUser { .. } => turn_completed_event(turn_usage.clone()),
         };
         if let Err(e) = emitter.emit(event) {
             tracing::debug!(error = %e, "harness turn outcome event emission failed");

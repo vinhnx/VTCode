@@ -62,12 +62,6 @@ impl TurnHistoryCheckpoint {
     }
 }
 
-#[derive(Clone)]
-pub(super) struct PendingTimeoutRecovery {
-    pub(super) reason: String,
-    pub(super) mode: RecoveryMode,
-}
-
 pub(super) fn remove_transient_system_notes(
     history: &mut Vec<vtcode_core::llm::provider::Message>,
     notes: &[String],

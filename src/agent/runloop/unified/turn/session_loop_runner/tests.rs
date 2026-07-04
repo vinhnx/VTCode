@@ -2,8 +2,7 @@ use super::{
     archive::NextRuntimeArchiveId,
     archive::next_runtime_archive_id_request,
     archive::workspace_archive_label,
-    build_partial_timeout_messages, effective_max_tool_calls_for_turn,
-    resolve_effective_turn_timeout_secs, should_attempt_requesting_timeout_recovery,
+    effective_max_tool_calls_for_turn,
     support::{
         TurnHistoryCheckpoint, build_tracked_file_freshness_note,
         build_unrelated_dirty_worktree_note, checkpoint_session_archive_start,
@@ -13,7 +12,6 @@ use super::{
 };
 use crate::agent::agents::ResumeSession;
 use crate::agent::runloop::git::normalize_workspace_path;
-use crate::agent::runloop::unified::run_loop_context::TurnPhase;
 use chrono::Utc;
 use std::collections::BTreeSet;
 use std::fs;
@@ -55,26 +53,6 @@ fn resume_session(intent: ArchivedSessionIntent) -> ResumeSession {
 }
 
 #[test]
-fn turn_timeout_respects_tool_wall_clock_budget() {
-    assert_eq!(resolve_effective_turn_timeout_secs(300, 600), 660);
-}
-
-#[test]
-fn turn_timeout_keeps_higher_configured_value() {
-    assert_eq!(resolve_effective_turn_timeout_secs(900, 600), 900);
-}
-
-#[test]
-fn turn_timeout_includes_full_llm_attempt_grace() {
-    assert_eq!(resolve_effective_turn_timeout_secs(360, 360), 432);
-}
-
-#[test]
-fn turn_timeout_expands_buffer_for_large_configs() {
-    assert_eq!(resolve_effective_turn_timeout_secs(600, 600), 720);
-}
-
-#[test]
 fn planning_workflow_applies_tool_call_floor() {
     assert_eq!(effective_max_tool_calls_for_turn(32, true), 48);
     assert_eq!(effective_max_tool_calls_for_turn(64, true), 64);
@@ -89,23 +67,6 @@ fn zero_tool_call_limit_stays_unlimited_in_all_modes() {
 #[test]
 fn edit_mode_keeps_configured_tool_call_limit() {
     assert_eq!(effective_max_tool_calls_for_turn(32, false), 32);
-}
-
-#[test]
-fn requesting_partial_timeout_recovery_message_mentions_continuation() {
-    let (timeout_message, timeout_error_message) =
-        build_partial_timeout_messages(660, TurnPhase::Requesting, 25, 0, true);
-    assert!(timeout_message.contains("continuing with a compacted tool-free recovery pass"));
-    assert!(timeout_error_message.contains("Continuing with a compacted tool-free recovery pass"));
-}
-
-#[test]
-fn requesting_partial_timeout_without_recovery_mentions_retry_skip() {
-    let (timeout_message, timeout_error_message) =
-        build_partial_timeout_messages(660, TurnPhase::Requesting, 25, 0, false);
-    assert!(timeout_message.contains("retry is skipped"));
-    assert!(!timeout_message.contains("continuing with a compacted tool-free recovery pass"));
-    assert!(!timeout_error_message.contains("Continuing with a compacted tool-free recovery pass"));
 }
 
 #[test]
@@ -198,33 +159,6 @@ fn turn_history_checkpoint_preserves_preexisting_history_prefix() {
     checkpoint.rollback(&mut history);
 
     assert_eq!(history, expected_prefix);
-}
-
-#[test]
-fn requesting_timeout_without_tool_activity_omits_autonomous_recovery_note() {
-    let (timeout_message, timeout_error_message) =
-        build_partial_timeout_messages(660, TurnPhase::Requesting, 0, 0, false);
-    assert!(!timeout_message.contains("continuing with a compacted tool-free recovery pass"));
-    assert!(!timeout_error_message.contains("Continuing with a compacted tool-free recovery pass"));
-}
-
-#[test]
-fn requesting_timeout_recovery_only_runs_once() {
-    assert!(should_attempt_requesting_timeout_recovery(
-        TurnPhase::Requesting,
-        true,
-        false,
-    ));
-    assert!(!should_attempt_requesting_timeout_recovery(
-        TurnPhase::Requesting,
-        true,
-        true,
-    ));
-    assert!(!should_attempt_requesting_timeout_recovery(
-        TurnPhase::ExecutingTools,
-        true,
-        false,
-    ));
 }
 
 #[test]

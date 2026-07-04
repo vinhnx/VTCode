@@ -36,11 +36,6 @@ pub(super) async fn emit_turn_outcome_notification(
             status: CompletionStatus::Cancelled,
             details: Some("Turn cancelled".to_string()),
         }),
-        TurnLoopResult::AwaitingUser { reason } => Some(NotificationEvent::Completion {
-            task: "turn".to_string(),
-            status: CompletionStatus::Success,
-            details: reason.clone(),
-        }),
         TurnLoopResult::Exit => None,
     };
 
@@ -80,7 +75,6 @@ async fn maybe_run_external_turn_complete_notify(
     let status = match result {
         TurnLoopResult::Completed => "success",
         TurnLoopResult::Blocked { .. } => "partial_success",
-        TurnLoopResult::AwaitingUser { .. } => "awaiting_user",
         TurnLoopResult::Aborted => "failure",
         TurnLoopResult::Cancelled => "cancelled",
         TurnLoopResult::Exit => return Ok(()),

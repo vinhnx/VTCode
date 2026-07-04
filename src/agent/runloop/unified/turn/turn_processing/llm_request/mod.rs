@@ -33,12 +33,13 @@ use crate::agent::runloop::unified::reasoning::resolve_reasoning_visibility;
 use crate::agent::runloop::unified::turn::context::TurnProcessingContext;
 use crate::agent::runloop::unified::ui_interaction::{
     PlaceholderSpinner, StreamProgressEvent, StreamSpinnerOptions,
-    stream_and_render_response_with_options_and_progress,
 };
-use crate::agent::runloop::unified::ui_interaction_stream::render_stream_with_options_and_copilot_runtime_impl;
+use crate::agent::runloop::unified::ui_interaction_stream::{
+    FirstProgressTimeout, render_stream_with_options_and_copilot_runtime_impl,
+    stream_and_render_response_with_options_impl_first_progress_timeout,
+};
 use crate::agent::runloop::unified::wait_feedback::{
-    WAIT_KEEPALIVE_INITIAL, WAIT_KEEPALIVE_INTERVAL, resolve_fractional_warning_delay,
-    wait_keepalive_message, wait_timeout_warning_message,
+    WAIT_KEEPALIVE_INITIAL, WAIT_KEEPALIVE_INTERVAL, wait_keepalive_message,
 };
 use copilot_runtime::{CopilotRuntimeHost, prompt_session_to_stream};
 use metrics::emit_llm_retry_metrics;
@@ -55,53 +56,35 @@ use retry::{DEFAULT_LLM_RETRY_ATTEMPTS, MAX_LLM_RETRY_ATTEMPTS};
 use retry::{
     PostToolRetryAction, classify_llm_error, compact_error_message,
     compact_tool_messages_for_retry, has_recent_tool_responses, is_previous_response_chain_error,
-    is_stream_timeout_error, llm_retry_attempts, next_post_tool_retry_action,
-    supports_streaming_timeout_fallback, switch_to_non_streaming_retry_mode,
+    is_stream_timeout_error, llm_first_progress_timeout_secs, llm_retry_attempts,
+    next_post_tool_retry_action, supports_streaming_timeout_fallback,
+    switch_to_non_streaming_retry_mode,
 };
 use streaming::HarnessStreamingBridge;
 #[cfg(test)]
 use vtcode_core::config::build_openai_prompt_cache_key;
 
-pub(crate) use retry::llm_attempt_timeout_secs;
-
-const WAIT_TIMEOUT_WARNING_HEADROOM: Duration = Duration::from_secs(15);
-const WAIT_TIMEOUT_WARNING_FRACTION: f32 = 0.75;
-
-fn llm_timeout_warning_delay(timeout_budget: Duration) -> Option<Duration> {
-    resolve_fractional_warning_delay(
-        timeout_budget,
-        WAIT_TIMEOUT_WARNING_FRACTION,
-        WAIT_TIMEOUT_WARNING_HEADROOM,
-    )
-}
-
 async fn run_standard_stream_attempt(
     ctx: &mut TurnProcessingContext<'_>,
     request: uni::LLMRequest,
-    request_timeout_secs: u64,
+    first_progress_timeout_secs: u64,
     spinner: &PlaceholderSpinner,
     stream_options: StreamSpinnerOptions,
     progress: &mut (dyn FnMut(StreamProgressEvent) + Send),
 ) -> Result<(uni::LLMResponse, bool)> {
-    let stream_future = stream_and_render_response_with_options_and_progress(
+    stream_and_render_response_with_options_impl_first_progress_timeout(
         &**ctx.provider_client,
         request,
+        Some(Duration::from_secs(first_progress_timeout_secs)),
         spinner,
         ctx.renderer,
         ctx.ctrl_c_state,
         ctx.ctrl_c_notify,
         stream_options,
         Some(progress),
-    );
-    let res = tokio::time::timeout(Duration::from_secs(request_timeout_secs), stream_future).await;
-
-    match res {
-        Ok(Ok((response, emitted_tokens))) => Ok((response, emitted_tokens)),
-        Ok(Err(err)) => Err(anyhow::Error::new(err)),
-        Err(_) => Err(anyhow::anyhow!(
-            "LLM request timed out after {request_timeout_secs} seconds"
-        )),
-    }
+    )
+    .await
+    .map_err(anyhow::Error::new)
 }
 
 fn finish_streaming_bridge_success(
@@ -124,7 +107,7 @@ pub(crate) async fn execute_llm_request(
 ) -> Result<(uni::LLMResponse, bool)> {
     let turn_snapshot = capture_turn_request_snapshot(ctx, active_model, tool_free_recovery);
     let active_model = turn_snapshot.active_model.clone();
-    let request_timeout_secs = llm_attempt_timeout_secs(
+    let first_progress_timeout_secs = llm_first_progress_timeout_secs(
         turn_snapshot.turn_timeout_secs,
         turn_snapshot.planning_active,
         &turn_snapshot.provider_name,
@@ -279,85 +262,101 @@ pub(crate) async fn execute_llm_request(
                 strip_proposed_plan_blocks: turn_snapshot.planning_active,
             };
             let mut progress = |event: StreamProgressEvent| stream_bridge.on_progress(event);
-            let stream_result =
-                if turn_snapshot.provider_name == vtcode_core::copilot::COPILOT_PROVIDER_KEY {
-                    let mut runtime_host = CopilotRuntimeHost::new(
-                        ctx.tool_registry,
-                        ctx.tool_result_cache,
-                        ctx.session,
-                        ctx.session_stats,
-                        ctx.plan_session,
-                        ctx.mcp_panel_state,
-                        ctx.handle,
+            let stream_result = if turn_snapshot.provider_name
+                == vtcode_core::copilot::COPILOT_PROVIDER_KEY
+            {
+                let mut runtime_host = CopilotRuntimeHost::new(
+                    ctx.tool_registry,
+                    ctx.tool_result_cache,
+                    ctx.session,
+                    ctx.session_stats,
+                    ctx.plan_session,
+                    ctx.mcp_panel_state,
+                    ctx.handle,
+                    ctx.ctrl_c_state,
+                    ctx.ctrl_c_notify,
+                    ctx.default_placeholder.clone(),
+                    ctx.approval_recorder,
+                    ctx.decision_ledger,
+                    ctx.tool_permission_cache,
+                    ctx.permissions_state,
+                    ctx.vt_cfg
+                        .and_then(|cfg| cfg.runtime_agent_permissions.as_ref())
+                        .or(Some(&turn_snapshot.active_primary_agent.permissions)),
+                    ctx.safety_validator,
+                    ctx.lifecycle_hooks,
+                    ctx.vt_cfg,
+                    ctx.traj,
+                    ctx.harness_state,
+                    runtime_tools.as_ref(),
+                    ctx.skip_confirmations,
+                    ctx.harness_emitter,
+                    format!("{}-step-{}", ctx.harness_state.turn_id.0, step_count),
+                );
+                let exposed_tools = runtime_host.exposed_tools().to_vec();
+
+                if let Some(start_prompt_session) = ctx
+                    .provider_client
+                    .as_ref()
+                    .start_copilot_prompt_session(request.clone(), &exposed_tools)
+                {
+                    let first_progress_timeout = FirstProgressTimeout::starting_now(
+                        Duration::from_secs(first_progress_timeout_secs),
+                    );
+                    let prompt_session = tokio::select! {
+                        biased;
+                        _ = ctx.ctrl_c_notify.notified() => {
+                            return Err(interrupted_provider_error(&turn_snapshot.provider_name));
+                        }
+                        _ = tokio::time::sleep_until(first_progress_timeout.deadline) => {
+                            return Err(anyhow::anyhow!(
+                                "LLM first token timed out after {} seconds",
+                                first_progress_timeout_secs
+                            ));
+                        }
+                        result = start_prompt_session => result?,
+                    };
+                    let (mut stream, mut runtime_requests) =
+                        prompt_session_to_stream(request.model.clone(), prompt_session);
+                    render_stream_with_options_and_copilot_runtime_impl(
+                        &turn_snapshot.provider_name,
+                        &mut stream,
+                        None,
+                        Some(&mut runtime_requests),
+                        Some(&mut runtime_host),
+                        Some(first_progress_timeout),
+                        &_spinner,
+                        ctx.renderer,
                         ctx.ctrl_c_state,
                         ctx.ctrl_c_notify,
-                        ctx.default_placeholder.clone(),
-                        ctx.approval_recorder,
-                        ctx.decision_ledger,
-                        ctx.tool_permission_cache,
-                        ctx.permissions_state,
-                        ctx.vt_cfg
-                            .and_then(|cfg| cfg.runtime_agent_permissions.as_ref())
-                            .or(Some(&turn_snapshot.active_primary_agent.permissions)),
-                        ctx.safety_validator,
-                        ctx.lifecycle_hooks,
-                        ctx.vt_cfg,
-                        ctx.traj,
-                        ctx.harness_state,
-                        runtime_tools.as_ref(),
-                        ctx.skip_confirmations,
-                        ctx.harness_emitter,
-                        format!("{}-step-{}", ctx.harness_state.turn_id.0, step_count),
-                    );
-                    let exposed_tools = runtime_host.exposed_tools().to_vec();
-
-                    if let Some(start_prompt_session) = ctx
-                        .provider_client
-                        .as_ref()
-                        .start_copilot_prompt_session(request.clone(), &exposed_tools)
-                    {
-                        let prompt_session = start_prompt_session.await?;
-                        let (mut stream, mut runtime_requests) =
-                            prompt_session_to_stream(request.model.clone(), prompt_session);
-                        render_stream_with_options_and_copilot_runtime_impl(
-                            &turn_snapshot.provider_name,
-                            &mut stream,
-                            None,
-                            Some(&mut runtime_requests),
-                            Some(&mut runtime_host),
-                            Some(Duration::from_secs(request_timeout_secs)),
-                            &_spinner,
-                            ctx.renderer,
-                            ctx.ctrl_c_state,
-                            ctx.ctrl_c_notify,
-                            stream_options,
-                            Some(&mut progress),
-                        )
-                        .await
-                        .map_err(anyhow::Error::new)
-                    } else {
-                        drop(runtime_host);
-                        run_standard_stream_attempt(
-                            ctx,
-                            request.clone(),
-                            request_timeout_secs,
-                            &_spinner,
-                            stream_options,
-                            &mut progress,
-                        )
-                        .await
-                    }
+                        stream_options,
+                        Some(&mut progress),
+                    )
+                    .await
+                    .map_err(anyhow::Error::new)
                 } else {
+                    drop(runtime_host);
                     run_standard_stream_attempt(
                         ctx,
                         request.clone(),
-                        request_timeout_secs,
+                        first_progress_timeout_secs,
                         &_spinner,
                         stream_options,
                         &mut progress,
                     )
                     .await
-                };
+                }
+            } else {
+                run_standard_stream_attempt(
+                    ctx,
+                    request.clone(),
+                    first_progress_timeout_secs,
+                    &_spinner,
+                    stream_options,
+                    &mut progress,
+                )
+                .await
+            };
 
             match stream_result {
                 Ok((response, emitted_tokens)) => {
@@ -372,16 +371,10 @@ pub(crate) async fn execute_llm_request(
         } else if ctx.ctrl_c_state.is_cancel_requested() || ctx.ctrl_c_state.is_exit_requested() {
             Err(interrupted_provider_error(&turn_snapshot.provider_name))
         } else {
-            let generate_future = tokio::time::timeout(
-                Duration::from_secs(request_timeout_secs),
-                ctx.provider_client.generate(request.clone()),
-            );
+            let generate_future = ctx.provider_client.generate(request.clone());
             tokio::pin!(generate_future);
             let keepalive_started_at = tokio::time::Instant::now();
             let mut next_keepalive_at = keepalive_started_at + WAIT_KEEPALIVE_INITIAL;
-            let timeout_budget = Duration::from_secs(request_timeout_secs);
-            let warning_delay = llm_timeout_warning_delay(timeout_budget);
-            let mut timeout_warning_emitted = false;
             let wait_subject = format!("LLM request for model '{active_model}'");
 
             loop {
@@ -391,12 +384,7 @@ pub(crate) async fn execute_llm_request(
                 tokio::pin!(keepalive_sleep);
 
                 let outcome = tokio::select! {
-                    res = &mut generate_future => Some(match res {
-                        Ok(inner) => inner.map_err(anyhow::Error::from),
-                        Err(_) => Err(anyhow::anyhow!(
-                            "LLM request timed out after {request_timeout_secs} seconds"
-                        )),
-                    }),
+                    res = &mut generate_future => Some(res.map_err(anyhow::Error::from)),
                     _ = &mut cancel_notifier => {
                         Some(Err(interrupted_provider_error(&turn_snapshot.provider_name)))
                     }
@@ -417,18 +405,6 @@ pub(crate) async fn execute_llm_request(
                     ctx.renderer,
                     &keepalive_message,
                 )?;
-
-                let remaining = timeout_budget.saturating_sub(elapsed);
-                if !timeout_warning_emitted && warning_delay.is_some_and(|delay| elapsed >= delay) {
-                    timeout_warning_emitted = true;
-                    let warning =
-                        wait_timeout_warning_message(&wait_subject, timeout_budget, remaining);
-                    _spinner.update_message(warning.clone());
-                    crate::agent::runloop::unified::turn::turn_helpers::display_status(
-                        ctx.renderer,
-                        &warning,
-                    )?;
-                }
 
                 next_keepalive_at += WAIT_KEEPALIVE_INTERVAL;
             }

@@ -372,41 +372,39 @@ fn stream_timeout_error_detection_matches_common_messages() {
         "Streaming request timed out after configured timeout"
     ));
     assert!(is_stream_timeout_error(
-        "LLM request timed out after 120 seconds"
+        "LLM first token timed out after 120 seconds"
     ));
 }
 
 #[test]
-fn llm_attempt_timeout_defaults_to_fifth_of_turn_budget() {
-    assert_eq!(llm_attempt_timeout_secs(300, false, "openai"), 60);
+fn llm_first_progress_timeout_defaults_to_fifth_of_turn_budget() {
+    assert_eq!(llm_first_progress_timeout_secs(300, false, "openai"), 60);
 }
 
 #[test]
-fn llm_attempt_timeout_expands_for_planning_workflow() {
-    assert_eq!(llm_attempt_timeout_secs(300, true, "openai"), 150);
+fn llm_first_progress_timeout_expands_for_planning_workflow() {
+    assert_eq!(llm_first_progress_timeout_secs(300, true, "openai"), 150);
 }
 
 #[test]
-fn llm_attempt_timeout_planning_workflow_respects_smaller_turn_budget() {
-    assert_eq!(llm_attempt_timeout_secs(180, true, "openai"), 90);
+fn llm_first_progress_timeout_planning_workflow_respects_smaller_turn_budget() {
+    assert_eq!(llm_first_progress_timeout_secs(180, true, "openai"), 90);
 }
 
 #[test]
-fn llm_attempt_timeout_planning_workflow_huggingface_uses_higher_floor() {
-    assert_eq!(llm_attempt_timeout_secs(150, true, "huggingface"), 90);
-}
-
-#[test]
-fn llm_timeout_warning_delay_targets_three_quarters_of_budget() {
+fn llm_first_progress_timeout_planning_workflow_huggingface_uses_higher_floor() {
     assert_eq!(
-        llm_timeout_warning_delay(Duration::from_secs(60)),
-        Some(Duration::from_secs(45))
+        llm_first_progress_timeout_secs(150, true, "huggingface"),
+        90
     );
 }
 
 #[test]
-fn llm_attempt_timeout_respects_planning_workflow_cap() {
-    assert_eq!(llm_attempt_timeout_secs(1_200, true, "huggingface"), 180);
+fn llm_first_progress_timeout_respects_planning_workflow_cap() {
+    assert_eq!(
+        llm_first_progress_timeout_secs(1_200, true, "huggingface"),
+        180
+    );
 }
 
 #[test]

@@ -55,16 +55,7 @@ pub(crate) enum TurnLoopResult {
     Aborted,
     Cancelled,
     Exit,
-    Blocked {
-        reason: Option<String>,
-    },
-    /// The agent voluntarily paused to await further user input or resources
-    /// (e.g. it chose `request_more_resources` during adaptive budget recovery).
-    /// This is a graceful, non-failing outcome: the session stays alive and
-    /// waits for the next user message.
-    AwaitingUser {
-        reason: Option<String>,
-    },
+    Blocked { reason: Option<String> },
 }
 
 #[derive(Clone, Debug)]
@@ -219,10 +210,6 @@ impl<'a> TurnProcessingContext<'a> {
 
     pub(crate) fn recovery_is_tool_free(&self) -> bool {
         self.harness_state.recovery_is_tool_free()
-    }
-
-    pub(crate) fn recovery_mode(&self) -> Option<RecoveryMode> {
-        self.harness_state.recovery_mode()
     }
 
     pub(crate) fn switch_to_tool_free_recovery(&mut self) -> bool {

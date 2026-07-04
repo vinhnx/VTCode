@@ -7,7 +7,6 @@ mod result_handler;
 pub(crate) mod test_support;
 
 pub(crate) use llm_request::execute_llm_request;
-pub(crate) use llm_request::llm_attempt_timeout_secs;
 pub(crate) use planning_workflow::{
     maybe_force_planning_workflow_interview, planning_workflow_interview_ready,
     should_attempt_dynamic_interview_generation, synthesize_planning_workflow_interview_args,

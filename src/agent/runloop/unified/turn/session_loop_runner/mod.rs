@@ -11,11 +11,7 @@ use crate::agent::runloop::unified::inline_events::harness::{
 };
 use crate::agent::runloop::unified::planning_workflow_state::render_planning_workflow_next_step_hint;
 use crate::agent::runloop::unified::postamble::{ExitData, print_exit_summary};
-use crate::agent::runloop::unified::run_loop_context::RecoveryMode;
 use crate::agent::runloop::unified::turn::turn_loop::TurnLoopOutcome;
-use crate::agent::runloop::unified::turn::turn_loop::{
-    POST_TOOL_TIMEOUT_RECOVERY_REASON, prepare_post_tool_tool_free_recovery,
-};
 use crate::updater::{InlineUpdateOutcome, display_update_notice, run_inline_update_prompt};
 use hashbrown::HashSet;
 use vtcode_config::loader::SimpleConfigWatcher;
@@ -30,21 +26,18 @@ const PLAN_APPROVED_EXECUTION_INPUT: &str = "Implement the approved plan now.";
 use archive::{
     create_session_archive, refresh_runtime_debug_context_for_next_session, workspace_archive_label,
 };
-use execution_policy::{
-    build_partial_timeout_messages, effective_max_tool_calls_for_turn,
-    resolve_effective_turn_timeout_secs, should_attempt_requesting_timeout_recovery,
-};
+use execution_policy::effective_max_tool_calls_for_turn;
 use metrics::{
     TurnExecutionMetrics, capture_code_change_snapshot, emit_turn_execution_metrics,
     estimate_history_bytes,
 };
 use plan_seed::load_active_plan_seed;
 use support::{
-    PendingTimeoutRecovery, TurnHistoryCheckpoint, append_transient_turn_notes,
-    checkpoint_session_archive_start, force_reload_workspace_config_for_execution,
-    latest_assistant_result_text, live_reload_preserves_session_config,
-    prepare_resume_bootstrap_without_archive, prompt_startup_planning_workflow,
-    remove_transient_system_notes, take_pending_resumed_user_prompt,
+    append_transient_turn_notes, checkpoint_session_archive_start,
+    force_reload_workspace_config_for_execution, latest_assistant_result_text,
+    live_reload_preserves_session_config, prepare_resume_bootstrap_without_archive,
+    prompt_startup_planning_workflow, remove_transient_system_notes,
+    take_pending_resumed_user_prompt,
 };
 use tokio::sync::{Notify, mpsc};
 use vtcode_core::llm::provider::MessageRole;
@@ -718,27 +711,15 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     &tool_registry,
                     &agent_touched_paths,
                 );
-                let timeout_secs = resolve_effective_turn_timeout_secs(
-                    resolve_timeout(
-                        vt_cfg
-                            .as_ref()
-                            .map(|cfg| cfg.optimization.agent_execution.max_execution_time_secs),
-                    ),
-                    harness_config.max_tool_wall_clock_secs,
-                );
                 let turn_started_at = Instant::now();
-                let mut attempts: usize = 0;
-                let mut timeout_recovery_attempted = false;
-                let mut pending_timeout_recovery: Option<PendingTimeoutRecovery> = None;
                 let history_snapshot_bytes = estimate_history_bytes(&working_history);
-                let turn_history_checkpoint = TurnHistoryCheckpoint::capture(&working_history);
                 let mut turn_metadata_cache = None;
                 // Cross-turn tracking data extracted from harness_state before
                 // it goes out of scope at the end of the match block.
                 let mut cross_turn_read_sigs: Vec<String> = Vec::new();
                 let mut cross_turn_written: HashSet<String> = HashSet::new();
                 let mut cross_turn_shell_cmd: Option<String> = None;
-                let outcome = match loop {
+                let outcome = match {
                     let mut auto_finish_planning_attempted = false;
                     let planning_active = tool_registry.is_planning_active();
                     let max_tool_calls_per_turn = effective_max_tool_calls_for_turn(
@@ -752,13 +733,6 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                         harness_config.max_tool_wall_clock_secs,
                         harness_config.max_tool_retries,
                     );
-                    let applying_timeout_recovery = pending_timeout_recovery.is_some();
-                    if let Some(recovery) = pending_timeout_recovery.take() {
-                        harness_state.activate_recovery_with_mode(recovery.reason, recovery.mode);
-                    }
-                    harness_state.set_turn_timeout_secs(timeout_secs);
-                    let execution_history_len_before_attempt =
-                        tool_registry.execution_history_len();
                     let turn_loop_ctx = crate::agent::runloop::unified::turn::TurnLoopContext::new(
                         &mut renderer,
                         &handle,
@@ -802,12 +776,9 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                         runtime_steering,
                     );
 
-                    let result = timeout(
-                        Duration::from_secs(timeout_secs),
-                        crate::agent::runloop::unified::turn::run_turn_loop(
-                            &mut working_history,
-                            turn_loop_ctx,
-                        ),
+                    let result = crate::agent::runloop::unified::turn::run_turn_loop(
+                        &mut working_history,
+                        turn_loop_ctx,
                     )
                     .await;
 
@@ -823,148 +794,9 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                             cross_turn_written = harness_state.recently_written_files.clone();
                             cross_turn_shell_cmd =
                                 harness_state.last_shell_command_signature.clone();
-                            break inner;
+                            Ok(inner)
                         }
-                        Err(_) => {
-                            let active_pty_sessions_before_cancel =
-                                tool_registry.active_pty_sessions();
-                            let attempted_tool_calls = harness_state.tool_calls;
-                            let timed_out_phase = harness_state.phase;
-                            if let Err(err) =
-                                tool_registry.terminate_all_exec_sessions_async().await
-                            {
-                                tracing::warn!(error = %err, "Failed to terminate all exec sessions after turn timeout");
-                            }
-                            let execution_history_len_after_attempt =
-                                tool_registry.execution_history_len();
-                            handle.set_input_status(None, None);
-                            input_status_state.left = None;
-                            input_status_state.right = None;
-
-                            if ctrl_c_state.is_exit_requested()
-                                || ctrl_c_state.is_cancel_requested()
-                            {
-                                let interrupted_result = if ctrl_c_state.is_exit_requested() {
-                                    RunLoopTurnLoopResult::Exit
-                                } else {
-                                    RunLoopTurnLoopResult::Cancelled
-                                };
-                                turn_history_checkpoint.rollback(&mut working_history);
-                                break Ok(TurnLoopOutcome {
-                                    result: interrupted_result,
-                                    turn_modified_files: std::collections::BTreeSet::new(),
-                                });
-                            }
-
-                            let had_tool_activity = execution_history_len_after_attempt
-                                > execution_history_len_before_attempt
-                                || active_pty_sessions_before_cancel > 0
-                                || attempted_tool_calls > 0;
-                            attempts += 1;
-                            if had_tool_activity {
-                                let continuing_with_recovery =
-                                    should_attempt_requesting_timeout_recovery(
-                                        timed_out_phase,
-                                        had_tool_activity,
-                                        timeout_recovery_attempted,
-                                    );
-                                let (timeout_message, timeout_error_message) =
-                                    build_partial_timeout_messages(
-                                        timeout_secs,
-                                        timed_out_phase,
-                                        attempted_tool_calls,
-                                        active_pty_sessions_before_cancel,
-                                        continuing_with_recovery,
-                                    );
-                                renderer.line(MessageStyle::Error, &timeout_message)?;
-                                if continuing_with_recovery {
-                                    match crate::agent::runloop::unified::turn::compaction::compact_history_for_recovery_in_place(
-                                        crate::agent::runloop::unified::turn::compaction::CompactionContext::new(
-                                            provider_client.as_ref(),
-                                            &config.model,
-                                            &turn_run_id.0,
-                                            &turn_run_id.0,
-                                            config.workspace.as_path(),
-                                            vt_cfg.as_ref(),
-                                            lifecycle_hooks.as_ref(),
-                                            harness_emitter.as_ref(),
-                                        ),
-                                        crate::agent::runloop::unified::turn::compaction::CompactionState::new(
-                                            &mut working_history,
-                                            &mut session_stats,
-                                            &mut context_manager,
-                                        ),
-                                        turn_history_checkpoint.baseline_len,
-                                    ).await {
-                                        Ok(Some(outcome)) => {
-                                            renderer.line(
-                                                MessageStyle::Info,
-                                                &format!(
-                                                    "Compacted earlier history before the recovery pass ({} -> {} messages).",
-                                                    outcome.original_len, outcome.compacted_len
-                                                ),
-                                            )?;
-                                        }
-                                        Ok(None) => {
-                                            renderer.line(
-                                                MessageStyle::Info,
-                                                "No earlier history was compacted before the recovery pass.",
-                                            )?;
-                                        }
-                                        Err(err) => {
-                                            tracing::warn!(
-                                                error = %err,
-                                                "Failed to compact earlier history before timeout recovery"
-                                            );
-                                            renderer.line(
-                                                MessageStyle::Info,
-                                                "Recovery compaction failed; continuing with the existing history for one final tool-free pass.",
-                                            )?;
-                                        }
-                                    }
-                                    prepare_post_tool_tool_free_recovery(
-                                        &mut working_history,
-                                        POST_TOOL_TIMEOUT_RECOVERY_REASON,
-                                    );
-                                    timeout_recovery_attempted = true;
-                                    pending_timeout_recovery = Some(PendingTimeoutRecovery {
-                                        reason: POST_TOOL_TIMEOUT_RECOVERY_REASON.to_string(),
-                                        mode: RecoveryMode::ToolFreeSynthesis,
-                                    });
-                                    continue;
-                                }
-                                break Err(anyhow::Error::msg(timeout_error_message));
-                            }
-                            if applying_timeout_recovery {
-                                renderer.line(
-                                    MessageStyle::Error,
-                                    &format!(
-                                        "Turn timed out after {timeout_secs} seconds during the compacted recovery pass. PTY sessions cancelled; stopping turn."
-                                    ),
-                                )?;
-                                break Err(anyhow::anyhow!(
-                                    "Turn timed out after {timeout_secs} seconds during the compacted recovery pass"
-                                ));
-                            }
-                            if attempts >= 2 {
-                                renderer.line(
-                                  MessageStyle::Error,
-                                  &format!(
-                                      "Turn timed out after {timeout_secs} seconds. PTY sessions cancelled; stopping turn."
-                                ),
-                            )?;
-                                break Err(anyhow::anyhow!(
-                                    "Turn timed out after {timeout_secs} seconds"
-                                ));
-                            }
-                            turn_history_checkpoint.rollback(&mut working_history);
-                            renderer.line(
-                            MessageStyle::Error,
-                            &format!(
-                                "Turn timed out after {timeout_secs} seconds. PTY sessions cancelled; retrying once."
-                            ),
-                        )?;
-                        }
+                        Err(err) => Err(err),
                     }
                 } {
                     Ok(outcome) => outcome,
@@ -1056,10 +888,10 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     );
                 }
                 emit_turn_execution_metrics(TurnExecutionMetrics {
-                    attempts_made: attempts.saturating_add(1),
-                    retry_count: attempts,
+                    attempts_made: 1,
+                    retry_count: 0,
                     history_snapshot_bytes,
-                    timeout_secs,
+                    timeout_secs: harness_config.max_tool_wall_clock_secs,
                     elapsed_ms: turn_elapsed.as_millis(),
                     outcome: match &outcome_result {
                         RunLoopTurnLoopResult::Completed => "completed",
@@ -1067,7 +899,6 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                         RunLoopTurnLoopResult::Cancelled => "cancelled",
                         RunLoopTurnLoopResult::Exit => "exit",
                         RunLoopTurnLoopResult::Blocked { .. } => "blocked",
-                        RunLoopTurnLoopResult::AwaitingUser { .. } => "awaiting_user",
                     },
                 });
 
@@ -1138,12 +969,6 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                             session_end_reason = SessionEndReason::Error;
                             break;
                         }
-                    }
-                    RunLoopTurnLoopResult::AwaitingUser { .. } => {
-                        // Voluntary pause (e.g. agent requested more resources).
-                        // Graceful: do not stall the turn or terminate the session;
-                        // the loop continues and waits for the next user message.
-                        session_stats.mark_turn_stalled(false, None);
                     }
                     _ => {
                         session_stats.mark_turn_stalled(false, None);

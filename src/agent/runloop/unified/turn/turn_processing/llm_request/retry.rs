@@ -35,7 +35,8 @@ pub(super) fn is_stream_timeout_error(message: &str) -> bool {
     let msg = message.to_ascii_lowercase();
     msg.contains("stream request timed out")
         || msg.contains("streaming request timed out")
-        || msg.contains("llm request timed out after")
+        || msg.contains("first token timed out")
+        || msg.contains("first progress timed out")
 }
 
 pub(super) fn is_previous_response_chain_error(message: &str) -> bool {
@@ -89,16 +90,14 @@ pub(super) fn compact_tool_messages_for_retry(messages: &[uni::Message]) -> Vec<
     }
 }
 
-pub(crate) fn llm_attempt_timeout_secs(
+pub(crate) fn llm_first_progress_timeout_secs(
     turn_timeout_secs: u64,
     planning_active: bool,
     provider_name: &str,
 ) -> u64 {
-    // Ceiling raised 120 → 180s: a single slow first-token follow-up on a large
-    // context (common after many accumulated tool outputs) should not exhaust
-    // the per-attempt budget and terminate the whole turn via
-    // "model follow-up timed out". The baseline fraction (turn/5) still bounds
-    // the default; only the clamp ceiling is relaxed.
+    // A single slow first-token follow-up on a large context (common after many
+    // accumulated tool outputs) should not burn all retries too aggressively.
+    // After first progress arrives, the stream is allowed to run to completion.
     let baseline = (turn_timeout_secs / 5).clamp(30, 180);
     if !planning_active {
         return baseline;
