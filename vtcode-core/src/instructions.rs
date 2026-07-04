@@ -1517,6 +1517,30 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn discovers_vtcode_home_agents_without_extra_instruction_files() -> Result<()> {
+        let workspace = tempdir()?;
+        let project_root = workspace.path();
+
+        let home = tempdir()?;
+        let user_agents_path = write_doc(&home.path().join(".vtcode"), "user agents")?;
+
+        let sources = discover_instruction_sources(&default_options(
+            project_root,
+            project_root,
+            Some(home.path()),
+            &[],
+        ))
+        .await?;
+
+        assert_eq!(sources.len(), 1);
+        assert_eq!(sources[0].path, std::fs::canonicalize(user_agents_path)?);
+        assert_eq!(sources[0].scope, InstructionScope::User);
+        assert_eq!(sources[0].kind, InstructionSourceKind::Agents);
+
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn discovers_claude_files_alongside_workspace_agents() -> Result<()> {
         let workspace = tempdir()?;
         let project_root = std::fs::canonicalize(workspace.path())?;
