@@ -894,6 +894,77 @@ pub fn normalize_unified_search_args(args: &Value) -> Value {
         }
     }
 
+    // Cross-map unified_search-specific fields to ListInput-compatible
+    // field names for action=list.  The unified_search schema defines
+    // `max_results`, `globs`, and `format`, but `ListInput` only knows
+    // `max_items`/`per_page`/`glob_pattern`/`mode`.  Without this
+    // mapping these fields are silently dropped by serde, the listing
+    // is capped at the default 20 items, and the agent loops trying
+    // `max_results: 1000` / `globs: "**/*"` / `format: "tree"` with no
+    // effect (checkpoint turn_606: 37-message loop on "what's in this
+    // repo?").
+    if action.eq_ignore_ascii_case("list") {
+        // globs -> pattern (ListInput.glob_pattern has serde alias "pattern")
+        let globs_pattern = if !normalized.contains_key("pattern") {
+            normalized.get("globs").and_then(|v| match v {
+                Value::String(s) => Some(s.clone()),
+                Value::Array(arr) => arr
+                    .iter()
+                    .filter_map(|v| v.as_str())
+                    .next()
+                    .map(str::to_string),
+                _ => None,
+            })
+        } else {
+            None
+        };
+        if let Some(glob_str) = globs_pattern {
+            normalized
+                .entry("pattern".to_string())
+                .or_insert(Value::String(glob_str));
+        }
+
+        // max_results -> per_page + max_items (raise both so a single
+        // page can hold all requested results)
+        if let Some(max_results) = normalized.get("max_results").cloned() {
+            normalized
+                .entry("per_page".to_string())
+                .or_insert(max_results.clone());
+            normalized
+                .entry("max_items".to_string())
+                .or_insert(max_results);
+        }
+
+        // format -> mode (the model often passes format:"tree" for
+        // list; map it to mode when the value is a valid list mode)
+        let format_mode = if !normalized.contains_key("mode") {
+            normalized
+                .get("format")
+                .and_then(Value::as_str)
+                .filter(|f| {
+                    matches!(
+                        *f,
+                        "list"
+                            | "recursive"
+                            | "tree"
+                            | "find_name"
+                            | "find_content"
+                            | "largest"
+                            | "file"
+                            | "files"
+                    )
+                })
+                .map(str::to_string)
+        } else {
+            None
+        };
+        if let Some(mode) = format_mode {
+            normalized
+                .entry("mode".to_string())
+                .or_insert(Value::String(mode));
+        }
+    }
+
     Value::Object(normalized)
 }
 
@@ -1553,5 +1624,174 @@ mod tests {
             tools::WRITE_STDIN,
             &json!({"session_id": "run-1", "chars": "q"})
         ));
+    }
+
+    // ── normalize_unified_search_args: list-action cross-mapping ──────────
+    //
+    // The unified_search schema defines `max_results`, `globs`, and `format`,
+    // but ListInput only knows `max_items`/`per_page`/`glob_pattern`/`mode`.
+    // Without cross-mapping these fields are silently dropped and the agent
+    // loops (checkpoint turn_606: 37-message loop on "what's in this repo?").
+
+    #[test]
+    fn normalize_list_maps_max_results_to_per_page_and_max_items() {
+        let result = normalize_unified_search_args(&json!({
+            "action": "list",
+            "path": ".",
+            "max_results": 1000
+        }));
+        assert_eq!(
+            result["per_page"], 1000,
+            "max_results should map to per_page"
+        );
+        assert_eq!(
+            result["max_items"], 1000,
+            "max_results should map to max_items"
+        );
+    }
+
+    #[test]
+    fn normalize_list_preserves_explicit_per_page_over_max_results() {
+        let result = normalize_unified_search_args(&json!({
+            "action": "list",
+            "path": ".",
+            "max_results": 1000,
+            "per_page": 50
+        }));
+        assert_eq!(
+            result["per_page"], 50,
+            "explicit per_page should not be overridden by max_results"
+        );
+        assert_eq!(
+            result["max_items"], 1000,
+            "max_items should still be set from max_results"
+        );
+    }
+
+    #[test]
+    fn normalize_list_maps_globs_string_to_pattern() {
+        let result = normalize_unified_search_args(&json!({
+            "action": "list",
+            "path": ".",
+            "globs": "**/*.rs"
+        }));
+        assert_eq!(
+            result["pattern"], "**/*.rs",
+            "globs string should map to pattern (serde alias for glob_pattern)"
+        );
+    }
+
+    #[test]
+    fn normalize_list_maps_globs_array_first_element_to_pattern() {
+        let result = normalize_unified_search_args(&json!({
+            "action": "list",
+            "path": ".",
+            "globs": ["**/*.rs", "**/*.toml"]
+        }));
+        assert_eq!(
+            result["pattern"], "**/*.rs",
+            "globs array first element should map to pattern"
+        );
+    }
+
+    #[test]
+    fn normalize_list_preserves_explicit_pattern_over_globs() {
+        let result = normalize_unified_search_args(&json!({
+            "action": "list",
+            "path": ".",
+            "pattern": "src/**/*.rs",
+            "globs": "**/*.toml"
+        }));
+        assert_eq!(
+            result["pattern"], "src/**/*.rs",
+            "explicit pattern should not be overridden by globs"
+        );
+    }
+
+    #[test]
+    fn normalize_list_maps_format_tree_to_mode() {
+        let result = normalize_unified_search_args(&json!({
+            "action": "list",
+            "path": ".",
+            "format": "tree"
+        }));
+        assert_eq!(
+            result["mode"], "tree",
+            "format:tree should map to mode:tree (valid list mode)"
+        );
+    }
+
+    #[test]
+    fn normalize_list_maps_format_recursive_to_mode() {
+        let result = normalize_unified_search_args(&json!({
+            "action": "list",
+            "path": ".",
+            "format": "recursive"
+        }));
+        assert_eq!(
+            result["mode"], "recursive",
+            "format:recursive should map to mode:recursive"
+        );
+    }
+
+    #[test]
+    fn normalize_list_does_not_map_format_github_to_mode() {
+        let result = normalize_unified_search_args(&json!({
+            "action": "list",
+            "path": ".",
+            "format": "github"
+        }));
+        assert!(
+            result.get("mode").is_none(),
+            "format:github is a scan-only enum value, not a list mode"
+        );
+    }
+
+    #[test]
+    fn normalize_list_preserves_explicit_mode_over_format() {
+        let result = normalize_unified_search_args(&json!({
+            "action": "list",
+            "path": ".",
+            "mode": "largest",
+            "format": "tree"
+        }));
+        assert_eq!(
+            result["mode"], "largest",
+            "explicit mode should not be overridden by format"
+        );
+    }
+
+    #[test]
+    fn normalize_list_full_cross_mapping() {
+        // Reproduces the exact args pattern from checkpoint turn_606 that
+        // caused the 37-message loop: all three dropped fields in one call.
+        let result = normalize_unified_search_args(&json!({
+            "action": "list",
+            "path": "/Users/example/vtcode",
+            "globs": "**/*",
+            "max_results": 1000,
+            "format": "tree"
+        }));
+        assert_eq!(result["pattern"], "**/*");
+        assert_eq!(result["per_page"], 1000);
+        assert_eq!(result["max_items"], 1000);
+        assert_eq!(result["mode"], "tree");
+    }
+
+    #[test]
+    fn normalize_non_list_action_does_not_cross_map() {
+        let result = normalize_unified_search_args(&json!({
+            "action": "grep",
+            "pattern": "TODO",
+            "max_results": 100
+        }));
+        assert!(
+            result.get("per_page").is_none(),
+            "max_results should not map to per_page for non-list actions"
+        );
+        assert!(
+            result.get("max_items").is_none(),
+            "max_results should not map to max_items for non-list actions"
+        );
     }
 }

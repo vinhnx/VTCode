@@ -8,9 +8,9 @@ This document describes the canonical public tool surface exposed to VT Code mod
   Purpose: Read-only discovery and lookup across the workspace and related runtime state.
   Actions:
   - `grep`: broad text search
-  - `list`: file discovery
+  - `list`: file discovery (paginated, default 20/page — use `max_results` for more; `globs` and `format` are cross-mapped to `pattern` and `mode`)
   - `structural`: syntax-aware code search via local ast-grep (`sg`); requires a pattern/kind
-  - `outline`: token-efficient symbol map of a file/directory via `ast-grep outline` (>= 0.44.0); no pattern needed, default `view=digest`. Use for "what's in this file?" before reading full source. See `docs/development/grep-tool-guide.md` "Outline mode".
+  - `outline`: token-efficient symbol map of a file/directory via `ast-grep outline` (>= 0.44.0); no pattern needed, default `view=digest`. **Preferred for "what's here?" / repo or directory overview.** Use for "what's in this file?" before reading full source. See `docs/development/grep-tool-guide.md` "Outline mode".
   - `tools`: tool discovery
   - `errors`: archived/current error lookup
   - `agent`: agent/runtime info
@@ -118,8 +118,11 @@ When byte-range parameters are provided, VT Code uses seek-based access for effi
 
 ### `list`
 
-- Optional: `path` (default `"."`), `mode`, `max_results`
+- Optional: `path` (default `"."`), `mode`, `max_results`, `globs`, `format`, `page`, `per_page`
+- Parameter mapping: `max_results` → `per_page` + `max_items`; `globs` → `pattern` (glob filter); `format` → `mode` when the value is a valid list mode (`tree`, `recursive`, etc.)
+- Pagination: default 20 items/page. Use `max_results` (or `per_page`) to increase page size, `page` for subsequent pages.
 - Use when: you need file names, directories, or tree-style discovery
+- For a code-structure overview of a directory, prefer `action=outline` (token-efficient symbol map) over `action=list`
 
 ### `structural`
 

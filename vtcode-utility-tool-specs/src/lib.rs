@@ -277,7 +277,7 @@ pub fn unified_search_parameters() -> Value {
             "action": {
                 "type": "string",
                 "enum": ["grep", "list", "structural", "outline", "tools", "errors", "agent", "web", "skill"],
-                "description": "Search action: grep (text), list (files), structural (ast-grep pattern search), outline (ast-grep symbol map of a file/directory, no pattern needed), tools, errors, agent, web, skill. For 'web', provide 'query' to search the web, or 'url' to fetch a specific page."
+                "description": "Search action: grep (text), list (files; paginated, default 20/page — use max_results for more), structural (ast-grep pattern search), outline (symbol map of a file/directory, no pattern needed — preferred for 'what's here?' / repo or directory overview), tools, errors, agent, web, skill. For 'web', provide 'query' to search the web, or 'url' to fetch a specific page."
             },
             "workflow": {
                 "type": "string",
@@ -525,6 +525,20 @@ mod tests {
                 .as_str()
                 .expect("action description")
                 .contains("structural")
+        );
+        assert!(
+            params["properties"]["action"]["description"]
+                .as_str()
+                .expect("action description")
+                .contains("preferred"),
+            "action description should mark outline as preferred for repo overview"
+        );
+        assert!(
+            params["properties"]["action"]["description"]
+                .as_str()
+                .expect("action description")
+                .contains("paginated"),
+            "action description should warn that list is paginated"
         );
         assert!(
             params["properties"]["pattern"]["description"]

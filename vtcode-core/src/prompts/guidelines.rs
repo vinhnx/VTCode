@@ -56,7 +56,12 @@ pub fn generate_tool_guidelines(
     if has_search && has_exec {
         lines.push("- Prefer search over shell for exploration.".to_string());
         lines.push(
-            "- Use `unified_search` `action=structural` for code shape; `action=outline` for a symbol map. Set `lang`; `format=github`. Grep text."
+            "- `action=outline` for \"what's here?\" (symbol map, no pattern needed); `action=structural` for code shape; `action=grep` for text. Set `lang` for structural/outline."
+                .to_string(),
+        );
+    } else if has_search {
+        lines.push(
+            "- `action=outline` for \"what's here?\" (symbol map); `action=list` for file listing (paginated)."
                 .to_string(),
         );
     }
@@ -298,7 +303,7 @@ mod tests {
         assert!(guidelines.contains("Prefer search over shell"));
         assert!(guidelines.contains("action=structural"));
         assert!(guidelines.contains("action=outline"));
-        assert!(guidelines.contains("format=github"));
+        assert!(guidelines.contains("action=grep"));
         assert!(guidelines.contains("git diff -- <path>"));
         assert!(guidelines.contains("Completion is a checkpoint"));
     }
@@ -424,7 +429,7 @@ mod tests {
         ];
         let guidelines = generate_tool_guidelines(&tools, None);
         let approx_tokens = guidelines.len() / 4;
-        assert!(approx_tokens < 145, "got ~{approx_tokens} tokens");
+        assert!(approx_tokens < 160, "got ~{approx_tokens} tokens");
     }
 
     #[test]
