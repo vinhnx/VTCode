@@ -50,9 +50,7 @@ impl VTCodeGitignore {
 
         let matcher = builder.build().unwrap_or_else(|_| {
             // Fallback to empty matcher on build error
-            GitignoreBuilder::new(root_dir)
-                .build()
-                .expect("empty gitignore builder should always succeed")
+            Gitignore::empty()
         });
 
         Ok(Self {
@@ -137,9 +135,7 @@ impl VTCodeGitignore {
 impl Default for VTCodeGitignore {
     fn default() -> Self {
         let root_dir = PathBuf::new();
-        let matcher = GitignoreBuilder::new(&root_dir)
-            .build()
-            .expect("empty gitignore builder should always succeed");
+        let matcher = Gitignore::empty();
         Self {
             root_dir,
             matcher,

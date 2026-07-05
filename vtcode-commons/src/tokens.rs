@@ -11,22 +11,33 @@
 use std::sync::OnceLock;
 use tiktoken::CoreBpe;
 
-/// Return the process-global `cl100k_base` BPE instance.
+/// Return the process-global `cl100k_base` BPE instance, if it could be loaded.
 ///
 /// Loaded once on first call; all subsequent calls return the same reference.
-fn bpe() -> &'static CoreBpe {
-    static BPE: OnceLock<&CoreBpe> = OnceLock::new();
-    BPE.get_or_init(|| tiktoken::get_encoding("cl100k_base").expect("failed to load cl100k_base"))
+/// Returns `None` only if the builtin encoding fails to load, in which case
+/// callers fall back to a character-based heuristic rather than panicking.
+fn bpe() -> Option<&'static CoreBpe> {
+    static BPE: OnceLock<Option<&'static CoreBpe>> = OnceLock::new();
+    *BPE.get_or_init(|| tiktoken::get_encoding("cl100k_base"))
+}
+
+/// Approximate token count from character length (~4 chars per token).
+fn heuristic_token_count(text: &str) -> usize {
+    text.len().div_ceil(4)
 }
 
 /// Count the number of tokens in `text` using tiktoken BPE.
 ///
-/// Returns 0 for empty strings.
+/// Returns 0 for empty strings. Falls back to a character-based heuristic if
+/// the BPE tokenizer is unavailable.
 pub fn estimate_tokens(text: &str) -> usize {
     if text.is_empty() {
         return 0;
     }
-    bpe().count(text)
+    match bpe() {
+        Some(bpe) => bpe.count(text),
+        None => heuristic_token_count(text),
+    }
 }
 
 /// Truncate `text` to at most `max_tokens` tokens.
@@ -38,23 +49,26 @@ pub fn truncate_to_tokens(text: &str, max_tokens: usize) -> String {
     if max_tokens == 0 || text.is_empty() {
         return String::new();
     }
-    let tokens = bpe().encode_with_special_tokens(text);
+    // Byte-level fallback used when BPE is unavailable or decode fails.
+    let byte_truncate = || {
+        let end = (max_tokens * 4).min(text.len());
+        let mut end = end;
+        while end > 0 && !text.is_char_boundary(end) {
+            end -= 1;
+        }
+        let mut result = text[..end].to_string();
+        result.push_str("...");
+        result
+    };
+    let Some(bpe) = bpe() else {
+        return byte_truncate();
+    };
+    let tokens = bpe.encode_with_special_tokens(text);
     if tokens.len() <= max_tokens {
         return text.to_string();
     }
-    bpe()
-        .decode_to_string(&tokens[..max_tokens])
-        .unwrap_or_else(|_| {
-            // Byte-level fallback (should never fire for valid UTF-8).
-            let end = (max_tokens * 4).min(text.len());
-            let mut end = end;
-            while end > 0 && !text.is_char_boundary(end) {
-                end -= 1;
-            }
-            let mut result = text[..end].to_string();
-            result.push_str("...");
-            result
-        })
+    bpe.decode_to_string(&tokens[..max_tokens])
+        .unwrap_or_else(|_| byte_truncate())
 }
 
 #[cfg(test)]
