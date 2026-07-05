@@ -224,6 +224,22 @@ async fn outline_full_passes_through_records() {
     assert_eq!(members.len(), 1);
     assert_eq!(members[0]["name"], "x");
     assert_eq!(members[0]["kind"], "field");
+    // `full` view must preserve the raw zero-based `range`, the derived
+    // 1-based `lineRange` (for `unified_file read` pagination), and `astKind`
+    // for both items and members — the contract advertised these but they were
+    // previously discarded during deserialization.
+    // alpha: range lines 0..=0 (0-based) -> lineRange {1, 1}.
+    assert_eq!(items[0]["astKind"], "function_item");
+    assert_eq!(items[0]["lineRange"], json!({"start": 1, "end": 1}));
+    assert_eq!(items[0]["range"]["start"]["line"], 0);
+    // Foo: range lines 1..=3 (0-based) -> lineRange {2, 4}.
+    assert_eq!(items[1]["astKind"], "struct_item");
+    assert_eq!(items[1]["lineRange"], json!({"start": 2, "end": 4}));
+    assert_eq!(items[1]["range"]["byteOffset"]["start"], 11);
+    // member x: range line 2 (0-based) -> lineRange {3, 3}; astKind preserved.
+    assert_eq!(members[0]["astKind"], "field_definition");
+    assert_eq!(members[0]["lineRange"], json!({"start": 3, "end": 3}));
+    assert_eq!(members[0]["isPublic"], true);
 }
 
 #[tokio::test]
@@ -288,6 +304,15 @@ async fn outline_directory_emits_summary_block() {
     assert_eq!(summary["by_lang"]["Rust"], json!(2));
     assert_eq!(summary["by_kind"]["function"], json!(2));
     assert_eq!(summary["by_kind"]["struct"], json!(1));
+    // `by_kind` counts symbols (not files/groups), so per-kind counts sum to
+    // `total_symbols`.
+    let by_kind_sum: i64 = summary["by_kind"]
+        .as_object()
+        .expect("by_kind object")
+        .values()
+        .map(|v| v.as_i64().unwrap_or(0))
+        .sum();
+    assert_eq!(by_kind_sum, 3, "sum(by_kind) must equal total_symbols");
     let all_symbols = summary["all_symbols"]
         .as_array()
         .expect("all_symbols array");
@@ -332,6 +357,12 @@ fn has_source_extension_detects_common_extensions() {
     assert!(has_source_extension("main.py"));
     assert!(has_source_extension("app.tsx"));
     assert!(has_source_extension("App.JAVA")); // case-insensitive
+    // Newly added extensions for the tolerant directory fallback.
+    assert!(has_source_extension("Program.cs"));
+    assert!(has_source_extension("lib.ex"));
+    assert!(has_source_extension("view.zig"));
+    assert!(has_source_extension("schema.graphql"));
+    assert!(has_source_extension("Component.vue"));
     assert!(!has_source_extension("src/registry"));
     assert!(!has_source_extension("Cargo.toml"));
     assert!(!has_source_extension("README.md"));
@@ -432,5 +463,166 @@ async fn outline_no_hints_when_all_params_recognized() {
     assert!(
         result.get("hints").is_none(),
         "no hints should be emitted when all params are recognized"
+    );
+}
+
+// ── Summary cap: large symbol counts ───────────────────────────────────
+
+/// Build a one-file NDJSON stream with `n` function symbols so the directory
+/// `summary.all_symbols` cap (`MAX_SUMMARY_SYMBOLS`) can be exercised without
+/// a giant literal fixture.
+fn stream_with_n_symbols(n: usize) -> String {
+    let mut items = String::new();
+    for i in 0..n {
+        let line = i;
+        items.push_str(&format!(
+            r#"{{"role":"item","symbolType":"function","name":"f{i}","range":{{"byteOffset":{{"start":{line},"end":{line}}},"start":{{"line":{line},"column":0}},"end":{{"line":{line},"column":2}}}},"signature":"fn f{i}()","astKind":"function_item","isImport":false,"isExported":false,"members":[]}}"#
+        ));
+        if i + 1 < n {
+            items.push(',');
+        }
+    }
+    format!(r#"{{"path":"src/big.rs","language":"Rust","items":[{items}]}}"#)
+}
+
+/// Build an N-file NDJSON stream (one function per file) for the large-
+/// directory `view=full` auto-downgrade test.
+fn stream_with_n_files(n: usize) -> String {
+    let mut out = String::new();
+    for i in 0..n {
+        out.push_str(&format!(
+            r#"{{"path":"src/m{i}.rs","language":"Rust","items":[{{"role":"item","symbolType":"function","name":"m{i}","range":{{"byteOffset":{{"start":0,"end":2}},"start":{{"line":0,"column":0}},"end":{{"line":0,"column":2}}}},"signature":"fn m{i}()","astKind":"function_item","isImport":false,"isExported":true,"members":[]}}]}}"#
+        ));
+        out.push('\n');
+    }
+    out
+}
+
+#[tokio::test]
+#[serial]
+async fn outline_directory_caps_all_symbols_and_marks_truncated() {
+    // 250 symbols exceeds MAX_SUMMARY_SYMBOLS (200): the visible array is
+    // capped, `total_symbols` stays accurate, and `truncated`/`visible_symbols`
+    // are set with a narrowed `next_action`.
+    let (_script_dir, script_path) = write_fake_sg(&stream_with_n_symbols(250));
+    let _override = set_ast_grep_binary_override_for_tests(Some(script_path));
+    let temp = workspace_with_source();
+
+    let result = execute_outline_search(temp.path(), json!({"action": "outline", "path": "src"}))
+        .await
+        .expect("capped directory outline ok");
+
+    let summary = result.get("summary").expect("summary block");
+    assert_eq!(summary["total_symbols"], json!(250), "true count preserved");
+    assert_eq!(summary["truncated"], json!(true));
+    assert_eq!(summary["visible_symbols"], json!(200));
+    let all_symbols = summary["all_symbols"]
+        .as_array()
+        .expect("all_symbols array");
+    assert_eq!(all_symbols.len(), 200, "visible array capped");
+    assert_eq!(all_symbols[0]["name"], "f0");
+    assert_eq!(all_symbols[199]["name"], "f199");
+    assert!(
+        summary["next_action"]
+            .as_str()
+            .is_some_and(|s| s.contains("Narrow with `type`")),
+        "truncated next_action should guide narrowing, got: {:?}",
+        summary["next_action"]
+    );
+    // `by_kind` must still sum to the true total (250 functions counted).
+    let by_kind_sum: i64 = summary["by_kind"]
+        .as_object()
+        .expect("by_kind object")
+        .values()
+        .map(|v| v.as_i64().unwrap_or(0))
+        .sum();
+    assert_eq!(by_kind_sum, 250);
+}
+
+#[tokio::test]
+#[serial]
+async fn outline_directory_not_truncated_under_cap() {
+    // 50 symbols is under the cap: no `truncated`/`visible_symbols` fields.
+    let (_script_dir, script_path) = write_fake_sg(&stream_with_n_symbols(50));
+    let _override = set_ast_grep_binary_override_for_tests(Some(script_path));
+    let temp = workspace_with_source();
+
+    let result = execute_outline_search(temp.path(), json!({"action": "outline", "path": "src"}))
+        .await
+        .expect("directory outline ok");
+
+    let summary = result.get("summary").expect("summary block");
+    assert_eq!(summary["total_symbols"], json!(50));
+    assert!(
+        summary.get("truncated").is_none(),
+        "no truncated flag under the cap"
+    );
+    assert_eq!(
+        summary["all_symbols"]
+            .as_array()
+            .expect("all_symbols")
+            .len(),
+        50
+    );
+}
+
+// ── Large-directory `view=full` auto-downgrade ─────────────────────────
+
+#[tokio::test]
+#[serial]
+async fn outline_large_directory_full_view_auto_downgrades_to_names() {
+    // >LARGE_DIR_FULL_VIEW_THRESHOLD (20) files with an explicit `view=full`
+    // should auto-downgrade to `names` and emit a hint explaining it.
+    let (_script_dir, script_path) = write_fake_sg(&stream_with_n_files(25));
+    let _override = set_ast_grep_binary_override_for_tests(Some(script_path));
+    let temp = workspace_with_source();
+
+    let result = execute_outline_search(
+        temp.path(),
+        json!({"action": "outline", "path": "src", "view": "full"}),
+    )
+    .await
+    .expect("downgrade outline ok");
+
+    assert_eq!(result["view"], "names", "full should downgrade to names");
+    let hints = result["hints"].as_array().expect("hints array");
+    assert!(
+        hints
+            .iter()
+            .any(|h| h.as_str().is_some_and(|s| s.contains("Auto-downgraded"))),
+        "should hint about the auto-downgrade, got: {hints:?}"
+    );
+    assert!(result.get("summary").is_some(), "summary still attached");
+}
+
+// ── Hints for grep-only params ─────────────────────────────────────────
+
+#[tokio::test]
+#[serial]
+async fn outline_emits_hint_for_ignored_grep_only_params() {
+    let (_script_dir, script_path) = write_fake_sg(TWO_FILE_STREAM);
+    let _override = set_ast_grep_binary_override_for_tests(Some(script_path));
+    let temp = workspace_with_source();
+
+    let result = execute_outline_search(
+        temp.path(),
+        json!({
+            "action": "outline",
+            "path": "src",
+            "context_lines": 3,
+            "case_sensitive": true,
+        }),
+    )
+    .await
+    .expect("outline should succeed even with ignored grep params");
+
+    let hints = result["hints"].as_array().expect("hints array");
+    assert!(
+        hints
+            .iter()
+            .any(|h| h.as_str().is_some_and(|s| s.contains("`context_lines`")
+                && s.contains("`case_sensitive`")
+                && s.contains("not used by outline"))),
+        "should list the ignored grep-only params, got: {hints:?}"
     );
 }

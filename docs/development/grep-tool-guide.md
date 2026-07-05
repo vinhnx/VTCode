@@ -378,8 +378,20 @@ types), `match` (name regex), `items` (`auto` | `structure` | `exports` |
 - `digest` (default): symbols grouped by kind per file, with flat member
   names. ~100-300 bytes for a typical file.
 - `names`: grouped names only, no members.
-- `full`: per-symbol records with ranges, signatures, `astKind`, and nested
-  members (passthrough of the ast-grep JSON).
+- `full`: per-symbol records with the raw zero-based `range`, a derived
+  1-based inclusive `lineRange` (`{start, end}` — usable directly with
+  `unified_file read` `offset_lines`/`page_size_lines`), signatures,
+  `astKind`, and nested members (members also carry `astKind`/`range`/`lineRange`).
+
+Directory results also include a top-level `summary` with `total_symbols`,
+`by_kind` (per-kind symbol counts summing to `total_symbols`), and
+`all_symbols` (flat symbol list capped at 200 entries). When the cap is hit,
+`summary.truncated` is `true` and `summary.visible_symbols` reports the
+visible count — narrow with `type` or `match`, or outline a specific file.
+Grep/structural-only params (`glob_pattern`, `case_sensitive`, `literal`,
+`context_lines`, `files_with_matches`, `type_pattern`, `max_file_size`) and
+`format`/`max_results` are not used by outline; a `hints` array in the result
+lists which were ignored.
 
 `outline` and `structural` shell out to the same resolved `ast-grep` binary.
 On a missing binary, both actions **auto-install ast-grep on first use** by

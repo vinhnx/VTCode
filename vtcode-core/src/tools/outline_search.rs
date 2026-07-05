@@ -33,6 +33,14 @@ const SUPPORTED_VIEWS: &[&str] = &["digest", "names", "full"];
 /// → retry → tools disabled → no final answer).
 const LARGE_DIR_FULL_VIEW_THRESHOLD: usize = 20;
 
+/// Cap on the number of entries emitted in the directory `summary.all_symbols`
+/// array. Beyond this the array is truncated and `summary.truncated` /
+/// `summary.visible_symbols` are set so the agent knows to narrow with `type`
+/// or `match`, or outline a specific file, rather than relying on an
+/// incomplete list — preventing the token-bloat → truncation → retry loop
+/// that the `view` auto-downgrade already guards against.
+const MAX_SUMMARY_SYMBOLS: usize = 200;
+
 /// Hint emitted when `format` is passed to outline (it's a structural
 /// scan-only field, not used by outline).
 const HINT_FORMAT_IGNORED: &str = "Parameter `format` is not used by outline (it is a structural scan-only field). It was ignored.";
@@ -199,60 +207,90 @@ fn get_string_or_array_field(obj: &Map<String, Value>, key: &str) -> Result<Opti
     }
 }
 
-/// Entry point invoked by `execute_unified_search` for `action=outline`.
-pub async fn execute_outline_search(workspace_root: &Path, args: Value) -> Result<Value> {
-    let mut request = OutlineRequest::from_args(&args)?;
-    let ast_grep = AstGrepStatus::resolve_or_install()
-        .await
-        .map_err(|reason| anyhow!("Outline requires ast-grep (`sg`). {reason}"))?;
+/// Whether the caller explicitly passed a non-empty `view` parameter.
+/// Matches `OutlineView::parse`'s empty-string handling: `view: ""` is
+/// treated as "not explicit" so directory auto-tuning still applies.
+fn view_is_explicit(args: &Value) -> bool {
+    args.as_object()
+        .and_then(|obj| obj.get("view"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .is_some_and(|s| !s.is_empty())
+}
 
-    // Resolve the search path within the workspace. `resolve_workspace_path`
-    // canonicalizes and enforces workspace containment, so a missing path
-    // surfaces as a structured error rather than a panic.
-    //
-    // Tolerant fallback: when the path ends with `.rs` (or another source
-    // extension) but doesn't exist as a file, retry without the extension —
-    // the agent often passes `path: "foo/bar.rs"` when `foo/bar` is actually a
-    // directory (checkpoint turn_595/turn_597: `vtcode-core/src/tools/registry.rs`
-    // → directory `vtcode-core/src/tools/registry`).
-    let resolved = resolve_workspace_path(workspace_root, Path::new(&request.path))
+/// Resolve the outline search path within the workspace, with a tolerant
+/// fallback: when the path ends with a source extension (`.rs`, `.py`, etc.)
+/// but doesn't exist as a file, retry without the extension — the agent often
+/// passes `path: "foo/bar.rs"` when `foo/bar` is actually a directory
+/// (checkpoint turn_595/turn_597).
+fn resolve_outline_path(workspace_root: &Path, request_path: &str) -> Result<std::path::PathBuf> {
+    resolve_workspace_path(workspace_root, Path::new(request_path))
         .or_else(|_| {
-            if has_source_extension(&request.path) {
-                let stem = strip_extension(&request.path);
+            if has_source_extension(request_path) {
+                let stem = strip_extension(request_path);
                 resolve_workspace_path(workspace_root, Path::new(&stem))
             } else {
-                Err(anyhow!("Failed to resolve outline path: {}", request.path))
+                Err(anyhow!("Failed to resolve outline path: {request_path}"))
             }
         })
-        .with_context(|| format!("Failed to resolve outline path: {}", request.path))?;
+        .with_context(|| format!("Failed to resolve outline path: {request_path}"))
+}
 
-    // Collect hints for unrecognized parameters so the agent gets feedback
-    // instead of silently dropped fields (checkpoint turn_586/594: `format:
-    // "github"` ignored; turn_595: `max_results: 80` ignored).
+/// Collect hints for unrecognized parameters so the agent gets feedback
+/// instead of silently dropped fields. Returns hints for `format`,
+/// `max_results`, and any grep/structural-only filtering params.
+fn collect_outline_hints(args: &Value) -> Vec<String> {
     let mut hints: Vec<String> = Vec::new();
-    if let Some(obj) = args.as_object() {
-        if obj.get("format").is_some() {
-            hints.push(HINT_FORMAT_IGNORED.to_string());
-        }
-        if obj.get("max_results").is_some() {
-            hints.push(HINT_MAX_RESULTS_IGNORED.to_string());
-        }
+    let Some(obj) = args.as_object() else {
+        return hints;
+    };
+    if obj.get("format").is_some() {
+        hints.push(HINT_FORMAT_IGNORED.to_string());
     }
-
-    // Auto-tune the output for directory queries: when the user asks for an
-    // outline of a directory, default to `view=names` (less verbose than
-    // `digest`, no member lists) and emit a top-level `summary` block that
-    // gives the model the symbol counts it usually wants when answering
-    // "what's in this directory?" in a single tool call.
-    let is_directory = resolved.is_dir();
-    let was_view_explicit = args.as_object().and_then(|obj| obj.get("view")).is_some();
-    if is_directory && !was_view_explicit {
-        request.view = OutlineView::Names;
+    if obj.get("max_results").is_some() {
+        hints.push(HINT_MAX_RESULTS_IGNORED.to_string());
     }
+    // Grep/structural-only filtering params that outline does not consume.
+    // Emit one combined hint listing every offender so the agent gets
+    // actionable feedback instead of silently-dropped fields.
+    let ignored_grep_params: Vec<&str> = [
+        "glob_pattern",
+        "glob",
+        "globs",
+        "case_sensitive",
+        "literal",
+        "context_lines",
+        "files_with_matches",
+        "type_pattern",
+        "max_file_size",
+    ]
+    .into_iter()
+    .filter(|p| obj.get(*p).is_some())
+    .collect();
+    if !ignored_grep_params.is_empty() {
+        hints.push(format!(
+            "Parameters {} are grep/structural fields and are not used by outline. They \
+             were ignored. Use `type` to filter symbol kinds, `match` to filter by name \
+             regex, or `items` to select structure/exports/imports.",
+            ignored_grep_params
+                .iter()
+                .map(|p| format!("`{p}`"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
+    }
+    hints
+}
 
-    let command_arg = command_path_arg(workspace_root, &resolved);
-
-    let mut command = Command::new(&ast_grep);
+/// Build the `ast-grep outline --json=stream` command from the resolved
+/// request. Pure construction — does not execute.
+fn build_outline_command(
+    ast_grep: &Path,
+    workspace_root: &Path,
+    request: &OutlineRequest,
+    command_arg: &str,
+) -> Command {
+    let mut command = Command::new(ast_grep);
     command.current_dir(workspace_root).arg("outline");
     command.arg("--json=stream");
     if let Some(lang) = request.lang.as_deref().filter(|s| !s.trim().is_empty()) {
@@ -271,7 +309,34 @@ pub async fn execute_outline_search(workspace_root: &Path, args: Value) -> Resul
     if request.follow {
         command.arg("--follow");
     }
-    command.arg(&command_arg);
+    command.arg(command_arg);
+    command
+}
+
+/// Entry point invoked by `execute_unified_search` for `action=outline`.
+pub async fn execute_outline_search(workspace_root: &Path, args: Value) -> Result<Value> {
+    let mut request = OutlineRequest::from_args(&args)?;
+    let ast_grep = AstGrepStatus::resolve_or_install()
+        .await
+        .map_err(|reason| anyhow!("Outline requires ast-grep (`sg`). {reason}"))?;
+
+    let resolved = resolve_outline_path(workspace_root, &request.path)?;
+
+    let mut hints = collect_outline_hints(&args);
+
+    // Auto-tune the output for directory queries: when the user asks for an
+    // outline of a directory, default to `view=names` (less verbose than
+    // `digest`, no member lists) and emit a top-level `summary` block that
+    // gives the model the symbol counts it usually wants when answering
+    // "what's in this directory?" in a single tool call.
+    let is_directory = resolved.is_dir();
+    let was_view_explicit = view_is_explicit(&args);
+    if is_directory && !was_view_explicit {
+        request.view = OutlineView::Names;
+    }
+
+    let command_arg = command_path_arg(workspace_root, &resolved);
+    let mut command = build_outline_command(&ast_grep, workspace_root, &request, &command_arg);
 
     let output = command
         .output()
@@ -304,10 +369,21 @@ pub async fn execute_outline_search(workspace_root: &Path, args: Value) -> Resul
         request.view = OutlineView::Names;
     }
 
+    // Compute the directory summary from typed data before `shape_outline_result`
+    // consumes `files`. The summary is view-independent (always walks
+    // `file.items`), so the auto-downgrade above doesn't affect it.
+    let summary = if is_directory {
+        Some(compute_directory_summary(&files, &request.path))
+    } else {
+        None
+    };
+
     let mut result = shape_outline_result(request.view, files)?;
 
-    if is_directory {
-        attach_directory_summary(&mut result, &request);
+    if let Some(summary) = summary {
+        if let Some(obj) = result.as_object_mut() {
+            obj.insert("summary".to_string(), summary);
+        }
     }
 
     // Attach collected hints to the result so the agent gets feedback about
@@ -321,117 +397,84 @@ pub async fn execute_outline_search(workspace_root: &Path, args: Value) -> Resul
     Ok(result)
 }
 
-/// Attach a directory-level `summary` block to the outline result. The
-/// summary includes total file count, breakdown by language, and a flat list
-/// of every top-level symbol name+kind across the directory. This lets the
-/// model answer "list all functions and structs in this directory" in a
-/// single tool call without re-extracting symbols file-by-file.
-fn attach_directory_summary(result: &mut Value, request: &OutlineRequest) {
-    let Some(obj) = result.as_object_mut() else {
-        return;
-    };
-    let Some(files) = obj.get("files").and_then(Value::as_array).cloned() else {
-        return;
-    };
-
+/// Compute a directory-level `summary` block from the parsed ast-grep records.
+///
+/// Pure function of the typed `&[OutlineFile]` slice — no re-parsing of shaped
+/// JSON, no branching on view. This makes it independently testable and
+/// ensures `by_kind`, `all_symbols[].kind`, and `total_symbols` are all
+/// derived from a single source of truth (fixing the previous inconsistency
+/// where `all_symbols[].kind` could be empty while `by_kind` counted it under
+/// `"item"`).
+fn compute_directory_summary(files: &[OutlineFile], request_path: &str) -> Value {
     let mut by_lang: BTreeMap<String, usize> = BTreeMap::new();
     let mut by_kind: BTreeMap<String, usize> = BTreeMap::new();
     let mut all_symbols: Vec<Value> = Vec::new();
     let mut total_items = 0usize;
 
-    for file in &files {
-        let path = file
-            .get("path")
-            .and_then(Value::as_str)
-            .unwrap_or_default()
-            .to_string();
-        let lang = file
-            .get("lang")
-            .and_then(Value::as_str)
-            .unwrap_or_default()
-            .to_string();
+    for file in files {
         *by_lang
-            .entry(if lang.is_empty() {
+            .entry(if file.lang.is_empty() {
                 "unknown".to_string()
             } else {
-                lang.clone()
+                file.lang.clone()
             })
             .or_default() += 1;
 
-        // Both `digest`/`names` views expose `groups` and `full` exposes
-        // `items`. Walk both shapes uniformly.
-        if let Some(groups) = file.get("groups").and_then(Value::as_array) {
-            for group in groups {
-                let kind = group
-                    .get("kind")
-                    .and_then(Value::as_str)
-                    .unwrap_or_default()
-                    .to_string();
-                *by_kind
-                    .entry(if kind.is_empty() {
-                        "item".to_string()
-                    } else {
-                        kind.clone()
-                    })
-                    .or_default() += 1;
-                if let Some(names) = group.get("names").and_then(Value::as_array) {
-                    for name in names {
-                        if let Some(name_str) = name.as_str() {
-                            all_symbols.push(json!({
-                                "path": path,
-                                "lang": lang,
-                                "kind": kind,
-                                "name": name_str,
-                            }));
-                            total_items += 1;
-                        }
-                    }
-                }
+        for item in &file.items {
+            if item.name.is_empty() {
+                continue;
             }
-        } else if let Some(items) = file.get("items").and_then(Value::as_array) {
-            for item in items {
-                let kind = item
-                    .get("kind")
-                    .and_then(Value::as_str)
-                    .unwrap_or_default()
-                    .to_string();
-                let name = item
-                    .get("name")
-                    .and_then(Value::as_str)
-                    .unwrap_or_default()
-                    .to_string();
-                *by_kind
-                    .entry(if kind.is_empty() {
-                        "item".to_string()
-                    } else {
-                        kind.clone()
-                    })
-                    .or_default() += 1;
-                if !name.is_empty() {
-                    all_symbols.push(json!({
-                        "path": path,
-                        "lang": lang,
-                        "kind": kind,
-                        "name": name,
-                    }));
-                    total_items += 1;
-                }
+            let kind_key = if item.symbol_type.is_empty() {
+                "item"
+            } else {
+                &item.symbol_type
+            };
+            if all_symbols.len() < MAX_SUMMARY_SYMBOLS {
+                all_symbols.push(json!({
+                    "path": file.path,
+                    "lang": file.lang,
+                    "kind": kind_key,
+                    "name": item.name,
+                }));
             }
+            *by_kind.entry(kind_key.to_string()).or_default() += 1;
+            total_items += 1;
         }
     }
 
-    let summary = json!({
-        "path": request.path,
+    let truncated = total_items > all_symbols.len();
+    let visible_symbols = all_symbols.len();
+    let next_action = if truncated {
+        format!(
+            "The directory has {total_items} symbols but only the first {visible_symbols} are \
+             shown in `summary.all_symbols` (cap: {MAX_SUMMARY_SYMBOLS}). Narrow with `type` to \
+             filter symbol kinds or `match` to filter by name, or outline a specific \
+             file/sub-directory. Synthesize your final answer from the `summary` counts and the \
+             `files` arrays above."
+        )
+    } else {
+        "The directory outline is complete. Synthesize your final answer from the `summary.all_symbols` and `files` arrays above — no further tool calls needed for an overview.".to_string()
+    };
+
+    let mut summary = json!({
+        "path": request_path,
         "is_directory": true,
         "file_count": files.len(),
         "total_symbols": total_items,
         "by_lang": by_lang,
         "by_kind": by_kind,
         "all_symbols": all_symbols,
-        "next_action": "The directory outline is complete. Synthesize your final answer from the `summary.all_symbols` and `files` arrays above — no further tool calls needed for an overview.",
+        "next_action": next_action,
     });
 
-    obj.insert("summary".to_string(), summary);
+    if truncated {
+        if let Some(summary_obj) = summary.as_object_mut() {
+            summary_obj.insert("truncated".to_string(), json!(true));
+            summary_obj.insert("visible_symbols".to_string(), json!(visible_symbols));
+        }
+    }
+
+    summary
 }
 
 /// Check if a path string ends with a known source file extension. Used by
@@ -441,7 +484,10 @@ fn has_source_extension(path: &str) -> bool {
     let lower = path.to_ascii_lowercase();
     const EXTENSIONS: &[&str] = &[
         ".rs", ".py", ".js", ".ts", ".tsx", ".jsx", ".go", ".java", ".c", ".cpp", ".h", ".hpp",
-        ".rb", ".php", ".swift", ".kt", ".scala", ".lua", ".sh", ".bash", ".zsh",
+        ".rb", ".php", ".swift", ".kt", ".scala", ".lua", ".sh", ".bash", ".zsh", ".cs", ".dart",
+        ".r", ".hs", ".clj", ".cljs", ".edn", ".ex", ".exs", ".ml", ".m", ".mm", ".zig", ".nim",
+        ".v", ".erl", ".jl", ".graphql", ".vue", ".svelte", ".gd", ".elm", ".f90", ".f", ".pas",
+        ".pl", ".pm", ".tcl", ".sql", ".proto",
     ];
     EXTENSIONS.iter().any(|ext| lower.ends_with(ext))
 }
@@ -489,6 +535,40 @@ struct OutlineFile {
     items: Vec<OutlineItem>,
 }
 
+/// Source range as reported by ast-grep outline. All line/column values are
+/// zero-based in the raw stream. We expose the raw range plus a derived
+/// 1-based `lineRange` in the `full` view so callers can feed the lines
+/// straight to `unified_file` `read` (`offset_lines` is 1-based, inclusive).
+///
+/// Forward-compat tolerant: `#[serde(default)]` and no `deny_unknown_fields`,
+/// so unknown keys from future ast-grep versions are ignored instead of
+/// failing the whole call.
+#[derive(Debug, Default, Clone, Deserialize)]
+struct OutlineRange {
+    #[serde(default, rename = "byteOffset")]
+    byte_offset: OutlineByteOffset,
+    #[serde(default)]
+    start: OutlineLineColumn,
+    #[serde(default)]
+    end: OutlineLineColumn,
+}
+
+#[derive(Debug, Default, Clone, Deserialize)]
+struct OutlineByteOffset {
+    #[serde(default)]
+    start: u64,
+    #[serde(default)]
+    end: u64,
+}
+
+#[derive(Debug, Default, Clone, Deserialize)]
+struct OutlineLineColumn {
+    #[serde(default)]
+    line: u64,
+    #[serde(default)]
+    column: u64,
+}
+
 #[derive(Debug, Default, Clone, Deserialize)]
 struct OutlineItem {
     #[serde(default)]
@@ -506,6 +586,10 @@ struct OutlineItem {
     is_import: bool,
     #[serde(default, rename = "isExported")]
     is_exported: bool,
+    /// Source range of the item. Parsed from the stream and re-emitted in the
+    /// `full` view; omitted (gracefully) from `digest`/`names`.
+    #[serde(default)]
+    range: Option<OutlineRange>,
     #[serde(default)]
     members: Vec<OutlineMember>,
 }
@@ -518,8 +602,41 @@ struct OutlineMember {
     symbol_type: String,
     #[serde(default)]
     signature: String,
+    #[serde(default, rename = "astKind")]
+    ast_kind: String,
     #[serde(default, rename = "isPublic")]
     is_public: bool,
+    #[serde(default)]
+    range: Option<OutlineRange>,
+}
+
+/// Build the raw `range` object for the `full` view: the zero-based ast-grep
+/// native shape (`byteOffset`, `start`, `end`). Returns `null` when ast-grep
+/// omitted the range (e.g. for some member kinds).
+fn range_value(range: &Option<OutlineRange>) -> Value {
+    match range {
+        Some(r) => json!({
+            "byteOffset": {"start": r.byte_offset.start, "end": r.byte_offset.end},
+            "start": {"line": r.start.line, "column": r.start.column},
+            "end": {"line": r.end.line, "column": r.end.column},
+        }),
+        None => Value::Null,
+    }
+}
+
+/// Derived 1-based inclusive line range (`{start, end}`) suitable for
+/// `unified_file` `read` pagination: `offset_lines = lineRange.start`,
+/// `page_size_lines = lineRange.end - lineRange.start + 1`. Returns `null`
+/// when the raw range is absent. `saturating_add` guards against pathological
+/// inputs (and satisfies the `-D warnings` arithmetic lint).
+fn line_range_value(range: &Option<OutlineRange>) -> Value {
+    match range {
+        Some(r) => json!({
+            "start": r.start.line.saturating_add(1),
+            "end": r.end.line.saturating_add(1),
+        }),
+        None => Value::Null,
+    }
 }
 
 fn parse_outline_stream(stdout: &[u8]) -> Result<Vec<OutlineFile>> {
@@ -595,13 +712,26 @@ fn full_item_record(item: &OutlineItem) -> Value {
         "astKind": item.ast_kind,
         "isImport": item.is_import,
         "isExported": item.is_exported,
-        "members": item.members.iter().map(|m| json!({
-            "role": "member",
-            "kind": m.symbol_type,
-            "name": m.name,
-            "signature": m.signature,
-            "isPublic": m.is_public,
-        })).collect::<Vec<_>>(),
+        "range": range_value(&item.range),
+        "lineRange": line_range_value(&item.range),
+        "members": item.members.iter().map(full_member_record).collect::<Vec<_>>(),
+    })
+}
+
+/// `full` view member record: includes `astKind`, the raw zero-based `range`,
+/// and the derived 1-based `lineRange` so the agent can locate a member
+/// (method/field/enum variant) precisely within its parent item and feed the
+/// lines straight to `unified_file` `read` pagination.
+fn full_member_record(member: &OutlineMember) -> Value {
+    json!({
+        "role": "member",
+        "kind": member.symbol_type,
+        "name": member.name,
+        "signature": member.signature,
+        "astKind": member.ast_kind,
+        "isPublic": member.is_public,
+        "range": range_value(&member.range),
+        "lineRange": line_range_value(&member.range),
     })
 }
 
