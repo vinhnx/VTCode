@@ -420,7 +420,7 @@ fn maybe_inline_spooled_preserves_extra_continue_args_fields() {
 }
 
 #[test]
-fn maybe_inline_spooled_keeps_loop_recovery_fields_and_drops_notes() {
+fn maybe_inline_spooled_keeps_loop_recovery_fields() {
     let serialized = maybe_inline_spooled(
         tool_names::READ_FILE,
         &serde_json::json!({
@@ -458,12 +458,22 @@ fn maybe_inline_spooled_keeps_loop_recovery_fields_and_drops_notes() {
             "l": 40
         }))
     );
-    assert!(parsed.get("reused_spooled_output").is_none());
-    assert!(parsed.get("spool_ref_only").is_none());
-    assert!(parsed.get("loop_detected_note").is_none());
-    assert!(parsed.get("repeat_count").is_none());
+    // Loop-recovery metadata fields are kept so the model understands why
+    // its tool call was intercepted and can act on the guidance.
+    assert_eq!(
+        parsed.get("reused_spooled_output"),
+        Some(&serde_json::json!(true))
+    );
+    assert_eq!(parsed.get("spool_ref_only"), Some(&serde_json::json!(true)));
+    assert_eq!(
+        parsed.get("loop_detected_note"),
+        Some(&serde_json::json!(
+            "Read the spool file instead of re-running this call."
+        ))
+    );
+    assert_eq!(parsed.get("repeat_count"), Some(&serde_json::json!(4)));
     assert!(parsed.get("limit").is_none());
-    assert!(parsed.get("tool").is_none());
+    assert_eq!(parsed.get("tool"), Some(&serde_json::json!("read_file")));
 }
 
 #[test]

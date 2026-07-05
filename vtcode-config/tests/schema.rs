@@ -1,3 +1,5 @@
+//! Integration tests for the vtcode-config JSON Schema export.
+
 #![cfg(feature = "schema")]
 #![allow(missing_docs)]
 

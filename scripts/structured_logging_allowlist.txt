@@ -17,5 +17,10 @@ vtcode-core/src/tool_policy.rs | Tool policy summaries are intentionally rendere
 vtcode-core/src/tools/ripgrep_installer/mod.rs | Dependency installer progress and remediation are intentionally terminal-facing.
 vtcode-core/src/tools/ripgrep_installer/platform.rs | Dependency installer fallback messaging is intentionally terminal-facing.
 vtcode-core/src/ui/** | UI helpers intentionally print prompts and formatted terminal output.
+vtcode-core/src/tools/cached_executor.rs | ToolExecutor report prints human-readable statistics.
 vtcode-core/src/utils/common.rs | Shared terminal formatting helpers intentionally write to stdout.
 vtcode-core/src/utils/safety.rs | Safety summaries are direct user-facing terminal output.
+vtcode-ui/src/tui/core_tui/mod.rs | TUI startup errors are reported via eprintln! before the UI loop is available.
+vtcode-ui/src/tui/core_tui/panic_hook.rs | Panic hook setup failures use eprintln! before tracing is initialized.
+vtcode-ui/src/tui/session_options.rs | TUI startup errors are reported via eprintln! before the UI loop is available.
+vtcode-bash-runner/src/process.rs | Output stream lag warnings are user-facing diagnostics from the pty runner.

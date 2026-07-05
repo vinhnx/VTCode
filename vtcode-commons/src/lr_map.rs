@@ -73,10 +73,7 @@ where
                 w.publish();
             }
             Err(e) => {
-                // Log the lock poisoning error instead of silently dropping the write
-                eprintln!(
-                    "WARNING: LrMap::insert failed due to poisoned mutex: {e}. Write dropped."
-                );
+                tracing::warn!("LrMap::insert failed due to poisoned mutex: {e}. Write dropped.");
             }
         }
     }
@@ -88,9 +85,8 @@ where
                 w.publish();
             }
             Err(e) => {
-                // Log the lock poisoning error instead of silently dropping the write
-                eprintln!(
-                    "WARNING: LrMap::clear failed due to poisoned mutex: {e}. Operation dropped."
+                tracing::warn!(
+                    "LrMap::clear failed due to poisoned mutex: {e}. Operation dropped."
                 );
             }
         }

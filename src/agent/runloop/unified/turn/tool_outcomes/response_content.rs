@@ -100,13 +100,13 @@ pub(crate) fn compact_model_tool_payload(output: serde_json::Value) -> serde_jso
                 .as_ref()
                 .is_some_and(|next_read| value_matches_usize(value, next_read.limit)),
             "stderr_preview" => has_stderr,
-            "loop_detected_note"
-            | "spool_ref_only"
-            | "result_ref_only"
-            | "reused_spooled_output"
-            | "reused_recent_result"
-            | "repeat_count"
-            | "tool" => loop_detected,
+            "loop_detected_note" => false,
+            "spool_ref_only" => false,
+            "result_ref_only" => false,
+            "reused_spooled_output" => false,
+            "reused_recent_result" => false,
+            "repeat_count" => false,
+            "tool" => false,
             "limit" => loop_detected && obj.get("tool").is_some(),
             // `loop_detected` is internal control logic — always strip it from
             // model output.  The related metadata keys (`reused_recent_result`,

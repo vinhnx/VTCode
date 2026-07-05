@@ -221,11 +221,20 @@ mod tests {
         cache.insert(key2.clone(), "out2".to_string());
         cache.insert(key3.clone(), "out3".to_string());
 
-        // Cache is full, adding key4 should evict key1
+        // Touch key2 and key3 to establish clear LRU ordering: key1 is now the
+        // least recently used.  Without these get() calls all three entries have
+        // identical last_accessed timestamps and FxHashMap iteration order makes
+        // the eviction victim non-deterministic.
+        cache.get(&key2);
+        cache.get(&key3);
+
+        // Cache is full, adding key4 should evict key1 (the LRU entry)
         cache.insert(key4.clone(), "out4".to_string());
 
         assert!(cache.get(&key1).is_none());
         assert_eq!(cache.get(&key2).unwrap().as_ref(), "out2");
+        assert_eq!(cache.get(&key3).unwrap().as_ref(), "out3");
+        assert_eq!(cache.get(&key4).unwrap().as_ref(), "out4");
     }
 
     #[test]
