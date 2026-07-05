@@ -2,6 +2,18 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.134.9 - 2026-07-05
+
+### Highlights
+#### Bug Fixes
+
+- Resolve apply_patch format confusion and updater stdout leak (53502b15) 
+- Cross-map max_results/globs/format in unified_search action=list (a8513c01) 
+- Resolve unified_search action=outline parameter confusion and refactor (be92673d) 
+### Other Changes
+#### Other
+
+- Enhance ast-grep code outline (8d2278b8) 
 ## 0.134.8 - 2026-07-05
 
 ### Highlights
