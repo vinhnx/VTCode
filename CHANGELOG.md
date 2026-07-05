@@ -2,6 +2,13 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.134.8 - 2026-07-05
+
+### Highlights
+#### Bug Fixes
+
+- Remove incorrect cfg gate on env_lock import (breaks Linux/Windows CI) (bb0c7d1f) (@vinhnx)
+### Other Changes
 ## 0.134.7 - 2026-07-05
 
 ### Highlights
