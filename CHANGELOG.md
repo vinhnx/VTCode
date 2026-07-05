@@ -2,6 +2,18 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.134.7 - 2026-07-05
+
+### Highlights
+#### Bug Fixes
+
+- Retain loop-detection metadata in compacted tool output (9bfed42a) 
+### Other Changes
+#### Other
+
+- Refactor code to allow missing documentation warnings and improve error handling in tests and components (defef020) 
+- Remove unused model override warnings and related test (ab912466) 
+- Fix em-dash guidance string, improve user message retention in compaction, and update test assertions (9c7f804c) 
 ## 0.134.6 - 2026-07-04
 
 ### Highlights
