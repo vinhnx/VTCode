@@ -949,7 +949,11 @@ impl ToolRegistry {
         let patch_input_bytes = patch_input.source_bytes;
         let patch_base64 = patch_input.was_base64;
 
-        let mut patch_args = args;
+        // Guard against a bare-string `args` (some callers pass the patch text
+        // directly as a JSON string rather than an object). Indexing a
+        // `Value::String` with `["input"]` panics in serde_json, so normalize
+        // to an object first.
+        let mut patch_args = if args.is_object() { args } else { json!({}) };
         patch_args["input"] = json!(patch_input.text);
         Ok((patch_args, patch_input_bytes, patch_base64))
     }

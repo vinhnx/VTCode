@@ -172,6 +172,19 @@ impl Updater {
     }
 
     pub(crate) async fn install_update(&self, force: bool) -> Result<InstallOutcome> {
+        // The CLI path (`vtcode update` in a plain terminal) should show a
+        // visual progress bar while the binary downloads. The inline TUI path
+        // (`/update install` inside the TUI) must keep `self_update` quiet so
+        // its output does not leak into the alternate screen — that path uses
+        // `install_update_with_progress(force, false)` directly.
+        self.install_update_with_progress(force, true).await
+    }
+
+    pub(crate) async fn install_update_with_progress(
+        &self,
+        force: bool,
+        show_progress: bool,
+    ) -> Result<InstallOutcome> {
         let guidance = self.update_guidance();
         if guidance.source.is_managed() {
             bail!(
@@ -196,8 +209,15 @@ impl Updater {
                 .bin_name("vtcode")
                 .target(target)
                 .identifier(&identifier)
-                .show_download_progress(false)
-                .show_output(false)
+                .show_download_progress(show_progress)
+                // `show_output` gates self_update's own status messages
+                // ("Checking target-arch…", "Extracting archive…", "Replacing
+                // binary file…", etc.) — it is independent of the indicatif
+                // progress bar controlled by `show_download_progress` above.
+                // Show the messages in the CLI path (plain terminal) and silence
+                // them in the inline TUI path so the install log does not leak
+                // into the alternate screen.
+                .show_output(show_progress)
                 .no_confirm(true);
 
             if force {

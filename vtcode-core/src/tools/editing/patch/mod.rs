@@ -161,6 +161,54 @@ pub async fn render_patch_update_content(
         .map_err(|err| anyhow!(err))
 }
 
+// ---------------------------------------------------------------------------
+// Shape detection primitives — single source of truth for "is this a VTE
+// patch?" / "is this a unified diff?" Used by tool routing, source-field
+// selection, and parse-error guidance. Replaces the previously duplicated
+// private `looks_like_patch_text` closures in `tool_intent` and `file_ops`.
+// ---------------------------------------------------------------------------
+
+/// Cheap shape check: does this text begin with the VT Code patch envelope
+/// (`*** Begin Patch`) or a bare file-operation header (`*** Update File:`,
+/// `*** Add File:`, `*** Delete File:`)? Used by tool routing and
+/// source-field selection to distinguish a real patch from raw file contents
+/// or a unified diff. Intentionally cheap (prefix-only) — it does **not**
+/// validate the full patch.
+#[must_use]
+pub fn looks_like_vte_patch(text: &str) -> bool {
+    let trimmed = text.trim_start();
+    trimmed.starts_with("*** Begin Patch")
+        || trimmed.starts_with("*** Update File:")
+        || trimmed.starts_with("*** Add File:")
+        || trimmed.starts_with("*** Delete File:")
+}
+
+/// Cheap shape check: does this text look like a standard unified diff
+/// (`diff --git` header, or a paired `--- `/`+++ ` file-header block)?
+/// Used to produce actionable error guidance when a model submits a
+/// git-style diff to `apply_patch` (which requires the `*** Begin Patch`
+/// envelope). VT Code patch format never uses `--- `/`+++ ` markers, so
+/// this will not false-positive on valid VTE patches.
+#[must_use]
+pub fn looks_like_unified_diff(text: &str) -> bool {
+    let trimmed = text.trim_start();
+    if trimmed.starts_with("diff --git") {
+        return true;
+    }
+    // Unified diffs always have a paired `--- ` / `+++ ` file-header block.
+    // Scan the first dozen lines; the pair usually appears within the first 2-3.
+    let mut saw_old = false;
+    for line in trimmed.lines().take(12) {
+        let lt = line.trim_start();
+        if lt.starts_with("--- ") {
+            saw_old = true;
+        } else if saw_old && lt.starts_with("+++ ") {
+            return true;
+        }
+    }
+    false
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -190,5 +238,53 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(written, "content\n");
+    }
+
+    // -----------------------------------------------------------------------
+    // Shape-detection primitives
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn looks_like_vte_patch_detects_envelope_and_bare_headers() {
+        assert!(looks_like_vte_patch("*** Begin Patch\n*** End Patch"));
+        assert!(looks_like_vte_patch(
+            "*** Update File: src/main.rs\n@@\n+new\n"
+        ));
+        assert!(looks_like_vte_patch("*** Add File: new.txt\n+content\n"));
+        assert!(looks_like_vte_patch("*** Delete File: old.txt"));
+        // Leading whitespace is tolerated.
+        assert!(looks_like_vte_patch("  \n*** Begin Patch\n*** End Patch"));
+    }
+
+    #[test]
+    fn looks_like_vte_patch_rejects_non_patch_shapes() {
+        assert!(!looks_like_vte_patch("diff --git a/f b/f\n"));
+        assert!(!looks_like_vte_patch("--- a/f\n+++ b/f\n"));
+        assert!(!looks_like_vte_patch("fn main() { println!(\"hi\"); }"));
+        assert!(!looks_like_vte_patch(""));
+    }
+
+    #[test]
+    fn looks_like_unified_diff_detects_git_diff_header() {
+        assert!(looks_like_unified_diff(
+            "diff --git a/src/main.rs b/src/main.rs\nindex abc..def 100644\n"
+        ));
+    }
+
+    #[test]
+    fn looks_like_unified_diff_detects_paired_file_headers() {
+        assert!(looks_like_unified_diff(
+            "--- a/src/main.rs\n+++ b/src/main.rs\n@@ -1,3 +1,3 @@\n-old\n+new\n"
+        ));
+    }
+
+    #[test]
+    fn looks_like_unified_diff_rejects_vte_patch() {
+        // A valid VTE patch must never be mistaken for a unified diff.
+        assert!(!looks_like_unified_diff(
+            "*** Begin Patch\n*** Update File: f.rs\n@@\n-old\n+new\n*** End Patch"
+        ));
+        assert!(!looks_like_unified_diff(""));
+        assert!(!looks_like_unified_diff("fn main() {}"));
     }
 }

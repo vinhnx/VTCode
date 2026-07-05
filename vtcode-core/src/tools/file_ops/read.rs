@@ -66,22 +66,16 @@ fn is_new_read_request(args: &Value) -> bool {
 }
 
 fn looks_like_patch_payload(args: &Value) -> bool {
-    fn looks_like_patch_text(text: &str) -> bool {
-        let trimmed = text.trim_start();
-        trimmed.starts_with("*** Begin Patch")
-            || trimmed.starts_with("*** Update File:")
-            || trimmed.starts_with("*** Add File:")
-            || trimmed.starts_with("*** Delete File:")
-    }
+    use crate::tools::editing::looks_like_vte_patch;
 
     args.get("patch")
         .and_then(Value::as_str)
-        .is_some_and(looks_like_patch_text)
+        .is_some_and(looks_like_vte_patch)
         || args
             .get("input")
             .and_then(Value::as_str)
-            .is_some_and(looks_like_patch_text)
-        || args.as_str().is_some_and(looks_like_patch_text)
+            .is_some_and(looks_like_vte_patch)
+        || args.as_str().is_some_and(looks_like_vte_patch)
 }
 
 fn build_read_handler_args(args: &Value, canonical_path: &Path) -> Value {

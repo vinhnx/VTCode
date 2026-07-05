@@ -11,7 +11,8 @@ use serde_json::Value;
 
 pub use crate::tools::editing::{Patch, PatchError, PatchHunk, PatchLine, PatchOperation};
 pub use vtcode_utility_tool_specs::{
-    APPLY_PATCH_ALIAS_DESCRIPTION, SEMANTIC_ANCHOR_GUIDANCE, with_semantic_anchor_guidance,
+    APPLY_PATCH_ALIAS_DESCRIPTION, DEFAULT_APPLY_PATCH_INPUT_DESCRIPTION, SEMANTIC_ANCHOR_GUIDANCE,
+    with_semantic_anchor_guidance,
 };
 
 /// Input structure for the apply_patch tool
@@ -28,9 +29,29 @@ pub struct DecodedApplyPatchInput {
 }
 
 pub fn patch_source_from_args(args: &Value) -> Option<&str> {
-    args.as_str()
-        .or_else(|| args.get("input").and_then(|value| value.as_str()))
-        .or_else(|| args.get("patch").and_then(|value| value.as_str()))
+    let input = args.get("input").and_then(|value| value.as_str());
+    let patch = args.get("patch").and_then(|value| value.as_str());
+
+    // When only one alias field is present, use it (historical behavior).
+    // When both are present, prefer the field whose content actually looks
+    // like a VT Code patch. This prevents a non-patch `input` (e.g. raw file
+    // contents emitted by some providers — see checkpoint turn_615) from
+    // masking a valid `patch` field. Falls back to `input`-first precedence
+    // only if neither field is patch-shaped.
+    match (input, patch) {
+        (Some(i), Some(p)) => {
+            if crate::tools::editing::looks_like_vte_patch(p)
+                && !crate::tools::editing::looks_like_vte_patch(i)
+            {
+                Some(p)
+            } else {
+                Some(i)
+            }
+        }
+        (Some(i), None) => Some(i),
+        (None, Some(p)) => Some(p),
+        (None, None) => args.as_str(),
+    }
 }
 
 pub fn decode_apply_patch_input(args: &Value) -> anyhow::Result<Option<DecodedApplyPatchInput>> {
@@ -124,6 +145,27 @@ mod tests {
     }
 
     #[test]
+    fn patch_source_prefers_patch_shaped_field_when_both_present() {
+        // When both `input` and `patch` are present, prefer the one whose
+        // content actually looks like a VTE patch. This prevents a non-patch
+        // `input` (raw file contents) from masking a valid `patch` field.
+        let raw_source = "pub fn foo() { println!(\"hi\"); }\n";
+        let vte_patch = "*** Begin Patch\n*** Update File: f.rs\n@@\n-old\n+new\n*** End Patch";
+
+        // `input` = raw source, `patch` = real patch → prefer `patch`.
+        let args = json!({ "input": raw_source, "patch": vte_patch });
+        assert_eq!(patch_source_from_args(&args), Some(vte_patch));
+
+        // `input` = real patch, `patch` = raw source → prefer `input`.
+        let args = json!({ "input": vte_patch, "patch": raw_source });
+        assert_eq!(patch_source_from_args(&args), Some(vte_patch));
+
+        // Neither is patch-shaped → fall back to `input`-first (historical).
+        let args = json!({ "input": "aaa", "patch": "bbb" });
+        assert_eq!(patch_source_from_args(&args), Some("aaa"));
+    }
+
+    #[test]
     fn decode_apply_patch_input_supports_base64_payloads() {
         let payload = json!({
             "patch": "base64:KioqIEJlZ2luIFBhdGNoCioqKiBFbmQgUGF0Y2gK"
@@ -199,10 +241,27 @@ mod tests {
     fn parameter_schema_keeps_alias_and_guidance_consistent() {
         let schema = parameter_schema("Patch in VT Code format");
 
+        // Both `input` and `patch` are alias fields for the same payload, so
+        // both must carry the format description AND the semantic-anchor
+        // guidance. This prevents the model from placing a unified diff in
+        // `patch` (see checkpoint turn_615).
         assert_eq!(
             schema["properties"]["patch"]["description"],
-            APPLY_PATCH_ALIAS_DESCRIPTION
+            with_semantic_anchor_guidance(APPLY_PATCH_ALIAS_DESCRIPTION)
         );
+        let patch_description = schema["properties"]["patch"]["description"]
+            .as_str()
+            .expect("patch description");
+        assert!(
+            patch_description.contains("*** Begin Patch"),
+            "patch description must name the envelope format"
+        );
+        assert!(
+            patch_description.contains("unified diff"),
+            "patch description must warn against unified diff"
+        );
+        assert!(patch_description.contains(SEMANTIC_ANCHOR_GUIDANCE));
+
         let input_description = schema["properties"]["input"]["description"]
             .as_str()
             .expect("input description");

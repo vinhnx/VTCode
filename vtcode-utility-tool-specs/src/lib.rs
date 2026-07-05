@@ -23,7 +23,14 @@ pub use responses_api::{FreeformTool, FreeformToolFormat, ResponsesApiTool};
 
 pub const SEMANTIC_ANCHOR_GUIDANCE: &str =
     "Prefer stable semantic @@ anchors such as function, class, method, or impl names.";
-pub const APPLY_PATCH_ALIAS_DESCRIPTION: &str = "Alias for input";
+
+/// Explicit, format-bearing description for the `patch` alias field. The old
+/// value ("Alias for input") gave the model no format guidance, so it often
+/// placed a standard unified diff (`---`/`+++`) there — which `apply_patch`
+/// rejects. This mirrors the `input` description so both alias fields carry
+/// identical, complete format guidance (see checkpoint turn_615 for the
+/// failure this prevents).
+pub const APPLY_PATCH_ALIAS_DESCRIPTION: &str = "Patch in VT Code format (*** Begin Patch, *** Update File: path, @@ hunk, -/+ lines, *** End Patch). Same envelope as 'input'; do NOT use unified diff (--- /+++ format).";
 pub const DEFAULT_APPLY_PATCH_INPUT_DESCRIPTION: &str = "Patch in VT Code format: *** Begin Patch, *** Update File: path, @@ hunk, -/+ lines, *** End Patch";
 
 #[must_use]
@@ -49,7 +56,7 @@ pub fn apply_patch_parameter_schema(input_description: &str) -> Value {
             },
             "patch": {
                 "type": "string",
-                "description": APPLY_PATCH_ALIAS_DESCRIPTION
+                "description": with_semantic_anchor_guidance(APPLY_PATCH_ALIAS_DESCRIPTION)
             }
         },
         "anyOf": [
@@ -436,10 +443,20 @@ mod tests {
     fn apply_patch_parameter_schema_keeps_alias_and_guidance_consistent() {
         let schema = apply_patch_parameter_schema("Patch in VT Code format");
 
+        // Both `input` and `patch` alias fields now carry the format
+        // description AND the semantic-anchor guidance, preventing the model
+        // from placing a unified diff in `patch` (see checkpoint turn_615).
         assert_eq!(
             schema["properties"]["patch"]["description"],
-            APPLY_PATCH_ALIAS_DESCRIPTION
+            with_semantic_anchor_guidance(APPLY_PATCH_ALIAS_DESCRIPTION)
         );
+        let patch_description = schema["properties"]["patch"]["description"]
+            .as_str()
+            .expect("patch description");
+        assert!(patch_description.contains("*** Begin Patch"));
+        assert!(patch_description.contains("unified diff"));
+        assert!(patch_description.contains(SEMANTIC_ANCHOR_GUIDANCE));
+
         let input_description = schema["properties"]["input"]["description"]
             .as_str()
             .expect("input description");

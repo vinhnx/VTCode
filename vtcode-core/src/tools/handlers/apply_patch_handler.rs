@@ -335,6 +335,10 @@ pub fn create_apply_patch_freeform_tool() -> ToolSpec {
 
 /// Create JSON function apply_patch tool spec (for standard function calling)
 pub fn create_apply_patch_json_tool() -> ToolSpec {
+    use crate::tools::apply_patch::{
+        APPLY_PATCH_ALIAS_DESCRIPTION, DEFAULT_APPLY_PATCH_INPUT_DESCRIPTION,
+        with_semantic_anchor_guidance,
+    };
     ToolSpec::Function(ResponsesApiTool {
         name: tools::APPLY_PATCH.to_string(),
         description: format!("{APPLY_PATCH_DESCRIPTION}\n\n{APPLY_PATCH_GRAMMAR_HELP}"),
@@ -344,11 +348,11 @@ pub fn create_apply_patch_json_tool() -> ToolSpec {
             "properties": {
                 "input": {
                     "type": "string",
-                    "description": "The entire contents of the apply_patch command"
+                    "description": with_semantic_anchor_guidance(DEFAULT_APPLY_PATCH_INPUT_DESCRIPTION)
                 },
                 "patch": {
                     "type": "string",
-                    "description": crate::tools::apply_patch::APPLY_PATCH_ALIAS_DESCRIPTION
+                    "description": with_semantic_anchor_guidance(APPLY_PATCH_ALIAS_DESCRIPTION)
                 }
             },
             "required": ["input"],

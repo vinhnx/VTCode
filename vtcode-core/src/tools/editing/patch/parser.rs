@@ -77,9 +77,28 @@ fn check_patch_boundaries(lines: &[&str]) -> Result<(), PatchError> {
         (Some(begin), Some(end)) if begin == BEGIN_PATCH_MARKER && end == END_PATCH_MARKER => {
             Ok(())
         }
-        (Some(begin), _) if begin != BEGIN_PATCH_MARKER => Err(PatchError::InvalidFormat(
-            "missing '*** Begin Patch' marker".to_string(),
-        )),
+        (Some(_begin), _) if first != Some(BEGIN_PATCH_MARKER) => {
+            // The first line is not the `*** Begin Patch` envelope header.
+            // Detect the two most common mis-formats and emit an actionable,
+            // one-shot recovery hint so the model does not waste a round-trip
+            // guessing (see checkpoint turn_615, where a unified diff in the
+            // `patch` field produced a bare "missing marker" error).
+            let joined = lines.join("\n");
+            let hint = if super::looks_like_unified_diff(&joined) {
+                "input looks like a standard unified diff (---/+++ format), \
+                 but apply_patch requires the VT Code envelope. Reformat as: \
+                 *** Begin Patch / *** Update File: <path> / @@ <optional context> \
+                 / -old line / +new line / *** End Patch"
+            } else if !super::looks_like_vte_patch(&joined) {
+                "input contains no VT Code patch markers (*** Begin Patch / \
+                 *** Update File: / *** Add File:). apply_patch expects a patch \
+                 envelope, not raw file contents. Wrap your change in: \
+                 *** Begin Patch ... *** End Patch"
+            } else {
+                "missing '*** Begin Patch' marker"
+            };
+            Err(PatchError::InvalidFormat(hint.to_string()))
+        }
         _ => Err(PatchError::InvalidFormat(
             "missing '*** End Patch' marker".to_string(),
         )),
@@ -417,5 +436,58 @@ mod tests {
             }
             other => panic!("expected UpdateFile, got {other:?}"),
         }
+    }
+
+    // -----------------------------------------------------------------------
+    // Actionable boundary-check errors (see checkpoint turn_615)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn unified_diff_input_produces_actionable_error() {
+        let diff = "diff --git a/src/main.rs b/src/main.rs\n\
+                    index abc..def 100644\n\
+                    --- a/src/main.rs\n\
+                    +++ b/src/main.rs\n\
+                    @@ -1,3 +1,3 @@\n\
+                    -old\n\
+                    +new\n";
+        let err = parse(diff).expect_err("unified diff should be rejected");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("unified diff"),
+            "error should identify the format: {msg}"
+        );
+        assert!(
+            msg.contains("*** Begin Patch"),
+            "error should name the required envelope: {msg}"
+        );
+    }
+
+    #[test]
+    fn raw_source_input_produces_envelope_hint() {
+        // Raw file contents (no patch markers at all) should get a distinct
+        // hint telling the model to wrap the change in the patch envelope.
+        let source = "pub(crate) async fn install_update(&self, force: bool) {\n\
+                      self.install_update_with_progress(force, true).await\n\
+                      }\n";
+        let err = parse(source).expect_err("raw source should be rejected");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("envelope") || msg.contains("*** Begin Patch"),
+            "error should mention the envelope: {msg}"
+        );
+        assert!(
+            !msg.contains("unified diff"),
+            "raw source should not be confused with a unified diff: {msg}"
+        );
+    }
+
+    #[test]
+    fn valid_envelope_still_parses_after_hint_change() {
+        // Regression guard: the boundary-check enhancement must not break
+        // well-formed patches.
+        let ops = parse("*** Begin Patch\n*** Add File: f.txt\n+hi\n*** End Patch")
+            .expect("valid patch should parse");
+        assert_eq!(ops.len(), 1);
     }
 }

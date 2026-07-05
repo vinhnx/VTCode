@@ -504,13 +504,7 @@ fn is_readonly_pipeline_segments(args: &Value) -> bool {
 /// Determine the action for unified_file tool based on args.
 /// Returns the action string or a default if inference is possible.
 pub fn unified_file_action(args: &Value) -> Option<&str> {
-    fn looks_like_patch_text(text: &str) -> bool {
-        let trimmed = text.trim_start();
-        trimmed.starts_with("*** Begin Patch")
-            || trimmed.starts_with("*** Update File:")
-            || trimmed.starts_with("*** Add File:")
-            || trimmed.starts_with("*** Delete File:")
-    }
+    use crate::tools::editing::looks_like_vte_patch;
 
     args.get("action").and_then(|v| v.as_str()).or_else(|| {
         let has_read_path = args.get("path").is_some()
@@ -522,8 +516,8 @@ pub fn unified_file_action(args: &Value) -> Option<&str> {
         let patch_in_input = args
             .get("input")
             .and_then(|v| v.as_str())
-            .is_some_and(looks_like_patch_text);
-        let raw_patch = args.as_str().is_some_and(looks_like_patch_text);
+            .is_some_and(looks_like_vte_patch);
+        let raw_patch = args.as_str().is_some_and(looks_like_vte_patch);
 
         if args.get("old_str").is_some() {
             Some("edit")

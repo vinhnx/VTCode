@@ -430,6 +430,19 @@ pub fn classify_error_message(msg: &str) -> ErrorCategory {
             "must be an absolute path",
             "not parseable",
             "parseable as",
+            // Patch format errors — these are LLM argument mistakes (the model
+            // sent a malformed patch), not execution failures. Classifying them
+            // as InvalidParameters ensures they don't trip the circuit breaker
+            // (is_llm_mistake() == true) and get parameter-focused recovery
+            // suggestions. See checkpoint turn_615 for the failure this
+            // prevents: a unified-diff patch was classified as ExecutionError
+            // and got generic "check tool documentation" suggestions.
+            "invalid patch format",
+            "invalid patch hunk",
+            "invalid patch operation",
+            "cannot parse empty patch",
+            "patch does not contain",
+            "semantic patch anchor",
         ],
     ) {
         return ErrorCategory::InvalidParameters;
@@ -761,6 +774,42 @@ mod tests {
         assert_eq!(
             classify_error_message("Path 'vtcode-core/src/agent' does not exist"),
             ErrorCategory::ResourceNotFound
+        );
+    }
+
+    #[test]
+    fn patch_format_errors_are_invalid_parameters() {
+        // Patch format errors are LLM argument mistakes, not execution
+        // failures. They must classify as InvalidParameters (is_llm_mistake
+        // == true, no circuit breaker trip) so the model gets parameter-
+        // focused recovery suggestions instead of generic "check tool docs".
+        assert_eq!(
+            classify_error_message("invalid patch format: missing '*** Begin Patch' marker"),
+            ErrorCategory::InvalidParameters
+        );
+        assert_eq!(
+            classify_error_message(
+                "invalid patch format: input looks like a standard unified diff (---/+++ format)"
+            ),
+            ErrorCategory::InvalidParameters
+        );
+        assert_eq!(
+            classify_error_message("invalid patch hunk on line 5: unexpected end of input"),
+            ErrorCategory::InvalidParameters
+        );
+        assert_eq!(
+            classify_error_message("cannot parse empty patch input"),
+            ErrorCategory::InvalidParameters
+        );
+        assert_eq!(
+            classify_error_message("patch does not contain any operations"),
+            ErrorCategory::InvalidParameters
+        );
+        assert_eq!(
+            classify_error_message(
+                "semantic patch anchor 'fn main' for 'src/main.rs' could not be resolved"
+            ),
+            ErrorCategory::InvalidParameters
         );
     }
 
