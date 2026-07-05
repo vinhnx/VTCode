@@ -79,7 +79,7 @@ pub(super) fn apply_reused_read_only_loop_metadata(
 
     let (note, next_action) = if has_meaningful_content {
         (
-            "Loop detected: same result returned. The content is in the result above -- use it directly.",
+            "Loop detected: same result returned. The content is in the result above \u{2014} use it directly.",
             "The tool result content is already in this response. Synthesize your answer from the available data.",
         )
     } else if has_spool_path {

@@ -510,42 +510,66 @@ fn collect_retained_user_messages(
         return Vec::new();
     }
 
-    // Score all messages by importance, then select the top-k that fit within
-    // the token budget. This replaces the naive backward-walk that only kept
-    // the N most recent user messages regardless of importance.
+    // Phase 1: select up to `max_messages` user messages, scored by importance.
     let total = history.len();
-    let mut scored: Vec<(usize, f64, &Message)> = history
+    let mut user_scored: Vec<(usize, f64, &Message)> = history
         .iter()
         .enumerate()
-        .filter(|(_, m)| is_retainable_message(m))
+        .filter(|(_, m)| m.role == MessageRole::User && !m.content.trim().is_empty())
         .map(|(i, m)| {
             let score = score_message(m, i, total);
             (i, score, m)
         })
         .collect();
-
-    // Sort by score descending (most important first).
-    scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    user_scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
     let mut selected: Vec<(usize, Message)> = Vec::new();
     let mut remaining = token_budget;
 
-    for (original_idx, _score, message) in &scored {
+    for (original_idx, _score, message) in &user_scored {
         if selected.len() >= max_messages {
             break;
         }
-
         let estimated = message.estimate_tokens();
         if estimated <= remaining {
             selected.push((*original_idx, (*message).clone()));
             remaining = remaining.saturating_sub(estimated);
             continue;
         }
-
         if let Some(truncated) = truncate_user_message(message, remaining) {
             selected.push((*original_idx, truncated));
         }
         break;
+    }
+
+    // Phase 2: if budget remains, add high-value non-user messages (tool
+    // results, assistant tool calls) that fit within the remaining capacity.
+    if selected.len() < max_messages && remaining > 0 {
+        let mut non_user_scored: Vec<(usize, f64, &Message)> = history
+            .iter()
+            .enumerate()
+            .filter(|(_, m)| {
+                m.role != MessageRole::User
+                    && m.role != MessageRole::System
+                    && is_retainable_message(m)
+            })
+            .map(|(i, m)| {
+                let score = score_message(m, i, total);
+                (i, score, m)
+            })
+            .collect();
+        non_user_scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+
+        for (original_idx, _score, message) in &non_user_scored {
+            if selected.len() >= max_messages {
+                break;
+            }
+            let estimated = message.estimate_tokens();
+            if estimated <= remaining {
+                selected.push((*original_idx, (*message).clone()));
+                remaining = remaining.saturating_sub(estimated);
+            }
+        }
     }
 
     // Re-sort by original conversation order to preserve chronology.
