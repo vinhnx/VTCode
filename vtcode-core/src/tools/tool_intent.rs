@@ -4,6 +4,22 @@ use crate::config::constants::tools;
 use crate::tools::command_args::{interactive_input_text, is_readonly_command_string};
 use crate::tools::names::canonical_tool_name;
 
+/// Valid list modes accepted by `FileOpsTool`.  Used by the `format`→`mode`
+/// cross-mapping in `normalize_unified_search_args` to decide whether a
+/// `format` value should be mapped to `mode`.  This must stay in sync with
+/// the `mode` enum in `list_files_parameters()` (vtcode-utility-tool-specs)
+/// and `FileOpsTool::normalize_list_mode` (file_ops/tool.rs).
+const VALID_LIST_MODES: &[&str] = &[
+    "list",
+    "recursive",
+    "tree",
+    "find_name",
+    "find_content",
+    "largest",
+    "file",
+    "files",
+];
+
 pub type ToolIntentClassifier = fn(&Value) -> ToolIntent;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -768,6 +784,81 @@ pub fn unified_search_action(args: &Value) -> Option<&str> {
     unified_search_action_from_object(args_obj)
 }
 
+/// Cross-map `unified_search`-specific fields to `ListInput`-compatible
+/// names for `action=list`.  The schema defines `max_results`, `globs`, and
+/// `format`, but `ListInput` only knows `max_items`/`per_page`/`glob_pattern`/
+/// `mode`.  Without this mapping these fields are silently dropped by serde.
+///
+/// Mappings (all use `or_insert` — explicit caller-provided values are
+/// preserved):
+/// - `globs` (string or array first element) → `pattern` (serde alias for
+///   `glob_pattern`)
+/// - `max_results` → `per_page` + `max_items` (both, so one page holds all
+///   requested results)
+/// - `format` → `mode` when the value is a valid list mode (see
+///   `VALID_LIST_MODES`).  When `format` is present but NOT a valid list
+///   mode (e.g. `"github"`), a `_format_ignored` warning is injected so the
+///   agent gets feedback instead of a silent drop.
+fn apply_list_cross_mappings(normalized: &mut serde_json::Map<String, Value>) {
+    // globs → pattern
+    let globs_pattern = if !normalized.contains_key("pattern") {
+        normalized.get("globs").and_then(|v| match v {
+            Value::String(s) => Some(s.clone()),
+            Value::Array(arr) => arr
+                .iter()
+                .filter_map(|v| v.as_str())
+                .next()
+                .map(str::to_string),
+            _ => None,
+        })
+    } else {
+        None
+    };
+    if let Some(glob_str) = globs_pattern {
+        normalized
+            .entry("pattern".to_string())
+            .or_insert(Value::String(glob_str));
+    }
+
+    // max_results → per_page + max_items
+    if let Some(max_results) = normalized.get("max_results").cloned() {
+        normalized
+            .entry("per_page".to_string())
+            .or_insert(max_results.clone());
+        normalized
+            .entry("max_items".to_string())
+            .or_insert(max_results);
+    }
+
+    // format → mode (only when the value is a valid list mode)
+    if !normalized.contains_key("mode") {
+        if let Some(format_val) = normalized.get("format").and_then(Value::as_str) {
+            let format_owned = format_val.to_string();
+            let is_valid_mode = VALID_LIST_MODES
+                .iter()
+                .any(|m| m.eq_ignore_ascii_case(&format_owned));
+            if is_valid_mode {
+                normalized
+                    .entry("mode".to_string())
+                    .or_insert(Value::String(format_owned));
+            } else {
+                // format was provided but is not a valid list mode (e.g.
+                // "github", "sarif").  Inject a warning so the agent gets
+                // feedback instead of a silent drop.
+                let warning = format!(
+                    "Parameter `format` value \"{format_owned}\" is not a valid list mode \
+                     (valid: {VALID_LIST_MODES:?}). It was ignored. Use `mode` directly \
+                     to control listing mode (list, recursive, tree, find_name, \
+                     find_content, largest)."
+                );
+                normalized
+                    .entry("_format_ignored".to_string())
+                    .or_insert(Value::String(warning));
+            }
+        }
+    }
+}
+
 /// Normalize unified_search args so case/shape variants still pass schema checks.
 pub fn normalize_unified_search_args(args: &Value) -> Value {
     let Some(args_obj) = extract_unified_search_args_object(args) else {
@@ -887,9 +978,23 @@ pub fn normalize_unified_search_args(args: &Value) -> Value {
             normalized
                 .entry("name_pattern".to_string())
                 .or_insert_with(|| Value::String(keyword));
-        } else if let Some(pattern) = pattern_alias {
+        } else if let Some(ref pattern) = pattern_alias {
             normalized
                 .entry("pattern".to_string())
+                .or_insert_with(|| Value::String(pattern.clone()));
+        }
+    }
+
+    // For outline action: map pattern -> path.  The agent often passes
+    // `pattern` (used by grep/list/structural) instead of `path` (used by
+    // outline).  Without this mapping, outline defaults to `path: "."`
+    // (workspace root) and the agent gets the wrong outline entirely
+    // (checkpoint turn_597: agent passed `pattern:
+    // "vtcode-core/src/tools/registry.rs"` instead of `path`).
+    if action.eq_ignore_ascii_case("outline") && !normalized.contains_key("path") {
+        if let Some(pattern) = pattern_alias.clone() {
+            normalized
+                .entry("path".to_string())
                 .or_insert_with(|| Value::String(pattern));
         }
     }
@@ -904,65 +1009,7 @@ pub fn normalize_unified_search_args(args: &Value) -> Value {
     // effect (checkpoint turn_606: 37-message loop on "what's in this
     // repo?").
     if action.eq_ignore_ascii_case("list") {
-        // globs -> pattern (ListInput.glob_pattern has serde alias "pattern")
-        let globs_pattern = if !normalized.contains_key("pattern") {
-            normalized.get("globs").and_then(|v| match v {
-                Value::String(s) => Some(s.clone()),
-                Value::Array(arr) => arr
-                    .iter()
-                    .filter_map(|v| v.as_str())
-                    .next()
-                    .map(str::to_string),
-                _ => None,
-            })
-        } else {
-            None
-        };
-        if let Some(glob_str) = globs_pattern {
-            normalized
-                .entry("pattern".to_string())
-                .or_insert(Value::String(glob_str));
-        }
-
-        // max_results -> per_page + max_items (raise both so a single
-        // page can hold all requested results)
-        if let Some(max_results) = normalized.get("max_results").cloned() {
-            normalized
-                .entry("per_page".to_string())
-                .or_insert(max_results.clone());
-            normalized
-                .entry("max_items".to_string())
-                .or_insert(max_results);
-        }
-
-        // format -> mode (the model often passes format:"tree" for
-        // list; map it to mode when the value is a valid list mode)
-        let format_mode = if !normalized.contains_key("mode") {
-            normalized
-                .get("format")
-                .and_then(Value::as_str)
-                .filter(|f| {
-                    matches!(
-                        *f,
-                        "list"
-                            | "recursive"
-                            | "tree"
-                            | "find_name"
-                            | "find_content"
-                            | "largest"
-                            | "file"
-                            | "files"
-                    )
-                })
-                .map(str::to_string)
-        } else {
-            None
-        };
-        if let Some(mode) = format_mode {
-            normalized
-                .entry("mode".to_string())
-                .or_insert(Value::String(mode));
-        }
+        apply_list_cross_mappings(&mut normalized);
     }
 
     Value::Object(normalized)
@@ -1792,6 +1839,46 @@ mod tests {
         assert!(
             result.get("max_items").is_none(),
             "max_results should not map to max_items for non-list actions"
+        );
+    }
+
+    // ── normalize_unified_search_args: outline pattern→path mapping ──────
+
+    #[test]
+    fn normalize_outline_maps_pattern_to_path() {
+        let result = normalize_unified_search_args(&json!({
+            "action": "outline",
+            "pattern": "vtcode-core/src/tools/registry.rs"
+        }));
+        assert_eq!(
+            result["path"], "vtcode-core/src/tools/registry.rs",
+            "outline should map pattern to path when path is absent"
+        );
+    }
+
+    #[test]
+    fn normalize_outline_preserves_explicit_path_over_pattern() {
+        let result = normalize_unified_search_args(&json!({
+            "action": "outline",
+            "path": "src/main.rs",
+            "pattern": "wrong/path.rs"
+        }));
+        assert_eq!(
+            result["path"], "src/main.rs",
+            "explicit path should not be overridden by pattern"
+        );
+    }
+
+    #[test]
+    fn normalize_outline_without_pattern_or_path_defaults() {
+        // No pattern, no path → outline will default to "." in from_args
+        let result = normalize_unified_search_args(&json!({
+            "action": "outline",
+            "view": "names"
+        }));
+        assert!(
+            result.get("path").is_none(),
+            "no path should be injected when neither pattern nor path is present"
         );
     }
 }

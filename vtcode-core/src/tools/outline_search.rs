@@ -25,6 +25,23 @@ use crate::utils::path::resolve_workspace_path;
 const SUPPORTED_ITEMS: &[&str] = &["auto", "structure", "exports", "imports", "all"];
 const SUPPORTED_VIEWS: &[&str] = &["digest", "names", "full"];
 
+/// Threshold for auto-downgrading `view: "full"` to `view: "names"` on
+/// directory queries.  `full` view emits per-symbol records with
+/// ranges/signatures/members — for a large directory this produces massive
+/// output that gets spooled and truncated, forcing the agent to retry.
+/// See checkpoint turn_586 (70-file directory, `view: "full"` → truncated
+/// → retry → tools disabled → no final answer).
+const LARGE_DIR_FULL_VIEW_THRESHOLD: usize = 20;
+
+/// Hint emitted when `format` is passed to outline (it's a structural
+/// scan-only field, not used by outline).
+const HINT_FORMAT_IGNORED: &str = "Parameter `format` is not used by outline (it is a structural scan-only field). It was ignored.";
+
+/// Hint emitted when `max_results` is passed to outline (outline doesn't
+/// paginate; use `type` or `match` to filter instead).
+const HINT_MAX_RESULTS_IGNORED: &str = "Parameter `max_results` is not used by outline. It was \
+    ignored. Use `type` to filter symbol kinds or `match` to filter by name regex.";
+
 /// Output shape applied in Rust after parsing the ast-grep JSON stream.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum OutlineView {
@@ -192,8 +209,35 @@ pub async fn execute_outline_search(workspace_root: &Path, args: Value) -> Resul
     // Resolve the search path within the workspace. `resolve_workspace_path`
     // canonicalizes and enforces workspace containment, so a missing path
     // surfaces as a structured error rather than a panic.
+    //
+    // Tolerant fallback: when the path ends with `.rs` (or another source
+    // extension) but doesn't exist as a file, retry without the extension —
+    // the agent often passes `path: "foo/bar.rs"` when `foo/bar` is actually a
+    // directory (checkpoint turn_595/turn_597: `vtcode-core/src/tools/registry.rs`
+    // → directory `vtcode-core/src/tools/registry`).
     let resolved = resolve_workspace_path(workspace_root, Path::new(&request.path))
+        .or_else(|_| {
+            if has_source_extension(&request.path) {
+                let stem = strip_extension(&request.path);
+                resolve_workspace_path(workspace_root, Path::new(&stem))
+            } else {
+                Err(anyhow!("Failed to resolve outline path: {}", request.path))
+            }
+        })
         .with_context(|| format!("Failed to resolve outline path: {}", request.path))?;
+
+    // Collect hints for unrecognized parameters so the agent gets feedback
+    // instead of silently dropped fields (checkpoint turn_586/594: `format:
+    // "github"` ignored; turn_595: `max_results: 80` ignored).
+    let mut hints: Vec<String> = Vec::new();
+    if let Some(obj) = args.as_object() {
+        if obj.get("format").is_some() {
+            hints.push(HINT_FORMAT_IGNORED.to_string());
+        }
+        if obj.get("max_results").is_some() {
+            hints.push(HINT_MAX_RESULTS_IGNORED.to_string());
+        }
+    }
 
     // Auto-tune the output for directory queries: when the user asks for an
     // outline of a directory, default to `view=names` (less verbose than
@@ -240,10 +284,38 @@ pub async fn execute_outline_search(workspace_root: &Path, args: Value) -> Resul
     }
 
     let files = parse_outline_stream(&output.stdout)?;
+
+    // Auto-downgrade `view: "full"` to `view: "names"` for large directories.
+    // `full` view emits per-symbol records with ranges/signatures/members —
+    // for a 70-file directory this produces massive output that gets spooled
+    // and truncated, forcing the agent to retry (checkpoint turn_586: 70-file
+    // directory, `view: "full"` → truncated → retry → tools disabled → no
+    // final answer).
+    let file_count = files.len();
+    let was_view_full_explicit =
+        is_directory && was_view_explicit && request.view == OutlineView::Full;
+    if was_view_full_explicit && file_count > LARGE_DIR_FULL_VIEW_THRESHOLD {
+        hints.push(format!(
+            "Auto-downgraded `view: \"full\"` to `view: \"names\"` because the directory has \
+             {file_count} files (threshold: {LARGE_DIR_FULL_VIEW_THRESHOLD}). `view: \"full\"` \
+             produces per-symbol records that are too large for directories. Use `view: \"full\"` \
+             on individual files, or `view: \"names\"`/`\"digest\"` for directories."
+        ));
+        request.view = OutlineView::Names;
+    }
+
     let mut result = shape_outline_result(request.view, files)?;
 
     if is_directory {
         attach_directory_summary(&mut result, &request);
+    }
+
+    // Attach collected hints to the result so the agent gets feedback about
+    // silently-dropped or auto-corrected parameters.
+    if !hints.is_empty() {
+        if let Some(obj) = result.as_object_mut() {
+            obj.insert("hints".to_string(), json!(hints));
+        }
     }
 
     Ok(result)
@@ -360,6 +432,26 @@ fn attach_directory_summary(result: &mut Value, request: &OutlineRequest) {
     });
 
     obj.insert("summary".to_string(), summary);
+}
+
+/// Check if a path string ends with a known source file extension. Used by
+/// the tolerant path fallback to detect when the agent passed a file path
+/// (e.g. `registry.rs`) when the target is actually a directory (`registry/`).
+fn has_source_extension(path: &str) -> bool {
+    let lower = path.to_ascii_lowercase();
+    const EXTENSIONS: &[&str] = &[
+        ".rs", ".py", ".js", ".ts", ".tsx", ".jsx", ".go", ".java", ".c", ".cpp", ".h", ".hpp",
+        ".rb", ".php", ".swift", ".kt", ".scala", ".lua", ".sh", ".bash", ".zsh",
+    ];
+    EXTENSIONS.iter().any(|ext| lower.ends_with(ext))
+}
+
+/// Strip the final extension from a path string. `"foo/bar.rs"` → `"foo/bar"`.
+fn strip_extension(path: &str) -> String {
+    match path.rfind('.') {
+        Some(dot_pos) if dot_pos > path.rfind('/').unwrap_or(0) => path[..dot_pos].to_string(),
+        _ => path.to_string(),
+    }
 }
 
 /// Build the path argument passed to ast-grep. Use the workspace-relative form

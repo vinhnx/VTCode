@@ -300,7 +300,7 @@ pub fn unified_search_parameters() -> Value {
             "view": {
                 "type": "string",
                 "enum": ["digest", "names", "full"],
-                "description": "Output shape for `outline`: digest (symbols grouped by kind, default for single-file queries), names (flat name groups, default for directory queries), full (per-symbol records with ranges/signatures/members). Directory queries also receive a top-level `summary` block with file/symbol counts and a flat `all_symbols` array.",
+                "description": "Output shape for `outline`: digest (symbols grouped by kind, default for single-file queries), names (flat name groups, default for directory queries — auto-applied when `view=full` is requested on a large directory to prevent truncation), full (per-symbol records with ranges/signatures/members — use on individual files, not large directories). Directory queries also receive a top-level `summary` block with file/symbol counts and a flat `all_symbols` array.",
                 "default": "digest"
             },
             "items": {

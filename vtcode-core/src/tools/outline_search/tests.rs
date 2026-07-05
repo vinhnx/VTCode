@@ -1,4 +1,7 @@
-use super::{OutlineItems, OutlineRequest, OutlineView, execute_outline_search};
+use super::{
+    OutlineItems, OutlineRequest, OutlineView, execute_outline_search, has_source_extension,
+    strip_extension,
+};
 use crate::tools::ast_grep_binary::AST_GREP_INSTALL_COMMAND;
 use crate::tools::editing::patch::set_ast_grep_binary_override_for_tests;
 use serde_json::json;
@@ -318,5 +321,116 @@ async fn outline_directory_respects_explicit_view() {
     assert!(
         result.get("summary").is_some(),
         "summary should still be attached for explicit views"
+    );
+}
+
+// ── Tolerant path fallback: .rs suffix on directory ───────────────────
+
+#[test]
+fn has_source_extension_detects_common_extensions() {
+    assert!(has_source_extension("src/registry.rs"));
+    assert!(has_source_extension("main.py"));
+    assert!(has_source_extension("app.tsx"));
+    assert!(has_source_extension("App.JAVA")); // case-insensitive
+    assert!(!has_source_extension("src/registry"));
+    assert!(!has_source_extension("Cargo.toml"));
+    assert!(!has_source_extension("README.md"));
+}
+
+#[test]
+fn strip_extension_removes_final_extension() {
+    assert_eq!(strip_extension("foo/bar.rs"), "foo/bar");
+    assert_eq!(strip_extension("main.py"), "main");
+    assert_eq!(strip_extension("no_extension"), "no_extension");
+    assert_eq!(strip_extension("path/to/dir/"), "path/to/dir/");
+}
+
+#[tokio::test]
+#[serial]
+async fn outline_tolerates_rs_suffix_on_directory() {
+    // The agent passes `path: "src.rs"` when `src/` is a directory.
+    // The tolerant fallback should strip `.rs` and find `src/`.
+    let (_script_dir, script_path) = write_fake_sg(TWO_FILE_STREAM);
+    let _override = set_ast_grep_binary_override_for_tests(Some(script_path));
+    let temp = workspace_with_source();
+
+    let result =
+        execute_outline_search(temp.path(), json!({"action": "outline", "path": "src.rs"}))
+            .await
+            .expect("tolerant fallback should resolve src.rs → src/");
+
+    // Should succeed and produce a names view (directory default)
+    assert_eq!(result["view"], "names");
+    assert!(
+        result.get("summary").is_some(),
+        "directory summary expected"
+    );
+}
+
+// ── Hints for unrecognized parameters ──────────────────────────────────
+
+#[tokio::test]
+#[serial]
+async fn outline_emits_hint_for_ignored_format() {
+    let (_script_dir, script_path) = write_fake_sg(TWO_FILE_STREAM);
+    let _override = set_ast_grep_binary_override_for_tests(Some(script_path));
+    let temp = workspace_with_source();
+
+    let result = execute_outline_search(
+        temp.path(),
+        json!({"action": "outline", "path": "src", "format": "github"}),
+    )
+    .await
+    .expect("outline should succeed even with ignored format");
+
+    let hints = result["hints"].as_array().expect("hints array");
+    assert!(
+        hints
+            .iter()
+            .any(|h| h.as_str().is_some_and(|s| s.contains("format"))),
+        "should hint that format was ignored"
+    );
+}
+
+#[tokio::test]
+#[serial]
+async fn outline_emits_hint_for_ignored_max_results() {
+    let (_script_dir, script_path) = write_fake_sg(TWO_FILE_STREAM);
+    let _override = set_ast_grep_binary_override_for_tests(Some(script_path));
+    let temp = workspace_with_source();
+
+    let result = execute_outline_search(
+        temp.path(),
+        json!({"action": "outline", "path": "src", "max_results": 80}),
+    )
+    .await
+    .expect("outline should succeed even with ignored max_results");
+
+    let hints = result["hints"].as_array().expect("hints array");
+    assert!(
+        hints
+            .iter()
+            .any(|h| h.as_str().is_some_and(|s| s.contains("max_results"))),
+        "should hint that max_results was ignored"
+    );
+}
+
+#[tokio::test]
+#[serial]
+async fn outline_no_hints_when_all_params_recognized() {
+    let (_script_dir, script_path) = write_fake_sg(TWO_FILE_STREAM);
+    let _override = set_ast_grep_binary_override_for_tests(Some(script_path));
+    let temp = workspace_with_source();
+
+    let result = execute_outline_search(
+        temp.path(),
+        json!({"action": "outline", "path": "src", "view": "names"}),
+    )
+    .await
+    .expect("outline should succeed");
+
+    assert!(
+        result.get("hints").is_none(),
+        "no hints should be emitted when all params are recognized"
     );
 }

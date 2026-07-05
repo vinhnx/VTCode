@@ -194,16 +194,19 @@ When byte-range parameters are provided, VT Code uses seek-based access for effi
 ### `outline`
 
 - Required: `action="outline"`
-- Optional: `path` (default `"."`), `lang`, `type` (string or array of symbol types, comma-joined for `--type`), `match` (regex over item names/signatures/first lines), `items` (`"auto" | "structure" | "exports" | "imports" | "all"`, default `"auto"` — `structure` for file input, `exports` for directory input), `pub_members` (bool, default `false`), `follow` (bool, default `false`), `view` (`"digest" | "names" | "full"`, default `"digest"`)
+- Optional: `path` (default `"."`; `pattern` is accepted as an alias and mapped to `path`), `lang`, `type` (string or array of symbol types, comma-joined for `--type`), `match` (regex over item names/signatures/first lines), `items` (`"auto" | "structure" | "exports" | "imports" | "all"`, default `"auto"` — `structure` for file input, `exports` for directory input), `pub_members` (bool, default `false`), `follow` (bool, default `false`), `view` (`"digest" | "names" | "full"`, default `"digest"`)
+- Tolerant path: when the path ends with a source extension (`.rs`, `.py`, etc.) but doesn't resolve as a file, outline retries without the extension — handles the common case of passing `foo/bar.rs` when `foo/bar/` is a directory
+- Ignored params: `format` and `max_results` are not used by outline; a `hints` array is emitted in the result explaining they were ignored
 - Internal mapping: `ast-grep outline --json=stream [--lang ...] [--type ...] [--match ...] [--items ...] [--pub-members] [--follow] <path>`. The CLI's own `--view` flag is text-only and is never passed; `view` is applied in Rust to shape the parsed NDJSON.
 - Requires ast-grep >= 0.44.0 (the `outline` subcommand and `--json` stream output shipped there)
 - No pattern or kind is required; outline extracts the symbol table via ast-grep's bundled rule catalog
 - No grep fallback when the binary is missing (outline has no text equivalent); auto-installs ast-grep on first use (download into `~/.vtcode/bin` with checksum + 24h cooldown). Set `VTCODE_AST_GREP_NO_INSTALL=1` to opt out; the error then includes the manual install command (`vtcode dependencies install ast-grep`)
 - Tolerant deserialization: unknown JSON keys from future ast-grep versions are ignored (`#[serde(default)]`, no `deny_unknown_fields`)
+- Auto-downgrade: `view: "full"` on a directory with >20 files is auto-downgraded to `view: "names"` to prevent output truncation; a `hints` entry explains the downgrade
 - Result shape by `view`:
   - `digest` (default): `{view:"digest", files:[{path, lang, groups:[{kind, names, members}]}]}` — symbols grouped by `symbolType`; `names` are top-level item names of that kind; `members` is the flat list of all member names across items of that kind
   - `names`: same as `digest` but without `members`
-  - `full`: `{view:"full", files:[{path, lang, items:[{role, kind, name, signature, astKind, isImport, isExported, members:[{role, kind, name, signature, isPublic}]}]}]}` — passthrough of per-symbol records with ranges/signatures and nested members
+  - `full`: `{view:"full", files:[{path, lang, items:[{role, kind, name, signature, astKind, isImport, isExported, members:[{role, kind, name, signature, isPublic}]}]}]}` — passthrough of per-symbol records with ranges/signatures and nested members. Use on individual files, not large directories.
 - Use when: you want a cheap "what's in this file/directory?" symbol map before reading full source; a 200-line file is ~100-300 bytes in `digest` vs ~10-40 KB of structural match JSON
 - Avoid when: you need pattern-based matches (use `structural`), text/regex matches (use `grep`), or semantic type resolution (use an LSP)
 

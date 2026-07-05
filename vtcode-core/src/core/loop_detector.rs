@@ -1089,14 +1089,22 @@ fn read_target_for_tool_call(tool_name: &str, args: &serde_json::Value) -> Optio
     }
 
     let read_tool = base_name == tools::READ_FILE
-        || (base_name == tools::UNIFIED_FILE && is_unified_file_read(tool_name, args));
+        || (base_name == tools::UNIFIED_FILE && is_unified_file_read(tool_name, args))
+        || (base_name == tools::UNIFIED_SEARCH && is_unified_search_outline(args));
     if !read_tool {
         return None;
     }
 
     let obj = args.as_object()?;
-    for key in ["path", "file_path", "filepath", "target_path", "file"] {
-        if let Some(path) = obj.get(key).and_then(|v| v.as_str()) {
+    // Outline uses `path` (and we normalize `pattern`→`path` for it in
+    // tool_intent), so check both keys.
+    let keys: &[&str] = if base_name == tools::UNIFIED_SEARCH {
+        &["path", "pattern"]
+    } else {
+        &["path", "file_path", "filepath", "target_path", "file"]
+    };
+    for key in keys {
+        if let Some(path) = obj.get(*key).and_then(|v| v.as_str()) {
             let trimmed = path.trim();
             if !trimmed.is_empty() {
                 return Some(trimmed.to_string());
@@ -1104,6 +1112,17 @@ fn read_target_for_tool_call(tool_name: &str, args: &serde_json::Value) -> Optio
         }
     }
     None
+}
+
+/// Returns `true` when `args` represent a `unified_search` outline
+/// invocation — `action: "outline"`.  Outline is a read-only symbol-map
+/// query; treating it as a read target lets the loop detector catch
+/// duplicate outline calls on the same path (checkpoint turn_597:
+/// 6 outline calls on the same directory).
+fn is_unified_search_outline(args: &serde_json::Value) -> bool {
+    args.get("action")
+        .and_then(|v| v.as_str())
+        .is_some_and(|a| a.eq_ignore_ascii_case("outline"))
 }
 
 /// Returns `true` when `(tool_name, args)` represent a `unified_file` read
