@@ -49,12 +49,10 @@ impl SubagentController {
         let prompt = self.prepare_delegation_prompt(
             &spec,
             &delegation,
-            &mut request.model,
             &request.message,
             &request.items,
             "spawn_agent",
             "spawning the subagent",
-            "Ignoring subagent model override because the current user turn did not explicitly request that model",
         )?;
         self.spawn_with_spec(
             spec,
@@ -101,12 +99,10 @@ impl SubagentController {
         let prompt = self.prepare_delegation_prompt(
             &spec,
             &delegation,
-            &mut request.model,
             &request.message,
             &request.items,
             "spawn_background_subprocess",
             "launching the background subprocess",
-            "Ignoring background subprocess model override because the current user turn did not explicitly request that model",
         )?;
         let desired_max_turns =
             normalize_background_child_max_turns(request.max_turns.or(spec.max_turns), true);
@@ -723,7 +719,6 @@ impl SubagentController {
             requested_agent,
             explicit_mentions: state.turn_hints.explicit_mentions.clone(),
             explicit_request: state.turn_hints.explicit_request,
-            current_input: state.turn_hints.current_input.clone(),
         })
     }
 
@@ -731,12 +726,10 @@ impl SubagentController {
         &self,
         spec: &SubagentSpec,
         delegation: &PreparedDelegationContext,
-        model: &mut Option<String>,
         message: &Option<String>,
         items: &[SubagentInputItem],
         tool_name: &'static str,
         launch_phrase: &'static str,
-        ignored_model_warning: &'static str,
     ) -> Result<String> {
         if let Some(explicit) = delegation.explicit_mentions.first()
             && delegation.explicit_mentions.len() == 1
@@ -768,16 +761,6 @@ impl SubagentController {
                 tool_name,
                 spec.name
             );
-        }
-        if let Some(requested_model) = model.as_deref()
-            && !contains_explicit_model_request(&delegation.current_input, requested_model)
-        {
-            tracing::warn!(
-                agent_name = spec.name.as_str(),
-                requested_model = requested_model.trim(),
-                "{ignored_model_warning}"
-            );
-            *model = None;
         }
         let prompt = request_prompt(message, items)
             .or_else(|| spec.initial_prompt.clone())

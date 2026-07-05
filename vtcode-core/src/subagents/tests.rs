@@ -1247,37 +1247,6 @@ fn load_primary_memory_appendix_missing_memory_is_noop_without_directory_creatio
 }
 
 #[tokio::test]
-async fn spawn_ignores_model_override_without_explicit_user_model_request() {
-    let temp = TempDir::new().expect("tempdir");
-    let controller = SubagentController::new(test_controller_config(
-        temp.path().to_path_buf(),
-        VTCodeConfig::default(),
-    ))
-    .await
-    .expect("controller");
-
-    controller
-        .set_turn_delegation_hints_from_input("delegate this task")
-        .await;
-
-    let spawned = controller
-        .spawn(SpawnAgentRequest {
-            agent_type: Some("worker".to_string()),
-            message: Some("Implement the change.".to_string()),
-            model: Some(models::openai::GPT_5_4_MINI.to_string()),
-            ..SpawnAgentRequest::default()
-        })
-        .await
-        .expect("spawn");
-
-    let effective_model = wait_for_effective_model(&controller, &spawned.id)
-        .await
-        .expect("effective model");
-    assert_eq!(effective_model, models::openai::GPT_5_4);
-    controller.close(&spawned.id).await.expect("close");
-}
-
-#[tokio::test]
 async fn spawn_honors_model_override_when_user_explicitly_requests_it() {
     let temp = TempDir::new().expect("tempdir");
     let controller = SubagentController::new(test_controller_config(

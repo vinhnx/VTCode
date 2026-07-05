@@ -57,7 +57,6 @@ pub(super) struct PreparedDelegationContext {
     pub(super) requested_agent: Option<String>,
     pub(super) explicit_mentions: Vec<String>,
     pub(super) explicit_request: bool,
-    pub(super) current_input: String,
 }
 
 /// Result of a propose/verify cycle.
