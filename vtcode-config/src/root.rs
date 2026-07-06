@@ -772,9 +772,9 @@ impl PtyConfig {
                     "pty.zsh_path '{zsh_path}' is not a file (required when pty.shell_zsh_fork is enabled)"
                 );
             }
-        }
 
-        Ok(Some(zsh_path))
+            Ok(Some(zsh_path))
+        }
     }
 }
 

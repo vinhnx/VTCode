@@ -117,6 +117,7 @@ fn install_via_homebrew() -> Result<()> {
 }
 
 #[cfg(target_os = "linux")]
+#[allow(unsafe_code)]
 fn install_via_apt() -> Result<()> {
     // Check if we're already running as root (skip sudo if so)
     let is_root = unsafe { libc::getuid() == 0 };

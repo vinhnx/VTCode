@@ -1,6 +1,6 @@
 //! Safety / audit configuration.
 //!
-//! This module wires the [`vtcode_safety::audit_log`] sinks into the top-level
+//! This module wires the `vtcode_safety::audit_log` sinks into the top-level
 //! VT Code configuration. The struct is purely additive — existing configs
 //! that don't declare a `[safety.audit]` table get the defaults from
 //! [`ToolAuditConfig::default`].
@@ -26,7 +26,7 @@ pub struct SafetyConfig {
     pub audit: Option<ToolAuditConfig>,
 }
 
-/// Subset of `[safety.audit]` controlling the [`JsonlFileSink`](vtcode_safety::audit_log::JsonlFileSink).
+/// Subset of `[safety.audit]` controlling the `vtcode_safety::audit_log::JsonlFileSink`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolAuditConfig {
     /// When true, the runloop persists audit entries. Default `false`.

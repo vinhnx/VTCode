@@ -174,9 +174,17 @@ jobs:
         with:
           targets: x86_64-pc-windows-msvc
 
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+
+      - name: Install sccache
+        uses: mozilla-actions/sccache-action@9e7fa8a12102821edf02ca5dbea1acd0f89a2696 # v0.0.10
+
       - name: Build (x86_64-pc-windows-msvc)
         run: cargo build --release --target x86_64-pc-windows-msvc
         shell: bash
+        env:
+          RUSTC_WRAPPER: sccache
+          SCCACHE_GHA_ENABLED: "true"
 
       - name: Check Binary
         shell: bash
