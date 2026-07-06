@@ -204,6 +204,7 @@ impl SensitivePath {
             }
             return path_norm == expanded_norm || path_norm.starts_with(&expanded_prefix);
         }
+        #[cfg(not(windows))]
         path.starts_with(&expanded)
     }
 }

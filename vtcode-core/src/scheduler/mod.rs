@@ -994,7 +994,7 @@ impl ServiceManager {
         {
             return Some(Self::SystemdUser);
         }
-        #[expect(unreachable_code)]
+        #[cfg_attr(unix, allow(unreachable_code))]
         None
     }
 }

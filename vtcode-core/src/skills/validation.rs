@@ -713,6 +713,7 @@ impl SkillValidator {
     }
 
     /// Check executable permissions
+    #[cfg_attr(not(unix), allow(unused_variables))]
     async fn check_executable_permissions(&self, path: &Path) -> CheckResult {
         let start_time = Instant::now();
 

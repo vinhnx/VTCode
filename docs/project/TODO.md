@@ -243,3 +243,7 @@ export CARGO_TARGET_DIR=/tmp/target-vtcode
 ===
 
 make the bottom status line text foreground color to be dimmer. Like the top right status line.
+
+=--
+
+check the CI step check in release.sh script. (SUCCESS: CI builds completed successfully)) is shown even though the CI build is failed and cancelled (example: https://github.com/vinhnx/VTCode/actions/runs/28781549754/job/85338081603). The CI step check should accurately reflect the actual status of the CI build, and not show a success message if the build has failed or been cancelled. We need to review the logic in the release.sh script that determines the CI build status and ensure that it correctly interprets the results from the GitHub Actions API. This may involve checking for specific status codes or messages returned by the API and updating the script to handle these cases appropriately.

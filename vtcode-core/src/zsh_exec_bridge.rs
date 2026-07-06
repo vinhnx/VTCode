@@ -7,11 +7,6 @@ use serde::{Deserialize, Serialize};
 #[cfg(not(unix))]
 use std::path::Path;
 
-pub(crate) const ZSH_EXEC_BRIDGE_WRAPPER_SOCKET_ENV_VAR: &str =
-    "VTCODE_ZSH_EXEC_BRIDGE_WRAPPER_SOCKET";
-pub(crate) const ZSH_EXEC_WRAPPER_MODE_ENV_VAR: &str = "VTCODE_ZSH_EXEC_WRAPPER_MODE";
-pub(crate) const EXEC_WRAPPER_ENV_VAR: &str = "EXEC_WRAPPER";
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct WrapperExecRequest {
     request_id: String,
@@ -36,10 +31,12 @@ struct WrapperExecResponse {
 
 #[cfg(unix)]
 mod unix_impl {
-    use super::{
-        EXEC_WRAPPER_ENV_VAR, WrapperExecAction, WrapperExecRequest, WrapperExecResponse,
-        ZSH_EXEC_BRIDGE_WRAPPER_SOCKET_ENV_VAR, ZSH_EXEC_WRAPPER_MODE_ENV_VAR,
-    };
+    use super::{WrapperExecAction, WrapperExecRequest, WrapperExecResponse};
+
+    pub(super) const ZSH_EXEC_BRIDGE_WRAPPER_SOCKET_ENV_VAR: &str =
+        "VTCODE_ZSH_EXEC_BRIDGE_WRAPPER_SOCKET";
+    pub(super) const ZSH_EXEC_WRAPPER_MODE_ENV_VAR: &str = "VTCODE_ZSH_EXEC_WRAPPER_MODE";
+    pub(super) const EXEC_WRAPPER_ENV_VAR: &str = "EXEC_WRAPPER";
     use anyhow::{Context, Result, bail};
     use hashbrown::HashMap;
     use parking_lot::Mutex;

@@ -296,6 +296,7 @@ fn is_process_running(pid: u32) -> bool {
 }
 
 #[cfg(not(unix))]
+#[allow(dead_code)]
 fn is_process_running(_pid: u32) -> bool {
     // On non-Unix, assume running (will fail gracefully)
     true

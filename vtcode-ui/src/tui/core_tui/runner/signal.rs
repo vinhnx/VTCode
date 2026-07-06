@@ -1,4 +1,6 @@
-use anyhow::{Context, Result};
+#[cfg(unix)]
+use anyhow::Context;
+use anyhow::Result;
 
 #[cfg(unix)]
 use signal_hook::consts::signal::SIGTERM;
