@@ -241,3 +241,7 @@ export CARGO_TARGET_DIR=/tmp/target-vtcode
 
 optimize only for my local machine, not on CI/CD. for CI/CD check existing free github action infra and see if it can be optimized or streamlined.
 ```
+
+===
+
+make the bottom status line text foreground color to be dimmer. Like the top right status line.
