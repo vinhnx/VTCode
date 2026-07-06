@@ -258,6 +258,9 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: read
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: "sccache"
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v6
         with:
@@ -266,6 +269,7 @@ jobs:
         with:
           toolchain: ${{ matrix.toolchain }}
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      - uses: mozilla-actions/sccache-action@9e7fa8a12102821edf02ca5dbea1acd0f89a2696 # v0.0.10
       - run: cargo check --locked
 
   test:
@@ -294,7 +298,7 @@ jobs:
         uses: taiki-e/install-action@fae525311e5e299134b606bf247d465dd0df8190 # nextest
 
       - name: Run tests
-        run: cargo nextest run --locked --profile ci
+        run: cargo nextest run --locked --profile ci --cargo-profile ci
 
       - name: Run focused harness PTY/TUI regressions
         if: success() || failure()
