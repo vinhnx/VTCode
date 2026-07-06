@@ -1,4 +1,7 @@
-use super::{PLACEHOLDER_COLOR, Session, measure_text_width, ratatui_style_from_inline};
+use super::{
+    PLACEHOLDER_COLOR, Session, measure_text_width, ratatui_color_from_ansi,
+    ratatui_style_from_inline,
+};
 use crate::tui::config::constants::ui;
 use crate::tui::ui::tui::types::InlineTextStyle;
 use anstyle::{Color as AnsiColorEnum, Effects};
@@ -907,7 +910,13 @@ impl Session {
             return None;
         }
 
-        let dim_style = self.styles.default_style().add_modifier(Modifier::DIM);
+        let dim_style = {
+            let mut style = self.styles.default_style().add_modifier(Modifier::DIM);
+            if let Some(secondary) = self.theme.secondary.or(self.theme.foreground) {
+                style = style.fg(ratatui_color_from_ansi(secondary));
+            }
+            style
+        };
         let mut spans = Vec::new();
 
         // Add left content (git status or shimmered activity)
