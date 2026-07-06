@@ -231,3 +231,7 @@ export CARGO_TARGET_DIR=/tmp/target-vtcode
 **Practical order to try, given a Rust CLI project like VT Code:** mold/lld first (fastest to set up, no code changes), then `cargo build --timings` to find your actual bottleneck crates, then hakari if the workspace has many interdependent crates, then sccache for CI. rust-analyzer's `check.workspace: false` is worth flipping immediately if editor lag is the real complaint rather than raw CLI time.
 
 ==> NOTE: optimize only for my local machine, not on CI/CD. for CI/CD check existing free github action infra and see if it can be optimized or streamlined.
+
+---
+
+total eleminate `unsafe {` calls in the codebase. The goal is to ensure that the code is safe and free from undefined behavior, which can lead to security vulnerabilities and runtime errors. This may involve refactoring code to use safe abstractions, leveraging Rust's ownership and borrowing system, and applying best practices for memory safety. We should also review existing unsafe blocks to determine if they can be replaced with safe alternatives or if they are necessary for performance reasons. The aim is to maintain a high level of safety and reliability in the codebase while still achieving the desired functionality.

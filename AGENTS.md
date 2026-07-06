@@ -14,6 +14,7 @@ Keep this file concise and under 150 lines. Root guidance belongs here; detailed
 - **Shape-suffix naming**: encode the dimensional structure of data in variable/type names. For feature vectors, document a **dimension key** (table of index → name → meaning). For bare tuples holding structured data, promote to named structs so the shape is explicit in the type system (inspired by Noam Shazeer's shape-suffix convention).
 - `clippy.toml` allows `unwrap`/`panic`/indexing in tests only.
 - Dev profile has `incremental = false` (sccache). Set `CARGO_INCREMENTAL=1` to override.
+- **All built-in themes must meet WCAG AA 4.5:1 contrast** for foreground and all accent fields against background. Validate with `cargo nextest run -p vtcode-ui -E 'test(theme)'`. See `.vtcode/memory/gotchas.md` for catppuccin-latte special-case.
 - **Every new major feature must update docs**: user-facing behavior → `docs/development/` guide + a table row/section in the relevant quick-reference; agent-facing tool surface → prompt guidance (`vtcode-core/src/prompts/guidelines.rs`) + schema (`vtcode-utility-tool-specs`); runtime contract → `vtcode-exec-events::ThreadEvent`. No feature is "done" until the docs it changes are updated and the AGENTS.md detailed-guides links still resolve.
 
 ## Detailed Guides
