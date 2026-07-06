@@ -2,6 +2,23 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.134.11 - 2026-07-06
+
+### Highlights
+#### Features
+
+- Add MultiErrors type implementing error-parameter pattern (145ea479) 
+### Other Changes
+#### CI
+
+- Update workflows to use install-action for dependencies and enable sccache (0f3af6e4) 
+#### Other
+
+- Update notes (68cf3fc3) 
+- Update TODO (8ae6078c) 
+#### Refactors
+
+- Enhance testing commands and scripts for improved efficiency (c7fcffd1) 
 ## 0.134.10 - 2026-07-06
 
 ### Highlights
