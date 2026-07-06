@@ -91,6 +91,8 @@ jobs:
       - name: Install sccache
         if: matrix.target == 'x86_64-unknown-linux-gnu'
         uses: mozilla-actions/sccache-action@9e7fa8a12102821edf02ca5dbea1acd0f89a2696 # v0.0.10
+        env:
+          SCCACHE_CACHE_SIZE: "20G"
 
       - name: Build with cargo (${{ matrix.target }})
         if: matrix.target == 'x86_64-unknown-linux-gnu'
@@ -186,6 +188,10 @@ jobs:
     runs-on: windows-latest
     permissions:
       contents: read
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      SCCACHE_CACHE_SIZE: "20G"
+      RUSTC_WRAPPER: sccache
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v6
         with:
@@ -205,9 +211,6 @@ jobs:
       - name: Build (x86_64-pc-windows-msvc)
         run: cargo build --release --target x86_64-pc-windows-msvc
         shell: bash
-        env:
-          RUSTC_WRAPPER: sccache
-          SCCACHE_GHA_ENABLED: "true"
 
       - name: Check Binary
         shell: bash
@@ -244,6 +247,10 @@ jobs:
     runs-on: macos-latest
     permissions:
       contents: read
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      SCCACHE_CACHE_SIZE: "20G"
+      RUSTC_WRAPPER: sccache
     strategy:
       fail-fast: false
       matrix:
@@ -275,9 +282,6 @@ jobs:
       - name: Build (${{ matrix.target }})
         run: cargo build --release --target ${{ matrix.target }}
         shell: bash
-        env:
-          RUSTC_WRAPPER: sccache
-          SCCACHE_GHA_ENABLED: "true"
 
       - name: Check Binary
         shell: bash
