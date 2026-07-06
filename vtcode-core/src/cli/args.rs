@@ -58,9 +58,9 @@ fn parse_workspace_directory(raw: &str) -> Result<PathBuf, String> {
 #[command(
     name = "vtcode",
     version,
-    about = "VT Code - AI coding assistant",
-    long_about = "VT Code - AI coding assistant\n\n\
-An AI-powered coding agent that can read, write, and execute code in your workspace.\n\n\
+    about = "VT Code is a Rust coding agent built for long-running autonomous workflows, with OS-native sandboxing, multi-provider LLM support, open protocols, and extensible Skills.",
+    long_about = "VT Code\n\n\
+VT Code is a Rust coding agent built for long-running autonomous workflows, with OS-native sandboxing, multi-provider LLM support, open protocols, and extensible Skills.\n\n\
 Quick start:\n\
   vtcode                  Launch interactive chat\n\
   vtcode ask \"question\"   Single prompt, no tools\n\
