@@ -52,6 +52,8 @@ pub fn get_syntax_theme_for_ui_theme(ui_theme: &str) -> &'static str {
         "afterglow" => "base16-ocean.dark",
         "apple-classic" => "base16-ocean.dark",
         "apple-system-colors" => "base16-ocean.dark",
+        "nord" => "base16-ocean.dark",
+        "nord-light" => "base16-ocean.light",
         "apple-system-colors-light" => "base16-ocean.light",
         "vitesse-light" | "vitesse-light-soft" => "base16-ocean.light",
         "ciapre" | "ciapre-dark" | "ciapre-blue" => "base16-ocean.dark",

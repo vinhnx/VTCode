@@ -847,6 +847,36 @@ static REGISTRY: Lazy<HashMap<&'static str, ThemeDefinition>> = Lazy::new(|| {
         },
     );
 
+    map.insert(
+        "nord",
+        ThemeDefinition {
+            id: "nord",
+            label: "Nord",
+            palette: ThemePalette {
+                primary_accent: RgbColor(0x88, 0xC0, 0xD0),
+                background: RgbColor(0x2E, 0x34, 0x40),
+                foreground: RgbColor(0xEC, 0xEF, 0xF4),
+                secondary_accent: RgbColor(0x81, 0xA1, 0xC1),
+                alert: RgbColor(0xBF, 0x61, 0x6A),
+                logo_accent: RgbColor(0xEB, 0xCB, 0x8B),
+            },
+        },
+    );
+    map.insert(
+        "nord-light",
+        ThemeDefinition {
+            id: "nord-light",
+            label: "Nord Light",
+            palette: ThemePalette {
+                primary_accent: RgbColor(0x5E, 0x81, 0xAC),
+                background: RgbColor(0xEC, 0xEF, 0xF4),
+                foreground: RgbColor(0x2E, 0x34, 0x40),
+                secondary_accent: RgbColor(0x88, 0xC0, 0xD0),
+                alert: RgbColor(0xBF, 0x61, 0x6A),
+                logo_accent: RgbColor(0xA3, 0xBE, 0x8C),
+            },
+        },
+    );
     register_catppuccin_themes(&mut map);
     map
 });
@@ -903,7 +933,9 @@ pub fn theme_label(theme_id: &str) -> Option<&'static str> {
 }
 
 fn suite_id_for_theme(theme_id: &str) -> Option<&'static str> {
-    if theme_id.starts_with("catppuccin-") {
+    if theme_id.starts_with("nord") {
+        Some("nord")
+    } else if theme_id.starts_with("catppuccin-") {
         Some("catppuccin")
     } else if theme_id.starts_with("vitesse-") {
         Some("vitesse")
@@ -918,6 +950,7 @@ fn suite_id_for_theme(theme_id: &str) -> Option<&'static str> {
 
 fn suite_label(suite_id: &str) -> Option<&'static str> {
     match suite_id {
+        "nord" => Some("Nord"),
         "catppuccin" => Some("Catppuccin"),
         "vitesse" => Some("Vitesse"),
         "ciapre" => Some("Ciapre"),
@@ -938,7 +971,7 @@ pub fn theme_suite_label(theme_id: &str) -> Option<&'static str> {
 
 /// Return the built-in theme suites and their member theme identifiers.
 pub fn available_theme_suites() -> Vec<ThemeSuite> {
-    const ORDER: &[&str] = &["ciapre", "vitesse", "catppuccin", "mono"];
+    const ORDER: &[&str] = &["ciapre", "vitesse", "catppuccin", "mono", "nord"];
 
     ORDER
         .iter()

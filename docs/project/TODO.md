@@ -74,14 +74,6 @@ IMPORTANT: some times read file tool offset and lines are too large, which can c
 
 ===
 
-optimize and reduce line height for tool call group. '/Users/vinhnguyenxuan/Documents/vtcode-resources/idea/Screenshot 2026-07-06 at 11.18.05.png'
-
-===
-
-add nord themes dark/light.
-
-===
-
 check the agent loop again:
 
 " 3. Goals (measurable)
