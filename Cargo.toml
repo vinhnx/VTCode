@@ -293,6 +293,8 @@ lto = false
 # incremental = false required for sccache; set CARGO_INCREMENTAL=1 to override for rapid iteration
 incremental = false
 opt-level = 0
+# More codegen units = more parallelism for dependency codegen during check/clippy
+codegen-units = 256
 # Split debuginfo for faster incremental builds (when CARGO_INCREMENTAL=1)
 split-debuginfo = "unpacked"
 
