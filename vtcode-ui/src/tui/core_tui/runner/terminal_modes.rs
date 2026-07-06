@@ -138,9 +138,10 @@ pub(super) fn enable_terminal_modes(
 
 pub(super) fn restore_terminal_modes(state: &TerminalModeState) -> Result<()> {
     use ratatui::crossterm::event::PopKeyboardEnhancementFlags;
+    use vtcode_commons::MultiErrors;
     let mut stderr = io::stderr();
 
-    let mut errors = Vec::new();
+    let mut errors: MultiErrors<String> = MultiErrors::new();
 
     // Restore in reverse order of enabling/entering.
 
@@ -208,10 +209,7 @@ pub(super) fn restore_terminal_modes(state: &TerminalModeState) -> Result<()> {
     if errors.is_empty() {
         Ok(())
     } else {
-        tracing::warn!(
-            errors = ?errors,
-            "some terminal modes failed to restore"
-        );
+        tracing::warn!("some terminal modes failed to restore: {errors}");
         Ok(()) // Don't fail the operation, just warn
     }
 }

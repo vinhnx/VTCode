@@ -4,6 +4,7 @@
 /// common configuration errors early and provide helpful error messages.
 use anyhow::{Result, bail};
 use std::path::Path;
+use vtcode_commons::MultiErrors;
 
 use crate::config::FullAutoConfig;
 use crate::config::loader::VTCodeConfig;
@@ -15,7 +16,7 @@ use crate::config::models::{
 #[derive(Debug, Clone)]
 pub struct ValidationResult {
     pub is_valid: bool,
-    pub errors: Vec<String>,
+    pub errors: MultiErrors<String>,
     pub warnings: Vec<String>,
 }
 
@@ -23,7 +24,7 @@ impl ValidationResult {
     pub fn new() -> Self {
         Self {
             is_valid: true,
-            errors: Vec::new(),
+            errors: MultiErrors::new(),
             warnings: Vec::new(),
         }
     }
@@ -39,15 +40,7 @@ impl ValidationResult {
 
     pub fn to_result(self) -> Result<()> {
         if !self.is_valid {
-            let error_msg = self
-                .errors
-                .iter()
-                .enumerate()
-                .map(|(i, e)| format!("  {}. {}", i + 1, e))
-                .collect::<Vec<_>>()
-                .join("\n");
-
-            bail!("Configuration validation failed:\n{error_msg}");
+            bail!("Configuration validation failed:\n{}", &self.errors);
         }
 
         // Print warnings if any

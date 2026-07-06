@@ -1,6 +1,8 @@
 use crate::types::SkillManifest;
 use serde::{Deserialize, Serialize};
+use std::fmt;
 use std::path::PathBuf;
+use vtcode_commons::MultiErrors;
 
 /// Skill scope indicating where the skill is defined
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, Hash)]
@@ -35,10 +37,18 @@ pub struct SkillErrorInfo {
     pub message: String,
 }
 
+impl fmt::Display for SkillErrorInfo {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}: {}", self.path.display(), self.message)
+    }
+}
+
+impl std::error::Error for SkillErrorInfo {}
+
 #[derive(Debug, Clone, Default)]
 pub struct SkillLoadOutcome {
     pub skills: Vec<SkillMetadata>,
-    pub errors: Vec<SkillErrorInfo>,
+    pub errors: MultiErrors<SkillErrorInfo>,
 }
 
 #[cfg(test)]

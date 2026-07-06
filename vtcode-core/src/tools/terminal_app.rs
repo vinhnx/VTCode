@@ -14,7 +14,7 @@ use ratatui::crossterm::terminal::{
 };
 use tempfile::NamedTempFile;
 use tracing::debug;
-use vtcode_commons::EditorTarget;
+use vtcode_commons::{EditorTarget, MultiErrors};
 
 const TERMINAL_EVENT_DRAIN_WAIT: Duration = Duration::from_millis(10);
 
@@ -375,7 +375,7 @@ impl TerminalAppLauncher {
         if was_raw_mode {
             // Always attempt every restore step so we minimize the chance of leaving the terminal
             // in a partially restored state.
-            let mut restore_errors = Vec::new();
+            let mut restore_errors: MultiErrors<String> = MultiErrors::new();
 
             if let Err(error) = enable_raw_mode() {
                 restore_errors.push(format!("failed to re-enable raw mode: {error}"));
@@ -397,11 +397,10 @@ impl TerminalAppLauncher {
             }
 
             if !restore_errors.is_empty() {
-                let restore_summary = restore_errors.join("; ");
                 return match result {
-                    Ok(_) => Err(anyhow!("terminal restore failed: {restore_summary}")),
+                    Ok(_) => Err(anyhow!("terminal restore failed: {restore_errors}")),
                     Err(command_error) => Err(command_error
-                        .context(format!("terminal restore also failed: {restore_summary}"))),
+                        .context(format!("terminal restore also failed: {restore_errors}"))),
                 };
             }
         }

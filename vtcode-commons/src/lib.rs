@@ -71,7 +71,9 @@ pub use error_category::{
     BackoffStrategy, ErrorCategory, Retryability, classify_anyhow_error, classify_error_message,
     is_retryable_llm_error_message,
 };
-pub use errors::{DisplayErrorFormatter, ErrorFormatter, ErrorReporter, NoopErrorReporter};
+pub use errors::{
+    DisplayErrorFormatter, ErrorFormatter, ErrorReporter, MultiErrors, NoopErrorReporter,
+};
 pub use paths::{
     PathExt, PathResolver, PathScope, StrPathExt, WorkspacePaths, file_name_from_path,
     is_safe_relative_path, normalize_ascii_identifier, resolve_workspace_path,

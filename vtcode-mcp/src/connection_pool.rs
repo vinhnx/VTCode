@@ -11,6 +11,7 @@ use tracing::{error, info, warn};
 
 use super::{McpElicitationHandler, McpProvider};
 use rmcp::model::{ClientCapabilities, InitializeRequestParams};
+use vtcode_commons::MultiErrors;
 use vtcode_config::mcp::{McpAllowListConfig, McpProviderConfig};
 
 /// MCP connection pool for efficient provider management
@@ -67,23 +68,18 @@ impl McpConnectionPool {
         // Execute all tasks in parallel
         let results = join_all(tasks).await;
 
-        // Collect successful connections
+        // Collect successful connections, accumulating errors
         let mut successful_providers = Vec::new();
-        let mut errors = Vec::new();
+        let mut errors: MultiErrors<McpPoolError> = MultiErrors::new();
 
         for result in results {
-            match result {
-                Ok((name, provider)) => {
-                    successful_providers.push((name, provider));
-                }
-                Err(error) => {
-                    errors.push(error);
-                }
+            if let Some(provider) = errors.collect_result(result) {
+                successful_providers.push(provider);
             }
         }
 
         if !errors.is_empty() {
-            warn!("Some MCP provider connections failed: {:?}", errors);
+            warn!("Some MCP provider connections failed: {errors}");
         }
 
         Ok(successful_providers)

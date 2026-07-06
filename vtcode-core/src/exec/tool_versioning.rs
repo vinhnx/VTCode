@@ -12,6 +12,7 @@ use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use std::fmt::Write;
 use tracing::debug;
+use vtcode_commons::MultiErrors;
 
 #[cfg(test)]
 use crate::config::constants::tools;
@@ -106,7 +107,7 @@ pub struct CompatibilityReport {
     /// Non-fatal warnings (e.g., available version is newer than required).
     pub warnings: Vec<String>,
     /// Fatal errors preventing compatibility.
-    pub errors: Vec<String>,
+    pub errors: MultiErrors<String>,
     /// Migrations that must be applied to resolve incompatibilities.
     pub migrations: Vec<Migration>,
 }
@@ -179,7 +180,7 @@ impl SkillCompatibilityChecker {
         let mut report = CompatibilityReport {
             compatible: true,
             warnings: vec![],
-            errors: vec![],
+            errors: MultiErrors::new(),
             migrations: vec![],
         };
 
@@ -295,7 +296,7 @@ impl SkillCompatibilityChecker {
 
         if !report.errors.is_empty() {
             output.push_str("\nErrors:\n");
-            for error in &report.errors {
+            for error in report.errors.iter() {
                 let _ = writeln!(output, "  - {error}");
             }
         }

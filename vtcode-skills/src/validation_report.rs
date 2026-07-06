@@ -3,6 +3,7 @@
 //! Provides detailed validation feedback with multiple error levels and suggestions.
 
 use serde::{Deserialize, Serialize};
+use std::fmt;
 use std::path::PathBuf;
 
 /// Severity level for validation issues
@@ -23,6 +24,19 @@ pub struct ValidationIssue {
     pub field: Option<String>,
     pub message: String,
     pub suggestion: Option<String>,
+}
+
+impl fmt::Display for ValidationIssue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.message)?;
+        if let Some(field) = &self.field {
+            write!(f, " (field: {field})")?;
+        }
+        if let Some(suggestion) = &self.suggestion {
+            write!(f, " — {suggestion}")?;
+        }
+        Ok(())
+    }
 }
 
 /// Comprehensive skill validation report

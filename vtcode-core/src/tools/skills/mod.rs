@@ -367,7 +367,7 @@ fn discover_skill_catalog(
     );
 
     let metadata = discover_session_skill_metadata(workspace_root, &codex_home);
-    log_discovery_warnings(operation, &metadata.errors);
+    log_discovery_warnings(operation, metadata.errors.as_slice());
     (codex_home, metadata)
 }
 
@@ -803,7 +803,7 @@ impl Tool for ListSkillsTool {
             );
             response_object.insert(
                 "discovery_error_samples".to_string(),
-                serde_json::json!(discovery_error_samples(&discovery.errors)),
+                serde_json::json!(discovery_error_samples(discovery.errors.as_slice())),
             );
         }
 

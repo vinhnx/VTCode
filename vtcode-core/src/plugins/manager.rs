@@ -9,6 +9,7 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
+use vtcode_commons::MultiErrors;
 
 use super::{PluginCache, PluginLoader, PluginManifest, PluginResult, PluginRuntime};
 use crate::config::PluginRuntimeConfig;
@@ -183,7 +184,7 @@ impl PluginManager {
         }
 
         let mut refreshed_count = 0usize;
-        let mut errors = Vec::with_capacity(roots.len());
+        let mut errors: MultiErrors<String> = MultiErrors::new();
 
         for root in roots {
             if !root.exists() {
@@ -229,17 +230,10 @@ impl PluginManager {
             }
         }
 
-        if errors.is_empty() {
-            Ok(RefreshResult::Success {
-                refreshed_count,
-                errors: Vec::new(),
-            })
-        } else {
-            Ok(RefreshResult::SuccessWithErrors {
-                refreshed_count,
-                errors,
-            })
-        }
+        Ok(RefreshResult::Success {
+            refreshed_count,
+            errors,
+        })
     }
 
     /// Scan a workspace root for non-curated plugins (marketplace.json files).
@@ -332,15 +326,10 @@ impl PluginManager {
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum RefreshResult {
-    /// Refresh completed successfully
+    /// Refresh completed successfully (possibly with non-fatal errors).
     Success {
         refreshed_count: usize,
-        errors: Vec<String>,
-    },
-    /// Refresh completed with some errors
-    SuccessWithErrors {
-        refreshed_count: usize,
-        errors: Vec<String>,
+        errors: MultiErrors<String>,
     },
     /// Refresh was skipped because one is already in progress
     SkippedAlreadyInProgress,

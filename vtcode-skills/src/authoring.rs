@@ -8,6 +8,7 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use tracing::{debug, info};
+use vtcode_commons::MultiErrors;
 
 /// Example Python script template
 pub const EXAMPLE_SCRIPT: &str = r#"#!/usr/bin/env python3
@@ -427,7 +428,7 @@ fn add_directory_to_zip<W: Write + std::io::Seek>(
 pub struct ValidationReport {
     pub skill_dir: PathBuf,
     pub valid: bool,
-    pub errors: Vec<String>,
+    pub errors: MultiErrors<String>,
     pub warnings: Vec<String>,
 }
 
@@ -436,7 +437,7 @@ impl ValidationReport {
         Self {
             skill_dir,
             valid: false,
-            errors: Vec::new(),
+            errors: MultiErrors::new(),
             warnings: Vec::new(),
         }
     }
@@ -454,7 +455,7 @@ impl ValidationReport {
 
         if !self.errors.is_empty() {
             output.push_str("Errors:\n");
-            for error in &self.errors {
+            for error in self.errors.iter() {
                 output.push_str(&format!("  ✗ {error}\n"));
             }
             output.push('\n');

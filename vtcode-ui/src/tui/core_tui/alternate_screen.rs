@@ -11,6 +11,7 @@ use ratatui::crossterm::{
         enable_raw_mode,
     },
 };
+use vtcode_commons::MultiErrors;
 
 /// Terminal state that needs to be preserved when entering alternate screen
 #[derive(Debug)]
@@ -158,7 +159,7 @@ impl AlternateScreenSession {
         // Clear current line to remove artifacts like ^C from rapid presses
         let _ = execute!(stdout, MoveToColumn(0), Clear(ClearType::CurrentLine));
 
-        let mut errors = Vec::new();
+        let mut errors: MultiErrors<String> = MultiErrors::new();
 
         // Restore in proper order to prevent leakage
 
@@ -205,10 +206,7 @@ impl AlternateScreenSession {
         if errors.is_empty() {
             Ok(())
         } else {
-            tracing::warn!(
-                errors = ?errors,
-                "some terminal operations failed during restore"
-            );
+            tracing::warn!("some terminal operations failed during restore: {errors}");
             // Don't fail the operation, just warn - terminal is likely already in a bad state
             Ok(())
         }
