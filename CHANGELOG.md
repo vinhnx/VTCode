@@ -2,6 +2,14 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.134.10 - 2026-07-06
+
+### Highlights
+### Other Changes
+#### Other
+
+- Update help cli (114dbecd) 
+- Refactor provider noise handling and harmony sanitization (4c402a60) 
 ## 0.134.9 - 2026-07-05
 
 ### Highlights
