@@ -2,6 +2,13 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.134.12 - 2026-07-06
+
+### Highlights
+### Other Changes
+#### Refactors
+
+- Clean up unused compiler settings and warnings in build configurations (129517c9) (@vinhnx)
 ## 0.134.11 - 2026-07-06
 
 ### Highlights
