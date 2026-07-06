@@ -191,9 +191,14 @@ impl Session {
         let agent_label = primary_agent_header_label(self.header_context.primary_agent.as_deref());
         let model_summary_spans = self.header_compact_model_summary_spans();
         if !agent_label.trim().is_empty() {
+            let fallback = self
+                .theme
+                .primary
+                .map(ratatui_color_from_ansi)
+                .unwrap_or(Color::LightMagenta);
             let agent_style = super::super::style::agent_color_style(
                 self.header_context.primary_agent_color.as_deref(),
-                Color::Magenta,
+                fallback,
             );
             spans.push(Span::styled(agent_label, agent_style));
         }
@@ -468,8 +473,14 @@ impl Session {
                 *first = false;
             };
 
+        let agent_badge_color = self
+            .theme
+            .primary
+            .or(self.theme.foreground)
+            .map(ratatui_color_from_ansi)
+            .unwrap_or(Color::LightMagenta);
         let agent_style = Style::default()
-            .fg(Color::Magenta)
+            .fg(agent_badge_color)
             .add_modifier(Modifier::BOLD);
         push_badge(
             &mut spans,
@@ -481,8 +492,15 @@ impl Session {
         // Show trust level badge
         let trust_value = self.header_context.workspace_trust.to_lowercase();
         if trust_value.contains("full auto") || trust_value.contains("full_auto") {
+            let auto_badge_color = self
+                .theme
+                .tool_accent
+                .or(self.theme.primary)
+                .or(self.theme.foreground)
+                .map(ratatui_color_from_ansi)
+                .unwrap_or(Color::LightCyan);
             let badge_style = Style::default()
-                .fg(Color::Cyan)
+                .fg(auto_badge_color)
                 .add_modifier(Modifier::BOLD);
             push_badge(
                 &mut spans,
@@ -491,8 +509,14 @@ impl Session {
                 &mut first_section,
             );
         } else if trust_value.contains("tools policy") || trust_value.contains("tools_policy") {
+            let safe_badge_color = self
+                .theme
+                .primary
+                .or(self.theme.foreground)
+                .map(ratatui_color_from_ansi)
+                .unwrap_or(Color::LightGreen);
             let badge_style = Style::default()
-                .fg(Color::Green)
+                .fg(safe_badge_color)
                 .add_modifier(Modifier::BOLD);
             push_badge(
                 &mut spans,

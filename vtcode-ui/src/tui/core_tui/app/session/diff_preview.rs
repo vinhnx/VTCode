@@ -127,8 +127,8 @@ fn render_diff_content(
                     DiffDisplayKind::Metadata | DiffDisplayKind::HunkHeader => unreachable!(),
                 };
 
-                let gutter_style = style_gutter(line_type);
-                let sign_style = style_sign(line_type);
+                let gutter_style = style_gutter(line_type, style_context);
+                let sign_style = style_sign(line_type, style_context);
                 let line_bg = style_line_bg(line_type, style_context);
                 let content_style = style_content(line_type, style_context);
 
@@ -192,6 +192,15 @@ fn render_controls(frame: &mut Frame<'_>, area: Rect, preview: &DiffPreviewState
 }
 
 fn control_lines(preview: &DiffPreviewState) -> Vec<Line<'static>> {
+    let action_key_style =
+        |color: Color| -> Style { Style::default().fg(color).add_modifier(Modifier::BOLD) };
+
+    let key_green = Color::LightGreen;
+    let key_red = Color::LightRed;
+    let key_cyan = Color::LightCyan;
+    let key_yellow = Color::Yellow;
+    let muted = Color::Gray;
+
     match preview.mode {
         DiffPreviewMode::EditApproval => {
             let trust = match preview.trust_mode {
@@ -203,84 +212,58 @@ fn control_lines(preview: &DiffPreviewState) -> Vec<Line<'static>> {
 
             vec![
                 Line::from(vec![
-                    Span::styled(
-                        "Enter",
-                        Style::default()
-                            .fg(Color::Green)
-                            .add_modifier(Modifier::BOLD),
-                    ),
+                    Span::styled("Enter", action_key_style(key_green)),
                     Span::raw(" Apply  "),
-                    Span::styled(
-                        "Esc",
-                        Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-                    ),
+                    Span::styled("Esc", action_key_style(key_red)),
                     Span::raw(" Reject  "),
-                    Span::styled("Tab", Style::default().fg(Color::Yellow)),
+                    Span::styled("Tab", action_key_style(key_yellow)),
                     Span::raw("/"),
-                    Span::styled("S-Tab", Style::default().fg(Color::Yellow)),
+                    Span::styled("S-Tab", action_key_style(key_yellow)),
                     Span::raw(" Nav"),
                 ]),
                 Line::from(vec![
-                    Span::styled("1", Style::default().fg(Color::Cyan)),
+                    Span::styled("1", action_key_style(key_cyan)),
                     Span::raw("-Once "),
-                    Span::styled("2", Style::default().fg(Color::Cyan)),
+                    Span::styled("2", action_key_style(key_cyan)),
                     Span::raw("-Sess "),
-                    Span::styled("3", Style::default().fg(Color::Cyan)),
+                    Span::styled("3", action_key_style(key_cyan)),
                     Span::raw("-Always "),
-                    Span::styled("4", Style::default().fg(Color::Cyan)),
+                    Span::styled("4", action_key_style(key_cyan)),
                     Span::raw("-Auto "),
                     Span::styled(
                         format!("[{trust}]"),
-                        Style::default()
-                            .fg(Color::DarkGray)
-                            .add_modifier(Modifier::BOLD),
+                        Style::default().fg(muted).add_modifier(Modifier::BOLD),
                     ),
                 ]),
             ]
         }
         DiffPreviewMode::FileConflict => vec![
             Line::from(vec![
-                Span::styled(
-                    "Enter",
-                    Style::default()
-                        .fg(Color::Green)
-                        .add_modifier(Modifier::BOLD),
-                ),
+                Span::styled("Enter", action_key_style(key_green)),
                 Span::raw(" Proceed  "),
-                Span::styled("r", Style::default().fg(Color::Cyan)),
+                Span::styled("r", action_key_style(key_cyan)),
                 Span::raw(" Reload  "),
-                Span::styled(
-                    "Esc",
-                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-                ),
+                Span::styled("Esc", action_key_style(key_red)),
                 Span::raw(" Abort"),
             ]),
             Line::from(vec![
-                Span::styled("Tab", Style::default().fg(Color::Yellow)),
+                Span::styled("Tab", action_key_style(key_yellow)),
                 Span::raw("/"),
-                Span::styled("S-Tab", Style::default().fg(Color::Yellow)),
+                Span::styled("S-Tab", action_key_style(key_yellow)),
                 Span::raw(" Nav"),
             ]),
         ],
         DiffPreviewMode::ReadonlyReview => vec![
             Line::from(vec![
-                Span::styled(
-                    "Enter",
-                    Style::default()
-                        .fg(Color::Green)
-                        .add_modifier(Modifier::BOLD),
-                ),
+                Span::styled("Enter", action_key_style(key_green)),
                 Span::raw(" Back  "),
-                Span::styled(
-                    "Esc",
-                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-                ),
+                Span::styled("Esc", action_key_style(key_red)),
                 Span::raw(" Back"),
             ]),
             Line::from(vec![
-                Span::styled("Tab", Style::default().fg(Color::Yellow)),
+                Span::styled("Tab", action_key_style(key_yellow)),
                 Span::raw("/"),
-                Span::styled("S-Tab", Style::default().fg(Color::Yellow)),
+                Span::styled("S-Tab", action_key_style(key_yellow)),
                 Span::raw(" Nav"),
             ]),
         ],
