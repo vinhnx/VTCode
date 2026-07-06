@@ -85,6 +85,12 @@ pub(crate) struct ToolWallClockExhaustion {
     pub max_secs: u64,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct ToolWallClockExhaustionNotice {
+    pub exhaustion: ToolWallClockExhaustion,
+    pub first_notice: bool,
+}
+
 pub(crate) const TOOL_BUDGET_WARNING_THRESHOLD: f64 = 0.75;
 
 impl ToolBudgetWarning {
@@ -129,6 +135,23 @@ impl ToolWallClockExhaustion {
     pub(crate) fn policy_violation_message(self) -> String {
         format!(
             "Policy violation: exceeded tool wall clock budget ({}s)",
+            self.max_secs
+        )
+    }
+
+    /// Compact stub returned for the 2nd+ rejected calls in the same batch so
+    /// the full policy message isn't repeated N times and context stays clean.
+    pub(crate) fn skipped_call_message(self) -> String {
+        "Tool wall-clock budget exhausted for this turn; call skipped.".to_string()
+    }
+
+    /// System directive pushed once (after all tool responses in the batch)
+    /// telling the model that tools are disabled for the rest of the turn and
+    /// it must synthesize a final answer from already-gathered outputs. This is
+    /// the in-turn synthesis nudge that the raw per-call policy errors lack.
+    pub(crate) fn synthesis_directive_message(self) -> String {
+        format!(
+            "Tool wall-clock budget exhausted for this turn ({}s). Tools are disabled for the rest of this turn. Do NOT emit more tool calls. Synthesize your final answer now from the tool outputs already gathered in this conversation.",
             self.max_secs
         )
     }
@@ -301,6 +324,15 @@ pub(crate) struct HarnessTurnState {
     pub recently_written_files: HashSet<String>,
     pub tool_budget_warning_emitted: bool,
     pub tool_budget_exhausted_emitted: bool,
+    /// Whether the first-notice wall-clock-exhaustion policy message has been
+    /// emitted this turn. Mirrors `tool_budget_exhausted_emitted` so the full
+    /// policy-violation message is sent once and subsequent rejected calls in
+    /// the same batch get a compact stub instead of repeating it.
+    pub wall_clock_exhausted_emitted: bool,
+    /// Set when the first wall-clock rejection fires; consumed after the tool
+    /// batch by the handler to push a single "synthesize now" system directive
+    /// *after* all tool responses (never interleaved between them).
+    pub wall_clock_directive_pending: bool,
     pub recovery_reason: Option<String>,
     recovery_phase: RecoveryPhase,
     recovery_mode: Option<RecoveryMode>,
@@ -353,6 +385,8 @@ impl HarnessTurnState {
             recently_written_files: HashSet::new(),
             tool_budget_warning_emitted: false,
             tool_budget_exhausted_emitted: false,
+            wall_clock_exhausted_emitted: false,
+            wall_clock_directive_pending: false,
             recovery_reason: None,
             recovery_phase: RecoveryPhase::Inactive,
             recovery_mode: None,
@@ -442,6 +476,33 @@ impl HarnessTurnState {
             exhaustion,
             first_notice,
         })
+    }
+
+    /// Record a wall-clock-budget rejection for the current tool call.
+    ///
+    /// Returns `None` when the budget is not exhausted. On the first exhausted
+    /// call it flags `first_notice` (so the full policy message is emitted once)
+    /// and arms `wall_clock_directive_pending` so the handler pushes a single
+    /// "synthesize now" system directive *after* the tool batch completes.
+    pub(crate) fn record_wall_clock_exhaustion_notice(
+        &mut self,
+    ) -> Option<ToolWallClockExhaustionNotice> {
+        let exhaustion = self.wall_clock_budget_exhaustion()?;
+        let first_notice = !self.wall_clock_exhausted_emitted;
+        if first_notice {
+            self.wall_clock_exhausted_emitted = true;
+            self.wall_clock_directive_pending = true;
+        }
+        Some(ToolWallClockExhaustionNotice {
+            exhaustion,
+            first_notice,
+        })
+    }
+
+    /// Consume the pending wall-clock synthesis-directive flag. Returns `true`
+    /// exactly once per turn (after the batch where exhaustion first fired).
+    pub(crate) fn take_wall_clock_directive_pending(&mut self) -> bool {
+        std::mem::take(&mut self.wall_clock_directive_pending)
     }
 
     pub(crate) fn record_blocked_tool_call(&mut self) -> usize {
@@ -835,7 +896,8 @@ mod tests {
     use super::{
         CrossTurnTracker, HarnessTurnState, RecoveryMode, TOOL_BUDGET_WARNING_THRESHOLD,
         ToolBudgetExhaustion, ToolBudgetExhaustionNotice, ToolBudgetWarning,
-        ToolWallClockExhaustion, TurnExecutionPhase, TurnId, TurnPhase, TurnRunId,
+        ToolWallClockExhaustion, ToolWallClockExhaustionNotice, TurnExecutionPhase, TurnId,
+        TurnPhase, TurnRunId,
     };
     use hashbrown::HashSet;
     use std::time::{Duration, Instant};
@@ -1032,6 +1094,60 @@ mod tests {
         assert_eq!(
             state.wall_clock_budget_exhaustion(),
             Some(ToolWallClockExhaustion { max_secs: 10 })
+        );
+    }
+
+    #[test]
+    fn harness_state_records_wall_clock_exhaustion_notice_once() {
+        let mut state = HarnessTurnState::new(
+            TurnRunId("run-1".to_string()),
+            TurnId("turn-1".to_string()),
+            4,
+            10,
+            1,
+        );
+
+        // Not exhausted yet: no notice, no pending directive.
+        assert_eq!(state.record_wall_clock_exhaustion_notice(), None);
+        assert!(!state.take_wall_clock_directive_pending());
+
+        // Simulate the wall-clock budget elapsing.
+        state.turn_started_at = Instant::now().checked_sub(Duration::from_secs(11)).unwrap();
+
+        // First rejection: first_notice=true and arms the directive.
+        assert_eq!(
+            state.record_wall_clock_exhaustion_notice(),
+            Some(ToolWallClockExhaustionNotice {
+                exhaustion: ToolWallClockExhaustion { max_secs: 10 },
+                first_notice: true,
+            })
+        );
+        assert!(state.wall_clock_exhausted_emitted);
+
+        // Subsequent rejections in the same batch: first_notice=false.
+        assert_eq!(
+            state.record_wall_clock_exhaustion_notice(),
+            Some(ToolWallClockExhaustionNotice {
+                exhaustion: ToolWallClockExhaustion { max_secs: 10 },
+                first_notice: false,
+            })
+        );
+
+        // The directive is consumed exactly once.
+        assert!(state.take_wall_clock_directive_pending());
+        assert!(!state.take_wall_clock_directive_pending());
+    }
+
+    #[test]
+    fn tool_wall_clock_exhaustion_directive_messages_match_contract() {
+        let exhaustion = ToolWallClockExhaustion { max_secs: 600 };
+        assert_eq!(
+            exhaustion.skipped_call_message(),
+            "Tool wall-clock budget exhausted for this turn; call skipped."
+        );
+        assert_eq!(
+            exhaustion.synthesis_directive_message(),
+            "Tool wall-clock budget exhausted for this turn (600s). Tools are disabled for the rest of this turn. Do NOT emit more tool calls. Synthesize your final answer now from the tool outputs already gathered in this conversation."
         );
     }
 

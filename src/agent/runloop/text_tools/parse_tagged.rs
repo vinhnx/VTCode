@@ -159,8 +159,11 @@ fn parse_minimax_tool_call(text: &str) -> Option<(String, Value)> {
     const PARAMETER_TAG: &str = "<parameter name=\"";
     const PARAMETER_CLOSE: &str = "</parameter>";
 
-    // Strip the ]<]minimax[>[ noise prefix if present
-    let cleaned_text = text.replace("]<]minimax[>[", "");
+    // Strip provider noise (e.g. MiniMax `]<]minimax[>[`) so tag boundaries
+    // parse cleanly. Delegates to the centralized provider-noise module so the
+    // noise vocabulary stays in one place.
+    let cleaned_text =
+        crate::agent::runloop::unified::turn::provider_noise::strip_provider_noise(text);
     let working_text = cleaned_text.as_str();
 
     let invoke_start = working_text.find(INVOKE_TAG)?;

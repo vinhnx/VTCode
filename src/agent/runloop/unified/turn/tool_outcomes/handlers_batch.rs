@@ -10,7 +10,7 @@ use crate::agent::runloop::unified::turn::context::{
 
 use super::{
     PreparedToolCall, ToolOutcomeContext, ValidationTransition, finalize_validation_result,
-    validate_tool_call,
+    flush_wall_clock_directive, validate_tool_call,
 };
 use crate::agent::runloop::unified::turn::tool_outcomes::execution_result::handle_tool_execution_result;
 use crate::agent::runloop::unified::turn::tool_outcomes::helpers::{
@@ -302,10 +302,17 @@ pub(crate) async fn handle_tool_call_batch_prepared<'a, 'b>(
                     prepared,
                 });
             }
-            ValidationTransition::Return(Some(outcome)) => return Ok(Some(outcome)),
+            ValidationTransition::Return(Some(outcome)) => {
+                flush_wall_clock_directive(t_ctx.ctx);
+                return Ok(Some(outcome));
+            }
             ValidationTransition::Return(None) => continue,
         }
     }
+
+    // If the wall-clock budget tripped during validation, push the single
+    // "synthesize now" directive after all tool responses (never interleaved).
+    flush_wall_clock_directive(t_ctx.ctx);
 
     if validated_calls.is_empty() {
         return Ok(None);

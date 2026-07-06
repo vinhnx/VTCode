@@ -1,3 +1,25 @@
+/// All known harmony control-token markers. Used by [`contains_harmony_marker`]
+/// to detect harmony-formatted content and by `stream_sanitization` for
+/// incomplete-block detection.
+pub(crate) const HARMONY_MARKERS: &[&str] = &[
+    "<|start|>",
+    "<|channel|>",
+    "<|message|>",
+    "<|call|>",
+    "<|return|>",
+    "<|end|>",
+];
+
+/// Returns `true` if `text` contains any harmony control-token marker.
+///
+/// This is the single source of truth for harmony detection — both the stream
+/// renderer (`stream_sanitization`) and the non-streamed response processor
+/// (`response_processing`) use this function instead of inline checks.
+#[inline]
+pub(crate) fn contains_harmony_marker(text: &str) -> bool {
+    text.contains("<|") || HARMONY_MARKERS.iter().any(|marker| text.contains(marker))
+}
+
 pub(crate) fn strip_harmony_syntax(text: &str) -> String {
     let mut result = String::with_capacity(text.len());
     let mut current = text;
@@ -85,7 +107,7 @@ pub(crate) fn strip_harmony_syntax(text: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::strip_harmony_syntax;
+    use super::{contains_harmony_marker, strip_harmony_syntax};
 
     #[test]
     fn test_strip_harmony_syntax_basic() {
@@ -120,5 +142,28 @@ mod tests {
         let input = "Text with <|channel|> partial tags <|message|>";
         let result = strip_harmony_syntax(input);
         assert_eq!(result, "Text with  partial tags");
+    }
+
+    #[test]
+    fn contains_harmony_marker_detects_all_markers() {
+        assert!(contains_harmony_marker("<|start|>content"));
+        assert!(contains_harmony_marker("<|channel|>content"));
+        assert!(contains_harmony_marker("<|message|>content"));
+        assert!(contains_harmony_marker("<|call|>"));
+        assert!(contains_harmony_marker("<|return|>"));
+        assert!(contains_harmony_marker("<|end|>"));
+    }
+
+    #[test]
+    fn contains_harmony_marker_detects_generic_pipe() {
+        // Any `<|` sequence is a potential harmony marker
+        assert!(contains_harmony_marker("text <|unknown|> more"));
+    }
+
+    #[test]
+    fn contains_harmony_marker_returns_false_for_clean_text() {
+        assert!(!contains_harmony_marker("Just normal text"));
+        assert!(!contains_harmony_marker(""));
+        assert!(!contains_harmony_marker("Some < but not harmony > text"));
     }
 }

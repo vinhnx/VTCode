@@ -291,6 +291,71 @@ async fn validate_tool_call_blocks_when_wall_clock_budget_exhausted() {
             .as_text()
             .contains("Policy violation: exceeded tool wall clock budget")
     }));
+
+    // A second rejected call in the same batch must NOT repeat the full policy
+    // message — it gets a compact "call skipped" stub instead.
+    let second = validate_tool_call(
+        &mut ctx,
+        "wall_clock_exhausted_2",
+        tool_names::READ_FILE,
+        &json!({"path": sample_path}),
+    )
+    .await
+    .expect("validate second wall-clock-exhausted tool call");
+    assert!(matches!(second, ValidationResult::Blocked));
+    let policy_violation_count = ctx
+        .working_history
+        .iter()
+        .filter(|message| {
+            message
+                .content
+                .as_text()
+                .contains("Policy violation: exceeded tool wall clock budget")
+        })
+        .count();
+    assert_eq!(
+        policy_violation_count, 1,
+        "full policy message must be emitted exactly once per turn"
+    );
+    assert!(
+        ctx.working_history
+            .iter()
+            .any(|message| { message.content.as_text().contains("call skipped") })
+    );
+
+    // Flushing after the batch pushes exactly one "synthesize now" directive so
+    // the model produces a final answer from gathered context instead of stalling.
+    flush_wall_clock_directive(&mut ctx);
+    let directive_count = ctx
+        .working_history
+        .iter()
+        .filter(|message| {
+            message.role == uni::MessageRole::System
+                && message
+                    .content
+                    .as_text()
+                    .contains("Synthesize your final answer now")
+        })
+        .count();
+    assert_eq!(
+        directive_count, 1,
+        "synthesis directive must be pushed once"
+    );
+
+    // Flushing again is a no-op (the pending flag is consumed).
+    flush_wall_clock_directive(&mut ctx);
+    let directive_count_after = ctx
+        .working_history
+        .iter()
+        .filter(|message| {
+            message.role == uni::MessageRole::System
+                && message
+                    .content
+                    .as_text()
+                    .contains("Synthesize your final answer now")
+        })
+        .count();
+    assert_eq!(directive_count_after, 1, "directive must not be duplicated");
 }
 
 #[tokio::test]

@@ -4,6 +4,7 @@ mod finalization;
 pub(crate) mod guards;
 pub(crate) mod harmony;
 pub(crate) mod plan_content;
+pub(crate) mod provider_noise;
 mod recovery_flow;
 pub(crate) mod session;
 mod session_loop;

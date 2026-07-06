@@ -34,6 +34,7 @@ pub(crate) mod state;
 mod status_line;
 mod status_line_command;
 pub(crate) mod stop_requests;
+pub(crate) mod stream_sanitization;
 pub(crate) mod tool_catalog;
 mod tool_output_handler;
 mod tool_pipeline;

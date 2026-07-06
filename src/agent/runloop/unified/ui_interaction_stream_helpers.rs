@@ -30,7 +30,7 @@ pub(super) fn reasoning_matches_content(reasoning: &str, content: &str) -> bool 
         && cleaned_reasoning == cleaned_content
 }
 
-pub(super) fn common_prefix_len(a: &str, b: &str) -> usize {
+pub(crate) fn common_prefix_len(a: &str, b: &str) -> usize {
     let mut len = 0;
     for (left, right) in a.chars().zip(b.chars()) {
         if left != right {

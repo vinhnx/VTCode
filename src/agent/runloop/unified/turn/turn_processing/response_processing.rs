@@ -24,13 +24,28 @@ pub(crate) fn process_llm_response(
     >,
     tool_registry: Option<&vtcode_core::tools::ToolRegistry>,
 ) -> Result<TurnProcessingResult> {
-    use crate::agent::runloop::unified::turn::harmony::strip_harmony_syntax;
+    use crate::agent::runloop::unified::turn::harmony::{
+        contains_harmony_marker, strip_harmony_syntax,
+    };
+    use crate::agent::runloop::unified::turn::provider_noise::strip_provider_noise;
     use vtcode_core::config::constants::tools;
     use vtcode_core::llm::provider as uni;
 
     let reasoning = split_reasoning_from_text(response.reasoning.as_deref().unwrap_or("")).0;
     let reasoning_details = response.reasoning_details.clone();
     let mut final_text = response.content.clone();
+
+    // Strip provider noise (e.g. MiniMax `]<]minimax[>[`) from non-streamed
+    // response content before any downstream processing. This prevents noise
+    // from leaking into `working_history` or corrupting harmony/tool-call
+    // parsing. Streamed responses are sanitized live by `StreamSanitizer`.
+    if let Some(ref text) = final_text {
+        let cleaned = strip_provider_noise(text);
+        if cleaned != *text {
+            final_text = Some(cleaned);
+        }
+    }
+
     let mut proposed_plan: Option<String> = None;
     let mut tool_calls = if allow_tool_calls {
         response.tool_calls.clone().unwrap_or_default()
@@ -43,7 +58,7 @@ pub(crate) fn process_llm_response(
     let reasoning_details_count = reasoning_details.as_ref().map_or(0, Vec::len);
 
     if let Some(ref text) = final_text
-        && (text.contains("<|start|>") || text.contains("<|channel|>") || text.contains("<|call|>"))
+        && contains_harmony_marker(text)
     {
         is_harmony = true;
         let cleaned = strip_harmony_syntax(text);

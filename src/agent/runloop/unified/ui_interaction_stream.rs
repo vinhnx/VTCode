@@ -10,7 +10,7 @@ use tokio::sync::{Notify, mpsc};
 use crate::agent::runloop::unified::plan_blocks::{
     ProposedPlanStreamParser, extract_proposed_plan,
 };
-use crate::agent::runloop::unified::turn::harmony::strip_harmony_syntax;
+use crate::agent::runloop::unified::stream_sanitization::StreamSanitizer;
 use vtcode_core::copilot::CopilotRuntimeRequest;
 use vtcode_core::llm::error_display;
 use vtcode_core::llm::provider::{self as uni, LLMStreamEvent, NormalizedStreamEvent};
@@ -219,50 +219,11 @@ fn stream_markdown_with_provider_error(
         .map_err(|err| map_render_error(provider_name, err))
 }
 
-const HARMONY_MARKERS: &[&str] = &[
-    "<|start|>",
-    "<|channel|>",
-    "<|message|>",
-    "<|call|>",
-    "<|return|>",
-    "<|end|>",
-];
-
-const HARMONY_TERMINATORS: &[&str] = &["<|call|>", "<|return|>", "<|end|>"];
-
-fn contains_harmony_marker(text: &str) -> bool {
-    text.contains("<|") || HARMONY_MARKERS.iter().any(|marker| text.contains(marker))
-}
-
-fn incomplete_harmony_block_start(raw: &str) -> Option<usize> {
-    let start_pos = raw.rfind("<|start|>")?;
-    let tail = &raw[start_pos..];
-    let has_terminator = HARMONY_TERMINATORS
-        .iter()
-        .any(|terminator| tail.contains(terminator));
-    if has_terminator {
-        None
-    } else {
-        Some(start_pos)
-    }
-}
-
-fn sanitize_harmony_stream_text(raw: &str) -> String {
-    let stable_raw = if let Some(start_pos) = incomplete_harmony_block_start(raw) {
-        &raw[..start_pos]
-    } else {
-        raw
-    };
-    strip_harmony_syntax(stable_raw)
-}
-
-fn sanitize_harmony_final_text(text: String) -> String {
-    if contains_harmony_marker(&text) {
-        strip_harmony_syntax(&text)
-    } else {
-        text
-    }
-}
+// Provider-noise and harmony-control-token sanitization has been extracted to
+// `stream_sanitization::StreamSanitizer`. The constants and helper functions
+// that previously lived here (`HARMONY_MARKERS`, `contains_harmony_marker`,
+// `sanitize_harmony_stream_text`, `sanitize_harmony_final_text`, etc.) now
+// reside in that module, alongside MiniMax flat-noise stripping.
 
 #[async_trait]
 pub(crate) trait CopilotRuntimeRequestHandler: Send {
@@ -507,9 +468,7 @@ pub(crate) async fn render_stream_with_options_and_copilot_runtime_impl(
     let mut reasoning_token_count = 0;
     let mut last_progress_update = Instant::now();
     let mut reasoning_emitted = false;
-    let mut harmony_stream_mode = false;
-    let mut harmony_raw_stream = String::new();
-    let mut harmony_visible_stream = String::new();
+    let mut stream_sanitizer = StreamSanitizer::new();
     let mut first_progress_timeout = first_progress_timeout;
 
     loop {
@@ -633,16 +592,11 @@ pub(crate) async fn render_stream_with_options_and_copilot_runtime_impl(
                     delta
                 };
 
-                if !harmony_stream_mode && contains_harmony_marker(&visible_delta) {
-                    harmony_stream_mode = true;
-                }
-                if harmony_stream_mode {
-                    harmony_raw_stream.push_str(&visible_delta);
-                    let sanitized = sanitize_harmony_stream_text(&harmony_raw_stream);
-                    let prefix_len = common_prefix_len(&harmony_visible_stream, &sanitized);
-                    visible_delta = sanitized.get(prefix_len..).unwrap_or_default().to_string();
-                    harmony_visible_stream = sanitized;
-                    aggregated = harmony_visible_stream.clone();
+                let sanitized = stream_sanitizer.process_delta(&visible_delta);
+                visible_delta = sanitized.visible_delta;
+                let has_aggregated_override = sanitized.aggregated_override.is_some();
+                if let Some(cleaned_aggregated) = sanitized.aggregated_override {
+                    aggregated = cleaned_aggregated;
                 }
 
                 if stream_reasoning_deltas && !pending_reasoning_delta.is_empty() {
@@ -693,7 +647,7 @@ pub(crate) async fn render_stream_with_options_and_copilot_runtime_impl(
                     continue;
                 }
 
-                if !harmony_stream_mode {
+                if !has_aggregated_override {
                     aggregated.push_str(&visible_delta);
                 }
                 if supports_streaming_markdown {
@@ -922,7 +876,7 @@ pub(crate) async fn render_stream_with_options_and_copilot_runtime_impl(
     } else {
         response.content.clone()
     };
-    let content_for_render = content_for_render.map(sanitize_harmony_final_text);
+    let content_for_render = content_for_render.map(|text| stream_sanitizer.finalize(text));
     let has_renderable_content = content_for_render
         .as_deref()
         .map(|content| !content.trim().is_empty())

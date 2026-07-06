@@ -54,6 +54,19 @@ fn build_failure_error_content(error: String, failure_kind: &'static str) -> Str
     super::execution_result::build_error_content(error, None, None, failure_kind).to_string()
 }
 
+/// Push the one-time wall-clock synthesis directive if a wall-clock rejection
+/// armed it during validation. Called after the tool batch (single or grouped)
+/// completes so the system message lands *after* all tool responses of the
+/// current assistant message, never interleaved between them (which some
+/// provider adapters reject). No-op unless the budget tripped this turn.
+pub(super) fn flush_wall_clock_directive(ctx: &mut TurnProcessingContext<'_>) {
+    if ctx.harness_state.take_wall_clock_directive_pending()
+        && let Some(exhaustion) = ctx.harness_state.wall_clock_budget_exhaustion()
+    {
+        ctx.push_system_message(exhaustion.synthesis_directive_message());
+    }
+}
+
 pub(super) fn apply_reused_read_only_loop_metadata(
     obj: &mut serde_json::Map<String, serde_json::Value>,
 ) {
@@ -304,7 +317,10 @@ async fn handle_tool_call_inner<'a, 'b, 'tool>(
         validation_result,
     ) {
         ValidationTransition::Proceed(prepared) => prepared,
-        ValidationTransition::Return(outcome) => return Ok(outcome),
+        ValidationTransition::Return(outcome) => {
+            flush_wall_clock_directive(t_ctx.ctx);
+            return Ok(outcome);
+        }
     };
 
     // 3. Execute and Handle Result
@@ -369,8 +385,17 @@ pub(crate) async fn validate_tool_call<'a>(
         )));
     }
 
-    if let Some(exhaustion) = ctx.harness_state.wall_clock_budget_exhaustion() {
-        let error_msg = exhaustion.policy_violation_message();
+    if let Some(notice) = ctx.harness_state.record_wall_clock_exhaustion_notice() {
+        // Emit the full policy message once (first notice); subsequent rejected
+        // calls in the same batch get a compact stub to avoid repeating it N
+        // times. The "synthesize now" system directive is pushed after the whole
+        // batch by the caller (see `take_wall_clock_directive_pending`) so it is
+        // never interleaved between tool responses of the same assistant message.
+        let error_msg = if notice.first_notice {
+            notice.exhaustion.policy_violation_message()
+        } else {
+            notice.exhaustion.skipped_call_message()
+        };
         ctx.push_tool_response(
             tool_call_id,
             Some(tool_name),
