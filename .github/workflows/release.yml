@@ -80,7 +80,9 @@ jobs:
           version: 0.15.2
 
       - name: Install Cross
-        run: cargo install cross --git https://github.com/cross-rs/cross.git --rev f8151ae777290430cf2108efacf3976d9528500b --locked
+        uses: taiki-e/install-action@fae525311e5e299134b606bf247d465dd0df8190 # v2
+        with:
+          tool: cross
 
       - name: Build (${{ matrix.target }})
         run: cross build --release --target ${{ matrix.target }}

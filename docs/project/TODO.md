@@ -82,7 +82,7 @@ add nord themes dark/light.
 
 ===
 
-check the agent loop again
+check the agent loop again:
 
 " 3. Goals (measurable)
 • \*\*P50 launch for vtcode --version / vtcode --help... [plan]
@@ -90,12 +90,13 @@ check the agent loop again
 
 ==> here the plan mode summarization is interrupted, and then the agent changes to reasoning thinking, this is not ideal. The agent should be able to complete the plan mode summarization without being interrupted by reasoning thinking. We need to ensure that the agent can maintain focus on the current mode of operation, whether it is planning, reasoning, or executing tasks. This may involve implementing better context management, ensuring that the agent has enough information to complete its current task before switching modes, and providing clear boundaries between different modes of operation.
 
-then later on, the agent completely failed and stop
+=> then later on, the agent completely failed and stop
 
 "
 ------------------------------------------------------ Info -------------------------------------------------------
 Tool execution completed, but the model follow-up failed (transient — may resolve on retry). Output above is
 valid.
+"
 
 ---
 
@@ -109,7 +110,6 @@ area—the validate_startup_configuration and init_global_guardian/dotfolder—t
 
 ===
 
-````
 Here's a comprehensive set of techniques, roughly ordered by impact:
 
 ## 1. Faster linker (biggest win for iteration speed)
@@ -117,6 +117,7 @@ Here's a comprehensive set of techniques, roughly ordered by impact:
 The default linker is often the bottleneck on `cargo check`/`clippy` incremental builds. Switch to `lld` or `mold`.
 
 **macOS:**
+
 ```toml
 # .cargo/config.toml
 [target.x86_64-apple-darwin]
@@ -124,7 +125,7 @@ rustflags = ["-C", "link-arg=-fuse-ld=lld"]
 
 [target.aarch64-apple-darwin]
 rustflags = ["-C", "link-arg=-fuse-ld=lld"]
-````
+```
 
 **Linux (mold is fastest):**
 
@@ -237,10 +238,7 @@ export CARGO_TARGET_DIR=/tmp/target-vtcode
 
 **Practical order to try, given a Rust CLI project like VT Code:** mold/lld first (fastest to set up, no code changes), then `cargo build --timings` to find your actual bottleneck crates, then hakari if the workspace has many interdependent crates, then sccache for CI. rust-analyzer's `check.workspace: false` is worth flipping immediately if editor lag is the real complaint rather than raw CLI time.
 
-```
-
-optimize only for my local machine, not on CI/CD. for CI/CD check existing free github action infra and see if it can be optimized or streamlined.
-```
+==> NOTE: optimize only for my local machine, not on CI/CD. for CI/CD check existing free github action infra and see if it can be optimized or streamlined.
 
 ===
 

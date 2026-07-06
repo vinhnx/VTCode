@@ -1150,14 +1150,20 @@ main() {
         local binaries_dir="/tmp/vtcode-release-$released_version"
         mkdir -p "$binaries_dir"
 
-        # Build macOS binaries locally
-         print_info "Building macOS binaries locally..."
+         # Build macOS binaries in parallel
+         print_info "Building macOS binaries in parallel..."
          
          # Clear RUSTC_WRAPPER to avoid sccache permission issues
          unset RUSTC_WRAPPER
          
-         # x86_64-apple-darwin
-         if cargo build --release --target x86_64-apple-darwin &>/dev/null; then
+         # Build both architectures in parallel on multi-core machines
+         cargo build --release --target x86_64-apple-darwin &>/dev/null &
+         local pid_x86=$!
+         cargo build --release --target aarch64-apple-darwin &>/dev/null &
+         local pid_arm=$!
+         
+         # Wait for x86_64
+         if wait "$pid_x86"; then
             package_release_archive \
                 "x86_64-apple-darwin" \
                 "vtcode" \
@@ -1168,8 +1174,8 @@ main() {
             print_warning "Failed to build macOS x86_64"
         fi
 
-        # aarch64-apple-darwin
-        if cargo build --release --target aarch64-apple-darwin &>/dev/null; then
+        # Wait for aarch64
+        if wait "$pid_arm"; then
             package_release_archive \
                 "aarch64-apple-darwin" \
                 "vtcode" \
