@@ -61,16 +61,32 @@ jobs:
           targets: ${{ matrix.target }}
 
       - name: Install Zig
+        if: matrix.target != 'x86_64-unknown-linux-gnu'
         uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2
         with:
           version: 0.15.2
 
       - name: Install Cross
+        if: matrix.target != 'x86_64-unknown-linux-gnu'
         uses: taiki-e/install-action@fae525311e5e299134b606bf247d465dd0df8190 # v2
         with:
           tool: cross
 
-      - name: Build (${{ matrix.target }})
+      - name: Install sccache
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
+        uses: mozilla-actions/sccache-action@9e7fa8a12102821edf02ca5dbea1acd0f89a2696 # v0.0.10
+
+      - name: Build with cargo (${{ matrix.target }})
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
+        run: cargo build --release --target ${{ matrix.target }}
+        shell: bash
+        env:
+          RUSTC_WRAPPER: sccache
+          SCCACHE_GHA_ENABLED: "true"
+          RUSTFLAGS: ${{ startsWith(matrix.target, 'x86_64') && '-C target-cpu=x86-64' || '' }}
+
+      - name: Build with cross (${{ matrix.target }})
+        if: matrix.target != 'x86_64-unknown-linux-gnu'
         run: cross build --release --target ${{ matrix.target }}
         shell: bash
         env:
