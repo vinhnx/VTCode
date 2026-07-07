@@ -19,6 +19,7 @@ anyhow = { workspace = true }
 dirs = { workspace = true }
 hashbrown = { workspace = true }
 libc = { workspace = true }
+nix = { version = "0.31", features = ["user", "signal", "process"] }
 once_cell = { workspace = true }
 rustc-hash = { workspace = true }
 serde = { workspace = true }

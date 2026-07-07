@@ -58,20 +58,7 @@ Tool use
 
 There are also some things to watch out for in tool use. For example, the number of tools cannot expand without limit, otherwise the model wastes attention on choosing. Tools should not overlap too much in functionality, otherwise the model does not know which one to use. Tool descriptions should clearly explain when to use them and when not to use them, namely they should make the boundaries clear. Return values should be token-efficient and should not pour irrelevant data into context. Returned error messages should let the model know what to repair next. Names should be clear, so the agent can infer boundaries from the names. Also, tools are preferably not exposed directly to the model as direct tool calls, but mapped into code APIs / a file tree, so the agent can call them through code. This way, the agent can read only the tool definitions it currently needs, filter large data inside the code execution environment, and return only summaries or a small number of results to the model. It can use loops, conditionals, and exception handling to complete complex control flow, or write intermediate state into files instead of stuffing it into context. Tool outputs are deterministic; we should leave deterministic computation to code. Judgment and planning, such as how to call tools, which tools to call, in what order, and how many times, should be left to the model.
 
-===
-
-optimize CI build
-
-INFO: CI status: in_progress (1995s elapsed)
-INFO: CI status: completed (2027s elapsed)
-
-it's taking too long to build.
-
-https://github.com/vinhnx/VTCode/actions
-
-The goal: reduce the CI build time. This may involve optimizing the build process, caching dependencies, parallelizing tasks, and removing unnecessary steps. We should also review the current CI configuration to identify any bottlenecks or inefficiencies that can be addressed. Optimize for speed without sacrificing reliability or correctness. Consider using incremental builds, leveraging build artifacts, and ensuring that tests are run in a way that maximizes efficiency. check connect with release.sh script for existing release infra, and see if it can be optimized or streamlined. The goal is to have a CI/CD pipeline that is fast, reliable, and easy to maintain, allowing for rapid iteration and deployment of changes.
-
-===
+==
 
 • Read file /Users/vinhnguyenxuan…/vtcode/src/startup/mod.rs
 └ Offset: 70
@@ -107,10 +94,6 @@ area—the validate_startup_configuration and init_global_guardian/dotfolder—t
 </tool_call>"
 
 ==> check logs: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/checkpoints/turn_621.json
-
----
-
-total eleminate `unsafe {` calls in the codebase. The goal is to ensure that the code is safe and free from undefined behavior, which can lead to security vulnerabilities and runtime errors. This may involve refactoring code to use safe abstractions, leveraging Rust's ownership and borrowing system, and applying best practices for memory safety. We should also review existing unsafe blocks to determine if they can be replaced with safe alternatives or if they are necessary for performance reasons. The aim is to maintain a high level of safety and reliability in the codebase while still achieving the desired functionality.
 
 ---
 

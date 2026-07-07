@@ -96,7 +96,6 @@ proc-macro2 = "1"
 quote = "1"
 syn = "2"
 linkme = "0.3"
-ctor = "1.0"
 webbrowser = "1.2"
 tiktoken = "3.5"
 opentelemetry = { version = "0.32", default-features = false, features = ["trace", "metrics"] }
@@ -255,7 +254,7 @@ async-stream = "0.3"
 # Home directory detection
 dirs = { workspace = true }
 libc = { workspace = true }
-ctor = { workspace = true }
+nix = { version = "0.31", features = ["user", "process", "resource"] }
 # Hashing for large output file paths
 sha2 = { workspace = true }
 # ANSI styling

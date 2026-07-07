@@ -202,10 +202,8 @@ pub fn filter_sensitive_env(env: &HashMap<String, String>) -> HashMap<String, St
 /// Uses SIGTERM for graceful shutdown. Includes parent PID check to avoid
 /// race condition where parent exits between fork and exec.
 #[cfg(target_os = "linux")]
-#[allow(unsafe_code)]
 pub fn setup_parent_death_signal() -> std::io::Result<()> {
-    // SAFETY: `getppid` has no preconditions and simply returns the current parent PID.
-    setup_parent_death_signal_with_check(unsafe { libc::getppid() })
+    setup_parent_death_signal_with_check(nix::unistd::getppid())
 }
 
 /// Set up parent death signal with explicit parent PID check.
@@ -213,28 +211,21 @@ pub fn setup_parent_death_signal() -> std::io::Result<()> {
 /// This variant should be used in pre_exec hooks where the parent PID
 /// is captured before spawn to avoid race conditions.
 #[cfg(target_os = "linux")]
-#[allow(unsafe_code)]
 pub fn setup_parent_death_signal_with_check(
-    expected_parent_pid: libc::pid_t,
+    expected_parent_pid: nix::unistd::Pid,
 ) -> std::io::Result<()> {
+    use nix::sys::prctl;
+    use nix::sys::signal::{Signal, raise};
     use std::io::Error;
 
     // Use SIGTERM for graceful shutdown (allows cleanup handlers to run)
-    // SAFETY: `prctl(PR_SET_PDEATHSIG, SIGTERM)` is called with a valid option and signal.
-    let result = unsafe { libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGTERM) };
-    if result == -1 {
-        return Err(Error::other(format!(
-            "prctl(PR_SET_PDEATHSIG) failed: {}",
-            Error::last_os_error()
-        )));
-    }
+    prctl::set_pdeathsig(Some(Signal::SIGTERM))
+        .map_err(|e| Error::other(format!("prctl(PR_SET_PDEATHSIG) failed: {e}")))?;
 
     // Re-check parent PID to catch race condition where parent exited between
     // fork and this prctl call. If parent changed, self-terminate immediately.
-    // SAFETY: `getppid` has no preconditions and simply returns the current parent PID.
-    if unsafe { libc::getppid() } != expected_parent_pid {
-        // SAFETY: raising SIGTERM in the current process is intentional here.
-        unsafe { libc::raise(libc::SIGTERM) };
+    if nix::unistd::getppid() != expected_parent_pid {
+        let _ = raise(Signal::SIGTERM);
     }
 
     Ok(())

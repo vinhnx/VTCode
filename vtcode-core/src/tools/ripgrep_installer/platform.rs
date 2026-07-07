@@ -117,10 +117,9 @@ fn install_via_homebrew() -> Result<()> {
 }
 
 #[cfg(target_os = "linux")]
-#[allow(unsafe_code)]
 fn install_via_apt() -> Result<()> {
     // Check if we're already running as root (skip sudo if so)
-    let is_root = unsafe { libc::getuid() == 0 };
+    let is_root = nix::unistd::getuid().is_root();
 
     if is_root {
         // Running as root, no sudo needed

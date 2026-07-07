@@ -1456,16 +1456,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ctor"
-version = "1.0.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "01334b89b69ff726750c5ce5073fc8bd860e99aa9a8fc5ca11b04730e3aee97a"
-dependencies = [
- "link-section",
- "linktime-proc-macro",
-]
-
-[[package]]
 name = "curve25519-dalek"
 version = "4.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3367,12 +3357,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "link-section"
-version = "0.18.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24670b639492630905459a6c7d47f063d33c2d4fcd5362f6e5827c5613976c9f"
-
-[[package]]
 name = "linked-hash-map"
 version = "0.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3397,12 +3381,6 @@ dependencies = [
  "quote",
  "syn 2.0.118",
 ]
-
-[[package]]
-name = "linktime-proc-macro"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8c7b0a3383c2a1002d11349c92c85a666a5fb679e96c79d782cf0dbe557fd6ee"
 
 [[package]]
 name = "linux-raw-sys"
@@ -7299,7 +7277,6 @@ dependencies = [
  "clap",
  "colorchoice",
  "crossterm",
- "ctor",
  "dialoguer",
  "dirs",
  "futures",
@@ -7310,6 +7287,7 @@ dependencies = [
  "libc",
  "memchr",
  "mimalloc",
+ "nix 0.31.3",
  "once_cell",
  "predicates",
  "pretty_assertions",
@@ -7763,6 +7741,7 @@ dependencies = [
  "dirs",
  "hashbrown 0.17.1",
  "libc",
+ "nix 0.31.3",
  "once_cell",
  "rustc-hash 2.1.2",
  "serde",
