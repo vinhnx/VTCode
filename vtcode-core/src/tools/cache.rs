@@ -290,3 +290,12 @@ pub fn read_limit_lines() -> usize {
         cfg.max_read_lines
     }
 }
+
+/// Per-call absolute ceiling (in lines) for any line-based `read_file` path.
+///
+/// Single source of truth shared by the new [`ReadFileHandler`] and the legacy
+/// `read_file_legacy` path, so the two can never drift apart. The hard floor of
+/// `1` guarantees a misconfigured `0` can never open an unbounded read.
+pub fn absolute_line_cap() -> usize {
+    read_limit_lines().max(1)
+}

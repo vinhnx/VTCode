@@ -58,7 +58,7 @@ pub struct ReadFileArgs {
         deserialize_with = "deserialize_maybe_quoted"
     )]
     pub offset: usize,
-    /// Maximum number of lines to return; defaults to 2000.
+    /// Maximum number of lines to return; defaults to 400.
     #[serde(
         default = "defaults::limit",
         deserialize_with = "deserialize_maybe_quoted"
@@ -523,7 +523,7 @@ impl ReadFileHandler {
         anyhow::ensure!(offset > 0, "offset must be a 1-indexed line number");
         anyhow::ensure!(limit > 0, "limit must be greater than zero");
 
-        let absolute_max = crate::tools::cache::read_limit_lines().max(1);
+        let absolute_max = crate::tools::cache::absolute_line_cap();
 
         let effective_limit =
             if matches!(mode, ReadMode::Slice) && max_tokens.is_none() && limit < MIN_BATCH_LIMIT {
@@ -653,8 +653,8 @@ impl Tool for ReadFileHandler {
                 },
                 "limit": {
                     "type": "integer",
-                    "description": "Maximum lines to return (default: 2000)",
-                    "default": 2000,
+                    "description": "Maximum lines to return. Requests above the configurable absolute cap (max_read_lines, default 400) are clamped, and the response carries `next_read_args` to continue reading.",
+                    "default": 400,
                     "minimum": 1
                 },
                 "mode": {
@@ -1127,7 +1127,7 @@ mod defaults {
     }
 
     pub fn limit() -> usize {
-        2000
+        400
     }
 
     pub fn batch_limit() -> usize {

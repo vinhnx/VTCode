@@ -417,6 +417,7 @@ python3 scripts/generate_config_field_reference.py
 | `optimization.file_read_cache.max_size_bytes` | `integer` | yes | `-` | Maximum cached file size (bytes) |
 | `optimization.file_read_cache.min_size_bytes` | `integer` | yes | `-` | Minimum file size (bytes) before caching |
 | `optimization.file_read_cache.ttl_secs` | `integer` | yes | `-` | Cache TTL in seconds |
+| `optimization.file_read_cache.max_read_lines` | `integer` | yes | `400` | Absolute ceiling (lines) for a single line-based `read_file` call. Larger requests are clamped and the response carries `next_read_args` to continue. A value of `0` falls back to the default. |
 | `optimization.llm_client.cache_ttl_secs` | `integer` | yes | `-` | Response cache TTL in seconds |
 | `optimization.llm_client.connection_pool_size` | `integer` | yes | `-` | Connection pool size |
 | `optimization.llm_client.enable_connection_pooling` | `boolean` | yes | `-` | Enable connection pooling |

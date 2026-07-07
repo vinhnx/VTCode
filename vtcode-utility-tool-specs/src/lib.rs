@@ -237,7 +237,7 @@ pub fn read_file_parameters() -> Value {
         "properties": {
             "path": {"type": "string", "description": "File path. Accepts file_path/filepath/target_path/file/p."},
             "offset": {"type": "integer", "description": "1-indexed line offset. Compact alias: `o`.", "minimum": 1},
-            "limit": {"type": "integer", "description": "Max lines for this chunk. Compact alias: `l`.", "minimum": 1},
+            "limit": {"type": "integer", "description": "Max lines for this chunk. Compact alias: `l`. Requests above the configurable absolute cap (max_read_lines, default 400) are clamped, and the response carries `next_read_args` to continue.", "default": 400, "minimum": 1},
             "mode": {"type": "string", "enum": ["slice", "indentation"], "description": "Read mode.", "default": "slice"},
             "indentation": {
                 "description": "Indentation-aware block selection.",

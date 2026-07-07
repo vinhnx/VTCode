@@ -539,7 +539,7 @@ impl FileOpsTool {
                         // correctly excluded and use their own `offset_bytes`/
                         // `page_size_bytes` continuation path.
                         else if has_more
-                            && applied_limit == crate::tools::cache::read_limit_lines()
+                            && applied_limit == crate::tools::cache::absolute_line_cap()
                         {
                             let next_offset = requested_offset.saturating_add(lines_returned);
                             let next_action = if capped_by_limit {
@@ -729,6 +729,7 @@ impl FileOpsTool {
 mod read_tests {
     use super::*;
     use crate::tools::grep_file::GrepSearchManager;
+    use crate::tools::types::Input;
     use std::fs;
     use std::path::Path;
     use tempfile::TempDir;
@@ -1049,6 +1050,33 @@ mod read_tests {
         let result = file_ops.read_file(args).await.unwrap();
         assert!(result["success"].as_bool().unwrap());
         assert_eq!(result["content"].as_str().unwrap(), "");
+    }
+
+    #[tokio::test]
+    async fn test_legacy_full_read_respects_absolute_cap() {
+        let temp_dir = TempDir::new().unwrap();
+        let workspace_root = temp_dir.path().to_path_buf();
+        let test_file = workspace_root.join("big_legacy.txt");
+        let content = (1..=1000)
+            .map(|i| format!("line{i}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        fs::write(&test_file, content).unwrap();
+
+        let grep_manager = std::sync::Arc::new(GrepSearchManager::new(workspace_root.clone()));
+        let file_ops = FileOpsTool::new(workspace_root, grep_manager);
+
+        // Bare legacy request (no max_* keys) would otherwise dump the whole file.
+        let input: Input =
+            serde_json::from_value(json!({ "path": test_file.to_string_lossy() })).unwrap();
+        let (read_content, metadata, truncated) =
+            file_ops.read_file_legacy(&test_file, &input).await.unwrap();
+
+        let cap = crate::tools::cache::read_limit_lines();
+        assert_eq!(read_content.lines().count(), cap);
+        assert!(truncated);
+        assert_eq!(metadata["is_truncated"], true);
+        assert_eq!(metadata["applied_max_lines"], cap);
     }
 
     #[tokio::test]

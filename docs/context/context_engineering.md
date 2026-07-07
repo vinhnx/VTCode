@@ -205,7 +205,7 @@ Our tools are designed with context efficiency in mind:
 #### File Operations
 
 -   **list_files**: Pagination support, metadata-only by default
--   **read_file**: Auto-chunking for large files
+-   **read_file**: Auto-chunking for large files; line-based reads are clamped to `optimization.file_read_cache.max_read_lines` (default 400) with a `next_read_args` continuation to page forward
 -   **edit_file**: Precise replacements avoid rewriting entire files
 
 #### Command Execution
