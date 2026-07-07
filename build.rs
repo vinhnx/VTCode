@@ -1,42 +1,6 @@
 #![allow(missing_docs)]
 
-#[cfg(target_os = "macos")]
-#[expect(
-    unsafe_code,
-    reason = "Rust 2024 requires unsafe process-environment mutation in build.rs, and this helper runs before any VT Code threads exist."
-)]
-fn remove_build_env_var(key: &str) {
-    // SAFETY: build scripts run in a dedicated process before any application worker threads
-    // exist, so mutating the process environment here cannot race with other VT Code code.
-    unsafe {
-        std::env::remove_var(key);
-    }
-}
-
 fn main() {
-    // Suppress macOS malloc warnings in build output
-    // IMPORTANT: Only remove vars, never set them to "0" as that triggers
-    // "can't turn off malloc stack logging" warnings from xcrun
-    #[cfg(target_os = "macos")]
-    {
-        // Unset all malloc-related environment variables that might cause warnings
-        for key in [
-            "MallocStackLogging",
-            "MallocStackLoggingDirectory",
-            "MallocScribble",
-            "MallocGuardEdges",
-            "MallocCheckHeapStart",
-            "MallocCheckHeapEach",
-            "MallocCheckHeapAbort",
-            "MallocCheckHeapSleep",
-            "MallocCorruptionAbort",
-            "MallocHelpOptions",
-            "MallocStackLoggingNoCompact",
-        ] {
-            remove_build_env_var(key);
-        }
-    }
-
     let git_output = std::process::Command::new("git")
         .args(["rev-parse", "--git-dir"])
         .output()

@@ -13,35 +13,12 @@ use std::os::unix::ffi::OsStrExt;
 #[cfg(any(target_os = "linux", target_os = "android"))]
 use nix::sys::prctl;
 #[cfg(unix)]
-use nix::sys::resource::{Resource, getrlimit, setrlimit};
+use nix::sys::resource::{RLIM_INFINITY, Resource, getrlimit, setrlimit};
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
 fn prctl_set_dumpable() -> std::io::Result<()> {
     prctl::set_dumpable(false)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("{e}")))
-}
-
-/// Safe wrapper around macOS `ptrace(PT_DENY_ATTACH)`.
-///
-/// `PT_DENY_ATTACH` (request 31) tells the kernel to kill this process if
-/// any debugger tries to attach. The call takes only integer arguments and a
-/// null pointer that the kernel never dereferences for this request type.
-#[cfg(target_os = "macos")]
-#[expect(
-    unsafe_code,
-    reason = "FFI call to macOS ptrace — unavoidable, but the call is safe by contract"
-)]
-fn ptrace_deny_attach() -> std::io::Result<()> {
-    // SAFETY: `ptrace(PT_DENY_ATTACH, ...)` takes only integer arguments and a
-    // null pointer that the kernel never dereferences for this request type.
-    unsafe {
-        let ret = libc::ptrace(libc::PT_DENY_ATTACH, 0, std::ptr::null_mut(), 0);
-        if ret == 0 {
-            Ok(())
-        } else {
-            Err(std::io::Error::last_os_error())
-        }
-    }
 }
 
 #[cfg(unix)]
@@ -108,9 +85,6 @@ fn check_environment_sanity() {
 #[cfg(any(target_os = "linux", target_os = "android"))]
 const PRCTL_FAILED_EXIT_CODE: i32 = 5;
 
-#[cfg(target_os = "macos")]
-const PTRACE_DENY_ATTACH_FAILED_EXIT_CODE: i32 = 6;
-
 #[cfg(any(
     target_os = "linux",
     target_os = "android",
@@ -153,18 +127,17 @@ fn pre_main_hardening_bsd() {
 fn pre_main_hardening_macos() {
     cap_stack_rlimit();
 
-    // Prevent debuggers from attaching to this process.
-    if let Err(e) = ptrace_deny_attach() {
-        eprintln!("ERROR: ptrace(PT_DENY_ATTACH) failed: {e}");
-        std::process::exit(PTRACE_DENY_ATTACH_FAILED_EXIT_CODE);
-    }
-
     // Set the core file size limit to 0 to prevent core dumps.
     set_core_file_size_limit_to_zero();
 
     // Remove all DYLD_* environment variables, which can be used to subvert
     // library loading.
     remove_env_vars_with_prefix(b"DYLD_");
+
+    // Note: PT_DENY_ATTACH (preventing debugger attachment) is intentionally
+    // skipped here because macOS's System Integrity Protection (SIP) and
+    // Hardened Runtime already provide anti-debugging protections at the
+    // system level, making this ptrace call redundant on modern macOS.
 }
 
 #[cfg(unix)]
@@ -199,7 +172,7 @@ fn cap_stack_rlimit() {
     let Ok((soft, _hard)) = getrlimit(Resource::RLIMIT_STACK) else {
         return;
     };
-    if soft != libc::RLIM_INFINITY {
+    if soft != RLIM_INFINITY {
         return;
     }
     let _ = setrlimit(Resource::RLIMIT_STACK, STACK_CAP_BYTES, STACK_CAP_BYTES);

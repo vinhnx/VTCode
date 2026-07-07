@@ -253,7 +253,6 @@ async-trait = { workspace = true }
 async-stream = "0.3"
 # Home directory detection
 dirs = { workspace = true }
-libc = { workspace = true }
 nix = { version = "0.31", features = ["user", "process", "resource"] }
 # Hashing for large output file paths
 sha2 = { workspace = true }
