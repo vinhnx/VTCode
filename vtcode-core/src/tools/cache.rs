@@ -270,3 +270,23 @@ pub fn configure_file_cache(config: &FileReadCacheConfig) {
 pub fn file_read_cache_config() -> FileReadCacheConfig {
     FILE_READ_CACHE_CONFIG.read().clone()
 }
+
+/// Default absolute ceiling on lines returned by a single `read_file` call.
+///
+/// Re-exported from [`vtcode_config::constants::optimization`] so there is a
+/// single source of truth for the default cap value.
+pub const DEFAULT_MAX_READ_LINES: usize =
+    vtcode_config::constants::optimization::DEFAULT_MAX_READ_LINES;
+
+/// Absolute ceiling (in lines) for a single line-based `read_file` call.
+///
+/// Returns the configured `max_read_lines`, or [`DEFAULT_MAX_READ_LINES`] when
+/// the value is zero/unspecified, so a misconfigured `0` never disables the cap.
+pub fn read_limit_lines() -> usize {
+    let cfg = FILE_READ_CACHE_CONFIG.read();
+    if cfg.max_read_lines == 0 {
+        DEFAULT_MAX_READ_LINES
+    } else {
+        cfg.max_read_lines
+    }
+}

@@ -57,6 +57,17 @@ pub struct FileReadCacheConfig {
 
     /// Maximum number of cached entries
     pub max_entries: usize,
+
+    /// Absolute ceiling (in lines) for a single line-based `read_file` call.
+    /// Any read requesting more lines is clamped to this value and the response
+    /// exposes a `next_read_args` continuation to read the remainder.
+    #[serde(default = "default_max_read_lines")]
+    pub max_read_lines: usize,
+}
+
+/// Serde default for [`FileReadCacheConfig::max_read_lines`].
+pub fn default_max_read_lines() -> usize {
+    crate::constants::optimization::DEFAULT_MAX_READ_LINES
 }
 
 /// Read-only command cache configuration
@@ -238,6 +249,7 @@ impl Default for FileReadCacheConfig {
             max_size_bytes: crate::constants::optimization::FILE_READ_CACHE_MAX_SIZE_BYTES,
             ttl_secs: crate::constants::optimization::FILE_READ_CACHE_TTL_SECS,
             max_entries: crate::constants::optimization::FILE_READ_CACHE_MAX_ENTRIES,
+            max_read_lines: crate::constants::optimization::DEFAULT_MAX_READ_LINES,
         }
     }
 }
@@ -430,6 +442,7 @@ impl OptimizationConfig {
                 max_size_bytes: crate::constants::optimization::FILE_READ_CACHE_PROD_MAX_SIZE_BYTES,
                 ttl_secs: crate::constants::optimization::FILE_READ_CACHE_PROD_TTL_SECS,
                 max_entries: crate::constants::optimization::FILE_READ_CACHE_PROD_MAX_ENTRIES,
+                max_read_lines: crate::constants::optimization::DEFAULT_MAX_READ_LINES,
             },
             command_cache: CommandCacheConfig {
                 enabled: true,

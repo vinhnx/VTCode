@@ -35,6 +35,10 @@ pub(crate) struct ReadFileOutcome {
     pub content: String,
     pub lines_read: usize,
     pub has_more: bool,
+    /// True when the requested line count exceeded the absolute cap and was clamped.
+    pub capped_by_limit: bool,
+    /// The line count actually applied after clamping (0 for byte-range reads).
+    pub applied_limit: usize,
 }
 
 /// JSON arguments accepted by the `read_file` tool handler.
@@ -479,6 +483,19 @@ impl ReadFileHandler {
         })
     }
 
+    /// Clamp a requested line count to the absolute per-call ceiling.
+    ///
+    /// Returns `(applied_limit, capped_by_limit)`. `capped_by_limit` is true
+    /// only when the caller asked for strictly more lines than `absolute_max`
+    /// permits, so a read whose `requested == absolute_max` is *not* flagged as
+    /// clamped (it merely sits at the ceiling). This keeps the pagination chain
+    /// alive on every page that reaches the ceiling without misreporting a
+    /// clamp on the exact-cap follow-up pages.
+    fn clamp_to_absolute_cap(requested: usize, absolute_max: usize) -> (usize, bool) {
+        let capped = requested > absolute_max;
+        (requested.min(absolute_max), capped)
+    }
+
     pub(crate) async fn handle_detailed(&self, args: ReadFileArgs) -> Result<ReadFileOutcome> {
         let ReadFileArgs {
             file_path,
@@ -506,6 +523,8 @@ impl ReadFileHandler {
         anyhow::ensure!(offset > 0, "offset must be a 1-indexed line number");
         anyhow::ensure!(limit > 0, "limit must be greater than zero");
 
+        let absolute_max = crate::tools::cache::read_limit_lines().max(1);
+
         let effective_limit =
             if matches!(mode, ReadMode::Slice) && max_tokens.is_none() && limit < MIN_BATCH_LIMIT {
                 MIN_BATCH_LIMIT
@@ -513,15 +532,21 @@ impl ReadFileHandler {
                 limit
             };
 
+        // Absolute hard cap: no single line-based read may return more than
+        // `absolute_max` lines, even when the caller requests a larger `limit`.
+        // Byte-range reads are unaffected (they use `page_size_bytes`).
+        let (applied_limit, capped_by_limit) =
+            Self::clamp_to_absolute_cap(effective_limit, absolute_max);
+
         let (mut collected, has_more) = match mode {
             ReadMode::Slice => {
-                let result = slice::read(&path, offset, effective_limit).await?;
+                let result = slice::read(&path, offset, applied_limit).await?;
                 (result.lines, result.has_more)
             }
             ReadMode::Indentation => {
                 let indentation = indentation.unwrap_or_default();
                 (
-                    indentation::read_block(&path, offset, limit, indentation).await?,
+                    indentation::read_block(&path, offset, applied_limit, indentation).await?,
                     false,
                 )
             }
@@ -543,6 +568,8 @@ impl ReadFileHandler {
             content: collected.join("\n"),
             lines_read,
             has_more,
+            capped_by_limit,
+            applied_limit,
         })
     }
 
@@ -561,6 +588,8 @@ impl ReadFileHandler {
             content: result.content,
             lines_read: result.lines_read,
             has_more: result.has_more,
+            capped_by_limit: false,
+            applied_limit: 0,
         })
     }
 
@@ -1343,6 +1372,83 @@ mod tests {
             vec!["first".to_string(), "second".to_string()]
         );
         assert!(!result.has_more);
+        Ok(())
+    }
+
+    #[test]
+    fn clamp_to_absolute_cap_marks_only_true_overages() {
+        // A request above the ceiling is clamped and flagged.
+        assert_eq!(
+            ReadFileHandler::clamp_to_absolute_cap(1000, 400),
+            (400, true)
+        );
+        // A request exactly at the ceiling sits at the cap but is not "clamped"
+        // (this is what keeps the pagination chain alive on follow-up pages).
+        assert_eq!(
+            ReadFileHandler::clamp_to_absolute_cap(400, 400),
+            (400, false)
+        );
+        // A request below the ceiling is unchanged and not flagged.
+        assert_eq!(ReadFileHandler::clamp_to_absolute_cap(50, 400), (50, false));
+    }
+
+    #[tokio::test]
+    async fn absolute_cap_clamps_large_request() -> Result<()> {
+        let mut temp = NamedTempFile::new()?;
+        for idx in 1..=1000 {
+            writeln!(temp, "line-{idx}")?;
+        }
+
+        let handler = ReadFileHandler;
+        let args = ReadFileArgs {
+            file_path: temp.path().to_string_lossy().to_string(),
+            offset: 1,
+            limit: 2000,
+            mode: ReadMode::Slice,
+            indentation: None,
+            max_tokens: None,
+            condense: false,
+            offset_bytes: None,
+            page_size_bytes: None,
+        };
+        let outcome = handler.handle_detailed(args).await?;
+
+        let cap = crate::tools::cache::read_limit_lines();
+        assert!(
+            outcome.capped_by_limit,
+            "request larger than the cap must be clamped"
+        );
+        assert_eq!(outcome.applied_limit, cap);
+        assert!(outcome.has_more);
+        assert!(outcome.lines_read <= cap);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn explicit_limit_under_cap_is_preserved() -> Result<()> {
+        let mut temp = NamedTempFile::new()?;
+        for idx in 1..=100 {
+            writeln!(temp, "line-{idx}")?;
+        }
+
+        let handler = ReadFileHandler;
+        let args = ReadFileArgs {
+            file_path: temp.path().to_string_lossy().to_string(),
+            offset: 1,
+            limit: 50,
+            mode: ReadMode::Slice,
+            indentation: None,
+            max_tokens: None,
+            condense: false,
+            offset_bytes: None,
+            page_size_bytes: None,
+        };
+        let outcome = handler.handle_detailed(args).await?;
+
+        assert!(!outcome.capped_by_limit);
+        // Small limits are expanded to MIN_BATCH_LIMIT (200) by the batch path,
+        // so the whole 100-line file is returned, but it is not cap-clamped.
+        assert_eq!(outcome.lines_read, 100);
         Ok(())
     }
 

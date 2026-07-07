@@ -60,12 +60,6 @@ There are also some things to watch out for in tool use. For example, the number
 
 ==
 
-• Read file /Users/vinhnguyenxuan…/vtcode/src/startup/mod.rs
-└ Offset: 70
-└ Limit: 400
-└ Read 400 lines
-
-IMPORTANT: some times read file tool offset and lines are too large (400 lines?), which can cause the model to be overwhelmed with too much information. We should implement a mechanism to limit the amount of data read from files, ensuring that only relevant sections are loaded into context. This may involve reading files in chunks, using pagination, or applying filters to extract only the necessary information. The goal is to provide the model with a manageable amount of data that is directly relevant to the current task, improving efficiency and reducing cognitive load.
 
 ===
 
