@@ -113,7 +113,26 @@ pub(super) fn complete_turn_after_failed_tool_free_recovery(
     working_history: &mut Vec<uni::Message>,
     failure_stage: &'static str,
     err: Option<&anyhow::Error>,
+    salvaged_text: Option<String>,
 ) -> TurnLoopResult {
+    // Prefer prose salvaged from a rejected synthesis response over the
+    // canned fallback string: a partially cleaned answer still reflects the
+    // tool outputs gathered this turn, while the canned string discards them.
+    if let Some(salvaged) = salvaged_text.filter(|text| !text.trim().is_empty()) {
+        working_history.push(
+            uni::Message::assistant(format!(
+                "[!] Recovery synthesis was interrupted; best-effort answer below \
+                 (tool-call markup removed):\n\n{salvaged}"
+            ))
+            .with_phase(Some(uni::AssistantPhase::FinalAnswer)),
+        );
+        tracing::warn!(
+            stage = failure_stage,
+            "Tool-free recovery failed; concluding turn with salvaged synthesis prose."
+        );
+        return TurnLoopResult::Completed;
+    }
+
     let has_recent_fallback = working_history.iter().rev().take(3).any(|message| {
         message.role == uni::MessageRole::Assistant
             && message.phase == Some(uni::AssistantPhase::FinalAnswer)
@@ -146,6 +165,7 @@ pub(super) fn normalize_tool_free_recovery_break_outcome(
     working_history: &mut Vec<uni::Message>,
     outcome_result: TurnLoopResult,
     tool_free_recovery: bool,
+    salvaged_text: Option<String>,
 ) -> TurnLoopResult {
     let should_fallback = tool_free_recovery
         && matches!(
@@ -160,6 +180,7 @@ pub(super) fn normalize_tool_free_recovery_break_outcome(
             working_history,
             "handle_turn_processing_result.tool_free_recovery_contract_violation",
             None,
+            salvaged_text,
         );
     }
 

@@ -116,6 +116,7 @@ fn check_recovery_cycle_cap(
     working_history: &mut Vec<uni::Message>,
     stage: &'static str,
     err: &anyhow::Error,
+    salvaged_text: Option<String>,
 ) -> Option<TurnLoopResult> {
     if cycles >= MAX_POST_TOOL_RECOVERY_CYCLES {
         tracing::warn!(
@@ -127,6 +128,7 @@ fn check_recovery_cycle_cap(
             working_history,
             stage,
             Some(err),
+            salvaged_text,
         ));
     }
     None
@@ -616,11 +618,15 @@ pub(crate) async fn run_turn_loop(
                 )? {
                     PostToolFailureRecovery::NotApplicable => {}
                     PostToolFailureRecovery::RetryToolFree => {
+                        let salvaged = turn_processing_ctx
+                            .harness_state
+                            .take_recovery_rejected_synthesis();
                         if let Some(r) = check_recovery_cycle_cap(
                             turn_processing_ctx.post_tool_recovery_cycles(),
                             turn_processing_ctx.working_history,
                             "execute_llm_request.recovery_cycle_cap",
                             &err,
+                            salvaged,
                         ) {
                             result = r;
                             break;
@@ -631,10 +637,14 @@ pub(crate) async fn run_turn_loop(
                     }
                     PostToolFailureRecovery::StopAfterDirective => {
                         if tool_free_recovery {
+                            let salvaged = turn_processing_ctx
+                                .harness_state
+                                .take_recovery_rejected_synthesis();
                             result = complete_turn_after_failed_tool_free_recovery(
                                 turn_processing_ctx.working_history,
                                 "execute_llm_request.stop_after_directive",
                                 Some(&err),
+                                salvaged,
                             );
                         } else {
                             result = TurnLoopResult::Completed;
@@ -644,10 +654,14 @@ pub(crate) async fn run_turn_loop(
                 }
 
                 if tool_free_recovery {
+                    let salvaged = turn_processing_ctx
+                        .harness_state
+                        .take_recovery_rejected_synthesis();
                     result = complete_turn_after_failed_tool_free_recovery(
                         turn_processing_ctx.working_history,
                         "execute_llm_request.direct_tool_free_failure",
                         Some(&err),
+                        salvaged,
                     );
                     break;
                 }
@@ -828,11 +842,15 @@ pub(crate) async fn run_turn_loop(
                 )? {
                     PostToolFailureRecovery::NotApplicable => {}
                     PostToolFailureRecovery::RetryToolFree => {
+                        let salvaged = turn_processing_ctx
+                            .harness_state
+                            .take_recovery_rejected_synthesis();
                         if let Some(r) = check_recovery_cycle_cap(
                             turn_processing_ctx.post_tool_recovery_cycles(),
                             turn_processing_ctx.working_history,
                             "process_llm_response.recovery_cycle_cap",
                             &err,
+                            salvaged,
                         ) {
                             result = r;
                             break;
@@ -843,10 +861,14 @@ pub(crate) async fn run_turn_loop(
                     }
                     PostToolFailureRecovery::StopAfterDirective => {
                         if tool_free_recovery {
+                            let salvaged = turn_processing_ctx
+                                .harness_state
+                                .take_recovery_rejected_synthesis();
                             result = complete_turn_after_failed_tool_free_recovery(
                                 turn_processing_ctx.working_history,
                                 "process_llm_response.stop_after_directive",
                                 Some(&err),
+                                salvaged,
                             );
                         } else {
                             result = TurnLoopResult::Completed;
@@ -960,11 +982,13 @@ pub(crate) async fn run_turn_loop(
                 )? {
                     PostToolFailureRecovery::NotApplicable => {}
                     PostToolFailureRecovery::RetryToolFree => {
+                        let salvaged = ctx.harness_state.take_recovery_rejected_synthesis();
                         if let Some(r) = check_recovery_cycle_cap(
                             ctx.harness_state.post_tool_recovery_cycles(),
                             working_history,
                             "handle_turn_processing_result.recovery_cycle_cap",
                             &err,
+                            salvaged,
                         ) {
                             result = r;
                             break;
@@ -975,10 +999,12 @@ pub(crate) async fn run_turn_loop(
                     }
                     PostToolFailureRecovery::StopAfterDirective => {
                         if tool_free_recovery {
+                            let salvaged = ctx.harness_state.take_recovery_rejected_synthesis();
                             result = complete_turn_after_failed_tool_free_recovery(
                                 working_history,
                                 "handle_turn_processing_result.stop_after_directive",
                                 Some(&err),
+                                salvaged,
                             );
                         } else {
                             result = TurnLoopResult::Completed;
@@ -1027,10 +1053,12 @@ pub(crate) async fn run_turn_loop(
                     ));
                     continue;
                 }
+                let salvaged = ctx.harness_state.take_recovery_rejected_synthesis();
                 result = normalize_tool_free_recovery_break_outcome(
                     working_history,
                     outcome_result,
                     tool_free_recovery,
+                    salvaged,
                 );
                 break;
             }

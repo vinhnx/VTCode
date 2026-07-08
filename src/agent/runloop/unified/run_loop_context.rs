@@ -344,6 +344,11 @@ pub(crate) struct HarnessTurnState {
     /// Resets naturally per turn because each turn constructs a fresh
     /// `HarnessTurnState`.
     post_tool_recovery_cycles: u8,
+    /// Best-effort prose salvaged from a recovery synthesis response that was
+    /// rejected for containing tool-call markup. Used as the final answer when
+    /// all recovery retries are exhausted, instead of the canned fallback
+    /// string, so gathered context is not discarded entirely.
+    recovery_rejected_synthesis: Option<String>,
     pub max_tool_calls: usize,
     pub max_tool_wall_clock: Duration,
     pub max_tool_retries: u32,
@@ -392,6 +397,7 @@ impl HarnessTurnState {
             recovery_mode: None,
             recovery_retry_count: 0,
             post_tool_recovery_cycles: 0,
+            recovery_rejected_synthesis: None,
             max_tool_calls,
             max_tool_wall_clock: Duration::from_secs(max_tool_wall_clock_secs),
             max_tool_retries,
@@ -654,6 +660,19 @@ impl HarnessTurnState {
 
     pub(crate) fn recovery_retry_count(&self) -> u8 {
         self.recovery_retry_count
+    }
+
+    /// Record best-effort prose salvaged from a rejected recovery synthesis
+    /// response. Later rejections overwrite earlier ones (the latest attempt
+    /// is the most complete).
+    pub(crate) fn record_recovery_rejected_synthesis(&mut self, text: String) {
+        if !text.trim().is_empty() {
+            self.recovery_rejected_synthesis = Some(text);
+        }
+    }
+
+    pub(crate) fn take_recovery_rejected_synthesis(&mut self) -> Option<String> {
+        self.recovery_rejected_synthesis.take()
     }
 
     pub(crate) fn post_tool_recovery_cycles(&self) -> u8 {

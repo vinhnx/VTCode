@@ -257,6 +257,7 @@ fn complete_turn_after_failed_tool_free_recovery_appends_fallback_once() {
         &mut history,
         "test.stage",
         Some(&anyhow!("Network error")),
+        None,
     );
     assert!(matches!(outcome, TurnLoopResult::Completed));
     let fallback_count = history
@@ -270,7 +271,7 @@ fn complete_turn_after_failed_tool_free_recovery_appends_fallback_once() {
     assert_eq!(fallback_count, 1);
 
     let outcome_again =
-        complete_turn_after_failed_tool_free_recovery(&mut history, "test.stage", None);
+        complete_turn_after_failed_tool_free_recovery(&mut history, "test.stage", None, None);
     assert!(matches!(outcome_again, TurnLoopResult::Completed));
     let fallback_count_again = history
         .iter()
@@ -284,6 +285,38 @@ fn complete_turn_after_failed_tool_free_recovery_appends_fallback_once() {
 }
 
 #[test]
+fn complete_turn_after_failed_tool_free_recovery_prefers_salvaged_prose() {
+    let mut history = vec![uni::Message::user("summarize".to_string())];
+    let outcome = complete_turn_after_failed_tool_free_recovery(
+        &mut history,
+        "test.stage",
+        None,
+        Some("Here is the launch-time plan: reduce config IO.".to_string()),
+    );
+    assert!(matches!(outcome, TurnLoopResult::Completed));
+    let last = history.last().unwrap();
+    assert_eq!(last.role, uni::MessageRole::Assistant);
+    assert_eq!(last.phase, Some(uni::AssistantPhase::FinalAnswer));
+    let text = last.content.as_text();
+    assert!(text.contains("reduce config IO"));
+    assert!(text != RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER);
+
+    // Whitespace-only salvage falls back to the canned answer.
+    let mut history = vec![uni::Message::user("summarize".to_string())];
+    let outcome = complete_turn_after_failed_tool_free_recovery(
+        &mut history,
+        "test.stage",
+        None,
+        Some("   \n".to_string()),
+    );
+    assert!(matches!(outcome, TurnLoopResult::Completed));
+    assert_eq!(
+        history.last().unwrap().content.as_text(),
+        RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER
+    );
+}
+
+#[test]
 fn normalize_tool_free_recovery_break_outcome_converts_contract_violation_to_completed() {
     let mut history = vec![uni::Message::user("summarize".to_string())];
     let outcome = normalize_tool_free_recovery_break_outcome(
@@ -292,6 +325,7 @@ fn normalize_tool_free_recovery_break_outcome_converts_contract_violation_to_com
             reason: Some(RECOVERY_CONTRACT_VIOLATION_REASON.to_string()),
         },
         true,
+        None,
     );
 
     assert!(matches!(outcome, TurnLoopResult::Completed));
@@ -311,6 +345,7 @@ fn normalize_tool_free_recovery_break_outcome_keeps_non_recovery_blocked_result(
             reason: Some("Stopped after reaching budget limit.".to_string()),
         },
         true,
+        None,
     );
 
     assert!(matches!(
