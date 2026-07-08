@@ -267,6 +267,7 @@ fn sanitize_worktree_name(name: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::TempDir;
 
     #[test]
     fn sanitize_worktree_name_basic() {
@@ -303,6 +304,114 @@ mod tests {
         );
     }
 
-    // Integration tests requiring a real git repo are gated behind a feature
-    // or run conditionally. The unit tests above cover the sanitization logic.
+    // Integration tests below exercise the real `git worktree` CLI against a
+    // throwaway git repo, fulfilling the plan's B1 "create/list/remove against a
+    // temp git repo" verification requirement (previously only sanitization was
+    // covered).
+
+    use std::process::Command as ProcCommand;
+
+    /// Build a `WorktreeManager` from a canonicalized repo root.
+    ///
+    /// `git worktree list --porcelain` returns canonical (symlink-resolved)
+    /// paths, so the manager must be constructed from a canonical root or its
+    /// `starts_with(managed_dir)` filter would miss worktrees when the caller
+    /// passes a symlinked path (e.g. macOS `/tmp` -> `/private/tmp`).
+    fn manager_for(repo: &TempDir) -> WorktreeManager {
+        WorktreeManager::new(std::fs::canonicalize(repo.path()).expect("canonicalize repo"))
+    }
+
+    fn init_temp_git_repo() -> TempDir {
+        let dir = TempDir::new().expect("temp dir");
+        let run = |args: &[&str]| {
+            let status = ProcCommand::new("git")
+                .args(args)
+                .current_dir(dir.path())
+                .output()
+                .expect("spawn git");
+            assert!(
+                status.status.success(),
+                "git {:?} failed: {}",
+                args,
+                String::from_utf8_lossy(&status.stderr)
+            );
+        };
+        run(&["init", "-q"]);
+        run(&["config", "user.email", "test@vtcode.dev"]);
+        run(&["config", "user.name", "vtcode-test"]);
+        std::fs::write(dir.path().join("README.md"), "seed\n").expect("write seed");
+        run(&["add", "."]);
+        run(&["commit", "-q", "-m", "seed"]);
+        dir
+    }
+
+    #[test]
+    fn create_then_list_returns_managed_worktree() {
+        let repo = init_temp_git_repo();
+        let mgr = manager_for(&repo);
+
+        let path = mgr.create("loop-a").expect("create");
+        assert!(path.exists(), "worktree directory must exist after create");
+
+        let worktrees = mgr.list().expect("list");
+        let found = worktrees.iter().find(|w| w.name == "loop-a");
+        assert!(found.is_some(), "created worktree should be listed");
+        assert_eq!(found.unwrap().path, path);
+    }
+
+    #[test]
+    fn create_is_idempotency_safe() {
+        let repo = init_temp_git_repo();
+        let mgr = manager_for(&repo);
+        mgr.create("loop-b").expect("create first");
+
+        let err = mgr.create("loop-b");
+        assert!(err.is_err(), "re-creating an existing worktree must fail");
+    }
+
+    #[test]
+    fn remove_deletes_worktree_and_orphan_branch() {
+        let repo = init_temp_git_repo();
+        let mgr = manager_for(&repo);
+        mgr.create("loop-c").expect("create");
+
+        mgr.remove("loop-c").expect("remove");
+        assert!(
+            mgr.list().expect("list").iter().all(|w| w.name != "loop-c"),
+            "worktree should no longer be listed after removal"
+        );
+
+        // The orphan `loop/{name}` branch created by `create()` must be GC'd too.
+        let branch_check = ProcCommand::new("git")
+            .args(["rev-parse", "--verify", "loop/loop-c"])
+            .current_dir(repo.path())
+            .output()
+            .expect("check branch");
+        assert!(
+            !branch_check.status.success(),
+            "orphan branch should be deleted on remove"
+        );
+    }
+
+    #[test]
+    fn remove_missing_worktree_errors() {
+        let repo = init_temp_git_repo();
+        let mgr = manager_for(&repo);
+        assert!(
+            mgr.remove("does-not-exist").is_err(),
+            "removing a non-existent worktree must error"
+        );
+    }
+
+    #[test]
+    fn remove_all_clears_every_managed_worktree() {
+        let repo = init_temp_git_repo();
+        let mgr = manager_for(&repo);
+        mgr.create("loop-x").expect("create x");
+        mgr.create("loop-y").expect("create y");
+
+        let removed = mgr.remove_all().expect("remove_all");
+        assert_eq!(removed, 2);
+        assert!(mgr.list().expect("list").is_empty());
+    }
 }

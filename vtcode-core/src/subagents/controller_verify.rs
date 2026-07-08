@@ -154,9 +154,10 @@ impl SubagentController {
     /// Reconcile a worktree-isolated child: diff → verify → merge → cleanup.
     ///
     /// Uses `WorktreeReconciler::reconcile` in a single `spawn_blocking` call
-    /// with a synchronous verify closure. This avoids borrowing `&self` across
-    /// spawn boundaries, which would make the parent `tokio::spawn` future
-    /// non-Send due to the recursive spawn chain through `verify_proposed_change`.
+    /// with the canonical [`HeuristicDiffVerifier`](crate::git::HeuristicDiffVerifier).
+    /// This avoids borrowing `&self` across spawn boundaries, which would make
+    /// the parent `tokio::spawn` future non-Send due to the recursive spawn
+    /// chain through `verify_proposed_change`.
     pub(super) async fn run_worktree_reconciliation(
         &self,
         child_id: &str,
@@ -169,51 +170,9 @@ impl SubagentController {
 
         let result = tokio::task::spawn_blocking(move || {
             let reconciler = crate::git::WorktreeReconciler::new(&ws, "main");
-            reconciler.reconcile(&wt_name_owned, &wt_path_owned, |diff, _files| {
-                // Heuristic verification: reject obviously dangerous patterns.
-                let lower = diff.to_lowercase();
-                let mut issues = Vec::new();
-
-                // Destructive shell commands
-                if lower.contains("rm -rf") || lower.contains("rm -fr") {
-                    issues.push("Diff contains 'rm -rf' pattern".to_string());
-                }
-                // Fork bombs and process abuse
-                if lower.contains(":(){ :|:&") || lower.contains("fork bomb") {
-                    issues.push("Diff contains fork bomb pattern".to_string());
-                }
-                // Curl-pipe-to-shell
-                if (lower.contains("curl") || lower.contains("wget"))
-                    && lower.contains("|")
-                    && (lower.contains("sh") || lower.contains("bash") || lower.contains("python"))
-                {
-                    issues.push("Diff contains pipe-to-shell pattern".to_string());
-                }
-                // Credential exfiltration
-                if lower.contains("curl")
-                    && (lower.contains("password")
-                        || lower.contains("secret")
-                        || lower.contains("token")
-                        || lower.contains("api_key"))
-                {
-                    issues.push("Diff may exfiltrate credentials via curl".to_string());
-                }
-                // chmod 777 on system paths
-                if lower.contains("chmod 777") || lower.contains("chmod -r 777") {
-                    issues.push("Diff contains overly permissive chmod".to_string());
-                }
-                // Eval of untrusted input
-                if lower.contains("eval(") || lower.contains("eval ") {
-                    issues.push("Diff contains eval usage".to_string());
-                }
-
-                if issues.is_empty() {
-                    Ok((true, Vec::new(), "Heuristic check passed".to_string()))
-                } else {
-                    let reasoning = format!("Heuristic check found {} issue(s)", issues.len());
-                    Ok((false, issues, reasoning))
-                }
-            })
+            let verifier: Box<dyn crate::git::DiffVerifier + Send + Sync> =
+                Box::new(crate::git::HeuristicDiffVerifier);
+            reconciler.reconcile(&wt_name_owned, &wt_path_owned, verifier.as_ref())
         })
         .await;
 

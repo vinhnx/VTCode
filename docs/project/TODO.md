@@ -63,22 +63,6 @@ There are also some things to watch out for in tool use. For example, the number
 
 ===
 
-check the agent loop again:
-
-" 3. Goals (measurable)
-• \*\*P50 launch for vtcode --version / vtcode --help... [plan]
-[reasoning] Tool wall-clock budget exhausted. I have enough context to synthesize a solid plan. Let me compile what I know:"
-
-==> here the plan mode summarization is interrupted, and then the agent changes to reasoning thinking, this is not ideal. The agent should be able to complete the plan mode summarization without being interrupted by reasoning thinking. We need to ensure that the agent can maintain focus on the current mode of operation, whether it is planning, reasoning, or executing tasks. This may involve implementing better context management, ensuring that the agent has enough information to complete its current task before switching modes, and providing clear boundaries between different modes of operation.
-
-=> then later on, the agent completely failed and stop
-
-"
------------------------------------------------------- Info -------------------------------------------------------
-Tool execution completed, but the model follow-up failed (transient — may resolve on retry). Output above is
-valid.
-"
-
 ---
 
 • I've already gathered enough context. Let me also quickly check the dispatch/mod.rs files and one more critical
