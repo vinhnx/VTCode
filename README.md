@@ -24,7 +24,7 @@ VT Code is a Rust coding agent built for long-running autonomous workflows, with
 - **Agent runtime** - Interactive TUI, slash commands, streaming, `ask`/`exec` CLI, session resume
 - **Coding tools** - Safe file ops, ripgrep search + ast-grep outline symbol maps, fuzzy discovery, code intelligence, project indexing, terminal execution
 - **Extensibility** - Agent Skills, MCP client/server, lifecycle hooks, subagents, custom providers, Zed ACP, VS Code, Claude Code
-- **Model providers** - 21+ LLM providers: Anthropic, OpenAI, Gemini, OpenRouter, Ollama, LM Studio, and more
+- **Model providers** - 21+ LLM providers: Anthropic, OpenAI, Gemini, OpenRouter, **local inference via Ollama, LM Studio, and llama.cpp** (managed with the `/local` command), and more
 - **Safety** - Restricted shell sandbox, tool guardrails, subprocess isolation, full audit logging
 - **Protocols** - Open Responses, Agent2Agent (A2A), ATIF, Anthropic Messages API
 - **Loop engineering** - Worktree isolation for parallel agents, propose/verify sub-agent separation, durable loop state, cost guardrails
@@ -77,6 +77,30 @@ VT Code supports 21+ LLM providers out of the box, plus any OpenAI-compatible AP
 | **Other**           | [GitHub Copilot](./docs/providers/PROVIDER_GUIDES.md#github-copilot) · [Anthropic API Compat](./docs/providers/PROVIDER_GUIDES.md#anthropic-api-compatibility-server) · [Poolside](./docs/providers/PROVIDER_GUIDES.md#poolside)                                                                                                                                                                                                                                                                                                                      |
 
 Read: [Provider Guides](./docs/providers/PROVIDER_GUIDES.md).
+
+## Local models (experimental)
+
+Run models entirely on your machine for privacy, offline use, or zero token
+cost. VT Code supports three local backends, all managed from the TUI:
+
+- **Ollama** (`ollama serve`) — best-supported local backend; auto-loads pulled models.
+- **LM Studio** (`lms server start`) — OpenAI-compatible; select the loaded model in the picker.
+- **llama.cpp** (`llama-server -m model.gguf`) — most automated; auto-starts via `LLAMACPP_MODEL_PATH`.
+
+```shell
+/local                 # interactive local server manager
+/local start ollama   # start a specific backend
+/local troubleshoot   # diagnose connection / model issues
+```
+
+Before each generation VT Code verifies the server is up and the model is
+loaded, and on failure prints the exact recovery command (e.g.
+`ollama pull gpt-oss:20b`) instead of a cryptic error. Local inference is
+**experimental** and depends on your hardware — see
+[Local Models guide](./docs/guides/local-models.md) for trade-offs, hardware
+sizing, and a reliable-setup checklist, and
+[Local Inference Servers](./docs/providers/local-servers.md) for the full
+`/local` reference.
 
 ## Development
 

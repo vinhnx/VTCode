@@ -16,6 +16,7 @@ use tokio::process::{Child, Command};
 use tokio::sync::{Mutex as AsyncMutex, watch};
 use tokio::time::sleep;
 use url::Url;
+use vtcode_commons::llm::LLMErrorMetadata;
 use vtcode_config::TimeoutsConfig;
 use vtcode_config::constants::{env_vars, models, urls};
 use vtcode_config::core::{AnthropicConfig, ModelConfig, PromptCachingConfig};
@@ -270,14 +271,6 @@ impl LlamaCppProvider {
             || Path::new(trimmed).exists()
     }
 
-    fn is_local_base_url(base_url: &str) -> bool {
-        let host_root = base_url_to_host_root(base_url);
-        Url::parse(&host_root)
-            .ok()
-            .and_then(|url| url.host_str().map(str::to_ascii_lowercase))
-            .is_some_and(|host| host == "localhost" || host == "127.0.0.1" || host == "::1")
-    }
-
     fn host_port(base_url: &str) -> Result<u16> {
         let host_root = base_url_to_host_root(base_url);
         let parsed = Url::parse(&host_root)
@@ -486,7 +479,7 @@ impl LlamaCppProvider {
                     ServerPhase::NotStarted | ServerPhase::Failed => {
                         match startup_model_path.clone() {
                             Some(model_path) => {
-                                if !Self::is_local_base_url(&self.base_url) {
+                                if !super::local_server::is_local_base_url(&self.base_url) {
                                     return Err(Self::provider_error(format!(
                                         "{LLAMACPP_CONNECTION_ERROR} Auto-start is only available for localhost llama.cpp endpoints."
                                     )));
@@ -504,10 +497,24 @@ impl LlamaCppProvider {
                                     }
                                     ServerProbe::Ready(model_id) => return Ok(model_id.clone()),
                                 };
-                                return Err(Self::provider_error(format!(
+                                let message = format!(
                                     "{reason} Set {} or configure the provider model to a local .gguf path so VT Code can launch llama-server automatically.",
                                     env_vars::LLAMACPP_MODEL_PATH
-                                )));
+                                );
+                                // Tag with the unified local readiness code so the
+                                // runloop can offer the /local recovery path.
+                                return Err(LLMError::Provider {
+                                    message,
+                                    metadata: Some(LLMErrorMetadata::new(
+                                        "llama.cpp",
+                                        None,
+                                        Some("local_server_down".to_string()),
+                                        None,
+                                        None,
+                                        None,
+                                        None,
+                                    )),
+                                });
                             }
                         }
                     }

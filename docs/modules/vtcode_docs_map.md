@@ -298,6 +298,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: Configuration Overview, Matchers, Hook Execution Model, Event Reference, Interpreting Hook Results
   - **User Questions**: "What can you tell me about Lifecycle Hooks?", "How does Configuration Overview work?", "How does Matchers work?"
 
+- **File**: `docs/guides/local-models.md`
+  - **Content**: Local Models: Ollama, LM Studio & llama.cpp
+  - **Topics**: Local vs Remote, Hardware & model sizing, Getting reliable results, Known limitations, See also
+  - **User Questions**: "What can you tell me about Local Models: Ollama, LM Studio & llama.cpp?", "How does Local vs Remote work?", "How does Hardware & model sizing work?"
+
 - **File**: `docs/guides/mcp-integration.md`
   - **Content**: MCP Integration Guide
   - **Topics**: MCP Specification Map, Configuring MCP Providers, Security and validation, Allowlist Behaviour, Testing the Integration

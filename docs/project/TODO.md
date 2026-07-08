@@ -58,10 +58,6 @@ Tool use
 
 There are also some things to watch out for in tool use. For example, the number of tools cannot expand without limit, otherwise the model wastes attention on choosing. Tools should not overlap too much in functionality, otherwise the model does not know which one to use. Tool descriptions should clearly explain when to use them and when not to use them, namely they should make the boundaries clear. Return values should be token-efficient and should not pour irrelevant data into context. Returned error messages should let the model know what to repair next. Names should be clear, so the agent can infer boundaries from the names. Also, tools are preferably not exposed directly to the model as direct tool calls, but mapped into code APIs / a file tree, so the agent can call them through code. This way, the agent can read only the tool definitions it currently needs, filter large data inside the code execution environment, and return only summaries or a small number of results to the model. It can use loops, conditionals, and exception handling to complete complex control flow, or write intermediate state into files instead of stuffing it into context. Tool outputs are deterministic; we should leave deterministic computation to code. Judgment and planning, such as how to call tools, which tools to call, in what order, and how many times, should be left to the model.
 
----
-
-remove local models via LM Studio / Ollama / llama.ccp support. Please note that local model inference via LM Studio and Ollama/llama.ccp is very experimental and not working as expected. Since using local models is hard and take much effort, I might plan to remove local model support completely in the future and use remote LLM API instead.
-
 ===
 
 Fix plan: tool-free recovery dies instead of retrying synthesis (checkpoint turn_621)

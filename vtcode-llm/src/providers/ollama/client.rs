@@ -179,7 +179,7 @@ impl OllamaClient {
     pub async fn pull_with_reporter(
         &self,
         model: &str,
-        reporter: &mut dyn OllamaPullProgressReporter,
+        reporter: &mut (dyn OllamaPullProgressReporter + Send),
     ) -> io::Result<()> {
         reporter.on_event(&OllamaPullEvent::Status(format!(
             "Pulling model {model}..."

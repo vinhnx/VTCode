@@ -21,6 +21,18 @@ pub(crate) fn display_error(
         MessageStyle::Error,
         &format!("{}: {}", category, error_message_for_user(error)),
     )?;
+    // For local-inference readiness failures, surface the managed recovery path
+    // (the error message already contains the exact `ollama pull`/`lms load`/
+    // `/local start` command — this adds the interactive `/local` entrypoint).
+    if let Some(llm_err) = error.downcast_ref::<LLMError>()
+        && let Some(code) = local_readiness_code(llm_err)
+        && (code == "local_server_down" || code == "local_model_missing")
+    {
+        renderer.line(
+            MessageStyle::Info,
+            "Use /local to manage local inference servers (status, start, troubleshoot).",
+        )?;
+    }
     // Show full JSON body for LLM errors when available and different from the message
     if let Some(llm_err) = error.downcast_ref::<LLMError>()
         && let Some(raw_body) = llm_error_raw_body(llm_err)
@@ -31,6 +43,18 @@ pub(crate) fn display_error(
         }
     }
     Ok(())
+}
+
+/// Return the structured error code from an `LLMError`'s metadata, if present.
+fn local_readiness_code(error: &LLMError) -> Option<&str> {
+    let metadata = match error {
+        LLMError::Authentication { metadata, .. }
+        | LLMError::InvalidRequest { metadata, .. }
+        | LLMError::Network { metadata, .. }
+        | LLMError::Provider { metadata, .. }
+        | LLMError::RateLimit { metadata } => metadata.as_ref(),
+    };
+    metadata.and_then(|meta| meta.code.as_deref())
 }
 
 pub(crate) fn error_message_for_user(error: &anyhow::Error) -> String {
