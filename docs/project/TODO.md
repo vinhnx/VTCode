@@ -108,3 +108,9 @@ Verification
 - ./scripts/check-dev.sh --test, plus cargo nextest run -p vtcode -E 'binary(/inline_events/)' for harness regressions.
 
 Items 1–4 are one coherent change in src/agent/runloop/unified/turn/; item 5 is separable. Want me to implement 1–4 now?
+
+===
+
+amp fable stash : "WIP on main: 383c71516 fix(runloop): raise recovery synthesis token cap 1024 -> 4096"
+
+===

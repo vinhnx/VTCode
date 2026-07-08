@@ -107,19 +107,21 @@ cargo nextest run        # parallel test runner
 I'd love to have you, bug reports, docs, features, ideas, all welcome. Start with [issues](https://github.com/vinhnx/vtcode/issues) or [good first issues](https://github.com/vinhnx/vtcode/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22). AI agents see [AGENTS.md](./AGENTS.md). Humans see [CONTRIBUTING.md](./docs/CONTRIBUTING.md).
 
 <p align="center">
-  <a href="https://github.com/kernitus"><img src="https://avatars.githubusercontent.com/u/2789734?s=60" width="40" height="40" alt="@kernitus" title="@kernitus (33 commits)" style="border-radius: 50%" /></a>&nbsp;
-  <a href="https://github.com/oiwn"><img src="https://avatars.githubusercontent.com/u/398035?s=60" width="40" height="40" alt="@oiwn" title="@oiwn (10 commits)" style="border-radius: 50%" /></a>&nbsp;
+  <a href="https://github.com/kernitus"><img src="https://avatars.githubusercontent.com/u/2789734?s=60" width="40" height="40" alt="@kernitus" title="@kernitus (54 commits)" style="border-radius: 50%" /></a>&nbsp;
+  <a href="https://github.com/oiwn"><img src="https://avatars.githubusercontent.com/u/398035?s=60" width="40" height="40" alt="@oiwn" title="@oiwn (12 commits)" style="border-radius: 50%" /></a>&nbsp;
   <a href="https://github.com/chenrui333"><img src="https://avatars.githubusercontent.com/u/1580956?s=60" width="40" height="40" alt="@chenrui333" title="@chenrui333 (6 commits)" style="border-radius: 50%" /></a>&nbsp;
   <a href="https://github.com/Sachin-Bhat"><img src="https://avatars.githubusercontent.com/u/25080916?s=60" width="40" height="40" alt="@Sachin-Bhat" title="@Sachin-Bhat (6 commits)" style="border-radius: 50%" /></a>&nbsp;
   <a href="https://github.com/gzsombor"><img src="https://avatars.githubusercontent.com/u/66230?s=60" width="40" height="40" alt="@gzsombor" title="@gzsombor (4 commits)" style="border-radius: 50%" /></a>&nbsp;
   <a href="https://github.com/lucaszhu-hue"><img src="https://avatars.githubusercontent.com/u/278269343?s=60" width="40" height="40" alt="@lucaszhu-hue" title="@lucaszhu-hue (4 commits)" style="border-radius: 50%" /></a>&nbsp;
+  <a href="https://github.com/leonj1"><img src="https://avatars.githubusercontent.com/u/5171829?s=60" width="40" height="40" alt="@leonj1" title="@leonj1 (4 commits)" style="border-radius: 50%" /></a>&nbsp;
   <a href="https://github.com/poelzi"><img src="https://avatars.githubusercontent.com/u/66107?s=60" width="40" height="40" alt="@poelzi" title="@poelzi (2 commits)" style="border-radius: 50%" /></a>&nbsp;
   <a href="https://github.com/EvoLinkAI"><img src="https://avatars.githubusercontent.com/u/253253881?s=60" width="40" height="40" alt="@EvoLinkAI" title="@EvoLinkAI (2 commits)" style="border-radius: 50%" /></a>&nbsp;
   <a href="https://github.com/gurdasnijor"><img src="https://avatars.githubusercontent.com/u/1755404?s=60" width="40" height="40" alt="@gurdasnijor" title="@gurdasnijor (2 commits)" style="border-radius: 50%" /></a>&nbsp;
-  <a href="https://github.com/leonj1"><img src="https://avatars.githubusercontent.com/u/5171829?s=60" width="40" height="40" alt="@leonj1" title="@leonj1 (2 commits)" style="border-radius: 50%" /></a>&nbsp;
   <a href="https://github.com/morler"><img src="https://avatars.githubusercontent.com/u/478444?s=60" width="40" height="40" alt="@morler" title="@morler (2 commits)" style="border-radius: 50%" /></a>&nbsp;
   <a href="https://github.com/uiYzzi"><img src="https://avatars.githubusercontent.com/u/40852301?s=60" width="40" height="40" alt="@uiYzzi" title="@uiYzzi (2 commits)" style="border-radius: 50%" /></a>&nbsp;
-  <a href="https://github.com/RobertBorg"><img src="https://avatars.githubusercontent.com/u/1288566?s=60" width="40" height="40" alt="@RobertBorg" title="@RobertBorg (1 commit)" style="border-radius: 50%" /></a>
+  <a href="https://github.com/search?q=li%40maisiliym.criome.net&type=commits"><img src="https://avatars.githubusercontent.com/u/0?s=60" width="40" height="40" alt="@li" title="li (2 commits)" style="border-radius: 50%" /></a>&nbsp;
+  <a href="https://github.com/RobertBorg"><img src="https://avatars.githubusercontent.com/u/1288566?s=60" width="40" height="40" alt="@RobertBorg" title="@RobertBorg (1 commit)" style="border-radius: 50%" /></a>&nbsp;
+  <a href="https://github.com/ForrestThump"><img src="https://avatars.githubusercontent.com/u/44280834?s=60" width="40" height="40" alt="@ForrestThump" title="@ForrestThump (1 commit)" style="border-radius: 50%" /></a>
 </p>
 
 ## Support
