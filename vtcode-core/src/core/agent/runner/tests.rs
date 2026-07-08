@@ -173,7 +173,7 @@ fn into_results_computes_metrics() {
 }
 
 #[tokio::test]
-async fn full_auto_allowlist_hides_tools_from_exposure() {
+async fn full_auto_allowlist_drops_hidden_legacy_tools() {
     let temp = TempDir::new().expect("tempdir");
     let mut runner = Box::pin(AgentRunner::new_with_bootstrap(
         AgentType::Single,
@@ -197,7 +197,7 @@ async fn full_auto_allowlist_hides_tools_from_exposure() {
         .enable_full_auto(&[tools::UNIFIED_FILE.to_string()])
         .await;
 
-    assert!(runner.is_tool_exposed(tools::UNIFIED_FILE).await);
+    assert!(!runner.is_tool_exposed(tools::UNIFIED_FILE).await);
     assert!(!runner.is_tool_exposed(tools::UNIFIED_EXEC).await);
 
     let snapshot = runner
@@ -205,7 +205,7 @@ async fn full_auto_allowlist_hides_tools_from_exposure() {
         .await
         .expect("full-auto snapshot");
     assert!(
-        snapshot
+        !snapshot
             .active_tool_names
             .contains(&tools::UNIFIED_FILE.to_string())
     );
@@ -237,9 +237,37 @@ async fn runner_uses_public_tool_resolution_for_validation() {
     .await
     .expect("runner");
 
-    assert!(runner.is_valid_tool(tools::READ_FILE).await);
-    assert!(runner.is_valid_tool("Exec code").await);
+    assert!(runner.is_valid_tool(tools::EXEC_COMMAND).await);
+    assert!(runner.is_valid_tool(tools::WRITE_STDIN).await);
+    assert!(runner.is_valid_tool(tools::APPLY_PATCH).await);
+    assert!(!runner.is_valid_tool(tools::READ_FILE).await);
+    assert!(!runner.is_valid_tool(tools::WRITE_FILE).await);
+    assert!(!runner.is_valid_tool(tools::UNIFIED_EXEC).await);
+    assert!(!runner.is_valid_tool(tools::UNIFIED_FILE).await);
+    assert!(!runner.is_valid_tool(tools::UNIFIED_SEARCH).await);
     assert!(!runner.is_valid_tool("exec_code").await);
+
+    let mut session_state =
+        AgentSessionState::new("thread-tool-validation".to_string(), 1, 1, 8_000);
+    let exec_call = runner
+        .admit_tool_call(
+            tools::EXEC_COMMAND,
+            json!({ "cmd": "echo hi" }),
+            &mut session_state,
+        )
+        .expect("exec_command should be admitted by public name");
+    assert_eq!(exec_call.canonical_name, tools::EXEC_COMMAND);
+    assert_eq!(exec_call.effective_args["cmd"], "echo hi");
+
+    let stdin_call = runner
+        .admit_tool_call(
+            tools::WRITE_STDIN,
+            json!({ "session_id": "exec-1", "chars": "q" }),
+            &mut session_state,
+        )
+        .expect("write_stdin should be admitted by public name");
+    assert_eq!(stdin_call.canonical_name, tools::WRITE_STDIN);
+    assert_eq!(stdin_call.effective_args["chars"], "q");
 }
 
 #[tokio::test]
@@ -291,8 +319,25 @@ async fn build_universal_tools_matches_registry_agent_runner_snapshot() {
                     &runner.model,
                     Some(runner.config()),
                 ),
+            tool_profile: crate::tools::handlers::ToolProfile::CodexDefault,
         })
         .await;
+    let registry_tool_names = registry_tools
+        .iter()
+        .map(|tool| tool.function_name().to_string())
+        .collect::<Vec<_>>();
+    assert!(
+        registry_tool_names.contains(&tools::EXEC_COMMAND.to_string()),
+        "AgentRunner default profile should advertise exec_command; got {registry_tool_names:?}"
+    );
+    assert!(
+        registry_tool_names.contains(&tools::WRITE_STDIN.to_string()),
+        "AgentRunner default profile should advertise write_stdin; got {registry_tool_names:?}"
+    );
+    assert!(
+        !registry_tool_names.contains(&tools::UNIFIED_EXEC.to_string()),
+        "AgentRunner default profile must not advertise unified_exec; got {registry_tool_names:?}"
+    );
     let mut expected = Vec::new();
     for tool in registry_tools {
         if runner.is_tool_exposed(tool.function_name()).await {
@@ -368,26 +413,26 @@ async fn active_primary_agent_policy_filters_provider_exposure_and_execution() {
     .expect("runner");
 
     let mut spec = vtcode_config::builtin_primary_auto_agent();
-    spec.tools = Some(vec![tools::READ_FILE.to_string()]);
+    spec.tools = Some(vec![tools::EXEC_COMMAND.to_string()]);
     spec.permissions = AgentPermissionsConfig::new(PermissionDefault::Deny);
     runner.set_active_primary_agent(ActivePrimaryAgent::from_spec(&spec));
 
-    assert!(!runner.is_tool_exposed(tools::READ_FILE).await);
-    assert!(!runner.is_tool_exposed(tools::UNIFIED_EXEC).await);
+    assert!(!runner.is_tool_exposed(tools::EXEC_COMMAND).await);
+    assert!(!runner.is_tool_exposed(tools::WRITE_STDIN).await);
 
     let snapshot = runner
         .build_universal_tool_snapshot()
         .await
         .expect("permission-filtered snapshot");
-    assert_provider_hides_tool(&snapshot, tools::READ_FILE);
-    assert_provider_hides_tool(&snapshot, tools::UNIFIED_EXEC);
+    assert_provider_hides_tool(&snapshot, tools::EXEC_COMMAND);
+    assert_provider_hides_tool(&snapshot, tools::WRITE_STDIN);
 
     let mut session_state =
         AgentSessionState::new("thread-primary-agent-policy".to_string(), 1, 1, 8_000);
     let denied = runner
         .admit_tool_call(
-            tools::READ_FILE,
-            json!({ "path": "Cargo.toml" }),
+            tools::EXEC_COMMAND,
+            json!({ "cmd": "echo denied" }),
             &mut session_state,
         )
         .expect_err("primary-agent deny should block execution");
@@ -422,7 +467,7 @@ async fn explicit_tool_policy_deny_filters_runtime_state_and_allowed_tools() {
 
     runner
         .tool_registry
-        .set_tool_policy(tools::UNIFIED_EXEC, ToolPolicy::Deny)
+        .set_tool_policy(tools::EXEC_COMMAND, ToolPolicy::Deny)
         .await
         .expect("set policy");
 
@@ -430,15 +475,15 @@ async fn explicit_tool_policy_deny_filters_runtime_state_and_allowed_tools() {
         .build_universal_tool_snapshot()
         .await
         .expect("snapshot");
-    assert_provider_hides_tool(&snapshot, tools::UNIFIED_EXEC);
-    assert_provider_exposes_tool(&snapshot, tools::READ_FILE);
+    assert_provider_hides_tool(&snapshot, tools::EXEC_COMMAND);
+    assert_provider_exposes_tool(&snapshot, tools::WRITE_STDIN);
 
     let choice = ToolChoice::allowed_tools_auto(snapshot.active_tool_names.as_ref().clone());
     let ToolChoice::AllowedTools(choice) = choice else {
         panic!("expected allowed-tools choice");
     };
     assert!(
-        !choice.tools.contains(&tools::UNIFIED_EXEC.to_string()),
+        !choice.tools.contains(&tools::EXEC_COMMAND.to_string()),
         "provider-native advisory allowed_tools must use the policy-filtered subset"
     );
 }
@@ -471,7 +516,7 @@ async fn category_read_deny_filters_advertised_active_tools() {
         .await
         .expect("snapshot");
     assert_provider_hides_tool(&snapshot, tools::READ_FILE);
-    assert_provider_exposes_tool(&snapshot, tools::UNIFIED_EXEC);
+    assert_provider_exposes_tool(&snapshot, tools::EXEC_COMMAND);
 }
 
 #[tokio::test]
@@ -501,14 +546,14 @@ async fn category_bash_deny_filters_advertised_active_tools_and_allowed_tools() 
         .build_universal_tool_snapshot()
         .await
         .expect("snapshot");
-    assert_provider_hides_tool(&snapshot, tools::UNIFIED_EXEC);
-    assert_provider_exposes_tool(&snapshot, tools::READ_FILE);
+    assert_provider_hides_tool(&snapshot, tools::EXEC_COMMAND);
+    assert_provider_exposes_tool(&snapshot, tools::APPLY_PATCH);
 
     let choice = ToolChoice::allowed_tools_auto(snapshot.active_tool_names.as_ref().clone());
     let ToolChoice::AllowedTools(choice) = choice else {
         panic!("expected allowed-tools choice");
     };
-    assert!(!choice.tools.contains(&tools::UNIFIED_EXEC.to_string()));
+    assert!(!choice.tools.contains(&tools::EXEC_COMMAND.to_string()));
 }
 
 #[tokio::test]
@@ -538,8 +583,8 @@ async fn category_edit_deny_filters_advertised_file_tool_conservatively() {
         .build_universal_tool_snapshot()
         .await
         .expect("snapshot");
-    assert_provider_hides_tool(&snapshot, tools::UNIFIED_FILE);
-    assert_provider_exposes_tool(&snapshot, tools::UNIFIED_EXEC);
+    assert_provider_hides_tool(&snapshot, tools::APPLY_PATCH);
+    assert_provider_exposes_tool(&snapshot, tools::EXEC_COMMAND);
 }
 
 #[tokio::test]
@@ -569,8 +614,8 @@ async fn category_write_deny_filters_advertised_file_tool_conservatively() {
         .build_universal_tool_snapshot()
         .await
         .expect("snapshot");
-    assert_provider_hides_tool(&snapshot, tools::UNIFIED_FILE);
-    assert_provider_exposes_tool(&snapshot, tools::UNIFIED_EXEC);
+    assert_provider_hides_tool(&snapshot, tools::APPLY_PATCH);
+    assert_provider_exposes_tool(&snapshot, tools::EXEC_COMMAND);
 }
 
 #[tokio::test]
@@ -601,7 +646,7 @@ async fn webfetch_domain_deny_filters_representative_unified_search_tool() {
         .await
         .expect("snapshot");
     assert_provider_hides_tool(&snapshot, tools::UNIFIED_SEARCH);
-    assert_provider_exposes_tool(&snapshot, tools::UNIFIED_EXEC);
+    assert_provider_exposes_tool(&snapshot, tools::EXEC_COMMAND);
 }
 
 #[tokio::test]
@@ -632,7 +677,7 @@ async fn planning_mode_filters_provider_facing_mutating_tools() {
         .await
         .expect("snapshot");
     assert_provider_hides_tool(&snapshot, tools::APPLY_PATCH);
-    assert_provider_exposes_tool(&snapshot, tools::READ_FILE);
+    assert_provider_hides_tool(&snapshot, tools::READ_FILE);
 }
 
 #[tokio::test]
@@ -660,11 +705,12 @@ async fn active_primary_agent_policy_filters_provider_snapshot_to_allowed_tools(
         .build_universal_tool_snapshot()
         .await
         .expect("baseline snapshot");
-    assert_provider_exposes_tool(&baseline, tools::READ_FILE);
-    assert_provider_exposes_tool(&baseline, tools::UNIFIED_EXEC);
+    assert_provider_exposes_tool(&baseline, tools::EXEC_COMMAND);
+    assert_provider_exposes_tool(&baseline, tools::WRITE_STDIN);
+    assert_provider_exposes_tool(&baseline, tools::APPLY_PATCH);
 
     let mut spec = vtcode_config::builtin_primary_auto_agent();
-    spec.tools = Some(vec![tools::READ_FILE.to_string()]);
+    spec.tools = Some(vec![tools::EXEC_COMMAND.to_string()]);
     runner.set_active_primary_agent(ActivePrimaryAgent::from_spec(&spec));
 
     let restricted = runner
@@ -674,8 +720,9 @@ async fn active_primary_agent_policy_filters_provider_snapshot_to_allowed_tools(
     let baseline_names = provider_tool_names(&baseline);
     let restricted_names = provider_tool_names(&restricted);
     assert_ne!(restricted_names, baseline_names);
-    assert_provider_exposes_tool(&restricted, tools::READ_FILE);
-    assert_provider_hides_tool(&restricted, tools::UNIFIED_EXEC);
+    assert_provider_exposes_tool(&restricted, tools::EXEC_COMMAND);
+    assert_provider_hides_tool(&restricted, tools::WRITE_STDIN);
+    assert_provider_hides_tool(&restricted, tools::APPLY_PATCH);
 }
 
 #[tokio::test]
@@ -837,12 +884,13 @@ async fn review_tool_allowlist_excludes_mutating_and_plan_only_tools() {
         .review_tool_allowlist(&[
             tools::UNIFIED_FILE.to_string(),
             tools::UNIFIED_EXEC.to_string(),
+            tools::UNIFIED_SEARCH.to_string(),
             "task_tracker".to_string(),
             "start_planning".to_string(),
         ])
         .await;
 
-    assert_eq!(allowlist, vec![tools::UNIFIED_FILE.to_string()]);
+    assert!(allowlist.is_empty());
 }
 
 #[tokio::test]
@@ -870,7 +918,7 @@ async fn review_tool_allowlist_expands_wildcard_read_only() {
         .enable_full_auto(&[tools::UNIFIED_FILE.to_string()])
         .await;
 
-    assert!(runner.is_tool_exposed(tools::UNIFIED_FILE).await);
+    assert!(!runner.is_tool_exposed(tools::UNIFIED_FILE).await);
     assert!(!runner.is_tool_exposed(tools::UNIFIED_EXEC).await);
 }
 

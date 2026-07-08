@@ -72,11 +72,15 @@ impl ToolRegistry {
             .iter()
             .map(|tool| self.resolve_runtime_policy_name(tool))
             .collect();
-        let available = self.available_tools().await;
+        let available_tools = self.available_tools().await;
+        let visible_policy_names: Vec<String> = available_tools
+            .iter()
+            .map(|tool| self.resolve_runtime_policy_name(tool))
+            .collect();
         self.policy_gateway
             .lock()
             .await
-            .enable_full_auto_permission(&normalized_allowed_tools, &available);
+            .enable_full_auto_permission(&normalized_allowed_tools, &visible_policy_names);
     }
 
     pub async fn disable_full_auto_permission(&self) {

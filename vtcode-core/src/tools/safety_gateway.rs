@@ -253,6 +253,12 @@ fn push_file_access_target(
 
 fn command_text_for_tool(tool_name: &str, args: &Value) -> Option<String> {
     match tool_name {
+        tools::EXEC_COMMAND => crate::tools::command_args::command_text(args)
+            .ok()
+            .flatten(),
+        tools::WRITE_STDIN => {
+            crate::tools::command_args::interactive_input_text(args).map(str::to_owned)
+        }
         tools::SHELL | tools::RUN_PTY_CMD => crate::tools::command_args::command_text(args)
             .ok()
             .flatten(),

@@ -1,11 +1,23 @@
 // ============================================================
-// UNIFIED TOOLS (Primary Interface)
+// MODEL-FACING TOOLS
 // ============================================================
-/// Unified search & discovery tool (aliases: grep_file, list_files, etc.)
+/// Canonical shell execution tool exposed to the model.
+pub const EXEC_COMMAND: &str = "exec_command";
+/// Canonical stdin writer for active execution sessions.
+pub const WRITE_STDIN: &str = "write_stdin";
+/// Canonical patch application tool exposed to the model.
+pub const APPLY_PATCH: &str = "apply_patch";
+/// Advanced semantic code search tool for VTCode-specific profiles.
+pub const CODE_SEARCH: &str = "code_search";
+
+// ============================================================
+// INTERNAL UNIFIED TOOLS
+// ============================================================
+/// Internal unified search and discovery dispatcher.
 pub const UNIFIED_SEARCH: &str = "unified_search";
-/// Unified shell execution & code execution tool (aliases: run_pty_cmd, execute_code, etc.)
+/// Internal unified shell execution and code execution dispatcher.
 pub const UNIFIED_EXEC: &str = "unified_exec";
-/// Unified file operations tool (aliases: read_file, write_file, edit_file, etc.)
+/// Internal unified file operations dispatcher.
 pub const UNIFIED_FILE: &str = "unified_file";
 
 // ============================================================
@@ -44,10 +56,8 @@ pub const LOAD_SKILL: &str = "load_skill";
 pub const LOAD_SKILL_RESOURCE: &str = "load_skill_resource";
 
 // ============================================================
-// LEGACY EXECUTION ALIASES (use unified_exec instead)
+// INTERNAL EXECUTION HELPERS
 // ============================================================
-pub const EXEC_COMMAND: &str = "exec_command";
-pub const WRITE_STDIN: &str = "write_stdin";
 pub const RUN_PTY_CMD: &str = "run_pty_cmd";
 pub const CREATE_PTY_SESSION: &str = "create_pty_session";
 pub const LIST_PTY_SESSIONS: &str = "list_pty_sessions";
@@ -58,14 +68,13 @@ pub const RESIZE_PTY_SESSION: &str = "resize_pty_session";
 pub const EXECUTE_CODE: &str = "execute_code";
 
 // ============================================================
-// LEGACY FILE OPERATION ALIASES (use unified_file instead)
+// INTERNAL FILE OPERATION HELPERS
 // ============================================================
 pub const READ_FILE: &str = "read_file";
 pub const WRITE_FILE: &str = "write_file";
 pub const EDIT_FILE: &str = "edit_file";
 pub const DELETE_FILE: &str = "delete_file";
 pub const CREATE_FILE: &str = "create_file";
-pub const APPLY_PATCH: &str = "apply_patch";
 pub const SEARCH_REPLACE: &str = "search_replace";
 pub const FILE_OP: &str = "file_op";
 pub const MOVE_FILE: &str = "move_file";
@@ -163,7 +172,13 @@ const _: () = {
         }
     }
 
-    // Unified tools
+    // Model-facing tools
+    validate_tool_name(EXEC_COMMAND);
+    validate_tool_name(WRITE_STDIN);
+    validate_tool_name(APPLY_PATCH);
+    validate_tool_name(CODE_SEARCH);
+
+    // Internal unified tools
     validate_tool_name(UNIFIED_SEARCH);
     validate_tool_name(UNIFIED_EXEC);
     validate_tool_name(UNIFIED_FILE);
@@ -193,9 +208,7 @@ const _: () = {
     validate_tool_name(LOAD_SKILL);
     validate_tool_name(LOAD_SKILL_RESOURCE);
 
-    // Legacy execution aliases
-    validate_tool_name(EXEC_COMMAND);
-    validate_tool_name(WRITE_STDIN);
+    // Internal execution helpers
     validate_tool_name(RUN_PTY_CMD);
     validate_tool_name(CREATE_PTY_SESSION);
     validate_tool_name(LIST_PTY_SESSIONS);
@@ -205,13 +218,12 @@ const _: () = {
     validate_tool_name(RESIZE_PTY_SESSION);
     validate_tool_name(EXECUTE_CODE);
 
-    // Legacy file operation aliases
+    // Internal file operation helpers
     validate_tool_name(READ_FILE);
     validate_tool_name(WRITE_FILE);
     validate_tool_name(EDIT_FILE);
     validate_tool_name(DELETE_FILE);
     validate_tool_name(CREATE_FILE);
-    validate_tool_name(APPLY_PATCH);
     validate_tool_name(SEARCH_REPLACE);
     validate_tool_name(FILE_OP);
     validate_tool_name(MOVE_FILE);

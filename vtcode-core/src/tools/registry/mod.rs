@@ -322,10 +322,14 @@ mod tests {
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
         let available = registry.available_tools().await;
 
-        assert!(available.contains(&tools::UNIFIED_SEARCH.to_string()));
-        assert!(available.contains(&tools::UNIFIED_FILE.to_string()));
-        assert!(available.contains(&tools::UNIFIED_EXEC.to_string()));
+        assert!(available.contains(&tools::EXEC_COMMAND.to_string()));
+        assert!(available.contains(&tools::WRITE_STDIN.to_string()));
+        assert!(available.contains(&tools::APPLY_PATCH.to_string()));
+        assert!(!available.contains(&tools::UNIFIED_SEARCH.to_string()));
+        assert!(!available.contains(&tools::UNIFIED_FILE.to_string()));
+        assert!(!available.contains(&tools::UNIFIED_EXEC.to_string()));
         assert!(!available.contains(&tools::READ_FILE.to_string()));
+        assert!(!available.contains(&tools::WRITE_FILE.to_string()));
         assert!(!available.contains(&tools::RUN_PTY_CMD.to_string()));
         Ok(())
     }
@@ -378,6 +382,31 @@ mod tests {
         assert_eq!(schema_names, names);
         assert_eq!(declaration_names, names);
         assert_eq!(model_tool_names, names);
+        assert_eq!(
+            names,
+            vec![
+                tools::APPLY_PATCH.to_string(),
+                tools::EXEC_COMMAND.to_string(),
+                tools::WRITE_STDIN.to_string(),
+            ]
+        );
+        for removed_tool in [
+            tools::UNIFIED_EXEC,
+            tools::UNIFIED_FILE,
+            tools::UNIFIED_SEARCH,
+            tools::LIST_FILES,
+            tools::READ_FILE,
+            tools::WRITE_FILE,
+        ] {
+            assert!(
+                registry.get_tool_schema(removed_tool).await.is_none(),
+                "{removed_tool} schema should not be discoverable"
+            );
+            assert!(
+                !registry.has_tool(removed_tool).await,
+                "{removed_tool} should not be reported as available"
+            );
+        }
 
         Ok(())
     }
@@ -391,19 +420,14 @@ mod tests {
         let test_file = temp_dir.path().join("alias-read.txt");
         fs::write(&test_file, "via alias\n")?;
 
-        let public_names = registry
-            .public_tool_names(SessionSurface::Interactive, CapabilityLevel::CodeSearch)
-            .await;
-        assert!(!public_names.contains(&tools::READ_FILE.to_string()));
-
-        let read_result = registry
+        let err = registry
             .execute_public_tool_ref(
                 tools::READ_FILE,
                 &json!({"path": test_file.to_string_lossy().to_string()}),
             )
-            .await?;
-        assert_eq!(read_result["success"].as_bool(), Some(true));
-        assert_eq!(read_result["content"].as_str(), Some("via alias"));
+            .await
+            .expect_err("read_file should not resolve through public routing");
+        assert!(err.to_string().contains("Unknown tool"));
 
         registry
             .register_tool(
@@ -426,7 +450,7 @@ mod tests {
         let public_names = registry
             .public_tool_names(SessionSurface::Interactive, CapabilityLevel::CodeSearch)
             .await;
-        assert!(public_names.contains(&CUSTOM_TOOL_NAME.to_string()));
+        assert!(!public_names.contains(&CUSTOM_TOOL_NAME.to_string()));
         assert!(!public_names.contains(&"custom_tool_alias".to_string()));
 
         let schema_names = registry
@@ -440,7 +464,7 @@ mod tests {
             .into_iter()
             .map(|entry| entry.name)
             .collect::<Vec<_>>();
-        assert!(schema_names.contains(&CUSTOM_TOOL_NAME.to_string()));
+        assert!(!schema_names.contains(&CUSTOM_TOOL_NAME.to_string()));
         assert!(!schema_names.contains(&"custom_tool_alias".to_string()));
 
         let dynamic_result = registry
@@ -1117,33 +1141,37 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn preflight_normalizes_humanized_exec_label_to_unified_exec() -> Result<()> {
+    async fn preflight_rejects_removed_humanized_exec_label_alias() -> Result<()> {
         let temp_dir = TempDir::new()?;
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
 
-        let outcome = registry.preflight_validate_call(
-            "Exec code",
-            &json!({
-                "command": "echo vtcode"
-            }),
-        )?;
-        assert_eq!(outcome.normalized_tool_name, tools::UNIFIED_EXEC);
+        let err = registry
+            .preflight_validate_call(
+                "Exec code",
+                &json!({
+                    "command": "echo vtcode"
+                }),
+            )
+            .expect_err("Exec code alias should be rejected");
+        assert!(err.to_string().contains("Unknown tool"));
 
         Ok(())
     }
 
     #[tokio::test]
-    async fn preflight_normalizes_execute_code_alias_to_unified_exec() -> Result<()> {
+    async fn preflight_rejects_removed_execute_code_alias() -> Result<()> {
         let temp_dir = TempDir::new()?;
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
 
-        let outcome = registry.preflight_validate_call(
-            tools::EXECUTE_CODE,
-            &json!({
-                "code": "print('vtcode')"
-            }),
-        )?;
-        assert_eq!(outcome.normalized_tool_name, tools::UNIFIED_EXEC);
+        let err = registry
+            .preflight_validate_call(
+                tools::EXECUTE_CODE,
+                &json!({
+                    "code": "print('vtcode')"
+                }),
+            )
+            .expect_err("execute_code alias should be rejected");
+        assert!(err.to_string().contains("Unknown tool"));
 
         Ok(())
     }
@@ -1163,15 +1191,17 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn preflight_normalizes_repo_browser_aliases() -> Result<()> {
+    async fn preflight_rejects_repo_browser_file_aliases() -> Result<()> {
         let temp_dir = TempDir::new()?;
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
 
-        let read_outcome = registry.preflight_validate_call(
-            "repo_browser.read_file",
-            &json!({"path": "vtcode-core/src/lib.rs"}),
-        )?;
-        assert_eq!(read_outcome.normalized_tool_name, tools::UNIFIED_FILE);
+        let read_err = registry
+            .preflight_validate_call(
+                "repo_browser.read_file",
+                &json!({"path": "vtcode-core/src/lib.rs"}),
+            )
+            .expect_err("repo_browser.read_file alias should be rejected");
+        assert!(read_err.to_string().contains("Unknown tool"));
 
         let list_err = registry
             .preflight_validate_call(
@@ -1185,21 +1215,22 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn preflight_prefers_direct_harness_browse_tool_routes() -> Result<()> {
+    async fn preflight_rejects_removed_harness_browse_tool_routes() -> Result<()> {
         let temp_dir = TempDir::new()?;
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
 
-        let read_outcome = registry.preflight_validate_call(
-            tools::READ_FILE,
-            &json!({"path": "vtcode-core/src/lib.rs"}),
-        )?;
-        assert_eq!(read_outcome.normalized_tool_name, tools::READ_FILE);
+        let read_err = registry
+            .preflight_validate_call(tools::READ_FILE, &json!({"path": "vtcode-core/src/lib.rs"}))
+            .expect_err("read_file should be rejected");
+        assert!(read_err.to_string().contains("Unknown tool"));
 
-        let list_outcome = registry.preflight_validate_call(
-            tools::LIST_FILES,
-            &json!({"path": "vtcode-core/src", "page": 1, "per_page": 20}),
-        )?;
-        assert_eq!(list_outcome.normalized_tool_name, tools::LIST_FILES);
+        let list_err = registry
+            .preflight_validate_call(
+                tools::LIST_FILES,
+                &json!({"path": "vtcode-core/src", "page": 1, "per_page": 20}),
+            )
+            .expect_err("list_files should be rejected");
+        assert!(list_err.to_string().contains("Unknown tool"));
 
         Ok(())
     }
@@ -1254,23 +1285,23 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn suggest_fallback_prefers_unified_exec_for_exec_code_alias() -> Result<()> {
+    async fn suggest_fallback_prefers_exec_command_for_exec_code_alias() -> Result<()> {
         let temp_dir = TempDir::new()?;
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
 
         let fallback = registry.suggest_fallback_tool("exec_code").await;
-        assert_eq!(fallback.as_deref(), Some(tools::UNIFIED_EXEC));
+        assert_eq!(fallback.as_deref(), Some(tools::EXEC_COMMAND));
 
         Ok(())
     }
 
     #[tokio::test]
-    async fn suggest_fallback_prefers_unified_exec_for_humanized_exec_label() -> Result<()> {
+    async fn suggest_fallback_returns_none_for_humanized_exec_label() -> Result<()> {
         let temp_dir = TempDir::new()?;
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
 
         let fallback = registry.suggest_fallback_tool("Exec code").await;
-        assert_eq!(fallback.as_deref(), Some(tools::UNIFIED_EXEC));
+        assert_eq!(fallback, None);
 
         Ok(())
     }
@@ -1298,31 +1329,27 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn execute_public_repo_browser_alias_routes_through_public_assembly() -> Result<()> {
+    async fn execute_public_repo_browser_alias_is_rejected() -> Result<()> {
         let temp_dir = TempDir::new()?;
         fs::write(temp_dir.path().join("public-route.txt"), "public route\n")?;
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
         registry.allow_all_tools().await?;
 
-        let response = registry
+        let err = registry
             .execute_public_tool_ref(
                 "repo_browser.read_file",
                 &json!({"path": "public-route.txt"}),
             )
-            .await?;
+            .await
+            .expect_err("repo_browser.read_file should not resolve publicly");
 
-        assert_eq!(response["path"].as_str(), Some("public-route.txt"));
-        assert!(
-            response["content"]
-                .as_str()
-                .is_some_and(|content| content.contains("public route"))
-        );
+        assert!(err.to_string().contains("Unknown tool"));
 
         Ok(())
     }
 
     #[tokio::test]
-    async fn set_tool_policy_normalizes_public_aliases() -> Result<()> {
+    async fn set_tool_policy_accepts_current_public_names() -> Result<()> {
         let temp_dir = TempDir::new()?;
         let policy_path = temp_dir.path().join("tool-policy.json");
         let policy_manager =
@@ -1332,16 +1359,16 @@ mod tests {
                 .await;
 
         registry
-            .set_tool_policy("Exec code", ToolPolicy::Deny)
+            .set_tool_policy(tools::EXEC_COMMAND, ToolPolicy::Deny)
             .await?;
 
         assert_eq!(
-            registry.get_tool_policy("Exec code").await,
+            registry.get_tool_policy(tools::EXEC_COMMAND).await,
             ToolPolicy::Deny
         );
         assert_eq!(
-            registry.get_tool_policy(tools::UNIFIED_EXEC).await,
-            ToolPolicy::Deny
+            registry.get_tool_policy(tools::WRITE_STDIN).await,
+            ToolPolicy::Allow
         );
 
         Ok(())
@@ -1728,10 +1755,15 @@ mod tests {
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
 
         registry
-            .enable_full_auto_permission(&[tools::READ_FILE.to_string()])
+            .enable_full_auto_permission(&[tools::EXEC_COMMAND.to_string()])
             .await;
 
-        assert!(registry.preflight_tool_permission(tools::READ_FILE).await?);
+        assert!(
+            registry
+                .preflight_tool_permission(tools::EXEC_COMMAND)
+                .await?
+        );
+        assert!(!registry.preflight_tool_permission(tools::READ_FILE).await?);
         assert!(
             !registry
                 .preflight_tool_permission(tools::RUN_PTY_CMD)

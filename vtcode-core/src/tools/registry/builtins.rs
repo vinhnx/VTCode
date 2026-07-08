@@ -22,10 +22,10 @@ use crate::tools::web_search::{WEB_SEARCH_DESCRIPTION, WebSearchTool};
 use serde_json::json;
 use vtcode_utility_tool_specs::{
     apply_patch_parameters, close_agent_parameters, cron_create_parameters, cron_delete_parameters,
-    cron_list_parameters, list_files_parameters, read_file_parameters, resume_agent_parameters,
-    send_input_parameters, spawn_agent_parameters, spawn_background_subprocess_parameters,
-    unified_exec_parameters, unified_file_parameters, unified_search_parameters,
-    wait_agent_parameters,
+    cron_list_parameters, exec_command_parameters, list_files_parameters, read_file_parameters,
+    resume_agent_parameters, send_input_parameters, spawn_agent_parameters,
+    spawn_background_subprocess_parameters, unified_exec_parameters, unified_file_parameters,
+    unified_search_parameters, wait_agent_parameters, write_stdin_parameters,
 };
 
 use super::distributed::{BUILTIN_TOOLS, tool_config};
@@ -64,8 +64,7 @@ pub(super) fn builtin_tool_registrations(
         .collect();
 
     // Sort so that tools with aliases register before tools without aliases.
-    // This prevents alias conflicts: e.g., `unified_search` has alias "list_files"
-    // which would conflict if the internal tool named "list_files" is registered first.
+    // This prevents alias conflicts when an alias matches another registration name.
     // The linker does not guarantee source order for distributed slices.
     // Secondary sort by name ensures deterministic ordering across builds.
     registrations.sort_by(|a, b| {
@@ -255,7 +254,7 @@ fn register_spawn_background_subprocess(
         ToolRegistry::spawn_background_subprocess_executor,
     )
     .with_description(
-        "Launch a managed background subprocess that outlives the current turn. Use this for long-running daemons (file watchers, dev servers, indexers) where you need to return control to the model immediately. Do NOT use this for one-shot shell commands — use unified_exec with action=run instead. Background subprocesses are session-scoped; they die with the vtcode process.",
+        "Launch a managed background subprocess that outlives the current turn. Use this for long-running daemons (file watchers, dev servers, indexers) where you need to return control to the model immediately. Do NOT use this for one-shot shell commands: use exec_command instead. Background subprocesses are session-scoped; they die with the vtcode process.",
     )
     .with_parameter_schema(spawn_background_subprocess_parameters())
     .with_aliases(["background_subagent", "launch_background_helper"])
@@ -338,18 +337,7 @@ fn register_unified_search(_plan_state: Option<&PlanningWorkflowState>) -> ToolR
     )
     .with_parameter_schema(unified_search_parameters())
     .with_permission(ToolPolicy::Allow)
-    .with_aliases([
-        tools::GREP_FILE,
-        tools::LIST_FILES,
-        "grep",
-        "search text",
-        "structural search",
-        "list files",
-        "list tools",
-        "list errors",
-        "show agent info",
-        "fetch",
-    ])
+    .with_llm_visibility(false)
 }
 
 // ---------------------------------------------------------------------------
@@ -422,7 +410,7 @@ fn register_web_search(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegis
                 },
                 "pattern": {
                     "type": "string",
-                    "description": "Alias for 'query' (used by the unified_search tool)."
+                    "description": "Alias for 'query'."
                 },
                 "max_results": {
                     "type": "integer",
@@ -459,7 +447,7 @@ fn register_defuddle_fetch(_plan_state: Option<&PlanningWorkflowState>) -> ToolR
                 "type": "string",
                 "format": "uri",
                 "pattern": "^https?://",
-                "description": "REMOTE web page URL (http:// or https:// ONLY). Do NOT use for local file paths — use unified_file action=read instead."
+                "description": "REMOTE web page URL (http:// or https:// ONLY). Do NOT use for local file paths."
             },
             "max_bytes": {
                 "type": "integer",
@@ -564,15 +552,35 @@ fn register_unified_exec(_plan_state: Option<&PlanningWorkflowState>) -> ToolReg
         "Execute shell commands and code: actions run, write, poll, continue, inspect, list, close, code. Use action=run for one-shot commands; action=write + action=poll for interactive shells. Do NOT use action=write without a follow-up poll/close — the session leaks. Default timeout 180s (max 1800s). All shell calls run through the active sandbox policy. Requires Prompt confirmation.",
     )
     .with_parameter_schema(unified_exec_parameters())
-    .with_aliases([
+    .with_llm_visibility(false)
+}
+
+#[distributed_slice(BUILTIN_TOOLS)]
+fn register_exec_command(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
+    ToolRegistration::new(
         tools::EXEC_COMMAND,
+        CapabilityLevel::Bash,
+        false,
+        ToolRegistry::exec_command_executor,
+    )
+    .with_description(
+        "Execute a shell command through the active sandbox policy. Use for verification and shell-only tasks. Returns output, exit status, and a reusable session id when the command is still running.",
+    )
+    .with_parameter_schema(exec_command_parameters())
+}
+
+#[distributed_slice(BUILTIN_TOOLS)]
+fn register_write_stdin(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
+    ToolRegistration::new(
         tools::WRITE_STDIN,
-        tools::RUN_PTY_CMD,
-        tools::EXECUTE_CODE,
-        "bash",
-        "exec code",
-        "run command",
-    ])
+        CapabilityLevel::Bash,
+        false,
+        ToolRegistry::write_stdin_executor,
+    )
+    .with_description(
+        "Write characters to an active exec_command session stdin, then poll for fresh output.",
+    )
+    .with_parameter_schema(write_stdin_parameters())
 }
 
 // ---------------------------------------------------------------------------
@@ -591,15 +599,7 @@ fn register_unified_file(_plan_state: Option<&PlanningWorkflowState>) -> ToolReg
         "Read, write, edit, patch, delete, move, or copy a single file. Use action=read to load file contents (with optional range); action=edit for surgical text replacements (exact old_str, max 800 chars/40 lines per side); action=patch for larger or multi-hunk changes; action=write for new files or full replacement; action=delete to remove a file; action=move to rename; action=copy to duplicate. Do NOT mix action=edit with action=patch in the same call. Requires Prompt confirmation for write/edit/patch/delete/move/copy.",
     )
     .with_parameter_schema(unified_file_parameters())
-    .with_aliases([
-        tools::READ_FILE,
-        tools::WRITE_FILE,
-        tools::EDIT_FILE,
-        tools::DELETE_FILE,
-        tools::CREATE_FILE,
-        "repo_browser.read_file",
-        "repo_browser.write_file",
-    ])
+    .with_llm_visibility(false)
 }
 
 // ---------------------------------------------------------------------------
@@ -646,7 +646,7 @@ fn register_write_file(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegis
         false,
         ToolRegistry::write_file_executor,
     )
-    .with_description("Write or overwrite a file with new content. Internal — use unified_file action=write instead.")
+    .with_description("Write or overwrite a file with new content. Internal file helper.")
     .with_llm_visibility(false)
 }
 
@@ -658,7 +658,7 @@ fn register_edit_file(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegist
         false,
         ToolRegistry::edit_file_executor,
     )
-    .with_description("Apply a surgical text replacement in a file. Internal — use unified_file action=edit instead.")
+    .with_description("Apply a surgical text replacement in a file. Internal file helper.")
     .with_llm_visibility(false)
 }
 
@@ -670,7 +670,7 @@ fn register_run_pty_cmd(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegi
         false,
         ToolRegistry::run_pty_cmd_executor,
     )
-    .with_description("Run a one-shot PTY command. Internal — use unified_exec action=run instead.")
+    .with_description("Run a one-shot PTY command. Internal execution helper.")
     .with_llm_visibility(false)
 }
 
@@ -682,9 +682,7 @@ fn register_send_pty_input(_plan_state: Option<&PlanningWorkflowState>) -> ToolR
         false,
         ToolRegistry::send_pty_input_executor,
     )
-    .with_description(
-        "Send stdin to an active PTY session. Internal — use unified_exec action=write instead.",
-    )
+    .with_description("Send stdin to an active PTY session. Internal execution helper.")
     .with_llm_visibility(false)
 }
 
@@ -696,9 +694,7 @@ fn register_read_pty_session(_plan_state: Option<&PlanningWorkflowState>) -> Too
         false,
         ToolRegistry::read_pty_session_executor,
     )
-    .with_description(
-        "Read buffered output from a PTY session. Internal — use unified_exec action=poll instead.",
-    )
+    .with_description("Read buffered output from a PTY session. Internal execution helper.")
     .with_llm_visibility(false)
 }
 
@@ -710,7 +706,7 @@ fn register_create_pty_session(_plan_state: Option<&PlanningWorkflowState>) -> T
         false,
         ToolRegistry::create_pty_session_executor,
     )
-    .with_description("Create an interactive PTY session. Internal — managed by unified_exec.")
+    .with_description("Create an interactive PTY session. Internal execution helper.")
     .with_llm_visibility(false)
 }
 
@@ -722,7 +718,7 @@ fn register_list_pty_sessions(_plan_state: Option<&PlanningWorkflowState>) -> To
         false,
         ToolRegistry::list_pty_sessions_executor,
     )
-    .with_description("List all active PTY sessions. Internal — managed by unified_exec.")
+    .with_description("List all active PTY sessions. Internal execution helper.")
     .with_llm_visibility(false)
 }
 
@@ -734,7 +730,7 @@ fn register_close_pty_session(_plan_state: Option<&PlanningWorkflowState>) -> To
         false,
         ToolRegistry::close_pty_session_executor,
     )
-    .with_description("Close a PTY session by ID. Internal — managed by unified_exec.")
+    .with_description("Close a PTY session by ID. Internal execution helper.")
     .with_llm_visibility(false)
 }
 
@@ -893,54 +889,38 @@ mod tests {
     }
 
     #[test]
-    fn unified_builtins_preserve_public_aliases() {
+    fn codex_baseline_builtins_are_canonical_public_tools() {
         let plan_state = PlanningWorkflowState::new(PathBuf::from("/workspace"));
         let registrations = builtin_tool_registrations(Some(&plan_state));
-        let unified_search = registrations
-            .iter()
-            .find(|registration| registration.name() == tools::UNIFIED_SEARCH)
-            .expect("unified_search registration should exist");
-        assert!(unified_search.expose_in_llm());
-        for alias in [tools::GREP_FILE, tools::LIST_FILES, "structural search"] {
+
+        for tool_name in [tools::EXEC_COMMAND, tools::WRITE_STDIN] {
+            let registration = registrations
+                .iter()
+                .find(|registration| registration.name() == tool_name)
+                .expect("canonical public registration should exist");
+            assert!(registration.expose_in_llm(), "{tool_name} should be public");
             assert!(
-                unified_search
-                    .metadata()
-                    .aliases()
-                    .iter()
-                    .any(|item| item == alias),
-                "expected unified_search alias {alias}"
+                registration.metadata().aliases().is_empty(),
+                "{tool_name} should not rely on aliases"
             );
         }
 
-        let unified_exec = registrations
-            .iter()
-            .find(|registration| registration.name() == tools::UNIFIED_EXEC)
-            .expect("unified_exec registration should exist");
-        assert!(unified_exec.expose_in_llm());
-        for alias in [tools::EXEC_COMMAND, tools::WRITE_STDIN, tools::RUN_PTY_CMD] {
+        for tool_name in [
+            tools::UNIFIED_SEARCH,
+            tools::UNIFIED_EXEC,
+            tools::UNIFIED_FILE,
+        ] {
+            let registration = registrations
+                .iter()
+                .find(|registration| registration.name() == tool_name)
+                .expect("internal unified registration should exist");
             assert!(
-                unified_exec
-                    .metadata()
-                    .aliases()
-                    .iter()
-                    .any(|item| item == alias),
-                "expected unified_exec alias {alias}"
+                !registration.expose_in_llm(),
+                "{tool_name} should be internal"
             );
-        }
-
-        let unified_file = registrations
-            .iter()
-            .find(|registration| registration.name() == tools::UNIFIED_FILE)
-            .expect("unified_file registration should exist");
-        assert!(unified_file.expose_in_llm());
-        for alias in [tools::READ_FILE, tools::WRITE_FILE, tools::EDIT_FILE] {
             assert!(
-                unified_file
-                    .metadata()
-                    .aliases()
-                    .iter()
-                    .any(|item| item == alias),
-                "expected unified_file alias {alias}"
+                registration.metadata().aliases().is_empty(),
+                "{tool_name} should not publish aliases"
             );
         }
     }

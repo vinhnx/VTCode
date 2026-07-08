@@ -6,9 +6,9 @@ use crate::config::types::CapabilityLevel;
 use crate::core::agent::harness_kernel::SessionToolCatalogSnapshot;
 use crate::prompts::sections::SectionBoundaryMode;
 
-const TOOL_UNIFIED_EXEC: &str = tools::UNIFIED_EXEC;
-const TOOL_UNIFIED_FILE: &str = tools::UNIFIED_FILE;
-const TOOL_UNIFIED_SEARCH: &str = tools::UNIFIED_SEARCH;
+const TOOL_EXEC_COMMAND: &str = tools::EXEC_COMMAND;
+const TOOL_WRITE_STDIN: &str = tools::WRITE_STDIN;
+const TOOL_CODE_SEARCH: &str = tools::CODE_SEARCH;
 const TOOL_READ_FILE: &str = tools::READ_FILE;
 const TOOL_LIST_FILES: &str = tools::LIST_FILES;
 const TOOL_APPLY_PATCH: &str = tools::APPLY_PATCH;
@@ -20,57 +20,51 @@ pub fn generate_tool_guidelines(
     available_tools: &[String],
     capability_level: Option<CapabilityLevel>,
 ) -> String {
-    let has_exec = available_tools.iter().any(|tool| tool == TOOL_UNIFIED_EXEC);
-    let has_file = available_tools.iter().any(|tool| tool == TOOL_UNIFIED_FILE);
-    let has_search = available_tools
-        .iter()
-        .any(|tool| tool == TOOL_UNIFIED_SEARCH);
+    let has_exec = available_tools.iter().any(|tool| tool == TOOL_EXEC_COMMAND);
+    let has_stdin = available_tools.iter().any(|tool| tool == TOOL_WRITE_STDIN);
+    let has_search = available_tools.iter().any(|tool| tool == TOOL_CODE_SEARCH);
     let has_read_file = available_tools.iter().any(|tool| tool == TOOL_READ_FILE);
     let has_list_files = available_tools.iter().any(|tool| tool == TOOL_LIST_FILES);
     let has_apply_patch = available_tools.iter().any(|tool| tool == TOOL_APPLY_PATCH);
 
     let mut lines = Vec::new();
-    if let Some(mode_line) = capability_mode_line(capability_level, has_exec, has_file) {
+    if let Some(mode_line) = capability_mode_line(capability_level, has_exec, has_apply_patch) {
         lines.push(mode_line.to_string());
     }
     if let Some(browse_guidance) =
-        browse_tool_guidance(has_search, has_file, has_list_files, has_read_file)
+        browse_tool_guidance(has_exec, has_search, has_list_files, has_read_file)
     {
         lines.push(browse_guidance);
     }
-    if has_file || has_apply_patch {
-        lines.push("- Read before edit; patches small.".to_string());
+    if has_apply_patch {
+        lines.push(
+            "- Use `apply_patch` for file edits after inspection; keep patches small.".to_string(),
+        );
     }
     if has_exec {
         lines.push(
-            "- Use `unified_exec` for verification, `git diff -- <path>`, and shell-only tasks."
+            "- Use `exec_command` for verification, `git diff -- <path>`, and shell-only tasks."
                 .to_string(),
         );
     }
-    if has_exec || has_file || has_apply_patch {
-        lines.push(
-            "- Completion is a checkpoint: keep `task_tracker` current; verification resolved."
-                .to_string(),
-        );
+    if has_stdin {
+        lines.push("- Use `write_stdin` only with an active exec_command session.".to_string());
+    }
+    if has_exec || has_apply_patch {
+        lines.push("- Completion is a checkpoint: keep verification resolved.".to_string());
     }
     if has_search && has_exec {
-        lines.push("- Prefer search over shell for exploration.".to_string());
-        lines.push(
-            "- `action=outline` for \"what's here?\" (symbol map, no pattern needed); `action=structural` for code shape; `action=grep` for text. Set `lang` for structural/outline."
-                .to_string(),
-        );
+        lines.push("- Prefer targeted repository searches over broad shell dumps.".to_string());
     } else if has_search {
-        lines.push(
-            "- `action=outline` for \"what's here?\" (symbol map); `action=list` for file listing (paginated)."
-                .to_string(),
-        );
+        lines.push("- Use targeted repository search for semantic exploration.".to_string());
     }
-    if has_file || has_apply_patch || has_exec {
+    if has_apply_patch || has_exec {
         lines.push("- If calls repeat, re-plan instead of retrying.".to_string());
     }
-    if has_search || has_file || has_exec {
+    if has_search || has_exec {
         lines.push(
-            "- Run independent tools in parallel (read files or commands at once).".to_string(),
+            "- Run independent tools in parallel when their inputs do not depend on each other."
+                .to_string(),
         );
     }
 
@@ -151,11 +145,8 @@ fn generate_runtime_tool_guidelines(available_tools: &[String], planning_active:
         return generate_tool_guidelines(available_tools, None);
     }
 
-    let has_exec = available_tools.iter().any(|tool| tool == TOOL_UNIFIED_EXEC);
-    let has_file = available_tools.iter().any(|tool| tool == TOOL_UNIFIED_FILE);
-    let has_search = available_tools
-        .iter()
-        .any(|tool| tool == TOOL_UNIFIED_SEARCH);
+    let has_exec = available_tools.iter().any(|tool| tool == TOOL_EXEC_COMMAND);
+    let has_search = available_tools.iter().any(|tool| tool == TOOL_CODE_SEARCH);
     let has_read_file = available_tools.iter().any(|tool| tool == TOOL_READ_FILE);
     let has_list_files = available_tools.iter().any(|tool| tool == TOOL_LIST_FILES);
     let has_request_user_input = available_tools
@@ -168,18 +159,13 @@ fn generate_runtime_tool_guidelines(available_tools: &[String], planning_active:
     let mut lines =
         vec!["- Planning workflow active: stay within the read-safe tool list.".to_string()];
     if let Some(browse_guidance) =
-        browse_tool_guidance(has_search, has_file, has_list_files, has_read_file)
+        browse_tool_guidance(has_exec, has_search, has_list_files, has_read_file)
     {
         lines.push(browse_guidance);
     }
-    if has_file {
-        lines.push(
-            "- In Planning workflow, use `unified_file` only for read-style access.".to_string(),
-        );
-    }
     if has_exec {
         lines.push(
-            "- In Planning workflow, use `unified_exec` only for read-only verification, poll, or inspect actions."
+            "- In Planning workflow, use `exec_command` only for read-only verification."
                 .to_string(),
         );
     }
@@ -195,7 +181,7 @@ fn generate_runtime_tool_guidelines(available_tools: &[String], planning_active:
                 .to_string(),
         );
     }
-    if has_search || has_file || has_exec {
+    if has_search || has_exec {
         lines.push(
             "- If calls repeat without progress, tighten the plan instead of retrying identically."
                 .to_string(),
@@ -216,30 +202,25 @@ fn snapshot_tool_names(tool_snapshot: &SessionToolCatalogSnapshot) -> Vec<String
 }
 
 fn browse_tool_guidance(
+    has_exec: bool,
     has_search: bool,
-    has_file: bool,
     has_list_files: bool,
     has_read_file: bool,
 ) -> Option<String> {
-    let mut tool_names = Vec::new();
-    if has_search {
-        tool_names.push("`unified_search`");
-    } else if has_list_files {
-        tool_names.push("`list_files`");
+    if has_exec {
+        return Some(
+            "- Use `exec_command` with `rg`, `find`, and `sed` for repository browsing."
+                .to_string(),
+        );
     }
-    if has_file {
-        tool_names.push("`unified_file`");
-    } else if has_read_file {
-        tool_names.push("`read_file`");
-    }
-    if tool_names.is_empty() {
+
+    if !(has_search || has_list_files || has_read_file) {
         return None;
     }
 
-    Some(format!(
-        "- Prefer {} over shell browsing.",
-        tool_names.join(" and ")
-    ))
+    Some(
+        "- Use available read-only repository tools for browsing; do not modify files.".to_string(),
+    )
 }
 
 fn capability_mode_line(
@@ -263,11 +244,11 @@ fn capability_mode_line(
 
 /// Infer capability level from available tools.
 pub fn infer_capability_level(available_tools: &[String]) -> CapabilityLevel {
-    let has_search = available_tools.iter().any(|t| t == TOOL_UNIFIED_SEARCH);
-    let has_edit = available_tools.iter().any(|t| t == TOOL_UNIFIED_FILE);
+    let has_search = available_tools.iter().any(|t| t == TOOL_CODE_SEARCH);
+    let has_edit = available_tools.iter().any(|t| t == TOOL_APPLY_PATCH);
     let has_read = has_edit || available_tools.iter().any(|t| t == TOOL_READ_FILE);
     let has_list = has_search || available_tools.iter().any(|t| t == TOOL_LIST_FILES);
-    let has_exec = available_tools.iter().any(|t| t == TOOL_UNIFIED_EXEC);
+    let has_exec = available_tools.iter().any(|t| t == TOOL_EXEC_COMMAND);
 
     if has_search {
         CapabilityLevel::CodeSearch
@@ -290,7 +271,7 @@ mod tests {
 
     #[test]
     fn test_read_only_capability_detection() {
-        let tools = vec!["unified_search".to_string()];
+        let tools = vec![TOOL_CODE_SEARCH.to_string()];
         let guidelines = generate_tool_guidelines(&tools, None);
         assert!(guidelines.contains("Capabilities: read-only"));
         assert!(guidelines.contains("do not modify files"));
@@ -298,30 +279,46 @@ mod tests {
 
     #[test]
     fn test_tool_preference_guidance() {
-        let tools = vec!["unified_exec".to_string(), "unified_search".to_string()];
+        let tools = vec![TOOL_EXEC_COMMAND.to_string(), TOOL_CODE_SEARCH.to_string()];
         let guidelines = generate_tool_guidelines(&tools, None);
-        assert!(guidelines.contains("Prefer search over shell"));
-        assert!(guidelines.contains("action=structural"));
-        assert!(guidelines.contains("action=outline"));
-        assert!(guidelines.contains("action=grep"));
+        assert!(guidelines.contains("targeted repository searches"));
         assert!(guidelines.contains("git diff -- <path>"));
         assert!(guidelines.contains("Completion is a checkpoint"));
     }
 
     #[test]
     fn test_edit_workflow_guidance() {
-        let tools = vec!["unified_file".to_string()];
+        let tools = vec![TOOL_APPLY_PATCH.to_string()];
         let guidelines = generate_tool_guidelines(&tools, None);
-        assert!(guidelines.contains("Read before edit"));
+        assert!(guidelines.contains("Use `apply_patch`"));
         assert!(guidelines.contains("patches small"));
         assert!(guidelines.contains("verification resolved"));
+    }
+
+    #[test]
+    fn test_codex_default_guidance_omits_task_tracker() {
+        let tools = vec![
+            TOOL_EXEC_COMMAND.to_string(),
+            TOOL_WRITE_STDIN.to_string(),
+            TOOL_APPLY_PATCH.to_string(),
+        ];
+        let guidelines = generate_tool_guidelines(&tools, None);
+
+        assert!(guidelines.contains("`exec_command`"));
+        assert!(guidelines.contains("`write_stdin`"));
+        assert!(guidelines.contains("`apply_patch`"));
+        assert!(!guidelines.contains("task_tracker"));
+        assert!(!guidelines.contains("list_files"));
+        assert!(!guidelines.contains("read_file"));
     }
 
     #[test]
     fn test_harness_browse_tool_guidance() {
         let tools = vec![TOOL_LIST_FILES.to_string(), TOOL_READ_FILE.to_string()];
         let guidelines = generate_tool_guidelines(&tools, None);
-        assert!(guidelines.contains("Prefer `list_files` and `read_file`"));
+        assert!(guidelines.contains("available read-only repository tools"));
+        assert!(!guidelines.contains("read_file"));
+        assert!(!guidelines.contains("list_files"));
         assert!(!guidelines.contains("offset"));
         assert!(!guidelines.contains("per_page"));
     }
@@ -329,14 +326,14 @@ mod tests {
     #[test]
     fn test_canonical_browse_tool_guidance_prefers_public_tools() {
         let tools = vec![
-            "unified_search".to_string(),
-            "unified_file".to_string(),
+            TOOL_CODE_SEARCH.to_string(),
             TOOL_LIST_FILES.to_string(),
             "read_file".to_string(),
         ];
         let guidelines = generate_tool_guidelines(&tools, None);
-        assert!(guidelines.contains("Prefer `unified_search` and `unified_file`"));
-        assert!(!guidelines.contains("Prefer `list_files` and `read_file`"));
+        assert!(guidelines.contains("available read-only repository tools"));
+        assert!(!guidelines.contains("code_search"));
+        assert!(!guidelines.contains("read_file"));
     }
 
     #[test]
@@ -349,7 +346,7 @@ mod tests {
 
     #[test]
     fn test_capability_file_reading_guidance() {
-        let tools = vec!["unified_file".to_string()];
+        let tools = vec![TOOL_APPLY_PATCH.to_string()];
         let guidelines = generate_tool_guidelines(&tools, Some(CapabilityLevel::FileReading));
         assert!(guidelines.contains("Capabilities: read-only"));
         assert!(guidelines.contains("do not modify"));
@@ -358,9 +355,9 @@ mod tests {
     #[test]
     fn test_full_capabilities_no_special_guidance() {
         let tools = vec![
-            "unified_file".to_string(),
-            "unified_exec".to_string(),
-            "unified_search".to_string(),
+            TOOL_APPLY_PATCH.to_string(),
+            TOOL_EXEC_COMMAND.to_string(),
+            TOOL_CODE_SEARCH.to_string(),
         ];
         let guidelines = generate_tool_guidelines(&tools, Some(CapabilityLevel::Editing));
 
@@ -378,9 +375,9 @@ mod tests {
     #[test]
     fn test_planning_workflow_guidance_keeps_verification_open() {
         let tools = vec![
-            TOOL_UNIFIED_EXEC.to_string(),
+            TOOL_EXEC_COMMAND.to_string(),
             TOOL_TASK_TRACKER.to_string(),
-            TOOL_UNIFIED_SEARCH.to_string(),
+            TOOL_CODE_SEARCH.to_string(),
         ];
         let guidelines = generate_runtime_tool_guidelines(&tools, true);
         assert!(guidelines.contains("Keep `task_tracker` updated"));
@@ -389,22 +386,22 @@ mod tests {
 
     #[test]
     fn test_capability_inference_precedence() {
-        let tools = vec!["unified_file".to_string(), "unified_search".to_string()];
+        let tools = vec![TOOL_APPLY_PATCH.to_string(), TOOL_CODE_SEARCH.to_string()];
         assert_eq!(infer_capability_level(&tools), CapabilityLevel::CodeSearch);
 
-        let tools = vec!["unified_exec".to_string(), "unified_file".to_string()];
+        let tools = vec![TOOL_EXEC_COMMAND.to_string(), TOOL_APPLY_PATCH.to_string()];
         assert_eq!(infer_capability_level(&tools), CapabilityLevel::Editing);
     }
 
     #[test]
     fn test_capability_inference_variants() {
-        let tools = vec!["unified_file".to_string()];
+        let tools = vec![TOOL_APPLY_PATCH.to_string()];
         assert_eq!(infer_capability_level(&tools), CapabilityLevel::Editing);
 
-        let tools = vec!["unified_exec".to_string()];
+        let tools = vec![TOOL_EXEC_COMMAND.to_string()];
         assert_eq!(infer_capability_level(&tools), CapabilityLevel::Bash);
 
-        let tools = vec!["unified_search".to_string()];
+        let tools = vec![TOOL_CODE_SEARCH.to_string()];
         assert_eq!(infer_capability_level(&tools), CapabilityLevel::CodeSearch);
 
         let tools = vec![TOOL_LIST_FILES.to_string()];
@@ -420,14 +417,16 @@ mod tests {
     #[test]
     fn test_guidelines_stay_compact() {
         let tools = vec![
-            "unified_exec".to_string(),
-            "unified_search".to_string(),
-            "unified_file".to_string(),
+            TOOL_EXEC_COMMAND.to_string(),
+            TOOL_CODE_SEARCH.to_string(),
             "read_file".to_string(),
             TOOL_LIST_FILES.to_string(),
             "apply_patch".to_string(),
         ];
         let guidelines = generate_tool_guidelines(&tools, None);
+        assert!(!guidelines.contains("read_file"));
+        assert!(!guidelines.contains("list_files"));
+        assert!(!guidelines.contains("code_search"));
         let approx_tokens = guidelines.len() / 4;
         assert!(approx_tokens < 160, "got ~{approx_tokens} tokens");
     }
@@ -435,9 +434,9 @@ mod tests {
     #[test]
     fn test_parallel_tool_call_guidance() {
         let tools = vec![
-            "unified_exec".to_string(),
-            "unified_search".to_string(),
-            "unified_file".to_string(),
+            TOOL_EXEC_COMMAND.to_string(),
+            TOOL_CODE_SEARCH.to_string(),
+            TOOL_APPLY_PATCH.to_string(),
         ];
         let guidelines = generate_tool_guidelines(&tools, None);
         assert!(
@@ -445,24 +444,23 @@ mod tests {
             "Should include parallel tool call guidance"
         );
         assert!(
-            guidelines.contains("read files"),
-            "Should mention reading files in parallel"
+            guidelines.contains("inputs do not depend"),
+            "Should mention independent inputs"
         );
     }
 
     #[test]
-    fn planning_workflow_runtime_guidance_keeps_unified_file_read_only() {
+    fn planning_workflow_runtime_guidance_keeps_exec_read_only() {
         let tools = vec![
-            TOOL_UNIFIED_FILE.to_string(),
-            TOOL_UNIFIED_EXEC.to_string(),
-            TOOL_UNIFIED_SEARCH.to_string(),
+            TOOL_APPLY_PATCH.to_string(),
+            TOOL_EXEC_COMMAND.to_string(),
+            TOOL_CODE_SEARCH.to_string(),
         ];
         let guidelines = generate_runtime_tool_guidelines(&tools, true);
 
         assert!(guidelines.contains("Planning workflow active"));
-        assert!(guidelines.contains("`unified_file` only for read-style access"));
-        assert!(guidelines.contains("`unified_exec` only for read-only verification"));
-        assert!(!guidelines.contains("Read before edit"));
+        assert!(guidelines.contains("`exec_command` only for read-only verification"));
+        assert!(!guidelines.contains("Inspect before edit"));
     }
 
     #[test]
@@ -475,12 +473,12 @@ mod tests {
             false,
             Some(std::sync::Arc::new(vec![
                 crate::llm::provider::ToolDefinition::function(
-                    TOOL_UNIFIED_SEARCH.to_string(),
+                    TOOL_EXEC_COMMAND.to_string(),
                     "Search".to_string(),
                     serde_json::json!({"type": "object"}),
                 ),
                 crate::llm::provider::ToolDefinition::function(
-                    TOOL_UNIFIED_FILE.to_string(),
+                    TOOL_APPLY_PATCH.to_string(),
                     "File".to_string(),
                     serde_json::json!({"type": "object"}),
                 ),
@@ -493,7 +491,7 @@ mod tests {
         assert!(prompt.contains("## Active Tools"));
         assert!(prompt.contains("[Runtime Tool Catalog]"));
         assert!(prompt.contains("catalog_tools: 2"));
-        assert!(prompt.contains("currently_available_tools: unified_search, unified_file"));
+        assert!(prompt.contains("currently_available_tools: apply_patch, exec_command"));
         assert!(prompt.contains("request_user_input_enabled: false"));
     }
 
@@ -507,7 +505,7 @@ mod tests {
             false,
             Some(std::sync::Arc::new(vec![
                 crate::llm::provider::ToolDefinition::function(
-                    TOOL_UNIFIED_SEARCH.to_string(),
+                    TOOL_EXEC_COMMAND.to_string(),
                     "Search".to_string(),
                     serde_json::json!({"type": "object"}),
                 ),
@@ -521,7 +519,7 @@ mod tests {
             true,
             Some(std::sync::Arc::new(vec![
                 crate::llm::provider::ToolDefinition::function(
-                    TOOL_UNIFIED_FILE.to_string(),
+                    TOOL_APPLY_PATCH.to_string(),
                     "File".to_string(),
                     serde_json::json!({"type": "object"}),
                 ),

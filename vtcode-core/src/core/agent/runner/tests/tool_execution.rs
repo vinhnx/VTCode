@@ -118,9 +118,6 @@ async fn denied_parallel_tool_halt_returns_promptly() {
 #[tokio::test]
 async fn duplicate_parallel_tool_names_are_split_into_safe_batches() {
     let temp = TempDir::new().expect("tempdir");
-    fs::write(temp.path().join("note-a.txt"), "hello\n").expect("workspace file");
-    fs::write(temp.path().join("note-b.txt"), "world\n").expect("workspace file");
-
     let mut runner = Box::pin(make_runner(
         &temp,
         VTCodeConfig::default(),
@@ -128,23 +125,23 @@ async fn duplicate_parallel_tool_names_are_split_into_safe_batches() {
     ))
     .await;
     runner
-        .enable_full_auto(&[tools::READ_FILE.to_string()])
+        .enable_full_auto(&[tools::EXEC_COMMAND.to_string()])
         .await;
 
     let tool_calls = vec![
         ToolCall::function(
-            "call-read-a".to_string(),
-            tools::READ_FILE.to_string(),
+            "call-echo-a".to_string(),
+            tools::EXEC_COMMAND.to_string(),
             json!({
-                "path": "note-a.txt",
+                "cmd": "printf hello",
             })
             .to_string(),
         ),
         ToolCall::function(
-            "call-read-b".to_string(),
-            tools::READ_FILE.to_string(),
+            "call-echo-b".to_string(),
+            tools::EXEC_COMMAND.to_string(),
             json!({
-                "path": "note-b.txt",
+                "cmd": "printf world",
             })
             .to_string(),
         ),
@@ -182,36 +179,28 @@ async fn duplicate_parallel_tool_names_are_split_into_safe_batches() {
         .collect::<Vec<_>>();
     assert_eq!(tool_outputs.len(), 2);
     assert!(tool_outputs.iter().any(|(id, output)| {
-        *id == "call-read-a"
+        *id == "call-echo-a"
             && output["success"].as_bool() == Some(true)
-            && output["path"].as_str() == Some("note-a.txt")
+            && output["output"].as_str() == Some("hello")
     }));
     assert!(tool_outputs.iter().any(|(id, output)| {
-        *id == "call-read-b"
+        *id == "call-echo-b"
             && output["success"].as_bool() == Some(true)
-            && output["path"].as_str() == Some("note-b.txt")
+            && output["output"].as_str() == Some("world")
     }));
 }
 
 #[tokio::test]
-async fn list_files_and_unified_search_parallel_batch_avoids_reentrancy() {
+async fn removed_public_tool_names_are_rejected() {
     let temp = TempDir::new().expect("tempdir");
-    fs::create_dir_all(temp.path().join("notes")).expect("notes directory");
-    fs::write(temp.path().join("notes/a.txt"), "hello from vt code\n").expect("workspace file");
-    fs::write(temp.path().join("notes/b.txt"), "another line\n").expect("workspace file");
-
     let mut runner = Box::pin(make_runner(
         &temp,
         VTCodeConfig::default(),
-        "thread-list-search-parallel",
+        "thread-removed-public-tools",
     ))
     .await;
-    runner
-        .enable_full_auto(&[
-            tools::LIST_FILES.to_string(),
-            tools::UNIFIED_SEARCH.to_string(),
-        ])
-        .await;
+    assert!(!runner.is_valid_tool(tools::LIST_FILES).await);
+    assert!(!runner.is_valid_tool(tools::UNIFIED_SEARCH).await);
 
     let tool_calls = vec![
         ToolCall::function(
@@ -235,11 +224,16 @@ async fn list_files_and_unified_search_parallel_batch_avoids_reentrancy() {
     ];
 
     let mut runtime = AgentRuntime::new(
-        AgentSessionState::new("session-list-search-parallel".to_string(), 16, 4, 128_000),
+        AgentSessionState::new(
+            "session-removed-public-tools".to_string(),
+            16,
+            4,
+            128_000,
+        ),
         None,
         None,
     );
-    let mut recorder = ExecEventRecorder::new("thread-list-search-parallel", None, None);
+    let mut recorder = ExecEventRecorder::new("thread-removed-public-tools", None, None);
 
     runner
         .execute_tool_call_batches(
@@ -269,45 +263,38 @@ async fn list_files_and_unified_search_parallel_batch_avoids_reentrancy() {
     let list_output = tool_outputs
         .iter()
         .find_map(|(id, output)| (*id == "call-list").then_some(output))
-        .expect("list_files output");
-    assert_ne!(
-        list_output
-            .pointer("/error/error_type")
-            .and_then(serde_json::Value::as_str),
-        Some("PolicyViolation")
-    );
+        .expect("list_files rejection output");
     assert_eq!(
-        list_output
-            .get("reentrant_call_blocked")
-            .and_then(serde_json::Value::as_bool),
-        None
-    );
-    assert!(
-        list_output["items"]
-            .as_array()
-            .is_some_and(|items| !items.is_empty())
+        list_output.as_str(),
+        Some("Tool execution denied: list_files")
     );
 
     let search_output = tool_outputs
         .iter()
         .find_map(|(id, output)| (*id == "call-search").then_some(output))
-        .expect("unified_search output");
-    assert_ne!(
-        search_output
-            .pointer("/error/error_type")
-            .and_then(serde_json::Value::as_str),
-        Some("PolicyViolation")
+        .expect("unified_search rejection output");
+    assert_eq!(
+        search_output.as_str(),
+        Some("Tool execution denied: unified_search")
+    );
+
+    let events = recorder.into_events();
+    let list_item_id =
+        completed_tool_invocation_item_id(&events, "call-list").expect("list invocation");
+    let search_item_id =
+        completed_tool_invocation_item_id(&events, "call-search").expect("search invocation");
+    assert_eq!(
+        completed_tool_output_count(&events, "call-list", ToolCallStatus::Failed, &list_item_id),
+        1
     );
     assert_eq!(
-        search_output
-            .get("reentrant_call_blocked")
-            .and_then(serde_json::Value::as_bool),
-        None
-    );
-    assert!(
-        search_output["matches"]
-            .as_array()
-            .is_some_and(|matches| !matches.is_empty())
+        completed_tool_output_count(
+            &events,
+            "call-search",
+            ToolCallStatus::Failed,
+            &search_item_id
+        ),
+        1
     );
 }
 
@@ -360,7 +347,6 @@ async fn denied_sequential_tool_halt_returns_promptly() {
 #[tokio::test]
 async fn execute_tool_internal_retries_open_circuit_breaker() {
     let temp = TempDir::new().expect("tempdir");
-    fs::write(temp.path().join("note.txt"), "hello\n").expect("workspace file");
     let runner = Box::pin(make_runner(
         &temp,
         VTCodeConfig::default(),
@@ -378,20 +364,20 @@ async fn execute_tool_internal_retries_open_circuit_breaker() {
         .tool_registry
         .set_shared_circuit_breaker(breaker.clone());
     breaker.record_failure_category_for_tool(
-        tools::READ_FILE,
+        tools::EXEC_COMMAND,
         vtcode_commons::ErrorCategory::ExecutionError,
     );
 
     let start = Instant::now();
     let result = runner
-        .execute_tool_internal(tools::READ_FILE, &json!({"path": "note.txt"}))
+        .execute_tool_internal(tools::EXEC_COMMAND, &json!({"cmd": "printf hello"}))
         .await
         .expect("circuit-open retry should recover");
 
     assert!(start.elapsed() >= Duration::from_millis(10));
     assert_eq!(
-        result.get("content").and_then(|value| value.as_str()),
-        Some("hello\n")
+        result.get("output").and_then(|value| value.as_str()),
+        Some("hello")
     );
 }
 
@@ -405,28 +391,29 @@ async fn sequential_policy_failure_halts_following_tool_calls() {
     let mut runner = Box::pin(make_runner(&temp, vt_cfg, "thread-policy-halt")).await;
     runner
         .enable_full_auto(&[
-            tools::UNIFIED_EXEC.to_string(),
-            tools::READ_FILE.to_string(),
+            tools::EXEC_COMMAND.to_string(),
+            tools::APPLY_PATCH.to_string(),
         ])
         .await;
-    assert!(runner.is_valid_tool(tools::UNIFIED_EXEC).await);
-    assert!(runner.is_valid_tool(tools::READ_FILE).await);
+    assert!(runner.is_valid_tool(tools::EXEC_COMMAND).await);
+    assert!(runner.is_valid_tool(tools::APPLY_PATCH).await);
+    assert!(!runner.is_valid_tool(tools::UNIFIED_EXEC).await);
+    assert!(!runner.is_valid_tool(tools::READ_FILE).await);
 
     let tool_calls = vec![
         ToolCall::function(
             "call-blocked".to_string(),
-            tools::UNIFIED_EXEC.to_string(),
+            tools::EXEC_COMMAND.to_string(),
             json!({
-                "action": "run",
-                "command": "blocked-cmd",
+                "cmd": "blocked-cmd",
             })
             .to_string(),
         ),
         ToolCall::function(
-            "call-read".to_string(),
-            tools::READ_FILE.to_string(),
+            "call-patch".to_string(),
+            tools::APPLY_PATCH.to_string(),
             json!({
-                "path": "note.txt",
+                "patch": "*** Begin Patch\n*** Update File: note.txt\n@@\n-hello\n+changed\n*** End Patch\n",
             })
             .to_string(),
         ),
@@ -463,12 +450,12 @@ async fn sequential_policy_failure_halts_following_tool_calls() {
             .state
             .executed_commands
             .iter()
-            .any(|tool| tool == tools::READ_FILE)
+            .any(|tool| tool == tools::APPLY_PATCH)
     );
 
     let events = recorder.into_events();
     assert!(completed_tool_invocation_item_id(&events, "call-blocked").is_some());
-    assert!(completed_tool_invocation_item_id(&events, "call-read").is_none());
+    assert!(completed_tool_invocation_item_id(&events, "call-patch").is_none());
 }
 
 #[tokio::test]
@@ -478,16 +465,16 @@ async fn sequential_tool_failures_record_categorized_user_message() {
     vt_cfg.commands.deny_regex = vec!["^blocked-cmd$".to_string()];
     let mut runner = Box::pin(make_runner(&temp, vt_cfg, "thread-policy-message")).await;
     runner
-        .enable_full_auto(&[tools::UNIFIED_EXEC.to_string()])
+        .enable_full_auto(&[tools::EXEC_COMMAND.to_string()])
         .await;
-    assert!(runner.is_valid_tool(tools::UNIFIED_EXEC).await);
+    assert!(runner.is_valid_tool(tools::EXEC_COMMAND).await);
+    assert!(!runner.is_valid_tool(tools::UNIFIED_EXEC).await);
 
     let tool_calls = vec![ToolCall::function(
         "call-blocked".to_string(),
-        tools::UNIFIED_EXEC.to_string(),
+        tools::EXEC_COMMAND.to_string(),
         json!({
-            "action": "run",
-            "command": "blocked-cmd",
+            "cmd": "blocked-cmd",
         })
         .to_string(),
     )];
@@ -546,15 +533,15 @@ async fn sequential_tool_failures_do_not_record_interruption_guards() {
     vt_cfg.commands.deny_regex = vec!["^blocked-cmd$".to_string()];
     let mut runner = Box::pin(make_runner(&temp, vt_cfg, "thread-policy-guard")).await;
     runner
-        .enable_full_auto(&[tools::UNIFIED_EXEC.to_string()])
+        .enable_full_auto(&[tools::EXEC_COMMAND.to_string()])
         .await;
+    assert!(!runner.is_valid_tool(tools::UNIFIED_EXEC).await);
 
     let tool_calls = vec![ToolCall::function(
         "call-blocked".to_string(),
-        tools::UNIFIED_EXEC.to_string(),
+        tools::EXEC_COMMAND.to_string(),
         json!({
-            "action": "run",
-            "command": "blocked-cmd",
+            "cmd": "blocked-cmd",
         })
         .to_string(),
     )];
@@ -594,12 +581,10 @@ async fn steer_stop_closes_open_tool_calls_with_failed_output_items() {
     ))
     .await;
 
-    fs::write(temp.path().join("note.txt"), "hello\n").expect("workspace file");
-
     let response = tool_call_response(
-        tools::READ_FILE,
+        tools::EXEC_COMMAND,
         json!({
-            "path": "note.txt",
+            "cmd": "printf hello",
         }),
     );
     let provider = QueuedProvider::new(vec![response]);

@@ -186,7 +186,6 @@ fn push_candidate(candidates: &mut Vec<String>, value: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::constants::tools;
     use crate::config::types::CapabilityLevel;
     use crate::tool_policy::ToolPolicy;
     use crate::tools::registry::ToolRegistration;
@@ -202,34 +201,30 @@ mod tests {
 
     #[test]
     fn public_routes_keep_exact_aliases_only() {
-        let registration = ToolRegistration::new(
-            tools::UNIFIED_EXEC,
-            CapabilityLevel::Bash,
-            true,
-            noop_executor,
-        )
-        .with_description("Run commands")
-        .with_parameter_schema(json!({"type": "object"}))
-        .with_permission(ToolPolicy::Prompt)
-        .with_aliases(["exec code", tools::EXECUTE_CODE]);
+        let registration =
+            ToolRegistration::new("visible_tool", CapabilityLevel::Bash, true, noop_executor)
+                .with_description("Run commands")
+                .with_parameter_schema(json!({"type": "object"}))
+                .with_permission(ToolPolicy::Prompt)
+                .with_aliases(["visible label", "visible_alias"]);
 
         let assembly = ToolAssembly::from_registrations(vec![registration]);
 
         assert_eq!(
             assembly
-                .resolve_public_tool("exec code")
+                .resolve_public_tool("visible label")
                 .ok()
                 .map(|resolution| resolution.registration_name().to_string()),
-            Some(tools::UNIFIED_EXEC.to_string())
+            Some("visible_tool".to_string())
         );
         assert_eq!(
             assembly
-                .resolve_public_tool(tools::EXECUTE_CODE)
+                .resolve_public_tool("visible_alias")
                 .ok()
                 .map(|resolution| resolution.registration_name().to_string()),
-            Some(tools::UNIFIED_EXEC.to_string())
+            Some("visible_tool".to_string())
         );
-        assembly.resolve_public_tool("exec_code").unwrap_err();
+        assembly.resolve_public_tool("missing_alias").unwrap_err();
     }
 
     #[test]

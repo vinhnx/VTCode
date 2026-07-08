@@ -24,7 +24,7 @@
 //! ---
 //! id: read-then-edit-large-file
 //! tags: [read, edit, large-file, patch]
-//! summary: Read a large file in chunks, then patch with unified_file.patch.
+//! summary: Read a large file in chunks, then patch with apply_patch.
 //! ---
 //! # User
 //! Refactor src/foo.rs to use the new API.

@@ -312,6 +312,7 @@ impl AgentRunner {
                 ),
                 deferred_tool_policy,
                 anthropic_native_memory_enabled,
+                tool_profile: crate::tools::handlers::ToolProfile::CodexDefault,
             })
             .await
             .into_iter()
@@ -486,8 +487,7 @@ impl AgentRunner {
                         | tools::TASK_TRACKER
                         | tools::START_PLANNING
                         | tools::FINISH_PLANNING
-                ) && (canonical == tools::UNIFIED_FILE
-                    || !self.tool_registry.is_mutating_tool(tool_name))
+                ) && !self.tool_registry.is_mutating_tool(tool_name)
             })
             .cloned()
             .collect()

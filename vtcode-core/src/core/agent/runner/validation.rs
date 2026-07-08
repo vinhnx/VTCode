@@ -2,7 +2,9 @@ use super::AgentRunner;
 use crate::config::types::CapabilityLevel;
 use crate::core::agent::harness_kernel::SessionToolCatalogSnapshot;
 use crate::llm::provider::{LLMRequest, ToolDefinition};
-use crate::tools::handlers::{SessionSurface, SessionToolsConfig, ToolModelCapabilities};
+use crate::tools::handlers::{
+    SessionSurface, SessionToolsConfig, ToolModelCapabilities, ToolProfile,
+};
 use anyhow::{Result, anyhow};
 use hashbrown::HashSet;
 
@@ -37,6 +39,7 @@ impl AgentRunner {
                     &self.model,
                     Some(self.config()),
                 ),
+            tool_profile: ToolProfile::CodexDefault,
         }
     }
 

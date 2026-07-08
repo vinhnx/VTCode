@@ -159,6 +159,16 @@ fn builtin_tool_behavior_canonical(tool: &str) -> Option<ToolBehavior> {
             false,
             true,
         )),
+        tools::EXEC_COMMAND => Some(ToolBehavior::function(
+            ToolMutationModel::ByArgs(exec_command_intent),
+            false,
+            true,
+        )),
+        tools::WRITE_STDIN => Some(ToolBehavior::function(
+            ToolMutationModel::ByArgs(write_stdin_intent),
+            false,
+            true,
+        )),
         tools::UNIFIED_FILE => Some(ToolBehavior::function(
             ToolMutationModel::ByArgs(unified_file_intent),
             false,
@@ -349,11 +359,13 @@ pub fn is_command_tool(tool_name: &str) -> bool {
 pub fn is_command_run_tool_call(tool_name: &str, args: &Value) -> bool {
     match tool_name {
         tools::RUN_PTY_CMD | tools::CREATE_PTY_SESSION | tools::SHELL | "bash" => true,
-        tools::UNIFIED_EXEC
-        | tools::EXEC_PTY_CMD
-        | tools::EXEC_COMMAND
-        | "exec"
-        | "container.exec" => unified_exec_action_is(args, "run"),
+        tools::EXEC_COMMAND => crate::tools::command_args::command_text(args)
+            .ok()
+            .flatten()
+            .is_some(),
+        tools::UNIFIED_EXEC | tools::EXEC_PTY_CMD | "exec" | "container.exec" => {
+            unified_exec_action_is(args, "run")
+        }
         _ => false,
     }
 }
@@ -423,6 +435,18 @@ fn unified_exec_intent(args: &Value) -> ToolIntent {
     } else {
         ToolIntent::mutating()
     }
+}
+
+fn exec_command_intent(args: &Value) -> ToolIntent {
+    if is_readonly_unified_exec_command(args) {
+        ToolIntent::read_only_unified_action()
+    } else {
+        ToolIntent::mutating()
+    }
+}
+
+fn write_stdin_intent(_args: &Value) -> ToolIntent {
+    ToolIntent::mutating()
 }
 
 fn memory_tool_intent(args: &Value) -> ToolIntent {

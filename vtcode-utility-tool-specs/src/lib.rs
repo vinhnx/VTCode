@@ -111,6 +111,36 @@ pub fn cron_delete_parameters() -> Value {
 }
 
 #[must_use]
+pub fn exec_command_parameters() -> Value {
+    json!({
+        "type": "object",
+        "required": ["cmd"],
+        "properties": {
+            "cmd": {"type": "string", "description": "Shell command to execute."},
+            "yield_time_ms": {"type": "integer", "description": "Wait before returning output (ms).", "default": 1000},
+            "max_output_tokens": {"type": "integer", "description": "Output token cap."},
+            "workdir": {"type": "string", "description": "Working directory."}
+        },
+        "additionalProperties": false
+    })
+}
+
+#[must_use]
+pub fn write_stdin_parameters() -> Value {
+    json!({
+        "type": "object",
+        "required": ["session_id", "chars"],
+        "properties": {
+            "session_id": {"type": "string", "description": "Active execution session id."},
+            "chars": {"type": "string", "description": "Bytes to write to stdin."},
+            "yield_time_ms": {"type": "integer", "description": "Wait before returning output (ms).", "default": 1000},
+            "max_output_tokens": {"type": "integer", "description": "Output token cap."}
+        },
+        "additionalProperties": false
+    })
+}
+
+#[must_use]
 pub fn unified_exec_parameters() -> Value {
     json!({
         "type": "object",
@@ -487,6 +517,21 @@ mod tests {
                 .expect("language description")
                 .contains("set `javascript`")
         );
+    }
+
+    #[test]
+    fn codex_baseline_exec_schemas_use_public_names_shape() {
+        let exec_params = exec_command_parameters();
+        assert_eq!(exec_params["required"], json!(["cmd"]));
+        assert!(exec_params["properties"]["cmd"].is_object());
+        assert!(exec_params["properties"]["workdir"].is_object());
+        assert_eq!(exec_params["additionalProperties"], false);
+
+        let stdin_params = write_stdin_parameters();
+        assert_eq!(stdin_params["required"], json!(["session_id", "chars"]));
+        assert!(stdin_params["properties"]["session_id"].is_object());
+        assert!(stdin_params["properties"]["chars"].is_object());
+        assert_eq!(stdin_params["additionalProperties"], false);
     }
 
     #[test]

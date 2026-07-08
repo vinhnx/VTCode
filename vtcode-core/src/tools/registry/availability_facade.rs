@@ -18,8 +18,8 @@ impl ToolRegistry {
 
         let lower = failed_tool.trim().to_ascii_lowercase();
         match lower.as_str() {
-            "exec_code" => tools::UNIFIED_EXEC.to_string(),
-            "list_dir" | "list_directory" => tools::UNIFIED_SEARCH.to_string(),
+            "exec_code" => tools::EXEC_COMMAND.to_string(),
+            "list_dir" | "list_directory" => lower,
             _ => {
                 if let Some((_, suffix)) = lower.rsplit_once('.')
                     && let Ok(resolved) = self.resolve_public_tool_name_sync(suffix)
@@ -43,9 +43,8 @@ impl ToolRegistry {
         }
 
         let candidates: &[&str] = match seed.as_str() {
-            tools::UNIFIED_SEARCH => &[tools::UNIFIED_FILE],
-            tools::UNIFIED_EXEC => &[tools::UNIFIED_SEARCH],
-            tools::UNIFIED_FILE | tools::APPLY_PATCH => &[tools::UNIFIED_SEARCH],
+            tools::EXEC_COMMAND => &[],
+            tools::APPLY_PATCH => &[tools::EXEC_COMMAND],
             // Task trackers require action-specific arguments; generic fallback names
             // create low-signal retries.
             tools::TASK_TRACKER => &[],
@@ -84,6 +83,10 @@ impl ToolRegistry {
 
     /// Get the schema for a specific tool.
     pub async fn get_tool_schema(&self, tool_name: &str) -> Option<Value> {
+        if is_removed_default_public_tool(tool_name) {
+            return None;
+        }
+
         let wrap_schema = |requested_name: &str, description: &str, schema: &Value| {
             // Wrap in full declaration if it's just parameters
             if schema.get("properties").is_some() && schema.get("name").is_none() {
@@ -138,6 +141,10 @@ impl ToolRegistry {
     /// # Returns
     /// `bool` indicating whether the tool exists (including aliases)
     pub async fn has_tool(&self, name: &str) -> bool {
+        if is_removed_default_public_tool(name) {
+            return false;
+        }
+
         if self.resolve_public_tool_name_sync(name).is_ok() {
             return true;
         }
@@ -163,4 +170,17 @@ impl ToolRegistry {
 
         false
     }
+}
+
+fn is_removed_default_public_tool(tool_name: &str) -> bool {
+    let lower = tool_name.trim().to_ascii_lowercase();
+    matches!(
+        lower.as_str(),
+        tools::UNIFIED_EXEC
+            | tools::UNIFIED_FILE
+            | tools::UNIFIED_SEARCH
+            | tools::LIST_FILES
+            | tools::READ_FILE
+            | tools::WRITE_FILE
+    )
 }

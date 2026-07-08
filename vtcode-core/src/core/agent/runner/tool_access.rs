@@ -48,16 +48,10 @@ fn restore_exact_file_read_output(mut output: Value) -> Value {
 }
 
 impl AgentRunner {
-    #[inline]
-    fn canonical_exec_request_name(tool_name: &str) -> &str {
-        tool_intent::canonical_unified_exec_tool_name(tool_name).unwrap_or(tool_name)
-    }
-
     pub(super) async fn resolve_executable_tool_name(&self, tool_name: &str) -> Option<String> {
-        let requested_name = Self::canonical_exec_request_name(tool_name);
         let canonical_name = self
             .tool_registry
-            .resolve_public_tool_name(requested_name)
+            .resolve_public_tool_name(tool_name)
             .ok()?;
 
         self.is_tool_exposed(&canonical_name)
@@ -73,10 +67,8 @@ impl AgentRunner {
     ) -> Result<PreparedToolCall> {
         let normalized_args = self.normalize_tool_args(tool_name, args, session_state);
         self.ensure_active_primary_agent_allows_tool_call(tool_name, &normalized_args)?;
-        self.tool_registry.admit_public_tool_call(
-            Self::canonical_exec_request_name(tool_name),
-            &normalized_args,
-        )
+        self.tool_registry
+            .admit_public_tool_call(tool_name, &normalized_args)
     }
 
     fn ensure_active_primary_agent_allows_tool_call(
@@ -88,11 +80,10 @@ impl AgentRunner {
             return Ok(());
         };
 
-        let requested_name = Self::canonical_exec_request_name(tool_name);
         let normalized_tool_name = self
             .tool_registry
-            .resolve_public_tool_name(requested_name)
-            .unwrap_or_else(|_| requested_name.to_string());
+            .resolve_public_tool_name(tool_name)
+            .unwrap_or_else(|_| tool_name.to_string());
 
         if !primary_agent_allows_tool(active_primary_agent, &normalized_tool_name) {
             bail!(
@@ -316,10 +307,10 @@ impl AgentRunner {
     ) -> std::result::Result<Value, ToolExecutionError> {
         let prepared = self
             .tool_registry
-            .admit_public_tool_call(Self::canonical_exec_request_name(tool_name), args)
+            .admit_public_tool_call(tool_name, args)
             .map_err(|error| {
                 ToolExecutionError::from_anyhow(
-                    Self::canonical_exec_request_name(tool_name),
+                    tool_name,
                     &error,
                     0,
                     false,

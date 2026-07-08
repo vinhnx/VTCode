@@ -1025,6 +1025,21 @@ impl ToolRegistry {
         self.dispatch_unified_exec_run_alias(args, true)
     }
 
+    pub(super) fn exec_command_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
+        self.dispatch_unified_exec_run_alias(args, false)
+    }
+
+    pub(super) fn write_stdin_executor(&self, mut args: Value) -> BoxFuture<'_, Result<Value>> {
+        if let Some(payload) = args.as_object_mut() {
+            if !payload.contains_key("input")
+                && let Some(chars) = payload.get("chars").cloned()
+            {
+                payload.insert("input".to_string(), chars);
+            }
+        }
+        self.dispatch_unified_exec_action_alias(args, "write")
+    }
+
     pub(super) fn send_pty_input_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
         self.dispatch_unified_exec_action_alias(args, "write")
     }
