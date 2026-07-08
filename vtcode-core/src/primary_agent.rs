@@ -275,8 +275,17 @@ pub fn build_primary_agent_runtime_config(
     agent: &ActivePrimaryAgent,
 ) -> VTCodeConfig {
     let mut config = parent.clone();
+    // "inherit" (and empty) are sentinels meaning "use the parent's model" — mirrors
+    // resolve_subagent_model's handling in subagents/model.rs. Built-in primary agents
+    // (e.g. "auto", "build") default their `model` field to "inherit", so without this
+    // check every plain `exec` run would clobber a real, explicitly configured model
+    // (via --model or [agent].default_model) with the literal string "inherit", which
+    // then fails ModelId parsing entirely.
     if let Some(model) = agent.model.as_ref() {
-        config.agent.default_model = model.clone();
+        let trimmed = model.trim();
+        if !trimmed.is_empty() && !trimmed.eq_ignore_ascii_case("inherit") {
+            config.agent.default_model = model.clone();
+        }
     }
     if let Some(reasoning_effort) = agent.reasoning_effort {
         config.agent.reasoning_effort = reasoning_effort;
@@ -823,6 +832,34 @@ mod tests {
         assert_eq!(runtime.mcp.providers.len(), 2);
         assert_eq!(runtime.mcp.providers[0].name, "global");
         assert_eq!(runtime.mcp.providers[1].name, "local");
+    }
+
+    #[test]
+    fn build_primary_agent_runtime_config_inherits_parent_model_when_spec_says_inherit() {
+        let mut parent = VTCodeConfig::default();
+        parent.agent.default_model = "parent-model".to_string();
+
+        let mut spec = test_spec("auto");
+        spec.model = Some("inherit".to_string());
+        let active = ActivePrimaryAgent::from_spec(&spec);
+
+        let runtime = build_primary_agent_runtime_config(&parent, &active);
+
+        assert_eq!(runtime.agent.default_model, "parent-model");
+    }
+
+    #[test]
+    fn build_primary_agent_runtime_config_inherits_parent_model_when_spec_model_empty() {
+        let mut parent = VTCodeConfig::default();
+        parent.agent.default_model = "parent-model".to_string();
+
+        let mut spec = test_spec("auto");
+        spec.model = Some(String::new());
+        let active = ActivePrimaryAgent::from_spec(&spec);
+
+        let runtime = build_primary_agent_runtime_config(&parent, &active);
+
+        assert_eq!(runtime.agent.default_model, "parent-model");
     }
 
     #[test]
