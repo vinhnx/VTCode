@@ -1,3 +1,7 @@
+implement claude advisor tool
+
+--
+
 context engineering: managing the context the model sees at each inference step, so that multi-turn tool use is not drowned by history, noise, tool definitions, and intermediate results.
 
 ===
