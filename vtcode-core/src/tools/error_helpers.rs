@@ -12,12 +12,11 @@ use std::path::Path;
 pub const PATCH_PARAMETER_HINT: &str = "(use 'input' or 'patch' parameter)";
 
 /// Canonical guidance for routing large edits away from edit_file.
-pub const USE_PATCH_FOR_LARGE_EDITS: &str =
-    "For larger edits, use unified_file with action=\"patch\" instead.";
+pub const USE_PATCH_FOR_LARGE_EDITS: &str = "For larger edits, use apply_patch instead.";
 
 /// Canonical guidance for routing large-file edits away from edit_file.
 pub const USE_PATCH_OR_WRITE_FOR_LARGE_FILES: &str =
-    "For large files, use unified_file with action=\"patch\" or action=\"write\".";
+    "For large files, use apply_patch or a dedicated write operation.";
 
 /// Canonical guidance to read a file before attempting a precise edit or patch.
 pub const READ_FILE_FIRST_HINT: &str =

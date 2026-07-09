@@ -44,7 +44,7 @@ Each returns a `serde_json::Value` representing a JSON Schema object:
 - `apply_patch_parameters()` / `apply_patch_parameter_schema(input_description)`
 - `cron_create_parameters()`, `cron_list_parameters()`, `cron_delete_parameters()`
 - `list_files_parameters()`, `read_file_parameters()`
-- `unified_exec_parameters()`, `unified_file_parameters()`, `unified_search_parameters()`
+- `unified_exec_parameters()`, `unified_search_parameters()`
 
 ### Collaboration / HITL functions
 

@@ -83,9 +83,8 @@ async fn apply_patch_returns_conflict_without_partial_write() -> Result<()> {
 
     let result = registry
         .execute_tool(
-            tools::UNIFIED_FILE,
+            tools::APPLY_PATCH,
             json!({
-                "action": "patch",
                 "patch": patch,
             }),
         )

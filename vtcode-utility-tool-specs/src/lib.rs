@@ -310,50 +310,6 @@ pub fn unified_exec_parameters() -> Value {
 }
 
 #[must_use]
-pub fn unified_file_parameters() -> Value {
-    json!({
-        "type": "object",
-        "properties": {
-            "action": {
-                "type": "string",
-                "enum": ["read", "write", "edit", "patch", "delete", "move", "copy"],
-                "description": "Optional; inferred from old_str/patch/content/destination/path."
-            },
-            "path": {"type": "string", "description": "File path. Accepts file_path/filepath/target_path/file/p."},
-            "content": {"type": "string", "description": "Content for write."},
-            "old_str": {"type": "string", "description": "Exact text to replace for edit. Max 800 chars or 40 lines; use patch for larger edits."},
-            "new_str": {"type": "string", "description": "Replacement text for edit. Max 800 chars or 40 lines; use patch for larger edits."},
-            "patch": {"type": "string", "description": "Patch text in `*** Update File:` format, not unified diff."},
-            "destination": {"type": "string", "description": "Destination for move or copy."},
-            "offset": {"type": "integer", "description": "Read start line (1-indexed). Compact alias: `o`."},
-            "limit": {"type": "integer", "description": "Read line count. Compact alias: `l`."},
-            "mode": {"type": "string", "description": "Read mode or write mode.", "default": "slice"},
-            "condense": {"type": "boolean", "description": "Condense long output to head/tail. Set false for full content.", "default": true},
-            "raw": {"type": "boolean", "description": "Bypass output spooling and return full content inline. Use when you need exact file content without spooling to disk.", "default": false},
-            "indentation": {
-                "description": "Indentation config. `true` uses defaults.",
-                "anyOf": [
-                    {"type": "boolean"},
-                    {
-                        "type": "object",
-                        "properties": {
-                            "anchor_line": {"type": "integer", "description": "Anchor line; defaults to offset."},
-                            "max_levels": {"type": "integer", "description": "Indent depth cap; 0 means unlimited."},
-                            "include_siblings": {"type": "boolean", "description": "Include sibling blocks."},
-                            "include_header": {"type": "boolean", "description": "Include header lines."},
-                            "max_lines": {"type": "integer", "description": "Optional line cap."}
-                        },
-                        "additionalProperties": false
-                    }
-                ]
-            },
-            "offset_bytes": {"type": "integer", "description": "Byte offset (0-indexed) for byte-range reads. Enables chunked preview of large files.", "minimum": 0},
-            "page_size_bytes": {"type": "integer", "description": "Bytes to read. Accepts alias `length`. Default: 8192.", "minimum": 1}
-        }
-    })
-}
-
-#[must_use]
 pub fn read_file_parameters() -> Value {
     json!({
         "type": "object",

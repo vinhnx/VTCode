@@ -386,3 +386,62 @@ async fn test_diff_preview_correctness() {
         "line 1 modified\nline 2\n"
     );
 }
+
+#[tokio::test]
+async fn test_move_file_operation() {
+    let temp_dir = TempDir::new().unwrap();
+    let source_path = temp_dir.path().join("source.txt");
+    let destination_path = temp_dir.path().join("renamed.txt");
+    fs::write(&source_path, "old name\n").unwrap();
+
+    let patch_text = r#"*** Begin Patch
+*** Update File: source.txt
+*** Move to: renamed.txt
+@@
+-old name
++new name
+*** End Patch"#;
+
+    let registry = setup_registry(temp_dir.path()).await;
+    let result = registry
+        .execute_tool("apply_patch", json!({ "patch": patch_text }))
+        .await
+        .unwrap();
+
+    assert!(
+        result["success"].as_bool().unwrap_or(false),
+        "Tool failed: {result:?}"
+    );
+    assert!(!source_path.exists());
+    assert_eq!(fs::read_to_string(destination_path).unwrap(), "new name\n");
+}
+
+#[tokio::test]
+async fn test_workspace_escape_is_rejected() {
+    let temp_dir = TempDir::new().unwrap();
+    let outside_name = format!(
+        "{}-outside.txt",
+        temp_dir.path().file_name().unwrap().to_string_lossy()
+    );
+    let patch_text = format!(
+        "*** Begin Patch\n*** Add File: ../{outside_name}\n+must not be written\n*** End Patch"
+    );
+
+    let registry = setup_registry(temp_dir.path()).await;
+    let result = registry
+        .execute_tool("apply_patch", json!({ "patch": patch_text }))
+        .await
+        .unwrap();
+
+    assert!(
+        result["error"].is_object(),
+        "Expected error object: {result:?}"
+    );
+    let error_msg = combined_error_message(&result);
+    assert!(
+        error_msg.contains("path escapes workspace"),
+        "Unexpected error message: {error_msg}"
+    );
+    let outside_path = temp_dir.path().parent().unwrap().join(outside_name);
+    assert!(!outside_path.exists());
+}

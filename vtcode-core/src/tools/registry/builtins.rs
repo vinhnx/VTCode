@@ -24,8 +24,8 @@ use vtcode_utility_tool_specs::{
     apply_patch_parameters, close_agent_parameters, code_search_parameters, cron_create_parameters,
     cron_delete_parameters, cron_list_parameters, exec_command_parameters, list_files_parameters,
     read_file_parameters, resume_agent_parameters, send_input_parameters, spawn_agent_parameters,
-    spawn_background_subprocess_parameters, unified_exec_parameters, unified_file_parameters,
-    unified_search_parameters, wait_agent_parameters, write_stdin_parameters,
+    spawn_background_subprocess_parameters, unified_exec_parameters, unified_search_parameters,
+    wait_agent_parameters, write_stdin_parameters,
 };
 
 use super::distributed::{BUILTIN_TOOLS, tool_config};
@@ -611,9 +611,8 @@ fn register_unified_file(_plan_state: Option<&PlanningWorkflowState>) -> ToolReg
         ToolRegistry::unified_file_executor,
     )
     .with_description(
-        "Read, write, edit, patch, delete, move, or copy a single file. Use action=read to load file contents (with optional range); action=edit for surgical text replacements (exact old_str, max 800 chars/40 lines per side); action=patch for larger or multi-hunk changes; action=write for new files or full replacement; action=delete to remove a file; action=move to rename; action=copy to duplicate. Do NOT mix action=edit with action=patch in the same call. Requires Prompt confirmation for write/edit/patch/delete/move/copy.",
+        "Internal file dispatcher for read, write, edit, delete, move, and copy operations.",
     )
-    .with_parameter_schema(unified_file_parameters())
     .with_llm_visibility(false)
 }
 

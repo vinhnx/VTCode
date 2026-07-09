@@ -633,9 +633,7 @@ fn extract_candidate_paths(
         }
     }
 
-    if normalized_tool_name == tools::APPLY_PATCH
-        || tool_intent::unified_file_action(args) == Some("patch")
-    {
+    if normalized_tool_name == tools::APPLY_PATCH {
         for patch_path in extract_patch_paths(args) {
             push_resolved_path(&mut paths, workspace_root, current_dir, &patch_path);
         }

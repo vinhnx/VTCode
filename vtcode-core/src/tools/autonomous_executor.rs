@@ -255,7 +255,7 @@ impl AutonomousExecutor {
     fn is_destructive_operation(&self, tool_name: &str, args: &Value) -> bool {
         match tool_name {
             tools::APPLY_PATCH | tools::DELETE_FILE => true,
-            tools::UNIFIED_FILE => unified_file_action_in(args, &["patch", "delete"]),
+            tools::UNIFIED_FILE => unified_file_action_in(args, &["delete"]),
             _ if Self::is_command_session_run(tool_name, args) => command_text(args)
                 .ok()
                 .flatten()
@@ -487,9 +487,7 @@ impl AutonomousExecutor {
             };
 
             format!("Will execute: {cmd}{warning}")
-        } else if tool_name == tools::APPLY_PATCH
-            || (tool_name == tools::UNIFIED_FILE && unified_file_action_is(args, "patch"))
-        {
+        } else if tool_name == tools::APPLY_PATCH {
             let patch = decode_apply_patch_input(args)
                 .ok()
                 .flatten()

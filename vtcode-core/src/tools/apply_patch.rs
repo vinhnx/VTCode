@@ -96,9 +96,8 @@ fn enforce_decoded_size_limit(
     )
 }
 
-/// Hard upper bound for any single `apply_patch` payload (and `unified_file` `edit`/`patch`
-/// actions) after base64 decoding. The preflight cap mirrors this same value; both
-/// share the same env-var override.
+/// Hard upper bound for any single `apply_patch` payload after base64 decoding.
+/// The preflight cap mirrors this same value; both share the same env-var override.
 pub const UNIFIED_FILE_MAX_PAYLOAD_BYTES: usize = 1024 * 1024;
 
 /// Maximum allowed decoded patch size — same as `UNIFIED_FILE_MAX_PAYLOAD_BYTES` but

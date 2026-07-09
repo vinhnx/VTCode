@@ -377,8 +377,8 @@ impl FileOpsTool {
             if looks_like_patch_payload(&args) {
                 return anyhow!(
                     "Error: Patch content was sent to read_file.\n\
-                    Use the patch path instead: unified_file with {{\"action\":\"patch\",\"patch\":\"...\"}} \
-                    (or {{\"action\":\"patch\",\"input\":\"...\"}}).\n\
+                    Use apply_patch with {{\"patch\":\"...\"}} \
+                    (or {{\"input\":\"...\"}}).\n\
                     read_file requires a path parameter."
                 );
             }
@@ -1107,7 +1107,8 @@ mod read_tests {
         let err = file_ops.read_file(args).await.unwrap_err().to_string();
 
         assert!(err.contains("Patch content was sent to read_file"));
-        assert!(err.contains("\"action\":\"patch\""));
+        assert!(err.contains("apply_patch"));
+        assert!(err.contains("\"patch\":\"...\""));
     }
 
     #[tokio::test]

@@ -371,9 +371,6 @@ fn file_access_targets(tool_name: &str, args: &Value) -> Vec<FileAccessTarget> {
                 push_file_access_target(&mut targets, path, AccessType::Write);
             }
         }
-        tools::UNIFIED_FILE if unified_file_action_is(args, "patch") => {
-            targets.extend(patch_file_access_targets(args));
-        }
         _ => {}
     }
 
@@ -1283,7 +1280,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_apply_patch_dotfile_protection_requires_approval() {
+    async fn test_apply_patch_dotfile_input_dotfile_protection_requires_approval() {
         let guardian = Arc::new(
             DotfileGuardian::new(DotfileProtectionConfig {
                 audit_logging_enabled: false,
@@ -1328,7 +1325,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_unified_file_patch_dotfile_protection_requires_approval() {
+    async fn test_apply_patch_patch_field_dotfile_protection_requires_approval() {
         let guardian = Arc::new(
             DotfileGuardian::new(DotfileProtectionConfig {
                 audit_logging_enabled: false,
@@ -1344,9 +1341,8 @@ mod tests {
         let decision = gateway
             .check_safety(
                 &ctx,
-                tools::UNIFIED_FILE,
+                tools::APPLY_PATCH,
                 &serde_json::json!({
-                    "action": "patch",
                     "patch": "*** Begin Patch\n*** Update File: .gitignore\n@@\n-old\n+new\n*** End Patch\n"
                 }),
             )

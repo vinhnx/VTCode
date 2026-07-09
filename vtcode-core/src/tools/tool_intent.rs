@@ -549,8 +549,6 @@ fn is_readonly_pipeline_segments(args: &Value) -> bool {
 /// Determine the action for unified_file tool based on args.
 /// Returns the action string or a default if inference is possible.
 pub fn unified_file_action(args: &Value) -> Option<&str> {
-    use crate::tools::editing::looks_like_vte_patch;
-
     args.get("action").and_then(|v| v.as_str()).or_else(|| {
         let has_read_path = args.get("path").is_some()
             || args.get("file_path").is_some()
@@ -558,16 +556,9 @@ pub fn unified_file_action(args: &Value) -> Option<&str> {
             || args.get("target_path").is_some()
             || args.get("file").is_some()
             || args.get("p").is_some();
-        let patch_in_input = args
-            .get("input")
-            .and_then(|v| v.as_str())
-            .is_some_and(looks_like_vte_patch);
-        let raw_patch = args.as_str().is_some_and(looks_like_vte_patch);
 
         if args.get("old_str").is_some() {
             Some("edit")
-        } else if args.get("patch").is_some() || patch_in_input || raw_patch {
-            Some("patch")
         } else if args.get("content").is_some() {
             Some("write")
         } else if args.get("destination").is_some() {
@@ -1321,22 +1312,6 @@ mod tests {
     }
 
     #[test]
-    fn unified_file_input_patch_infers_patch() {
-        let args = json!({
-            "input": "*** Begin Patch\n*** End Patch\n"
-        });
-        let action = unified_file_action(&args);
-        assert_eq!(action, Some("patch"));
-    }
-
-    #[test]
-    fn unified_file_raw_patch_infers_patch() {
-        let args = json!("*** Begin Patch\n*** Update File: src/main.rs\n*** End Patch\n");
-        let action = unified_file_action(&args);
-        assert_eq!(action, Some("patch"));
-    }
-
-    #[test]
     fn unified_file_unknown_args_require_action() {
         let args = json!({
             "unexpected": true
@@ -1416,10 +1391,6 @@ mod tests {
         assert!(is_edited_file_conflict_guarded_call(
             tools::UNIFIED_FILE,
             &json!({"action": "create", "path": "README.md", "content": "agent"})
-        ));
-        assert!(is_edited_file_conflict_guarded_call(
-            tools::UNIFIED_FILE,
-            &json!({"patch": "*** Begin Patch\n*** End Patch\n"})
         ));
     }
 

@@ -447,7 +447,6 @@ impl ToolRegistry {
             }
             UnifiedFileAction::Write => tool.write_file(args).await,
             UnifiedFileAction::Edit => self.edit_file(args).await,
-            UnifiedFileAction::Patch => self.execute_apply_patch(args).await,
             UnifiedFileAction::Delete => tool.delete_file(args).await,
             UnifiedFileAction::Move => tool.move_file(args).await,
             UnifiedFileAction::Copy => tool.copy_file(args).await,
@@ -953,8 +952,7 @@ impl ToolRegistry {
         let (patch_args, patch_input_bytes, patch_base64) = self.prepare_apply_patch_args(args)?;
         let context = self.harness_context_snapshot();
         tracing::debug!(
-            tool = tools::UNIFIED_FILE,
-            action = "patch",
+            tool = tools::APPLY_PATCH,
             payload_bytes = serialized_payload_size_bytes(&patch_args),
             patch_input_bytes,
             patch_base64,
@@ -965,7 +963,7 @@ impl ToolRegistry {
                 .unwrap_or(0),
             session_id = %context.session_id,
             task_id = %context.task_id.as_deref().unwrap_or(""),
-            "Prepared patch payload for apply_patch"
+            "Prepared apply_patch payload"
         );
 
         self.execute_apply_patch_internal(patch_args).await
