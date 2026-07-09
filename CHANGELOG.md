@@ -2,6 +2,43 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.134.15 - 2026-07-09
+
+### Highlights
+#### Bug Fixes
+
+- Primary agent runtime config clobbers configured model with "inherit"  (fe45c4ec) (@ForrestThump)
+- Retry tool-free recovery on contract violation instead of bailing (ebc936ad) 
+- Raise recovery synthesis token cap 1024 -> 4096 (383c7151) 
+- Update contributor commit counts in README and add WIP note in TODO (891da9e0) 
+- Stop injecting contradictory resume directive during tool-free recovery (7acc042d) 
+#### Features
+
+- Implement absolute line cap for read_file calls with continuation support (a345212b) 
+- Add absolute line cap for line-based read_file operations (c2d7a50f) 
+- Implement WorktreeReconciler with DiffVerifier for safe merges (58c257c1) 
+- Salvage prose from rejected recovery synthesis in fallback (c30ac37d) 
+- Enhance local model management and readiness checks (f7271b25) 
+### Other Changes
+#### Build
+
+- Eliminate last 2 unsafe blocks in build.rs and process_hardening.rs (650781c6) 
+#### CI
+
+- Wire allocator-jemalloc feature into build-linux-windows.yml (e5f4b3d6) 
+#### Other
+
+- Remove sccache + rust-cache from Windows and macOS builds (ecd69fc1) (@vinhnx)
+- Update TODO.md (51f4dad0) (@vinhnx)
+- Delete PLAN-loop-engineering.md (40ae26f0) (@vinhnx)
+- Delete web-fetch-hilt-fix.md (05425cda) (@vinhnx)
+- Update TODO.md (e8266c24) (@vinhnx)
+- Update TODOs (66a93a98) 
+- Update TODO (ec8e24ee) 
+#### Performance
+
+- Shallow git checkouts in CI, enable sccache for local macOS release builds (d55f76ec) 
+- Default to jemalloc on Linux and add bench-allocator RSS diagnostic (998f101e) 
 ## 0.134.14 - 2026-07-07
 
 ### Highlights
