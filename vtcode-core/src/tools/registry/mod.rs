@@ -216,7 +216,9 @@ mod tests {
     use crate::constants::tools;
     use crate::tool_policy::ToolPolicy;
     use crate::tool_policy::ToolPolicyConfig;
-    use crate::tools::handlers::{SessionSurface, SessionToolsConfig, ToolModelCapabilities};
+    use crate::tools::handlers::{
+        SessionSurface, SessionToolsConfig, ToolModelCapabilities, ToolProfile,
+    };
     use crate::tools::registry::mcp_helpers::normalize_mcp_tool_identifier;
     use anyhow::Result;
     use async_trait::async_trait;
@@ -325,6 +327,7 @@ mod tests {
         assert!(available.contains(&tools::EXEC_COMMAND.to_string()));
         assert!(available.contains(&tools::WRITE_STDIN.to_string()));
         assert!(available.contains(&tools::APPLY_PATCH.to_string()));
+        assert!(!available.contains(&tools::CODE_SEARCH.to_string()));
         assert!(!available.contains(&tools::UNIFIED_SEARCH.to_string()));
         assert!(!available.contains(&tools::UNIFIED_FILE.to_string()));
         assert!(!available.contains(&tools::UNIFIED_EXEC.to_string()));
@@ -407,6 +410,68 @@ mod tests {
                 "{removed_tool} should not be reported as available"
             );
         }
+
+        let code_search_schema = registry
+            .get_tool_schema(tools::CODE_SEARCH)
+            .await
+            .expect("code_search schema should be discoverable on request");
+        let code_search_actions = code_search_schema["parameters"]["properties"]["action"]["enum"]
+            .as_array()
+            .expect("code_search action enum");
+        assert!(
+            code_search_actions
+                .iter()
+                .any(|value| value == "structural")
+        );
+        assert!(!code_search_actions.iter().any(|value| value == "list"));
+        assert!(!code_search_actions.iter().any(|value| value == "web"));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn advanced_profile_exposes_code_search_without_removed_public_names() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        let config = SessionToolsConfig::full_public(
+            SessionSurface::Interactive,
+            CapabilityLevel::CodeSearch,
+            ConfigToolDocumentationMode::Full,
+            ToolModelCapabilities::default(),
+        )
+        .with_tool_profile(ToolProfile::AdvancedVtCode);
+
+        let names = registry
+            .schema_entries(config.clone())
+            .await
+            .into_iter()
+            .map(|entry| entry.name)
+            .collect::<Vec<_>>();
+        assert!(
+            names.contains(&tools::CODE_SEARCH.to_string()),
+            "advanced profile should expose code_search"
+        );
+        for removed_tool in [
+            tools::UNIFIED_EXEC,
+            tools::UNIFIED_FILE,
+            tools::UNIFIED_SEARCH,
+            tools::READ_FILE,
+            tools::WRITE_FILE,
+        ] {
+            assert!(
+                !names.contains(&removed_tool.to_string()),
+                "{removed_tool} must not be exposed in the advanced profile"
+            );
+        }
+
+        let model_tool_names = registry
+            .model_tools(config)
+            .await
+            .into_iter()
+            .map(|tool| tool.function_name().to_string())
+            .collect::<Vec<_>>();
+        assert!(model_tool_names.contains(&tools::CODE_SEARCH.to_string()));
+        assert!(!model_tool_names.contains(&tools::UNIFIED_SEARCH.to_string()));
 
         Ok(())
     }

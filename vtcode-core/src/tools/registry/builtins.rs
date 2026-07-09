@@ -21,9 +21,9 @@ use crate::tools::web_fetch::{WEB_FETCH_DESCRIPTION, WebFetchTool};
 use crate::tools::web_search::{WEB_SEARCH_DESCRIPTION, WebSearchTool};
 use serde_json::json;
 use vtcode_utility_tool_specs::{
-    apply_patch_parameters, close_agent_parameters, cron_create_parameters, cron_delete_parameters,
-    cron_list_parameters, exec_command_parameters, list_files_parameters, read_file_parameters,
-    resume_agent_parameters, send_input_parameters, spawn_agent_parameters,
+    apply_patch_parameters, close_agent_parameters, code_search_parameters, cron_create_parameters,
+    cron_delete_parameters, cron_list_parameters, exec_command_parameters, list_files_parameters,
+    read_file_parameters, resume_agent_parameters, send_input_parameters, spawn_agent_parameters,
     spawn_background_subprocess_parameters, unified_exec_parameters, unified_file_parameters,
     unified_search_parameters, wait_agent_parameters, write_stdin_parameters,
 };
@@ -338,6 +338,21 @@ fn register_unified_search(_plan_state: Option<&PlanningWorkflowState>) -> ToolR
     .with_parameter_schema(unified_search_parameters())
     .with_permission(ToolPolicy::Allow)
     .with_llm_visibility(false)
+}
+
+#[distributed_slice(BUILTIN_TOOLS)]
+fn register_code_search(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
+    ToolRegistration::new(
+        tools::CODE_SEARCH,
+        CapabilityLevel::CodeSearch,
+        false,
+        ToolRegistry::code_search_executor,
+    )
+    .with_description(
+        "Search code with text grep, ast-grep structural patterns, or Tree-sitter outlines. Use action=grep for text search, action=structural for AST-shaped queries, and action=outline for symbol maps. This tool does not perform web, skill, error, tool discovery, or file-listing actions.",
+    )
+    .with_parameter_schema(code_search_parameters())
+    .with_permission(ToolPolicy::Allow)
 }
 
 // ---------------------------------------------------------------------------
@@ -904,6 +919,26 @@ mod tests {
                 "{tool_name} should not rely on aliases"
             );
         }
+
+        let code_search = registrations
+            .iter()
+            .find(|registration| registration.name() == tools::CODE_SEARCH)
+            .expect("advanced public code_search registration should exist");
+        assert!(code_search.expose_in_llm(), "code_search should be public");
+        assert!(
+            code_search.metadata().aliases().is_empty(),
+            "code_search should not rely on aliases"
+        );
+        assert!(
+            code_search
+                .metadata()
+                .parameter_schema()
+                .expect("code_search schema")["properties"]["action"]["enum"]
+                .as_array()
+                .expect("action enum")
+                .iter()
+                .any(|value| value == "structural")
+        );
 
         for tool_name in [
             tools::UNIFIED_SEARCH,

@@ -821,6 +821,9 @@ mod tests {
                     false,
                     true,
                 )),
+            registration(tools::CODE_SEARCH)
+                .with_description("Search code")
+                .with_parameter_schema(empty_object_schema()),
             registration(tools::UNIFIED_EXEC)
                 .with_description("Unified exec")
                 .with_parameter_schema(empty_object_schema()),
@@ -856,6 +859,43 @@ mod tests {
                 tools::APPLY_PATCH.to_string(),
             ]
         );
+    }
+
+    #[test]
+    fn advanced_profile_exposes_code_search_without_internal_search_names() {
+        let registrations = vec![
+            registration(tools::CODE_SEARCH)
+                .with_description("Search code")
+                .with_parameter_schema(empty_object_schema()),
+            registration(tools::UNIFIED_SEARCH)
+                .with_description("Unified search")
+                .with_parameter_schema(unified_search_parameters()),
+            registration(tools::LIST_FILES)
+                .with_llm_visibility(false)
+                .with_description("List files")
+                .with_parameter_schema(list_files_parameters()),
+            registration(tools::READ_FILE)
+                .with_llm_visibility(false)
+                .with_description("Read file")
+                .with_parameter_schema(read_file_parameters()),
+            registration(tools::WRITE_FILE)
+                .with_llm_visibility(false)
+                .with_description("Write file")
+                .with_parameter_schema(empty_object_schema()),
+        ];
+
+        let catalog = SessionToolCatalog::rebuild_from_registrations(registrations);
+        let names = catalog.public_tool_names(
+            SessionToolsConfig::full_public(
+                SessionSurface::AgentRunner,
+                CapabilityLevel::CodeSearch,
+                ToolDocumentationMode::Full,
+                ToolModelCapabilities::default(),
+            )
+            .with_tool_profile(ToolProfile::AdvancedVtCode),
+        );
+
+        assert_eq!(names, vec![tools::CODE_SEARCH.to_string()]);
     }
 
     #[test]

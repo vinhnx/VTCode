@@ -141,6 +141,98 @@ pub fn write_stdin_parameters() -> Value {
 }
 
 #[must_use]
+pub fn code_search_parameters() -> Value {
+    json!({
+        "type": "object",
+        "required": ["action"],
+        "additionalProperties": false,
+        "properties": {
+            "action": {
+                "type": "string",
+                "enum": ["grep", "structural", "outline"],
+                "description": "Code search action: grep for text search, structural for ast-grep pattern search, or outline for Tree-sitter symbol maps."
+            },
+            "workflow": {
+                "type": "string",
+                "enum": ["query", "scan", "test"],
+                "description": "Structural workflow for ast-grep.",
+                "default": "query"
+            },
+            "pattern": {"type": "string", "description": "For grep: regex or literal text. For structural: ast-grep pattern such as $VAR or $$$ARGS."},
+            "kind": {"type": "string", "description": "Ast-grep node kind, such as function_item or call_expression."},
+            "path": {"type": "string", "description": "Directory or file path to search or outline.", "default": "."},
+            "config_path": {"type": "string", "description": "Ast-grep config path for scan or test workflows. Defaults to workspace sgconfig.yml."},
+            "filter": {"type": "string", "description": "Ast-grep rule or test filter for scan or test workflows."},
+            "lang": {"type": "string", "description": "Language for structural search or outline. Set this when the language is known."},
+            "selector": {"type": "string", "description": "Ast-grep selector when the match is a subnode."},
+            "strictness": {
+                "type": "string",
+                "enum": ["cst", "smart", "ast", "relaxed", "signature", "template"],
+                "description": "Pattern strictness for structural query workflow."
+            },
+            "view": {
+                "type": "string",
+                "enum": ["digest", "names", "full"],
+                "description": "Output shape for outline results.",
+                "default": "digest"
+            },
+            "items": {
+                "type": "string",
+                "enum": ["auto", "structure", "exports", "imports", "all"],
+                "description": "Which top-level symbols outline includes.",
+                "default": "auto"
+            },
+            "type": {
+                "description": "Symbol types to keep in outline.",
+                "anyOf": [
+                    {"type": "string"},
+                    {"type": "array", "items": {"type": "string"}}
+                ]
+            },
+            "match": {"type": "string", "description": "Regex for outline to filter item names, signatures, or first lines."},
+            "pub_members": {"type": "boolean", "description": "In outline, show only public members.", "default": false},
+            "follow": {"type": "boolean", "description": "Follow symbolic links while traversing directories.", "default": false},
+            "debug_query": {
+                "type": "string",
+                "enum": ["pattern", "ast", "cst", "sexp"],
+                "description": "Print the structural query AST instead of matches. Requires lang."
+            },
+            "globs": {
+                "description": "Optional include or exclude globs for structural workflows.",
+                "anyOf": [
+                    {"type": "string"},
+                    {"type": "array", "items": {"type": "string"}}
+                ]
+            },
+            "skip_snapshot_tests": {"type": "boolean", "description": "Skip ast-grep snapshot tests for test workflow.", "default": false},
+            "max_results": {"type": "integer", "description": "Maximum results to return.", "default": 100},
+            "case_sensitive": {"type": "boolean", "description": "Case-sensitive text search.", "default": false},
+            "context_lines": {"type": "integer", "description": "Context lines for grep or structural results.", "default": 0},
+            "severities": {
+                "type": "array",
+                "items": {"type": "string", "enum": ["error", "warning", "info", "hint"]},
+                "description": "Post-run severity filter for structural scan workflow."
+            },
+            "no_ignore": {
+                "type": "array",
+                "items": {"type": "string", "enum": ["hidden", "dot", "exclude", "global", "parent", "vcs"]},
+                "description": "Ignore file overrides."
+            },
+            "threads": {"type": "integer", "description": "Number of threads for ast-grep scan parallelism. 0 means auto.", "minimum": 0, "maximum": 256, "default": 0},
+            "format": {"type": "string", "enum": ["github", "sarif", "files_with_matches", "count"], "description": "Output format for structural scan workflow."},
+            "report_style": {"type": "string", "enum": ["rich", "medium", "short"], "description": "Diagnostic report style for structural scan workflow."},
+            "before_lines": {"type": "integer", "description": "Context lines before each structural match.", "minimum": 0, "maximum": 20},
+            "after_lines": {"type": "integer", "description": "Context lines after each structural match.", "minimum": 0, "maximum": 20},
+            "builtin_rules": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Built-in ast-grep rules to activate for structural scan workflow."
+            }
+        }
+    })
+}
+
+#[must_use]
 pub fn unified_exec_parameters() -> Value {
     json!({
         "type": "object",
@@ -623,6 +715,34 @@ mod tests {
                 .expect("skip snapshot description")
                 .contains("workflow=\"test\"")
         );
+    }
+
+    #[test]
+    fn code_search_schema_exposes_only_code_search_actions() {
+        let params = code_search_parameters();
+        let actions = params["properties"]["action"]["enum"]
+            .as_array()
+            .expect("action enum");
+
+        assert_eq!(params["required"], json!(["action"]));
+        assert!(actions.iter().any(|value| value == "grep"));
+        assert!(actions.iter().any(|value| value == "structural"));
+        assert!(actions.iter().any(|value| value == "outline"));
+        for removed_action in ["list", "tools", "errors", "agent", "web", "skill"] {
+            assert!(
+                !actions.iter().any(|value| value == removed_action),
+                "{removed_action} must not be a code_search action"
+            );
+        }
+        assert_eq!(params["additionalProperties"], false);
+        assert!(params["properties"]["lang"].is_object());
+        assert!(params["properties"]["selector"].is_object());
+        let workflows = params["properties"]["workflow"]["enum"]
+            .as_array()
+            .expect("workflow enum");
+        assert!(workflows.iter().any(|value| value == "query"));
+        assert!(!workflows.iter().any(|value| value == "rewrite"));
+        assert!(!workflows.iter().any(|value| value == "apply"));
     }
 
     #[test]

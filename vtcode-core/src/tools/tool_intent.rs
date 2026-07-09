@@ -149,6 +149,11 @@ pub fn builtin_tool_behavior(tool_name: &str) -> Option<ToolBehavior> {
 
 fn builtin_tool_behavior_canonical(tool: &str) -> Option<ToolBehavior> {
     match tool {
+        tools::CODE_SEARCH => Some(ToolBehavior::function(
+            ToolMutationModel::ReadOnly,
+            true,
+            false,
+        )),
         tools::UNIFIED_SEARCH => Some(ToolBehavior::function(
             ToolMutationModel::ReadOnly,
             true,

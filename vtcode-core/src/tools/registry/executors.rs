@@ -248,6 +248,10 @@ impl ToolRegistry {
         Box::pin(async move { self.execute_unified_search(args).await })
     }
 
+    pub(super) fn code_search_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
+        Box::pin(async move { self.execute_code_search(args).await })
+    }
+
     async fn prepare_exec_run_request(
         &self,
         args: &Value,
@@ -573,6 +577,35 @@ impl ToolRegistry {
             UnifiedSearchAction::Agent => self.execute_agent_info().await,
             UnifiedSearchAction::Web => self.execute_unified_web(args).await,
             UnifiedSearchAction::Skill => self.execute_skill(args).await,
+        }
+    }
+
+    async fn execute_code_search(&self, args: Value) -> Result<Value> {
+        let args = tool_intent::normalize_unified_search_args(&args);
+        let action_str = tool_intent::unified_search_action(&args).ok_or_else(|| {
+            anyhow!("code_search requires action='grep', 'structural', or 'outline'")
+        })?;
+        let action: UnifiedSearchAction = parse_action(action_str)?;
+
+        match action {
+            UnifiedSearchAction::Grep | UnifiedSearchAction::Outline => {
+                self.execute_unified_search(args).await
+            }
+            UnifiedSearchAction::Structural => {
+                let workflow = args
+                    .get("workflow")
+                    .and_then(Value::as_str)
+                    .unwrap_or("query");
+                if !matches!(workflow, "query" | "scan" | "test") {
+                    bail!(
+                        "code_search structural workflow supports only 'query', 'scan', or 'test'"
+                    );
+                }
+                self.execute_unified_search(args).await
+            }
+            _ => bail!(
+                "code_search supports only action='grep', action='structural', or action='outline'"
+            ),
         }
     }
 

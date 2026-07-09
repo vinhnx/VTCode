@@ -224,12 +224,7 @@ async fn removed_public_tool_names_are_rejected() {
     ];
 
     let mut runtime = AgentRuntime::new(
-        AgentSessionState::new(
-            "session-removed-public-tools".to_string(),
-            16,
-            4,
-            128_000,
-        ),
+        AgentSessionState::new("session-removed-public-tools".to_string(), 16, 4, 128_000),
         None,
         None,
     );
