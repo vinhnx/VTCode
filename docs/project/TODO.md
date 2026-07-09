@@ -111,8 +111,8 @@ https://github.com/vinhnx/VTCode/issues/698
 
 IMPORTANT: when the agent loop processing is running, prevent switch mode (e.g. from tool-free to tool-enabled) from happening mid-turn. The agent loop should complete the current turn before switching modes, to avoid inconsistent state and context corruption. This may involve locking the mode state during turn processing or queuing mode switch requests until the turn is fully processed. also disable keyboard shortcuts that can trigger mode switches during active processing, to ensure that the agent's state remains stable and predictable.
 
----
+--
 
-check vtcode reasoning trace, it seems to have a lot of blank lines. make it more compact and readable, by removing unnecessary whitespace and formatting the output in a structured way. This will help in debugging and understanding the agent's decision-making process. Consider implementing a logging utility that formats the reasoning trace consistently, highlighting key decisions, tool calls, and context changes.
+fix /resume (or resume sesssion logic) should also resume sessions's mode. currently it is default to build mode (default)
 
----
+then also check mode persistent, it should follow vtcode's config persistent mode.

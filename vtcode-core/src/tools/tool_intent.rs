@@ -962,12 +962,31 @@ pub fn normalize_unified_search_args(args: &Value) -> Value {
         })
         .or_else(|| keyword_alias.clone());
 
-    if action.eq_ignore_ascii_case("grep")
-        && let Some(pattern) = pattern_alias.clone()
-    {
-        normalized
-            .entry("pattern".to_string())
-            .or_insert_with(|| Value::String(pattern));
+    if action.eq_ignore_ascii_case("grep") {
+        // Map `match` -> `pattern` for grep action.  The `match` field is
+        // only valid for `outline` action, but the model sometimes uses it
+        // with grep (checkpoint turn_635: agent passed `match: "doctor"`
+        // instead of `pattern`).
+        if !normalized.contains_key("pattern") {
+            let match_value = normalized
+                .get("match")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|v| !v.is_empty())
+                .map(|v| v.to_string());
+            if let Some(match_val) = match_value {
+                normalized
+                    .entry("pattern".to_string())
+                    .or_insert_with(|| Value::String(match_val));
+                normalized.remove("match");
+            }
+        }
+
+        if let Some(pattern) = pattern_alias.clone() {
+            normalized
+                .entry("pattern".to_string())
+                .or_insert_with(|| Value::String(pattern));
+        }
     }
 
     if action.eq_ignore_ascii_case("list")
@@ -1010,6 +1029,23 @@ pub fn normalize_unified_search_args(args: &Value) -> Value {
     // repo?").
     if action.eq_ignore_ascii_case("list") {
         apply_list_cross_mappings(&mut normalized);
+    }
+
+    // For grep action: the `format` field is only valid for structural
+    // workflow (workflow="scan").  When the model passes `format` with
+    // action=grep, it's often an invalid value like "content" that
+    // causes schema validation to fail.  Remove it to prevent blocked
+    // tool call loops (checkpoint turn_635: 8 consecutive blocked calls).
+    if action.eq_ignore_ascii_case("grep") {
+        if let Some(format_val) = normalized.get("format").and_then(Value::as_str) {
+            let valid_grep_formats = ["files_with_matches", "count"];
+            if !valid_grep_formats
+                .iter()
+                .any(|f| f.eq_ignore_ascii_case(format_val))
+            {
+                normalized.remove("format");
+            }
+        }
     }
 
     Value::Object(normalized)
@@ -1556,6 +1592,53 @@ mod tests {
         assert_eq!(normalized["action"], "grep");
         assert_eq!(normalized["pattern"], "Result<");
         assert_eq!(normalized["path"], "vtcode-core/src");
+    }
+
+    #[test]
+    fn normalize_unified_search_args_removes_invalid_format_for_grep() {
+        // "content" is not a valid format value for grep action.
+        // Valid values are: "files_with_matches", "count".
+        // The normalization should remove invalid values to prevent
+        // schema validation failures and blocked tool call loops.
+        let normalized = normalize_unified_search_args(&json!({
+            "action": "grep",
+            "pattern": "doctor",
+            "path": ".",
+            "format": "content"
+        }));
+
+        assert_eq!(normalized["action"], "grep");
+        assert_eq!(normalized["pattern"], "doctor");
+        assert!(!normalized.as_object().unwrap().contains_key("format"));
+    }
+
+    #[test]
+    fn normalize_unified_search_args_keeps_valid_format_for_grep() {
+        // "files_with_matches" is a valid format value for grep action.
+        let normalized = normalize_unified_search_args(&json!({
+            "action": "grep",
+            "pattern": "doctor",
+            "path": ".",
+            "format": "files_with_matches"
+        }));
+
+        assert_eq!(normalized["action"], "grep");
+        assert_eq!(normalized["format"], "files_with_matches");
+    }
+
+    #[test]
+    fn normalize_unified_search_args_maps_match_to_pattern_for_grep() {
+        // "match" is only valid for outline action, not grep.
+        // The normalization should map it to "pattern" for grep.
+        let normalized = normalize_unified_search_args(&json!({
+            "action": "grep",
+            "match": "doctor",
+            "path": "."
+        }));
+
+        assert_eq!(normalized["action"], "grep");
+        assert_eq!(normalized["pattern"], "doctor");
+        assert!(!normalized.as_object().unwrap().contains_key("match"));
     }
 
     #[test]

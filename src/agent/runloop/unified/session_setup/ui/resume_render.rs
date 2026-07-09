@@ -158,7 +158,15 @@ pub(crate) fn build_structured_resume_lines(
 
                 if let Some(reasoning) = reasoning_text {
                     rendered_any = true;
-                    lines.push(ResumeRenderLine::new(MessageStyle::Reasoning, reasoning));
+                    let compact = vtcode_commons::formatting::compact_reasoning_text(&reasoning);
+                    lines.push(ResumeRenderLine::new(
+                        MessageStyle::Reasoning,
+                        if compact.trim().is_empty() {
+                            reasoning
+                        } else {
+                            compact
+                        },
+                    ));
                 }
 
                 if let Some(content) = project_content_text(&message.content) {

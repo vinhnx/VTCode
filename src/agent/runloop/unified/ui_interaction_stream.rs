@@ -11,6 +11,7 @@ use crate::agent::runloop::unified::plan_blocks::{
     ProposedPlanStreamParser, extract_proposed_plan,
 };
 use crate::agent::runloop::unified::stream_sanitization::StreamSanitizer;
+use vtcode_commons::formatting::compact_reasoning_text;
 use vtcode_core::copilot::CopilotRuntimeRequest;
 use vtcode_core::llm::error_display;
 use vtcode_core::llm::provider::{self as uni, LLMStreamEvent, NormalizedStreamEvent};
@@ -54,10 +55,10 @@ fn first_progress_timeout_error(provider_name: &str, budget: Duration) -> uni::L
 #[derive(Default)]
 struct StreamingReasoningState {
     buffered: String,
-    render_inline: bool,
+    /// Number of chars of `buffered`'s compacted form already rendered.
+    printed_chars: usize,
     render_output: bool,
     defer_rendering: bool,
-    started: bool,
     rendered_any: bool,
 }
 
@@ -65,22 +66,73 @@ impl StreamingReasoningState {
     fn new(inline_enabled: bool) -> Self {
         Self {
             buffered: String::new(),
-            render_inline: inline_enabled,
+            printed_chars: 0,
             render_output: true,
             defer_rendering: !inline_enabled,
-            started: false,
             rendered_any: false,
         }
     }
 
+    /// Append a reasoning delta and emit any newly-stabilized, compacted tail.
+    ///
+    /// Each chunk is printed exactly once and blank-line spam from the model is
+    /// collapsed, so the on-screen chain-of-thought stays compact. When rendering
+    /// is deferred (non-streaming), the delta is buffered and emitted at
+    /// [`Self::finalize`].
     fn handle_delta(&mut self, renderer: &mut AnsiRenderer, delta: &str) -> Result<bool> {
-        if !self.render_output || !self.render_inline || self.defer_rendering {
-            self.buffered.push_str(delta);
+        if !self.render_output {
             return Ok(false);
         }
+        self.buffered.push_str(delta);
+        if self.defer_rendering {
+            return Ok(false);
+        }
+        self.render_new_tail(renderer)
+    }
 
-        self.started = true;
-        renderer.inline_with_style(MessageStyle::Reasoning, delta)?;
+    /// Render the newly-stabilized tail of the compacted reasoning buffer.
+    fn render_new_tail(&mut self, renderer: &mut AnsiRenderer) -> Result<bool> {
+        if self.buffered.is_empty() {
+            return Ok(self.rendered_any);
+        }
+
+        let compact = compact_reasoning_text(&self.buffered);
+        let compact_len = compact.chars().count();
+        if self.printed_chars > compact_len {
+            self.printed_chars = compact_len;
+        }
+        let tail: String = compact.chars().skip(self.printed_chars).collect();
+        if tail.is_empty() {
+            return Ok(self.rendered_any);
+        }
+
+        let inline = renderer.writes_to_inline_sink();
+        for line in tail.split('\n') {
+            let is_blank = line.trim().is_empty();
+            if is_blank {
+                if !inline {
+                    renderer.line(MessageStyle::Reasoning, "")?;
+                }
+                // Inline sink: drop blank lines entirely to avoid blank-line spam.
+                continue;
+            }
+            let style = if super::reasoning::is_decision_or_tool_line(line) {
+                MessageStyle::ReasoningEmphasis
+            } else {
+                MessageStyle::Reasoning
+            };
+            if inline {
+                // Preserve line breaks while dropping blank-line spam: each
+                // non-blank line is streamed with a trailing newline.
+                let mut piece = String::with_capacity(line.len() + 1);
+                piece.push_str(line);
+                piece.push('\n');
+                renderer.inline_with_style(style, &piece)?;
+            } else {
+                renderer.line(style, line)?;
+            }
+        }
+        self.printed_chars = compact_len;
         self.rendered_any = true;
         Ok(true)
     }
@@ -88,21 +140,10 @@ impl StreamingReasoningState {
     fn flush_pending(&mut self, renderer: &mut AnsiRenderer) -> Result<bool> {
         if !self.render_output {
             self.buffered.clear();
+            self.printed_chars = 0;
             return Ok(false);
         }
-        if !self.buffered.is_empty() {
-            let cleaned = clean_reasoning_text(&self.buffered);
-            if !cleaned.is_empty() {
-                if self.render_inline && self.started {
-                    renderer.inline_with_style(MessageStyle::Reasoning, "\n")?;
-                }
-                renderer.line(MessageStyle::Reasoning, &cleaned)?;
-                self.rendered_any = true;
-            }
-            self.buffered.clear();
-            return Ok(self.rendered_any);
-        }
-        Ok(false)
+        self.render_new_tail(renderer)
     }
 
     fn finalize(
@@ -114,10 +155,12 @@ impl StreamingReasoningState {
     ) -> Result<()> {
         if !self.render_output {
             self.buffered.clear();
+            self.printed_chars = 0;
             return Ok(());
         }
         if suppress_reasoning {
             self.buffered.clear();
+            self.printed_chars = 0;
             return Ok(());
         }
 
@@ -130,13 +173,14 @@ impl StreamingReasoningState {
             && let Some(reasoning_text) = final_reasoning
             && !reasoning_text.trim().is_empty()
         {
-            let cleaned_reasoning = clean_reasoning_text(reasoning_text);
-            if !cleaned_reasoning.trim().is_empty() {
-                renderer.line(MessageStyle::Reasoning, &cleaned_reasoning)?;
+            let compact = compact_reasoning_text(reasoning_text);
+            if !compact.trim().is_empty() {
+                use crate::agent::runloop::unified::ui_interaction_stream_helpers::render_compact_reasoning_block;
+                render_compact_reasoning_block(renderer, reasoning_text)?;
                 self.rendered_any = true;
 
                 use super::reasoning::analyze_reasoning;
-                let analysis = analyze_reasoning(&cleaned_reasoning);
+                let analysis = analyze_reasoning(&compact);
                 if analysis.has_concerns() {
                     tracing::debug!(
                         concern = ?analysis.priority_concern(),
