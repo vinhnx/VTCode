@@ -147,6 +147,10 @@ commit_parsers = [
     { message = "^chore", group = "Chores", skip = true },
     { message = "^chore\\(.*\\):", group = "Chores", skip = true },
 
+    # Skip commits that only update docs/project/TODO.md
+    { message = "docs/project/TODO\\.md", skip = true },
+    { message = "TODO\\.md", skip = true },
+
     # Skip generic/non-descriptive commits
     { message = "^Update commit$", skip = true },
     { message = "^Remove codes$", skip = true },
@@ -185,6 +189,9 @@ exclude_patterns = [
     "update changelog for",
     "\\[skip ci\\]",
     "Merge branch",
+    # Exclude TODO.md updates
+    "docs/project/TODO\\.md",
+    "TODO\\.md",
     # Exclude merge commits - we want to show the original commits with their actual authors
     "Merge pull request",
 ]
