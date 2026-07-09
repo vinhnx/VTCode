@@ -43,7 +43,7 @@ pub fn generate_tool_guidelines(
     }
     if has_exec {
         lines.push(
-            "- Use `exec_command` for verification, `git diff -- <path>`, and shell-only tasks."
+            "- Use `exec_command.cmd` for build tools, test tools, `git diff -- <path>`, and shell-only tasks."
                 .to_string(),
         );
     }
@@ -209,7 +209,7 @@ fn browse_tool_guidance(
 ) -> Option<String> {
     if has_exec {
         return Some(
-            "- Use `exec_command` with `rg`, `find`, and `sed` for repository browsing."
+            "- Use `exec_command.cmd` with `ls`, `rg`, `find`, `cat`, `sed`, and `awk` for repository browsing."
                 .to_string(),
         );
     }
@@ -283,6 +283,8 @@ mod tests {
         let guidelines = generate_tool_guidelines(&tools, None);
         assert!(guidelines.contains("targeted repository searches"));
         assert!(guidelines.contains("git diff -- <path>"));
+        assert!(guidelines.contains("build tools"));
+        assert!(guidelines.contains("test tools"));
         assert!(guidelines.contains("Completion is a checkpoint"));
     }
 
@@ -305,6 +307,13 @@ mod tests {
         let guidelines = generate_tool_guidelines(&tools, None);
 
         assert!(guidelines.contains("`exec_command`"));
+        assert!(guidelines.contains("exec_command.cmd"));
+        for command in ["ls", "rg", "find", "cat", "sed", "awk"] {
+            assert!(
+                guidelines.contains(&format!("`{command}`")),
+                "{command} should be shown as an exec_command.cmd example"
+            );
+        }
         assert!(guidelines.contains("`write_stdin`"));
         assert!(guidelines.contains("`apply_patch`"));
         assert!(!guidelines.contains("task_tracker"));

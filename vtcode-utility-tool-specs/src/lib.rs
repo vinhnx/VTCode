@@ -116,10 +116,11 @@ pub fn exec_command_parameters() -> Value {
         "type": "object",
         "required": ["cmd"],
         "properties": {
-            "cmd": {"type": "string", "description": "Shell command to execute."},
+            "cmd": {"type": "string", "description": "Shell command to execute, subject to command policy. Examples include `ls`, `rg`, `find`, `cat`, `sed`, `awk`, build tools, and test tools."},
             "yield_time_ms": {"type": "integer", "description": "Wait before returning output (ms).", "default": 1000},
             "max_output_tokens": {"type": "integer", "description": "Output token cap."},
-            "workdir": {"type": "string", "description": "Working directory."}
+            "workdir": {"type": "string", "description": "Working directory."},
+            "tty": {"type": "boolean", "description": "Run the command in PTY mode for interactive or terminal-sensitive commands.", "default": false}
         },
         "additionalProperties": false
     })
@@ -617,7 +618,22 @@ mod tests {
         assert_eq!(exec_params["required"], json!(["cmd"]));
         assert!(exec_params["properties"]["cmd"].is_object());
         assert!(exec_params["properties"]["workdir"].is_object());
+        assert_eq!(exec_params["properties"]["tty"]["type"], "boolean");
+        assert_eq!(exec_params["properties"]["tty"]["default"], false);
         assert_eq!(exec_params["additionalProperties"], false);
+        for command in ["ls", "rg", "find", "cat", "sed", "awk"] {
+            assert!(
+                exec_params["properties"]["cmd"]["description"]
+                    .as_str()
+                    .expect("cmd description")
+                    .contains(command),
+                "{command} should be described as an exec_command.cmd example"
+            );
+            assert!(
+                exec_params["properties"].get(command).is_none(),
+                "{command} must not be modelled as a separate exec_command field"
+            );
+        }
 
         let stdin_params = write_stdin_parameters();
         assert_eq!(stdin_params["required"], json!(["session_id", "chars"]));

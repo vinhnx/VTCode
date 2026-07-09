@@ -782,8 +782,8 @@ fn remove_schema_descriptions_impl(value: &mut Value, inside_properties_map: boo
 
 #[cfg(test)]
 pub(crate) use vtcode_utility_tool_specs::{
-    apply_patch_parameters, list_files_parameters, read_file_parameters, unified_file_parameters,
-    unified_search_parameters,
+    apply_patch_parameters, exec_command_parameters, list_files_parameters, read_file_parameters,
+    unified_file_parameters, unified_search_parameters,
 };
 
 #[cfg(test)]
@@ -841,6 +841,24 @@ mod tests {
                 .with_llm_visibility(false)
                 .with_description("Write file")
                 .with_parameter_schema(empty_object_schema()),
+            registration("ls")
+                .with_description("List directory")
+                .with_parameter_schema(empty_object_schema()),
+            registration("rg")
+                .with_description("Search text")
+                .with_parameter_schema(empty_object_schema()),
+            registration("find")
+                .with_description("Find files")
+                .with_parameter_schema(empty_object_schema()),
+            registration("cat")
+                .with_description("Print file")
+                .with_parameter_schema(empty_object_schema()),
+            registration("sed")
+                .with_description("Stream edit")
+                .with_parameter_schema(empty_object_schema()),
+            registration("awk")
+                .with_description("Process text")
+                .with_parameter_schema(empty_object_schema()),
         ];
 
         let catalog = SessionToolCatalog::rebuild_from_registrations(registrations);
@@ -859,6 +877,49 @@ mod tests {
                 tools::APPLY_PATCH.to_string(),
             ]
         );
+        for command in ["ls", "rg", "find", "cat", "sed", "awk"] {
+            assert!(
+                !names.contains(&command.to_string()),
+                "{command} must stay an exec_command.cmd example, not a default tool"
+            );
+        }
+    }
+
+    #[test]
+    fn exec_command_schema_models_unix_tools_as_cmd_examples() {
+        let registration = registration(tools::EXEC_COMMAND)
+            .with_description("Run command")
+            .with_parameter_schema(exec_command_parameters());
+        let catalog = SessionToolCatalog::rebuild_from_registrations(vec![registration]);
+        let entries = catalog.schema_entries(SessionToolsConfig::full_public(
+            SessionSurface::AgentRunner,
+            CapabilityLevel::CodeSearch,
+            ToolDocumentationMode::Full,
+            ToolModelCapabilities::default(),
+        ));
+        let entry = entries
+            .iter()
+            .find(|entry| entry.name == tools::EXEC_COMMAND)
+            .expect("exec_command schema entry");
+        let properties = &entry.parameters["properties"];
+
+        assert_eq!(entry.parameters["required"], json!(["cmd"]));
+        assert!(
+            properties["cmd"]["description"]
+                .as_str()
+                .is_some_and(|text| {
+                    ["ls", "rg", "find", "cat", "sed", "awk"]
+                        .iter()
+                        .all(|command| text.contains(command))
+                })
+        );
+        assert_eq!(properties["tty"]["type"], "boolean");
+        for command in ["ls", "rg", "find", "cat", "sed", "awk"] {
+            assert!(
+                properties.get(command).is_none(),
+                "{command} must not be modelled as a separate schema property"
+            );
+        }
     }
 
     #[test]

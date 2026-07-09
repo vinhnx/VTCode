@@ -23,7 +23,7 @@ use tracing::warn;
 /// Shared Planning workflow header used by both static and incremental prompt builders.
 pub const PLANNING_WORKFLOW_READ_ONLY_HEADER: &str = "# PLANNING WORKFLOW (READ-ONLY)";
 /// Shared Planning workflow notice line describing strict read-only enforcement.
-pub const PLANNING_WORKFLOW_READ_ONLY_NOTICE_LINE: &str = "Mutating file edits are blocked, including `apply_patch`. Use `exec_command` only for read-only repository inspection, such as `rg`, `find`, `sed`, `cargo check`, and `git status`; keep `task_tracker` current. Plan artifacts under `.vtcode/plans/` are allowed.";
+pub const PLANNING_WORKFLOW_READ_ONLY_NOTICE_LINE: &str = "Mutating file edits are blocked, including `apply_patch`. Use `exec_command.cmd` only for read-only repository inspection, such as `ls`, `rg`, `find`, `cat`, `sed`, `awk`, `cargo check`, and `git status`; keep `task_tracker` current. Plan artifacts under `.vtcode/plans/` are allowed.";
 /// Shared Planning workflow instruction line for transitioning to implementation.
 pub const PLANNING_WORKFLOW_EXIT_INSTRUCTION_LINE: &str =
     "Call `finish_planning` to present the plan. Mutating tools stay disabled until user approves.";
@@ -83,7 +83,7 @@ const SHARED_CONTRACT_LINES: &[&str] = &[
     "Preserve task goal, tracker state, touched files, verification status, and decisions across compaction.",
     "Keep outputs concise; keep agent loops simple and let the model choose the next useful step.",
     "Prefer `ast-grep` for code-shape queries; keep text grep for prose and config.",
-    "`spool_path` holds full tool output. Inspect it once with a targeted shell command through `exec_command`, such as `rg` or `sed`, instead of repeatedly dumping the whole file. Past-turn errors are already in history.",
+    "`spool_path` holds full tool output. Inspect it once with a targeted shell command through `exec_command.cmd`, such as `rg`, `sed`, or `cat`, instead of repeatedly dumping the whole file. Past-turn errors are already in history.",
 ];
 
 /// Default/Lightweight/Specialized mode: expanded contract lines beyond shared rules.
@@ -108,6 +108,7 @@ const MINIMAL_SPECIFIC_LINES: &[&str] = &[
 const DEFAULT_OPERATING_PROFILE_DELTA: &str = r#"## Operating Profile
 
 - Available tools in the default profile are `exec_command`, `write_stdin`, and `apply_patch`.
+- Put normal shell commands, including `ls`, `rg`, `find`, `cat`, `sed`, `awk`, build tools, and test tools, in `exec_command.cmd`; they are not separate function tools.
 - Treat completion language as a checkpoint, not proof; only stop when verification is resolved.
 - When tools are available, read files and search the codebase before answering; use tools to implement directly rather than describing what should be done.
 - Use Planning workflow for research/spec work; stay read-only until implementation intent is explicit."#;
@@ -879,6 +880,13 @@ mod tests {
         let result = compose_system_instruction_text(&project_root, Some(&config), None).await;
 
         assert!(result.contains("`exec_command`, `write_stdin`, and `apply_patch`"));
+        assert!(result.contains("exec_command.cmd"));
+        for command in ["ls", "rg", "find", "cat", "sed", "awk"] {
+            assert!(
+                result.contains(&format!("`{command}`")),
+                "{command} should appear only as an exec_command.cmd example"
+            );
+        }
         assert!(!result.contains("task_tracker"));
         assert!(!result.contains("list_files"));
         assert!(!result.contains("read_file"));
@@ -1210,7 +1218,7 @@ mod tests {
     fn test_search_guidance_prefers_structural_and_rg() {
         let guidelines = generate_tool_guidelines(&[tools::EXEC_COMMAND.to_string()], None);
         assert!(
-            guidelines.contains("`exec_command` with `rg`"),
+            guidelines.contains("`exec_command.cmd` with `ls`, `rg`"),
             "Tool guidance should browse through shell commands"
         );
         assert!(

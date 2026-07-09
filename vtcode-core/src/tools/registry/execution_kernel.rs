@@ -871,13 +871,14 @@ mod tests {
         let result = preflight_validate_call(
             &registry,
             tool_names::EXEC_COMMAND,
-            &json!({"cmd": "rg --files", "workdir": "."}),
+            &json!({"cmd": "rg --files", "workdir": ".", "tty": true}),
         )?;
 
         assert_eq!(result.normalized_tool_name, tool_names::EXEC_COMMAND);
         assert_eq!(result.effective_args["action"], "run");
         assert_eq!(result.effective_args["command"], "rg --files");
         assert_eq!(result.effective_args["workdir"], ".");
+        assert_eq!(result.effective_args["tty"], true);
         assert!(result.readonly_classification);
         Ok(())
     }

@@ -2,7 +2,7 @@ use super::config::{AgentPersonality, ResponseStyle};
 use once_cell::sync::Lazy;
 
 static TOOL_USAGE_PROMPT: Lazy<String> = Lazy::new(|| {
-    "Tools: use exec_command for shell commands, including `rg`, `sed`, `find`, `ls`, and validation; use write_stdin for active command sessions; use apply_patch for file edits when exposed by the model.".to_string()
+    "Tools: use exec_command.cmd for shell commands, including `ls`, `rg`, `find`, `cat`, `sed`, `awk`, build tools, test tools, and validation; use write_stdin for active command sessions; use apply_patch for file edits when exposed by the model.".to_string()
 });
 
 /// Prompt template collection
@@ -87,8 +87,17 @@ mod tests {
     fn tool_usage_prompt_prefers_codex_baseline_tools() {
         let prompt = PromptTemplates::tool_usage_prompt();
         assert!(prompt.contains("exec_command"));
+        assert!(prompt.contains("exec_command.cmd"));
         assert!(prompt.contains("write_stdin"));
         assert!(prompt.contains("apply_patch"));
+        for command in ["ls", "rg", "find", "cat", "sed", "awk"] {
+            assert!(
+                prompt.contains(&format!("`{command}`")),
+                "{command} should be shown as an exec_command.cmd example"
+            );
+        }
+        assert!(prompt.contains("build tools"));
+        assert!(prompt.contains("test tools"));
         assert!(!prompt.contains("unified_exec"));
         assert!(!prompt.contains("unified_file"));
         assert!(!prompt.contains("unified_search"));

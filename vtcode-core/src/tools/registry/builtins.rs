@@ -579,7 +579,7 @@ fn register_exec_command(_plan_state: Option<&PlanningWorkflowState>) -> ToolReg
         ToolRegistry::exec_command_executor,
     )
     .with_description(
-        "Execute a shell command through the active sandbox policy. Use for verification and shell-only tasks. Returns output, exit status, and a reusable session id when the command is still running.",
+        "Execute a shell command through the active sandbox policy. Put normal shell tools such as ls, rg, find, cat, sed, awk, build tools, and test tools in cmd. Returns output, exit status, and a reusable session id when the command is still running.",
     )
     .with_parameter_schema(exec_command_parameters())
 }
