@@ -989,6 +989,24 @@ pub(crate) async fn run_turn_loop(
     }
 
     ctx.set_phase(TurnPhase::Finalizing);
+    finalize_turn(&mut ctx, working_history, &result, &turn_usage).await;
+
+    // Final outcome with the correct result status
+    ctx.session_stats.record_turn_completed();
+    Ok(TurnLoopOutcome {
+        result,
+        turn_modified_files,
+    })
+}
+
+/// Finalize the turn: terminate sessions if needed, emit outcome events,
+/// and send notifications.
+async fn finalize_turn(
+    ctx: &mut TurnLoopContext<'_>,
+    working_history: &[uni::Message],
+    result: &TurnLoopResult,
+    turn_usage: &HarnessUsage,
+) {
     if matches!(result, TurnLoopResult::Cancelled | TurnLoopResult::Exit)
         && let Err(err) = ctx.tool_registry.terminate_all_exec_sessions_async().await
     {
@@ -1002,15 +1020,15 @@ pub(crate) async fn run_turn_loop(
             }
             TurnLoopResult::Aborted => turn_failed_event(
                 "turn aborted",
-                has_turn_usage(&turn_usage).then_some(turn_usage.clone()),
+                has_turn_usage(turn_usage).then_some(turn_usage.clone()),
             ),
             TurnLoopResult::Cancelled => turn_failed_event(
                 "turn cancelled",
-                has_turn_usage(&turn_usage).then_some(turn_usage.clone()),
+                has_turn_usage(turn_usage).then_some(turn_usage.clone()),
             ),
             TurnLoopResult::Blocked { .. } => turn_failed_event(
                 "turn blocked",
-                has_turn_usage(&turn_usage).then_some(turn_usage.clone()),
+                has_turn_usage(turn_usage).then_some(turn_usage.clone()),
             ),
         };
         if let Err(e) = emitter.emit(event) {
@@ -1022,16 +1040,9 @@ pub(crate) async fn run_turn_loop(
         working_history,
         ctx.config.workspace.as_path(),
         ctx.harness_state,
-        &result,
+        result,
     )
     .await;
-
-    // Final outcome with the correct result status
-    ctx.session_stats.record_turn_completed();
-    Ok(TurnLoopOutcome {
-        result,
-        turn_modified_files,
-    })
 }
 
 #[cfg(test)]
