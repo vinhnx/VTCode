@@ -11,7 +11,7 @@ use super::async_mcp_manager::{AsyncMcpManager, McpInitStatus};
 use super::workspace_links::LinkedDirectory;
 
 #[derive(Clone, Copy, Debug, Default)]
-pub(crate) struct DoctorOptions {
+pub(crate) struct CheckupOptions {
     pub quick: bool,
 }
 
@@ -39,7 +39,7 @@ enum DoctorCheckOutcome {
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(crate) async fn run_doctor_diagnostics(
+pub(crate) async fn run_checkup_diagnostics(
     renderer: &mut AnsiRenderer,
     config: &CoreAgentConfig,
     vt_cfg: Option<&VTCodeConfig>,
@@ -51,7 +51,7 @@ pub(crate) async fn run_doctor_diagnostics(
             tokio::sync::RwLock<hashbrown::HashMap<String, vtcode_core::skills::types::Skill>>,
         >,
     >,
-    options: DoctorOptions,
+    options: CheckupOptions,
 ) -> Result<()> {
     let mut summary = DoctorSummary::default();
 

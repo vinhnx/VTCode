@@ -2,16 +2,16 @@ use anyhow::{Context, Result};
 use vtcode_core::utils::ansi::MessageStyle;
 use vtcode_ui::tui::app::{InlineListItem, InlineListSelection};
 
-use crate::agent::runloop::unified::diagnostics::{DoctorOptions, run_doctor_diagnostics};
+use crate::agent::runloop::unified::diagnostics::{CheckupOptions, run_checkup_diagnostics};
 use crate::agent::runloop::unified::ui_interaction::display_session_status;
 
 use super::{SlashCommandContext, SlashCommandControl};
 
 #[path = "diagnostics/memory.rs"]
-mod memory;
+pub(super) mod memory;
 
-const DOCTOR_ACTION_PREFIX: &str = "doctor.action.";
-const DOCTOR_ACTION_BACK: &str = "doctor.action.back";
+const CHECKUP_ACTION_PREFIX: &str = "checkup.action.";
+const CHECKUP_ACTION_BACK: &str = "checkup.action.back";
 
 pub(crate) async fn handle_show_status(
     ctx: SlashCommandContext<'_>,
@@ -78,27 +78,27 @@ pub(crate) async fn handle_show_memory_config(
     memory::run_memory_modal(&mut ctx, true).await
 }
 
-pub(crate) async fn handle_run_doctor(
+pub(crate) async fn handle_run_checkup(
     mut ctx: SlashCommandContext<'_>,
     quick: bool,
 ) -> Result<SlashCommandControl> {
-    run_doctor(&mut ctx, quick).await?;
+    run_checkup(&mut ctx, quick).await?;
     Ok(SlashCommandControl::Continue)
 }
 
-pub(crate) async fn handle_start_doctor_interactive(
+pub(crate) async fn handle_start_checkup_interactive(
     mut ctx: SlashCommandContext<'_>,
 ) -> Result<SlashCommandControl> {
     if !ctx.renderer.supports_inline_ui() {
-        run_doctor(&mut ctx, false).await?;
+        run_checkup(&mut ctx, false).await?;
         return Ok(SlashCommandControl::Continue);
     }
 
-    if !super::ui::ensure_selection_ui_available(&mut ctx, "opening doctor checks")? {
+    if !super::ui::ensure_selection_ui_available(&mut ctx, "opening checkup")? {
         return Ok(SlashCommandControl::Continue);
     }
 
-    show_doctor_actions_modal(&mut ctx);
+    show_checkup_actions_modal(&mut ctx);
     let Some(selection) = super::ui::wait_for_list_modal_selection(&mut ctx).await else {
         return Ok(SlashCommandControl::Continue);
     };
@@ -107,25 +107,25 @@ pub(crate) async fn handle_start_doctor_interactive(
         return Ok(SlashCommandControl::Continue);
     };
 
-    if action == DOCTOR_ACTION_BACK {
+    if action == CHECKUP_ACTION_BACK {
         return Ok(SlashCommandControl::Continue);
     }
 
-    let Some(action_key) = action.strip_prefix(DOCTOR_ACTION_PREFIX) else {
+    let Some(action_key) = action.strip_prefix(CHECKUP_ACTION_PREFIX) else {
         return Ok(SlashCommandControl::Continue);
     };
     match action_key {
-        "quick" => run_doctor(&mut ctx, true).await?,
-        "full" => run_doctor(&mut ctx, false).await?,
+        "quick" => run_checkup(&mut ctx, true).await?,
+        "full" => run_checkup(&mut ctx, false).await?,
         _ => {}
     }
 
     Ok(SlashCommandControl::Continue)
 }
 
-async fn run_doctor(ctx: &mut SlashCommandContext<'_>, quick: bool) -> Result<()> {
+async fn run_checkup(ctx: &mut SlashCommandContext<'_>, quick: bool) -> Result<()> {
     let provider_runtime = ctx.provider_client.name().to_string();
-    run_doctor_diagnostics(
+    run_checkup_diagnostics(
         ctx.renderer,
         ctx.config,
         ctx.vt_cfg.as_ref(),
@@ -133,7 +133,7 @@ async fn run_doctor(ctx: &mut SlashCommandContext<'_>, quick: bool) -> Result<()
         ctx.async_mcp_manager.map(|m| m.as_ref()),
         ctx.linked_directories,
         Some(ctx.loaded_skills),
-        DoctorOptions { quick },
+        CheckupOptions { quick },
     )
     .await?;
     ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
@@ -152,10 +152,10 @@ pub(crate) async fn handle_start_terminal_setup(
     Ok(SlashCommandControl::Continue)
 }
 
-fn show_doctor_actions_modal(ctx: &mut SlashCommandContext<'_>) {
+fn show_checkup_actions_modal(ctx: &mut SlashCommandContext<'_>) {
     let items = vec![
         InlineListItem {
-            title: "Run full diagnostics".to_string(),
+            title: "Run full checkup".to_string(),
             subtitle: Some(
                 "Run all checks: config, provider key, dependencies, MCP, links, and skills"
                     .to_string(),
@@ -163,43 +163,43 @@ fn show_doctor_actions_modal(ctx: &mut SlashCommandContext<'_>) {
             badge: Some("Recommended".to_string()),
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!(
-                "{DOCTOR_ACTION_PREFIX}full"
+                "{CHECKUP_ACTION_PREFIX}full"
             ))),
-            search_value: Some("doctor full all checks mcp dependencies".to_string()),
+            search_value: Some("checkup full all checks mcp dependencies".to_string()),
         },
         InlineListItem {
-            title: "Run quick diagnostics".to_string(),
+            title: "Run quick checkup".to_string(),
             subtitle: Some(
                 "Run core checks only (skips dependencies, MCP, links, and skills)".to_string(),
             ),
             badge: Some("Fast".to_string()),
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!(
-                "{DOCTOR_ACTION_PREFIX}quick"
+                "{CHECKUP_ACTION_PREFIX}quick"
             ))),
-            search_value: Some("doctor quick fast checks".to_string()),
+            search_value: Some("checkup quick fast checks".to_string()),
         },
         InlineListItem {
             title: "Back".to_string(),
-            subtitle: Some("Close without running diagnostics".to_string()),
+            subtitle: Some("Close without running the checkup".to_string()),
             badge: None,
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(
-                DOCTOR_ACTION_BACK.to_string(),
+                CHECKUP_ACTION_BACK.to_string(),
             )),
             search_value: Some("back close cancel".to_string()),
         },
     ];
 
     ctx.renderer.show_list_modal(
-        "Doctor",
+        "Checkup",
         vec![
-            "Choose how to run VT Code diagnostics.".to_string(),
+            "Choose how to run the VT Code checkup.".to_string(),
             "Use Enter to run an action, Esc to close.".to_string(),
         ],
         items,
         Some(InlineListSelection::ConfigAction(format!(
-            "{DOCTOR_ACTION_PREFIX}full"
+            "{CHECKUP_ACTION_PREFIX}full"
         ))),
         None,
     );

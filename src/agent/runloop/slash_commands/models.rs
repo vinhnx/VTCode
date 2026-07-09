@@ -154,8 +154,8 @@ pub(crate) enum SlashCommandOutcome {
     ManageMcp {
         action: McpCommandAction,
     },
-    StartDoctorInteractive,
-    RunDoctor {
+    StartCheckupInteractive,
+    RunCheckup {
         quick: bool,
     },
     Update {

@@ -13,7 +13,7 @@ use super::super::super::config_toml::{
 };
 use super::SlashCommandContext;
 
-pub(super) async fn persist_workspace_config_change<F>(
+pub(crate) async fn persist_workspace_config_change<F>(
     ctx: &mut SlashCommandContext<'_>,
     update: F,
 ) -> Result<()>

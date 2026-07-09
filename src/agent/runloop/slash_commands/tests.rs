@@ -1,4 +1,4 @@
-use super::builtins::{DoctorCommand, parse_doctor_args, parse_effort_args, parse_update_args};
+use super::builtins::{CheckupCommand, parse_checkup_args, parse_effort_args, parse_update_args};
 use super::{
     AgentManagerAction, CompactConversationCommand, SessionLogExportFormat, SlashCommandOutcome,
     SubprocessManagerAction, handle_slash_command,
@@ -15,32 +15,32 @@ fn renderer_for_tests() -> AnsiRenderer {
 }
 
 #[test]
-fn parse_doctor_defaults_to_full_mode() {
-    let mode = parse_doctor_args("", false).expect("should parse");
-    assert!(matches!(mode, DoctorCommand::Run { quick: false }));
+fn parse_checkup_defaults_to_full_mode() {
+    let mode = parse_checkup_args("", false).expect("should parse");
+    assert!(matches!(mode, CheckupCommand::Run { quick: false }));
 }
 
 #[test]
-fn parse_doctor_defaults_to_interactive_when_inline_ui_available() {
-    let mode = parse_doctor_args("", true).expect("should parse");
-    assert!(matches!(mode, DoctorCommand::Interactive));
+fn parse_checkup_defaults_to_interactive_when_inline_ui_available() {
+    let mode = parse_checkup_args("", true).expect("should parse");
+    assert!(matches!(mode, CheckupCommand::Interactive));
 }
 
 #[test]
-fn parse_doctor_quick_aliases() {
-    let mode = parse_doctor_args("--quick", true).expect("should parse");
-    assert!(matches!(mode, DoctorCommand::Run { quick: true }));
+fn parse_checkup_quick_aliases() {
+    let mode = parse_checkup_args("--quick", true).expect("should parse");
+    assert!(matches!(mode, CheckupCommand::Run { quick: true }));
 
-    let mode = parse_doctor_args("-q", true).expect("should parse");
-    assert!(matches!(mode, DoctorCommand::Run { quick: true }));
+    let mode = parse_checkup_args("-q", true).expect("should parse");
+    assert!(matches!(mode, CheckupCommand::Run { quick: true }));
 
-    let mode = parse_doctor_args("quick", true).expect("should parse");
-    assert!(matches!(mode, DoctorCommand::Run { quick: true }));
+    let mode = parse_checkup_args("quick", true).expect("should parse");
+    assert!(matches!(mode, CheckupCommand::Run { quick: true }));
 }
 
 #[test]
-fn parse_doctor_rejects_conflicting_flags() {
-    let err = parse_doctor_args("--quick --full", true).expect_err("must reject");
+fn parse_checkup_rejects_conflicting_flags() {
+    let err = parse_checkup_args("--quick --full", true).expect_err("must reject");
     assert!(err.contains("either --quick or --full"));
 }
 
