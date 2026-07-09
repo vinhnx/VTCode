@@ -2,6 +2,42 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.135.0 - 2026-07-09
+
+### Highlights
+#### Bug Fixes
+
+- Comprehensive code review and debugging fixes (060baf81) 
+- Skip CARGO_INCREMENTAL with sccache wrapper in check-dev (b3009d4a) 
+- Address critical/high/medium bugs and DRY violations across codebase (099e7d60) 
+- Dedup recovery dispatch, fix error swallowing, clean DRY (e403b78a) 
+#### Features
+
+- Differentiate model-switch outcome variants, add harness opt-out config (b535d70f) 
+- Add immediate submit commands for slash palette (aa01bce9) 
+- Include enum options in preflight schema hint (74a9ca18) 
+- Add support for GPT-5.6 models and update related prompts and configurations (6775385c) 
+### Other Changes
+#### Other
+
+- Add planning intent detection and validation enhancements (8176201f) 
+- Update TODO (c7b353de) 
+#### Performance
+
+- Lowercase once per strip instead of per marker scan (83a33aaf) 
+- Pre-size summary prompt and retained-message vectors (b8de575b) 
+- Pre-size preflight validation failures vector (95ba7560) 
+- Pre-size system-prompt line vectors (4d583287) 
+- Pre-size render output lines and list stack (35a90e05) 
+- Pre-size render output strings (83407ee2) 
+#### Refactors
+
+- Name failure mode in recovery retry directive (593b4c67) 
+- Extract finalize_turn helper from run_turn_loop (85460ba6) 
+- Improve error handling and streamline post-tool recovery logic (bb3aeff2) 
+#### Tests
+
+- Cover tool-free recovery retry-then-salvage (00f6ad3f) 
 ## 0.134.15 - 2026-07-09
 
 ### Highlights
