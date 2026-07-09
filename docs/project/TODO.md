@@ -20,7 +20,7 @@ People used to focus on prompt engineering, namely how to write the system promp
 
 Common context techniques in long tasks include:
 
-    Compaction: When the context is almost full, compress the current conversation trace into a summary, then use that summary to start the next context. Usually this is still the continuation of the same task and the same agent loop. Its goal is to preserve conversational continuity as much as possible. In other words, the model should feel that “what I was just doing is still here”; only the history has been compressed.
+    Compaction: When the context is almost full, compress the current conversation trace into a summary, then use that summary to start the next context. Usually this is still the continuation of the same task and the same agent loop. Its goal is to preserve conversational continuity as much as possible. In other words, the model should feel that “what I was just doing is still here”; only the history has been compressed. It should use a cheaper model to summarize, and the summary should be written into a persistent artifact, such as progress.md, so that later sessions can read it. Compaction is not necessarily only for the same task; a project-level progress.md can be read by later sessions, by planner/generator/evaluator, or reused in neighboring tasks.
 
     Structured note-taking: Let the agent actively write task state into persistent external artifacts, such as progress.md, feature_list.json, NOTES.md, or git commits. It is not necessarily only for the same task. A project-level NOTES.md can be read by later sessions, by planner/generator/evaluator, or reused in neighboring tasks.
 
