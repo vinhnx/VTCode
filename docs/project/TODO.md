@@ -2,7 +2,164 @@ implement claude advisor tool
 
 --
 
-fix buyme coffee readme
+when switching a different model mid-turn of session, trigger compaction of the current context, so that the new model does not see the old model's context. This is important because different models have different capabilities and may interpret the same context differently. By compacting the context, we ensure that the new model starts with a clean slate and can focus on the relevant information for its own reasoning.
+
+plan:
+
+````
+# Plan: Compact context on mid-session model switch
+
+## Context
+
+Switching models mid-session currently **only warns** that performance may degrade; the new model still receives the full prior conversation (tool traces, assistant turns, provider-specific structure):
+
+```144:148:src/agent/runloop/unified/model_selection.rs
+    if conversation_history_len > 0 {
+        renderer.line(
+            MessageStyle::Warning,
+            "Changing model mid-conversation may degrade performance due to context loss and token inefficiency. For best results, start a new conversation with /clear.",
+        )?;
+````
+
+That matches the open item in `docs/project/TODO.md`. Compaction already exists end-to-end (`manual_compact_history_in_place`, memory envelope, `thread.compact_boundary` events). We should **automatically compact** when the **main session model/provider actually changes** and history is non-empty, so the next turn starts from a summary + retained high-signal context rather than the old model’s raw trace.
+
+**Scope note:** Model selection runs in the **idle interaction loop** (between turns: `/model`, palette, text picker), not inside an in-flight tool batch. “Mid-turn of session” here means **mid-session / mid-conversation**, not mid–LLM-stream.
+
+## Recommended approach
+
+### Behavior
+
+1. On successful main-model apply via `finalize_model_selection`:
+    - If **provider+model** are unchanged relative to the pre-switch session (e.g. only reasoning/service tier changed): **do not** compact; keep existing messages.
+    - If provider and/or model **changed** and `conversation_history` is non-empty: run **forced** compaction (same strategy dispatch as `/compact`: native standalone / native inline / local), with **`always_summarize: true`** so short histories are not skipped.
+2. After switch (whether compact succeeds or not): clear **all** previous-response chains and rotate prompt-cache lineage so the new model/provider is not chained to the old Responses/cache identity.
+3. Replace the mid-conversation **warning + “use /clear”** copy with an **info** line that compaction ran (or was skipped / failed with keep-history).
+4. Compaction failure must **not** roll back the model switch; surface error and keep uncompacted history (same posture as failed `/compact`).
+
+### Which model performs the summary call
+
+Use the **new** provider/client after it is installed (same as manual `/compact`). The compact API call may still _read_ prior history once; the important guarantee is that **subsequent session turns** only see the compacted history. Optionally later: compact with the outgoing client before swap for better continuity—out of scope unless we hit quality issues.
+
+### Trigger taxonomy
+
+Add `CompactionTrigger::ModelSwitch` in `vtcode-exec-events` (and wire `as_str`, hooks, harness `compact_boundary_event`) so telemetry distinguishes model-switch compaction from Manual/Auto/Recovery.
+
+### API shape
+
+Introduce a small optional compaction bundle so call sites that already own history can pass it without bloating every intermediate struct:
+
+```rust
+// conceptual — place next to finalize_model_selection
+pub(crate) struct ModelSwitchCompactionTargets<'a> {
+    history: &'a mut Vec<Message>,
+    session_stats: &'a mut SessionStats,
+    context_manager: &'a mut ContextManager,
+    session_id: &'a str,
+    thread_id: &'a str,
+    lifecycle_hooks: Option<&'a LifecycleHookEngine>,
+    harness_emitter: Option<&'a HarnessEventEmitter>,
+}
+```
+
+`finalize_model_selection(...)` gains:
+
+- Pre-switch snapshot: `previous_provider: &str`, `previous_model: &str` (from `config` **before** mutation).
+- `compaction: Option<ModelSwitchCompactionTargets<'_>>`.
+
+When `compaction` is `None`, keep today’s apply-only behavior (defensive for tests / incomplete callers). Production call sites must pass `Some`.
+
+Internal helper (same crate as turn compaction):
+
+```rust
+pub(crate) async fn compact_history_on_model_switch_in_place(
+    context: CompactionContext<'_>,
+    state: CompactionState<'_>,
+) -> Result<Option<CompactionOutcome>>
+```
+
+- Reuse `manual_compact_history_in_place` path but force `always_summarize` via config (or a thin wrapper around `compact_history_manual` + `apply_compacted_history` with `trigger: ModelSwitch` and envelope placement `Start` / persist-to-disk, matching manual).
+- Skip no-op when compacted == input.
+
+### Call-site plumbing
+
+| Call site                                           | Change                                                                                                                                                                                                                                              |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `interaction_loop_runner.rs` (text picker complete) | Pass full compaction targets (history, stats, context_manager, session/thread ids, hooks, emitter).                                                                                                                                                 |
+| `slash_commands/ui.rs` (`/model`)                   | Same via `SlashCommandContext` (already has all fields).                                                                                                                                                                                            |
+| `inline_events/modal.rs` (list picker complete)     | Today only has `conversation_history_len`. Extend `InlineEventLoopResources` / modal coordinator with **mutable** history + stats + context_manager + ids + hooks/emitter from `InteractionLoopContext`, then pass into `finalize_model_selection`. |
+
+Avoid duplicating compact logic in three places—only `finalize_model_selection` after successful client apply.
+
+### Skip conditions
+
+- History empty.
+- `previous_model` equals `selection.model` **and** provider key equals (case-insensitive provider string compare matching existing config).
+- Lightweight model picker (`finalize_lightweight_model_selection`) — **out of scope** (does not change main session model).
+- Primary-agent Tab switch — **out of scope** unless that path also mutates `config.model` (today it does not via `finalize_model_selection`).
+
+### UX messages
+
+- Success: e.g. `Compacted conversation for model switch (N → M messages, local|provider compaction).`
+- No-op compact: brief note that history was already compact / too small after policy.
+- Failure: `Model switched, but context compaction failed: … Continuing with full history.`
+
+Remove or rewrite the old “start a new conversation with /clear” warning so it does not contradict auto-compact.
+
+### Docs
+
+- User-facing: short note on `/model` / model palette in `docs/user-guide/` (commands or interactive mode): mid-session model change auto-compacts context.
+- Optional row in agent-loop / compaction docs for `CompactionTrigger::ModelSwitch`.
+- Remove or rewrite the matching bullet in `docs/project/TODO.md` once done.
+
+### Config
+
+No new config flag in v1 (always on when model/provider changes and history non-empty). Optional follow-up: `agent.harness.compact_on_model_switch` if users need opt-out.
+
+## Critical files
+
+| File                                                                | Role                                                  |
+| ------------------------------------------------------------------- | ----------------------------------------------------- |
+| `src/agent/runloop/unified/model_selection.rs`                      | Hook after apply; previous model/provider compare; UX |
+| `src/agent/runloop/unified/turn/compaction/mod.rs`                  | `compact_history_on_model_switch_in_place`            |
+| `vtcode-exec-events/src/lib.rs`                                     | `CompactionTrigger::ModelSwitch`                      |
+| `src/agent/runloop/unified/inline_events/{driver,context,modal}.rs` | Plumb mutable history/stats into picker completion    |
+| `src/agent/runloop/unified/turn/session/interaction_loop_runner.rs` | Text-picker completion path                           |
+| `src/agent/runloop/unified/turn/session/slash_commands/ui.rs`       | `/model` completion path                              |
+| Hooks/harness that match on `CompactionTrigger`                     | Exhaustive match updates                              |
+| Docs under `docs/user-guide/`, `docs/guides/agent-loop-contract.md` | Document trigger + behavior                           |
+
+## Reuse (do not reinvent)
+
+- `manual_compact_history_in_place` / `compact_history_manual` / `manual_compaction_strategy` — strategy dispatch.
+- `local_compaction_config(vt_cfg, always_summarize)` — force summary on short histories.
+- `apply_compacted_history` — memory envelope, response-chain clear for model, harness `compact_boundary_event`, token cap.
+- `SessionStats::clear_previous_response_chain` — full clear on provider/model change (in addition to per-model clear inside apply).
+- Existing `/compact` UI/stats patterns in `slash_commands/compact.rs`.
+
+## Implementation steps
+
+1. Add `CompactionTrigger::ModelSwitch` + tests for serde/`as_str`.
+2. Add `compact_history_on_model_switch_in_place` in turn compaction module; unit-test with mock/dummy provider if patterns exist in `turn/compaction/tests.rs`.
+3. Extend `finalize_model_selection` with pre-switch compare + optional compaction targets + messaging; clear full response chain + lineage on real switch even when history empty.
+4. Plumb targets through interaction runner, slash `/model`, and inline modal resources.
+5. Update docs and TODO.
+6. Verify with `./scripts/check-dev.sh` and focused nextest on compaction + model selection if present.
+
+## Verification
+
+- **Unit:** model-switch compact applies summary when history > 0 and model differs; no compact when same model; empty history no-op; failure leaves history and still updates `config.model`.
+- **Unit/integration:** `CompactionTrigger::ModelSwitch` serializes and appears in compact boundary event builders.
+- **Manual / harness:** interactive session with multi-turn history → `/model` switch → observe compact info line and shorter next-turn context; same-model reselect does not compact.
+- **Gate:** `./scripts/check-dev.sh` (and `--test` or nextest on `vtcode` / compaction modules as needed).
+
+## Non-goals (v1)
+
+- Compacting during an active streaming turn or tool batch interrupt.
+- Auto-compact on primary-agent-only switches without model change.
+- Lightweight-route model changes.
+- ACP remote model switch (unless it already shares `finalize_model_selection`—it does not today).
+
+```
 
 --
 
@@ -110,3 +267,6 @@ Items 1–4 are one coherent change in src/agent/runloop/unified/turn/; item 5 i
 amp fable stash : "WIP on main: 383c71516 fix(runloop): raise recovery synthesis token cap 1024 -> 4096"
 
 ===
+
+https://github.com/vinhnx/VTCode/issues/698
+```
