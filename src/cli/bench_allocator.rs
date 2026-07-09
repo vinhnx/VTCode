@@ -135,7 +135,7 @@ pub async fn handle_bench_allocator_command(args: BenchAllocatorArgs) -> Result<
 }
 
 fn allocator_name() -> &'static str {
-    if cfg!(target_os = "linux") {
+    if cfg!(feature = "allocator-jemalloc") {
         "jemalloc"
     } else {
         "mimalloc"

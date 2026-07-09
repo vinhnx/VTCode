@@ -9,8 +9,10 @@
 ## Rules
 
 - Thin binary — all runtime logic in `vtcode-core`. This crate wires CLI args to `Agent::run()`.
-- Global allocator is selected by target OS in `src/main.rs`: `mimalloc` on macOS,
-  `tikv-jemalloc` (background threads) on Linux. See `docs/development/ALLOCATOR_MEMORY.md`.
+- Global allocator is `mimalloc` by default; `allocator-jemalloc` opts into
+  `tikv-jemalloc` (background-thread purging, recommended for Linux servers).
+  Selected in `src/allocator.rs` (a `mod allocator;` in `src/main.rs`). See
+  `docs/development/ALLOCATOR_MEMORY.md`.
 - `vtcode bench-allocator` measures RSS under a bursty/sparse Tokio workload to detect
   allocator memory pinning; use it before changing the default allocator (see Gotchas).
 - `vtcode_ui::tui::panic_hook` installs custom panic handler — must run before any output.

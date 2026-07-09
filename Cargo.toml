@@ -276,22 +276,25 @@ thiserror = { workspace = true }
 axum = { version = "0.8" }
 serde-saphyr = { workspace = true }
 mimalloc = { version = "0.1", default-features = false }
-
-# jemalloc is the default allocator on Linux (long-lived servers/containers), where
-# its `background_thread` purging returns memory to the OS between bursty/sparse
-# workload idle gaps. It is target-gated to Linux so macOS dev builds keep mimalloc
-# (low-latency, no C build) and avoid jemalloc's unsupported `background_thread` on
-# macOS. See src/main.rs and `vtcode bench-allocator`.
-[target.'cfg(target_os = "linux")'.dependencies]
-tikv-jemallocator = { version = "0.6", features = ["background_threads"] }
+tikv-jemallocator = { version = "0.6", optional = true, features = ["background_threads"] }
 
 [features]
 default = ["tool-chat", "desktop-notifications"]
 tool-chat = []
 profiling = []
+# Opt into jemalloc (background-thread purging) on any platform. Recommended for
+# Linux servers/containers, where it returns memory to the OS between bursty/sparse
+# idle gaps. On macOS `background_thread` is unsupported, so jemalloc pins like
+# mimalloc there; the default allocator is mimalloc. See src/allocator.rs and
+# `vtcode bench-allocator`.
+allocator-jemalloc = ["dep:tikv-jemallocator"]
 anthropic-api = ["vtcode-core/anthropic-api"]
 a2a-server = ["vtcode-core/a2a-server"]   # Enable OAuth callback server for provider authentication
 desktop-notifications = ["vtcode-core/desktop-notifications"]
+
+[[bench]]
+name = "allocator_throughput"
+harness = false
 
 [profile.dev]
 debug = 0
@@ -378,6 +381,7 @@ name = "vtcode"
 path = "src/main.rs"
 
 [dev-dependencies]
+criterion = { workspace = true }
 pretty_assertions = { workspace = true }
 tempfile = { workspace = true }
 assert_fs = { workspace = true }

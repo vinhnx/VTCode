@@ -49,7 +49,7 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 - **File**: `docs/development/ALLOCATOR_MEMORY.md`
   - **Content**: Allocator & Memory Behavior
-  - **Topics**: The problem, Allocator selection, Measuring it, Implementation
+  - **Topics**: The problem, Allocator selection, Allocation throughput trade-off (measured), Measuring it, Implementation
   - **User Questions**: "What can you tell me about Allocator & Memory Behavior?", "How does The problem work?", "How does Allocator selection work?"
 
 - **File**: `docs/development/EXTENDED_THINKING.md`

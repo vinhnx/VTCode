@@ -7296,6 +7296,7 @@ dependencies = [
  "chrono",
  "clap",
  "colorchoice",
+ "criterion",
  "crossterm",
  "dialoguer",
  "dirs",

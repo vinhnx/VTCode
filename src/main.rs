@@ -13,16 +13,8 @@
 
 use anyhow::{Context, Result};
 
-// jemalloc is the default allocator on Linux, where its background-thread purging
-// returns memory to the OS after bursty/sparse workloads go idle. macOS keeps
-// mimalloc (low-latency, and jemalloc's `background_thread` is unsupported there).
-#[cfg(target_os = "linux")]
-#[global_allocator]
-static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+mod allocator;
 
-#[cfg(not(target_os = "linux"))]
-#[global_allocator]
-static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 use clap::FromArgMatches;
 use colorchoice::ColorChoice as GlobalColorChoice;
 use vtcode_commons::color_policy;

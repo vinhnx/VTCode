@@ -96,7 +96,7 @@ jobs:
 
       - name: Build with cargo (${{ matrix.target }})
         if: matrix.target == 'x86_64-unknown-linux-gnu'
-        run: cargo build --release --target ${{ matrix.target }}
+        run: cargo build --release --target ${{ matrix.target }} --features allocator-jemalloc
         shell: bash
         env:
           RUSTC_WRAPPER: sccache
@@ -105,7 +105,7 @@ jobs:
 
       - name: Build with cross (${{ matrix.target }})
         if: matrix.target != 'x86_64-unknown-linux-gnu'
-        run: cross build --release --target ${{ matrix.target }}
+        run: cross build --release --target ${{ matrix.target }} ${{ endsWith(matrix.target, 'linux-gnu') && ' --features allocator-jemalloc' || '' }}
         shell: bash
         env:
           RUSTFLAGS: ${{ startsWith(matrix.target, 'x86_64') && '-C target-cpu=x86-64' || '' }}
