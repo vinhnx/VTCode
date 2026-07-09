@@ -229,7 +229,7 @@ pub fn create_list_dir_tool() -> super::tool_handler::ToolSpec {
     ToolSpec::Function(ResponsesApiTool {
         name: "list_dir".to_string(),
         description:
-            "List the contents of a directory. Returns file and directory names with metadata. For file content search or recursive pattern matching, use unified_search (action=grep or action=structural) instead."
+            "List the contents of a directory. Returns file and directory names with metadata. For file content search, use exec_command.cmd with rg. For recursive structural pattern matching, use code_search."
                 .to_string(),
         parameters: json!({
             "type": "object",

@@ -165,8 +165,8 @@ This directory contains dynamic context files for VT Code agent operations.
 These files implement **dynamic context discovery** - a pattern where large outputs
 are written to files instead of being truncated. This allows the agent to:
 
-1. Retrieve full tool outputs on demand via `unified_file`
-2. Search through outputs using `unified_search`
+1. Inspect full tool-output files on demand with `exec_command.cmd` using `sed`, `cat`, or `rg`
+2. Search code semantically with `code_search`, and search spooled text with `exec_command.cmd` plus `rg`
 3. Recover conversation details lost during summarization
 4. Discover available skills and MCP tools efficiently
 
@@ -200,7 +200,7 @@ async fn create_initial_skills_index(skills_dir: &Path) {
     let content = r#"# Skills Index
 
 This file lists all available skills for dynamic discovery.
-Use `unified_file` (action='read') on individual skill directories for full documentation.
+Use `exec_command.cmd` with `find`, `sed`, or `cat` on individual skill directories for full documentation.
 
 *No skills available yet.*
 
@@ -225,7 +225,7 @@ async fn create_initial_terminals_index(terminals_dir: &Path) {
     let content = r#"# Terminal Sessions Index
 
 This file lists all active terminal sessions for dynamic discovery.
-Use `unified_file` (action='read') on individual session files for full output.
+Use `exec_command.cmd` with `sed`, `cat`, or `rg` on individual session files for full output.
 
 *No active terminal sessions.*
 
@@ -248,7 +248,7 @@ async fn create_initial_mcp_index(mcp_tools_dir: &Path) {
     let content = r#"# MCP Tools Index
 
 This file lists all available MCP tools for dynamic discovery.
-Use `unified_file` (action='read') on individual tool files for full schema details.
+Use `exec_command.cmd` with `sed`, `cat`, or `rg` on individual tool files for full schema details.
 
 *No MCP tools available.*
 
@@ -295,15 +295,15 @@ mod tests {
         let readme = fs::read_to_string(dirs.vtcode_dir.join("README.md"))
             .await
             .unwrap();
-        assert!(readme.contains("`unified_file`"));
-        assert!(readme.contains("`unified_search`"));
+        assert!(readme.contains("`exec_command.cmd`"));
+        assert!(readme.contains("`code_search`"));
 
         // Check startup index files were created
         assert!(dirs.terminals.join("INDEX.md").exists());
         let terminals_index = fs::read_to_string(dirs.terminals.join("INDEX.md"))
             .await
             .unwrap();
-        assert!(terminals_index.contains("`unified_file` (action='read')"));
+        assert!(terminals_index.contains("`exec_command.cmd` with `sed`, `cat`, or `rg`"));
         assert!(!dirs.skills.join("INDEX.md").exists());
         assert!(!dirs.mcp_tools.join("INDEX.md").exists());
     }
@@ -339,7 +339,7 @@ mod tests {
         let index = fs::read_to_string(dirs.mcp_tools.join("INDEX.md"))
             .await
             .unwrap();
-        assert!(index.contains("`unified_file` (action='read')"));
+        assert!(index.contains("`exec_command.cmd` with `sed`, `cat`, or `rg`"));
     }
 
     #[tokio::test]
@@ -357,6 +357,6 @@ mod tests {
         let index = fs::read_to_string(dirs.skills.join("INDEX.md"))
             .await
             .unwrap();
-        assert!(index.contains("`unified_file` (action='read')"));
+        assert!(index.contains("`exec_command.cmd` with `find`, `sed`, or `cat`"));
     }
 }

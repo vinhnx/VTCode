@@ -82,7 +82,7 @@ const SHARED_CONTRACT_LINES: &[&str] = &[
     "Use retrieved evidence when citation-sensitive.",
     "Preserve task goal, tracker state, touched files, verification status, and decisions across compaction.",
     "Keep outputs concise; keep agent loops simple and let the model choose the next useful step.",
-    "Prefer `ast-grep` for code-shape queries; keep text grep for prose and config.",
+    "Prefer `code_search` for ast-grep structural queries and Tree-sitter outlines; use `exec_command.cmd` with `rg` for text search.",
     "`spool_path` holds full tool output. Inspect it once with a targeted shell command through `exec_command.cmd`, such as `rg`, `sed`, or `cat`, instead of repeatedly dumping the whole file. Past-turn errors are already in history.",
 ];
 

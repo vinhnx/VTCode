@@ -359,7 +359,7 @@ pub(super) fn fragment_pattern_hint(
         message.push_str(
             " In Go, tree-sitter parses bare call-like fragments (e.g. `fmt.Println($A)`) as type conversions, not call expressions. \
              Wrap the call in surrounding parseable code like `func t() { fmt.Println($A) }` and use `selector: call_expression` to match only function calls. \
-             Note: contextual patterns with `context` + `selector` require the CLI skill path via `unified_exec`.",
+             Note: contextual patterns with `context` + `selector` require the CLI skill path via `exec_command.cmd`.",
         );
     } else if language == AstGrepLanguage::Html && looks_like_html_attribute_pattern(trimmed) {
         message.push_str(
@@ -415,6 +415,6 @@ pub(super) fn fragment_pattern_hint(
         );
     }
 
-    message.push_str(" Retry `unified_search` with `action='structural'` using a larger parseable pattern before switching tools. Do not retry the same fragment with grep if syntax matters.");
+    message.push_str(" Retry `code_search` with `action='structural'` using a larger parseable pattern before switching tools. Do not retry the same fragment with grep if syntax matters.");
     message
 }

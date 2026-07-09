@@ -241,20 +241,20 @@ criterion_main!(benches);
 
 ### Tool Registry Testing
 
-Test the file system tools:
+Test the default shell tool for file listing:
 
 ```rust
 #[tokio::test]
-async fn test_list_files_tool() {
+async fn test_exec_command_lists_files() {
     let env = create_test_project();
     let mut registry = ToolRegistry::new();
 
     let args = json!({
-        "action": "list",
-        "path": "."
+        "cmd": "find . -maxdepth 1 -type f",
+        "workdir": env.root()
     });
 
-    let result = registry.execute("unified_search", args).await;
+    let result = registry.execute("exec_command", args).await;
     assert!(result.is_ok());
 }
 ```
@@ -276,11 +276,11 @@ fn test_parse_rust_code() {
 
 ### Search Functionality Testing
 
-Test regex-based search:
+Test regex-based text search through the shell:
 
 ```rust
 #[tokio::test]
-async fn test_unified_search_grep() {
+async fn test_exec_command_rg() {
     let env = TestEnv::new();
     let content = "fn main() { println!(\"test\"); }";
     env.create_test_file("test.rs", content);
@@ -288,15 +288,17 @@ async fn test_unified_search_grep() {
     let mut registry = ToolRegistry::new();
 
     let args = json!({
-        "action": "grep",
-        "pattern": "fn main",
-        "path": "."
+        "cmd": "rg 'fn main' .",
+        "workdir": env.root()
     });
 
-    let result = registry.execute("unified_search", args).await;
+    let result = registry.execute("exec_command", args).await;
     assert!(result.is_ok());
 }
 ```
+
+Use `code_search` only for semantic checks, such as ast-grep structural queries
+or Tree-sitter outlines.
 
 ## **Mock Data and Testing Utilities**
 

@@ -429,6 +429,8 @@ mod tests {
                 .iter()
                 .any(|value| value == "structural")
         );
+        assert!(code_search_actions.iter().any(|value| value == "outline"));
+        assert!(!code_search_actions.iter().any(|value| value == "grep"));
         assert!(!code_search_actions.iter().any(|value| value == "list"));
         assert!(!code_search_actions.iter().any(|value| value == "web"));
 

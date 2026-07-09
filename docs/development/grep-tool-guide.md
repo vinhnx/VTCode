@@ -1,10 +1,10 @@
-# grep_file Tool Guide
+# Text Search Guide
 
-> **Note:** `grep_file` is now an internal implementation detail. The canonical public tool is `unified_search` with `action="grep"`. This guide documents the underlying search engine behavior.
+> **Note:** legacy text-search dispatcher names are internal implementation details. The AI-facing default path for text search is `exec_command.cmd` with `rg`.
 
 ## Overview
 
-The `grep_file` module powers VT Code's primary code search mechanism via the `unified_search` tool's `grep` action, backed by **ripgrep** for fast, efficient pattern matching across codebases. It provides comprehensive regex-based and literal string searching with support for file filtering, context lines, and language-specific searches.
+Use **ripgrep** (`rg`) through `exec_command.cmd` for fast pattern matching across codebases. It provides regex-based and literal string searching with file filtering, context lines, and language-specific searches. Use `code_search` for semantic code search, such as ast-grep structural patterns and Tree-sitter outlines.
 
 ## Architecture
 
@@ -225,7 +225,7 @@ The `grep_file` module powers VT Code's primary code search mechanism via the `u
 
 ## Smart-Case Matching
 
-By default, grep_file uses **smart-case matching**:
+By default, `rg` uses **smart-case matching**:
 
 -   **Lowercase pattern** → Case-insensitive search
 
@@ -333,7 +333,7 @@ Returns: List of all files importing the old module.
 
 ## Comparison with ast-grep
 
-| Feature              | grep_file (ripgrep)           | ast-grep             |
+| Feature              | rg                            | ast-grep             |
 | -------------------- | ----------------------------- | -------------------- |
 | **Speed**            | Very fast                     | Fast                 |
 | **Pattern Type**     | Regex + literal               | AST queries          |
@@ -350,20 +350,20 @@ Returns: List of all files importing the old module.
 -   Imports: `^import|^from`
 -   Comments: `#|//|/*`
 
-## Outline mode (`action=outline`)
+## Semantic Outline
 
-`unified_search` also exposes `action=outline`, which wraps `ast-grep outline`
-(ast-grep >= 0.44.0) to produce a cheap, token-efficient symbol map of a file
-or directory **without requiring a structural pattern**. Use it for the
+`code_search` exposes `action=outline`, which wraps the Tree-sitter outline
+runtime to produce a cheap, token-efficient symbol map of a file or directory
+**without requiring a structural pattern**. Use it for the
 "what's in this file/directory?" question before reading full source.
 
 **When to use which search action:**
 
 | Action | Question it answers |
 | --- | --- |
-| `grep` | "Which lines match this text/regex?" |
-| `outline` | "What symbols are defined in this file/directory?" (no pattern) |
-| `structural` | "Which nodes match this AST pattern?" (pattern/kind required) |
+| `rg` through `exec_command.cmd` | "Which lines match this text/regex?" |
+| `code_search` outline | "What symbols are defined in this file/directory?" (no pattern) |
+| `code_search` structural | "Which nodes match this AST pattern?" (pattern/kind required) |
 
 ```json
 {"action":"outline","path":"vtcode-core/src/tools/registry/builder.rs","lang":"rust","view":"digest"}
@@ -379,8 +379,7 @@ types), `match` (name regex), `items` (`auto` | `structure` | `exports` |
   names. ~100-300 bytes for a typical file.
 - `names`: grouped names only, no members.
 - `full`: per-symbol records with the raw zero-based `range`, a derived
-  1-based inclusive `lineRange` (`{start, end}` — usable directly with
-  `unified_file read` `offset_lines`/`page_size_lines`), signatures,
+  1-based inclusive `lineRange` (`{start, end}`), signatures,
   `astKind`, and nested members (members also carry `astKind`/`range`/`lineRange`).
 
 Directory results also include a top-level `summary` with `total_symbols`,
@@ -445,21 +444,21 @@ no grep fallback (outline has no text equivalent).
 
 ## Integration with Other Tools
 
-### Using grep_file with read_file
+### Inspecting Matches
 
 ```
-1. grep_file to locate patterns
-2. read_file to examine full context
-3. edit_file to make changes
+1. Use `rg` through `exec_command.cmd` to locate patterns.
+2. Use `sed`, `cat`, or another shell command through `exec_command.cmd` to inspect full context.
+3. Use `apply_patch` to make changes.
 ```
 
-### Using grep_file with execute_code
+### Scripted Search
 
 ```python
 # Find all matches
-results = grep_file(pattern="TODO", path="src")
+results = subprocess.run(["rg", "TODO", "src"], check=False, capture_output=True, text=True)
 # Process results locally
-todos = [m['data']['lines']['text'] for m in results['matches']]
+todos = [line for line in results.stdout.splitlines() if "TODO" in line]
 ```
 
 ## See Also

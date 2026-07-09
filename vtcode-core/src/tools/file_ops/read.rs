@@ -515,7 +515,7 @@ impl FileOpsTool {
                                 builder = builder.field(
                                     "next_action",
                                     json!(
-                                        "Use the `next_read_args` field above to continue, or `unified_search action=grep` with a SPECIFIC pattern. Do NOT re-read the same offset — the per-turn spool chunk cap will block you."
+                                        "Use the `next_read_args` field above to continue, or `exec_command.cmd` with `rg` and a specific pattern. Do NOT re-read the same offset; the per-turn spool chunk cap will block you."
                                     ),
                                 );
                             }
@@ -642,7 +642,7 @@ impl FileOpsTool {
         if let Some(spool_path) = missing_spool_candidate {
             if let Some(session_id) = pty_session_id_from_tool_output_path(&spool_path) {
                 return Err(anyhow!(
-                    "Error: Session output file not found: {}. This looks like a command session id. Use unified_exec with session_id=\"{}\" instead of read_file.",
+                    "Error: Session output file not found: {}. This looks like command session output. Use write_stdin with session_id=\"{}\" to poll or continue the active session.",
                     self.workspace_relative_display(&spool_path),
                     session_id,
                 ));
@@ -656,7 +656,7 @@ impl FileOpsTool {
         if let Some(directory_path) = directory_candidate {
             let display_path = self.workspace_relative_display(&directory_path);
             return Err(anyhow!(
-                "Error: Path '{display_path}' is a directory, not a file. Use unified_search with action=\"list\" and path=\"{display_path}\" to inspect it, or set mode=\"recursive\" for nested discovery.",
+                "Error: Path '{display_path}' is a directory, not a file. Use `exec_command.cmd` with `find` or `ls` to inspect it.",
             ));
         }
 
@@ -668,7 +668,7 @@ impl FileOpsTool {
             .missing_path_suggestion_suffix(path_str, PathSuggestionKind::File)
             .await;
         Err(anyhow!(
-            "Error: File not found: {}. Tried paths: {}.{} Use unified_search action=list path=\"{}\" to discover available files.",
+            "Error: File not found: {}. Tried paths: {}.{} Use `exec_command.cmd` with `find {}` to discover available files.",
             path_str,
             potential_paths
                 .iter()
@@ -1128,7 +1128,7 @@ mod read_tests {
     }
 
     #[tokio::test]
-    async fn test_missing_run_session_file_suggests_unified_exec() {
+    async fn test_missing_run_session_file_suggests_write_stdin() {
         let temp_dir = TempDir::new().unwrap();
         let workspace_root = temp_dir.path().to_path_buf();
         let grep_manager = std::sync::Arc::new(GrepSearchManager::new(workspace_root.clone()));
@@ -1140,7 +1140,7 @@ mod read_tests {
         let err = file_ops.read_file(args).await.unwrap_err().to_string();
 
         assert!(err.contains("Session output file not found"));
-        assert!(err.contains("unified_exec"));
+        assert!(err.contains("write_stdin"));
         assert!(err.contains("run-123abc"));
     }
 

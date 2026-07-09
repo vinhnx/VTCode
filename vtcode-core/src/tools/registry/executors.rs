@@ -582,14 +582,12 @@ impl ToolRegistry {
     async fn execute_code_search(&self, args: Value) -> Result<Value> {
         let args = tool_intent::normalize_unified_search_args(&args);
         let action_str = tool_intent::unified_search_action(&args).ok_or_else(|| {
-            anyhow!("code_search requires action='grep', 'structural', or 'outline'")
+            anyhow!("code_search requires action='structural' or action='outline'")
         })?;
         let action: UnifiedSearchAction = parse_action(action_str)?;
 
         match action {
-            UnifiedSearchAction::Grep | UnifiedSearchAction::Outline => {
-                self.execute_unified_search(args).await
-            }
+            UnifiedSearchAction::Outline => self.execute_unified_search(args).await,
             UnifiedSearchAction::Structural => {
                 let workflow = args
                     .get("workflow")
@@ -603,7 +601,7 @@ impl ToolRegistry {
                 self.execute_unified_search(args).await
             }
             _ => bail!(
-                "code_search supports only action='grep', action='structural', or action='outline'"
+                "code_search supports only action='structural' or action='outline'; use exec_command.cmd with rg for text search"
             ),
         }
     }

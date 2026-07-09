@@ -333,7 +333,7 @@ fn register_unified_search(_plan_state: Option<&PlanningWorkflowState>) -> ToolR
         ToolRegistry::unified_search_executor,
     )
     .with_description(
-        "Search and discover: grep text, list files, structural-search (ast-grep), list tools, list errors, web search, web fetch, and list skills. Use action=grep for regex across files; action=structural for AST-shaped queries; action=list to enumerate files; action=web with query for search or url to fetch. Do NOT use action=list to read file contents — use unified_file action=read instead. Results are capped by max_results; increase only when genuinely needed.",
+        "Internal legacy search dispatcher for grep, list, structural, outline, tool, error, web, and skill lookups. Hidden from model-visible schemas; public text search goes through exec_command.cmd with rg, and semantic code search goes through code_search.",
     )
     .with_parameter_schema(unified_search_parameters())
     .with_permission(ToolPolicy::Allow)
@@ -349,7 +349,7 @@ fn register_code_search(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegi
         ToolRegistry::code_search_executor,
     )
     .with_description(
-        "Search code with text grep, ast-grep structural patterns, or Tree-sitter outlines. Use action=grep for text search, action=structural for AST-shaped queries, and action=outline for symbol maps. This tool does not perform web, skill, error, tool discovery, or file-listing actions.",
+        "Search code semantically with ast-grep structural patterns or Tree-sitter outlines. Use action=structural for AST-shaped queries and action=outline for symbol maps. Use exec_command.cmd with rg for plain text search. This tool does not perform web, skill, error, tool discovery, or file-listing actions.",
     )
     .with_parameter_schema(code_search_parameters())
     .with_permission(ToolPolicy::Allow)
@@ -936,6 +936,16 @@ mod tests {
                 .expect("action enum")
                 .iter()
                 .any(|value| value == "structural")
+        );
+        assert!(
+            !code_search
+                .metadata()
+                .parameter_schema()
+                .expect("code_search schema")["properties"]["action"]["enum"]
+                .as_array()
+                .expect("action enum")
+                .iter()
+                .any(|value| value == "grep")
         );
 
         for tool_name in [

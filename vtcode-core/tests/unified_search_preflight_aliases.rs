@@ -1,145 +1,127 @@
 #![allow(missing_docs)]
+
 use anyhow::Result;
 use serde_json::json;
-use std::fs;
 use tempfile::TempDir;
 use vtcode_core::config::constants::tools;
 use vtcode_core::tools::ToolRegistry;
 
 #[tokio::test]
-async fn preflight_accepts_grep_file_alias_and_normalizes_to_unified_search() -> Result<()> {
+async fn preflight_rejects_removed_unified_search_aliases() -> Result<()> {
     let temp_dir = TempDir::new()?;
     let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
 
-    let outcome = registry
+    for alias in [
+        tools::UNIFIED_SEARCH,
+        tools::GREP_FILE,
+        tools::LIST_FILES,
+        tools::GET_ERRORS,
+        tools::SEARCH_TOOLS,
+        tools::GREP,
+        "Search text",
+        "structural search",
+        "repo_browser.list_files",
+        "repo_browser.grep_file",
+        "fetch",
+        "errors",
+        "tool_discovery",
+    ] {
+        let err = registry
+            .preflight_validate_call(
+                alias,
+                &json!({
+                    "pattern": "ReasoningStage",
+                    "path": ".",
+                    "max_results": 10
+                }),
+            )
+            .expect_err("removed unified_search alias should not resolve");
+        assert!(
+            err.to_string().contains("Unknown tool"),
+            "{alias} should be rejected before schema validation: {err}"
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn separate_web_skill_and_discovery_names_do_not_route_to_unified_search() -> Result<()> {
+    let temp_dir = TempDir::new()?;
+    let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+
+    for (name, args) in [
+        (tools::WEB_SEARCH, json!({"query": "rust ast-grep"})),
+        (tools::WEB_FETCH, json!({"url": "https://example.com"})),
+        (tools::FETCH_URL, json!({"url": "https://example.com"})),
+        ("web", json!({"url": "https://example.com"})),
+        (tools::LIST_SKILLS, json!({})),
+        (tools::LOAD_SKILL, json!({"name": "example"})),
+        (tools::MCP_SEARCH_TOOLS, json!({"query": "database"})),
+    ] {
+        match registry.preflight_validate_call(name, &args) {
+            Ok(outcome) => assert_ne!(
+                outcome.normalized_tool_name,
+                tools::UNIFIED_SEARCH,
+                "{name} must remain a separate affordance"
+            ),
+            Err(err) => assert!(
+                err.to_string().contains("Unknown tool"),
+                "{name} may be deferred, but must not fail through unified_search schema: {err}"
+            ),
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn code_search_rejects_text_grep_action() -> Result<()> {
+    let temp_dir = TempDir::new()?;
+    let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+
+    let err = registry
         .preflight_validate_call(
-            tools::GREP_FILE,
+            tools::CODE_SEARCH,
             &json!({
-                "pattern": "LLMStreamEvent::",
+                "action": "grep",
+                "pattern": "ReasoningStage",
                 "path": "."
             }),
         )
-        .expect("grep_file alias should resolve");
-    assert_eq!(outcome.normalized_tool_name, tools::UNIFIED_SEARCH);
-    assert!(outcome.readonly_classification);
+        .expect_err("text grep belongs in exec_command.cmd with rg");
+
+    let text = err.to_string();
+    assert!(text.contains("Invalid arguments for tool 'code_search'"));
+    assert!(text.contains("grep"));
     Ok(())
 }
 
 #[tokio::test]
-async fn preflight_infers_action_for_humanized_search_text_alias() -> Result<()> {
+async fn code_search_accepts_structural_and_outline_actions() -> Result<()> {
     let temp_dir = TempDir::new()?;
     let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
 
-    let outcome = registry.preflight_validate_call(
-        "Search text",
+    let structural = registry.preflight_validate_call(
+        tools::CODE_SEARCH,
         &json!({
-            "pattern": "ReasoningStage",
-            "path": "."
-        }),
-    )?;
-
-    assert_eq!(outcome.normalized_tool_name, tools::UNIFIED_SEARCH);
-    Ok(())
-}
-
-#[tokio::test]
-async fn preflight_infers_structural_action_for_structural_search_alias() -> Result<()> {
-    let temp_dir = TempDir::new()?;
-    let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
-
-    let outcome = registry.preflight_validate_call(
-        "structural search",
-        &json!({
+            "action": "structural",
             "pattern": "fn $NAME() {}",
             "path": ".",
-            "lang": "rust"
+            "lang": "rust",
+            "max_results": 5
         }),
     )?;
+    assert_eq!(structural.normalized_tool_name, tools::CODE_SEARCH);
+    assert!(structural.readonly_classification);
 
-    assert_eq!(outcome.normalized_tool_name, tools::UNIFIED_SEARCH);
-    Ok(())
-}
-
-#[tokio::test]
-async fn preflight_rejects_removed_repo_browser_list_alias() -> Result<()> {
-    let temp_dir = TempDir::new()?;
-    let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
-
-    let err = registry
-        .preflight_validate_call(
-            "repo_browser.list_files",
-            &json!({
-                "path": "."
-            }),
-        )
-        .expect_err("repo_browser.list_files alias should be rejected");
-    assert!(err.to_string().contains("Unknown tool"));
-    Ok(())
-}
-
-#[tokio::test]
-async fn preflight_rejects_unified_search_when_action_cannot_be_inferred() -> Result<()> {
-    let temp_dir = TempDir::new()?;
-    let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
-
-    let err = registry
-        .preflight_validate_call(
-            tools::UNIFIED_SEARCH,
-            &json!({
-                "max_results": 10
-            }),
-        )
-        .expect_err("preflight should reject when unified_search action is missing");
-
-    let err_text = err.to_string();
-    assert!(err_text.contains("Invalid arguments for tool 'unified_search'"));
-    assert!(err_text.contains("action"));
-    Ok(())
-}
-
-#[tokio::test]
-async fn preflight_accepts_unified_search_with_case_variant_keys() -> Result<()> {
-    let temp_dir = TempDir::new()?;
-    let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
-
-    let outcome = registry.preflight_validate_call(
-        tools::UNIFIED_SEARCH,
+    let outline = registry.preflight_validate_call(
+        tools::CODE_SEARCH,
         &json!({
-            "Pattern": "ReasoningStage",
-            "Path": "."
+            "action": "outline",
+            "path": ".",
+            "view": "digest"
         }),
     )?;
-
-    assert_eq!(outcome.normalized_tool_name, tools::UNIFIED_SEARCH);
-    Ok(())
-}
-
-#[tokio::test]
-async fn unified_search_list_with_blank_mode_executes_default_list() -> Result<()> {
-    let temp_dir = TempDir::new()?;
-    fs::create_dir_all(temp_dir.path().join("src"))?;
-    fs::write(temp_dir.path().join("src/lib.rs"), "pub fn lib() {}\n")?;
-    fs::write(temp_dir.path().join("src/readme.md"), "# readme\n")?;
-    let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
-
-    let args = json!({
-        "action": "list",
-        "mode": "",
-        "path": "src",
-        "pattern": "*.rs"
-    });
-
-    let outcome = registry.preflight_validate_call(tools::UNIFIED_SEARCH, &args)?;
-    assert_eq!(outcome.normalized_tool_name, tools::UNIFIED_SEARCH);
-
-    let result = registry
-        .execute_tool_ref(tools::UNIFIED_SEARCH, &args)
-        .await?;
-    assert_eq!(result["mode"], json!("list"));
-    assert_eq!(result["pattern"], json!("*.rs"));
-
-    let items = result["items"].as_array().expect("items array");
-    assert_eq!(items.len(), 1);
-    assert_eq!(items[0]["path"], json!("src/lib.rs"));
+    assert_eq!(outline.normalized_tool_name, tools::CODE_SEARCH);
+    assert!(outline.readonly_classification);
     Ok(())
 }

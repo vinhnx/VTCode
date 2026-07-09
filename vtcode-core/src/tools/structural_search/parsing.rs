@@ -215,7 +215,7 @@ pub(super) fn reject_forbidden_args(args: &Value) -> Result<()> {
     for key in STRUCTURAL_FORBIDDEN_KEYS {
         if has_argument_key(object, key) {
             bail!(
-                "action='structural' is read-only; remove `{key}`. For `sg scan`, `sg test`, `sg new`, `sgconfig.yml`, or rewrite-oriented ast-grep tasks, load the bundled `ast-grep` skill first and use `unified_exec` only when the public structural surface cannot express the needed CLI flow."
+                "action='structural' is read-only; remove `{key}`. For `sg scan`, `sg test`, `sg new`, `sgconfig.yml`, or rewrite-oriented ast-grep tasks, load the bundled `ast-grep` skill first and use `exec_command.cmd` only when the public structural surface cannot express the needed CLI flow."
             );
         }
     }

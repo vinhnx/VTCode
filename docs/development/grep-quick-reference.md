@@ -1,20 +1,16 @@
-# unified_search (grep action) Quick Reference Card
+# rg Text Search Quick Reference Card
 
-> **Note:** `grep_file` is now an internal implementation. Use `unified_search` with `action="grep"` as the canonical tool.
+> **Note:** legacy text-search dispatcher names are internal implementation details. Use `exec_command.cmd` with `rg` for AI-facing text search. Use `code_search` for ast-grep structural queries and Tree-sitter outlines.
 
 ## Essential Parameters
 
-```json
-{
-  "pattern": "TODO",           // Required: regex or literal string
-  "path": "src",               // Directory to search (default: ".")
-  "max_results": 50,           // Results limit (default: 100, max: 1000)
-  "glob_pattern": "**/*.rs",   // Filter files: **/*.rs, src/**/*.ts, etc.
-  "type_pattern": "rust",      // Language: rust, python, typescript, java, go
-  "context_lines": 3,          // Lines around match (0-20, default: 0)
-  "literal": false,            // false=regex (default), true=literal string
-  "case_sensitive": false      // false=smart-case (default), true=case-sensitive
-}
+```sh
+rg "TODO" src                 # pattern and path
+rg -n -C 3 "TODO" src         # line numbers and context
+rg --glob "**/*.rs" "TODO"    # file filter
+rg -t rust "TODO"             # language filter
+rg -F "literal text" src      # literal string
+rg -i "todo" src              # case-insensitive search
 ```
 
 ## Common Search Patterns

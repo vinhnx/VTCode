@@ -54,9 +54,12 @@ pub fn generate_tool_guidelines(
         lines.push("- Completion is a checkpoint: keep verification resolved.".to_string());
     }
     if has_search && has_exec {
-        lines.push("- Prefer targeted repository searches over broad shell dumps.".to_string());
+        lines.push(
+            "- Use `code_search` only for semantic structural searches or outlines; use `exec_command.cmd` with `rg` for text search."
+                .to_string(),
+        );
     } else if has_search {
-        lines.push("- Use targeted repository search for semantic exploration.".to_string());
+        lines.push("- Use semantic code search for structural searches and outlines.".to_string());
     }
     if has_apply_patch || has_exec {
         lines.push("- If calls repeat, re-plan instead of retrying.".to_string());
@@ -281,7 +284,8 @@ mod tests {
     fn test_tool_preference_guidance() {
         let tools = vec![TOOL_EXEC_COMMAND.to_string(), TOOL_CODE_SEARCH.to_string()];
         let guidelines = generate_tool_guidelines(&tools, None);
-        assert!(guidelines.contains("targeted repository searches"));
+        assert!(guidelines.contains("semantic structural searches or outlines"));
+        assert!(guidelines.contains("`exec_command.cmd` with `rg`"));
         assert!(guidelines.contains("git diff -- <path>"));
         assert!(guidelines.contains("build tools"));
         assert!(guidelines.contains("test tools"));

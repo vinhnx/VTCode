@@ -1035,7 +1035,7 @@ async fn structural_search_returns_fragment_guidance_without_running_ast_grep() 
         "{hint}"
     );
     assert!(
-        hint.contains("Retry `unified_search` with `action='structural'`"),
+        hint.contains("Retry `code_search` with `action='structural'`"),
         "{hint}"
     );
     assert!(!hint.contains("load_skill"), "{hint}");
@@ -1070,7 +1070,7 @@ async fn structural_search_arrow_fragment_guidance_prefers_direct_retry() {
     let hint = result["hint"].as_str().expect("hint");
     assert!(hint.contains("Result return-type queries"), "{hint}");
     assert!(
-        hint.contains("Retry `unified_search` with `action='structural'`"),
+        hint.contains("Retry `code_search` with `action='structural'`"),
         "{hint}"
     );
     assert!(!hint.contains("load_skill"), "{hint}");
@@ -1452,8 +1452,8 @@ fn structural_failure_message_includes_pattern_guidance() {
     assert!(text.contains("`smart` default"));
     assert!(text.contains("`debug_query`"));
     assert!(text.contains("not scope/type/data-flow analysis"));
-    assert!(text.contains("Retry `unified_search`"));
-    assert!(text.contains("`unified_exec`"));
+    assert!(text.contains("Retry `code_search`"));
+    assert!(text.contains("`exec_command.cmd`"));
     // Rewrite guidance only appears for rewrite/apply workflow failures.
     assert!(!text.contains("fix_config"));
     assert!(
@@ -1504,7 +1504,7 @@ fn structural_failure_message_stays_small_for_unclassified_errors() {
         "permission denied".to_string(),
     );
 
-    assert!(text.contains("Retry `unified_search`"));
+    assert!(text.contains("Retry `code_search`"));
     assert!(text.contains("bundled `ast-grep` skill"));
     // No targeted hints for unclassified failures.
     assert!(!text.contains("valid parseable code"));
@@ -1608,9 +1608,9 @@ fn structural_failure_message_includes_custom_language_guidance() {
     assert!(text.contains("expandoChar"));
     assert!(text.contains("tree-sitter parse"));
     assert!(text.contains("single-language"));
-    assert!(text.contains("Retry `unified_search`"));
+    assert!(text.contains("Retry `code_search`"));
     assert!(text.contains("bundled `ast-grep` skill"));
-    assert!(text.contains("`unified_exec`"));
+    assert!(text.contains("`exec_command.cmd`"));
     // Language-support failures should not carry the pattern-authoring hint.
     assert!(!text.contains("not scope/type/data-flow analysis"));
 }
@@ -1639,7 +1639,7 @@ async fn structural_search_failure_surfaces_pattern_guidance() {
     assert!(text.contains("valid parseable code"));
     assert!(text.contains("use `selector`"));
     assert!(!text.contains("customLanguages"));
-    assert!(text.contains("Retry `unified_search`"));
+    assert!(text.contains("Retry `code_search`"));
 }
 
 #[tokio::test]
@@ -1675,8 +1675,8 @@ async fn structural_search_failure_surfaces_custom_language_guidance() {
     assert!(text.contains("$CONTENT"), "{text}");
     assert!(text.contains("expandoChar"), "{text}");
     assert!(text.contains("tree-sitter parse"), "{text}");
-    assert!(text.contains("Retry `unified_search`"), "{text}");
-    assert!(text.contains("`unified_exec`"), "{text}");
+    assert!(text.contains("Retry `code_search`"), "{text}");
+    assert!(text.contains("`exec_command.cmd`"), "{text}");
 }
 
 #[tokio::test]

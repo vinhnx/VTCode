@@ -634,8 +634,8 @@ impl LoopDetector {
                  **Synthesis Required**: You have collected sufficient information from previous tool outputs. \
                  Review your conversation history and produce a concrete answer or implementation. \
                  Do NOT re-read files or re-run searches you have already performed. \
-                 If a tool output was truncated, use offset/limit to read the specific omitted range, \
-                 or use `cat` via unified_exec for full content.",
+                 If a tool output was truncated, use the exact continuation range, \
+                 or use `exec_command.cmd` with `cat` for full content.",
                 self.readonly_streak
             );
             let now = Instant::now();
@@ -802,8 +802,8 @@ impl LoopDetector {
             return Some(format!(
                 "HARD STOP: Repeated '{}' calls for '{}' with minimal argument variation ({}-call streak, {} variants). \
                  You are stuck in a read loop. Review the tool outputs already in your conversation history — \
-                 you likely have the information needed. If a read was truncated, use `unified_exec` with \
-                 `cat {}` for full content, or use offset/limit to read the exact omitted range. \
+                 you likely have the information needed. If a read was truncated, use `exec_command.cmd` with \
+                 `cat {}` for full content, or use the exact continuation range. \
                  Do NOT re-read the same file with the same parameters.",
                 tool_name,
                 current_target,
@@ -846,32 +846,32 @@ impl LoopDetector {
         match tool_name {
             LEGACY_LIST_FILES => Some(
                 "Instead of listing files repeatedly:\n\
-                 • Use unified_search with action='structural' plus lang for code patterns\n\
-                 • Use unified_search with action='grep' for raw text, docs, or logs\n\
+                 • Use code_search with action='structural' plus lang for code patterns\n\
+                 • Use exec_command.cmd with rg for raw text, docs, or logs\n\
                  • Target specific subdirectories (e.g., 'src/', 'tests/')\n\
-                 • Use unified_file with action='read' if you know the exact file path"
+                 • Use exec_command.cmd with sed or cat if you know the exact file path"
                     .to_string(),
             ),
             LEGACY_GREP_FILE => Some(
                 "Instead of grepping repeatedly:\n\
-                 • If syntax matters, switch to unified_search with action='structural' and set lang\n\
+                 • If syntax matters, switch to code_search with action='structural' and set lang\n\
                  • Refine your text pattern or narrow the path when grep is the right tool\n\
-                 • Use unified_file with action='read' to examine specific files\n\
-                 • Consider using unified_exec with action='code' for complex filtering"
+                 • Use exec_command.cmd with sed or cat to examine specific files\n\
+                 • Consider a small script through exec_command.cmd for complex filtering"
                     .to_string(),
             ),
             tools::READ_FILE => Some(
                 "Instead of reading files repeatedly:\n\
-                 • Use unified_search with action='structural' plus lang for code lookups\n\
-                 • Use unified_search with action='grep' to find specific content first\n\
-                 • Read specific line ranges with unified_file offset/limit parameters\n\
+                 • Use code_search with action='structural' plus lang for code lookups\n\
+                 • Use exec_command.cmd with rg to find specific content first\n\
+                 • Read specific line ranges with sed through exec_command.cmd\n\
                  • Consider if you already have the information needed"
                     .to_string(),
             ),
             LEGACY_SEARCH_TOOLS => Some(
                 "Instead of searching tools repeatedly:\n\
                  • Review the tools you've already discovered\n\
-                 • Use unified_search with action='tools' to inspect available tools\n\
+                 • Use the dedicated MCP or deferred discovery affordance when available\n\
                  • Check if you need a different approach to the task"
                     .to_string(),
             ),
@@ -974,26 +974,26 @@ impl LoopDetector {
     fn suggest_alternative_for_tool(tool_name: &str) -> String {
         match base_tool_name(tool_name) {
             LEGACY_LIST_FILES => "Instead of listing repeatedly:\n\
-                 • Use unified_search with action='structural' plus lang for code patterns\n\
-                 • Use unified_search with action='grep' for raw text, docs, or logs\n\
+                 • Use code_search with action='structural' plus lang for code patterns\n\
+                 • Use exec_command.cmd with rg for raw text, docs, or logs\n\
                  • Target specific subdirectories (e.g., 'src/', 'tests/')\n\
-                 • Use unified_file with action='read' if you know the exact file path"
+                 • Use exec_command.cmd with sed or cat if you know the exact file path"
                 .to_string(),
             LEGACY_GREP_FILE => "Instead of grepping repeatedly:\n\
-                 • If syntax matters, switch to unified_search with action='structural' and set lang\n\
+                 • If syntax matters, switch to code_search with action='structural' and set lang\n\
                  • Refine your text pattern or narrow the path when grep is the right tool\n\
-                 • Use unified_file with action='read' to examine specific files\n\
-                 • Consider using unified_exec with action='code' for complex filtering"
+                 • Use exec_command.cmd with sed or cat to examine specific files\n\
+                 • Consider a small script through exec_command.cmd for complex filtering"
                 .to_string(),
             tools::READ_FILE => "Instead of reading files repeatedly:\n\
-                 • Use unified_search with action='structural' plus lang for code lookups\n\
-                 • Use unified_search with action='grep' to find specific content first\n\
-                 • Read specific line ranges with unified_file offset/limit parameters\n\
+                 • Use code_search with action='structural' plus lang for code lookups\n\
+                 • Use exec_command.cmd with rg to find specific content first\n\
+                 • Read specific line ranges with sed through exec_command.cmd\n\
                  • Consider if you already have the information needed"
                 .to_string(),
             LEGACY_SEARCH_TOOLS => "Instead of searching tools repeatedly:\n\
                  • Review the tools you've already discovered\n\
-                 • Use unified_search with action='tools' to inspect available tools\n\
+                 • Use the dedicated MCP or deferred discovery affordance when available\n\
                  • Check if you need a different approach to the task"
                 .to_string(),
             _ => "Shift focus to ROOT CAUSE analysis rather than patching symptoms. Re-evaluate planning assumptions specifically regarding environmental constraints. Consider:\n\
@@ -1323,7 +1323,7 @@ mod tests {
 
         assert!(suggestion.is_some());
         let msg = suggestion.unwrap();
-        assert!(msg.contains("unified_search"));
+        assert!(msg.contains("code_search"));
         assert!(msg.contains("action='structural'"));
         assert!(msg.contains("subdirectories"));
     }
@@ -1335,7 +1335,7 @@ mod tests {
 
         assert!(suggestion.is_some());
         let msg = suggestion.unwrap();
-        assert!(msg.contains("unified_file"));
+        assert!(msg.contains("exec_command.cmd"));
         assert!(msg.contains("set lang"));
         assert!(msg.contains("pattern"));
     }

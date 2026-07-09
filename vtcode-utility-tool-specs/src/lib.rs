@@ -150,8 +150,8 @@ pub fn code_search_parameters() -> Value {
         "properties": {
             "action": {
                 "type": "string",
-                "enum": ["grep", "structural", "outline"],
-                "description": "Code search action: grep for text search, structural for ast-grep pattern search, or outline for Tree-sitter symbol maps."
+                "enum": ["structural", "outline"],
+                "description": "Semantic code search action: structural for ast-grep pattern search, or outline for Tree-sitter symbol maps. Use exec_command.cmd with rg for plain text search."
             },
             "workflow": {
                 "type": "string",
@@ -159,7 +159,7 @@ pub fn code_search_parameters() -> Value {
                 "description": "Structural workflow for ast-grep.",
                 "default": "query"
             },
-            "pattern": {"type": "string", "description": "For grep: regex or literal text. For structural: ast-grep pattern such as $VAR or $$$ARGS."},
+            "pattern": {"type": "string", "description": "Ast-grep pattern such as $VAR or $$$ARGS for structural search."},
             "kind": {"type": "string", "description": "Ast-grep node kind, such as function_item or call_expression."},
             "path": {"type": "string", "description": "Directory or file path to search or outline.", "default": "."},
             "config_path": {"type": "string", "description": "Ast-grep config path for scan or test workflows. Defaults to workspace sgconfig.yml."},
@@ -207,8 +207,7 @@ pub fn code_search_parameters() -> Value {
             },
             "skip_snapshot_tests": {"type": "boolean", "description": "Skip ast-grep snapshot tests for test workflow.", "default": false},
             "max_results": {"type": "integer", "description": "Maximum results to return.", "default": 100},
-            "case_sensitive": {"type": "boolean", "description": "Case-sensitive text search.", "default": false},
-            "context_lines": {"type": "integer", "description": "Context lines for grep or structural results.", "default": 0},
+            "context_lines": {"type": "integer", "description": "Context lines for structural results.", "default": 0},
             "severities": {
                 "type": "array",
                 "items": {"type": "string", "enum": ["error", "warning", "info", "hint"]},
@@ -682,18 +681,28 @@ mod tests {
             .expect("action enum");
 
         assert_eq!(params["required"], json!(["action"]));
-        assert!(actions.iter().any(|value| value == "grep"));
-        assert!(actions.iter().any(|value| value == "structural"));
-        assert!(actions.iter().any(|value| value == "outline"));
-        for removed_action in ["list", "tools", "errors", "agent", "web", "skill"] {
+        assert_eq!(
+            actions.as_slice(),
+            json!(["structural", "outline"])
+                .as_array()
+                .expect("expected array")
+        );
+        for removed_action in ["grep", "list", "tools", "errors", "agent", "web", "skill"] {
             assert!(
                 !actions.iter().any(|value| value == removed_action),
                 "{removed_action} must not be a code_search action"
             );
         }
         assert_eq!(params["additionalProperties"], false);
+        assert!(params["properties"].get("case_sensitive").is_none());
         assert!(params["properties"]["lang"].is_object());
         assert!(params["properties"]["selector"].is_object());
+        assert!(
+            params["properties"]["action"]["description"]
+                .as_str()
+                .expect("action description")
+                .contains("exec_command.cmd with rg")
+        );
         let workflows = params["properties"]["workflow"]["enum"]
             .as_array()
             .expect("workflow enum");

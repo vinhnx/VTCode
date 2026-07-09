@@ -72,7 +72,7 @@ pub(super) fn build_rewrite_fragment_result(
     display_path: &str,
     hint: String,
 ) -> Value {
-    let next_action = "Retry `unified_search` with `action='structural'` using a larger parseable pattern and `selector` when the real target is a subnode inside that pattern. Do not rerun the same fragment unchanged.";
+    let next_action = "Retry `code_search` with `action='structural'` using a larger parseable pattern and `selector` when the real target is a subnode inside that pattern. Do not rerun the same fragment unchanged.";
 
     let mut result = json!({
         "backend": "ast-grep",
