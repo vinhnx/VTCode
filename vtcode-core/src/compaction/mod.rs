@@ -455,7 +455,15 @@ async fn summarize_locally_hierarchical(
 }
 
 fn build_summary_prompt(history: &[Message], instructions: &str) -> String {
-    let mut formatted = String::new();
+    // Pre-size for the header plus every (non-empty) message body, avoiding
+    // repeated reallocations while the summary prompt is assembled.
+    let estimated_len = instructions.len()
+        + history
+            .iter()
+            .map(|m| m.content.as_text().len())
+            .sum::<usize>()
+        + history.len() * 16;
+    let mut formatted = String::with_capacity(estimated_len);
     let now: DateTime<Utc> = Utc::now();
     let _ = writeln!(
         &mut formatted,
@@ -523,7 +531,7 @@ fn collect_retained_user_messages(
         .collect();
     user_scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
-    let mut selected: Vec<(usize, Message)> = Vec::new();
+    let mut selected: Vec<(usize, Message)> = Vec::with_capacity(max_messages.min(history.len()));
     let mut remaining = token_budget;
 
     for (original_idx, _score, message) in &user_scored {
