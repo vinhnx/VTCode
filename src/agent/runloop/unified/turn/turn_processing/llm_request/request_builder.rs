@@ -432,7 +432,7 @@ fn append_active_primary_agent_skills(
     }
 
     let prompt_context = active_primary_agent_prompt_context(ctx, agent);
-    let mut lines = Vec::new();
+    let mut lines = Vec::with_capacity(2 + agent.skills.len());
     lines.push("## Active Primary Agent Skills".to_string());
     lines.push("These skills are scoped to the active primary agent for this request.".to_string());
 
@@ -702,7 +702,9 @@ async fn render_primary_agent_runtime_context(
     agent: &ActivePrimaryAgent,
     reasoning_effort: Option<vtcode_core::config::types::ReasoningEffortLevel>,
 ) -> String {
-    let mut lines = Vec::new();
+    // Upper bound on the number of lines pushed below (two static headers
+    // plus a bounded set of conditional runtime-state lines).
+    let mut lines = Vec::with_capacity(16);
     lines.push("## Active Primary Agent Runtime State".to_string());
     lines.push(format!("- Active agent: {}", agent.display_name));
     lines.push(format!("- Spec name: {}", agent.identity.name));
