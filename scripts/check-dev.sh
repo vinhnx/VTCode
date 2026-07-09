@@ -143,9 +143,17 @@ run_tests() {
     local test_exit=0
 
     if cargo nextest --version &> /dev/null; then
-        # Enable incremental compilation for local test builds
-        # to avoid full recompiles on every test run.
-        CARGO_INCREMENTAL=1 cargo nextest run "${nextest_args[@]}" --no-tests=warn || test_exit=$?
+        # Enable incremental compilation for local test builds to avoid full
+        # recompiles on every test run. Skip this when a distributed compiler
+        # wrapper such as sccache (the repo's recommended dev setup, which sets
+        # `incremental = false` in the dev profile) is active: sccache forbids
+        # incremental compilation, so forcing `CARGO_INCREMENTAL=1` makes
+        # `check-dev.sh --test` fail for sccache users.
+        local nextest_env=()
+        if [[ -z "${RUSTC_WRAPPER:-}" || "${RUSTC_WRAPPER}" != *sccache* ]]; then
+            nextest_env=(CARGO_INCREMENTAL=1)
+        fi
+        env "${nextest_env[@]}" cargo nextest run "${nextest_args[@]}" --no-tests=warn || test_exit=$?
     else
         print_warning "cargo-nextest not found. Falling back to cargo test."
         cargo test $scope_args || test_exit=$?
