@@ -12,7 +12,9 @@ use crate::agent::runloop::slash_commands::SessionPaletteMode;
 use crate::agent::runloop::unified::display::{
     persist_theme_preference, sync_runtime_theme_selection,
 };
-use crate::agent::runloop::unified::model_selection::finalize_model_selection;
+use crate::agent::runloop::unified::model_selection::{
+    ModelSwitchCompactionTargets, finalize_model_selection,
+};
 use crate::agent::runloop::unified::overlay_prompt::{
     OverlayWaitOutcome, wait_for_overlay_submission,
 };
@@ -384,6 +386,7 @@ pub(super) async fn start_model_picker(
             *ctx.model_picker_state = Some(picker);
         }
         Ok(ModelPickerStart::Completed { state, selection }) => {
+            let harness_snapshot = ctx.tool_registry.harness_context_snapshot();
             if let Err(err) = finalize_model_selection(
                 ctx.renderer,
                 &state,
@@ -395,7 +398,15 @@ pub(super) async fn start_model_picker(
                 ctx.handle,
                 ctx.header_context,
                 ctx.full_auto,
-                ctx.conversation_history.len(),
+                ModelSwitchCompactionTargets {
+                    history: ctx.conversation_history,
+                    session_stats: ctx.session_stats,
+                    context_manager: ctx.context_manager,
+                    session_id: &harness_snapshot.session_id,
+                    thread_id: ctx.thread_id,
+                    lifecycle_hooks: ctx.lifecycle_hooks,
+                    harness_emitter: ctx.harness_emitter,
+                },
             )
             .await
             {

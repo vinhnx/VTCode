@@ -14,7 +14,9 @@ use crate::agent::runloop::model_picker::{
     ModelPickerProgress, ModelPickerStart, ModelPickerState,
 };
 use crate::agent::runloop::slash_commands::SessionPaletteMode;
-use crate::agent::runloop::unified::model_selection::finalize_model_selection;
+use crate::agent::runloop::unified::model_selection::{
+    ModelSwitchCompactionTargets, finalize_model_selection,
+};
 use crate::agent::runloop::unified::palettes::{
     ActivePalette, LIGHTWEIGHT_MODEL_ACTION_PREFIX, MODE_ACTION_PREFIX,
     MODEL_TARGET_ACTION_LIGHTWEIGHT, MODEL_TARGET_ACTION_MAIN, build_lightweight_palette_view,
@@ -53,7 +55,7 @@ impl<'a> InlineModalProcessor<'a> {
         ctrl_c_notify: &'a Arc<Notify>,
         session_bootstrap: &'a SessionBootstrap,
         full_auto: bool,
-        conversation_history_len: usize,
+        compaction: ModelSwitchCompactionTargets<'a>,
     ) -> Self {
         let model_picker = ModelPickerCoordinator {
             state: model_picker_state,
@@ -66,7 +68,7 @@ impl<'a> InlineModalProcessor<'a> {
             session_bootstrap,
             handle,
             full_auto,
-            conversation_history_len,
+            compaction,
         };
         let palette = PaletteCoordinator {
             state: palette_state,
@@ -602,7 +604,7 @@ struct ModelPickerCoordinator<'a> {
     session_bootstrap: &'a SessionBootstrap,
     handle: &'a InlineHandle,
     full_auto: bool,
-    conversation_history_len: usize,
+    compaction: ModelSwitchCompactionTargets<'a>,
 }
 
 impl<'a> ModelPickerCoordinator<'a> {
@@ -671,7 +673,15 @@ impl<'a> ModelPickerCoordinator<'a> {
                     self.handle,
                     self.header_context,
                     self.full_auto,
-                    self.conversation_history_len,
+                    ModelSwitchCompactionTargets {
+                        history: self.compaction.history,
+                        session_stats: self.compaction.session_stats,
+                        context_manager: self.compaction.context_manager,
+                        session_id: self.compaction.session_id,
+                        thread_id: self.compaction.thread_id,
+                        lifecycle_hooks: self.compaction.lifecycle_hooks,
+                        harness_emitter: self.compaction.harness_emitter,
+                    },
                 )
                 .await
                 {
@@ -736,7 +746,15 @@ impl<'a> ModelPickerCoordinator<'a> {
                     self.handle,
                     self.header_context,
                     self.full_auto,
-                    self.conversation_history_len,
+                    ModelSwitchCompactionTargets {
+                        history: self.compaction.history,
+                        session_stats: self.compaction.session_stats,
+                        context_manager: self.compaction.context_manager,
+                        session_id: self.compaction.session_id,
+                        thread_id: self.compaction.thread_id,
+                        lifecycle_hooks: self.compaction.lifecycle_hooks,
+                        harness_emitter: self.compaction.harness_emitter,
+                    },
                 )
                 .await
                 {

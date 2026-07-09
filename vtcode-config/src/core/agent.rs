@@ -372,6 +372,12 @@ pub struct AgentHarnessConfig {
     /// generates its text response.
     #[serde(default)]
     pub auto_compaction_pause_after: bool,
+    /// Automatically compact conversation context when the main session model
+    /// or provider is switched mid-conversation, so the newly selected model
+    /// starts from a summary instead of the outgoing model's raw trace.
+    /// Default: true. Disable to keep the full history across a model switch.
+    #[serde(default = "default_harness_compact_on_model_switch")]
+    pub compact_on_model_switch: bool,
     /// Provider-native tool-result clearing policy.
     #[serde(default)]
     pub tool_result_clearing: ToolResultClearingConfig,
@@ -421,6 +427,7 @@ impl Default for AgentHarnessConfig {
             auto_compaction_threshold_tokens: None,
             auto_compaction_instructions: None,
             auto_compaction_pause_after: false,
+            compact_on_model_switch: default_harness_compact_on_model_switch(),
             tool_result_clearing: ToolResultClearingConfig::default(),
             max_budget_usd: None,
             continuation_policy: ContinuationPolicy::default(),
@@ -1014,6 +1021,10 @@ const fn default_harness_max_parallel_tool_calls() -> usize {
 #[inline]
 const fn default_harness_auto_compaction_enabled() -> bool {
     false
+}
+
+const fn default_harness_compact_on_model_switch() -> bool {
+    true
 }
 
 #[inline]

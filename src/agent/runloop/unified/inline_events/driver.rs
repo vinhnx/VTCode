@@ -7,13 +7,16 @@ use tokio::sync::Notify;
 
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
+use vtcode_core::hooks::LifecycleHookEngine;
 use vtcode_core::llm::provider::{self as uni};
 use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_ui::tui::app::{InlineHandle, InlineHeaderContext, InlineSession};
 
 use crate::agent::runloop::model_picker::ModelPickerState;
+use crate::agent::runloop::unified::context_manager::ContextManager;
+use crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter;
 use crate::agent::runloop::unified::palettes::ActivePalette;
-use crate::agent::runloop::unified::state::CtrlCState;
+use crate::agent::runloop::unified::state::{CtrlCState, SessionStats};
 use crate::agent::runloop::welcome::SessionBootstrap;
 use crate::updater::{StartupUpdateNotice, display_update_notice};
 
@@ -41,7 +44,13 @@ struct InlineEventLoop<'a> {
         &'a mut Option<tokio::sync::mpsc::UnboundedReceiver<StartupUpdateNotice>>,
     header_context: &'a mut InlineHeaderContext,
     use_unicode: bool,
-    conversation_history_len: usize,
+    conversation_history: &'a mut Vec<uni::Message>,
+    session_stats: &'a mut SessionStats,
+    context_manager: &'a mut ContextManager,
+    session_id: &'a str,
+    thread_id: &'a str,
+    lifecycle_hooks: Option<&'a LifecycleHookEngine>,
+    harness_emitter: Option<&'a HarnessEventEmitter>,
     idle_wake_delay: Duration,
 }
 
@@ -72,7 +81,13 @@ impl<'a> InlineEventLoop<'a> {
             startup_update_notice_rx,
             header_context,
             use_unicode,
-            conversation_history_len,
+            conversation_history,
+            session_stats,
+            context_manager,
+            session_id,
+            thread_id,
+            lifecycle_hooks,
+            harness_emitter,
             idle_wake_delay,
         } = resources;
 
@@ -95,7 +110,13 @@ impl<'a> InlineEventLoop<'a> {
             startup_update_notice_rx,
             header_context,
             use_unicode,
-            conversation_history_len,
+            conversation_history,
+            session_stats,
+            context_manager,
+            session_id,
+            thread_id,
+            lifecycle_hooks,
+            harness_emitter,
             idle_wake_delay,
         }
     }
@@ -160,7 +181,13 @@ impl<'a> InlineEventLoop<'a> {
         let provider_client = &mut *self.provider_client;
         let ctrl_c_state = self.ctrl_c_state;
         let ctrl_c_notify = self.ctrl_c_notify;
-        let conversation_history_len = self.conversation_history_len;
+        let conversation_history = &mut *self.conversation_history;
+        let session_stats = &mut *self.session_stats;
+        let context_manager = &mut *self.context_manager;
+        let session_id = self.session_id;
+        let thread_id = self.thread_id;
+        let lifecycle_hooks = self.lifecycle_hooks;
+        let harness_emitter = self.harness_emitter;
         let mut context = InlineEventContext::new(
             renderer,
             handle,
@@ -176,7 +203,13 @@ impl<'a> InlineEventLoop<'a> {
             ctrl_c_notify,
             session_bootstrap,
             full_auto,
-            conversation_history_len,
+            conversation_history,
+            session_stats,
+            context_manager,
+            session_id,
+            thread_id,
+            lifecycle_hooks,
+            harness_emitter,
         );
 
         context.process_event(event, &mut self.queue).await
@@ -250,7 +283,13 @@ pub(crate) struct InlineEventLoopResources<'a> {
         &'a mut Option<tokio::sync::mpsc::UnboundedReceiver<StartupUpdateNotice>>,
     pub header_context: &'a mut InlineHeaderContext,
     pub use_unicode: bool,
-    pub conversation_history_len: usize,
+    pub conversation_history: &'a mut Vec<uni::Message>,
+    pub session_stats: &'a mut SessionStats,
+    pub context_manager: &'a mut ContextManager,
+    pub session_id: &'a str,
+    pub thread_id: &'a str,
+    pub lifecycle_hooks: Option<&'a LifecycleHookEngine>,
+    pub harness_emitter: Option<&'a HarnessEventEmitter>,
     pub idle_wake_delay: Duration,
 }
 
@@ -426,7 +465,13 @@ mod tests {
             startup_update_notice_rx: &mut startup_update_notice_rx,
             header_context: &mut header_context,
             use_unicode: true,
-            conversation_history_len: 0,
+            conversation_history: &mut Vec::new(),
+            session_stats: &mut SessionStats::default(),
+            context_manager: &mut ContextManager::default_for_test(),
+            session_id: "test-session",
+            thread_id: "test-thread",
+            lifecycle_hooks: None,
+            harness_emitter: None,
             idle_wake_delay: Duration::from_millis(5),
             ctrl_c_state: &ctrl_c_state,
             ctrl_c_notify: &ctrl_c_notify,

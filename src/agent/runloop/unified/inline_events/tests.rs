@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::agent::runloop::model_picker::ModelPickerState;
+use crate::agent::runloop::unified::context_manager::ContextManager;
 use crate::agent::runloop::unified::inline_events::{
     InlineEventContext, InlineInterruptCoordinator, InlineLoopAction, InlineQueueState, QueuedInput,
 };
@@ -11,6 +12,7 @@ use crate::agent::runloop::unified::settings_interactive::{
     ACTION_CONFIGURE_EDITOR, SettingsPaletteState,
 };
 use crate::agent::runloop::unified::state::CtrlCState;
+use crate::agent::runloop::unified::state::SessionStats;
 use crate::agent::runloop::unified::url_guard::UrlGuardPrompt;
 use crate::agent::runloop::welcome::SessionBootstrap;
 use tokio::sync::Notify;
@@ -124,6 +126,9 @@ async fn launch_editor_event_submits_edit_command() {
     let mut provider_client: Box<dyn uni::LLMProvider> = Box::new(DummyProvider);
     let session_bootstrap = SessionBootstrap::default();
     let mut header_context = vtcode_ui::tui::app::InlineHeaderContext::default();
+    let mut history = Vec::<uni::Message>::new();
+    let mut session_stats = SessionStats::default();
+    let mut context_manager = ContextManager::default_for_test();
     let mut context = InlineEventContext::new(
         &mut renderer,
         &handle,
@@ -139,7 +144,13 @@ async fn launch_editor_event_submits_edit_command() {
         &ctrl_c_notify,
         &session_bootstrap,
         false,
-        0,
+        &mut history,
+        &mut session_stats,
+        &mut context_manager,
+        "test-session",
+        "test-thread",
+        None,
+        None,
     );
     let mut queued_inputs = VecDeque::new();
     let mut prefer_latest_once = false;
@@ -173,6 +184,9 @@ async fn launch_editor_event_with_draft_returns_editor_with_draft_action() {
     let mut provider_client: Box<dyn uni::LLMProvider> = Box::new(DummyProvider);
     let session_bootstrap = SessionBootstrap::default();
     let mut header_context = vtcode_ui::tui::app::InlineHeaderContext::default();
+    let mut history = Vec::<uni::Message>::new();
+    let mut session_stats = SessionStats::default();
+    let mut context_manager = ContextManager::default_for_test();
     let mut context = InlineEventContext::new(
         &mut renderer,
         &handle,
@@ -188,7 +202,13 @@ async fn launch_editor_event_with_draft_returns_editor_with_draft_action() {
         &ctrl_c_notify,
         &session_bootstrap,
         false,
-        0,
+        &mut history,
+        &mut session_stats,
+        &mut context_manager,
+        "test-session",
+        "test-thread",
+        None,
+        None,
     );
     let mut queued_inputs = VecDeque::new();
     let mut prefer_latest_once = false;
@@ -222,6 +242,9 @@ async fn open_file_in_editor_event_submits_edit_command_with_path() {
     let mut provider_client: Box<dyn uni::LLMProvider> = Box::new(DummyProvider);
     let session_bootstrap = SessionBootstrap::default();
     let mut header_context = vtcode_ui::tui::app::InlineHeaderContext::default();
+    let mut history = Vec::<uni::Message>::new();
+    let mut session_stats = SessionStats::default();
+    let mut context_manager = ContextManager::default_for_test();
     let mut context = InlineEventContext::new(
         &mut renderer,
         &handle,
@@ -237,7 +260,13 @@ async fn open_file_in_editor_event_submits_edit_command_with_path() {
         &ctrl_c_notify,
         &session_bootstrap,
         false,
-        0,
+        &mut history,
+        &mut session_stats,
+        &mut context_manager,
+        "test-session",
+        "test-thread",
+        None,
+        None,
     );
     let mut queued_inputs = VecDeque::new();
     let mut prefer_latest_once = false;
@@ -269,6 +298,9 @@ async fn open_url_event_shows_guard_modal_with_deny_selected_by_default() {
     let mut header_context = vtcode_ui::tui::app::InlineHeaderContext::default();
     let url = "https://example.com/docs".to_string();
     {
+        let mut history = Vec::<uni::Message>::new();
+        let mut session_stats = SessionStats::default();
+        let mut context_manager = ContextManager::default_for_test();
         let mut context = InlineEventContext::new(
             &mut renderer,
             &handle,
@@ -284,7 +316,13 @@ async fn open_url_event_shows_guard_modal_with_deny_selected_by_default() {
             &ctrl_c_notify,
             &session_bootstrap,
             false,
-            0,
+            &mut history,
+            &mut session_stats,
+            &mut context_manager,
+            "test-session",
+            "test-thread",
+            None,
+            None,
         );
         let mut queued_inputs = VecDeque::new();
         let mut prefer_latest_once = false;
@@ -340,6 +378,9 @@ async fn open_http_url_guard_modal_includes_insecure_transport_warning() {
     let session_bootstrap = SessionBootstrap::default();
     let mut header_context = vtcode_ui::tui::app::InlineHeaderContext::default();
     {
+        let mut history = Vec::<uni::Message>::new();
+        let mut session_stats = SessionStats::default();
+        let mut context_manager = ContextManager::default_for_test();
         let mut context = InlineEventContext::new(
             &mut renderer,
             &handle,
@@ -355,7 +396,13 @@ async fn open_http_url_guard_modal_includes_insecure_transport_warning() {
             &ctrl_c_notify,
             &session_bootstrap,
             false,
-            0,
+            &mut history,
+            &mut session_stats,
+            &mut context_manager,
+            "test-session",
+            "test-thread",
+            None,
+            None,
         );
         let mut queued_inputs = VecDeque::new();
         let mut prefer_latest_once = false;
@@ -405,6 +452,9 @@ async fn cancelling_url_guard_restores_previous_palette() {
     let session_bootstrap = SessionBootstrap::default();
     let mut header_context = vtcode_ui::tui::app::InlineHeaderContext::default();
     {
+        let mut history = Vec::<uni::Message>::new();
+        let mut session_stats = SessionStats::default();
+        let mut context_manager = ContextManager::default_for_test();
         let mut context = InlineEventContext::new(
             &mut renderer,
             &handle,
@@ -420,7 +470,13 @@ async fn cancelling_url_guard_restores_previous_palette() {
             &ctrl_c_notify,
             &session_bootstrap,
             false,
-            0,
+            &mut history,
+            &mut session_stats,
+            &mut context_manager,
+            "test-session",
+            "test-thread",
+            None,
+            None,
         );
         let mut queued_inputs = VecDeque::new();
         let mut prefer_latest_once = false;
@@ -485,6 +541,9 @@ async fn previous_agent_event_cycles_primary_agent_backward() {
     let mut provider_client: Box<dyn uni::LLMProvider> = Box::new(DummyProvider);
     let session_bootstrap = SessionBootstrap::default();
     let mut header_context = vtcode_ui::tui::app::InlineHeaderContext::default();
+    let mut history = Vec::<uni::Message>::new();
+    let mut session_stats = SessionStats::default();
+    let mut context_manager = ContextManager::default_for_test();
     let mut context = InlineEventContext::new(
         &mut renderer,
         &handle,
@@ -500,7 +559,13 @@ async fn previous_agent_event_cycles_primary_agent_backward() {
         &ctrl_c_notify,
         &session_bootstrap,
         false,
-        0,
+        &mut history,
+        &mut session_stats,
+        &mut context_manager,
+        "test-session",
+        "test-thread",
+        None,
+        None,
     );
     let mut queued_inputs = VecDeque::new();
     let mut prefer_latest_once = false;
@@ -538,6 +603,9 @@ async fn settings_editor_selection_submits_editor_config_command() {
     let mut provider_client: Box<dyn uni::LLMProvider> = Box::new(DummyProvider);
     let session_bootstrap = SessionBootstrap::default();
     let mut header_context = vtcode_ui::tui::app::InlineHeaderContext::default();
+    let mut history = Vec::<uni::Message>::new();
+    let mut session_stats = SessionStats::default();
+    let mut context_manager = ContextManager::default_for_test();
     let mut context = InlineEventContext::new(
         &mut renderer,
         &handle,
@@ -553,7 +621,13 @@ async fn settings_editor_selection_submits_editor_config_command() {
         &ctrl_c_notify,
         &session_bootstrap,
         false,
-        0,
+        &mut history,
+        &mut session_stats,
+        &mut context_manager,
+        "test-session",
+        "test-thread",
+        None,
+        None,
     );
     let mut queued_inputs = VecDeque::new();
     let mut prefer_latest_once = false;
@@ -589,6 +663,9 @@ async fn mode_palette_selection_selects_primary_agent() {
     let mut provider_client: Box<dyn uni::LLMProvider> = Box::new(DummyProvider);
     let session_bootstrap = SessionBootstrap::default();
     let mut header_context = vtcode_ui::tui::app::InlineHeaderContext::default();
+    let mut history = Vec::<uni::Message>::new();
+    let mut session_stats = SessionStats::default();
+    let mut context_manager = ContextManager::default_for_test();
     let mut context = InlineEventContext::new(
         &mut renderer,
         &handle,
@@ -604,7 +681,13 @@ async fn mode_palette_selection_selects_primary_agent() {
         &ctrl_c_notify,
         &session_bootstrap,
         false,
-        0,
+        &mut history,
+        &mut session_stats,
+        &mut context_manager,
+        "test-session",
+        "test-thread",
+        None,
+        None,
     );
     let mut queued_inputs = VecDeque::new();
     let mut prefer_latest_once = false;
@@ -640,6 +723,9 @@ async fn plan_confirmation_events_map_to_expected_actions() {
     let mut provider_client: Box<dyn uni::LLMProvider> = Box::new(DummyProvider);
     let session_bootstrap = SessionBootstrap::default();
     let mut header_context = vtcode_ui::tui::app::InlineHeaderContext::default();
+    let mut history = Vec::<uni::Message>::new();
+    let mut session_stats = SessionStats::default();
+    let mut context_manager = ContextManager::default_for_test();
     let mut context = InlineEventContext::new(
         &mut renderer,
         &handle,
@@ -655,7 +741,13 @@ async fn plan_confirmation_events_map_to_expected_actions() {
         &ctrl_c_notify,
         &session_bootstrap,
         false,
-        0,
+        &mut history,
+        &mut session_stats,
+        &mut context_manager,
+        "test-session",
+        "test-thread",
+        None,
+        None,
     );
     let mut queued_inputs = VecDeque::new();
     let mut prefer_latest_once = false;
@@ -721,6 +813,9 @@ async fn single_ctrl_c_returns_continue_from_tui() {
     let mut provider_client: Box<dyn uni::LLMProvider> = Box::new(DummyProvider);
     let session_bootstrap = SessionBootstrap::default();
     let mut header_context = vtcode_ui::tui::app::InlineHeaderContext::default();
+    let mut history = Vec::<uni::Message>::new();
+    let mut session_stats = SessionStats::default();
+    let mut context_manager = ContextManager::default_for_test();
     let mut context = InlineEventContext::new(
         &mut renderer,
         &handle,
@@ -736,7 +831,13 @@ async fn single_ctrl_c_returns_continue_from_tui() {
         &ctrl_c_notify,
         &session_bootstrap,
         false,
-        0,
+        &mut history,
+        &mut session_stats,
+        &mut context_manager,
+        "test-session",
+        "test-thread",
+        None,
+        None,
     );
     let mut queued_inputs = VecDeque::new();
     let mut prefer_latest_once = false;
@@ -765,6 +866,9 @@ async fn double_ctrl_c_returns_exit_from_tui() {
     let mut provider_client: Box<dyn uni::LLMProvider> = Box::new(DummyProvider);
     let session_bootstrap = SessionBootstrap::default();
     let mut header_context = vtcode_ui::tui::app::InlineHeaderContext::default();
+    let mut history = Vec::<uni::Message>::new();
+    let mut session_stats = SessionStats::default();
+    let mut context_manager = ContextManager::default_for_test();
     let mut context = InlineEventContext::new(
         &mut renderer,
         &handle,
@@ -780,7 +884,13 @@ async fn double_ctrl_c_returns_exit_from_tui() {
         &ctrl_c_notify,
         &session_bootstrap,
         false,
-        0,
+        &mut history,
+        &mut session_stats,
+        &mut context_manager,
+        "test-session",
+        "test-thread",
+        None,
+        None,
     );
     let mut queued_inputs = VecDeque::new();
     let mut prefer_latest_once = false;
@@ -814,6 +924,9 @@ async fn steering_events_are_passive_in_idle_loop() {
     let mut provider_client: Box<dyn uni::LLMProvider> = Box::new(DummyProvider);
     let session_bootstrap = SessionBootstrap::default();
     let mut header_context = vtcode_ui::tui::app::InlineHeaderContext::default();
+    let mut history = Vec::<uni::Message>::new();
+    let mut session_stats = SessionStats::default();
+    let mut context_manager = ContextManager::default_for_test();
     let mut context = InlineEventContext::new(
         &mut renderer,
         &handle,
@@ -829,7 +942,13 @@ async fn steering_events_are_passive_in_idle_loop() {
         &ctrl_c_notify,
         &session_bootstrap,
         false,
-        0,
+        &mut history,
+        &mut session_stats,
+        &mut context_manager,
+        "test-session",
+        "test-thread",
+        None,
+        None,
     );
     let mut queued_inputs = VecDeque::new();
     let mut prefer_latest_once = false;
@@ -861,6 +980,9 @@ async fn steer_with_attachments_restores_full_draft_and_continues() {
     let mut provider_client: Box<dyn uni::LLMProvider> = Box::new(DummyProvider);
     let session_bootstrap = SessionBootstrap::default();
     let mut header_context = vtcode_ui::tui::app::InlineHeaderContext::default();
+    let mut history = Vec::<uni::Message>::new();
+    let mut session_stats = SessionStats::default();
+    let mut context_manager = ContextManager::default_for_test();
     let mut context = InlineEventContext::new(
         &mut renderer,
         &handle,
@@ -876,7 +998,13 @@ async fn steer_with_attachments_restores_full_draft_and_continues() {
         &ctrl_c_notify,
         &session_bootstrap,
         false,
-        0,
+        &mut history,
+        &mut session_stats,
+        &mut context_manager,
+        "test-session",
+        "test-thread",
+        None,
+        None,
     );
     let mut queued_inputs = VecDeque::new();
     let mut prefer_latest_once = false;
@@ -933,6 +1061,9 @@ async fn process_latest_queued_event_primes_newest_queue_priority() {
     let mut provider_client: Box<dyn uni::LLMProvider> = Box::new(DummyProvider);
     let session_bootstrap = SessionBootstrap::default();
     let mut header_context = vtcode_ui::tui::app::InlineHeaderContext::default();
+    let mut history = Vec::<uni::Message>::new();
+    let mut session_stats = SessionStats::default();
+    let mut context_manager = ContextManager::default_for_test();
     let mut context = InlineEventContext::new(
         &mut renderer,
         &handle,
@@ -948,7 +1079,13 @@ async fn process_latest_queued_event_primes_newest_queue_priority() {
         &ctrl_c_notify,
         &session_bootstrap,
         false,
-        0,
+        &mut history,
+        &mut session_stats,
+        &mut context_manager,
+        "test-session",
+        "test-thread",
+        None,
+        None,
     );
     let mut queued_inputs = VecDeque::from([
         QueuedInput::new("first".into(), Some("duck".to_string())),
@@ -979,6 +1116,9 @@ async fn inline_prompt_suggestion_event_maps_to_inline_action() {
     let mut provider_client: Box<dyn uni::LLMProvider> = Box::new(DummyProvider);
     let session_bootstrap = SessionBootstrap::default();
     let mut header_context = vtcode_ui::tui::app::InlineHeaderContext::default();
+    let mut history = Vec::<uni::Message>::new();
+    let mut session_stats = SessionStats::default();
+    let mut context_manager = ContextManager::default_for_test();
     let mut context = InlineEventContext::new(
         &mut renderer,
         &handle,
@@ -994,7 +1134,13 @@ async fn inline_prompt_suggestion_event_maps_to_inline_action() {
         &ctrl_c_notify,
         &session_bootstrap,
         false,
-        0,
+        &mut history,
+        &mut session_stats,
+        &mut context_manager,
+        "test-session",
+        "test-thread",
+        None,
+        None,
     );
     let mut queued_inputs = VecDeque::new();
     let mut prefer_latest_once = false;

@@ -398,6 +398,42 @@ pub(crate) async fn manual_compact_history_in_place(
     options: &vtcode_core::compaction::ManualCompactionOptions,
     native_only: bool,
 ) -> Result<Option<CompactionOutcome>> {
+    run_manual_compaction(
+        context,
+        state,
+        options,
+        native_only,
+        vtcode_core::exec::events::CompactionTrigger::Manual,
+    )
+    .await
+}
+
+/// Compact the conversation when the main session model or provider is switched
+/// mid-session, so the newly selected model starts from a summary rather than
+/// the outgoing model's raw trace. Mirrors `/compact` (forces `always_summarize`
+/// via `local_compaction_config(vt_cfg, true)` and routes through the same
+/// strategy dispatch) but is tagged with `CompactionTrigger::ModelSwitch`.
+pub(crate) async fn compact_history_on_model_switch_in_place(
+    context: CompactionContext<'_>,
+    state: CompactionState<'_>,
+) -> Result<Option<CompactionOutcome>> {
+    run_manual_compaction(
+        context,
+        state,
+        &vtcode_core::compaction::ManualCompactionOptions::default(),
+        false,
+        vtcode_core::exec::events::CompactionTrigger::ModelSwitch,
+    )
+    .await
+}
+
+async fn run_manual_compaction(
+    context: CompactionContext<'_>,
+    state: CompactionState<'_>,
+    options: &vtcode_core::compaction::ManualCompactionOptions,
+    native_only: bool,
+    trigger: vtcode_core::exec::events::CompactionTrigger,
+) -> Result<Option<CompactionOutcome>> {
     let CompactionContext {
         provider,
         model,
@@ -453,7 +489,7 @@ pub(crate) async fn manual_compact_history_in_place(
         },
         CompactionState::new(history, session_stats, context_manager),
         CompactionPlan {
-            trigger: vtcode_core::exec::events::CompactionTrigger::Manual,
+            trigger,
             envelope_mode: CompactionEnvelopeMode {
                 persistence: MemoryEnvelopePersistence::PersistToDisk,
                 placement: MemoryEnvelopePlacement::Start,

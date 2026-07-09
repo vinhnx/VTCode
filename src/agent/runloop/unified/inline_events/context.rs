@@ -4,6 +4,7 @@ use tokio::sync::Notify;
 
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
+use vtcode_core::hooks::LifecycleHookEngine;
 use vtcode_core::llm::provider::{self as uni};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_ui::tui::app::{
@@ -12,7 +13,11 @@ use vtcode_ui::tui::app::{
 };
 
 use crate::agent::runloop::model_picker::ModelPickerState;
+use crate::agent::runloop::unified::context_manager::ContextManager;
+use crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter;
+use crate::agent::runloop::unified::model_selection::ModelSwitchCompactionTargets;
 use crate::agent::runloop::unified::palettes::ActivePalette;
+use crate::agent::runloop::unified::state::SessionStats;
 use crate::agent::runloop::welcome::SessionBootstrap;
 
 use super::action::InlineLoopAction;
@@ -47,7 +52,13 @@ impl<'a> InlineEventContext<'a> {
         ctrl_c_notify: &'a Arc<Notify>,
         session_bootstrap: &'a SessionBootstrap,
         full_auto: bool,
-        conversation_history_len: usize,
+        conversation_history: &'a mut Vec<uni::Message>,
+        session_stats: &'a mut SessionStats,
+        context_manager: &'a mut ContextManager,
+        session_id: &'a str,
+        thread_id: &'a str,
+        lifecycle_hooks: Option<&'a LifecycleHookEngine>,
+        harness_emitter: Option<&'a HarnessEventEmitter>,
     ) -> Self {
         let state = InlineEventState::new(renderer, interrupts, ctrl_c_notice_displayed);
         let modal = InlineModalProcessor::new(
@@ -62,7 +73,15 @@ impl<'a> InlineEventContext<'a> {
             ctrl_c_notify,
             session_bootstrap,
             full_auto,
-            conversation_history_len,
+            ModelSwitchCompactionTargets {
+                history: conversation_history,
+                session_stats,
+                context_manager,
+                session_id,
+                thread_id,
+                lifecycle_hooks,
+                harness_emitter,
+            },
         );
 
         Self {

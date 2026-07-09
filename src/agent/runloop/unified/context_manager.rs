@@ -76,6 +76,16 @@ impl ContextManager {
         self.workspace_root = Some(workspace_root.to_path_buf());
     }
 
+    #[cfg(test)]
+    pub(crate) fn default_for_test() -> Self {
+        Self::new(
+            String::new(),
+            (),
+            Arc::new(RwLock::new(HashMap::new())),
+            None,
+        )
+    }
+
     pub(crate) fn set_editor_context_snapshot(
         &mut self,
         snapshot: Option<EditorContextSnapshot>,

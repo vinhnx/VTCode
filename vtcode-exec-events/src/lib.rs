@@ -447,6 +447,9 @@ pub enum CompactionTrigger {
     Manual,
     Auto,
     Recovery,
+    /// Compaction triggered by a mid-session switch of the main model or
+    /// provider, so the newly selected model starts from a clean summary.
+    ModelSwitch,
     /// Catch-all for unknown triggers added in newer schema versions.
     #[serde(other)]
     Unknown,
@@ -458,6 +461,7 @@ impl CompactionTrigger {
             Self::Manual => "manual",
             Self::Auto => "auto",
             Self::Recovery => "recovery",
+            Self::ModelSwitch => "model_switch",
             Self::Unknown => "unknown",
         }
     }
@@ -945,6 +949,22 @@ mod tests {
         assert_eq!(restored.schema_version, EVENT_SCHEMA_VERSION);
         assert_eq!(restored.event, event);
         Ok(())
+    }
+
+    #[test]
+    fn compaction_trigger_serializes_snake_case_and_round_trips() {
+        for trigger in [
+            CompactionTrigger::Manual,
+            CompactionTrigger::Auto,
+            CompactionTrigger::Recovery,
+            CompactionTrigger::ModelSwitch,
+            CompactionTrigger::Unknown,
+        ] {
+            let json = serde_json::to_string(&trigger).unwrap();
+            assert_eq!(json, format!("\"{}\"", trigger.as_str()));
+            let restored: CompactionTrigger = serde_json::from_str(&json).unwrap();
+            assert_eq!(restored, trigger);
+        }
     }
 
     #[test]

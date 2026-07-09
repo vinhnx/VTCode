@@ -3,9 +3,9 @@ use super::{
     SessionMemoryEnvelope, build_server_compaction_context_management,
     build_summarized_fork_history, compact_history_for_recovery_in_place,
     compact_history_from_index_in_place, compact_history_in_place,
-    compact_history_in_place_with_events, inject_latest_memory_envelope,
-    latest_memory_envelope_path_for_session, manual_compact_history_in_place,
-    maybe_auto_compact_history, resolve_compaction_threshold,
+    compact_history_in_place_with_events, compact_history_on_model_switch_in_place,
+    inject_latest_memory_envelope, latest_memory_envelope_path_for_session,
+    manual_compact_history_in_place, maybe_auto_compact_history, resolve_compaction_threshold,
 };
 use crate::agent::runloop::unified::context_manager::ContextManager;
 use crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter;
@@ -555,6 +555,45 @@ async fn manual_compaction_clears_previous_response_chain() {
     assert_eq!(
         session_stats.previous_response_id_for("provider-stub", "stub-model"),
         None
+    );
+}
+
+#[tokio::test]
+async fn model_switch_compaction_tags_boundary_event_with_model_switch_trigger() {
+    let temp = tempdir().expect("tempdir");
+    let harness_path = temp.path().join("harness.log");
+    let emitter = HarnessEventEmitter::new(harness_path.clone()).expect("emitter");
+    let provider = ProviderCompactionProvider;
+    let mut history = test_history();
+    let mut session_stats = SessionStats::default();
+    let mut context_manager = test_context_manager();
+
+    let outcome = compact_history_on_model_switch_in_place(
+        CompactionContext::new(
+            &provider,
+            "stub-model",
+            "session-alpha",
+            "thread-alpha",
+            temp.path(),
+            Some(&VTCodeConfig::default()),
+            None,
+            Some(&emitter),
+        ),
+        CompactionState::new(&mut history, &mut session_stats, &mut context_manager),
+    )
+    .await
+    .expect("model-switch compaction succeeds")
+    .expect("history should compact");
+
+    assert_eq!(
+        outcome.mode,
+        vtcode_core::exec::events::CompactionMode::Provider
+    );
+
+    let log = fs::read_to_string(&harness_path).expect("harness log readable");
+    assert!(
+        log.contains("\"trigger\":\"model_switch\""),
+        "compact boundary event should carry the model_switch trigger, got: {log}"
     );
 }
 

@@ -14,9 +14,17 @@ use vtcode_core::llm::rig_adapter::RigProviderCapabilities;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_ui::tui::app::{InlineHandle, InlineHeaderContext};
 
+use crate::agent::runloop::unified::model_switch_compaction::{
+    ModelSwitchCompactionOutcome, ModelSwitchCompactionRequest, compact_on_model_switch,
+};
+
 use crate::agent::runloop::model_picker::{
     ModelPickerState, ModelSelectionResult, persist_lightweight_selection,
 };
+
+// Re-exported so call sites can keep importing `ModelSwitchCompactionTargets`
+// from this module even though its definition lives in `model_switch_compaction`.
+pub(crate) use crate::agent::runloop::unified::model_switch_compaction::ModelSwitchCompactionTargets;
 use crate::agent::runloop::welcome::SessionBootstrap;
 
 use crate::agent::runloop::ui::build_inline_header_context;
@@ -44,8 +52,10 @@ pub(crate) async fn finalize_model_selection(
     handle: &InlineHandle,
     header_context: &mut InlineHeaderContext,
     _full_auto: bool,
-    conversation_history_len: usize,
+    compaction: ModelSwitchCompactionTargets<'_>,
 ) -> Result<()> {
+    let prev_provider = config.provider.clone();
+    let prev_model = config.model.clone();
     let workspace = config.workspace.clone();
     let auth_cfg = vt_cfg.as_ref().cloned().unwrap_or_default();
     let (api_key, openai_chatgpt_auth) =
@@ -58,6 +68,7 @@ pub(crate) async fn finalize_model_selection(
         .as_ref()
         .and_then(|cfg| cfg.custom_provider(&selection.provider))
         .is_some();
+    let client_installed = selection.provider_enum.is_some() || custom_provider_enabled;
 
     if let Some(provider_enum) = selection.provider_enum
         && let Err(err) =
@@ -72,7 +83,7 @@ pub(crate) async fn finalize_model_selection(
         )?;
     }
 
-    if selection.provider_enum.is_some() || custom_provider_enabled {
+    if client_installed {
         let provider_name = selection.provider.clone();
         let new_client = create_provider_with_config(
             &provider_name,
@@ -141,11 +152,75 @@ pub(crate) async fn finalize_model_selection(
         ),
     )?;
 
-    if conversation_history_len > 0 {
-        renderer.line(
-            MessageStyle::Warning,
-            "Changing model mid-conversation may degrade performance due to context loss and token inefficiency. For best results, start a new conversation with /clear.",
-        )?;
+    let compact_on_model_switch_enabled = vt_cfg
+        .as_ref()
+        .map(|cfg| cfg.agent.harness.compact_on_model_switch)
+        .unwrap_or(true);
+
+    let outcome = compact_on_model_switch(ModelSwitchCompactionRequest {
+        prev_provider,
+        prev_model,
+        new_provider: selection.provider.clone(),
+        new_model: selection.model.clone(),
+        client_installed,
+        enabled: compact_on_model_switch_enabled,
+        provider: provider_client.as_ref(),
+        workspace: &config.workspace,
+        vt_cfg: vt_cfg.as_ref(),
+        targets: compaction,
+    })
+    .await?;
+
+    match outcome {
+        ModelSwitchCompactionOutcome::Unchanged => {
+            renderer.line(
+                MessageStyle::Info,
+                "Model selection unchanged (same model); conversation history preserved.",
+            )?;
+        }
+        ModelSwitchCompactionOutcome::Disabled => {
+            renderer.line(
+                MessageStyle::Info,
+                "Model switch context compaction is disabled; conversation history preserved.",
+            )?;
+        }
+        ModelSwitchCompactionOutcome::SkippedNoClient => {
+            renderer.line(
+                MessageStyle::Info,
+                "Model switched, but the provider client is not configured; conversation history preserved.",
+            )?;
+        }
+        ModelSwitchCompactionOutcome::LineageCleared => {
+            renderer.line(
+                MessageStyle::Info,
+                "Model switched; previous response lineage cleared (no conversation history to compact).",
+            )?;
+        }
+        ModelSwitchCompactionOutcome::Compacted(outcome) => {
+            renderer.line(
+                MessageStyle::Info,
+                &format!(
+                    "Compacted conversation for model switch ({} -> {} messages, {} compaction).",
+                    outcome.original_len,
+                    outcome.compacted_len,
+                    outcome.mode.as_str()
+                ),
+            )?;
+        }
+        ModelSwitchCompactionOutcome::AlreadyCompact => {
+            renderer.line(
+                MessageStyle::Info,
+                "Model switched; conversation was already compact.",
+            )?;
+        }
+        ModelSwitchCompactionOutcome::Failed(err) => {
+            renderer.line(
+                MessageStyle::Error,
+                &format!(
+                    "Model switched, but context compaction failed: {err}. Continuing with full history."
+                ),
+            )?;
+        }
     }
 
     if !selection.known_model {
