@@ -46,6 +46,14 @@ pub(super) fn sanitize_generated_interview_payload(
         .get("questions")
         .and_then(Value::as_array)
         .cloned()
+        .or_else(|| {
+            // Handle malformed {"questions": {"item": [...]}} or similar
+            // object wrappers where the LLM added an extra container layer.
+            payload
+                .get("questions")
+                .and_then(Value::as_object)
+                .and_then(|obj| obj.values().find_map(|v| v.as_array().cloned()))
+        })
         .or_else(|| payload.as_array().cloned())?;
 
     let analysis_hints = build_analysis_hints(context);
@@ -470,4 +478,136 @@ fn truncate_hint(value: &str, max_len: usize) -> String {
         .collect::<String>();
     out.push_str("...");
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn empty_context() -> InterviewResearchContext {
+        InterviewResearchContext {
+            discovery_tools_used: Vec::new(),
+            recent_targets: Vec::new(),
+            risk_hints: Vec::new(),
+            open_decision_hints: Vec::new(),
+            goal_hints: Vec::new(),
+            verification_hints: Vec::new(),
+            custom_note_policy: "Users can always type custom notes.".to_string(),
+            plan_draft_excerpt: None,
+            plan_draft_path: None,
+            plan_validation: None,
+            task_tracker_excerpt: None,
+            task_tracker_path: None,
+            task_tracker_summary: None,
+        }
+    }
+
+    #[test]
+    fn sanitize_handles_standard_questions_array() {
+        let payload = json!({
+            "questions": [
+                {
+                    "id": "scope",
+                    "header": "Scope",
+                    "question": "What is the scope?",
+                    "options": [
+                        {"label": "Narrow (Recommended)", "description": "Focus on one thing."},
+                        {"label": "Broad", "description": "Cover everything."}
+                    ]
+                }
+            ]
+        });
+        let result = sanitize_generated_interview_payload(payload, &empty_context());
+        assert!(result.is_some());
+        let result = result.unwrap();
+        let questions = result["questions"].as_array().unwrap();
+        assert_eq!(questions.len(), 1);
+        assert_eq!(questions[0]["id"], "scope");
+    }
+
+    #[test]
+    fn sanitize_handles_malformed_item_wrapper() {
+        // Simulates LLM generating {"questions": {"item": [...]}} instead of {"questions": [...]}
+        let payload = json!({
+            "questions": {
+                "item": [
+                    {
+                        "id": "scope",
+                        "header": "Scope",
+                        "question": "What is the scope?",
+                        "options": [
+                            {"label": "Narrow (Recommended)", "description": "Focus on one thing."},
+                            {"label": "Broad", "description": "Cover everything."}
+                        ]
+                    }
+                ]
+            }
+        });
+        let result = sanitize_generated_interview_payload(payload, &empty_context());
+        assert!(result.is_some());
+        let result = result.unwrap();
+        let questions = result["questions"].as_array().unwrap();
+        assert_eq!(questions.len(), 1);
+        assert_eq!(questions[0]["id"], "scope");
+    }
+
+    #[test]
+    fn sanitize_handles_top_level_array() {
+        // Simulates LLM generating [...] instead of {"questions": [...]}
+        let payload = json!([
+            {
+                "id": "plan",
+                "header": "Plan",
+                "question": "How to decompose?",
+                "options": [
+                    {"label": "Small steps (Recommended)", "description": "Break it down."},
+                    {"label": "Big steps", "description": "Fewer, larger steps."}
+                ]
+            }
+        ]);
+        let result = sanitize_generated_interview_payload(payload, &empty_context());
+        assert!(result.is_some());
+        let result = result.unwrap();
+        let questions = result["questions"].as_array().unwrap();
+        assert_eq!(questions.len(), 1);
+        assert_eq!(questions[0]["id"], "plan");
+    }
+
+    #[test]
+    fn sanitize_returns_none_for_empty_questions() {
+        let payload = json!({ "questions": [] });
+        let result = sanitize_generated_interview_payload(payload, &empty_context());
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn sanitize_returns_none_for_no_questions_key() {
+        let payload = json!({ "something_else": "value" });
+        let result = sanitize_generated_interview_payload(payload, &empty_context());
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn parse_interview_payload_from_text_extracts_json_from_markdown() {
+        let text = "Here are the questions:\n```json\n{\"questions\": [{\"id\": \"q1\", \"header\": \"Q1\", \"question\": \"Test?\"}]}\n```";
+        let result = parse_interview_payload_from_text(text);
+        assert!(result.is_some());
+        let result = result.unwrap();
+        assert!(result["questions"].is_array());
+    }
+
+    #[test]
+    fn parse_interview_payload_from_text_extracts_json_from_prose() {
+        let text =
+            "The following JSON contains questions: {\"questions\": [{\"id\": \"q1\"}]} end.";
+        let result = parse_interview_payload_from_text(text);
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn parse_interview_payload_from_text_returns_none_for_empty() {
+        assert!(parse_interview_payload_from_text("").is_none());
+        assert!(parse_interview_payload_from_text("   ").is_none());
+    }
 }

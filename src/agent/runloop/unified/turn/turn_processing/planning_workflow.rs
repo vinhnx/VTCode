@@ -153,7 +153,10 @@ pub(crate) async fn synthesize_planning_workflow_interview_args(
         .unwrap_or_else(|| "(none)".to_string());
     let system_prompt = format!(
         "You generate Planning workflow interview payloads for request_user_input.\n\
-Return strict JSON only (no markdown/prose): {{\"questions\": [...]}}\n\
+Return strict JSON only (no markdown/prose).\n\
+The top-level value MUST be an object with a \"questions\" key whose value is a flat JSON array of question objects.\n\
+Example: {{\"questions\": [{{\"id\": \"scope\", \"header\": \"Scope\", \"question\": \"...\", \"options\": [{{\"label\": \"A (Recommended)\", \"description\": \"...\"}}, {{\"label\": \"B\", \"description\": \"...\"}}]}}]}}\n\
+Do NOT wrap the array in an extra container like {{\"item\": [...]}} or {{\"questions\": {{\"item\": [...]}}}}.\n\
 Constraints:\n\
 - 1 to 3 questions\n\
 - each question: id snake_case, header <= 12 chars, question is one line\n\

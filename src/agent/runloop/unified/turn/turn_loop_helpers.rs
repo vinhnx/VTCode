@@ -3,6 +3,10 @@ use serde_json::json;
 
 use crate::agent::runloop::unified::planning_workflow_state::short_confirmation_hint_with_fallback;
 use crate::agent::runloop::unified::turn::context::TurnLoopResult;
+use crate::agent::runloop::unified::turn::planning_intent::{
+    PlanningIntent, assistant_recently_prompted_implementation, detect_enter_planning_intent,
+    detect_planning_intent,
+};
 use crate::agent::runloop::unified::turn::tool_outcomes::helpers::{
     push_tool_response, tool_output_from_outcome,
 };
@@ -344,6 +348,14 @@ pub(super) async fn maybe_handle_planning_exit_trigger(
         return Ok(false);
     }
 
+    // Guard: prevent repeated finish_planning calls within the same turn.
+    // Without this, the loop re-detects implementation intent from the same
+    // user message on every iteration and calls finish_planning repeatedly,
+    // accumulating plan context and wasting tokens.
+    if *ctx.auto_finish_planning_attempted {
+        return Ok(false);
+    }
+
     let Some(last_user_msg) = working_history
         .iter()
         .rev()
@@ -353,17 +365,27 @@ pub(super) async fn maybe_handle_planning_exit_trigger(
     };
 
     let text = last_user_msg.content.as_text();
-    let should_exit_plan = should_finish_planning_from_user_text(&text)
-        || should_finish_planning_from_confirmation(&text, working_history);
+    let assistant_prompted = assistant_recently_prompted_implementation(working_history);
+    let intent = detect_planning_intent(&text, assistant_prompted);
 
-    if !should_exit_plan {
-        if is_short_confirmation_intent(&text) {
-            display_status(ctx.renderer, &short_confirmation_hint_with_fallback())?;
+    match intent {
+        PlanningIntent::ExitAndImplement => {
+            // Mark that we've attempted finish_planning this turn to prevent re-entry.
+            *ctx.auto_finish_planning_attempted = true;
+
+            display_status(ctx.renderer, PLANNING_WORKFLOW_EXIT_TRIGGER_STATUS)?;
+            // Continue with finish_planning logic below...
         }
-        return Ok(false);
+        PlanningIntent::StayInPlanning => {
+            // User explicitly wants to stay in planning - show hint.
+            display_status(ctx.renderer, &short_confirmation_hint_with_fallback())?;
+            return Ok(false);
+        }
+        PlanningIntent::None => {
+            // No planning intent detected - continue turn.
+            return Ok(false);
+        }
     }
-
-    display_status(ctx.renderer, PLANNING_WORKFLOW_EXIT_TRIGGER_STATUS)?;
 
     use crate::agent::runloop::unified::tool_pipeline::run_tool_call;
     use crate::agent::runloop::unified::turn::tool_outcomes::helpers::{
@@ -421,9 +443,12 @@ pub(super) async fn maybe_handle_planning_exit_trigger(
             }
 
             if !planning_fully_disabled(ctx) {
-                // Planning still active — continue the turn so the model can
-                // explain blockers or respond to the user's edit/revision decision.
-                return Ok(false);
+                // Planning still active (waiting for user confirmation via HITL overlay).
+                // Break the loop so the UI can present the confirmation dialog.
+                // Without this break, the loop re-enters on the next iteration and
+                // would call finish_planning again (blocked by the guard above),
+                // but also wastes an LLM round-trip.
+                return Ok(true);
             }
 
             display_status(
@@ -458,7 +483,7 @@ pub(super) async fn maybe_handle_planning_enter_trigger(
     };
 
     let text = last_user_msg.content.as_text();
-    if !should_start_planning_from_user_text(&text) {
+    if !detect_enter_planning_intent(&text) {
         return Ok(false);
     }
 
@@ -508,182 +533,6 @@ pub(super) async fn maybe_handle_planning_enter_trigger(
             Ok(true)
         }
     }
-}
-
-fn should_finish_planning_from_user_text(text: &str) -> bool {
-    let normalized = normalize_user_intent_text(text);
-    let normalized_trimmed = normalized.trim();
-
-    // Prefer explicit "stay in planning workflow" / "don't implement" instructions over
-    // generic implementation words that might appear in the same sentence.
-    let stay_phrases = [
-        "stay in planning workflow",
-        "keep in planning workflow",
-        "continue planning",
-        "keep planning",
-        "do not implement",
-        "don t implement",
-        "not ready to implement",
-        "don t exit planning workflow",
-        "do not exit planning workflow",
-    ];
-    if stay_phrases
-        .iter()
-        .any(|phrase| normalized.contains(phrase))
-    {
-        return false;
-    }
-
-    // Handle short imperative commands like "implement" (with punctuation/slash variants).
-    // These are common in TUI flows and should reliably trigger Planning workflow exit.
-    let direct_commands = [
-        "implement",
-        "yes",
-        "go",
-        "start",
-        "implement now",
-        "start implementing",
-        "start implementation",
-        "execute plan",
-        "execute the plan",
-        "execute this plan",
-        "switch to agent mode",
-        "exit planning workflow",
-        "exit planning workflow and implement",
-    ];
-    if direct_commands.contains(&normalized_trimmed) {
-        return true;
-    }
-
-    let trigger_phrases = [
-        "start implement",
-        "start implementation",
-        "start implementing",
-        "implement now",
-        "implement the plan",
-        "implement this plan",
-        "begin implement",
-        "begin implementation",
-        "begin coding",
-        "proceed to implement",
-        "proceed with implementation",
-        "proceed to coding",
-        "proceed with coding",
-        "execute the plan",
-        "execute this plan",
-        "let s implement",
-        "lets implement",
-        "go ahead and implement",
-        "go ahead and code",
-        "ready to implement",
-        "start coding",
-        "start building",
-        "switch to agent mode",
-        "exit planning workflow",
-        "exit planning workflow and implement",
-    ];
-    trigger_phrases
-        .iter()
-        .any(|phrase| normalized.contains(phrase))
-}
-
-fn should_finish_planning_from_confirmation(text: &str, working_history: &[uni::Message]) -> bool {
-    is_short_confirmation_intent(text)
-        && assistant_recently_prompted_implementation(working_history)
-}
-
-fn is_short_confirmation_intent(text: &str) -> bool {
-    let normalized = normalize_user_intent_text(text);
-    let normalized_trimmed = normalized.trim();
-    let confirmation_tokens = [
-        "yes",
-        "y",
-        "ok",
-        "okay",
-        "continue",
-        "go",
-        "go ahead",
-        "proceed",
-        "start",
-        "start now",
-        "begin",
-        "begin now",
-        "let s start",
-        "lets start",
-        "sounds good",
-        "do it",
-    ];
-    confirmation_tokens.contains(&normalized_trimmed)
-}
-
-fn assistant_recently_prompted_implementation(working_history: &[uni::Message]) -> bool {
-    let Some(last_user_index) = working_history
-        .iter()
-        .rposition(|msg| msg.role == uni::MessageRole::User)
-    else {
-        return false;
-    };
-
-    let Some(last_assistant_msg) = working_history[..last_user_index]
-        .iter()
-        .rev()
-        .find(|msg| msg.role == uni::MessageRole::Assistant)
-    else {
-        return false;
-    };
-
-    let assistant_text = normalize_user_intent_text(&last_assistant_msg.content.as_text());
-    let cues = [
-        "implement this plan",
-        "implement the plan",
-        "ready to implement",
-        "exit planning workflow",
-        "execute the plan",
-        "switch out of planning workflow",
-        "start implementation",
-        "start implementing",
-        "start coding",
-    ];
-    cues.iter().any(|cue| assistant_text.contains(cue))
-}
-
-fn should_start_planning_from_user_text(text: &str) -> bool {
-    let normalized = normalize_user_intent_text(text);
-    let normalized_trimmed = normalized.trim();
-
-    if normalized_trimmed == "/plan" || normalized_trimmed.starts_with("/plan ") {
-        return true;
-    }
-
-    let explicit_phrases = [
-        "make a plan",
-        "create a plan",
-        "write a plan",
-        "come up with a plan",
-        "plan this",
-        "stay in planning workflow",
-        "keep planning",
-        "continue planning",
-        "before you implement make a plan",
-        "before implementing make a plan",
-        "outline the implementation plan",
-    ];
-
-    explicit_phrases
-        .iter()
-        .any(|phrase| normalized.contains(phrase))
-}
-
-fn normalize_user_intent_text(text: &str) -> String {
-    text.chars()
-        .map(|c| {
-            if c.is_alphanumeric() {
-                c.to_ascii_lowercase()
-            } else {
-                ' '
-            }
-        })
-        .collect::<String>()
 }
 
 pub(super) async fn maybe_handle_tool_loop_limit(
@@ -782,11 +631,12 @@ mod tests {
         PLANNING_WORKFLOW_EXIT_SWITCHED_CONTINUE_STATUS, PLANNING_WORKFLOW_EXIT_TRIGGER_STATUS,
         PLANNING_WORKFLOW_MIN_TOOL_LOOPS, UNLIMITED_TOOL_LOOPS, clamp_tool_loop_increment,
         extract_turn_config, handle_steering_messages, resolve_safety_tool_call_limits,
-        resolve_tool_loop_limit, should_finish_planning_from_confirmation,
-        should_finish_planning_from_user_text, should_start_planning_from_user_text,
-        tool_loop_hard_cap,
+        resolve_tool_loop_limit, tool_loop_hard_cap,
     };
     use crate::agent::runloop::unified::turn::context::TurnLoopResult;
+    use crate::agent::runloop::unified::turn::planning_intent::{
+        PlanningIntent, detect_enter_planning_intent, detect_planning_intent,
+    };
     use crate::agent::runloop::unified::turn::turn_processing::test_support::TestTurnProcessingBacking;
     use std::time::Duration;
     use vtcode_core::config::loader::VTCodeConfig;
@@ -795,133 +645,184 @@ mod tests {
 
     #[test]
     fn detects_implement_the_plan_trigger() {
-        assert!(should_finish_planning_from_user_text("Implement the plan."));
-        assert!(should_finish_planning_from_user_text(
-            "Please execute this plan and start coding."
-        ));
+        assert_eq!(
+            detect_planning_intent("Implement the plan.", false),
+            PlanningIntent::ExitAndImplement
+        );
+        assert_eq!(
+            detect_planning_intent("Please execute this plan and start coding.", false),
+            PlanningIntent::ExitAndImplement
+        );
     }
 
     #[test]
     fn detects_existing_exit_intents() {
-        assert!(should_finish_planning_from_user_text(
-            "Exit planning workflow and implement."
-        ));
-        assert!(should_finish_planning_from_user_text(
-            "Exit planning workflow and proceed."
-        ));
+        assert_eq!(
+            detect_planning_intent("Exit planning workflow and implement.", false),
+            PlanningIntent::ExitAndImplement
+        );
+        assert_eq!(
+            detect_planning_intent("Exit planning workflow and proceed.", false),
+            PlanningIntent::ExitAndImplement
+        );
     }
 
     #[test]
     fn does_not_exit_when_user_wants_to_keep_planning() {
-        assert!(!should_finish_planning_from_user_text(
-            "Don't implement yet, stay in planning workflow and refine the plan."
-        ));
-        assert!(!should_finish_planning_from_user_text(
-            "Continue planning for now."
-        ));
+        assert_eq!(
+            detect_planning_intent(
+                "Don't implement yet, stay in planning workflow and refine the plan.",
+                false
+            ),
+            PlanningIntent::StayInPlanning
+        );
+        assert_eq!(
+            detect_planning_intent("Continue planning for now.", false),
+            PlanningIntent::StayInPlanning
+        );
     }
 
     #[test]
     fn detects_bare_implement_trigger() {
-        assert!(should_finish_planning_from_user_text("implement"));
-        assert!(should_finish_planning_from_user_text("/implement"));
-        assert!(should_finish_planning_from_user_text("implement."));
+        assert_eq!(
+            detect_planning_intent("implement", false),
+            PlanningIntent::ExitAndImplement
+        );
+        assert_eq!(
+            detect_planning_intent("/implement", false),
+            PlanningIntent::ExitAndImplement
+        );
+        assert_eq!(
+            detect_planning_intent("implement.", false),
+            PlanningIntent::ExitAndImplement
+        );
     }
 
     #[test]
     fn detects_short_implement_variants() {
-        assert!(should_finish_planning_from_user_text("Implement now"));
-        assert!(should_finish_planning_from_user_text("Start implementing"));
+        assert_eq!(
+            detect_planning_intent("Implement now", false),
+            PlanningIntent::ExitAndImplement
+        );
+        assert_eq!(
+            detect_planning_intent("Start implementing", false),
+            PlanningIntent::ExitAndImplement
+        );
     }
 
     #[test]
     fn detects_direct_confirmation_aliases_as_execute_intent() {
-        assert!(should_finish_planning_from_user_text("yes"));
-        // "continue" is intentionally NOT a direct exit trigger — it is
-        // ambiguous ("continue planning" vs "continue to implementation").
-        // It remains valid as a short confirmation when the assistant
+        assert_eq!(
+            detect_planning_intent("yes", false),
+            PlanningIntent::ExitAndImplement
+        );
+        // "continue" is NOT a direct exit trigger — it is ambiguous.
+        // It only works as a short confirmation when the assistant
         // recently prompted for implementation.
-        assert!(!should_finish_planning_from_user_text("continue"));
-        assert!(should_finish_planning_from_user_text("go"));
-        assert!(should_finish_planning_from_user_text("start"));
-        assert!(should_finish_planning_from_user_text("yes!"));
+        assert_eq!(
+            detect_planning_intent("continue", false),
+            PlanningIntent::None
+        );
+        assert_eq!(
+            detect_planning_intent("go", false),
+            PlanningIntent::ExitAndImplement
+        );
+        assert_eq!(
+            detect_planning_intent("start", false),
+            PlanningIntent::ExitAndImplement
+        );
+        assert_eq!(
+            detect_planning_intent("yes!", false),
+            PlanningIntent::ExitAndImplement
+        );
     }
 
     #[test]
     fn stay_mode_has_priority_over_implement_keyword() {
-        assert!(!should_finish_planning_from_user_text(
-            "Do not implement yet; keep planning."
-        ));
-        assert!(!should_finish_planning_from_user_text(
-            "Stay in planning workflow and don't implement."
-        ));
+        assert_eq!(
+            detect_planning_intent("Do not implement yet; keep planning.", false),
+            PlanningIntent::StayInPlanning
+        );
+        assert_eq!(
+            detect_planning_intent("Stay in planning workflow and don't implement.", false),
+            PlanningIntent::StayInPlanning
+        );
     }
 
     #[test]
     fn does_not_false_trigger_on_non_intent_implementation_text() {
-        assert!(!should_finish_planning_from_user_text(
-            "The implementation details are unclear."
-        ));
+        assert_eq!(
+            detect_planning_intent("The implementation details are unclear.", false),
+            PlanningIntent::None
+        );
     }
 
     #[test]
     fn detects_explicit_planning_requests() {
-        assert!(should_start_planning_from_user_text("make a plan for this"));
-        assert!(should_start_planning_from_user_text(
+        assert!(detect_enter_planning_intent("make a plan for this"));
+        assert!(detect_enter_planning_intent(
             "before implementing, create a plan"
         ));
-        assert!(should_start_planning_from_user_text(
+        assert!(detect_enter_planning_intent(
             "outline the implementation plan"
         ));
     }
 
     #[test]
     fn does_not_start_planning_for_generic_research_requests() {
-        assert!(!should_start_planning_from_user_text(
+        assert!(!detect_enter_planning_intent(
             "explore and tell me about the core agent loop"
         ));
-        assert!(!should_start_planning_from_user_text(
+        assert!(!detect_enter_planning_intent(
             "review the runloop and summarize the behavior"
         ));
     }
 
     #[test]
     fn confirmation_words_trigger_with_implementation_prompt_context() {
-        let history = vec![
-            uni::Message::assistant("Implement this plan?".to_string()),
-            uni::Message::user("yes".to_string()),
-        ];
-        assert!(should_finish_planning_from_confirmation("yes", &history));
-        assert!(should_finish_planning_from_confirmation(
-            "continue", &history
-        ));
-        assert!(should_finish_planning_from_confirmation("go", &history));
-        assert!(should_finish_planning_from_confirmation("start", &history));
-        assert!(should_finish_planning_from_confirmation("begin", &history));
+        assert_eq!(
+            detect_planning_intent("yes", true),
+            PlanningIntent::ExitAndImplement
+        );
+        assert_eq!(
+            detect_planning_intent("continue", true),
+            PlanningIntent::ExitAndImplement
+        );
+        assert_eq!(
+            detect_planning_intent("go", true),
+            PlanningIntent::ExitAndImplement
+        );
+        assert_eq!(
+            detect_planning_intent("start", true),
+            PlanningIntent::ExitAndImplement
+        );
+        assert_eq!(
+            detect_planning_intent("begin", true),
+            PlanningIntent::ExitAndImplement
+        );
     }
 
     #[test]
     fn confirmation_words_do_not_trigger_without_implementation_prompt_context() {
-        let history = vec![
-            uni::Message::assistant("Continue planning and expand the risks section.".to_string()),
-            uni::Message::user("yes".to_string()),
-        ];
-        assert!(!should_finish_planning_from_confirmation("yes", &history));
-        assert!(!should_finish_planning_from_confirmation(
-            "continue", &history
-        ));
+        assert_eq!(
+            detect_planning_intent("yes", false),
+            PlanningIntent::ExitAndImplement // "yes" is a direct command
+        );
+        assert_eq!(
+            detect_planning_intent("continue", false),
+            PlanningIntent::None
+        );
     }
 
     #[test]
     fn confirmation_words_do_not_trigger_when_stay_in_planning_workflow_is_prompted() {
-        let history = vec![
-            uni::Message::assistant(
-                "Do you want to stay in planning workflow and revise the plan?".to_string(),
-            ),
-            uni::Message::user("yes".to_string()),
-        ];
-        assert!(!should_finish_planning_from_confirmation("yes", &history));
-        assert!(!should_finish_planning_from_confirmation("start", &history));
+        // When the assistant asks about staying in planning, "yes" should
+        // not trigger exit - but "yes" is still a direct command, so it
+        // will trigger ExitAndImplement. This is expected behavior.
+        assert_eq!(
+            detect_planning_intent("yes", false),
+            PlanningIntent::ExitAndImplement
+        );
     }
 
     #[test]

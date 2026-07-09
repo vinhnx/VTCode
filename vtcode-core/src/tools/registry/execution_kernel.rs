@@ -7,7 +7,7 @@ use crate::config::constants::tools as tool_names;
 use crate::tools::apply_patch::{UNIFIED_FILE_MAX_PAYLOAD_BYTES_ENV, effective_max_payload_bytes};
 use crate::tools::error_messages::agent_execution;
 use crate::tools::names::canonical_tool_name;
-use crate::tools::validation::{commands, paths};
+use crate::tools::validation::{commands, condensed_schema_hint, paths};
 
 use super::ToolRegistry;
 
@@ -428,8 +428,15 @@ pub(super) fn preflight_validate_resolved_call(
     if let Some(schema) = effective_parameter_schema.as_ref()
         && let Err(errors) = jsonschema::validate(schema, validation_args.as_ref())
     {
+        // Include a condensed schema hint so the model can self-correct
+        // instead of retrying blind with the same malformed arguments.
+        let schema_hint = condensed_schema_hint(schema);
+        let hint_msg = match schema_hint {
+            Some(hint) => format!("\nExpected schema (required fields and types): {hint}"),
+            None => String::new(),
+        };
         return Err(anyhow!(
-            "Invalid arguments for tool '{effective_tool_name}': {errors}"
+            "Invalid arguments for tool '{effective_tool_name}': {errors}{hint_msg}"
         ));
     }
 
@@ -468,6 +475,7 @@ mod tests {
     use crate::tools::command_args::parse_indexed_command_parts;
     use crate::tools::request_user_input::RequestUserInputTool;
     use crate::tools::traits::Tool;
+    use crate::tools::validation::condensed_schema_hint;
     use anyhow::Result;
     use serde_json::{Value, json};
 
@@ -475,6 +483,46 @@ mod tests {
         let temp = tempfile::tempdir().expect("temp workspace");
         let registry = ToolRegistry::new(temp.path().to_path_buf()).await;
         (temp, registry)
+    }
+
+    #[test]
+    fn condensed_schema_hint_extracts_required_and_types() {
+        let schema = json!({
+            "type": "object",
+            "required": ["path", "content"],
+            "properties": {
+                "path": {"type": "string"},
+                "content": {"type": "string"},
+                "encoding": {"type": "string"}
+            }
+        });
+        let hint = condensed_schema_hint(&schema).unwrap();
+        let required = hint["required"].as_array().unwrap();
+        assert_eq!(required.len(), 2);
+        assert!(required.contains(&json!("path")));
+        assert!(required.contains(&json!("content")));
+        assert_eq!(hint["properties"]["path"], "string");
+        assert_eq!(hint["properties"]["content"], "string");
+        assert_eq!(hint["properties"]["encoding"], "string");
+    }
+
+    #[test]
+    fn condensed_schema_hint_returns_none_without_properties() {
+        let schema = json!({"type": "object"});
+        assert!(condensed_schema_hint(&schema).is_none());
+    }
+
+    #[test]
+    fn condensed_schema_hint_defaults_type_to_any() {
+        let schema = json!({
+            "type": "object",
+            "required": ["id"],
+            "properties": {
+                "id": {}
+            }
+        });
+        let hint = condensed_schema_hint(&schema).unwrap();
+        assert_eq!(hint["properties"]["id"], "any");
     }
 
     #[test]
