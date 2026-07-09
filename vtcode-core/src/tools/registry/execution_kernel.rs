@@ -328,7 +328,7 @@ pub(super) fn preflight_validate_resolved_call(
     }
 
     let required = required_args_for_tool(&effective_tool_name);
-    let mut failures = Vec::new();
+    let mut failures = Vec::with_capacity(required.len());
     for key in required {
         if is_missing_required_arg(&effective_tool_name, validation_args.as_ref(), key) {
             failures.push(format!("Missing required argument: {key}"));
