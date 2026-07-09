@@ -3,7 +3,7 @@
 use serde_json::Value;
 use std::time::Duration;
 
-use super::{ToolExecutionRecord, ToolRegistry};
+use super::{ToolExecutionRecord, ToolRegistry, ToolTaskTelemetrySnapshot};
 
 impl ToolRegistry {
     /// Get recent tool executions (successes and failures).
@@ -14,6 +14,16 @@ impl ToolRegistry {
     /// Get recent tool execution failures.
     pub fn get_recent_tool_failures(&self, count: usize) -> Vec<ToolExecutionRecord> {
         self.execution_history.get_recent_failures(count)
+    }
+
+    /// Aggregate representative task telemetry from recorded tool executions.
+    pub fn task_tool_telemetry_snapshot(
+        &self,
+        task_id: Option<&str>,
+        task_completed_successfully: Option<bool>,
+    ) -> ToolTaskTelemetrySnapshot {
+        self.execution_history
+            .task_telemetry_snapshot(task_id, task_completed_successfully)
     }
 
     /// Find a recent spooled output for a tool call with identical args.

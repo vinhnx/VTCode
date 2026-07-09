@@ -3,6 +3,7 @@ use hashbrown::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, TryLockError};
 use std::time::{Duration, Instant};
+use vtcode_config::constants::tools;
 
 /// Aggregates telemetry data for the agent session.
 #[derive(Debug, Clone, Default)]
@@ -72,18 +73,19 @@ impl TelemetryManager {
 
     /// Record a tool invocation, incrementing error count if it failed.
     pub fn record_tool_usage(&self, tool: &str, success: bool) {
+        let tool = public_tool_telemetry_label(tool);
         self.with_stats_mut_non_blocking(|stats| {
             stats.total_tool_calls += 1;
-            if let Some(count) = stats.tool_counts.get_mut(tool) {
+            if let Some(count) = stats.tool_counts.get_mut(&tool) {
                 *count += 1;
             } else {
-                stats.tool_counts.insert(tool.to_owned(), 1);
+                stats.tool_counts.insert(tool.clone(), 1);
             }
             if !success {
-                if let Some(count) = stats.tool_errors.get_mut(tool) {
+                if let Some(count) = stats.tool_errors.get_mut(&tool) {
                     *count += 1;
                 } else {
-                    stats.tool_errors.insert(tool.to_owned(), 1);
+                    stats.tool_errors.insert(tool, 1);
                 }
             }
         });
@@ -150,6 +152,15 @@ impl TelemetryManager {
     }
 }
 
+fn public_tool_telemetry_label(tool: &str) -> String {
+    match tool {
+        tools::UNIFIED_EXEC => tools::EXEC_COMMAND.to_string(),
+        tools::UNIFIED_SEARCH => tools::CODE_SEARCH.to_string(),
+        tools::UNIFIED_FILE => "file_operation".to_string(),
+        _ => tool.to_owned(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::TelemetryManager;
@@ -206,5 +217,32 @@ mod tests {
         let model = snapshot.model_usage.get("gpt-5").expect("model usage");
         assert_eq!(model.cache_read_tokens, 320);
         assert_eq!(model.cache_creation_tokens, 80);
+    }
+
+    #[test]
+    fn tool_usage_normalises_removed_internal_labels() {
+        let telemetry = TelemetryManager::new();
+        telemetry.record_tool_usage("unified_exec", true);
+        telemetry.record_tool_usage("unified_search", false);
+        telemetry.record_tool_usage("unified_file", true);
+
+        let snapshot = telemetry.get_snapshot().expect("snapshot");
+        assert_eq!(snapshot.total_tool_calls, 3);
+        assert_eq!(snapshot.tool_counts.get("exec_command"), Some(&1));
+        assert_eq!(snapshot.tool_counts.get("code_search"), Some(&1));
+        assert_eq!(snapshot.tool_counts.get("file_operation"), Some(&1));
+        assert_eq!(snapshot.tool_errors.get("code_search"), Some(&1));
+        assert!(
+            !snapshot
+                .tool_counts
+                .keys()
+                .any(|label| label.contains("unified_"))
+        );
+        assert!(
+            !snapshot
+                .tool_errors
+                .keys()
+                .any(|label| label.contains("unified_"))
+        );
     }
 }

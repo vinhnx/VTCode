@@ -1,0 +1,91 @@
+[
+  {
+    "id": "tool_surface_discovery_default",
+    "category": "tool_surface",
+    "profile": "codex_default",
+    "capability": "ordinary_file_discovery",
+    "task": "In this repository, list the crates that define an AGENTS.md file and mention the command you used.",
+    "metric": "contains_match",
+    "expected": "AGENTS.md",
+    "telemetry_required": [
+      "total_tool_calls",
+      "repeated_equivalent_calls",
+      "failed_tool_calls",
+      "spooled_outputs",
+      "task_completed_successfully"
+    ]
+  },
+  {
+    "id": "tool_surface_text_search_default",
+    "category": "tool_surface",
+    "profile": "codex_default",
+    "capability": "text_search",
+    "task": "Find the Rust source file that defines ToolTaskTelemetrySnapshot and report the file path plus the shell search command.",
+    "metric": "contains_match",
+    "expected": "ToolTaskTelemetrySnapshot",
+    "telemetry_required": [
+      "total_tool_calls",
+      "repeated_equivalent_calls",
+      "failed_tool_calls",
+      "spooled_outputs",
+      "task_completed_successfully"
+    ]
+  },
+  {
+    "id": "tool_surface_semantic_search_advanced",
+    "category": "tool_surface",
+    "profile": "advanced_vtcode",
+    "capability": "semantic_search",
+    "task": "Use semantic code search to find Rust functions that take a ToolExecutionRecord parameter or reference and summarise the most relevant match.",
+    "metric": "contains_match",
+    "expected": "ToolExecutionRecord",
+    "telemetry_required": [
+      "total_tool_calls",
+      "repeated_equivalent_calls",
+      "failed_tool_calls",
+      "fallback_calls",
+      "task_completed_successfully"
+    ]
+  },
+  {
+    "id": "tool_surface_patch_default",
+    "category": "tool_surface",
+    "profile": "codex_default",
+    "capability": "patch_editing",
+    "task": "Make a minimal patch to a temporary fixture file that changes one line, then explain the patch result without touching repository source files.",
+    "metric": "contains_match",
+    "expected": "apply_patch",
+    "telemetry_required": [
+      "total_tool_calls",
+      "failed_tool_calls",
+      "task_completed_successfully"
+    ]
+  },
+  {
+    "id": "tool_surface_interactive_default",
+    "category": "tool_surface",
+    "profile": "codex_default",
+    "capability": "interactive_command_continuation",
+    "task": "Start an interactive shell command that waits for input, send one input line, and report the final output.",
+    "metric": "contains_match",
+    "expected": "write_stdin",
+    "telemetry_required": [
+      "total_tool_calls",
+      "failed_tool_calls",
+      "spooled_outputs",
+      "read_after_spool_calls",
+      "command_approval_prompts",
+      "task_completed_successfully"
+    ]
+  },
+  {
+    "id": "tool_surface_archived_baseline_unavailable",
+    "category": "tool_surface",
+    "profile": "archived_baseline",
+    "capability": "archival_comparison",
+    "task": "Placeholder for old unified tool surface results. No checked-in archived baseline report was found before dead-code cleanup.",
+    "metric": "contains_match",
+    "expected": "baseline unavailable",
+    "baseline_status": "unavailable"
+  }
+]
