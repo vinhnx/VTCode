@@ -53,7 +53,7 @@ This documentation is organized to support different user personas and use cases
 
 VT Code has undergone significant improvements:
 
-- **Loop Engineering** - Worktree isolation for parallel agents, propose/verify sub-agent separation, durable loop state persistence (`.vtcode/state/`), and token-cost guardrails. See [Loop Engineering Plan](./project/PLAN-loop-engineering.md).
+- **Loop Engineering** - Worktree isolation for parallel agents, propose/verify sub-agent separation, durable loop state persistence (`.vtcode/state/`), and token-cost guardrails. See [Loop Engineering](./loop-engineering.md).
 
 - **GLM-5.2 Model Support** - Zhipu AI's latest model with cache metrics in stream handling
 - **Byte-Range File Reading** - Large file reading with offset and page size parameters for efficient partial reads
@@ -65,7 +65,7 @@ VT Code has undergone significant improvements:
 - **Provider Stream Refactoring** - Simplified stream handling across DeepSeek, StepFun, and ZAI providers
 - **Decision Transparency System** - Complete audit trail with reasoning and confidence scores
 - **Error Recovery & Resilience** - Intelligent error handling with pattern detection and multiple recovery strategies
-- **Ast-grep Outline Mode** — Token-efficient symbol maps (`action=outline`) via `unified_search` for cheap "what's in this file/directory?" queries, auto-installs ast-grep on first use
+- **Advanced Code Search** - Token-efficient Tree-sitter outlines and ast-grep structural queries through `code_search` in the advanced VT Code profile
 - **Web Search & Fetch** — `web_search` and `defuddle_fetch` tools with TOML-driven network allowlist and domain-scoped approval caching
 - **Post-Tool Recovery Cycles** — Automatic detection and cap enforcement for post-tool recovery loops with temporary file cleanup
 - **CLI `did you mean?`** — Fuzzy suggestions for unrecognized commands with colorized output
@@ -95,6 +95,7 @@ Contributing to VT Code? Understand the architecture and development processes:
 - **[Architecture Overview](./ARCHITECTURE.md)** - System design and core components
 - **[Development Guide](./development/README.md)** - Development environment setup
 - **[Tool Reference](./tools/TOOL_SPECS.md)** - Technical reference for built-in tools
+- **[AI Tool Surface Migration](./development/ai-tool-surface-migration.md)** - Breaking-change notes for the Codex-style default tools
 - **[Web Search Tool](./tools/web_search.md)** - Web search configuration and guard rails
 - **[Defuddle Fetch](./tools/defuddle_fetch.md)** - Markdown extraction fallback for complex pages
 - **[Code Standards](../.github/copilot-instructions.md)** - Coding guidelines and best practices
@@ -127,7 +128,7 @@ Deploying VT Code in production? Focus on enterprise features:
 
 - **Semantic Analysis** - Deep code understanding across Rust, Python, JavaScript, TypeScript, Go, Java, and more
 - **Bash Safety Parsing** - Tree-sitter-bash for critical shell command validation
-- **Intelligent Search** - Ripgrep text search and ast-grep AST outline symbol maps via `unified_search` (actions: `grep`, `outline`, `structural`)
+- **Intelligent Search** - Ripgrep text search through `exec_command.cmd` and semantic `code_search` for ast-grep structural queries and Tree-sitter outlines
 - **Fuzzy File Discovery** - Git-aware traversal using `ignore` with `nucleo-matcher` scoring
 - **Symbol Analysis** - LLM-native function, class, and variable extraction
 - **Dependency Mapping** - Import relationship analysis
@@ -137,7 +138,7 @@ Deploying VT Code in production? Focus on enterprise features:
 
 - **File Operations** - Safe, validated file system operations
 - **Terminal Integration** - Enhanced PTY support with color-coded tool/MCP status banners and interactive commands
-- **Search & Analysis** - Fast text/structural/outline code search via `unified_search` (grep, structural, outline actions)
+- **Search & Analysis** - Fast text search through shell `rg`, plus advanced structural and outline code search through `code_search`
 - **Batch Processing** - Efficient multi-file operations
 - **Configuration Management** - Dynamic TOML-based settings
 - **GPU Pod Manager** - Remote model pod lifecycle management over SSH ([feature guide](./features/GPU_POD_MANAGER.md))
@@ -361,7 +362,7 @@ This documentation reflects version 0.133.21 of VT Code, which includes signific
 - Conversation summarization for long-running sessions
 - Enhanced Terminal User Interface (TUI) with improved mouse support and text selection
 - `web_search` and `defuddle_fetch` tools with TOML-driven network allowlist
-- `unified_search` outline mode for token-efficient symbol maps (auto-installs ast-grep)
+- `code_search` outline mode for token-efficient symbol maps in the advanced VT Code profile (auto-installs ast-grep)
 - Post-tool recovery cycle tracking with cap checks and temporary file cleanup
 - CLI `did you mean?` suggestions for unrecognized commands
 - `/continue` command to resume the most recent session

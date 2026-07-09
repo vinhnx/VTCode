@@ -39,7 +39,7 @@ python3 scripts/generate_config_field_reference.py
 | `agent.custom_api_keys.*` | `string` | no | `-` | - |
 | `agent.default_model` | `string` | no | `"xiaomi/mimo-v2.5-pro"` | Default model to use |
 | `agent.enable_self_review` | `boolean` | no | `false` | Enable an extra self-review pass to refine final responses |
-| `agent.enable_split_tool_results` | `boolean` | no | `true` | Enable split tool results for massive token savings (Phase 4) When enabled, tools return dual-channel output: - llm_content: Concise summary sent to LLM (token-optimized, 53-95% reduction) - ui_content: Rich output displayed to user (full details preserved) Applies to: unified_search, unified_file, unified_exec Default: true (opt-out for compatibility), recommended for production use |
+| `agent.enable_split_tool_results` | `boolean` | no | `true` | Enable split tool results for massive token savings. When enabled, tools return dual-channel output: - llm_content: Concise summary sent to LLM (token-optimized, 53-95% reduction) - ui_content: Rich output displayed to user (full details preserved) Applies to large built-in tool responses such as command output, patch feedback, and semantic search. Default: true, recommended for production use |
 | `agent.harness.auto_compaction_enabled` | `boolean` | no | `false` | Enable automatic context compaction when token pressure crosses threshold. Disabled by default. When disabled, no automatic compaction is triggered. |
 | `agent.harness.auto_compaction_instructions` | `null \| string` | no | `null` | Optional custom instructions for the compaction summarization prompt. When set, replaces the default Anthropic compaction prompt entirely. Useful for tool-use scenarios to prevent the model from calling tools during summarization. Only applies to Anthropic provider. |
 | `agent.harness.auto_compaction_pause_after` | `boolean` | no | `false` | Whether to pause after compaction (Anthropic only). When true and compaction triggers, the API returns early with `stop_reason: "compaction"` and only the compaction block. The caller can then insert additional messages before the model generates its text response. |
@@ -154,7 +154,7 @@ python3 scripts/generate_config_field_reference.py
 | `auth.copilot.excluded_tools[]` | `string` | no | `-` | - |
 | `auth.copilot.host` | `null \| string` | no | `null` | - |
 | `auth.copilot.startup_timeout_secs` | `integer` | no | `20` | - |
-| `auth.copilot.vtcode_tool_allowlist` | `array` | no | `["unified_search", "unified_file", "unified_exec", "apply_patch"]` | - |
+| `auth.copilot.vtcode_tool_allowlist` | `array` | no | `["exec_command", "write_stdin", "apply_patch", "code_search"]` | - |
 | `auth.copilot.vtcode_tool_allowlist[]` | `string` | no | `-` | - |
 | `auth.openai.auto_refresh` | `boolean` | no | `true` | - |
 | `auth.openai.callback_port` | `integer` | no | `1455` | - |
@@ -164,7 +164,7 @@ python3 scripts/generate_config_field_reference.py
 | `auth.openrouter.callback_port` | `integer` | no | `8484` | Port for the local callback server |
 | `auth.openrouter.flow_timeout_secs` | `integer` | no | `300` | Timeout in seconds for completing the OAuth browser flow. |
 | `auth.openrouter.use_oauth` | `boolean` | no | `false` | Whether to use OAuth instead of API key |
-| `automation.full_auto.allowed_tools` | `array` | no | `["read_file", "unified_search"]` | Allow-list of tools that may execute automatically. |
+| `automation.full_auto.allowed_tools` | `array` | no | `["exec_command", "write_stdin", "apply_patch"]` | Allow-list of tools that may execute automatically. Add `code_search` when the advanced profile is enabled. |
 | `automation.full_auto.allowed_tools[]` | `string` | no | `-` | - |
 | `automation.full_auto.enabled` | `boolean` | no | `false` | Enable the runtime flag once the workspace is configured for autonomous runs. |
 | `automation.full_auto.max_turns` | `integer` | no | `100` | Maximum number of autonomous agent turns before the exec runner pauses. |
@@ -656,7 +656,7 @@ python3 scripts/generate_config_field_reference.py
 | `tools.loop_thresholds.*` | `integer` | no | `-` | - |
 | `tools.max_consecutive_blocked_tool_calls_per_turn` | `integer` | no | `3` | Maximum consecutive blocked tool calls allowed per turn before forcing a turn break. This prevents long blocked-call churn from consuming CPU. |
 | `tools.max_repeated_tool_calls` | `integer` | no | `2` | Maximum number of times the same tool invocation can be retried with the identical arguments within a single turn. |
-| `tools.max_sequential_spool_chunk_reads` | `integer` | no | `6` | Maximum sequential spool-chunk `read_file` calls allowed per turn before nudging the agent to switch to targeted extraction/summarization. |
+| `tools.max_sequential_spool_chunk_reads` | `integer` | no | `6` | Maximum sequential spool-chunk inspections allowed per turn before nudging the agent to switch to targeted extraction or summarisation. |
 | `tools.max_tool_loops` | `integer` | no | `0` | Maximum inner tool-call loops per user turn. Set to `0` to disable the limit. Prevents infinite tool-calling cycles in interactive chat. This limits how many back-and-forths the agent will perform executing tools and re-asking the model before returning a final answer. |
 | `tools.max_tool_rate_per_second` | `integer \| null` | no | `null` | Optional per-second rate limit for tool calls to smooth bursty retries. When unset, the runtime defaults apply. |
 | `tools.plugins.allow` | `array` | no | `[]` | Explicit allow-list of plugin identifiers permitted to load. |

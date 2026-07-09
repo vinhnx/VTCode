@@ -6,7 +6,9 @@ This document describes VT Code's sandboxing implementation, inspired by the [Co
 
 VT Code implements **configurable sandbox execution with selective escalation**. Sandboxing is opt-in via `[sandbox].enabled = true`; when enabled, commands flow through a centralized execution system that decides whether to run commands raw, under macOS Seatbelt, or through Linux Landlock + seccomp.
 
-Runtime enforcement for shell execution is applied in the active tool path (`unified_exec` / `run_pty_cmd`) after loading `[sandbox]` from `vtcode.toml`, before PTY process launch.
+Runtime enforcement for shell execution is applied in the active
+`exec_command` path after loading `[sandbox]` from `vtcode.toml`, before PTY
+process launch.
 
 Key design principles:
 1. **Platform-specific implementations unified behind a common policy abstraction**

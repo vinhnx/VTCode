@@ -529,9 +529,10 @@ Define specific policies for different tools:
 ```toml
 [tools.policies]
 # Policy for shell execution tools
-shell_exec = "ask"        # Options: "ask", "allow", "deny"
-write_file = "ask"        # Options: "ask", "allow", "deny"
-read_file = "allow"       # Options: "ask", "allow", "deny"
+exec_command = "ask"      # Options: "ask", "allow", "deny"
+write_stdin = "ask"       # Options: "ask", "allow", "deny"
+apply_patch = "ask"       # Options: "ask", "allow", "deny"
+code_search = "allow"     # Options: "ask", "allow", "deny"
 web_search = "ask"        # Options: "ask", "allow", "deny"
 
 # Custom policies for specific tools
@@ -551,7 +552,7 @@ full_auto = false
 [automation.full_auto]
 enabled = false
 # List of tools that are allowed in full automation mode
-allowed_tools = ["unified_file", "unified_search", "unified_exec"]
+allowed_tools = ["exec_command", "write_stdin", "apply_patch"]
 
 [automation.scheduled_tasks]
 enabled = false
@@ -667,8 +668,8 @@ default_model = "claude-haiku-4-5"
 
 [profiles.research.tools.policies]
 web_search = "allow"
-read_file = "allow"
-shell_exec = "deny"
+code_search = "allow"
+exec_command = "deny"
 
 # Profile for local development with Ollama
 [profiles.local]

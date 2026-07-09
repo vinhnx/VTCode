@@ -48,7 +48,7 @@ hooks = [
 
 # Permission request hooks - Run only when VT Code is about to ask for approval
 [[hooks.lifecycle.permission_request]]
-matcher = "unified_exec"
+matcher = "exec_command"
 hooks = [
   { command = "$VT_PROJECT_DIR/.vtcode/hooks/approve-shell.sh" }
 ]
@@ -66,7 +66,7 @@ hooks = [
 
 -   Runs after VT Code creates tool parameters and before processing the tool call
 -   Can allow, deny, or force a human approval prompt
--   Common matchers: builtin tool names like `unified_exec`, `unified_file`, `read_file`, or MCP tool names
+-   Common matchers: builtin tool names like `exec_command`, `write_stdin`, `apply_patch`, `code_search`, or MCP tool names
 
 ### PostToolUse
 
@@ -174,11 +174,9 @@ Hook scripts receive JSON data via stdin containing session information and even
     "cwd": "/current/working/directory",
     "hook_event_name": "PreToolUse",
     "permission_decision": "ask",
-    "tool_name": "unified_file",
+    "tool_name": "apply_patch",
     "tool_input": {
-        "action": "write",
-        "path": "/path/to/file.txt",
-        "content": "file content"
+        "path": "/path/to/file.txt"
     }
 }
 ```

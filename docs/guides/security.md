@@ -118,14 +118,12 @@ Configure tool approval policies in `~/.config/vtcode/tool_policy.toml`:
 ```toml
 # Allow specific tools without prompting
 [tools]
-read_file = "allow"
-list_directory = "allow"
-search_files = "allow"
+exec_command = "ask"
+code_search = "allow"
+apply_patch = "prompt"
 
 # Require approval for sensitive operations
-run_pty_cmd = "prompt"
-write_file = "prompt"
-delete_file = "prompt"
+write_stdin = "prompt"
 
 # Block dangerous operations
 bash = "deny"

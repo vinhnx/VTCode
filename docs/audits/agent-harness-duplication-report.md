@@ -119,9 +119,9 @@ Line-by-line reading disproves the original claim:
 - `tool_routing/approval_policy.rs` does **risk/network classification**
   (`build_tool_risk_context`), not argument normalization at all.
 - The genuinely shared, name-keyed arg-shape normalization already lives in one
-  place — `tools/registry/execution_kernel.rs:245` `normalize_tool_args`
-  (apply_patch wrapping, shell-arg/unified_search normalization, alias remap) —
-  and **both** loops use it via the registry.
+  place: `tools/registry/execution_kernel.rs:245` `normalize_tool_args`
+  (apply_patch wrapping, shell argument normalization, alias remap), and
+  **both** loops use it via the registry.
 
 The interactive loop has **no** `last_file_path` inference (`rg` finds zero
 references in `src/`). There is no duplicated logic to consolidate.

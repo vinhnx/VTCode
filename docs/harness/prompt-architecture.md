@@ -60,7 +60,7 @@ for metadata:
 ---
 id: read-then-edit-large-file
 tags: [read, edit, patch, large-file, refactor]
-summary: Read a large file in chunks before editing; use unified_file.patch (not edit) for multi-hunk changes.
+summary: Inspect a large file in targeted shell slices before editing; use apply_patch for multi-hunk changes.
 ---
 # User
 <the user query>

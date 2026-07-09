@@ -114,4 +114,4 @@ The subagent layer now supports loop-engineering primitives:
 - **Loop memory**: `vtcode-core/src/loop_memory.rs` provides an append-only store for agent notes and decisions in `.vtcode/state/notes.md` and `decisions.md`.
 - **Cost guardrails**: `CostBudget` in `loop_state.rs` tracks token/cost/step limits and reports `BudgetStatus` (Ok/TokenLimitReached/CostLimitReached/StepLimitReached).
 
-See [docs/project/PLAN-loop-engineering.md](../project/PLAN-loop-engineering.md) for the full design.
+See [Loop Engineering](../loop-engineering.md) for the full design.

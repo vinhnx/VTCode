@@ -101,10 +101,7 @@ valid.
 ---
 
 • I've already gathered enough context. Let me also quickly check the dispatch/mod.rs files and one more critical
-area—the validate_startup_configuration and init_global_guardian/dotfolder—to confirm my findings.<tool_call>
-<invoke name="unified_search"><action>list</action><items>structure</items><max_depth>1</max_depth><path>
-/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-core/src/config/loader</path></invoke>
-</tool_call>"
+area, the validate_startup_configuration and init_global_guardian/dotfolder, to confirm my findings with a structured file listing."
 
 ==> check logs: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/checkpoints/turn_621.json
 

@@ -1,6 +1,8 @@
 # Text Search Guide
 
-> **Note:** legacy text-search dispatcher names are internal implementation details. The AI-facing default path for text search is `exec_command.cmd` with `rg`.
+> **Note:** legacy text-search dispatcher names are internal implementation
+> details. The AI-facing default path for text search is `exec_command.cmd`
+> with `rg`.
 
 Shell examples follow the active shell prompt profile. Linux, macOS, and WSL
 use the Unix-like profile by default; native Windows uses PowerShell. VT Code
@@ -9,88 +11,92 @@ commands to PowerShell. Use WSL when you want Unix-like workflows on Windows.
 
 ## Overview
 
-Use **ripgrep** (`rg`) through `exec_command.cmd` for fast pattern matching across codebases. It provides regex-based and literal string searching with file filtering, context lines, and language-specific searches. Use `code_search` for semantic code search, such as ast-grep structural patterns and Tree-sitter outlines.
+Use **ripgrep** (`rg`) through `exec_command.cmd` for fast text and regex
+search across codebases. Use shell `grep` only when `rg` is unavailable or when
+you need a host-specific grep feature. Use `code_search` for semantic code
+search, such as ast-grep structural queries and Tree-sitter outlines.
 
 ## Architecture
 
--   **Backend**: ripgrep (`rg`) — requires `rg` on PATH
--   **Search Type**: Regex-based (default) or literal string matching
--   **File Filtering**: Glob patterns, file type matching, size limits
--   **Performance**: Respects `.gitignore` and `.ignore` files by default for faster searches
--   **Context**: Optional surrounding lines for understanding matched code
+-   **Backend**: `rg` on PATH, or `grep` as a fallback
+-   **Search type**: regex by default, literal string matching with `rg -F`
+-   **File filtering**: `rg --glob`, `rg -t`, path arguments, and size limits
+-   **Performance**: `rg` respects `.gitignore` and `.ignore` files by default
+-   **Output control**: line numbers, column numbers, filename-only output, and
+    nearby lines are shell flags
 
 ## Basic Usage
 
-### Simple Pattern Search
+Call `exec_command` with a shell command:
 
 ```json
 {
-    "pattern": "TODO",
-    "path": "src"
+    "cmd": "rg -n \"TODO\" src"
 }
+```
+
+### Simple Text Search
+
+```sh
+rg -n "TODO" src
 ```
 
 ### Function Definition Search
 
-```json
-{
-    "pattern": "^(pub )?fn \\w+\\(",
-    "glob": "**/*.rs",
-    "context_lines": 3
-}
+```sh
+rg -n -C 3 --glob "**/*.rs" "^(pub )?fn \\w+\\(" .
 ```
 
 ### Import Statement Search
 
-```json
-{
-    "pattern": "^import\\s.*from",
-    "glob": "**/*.ts",
-    "case_sensitive": false
-}
+```sh
+rg -n -i --glob "**/*.ts" "^import\\s.*from" .
 ```
 
-## Parameter Reference
+## Flag Reference
 
-### Core Parameters
+### Core Flags
 
-| Parameter     | Type    | Default      | Description                                   |
-| ------------- | ------- | ------------ | --------------------------------------------- |
-| `pattern`     | string  | _(required)_ | Regex pattern or literal string to search for |
-| `path`        | string  | "."          | Directory to search (relative path)           |
-| `max_results` | integer | 100          | Maximum results to return (1-1000)            |
+| Need | `rg` command form |
+| --- | --- |
+| Search under a path | `rg "TODO" src` |
+| Show line numbers | `rg -n "TODO" src` |
+| Limit result volume | `rg -n "TODO" src | head -c 4000` |
+| Return only filenames | `rg -l "TODO" src` |
 
 ### Pattern Matching
 
-| Parameter         | Type    | Default | Description                                            |
-| ----------------- | ------- | ------- | ------------------------------------------------------ |
-| `literal`         | boolean | false   | Treat pattern as literal string (disable regex)        |
-| `case_sensitive`  | boolean | false   | Force case-sensitive matching. Default uses smart-case |
-| `word_boundaries` | boolean | false   | Match only at word boundaries (`\b` in regex)          |
-| `invert_match`    | boolean | false   | Return lines that DON'T match the pattern              |
-| `only_matching`   | boolean | false   | Show only matched parts, not full lines                |
+| Need | `rg` flag |
+| --- | --- |
+| Literal string search | `-F` |
+| Case-insensitive search | `-i` |
+| Case-sensitive search | `-s` |
+| Smart-case search | `-S` |
+| Whole-word search | `-w` |
+| Invert a match | `-v` |
+| Show only matched text | `-o` |
 
 ### File Filtering
 
-| Parameter              | Type    | Default | Description                                                                |
-| ---------------------- | ------- | ------- | -------------------------------------------------------------------------- |
-| `glob_pattern`         | string  | null    | Glob pattern to filter files (e.g., `**/*.rs`, `src/**/*.ts`)              |
-| `type_pattern`         | string  | null    | Filter by file type (rust, python, typescript, javascript, java, go, etc.) |
-| `max_file_size`        | integer | null    | Skip files larger than this (in bytes)                                     |
-| `respect_ignore_files` | boolean | true    | Respect `.gitignore` and `.ignore` files                                   |
-| `search_hidden`        | boolean | false   | Search inside hidden directories (starting with `.`)                       |
-| `include_hidden`       | boolean | false   | Include hidden files in results                                            |
-| `search_binary`        | boolean | false   | Search binary files (usually false)                                        |
+| Need | `rg` flag |
+| --- | --- |
+| Glob file filter | `--glob "**/*.rs"` |
+| Language type filter | `-t rust`, `-t python`, `-t ts` |
+| Skip large files | `--max-filesize 5M` |
+| Search hidden files | `--hidden` |
+| Include ignored files | `--no-ignore` |
+| Search binary files | `-a` |
 
 ### Output Formatting
 
-| Parameter         | Type    | Default   | Description                                     |
-| ----------------- | ------- | --------- | ----------------------------------------------- |
-| `context_lines`   | integer | 0         | Lines of context before/after matches (0-20)    |
-| `line_number`     | boolean | true      | Include line numbers in output                  |
-| `column`          | boolean | false     | Include column numbers for exact match position |
-| `trim`            | boolean | false     | Trim leading/trailing whitespace                |
-| `response_format` | string  | "concise" | Output format (concise or detailed)             |
+| Need | `rg` flag |
+| --- | --- |
+| Nearby lines | `-C 3` |
+| Lines before matches | `-B 2` |
+| Lines after matches | `-A 2` |
+| Column numbers | `--column` |
+| Trim leading whitespace | `--trim` |
+| JSON output for scripts | `--json` |
 
 ## Common Patterns
 
@@ -98,277 +104,190 @@ Use **ripgrep** (`rg`) through `exec_command.cmd` for fast pattern matching acro
 
 **Rust functions:**
 
-```json
-{
-    "pattern": "^(pub )?async fn \\w+|^(pub )?fn \\w+",
-    "glob": "**/*.rs"
-}
+```sh
+rg -n --glob "**/*.rs" "^(pub )?async fn \\w+|^(pub )?fn \\w+" .
 ```
 
-**TypeScript/JavaScript functions:**
+**TypeScript and JavaScript functions:**
 
-```json
-{
-    "pattern": "^(export )?function \\w+|^const \\w+ = (async )?\\(",
-    "glob": "**/*.ts"
-}
+```sh
+rg -n --glob "**/*.ts" "^(export )?function \\w+|^const \\w+ = (async )?\\(" .
 ```
 
 **Python functions:**
 
-```json
-{
-    "pattern": "^def \\w+\\(",
-    "type_pattern": "python"
-}
+```sh
+rg -n -t python "^def \\w+\\(" .
 ```
 
 ### Finding Error Handling
 
 **Rust panics and unwraps:**
 
-```json
-{
-    "pattern": "panic!|unwrap\\(|expect\\(",
-    "type_pattern": "rust",
-    "context_lines": 2
-}
+```sh
+rg -n -C 2 -t rust "panic!|unwrap\\(|expect\\(" .
 ```
 
 **Try-catch blocks:**
 
-```json
-{
-    "pattern": "try\\s*{|catch\\s*\\(|throw ",
-    "glob": "**/*.ts"
-}
+```sh
+rg -n --glob "**/*.ts" "try\\s*\\{|catch\\s*\\(|throw " .
 ```
 
 ### Finding Imports and Exports
 
 **TypeScript imports:**
 
-```json
-{
-    "pattern": "^import\\s+.*from\\s+['\"]",
-    "glob": "**/*.ts"
-}
+```sh
+rg -n --glob "**/*.ts" "^import\\s+.*from\\s+['\\\"]" .
 ```
 
 **Python imports:**
 
-```json
-{
-    "pattern": "^import |^from .* import ",
-    "type_pattern": "python"
-}
+```sh
+rg -n -t python "^import |^from .* import " .
 ```
 
 ### Finding TODOs and FIXMEs
 
 **All comment markers:**
 
-```json
-{
-    "pattern": "(TODO|FIXME|HACK|BUG|XXX)[:\\s]",
-    "context_lines": 1
-}
+```sh
+rg -n -C 1 "(TODO|FIXME|HACK|BUG|XXX)[:\\s]" .
 ```
 
 **Language-specific TODOs:**
 
-```json
-{
-    "pattern": "// TODO|# TODO",
-    "type_pattern": "rust",
-    "context_lines": 1
-}
+```sh
+rg -n -C 1 -t rust "// TODO|# TODO" .
 ```
 
 ### Finding API Calls
 
 **HTTP verbs:**
 
-```json
-{
-    "pattern": "\\.(get|post|put|delete|patch)\\(",
-    "glob": "src/**/*.ts",
-    "context_lines": 2
-}
+```sh
+rg -n -C 2 --glob "src/**/*.ts" "\\.(get|post|put|delete|patch)\\(" .
 ```
 
 **Database queries:**
 
-```json
-{
-    "pattern": "SELECT|INSERT|UPDATE|DELETE",
-    "glob": "**/*.sql",
-    "case_sensitive": false
-}
+```sh
+rg -n -i --glob "**/*.sql" "SELECT|INSERT|UPDATE|DELETE" .
 ```
 
 ### Finding Config References
 
 **Environment variables:**
 
-```json
-{
-    "pattern": "process\\.env\\.|os\\.getenv\\(|getenv\\(",
-    "glob": "**/*.js"
-}
+```sh
+rg -n --glob "**/*.js" "process\\.env\\.|os\\.getenv\\(|getenv\\(" .
 ```
 
 **Config objects:**
 
-```json
-{
-    "pattern": "config\\.",
-    "case_sensitive": false,
-    "context_lines": 1
-}
+```sh
+rg -n -i -C 1 "config\\." .
 ```
 
 ## Smart-Case Matching
 
-By default, `rg` uses **smart-case matching**:
+Use `rg -S` for smart-case matching:
 
--   **Lowercase pattern** → Case-insensitive search
+-   `rg -S "todo"` matches `TODO`, `Todo`, and `todo`
+-   `rg -S "TODO"` matches `TODO` only
 
-    -   `pattern: "todo"` matches "TODO", "Todo", "todo"
+Use `rg -s` when you always need case-sensitive matching:
 
--   **Uppercase characters in pattern** → Case-sensitive search
-    -   `pattern: "TODO"` matches "TODO" only
-    -   `pattern: "myVar"` matches "myVar" only
-
-Force case sensitivity with `case_sensitive: true`:
-
-```json
-{
-    "pattern": "ERROR",
-    "case_sensitive": true // Forces case-sensitive match
-}
+```sh
+rg -n -s "ERROR" src
 ```
 
 ## Performance Tips
 
 1. **Use specific globs** instead of searching all files:
 
-    ```json
-    {
-        "pattern": "fn deploy",
-        "glob": "src/**/*.rs" // Much faster than searching entire directory
-    }
+    ```sh
+    rg -n --glob "src/**/*.rs" "fn deploy" .
     ```
 
-2. **Use type_pattern** for language filtering:
+2. **Use type filters** for language filtering:
 
-    ```json
-    {
-        "pattern": "class MyClass",
-        "type_pattern": "python" // Faster than glob: "**/*.py"
-    }
+    ```sh
+    rg -n -t python "class MyClass" .
     ```
 
-3. **Respect ignore files** by default (leave `respect_ignore_files: true`)
+3. **Respect ignore files** by default:
 
-    - Skips node_modules, .git, build artifacts automatically
-    - Set `false` only when you need to search ignored directories
+    - Skips `node_modules`, `.git`, and build artefacts automatically
+    - Use `--no-ignore` only when you need ignored directories
 
-4. **Limit context lines** in large searches:
+4. **Limit nearby lines** in large searches:
 
-    ```json
-    {
-        "pattern": ".*",
-        "context_lines": 0 // No context for massive matches
-    }
+    ```sh
+    rg -n "needle" src
     ```
 
 5. **Use literal matching** when searching exact strings:
-    ```json
-    {
-        "pattern": "const.ERROR_MSG",
-        "literal": true // Faster than regex for exact strings
-    }
+
+    ```sh
+    rg -n -F "const.ERROR_MSG" src
     ```
 
 ## Advanced Examples
 
 ### Refactoring Scenario: Update all imports
 
-```json
-{
-    "pattern": "^import.*from.*old-module",
-    "glob": "src/**/*.ts",
-    "context_lines": 0,
-    "files_with_matches": true
-}
+```sh
+rg -l --glob "src/**/*.ts" "^import.*from.*old-module" .
 ```
 
-Returns: List of all files importing the old module.
+Returns all files importing the old module.
 
-### Finding unused exports
+### Finding Unused Exports
 
-```json
-{
-    "pattern": "^export.*const|^export.*function",
-    "glob": "src/**/*.ts",
-    "max_results": 500
-}
+```sh
+rg -n --glob "src/**/*.ts" "^export.*const|^export.*function" .
 ```
 
-### Auditing security concerns
+### Auditing Security Concerns
 
-```json
-{
-    "pattern": "eval\\(|exec\\(|innerHTML|dangerouslySetInnerHTML",
-    "glob": "**/*.ts",
-    "context_lines": 2
-}
+```sh
+rg -n -C 2 --glob "**/*.ts" "eval\\(|exec\\(|innerHTML|dangerouslySetInnerHTML" .
 ```
 
-### Finding configuration issues
+### Finding Configuration Issues
 
-```json
-{
-    "pattern": "hardcoded.*password|api.*key.*=|token.*=",
-    "case_sensitive": false,
-    "context_lines": 1
-}
+```sh
+rg -n -i -C 1 "hardcoded.*password|api.*key.*=|token.*=" .
 ```
 
 ## Comparison with ast-grep
 
-| Feature              | rg                            | ast-grep             |
-| -------------------- | ----------------------------- | -------------------- |
-| **Speed**            | Very fast                     | Fast                 |
-| **Pattern Type**     | Regex + literal               | AST queries          |
-| **File Filtering**   | Glob, type, size              | Limited              |
-| **Language Support** | All languages                 | Limited              |
-| **Installation**     | Usually pre-installed         | Requires binary      |
-| **Learning Curve**   | Regex knowledge               | Domain language      |
-| **Use Cases**        | General code search, patterns | AST-specific queries |
-
-**Migration:** Replace AST grep queries with regex patterns targeting:
-
--   Function signatures: `^(pub )?fn name`
--   Class definitions: `^class Name`
--   Imports: `^import|^from`
--   Comments: `#|//|/*`
+| Feature | `rg` | ast-grep |
+| --- | --- | --- |
+| **Speed** | Very fast | Fast |
+| **Pattern type** | Regex and literal text | AST queries |
+| **File filtering** | Glob, type, size | Language-aware source files |
+| **Language support** | All text files | Supported programming languages |
+| **Installation** | Usually pre-installed | Requires binary |
+| **Learning curve** | Regex knowledge | AST query knowledge |
+| **Use cases** | General code search, prose, config | Syntax-aware code queries |
 
 ## Semantic Outline
 
 `code_search` exposes `action=outline`, which wraps the Tree-sitter outline
 runtime to produce a cheap, token-efficient symbol map of a file or directory
-**without requiring a structural pattern**. Use it for the
-"what's in this file/directory?" question before reading full source.
+without requiring a structural query. Use it for the "what is in this file or
+directory?" question before reading full source.
 
 **When to use which search action:**
 
 | Action | Question it answers |
 | --- | --- |
-| `rg` through `exec_command.cmd` | "Which lines match this text/regex?" |
-| `code_search` outline | "What symbols are defined in this file/directory?" (no pattern) |
-| `code_search` structural | "Which nodes match this AST pattern?" (pattern/kind required) |
+| `rg` through `exec_command.cmd` | "Which lines match this text or regex?" |
+| `code_search` outline | "What symbols are defined in this file or directory?" |
+| `code_search` structural | "Which nodes match this AST query?" |
 
 ```json
 {"action":"outline","path":"vtcode-core/src/tools/registry/builder.rs","lang":"rust","view":"digest"}
@@ -377,92 +296,79 @@ runtime to produce a cheap, token-efficient symbol map of a file or directory
 
 Sub-fields: `path` (default `.`), `lang`, `type` (string or array of symbol
 types), `match` (name regex), `items` (`auto` | `structure` | `exports` |
-`imports` | `all`; default `auto`), `pub_members` (bool), `follow` (bool),
+`imports` | `all`; default `auto`), `pub_members` (bool), `follow` (bool), and
 `view` (`digest` | `names` | `full`; default `digest`).
 
-- `digest` (default): symbols grouped by kind per file, with flat member
-  names. ~100-300 bytes for a typical file.
-- `names`: grouped names only, no members.
-- `full`: per-symbol records with the raw zero-based `range`, a derived
-  1-based inclusive `lineRange` (`{start, end}`), signatures,
-  `astKind`, and nested members (members also carry `astKind`/`range`/`lineRange`).
+-   `digest` (default): symbols grouped by kind per file, with flat member
+    names. About 100-300 bytes for a typical file.
+-   `names`: grouped names only, no members.
+-   `full`: per-symbol records with the raw zero-based `range`, a derived
+    1-based inclusive `lineRange` (`{start, end}`), signatures, `astKind`, and
+    nested members. Members also carry `astKind`, `range`, and `lineRange`.
 
 Directory results also include a top-level `summary` with `total_symbols`,
 `by_kind` (per-kind symbol counts summing to `total_symbols`), and
 `all_symbols` (flat symbol list capped at 200 entries). When the cap is hit,
 `summary.truncated` is `true` and `summary.visible_symbols` reports the
-visible count — narrow with `type` or `match`, or outline a specific file.
-Grep/structural-only params (`glob_pattern`, `case_sensitive`, `literal`,
-`context_lines`, `files_with_matches`, `type_pattern`, `max_file_size`) and
-`format`/`max_results` are not used by outline; a `hints` array in the result
-lists which were ignored.
+visible count. Narrow with `type` or `match`, or outline a specific file.
 
-`outline` and `structural` shell out to the same resolved `ast-grep` binary.
-On a missing binary, both actions **auto-install ast-grep on first use** by
+Outline and structural search shell out to the same resolved `ast-grep` binary.
+On a missing binary, both actions auto-install ast-grep on first use by
 downloading the matching platform release from GitHub into `~/.vtcode/bin`
-(with checksum verification and a 24h failure cooldown). Set
+with checksum verification and a 24-hour failure cooldown. Set
 `VTCODE_AST_GREP_NO_INSTALL=1` to opt out of auto-install; the error then
 surfaces immediately with the manual install command
-(`vtcode dependencies install ast-grep`). Unlike `structural`, `outline` has
-no grep fallback (outline has no text equivalent).
+(`vtcode dependencies install ast-grep`). Unlike structural search, outline has
+no text equivalent.
 
 ## Troubleshooting
 
-### No results found
+### No Results Found
 
-1. Check pattern syntax (regex special chars must be escaped)
-2. Verify path exists
-3. Check if files are in `.gitignore` (add `respect_ignore_files: false`)
-4. Use `context_lines: 1` to debug with surrounding lines
+1. Check regex syntax and escape special characters.
+2. Verify the path exists.
+3. Check whether files are ignored by `.gitignore`; use `--no-ignore` only
+   when that is intentional.
+4. Add `-C 1` to see nearby lines.
 
-### Too many results
+### Too Many Results
 
-1. Add `glob_pattern` or `type_pattern` to narrow scope
-2. Increase `max_results` limit (up to 1000)
-3. Use `files_with_matches: true` to get just filenames
+1. Add a path, `--glob`, or `-t` filter to narrow scope.
+2. Pipe through `head -c 4000` while exploring.
+3. Use `rg -l` when filenames are enough.
 
-### Slow searches
+### Slow Searches
 
-1. Add `glob_pattern` to narrow scope (e.g., `**/*.rs`)
-2. Use `type_pattern` instead of glob when possible
-3. Set `max_file_size` to skip large files
-4. Use `respect_ignore_files: true` (default) to skip node_modules, etc.
+1. Add `--glob` to narrow scope, for example `--glob "**/*.rs"`.
+2. Use `-t rust` or another type filter when possible.
+3. Set `--max-filesize` to skip large files.
+4. Keep ignore files enabled unless you need generated or vendored content.
 
 ## Return Format
 
-```json
-{
-    "success": true,
-    "query": "TODO",
-    "matches": [
-        {
-            "type": "match",
-            "data": {
-                "path": { "text": "src/main.rs" },
-                "line_number": 42,
-                "lines": { "text": "// TODO: refactor this function\n" }
-            }
-        }
-    ]
-}
+Text search returns normal shell output from `exec_command`. Use concise shell
+formats for AI-facing work:
+
+```sh
+rg -n "TODO" src
+rg -l "TODO" src
+rg --json "TODO" src | head -c 4000
 ```
 
 ## Integration with Other Tools
 
 ### Inspecting Matches
 
-```
-1. Use `rg` through `exec_command.cmd` to locate patterns.
-2. Use `sed`, `cat`, or another shell command through `exec_command.cmd` to inspect full context.
+1. Use `rg` through `exec_command.cmd` to locate text.
+2. Use `sed`, `cat`, or another shell command through `exec_command.cmd` to
+   inspect full context.
 3. Use `apply_patch` to make changes.
-```
 
 ### Scripted Search
 
 ```python
-# Find all matches
+# Find all matches.
 results = subprocess.run(["rg", "TODO", "src"], check=False, capture_output=True, text=True)
-# Process results locally
 todos = [line for line in results.stdout.splitlines() if "TODO" in line]
 ```
 

@@ -179,8 +179,8 @@ Runs only when VT Code is about to show a human approval prompt. Payload:
   "cwd": "/path/to/project",
   "hook_event_name": "PermissionRequest",
   "permission_decision": "ask",
-  "tool_name": "unified_exec",
-  "tool_input": { "command": "git push --force" },
+  "tool_name": "exec_command",
+  "tool_input": { "cmd": "git push --force" },
   "permission_request": { "...": "normalized permission summary" },
   "permission_suggestions": [
     { "id": "allow_once", "behavior": "allow", "scope": "once" }
@@ -230,7 +230,7 @@ Payload:
   "hook_event_name": "Notification",
   "notification_type": "permission_prompt" | "idle_prompt",
   "title": "VT Code approval required",
-  "message": "Review the permission prompt for tool `unified_exec`.",
+  "message": "Review the permission prompt for tool `exec_command`.",
   "transcript_path": "..." | null
 }
 ```

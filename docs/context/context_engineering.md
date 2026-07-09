@@ -114,7 +114,7 @@ Example from our default prompt:
 Instead of pre-loading everything, we use lightweight references:
 
 -   **File Paths as Metadata**: List files first, read content only when relevant
--   **Search Before Read**: Use `unified_search` to identify relevant files
+-   **Search Before Read**: Use shell `rg` through `exec_command.cmd` to identify relevant files
 -   **Chunked Reading**: Auto-truncate large files (>2000 lines) to first/last portions
 -   **Pagination**: Tools support `per_page` and `page` parameters for large results
 
@@ -162,8 +162,8 @@ let mut tracker = DecisionTracker::new();
 let decision_id = tracker.record_decision(
     "Reading config file to understand project structure".to_string(),
     Action::ToolCall {
-        name: "unified_file".to_string(),
-        args: json!({"action": "read", "path": "vtcode.toml"}),
+        name: "exec_command".to_string(),
+        args: json!({"cmd": "sed -n '1,120p' vtcode.toml"}),
         expected_outcome: "Configuration loaded".to_string(),
     },
     Some(0.9), // confidence score
@@ -198,20 +198,24 @@ Our tools are designed with context efficiency in mind:
 
 #### Search Tools
 
--   **unified_search**: Fast pattern matching with `max_results` limits
--   **unified_search**: Syntax-aware search with `max_results` and `context_lines`
+-   **exec_command**: Shell file inspection and fast text matching through
+    `rg`, with `grep` as a fallback when `rg` is unavailable
+-   **code_search**: Advanced semantic search for ast-grep structural queries
+    and Tree-sitter outlines
 -   Return metadata first (file paths, line numbers) before content
 
 #### File Operations
 
--   **list_files**: Pagination support, metadata-only by default
--   **read_file**: Auto-chunking for large files
--   **edit_file**: Precise replacements avoid rewriting entire files
+-   **exec_command**: Inspect files with shell commands such as `rg`, `sed`,
+    `cat`, `ls`, and `wc`
+-   **apply_patch**: Precise repository edits through unified patches, avoiding
+    whole-file rewrites for small changes
 
 #### Command Execution
 
--   **run_pty_cmd**: Auto-truncation, timeout limits
--   Streaming mode for long-running commands
+-   **exec_command**: Run shell commands with output limits and reusable
+    sessions for long-running processes
+-   **write_stdin**: Continue or interact with an existing live command session
 
 ## Configuration
 

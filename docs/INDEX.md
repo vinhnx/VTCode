@@ -17,6 +17,7 @@ Last reviewed: 2026-06-28
 - [Configuration Precedence](config/CONFIGURATION_PRECEDENCE.md) - Runtime config loading order.
 - [Config Field Reference](config/CONFIG_FIELD_REFERENCE.md) - Field-level schema reference.
 - [Tool Specifications](tools/TOOL_SPECS.md) - Canonical tool surface reference.
+- [AI Tool Surface Migration](development/ai-tool-surface-migration.md) - Breaking-change notes for the Codex-style default tools.
 - [Web Search Tool](tools/web_search.md) - Web search configuration and guard rails.
 - [Defuddle Fetch](tools/defuddle_fetch.md) - Markdown extraction fallback for complex pages.
 - [Scheduled Tasks](user-guide/scheduled-tasks.md) - Reminder and durable scheduler flows.
@@ -37,7 +38,7 @@ Last reviewed: 2026-06-28
 - [Indexer Notes](modules/vtcode_indexer.md) - Indexer behavior and usage.
 - [Development Guide](development/README.md) - Local dev workflows.
 - [Roadmap](project/ROADMAP.md) - Planned work.
-- [Loop Engineering](project/PLAN-loop-engineering.md) - Worktree isolation, propose/verify sub-agents, loop state, cost guardrails.
+- [Loop Engineering](loop-engineering.md) - Worktree isolation, propose/verify sub-agents, loop state, cost guardrails.
 
 ## Module Documentation
 

@@ -1,197 +1,193 @@
 # rg Text Search Quick Reference Card
 
-> **Note:** legacy text-search dispatcher names are internal implementation details. Use `exec_command.cmd` with `rg` for AI-facing text search. Use `code_search` for ast-grep structural queries and Tree-sitter outlines.
+> **Note:** legacy text-search dispatcher names are internal implementation
+> details. Use `exec_command.cmd` with `rg` for AI-facing text search. Use
+> `code_search` for ast-grep structural queries and Tree-sitter outlines.
 
 Shell examples follow the active shell prompt profile. Linux, macOS, and WSL
 use the Unix-like profile by default; native Windows uses PowerShell. VT Code
 does not rewrite GNU flags for macOS BSD tools and does not translate Unix
 commands to PowerShell. Use WSL when you want Unix-like workflows on Windows.
 
-## Essential Parameters
+## Essential Commands
 
 ```sh
 rg "TODO" src                 # pattern and path
-rg -n -C 3 "TODO" src         # line numbers and context
+rg -n -C 3 "TODO" src         # line numbers and nearby lines
 rg --glob "**/*.rs" "TODO"    # file filter
 rg -t rust "TODO"             # language filter
 rg -F "literal text" src      # literal string
 rg -i "todo" src              # case-insensitive search
+rg -l "TODO" src              # filenames only
+```
+
+For the live AI-facing tool call, pass the command through `exec_command.cmd`:
+
+```json
+{"cmd":"rg -n \"TODO\" src"}
 ```
 
 ## Common Search Patterns
 
-| Task | Pattern | Glob | Notes |
-|------|---------|------|-------|
-| Find functions | `^(pub )?fn \w+\(` | `**/*.rs` | Rust function definitions |
-| Find imports | `^import.*from` | `**/*.ts` | TypeScript/JS imports |
-| Find classes | `^class \w+` | `**/*.java` | Java class definitions |
-| Find TODOs | `TODO\|FIXME` | `**/*.rs` | Common markers |
-| Find errors | `panic!\|unwrap\|throw` | `**/*.rs` | Error patterns |
-| Find API calls | `\.get\(\|\.post\(` | `**/*.ts` | HTTP verbs |
-| Find exports | `^export ` | `**/*.ts` | Module exports |
-| Find config | `config\.` | `**/*.py` | Config references |
-| Find async | `async fn` | `**/*.rs` | Async functions |
-| Find unused | `^pub fn` | `**/*.rs` | Public functions (for refactoring) |
+| Task | Regex | File filter | Notes |
+| --- | --- | --- | --- |
+| Find functions | `^(pub )?fn \w+\(` | `--glob "**/*.rs"` | Rust function definitions |
+| Find imports | `^import.*from` | `--glob "**/*.ts"` | TypeScript and JavaScript imports |
+| Find classes | `^class \w+` | `--glob "**/*.java"` | Java class definitions |
+| Find TODOs | `TODO\|FIXME` | `--glob "**/*.rs"` | Common markers |
+| Find errors | `panic!\|unwrap\|throw` | `--glob "**/*.rs"` | Error patterns |
+| Find API calls | `\.get\(\|\.post\(` | `--glob "**/*.ts"` | HTTP verbs |
+| Find exports | `^export ` | `--glob "**/*.ts"` | Module exports |
+| Find config | `config\.` | `--glob "**/*.py"` | Config references |
+| Find async | `async fn` | `--glob "**/*.rs"` | Async functions |
+| Find unused | `^pub fn` | `--glob "**/*.rs"` | Public functions for refactoring |
 
 ## Smart Patterns by Language
 
 ### Rust
-```json
-{"pattern": "^fn \\w+", "type_pattern": "rust"}
-{"pattern": "impl \\w+", "type_pattern": "rust"}
-{"pattern": "#\\[test\\]", "context_lines": 1}
-{"pattern": "Result<|Option<", "type_pattern": "rust"}
+
+```sh
+rg -n -t rust "^fn \\w+" .
+rg -n -t rust "impl \\w+" .
+rg -n -C 1 "#\\[test\\]" .
+rg -n -t rust "Result<|Option<" .
 ```
 
 ### TypeScript
-```json
-{"pattern": "^export (function|const|class)", "glob": "**/*.ts"}
-{"pattern": "interface \\w+", "glob": "**/*.ts"}
-{"pattern": "async \\(", "glob": "**/*.tsx"}
-{"pattern": "useState|useEffect|useContext", "glob": "**/*.tsx"}
+
+```sh
+rg -n --glob "**/*.ts" "^export (function|const|class)" .
+rg -n --glob "**/*.ts" "interface \\w+" .
+rg -n --glob "**/*.tsx" "async \\(" .
+rg -n --glob "**/*.tsx" "useState|useEffect|useContext" .
 ```
 
 ### Python
-```json
-{"pattern": "^def \\w+", "type_pattern": "python"}
-{"pattern": "^class \\w+", "type_pattern": "python"}
-{"pattern": "import |from .* import", "type_pattern": "python"}
-{"pattern": "@property|@staticmethod", "context_lines": 2}
+
+```sh
+rg -n -t python "^def \\w+" .
+rg -n -t python "^class \\w+" .
+rg -n -t python "import |from .* import" .
+rg -n -C 2 "@property|@staticmethod" .
 ```
 
 ## Performance Tips
 
-| Optimization | Benefit | Example |
-|--------------|---------|---------|
-| Use `glob_pattern` | 10-100x faster | `glob: "**/*.rs"` |
-| Use `type_pattern` | 5-10x faster | `type_pattern: "rust"` |
-| Set `max_file_size` | Skip large files | `max_file_size: 5242880` |
-| Keep `respect_ignore_files: true` | Skip node_modules, build | (default) |
-| Reduce `context_lines` | Smaller output | `context_lines: 0` |
-| Use `literal: true` | Faster for exact strings | `literal: true` |
+| Optimisation | Benefit | Example |
+| --- | --- | --- |
+| Use `--glob` | 10-100x faster | `--glob "**/*.rs"` |
+| Use `-t` | 5-10x faster | `-t rust` |
+| Set `--max-filesize` | Skip large files | `--max-filesize 5M` |
+| Keep ignore files enabled | Skip `node_modules` and build output | default |
+| Reduce nearby lines | Smaller output | omit `-C`, `-A`, and `-B` |
+| Use `-F` | Faster for exact strings | `rg -F "literal text"` |
 
 ## Output Example
 
-```json
-{
-  "success": true,
-  "query": "TODO",
-  "matches": [
-    {
-      "type": "match",
-      "data": {
-        "path": {"text": "src/main.rs"},
-        "line_number": 42,
-        "lines": {"text": "// TODO: refactor this function\n"}
-      }
-    }
-  ]
-}
+```text
+src/main.rs:42:// TODO: refactor this function
+```
+
+Use `rg -l` when you only need filenames:
+
+```text
+src/main.rs
+src/lib.rs
 ```
 
 ## Real-World Examples
 
-### Refactor: Replace old import
-```json
-{
-  "pattern": "^import.*OldLib",
-  "glob": "src/**/*.ts",
-  "files_with_matches": true
-}
-```
-Result: All files needing import updates
+### Refactor: Replace Old Import
 
-### Audit: Find hardcoded secrets
-```json
-{
-  "pattern": "password|api.key|token",
-  "case_sensitive": false,
-  "glob": "src/**/*.{ts,js,py}",
-  "context_lines": 1
-}
+```sh
+rg -l --glob "src/**/*.ts" "^import.*OldLib" .
 ```
 
-### Refactor: Identify deprecated API
-```json
-{
-  "pattern": "\\.oldMethod\\(",
-  "glob": "src/**/*.{ts,tsx}",
-  "max_results": 500
-}
+Result: all files needing import updates.
+
+### Audit: Find Hardcoded Secrets
+
+```sh
+rg -n -i -C 1 --glob "src/**/*.{ts,js,py}" "password|api.key|token" .
 ```
 
-### Analysis: Find error handling patterns
-```json
-{
-  "pattern": "try\\s*{|catch\\s*\\(|throw ",
-  "type_pattern": "typescript",
-  "context_lines": 2
-}
+### Refactor: Identify Deprecated API
+
+```sh
+rg -n --glob "src/**/*.{ts,tsx}" "\\.oldMethod\\(" .
+```
+
+### Analysis: Find Error Handling Patterns
+
+```sh
+rg -n -C 2 -t typescript "try\\s*\\{|catch\\s*\\(|throw " .
 ```
 
 ## Regex Cheat Sheet
 
-| Pattern | Matches |
-|---------|---------|
+| Regex | Matches |
+| --- | --- |
 | `.` | Any character |
-| `\w` | Word character [a-zA-Z0-9_] |
-| `\d` | Digit [0-9] |
+| `\w` | Word character `[a-zA-Z0-9_]` |
+| `\d` | Digit `[0-9]` |
 | `\s` | Whitespace |
 | `^` | Line start |
 | `$` | Line end |
-| `\|` | OR (escaped in JSON) |
+| `\|` | OR in shell examples that need escaping |
 | `(...)` | Group |
 | `*` | 0 or more |
 | `+` | 1 or more |
 | `?` | 0 or 1 |
 | `[...]` | Character class |
 
-**In JSON, escape backslashes:** `\\w`, `\\d`, `\\s`
+Escape backslashes for JSON shell strings, for example `\\w`, `\\d`, and
+`\\s`.
 
 ## Decision Tree
 
-```
+```text
 What do you want to find?
 
- Functions/Classes?
+ Functions and classes?
    Rust: ^(pub )?fn \w+|^pub struct
-   Python: ^def |^class 
+   Python: ^def |^class
    TypeScript: ^export (function|class)
 
- Imports/Exports?
-   TypeScript/JS: ^import|^export
+ Imports and exports?
+   TypeScript and JavaScript: ^import|^export
    Python: ^import |^from
 
  Error handling?
    Rust: panic!|unwrap|Result
-   JS/TS: try|catch|throw
+   JavaScript and TypeScript: try|catch|throw
    Python: try|except|raise
 
- TODOs/Comments?
+ TODOs and comments?
    (TODO|FIXME|HACK|XXX)
 
- API/Database?
+ API and database?
    HTTP: \.get\(|\.post\(|\.put\(
    SQL: SELECT|INSERT|UPDATE
 
- Config/Constants?
-    config\.|process.env|os.getenv
+ Config and constants?
+   config\.|process.env|os.getenv
 ```
 
 ## Common Mistakes
 
-|   Wrong |   Right | Why |
-|---------|---------|-----|
-| `pattern: "fn test"` | `pattern: "^fn test"` | Anchor patterns to line start |
-| `glob_pattern: "*.rs"` | `glob_pattern: "**/*.rs"` | Use `**` for recursive |
-| `pattern: "my.variable"` | `pattern: "my\.variable"` | Escape special chars |
-| No `glob` + huge search | `glob: "src/**/*.ts"` | Always narrow scope |
-| `context_lines: 50` | `context_lines: 3` | Reasonable context (0-20) |
-| Large codebase searches | `type_pattern: "rust"` | Use type_pattern not glob |
+| Wrong | Right | Why |
+| --- | --- | --- |
+| `rg "fn test"` | `rg "^fn test"` | Anchor patterns to line start |
+| `rg --glob "*.rs"` | `rg --glob "**/*.rs"` | Use `**` for recursive filters |
+| `rg "my.variable"` | `rg "my\\.variable"` | Escape special chars |
+| `rg "needle" .` on a huge tree | `rg --glob "src/**/*.ts" "needle" .` | Narrow scope |
+| `rg -C 50 "needle"` | `rg -C 3 "needle"` | Keep nearby output small |
+| Large codebase searches | `rg -t rust "needle"` | Use a type filter where possible |
 
 ## See Also
 
 - Full guide: `docs/development/grep-tool-guide.md`
-- Outline mode (`action=outline`): symbol maps via `ast-grep outline` (>= 0.44.0); see the grep-tool-guide "Outline mode" section.
-- System prompt: Agent instructions for grep usage
+- Semantic outline: use `code_search` with `action=outline`; see the
+  grep-tool-guide "Semantic Outline" section.
+- System prompt: agent instructions for grep usage
 - ripgrep docs: https://github.com/BurntSushi/ripgrep

@@ -58,17 +58,15 @@ These are patterns agents have tried or might try that aren't yet smooth:
 **Current friction**:
 
 ```
-unified_search {
-  "action": "grep",
-  "pattern": "fn main",
-  "path": "src/"
+exec_command {
+  "cmd": "rg -n 'fn main' src/"
 }
 ```
 
 **Intuitive expectation**:
 
 ```
-unified_search grep "fn main" src/
+exec_command "rg -n 'fn main' src/"
 ```
 
 **Priority**: Medium (requires tool refactoring)

@@ -208,9 +208,9 @@ deny_regex = [
 
 ```toml
 [tools.policies]
-unified_exec = "allow"     # Execute without confirmation
+exec_command = "allow"     # Execute without confirmation
 apply_patch = "prompt"     # Ask before applying patches
-unified_search = "allow"   # Allow discovery/search without confirmation
+code_search = "allow"      # Allow advanced semantic search without confirmation
 ```
 
 ## Troubleshooting

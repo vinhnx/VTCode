@@ -16,6 +16,7 @@ Entry point for VT Code contributor workflows.
 - [Process Hardening](./PROCESS_HARDENING.md) - Runtime hardening controls.
 - [Execution Policy](./EXECUTION_POLICY.md) - Command policy model.
 - [Command Security Model](./COMMAND_SECURITY_MODEL.md) - Command validation and threat model.
+- [AI Tool Surface Migration](./ai-tool-surface-migration.md) - Breaking-change notes for the Codex-style default tools.
 
 ## Performance and Reliability
 

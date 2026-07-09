@@ -45,9 +45,10 @@ enabled = true
 require_profile_ack = true
 profile_path = "automation/full_auto_profile.toml"
 allowed_tools = [
-    "unified_file",
-    "unified_search",
-    "unified_exec",
+    "exec_command",
+    "write_stdin",
+    "apply_patch",
+    "code_search",
 ]
 ```
 
@@ -77,7 +78,7 @@ When enabled, the propose/verify cycle works as follows:
 3. A verifier sub-agent (falling back to the `explorer` agent if no `verifier` agent is defined) reads the files and returns `VerificationResult { approved, issues, reasoning }`.
 4. If rejected, the caller can retry the mutation up to N times.
 
-See [docs/project/PLAN-loop-engineering.md](../project/PLAN-loop-engineering.md) for the full design.
+See [Loop Engineering](../loop-engineering.md) for the full design.
 
 ## Orchestrated Harness
 

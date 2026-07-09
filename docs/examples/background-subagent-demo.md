@@ -2,7 +2,7 @@
 name: background-demo
 description: Minimal demo agent for the managed background subprocess flow.
 tools:
-  - unified_exec
+  - exec_command
 color: "white #2f6fed"
 background: true
 maxTurns: 2

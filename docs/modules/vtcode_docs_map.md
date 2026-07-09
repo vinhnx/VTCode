@@ -42,6 +42,16 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: **Test Overview**, **Running Tests**, **Test Structure**, **Test Profiles & Groups**, **Test Categories**
   - **User Questions**: "What can you tell me about **Testing Guide**?", "How does **Test Overview** work?", "How does **Running Tests** work?"
 
+- **File**: `docs/development/ai-tool-surface-eval-report.md`
+  - **Content**: AI Tool Surface Eval Report
+  - **Topics**: Scope, Baseline Data, Comparison Table, Result Format
+  - **User Questions**: "What can you tell me about AI Tool Surface Eval Report?", "How does Scope work?", "How does Baseline Data work?"
+
+- **File**: `docs/development/ai-tool-surface-migration.md`
+  - **Content**: AI Tool Surface Migration
+  - **Topics**: What Changed, Replacement Map, Short Examples, Advanced Profile, File Tool Finding
+  - **User Questions**: "What can you tell me about AI Tool Surface Migration?", "How does What Changed work?", "How does Replacement Map work?"
+
 - **File**: `docs/development/ADDING_MODELS.md`
   - **Content**: Adding New Models to VT Code
   - **Topics**: Overview, Quick Checklist, Detailed Steps, Verification, Template for Copy-Paste
@@ -137,6 +147,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: Overview, Problem Statement, Solution, Usage, Backward Compatibility
   - **User Questions**: "What can you tell me about TUI-Only Tool Permission Refactoring?", "How does Overview work?", "How does Problem Statement work?"
 
+- **File**: `docs/development/grep-tool-guide.md`
+  - **Content**: Text Search Guide
+  - **Topics**: Overview, Architecture, Basic Usage, Parameter Reference, Common Patterns
+  - **User Questions**: "What can you tell me about Text Search Guide?", "How does Overview work?", "How does Architecture work?"
+
 - **File**: `docs/development/async-performance-audit.md`
   - **Content**: VT Code Async Performance Audit
   - **Topics**: Audit Rubric, Findings (Prioritized), Implemented Batch (Runtime-Critical), Validation, Next Batch (Recommended)
@@ -152,15 +167,10 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: Summary, Auto-Allowed Commands, Tool Policies, Key Safety Features, Dangerous Operations (Blocked)
   - **User Questions**: "What can you tell me about VT Code Execution Policy?", "How does Summary work?", "How does Auto-Allowed Commands work?"
 
-- **File**: `docs/development/grep-tool-guide.md`
-  - **Content**: grep_file Tool Guide
-  - **Topics**: Overview, Architecture, Basic Usage, Parameter Reference, Common Patterns
-  - **User Questions**: "What can you tell me about grep_file Tool Guide?", "How does Overview work?", "How does Architecture work?"
-
 - **File**: `docs/development/grep-quick-reference.md`
-  - **Content**: unified_search (grep action) Quick Reference Card
+  - **Content**: rg Text Search Quick Reference Card
   - **Topics**: Essential Parameters, Common Search Patterns, Smart Patterns by Language, Performance Tips, Output Example
-  - **User Questions**: "What can you tell me about unified_search (grep action) Quick Reference Card?", "How does Essential Parameters work?", "How does Common Search Patterns work?"
+  - **User Questions**: "What can you tell me about rg Text Search Quick Reference Card?", "How does Essential Parameters work?", "How does Common Search Patterns work?"
 
 - **File**: `docs/development/vtcode-crate-audit.md`
   - **Content**: vtcode-* Crate Audit Report
@@ -355,8 +365,8 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 - **File**: `docs/guides/tool_registry.md`
   - **Content**: Tool Registry Guide
-  - **Topics**: Registry architecture, Adding a new tool, Safety guidelines, Testing checklist
-  - **User Questions**: "What can you tell me about Tool Registry Guide?", "How does Registry architecture work?", "How does Adding a new tool work?"
+  - **Topics**: Registry architecture, Shell prompt profiles, Adding a new tool, Safety guidelines, Testing checklist
+  - **User Questions**: "What can you tell me about Tool Registry Guide?", "How does Registry architecture work?", "How does Shell prompt profiles work?"
 
 - **File**: `docs/guides/async-architecture.md`
   - **Content**: VT Code Async Architecture Guide
@@ -709,6 +719,10 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: Semantic Understanding, Tree-sitter Security Parsing (Bash), Syntax Highlighting
   - **User Questions**: "What can you tell me about Language Support in VT Code?", "How does Semantic Understanding work?", "How does Tree-sitter Security Parsing (Bash) work?"
 
+- **File**: `docs/project/PLAN-loop-engineering.md`
+  - **Content**: Loop Engineering Plan
+  - **User Questions**: "What can you tell me about Loop Engineering Plan?"
+
 - **File**: `docs/installation/NATIVE_INSTALLERS.md`
   - **Content**: Native Installers
   - **Topics**: macOS & Linux (Shell), Windows (PowerShell)
@@ -728,11 +742,6 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Content**: Open Responses Specification Conformance
   - **Topics**: Conformance Overview, What is Open Responses?, Implementation Details, Conformance Levels, Response Object Structure
   - **User Questions**: "What can you tell me about Open Responses Specification Conformance?", "How does Conformance Overview work?", "How does What is Open Responses? work?"
-
-- **File**: `docs/project/PLAN-loop-engineering.md`
-  - **Content**: PLAN: vtcode Loop Engineering — Apply Addy Osmani's Pattern to vtcode-core
-  - **Topics**: 1. Why this plan exists, 2. The article's checklist mapped to vtcode, 3. Goals (in order of priority), 4. Non-goals, 5. Architectural decisions
-  - **User Questions**: "What can you tell me about PLAN: vtcode Loop Engineering — Apply Addy Osmani's Pattern to vtcode-core?", "How does 1. Why this plan exists work?", "How does 2. The article's checklist mapped to vtcode work?"
 
 - **File**: `docs/pty/PTY_ANSI_HANDLING.md`
   - **Content**: PTY Output ANSI Handling
@@ -843,11 +852,6 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Content**: Vtcode Styling System Documentation
   - **Topics**: Files, Quick Summary, Architecture Overview, Dependencies, Related Code Locations
   - **User Questions**: "What can you tell me about Vtcode Styling System Documentation?", "How does Files work?", "How does Quick Summary work?"
-
-- **File**: `docs/project/web-fetch-hilt-fix.md`
-  - **Content**: Web Fetch Tool Registration & HITL Popup Fix
-  - **Topics**: Problem, Root Cause Analysis, Solution, Testing, Files Changed
-  - **User Questions**: "What can you tell me about Web Fetch Tool Registration & HITL Popup Fix?", "How does Problem work?", "How does Root Cause Analysis work?"
 
 - **File**: `docs/protocols/XDG_DIRECTORY_SPECIFICATION.md`
   - **Content**: XDG Base Directory Specification Implementation
@@ -970,9 +974,9 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **User Questions**: "What can you tell me about Git Commands - Quick Reference?", "How does Allowed Operations work?", "How does Blocked Operations work?"
 
 - **File**: `docs/tools/max_tokens_support.md`
-  - **Content**: Per-Call Max Tokens Support
-  - **Topics**: Overview, Supported Tools, Usage Examples, Token Budget Hierarchy, Implementation Details
-  - **User Questions**: "What can you tell me about Per-Call Max Tokens Support?", "How does Overview work?", "How does Supported Tools work?"
+  - **Content**: Per-Call Output Limits
+  - **Topics**: Overview, Supported Public Tools, Examples, Result Shape, Recommended Budgets
+  - **User Questions**: "What can you tell me about Per-Call Output Limits?", "How does Overview work?", "How does Supported Public Tools work?"
 
 - **File**: `docs/tools/PROMPT_CACHING_GUIDE.md`
   - **Content**: Prompt Caching Guide
@@ -986,8 +990,8 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 - **File**: `docs/tools/TOOL_SPECS.md`
   - **Content**: VT Code Tool Specifications
-  - **Topics**: Canonical Public Tools, `unified_file`, `unified_search`, Guidance, Common Recovery Patterns
-  - **User Questions**: "What can you tell me about VT Code Tool Specifications?", "How does Canonical Public Tools work?", "How does `unified_file` work?"
+  - **Topics**: Public Profiles, Default Tools, Advanced Semantic Search, File Inspection, Platform Profiles
+  - **User Questions**: "What can you tell me about VT Code Tool Specifications?", "How does Public Profiles work?", "How does Default Tools work?"
 
 - **File**: `docs/tools/web_fetch_security.md`
   - **Content**: Web Fetch Tool Security Configuration
@@ -1003,8 +1007,8 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 - **File**: `docs/user-guide/commands.md`
   - **Content**: Command Reference
-  - **Topics**: unified_search (ripgrep-like), File operations, Session resume and forks, Quick Actions in Chat Input, Scheduled tasks
-  - **User Questions**: "What can you tell me about Command Reference?", "How does unified_search (ripgrep-like) work?", "How does File operations work?"
+  - **Topics**: Search, File operations, Session resume and forks, Quick Actions in Chat Input, Scheduled tasks
+  - **User Questions**: "What can you tell me about Command Reference?", "How does Search work?", "How does File operations work?"
 
 - **File**: `docs/user-guide/interactive-mode.md`
   - **Content**: Interactive Mode Reference

@@ -361,9 +361,9 @@ Dynamic skill registrations follow the same model:
 
 `RegistryFn` registrations now also participate in CGP. The registry bridges a
 function-pointer registration into a concrete `RegistryFnTool`, then wraps that
-typed tool through the same interactive/CI CGP runtime. That covers the unified
-tool family (`unified_search`, `unified_exec`, `unified_file`) plus hidden
-registry-function helpers such as `read_file`, `write_file`, and `apply_patch`.
+typed tool through the same interactive/CI CGP runtime. That covers the current
+public built-ins (`exec_command`, `write_stdin`, `apply_patch`, and advanced
+`code_search`) plus internal registry-function helpers.
 
 ## Native Tool Migration (Phase 7)
 

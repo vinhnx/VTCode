@@ -1,376 +1,167 @@
 # VT Code Tool Specifications
 
-This document describes the canonical public tool surface exposed to VT Code models. Legacy aliases such as `read_file`, `grep_file`, `list_files`, and PTY helpers may still route internally, but prompts, schemas, and evaluations should target the unified tools below.
+This document describes the public tool surface exposed to VT Code models after
+the Codex-style tool migration.
 
-## Canonical Public Tools
+## Public Profiles
 
-- `unified_search`
-  Purpose: Read-only discovery and lookup across the workspace and related runtime state.
-  Actions:
-  - `grep`: broad text search
-  - `list`: file discovery (paginated, default 20/page — use `max_results` for more; `globs` and `format` are cross-mapped to `pattern` and `mode`)
-  - `structural`: syntax-aware code search via local ast-grep (`sg`); requires a pattern/kind
-  - `outline`: token-efficient symbol map of a file/directory via `ast-grep outline` (>= 0.44.0); no pattern needed, default `view=digest`. **Preferred for "what's here?" / repo or directory overview.** Use for "what's in this file?" before reading full source. See `docs/development/grep-tool-guide.md` "Outline mode".
-  - `tools`: tool discovery
-  - `errors`: archived/current error lookup
-  - `agent`: agent/runtime info
-  - `web`: fetch a URL
-  - `skill`: load a skill by name
+| Profile | Tools | Use |
+|---|---|---|
+| Default | `exec_command`, `write_stdin`, `apply_patch` | Normal repository work: shell inspection, validation, interactive sessions, and patch edits. |
+| Advanced VT Code | Default tools plus `code_search` | Syntax-aware search through ast-grep structural queries and Tree-sitter outlines. |
 
-- `unified_file`
-  Purpose: File reads and workspace-local edits.
-  Actions:
-  - `read`
-  - `write`
-  - `edit`
-  - `patch`
-  - `delete`
-  - `move`
-  - `copy`
+No `unified_*` schema, alias, hidden public tool, or compatibility profile is
+available after this migration. Those names are legacy external schema names
+only and must not be used in new prompts, config examples, evals, or tool calls.
 
-- `unified_exec`
-  Purpose: Command execution and session control.
-  Actions:
-  - `run`
-  - `write`
-  - `poll`
-  - `continue`
-  - `inspect`
-  - `list`
-  - `close`
-  - `code`
+## Default Tools
 
-- `request_user_input`
-  Purpose: Collect short structured user decisions when runtime permissions allow it.
+### `exec_command`
 
-- `apply_patch`
-  Purpose: First-class patch application for models that support the freeform patch surface.
+Runs a shell command through the active shell profile and the usual command
+policy, sandbox, approval, and output-limit checks.
 
-- `web_search`
-  Purpose: Searches the web via DuckDuckGo (keyless) and returns ranked results.
-  Accepts: `query` (string, required), `max_results` (number, optional).
-  See [Web Search Tool](./web_search.md) for config and guard rails.
+Required:
 
-- `defuddle_fetch`
-  Purpose: Fetch a URL through defuddle.md markdown extraction (fallback for complex pages).
-  Accepts: `url` (string, required), `max_bytes` (number, optional).
-  Hard-capped at one call per session. See [Defuddle Fetch](./defuddle_fetch.md).
+- `cmd`: command text.
 
-## `unified_file`
+Common optional fields:
 
-### `read`
+- `workdir`: working directory.
+- `tty`: allocate a PTY when the command needs an interactive terminal.
+- `yield_time_ms`: how long to wait before returning output.
+- `max_output_tokens`: output budget for the response.
 
-Read file content with optional line or byte-range pagination.
-
-- Required: `path`
-- Optional:
-  - `max_bytes` — maximum bytes to return (default: full file)
-  - `offset_lines` — line offset for line-based reads (1-indexed)
-  - `page_size_lines` — number of lines to read per page
-  - `offset_bytes` — byte offset for byte-range reads (0-indexed)
-  - `page_size_bytes` — number of bytes to read per page (default: 8192)
-
-**Line-range reads** are useful for paginating through large text files:
+Unix-like example:
 
 ```json
-{
-  "tool": "unified_file",
-  "action": "read",
-  "path": "src/main.rs",
-  "offset_lines": 100,
-  "page_size_lines": 50
-}
+{"cmd":"rg -n \"ToolProfile\" vtcode-core","workdir":"/repo"}
 ```
 
-**Byte-range reads** enable chunked preview of large or binary files:
+PowerShell example:
 
 ```json
-{
-  "tool": "unified_file",
-  "action": "read",
-  "path": "large_file.bin",
-  "offset_bytes": 0,
-  "page_size_bytes": 8192
-}
+{"cmd":"Select-String -Path vtcode-core/**/*.rs -Pattern ToolProfile","workdir":"C:\\repo"}
 ```
 
-When byte-range parameters are provided, VT Code uses seek-based access for efficient partial reads without loading the entire file into memory.
+### `write_stdin`
 
-### `write`
+Sends input to a live session created by `exec_command`.
 
-### `edit`
+Required:
 
-### `patch`
+- `session_id`: identifier returned by a still-running command.
+- `chars`: bytes or text to send.
 
-### `delete`
-
-### `move`
-
-### `copy`
-
-## `unified_search`
-
-### `grep`
-
-- Required: `pattern`
-- Optional: `path` (default `"."`), `case_sensitive`, `context_lines`, `max_results`
-- Use when: you need broad text matching or a quick file-content sweep
-
-### `list`
-
-- Optional: `path` (default `"."`), `mode`, `max_results`, `globs`, `format`, `page`, `per_page`
-- Parameter mapping: `max_results` → `per_page` + `max_items`; `globs` → `pattern` (glob filter); `format` → `mode` when the value is a valid list mode (`tree`, `recursive`, etc.)
-- Pagination: default 20 items/page. Use `max_results` (or `per_page`) to increase page size, `page` for subsequent pages.
-- Use when: you need file names, directories, or tree-style discovery
-- For a code-structure overview of a directory, prefer `action=outline` (token-efficient symbol map) over `action=list`
-
-### `structural`
-
-- Required: `action="structural"`
-- Optional common fields: `workflow` (`"query" | "scan" | "test" | "inspect" | "rewrite"`, default `"query"`), `path` (default `"."` for query/scan; public structural takes one root per call even though raw `ast-grep run` accepts multiple paths), `config_path` (default workspace `sgconfig.yml` for scan/test), `filter`, `globs`, `context_lines`, `max_results`
-- `workflow="query"`:
-  - Required: at least one of `pattern` or `kind`
-  - Optional: `lang`, `selector`, `strictness`, `debug_query`
-  - Internal mapping: read-only `ast-grep run --pattern ... --json=compact --color=never`, plus optional `--lang`, `--kind`, `--selector`, `--strictness`, repeated `--globs`, and `--context`
-  - `lang` accepts ast-grep built-in aliases. VT Code normalizes and infers a local subset it can pre-parse itself, such as Rust, Python, JavaScript, TypeScript, TSX, Go, and Java, while explicit unsupported aliases are still passed through to ast-grep unchanged.
-  - `strictness` tunes ast-grep matching for read-only queries. `smart` is the default; common alternatives are `cst`, `ast`, `relaxed`, and `signature`. `template` is passed through for ast-grep compatibility.
-  - `context_lines` maps to ast-grep `--context`; raw `--before` and `--after` are intentionally not exposed
-  - ast-grep `run` exit code `1` is normalized to an empty `matches` array instead of surfacing as a VT Code error
-  - Result shape: top-level `matches` array with `file`, `line_number`, `text`/`lines`, `language`, and compact `range` metadata, plus `backend: "ast-grep"`
-  - Raw ast-grep JSON contains fields such as `text`, `range`, `file`, `lines`, optional `replacement`, optional `replacementOffsets`, and optional `metaVariables`; VT Code consumes that internal payload but returns a normalized query result instead of exposing the native ast-grep object directly
-  - ast-grep JSON `line`, `column`, and byte offsets are zero-based; VT Code preserves the range semantics in its structured metadata even when also surfacing a convenience `line_number`
-- `workflow="scan"`:
-  - Optional: `path`, `config_path`, `filter`, `globs`, `context_lines`, `max_results`
-  - Internal mapping: read-only `ast-grep scan --config ... --json=stream --include-metadata --color=never`, plus optional `--filter`, repeated `--globs`, and `--context`
-  - `workflow="scan"` depends on project config. In raw ast-grep terms, `scan` requires an `sgconfig.yml`, while `run` can still search without one.
-  - `context_lines` maps to ast-grep `--context`; raw `--before` and `--after` are intentionally not exposed
-  - ast-grep `scan` exit code `1` when error-severity findings exist is normalized to structured `findings` instead of surfacing as a VT Code error
-  - Result shape: top-level `findings` array with `file`, `line_number`, `text`/`lines`, `language`, `range`, `rule_id`, `severity`, `message`, `note`, optional `metadata`, plus `summary`, `truncated`, and `backend: "ast-grep"`
-  - Raw ast-grep scan JSON extends the base match object with rule metadata such as `ruleId`, `severity`, `message`, and optional `note`; VT Code maps those into its normalized finding fields rather than returning the raw scan object verbatim
-- `workflow="test"`:
-  - Optional: `config_path`, `filter`, `skip_snapshot_tests`
-  - Result shape: `passed`, `stdout`, `stderr`, `summary`, and `backend: "ast-grep"`
-- `workflow="rewrite"`:
-  - Required: `pattern` and either `rewrite` (string) or `fix_config` (object)
-  - Optional: `lang`, `selector`, `strictness`, `globs`, `context_lines`, `max_results`
-  - Internal mapping: dry-run `ast-grep run --pattern=... --rewrite=... --json=compact --color=never`, plus optional `--lang`, `--selector`, `--strictness`, repeated `--globs`, and `--context`
-  - This is a preview-only workflow; no files are modified on disk
-  - `lang`, `selector`, and `strictness` behave the same as `workflow="query"`
-  - `config_path`, `filter`, and `skip_snapshot_tests` are rejected (scan/test-only fields)
-  - `fix_config` is an advanced alternative to the simple `rewrite` string. It accepts `template` (replacement text), `expand_start` (optional rule to widen the replacement range backwards), and `expand_end` (optional rule to widen the replacement range forwards). Each expand rule supports `regex`, `kind`, or `pattern`, plus optional `stop_by`. When `fix_config` includes expansion, the tool generates a temporary YAML rule and runs `sg scan` internally instead of `sg run --rewrite`. Use `fix_config` when replacing only the matched node is not enough, especially for deleting list items or key-value pairs that also need a surrounding comma removed.
-  - ast-grep `run` exit code `1` is normalized to an empty `rewrites` array instead of surfacing as a VT Code error
-  - Result shape: top-level `rewrites` array with `file`, `line_number`, `text`/`lines`, `language`, `range`, `replacement`, `replacementOffsets`, and optional `metaVariables`, plus `truncated`, `backend: "ast-grep"`, and `workflow: "rewrite"`
-- `workflow="inspect"`:
-  - Optional: `config_path`, `path`
-  - Does not require the ast-grep binary; reads `sgconfig.yml` directly
-  - Returns: `config_exists`, `rule_dir_hints`, `test_configs`, `util_dirs`, `language_injections`, `custom_languages`, `language_globs`, and `discovered_configs` (when the default config is missing but found in a parent directory)
-  - Use when: you need to inspect the project's ast-grep configuration without running any rules
-- Constraints:
-  - Read-only only; `workflow="rewrite"` is a dry-run preview that does not modify files; raw `--interactive`, `--update-all`, and other apply-mode flags are rejected
-  - `lang`, `kind`, `selector`, `strictness`, and `debug_query` are only valid for `workflow="query"` and `workflow="rewrite"`
-  - `lang` is required when `debug_query` is set
-  - `skip_snapshot_tests` is only valid for `workflow="test"`
-  - `fix_config` is only valid for `workflow="rewrite"`
-  - `workflow="inspect"` does not require the ast-grep binary and rejects `pattern`, `kind`, `lang`, `selector`, `strictness`, `debug_query`, `filter`, `skip_snapshot_tests`, `globs`, `context_lines`, and `max_results`
-  - Default `config_path` is workspace `sgconfig.yml`; raw ast-grep also supports upward discovery of `sgconfig.yml`, but VT Code’s public structural surface pins scan/test to an explicit config path for determinism
-  - Requires a local `sg` / `ast-grep` binary; if missing, VT Code auto-installs it on first use (download into `~/.vtcode/bin` with checksum + 24h cooldown). Set `VTCODE_AST_GREP_NO_INSTALL=1` to opt out, in which case VT Code returns an actionable error pointing to `vtcode dependencies install ast-grep`
-  - VT Code-managed installs live in `~/.vtcode/bin`
-  - On Linux, prefer the canonical `ast-grep` binary name instead of `sg`
-  - Raw ast-grep CLI flags such as `--stdin`, `--json`, `--color`, `--heading`, `--threads`, `--inspect`, `--follow`, `--no-ignore`, `--before`, `--after`, `--interactive`, `--update-all`, `--rule`, `--inline-rules`, `--format`, `--report-style`, `--error`, `--warning`, `--info`, `--hint`, and `--off` are not part of the public structural surface and should go through the bundled `ast-grep` skill plus `unified_exec` when needed. The `rewrite` field is accepted only for `workflow="rewrite"` (dry-run preview); passing `rewrite` with other workflows is silently ignored.
-  - Test-only ast-grep flags such as `--test-dir`, `--snapshot-dir`, `--include-off`, interactive snapshot review, and snapshot update flows are also CLI-only and not part of the public structural surface
-  - `ast-grep new`, `ast-grep lsp`, `ast-grep completions`, and top-level help/command-discovery flows are CLI-only and should go through the bundled `ast-grep` skill plus `unified_exec`
-  - Syntax-aware only; do not treat this surface as scope, type, or data-flow analysis
-  - Pattern syntax follows ast-grep rules: `$VAR` captures one named node, `$$$ARGS` captures zero or more nodes, `$$VAR` includes unnamed nodes, and `$_` suppresses capture
-  - `workflow="query"` patterns must be valid parseable code; for fragments, unnamed-token cases, or role-sensitive matching, prefer the bundled `ast-grep` skill workflow
-  - Path and glob language inference use VT Code’s local subset of ast-grep-compatible extensions, not the full ast-grep built-in catalog; set `lang` explicitly when inference is ambiguous or outside that subset
-  - Custom languages are supported only through local ast-grep configuration, typically workspace `sgconfig.yml` `customLanguages` plus a compiled tree-sitter dynamic library
-  - Built-in embedded-language behavior is limited to what ast-grep already knows, such as HTML `<script>` / `<style>` extraction; other nested-language cases depend on local `languageInjections`
-  - Non-standard extensions and embedded languages should be handled through local ast-grep config such as `languageGlobs` and `languageInjections`, not by guessing a different file language in the tool call
-  - Public project support stops at read-only `sg scan` and `sg test`
-  - Use the bundled `ast-grep` skill for `sg new`, rewrite/apply flows, interactive flags, `transform`, `replace`, `substring`, `convert`, `toCase`, `separatedBy`, `rewrite`, `joinBy`, `rewriters`, custom parser compilation, or non-trivial `sgconfig.yml` authoring/debugging
-- Use when: you need syntax-aware search, read-only project rule scans, read-only ast-grep rule tests, ast-grep config inspection, or dry-run rewrite previews
-- Avoid when: plain text grep is simpler, the search target is not syntax-sensitive, or the task depends on semantic/static-analysis facts
-
-### `outline`
-
-- Required: `action="outline"`
-- Optional: `path` (default `"."`; `pattern` is accepted as an alias and mapped to `path`), `lang`, `type` (string or array of symbol types, comma-joined for `--type`), `match` (regex over item names/signatures/first lines), `items` (`"auto" | "structure" | "exports" | "imports" | "all"`, default `"auto"` — `structure` for file input, `exports` for directory input), `pub_members` (bool, default `false`), `follow` (bool, default `false`), `view` (`"digest" | "names" | "full"`, default `"digest"`)
-- Tolerant path: when the path ends with a source extension (`.rs`, `.py`, etc.) but doesn't resolve as a file, outline retries without the extension — handles the common case of passing `foo/bar.rs` when `foo/bar/` is a directory
-- Ignored params: `format` and `max_results` are not used by outline; a `hints` array is emitted in the result explaining they were ignored
-- Internal mapping: `ast-grep outline --json=stream [--lang ...] [--type ...] [--match ...] [--items ...] [--pub-members] [--follow] <path>`. The CLI's own `--view` flag is text-only and is never passed; `view` is applied in Rust to shape the parsed NDJSON.
-- Requires ast-grep >= 0.44.0 (the `outline` subcommand and `--json` stream output shipped there)
-- No pattern or kind is required; outline extracts the symbol table via ast-grep's bundled rule catalog
-- No grep fallback when the binary is missing (outline has no text equivalent); auto-installs ast-grep on first use (download into `~/.vtcode/bin` with checksum + 24h cooldown). Set `VTCODE_AST_GREP_NO_INSTALL=1` to opt out; the error then includes the manual install command (`vtcode dependencies install ast-grep`)
-- Tolerant deserialization: unknown JSON keys from future ast-grep versions are ignored (`#[serde(default)]`, no `deny_unknown_fields`)
-- Auto-downgrade: `view: "full"` on a directory with >20 files is auto-downgraded to `view: "names"` to prevent output truncation; a `hints` entry explains the downgrade
-- Directory `summary`: directory results carry a top-level `summary` with `file_count`, `total_symbols`, `by_lang`, `by_kind` (per-kind symbol counts where `sum(by_kind) == total_symbols`), `all_symbols` (flat `{path, lang, kind, name}` list, capped at 200 entries), `next_action`, and — when the cap is hit — `truncated: true` + `visible_symbols` (the visible count). Narrow with `type`/`match` or outline a specific file when truncated.
-- Result shape by `view`:
-  - `digest` (default): `{view:"digest", files:[{path, lang, groups:[{kind, names, members}]}]}` — symbols grouped by `symbolType`; `names` are top-level item names of that kind; `members` is the flat list of all member names across items of that kind
-  - `names`: same as `digest` but without `members`
-  - `full`: `{view:"full", files:[{path, lang, items:[{role, kind, name, signature, astKind, isImport, isExported, range, lineRange, members:[{role, kind, name, signature, astKind, isPublic, range, lineRange}]}]}]}` — per-symbol records with the raw zero-based `range` (`byteOffset`/`start`/`end`), a derived 1-based inclusive `lineRange` (`{start, end}` — pass `start` to `unified_file read` `offset_lines` and `end - start + 1` to `page_size_lines`), `astKind`, signatures, and nested members (members also carry `astKind`/`range`/`lineRange`). Use on individual files, not large directories.
-- Use when: you want a cheap "what's in this file/directory?" symbol map before reading full source; a 200-line file is ~100-300 bytes in `digest` vs ~10-40 KB of structural match JSON
-- Avoid when: you need pattern-based matches (use `structural`), text/regex matches (use `grep`), or semantic type resolution (use an LSP)
-
-### `tools`
-
-- Required: `keyword`
-- Optional: `detail_level`
-
-### `errors`
-
-- Optional: `scope`
-
-### `agent`
-
-- Optional: `mode`
-
-### `web`
-
-- Required: `url`
-- Optional: `prompt`, `max_bytes`, `timeout_secs`
-
-### `skill`
-
-- Required: `name`
-
-## Guidance
-
-- Prefer `unified_search` over shell `grep`/`find` for normal workspace discovery.
-- Prefer `grep` for broad text search.
-- Prefer `structural` for syntax-sensitive search, read-only project scans, and read-only ast-grep rule tests.
-- Prefer public `structural` `strictness` on `workflow="query"` when the task is just tuning read-only matching between `cst`, `smart`, `ast`, `relaxed`, and `signature`.
-- Prefer `workflow="scan"` for public `sg scan` equivalents and `workflow="test"` for public `sg test` equivalents.
-- Prefer `workflow="inspect"` when the task needs to introspect the project's ast-grep configuration (rule directories, test configs, language injections, custom languages, language globs) without running any rules.
-- Prefer `workflow="rewrite"` with `fix_config` when the rewrite needs range expansion beyond the matched node, such as removing surrounding commas from list items or key-value pairs.
-- Prefer `load_skill` with the bundled `ast-grep` skill when the task becomes rule authoring, `sg new`, rewrite/apply work, interactive ast-grep work, or `sgconfig.yml` authoring/debugging.
-- Prefer `load_skill` with the bundled `ast-grep` skill when the task is a quick-start or install flow, including `ast-grep --help`, shell quoting for metavariables, or optional-chaining style first rewrites.
-- Prefer `load_skill` with the bundled `ast-grep` skill when the task asks for ast-grep catalog examples, existing rewrite examples, or help adapting catalog rules to this repository.
-- Prefer `load_skill` with the bundled `ast-grep` skill when the task needs project scaffolding via `ast-grep new` or `ast-grep new rule`, or when it needs guidance around `rules/`, `rule-tests/`, `utils/`, and `sgconfig.yml`.
-- Prefer `load_skill` with the bundled `ast-grep` skill when the task needs `sgconfig.yml` top-level config semantics such as `ruleDirs`, `testConfigs`, `testDir`, `snapshotDir`, `utilDirs`, `languageGlobs` precedence, target-triple `libraryPath`, `languageSymbol`, or experimental `languageInjections`.
-- Prefer `load_skill` with the bundled `ast-grep` skill when the task needs `scan --rule`, `scan --inline-rules`, scan severity overrides (`--error`, `--warning`, `--info`, `--hint`, `--off`), scan output modes such as `--format` / `--report-style`, relational/composite rule objects, positive-rule requirements, limited `kind` ESQuery syntax, `matches` utility rules, `nthChild` formulas or `reverse` / `ofRule`, `range`, relational `field`, exact `stopBy` semantics, local/global utility rules, or rule-order debugging.
-- Prefer `load_skill` with the bundled `ast-grep` skill when the task needs `test --test-dir`, `--snapshot-dir`, `--include-off`, snapshot update flows, interactive snapshot review, or detailed `ast-grep test` CLI behavior beyond public `workflow="test"`.
-- Prefer `load_skill` with the bundled `ast-grep` skill when the task needs rule-config YAML keys such as `url`, `metadata`, `constraints`, `severity`, `message`, `note`, `labels`, `files`, `ignores`, `caseInsensitive` glob objects, `severity: off`, `--include-metadata`, or YAML multi-document rule files.
-- Prefer `load_skill` with the bundled `ast-grep` skill when the task depends on config semantics like single-meta `constraints`, `constraints` after `rule`, `note` without meta interpolation, label-variable scoping, `files` / `ignores` precedence, relative glob roots, the `./` path gotcha, or the difference between YAML `ignores` and CLI `--no-ignore`.
-- Prefer `load_skill` with the bundled `ast-grep` skill when the task needs `--rewrite`, YAML string `fix`, `FixConfig`, `template`, `expandStart`, `expandEnd`, meta variables anywhere in replacement text, comma/list-item cleanup, `--interactive`, `--update-all`, or indentation-sensitive rewrite behavior.
-- Prefer `load_skill` with the bundled `ast-grep` skill when the task needs transformation-object details such as `replace`, `substring`, `convert`, `toCase`, `separatedBy`, `CaseChange`, string-form transforms, or experimental `transform.rewrite` ordering semantics.
-- Prefer `load_skill` with the bundled `ast-grep` skill when the task needs rewriter-specific semantics such as required rewriter fields, rewriter-local captures / utils / transforms, nested rewriter calls, or the barrel-import rewrite pattern.
-- Prefer `load_skill` with the bundled `ast-grep` skill when the task needs raw ast-grep CLI behavior such as `--stdin`, `--json`, `--heading`, `--threads`, `--inspect`, `--follow`, `--no-ignore`, `--before`, `--after`, scan `-r`, `lsp`, shell completions, GitHub Action setup, direct `--color never` control, or run-command exit-code details.
-- Prefer `load_skill` with the bundled `ast-grep` skill when the task is about top-level command discovery such as `ast-grep --help`, subcommand selection, `new project|rule|test|util`, `lsp`, `completions`, or `help`.
-- Prefer `load_skill` with the bundled `ast-grep` skill when the task is really about pattern syntax design, meta-variable capture rules, `$$$ARGS`, `$_`, `$$VAR`, or object-style patterns.
-- Prefer `load_skill` with the bundled `ast-grep` skill when the task is troubleshooting incomplete fragments, interpreting `debug_query`, comparing Playground vs CLI results, or using pattern-object `context` plus `selector`.
-- Prefer `load_skill` with the bundled `ast-grep` skill when the task needs `kind` plus `pattern` troubleshooting, `rule order` guidance, prefix matching via `constraints.regex`, or multi language rule strategy via `languageGlobs` versus separate rules.
-- Prefer `load_skill` with the bundled `ast-grep` skill when the task asks how ast-grep works at a high level, including Tree-Sitter parsing, pattern vs YAML vs API inputs, search/rewrite/lint/analyze modes, or multi-core processing.
-- Prefer `load_skill` with the bundled `ast-grep` skill when the task is about pattern core concepts such as textual vs structural matching, AST vs CST, named vs unnamed nodes, `kind` vs `field`, or significant vs trivial nodes.
-- Prefer `load_skill` with the bundled `ast-grep` skill when the task is about pattern parsing heuristics such as invalid / incomplete / ambiguous snippets, effective-node selection via `selector`, meta-variable detection, lazy multi-meta behavior, or `expandoChar`.
-- Prefer `load_skill` with the bundled `ast-grep` skill when the task is about ast-grep’s match algorithm itself, choosing between strictness levels, or using CLI / YAML strictness outside the public read-only query surface.
-- Prefer `load_skill` with the bundled `ast-grep` skill when the task needs Find & Patch style rewrites such as `rewriters`, `transform.rewrite`, `joinBy`, recursive sub-node patching, or barrel-import splitting.
-- Prefer `load_skill` with the bundled `ast-grep` skill when the task outgrows rule syntax and needs ast-grep’s Node NAPI / Python / Rust API, `parse`, `Lang`, `pattern`, `kind`, `SgRoot`, `SgNode`, `NapiConfig`, `ast_grep_core`, computed replacements, conditional AST edits, or node-order/count logic.
-- Prefer `load_skill` with the bundled `ast-grep` skill when the task mentions deprecated language-specific JS objects like `js.parse(...)`; the current guidance should move that work to the unified NAPI functions instead.
-- Prefer `load_skill` with the bundled `ast-grep` skill when the target snippet is not valid standalone code and needs pattern-object `context` plus `selector`.
-- Prefer `load_skill` with the bundled `ast-grep` skill when matching depends on `$$VAR`, `field`, modifiers/operators, or other CST-level distinctions.
-- Prefer `load_skill` with the bundled `ast-grep` skill when the requested language is not built into ast-grep and needs workspace `sgconfig.yml` `customLanguages` setup or `expandoChar`.
-- Prefer `load_skill` with the bundled `ast-grep` skill when the task needs custom parser compilation via `tree-sitter build`, the `TREE_SITTER_LIBDIR` fallback, reused Neovim parser libraries, or parser inspection with `tree-sitter parse`.
-- Prefer `load_skill` with the bundled `ast-grep` skill when the task is mainly about the built-in language catalog, alias selection, extension defaults, or deciding between built-in extension mapping and `languageGlobs`.
-- Prefer `load_skill` with the bundled `ast-grep` skill when the task needs `languageGlobs`, `languageInjections`, `hostLanguage`, `injected`, dynamic injected candidates through `$LANG`, `$CONTENT`-style embedded-region capture, styled-components CSS, GraphQL template literals, local/global utility rules, `transform`, `rewrite`, `joinBy`, or `rewriters`.
-- Prefer another analysis tool when the task depends on scope, type, control-flow, data-flow, taint, or constant-propagation facts; ast-grep’s structural surface does not provide that analysis.
-- `action="intelligence"` remains executor-compatible for legacy callers, but it is deprecated and not part of the public schema.
-
-## Common Recovery Patterns
-
-Use these patterns to avoid the tool-selection failures called out in TD-015.
-
-| Situation | Prefer | Avoid |
-| --- | --- | --- |
-| Need prose, regex, filenames, or symbol-name matching | `unified_search` with `action="grep"` | `action="structural"` with non-parseable text fragments |
-| Need syntax-aware code structure matching | `unified_search` with `action="structural"` and a valid parseable snippet | Treating structural search as a smarter grep |
-| Existing file needs a small literal replacement | `unified_file` `edit` with exact old/new text | Large block rewrites through a small literal-edit call |
-| Existing file needs a broad rewrite | `unified_file` `write` with `mode="overwrite"` or `apply_patch` with exact context | `write` without explicit overwrite intent |
-| Patch failed after the file changed | Re-read a narrow fresh range, then re-run `patch` with exact surrounding lines | Synthetic anchors or remembered context such as `@@ heading @@` |
-| Shell inspection was denied by policy | Switch to `unified_search`, `unified_file`, or `request_user_input`; if shell access is still required, tell the user it was **not applied** and suggest `/mode auto` | Retrying the same denied `unified_exec` call |
-| Recovery pass cannot apply a requested mutation | Finalize with explicit blocker text: `not applied; tools were disabled or denied; next action is ...` | Presenting generated prose or pseudo tool-call markup as if it ran |
-
-### Grep vs structural search
-
-Use `grep` when the target is plain text or regex:
+Example:
 
 ```json
-{
-  "tool": "unified_search",
-  "action": "grep",
-  "pattern": "TD-015|recovery-mode",
-  "path": "docs/"
-}
+{"session_id":42,"chars":"q"}
 ```
 
-Use `structural` only when the pattern is valid code in the target language:
+### `apply_patch`
+
+Applies a freeform patch through VT Code's workspace-boundary and edit-safety
+checks. Use it for file edits, additions, moves, and deletions when the model has
+the patch tool.
+
+Example:
+
+```diff
+*** Begin Patch
+*** Update File: README.md
+@@
+-old text
++new text
+*** End Patch
+```
+
+## Advanced Semantic Search
+
+`code_search` is available only when the advanced VT Code profile is enabled.
+It preserves VT Code's semantic search features without making text search a
+separate default function tool.
+
+Actions:
+
+- `outline`: Tree-sitter symbol maps for a file or path set.
+- `structural`: ast-grep pattern search over syntax trees.
+
+Examples:
 
 ```json
-{
-  "tool": "unified_search",
-  "action": "structural",
-  "workflow": "query",
-  "lang": "rust",
-  "pattern": "fn $NAME($$$ARGS) -> $RET { $$$BODY }",
-  "path": "src/"
-}
+{"action":"outline","path":"vtcode-core/src/tools/registry","lang":"rust","view":"names"}
 ```
-
-Do not send prose fragments such as `AgentLoop agent loop` or selector-heavy text blobs to structural mode; ast-grep expects parseable code, not free-form search terms.
-
-### `edit` vs `write`/`overwrite`
-
-Use `edit` when the old text is short, exact, and already present:
 
 ```json
-{
-  "tool": "unified_file",
-  "action": "edit",
-  "path": "README.md",
-  "old_str": "Old heading",
-  "new_str": "New heading"
-}
+{"action":"structural","path":"vtcode-core","lang":"rust","pattern":"ToolProfile::$NAME"}
 ```
 
-Use `write` with `mode="overwrite"` when replacing most or all of an existing file:
+Use shell `rg` or `grep` through `exec_command.cmd` for plain text, filenames,
+and prose search. Use `code_search` when the query depends on syntax, nesting,
+or symbol structure.
+
+## File Inspection
+
+The default profile has no public `read_file` or `write_file` tools. This
+matches the Codex core finding: file inspection uses shell commands, internal
+filesystem affordances, or MCP tools when present, and edits use `apply_patch`.
+
+Examples:
 
 ```json
-{
-  "tool": "unified_file",
-  "action": "write",
-  "path": "README.md",
-  "mode": "overwrite",
-  "content": "# New README\n..."
-}
+{"cmd":"sed -n '1,120p' docs/tools/TOOL_SPECS.md"}
 ```
 
-If the rewrite is partial but larger than a safe literal edit, prefer `apply_patch` or `unified_file` `patch` with exact file context.
+```json
+{"cmd":"rg --files docs | sort"}
+```
 
-### Patch context discipline
+Separately named non-default file tools may be added later only if a concrete
+use case justifies them. They must not reuse a legacy `unified_*` name.
 
-Good patch flow:
+## Platform Profiles
 
-1. Read only the narrow range you will edit.
-2. Copy the exact surrounding lines into the patch.
-3. If the patch fails, re-read the file and regenerate the patch from fresh context.
+VT Code selects the model-facing shell guidance from `agent.shell_prompt_profile`.
 
-Bad patch flow:
+| Platform | Default profile | Guidance |
+|---|---|---|
+| Linux | `unix_like` | Use Unix-like shell commands in `exec_command.cmd`. |
+| macOS | `unix_like` | Use BSD-compatible flags where BSD tools differ. |
+| WSL | `unix_like` | Recommended route for Unix-like workflows on Windows. |
+| Native Windows | `powershell` | Use native PowerShell syntax. |
 
-- inventing anchors from memory,
-- patching against stale content after another edit,
-- widening context until the patch becomes a full-file replacement.
+The setting accepts `auto`, `unix_like`, or `powershell`. It controls prompt
+examples and expected command syntax only. VT Code does not translate GNU flags
+for macOS BSD tools, and it does not translate Unix commands to PowerShell.
 
-### Policy-denied exec recovery
+## Migration From Removed Schemas
 
-If `unified_exec` is denied for a read-only shell inspection:
+External users of the removed legacy schemas must update their calls directly:
 
-1. Do not retry the same shell command.
-2. Switch to `unified_search` or `unified_file` for workspace inspection.
-3. If shell execution is still necessary, say it was **not applied** and recommend `/mode auto` or a user-approved mode change.
+| Removed legacy schema | Replacement |
+|---|---|
+| `unified_exec` run | `exec_command` |
+| `unified_exec` session input | `write_stdin` |
+| `unified_file` patch or edit | `apply_patch` |
+| `unified_file` read or write | Shell commands through `exec_command.cmd` by default, or separately named non-default tools if added later. |
+| `unified_search` text search | `rg` or `grep` through `exec_command.cmd` |
+| `unified_search` semantic search | `code_search` in the advanced profile |
+| `unified_search` web, skills, errors, discovery | Separate tools only where those affordances are retained. |
 
-### Recovery-mode final wording
+Short replacements:
 
-When a mutating task could not be executed in recovery mode, prefer:
+```json
+{"cmd":"rg -n \"struct ToolRegistration\" vtcode-core"}
+```
 
-> Not applied. Tools were disabled or denied during recovery, so no additional tool call ran. Latest verified evidence is above; next action: re-enable the needed tool or switch to `/mode auto`.
+```json
+{"action":"outline","path":"vtcode-core/src/tools","lang":"rust","view":"names"}
+```
 
-Do not return pseudo tool-call markup, XML wrappers, or “done” language for changes that were never applied.
+## Related Docs
+
+- [Tool Registry Guide](../guides/tool_registry.md)
+- [Execution Policy](../development/EXECUTION_POLICY.md)
+- [Grep Tool Guide](../development/grep-tool-guide.md)
+- [AI Tool Surface Migration](../development/ai-tool-surface-migration.md)

@@ -2,39 +2,23 @@
 
 This guide summarizes common actions and how to invoke them with vtcode. The agent exposes a suite of tools to the LLM; you interact with them via chat. When you ask to search, read, or edit files, the agent chooses an appropriate tool.
 
-## unified_search (ripgrep-like)
+## Search
 
-High-speed code search with glob filters, context lines, and optional literal/regex matching.
-VT Code routes searches through the `unified_search` tool (with `grep_file` as a legacy alias) backed by the system `rg` (ripgrep) binary. Prefer `unified_search` instead of invoking shell `rg`/`grep` yourself.
+Use `exec_command.cmd` with `rg` or `grep` for high-speed text search. Use
+advanced `code_search` only for Tree-sitter outlines or ast-grep structural
+queries.
 
--   Input fields:
-
-    -   `pattern` (string, required): Search pattern. Treated as regex unless `literal=true`.
-    -   `path` (string, default: `.`): Base directory to search from.
-    -   `case_sensitive` (bool, default: true): Case-sensitive when true.
-    -   `literal` (bool, default: false): Treat pattern as literal text when true.
-    -   `glob_pattern` (string, optional): Filter files by glob (e.g., `**/*.rs`).
-    -   `context_lines` (integer, default: 0): Lines before/after each hit.
-    -   `include_hidden` (bool, default: false): Include dotfiles when true.
-    -   `max_results` (integer, default: 1000): Cap results to avoid large payloads.
-
--   Output fields:
-    -   `matches[]`: `{ path, line, column, line_text, before[], after[] }`
-    -   `total_matches`, `total_files_scanned`, `truncated`
+The default model-visible tools are `exec_command`, `write_stdin`, and
+`apply_patch`. `code_search` is available through the advanced VT Code profile.
 
 ### Examples
 
 -   Find TODO/FIXME with 2 lines of context in Rust files only:
 
 ```
-Ask: Search for TODO|FIXME across the repo with 2 lines of context in .rs files
-(Agent uses unified_search with)
+Ask: Search for TODO or FIXME across the repo with 2 lines of context in Rust files.
 {
-  "pattern": "TODO|FIXME",
-  "path": ".",
-  "case_sensitive": false,
-  "glob_pattern": "**/*.rs",
-  "context_lines": 2
+  "cmd": "rg -n -C 2 'TODO|FIXME' -g '*.rs' ."
 }
 ```
 
@@ -42,9 +26,7 @@ Ask: Search for TODO|FIXME across the repo with 2 lines of context in .rs files
 
 ```
 {
-  "pattern": "unsafe {",
-  "literal": true,
-  "context_lines": 1
+  "cmd": "rg -n -C 1 -F 'unsafe {' ."
 }
 ```
 
@@ -52,18 +34,15 @@ Ask: Search for TODO|FIXME across the repo with 2 lines of context in .rs files
 
 ```
 {
-  "pattern": "doSomethingImportant",
-  "case_sensitive": false,
-  "glob_pattern": "**/*.js"
+  "cmd": "rg -n -i 'doSomethingImportant' -g '*.js' ."
 }
 ```
 
 ## File operations
 
--   `list_files(path, max_items?, include_hidden?)`
--   `read_file(path, max_bytes?)`
--   `write_file(path, content, mode?)` — mode: `overwrite`, `append`, or `skip_if_exists`
--   `edit_file(path, old_str, new_str)` — tolerant to whitespace differences and detects rename conflicts
+-   Inspect files with shell commands through `exec_command.cmd`, such as `rg --files`, `sed -n`, `cat`, `head`, and `tail`.
+-   Edit files with `apply_patch`.
+-   Continue live shell sessions with `write_stdin`.
 
 ## Session resume and forks
 
@@ -181,7 +160,7 @@ vtcode schema tools --mode minimal
 vtcode schema tools --format ndjson
 
 # Filter to specific tools
-vtcode schema tools --name unified_search --name unified_file
+vtcode schema tools --name exec_command --name apply_patch
 ```
 
 ### Options
@@ -349,7 +328,7 @@ This starts a fresh conversation with the context preserved from the last sessio
 ## Tips
 
 -   The agent respects `.vtcodegitignore` to exclude files from search and I/O.
--   Prefer `unified_search` for fast, focused searches with glob filters and context.
+-   Prefer `exec_command.cmd` with `rg` for fast, focused text searches with glob filters and context.
 -   Ask for “N lines of context” when searching to understand usage in-place.
 -   Shell commands are filtered by allow/deny lists and can be extended via `VTCODE_<AGENT>_COMMANDS_*` environment variables.
 -   Use `vtcode update --check` regularly to stay informed about new features and security updates.

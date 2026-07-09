@@ -297,12 +297,13 @@ Common cases:
   function calling or the tool toggle is disabled, VT Code surfaces a reasoning notice and skips the
   invocation. Paths supplied by tools are normalised against the trusted workspace so relative
   segments stay inside the project before the request reaches the client.
-- **Tool policy compatibility** – VT Code still advertises its core tool suite (for example
-  `unified_exec`, `unified_search`, `unified_file`) through ACP when the model supports
-  function calling. The bridge evaluates each request against the workspace's tool-policy settings
-  before executing commands locally, ensuring shell access and editing tools behave the same as in
-  the native CLI. Policy defaults and overrides defined under `[tools]` in `vtcode.toml` apply to
-  ACP sessions just like the CLI.
+- **Tool policy compatibility** – VT Code advertises the current core tool suite
+  through ACP when the model supports function calling, including `exec_command`,
+  `write_stdin`, `apply_patch`, and advanced `code_search` where enabled. The
+  bridge evaluates each request against the workspace's tool-policy settings
+  before executing commands locally, ensuring shell access and editing tools
+  behave the same as in the native CLI. Policy defaults and overrides defined
+  under `[tools]` in `vtcode.toml` apply to ACP sessions just like the CLI.
 - **Policy persistence** – Auto-approved tool prompts in ACP mode (for example shell execution in a
   non-interactive environment) are stored in the workspace policy file so subsequent runs reuse the
   remembered decision instead of prompting on every invocation.

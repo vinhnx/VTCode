@@ -10,14 +10,11 @@ Every VT Code-native agent spec must provide `permissions.default`. Optional rul
 permissions:
   default: ask
   allow:
-    - read_file
-    - list_files
-    - unified_search
+    - exec_command
+    - code_search
   ask:
-    - unified_exec
+    - write_stdin
   auto:
-    - edit_file
-    - write_file
     - apply_patch
   deny:
     - rm
@@ -33,9 +30,9 @@ The top-level `[permissions]` table in `vtcode.toml` defines workspace-wide rule
 
 ```toml
 [permissions]
-ask = ["unified_exec(git commit *)", "unified_file(/docs/**)"]
-allow = ["unified_file", "unified_search", "mcp__context7__*"]
-deny = ["unified_exec(rm -rf *)", "unified_file(/.git/**)"]
+ask = ["exec_command(git commit *)", "apply_patch(/docs/**)"]
+allow = ["exec_command", "code_search", "mcp__context7__*"]
+deny = ["exec_command(rm -rf *)", "apply_patch(/.git/**)"]
 ```
 
 Global rules do not define a default decision. The active primary agent or active subagent supplies `permissions.default` after global deny and ask checks.
@@ -68,13 +65,13 @@ After repeated classifier denials, VT Code falls back to manual prompts where an
 
 `allow`, `ask`, `auto`, and `deny` accept exact VT Code tool ids and richer rule grammar:
 
-- `unified_exec` or `unified_exec(cargo test *)`
-- `read_file` or `read_file(/src/**/*.rs)`
-- `edit_file` or `edit_file(/docs/**)`
-- `write_file` or `write_file(./notes/*.md)`
+- `exec_command` or `exec_command(cargo check *)`
+- `write_stdin`
+- `apply_patch` or `apply_patch(/docs/**)`
+- `code_search`
 - `WebFetch(domain:example.com)`
 - `mcp__context7`, `mcp__context7__*`, `mcp__context7__search-docs`
-- Exact VT Code tool ids such as `apply_patch` or `unified_search`
+- Exact VT Code tool ids such as `exec_command` or `apply_patch`
 
 ## Path Matching
 

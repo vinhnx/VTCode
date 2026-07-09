@@ -182,7 +182,7 @@ When updating an `Agent Legibility` row, make all three signals explicit in the 
 | ---------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Test Coverage    | B+    | PTY command/session paths now include timeout and output-truncation regressions in `vtcode-core/tests/pty_tests.rs`, alongside existing session lifecycle and runner tests. |
 | API Stability    | B     | Standard/PTY/streaming execution modes are stable.                                                                                                                          |
-| Agent Legibility | B     | `unified_exec` is the stable top-level entrypoint; PTY lifecycle and shell-init flows still force deeper traversal through lower-level plumbing.                            |
+| Agent Legibility | B     | `exec_command` is the stable top-level entrypoint; PTY lifecycle and shell-init flows still force deeper traversal through lower-level plumbing.                              |
 | Error Handling   | B     | Exit code and timeout handling are in place; shell-init edge paths can improve.                                                                                             |
 | Documentation    | B     | Runner docs and workflow docs exist and are current.                                                                                                                        |
 

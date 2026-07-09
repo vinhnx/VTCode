@@ -190,7 +190,7 @@ During chat you can lead with `/` to trigger built-in actions without leaving th
 -   `/help` — list supported commands
 
 -   `/theme <id>` — switch the active theme
--   `/command <program> [args...]` — run a shell command via `unified_exec`
+-   `/command <program> [args...]` — run a shell command via `exec_command`
 -   `/agents` — create, inspect, edit, or delete subagent definitions with VT Code-native frontmatter
 -   `/agent` — inspect delegated child threads in the current session
 
@@ -198,7 +198,7 @@ Press **Tab** on an empty idle composer to cycle primary agents. The active prim
 
 Slash commands execute immediately and respect the same tool policies configured in `vtcode.toml`.
 
-For delegated child-agent workflows and primary agents, see the dedicated [Subagents guide](./subagents.md). Primary agents (`mode: primary` or `mode: all`) control the main session directly; subagents (`mode: subagent` or `mode: all`) are spawned as child threads via `@agent-name`. New `.vtcode/agents/*.md` files should use VT Code tool ids such as `read_file`, `list_files`, `unified_search`, and `unified_exec`, not Claude-style names like `Read` or `Bash`.
+For delegated child-agent workflows and primary agents, see the dedicated [Subagents guide](./subagents.md). Primary agents (`mode: primary` or `mode: all`) control the main session directly; subagents (`mode: subagent` or `mode: all`) are spawned as child threads via `@agent-name`. New `.vtcode/agents/*.md` files should use VT Code tool ids such as `exec_command`, `write_stdin`, `apply_patch`, and advanced `code_search`, not Claude-style names like `Read` or `Bash`.
 
 VT Code uses a comprehensive TOML configuration system. The `init` command creates a `vtcode.toml` file with sensible defaults.
 
@@ -220,8 +220,8 @@ human_in_the_loop = true   # enable human-in-the-loop tool approval
 default_policy = "prompt"
 
 [tools.policies]
-unified_search = "allow"
-unified_exec = "prompt"
+exec_command = "prompt"
+code_search = "allow"
 apply_patch = "prompt"
 ```
 
@@ -273,7 +273,7 @@ usage_tips = [
     "Share the outcome you need or ask for a quick /status summary.",
     "Reference AGENTS.md expectations before changing files.",
     "Draft or refresh your TODOs with task_tracker before editing.",
-    "Prefer targeted reads and unified_search (grep or structural) before editing.",
+    "Prefer targeted shell reads, rg search, or advanced code_search before editing.",
 ]
 recommended_actions = [
     "Outline a 3-6 step TODO plan via task_tracker before coding.",

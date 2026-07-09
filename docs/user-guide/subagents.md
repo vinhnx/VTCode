@@ -77,13 +77,13 @@ Use `- None` for empty sections. If a child reply does not follow this contract,
 ---
 name: code-reviewer
 description: Read-only reviewer for correctness, regressions, and test gaps. Use proactively after code changes.
-tools: [read_file, list_files, unified_search]
+tools: [exec_command, code_search]
 permissions:
   default: deny
-  allow: [read_file, list_files, unified_search]
+  allow: [exec_command, code_search]
   ask: []
   auto: []
-  deny: [unified_exec, edit_file, write_file, apply_patch]
+  deny: [write_stdin, apply_patch]
 model: inherit
 color: blue
 reasoning_effort: medium
@@ -136,11 +136,9 @@ model: inherit
 color: "#4f8fd8"
 maxTurns: 8
 tools:
-  - unified_search
-  - read_file
-  - list_files
-  - unified_exec
-  - unified_file
+  - exec_command
+  - write_stdin
+  - code_search
   - apply_patch
 ---
 
@@ -162,7 +160,7 @@ Return findings in priority order with file references.
 model = "gpt-5.4-mini"
 model_reasoning_effort = "low"
 maxTurns = 6
-permissions = { default = "deny", allow = ["unified_file", "unified_search"], ask = [], auto = [], deny = ["unified_exec", "apply_patch"] }
+permissions = { default = "deny", allow = ["exec_command", "code_search"], ask = [], auto = [], deny = ["write_stdin", "apply_patch"] }
 ```
 
 VT Code reads `developer_instructions` and also accepts `instructions` for compatibility.
@@ -175,29 +173,29 @@ For `.vtcode/agents/*.md`, prefer the exact VT Code tool ids returned by `vtcode
 
 ```bash
 vtcode schema tools
-vtcode schema tools --name unified_search --name unified_exec --name unified_file
+vtcode schema tools --name exec_command --name write_stdin --name apply_patch --name code_search
 ```
 
 Common starting points:
 
 | Use case | Recommended VT Code tool ids |
 | --- | --- |
-| Read-only review | `read_file`, `list_files`, `unified_search` |
-| Read plus shell execution | `read_file`, `list_files`, `unified_search`, `unified_exec` |
-| Write-capable editor | `read_file`, `list_files`, `unified_search`, `edit_file`, `write_file`, `apply_patch` |
-| Umbrella file access | `unified_file` |
+| Read-only review | `exec_command`, advanced `code_search` |
+| Read plus shell execution | `exec_command`, `write_stdin`, advanced `code_search` |
+| Write-capable editor | `exec_command`, `write_stdin`, `apply_patch`, advanced `code_search` |
+| File inspection | shell commands through `exec_command.cmd` |
 | Explicit user clarification | `request_user_input` |
 
 Compatibility alias mapping for imported `.claude` agents:
 
 | Claude-style name | VT Code tool id |
 | --- | --- |
-| `Read` | `read_file` |
-| `Grep` | `unified_search` |
-| `Glob` | `list_files` |
-| `Bash` | `unified_exec` |
-| `Edit` | `edit_file` |
-| `Write` | `write_file` |
+| `Read` | `exec_command` shell file inspection |
+| `Grep` | `exec_command` shell `rg` search |
+| `Glob` | `exec_command` shell file listing |
+| `Bash` | `exec_command` |
+| `Edit` | `apply_patch` |
+| `Write` | `apply_patch` |
 | `Agent` or `Task` | `spawn_agent` |
 | Managed background helper | `spawn_background_subprocess` |
 
@@ -210,7 +208,7 @@ Only `name` and `description` are required.
 | `name` | unique agent identifier | use lowercase letters, digits, and hyphens |
 | `description` | delegation hint for VT Code and the model | include phrases like "use proactively" when you want read-only delegation to be attractive |
 | `mode` | agent availability | `primary`, `subagent`, or `all`; omitted mode defaults to `subagent` |
-| `tools` | allowlist of tool names | use VT Code tool ids from `vtcode schema tools`, such as `read_file`, `list_files`, `unified_search`, `unified_exec`, `edit_file`, `write_file`, `apply_patch`, or `unified_file` |
+| `tools` | allowlist of tool names | use VT Code tool ids from `vtcode schema tools`, such as `exec_command`, `write_stdin`, `apply_patch`, or advanced `code_search` |
 | `disallowedTools` / `disallowed_tools` | denylist removed from inherited or allowed tools | use the same VT Code tool ids as `tools`; applied before runtime filtering |
 | `model` | model override | defaults to `inherit`; also accepts `small`, `haiku`, `sonnet`, `opus`, or a full model id |
 | `color` | TUI color metadata | optional; accepts simple color names such as `blue`, hex like `#4f8fd8`, or Git-style fg/bg strings such as `white #4f8fd8` |
@@ -441,14 +439,14 @@ description: Main-session code reviewer for correctness, regressions, and test g
 mode: primary
 aliases: [review, critic]
 color: cyan
-tools: [read_file, list_files, unified_search]
-disallowedTools: [unified_exec, unified_file]
+tools: [exec_command, code_search]
+disallowedTools: [write_stdin, apply_patch]
 permissions:
   default: deny
-  allow: [read_file, list_files, unified_search]
+  allow: [exec_command, code_search]
   ask: []
   auto: []
-  deny: [unified_exec, edit_file, write_file, apply_patch]
+  deny: [write_stdin, apply_patch]
 model: inherit
 reasoning_effort: medium
 skills: [code-review]
@@ -487,13 +485,13 @@ description: Code review agent that enforces project conventions.
 mode: primary
 aliases: [review, critic]
 color: cyan
-tools: [read_file, list_files, unified_search]
+tools: [exec_command, code_search]
 permissions:
   default: deny
-  allow: [read_file, list_files, unified_search]
+  allow: [exec_command, code_search]
   ask: []
   auto: []
-  deny: [unified_exec, edit_file, write_file, apply_patch]
+  deny: [write_stdin, apply_patch]
 model: inherit
 reasoning_effort: medium
 skills: [code-review]
@@ -501,7 +499,7 @@ memory: project
 hooks:
   lifecycle:
     pre_tool_use:
-      - matcher: unified_search
+      - matcher: code_search
         hooks:
           - command: "$VT_PROJECT_DIR/.vtcode/hooks/log-review-search.sh"
 ---

@@ -26,8 +26,8 @@ exec/full-auto runtime is built around that split rather than around a separate 
 Harness primitives in VT Code map to the runtime like this:
 
 - **Instruction memory**: AGENTS.md loading, project docs, prompt assembly, onboarding guidance, and session bootstrap live in `vtcode-core/src/prompts/`, `vtcode-core/src/core/agent/`, and the workspace instruction loaders.
-- **Tools**: `vtcode-core/src/tools/`, MCP integration, slash commands, and the tool registry expose filesystem, search, edit, exec, and protocol-backed capabilities to the model.
-- **Sandbox / execution environment**: `vtcode-bash-runner/`, `vtcode-safety/` (command safety, exec policy, sandboxing), unified exec, workspace trust, command policies, and tool allow-lists define where generated code runs and what it can touch.
+- **Tools**: `vtcode-core/src/tools/`, MCP integration, slash commands, and the tool registry expose shell execution, stdin continuation, patch editing, advanced semantic search, and protocol-backed capabilities to the model.
+- **Sandbox / execution environment**: `vtcode-bash-runner/`, `vtcode-safety/` (command safety, exec policy, sandboxing), workspace trust, command policies, and tool allow-lists define where generated code runs and what it can touch.
 - **Dynamic context**: context assembly, instruction merging, task tracker state, history, plan sidecars, and spooled tool outputs let VT Code rehydrate long-running work without keeping every token in the live window. The persisted `SessionMemoryEnvelope` is the harness working-memory artifact: it summarizes objective, constraints, touched files, grounded facts, verification status, verification TODOs, and delegated findings for resume and summarized-fork handoff.
 - **Compaction / offloading**: split tool results, spool files, archive transcripts, and provider-aware auto-compaction reduce context rot while preserving recoverable state on disk. On VT Code's local compaction path, older repeated single-file reads are deduplicated before summarization so the summary prompt keeps the newest copy and avoids re-injecting stale file payloads.
 - **Hooks / middleware**: lifecycle hooks, tool middleware, guard rails, duplicate-call protection, and planning-workflow enforcement add deterministic control around the model loop.
@@ -137,7 +137,7 @@ tools/
  structural_search/  # AST-grep structural search (mod.rs dispatcher + submodules)
  registry/
    builtins.rs       # Tool registration and declarations
-   executors.rs      # Unified tool executors (unified_search, unified_file, unified_exec)
+   executors.rs      # Built-in executors for exec_command, write_stdin, apply_patch, and code_search
    tool_intent.rs    # Argument normalization and action inference
 ```
 
@@ -166,27 +166,18 @@ pub trait CacheableTool: Tool {
 
 ## Tool Implementations
 
-### Unified Search (`unified_search`)
+### Default Tool Surface
 
-- Canonical public tool for read-only discovery and lookup
-- Actions: `grep` (ripgrep-backed), `list` (file discovery), `structural` (ast-grep), `tools`, `errors`, `agent`, `web`, `skill`
-- Internal `GrepSearchManager` (`tools::grep_file`) handles the `grep` action
-- Debounce and cancellation pipeline for responsive searches
-- Workspace boundary enforcement with robust path validation
+- `exec_command`: canonical public shell tool. Commands run through the active shell profile, command policy, sandboxing, approvals, and output caps.
+- `write_stdin`: canonical public continuation tool for live sessions started by `exec_command`.
+- `apply_patch`: canonical public patch-editing tool with workspace-boundary checks.
 
-### Unified File (`unified_file`)
+### Advanced Code Search (`code_search`)
 
-- Canonical public tool for file reads and workspace-local edits
-- Actions: `read`, `write`, `edit`, `patch`, `delete`, `move`, `copy`
-- Byte-range reading for large files with offset and page size parameters
-- Async directory walking with cache integration for large trees
-
-### Unified Exec (`unified_exec`)
-
-- Canonical public tool for command execution and session control
-- Actions: `run`, `write`, `poll`, `continue`, `inspect`, `list`, `close`, `code`
-- PTY session management for interactive commands
-- Streaming support for long-lived shell tasks with cancellation
+- Advanced-profile public tool for semantic code search.
+- `outline` returns Tree-sitter symbol maps for files or path sets.
+- `structural` runs ast-grep pattern search for syntax-aware queries.
+- Plain text search remains a shell command, usually `rg` through `exec_command.cmd`.
 
 ## Design Principles
 

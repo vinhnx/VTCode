@@ -62,9 +62,9 @@ let deferred_tool = ToolDefinition::function(
 
 // Create a non-deferred tool (always available)
 let core_tool = ToolDefinition::function(
-    "unified_file".to_string(),
-    "Read, write, or edit a file".to_string(),
-    json!({"type": "object", "properties": {"action": {"type": "string"}, "path": {"type": "string"}}, "required": ["action", "path"]}),
+    "apply_patch".to_string(),
+    "Apply a workspace-bound patch".to_string(),
+    json!({"type": "object", "properties": {"input": {"type": "string"}}, "required": ["input"]}),
 );
 ```
 
