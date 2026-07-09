@@ -7,8 +7,9 @@ use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::{
     POST_TOOL_RECOVERY_REASON, POST_TOOL_RESUME_DIRECTIVE, RECOVERY_CONTRACT_VIOLATION_REASON,
-    RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER,
+    RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER, check_recovery_cycle_cap,
 };
+use crate::agent::runloop::unified::run_loop_context::HarnessTurnState;
 use crate::agent::runloop::unified::turn::context::TurnLoopResult;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -120,7 +121,7 @@ pub(super) fn maybe_recover_after_post_tool_llm_failure(
 
 pub(super) fn complete_turn_after_failed_tool_free_recovery(
     working_history: &mut Vec<uni::Message>,
-    failure_stage: &'static str,
+    failure_stage: &str,
     err: Option<&anyhow::Error>,
     salvaged_text: Option<String>,
 ) -> TurnLoopResult {
@@ -194,4 +195,101 @@ pub(super) fn normalize_tool_free_recovery_break_outcome(
     }
 
     outcome_result
+}
+
+/// Action the turn loop should take after dispatching a post-tool failure.
+#[derive(Debug)]
+pub(super) enum PostToolFailureAction {
+    /// Continue the loop (after RetryToolFree).
+    Continue,
+    /// Break with the given result (after StopAfterDirective or cycle cap).
+    Break(TurnLoopResult),
+    /// Fall through to error display and abort (block A only).
+    Fallthrough,
+}
+
+/// Dispatch the post-tool failure recovery match block, deduplicating the
+/// near-identical 3× match in `run_turn_loop`.
+///
+/// Returns the action the caller should take: continue the loop, break with a
+/// result, or fall through to error display.
+pub(super) fn dispatch_post_tool_failure(
+    renderer: &mut AnsiRenderer,
+    working_history: &mut Vec<uni::Message>,
+    harness_state: &mut HarnessTurnState,
+    err: &anyhow::Error,
+    step_count: usize,
+    turn_history_start_len: usize,
+    stage: &'static str,
+    tool_free_recovery: bool,
+) -> Result<PostToolFailureAction> {
+    let recovery = maybe_recover_after_post_tool_llm_failure(
+        renderer,
+        working_history,
+        err,
+        step_count,
+        turn_history_start_len,
+        stage,
+        !tool_free_recovery,
+    )?;
+
+    match recovery {
+        PostToolFailureRecovery::NotApplicable => {
+            // Block A only: when tool_free_recovery is true and recovery is
+            // not applicable, the turn still fails with a deterministic
+            // fallback. Blocks B and C never reach this path.
+            if tool_free_recovery {
+                let salvaged = harness_state.take_recovery_rejected_synthesis();
+                let direct_stage = concat_compact(stage, ".direct_tool_free_failure");
+                let result = complete_turn_after_failed_tool_free_recovery(
+                    working_history,
+                    &direct_stage,
+                    Some(err),
+                    salvaged,
+                );
+                Ok(PostToolFailureAction::Break(result))
+            } else {
+                Ok(PostToolFailureAction::Fallthrough)
+            }
+        }
+        PostToolFailureRecovery::RetryToolFree => {
+            let salvaged = harness_state.take_recovery_rejected_synthesis();
+            let cycle_stage = concat_compact(stage, ".recovery_cycle_cap");
+            if let Some(r) = check_recovery_cycle_cap(
+                harness_state.post_tool_recovery_cycles(),
+                working_history,
+                &cycle_stage,
+                err,
+                salvaged,
+            ) {
+                return Ok(PostToolFailureAction::Break(r));
+            }
+            harness_state.increment_post_tool_recovery_cycle();
+            harness_state.switch_to_tool_free_recovery();
+            Ok(PostToolFailureAction::Continue)
+        }
+        PostToolFailureRecovery::StopAfterDirective => {
+            let result = if tool_free_recovery {
+                let salvaged = harness_state.take_recovery_rejected_synthesis();
+                let directive_stage = concat_compact(stage, ".stop_after_directive");
+                complete_turn_after_failed_tool_free_recovery(
+                    working_history,
+                    &directive_stage,
+                    Some(err),
+                    salvaged,
+                )
+            } else {
+                TurnLoopResult::Completed
+            };
+            Ok(PostToolFailureAction::Break(result))
+        }
+    }
+}
+
+/// Concatenate two `&str` into a `String` for composite stage labels.
+fn concat_compact(a: &str, b: &str) -> String {
+    let mut buf = String::with_capacity(a.len() + b.len());
+    buf.push_str(a);
+    buf.push_str(b);
+    buf
 }

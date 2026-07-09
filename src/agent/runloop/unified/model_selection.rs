@@ -350,7 +350,15 @@ async fn resolve_runtime_api_key(
     if selection.provider_enum == Some(Provider::OpenAI)
         && let Some(cfg) = vt_cfg
     {
-        let api_key = get_api_key(&selection.provider, &ApiKeySources::default()).ok();
+        let api_key = get_api_key(&selection.provider, &ApiKeySources::default())
+            .inspect_err(|err| {
+                tracing::debug!(
+                    error = %err,
+                    provider = %selection.provider,
+                    "Failed to read API key from keychain; falling back to configured auth"
+                );
+            })
+            .ok();
         let resolved =
             resolve_openai_auth(&cfg.auth.openai, cfg.agent.credential_storage_mode, api_key)?;
         return Ok((resolved.api_key().to_string(), resolved.handle()));
@@ -385,14 +393,9 @@ async fn resolve_runtime_api_key(
     }
 
     if selection.provider_enum.is_none()
-        && vt_cfg
-            .and_then(|cfg| cfg.custom_provider(&selection.provider))
-            .is_some()
+        && let Some(cp) = vt_cfg.and_then(|cfg| cfg.custom_provider(&selection.provider))
     {
-        if vt_cfg
-            .and_then(|cfg| cfg.custom_provider(&selection.provider))
-            .is_some_and(|provider| provider.uses_command_auth())
-        {
+        if cp.uses_command_auth() {
             return Ok((String::new(), None));
         }
 

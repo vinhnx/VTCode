@@ -920,7 +920,7 @@ pub(crate) async fn render_stream_with_options_and_copilot_runtime_impl(
     } else {
         response.content.clone()
     };
-    let content_for_render = content_for_render.map(|text| stream_sanitizer.finalize(text));
+    let content_for_render = content_for_render.map(|text| stream_sanitizer.finalize(&text));
     let has_renderable_content = content_for_render
         .as_deref()
         .map(|content| !content.trim().is_empty())

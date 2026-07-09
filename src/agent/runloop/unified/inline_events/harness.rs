@@ -255,26 +255,34 @@ impl HarnessEventEmitter {
         }
 
         // Also emit to Open Responses format if enabled
-        if let Ok(mut guard) = self.inner.open_responses.lock()
-            && let Some(ref mut state) = *guard
-        {
-            state.integration.process_event(&event);
+        match self.inner.open_responses.lock() {
+            Ok(mut guard) => {
+                if let Some(ref mut state) = *guard {
+                    state.integration.process_event(&event);
 
-            // Write any emitted Open Responses events
-            for stream_event in state.integration.take_events() {
-                if let Some(ref mut writer) = state.writer {
-                    let seq = state.sequence_counter;
-                    state.sequence_counter += 1;
-                    let sequenced = SequencedEvent::new(seq, &stream_event);
+                    // Write any emitted Open Responses events
+                    for stream_event in state.integration.take_events() {
+                        if let Some(ref mut writer) = state.writer {
+                            let seq = state.sequence_counter;
+                            state.sequence_counter += 1;
+                            let sequenced = SequencedEvent::new(seq, &stream_event);
 
-                    // SSE format
-                    let _ = writeln!(writer, "event: {}", stream_event.event_type());
-                    if let Ok(json) = serde_json::to_string(&sequenced) {
-                        let _ = writeln!(writer, "data: {json}");
+                            // SSE format
+                            let _ = writeln!(writer, "event: {}", stream_event.event_type());
+                            if let Ok(json) = serde_json::to_string(&sequenced) {
+                                let _ = writeln!(writer, "data: {json}");
+                            }
+                            let _ = writeln!(writer);
+                            let _ = writer.flush();
+                        }
                     }
-                    let _ = writeln!(writer);
-                    let _ = writer.flush();
                 }
+            }
+            Err(poisoned) => {
+                tracing::warn!(
+                    error = %poisoned,
+                    "Open Responses mutex poisoned; dropping event to avoid cascade"
+                );
             }
         }
 
@@ -290,13 +298,21 @@ impl HarnessEventEmitter {
 
     /// Finishes the Open Responses session and writes the terminal marker.
     pub(crate) fn finish_open_responses(&self) {
-        if let Ok(mut guard) = self.inner.open_responses.lock()
-            && let Some(ref mut state) = *guard
-        {
-            let _ = state.integration.finish_response();
-            if let Some(ref mut writer) = state.writer {
-                let _ = writeln!(writer, "data: [DONE]");
-                let _ = writer.flush();
+        match self.inner.open_responses.lock() {
+            Ok(mut guard) => {
+                if let Some(ref mut state) = *guard {
+                    let _ = state.integration.finish_response();
+                    if let Some(ref mut writer) = state.writer {
+                        let _ = writeln!(writer, "data: [DONE]");
+                        let _ = writer.flush();
+                    }
+                }
+            }
+            Err(poisoned) => {
+                tracing::warn!(
+                    error = %poisoned,
+                    "Open Responses mutex poisoned during finish; skipping terminal marker"
+                );
             }
         }
     }

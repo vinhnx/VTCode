@@ -53,9 +53,13 @@ use crate::agent::runloop::mcp_events;
 use crate::agent::runloop::unified::turn::tool_outcomes::helpers::LoopTracker;
 use crate::agent::runloop::unified::turn::turn_helpers::{display_error, error_message_for_user};
 use notifications::emit_turn_outcome_notification;
+#[cfg(test)]
+use post_tool_recovery::PostToolFailureRecovery;
+#[cfg(test)]
+use post_tool_recovery::maybe_recover_after_post_tool_llm_failure;
 use post_tool_recovery::{
-    PostToolFailureRecovery, complete_turn_after_failed_tool_free_recovery,
-    maybe_recover_after_post_tool_llm_failure, normalize_tool_free_recovery_break_outcome,
+    PostToolFailureAction, complete_turn_after_failed_tool_free_recovery,
+    dispatch_post_tool_failure, normalize_tool_free_recovery_break_outcome,
 };
 use usage_accounting::{
     accumulate_turn_usage, estimate_session_cost_usd, has_turn_usage,
@@ -126,7 +130,7 @@ const RECOVERY_TOOL_CALL_RETRY_DIRECTIVE: &str = "Recovery: tools are disabled, 
 fn check_recovery_cycle_cap(
     cycles: u8,
     working_history: &mut Vec<uni::Message>,
-    stage: &'static str,
+    stage: &str,
     err: &anyhow::Error,
     salvaged_text: Option<String>,
 ) -> Option<TurnLoopResult> {
@@ -619,63 +623,22 @@ pub(crate) async fn run_turn_loop(
                     restore_status_right.clone(),
                 );
 
-                match maybe_recover_after_post_tool_llm_failure(
+                match dispatch_post_tool_failure(
                     turn_processing_ctx.renderer,
                     turn_processing_ctx.working_history,
+                    turn_processing_ctx.harness_state,
                     &err,
                     step_count,
                     turn_history_start_len,
                     "execute_llm_request",
-                    !tool_free_recovery,
+                    tool_free_recovery,
                 )? {
-                    PostToolFailureRecovery::NotApplicable => {}
-                    PostToolFailureRecovery::RetryToolFree => {
-                        let salvaged = turn_processing_ctx
-                            .harness_state
-                            .take_recovery_rejected_synthesis();
-                        if let Some(r) = check_recovery_cycle_cap(
-                            turn_processing_ctx.post_tool_recovery_cycles(),
-                            turn_processing_ctx.working_history,
-                            "execute_llm_request.recovery_cycle_cap",
-                            &err,
-                            salvaged,
-                        ) {
-                            result = r;
-                            break;
-                        }
-                        turn_processing_ctx.increment_post_tool_recovery_cycle();
-                        turn_processing_ctx.switch_to_tool_free_recovery();
-                        continue;
-                    }
-                    PostToolFailureRecovery::StopAfterDirective => {
-                        if tool_free_recovery {
-                            let salvaged = turn_processing_ctx
-                                .harness_state
-                                .take_recovery_rejected_synthesis();
-                            result = complete_turn_after_failed_tool_free_recovery(
-                                turn_processing_ctx.working_history,
-                                "execute_llm_request.stop_after_directive",
-                                Some(&err),
-                                salvaged,
-                            );
-                        } else {
-                            result = TurnLoopResult::Completed;
-                        }
+                    PostToolFailureAction::Continue => continue,
+                    PostToolFailureAction::Break(r) => {
+                        result = r;
                         break;
                     }
-                }
-
-                if tool_free_recovery {
-                    let salvaged = turn_processing_ctx
-                        .harness_state
-                        .take_recovery_rejected_synthesis();
-                    result = complete_turn_after_failed_tool_free_recovery(
-                        turn_processing_ctx.working_history,
-                        "execute_llm_request.direct_tool_free_failure",
-                        Some(&err),
-                        salvaged,
-                    );
-                    break;
+                    PostToolFailureAction::Fallthrough => {}
                 }
 
                 display_error(turn_processing_ctx.renderer, "LLM request failed", &err)?;
@@ -843,50 +806,22 @@ pub(crate) async fn run_turn_loop(
                 }
                 let tool_free_recovery = turn_processing_ctx.recovery_pass_used()
                     && turn_processing_ctx.recovery_is_tool_free();
-                match maybe_recover_after_post_tool_llm_failure(
+                match dispatch_post_tool_failure(
                     turn_processing_ctx.renderer,
                     turn_processing_ctx.working_history,
+                    turn_processing_ctx.harness_state,
                     &err,
                     step_count,
                     turn_history_start_len,
                     "process_llm_response",
-                    !tool_free_recovery,
+                    tool_free_recovery,
                 )? {
-                    PostToolFailureRecovery::NotApplicable => {}
-                    PostToolFailureRecovery::RetryToolFree => {
-                        let salvaged = turn_processing_ctx
-                            .harness_state
-                            .take_recovery_rejected_synthesis();
-                        if let Some(r) = check_recovery_cycle_cap(
-                            turn_processing_ctx.post_tool_recovery_cycles(),
-                            turn_processing_ctx.working_history,
-                            "process_llm_response.recovery_cycle_cap",
-                            &err,
-                            salvaged,
-                        ) {
-                            result = r;
-                            break;
-                        }
-                        turn_processing_ctx.increment_post_tool_recovery_cycle();
-                        turn_processing_ctx.switch_to_tool_free_recovery();
-                        continue;
-                    }
-                    PostToolFailureRecovery::StopAfterDirective => {
-                        if tool_free_recovery {
-                            let salvaged = turn_processing_ctx
-                                .harness_state
-                                .take_recovery_rejected_synthesis();
-                            result = complete_turn_after_failed_tool_free_recovery(
-                                turn_processing_ctx.working_history,
-                                "process_llm_response.stop_after_directive",
-                                Some(&err),
-                                salvaged,
-                            );
-                        } else {
-                            result = TurnLoopResult::Completed;
-                        }
+                    PostToolFailureAction::Continue => continue,
+                    PostToolFailureAction::Break(r) => {
+                        result = r;
                         break;
                     }
+                    PostToolFailureAction::Fallthrough => {}
                 }
                 return Err(err);
             }
@@ -983,46 +918,22 @@ pub(crate) async fn run_turn_loop(
                 );
                 let tool_free_recovery = ctx.harness_state.recovery_pass_used()
                     && ctx.harness_state.recovery_is_tool_free();
-                match maybe_recover_after_post_tool_llm_failure(
+                match dispatch_post_tool_failure(
                     ctx.renderer,
                     working_history,
+                    ctx.harness_state,
                     &err,
                     step_count,
                     turn_history_start_len,
                     "handle_turn_processing_result",
-                    !tool_free_recovery,
+                    tool_free_recovery,
                 )? {
-                    PostToolFailureRecovery::NotApplicable => {}
-                    PostToolFailureRecovery::RetryToolFree => {
-                        let salvaged = ctx.harness_state.take_recovery_rejected_synthesis();
-                        if let Some(r) = check_recovery_cycle_cap(
-                            ctx.harness_state.post_tool_recovery_cycles(),
-                            working_history,
-                            "handle_turn_processing_result.recovery_cycle_cap",
-                            &err,
-                            salvaged,
-                        ) {
-                            result = r;
-                            break;
-                        }
-                        ctx.harness_state.increment_post_tool_recovery_cycle();
-                        ctx.harness_state.switch_to_tool_free_recovery();
-                        continue;
-                    }
-                    PostToolFailureRecovery::StopAfterDirective => {
-                        if tool_free_recovery {
-                            let salvaged = ctx.harness_state.take_recovery_rejected_synthesis();
-                            result = complete_turn_after_failed_tool_free_recovery(
-                                working_history,
-                                "handle_turn_processing_result.stop_after_directive",
-                                Some(&err),
-                                salvaged,
-                            );
-                        } else {
-                            result = TurnLoopResult::Completed;
-                        }
+                    PostToolFailureAction::Continue => continue,
+                    PostToolFailureAction::Break(r) => {
+                        result = r;
                         break;
                     }
+                    PostToolFailureAction::Fallthrough => {}
                 }
                 return Err(err);
             }
