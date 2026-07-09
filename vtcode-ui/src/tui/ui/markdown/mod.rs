@@ -141,11 +141,14 @@ pub fn render_markdown_to_lines_with_options(
 
     let parser = Parser::new_ext(source, parser_options);
 
-    let mut lines = Vec::new();
+    // Output lines track the source roughly 1:1, so size from the source line
+    // count to avoid reallocations during per-message rendering.
+    let mut lines = Vec::with_capacity(source.lines().count());
     let mut current_line = MarkdownLine::default();
     let mut style_stack = vec![base_style];
     let mut blockquote_depth = 0usize;
-    let mut list_stack: Vec<ListState> = Vec::new();
+    // List nesting is shallow in practice; bound the stack up front.
+    let mut list_stack: Vec<ListState> = Vec::with_capacity(4);
     let mut list_continuation_prefix = String::new();
     let mut pending_list_prefix: Option<String> = None;
     let mut code_block: Option<CodeBlockState> = None;
