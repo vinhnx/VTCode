@@ -5,12 +5,19 @@ use tempfile::TempDir;
 use vtcode_core::tools::ToolRegistry;
 
 async fn temp_registry() -> (TempDir, ToolRegistry) {
+    temp_registry_with_config(None).await
+}
+
+async fn temp_registry_with_config(vtcode_toml: Option<&str>) -> (TempDir, ToolRegistry) {
     let temp = TempDir::new().expect("temp workspace");
     fs::write(
         temp.path().join("Cargo.toml"),
         "[package]\nname = \"pty-test\"\n",
     )
     .expect("write fixture Cargo.toml");
+    if let Some(config) = vtcode_toml {
+        fs::write(temp.path().join("vtcode.toml"), config).expect("write fixture vtcode.toml");
+    }
     let registry = ToolRegistry::new(temp.path().to_path_buf()).await;
     registry.allow_all_tools().await.ok();
     (temp, registry)
@@ -530,4 +537,172 @@ async fn test_unified_exec_write_preserves_whitespace() {
         combined_output.contains("<  keep  >"),
         "combined output was: {combined_output:?}"
     );
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn test_exec_command_write_stdin_continues_session() {
+    let (_temp, registry) = temp_registry().await;
+
+    let start = registry
+        .execute_tool(
+            "exec_command",
+            json!({
+                "cmd": "cat",
+                "yield_time_ms": 0,
+            }),
+        )
+        .await
+        .expect("start public exec command session");
+    let sid = exec_session_id(&start);
+
+    let write = registry
+        .execute_tool(
+            "write_stdin",
+            json!({
+                "session_id": sid.as_str(),
+                "chars": "  keep  \n",
+                "yield_time_ms": 250,
+            }),
+        )
+        .await
+        .expect("continue public exec command session");
+
+    assert_eq!(write["success"], true);
+    assert_eq!(write["session_id"].as_str(), Some(sid.as_str()));
+    assert_eq!(write["is_exited"].as_bool(), Some(false));
+    assert!(
+        write["output"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("  keep  "),
+        "write_stdin output was: {write:?}"
+    );
+
+    let _ = registry
+        .execute_tool(
+            "close_pty_session",
+            json!({
+                "session_id": sid.as_str(),
+            }),
+        )
+        .await;
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn test_write_stdin_reports_missing_and_closed_session_ids() {
+    let (_temp, registry) = temp_registry().await;
+
+    let missing = registry
+        .execute_tool(
+            "write_stdin",
+            json!({
+                "chars": "ignored\n",
+            }),
+        )
+        .await;
+    assert!(missing.is_err(), "missing session id should fail preflight");
+
+    let start = registry
+        .execute_tool(
+            "exec_command",
+            json!({
+                "cmd": "cat",
+                "yield_time_ms": 0,
+            }),
+        )
+        .await
+        .expect("start public exec command session");
+    let sid = exec_session_id(&start);
+
+    let close = registry
+        .execute_tool(
+            "close_pty_session",
+            json!({
+                "session_id": sid.as_str(),
+            }),
+        )
+        .await
+        .expect("close session");
+    assert_eq!(close["success"], true);
+
+    let closed = registry
+        .execute_tool(
+            "write_stdin",
+            json!({
+                "session_id": sid.as_str(),
+                "chars": "after-close\n",
+            }),
+        )
+        .await
+        .expect("closed session should return structured tool error");
+    assert!(
+        closed.get("error").is_some(),
+        "closed session response should be a structured error: {closed:?}"
+    );
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn test_write_stdin_output_cap_forces_spool_path() {
+    let (temp, registry) = temp_registry_with_config(Some(
+        r#"[context.dynamic]
+enabled = true
+tool_output_threshold = 64
+max_spooled_files = 7
+spool_max_age_secs = 12
+"#,
+    ))
+    .await;
+
+    let start = registry
+        .execute_tool(
+            "exec_command",
+            json!({
+                "cmd": "cat",
+                "yield_time_ms": 0,
+            }),
+        )
+        .await
+        .expect("start public exec command session");
+    let sid = exec_session_id(&start);
+    let payload = "abcdefghijklmnopqrstuvwxyz\n";
+
+    let write = registry
+        .execute_tool(
+            "write_stdin",
+            json!({
+                "session_id": sid.as_str(),
+                "chars": payload,
+                "yield_time_ms": 250,
+                "max_output_tokens": 1,
+            }),
+        )
+        .await
+        .expect("continue with capped output");
+
+    assert_eq!(write["success"], true);
+    assert_eq!(write["truncated"].as_bool(), Some(true));
+    let spool_path = write["spool_path"]
+        .as_str()
+        .expect("capped write_stdin output should be spooled");
+    assert!(
+        spool_path.contains("write_stdin_"),
+        "spool path should use the public tool name: {spool_path}"
+    );
+    let spooled = fs::read_to_string(temp.path().join(spool_path)).expect("read spool file");
+    assert!(
+        spooled.contains(payload.trim_end()),
+        "spool file should contain full continuation output: {spooled:?}"
+    );
+
+    let _ = registry
+        .execute_tool(
+            "close_pty_session",
+            json!({
+                "session_id": sid.as_str(),
+            }),
+        )
+        .await;
 }

@@ -142,6 +142,15 @@ impl ToolRegistry {
     }
 
     pub(super) async fn execute_command_session_write(&self, args: Value) -> Result<Value> {
+        self.execute_command_session_write_for_tool(args, tools::UNIFIED_EXEC)
+            .await
+    }
+
+    pub(super) async fn execute_command_session_write_for_tool(
+        &self,
+        args: Value,
+        progress_tool_name: &'static str,
+    ) -> Result<Value> {
         acquire_executor_rate_limit("unified_exec:write", 3.0)?;
 
         let payload = exec_session_payload(&args, "command session write requires a JSON object")?;
@@ -170,6 +179,7 @@ impl ToolRegistry {
             Duration::from_millis(yield_time_ms),
             false,
             Some(max_tokens),
+            progress_tool_name,
         )
         .await
     }
@@ -203,6 +213,7 @@ impl ToolRegistry {
             Duration::from_millis(yield_time_ms),
             session.should_settle_noninteractive(exec_settlement_mode),
             None,
+            tools::UNIFIED_EXEC,
         )
         .await
     }
@@ -664,12 +675,13 @@ impl ToolRegistry {
         yield_duration: Duration,
         settle_until_terminal: bool,
         max_tokens: Option<usize>,
+        progress_tool_name: &'static str,
     ) -> Result<Value> {
         let capture = self
             .capture_exec_session_output(
                 session.metadata.id.as_str(),
                 yield_duration,
-                Some(tools::UNIFIED_EXEC),
+                Some(progress_tool_name),
                 settle_until_terminal,
             )
             .await?;

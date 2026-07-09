@@ -117,8 +117,8 @@ pub fn exec_command_parameters() -> Value {
         "required": ["cmd"],
         "properties": {
             "cmd": {"type": "string", "description": "Shell command to execute, subject to command policy. Examples include `ls`, `rg`, `find`, `cat`, `sed`, `awk`, build tools, and test tools."},
-            "yield_time_ms": {"type": "integer", "description": "Wait before returning output (ms).", "default": 1000},
-            "max_output_tokens": {"type": "integer", "description": "Output token cap."},
+            "yield_time_ms": {"type": "integer", "description": "Wait before returning output (ms). If the command is still running, the response includes a session_id for write_stdin.", "default": 1000},
+            "max_output_tokens": {"type": "integer", "description": "Output token cap. Large or truncated output can return a spool_path for the full output."},
             "workdir": {"type": "string", "description": "Working directory."},
             "tty": {"type": "boolean", "description": "Run the command in PTY mode for interactive or terminal-sensitive commands.", "default": false}
         },
@@ -134,8 +134,8 @@ pub fn write_stdin_parameters() -> Value {
         "properties": {
             "session_id": {"type": "string", "description": "Active execution session id."},
             "chars": {"type": "string", "description": "Bytes to write to stdin."},
-            "yield_time_ms": {"type": "integer", "description": "Wait before returning output (ms).", "default": 1000},
-            "max_output_tokens": {"type": "integer", "description": "Output token cap."}
+            "yield_time_ms": {"type": "integer", "description": "Wait before returning fresh session output (ms).", "default": 1000},
+            "max_output_tokens": {"type": "integer", "description": "Output token cap for the continuation response. Large or truncated output can return a spool_path for the full output."}
         },
         "additionalProperties": false
     })
@@ -618,6 +618,18 @@ mod tests {
         assert_eq!(exec_params["required"], json!(["cmd"]));
         assert!(exec_params["properties"]["cmd"].is_object());
         assert!(exec_params["properties"]["workdir"].is_object());
+        assert!(
+            exec_params["properties"]["yield_time_ms"]["description"]
+                .as_str()
+                .expect("exec yield description")
+                .contains("session_id")
+        );
+        assert!(
+            exec_params["properties"]["max_output_tokens"]["description"]
+                .as_str()
+                .expect("exec max output description")
+                .contains("spool_path")
+        );
         assert_eq!(exec_params["properties"]["tty"]["type"], "boolean");
         assert_eq!(exec_params["properties"]["tty"]["default"], false);
         assert_eq!(exec_params["additionalProperties"], false);
@@ -639,6 +651,18 @@ mod tests {
         assert_eq!(stdin_params["required"], json!(["session_id", "chars"]));
         assert!(stdin_params["properties"]["session_id"].is_object());
         assert!(stdin_params["properties"]["chars"].is_object());
+        assert!(
+            stdin_params["properties"]["yield_time_ms"]["description"]
+                .as_str()
+                .expect("stdin yield description")
+                .contains("fresh session output")
+        );
+        assert!(
+            stdin_params["properties"]["max_output_tokens"]["description"]
+                .as_str()
+                .expect("stdin max output description")
+                .contains("spool_path")
+        );
         assert_eq!(stdin_params["additionalProperties"], false);
     }
 

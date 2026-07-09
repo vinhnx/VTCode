@@ -1070,7 +1070,12 @@ impl ToolRegistry {
                 payload.insert("input".to_string(), chars);
             }
         }
-        self.dispatch_unified_exec_action_alias(args, "write")
+        Box::pin(async move {
+            let args = with_unified_exec_action_default(args, "write");
+            self.execute_command_session_write_for_tool(args, tools::WRITE_STDIN)
+                .await
+                .map(super::normalize_tool_output)
+        })
     }
 
     pub(super) fn send_pty_input_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
