@@ -76,16 +76,22 @@ pub(crate) fn contains_pseudo_tool_call_markers(text: &str) -> bool {
 pub(crate) fn strip_textual_tool_call_regions(text: &str) -> String {
     let registry = default_parser_registry();
     let mut regions = registry.consumed_spans(text);
+    // Up to four pseudo-marker scans below may each append one region.
+    regions.reserve(4);
 
     // Pseudo-marker regions are not parseable as tool calls but still indicate
-    // tool-call intent, so they are stripped separately.
+    // tool-call intent, so they are stripped separately. Lowercase the text
+    // once and reuse it for all case-insensitive marker scans instead of
+    // re-allocating a full copy inside each collector — this runs on every LLM
+    // response, so the redundant allocations add up.
+    let lowered = text.to_ascii_lowercase();
     collect_enclosed_regions(
         text,
         "<minimax:tool_call>",
         "</minimax:tool_call>",
         &mut regions,
     );
-    collect_pseudo_marker_regions(text, "<tool_call>", "</tool_call", &mut regions);
+    collect_pseudo_marker_regions(&lowered, "<tool_call>", "</tool_call", &mut regions);
     // Strip <function=name>...</function> and <parameter=name>...</parameter>
     // blocks that models emit as pseudo-tool-call markup when tools are
     // unavailable. These may appear inside a <tool_call> wrapper (already
@@ -96,8 +102,8 @@ pub(crate) fn strip_textual_tool_call_regions(text: &str) -> String {
     // Use close prefixes (without the trailing ">") so that both
     // `</function>` and `</function=name>` (parameterised close tags) are
     // consumed in full; the scanner advances past any suffix to the next ">".
-    collect_pseudo_marker_regions(text, "<function=", "</function", &mut regions);
-    collect_pseudo_marker_regions(text, "<parameter=", "</parameter", &mut regions);
+    collect_pseudo_marker_regions(&lowered, "<function=", "</function", &mut regions);
+    collect_pseudo_marker_regions(&lowered, "<parameter=", "</parameter", &mut regions);
 
     if regions.is_empty() {
         return text.to_string();
@@ -159,12 +165,11 @@ fn collect_enclosed_regions(
 /// suffix bytes (e.g. `"=apply_patch"`) to the next `>`, so both
 /// `</function>` and `</function=name>` are handled correctly.
 fn collect_pseudo_marker_regions(
-    text: &str,
+    lowered: &str,
     open_marker: &str,
     close_prefix: &str,
     regions: &mut Vec<(usize, usize)>,
 ) {
-    let lowered = text.to_ascii_lowercase();
     let open_lower = open_marker.to_ascii_lowercase();
     let close_lower = close_prefix.to_ascii_lowercase();
     let mut search_start = 0usize;
@@ -179,10 +184,10 @@ fn collect_pseudo_marker_regions(
                 let prefix_end = content_start + idx + close_prefix.len();
                 lowered[prefix_end..]
                     .find('>')
-                    .map_or(text.len(), |extra| prefix_end + extra + 1)
+                    .map_or(lowered.len(), |extra| prefix_end + extra + 1)
             })
-            .unwrap_or(text.len());
-        if start < end && end <= text.len() {
+            .unwrap_or(lowered.len());
+        if start < end && end <= lowered.len() {
             regions.push((start, end));
         }
         search_start = end.max(content_start);
