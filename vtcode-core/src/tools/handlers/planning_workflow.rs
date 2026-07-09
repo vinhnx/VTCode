@@ -1146,7 +1146,7 @@ impl Tool for StartPlanningTool {
     }
 
     fn description(&self) -> &str {
-        "Enter Planning workflow for read-safe exploration. In Planning workflow, you can only read files, search code, and write canonical plan artifacts. Use this when you need to understand requirements before making changes. Do NOT call this if you already have a clear plan — proceed with unified_search, unified_file, and unified_exec instead."
+        "Enter Planning workflow for read-safe exploration. In Planning workflow, you can only inspect files, search code, and write canonical plan artifacts. Use this when you need to understand requirements before making changes. Do NOT call this if you already have a clear plan: proceed with exec_command for shell inspection and validation, and apply_patch for edits."
     }
 
     fn parameter_schema(&self) -> Option<Value> {
@@ -1394,7 +1394,7 @@ impl Tool for FinishPlanningTool {
             "plan_summary": plan_summary,
             "next_steps": [
                 "Planning workflow is STILL ACTIVE until the user explicitly confirms the plan.",
-                "Mutating tools (write_file, edit_file, apply_patch, unified_file:write/create/edit, shell commands that touch files) remain DISABLED.",
+                "Mutating tools (apply_patch and shell commands that touch files) remain DISABLED.",
                 "Do not attempt to write or edit files now; wait for the user to approve the plan in the UI.",
                 "User can choose: Execute (exit planning and enable mutating tools) or Stay in Planning workflow (revise the plan).",
                 "If the user says 'implement', 'yes', 'go', or 'start', the plan will be presented for confirmation automatically."
@@ -1443,6 +1443,10 @@ mod tests {
     use super::*;
     use tempfile::TempDir;
 
+    fn internal_unified_tool_name(suffix: &str) -> String {
+        format!("unified_{suffix}")
+    }
+
     #[tokio::test]
     async fn test_start_planning() {
         let temp_dir = TempDir::new().unwrap();
@@ -1485,6 +1489,23 @@ mod tests {
         assert!(!content.contains("Repository facts checked"));
         assert!(!content.contains("[Step]"));
         assert!(!content.contains("## Implementation Steps"));
+    }
+
+    #[test]
+    fn planning_tool_descriptions_do_not_expose_internal_unified_tools() {
+        let temp_dir = TempDir::new().unwrap();
+        let state = PlanningWorkflowState::new(temp_dir.path().to_path_buf());
+        let start_tool = StartPlanningTool::new(state.clone());
+        let finish_tool = FinishPlanningTool::new(state);
+
+        for description in [start_tool.description(), finish_tool.description()] {
+            assert!(!description.contains(&internal_unified_tool_name("file")));
+            assert!(!description.contains(&internal_unified_tool_name("exec")));
+            assert!(!description.contains(&internal_unified_tool_name("search")));
+        }
+
+        assert!(start_tool.description().contains("exec_command"));
+        assert!(start_tool.description().contains("apply_patch"));
     }
 
     #[tokio::test]
@@ -1566,6 +1587,25 @@ mod tests {
         assert!(state.is_active());
         assert_eq!(result["status"], "pending_confirmation");
         assert!(result["requires_confirmation"].as_bool().unwrap());
+        let next_steps = result["next_steps"].as_array().unwrap();
+        assert!(next_steps.iter().all(|step| {
+            !step
+                .as_str()
+                .unwrap_or_default()
+                .contains(&internal_unified_tool_name("file"))
+        }));
+        assert!(next_steps.iter().all(|step| {
+            !step
+                .as_str()
+                .unwrap_or_default()
+                .contains(&internal_unified_tool_name("exec"))
+        }));
+        assert!(next_steps.iter().all(|step| {
+            !step
+                .as_str()
+                .unwrap_or_default()
+                .contains(&internal_unified_tool_name("search"))
+        }));
         assert!(
             result["plan_content"]
                 .as_str()

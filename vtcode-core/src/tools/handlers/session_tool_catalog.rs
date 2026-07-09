@@ -607,8 +607,16 @@ fn profile_allows_tool(profile: ToolProfile, tool_name: &str) -> bool {
             tools::UNIFIED_EXEC
                 | tools::UNIFIED_FILE
                 | tools::UNIFIED_SEARCH
+                | tools::LIST_FILES
                 | tools::READ_FILE
                 | tools::WRITE_FILE
+                | tools::EDIT_FILE
+                | tools::CREATE_FILE
+                | tools::DELETE_FILE
+                | tools::MOVE_FILE
+                | tools::COPY_FILE
+                | tools::SEARCH_REPLACE
+                | tools::FILE_OP
         ),
     }
 }
@@ -782,7 +790,7 @@ fn remove_schema_descriptions_impl(value: &mut Value, inside_properties_map: boo
 
 #[cfg(test)]
 pub(crate) use vtcode_utility_tool_specs::{
-    apply_patch_parameters, exec_command_parameters, list_files_parameters, read_file_parameters,
+    apply_patch_parameters, exec_command_parameters, list_files_parameters,
     unified_search_parameters,
 };
 
@@ -836,10 +844,19 @@ mod tests {
             registration(tools::READ_FILE)
                 .with_llm_visibility(false)
                 .with_description("Read file")
-                .with_parameter_schema(read_file_parameters()),
+                .with_parameter_schema(empty_object_schema()),
             registration(tools::WRITE_FILE)
                 .with_llm_visibility(false)
                 .with_description("Write file")
+                .with_parameter_schema(empty_object_schema()),
+            registration(tools::DELETE_FILE)
+                .with_description("Delete file")
+                .with_parameter_schema(empty_object_schema()),
+            registration(tools::MOVE_FILE)
+                .with_description("Move file")
+                .with_parameter_schema(empty_object_schema()),
+            registration(tools::COPY_FILE)
+                .with_description("Copy file")
                 .with_parameter_schema(empty_object_schema()),
             registration("ls")
                 .with_description("List directory")
@@ -881,6 +898,19 @@ mod tests {
             assert!(
                 !names.contains(&command.to_string()),
                 "{command} must stay an exec_command.cmd example, not a default tool"
+            );
+        }
+        for file_tool in [
+            tools::READ_FILE,
+            tools::WRITE_FILE,
+            tools::DELETE_FILE,
+            tools::MOVE_FILE,
+            tools::COPY_FILE,
+            tools::UNIFIED_FILE,
+        ] {
+            assert!(
+                !names.contains(&file_tool.to_string()),
+                "{file_tool} must stay out of the default file surface"
             );
         }
     }
@@ -938,10 +968,19 @@ mod tests {
             registration(tools::READ_FILE)
                 .with_llm_visibility(false)
                 .with_description("Read file")
-                .with_parameter_schema(read_file_parameters()),
+                .with_parameter_schema(empty_object_schema()),
             registration(tools::WRITE_FILE)
                 .with_llm_visibility(false)
                 .with_description("Write file")
+                .with_parameter_schema(empty_object_schema()),
+            registration(tools::DELETE_FILE)
+                .with_description("Delete file")
+                .with_parameter_schema(empty_object_schema()),
+            registration(tools::MOVE_FILE)
+                .with_description("Move file")
+                .with_parameter_schema(empty_object_schema()),
+            registration(tools::COPY_FILE)
+                .with_description("Copy file")
                 .with_parameter_schema(empty_object_schema()),
         ];
 
@@ -1132,7 +1171,7 @@ mod tests {
         let read_file = registration(tools::READ_FILE)
             .with_llm_visibility(false)
             .with_description("Read file contents in chunks")
-            .with_parameter_schema(read_file_parameters());
+            .with_parameter_schema(empty_object_schema());
         let list_files = registration(tools::LIST_FILES)
             .with_llm_visibility(false)
             .with_description("List files with pagination")

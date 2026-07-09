@@ -1,5 +1,6 @@
 use rustc_hash::FxHashMap;
 
+use crate::config::constants::tools;
 use crate::tool_policy::ToolPolicy;
 use crate::tools::handlers::{SessionToolCatalog, ToolCallError};
 use crate::tools::names::canonical_tool_name;
@@ -118,12 +119,19 @@ fn build_public_routes(catalog: &SessionToolCatalog) -> FxHashMap<String, Public
     let mut public_routes = FxHashMap::default();
 
     for entry in catalog.entries() {
+        if is_removed_public_tool_name(entry.public_name.as_str()) {
+            continue;
+        }
+
         let resolution = PublicToolResolution::new(
             entry.registration_name.clone(),
             entry.default_permission.clone(),
         );
         public_routes.insert(entry.public_name.clone(), resolution.clone());
         for alias in &entry.aliases {
+            if is_removed_public_tool_name(alias) {
+                continue;
+            }
             public_routes
                 .entry(alias.clone())
                 .or_insert_with(|| resolution.clone());
@@ -131,6 +139,25 @@ fn build_public_routes(catalog: &SessionToolCatalog) -> FxHashMap<String, Public
     }
 
     public_routes
+}
+
+fn is_removed_public_tool_name(name: &str) -> bool {
+    matches!(
+        name.trim().to_ascii_lowercase().as_str(),
+        tools::UNIFIED_EXEC
+            | tools::UNIFIED_FILE
+            | tools::UNIFIED_SEARCH
+            | tools::LIST_FILES
+            | tools::READ_FILE
+            | tools::WRITE_FILE
+            | tools::EDIT_FILE
+            | tools::CREATE_FILE
+            | tools::DELETE_FILE
+            | tools::MOVE_FILE
+            | tools::COPY_FILE
+            | tools::SEARCH_REPLACE
+            | tools::FILE_OP
+    )
 }
 
 fn strip_wrapping_quotes(value: &str) -> &str {
@@ -238,5 +265,54 @@ mod tests {
     fn public_tool_name_candidates_strip_tool_prefixes() {
         let candidates = public_tool_name_candidates("functions.read_file");
         assert!(candidates.iter().any(|candidate| candidate == "read_file"));
+    }
+
+    #[test]
+    fn public_routes_reject_removed_file_surface_names_and_aliases() {
+        let legacy_registration = ToolRegistration::new(
+            tools::UNIFIED_FILE,
+            CapabilityLevel::Editing,
+            true,
+            noop_executor,
+        )
+        .with_description("Legacy file surface")
+        .with_parameter_schema(json!({"type": "object"}))
+        .with_permission(ToolPolicy::Prompt)
+        .with_aliases([tools::READ_FILE, tools::WRITE_FILE]);
+        let custom_registration = ToolRegistration::new(
+            "custom_tool",
+            CapabilityLevel::CodeSearch,
+            true,
+            noop_executor,
+        )
+        .with_description("Custom tool")
+        .with_parameter_schema(json!({"type": "object"}))
+        .with_permission(ToolPolicy::Allow)
+        .with_aliases([tools::DELETE_FILE, "custom_alias"]);
+
+        let assembly =
+            ToolAssembly::from_registrations(vec![legacy_registration, custom_registration]);
+
+        for removed_name in [
+            tools::UNIFIED_EXEC,
+            tools::UNIFIED_FILE,
+            tools::UNIFIED_SEARCH,
+            tools::LIST_FILES,
+            tools::READ_FILE,
+            tools::WRITE_FILE,
+            tools::DELETE_FILE,
+        ] {
+            assembly
+                .resolve_public_tool(removed_name)
+                .expect_err("removed file surface should not resolve publicly");
+        }
+
+        assert_eq!(
+            assembly
+                .resolve_public_tool("custom_alias")
+                .ok()
+                .map(|resolution| resolution.registration_name().to_string()),
+            Some("custom_tool".to_string())
+        );
     }
 }

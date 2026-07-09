@@ -310,45 +310,6 @@ pub fn unified_exec_parameters() -> Value {
 }
 
 #[must_use]
-pub fn read_file_parameters() -> Value {
-    json!({
-        "type": "object",
-        "properties": {
-            "path": {"type": "string", "description": "File path. Accepts file_path/filepath/target_path/file/p."},
-            "offset": {"type": "integer", "description": "1-indexed line offset. Compact alias: `o`.", "minimum": 1},
-            "limit": {"type": "integer", "description": "Max lines for this chunk. Compact alias: `l`.", "minimum": 1},
-            "mode": {"type": "string", "enum": ["slice", "indentation"], "description": "Read mode.", "default": "slice"},
-            "indentation": {
-                "description": "Indentation-aware block selection.",
-                "anyOf": [
-                    {"type": "boolean"},
-                    {
-                        "type": "object",
-                        "properties": {
-                            "anchor_line": {"type": "integer", "description": "Anchor line; defaults to offset."},
-                            "max_levels": {"type": "integer", "description": "Indent depth cap; 0 means unlimited."},
-                            "include_siblings": {"type": "boolean", "description": "Include sibling blocks."},
-                            "include_header": {"type": "boolean", "description": "Include header lines."},
-                            "max_lines": {"type": "integer", "description": "Optional line cap."}
-                        },
-                        "additionalProperties": false
-                    }
-                ]
-            },
-            "offset_lines": {"type": "integer", "description": "Legacy alias for line offset.", "minimum": 1},
-            "page_size_lines": {"type": "integer", "description": "Legacy alias for line chunk size.", "minimum": 1},
-            "offset_bytes": {"type": "integer", "description": "Byte offset for binary or byte-paged reads.", "minimum": 0},
-            "page_size_bytes": {"type": "integer", "description": "Byte page size for binary or byte-paged reads.", "minimum": 1},
-            "max_bytes": {"type": "integer", "description": "Maximum bytes to return.", "minimum": 1},
-            "max_lines": {"type": "integer", "description": "Maximum lines to return in legacy mode.", "minimum": 1},
-            "chunk_lines": {"type": "integer", "description": "Legacy alias for chunk size in lines.", "minimum": 1},
-            "max_tokens": {"type": "integer", "description": "Optional token budget for large reads.", "minimum": 1},
-            "condense": {"type": "boolean", "description": "Condense long outputs to head/tail. Set false for full content.", "default": true}
-        }
-    })
-}
-
-#[must_use]
 pub fn unified_search_parameters() -> Value {
     json!({
         "type": "object",
@@ -379,7 +340,7 @@ pub fn unified_search_parameters() -> Value {
             "view": {
                 "type": "string",
                 "enum": ["digest", "names", "full"],
-                "description": "Output shape for `outline`: digest (symbols grouped by kind, default for single-file queries), names (flat name groups, default for directory queries — auto-applied when `view=full` is requested on a large directory to prevent truncation), full (per-symbol records with the raw zero-based `range`, a derived 1-based inclusive `lineRange` usable with `unified_file read` pagination, `astKind`, signatures, and nested members — use on individual files, not large directories). Directory queries also receive a top-level `summary` block with `total_symbols`, `by_kind` (per-kind symbol counts), and a flat `all_symbols` array (capped at 200 entries; `truncated`/`visible_symbols` are set when the cap is hit).",
+                "description": "Output shape for `outline`: digest (symbols grouped by kind, default for single-file queries), names (flat name groups, default for directory queries, auto-applied when `view=full` is requested on a large directory to prevent truncation), full (per-symbol records with the raw zero-based `range`, a derived 1-based inclusive `lineRange` usable with shell inspection such as `sed -n`, `astKind`, signatures, and nested members, use on individual files, not large directories). Directory queries also receive a top-level `summary` block with `total_symbols`, `by_kind` (per-kind symbol counts), and a flat `all_symbols` array (capped at 200 entries; `truncated`/`visible_symbols` are set when the cap is hit).",
                 "default": "digest"
             },
             "items": {
@@ -742,12 +703,7 @@ mod tests {
     }
 
     #[test]
-    fn legacy_browse_tool_schemas_expose_chunking_and_pagination_fields() {
-        let read_params = read_file_parameters();
-        assert!(read_params["properties"]["offset"].is_object());
-        assert!(read_params["properties"]["limit"].is_object());
-        assert!(read_params["properties"]["page_size_lines"].is_object());
-
+    fn legacy_list_files_schema_exposes_pagination_fields() {
         let list_params = list_files_parameters();
         assert!(list_params["properties"]["page"].is_object());
         assert!(list_params["properties"]["per_page"].is_object());

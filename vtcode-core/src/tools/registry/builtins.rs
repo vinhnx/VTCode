@@ -23,7 +23,7 @@ use serde_json::json;
 use vtcode_utility_tool_specs::{
     apply_patch_parameters, close_agent_parameters, code_search_parameters, cron_create_parameters,
     cron_delete_parameters, cron_list_parameters, exec_command_parameters, list_files_parameters,
-    read_file_parameters, resume_agent_parameters, send_input_parameters, spawn_agent_parameters,
+    resume_agent_parameters, send_input_parameters, spawn_agent_parameters,
     spawn_background_subprocess_parameters, unified_exec_parameters, unified_search_parameters,
     wait_agent_parameters, write_stdin_parameters,
 };
@@ -631,7 +631,6 @@ fn register_read_file(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegist
     .with_description(
         "Read file contents with chunked ranges or indentation-aware block selection. Exposed as a first-class browse tool for the harness surface.",
     )
-    .with_parameter_schema(read_file_parameters())
     .with_permission(ToolPolicy::Allow)
     .with_llm_visibility(false)
 }

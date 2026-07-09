@@ -32,7 +32,7 @@ const MAX_TIMEOUT_SECS: u64 = 60;
 const MAX_BYTES: usize = 256 * 1024;
 const DEFUDDLE_BASE_URL: &str = "https://defuddle.md/";
 
-pub(crate) const DEFUDDLE_FETCH_DESCRIPTION: &str = "Fetch a REMOTE web page (http:// or https:// URLs ONLY) through the defuddle.md markdown extraction service and return the cleaned markdown inline. DO NOT use for local files — use unified_file with action='read' for local paths. Use this sparingly: the hosted service is rate-limited, so this tool can be called at most ONCE per session. Accepts: { url: string (must start with http:// or https://), max_bytes?: number }. Returns { url, markdown, bytes, used_this_session, session_cap } or a structured error if the cap has been hit.";
+pub(crate) const DEFUDDLE_FETCH_DESCRIPTION: &str = "Fetch a REMOTE web page (http:// or https:// URLs ONLY) through the defuddle.md markdown extraction service and return the cleaned markdown inline. DO NOT use for local files: inspect local paths with exec_command and readonly shell commands such as sed, rg, ls, or find. Use this sparingly: the hosted service is rate-limited, so this tool can be called at most ONCE per session. Accepts: { url: string (must start with http:// or https://), max_bytes?: number }. Returns { url, markdown, bytes, used_this_session, session_cap } or a structured error if the cap has been hit.";
 
 #[derive(Debug, Deserialize)]
 struct DefuddleArgs {
@@ -101,7 +101,7 @@ impl DefuddleTool {
         if !lower.starts_with("http://") && !lower.starts_with("https://") {
             return Err(anyhow!(
                 "defuddle_fetch only accepts http:// or https:// URLs for web content extraction. \
-                For local file reads, use unified_file with action='read' instead. \
+                For local file reads, use exec_command with readonly shell inspection commands instead. \
                 Got: {url}"
             ));
         }
@@ -391,10 +391,8 @@ mod tests {
                 .block_on(tool.run(json!({ "url": bad })));
             assert!(result.is_err(), "should reject local path: {bad}");
             let err_msg = result.unwrap_err().to_string();
-            assert!(
-                err_msg.contains("unified_file"),
-                "error should suggest unified_file for local paths: {err_msg}"
-            );
+            assert!(err_msg.contains("exec_command"));
+            assert!(!err_msg.contains(&format!("unified_{}", "file")));
         }
     }
 

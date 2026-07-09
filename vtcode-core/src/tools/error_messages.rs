@@ -19,14 +19,14 @@ pub mod agent_execution {
             "Tool '{tool_name}' execution failed: tool denied by planning workflow\n\n\
              This tool is MUTATING and blocked during planning.\n\n\
              What you CAN do during planning:\n\
-             - Read files: unified_file with action='read'\n\
+             - Read files: exec_command with readonly shell inspection commands such as sed, rg, ls, find, and git show\n\
              - Run readonly commands: cargo check, cargo test, git status, ls, grep, find, diff\n\
-             - Search code: unified_search\n\
+             - Search code: exec_command with rg or other readonly search commands\n\
              - Use task_tracker\n\n\
              To start implementation:\n\
              1. Call `finish_planning` tool to show the user your plan for approval\n\
              2. Wait for user to confirm (they will see the Implementation Blueprint)\n\
-             3. After approval, mutating tools will be enabled\n\n\
+             3. After approval, use apply_patch for file edits\n\n\
              Fallback if automatic planning handoff keeps failing: call `finish_planning` to present the plan again."
         )
     }
@@ -77,6 +77,10 @@ pub mod skill_ops {
 mod tests {
     use super::*;
 
+    fn internal_unified_tool_name(suffix: &str) -> String {
+        format!("unified_{suffix}")
+    }
+
     #[test]
     fn test_agent_execution_message_helpers() {
         let planning_msg = agent_execution::planning_workflow_denial_message("write_file");
@@ -84,7 +88,11 @@ mod tests {
         assert!(planning_msg.contains("finish_planning"));
         assert!(planning_msg.contains("MUTATING"));
         assert!(planning_msg.contains("cargo check"));
-        assert!(planning_msg.contains("unified_file with action='read'"));
+        assert!(planning_msg.contains("exec_command"));
+        assert!(planning_msg.contains("apply_patch"));
+        assert!(!planning_msg.contains(&internal_unified_tool_name("file")));
+        assert!(!planning_msg.contains(&internal_unified_tool_name("exec")));
+        assert!(!planning_msg.contains(&internal_unified_tool_name("search")));
         assert!(!planning_msg.contains(&format!("/{}", "mode")));
         assert!(!planning_msg.contains("DO NOT retry this tool or use /plan off"));
 

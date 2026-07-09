@@ -3,7 +3,7 @@
 Passive JSON schemas for VT Code utility, file, scheduling, and collaboration tool surfaces.
 
 This crate provides ready-made `serde_json::Value` parameter schemas for the
-built-in tool surfaces (apply-patch, cron, file I/O, exec, search, and collaboration/HITL tools)
+built-in tool surfaces (apply-patch, cron, exec, search, and collaboration/HITL tools)
 so that callers never have to hand-roll JSON Schema objects.
 
 <!-- cargo-rdme start -->
@@ -17,7 +17,6 @@ Passive JSON schemas for utility, file, scheduling, and collaboration tool surfa
 ```rust
 use vtcode_utility_tool_specs::{
     apply_patch_parameters,
-    read_file_parameters,
     unified_exec_parameters,
     with_semantic_anchor_guidance,
 };
@@ -43,7 +42,7 @@ Each returns a `serde_json::Value` representing a JSON Schema object:
 
 - `apply_patch_parameters()` / `apply_patch_parameter_schema(input_description)`
 - `cron_create_parameters()`, `cron_list_parameters()`, `cron_delete_parameters()`
-- `list_files_parameters()`, `read_file_parameters()`
+- `list_files_parameters()`
 - `unified_exec_parameters()`, `unified_search_parameters()`
 
 ### Collaboration / HITL functions

@@ -182,5 +182,12 @@ fn is_removed_default_public_tool(tool_name: &str) -> bool {
             | tools::LIST_FILES
             | tools::READ_FILE
             | tools::WRITE_FILE
+            | tools::EDIT_FILE
+            | tools::CREATE_FILE
+            | tools::DELETE_FILE
+            | tools::MOVE_FILE
+            | tools::COPY_FILE
+            | tools::SEARCH_REPLACE
+            | tools::FILE_OP
     )
 }

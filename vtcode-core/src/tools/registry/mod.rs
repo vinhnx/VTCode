@@ -333,6 +333,9 @@ mod tests {
         assert!(!available.contains(&tools::UNIFIED_EXEC.to_string()));
         assert!(!available.contains(&tools::READ_FILE.to_string()));
         assert!(!available.contains(&tools::WRITE_FILE.to_string()));
+        assert!(!available.contains(&tools::DELETE_FILE.to_string()));
+        assert!(!available.contains(&tools::MOVE_FILE.to_string()));
+        assert!(!available.contains(&tools::COPY_FILE.to_string()));
         assert!(!available.contains(&tools::RUN_PTY_CMD.to_string()));
         Ok(())
     }
@@ -400,6 +403,9 @@ mod tests {
             tools::LIST_FILES,
             tools::READ_FILE,
             tools::WRITE_FILE,
+            tools::DELETE_FILE,
+            tools::MOVE_FILE,
+            tools::COPY_FILE,
         ] {
             assert!(
                 registry.get_tool_schema(removed_tool).await.is_none(),
@@ -457,6 +463,9 @@ mod tests {
             tools::UNIFIED_SEARCH,
             tools::READ_FILE,
             tools::WRITE_FILE,
+            tools::DELETE_FILE,
+            tools::MOVE_FILE,
+            tools::COPY_FILE,
         ] {
             assert!(
                 !names.contains(&removed_tool.to_string()),
