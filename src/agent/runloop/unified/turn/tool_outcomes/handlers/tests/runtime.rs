@@ -521,7 +521,7 @@ async fn repeated_same_file_paginated_reads_do_not_trip_read_family_cap() {
     };
 
     // Paginated reads: each variant targets a different line range, so each
-    // gets a distinct family key (`unified_file::read::<path>::off=<line>`).
+    // gets a distinct family key (`file_operation::read::<path>::off=<line>`).
     for idx in 1..=read_family_cap {
         let outcome = handle_single_tool_call(
             &mut outcome_ctx,

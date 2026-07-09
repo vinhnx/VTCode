@@ -569,7 +569,7 @@ async fn test_permission_request_hook_parses_decision_and_updates() {
 
     let hooks_config = LifecycleHooksConfig {
         permission_request: vec![HookGroupConfig {
-            matcher: Some("unified_exec".into()),
+            matcher: Some("command_session".into()),
             hooks: vec![HookCommandConfig {
                 kind: Default::default(),
                 command: r#"printf '{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"allow"},"updatedInput":{"command":"echo approved"},"updatedPermissions":[{"destination":"session","addRules":["bash(echo approved)"]}]}}'"#.into(),
@@ -595,13 +595,13 @@ async fn test_permission_request_hook_parses_decision_and_updates() {
     let permission_request = permissions::build_permission_request(
         workspace,
         workspace,
-        "unified_exec",
+        "command_session",
         Some(&json!({"command": "echo hi"})),
     );
 
     let outcome = engine
         .run_permission_request(
-            "unified_exec",
+            "command_session",
             Some(&json!({"command": "echo hi"})),
             &permission_request,
             &[json!({"id": "allow_once", "behavior": "allow", "scope": "once"})],

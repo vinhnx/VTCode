@@ -2,14 +2,14 @@
 //!
 //! Implements Cursor-style dynamic context discovery by writing large tool outputs
 //! to files instead of truncating them. This allows agents to retrieve the full
-//! output via `unified_file` or search it with `unified_search` when needed.
+//! output with shell inspection or semantic search when needed.
 //!
 //! ## Design Philosophy
 //!
 //! Instead of truncating large tool responses (which loses data), we:
 //! 1. Write the full output to `.vtcode/context/tool_outputs/{tool}_{timestamp}.txt`
 //! 2. Return a file reference to the agent
-//! 3. Agent can use `unified_file` with offset/limit or `unified_search` to explore
+//! 3. Agent can inspect the file with `exec_command` or use `code_search` for code structure
 //!
 //! This is more token-efficient as only necessary data is pulled into context.
 
@@ -36,7 +36,7 @@ const PTY_PREVIEW_TAIL_BYTES: usize = 2_500;
 const PTY_PREVIEW_MAX_LINES: usize = 40;
 
 fn is_command_session_tool_name(tool_name: &str) -> bool {
-    crate::tools::tool_intent::canonical_unified_exec_tool_name(tool_name).is_some()
+    crate::tools::tool_intent::canonical_command_session_tool_name(tool_name).is_some()
 }
 
 fn condense_content(content: &str) -> String {
@@ -210,7 +210,7 @@ impl ToolOutputSpooler {
         let filename = format!("{}_{}.txt", sanitize_tool_name(tool_name), timestamp);
         let file_path = self.output_dir.join(&filename);
 
-        // For read_file/unified_file and PTY-related tools, extract raw content so the spooled file is directly usable
+        // For file and command-session tools, extract raw content so the spooled file is directly usable.
         // This allows grep_file to work on the spooled output and makes reading more intuitive
         let content = if (tool_name == tools::READ_FILE || tool_name == tools::UNIFIED_FILE)
             && !is_mcp
@@ -242,7 +242,7 @@ impl ToolOutputSpooler {
                 json_to_string_pretty(value)
             }
         } else if is_command_session_tool_name(tool_name) && !is_mcp {
-            // For command-session tools, including unified_exec and legacy PTY helpers,
+            // For command-session tools and legacy PTY helpers,
             // extract the actual command output from the "output" field.
             // This ensures the spooled file contains the raw command output, not the JSON wrapper.
             //
@@ -852,7 +852,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_unified_exec_spools_raw_output() {
+    async fn test_exec_command_spools_raw_output() {
         let temp = tempdir().unwrap();
         let config = SpoolerConfig {
             threshold_bytes: 50,
@@ -863,7 +863,7 @@ mod tests {
         let command_output =
             "   Compiling vtcode-core v0.68.1\n   Checking vtcode-core v0.68.1\n    Finished dev";
 
-        let unified_exec_response = json!({
+        let exec_command_response = json!({
             "output": command_output,
             "exit_code": 0,
             "wall_time": 1.234,
@@ -871,7 +871,7 @@ mod tests {
         });
 
         let result = spooler
-            .process_output("unified_exec", unified_exec_response, false)
+            .process_output(tools::EXEC_COMMAND, exec_command_response, false)
             .await
             .unwrap();
 
@@ -886,7 +886,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_unified_exec_spools_internal_raw_output_over_preview() {
+    async fn test_exec_command_spools_internal_raw_output_over_preview() {
         let temp = tempdir().unwrap();
         let config = SpoolerConfig {
             threshold_bytes: 10,
@@ -896,7 +896,7 @@ mod tests {
 
         let raw_output = "line 1\nline 2\nline 3\nline 4\nline 5\nline 6";
         let preview_output = "line 1\nline 2\n[Output truncated]";
-        let unified_exec_response = json!({
+        let exec_command_response = json!({
             "output": preview_output,
             "raw_output": raw_output,
             "truncated": true,
@@ -906,7 +906,7 @@ mod tests {
         });
 
         let result = spooler
-            .process_output("unified_exec", unified_exec_response, false)
+            .process_output(tools::EXEC_COMMAND, exec_command_response, false)
             .await
             .unwrap();
 

@@ -148,7 +148,7 @@ fn finalize_refined_prompt(text: String) -> String {
     ];
     if debug_triggers.iter().any(|token| lower.contains(token)) {
         format!(
-            "{text}\n\nNote: For diagnostics, prefer `unified_search` for inspection and `unified_exec` for verification commands."
+            "{text}\n\nNote: For diagnostics, inspect files with shell commands through `exec_command`, use `code_search` for semantic code search, and run verification commands with `exec_command`."
         )
     } else {
         text

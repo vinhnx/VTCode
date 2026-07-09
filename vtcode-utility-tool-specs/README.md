@@ -17,12 +17,13 @@ Passive JSON schemas for utility, file, scheduling, and collaboration tool surfa
 ```rust
 use vtcode_utility_tool_specs::{
     apply_patch_parameters,
-    unified_exec_parameters,
+    exec_command_parameters,
     with_semantic_anchor_guidance,
 };
 
 // Get the default apply-patch parameter schema
 let schema = apply_patch_parameters();
+let exec_schema = exec_command_parameters();
 
 // Attach semantic-anchor guidance to a custom description
 let desc = with_semantic_anchor_guidance("Apply a unified diff");
@@ -41,9 +42,10 @@ let desc = with_semantic_anchor_guidance("Apply a unified diff");
 Each returns a `serde_json::Value` representing a JSON Schema object:
 
 - `apply_patch_parameters()` / `apply_patch_parameter_schema(input_description)`
+- `exec_command_parameters()`, `write_stdin_parameters()`
+- `code_search_parameters()`
 - `cron_create_parameters()`, `cron_list_parameters()`, `cron_delete_parameters()`
 - `list_files_parameters()`
-- `unified_exec_parameters()`, `unified_search_parameters()`
 
 ### Collaboration / HITL functions
 

@@ -140,7 +140,7 @@ pub(crate) fn validate_tool_args_security(
     }
     if name == tool_names::UNIFIED_EXEC {
         let exec_failures =
-            vtcode_core::tools::command_args::unified_exec_missing_required_args(args);
+            vtcode_core::tools::command_args::command_session_missing_required_args(args);
         if !exec_failures.is_empty() {
             failures
                 .get_or_insert_with(|| Vec::with_capacity(exec_failures.len()))
@@ -159,7 +159,7 @@ pub(crate) fn validate_tool_args_security(
     }
 
     if name == tool_names::UNIFIED_EXEC
-        && vtcode_core::tools::tool_intent::unified_exec_action(args).is_none()
+        && vtcode_core::tools::tool_intent::command_session_action(args).is_none()
     {
         return Some(vec![
             "Invalid arguments: missing action; provide `action` or inferable exec arguments"
@@ -180,7 +180,7 @@ pub(crate) fn validate_tool_args_security(
     // Command safety checks
     if (name == tool_names::RUN_PTY_CMD
         || (name == tool_names::UNIFIED_EXEC
-            && vtcode_core::tools::command_args::unified_exec_requires_command_safety(args)))
+            && vtcode_core::tools::command_args::command_session_requires_command_safety(args)))
         && let Some(cmd) = vtcode_core::tools::command_args::command_text(args)
             .ok()
             .flatten()
@@ -335,7 +335,7 @@ pub(crate) async fn handle_turn_balancer(
             )
             .unwrap_or(());
         ctx.working_history.push(uni::Message::system(
-            "CRITICAL: Multiple edits were made without verification. Stop editing and run `unified_exec` to compile or test before proceeding."
+            "CRITICAL: Multiple edits were made without verification. Stop editing and run `exec_command` to compile or test before proceeding."
                 .to_string(),
         ));
         repeated_tool_attempts.consecutive_mutations = 0;
@@ -490,25 +490,29 @@ mod tests {
             r#"search text:{"pattern":"match provider_event","path":"vtcode-core/src/llm/providers/anthropic/api.rs"}"#
         ));
         assert!(is_readonly_signature(
-            r#"unified_search:{"pattern":"LLMStreamEvent::","path":"vtcode-core/src/llm/providers/anthropic/api.rs"}"#
+            r#"search_dispatch:{"pattern":"LLMStreamEvent::","path":"vtcode-core/src/llm/providers/anthropic/api.rs"}"#
         ));
     }
 
     #[test]
     fn readonly_signature_treats_safe_exec_runs_as_readonly() {
         assert!(is_readonly_signature(
-            r#"unified_exec:{"action":"run","command":"cargo check"}"#
+            r#"command_session:{"action":"run","command":"cargo check"}"#
         ));
     }
 
     #[test]
     fn readonly_signature_fast_path_accepts_ro_tag() {
-        assert!(is_readonly_signature("unified_search:ro:len42-fnv1234abcd"));
+        assert!(is_readonly_signature(
+            "search_dispatch:ro:len42-fnv1234abcd"
+        ));
     }
 
     #[test]
     fn readonly_signature_fast_path_rejects_rw_tag() {
-        assert!(!is_readonly_signature("unified_file:rw:len42-fnv1234abcd"));
+        assert!(!is_readonly_signature(
+            "file_operation:rw:len42-fnv1234abcd"
+        ));
     }
 
     #[test]
@@ -535,7 +539,7 @@ mod tests {
     }
 
     #[test]
-    fn validate_unified_exec_args_without_registry_reports_single_missing_command() {
+    fn validate_command_session_args_without_registry_reports_single_missing_command() {
         let failures = validate_tool_args_security(
             tool_names::UNIFIED_EXEC,
             &json!({"action": "run"}),
@@ -551,7 +555,7 @@ mod tests {
     }
 
     #[test]
-    fn validate_unified_exec_args_without_registry_rejects_missing_action() {
+    fn validate_command_session_args_without_registry_rejects_missing_action() {
         let failures =
             validate_tool_args_security(tool_names::UNIFIED_EXEC, &json!({}), None, None)
                 .expect("missing action should fail");
@@ -589,7 +593,7 @@ mod tests {
     #[test]
     fn balancer_recovery_continues_and_resets_tracker() {
         let mut tracker = LoopTracker::new();
-        let sig = r#"unified_exec:{"action":"run","command":"cargo test"}"#.to_string();
+        let sig = r#"command_session:{"action":"run","command":"cargo test"}"#.to_string();
         tracker.record(sig.clone());
         tracker.record(sig.clone());
         tracker.record(sig);

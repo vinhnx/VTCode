@@ -54,15 +54,10 @@ fn default_copilot_available_tools() -> Vec<String> {
 }
 
 fn default_vtcode_tool_allowlist() -> Vec<String> {
-    [
-        "unified_search",
-        "unified_file",
-        "unified_exec",
-        "apply_patch",
-    ]
-    .into_iter()
-    .map(str::to_string)
-    .collect()
+    ["exec_command", "write_stdin", "apply_patch", "code_search"]
+        .into_iter()
+        .map(str::to_string)
+        .collect()
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -136,12 +131,7 @@ mod tests {
         assert!(config.excluded_tools.is_empty());
         assert_eq!(
             config.vtcode_tool_allowlist,
-            vec![
-                "unified_search",
-                "unified_file",
-                "unified_exec",
-                "apply_patch"
-            ]
+            vec!["exec_command", "write_stdin", "apply_patch", "code_search"]
         );
         assert_eq!(config.startup_timeout_secs, 20);
         assert_eq!(config.auth_timeout_secs, 300);

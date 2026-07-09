@@ -390,21 +390,11 @@ const DEFAULT_TOOL_POLICIES: &[(&str, ToolPolicy)] = &[
     // Core workflow tools (non-destructive)
     (tools::START_PLANNING, ToolPolicy::Allow),
     (tools::TASK_TRACKER, ToolPolicy::Allow),
-    // Search operations (non-destructive)
-    (tools::UNIFIED_SEARCH, ToolPolicy::Allow),
-    // File operations (non-destructive)
-    (tools::READ_FILE, ToolPolicy::Allow),
-    // File operations (write/create)
-    (tools::WRITE_FILE, ToolPolicy::Allow),
-    (tools::EDIT_FILE, ToolPolicy::Allow),
-    (tools::CREATE_FILE, ToolPolicy::Allow),
-    // File operations (destructive - require confirmation)
-    (tools::DELETE_FILE, ToolPolicy::Prompt),
+    // Public model-facing tools.
+    (tools::CODE_SEARCH, ToolPolicy::Allow),
+    (tools::EXEC_COMMAND, ToolPolicy::Allow),
+    (tools::WRITE_STDIN, ToolPolicy::Allow),
     (tools::APPLY_PATCH, ToolPolicy::Prompt),
-    (tools::SEARCH_REPLACE, ToolPolicy::Prompt),
-    // Canonical execution interface. The tool is core; individual shell commands
-    // remain gated by command/sandbox approval policy.
-    (tools::UNIFIED_EXEC, ToolPolicy::Allow),
 ];
 
 #[cfg(test)]
@@ -452,14 +442,32 @@ mod tests {
     }
 
     #[test]
-    fn default_tool_policies_only_seed_canonical_exec_surface() {
+    fn default_tool_policies_only_seed_current_public_surface() {
         let config = ToolsConfig::default();
 
         assert_eq!(
-            config.policies.get(tools::UNIFIED_EXEC),
+            config.policies.get(tools::EXEC_COMMAND),
             Some(&ToolPolicy::Allow)
         );
+        assert_eq!(
+            config.policies.get(tools::WRITE_STDIN),
+            Some(&ToolPolicy::Allow)
+        );
+        assert_eq!(
+            config.policies.get(tools::CODE_SEARCH),
+            Some(&ToolPolicy::Allow)
+        );
+        assert_eq!(
+            config.policies.get(tools::APPLY_PATCH),
+            Some(&ToolPolicy::Prompt)
+        );
         for legacy_tool in [
+            tools::UNIFIED_EXEC,
+            tools::UNIFIED_SEARCH,
+            tools::UNIFIED_FILE,
+            tools::READ_FILE,
+            tools::WRITE_FILE,
+            tools::EDIT_FILE,
             tools::RUN_PTY_CMD,
             tools::READ_PTY_SESSION,
             tools::LIST_PTY_SESSIONS,

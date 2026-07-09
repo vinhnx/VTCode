@@ -92,8 +92,8 @@ async fn check_filesystem_permissions(config: &AgentConfig) -> Result<()> {
     // Try to list files in the workspace
     registry
         .execute_tool(
-            tools::UNIFIED_SEARCH,
-            json!({"action": "list", "path": ".", "max_items": 5}),
+            tools::LIST_FILES,
+            json!({"mode": "list", "path": ".", "per_page": 5}),
         )
         .await?;
 

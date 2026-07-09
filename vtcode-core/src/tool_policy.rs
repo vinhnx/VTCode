@@ -1477,7 +1477,7 @@ mod tests {
         config
             .approval_cache
             .allowed
-            .insert("unified_exec:cargo test".to_string());
+            .insert("command_session:cargo test".to_string());
 
         let json = serde_json::to_string_pretty(&config).unwrap();
         let deserialized: ToolPolicyConfig = serde_json::from_str(&json).unwrap();

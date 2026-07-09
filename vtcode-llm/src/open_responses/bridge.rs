@@ -6,17 +6,16 @@
 
 use serde_json::json;
 
-/// Canonicalize unified exec tool names to their standard form.
+/// Canonicalize shell tool names to the public exec_command form.
 ///
 /// This mirrors the canonicalization in vtcode-core's `tools::tool_intent` module,
 /// using inline string constants to avoid a circular dependency.
-fn canonical_unified_exec_tool_name(tool_name: &str) -> Option<&'static str> {
-    const UNIFIED_EXEC: &str = "unified_exec";
+fn canonical_exec_command_tool_name(tool_name: &str) -> Option<&'static str> {
+    const EXEC_COMMAND: &str = "exec_command";
     match tool_name {
-        "unified_exec" | "run_pty_cmd" | "send_pty_input" | "create_pty_session"
-        | "read_pty_session" | "list_pty_sessions" | "close_pty_session" | "execute_code"
-        | "exec_pty_cmd" | "exec_command" | "write_stdin" | "shell" | "bash" | "exec"
-        | "container.exec" => Some(UNIFIED_EXEC),
+        "exec_command" | "write_stdin" | "shell" | "bash" | "exec" | "container.exec" => {
+            Some(EXEC_COMMAND)
+        }
         _ => None,
     }
 }
@@ -624,7 +623,7 @@ impl ResponseBuilder {
             }),
 
             ThreadItemDetails::ToolInvocation(invocation) => {
-                let tool_name = canonical_unified_exec_tool_name(&invocation.tool_name)
+                let tool_name = canonical_exec_command_tool_name(&invocation.tool_name)
                     .unwrap_or(invocation.tool_name.as_str())
                     .to_string();
                 OutputItem::FunctionCall(FunctionCallItem {
@@ -1546,7 +1545,7 @@ mod tests {
 
         match &builder.response().output[0] {
             OutputItem::FunctionCall(call) => {
-                assert_eq!(call.name, "unified_exec");
+                assert_eq!(call.name, "exec_command");
                 assert_eq!(call.arguments["command"][0], "git");
                 assert_eq!(call.arguments["yield_time_ms"], 1000);
                 assert_eq!(call.call_id.as_deref(), Some("tool_call_0"));
@@ -1848,7 +1847,7 @@ mod tests {
             },
             NormalizedStreamEvent::ToolCallStart {
                 call_id: "call_1".to_string(),
-                name: Some("unified_search".to_string()),
+                name: Some("code_search".to_string()),
             },
             NormalizedStreamEvent::ToolCallDelta {
                 call_id: "call_1".to_string(),
@@ -1871,7 +1870,7 @@ mod tests {
                     model: "gpt-5".to_string(),
                     tool_calls: Some(vec![ToolCall::function(
                         "call_1".to_string(),
-                        "unified_search".to_string(),
+                        "code_search".to_string(),
                         "{\"pattern\":\"phase\"}".to_string(),
                     )]),
                     usage: None,

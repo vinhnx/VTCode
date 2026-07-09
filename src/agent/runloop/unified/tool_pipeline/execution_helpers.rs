@@ -46,7 +46,7 @@ pub(crate) fn process_llm_tool_output(output: Value) -> ToolExecutionStatus {
     // Prior to this fix, loop_detected was wrapped in a PolicyViolation failure
     // which caused the consecutive blocked fuse to kill the entire turn after
     // DEFAULT_MAX_CONSECUTIVE_BLOCKED_TOOL_CALLS_PER_TURN (8) iterations —
-    // blocking even unrelated tool calls (e.g. unified_exec) that happened to
+    // blocking even unrelated tool calls (e.g. command_session) that happened to
     // follow the loop-detected ones.
     if output
         .get("loop_detected")

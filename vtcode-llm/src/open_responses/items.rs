@@ -486,12 +486,12 @@ mod tests {
     fn test_function_call_serialization() {
         let item = OutputItem::function_call(
             "fc_1",
-            "read_file",
+            "exec_command",
             serde_json::json!({"path": "/etc/passwd"}),
         );
         let json = serde_json::to_string(&item).unwrap();
         assert!(json.contains("\"type\":\"function_call\""));
-        assert!(json.contains("\"name\":\"read_file\""));
+        assert!(json.contains("\"name\":\"exec_command\""));
     }
 
     #[test]

@@ -591,7 +591,7 @@ impl<'a> CopilotRuntimeHost<'a> {
         let command_display = terminal_command_display(&request.command, &request.args);
         let response = self
             .tool_registry
-            .execute_harness_unified_exec_terminal_run(terminal_run_args(&request))
+            .execute_harness_command_session_terminal_run(terminal_run_args(&request))
             .await
             .context("copilot local terminal create")?;
 
@@ -998,7 +998,7 @@ impl ObservedToolPtyStream {
     }
 
     fn push_output(&self, chunk: &str) {
-        (self.callback)("unified_exec", chunk);
+        (self.callback)("exec_command", chunk);
     }
 
     fn finish(self) {
@@ -1309,7 +1309,7 @@ async fn run_local_terminal_session(task: LocalTerminalTaskContext) {
         setup_terminal_stream(&handle, tail_limit, &command_display, pty_config).await;
 
     if let Some(output) = initial_output.as_deref() {
-        pty_stream.progress_callback("unified_exec", output);
+        pty_stream.progress_callback("exec_command", output);
     }
 
     loop {
@@ -1322,7 +1322,7 @@ async fn run_local_terminal_session(task: LocalTerminalTaskContext) {
             .await
         {
             Ok(Some(chunk)) if !chunk.is_empty() => {
-                pty_stream.progress_callback("unified_exec", &chunk);
+                pty_stream.progress_callback("exec_command", &chunk);
                 if let Some((tool_call_id, tool_name, output)) =
                     update_local_terminal_output(&state, &chunk)
                 {

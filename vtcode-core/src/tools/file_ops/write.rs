@@ -74,8 +74,8 @@ impl FileOpsTool {
         if content_size > MAX_WRITE_BYTES {
             return Err(anyhow!(
                 "Content exceeds safe write limit ({MAX_WRITE_BYTES} bytes, got {content_size} bytes). \
-                 Use unified_exec with a shell heredoc to write large files, e.g. \
-                 unified_exec(action='run', command=\"cat > '<path>' << '__VT_WRITE_EOF__'\\n<content>\\n__VT_WRITE_EOF__\")."
+                 Use exec_command with a shell heredoc to write large files, e.g. \
+                 exec_command(cmd=\"cat > '<path>' << '__VT_WRITE_EOF__'\\n<content>\\n__VT_WRITE_EOF__\")."
             ));
         }
 

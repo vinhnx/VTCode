@@ -1817,7 +1817,7 @@ fn part_json_deserialization_function_call_with_thought_signature() {
         "content": {
             "role": "model",
             "parts": [{
-                "functionCall": {"name": "run_pty_cmd", "args": {"command": "cargo check"}},
+                "functionCall": {"name": "exec_command", "args": {"command": "cargo check"}},
                 "thoughtSignature": "api_signature_abc"
             }]
         },
@@ -1831,7 +1831,7 @@ fn part_json_deserialization_function_call_with_thought_signature() {
             function_call,
             thought_signature,
         } => {
-            assert_eq!(function_call.name, "run_pty_cmd");
+            assert_eq!(function_call.name, "exec_command");
             assert_eq!(
                 thought_signature.as_deref(),
                 Some("api_signature_abc"),

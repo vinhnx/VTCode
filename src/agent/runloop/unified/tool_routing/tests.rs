@@ -210,7 +210,7 @@ fn shell_learning_target_uses_scoped_prefix_rule() {
         "sandbox_permissions": "require_escalated",
     });
 
-    let target = approval_learning_target("unified_exec", Some(&args), "Run command");
+    let target = approval_learning_target("exec_command", Some(&args), "Run command");
     assert_eq!(
         target.approval_key,
         "cargo test|sandbox_permissions=\"require_escalated\"|additional_permissions=null"
@@ -227,7 +227,7 @@ fn shell_learning_target_falls_back_to_exact_command_scope() {
         "sandbox_permissions": "require_escalated",
     });
 
-    let target = approval_learning_target("unified_exec", Some(&args), "Run command");
+    let target = approval_learning_target("exec_command", Some(&args), "Run command");
     assert_eq!(
         target.approval_key,
         "cargo test -p vtcode|sandbox_permissions=\"require_escalated\"|additional_permissions=null"
@@ -258,7 +258,7 @@ async fn shell_approval_prefix_rules_persist_to_workspace_config() {
 
     let rendered = persist_shell_approval_prefix_rule(
         &registry,
-        "unified_exec",
+        "exec_command",
         Some(&args),
         &["cargo".to_string(), "test".to_string()],
     )
@@ -1645,7 +1645,7 @@ async fn permanent_shell_approval_persists_segmented_commands() {
         "command": ["/bin/zsh", "-lc", "git status && cargo check"],
     });
 
-    persist_segment_approval_cache_keys(&registry, "unified_exec", "unified_exec", Some(&args))
+    persist_segment_approval_cache_keys(&registry, "exec_command", "exec_command", Some(&args))
         .await;
 
     assert!(
@@ -1675,8 +1675,8 @@ async fn permanent_shell_approval_reuses_for_loop_body_commands() {
 
     persist_segment_approval_cache_keys(
         &registry,
-        "unified_exec",
-        "unified_exec",
+        "exec_command",
+        "exec_command",
         Some(&approved_args),
     )
     .await;
@@ -1687,7 +1687,7 @@ async fn permanent_shell_approval_reuses_for_loop_body_commands() {
     });
 
     assert!(
-        persisted_segment_approval_hit_key(&registry, "unified_exec", Some(&later_args))
+        persisted_segment_approval_hit_key(&registry, "exec_command", Some(&later_args))
             .await
             .is_some()
     );

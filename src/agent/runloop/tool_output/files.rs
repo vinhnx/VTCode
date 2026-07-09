@@ -78,7 +78,7 @@ pub(crate) fn render_write_file_preview(
         if let Some(omitted) = get_u64(diff_value, "omitted_line_count") {
             renderer.line(
                 MessageStyle::ToolDetail,
-                &format!("… +{omitted} lines (use unified_file for full view)"),
+                &format!("… +{omitted} lines (use exec_command with sed for full view)"),
             )?;
         } else {
             renderer.line(MessageStyle::ToolDetail, "… diff truncated")?;

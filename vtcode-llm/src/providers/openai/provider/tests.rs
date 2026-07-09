@@ -762,7 +762,7 @@ fn openai_and_chatgpt_replay_structured_history_on_continuation_turns() {
                 "Running the requested check.".to_owned(),
                 vec![provider::ToolCall::function(
                     "call_1".to_string(),
-                    "unified_exec".to_string(),
+                    "exec_command".to_string(),
                     "{\"command\":\"cargo check\"}".to_string(),
                 )],
             )
@@ -2554,7 +2554,7 @@ fn chatgpt_backend_keeps_tool_turn_history_structured_for_codex() {
                 String::new(),
                 vec![provider::ToolCall::function(
                     "call_1".to_string(),
-                    "unified_exec".to_string(),
+                    "exec_command".to_string(),
                     "{\"command\":\"cargo check\"}".to_string(),
                 )],
             ),
@@ -2612,7 +2612,7 @@ fn chatgpt_backend_preserves_structured_tool_turns_with_paired_function_calls() 
                     "Checking the first command output.".to_owned(),
                     vec![provider::ToolCall::function(
                         "call_1".to_string(),
-                        "unified_exec".to_string(),
+                        "exec_command".to_string(),
                         "{\"command\":\"cargo check -p vtcode-core\"}".to_string(),
                     )],
                 )
@@ -2650,13 +2650,13 @@ fn chatgpt_backend_replays_prior_direct_tool_turns() {
             provider::Message::assistant_with_tools(
                 String::new(),
                 vec![provider::ToolCall::function(
-                    "direct_unified_exec_1".to_string(),
-                    "unified_exec".to_string(),
+                    "direct_exec_command_1".to_string(),
+                    "exec_command".to_string(),
                     "{\"command\":\"cargo fmt\"}".to_string(),
                 )],
             ),
             provider::Message::tool_response(
-                "direct_unified_exec_1".to_string(),
+                "direct_exec_command_1".to_string(),
                 "{\"output\":\"\",\"exit_code\":0,\"backend\":\"pipe\"}".to_string(),
             ),
             provider::Message::assistant("cargo fmt completed successfully.".to_owned())
@@ -2669,8 +2669,8 @@ fn chatgpt_backend_replays_prior_direct_tool_turns() {
     assert_eq!(input.len(), 5);
     assert_eq!(input_type_at(&payload, 1), Some("function_call"));
     assert_eq!(input_type_at(&payload, 2), Some("function_call_output"));
-    assert_eq!(input_call_id_at(&payload, 1), Some("direct_unified_exec_1"));
-    assert_eq!(input_call_id_at(&payload, 2), Some("direct_unified_exec_1"));
+    assert_eq!(input_call_id_at(&payload, 1), Some("direct_exec_command_1"));
+    assert_eq!(input_call_id_at(&payload, 2), Some("direct_exec_command_1"));
     assert!(input.iter().all(|item| {
         let t = item.get("type").and_then(Value::as_str);
         t != Some("tool_call") && t != Some("tool_result")
@@ -2686,7 +2686,7 @@ fn chatgpt_backend_synthesizes_missing_function_call_outputs_for_orphan_calls() 
                 String::new(),
                 vec![provider::ToolCall::function(
                     "call_orphan".to_string(),
-                    "unified_exec".to_string(),
+                    "exec_command".to_string(),
                     "{\"command\":\"echo orphan\"}".to_string(),
                 )],
             ),
@@ -2694,7 +2694,7 @@ fn chatgpt_backend_synthesizes_missing_function_call_outputs_for_orphan_calls() 
                 String::new(),
                 vec![provider::ToolCall::function(
                     "call_paired".to_string(),
-                    "unified_exec".to_string(),
+                    "exec_command".to_string(),
                     "{\"command\":\"echo paired\"}".to_string(),
                 )],
             ),
@@ -3276,12 +3276,12 @@ fn chatgpt_backend_keeps_streaming_for_codex_and_disables_non_streaming() {
 #[test]
 fn parse_harmony_tool_names_and_calls() {
     assert_eq!(
-        OpenAIProvider::parse_harmony_tool_name("repo_browser.list_files"),
-        vtcode_config::constants::tools::LIST_FILES
+        OpenAIProvider::parse_harmony_tool_name("functions.code_search"),
+        vtcode_config::constants::tools::CODE_SEARCH
     );
     assert_eq!(
         OpenAIProvider::parse_harmony_tool_name("container.exec"),
-        "unified_exec"
+        "exec_command"
     );
     assert_eq!(
         OpenAIProvider::parse_harmony_tool_name("unknown.tool"),
@@ -3290,17 +3290,17 @@ fn parse_harmony_tool_names_and_calls() {
     assert!(!OpenAIProvider::uses_harmony("gpt-oss:20b"));
 
     let (name, args) = OpenAIProvider::parse_harmony_tool_call_from_text(
-        r#"to=repo_browser.list_files {"path":"", "recursive":"true"}"#,
+        r#"to=functions.code_search {"action":"outline", "path":"src"}"#,
     )
     .expect("should parse");
-    assert_eq!(name, vtcode_config::constants::tools::LIST_FILES);
-    assert_eq!(args["path"], json!(""));
+    assert_eq!(name, vtcode_config::constants::tools::CODE_SEARCH);
+    assert_eq!(args["path"], json!("src"));
 
     let (name2, args2) = OpenAIProvider::parse_harmony_tool_call_from_text(
         r#"to=container.exec {"cmd":["ls", "-la"]}"#,
     )
     .expect("should parse");
-    assert_eq!(name2, "unified_exec");
+    assert_eq!(name2, "exec_command");
     assert_eq!(args2["cmd"], json!(["ls", "-la"]));
 
     let text = r#"<|start|>assistant to=functions.lookup_weather<|channel|>commentary <|constrain|>json<|message|>{"location":"San Francisco"}<|call|>"#;

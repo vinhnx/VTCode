@@ -251,6 +251,7 @@ fn default_codex_home_dir() -> Option<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::PromptContext;
+    use crate::config::constants::tools;
     use std::fs;
     use std::path::PathBuf;
     use tempfile::TempDir;
@@ -268,7 +269,7 @@ mod tests {
     fn from_workspace_tools_populates_workspace_and_tools() {
         let context = PromptContext::from_workspace_tools(
             PathBuf::from("/tmp/vtcode"),
-            ["unified_search", "unified_exec"],
+            [tools::CODE_SEARCH, tools::EXEC_COMMAND],
         );
 
         assert_eq!(context.workspace, Some(PathBuf::from("/tmp/vtcode")));
@@ -285,7 +286,7 @@ mod tests {
         fs::write(workspace.path().join("src/lib.rs"), "fn alpha() {}\n").expect("write rust");
         fs::write(workspace.path().join("web/app.ts"), "const app = 1;\n").expect("write ts");
 
-        let context = PromptContext::from_workspace_tools(workspace.path(), ["unified_search"]);
+        let context = PromptContext::from_workspace_tools(workspace.path(), [tools::CODE_SEARCH]);
 
         assert_eq!(
             context.languages,
@@ -304,7 +305,8 @@ mod tests {
         );
 
         let home = TempDir::new().expect("home tempdir");
-        let mut context = PromptContext::from_workspace_tools(workspace.path(), ["unified_search"]);
+        let mut context =
+            PromptContext::from_workspace_tools(workspace.path(), [tools::CODE_SEARCH]);
 
         assert!(context.available_skill_metadata.is_empty());
 
@@ -338,7 +340,8 @@ mod tests {
         );
 
         let home = TempDir::new().expect("home tempdir");
-        let mut context = PromptContext::from_workspace_tools(workspace.path(), ["unified_search"]);
+        let mut context =
+            PromptContext::from_workspace_tools(workspace.path(), [tools::CODE_SEARCH]);
 
         context.replace_available_skills_with_named_and_home_dir(
             &["alpha".to_string()],

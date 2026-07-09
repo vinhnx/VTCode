@@ -63,7 +63,7 @@ impl ContainerSkillsValidator {
             ],
             fallback_patterns: vec![
                 "vtcode does not currently support".to_string(),
-                "use unified_exec".to_string(),
+                "use exec_command".to_string(),
                 "openpyxl".to_string(),
                 "reportlab".to_string(),
                 "python-docx".to_string(),
@@ -97,7 +97,7 @@ impl ContainerSkillsValidator {
                 analysis: "Manifest sets disallow-container=true (VT Code-native only)".to_string(),
                 patterns_found: vec!["disallow-container".to_string()],
                 recommendations: vec![
-                    "Use VT Code-native execution paths via `unified_exec` instead of Anthropic container skills.".to_string(),
+                    "Use VT Code-native execution paths via `exec_command` instead of Anthropic container skills.".to_string(),
                 ],
                 should_filter: false,
             };
@@ -193,14 +193,14 @@ impl ContainerSkillsValidator {
             // Provide specific alternatives based on skill type
             if skill.name().contains("pdf") || skill.name().contains("report") {
                 recommendations.push(
-                    "  1. Use unified_exec with action='code' and Python libraries: reportlab, fpdf2, or weasyprint"
+                    "  1. Run Python through exec_command.cmd with libraries: reportlab, fpdf2, or weasyprint"
                         .to_string(),
                 );
                 recommendations.push("  2. Install: pip install reportlab".to_string());
                 recommendations.push("  3. Use Python code execution to generate PDFs".to_string());
             } else if skill.name().contains("spreadsheet") || skill.name().contains("excel") {
                 recommendations.push(
-                    "  1. Use unified_exec with action='code' and Python libraries: openpyxl, xlsxwriter, or pandas"
+                    "  1. Run Python through exec_command.cmd with libraries: openpyxl, xlsxwriter, or pandas"
                         .to_string(),
                 );
                 recommendations.push("  2. Install: pip install openpyxl xlsxwriter".to_string());
@@ -208,7 +208,7 @@ impl ContainerSkillsValidator {
                     .push("  3. Use Python code execution to create spreadsheets".to_string());
             } else if skill.name().contains("doc") || skill.name().contains("word") {
                 recommendations.push(
-                    "  1. Use unified_exec with action='code' and Python libraries: python-docx or docxtpl"
+                    "  1. Run Python through exec_command.cmd with libraries: python-docx or docxtpl"
                         .to_string(),
                 );
                 recommendations.push("  2. Install: pip install python-docx".to_string());
@@ -216,7 +216,7 @@ impl ContainerSkillsValidator {
                     .push("  3. Use Python code execution to generate documents".to_string());
             } else if skill.name().contains("presentation") || skill.name().contains("ppt") {
                 recommendations.push(
-                    "  1. Use unified_exec with action='code' and Python libraries: python-pptx"
+                    "  1. Run Python through exec_command.cmd with libraries: python-pptx"
                         .to_string(),
                 );
                 recommendations.push("  2. Install: pip install python-pptx".to_string());
@@ -224,7 +224,7 @@ impl ContainerSkillsValidator {
                     .push("  3. Use Python code execution to create presentations".to_string());
             } else {
                 recommendations.push(
-                    "  1. Use unified_exec with action='code' and appropriate Python libraries"
+                    "  1. Run Python through exec_command.cmd with appropriate Python libraries"
                         .to_string(),
                 );
                 recommendations.push(
@@ -247,7 +247,7 @@ impl ContainerSkillsValidator {
             recommendations
                 .push("Look for sections marked 'Option 2' or 'VT Code Alternative'.".to_string());
             recommendations.push(
-                "The skill instructions contain working examples using legacy `execute_code`; map them to `unified_exec` with action='code' in VT Code.".to_string(),
+                "The skill instructions contain working examples using legacy `execute_code`; map them to `exec_command` with a Python command in VT Code.".to_string(),
             );
         }
 
@@ -520,7 +520,7 @@ mod tests {
         **vtcode does not currently support Anthropic container skills.** Instead, use:
 
         ### Option 1: Python Script with openpyxl
-        Use vtcode's `unified_exec` tool with `action=\"code\"` and Python with openpyxl:
+        Use vtcode's `exec_command` tool with a Python `cmd` and openpyxl:
 
         ```python
         import openpyxl
@@ -579,7 +579,7 @@ mod tests {
         assert!(recommendations.contains("container skills"));
         assert!(recommendations.contains("not available in VT Code"));
         assert!(recommendations.contains("reportlab"));
-        assert!(recommendations.contains("unified_exec"));
+        assert!(recommendations.contains("exec_command"));
     }
 
     #[test]

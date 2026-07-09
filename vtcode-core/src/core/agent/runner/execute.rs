@@ -482,7 +482,7 @@ impl AgentRunner {
             });
             let result = self
                 .tool_registry
-                .execute_harness_unified_exec(payload)
+                .execute_harness_command_session(payload)
                 .await?;
             let exit_code = result
                 .get("exit_code")

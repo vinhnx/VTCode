@@ -82,7 +82,7 @@ impl IrreversibilityClassifier {
         }
 
         // --- High-cost patterns ---
-        if tool_name == "unified_exec" || tool_name == "bash" || tool_name == "sh" {
+        if tool_name == "exec_command" || tool_name == "bash" || tool_name == "sh" {
             if let Some(command) = args.get("command").and_then(|v| v.as_str()) {
                 let lower = command.to_lowercase();
 
@@ -162,7 +162,7 @@ impl ConfidenceEstimator {
 
         // --- Tool-class baseline adjustments ---
         match tool_name {
-            "read_file" | "glob" | "grep" | "unified_search" => {
+            "read_file" | "glob" | "grep" | "code_search" => {
                 // Reads are generally reliable even with errors
                 confidence = confidence.max(0.7);
             }
@@ -170,7 +170,7 @@ impl ConfidenceEstimator {
                 // Writes have higher inherent risk
                 confidence *= 0.9;
             }
-            "unified_exec" | "bash" | "sh" => {
+            "exec_command" | "bash" | "sh" => {
                 // Commands are high-variance
                 confidence *= 0.85;
             }
@@ -342,7 +342,7 @@ mod tests {
     fn classify_rm_rf_root_is_irreversible() {
         let args = serde_json::json!({"command": "rm -rf /var/log"});
         assert_eq!(
-            IrreversibilityClassifier::classify("unified_exec", &args),
+            IrreversibilityClassifier::classify("exec_command", &args),
             IrreversibilityClass::Irreversible,
         );
     }
@@ -350,9 +350,9 @@ mod tests {
     #[test]
     fn classify_git_force_push_is_irreversible() {
         let args = serde_json::json!({"command": "git push --force origin main"});
-        // The tool name for this is "unified_exec" or "bash", not "git_push"
+        // The tool name for this is "exec_command" or "bash", not "git_push"
         assert_eq!(
-            IrreversibilityClassifier::classify("unified_exec", &args),
+            IrreversibilityClassifier::classify("exec_command", &args),
             IrreversibilityClass::Irreversible,
         );
     }
@@ -361,7 +361,7 @@ mod tests {
     fn classify_destructive_shell_is_irreversible() {
         let args = serde_json::json!({"command": "rm -rf /"});
         assert_eq!(
-            IrreversibilityClassifier::classify("unified_exec", &args),
+            IrreversibilityClassifier::classify("exec_command", &args),
             IrreversibilityClass::Irreversible,
         );
     }
@@ -370,7 +370,7 @@ mod tests {
     fn classify_drop_table_is_irreversible() {
         let args = serde_json::json!({"command": "DROP TABLE users"});
         assert_eq!(
-            IrreversibilityClassifier::classify("unified_exec", &args),
+            IrreversibilityClassifier::classify("exec_command", &args),
             IrreversibilityClass::Irreversible,
         );
     }
@@ -480,13 +480,13 @@ mod tests {
         };
         let mut state = ErrorRecoveryState::new();
         state.recent_errors.push_back(RecentError {
-            tool_name: "unified_exec".into(),
+            tool_name: "exec_command".into(),
             timestamp: Instant::now(),
             error_message: "error".into(),
             error_type: ErrorType::ToolExecution,
             category: None,
         });
-        let tc = make_tool("unified_exec", r#"{"command":"cargo build"}"#);
+        let tc = make_tool("exec_command", r#"{"command":"cargo build"}"#);
 
         let result = EscalationGate::decide(&[tc], &config, &state, None, "single");
         assert!(result.any_escalated);

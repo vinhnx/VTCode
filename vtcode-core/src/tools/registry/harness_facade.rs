@@ -11,7 +11,7 @@ use super::ToolRegistry;
 use crate::config::constants::tools;
 
 impl ToolRegistry {
-    async fn process_harness_unified_exec_output(&self, value: Value) -> Result<Value> {
+    async fn process_harness_command_session_output(&self, value: Value) -> Result<Value> {
         let processed = self
             .process_tool_output(tools::UNIFIED_EXEC, value, false)
             .await;
@@ -54,20 +54,20 @@ impl ToolRegistry {
     }
 
     /// Execute a harness-owned verification command through the same exec/sandbox
-    /// runtime used by the public `unified_exec` tool while bypassing the
+    /// runtime used by the public `command_session` tool while bypassing the
     /// model-facing full-auto allow-list gate.
-    pub async fn execute_harness_unified_exec(&self, args: Value) -> Result<Value> {
-        let value = self.execute_unified_exec(args).await?;
-        self.process_harness_unified_exec_output(value).await
+    pub async fn execute_harness_command_session(&self, args: Value) -> Result<Value> {
+        let value = self.execute_command_session(args).await?;
+        self.process_harness_command_session_output(value).await
     }
 
     /// Start a harness-owned PTY command session while retaining the session metadata even when
     /// the command exits immediately. ACP terminal sessions use explicit release semantics.
-    pub async fn execute_harness_unified_exec_terminal_run(&self, args: Value) -> Result<Value> {
+    pub async fn execute_harness_command_session_terminal_run(&self, args: Value) -> Result<Value> {
         let value = self
-            .execute_harness_unified_exec_terminal_run_raw(args)
+            .execute_harness_command_session_terminal_run_raw(args)
             .await?;
-        self.process_harness_unified_exec_output(value).await
+        self.process_harness_command_session_output(value).await
     }
 
     pub async fn read_harness_exec_session_output(

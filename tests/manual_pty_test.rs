@@ -26,7 +26,10 @@ async fn main() -> Result<()> {
         "args": ["Hello, PTY!"]
     });
 
-    match registry.execute_tool("run_pty_cmd", args).await {
+    match registry
+        .execute_tool(vtcode_core::config::constants::tools::RUN_PTY_CMD, args)
+        .await
+    {
         Ok(result) => {
             println!("Success: {result:?}");
             assert_eq!(result["success"], true);
@@ -51,7 +54,10 @@ async fn main() -> Result<()> {
         "args": ["test.txt"]
     });
 
-    match registry.execute_tool("run_pty_cmd", args).await {
+    match registry
+        .execute_tool(vtcode_core::config::constants::tools::RUN_PTY_CMD, args)
+        .await
+    {
         Ok(result) => {
             println!("Success: {result:?}");
             assert_eq!(result["success"], true);

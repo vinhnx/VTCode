@@ -37,7 +37,7 @@ pub struct ExecutionPolicySnapshot {
     pub prevalidated: bool,
     /// Optional invocation id for cross-surface correlation.
     pub invocation_id: Option<String>,
-    /// How unified_exec should settle before returning.
+    /// How command_session should settle before returning.
     pub exec_settlement_mode: ExecSettlementMode,
     /// Whether caller already completed safety gateway admission.
     pub safety_prevalidated: bool,

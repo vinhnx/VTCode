@@ -2,7 +2,7 @@ use serde_json::Value;
 use vtcode_core::config::constants::tools;
 
 use crate::agent::runloop::text_tools::canonical::{
-    apply_unified_exec_defaults, unified_exec_defaults_for_name,
+    apply_exec_command_defaults, exec_command_defaults_for_name,
 };
 use crate::agent::runloop::text_tools::parse_args::parse_textual_arguments;
 use crate::agent::runloop::text_tools::parser::{ParseResult, ParsedToolCall, TextualToolParser};
@@ -62,7 +62,7 @@ pub(super) fn parse_tool_name_from_reference(tool_ref: &str) -> &str {
         "repo_browser.list_files" | tools::LIST_FILES => tools::LIST_FILES,
         "repo_browser.read_file" | tools::READ_FILE => tools::READ_FILE,
         "repo_browser.write_file" | tools::WRITE_FILE => tools::WRITE_FILE,
-        "container.exec" | "exec" | "bash" | "exec_command" => tools::UNIFIED_EXEC,
+        "container.exec" | "exec" | "bash" | "exec_command" => tools::EXEC_COMMAND,
         "grep" => tools::GREP_FILE,
         _ => {
             // Try to extract the function name after the last dot
@@ -79,9 +79,9 @@ pub(super) fn convert_harmony_args_to_tool_format(
     tool_name: &str,
     parsed: Value,
 ) -> Result<Value, String> {
-    if let Some(defaults) = unified_exec_defaults_for_name(tool_name) {
+    if let Some(defaults) = exec_command_defaults_for_name(tool_name) {
         let mut result = serde_json::Map::new();
-        apply_unified_exec_defaults(&mut result, defaults);
+        apply_exec_command_defaults(&mut result, defaults);
 
         // Preserve other parameters from the original parsed object
         if let Some(map) = parsed.as_object() {

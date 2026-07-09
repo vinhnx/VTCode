@@ -24,8 +24,7 @@ use vtcode_utility_tool_specs::{
     apply_patch_parameters, close_agent_parameters, code_search_parameters, cron_create_parameters,
     cron_delete_parameters, cron_list_parameters, exec_command_parameters, list_files_parameters,
     resume_agent_parameters, send_input_parameters, spawn_agent_parameters,
-    spawn_background_subprocess_parameters, unified_exec_parameters, unified_search_parameters,
-    wait_agent_parameters, write_stdin_parameters,
+    spawn_background_subprocess_parameters, wait_agent_parameters, write_stdin_parameters,
 };
 
 use super::distributed::{BUILTIN_TOOLS, tool_config};
@@ -325,22 +324,6 @@ fn register_close_agent(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegi
 // ---------------------------------------------------------------------------
 
 #[distributed_slice(BUILTIN_TOOLS)]
-fn register_unified_search(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
-    ToolRegistration::new(
-        tools::UNIFIED_SEARCH,
-        CapabilityLevel::CodeSearch,
-        false,
-        ToolRegistry::unified_search_executor,
-    )
-    .with_description(
-        "Internal legacy search dispatcher for grep, list, structural, outline, tool, error, web, and skill lookups. Hidden from model-visible schemas; public text search goes through exec_command.cmd with rg, and semantic code search goes through code_search.",
-    )
-    .with_parameter_schema(unified_search_parameters())
-    .with_permission(ToolPolicy::Allow)
-    .with_llm_visibility(false)
-}
-
-#[distributed_slice(BUILTIN_TOOLS)]
 fn register_code_search(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
     ToolRegistration::new(
         tools::CODE_SEARCH,
@@ -556,21 +539,6 @@ fn register_mcp_disconnect_server(_plan_state: Option<&PlanningWorkflowState>) -
 // ---------------------------------------------------------------------------
 
 #[distributed_slice(BUILTIN_TOOLS)]
-fn register_unified_exec(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
-    ToolRegistration::new(
-        tools::UNIFIED_EXEC,
-        CapabilityLevel::Bash,
-        false,
-        ToolRegistry::unified_exec_executor,
-    )
-    .with_description(
-        "Execute shell commands and code: actions run, write, poll, continue, inspect, list, close, code. Use action=run for one-shot commands; action=write + action=poll for interactive shells. Do NOT use action=write without a follow-up poll/close — the session leaks. Default timeout 180s (max 1800s). All shell calls run through the active sandbox policy. Requires Prompt confirmation.",
-    )
-    .with_parameter_schema(unified_exec_parameters())
-    .with_llm_visibility(false)
-}
-
-#[distributed_slice(BUILTIN_TOOLS)]
 fn register_exec_command(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
     ToolRegistration::new(
         tools::EXEC_COMMAND,
@@ -599,25 +567,7 @@ fn register_write_stdin(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegi
 }
 
 // ---------------------------------------------------------------------------
-// FILE OPERATIONS
-// ---------------------------------------------------------------------------
-
-#[distributed_slice(BUILTIN_TOOLS)]
-fn register_unified_file(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
-    ToolRegistration::new(
-        tools::UNIFIED_FILE,
-        CapabilityLevel::Editing,
-        false,
-        ToolRegistry::unified_file_executor,
-    )
-    .with_description(
-        "Internal file dispatcher for read, write, edit, delete, move, and copy operations.",
-    )
-    .with_llm_visibility(false)
-}
-
-// ---------------------------------------------------------------------------
-// INTERNAL TOOLS (Hidden from LLM, used by unified tools)
+// INTERNAL TOOLS (Hidden from LLM, reused by public tools and harnesses)
 // ---------------------------------------------------------------------------
 
 #[distributed_slice(BUILTIN_TOOLS)]
@@ -894,11 +844,14 @@ mod tests {
             );
         }
 
-        let unified_search = registrations
-            .iter()
-            .find(|registration| registration.name() == tools::UNIFIED_SEARCH)
-            .expect("unified_search registration should exist");
-        assert!(unified_search.native_cgp_factory().is_none());
+        assert!(
+            registrations
+                .iter()
+                .all(|registration| registration.name() != tools::UNIFIED_SEARCH
+                    && registration.name() != tools::UNIFIED_FILE
+                    && registration.name() != tools::UNIFIED_EXEC),
+            "removed unified tools must not have builtin registrations"
+        );
     }
 
     #[test]
@@ -953,17 +906,11 @@ mod tests {
             tools::UNIFIED_EXEC,
             tools::UNIFIED_FILE,
         ] {
-            let registration = registrations
-                .iter()
-                .find(|registration| registration.name() == tool_name)
-                .expect("internal unified registration should exist");
             assert!(
-                !registration.expose_in_llm(),
-                "{tool_name} should be internal"
-            );
-            assert!(
-                registration.metadata().aliases().is_empty(),
-                "{tool_name} should not publish aliases"
+                registrations
+                    .iter()
+                    .all(|registration| registration.name() != tool_name),
+                "{tool_name} must not have a builtin registration"
             );
         }
     }

@@ -782,9 +782,9 @@ max_sequential_spool_chunk_reads = 6
 apply_patch = "prompt"            # Apply code patches (requires confirmation)
 request_user_input = "allow"      # Ask focused user questions when the task requires it
 task_tracker = "prompt"           # Create or update explicit task plans
-unified_exec = "prompt"           # Run commands; pipe-first by default, set tty=true for PTY/interactive sessions
-unified_file = "allow"            # Canonical file read/write/edit/move/copy/delete surface
-unified_search = "allow"          # Canonical search/list/intelligence/error surface
+exec_command = "prompt"           # Run commands; pipe-first by default, set tty=true for PTY/interactive sessions
+write_stdin = "prompt"            # Send input to active command sessions
+code_search = "allow"             # Advanced semantic structural search and outline surface
 
 # Command security - Define safe and dangerous command patterns
 [commands]

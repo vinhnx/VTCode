@@ -146,12 +146,12 @@ mod tests {
     fn filter_tools_keeps_all_when_names_empty() {
         let tools = vec![
             ToolSchemaEntry {
-                name: "unified_file".to_string(),
-                description: "File operations".to_string(),
+                name: "apply_patch".to_string(),
+                description: "Patch editing".to_string(),
                 parameters: serde_json::json!({}),
             },
             ToolSchemaEntry {
-                name: "unified_exec".to_string(),
+                name: "exec_command".to_string(),
                 description: "Command execution".to_string(),
                 parameters: serde_json::json!({}),
             },
@@ -165,19 +165,19 @@ mod tests {
     fn filter_tools_selects_exact_name_matches() {
         let tools = vec![
             ToolSchemaEntry {
-                name: "unified_file".to_string(),
-                description: "File operations".to_string(),
+                name: "apply_patch".to_string(),
+                description: "Patch editing".to_string(),
                 parameters: serde_json::json!({}),
             },
             ToolSchemaEntry {
-                name: "unified_exec".to_string(),
+                name: "exec_command".to_string(),
                 description: "Command execution".to_string(),
                 parameters: serde_json::json!({}),
             },
         ];
 
-        let filtered = filter_tools_by_name(tools, &[String::from("unified_file")]);
+        let filtered = filter_tools_by_name(tools, &[String::from("apply_patch")]);
         assert_eq!(filtered.len(), 1);
-        assert_eq!(filtered[0].name, "unified_file");
+        assert_eq!(filtered[0].name, "apply_patch");
     }
 }

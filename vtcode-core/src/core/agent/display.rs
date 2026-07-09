@@ -7,11 +7,11 @@ use serde_json::Value;
 #[inline]
 pub fn format_tool_result_for_display(tool_name: &str, result: &Value) -> String {
     let display_tool_name =
-        tool_intent::canonical_unified_exec_tool_name(tool_name).unwrap_or(tool_name);
+        tool_intent::canonical_command_session_tool_name(tool_name).unwrap_or(tool_name);
     let is_command_session_tool = display_tool_name == tools::UNIFIED_EXEC;
 
     if display_tool_name == tools::UNIFIED_SEARCH {
-        return format_unified_search_result_for_display(display_tool_name, result);
+        return format_search_dispatch_result_for_display(display_tool_name, result);
     }
 
     if is_command_session_tool {
@@ -49,7 +49,7 @@ pub fn format_tool_result_for_display(tool_name: &str, result: &Value) -> String
     format!("Tool {display_tool_name} result: {result}")
 }
 
-fn format_unified_search_result_for_display(tool_name: &str, result: &Value) -> String {
+fn format_search_dispatch_result_for_display(tool_name: &str, result: &Value) -> String {
     if let Some(obj) = result.as_object()
         && obj.get("url").is_some()
         && obj.get("content").is_some()

@@ -428,8 +428,8 @@ const FINAL_RESPONSE_CONTRACT: &str = "Return your final response using this exa
 Use `- None` for empty sections. Keep it concise and grounded in the work you actually performed.";
 
 const READ_ONLY_TOOL_REMINDER: &str = "Tool reminder: stay inside the exposed read-only tool set for this child. \
-Do not guess hidden or legacy helpers such as `list_files`, `read_file`, `unified_file`, or `unified_exec` when they \
-are not visible. For workspace discovery here, prefer `unified_search`; if that is insufficient, report the blocker \
+Do not guess hidden or legacy helpers such as `list_files`, `read_file`, `file_operation`, or `command_session` when they \
+are not visible. For workspace discovery here, prefer `search_dispatch`; if that is insufficient, report the blocker \
 instead of retrying denied calls.";
 
 const READ_ONLY_PLANNING_WORKFLOW_REMINDER: &str = "This delegated agent already runs with a read-only tool surface. \
@@ -437,8 +437,8 @@ Do not try to enter or exit planning workflow, do not call hidden mutating tools
 call; adjust strategy or report the blocker instead.";
 
 const WRITE_TOOL_REMINDER: &str = "Tool reminder: `list_files` on the workspace root (`.`) is blocked, and \
-`list_files` already uses search internally. Do not pair `list_files` with `unified_search` in the same batch. \
-Use a specific subdirectory, `unified_search` for workspace-wide discovery, or `unified_exec` with \
+`list_files` already uses search internally. Do not pair `list_files` with `search_dispatch` in the same batch. \
+Use a specific subdirectory, `search_dispatch` for workspace-wide discovery, or `command_session` with \
 `git diff --name-only` / `git diff --stat` when reviewing current changes.";
 
 const WRITE_SYNTHESIS_REMINDER: &str = "CRITICAL: After reading files to gather context, you MUST synthesize \

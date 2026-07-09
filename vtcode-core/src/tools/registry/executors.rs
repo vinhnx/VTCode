@@ -3,9 +3,7 @@ use crate::config::constants::tools;
 use crate::exec::skill_manager::{Skill, SkillMetadata};
 use crate::tools::file_tracker::FileTracker;
 use crate::tools::native_memory;
-use crate::tools::registry::unified_actions::{
-    UnifiedExecAction, UnifiedFileAction, UnifiedSearchAction,
-};
+use crate::tools::registry::unified_actions::{CommandSessionAction, SearchDispatchAction};
 use crate::tools::tool_intent;
 use crate::tools::traits::Tool;
 
@@ -68,7 +66,7 @@ fn set_payload_default(payload: &mut serde_json::Map<String, Value>, key: &str, 
     payload.entry(key.to_string()).or_insert(value);
 }
 
-fn normalize_unified_exec_run_alias_args(args: &Value, tty: bool) -> Result<Value> {
+fn normalize_command_session_run_alias_args(args: &Value, tty: bool) -> Result<Value> {
     let mut args =
         crate::tools::command_args::normalize_shell_args(args).map_err(|error| anyhow!(error))?;
     if let Some(payload) = args.as_object_mut() {
@@ -80,7 +78,7 @@ fn normalize_unified_exec_run_alias_args(args: &Value, tty: bool) -> Result<Valu
     Ok(args)
 }
 
-fn with_unified_exec_action_default(mut args: Value, action: &'static str) -> Value {
+fn with_command_session_action_default(mut args: Value, action: &'static str) -> Value {
     if let Some(payload) = args.as_object_mut() {
         set_payload_default(payload, "action", json!(action));
     }
@@ -236,18 +234,6 @@ impl ToolRegistry {
         Ok(plan.approval_reason)
     }
 
-    pub(super) fn unified_exec_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move { self.execute_unified_exec(args).await })
-    }
-
-    pub(super) fn unified_file_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move { self.execute_unified_file(args).await })
-    }
-
-    pub(super) fn unified_search_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move { self.execute_unified_search(args).await })
-    }
-
     pub(super) fn code_search_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move { self.execute_code_search(args).await })
     }
@@ -259,7 +245,7 @@ impl ToolRegistry {
         missing_error: &str,
         empty_error: &str,
     ) -> Result<PreparedExecRunRequest> {
-        acquire_executor_rate_limit("unified_exec:run", 2.0)?;
+        acquire_executor_rate_limit("exec_command:run", 2.0)?;
 
         let payload = args
             .as_object()
@@ -344,49 +330,49 @@ impl ToolRegistry {
         })
     }
 
-    pub(super) async fn execute_unified_exec(&self, args: Value) -> Result<Value> {
-        self.execute_unified_exec_internal(args, ExecSettlementMode::Manual)
+    pub(super) async fn execute_command_session(&self, args: Value) -> Result<Value> {
+        self.execute_command_session_internal(args, ExecSettlementMode::Manual)
             .await
     }
 
-    pub(super) async fn execute_harness_unified_exec_terminal_run_raw(
+    pub(super) async fn execute_harness_command_session_terminal_run_raw(
         &self,
         args: Value,
     ) -> Result<Value> {
-        let args = normalize_unified_exec_run_alias_args(&args, true)?;
+        let args = normalize_command_session_run_alias_args(&args, true)?;
         self.execute_command_session_run_pty(args, true).await
     }
 
-    fn dispatch_unified_exec_alias(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
+    fn dispatch_command_session_alias(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move {
-            self.execute_unified_exec(args)
+            self.execute_command_session(args)
                 .await
                 .map(super::normalize_tool_output)
         })
     }
 
-    fn dispatch_unified_exec_run_alias(
+    fn dispatch_command_session_run_alias(
         &self,
         args: Value,
         tty: bool,
     ) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move {
-            let args = normalize_unified_exec_run_alias_args(&args, tty)?;
-            self.execute_unified_exec(args)
+            let args = normalize_command_session_run_alias_args(&args, tty)?;
+            self.execute_command_session(args)
                 .await
                 .map(super::normalize_tool_output)
         })
     }
 
-    fn dispatch_unified_exec_action_alias(
+    fn dispatch_command_session_action_alias(
         &self,
         args: Value,
         action: &'static str,
     ) -> BoxFuture<'_, Result<Value>> {
-        self.dispatch_unified_exec_alias(with_unified_exec_action_default(args, action))
+        self.dispatch_command_session_alias(with_command_session_action_default(args, action))
     }
 
-    pub(super) async fn execute_unified_exec_internal(
+    pub(super) async fn execute_command_session_internal(
         &self,
         args: Value,
         exec_settlement_mode: ExecSettlementMode,
@@ -394,28 +380,28 @@ impl ToolRegistry {
         let args = crate::tools::command_args::normalize_shell_args(&args)
             .map_err(|error| anyhow!(error))?;
 
-        let action_str = tool_intent::unified_exec_action(&args)
-            .ok_or_else(|| missing_unified_exec_action_error(&args))?;
-        let action: UnifiedExecAction = parse_action(action_str)?;
+        let action_str = tool_intent::command_session_action(&args)
+            .ok_or_else(|| missing_command_session_action_error(&args))?;
+        let action: CommandSessionAction = parse_action(action_str)?;
 
         match action {
-            UnifiedExecAction::Run => {
+            CommandSessionAction::Run => {
                 self.execute_command_session_run_internal(args, exec_settlement_mode)
                     .await
             }
-            UnifiedExecAction::Write => self.execute_command_session_write(args).await,
-            UnifiedExecAction::Poll => {
+            CommandSessionAction::Write => self.execute_command_session_write(args).await,
+            CommandSessionAction::Poll => {
                 self.execute_command_session_poll_internal(args, exec_settlement_mode)
                     .await
             }
-            UnifiedExecAction::Continue => {
+            CommandSessionAction::Continue => {
                 self.execute_command_session_continue_internal(args, exec_settlement_mode)
                     .await
             }
-            UnifiedExecAction::Inspect => self.execute_command_session_inspect(args).await,
-            UnifiedExecAction::List => self.execute_command_session_list().await,
-            UnifiedExecAction::Close => self.execute_command_session_close(args).await,
-            UnifiedExecAction::Code => self.execute_code(args).await,
+            CommandSessionAction::Inspect => self.execute_command_session_inspect(args).await,
+            CommandSessionAction::List => self.execute_command_session_list().await,
+            CommandSessionAction::Close => self.execute_command_session_close(args).await,
+            CommandSessionAction::Code => self.execute_code(args).await,
         }
     }
 
@@ -432,85 +418,18 @@ impl ToolRegistry {
         }
     }
 
-    pub(super) async fn execute_unified_file(&self, args: Value) -> Result<Value> {
-        let action_str = tool_intent::unified_file_action(&args)
-            .ok_or_else(|| missing_unified_file_action_error(&args))?;
+    pub(super) async fn execute_search_dispatch(&self, args: Value) -> Result<Value> {
+        let mut args = tool_intent::normalize_search_dispatch_args(&args);
 
-        let action: UnifiedFileAction = parse_action(action_str)?;
-        self.log_unified_file_payload_diagnostics(action_str, &args);
-        let tool = self.inventory.file_ops_tool().clone();
+        let action_str = tool_intent::search_dispatch_action(&args)
+            .ok_or_else(|| missing_search_dispatch_action_error(&args))?;
 
-        match action {
-            UnifiedFileAction::Read => {
-                self.execute_unified_file_read_with_recovery(&tool, args)
-                    .await
-            }
-            UnifiedFileAction::Write => tool.write_file(args).await,
-            UnifiedFileAction::Edit => self.edit_file(args).await,
-            UnifiedFileAction::Delete => tool.delete_file(args).await,
-            UnifiedFileAction::Move => tool.move_file(args).await,
-            UnifiedFileAction::Copy => tool.copy_file(args).await,
-        }
-    }
-
-    async fn execute_unified_file_read_with_recovery(
-        &self,
-        tool: &crate::tools::file_ops::FileOpsTool,
-        args: Value,
-    ) -> Result<Value> {
-        match tool.read_file(args.clone()).await {
-            Ok(response) => Ok(response),
-            Err(read_err) => {
-                let read_err_text = read_err.to_string();
-                if let Some(fallback_args) = build_read_pty_fallback_args(&args, &read_err_text) {
-                    let session_id = fallback_args
-                        .get("session_id")
-                        .and_then(Value::as_str)
-                        .unwrap_or_default()
-                        .to_string();
-                    tracing::info!(
-                        session_id = %session_id,
-                        "Auto-recovering unified_file read via unified_exec poll"
-                    );
-                    match self.execute_command_session_poll(fallback_args).await {
-                        Ok(mut recovered) => {
-                            if let Some(obj) = recovered.as_object_mut() {
-                                obj.insert("auto_recovered".to_string(), json!(true));
-                                obj.insert("recovery_tool".to_string(), json!(tools::UNIFIED_EXEC));
-                                obj.insert("recovery_action".to_string(), json!("poll"));
-                                obj.insert(
-                                    "recovery_reason".to_string(),
-                                    json!("missing_pty_spool_file"),
-                                );
-                            }
-                            return Ok(recovered);
-                        }
-                        Err(recovery_err) => {
-                            tracing::warn!(
-                                session_id = %session_id,
-                                error = %recovery_err,
-                                "Failed auto-recovery via unified_exec poll"
-                            );
-                        }
-                    }
-                }
-                Err(read_err)
-            }
-        }
-    }
-
-    pub(super) async fn execute_unified_search(&self, args: Value) -> Result<Value> {
-        let mut args = tool_intent::normalize_unified_search_args(&args);
-
-        let action_str = tool_intent::unified_search_action(&args)
-            .ok_or_else(|| missing_unified_search_action_error(&args))?;
-
-        let action: UnifiedSearchAction = parse_action(action_str)?;
+        let action: SearchDispatchAction = parse_action(action_str)?;
 
         // Default to workspace root when path is omitted for list/grep actions to reduce friction
         if matches!(
             action,
-            UnifiedSearchAction::Grep | UnifiedSearchAction::List
+            SearchDispatchAction::Grep | SearchDispatchAction::List
         ) {
             let has_path = args
                 .get("path")
@@ -523,19 +442,19 @@ impl ToolRegistry {
         }
 
         match action {
-            UnifiedSearchAction::Grep => {
-                ensure_unified_search_grep_pattern(&args)?;
+            SearchDispatchAction::Grep => {
+                ensure_search_dispatch_grep_pattern(&args)?;
                 let manager = self.inventory.grep_file_manager();
                 manager
                     .perform_search(serde_json::from_value(args)?)
                     .await
                     .map(|r| json!(r))
             }
-            UnifiedSearchAction::List => {
+            SearchDispatchAction::List => {
                 let tool = self.inventory.file_ops_tool().clone();
                 tool.execute(args).await
             }
-            UnifiedSearchAction::Structural => {
+            SearchDispatchAction::Structural => {
                 match crate::tools::structural_search::execute_structural_search(
                     self.workspace_root(),
                     args.clone(),
@@ -561,34 +480,34 @@ impl ToolRegistry {
                     }
                 }
             }
-            UnifiedSearchAction::Outline => {
+            SearchDispatchAction::Outline => {
                 crate::tools::outline_search::execute_outline_search(
                     self.workspace_root(),
                     args.clone(),
                 )
                 .await
             }
-            UnifiedSearchAction::Intelligence => Ok(
+            SearchDispatchAction::Intelligence => Ok(
                 serde_json::json!({"error": "Action 'intelligence' is deprecated. Use action='grep' or action='list'."}),
             ),
-            UnifiedSearchAction::Tools => self.execute_search_tools(args).await,
-            UnifiedSearchAction::Errors => self.execute_get_errors(args).await,
-            UnifiedSearchAction::Agent => self.execute_agent_info().await,
-            UnifiedSearchAction::Web => self.execute_unified_web(args).await,
-            UnifiedSearchAction::Skill => self.execute_skill(args).await,
+            SearchDispatchAction::Tools => self.execute_search_tools(args).await,
+            SearchDispatchAction::Errors => self.execute_get_errors(args).await,
+            SearchDispatchAction::Agent => self.execute_agent_info().await,
+            SearchDispatchAction::Web => self.execute_unified_web(args).await,
+            SearchDispatchAction::Skill => self.execute_skill(args).await,
         }
     }
 
     async fn execute_code_search(&self, args: Value) -> Result<Value> {
-        let args = tool_intent::normalize_unified_search_args(&args);
-        let action_str = tool_intent::unified_search_action(&args).ok_or_else(|| {
+        let args = tool_intent::normalize_search_dispatch_args(&args);
+        let action_str = tool_intent::search_dispatch_action(&args).ok_or_else(|| {
             anyhow!("code_search requires action='structural' or action='outline'")
         })?;
-        let action: UnifiedSearchAction = parse_action(action_str)?;
+        let action: SearchDispatchAction = parse_action(action_str)?;
 
         match action {
-            UnifiedSearchAction::Outline => self.execute_unified_search(args).await,
-            UnifiedSearchAction::Structural => {
+            SearchDispatchAction::Outline => self.execute_search_dispatch(args).await,
+            SearchDispatchAction::Structural => {
                 let workflow = args
                     .get("workflow")
                     .and_then(Value::as_str)
@@ -598,7 +517,7 @@ impl ToolRegistry {
                         "code_search structural workflow supports only 'query', 'scan', or 'test'"
                     );
                 }
-                self.execute_unified_search(args).await
+                self.execute_search_dispatch(args).await
             }
             _ => bail!(
                 "code_search supports only action='structural' or action='outline'; use exec_command.cmd with rg for text search"
@@ -841,7 +760,7 @@ impl ToolRegistry {
         Ok(response)
     }
 
-    /// Dispatch the `unified_search action="web"` surface.
+    /// Dispatch the `code_search action="web"` surface.
     ///
     /// This action is polymorphic:
     /// - `url` present  -> fetch that URL via the secure `WebFetchTool`
@@ -855,7 +774,7 @@ impl ToolRegistry {
     /// Both tools are pulled from the inventory so user-configured
     /// `[web_fetch]` and `[web_search]` settings are honored.
     pub(super) async fn execute_unified_web(&self, args: Value) -> Result<Value> {
-        acquire_executor_rate_limit("unified_search:web", 1.0)?;
+        acquire_executor_rate_limit("web_search:dispatch", 1.0)?;
 
         match classify_unified_web_args(&args)? {
             UnifiedWebDispatch::Fetch { args: fetch_args } => {
@@ -987,25 +906,6 @@ impl ToolRegistry {
         Ok((patch_args, patch_input_bytes, patch_base64))
     }
 
-    fn log_unified_file_payload_diagnostics(&self, action: &str, args: &Value) {
-        let context = self.harness_context_snapshot();
-        let (patch_source_bytes, patch_base64) =
-            crate::tools::apply_patch::patch_source_from_args(args)
-                .map(|source| (source.len(), source.starts_with("base64:")))
-                .unwrap_or((0, false));
-
-        tracing::trace!(
-            tool = tools::UNIFIED_FILE,
-            action,
-            payload_bytes = serialized_payload_size_bytes(args),
-            patch_source_bytes,
-            patch_base64,
-            session_id = %context.session_id,
-            task_id = %context.task_id.as_deref().unwrap_or(""),
-            "Captured unified_file payload diagnostics"
-        );
-    }
-
     async fn resolve_exec_sandbox_request(
         &self,
         payload: &serde_json::Map<String, Value>,
@@ -1051,11 +951,11 @@ impl ToolRegistry {
     // create a PTY session and run a command. The separate names exist for
     // backward compatibility with existing tool registrations.
     pub(super) fn run_pty_cmd_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        self.dispatch_unified_exec_run_alias(args, true)
+        self.dispatch_command_session_run_alias(args, true)
     }
 
     pub(super) fn exec_command_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        self.dispatch_unified_exec_run_alias(args, false)
+        self.dispatch_command_session_run_alias(args, false)
     }
 
     pub(super) fn write_stdin_executor(&self, mut args: Value) -> BoxFuture<'_, Result<Value>> {
@@ -1067,7 +967,7 @@ impl ToolRegistry {
             }
         }
         Box::pin(async move {
-            let args = with_unified_exec_action_default(args, "write");
+            let args = with_command_session_action_default(args, "write");
             self.execute_command_session_write_for_tool(args, tools::WRITE_STDIN)
                 .await
                 .map(super::normalize_tool_output)
@@ -1075,23 +975,23 @@ impl ToolRegistry {
     }
 
     pub(super) fn send_pty_input_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        self.dispatch_unified_exec_action_alias(args, "write")
+        self.dispatch_command_session_action_alias(args, "write")
     }
 
     pub(super) fn read_pty_session_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        self.dispatch_unified_exec_action_alias(args, "poll")
+        self.dispatch_command_session_action_alias(args, "poll")
     }
 
     pub(super) fn create_pty_session_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        self.dispatch_unified_exec_run_alias(args, true)
+        self.dispatch_command_session_run_alias(args, true)
     }
 
     pub(super) fn list_pty_sessions_executor(&self, _args: Value) -> BoxFuture<'_, Result<Value>> {
-        self.dispatch_unified_exec_alias(json!({"action": "list"}))
+        self.dispatch_command_session_alias(json!({"action": "list"}))
     }
 
     pub(super) fn close_pty_session_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        self.dispatch_unified_exec_action_alias(args, "close")
+        self.dispatch_command_session_action_alias(args, "close")
     }
 
     // ============================================================
@@ -1099,7 +999,7 @@ impl ToolRegistry {
     // ============================================================
 }
 
-/// Outcome of classifying `unified_search action="web"` arguments. Extracted
+/// Outcome of classifying `code_search action="web"` arguments. Extracted
 /// from `execute_unified_web` so the dispatch rules can be unit-tested without
 /// touching the network.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1127,7 +1027,7 @@ fn classify_unified_web_args(args: &Value) -> Result<UnifiedWebDispatch> {
 
     match (has_url, query) {
         (true, Some(_)) => Err(anyhow!(
-            "unified_search action='web' got both 'url' and 'query'. Provide 'url' to fetch a page, or 'query' to search the web — not both."
+            "code_search action='web' got both 'url' and 'query'. Provide 'url' to fetch a page, or 'query' to search the web — not both."
         )),
         (true, None) => Ok(UnifiedWebDispatch::Fetch { args: args.clone() }),
         (false, Some(query)) => Ok(UnifiedWebDispatch::Search {
@@ -1135,7 +1035,7 @@ fn classify_unified_web_args(args: &Value) -> Result<UnifiedWebDispatch> {
             extra: pick_search_extras(args),
         }),
         (false, None) => Err(anyhow!(
-            "unified_search action='web' requires either 'url' (to fetch a page) or 'query' (to search the web)."
+            "code_search action='web' requires either 'url' (to fetch a page) or 'query' (to search the web)."
         )),
     }
 }
@@ -1158,7 +1058,7 @@ fn merge_search_args(query: &str, extra: &Value) -> Value {
     Value::Object(map)
 }
 
-fn ensure_unified_search_grep_pattern(args: &Value) -> Result<()> {
+fn ensure_search_dispatch_grep_pattern(args: &Value) -> Result<()> {
     let pattern = args
         .get("pattern")
         .and_then(Value::as_str)
@@ -1167,7 +1067,7 @@ fn ensure_unified_search_grep_pattern(args: &Value) -> Result<()> {
 
     if pattern.is_empty() {
         bail!(
-            "unified_search action='grep' requires a non-empty pattern. Use unified_file action='read' to read file contents, or provide specific text/regex to search for."
+            "code_search action='grep' requires a non-empty pattern. Use exec_command.cmd shell inspection to read file contents, or provide specific text/regex to search for."
         );
     }
 
@@ -1555,9 +1455,9 @@ mod unified_action_error_tests {
         build_exec_output_preview, build_exec_response, build_head_tail_preview,
         cargo_selector_error_diagnostics, cargo_test_failure_diagnostics, cargo_test_rerun_hint,
         clamp_inspect_lines, clamp_max_matches, classify_unified_web_args,
-        ensure_unified_search_grep_pattern, extract_run_session_id_from_read_file_error,
+        ensure_search_dispatch_grep_pattern, extract_run_session_id_from_read_file_error,
         extract_run_session_id_from_tool_output_path, filter_lines, merge_search_args,
-        missing_unified_exec_action_error, missing_unified_search_action_error,
+        missing_command_session_action_error, missing_search_dispatch_action_error,
         resolve_exec_run_session_id, summarized_arg_keys,
     };
     use crate::tools::types::VTCodeExecSession;
@@ -1572,30 +1472,30 @@ mod unified_action_error_tests {
     }
 
     #[test]
-    fn unified_exec_missing_action_error_includes_received_keys() {
-        let err = missing_unified_exec_action_error(&json!({
+    fn exec_command_missing_action_error_includes_received_keys() {
+        let err = missing_command_session_action_error(&json!({
             "foo": "bar",
             "session_id": "123"
         }));
         let text = err.to_string();
-        assert!(text.contains("Missing unified_exec action"));
+        assert!(text.contains("Missing command session action"));
         assert!(text.contains("foo"));
         assert!(text.contains("session_id"));
     }
 
     #[test]
-    fn unified_search_missing_action_error_includes_received_keys() {
-        let err = missing_unified_search_action_error(&json!({
+    fn code_search_missing_action_error_includes_received_keys() {
+        let err = missing_search_dispatch_action_error(&json!({
             "unexpected": true
         }));
         let text = err.to_string();
-        assert!(text.contains("Missing unified_search action"));
+        assert!(text.contains("Missing search action"));
         assert!(text.contains("unexpected"));
     }
 
     #[test]
-    fn unified_search_grep_rejects_empty_patterns() {
-        let err = ensure_unified_search_grep_pattern(&json!({
+    fn code_search_grep_rejects_empty_patterns() {
+        let err = ensure_search_dispatch_grep_pattern(&json!({
             "action": "grep",
             "pattern": "   ",
             "path": "README.md"
@@ -1604,12 +1504,12 @@ mod unified_action_error_tests {
 
         let text = err.to_string();
         assert!(text.contains("requires a non-empty pattern"));
-        assert!(text.contains("unified_file"));
+        assert!(text.contains("exec_command.cmd"));
     }
 
     #[test]
-    fn unified_search_grep_accepts_non_empty_patterns() {
-        ensure_unified_search_grep_pattern(&json!({
+    fn code_search_grep_accepts_non_empty_patterns() {
+        ensure_search_dispatch_grep_pattern(&json!({
             "action": "grep",
             "pattern": "VT Code",
             "path": "README.md"
@@ -1726,7 +1626,7 @@ mod unified_action_error_tests {
 
     #[test]
     fn extracts_run_session_id_from_read_file_error() {
-        let error = "Use unified_exec with session_id=\"run-zz9\" instead of read_file.";
+        let error = "Use exec_command with session_id=\"run-zz9\" instead of read_file.";
         assert_eq!(
             extract_run_session_id_from_read_file_error(error),
             Some("run-zz9".to_string())

@@ -725,7 +725,7 @@ mod tests {
                 "id": "mcp_1",
                 "call_id": "call_mcp_1",
                 "server_label": "workspace",
-                "name": "read_file",
+                "name": "exec_command",
                 "arguments": "{\"path\":\"src/main.rs\"}",
                 "status": "in_progress"
             }

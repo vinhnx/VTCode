@@ -74,7 +74,7 @@ fn collect_inline_output(
 fn filter_copilot_tools_keeps_only_allowlisted_names() {
     let tools = Arc::new(vec![
         ToolDefinition::function(
-            "unified_search".to_string(),
+            "code_search".to_string(),
             "Search".to_string(),
             json!({"type": "object"}),
         ),
@@ -85,7 +85,7 @@ fn filter_copilot_tools_keeps_only_allowlisted_names() {
         ),
     ]);
 
-    let filtered = filter_copilot_tools(Some(&tools), &["unified_search".to_string()]);
+    let filtered = filter_copilot_tools(Some(&tools), &["code_search".to_string()]);
     let names: Vec<_> = filtered
         .iter()
         .filter_map(|tool| {
@@ -95,7 +95,7 @@ fn filter_copilot_tools_keeps_only_allowlisted_names() {
         })
         .collect();
 
-    assert_eq!(names, vec!["unified_search"]);
+    assert_eq!(names, vec!["code_search"]);
 }
 
 #[test]
@@ -207,13 +207,13 @@ fn interrupted_builtin_permission_becomes_interactive_denial() {
 
 #[test]
 fn interrupted_tool_permission_returns_failure_response() {
-    let response = denied_tool_response("unified_exec", "permission request interrupted");
+    let response = denied_tool_response("exec_command", "permission request interrupted");
 
     assert_eq!(
         response,
         CopilotToolCallResponse::Failure(vtcode_core::copilot::CopilotToolCallFailure {
-            text_result_for_llm: "VT Code denied the tool `unified_exec`.".to_string(),
-            error: "tool 'unified_exec' permission request interrupted".to_string(),
+            text_result_for_llm: "VT Code denied the tool `exec_command`.".to_string(),
+            error: "tool 'exec_command' permission request interrupted".to_string(),
         })
     );
 }
@@ -645,7 +645,7 @@ async fn vtcode_tool_calls_render_transcript_output_via_shared_pipeline() {
         0,
     );
     let tools = Arc::new(vec![ToolDefinition::function(
-        "unified_exec".to_string(),
+        "exec_command".to_string(),
         "Run a VT Code command".to_string(),
         json!({"type": "object"}),
     )]);
@@ -683,7 +683,7 @@ async fn vtcode_tool_calls_render_transcript_output_via_shared_pipeline() {
             &mut renderer,
             vtcode_core::copilot::CopilotToolCallRequest {
                 tool_call_id: "call_1".to_string(),
-                tool_name: "unified_exec".to_string(),
+                tool_name: "exec_command".to_string(),
                 arguments: json!({
                     "action": "run",
                     "command": "cat sample.txt"

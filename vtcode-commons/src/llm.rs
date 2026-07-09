@@ -672,7 +672,7 @@ mod tests {
     fn parsed_arguments_accepts_trailing_characters() {
         let call = ToolCall::function(
             "call_read".to_string(),
-            "read_file".to_string(),
+            "exec_command".to_string(),
             r#"{"path":"src/main.rs"} trailing text"#.to_string(),
         );
 
@@ -686,7 +686,7 @@ mod tests {
     fn parsed_arguments_accepts_code_fenced_json() {
         let call = ToolCall::function(
             "call_read".to_string(),
-            "read_file".to_string(),
+            "exec_command".to_string(),
             "```json\n{\"path\":\"src/lib.rs\",\"limit\":25}\n```".to_string(),
         );
 
@@ -700,7 +700,7 @@ mod tests {
     fn parsed_arguments_recovers_truncated_json_missing_closing_brace() {
         let call = ToolCall::function(
             "call_search".to_string(),
-            "unified_search".to_string(),
+            "code_search".to_string(),
             r#"{"action": "structural", "pattern": "context", "path": ".", "lang": "rust""#
                 .to_string(),
         );
@@ -723,7 +723,7 @@ mod tests {
     fn parsed_arguments_rejects_incomplete_json() {
         let call = ToolCall::function(
             "call_read".to_string(),
-            "read_file".to_string(),
+            "exec_command".to_string(),
             r#"{"path":"src/main.rs","limit""#.to_string(),
         );
 
@@ -734,7 +734,7 @@ mod tests {
     fn parsed_arguments_recovers_truncated_minimax_markup() {
         let call = ToolCall::function(
             "call_search".to_string(),
-            "unified_search".to_string(),
+            "code_search".to_string(),
             "{\"action\": \"grep\", \"pattern\": \"persistent_memory\", \"path\": \"vtcode-core/src</parameter>\n<</invoke>\n</minimax:tool_call>".to_string(),
         );
 
@@ -756,13 +756,13 @@ mod tests {
         let call = ToolCall::function_with_namespace(
             "call_read".to_string(),
             Some("workspace".to_string()),
-            "read_file".to_string(),
+            "exec_command".to_string(),
             r#"{"path":"src/main.rs"}"#.to_string(),
         );
 
         let json = serde_json::to_value(&call).expect("tool call should serialize");
         assert_eq!(json["function"]["namespace"], "workspace");
-        assert_eq!(json["function"]["name"], "read_file");
+        assert_eq!(json["function"]["name"], "exec_command");
     }
 
     #[test]

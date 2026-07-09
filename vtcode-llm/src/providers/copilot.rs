@@ -673,14 +673,14 @@ mod tests {
                     "Running checks.".to_string(),
                     vec![ToolCall::function(
                         "call-1".to_string(),
-                        "unified_exec".to_string(),
+                        "exec_command".to_string(),
                         r#"{"cmd":"cargo check"}"#.to_string(),
                     )],
                 ),
                 Message::tool_response_with_origin(
                     "call-1".to_string(),
                     "cargo check completed successfully.".to_string(),
-                    "unified_exec".to_string(),
+                    "exec_command".to_string(),
                 ),
                 Message::user_with_parts(vec![
                     ContentPart::text("Tell me more.".to_string()),
@@ -696,10 +696,10 @@ mod tests {
 
         assert!(transcript.contains("Assistant:\nRunning checks."));
         assert!(transcript.contains("[VT Code tool call history]"));
-        assert!(transcript.contains("- unified_exec id=call-1 args={\"cmd\":\"cargo check\"}"));
+        assert!(transcript.contains("- exec_command id=call-1 args={\"cmd\":\"cargo check\"}"));
         assert!(transcript.contains("Tool:\n[VT Code tool result]"));
         assert!(transcript.contains("- tool_call_id: call-1"));
-        assert!(transcript.contains("- tool: unified_exec"));
+        assert!(transcript.contains("- tool: exec_command"));
         assert!(transcript.contains("cargo check completed successfully."));
         assert!(transcript.contains("User:\nTell me more."));
         assert!(transcript.contains("omitted 1 image input"));

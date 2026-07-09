@@ -17,7 +17,7 @@ async fn build_tool_permissions_context_propagates_skip_confirmations() {
 }
 
 #[test]
-fn low_signal_family_for_unified_search_normalizes_missing_default_path() {
+fn low_signal_family_for_search_dispatch_normalizes_missing_default_path() {
     // Same pattern + globs, different path forms => same key after normalization
     let first = low_signal_family_key(
         tool_names::UNIFIED_SEARCH,
@@ -32,7 +32,7 @@ fn low_signal_family_for_unified_search_normalizes_missing_default_path() {
 }
 
 #[test]
-fn low_signal_family_for_unified_search_includes_action_in_key() {
+fn low_signal_family_for_search_dispatch_includes_action_in_key() {
     let grep = low_signal_family_key(
         tool_names::UNIFIED_SEARCH,
         &json!({"action":"grep","pattern":"Result","path":"src"}),
@@ -64,7 +64,7 @@ fn low_signal_family_for_unified_search_includes_action_in_key() {
 }
 
 #[test]
-fn low_signal_family_for_unified_search_includes_pattern_in_grep_key() {
+fn low_signal_family_for_search_dispatch_includes_pattern_in_grep_key() {
     // Different patterns on the same path must produce different keys
     let todo = low_signal_family_key(
         tool_names::UNIFIED_SEARCH,
@@ -83,7 +83,7 @@ fn low_signal_family_for_unified_search_includes_pattern_in_grep_key() {
 }
 
 #[test]
-fn low_signal_family_for_unified_search_includes_pattern_in_structural_key() {
+fn low_signal_family_for_search_dispatch_includes_pattern_in_structural_key() {
     let unwrap = low_signal_family_key(
         tool_names::UNIFIED_SEARCH,
         &json!({"action":"structural","pattern":"$X.unwrap()","lang":"rust","path":"src"}),
@@ -101,14 +101,14 @@ fn low_signal_family_for_unified_search_includes_pattern_in_structural_key() {
 #[test]
 fn spool_chunk_read_path_detects_spooled_read_calls() {
     let args = json!({
-        "path": ".vtcode/context/tool_outputs/unified_exec_123.txt",
+        "path": ".vtcode/context/tool_outputs/command_session_123.txt",
         "offset": 41,
         "limit": 40
     });
     let path = spool_chunk_read_path(tool_names::READ_FILE, &args);
     assert_eq!(
         path,
-        Some(".vtcode/context/tool_outputs/unified_exec_123.txt")
+        Some(".vtcode/context/tool_outputs/command_session_123.txt")
     );
 }
 
@@ -219,12 +219,12 @@ fn shell_run_signature_normalizes_run_pty_command_and_args() {
     let signature = shell_run_signature(tool_names::RUN_PTY_CMD, &args);
     assert_eq!(
         signature,
-        Some("unified_exec::cargo check -p vtcode-core".to_string())
+        Some("command_session::cargo check -p vtcode-core".to_string())
     );
 }
 
 #[test]
-fn shell_run_signature_handles_unified_exec_run_action() {
+fn shell_run_signature_handles_command_session_run_action() {
     let args = json!({
         "action": "run",
         "command": ["cargo", "check", "-p", "vtcode-core"]
@@ -232,7 +232,7 @@ fn shell_run_signature_handles_unified_exec_run_action() {
     let signature = shell_run_signature(tool_names::UNIFIED_EXEC, &args);
     assert_eq!(
         signature,
-        Some("unified_exec::cargo check -p vtcode-core".to_string())
+        Some("command_session::cargo check -p vtcode-core".to_string())
     );
 }
 
@@ -257,7 +257,7 @@ fn shell_run_signature_normalizes_trivial_shell_quoting_differences() {
 }
 
 #[test]
-fn shell_run_signature_ignores_non_run_unified_exec_action() {
+fn shell_run_signature_ignores_non_run_command_session_action() {
     let args = json!({
         "action": "poll",
         "session_id": "run-123"

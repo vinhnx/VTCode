@@ -9,8 +9,8 @@ use serde_json::Value;
 
 pub(super) fn detect_textual_exec_tool_call(text: &str) -> Option<Value> {
     const FENCE_PREFIXES: [&str; 4] = [
-        "```tool:unified_exec",
-        "```unified_exec",
+        "```tool:command_session",
+        "```command_session",
         "```tool:run_pty_cmd",
         "```run_pty_cmd",
     ];
@@ -73,8 +73,8 @@ mod tests {
     use serde_json::json;
 
     #[test]
-    fn detects_unified_exec_fence() {
-        let text = "```tool:unified_exec\n{\"command\":\"pwd\"}\n```";
+    fn detects_command_session_fence() {
+        let text = "```tool:command_session\n{\"command\":\"pwd\"}\n```";
         assert_eq!(
             detect_textual_exec_tool_call(text),
             Some(json!({"command":"pwd"}))
@@ -92,7 +92,7 @@ mod tests {
 
     #[test]
     fn ignores_non_object_payloads() {
-        let text = "```unified_exec\n[\"pwd\"]\n```";
+        let text = "```command_session\n[\"pwd\"]\n```";
         assert!(detect_textual_exec_tool_call(text).is_none());
     }
 }

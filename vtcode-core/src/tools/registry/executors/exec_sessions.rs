@@ -105,7 +105,7 @@ impl ToolRegistry {
             .prepare_exec_run_request(
                 &args,
                 ExecRunBackendKind::Pipe,
-                "unified_exec run requires a 'command' value",
+                "exec_command run requires a 'command' value",
                 "Command cannot be empty",
             )
             .await?;
@@ -151,7 +151,7 @@ impl ToolRegistry {
         args: Value,
         progress_tool_name: &'static str,
     ) -> Result<Value> {
-        acquire_executor_rate_limit("unified_exec:write", 3.0)?;
+        acquire_executor_rate_limit("write_stdin:write", 3.0)?;
 
         let payload = exec_session_payload(&args, "command session write requires a JSON object")?;
         let session = self
@@ -184,17 +184,12 @@ impl ToolRegistry {
         .await
     }
 
-    pub(super) async fn execute_command_session_poll(&self, args: Value) -> Result<Value> {
-        self.execute_command_session_poll_internal(args, ExecSettlementMode::Manual)
-            .await
-    }
-
     pub(super) async fn execute_command_session_poll_internal(
         &self,
         args: Value,
         exec_settlement_mode: ExecSettlementMode,
     ) -> Result<Value> {
-        acquire_executor_rate_limit("unified_exec:poll", 4.0)?;
+        acquire_executor_rate_limit("write_stdin:poll", 4.0)?;
 
         let payload = exec_session_payload(&args, "command session read requires a JSON object")?;
         let session = self

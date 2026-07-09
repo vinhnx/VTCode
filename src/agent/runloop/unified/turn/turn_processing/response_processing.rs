@@ -686,7 +686,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn process_llm_response_rejects_textual_unified_exec_without_command() {
+    async fn process_llm_response_rejects_textual_exec_command_without_command() {
         let temp = tempfile::tempdir().expect("temp workspace");
         let tool_registry = vtcode_core::tools::ToolRegistry::new(temp.path().to_path_buf()).await;
         let response = LLMResponse {
@@ -721,7 +721,7 @@ mod tests {
             TurnProcessingResult::TextResponse { text, .. } => {
                 assert_eq!(text, "run()");
             }
-            _ => panic!("Expected textual invalid unified_exec to stay a text response"),
+            _ => panic!("Expected textual invalid exec_command to stay a text response"),
         }
     }
 
@@ -1030,7 +1030,7 @@ Open questions for alignment:
             content: Some("".to_string()),
             tool_calls: Some(vec![vtcode_core::llm::provider::ToolCall::function(
                 "call_1".to_string(),
-                "unified_search".to_string(),
+                "code_search".to_string(),
                 r#"{"action":"grep","pattern":"x"}"#.to_string(),
             )]),
             model: "test".to_string(),
@@ -1084,7 +1084,7 @@ Open questions for alignment:
     #[test]
     fn process_llm_response_keeps_textual_tool_request_as_text_when_tool_calls_disabled() {
         let response = LLMResponse {
-            content: Some("unified_search({\"action\":\"list\",\"path\":\"src\"})".to_string()),
+            content: Some("code_search({\"action\":\"outline\",\"path\":\"src\"})".to_string()),
             tool_calls: None,
             model: "test".to_string(),
             usage: None,
@@ -1115,7 +1115,7 @@ Open questions for alignment:
             TurnProcessingResult::TextResponse { text, .. } => {
                 assert_eq!(
                     text,
-                    "unified_search({\"action\":\"list\",\"path\":\"src\"})"
+                    "code_search({\"action\":\"outline\",\"path\":\"src\"})"
                 );
             }
             _ => panic!("Expected text response when tool calls are disabled"),
@@ -1128,7 +1128,7 @@ Open questions for alignment:
             content: Some("Final synthesis only.".to_string()),
             tool_calls: Some(vec![vtcode_core::llm::provider::ToolCall::function(
                 "call_1".to_string(),
-                "unified_search".to_string(),
+                "code_search".to_string(),
                 r#"{"action":"list","path":"src"}"#.to_string(),
             )]),
             model: "test".to_string(),

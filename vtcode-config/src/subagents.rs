@@ -643,7 +643,7 @@ pub fn builtin_primary_build_agent() -> SubagentSpec {
         warnings: Vec::new(),
         tool_policy_overrides: {
             let mut m = BTreeMap::new();
-            m.insert("unified_exec".to_string(), ToolPolicy::Allow);
+            m.insert("exec_command".to_string(), ToolPolicy::Allow);
             m
         },
     }
@@ -676,7 +676,7 @@ pub fn builtin_primary_auto_agent() -> SubagentSpec {
         warnings: Vec::new(),
         tool_policy_overrides: {
             let mut m = BTreeMap::new();
-            m.insert("unified_exec".to_string(), ToolPolicy::Allow);
+            m.insert("exec_command".to_string(), ToolPolicy::Allow);
             m
         },
     }
@@ -742,8 +742,8 @@ pub fn builtin_primary_duck_agent() -> SubagentSpec {
 
 fn builtin_readonly_tool_ids() -> Vec<String> {
     vec![
-        tools::UNIFIED_SEARCH.to_string(),
-        tools::UNIFIED_FILE.to_string(),
+        tools::CODE_SEARCH.to_string(),
+        tools::EXEC_COMMAND.to_string(),
     ]
 }
 
@@ -1155,12 +1155,10 @@ fn normalize_subagent_tools(tools: Vec<String>) -> Vec<String> {
 
 fn normalize_subagent_tool_name(tool: &str) -> &'static [&'static str] {
     match tool.trim().to_ascii_lowercase().as_str() {
-        "read" => &[tools::READ_FILE],
-        "write" => &[tools::WRITE_FILE],
-        "edit" | "multiedit" | "multi_edit" | "multi-edit" => &[tools::EDIT_FILE],
-        "grep" | "grep_file" | "grepfile" => &[tools::UNIFIED_SEARCH],
-        "glob" | "list" | "list_files" | "listfiles" => &[tools::LIST_FILES],
-        "bash" | "shell" | "command" => &[tools::UNIFIED_EXEC],
+        "read" | "grep" | "grep_file" | "grepfile" | "glob" | "list" | "list_files"
+        | "listfiles" => &[tools::CODE_SEARCH],
+        "write" | "edit" | "multiedit" | "multi_edit" | "multi-edit" => &[tools::APPLY_PATCH],
+        "bash" | "shell" | "command" => &[tools::EXEC_COMMAND],
         "patch" | "applypatch" | "apply_patch" => &[tools::APPLY_PATCH],
         "agent" | "task" => &[tools::SPAWN_AGENT],
         "askuserquestion" | "ask_user_question" | "requestuserinput" | "request_user_input" => {
@@ -1176,11 +1174,12 @@ fn is_mutating_tool_name(tool: &str) -> bool {
         || tool == "shell"
         || tool == "command"
         || tool == "write"
+        || tool == tools::EXEC_COMMAND
+        || tool == tools::APPLY_PATCH
         || tool == tools::UNIFIED_EXEC
         || tool == tools::EDIT_FILE
         || tool == tools::WRITE_FILE
         || tool == tools::UNIFIED_FILE
-        || tool == tools::APPLY_PATCH
         || tool == tools::CREATE_FILE
         || tool == tools::DELETE_FILE
         || tool == tools::MOVE_FILE
@@ -1222,17 +1221,12 @@ fn is_legacy_tool_name(name: &str) -> bool {
             | "delete_file"
             | "move_file"
             | "copy_file"
-            | "apply_patch"
             | "search_replace"
             | "file_op"
             | "grep_file"
             | "list_files"
-            | "exec_command"
             | "run_pty_cmd"
             | "execute_code"
-            | "unified_file"
-            | "unified_exec"
-            | "unified_search"
     )
 }
 
@@ -1758,10 +1752,10 @@ color: blue
 reasoning_effort: high
 permissions:
   default: ask
-  allow: [read_file]
-  ask: [unified_exec]
-  auto: [unified_search]
-  deny: [write_file]
+  allow: [code_search]
+  ask: [exec_command]
+  auto: [code_search]
+  deny: [apply_patch]
 skills: [rust, repo]
 mcpServers:
   - filesystem
@@ -1787,19 +1781,16 @@ Primary prompt."#,
         assert_eq!(
             spec.tools,
             Some(vec![
-                tools::READ_FILE.to_string(),
-                tools::UNIFIED_EXEC.to_string(),
+                tools::CODE_SEARCH.to_string(),
+                tools::EXEC_COMMAND.to_string(),
             ])
         );
-        assert_eq!(spec.disallowed_tools, vec![tools::WRITE_FILE.to_string()]);
+        assert_eq!(spec.disallowed_tools, vec![tools::APPLY_PATCH.to_string()]);
         assert_eq!(spec.permissions.default, PermissionDefault::Ask);
-        assert_eq!(spec.permissions.allow, vec![tools::READ_FILE.to_string()]);
-        assert_eq!(spec.permissions.ask, vec![tools::UNIFIED_EXEC.to_string()]);
-        assert_eq!(
-            spec.permissions.auto,
-            vec![tools::UNIFIED_SEARCH.to_string()]
-        );
-        assert_eq!(spec.permissions.deny, vec![tools::WRITE_FILE.to_string()]);
+        assert_eq!(spec.permissions.allow, vec![tools::CODE_SEARCH.to_string()]);
+        assert_eq!(spec.permissions.ask, vec![tools::EXEC_COMMAND.to_string()]);
+        assert_eq!(spec.permissions.auto, vec![tools::CODE_SEARCH.to_string()]);
+        assert_eq!(spec.permissions.deny, vec![tools::APPLY_PATCH.to_string()]);
         assert_eq!(spec.model.as_deref(), Some("gpt-5.4"));
         assert_eq!(spec.reasoning_effort, Some(ReasoningEffortLevel::High));
         assert_eq!(spec.skills, vec!["rust".to_string(), "repo".to_string()]);
@@ -1814,11 +1805,7 @@ Primary prompt."#,
         );
         assert_eq!(spec.mode, AgentMode::Primary);
         assert!(spec.hooks.is_some());
-        // Legacy tool names in permission rules generate warnings
-        assert!(spec.warnings.iter().any(|w| w.contains("read_file")));
-        assert!(spec.warnings.iter().any(|w| w.contains("unified_exec")));
-        assert!(spec.warnings.iter().any(|w| w.contains("unified_search")));
-        assert!(spec.warnings.iter().any(|w| w.contains("write_file")));
+        assert!(spec.warnings.is_empty());
         Ok(())
     }
 
@@ -1903,8 +1890,8 @@ Prompt."#,
 description = "Baseline primary"
 prompt = "Baseline prompt"
 mode = "primary"
-tools = ["unified_search", "unified_exec"]
-disallowed_tools = ["unified_exec"]
+tools = ["code_search", "exec_command"]
+disallowed_tools = ["exec_command"]
 permissions = { default = "allow" }
 model = "gpt-5.4"
 reasoning_effort = "medium"
@@ -1916,11 +1903,11 @@ reasoning_effort = "medium"
         assert_eq!(
             spec.tools,
             Some(vec![
-                tools::UNIFIED_SEARCH.to_string(),
-                tools::UNIFIED_EXEC.to_string(),
+                tools::CODE_SEARCH.to_string(),
+                tools::EXEC_COMMAND.to_string(),
             ])
         );
-        assert_eq!(spec.disallowed_tools, vec![tools::UNIFIED_EXEC.to_string()]);
+        assert_eq!(spec.disallowed_tools, vec![tools::EXEC_COMMAND.to_string()]);
         assert_eq!(spec.permissions.default, PermissionDefault::Allow);
         assert!(spec.permissions.allow.is_empty());
         assert!(spec.permissions.ask.is_empty());
@@ -1948,7 +1935,7 @@ model: sonnet
 color: blue
 permissions:
   default: deny
-  allow: [read_file, unified_search, list_files]
+  allow: [code_search]
 skills: [rust]
 memory: project
 background: true
@@ -1965,15 +1952,8 @@ Review the target changes."#,
         assert_eq!(spec.description, "Review code");
         assert_eq!(spec.model.as_deref(), Some("sonnet"));
         assert_eq!(spec.color.as_deref(), Some("blue"));
-        assert_eq!(
-            spec.tools,
-            Some(vec![
-                tools::READ_FILE.to_string(),
-                tools::UNIFIED_SEARCH.to_string(),
-                tools::LIST_FILES.to_string(),
-            ])
-        );
-        assert_eq!(spec.disallowed_tools, vec![tools::WRITE_FILE.to_string()]);
+        assert_eq!(spec.tools, Some(vec![tools::CODE_SEARCH.to_string()]));
+        assert_eq!(spec.disallowed_tools, vec![tools::APPLY_PATCH.to_string()]);
         assert!(spec.background);
         assert_eq!(spec.mode, AgentMode::Primary);
         assert_eq!(spec.max_turns, Some(7));
@@ -2002,12 +1982,9 @@ Debug the issue."#,
         assert_eq!(
             spec.tools,
             Some(vec![
-                tools::READ_FILE.to_string(),
-                tools::UNIFIED_EXEC.to_string(),
-                tools::EDIT_FILE.to_string(),
-                tools::WRITE_FILE.to_string(),
-                tools::LIST_FILES.to_string(),
-                tools::UNIFIED_SEARCH.to_string(),
+                tools::CODE_SEARCH.to_string(),
+                tools::EXEC_COMMAND.to_string(),
+                tools::APPLY_PATCH.to_string(),
             ])
         );
         assert_eq!(spec.disallowed_tools, vec![tools::SPAWN_AGENT.to_string()]);
@@ -2032,7 +2009,7 @@ Run shell commands."#,
         )?;
 
         let spec = load_subagent_from_file(&path, SubagentSource::ProjectClaude)?;
-        assert_eq!(spec.tools, Some(vec![tools::UNIFIED_EXEC.to_string()]));
+        assert_eq!(spec.tools, Some(vec![tools::EXEC_COMMAND.to_string()]));
         assert!(!spec.is_read_only());
         Ok(())
     }
@@ -2205,9 +2182,9 @@ name: plugin-agent
 description: Plugin agent
 permissions:
   default: auto
-  allow: [read_file, "Read(*)", Bash, "Bash(*)", edit_file, "Edit(/src/**)"]
-  ask: [unified_exec]
-  auto: [unified_search, "Glob(**/*.rs)", Write, "Write(*)", apply_patch, "apply_patch(*)"]
+  allow: [code_search, "Read(*)", Bash, "Bash(*)", apply_patch, "Edit(/src/**)"]
+  ask: [exec_command]
+  auto: [code_search, "Glob(**/*.rs)", Write, "Write(*)", apply_patch, "apply_patch(*)"]
 ---
 Plugin prompt"#,
         )?;
@@ -2222,15 +2199,12 @@ Plugin prompt"#,
         assert_eq!(spec.permissions.default, PermissionDefault::Ask);
         assert_eq!(
             spec.permissions.allow,
-            vec![tools::READ_FILE.to_string(), "Read(*)".to_string()]
+            vec![tools::CODE_SEARCH.to_string(), "Read(*)".to_string()]
         );
-        assert_eq!(spec.permissions.ask, vec![tools::UNIFIED_EXEC.to_string()]);
+        assert_eq!(spec.permissions.ask, vec![tools::EXEC_COMMAND.to_string()]);
         assert_eq!(
             spec.permissions.auto,
-            vec![
-                tools::UNIFIED_SEARCH.to_string(),
-                "Glob(**/*.rs)".to_string(),
-            ]
+            vec![tools::CODE_SEARCH.to_string(), "Glob(**/*.rs)".to_string(),]
         );
         assert!(spec.warnings.iter().any(|warning| {
             warning == "plugin subagent permission overrides are restricted for safety"
@@ -2294,12 +2268,12 @@ Hook prompt"#,
     fn builtin_primary_agents_are_available() {
         let builtins = builtin_subagents();
         let expected_readonly_tools = vec![
-            tools::UNIFIED_SEARCH.to_string(),
-            tools::UNIFIED_FILE.to_string(),
+            tools::CODE_SEARCH.to_string(),
+            tools::EXEC_COMMAND.to_string(),
         ];
         let expected_primary_readonly_tools = vec![
-            tools::UNIFIED_SEARCH.to_string(),
-            tools::UNIFIED_FILE.to_string(),
+            tools::CODE_SEARCH.to_string(),
+            tools::EXEC_COMMAND.to_string(),
             tools::REQUEST_USER_INPUT.to_string(),
         ];
         let default = builtins
@@ -2322,7 +2296,7 @@ Hook prompt"#,
                 .tools
                 .as_deref()
                 .unwrap_or_default()
-                .contains(&tools::UNIFIED_EXEC.to_string())
+                .contains(&tools::APPLY_PATCH.to_string())
         );
         assert!(explorer.disallowed_tools.is_empty());
 
@@ -2349,7 +2323,7 @@ Hook prompt"#,
                         .tools
                         .as_deref()
                         .unwrap_or_default()
-                        .contains(&tools::UNIFIED_EXEC.to_string())
+                        .contains(&tools::APPLY_PATCH.to_string())
                 );
                 assert!(spec.disallowed_tools.is_empty());
                 assert_eq!(spec.permissions.allow, vec!["read".to_string()]);
@@ -2456,7 +2430,7 @@ description: Agent with legacy permission rules
 permissions:
   default: deny
   allow: [read_file, "write_file(/docs/**)"]
-  deny: [unified_exec]
+  deny: [run_pty_cmd]
 ---
 Legacy prompt."#,
         )?;
@@ -2464,7 +2438,7 @@ Legacy prompt."#,
         let spec = load_subagent_from_file(&path, SubagentSource::ProjectVtcode)?;
         assert!(spec.warnings.iter().any(|w| w.contains("read_file")));
         assert!(spec.warnings.iter().any(|w| w.contains("write_file")));
-        assert!(spec.warnings.iter().any(|w| w.contains("unified_exec")));
+        assert!(spec.warnings.iter().any(|w| w.contains("run_pty_cmd")));
         Ok(())
     }
 

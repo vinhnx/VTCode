@@ -267,7 +267,7 @@ mod tests {
 
         for _ in 0..5 {
             let _ = recorder
-                .record_approval("unified_exec", Some("Unified Exec"), true, None)
+                .record_approval("command_session", Some("Unified Exec"), true, None)
                 .await;
         }
 

@@ -159,7 +159,7 @@ async fn test_unicode_rendering_scenarios() {
     // Run the script and capture output
     let result = registry
         .execute_tool(
-            "unified_exec",
+            "exec_command",
             serde_json::json!({
                 "action": "run",
                 "command": "python3",

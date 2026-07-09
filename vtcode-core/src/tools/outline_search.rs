@@ -1,4 +1,4 @@
-//! `unified_search action=outline` -- wraps `ast-grep outline` to produce a
+//! `search_dispatch action=outline` -- wraps `ast-grep outline` to produce a
 //! cheap, token-efficient symbol map of a file or directory without requiring
 //! a structural pattern.
 //!
@@ -313,7 +313,7 @@ fn build_outline_command(
     command
 }
 
-/// Entry point invoked by `execute_unified_search` for `action=outline`.
+/// Entry point invoked by `execute_search_dispatch` for `action=outline`.
 pub async fn execute_outline_search(workspace_root: &Path, args: Value) -> Result<Value> {
     let mut request = OutlineRequest::from_args(&args)?;
     let ast_grep = AstGrepStatus::resolve_or_install()
@@ -538,7 +538,7 @@ struct OutlineFile {
 /// Source range as reported by ast-grep outline. All line/column values are
 /// zero-based in the raw stream. We expose the raw range plus a derived
 /// 1-based `lineRange` in the `full` view so callers can feed the lines
-/// straight to `unified_file` `read` (`offset_lines` is 1-based, inclusive).
+/// straight to `file_operation` `read` (`offset_lines` is 1-based, inclusive).
 ///
 /// Forward-compat tolerant: `#[serde(default)]` and no `deny_unknown_fields`,
 /// so unknown keys from future ast-grep versions are ignored instead of
@@ -625,7 +625,7 @@ fn range_value(range: &Option<OutlineRange>) -> Value {
 }
 
 /// Derived 1-based inclusive line range (`{start, end}`) suitable for
-/// `unified_file` `read` pagination: `offset_lines = lineRange.start`,
+/// `file_operation` `read` pagination: `offset_lines = lineRange.start`,
 /// `page_size_lines = lineRange.end - lineRange.start + 1`. Returns `null`
 /// when the raw range is absent. `saturating_add` guards against pathological
 /// inputs (and satisfies the `-D warnings` arithmetic lint).
@@ -721,7 +721,7 @@ fn full_item_record(item: &OutlineItem) -> Value {
 /// `full` view member record: includes `astKind`, the raw zero-based `range`,
 /// and the derived 1-based `lineRange` so the agent can locate a member
 /// (method/field/enum variant) precisely within its parent item and feed the
-/// lines straight to `unified_file` `read` pagination.
+/// lines straight to `file_operation` `read` pagination.
 fn full_member_record(member: &OutlineMember) -> Value {
     json!({
         "role": "member",

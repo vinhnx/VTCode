@@ -630,9 +630,9 @@ mod tests {
     use std::path::PathBuf;
 
     const REMOVED_MODEL_FACING_TOOL_NAMES: &[&str] = &[
-        "unified_exec",
-        "unified_file",
-        "unified_search",
+        "command_session",
+        "file_operation",
+        "search_dispatch",
         "list_files",
         "read_file",
         "write_file",

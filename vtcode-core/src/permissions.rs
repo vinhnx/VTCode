@@ -571,7 +571,7 @@ fn is_web_fetch_request(normalized_tool_name: &str, args: &Value) -> bool {
     normalized_tool_name == tools::WEB_FETCH
         || normalized_tool_name == tools::FETCH_URL
         || (normalized_tool_name == tools::UNIFIED_SEARCH
-            && tool_intent::unified_search_action(args).is_some_and(|action| action == "web"))
+            && tool_intent::search_dispatch_action(args).is_some_and(|action| action == "web"))
 }
 
 fn file_request_kind(
@@ -595,13 +595,13 @@ fn file_request_kind(
             Some(PermissionRequestKind::Edit { paths })
         }
         tools::UNIFIED_SEARCH => {
-            if tool_intent::unified_search_action(args).is_some_and(|action| action == "web") {
+            if tool_intent::search_dispatch_action(args).is_some_and(|action| action == "web") {
                 None
             } else {
                 Some(PermissionRequestKind::Read { paths })
             }
         }
-        tools::UNIFIED_FILE => match tool_intent::unified_file_action(args) {
+        tools::UNIFIED_FILE => match tool_intent::file_operation_action(args) {
             Some("read") => Some(PermissionRequestKind::Read { paths }),
             Some("edit") | Some("patch") => Some(PermissionRequestKind::Edit { paths }),
             Some(_) => Some(PermissionRequestKind::Write { paths }),
@@ -826,7 +826,7 @@ mod tests {
             ..PermissionsConfig::default()
         };
         let request = PermissionRequest {
-            exact_tool_name: "unified_exec".to_string(),
+            exact_tool_name: "command_session".to_string(),
             kind: PermissionRequestKind::Bash {
                 command: "cargo test -p vtcode".to_string(),
             },
@@ -891,7 +891,7 @@ mod tests {
         let request = build_permission_request(
             &workspace,
             &cwd,
-            "unified_file",
+            "file_operation",
             Some(&json!({
                 "action": "write",
                 "path": "../.vtcode/skills/example.md"
@@ -902,7 +902,7 @@ mod tests {
         let request = build_permission_request(
             &workspace,
             &cwd,
-            "unified_file",
+            "file_operation",
             Some(&json!({
                 "action": "write",
                 "path": "../.vtcode/settings.toml"
@@ -970,7 +970,7 @@ mod tests {
             protected_write_paths: Vec::new(),
         };
         let exec_request = PermissionRequest {
-            exact_tool_name: "unified_exec".to_string(),
+            exact_tool_name: "command_session".to_string(),
             kind: PermissionRequestKind::Bash {
                 command: "test".to_string(),
             },
@@ -1045,7 +1045,7 @@ mod tests {
     }
 
     #[test]
-    fn agent_read_permission_allows_unified_file_read_only() {
+    fn agent_read_permission_allows_file_operation_read_only() {
         let (_temp, workspace, cwd) = workspace_roots();
         let mut permissions = agent_permissions(PermissionDefault::Deny);
         permissions.allow = vec!["read".to_string()];
@@ -1144,9 +1144,9 @@ mod tests {
     #[test]
     fn global_allow_cannot_override_agent_deny_or_auto() {
         let (_temp, workspace, cwd) = workspace_roots();
-        let request = exact_tool_request("unified_exec");
+        let request = exact_tool_request("command_session");
         let global = PermissionsConfig {
-            allow: vec!["unified_exec".to_string()],
+            allow: vec!["command_session".to_string()],
             ..PermissionsConfig::default()
         };
 

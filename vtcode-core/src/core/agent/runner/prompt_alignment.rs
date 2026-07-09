@@ -147,7 +147,8 @@ pub fn validate_prompt_catalog_alignment(
             return Err(AlignmentError::PlanningWorkflowPromptPolicyMismatch { expected_line });
         }
 
-        const MUTATING_HINTS: &[&str] = &["apply_patch", "unified_file write", "unified_file edit"];
+        const MUTATING_HINTS: &[&str] =
+            &["apply_patch", "file_operation write", "file_operation edit"];
         for &hint in MUTATING_HINTS {
             if system_instruction.contains(hint) {
                 return Err(AlignmentError::MutatingToolInPlanningWorkflowPrompt {

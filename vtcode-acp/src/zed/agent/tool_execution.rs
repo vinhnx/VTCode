@@ -14,7 +14,6 @@ use std::sync::atomic::Ordering;
 use tokio::time::Instant;
 use vtcode_core::config::constants::tools;
 use vtcode_core::llm::provider::ToolCall as ProviderToolCall;
-use vtcode_core::tools::tool_intent;
 
 use super::super::types::{RunTerminalMode, SessionHandle, ToolCallResult};
 
@@ -374,12 +373,10 @@ impl ZedAgent {
     }
 }
 
-fn should_route_terminal_via_client(tool_name: &str, args: &Value) -> bool {
+fn should_route_terminal_via_client(tool_name: &str, _args: &Value) -> bool {
     match tool_name {
         tools::RUN_PTY_CMD => true,
-        tools::UNIFIED_EXEC => tool_intent::unified_exec_action(args)
-            .map(|action| action.eq_ignore_ascii_case("run"))
-            .unwrap_or(false),
+        tools::EXEC_COMMAND => true,
         _ => false,
     }
 }

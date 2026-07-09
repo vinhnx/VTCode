@@ -37,9 +37,10 @@ mod tests {
     #[test]
     fn definitions_for_preserve_core_local_tool_order() {
         let local_definitions = vec![
-            local_definition(tools::UNIFIED_FILE),
-            local_definition(tools::UNIFIED_EXEC),
-            local_definition(tools::UNIFIED_SEARCH),
+            local_definition(tools::EXEC_COMMAND),
+            local_definition(tools::WRITE_STDIN),
+            local_definition(tools::APPLY_PATCH),
+            local_definition(tools::CODE_SEARCH),
         ];
         let registry =
             AcpToolRegistry::new(Path::new("/tmp/workspace"), true, true, local_definitions);
@@ -54,9 +55,10 @@ mod tests {
             names,
             vec![
                 tools::READ_FILE.to_string(),
-                tools::UNIFIED_FILE.to_string(),
-                tools::UNIFIED_EXEC.to_string(),
-                tools::UNIFIED_SEARCH.to_string(),
+                tools::EXEC_COMMAND.to_string(),
+                tools::WRITE_STDIN.to_string(),
+                tools::APPLY_PATCH.to_string(),
+                tools::CODE_SEARCH.to_string(),
             ]
         );
     }
@@ -67,7 +69,7 @@ mod tests {
             Path::new("/tmp/workspace"),
             true,
             false,
-            vec![local_definition(tools::UNIFIED_SEARCH)],
+            vec![local_definition(tools::CODE_SEARCH)],
         );
 
         assert_eq!(
@@ -75,7 +77,7 @@ mod tests {
             Some(ToolDescriptor::Acp(SupportedTool::ReadFile))
         );
         assert_eq!(
-            registry.lookup(tools::UNIFIED_SEARCH),
+            registry.lookup(tools::CODE_SEARCH),
             Some(ToolDescriptor::Local)
         );
         assert_eq!(registry.lookup("unknown_tool"), None);

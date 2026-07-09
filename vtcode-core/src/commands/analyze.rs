@@ -41,8 +41,8 @@ pub async fn handle_analyze_command(
     println!("{}", style("1. Getting workspace structure...").dim());
     let root_files = registry
         .execute_tool(
-            tools::UNIFIED_SEARCH,
-            json!({"action": "list", "path": ".", "max_items": 50}),
+            tools::LIST_FILES,
+            json!({"mode": "list", "path": ".", "per_page": 50}),
         )
         .await;
 
@@ -73,8 +73,8 @@ pub async fn handle_analyze_command(
     for file in important_files {
         let check_file = registry
             .execute_tool(
-                tools::UNIFIED_SEARCH,
-                json!({"action": "list", "path": ".", "include_hidden": false}),
+                tools::LIST_FILES,
+                json!({"mode": "list", "path": ".", "include_hidden": false}),
             )
             .await;
         if let Ok(result) = check_file
@@ -124,8 +124,8 @@ pub async fn handle_analyze_command(
     for dir in src_dirs {
         let check_dir = registry
             .execute_tool(
-                tools::UNIFIED_SEARCH,
-                json!({"action": "list", "path": ".", "include_hidden": false}),
+                tools::LIST_FILES,
+                json!({"mode": "list", "path": ".", "include_hidden": false}),
             )
             .await;
         if let Ok(result) = check_dir

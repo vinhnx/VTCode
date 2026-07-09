@@ -8,7 +8,7 @@ use crate::config::constants::tools;
 use crate::config::mcp::McpAllowListConfig;
 use crate::tool_policy::{ToolExecutionDecision, ToolPolicy, ToolPolicyManager};
 use crate::tools::names::canonical_tool_name;
-use crate::tools::tool_intent::{unified_file_action_is, unified_search_action_is};
+use crate::tools::tool_intent::{file_operation_action_is, search_dispatch_action_is};
 
 use super::ToolPermissionDecision;
 use super::risk_scorer::{RiskLevel, ToolRiskContext, ToolRiskScorer, ToolSource, WorkspaceTrust};
@@ -76,12 +76,12 @@ impl ToolPolicyGateway {
         let mut args = args.clone();
         let canonical = canonical_tool_name(name);
         let normalized = canonical;
-        let unified_file_read =
-            normalized == tools::UNIFIED_FILE && unified_file_action_is(&args, "read");
-        let unified_search_list =
-            normalized == tools::UNIFIED_SEARCH && unified_search_action_is(&args, "list");
-        let unified_search_grep =
-            normalized == tools::UNIFIED_SEARCH && unified_search_action_is(&args, "grep");
+        let file_operation_read =
+            normalized == tools::UNIFIED_FILE && file_operation_action_is(&args, "read");
+        let search_dispatch_list =
+            normalized == tools::UNIFIED_SEARCH && search_dispatch_action_is(&args, "list");
+        let search_dispatch_grep =
+            normalized == tools::UNIFIED_SEARCH && search_dispatch_action_is(&args, "grep");
 
         if let Some(constraints) = self
             .tool_policy
@@ -110,7 +110,7 @@ impl ToolPolicyGateway {
             }
 
             match normalized {
-                n if n == tools::UNIFIED_SEARCH && unified_search_list => {
+                n if n == tools::UNIFIED_SEARCH && search_dispatch_list => {
                     if let Some(cap) = constraints.max_items_per_call {
                         let requested = obj
                             .get("max_items")
@@ -125,7 +125,7 @@ impl ToolPolicyGateway {
                         }
                     }
                 }
-                n if n == tools::UNIFIED_SEARCH && unified_search_grep => {
+                n if n == tools::UNIFIED_SEARCH && search_dispatch_grep => {
                     if let Some(cap) = constraints.max_results_per_call {
                         let requested = obj
                             .get("max_results")
@@ -140,7 +140,7 @@ impl ToolPolicyGateway {
                         }
                     }
                 }
-                n if n == tools::READ_FILE || unified_file_read => {
+                n if n == tools::READ_FILE || file_operation_read => {
                     if let Some(cap) = constraints.max_bytes_per_read {
                         let requested = obj
                             .get("max_bytes")
@@ -483,7 +483,7 @@ mod tests {
         // Web fetches must require HITL approval and never be auto-promoted to
         // Allow by the low-risk auto-approval heuristic.
         assert!(!ToolPolicyGateway::should_auto_approve_by_risk(
-            "unified_search:web"
+            "search_dispatch:web"
         ));
         assert!(!ToolPolicyGateway::should_auto_approve_by_risk(
             tools::WEB_FETCH
@@ -495,7 +495,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn apply_policy_constraints_caps_inferred_unified_search_list_calls() {
+    async fn apply_policy_constraints_caps_inferred_search_dispatch_list_calls() {
         let gateway = gateway_with_constraints(
             tools::UNIFIED_SEARCH,
             ToolConstraints {
@@ -524,7 +524,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn apply_policy_constraints_caps_inferred_unified_search_grep_calls() {
+    async fn apply_policy_constraints_caps_inferred_search_dispatch_grep_calls() {
         let gateway = gateway_with_constraints(
             tools::UNIFIED_SEARCH,
             ToolConstraints {

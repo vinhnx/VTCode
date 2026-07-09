@@ -151,8 +151,8 @@ fn session_approval_cache_keys<'a>(
     exact_shell_approval_target: Option<&'a shell_approval::ApprovalLearningTarget>,
 ) -> impl Iterator<Item = &'a str> {
     // The bare tool_name is only included when it differs from cache_key to
-    // avoid cross-action contamination (e.g. `unified_search` grep approval
-    // should not satisfy a `unified_search:web` call).
+    // avoid cross-action contamination (e.g. `search_dispatch` grep approval
+    // should not satisfy a `search_dispatch:web` call).
     let bare_if_different = if cache_key != tool_name {
         Some(tool_name)
     } else {
@@ -477,20 +477,20 @@ fn full_auto_unavailable_reason(tool_name: &str) -> String {
 /// Resolve the tool name used for policy evaluation, qualifying it with the
 /// requested action when the action changes the tool's risk profile.
 ///
-/// `unified_search` is a low-risk read-only tool for most actions, but its
+/// `search_dispatch` is a low-risk read-only tool for most actions, but its
 /// `web` action performs an outbound network fetch. Evaluating the bare name
 /// would let the read-only risk score auto-approve the fetch, bypassing HITL.
-/// Returning `unified_search:web` aligns the policy decision with the risk
+/// Returning `search_dispatch:web` aligns the policy decision with the risk
 /// scorer, which already classifies that name as a network operation.
 fn policy_evaluation_name<'a>(tool_name: &'a str, tool_args: Option<&Value>) -> Cow<'a, str> {
     use vtcode_core::config::constants::tools::UNIFIED_SEARCH;
-    use vtcode_core::tools::tool_intent::unified_search_action_is;
+    use vtcode_core::tools::tool_intent::search_dispatch_action_is;
 
     if tool_name == UNIFIED_SEARCH
         && let Some(args) = tool_args
-        && unified_search_action_is(args, "web")
+        && search_dispatch_action_is(args, "web")
     {
-        return Cow::Borrowed("unified_search:web");
+        return Cow::Borrowed("search_dispatch:web");
     }
 
     Cow::Borrowed(tool_name)
@@ -1080,9 +1080,9 @@ pub(crate) async fn ensure_tool_permission_with_call_id<S: UiSession + ?Sized>(
         .unwrap_or_else(|| tool_name.to_string());
 
     // Evaluate the tool policy against an action-qualified name so that
-    // network-accessing actions (e.g. `unified_search` with `action: "web"`)
+    // network-accessing actions (e.g. `search_dispatch` with `action: "web"`)
     // are not auto-approved as if they were the low-risk read-only tool. The
-    // risk scorer already models `unified_search:web` as a network operation;
+    // risk scorer already models `search_dispatch:web` as a network operation;
     // routing the policy check through this name keeps web fetches HITL-gated.
     let policy_eval_name = policy_evaluation_name(tool_name, tool_args);
     let policy_decision = tool_registry

@@ -70,7 +70,7 @@ async fn test_pty_functionality() {
     // Run an allow-listed command and verify output is captured
     let result = registry
         .execute_tool(
-            "run_pty_cmd",
+            "exec_command",
             json!({
                 "mode": "pty",
                 "command": "ls",
@@ -107,7 +107,7 @@ async fn test_pty_functionality_with_exit_code() {
     // Run an allow-listed command that exits with a non-zero code
     let result = registry
         .execute_tool(
-            "run_pty_cmd",
+            "exec_command",
             json!({
                 "mode": "pty",
                 "command": "ls",
@@ -140,7 +140,7 @@ async fn test_pty_run_returns_live_session_after_yield_window() {
 
     let start = registry
         .execute_tool(
-            "run_pty_cmd",
+            "exec_command",
             json!({
                 "mode": "pty",
                 "command": ["bash", "-lc", "sleep 0.75; echo done"],
@@ -177,7 +177,7 @@ async fn test_pty_shell_option_runs_through_requested_shell() {
 
     let result = registry
         .execute_tool(
-            "run_pty_cmd",
+            "exec_command",
             json!({
                 "mode": "pty",
                 "shell": "sh",
@@ -222,7 +222,7 @@ async fn test_pty_output_has_no_ansi_codes() {
 
     let result = registry
         .execute_tool(
-            "run_pty_cmd",
+            "exec_command",
             json!({
                 "mode": "pty",
                 "command": "ls",
@@ -259,7 +259,7 @@ async fn test_pty_command_not_found_handling() {
     // Run a command that definitely doesn't exist
     let result = registry
         .execute_tool(
-            "run_pty_cmd",
+            "exec_command",
             json!({
                 "mode": "pty",
                 "shell": "/bin/bash",
@@ -302,7 +302,7 @@ async fn test_read_pty_session_includes_command_context_fields() {
 
     let start = registry
         .execute_tool(
-            "run_pty_cmd",
+            "exec_command",
             json!({
                 "mode": "pty",
                 "command": "sleep 1",
@@ -355,7 +355,7 @@ async fn test_inspect_does_not_drain_session_output() {
 
     let start = registry
         .execute_tool(
-            "unified_exec",
+            "exec_command",
             json!({
                 "command": "bash -lc 'sleep 0.4; printf \"<alpha>\\n\"; sleep 1'",
                 "yield_time_ms": 0,
@@ -370,7 +370,7 @@ async fn test_inspect_does_not_drain_session_output() {
     for attempt in 0..8 {
         inspect = registry
             .execute_tool(
-                "unified_exec",
+                "exec_command",
                 json!({
                     "action": "inspect",
                     "session_id": sid.as_str(),
@@ -394,7 +394,7 @@ async fn test_inspect_does_not_drain_session_output() {
 
     let read = registry
         .execute_tool(
-            "unified_exec",
+            "exec_command",
             json!({
                 "action": "poll",
                 "session_id": sid.as_str(),
@@ -435,7 +435,7 @@ async fn test_exited_sessions_are_pruned_after_final_poll() {
 
     let start = registry
         .execute_tool(
-            "run_pty_cmd",
+            "exec_command",
             json!({
                 "mode": "pty",
                 "command": ["bash", "-lc", "sleep 0.4; echo done"],
@@ -493,12 +493,12 @@ async fn test_exited_sessions_are_pruned_after_final_poll() {
 
 #[cfg(unix)]
 #[tokio::test]
-async fn test_unified_exec_write_preserves_whitespace() {
+async fn test_exec_command_write_preserves_whitespace() {
     let (_temp, registry) = temp_registry().await;
 
     let start = registry
         .execute_tool(
-            "run_pty_cmd",
+            "exec_command",
             json!({
                 "mode": "pty",
                 "command": ["bash", "-lc", "IFS= read -r line; printf '<%s>' \"$line\""],

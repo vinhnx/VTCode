@@ -235,7 +235,7 @@ struct FileReadDedupCandidate {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum FileReadToolKind {
     ReadFile,
-    UnifiedFileRead,
+    FileOperationRead,
 }
 
 #[allow(clippy::cast_sign_loss)] // context_size is usize (non-negative), ratio is positive

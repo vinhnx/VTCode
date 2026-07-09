@@ -63,7 +63,7 @@ impl ToolRegistry {
 
     /// Find continuation metadata from a recent chunked file-read result for the same path.
     ///
-    /// Supports both `read_file` and `unified_file` (read action) history records.
+    /// Supports both `read_file` and `file_operation` (read action) history records.
     pub fn find_recent_read_file_spool_progress(
         &self,
         path: &str,

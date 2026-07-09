@@ -336,7 +336,7 @@ async fn build_universal_tools_matches_registry_agent_runner_snapshot() {
     );
     assert!(
         !registry_tool_names.contains(&tools::UNIFIED_EXEC.to_string()),
-        "AgentRunner default profile must not advertise unified_exec; got {registry_tool_names:?}"
+        "AgentRunner default profile must not advertise command_session; got {registry_tool_names:?}"
     );
     let mut expected = Vec::new();
     for tool in registry_tools {
@@ -619,7 +619,7 @@ async fn category_write_deny_filters_advertised_file_tool_conservatively() {
 }
 
 #[tokio::test]
-async fn webfetch_domain_deny_filters_representative_unified_search_tool() {
+async fn webfetch_domain_deny_filters_representative_search_dispatch_tool() {
     let temp = TempDir::new().expect("tempdir");
     let mut config = VTCodeConfig::default();
     config.permissions.deny = vec!["webfetch(domain:example.com)".to_string()];

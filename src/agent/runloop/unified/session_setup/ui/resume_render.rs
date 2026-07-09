@@ -201,7 +201,7 @@ pub(crate) fn build_structured_resume_lines(
 }
 
 fn format_resume_tool_header(tool_name: &str, tool_call_id: Option<&str>) -> String {
-    let tool_name = vtcode_core::tools::tool_intent::canonical_unified_exec_tool_name(tool_name)
+    let tool_name = vtcode_core::tools::tool_intent::canonical_command_session_tool_name(tool_name)
         .unwrap_or(tool_name);
     match tool_call_id {
         Some(id) if !id.trim().is_empty() && tool_name.trim().eq_ignore_ascii_case("tool") => {
@@ -234,7 +234,7 @@ fn format_tool_arguments_for_resume(arguments: &str) -> String {
     // Build a concise summary from key fields instead of showing raw JSON
     let mut summary_parts = Vec::new();
 
-    // For unified_exec: show command
+    // For command_session: show command
     if let Some(cmd) = obj
         .get("command")
         .or_else(|| obj.get("cmd"))
@@ -242,7 +242,7 @@ fn format_tool_arguments_for_resume(arguments: &str) -> String {
     {
         summary_parts.push(format!("command: {cmd}"));
     }
-    // For unified_file / task_tracker: show action and related fields
+    // For file_operation / task_tracker: show action and related fields
     if let Some(action) = obj.get("action").and_then(|v| v.as_str()) {
         summary_parts.push(format!("action: {action}"));
         if let Some(path) = obj.get("path").and_then(|v| v.as_str()) {
@@ -255,11 +255,11 @@ fn format_tool_arguments_for_resume(arguments: &str) -> String {
             summary_parts.push(format!("status: {status}"));
         }
     }
-    // For unified_search: show query
+    // For search_dispatch: show query
     if let Some(query) = obj.get("query").and_then(|v| v.as_str()) {
         summary_parts.push(format!("query: {query}"));
     }
-    // For unified_exec: show session_id if present
+    // For command_session: show session_id if present
     if let Some(sid) = obj.get("session_id").and_then(|v| v.as_str()) {
         summary_parts.push(format!("session: {sid}"));
     }

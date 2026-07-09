@@ -158,7 +158,7 @@ fn redact_json_value(value: &Value) -> Value {
 }
 
 fn canonical_tool_name(name: &str) -> String {
-    vtcode_core::tools::tool_intent::canonical_unified_exec_tool_name(name)
+    vtcode_core::tools::tool_intent::canonical_command_session_tool_name(name)
         .unwrap_or(name)
         .to_string()
 }

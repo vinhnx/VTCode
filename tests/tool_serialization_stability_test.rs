@@ -113,58 +113,71 @@ fn snapshot_current_tool_schemas() -> Result<BTreeMap<String, Value>> {
             }
         }
 
-        // If no tools were found in the registry, fall back to default schemas
+        // If no tools were found in the registry, fall back to current public schemas.
         if schemas.is_empty() {
-            // Add default schemas as fallback
             schemas.insert(
-                "unified_file".to_string(),
+                "exec_command".to_string(),
                 json!({
-                    "name": "unified_file",
-                    "description": "Unified file operations",
+                    "name": "exec_command",
+                    "description": "Execute a shell command",
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "action": {
+                            "cmd": {
                                 "type": "string",
-                                "description": "File action"
-                            },
-                            "path": {
-                                "type": "string",
-                                "description": "Path to the file to read"
+                                "description": "Shell command to run"
                             },
                         },
-                        "required": ["action"]
+                        "required": ["cmd"]
                     }
                 }),
             );
 
             schemas.insert(
-                "unified_exec".to_string(),
+                "write_stdin".to_string(),
                 json!({
-                    "name": "unified_exec",
-                    "description": "Unified execution and PTY operations",
+                    "name": "write_stdin",
+                    "description": "Send input to an active command session",
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "action": {
+                            "session_id": {
                                 "type": "string",
-                                "description": "Execution action"
+                                "description": "Session id"
                             },
-                            "command": {
+                            "chars": {
                                 "type": "string",
-                                "description": "Command to run"
+                                "description": "Input bytes"
                             }
                         },
-                        "required": ["action"]
+                        "required": ["session_id", "chars"]
                     }
                 }),
             );
 
             schemas.insert(
-                "unified_search".to_string(),
+                "apply_patch".to_string(),
                 json!({
-                    "name": "unified_search",
-                    "description": "Unified discovery and search",
+                    "name": "apply_patch",
+                    "description": "Apply a VT Code patch",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "input": {
+                                "type": "string",
+                                "description": "Patch body"
+                            }
+                        },
+                        "required": ["input"]
+                    }
+                }),
+            );
+
+            schemas.insert(
+                "code_search".to_string(),
+                json!({
+                    "name": "code_search",
+                    "description": "Semantic structural search and outline",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -265,9 +278,9 @@ mod tests {
     fn test_snapshot_generation() {
         let schemas = snapshot_current_tool_schemas().unwrap();
         assert!(!schemas.is_empty());
-        assert!(schemas.contains_key("unified_file"));
-        assert!(schemas.contains_key("unified_exec"));
-        assert!(schemas.contains_key("unified_search"));
+        assert!(schemas.contains_key("exec_command"));
+        assert!(schemas.contains_key("write_stdin"));
+        assert!(schemas.contains_key("apply_patch"));
     }
 
     /// # Property: the same schema produces the same stable digest every run.

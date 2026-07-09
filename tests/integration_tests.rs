@@ -20,8 +20,7 @@ mod integration_tests {
     }
 
     #[tokio::test]
-    #[ignore = "requires tool execution environment"]
-    async fn test_list_files_tool() {
+    async fn test_list_files_tool_is_not_public() {
         let temp_dir = TempDir::new().unwrap();
         std::env::set_current_dir(&temp_dir).unwrap();
 
@@ -36,16 +35,15 @@ mod integration_tests {
             "path": "."
         });
 
-        let result = registry.execute_tool_ref(tools::LIST_FILES, &args).await;
-        assert!(result.is_ok());
-
-        let response: serde_json::Value = result.unwrap();
-        assert!(response["files"].is_array());
-        assert!(response["files"].as_array().unwrap().len() >= 2); // test1.txt, test2.txt, subdir
+        let err = registry
+            .execute_public_tool_ref(tools::LIST_FILES, &args)
+            .await
+            .expect_err("list_files should not be exposed as a public tool");
+        assert!(err.to_string().contains("Unknown tool"));
     }
 
     #[tokio::test]
-    async fn test_read_file_tool() {
+    async fn test_unified_file_tool_is_not_public() {
         let temp_dir = TempDir::new().unwrap();
         std::env::set_current_dir(&temp_dir).unwrap();
 
@@ -56,14 +54,15 @@ mod integration_tests {
         registry.allow_all_tools().await.unwrap();
 
         let args = json!({
+            "action": "read",
             "path": "read_test.txt"
         });
 
-        let result = registry.execute_tool_ref("read_file", &args).await;
-        assert!(result.is_ok());
-
-        let response: serde_json::Value = result.unwrap();
-        assert_eq!(response["content"], test_content);
+        let err = registry
+            .execute_public_tool_ref(tools::UNIFIED_FILE, &args)
+            .await
+            .expect_err("file_operation_internal should not be exposed as a public tool");
+        assert!(err.to_string().contains("Unknown tool"));
     }
 
     #[tokio::test]
@@ -77,12 +76,11 @@ mod integration_tests {
 default_policy = "deny"
 
 [tools.policies]
-read_file = "allow"
-unified_file = "allow"
+exec_command = "allow"
+apply_patch = "allow"
 "#;
 
         std::fs::write(workspace.join("vtcode.toml"), config_contents).unwrap();
-        std::fs::write(workspace.join("sample.txt"), "hello world").unwrap();
 
         let registry = ToolRegistry::new(workspace.to_path_buf()).await;
         registry.initialize_async().await.unwrap();
@@ -94,20 +92,17 @@ unified_file = "allow"
             .unwrap();
 
         assert_eq!(
-            registry.get_tool_policy(tools::READ_FILE).await,
+            registry.get_tool_policy(tools::EXEC_COMMAND).await,
             RuntimeToolPolicy::Allow
         );
-
-        let args = json!({ "path": "sample.txt" });
-        let result = registry
-            .execute_tool_ref(tools::READ_FILE, &args)
-            .await
-            .unwrap();
-        assert!(result["success"].as_bool().unwrap_or(false));
+        assert_eq!(
+            registry.get_tool_policy(tools::APPLY_PATCH).await,
+            RuntimeToolPolicy::Allow
+        );
     }
 
     #[tokio::test]
-    async fn test_write_file_tool() {
+    async fn test_write_file_tool_is_not_public() {
         let temp_dir = TempDir::new().unwrap();
         std::env::set_current_dir(&temp_dir).unwrap();
 
@@ -121,21 +116,19 @@ unified_file = "allow"
             "create_dirs": false
         });
 
-        let result = registry.execute_tool_ref("write_file", &args).await;
-        assert!(result.is_ok());
+        let err = registry
+            .execute_public_tool_ref("write_file", &args)
+            .await
+            .expect_err("write_file should not be exposed as a public tool");
+        assert!(err.to_string().contains("Unknown tool"));
 
-        let _response: serde_json::Value = result.unwrap();
-
-        // Verify file was created
+        // Verify the rejected public call did not create a file.
         let file_path = temp_dir.path().join("write_test.txt");
-        assert!(file_path.exists());
-        let content = std::fs::read_to_string(file_path).unwrap();
-        assert_eq!(content, "Hello, World!");
+        assert!(!file_path.exists());
     }
 
     #[tokio::test]
-    #[ignore = "requires tool execution environment"]
-    async fn test_grep_file_tool() {
+    async fn test_grep_file_tool_is_not_public() {
         let temp_dir = TempDir::new().unwrap();
         std::env::set_current_dir(&temp_dir).unwrap();
 
@@ -157,12 +150,10 @@ fn calculate_sum(a: i32, b: i32) -> i32 {
             "type": "regex"
         });
 
-        let result = registry.execute_tool_ref(tools::GREP_FILE, &args).await;
-        assert!(result.is_ok());
-
-        let response: serde_json::Value = result.unwrap();
-        assert!(response["matches"].is_array());
-        let matches = response["matches"].as_array().unwrap();
-        assert!(!matches.is_empty());
+        let err = registry
+            .execute_public_tool_ref(tools::GREP_FILE, &args)
+            .await
+            .expect_err("grep_file should not be exposed as a public tool");
+        assert!(err.to_string().contains("Unknown tool"));
     }
 }

@@ -538,7 +538,7 @@ mod tests {
 
     fn pattern_for(command: &str) -> Option<LearnedPattern> {
         let args = json!({ "action": "run", "command": command });
-        learned_shell_pattern("unified_exec", Some(&args))
+        learned_shell_pattern("exec_command", Some(&args))
     }
 
     #[test]
@@ -653,7 +653,7 @@ mod tests {
             "action": "run",
             "command": "ls /Users/me/project/.agents/ 2>/dev/null; echo '---'; ls /Users/me/project/docs/ 2>/dev/null"
         });
-        let target = exact_shell_learning_target("unified_exec", Some(&args), "Run Command")
+        let target = exact_shell_learning_target("exec_command", Some(&args), "Run Command")
             .expect("target");
 
         assert_eq!(
@@ -724,7 +724,7 @@ mod tests {
 
         let recorder = ApprovalRecorder::new(temp_dir.clone());
         let target = approval_learning_target(
-            "unified_exec",
+            "exec_command",
             Some(&json!({"action":"run","command":"find src -type f"})),
             "default",
         );
@@ -754,7 +754,7 @@ mod tests {
 
         let recorder = ApprovalRecorder::new(temp_dir.clone());
         let target = approval_learning_target(
-            "unified_exec",
+            "exec_command",
             Some(&json!({"action":"run","command":"find src -type f"})),
             "default",
         );
@@ -796,7 +796,7 @@ mod tests {
             "find src -name foo",
         ] {
             let target = approval_learning_target(
-                "unified_exec",
+                "exec_command",
                 Some(&json!({"action":"run","command":command})),
                 "default",
             );
@@ -806,7 +806,7 @@ mod tests {
         // A *new* safe `find src ...` invocation should auto-approve via the
         // pattern key even though its exact form has never been seen before.
         let new_target = approval_learning_target(
-            "unified_exec",
+            "exec_command",
             Some(&json!({"action":"run","command":"find src -path '*runloop*'"})),
             "default",
         );
@@ -819,7 +819,7 @@ mod tests {
 
         // Destructive `find src -delete` MUST NOT inherit the pattern.
         let destructive = approval_learning_target(
-            "unified_exec",
+            "exec_command",
             Some(&json!({"action":"run","command":"find src -delete"})),
             "default",
         );

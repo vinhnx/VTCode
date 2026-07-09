@@ -12,7 +12,7 @@ pub(super) const DIRECT_FUNCTION_ALIASES: &[&str] = &[
 ];
 
 #[derive(Clone, Copy)]
-pub(super) struct UnifiedExecDefaults {
+pub(super) struct ExecCommandDefaults {
     pub(super) action: &'static str,
     pub(super) force_tty: Option<bool>,
 }
@@ -21,8 +21,8 @@ pub(super) fn canonicalize_tool_name(raw: &str) -> Option<String> {
     let normalized = canonicalize_normalized_name(raw)?;
     if normalized.is_empty() {
         None
-    } else if unified_exec_defaults_from_normalized_name(&normalized).is_some() {
-        Some(tools::UNIFIED_EXEC.to_string())
+    } else if exec_command_defaults_from_normalized_name(&normalized).is_some() {
+        Some(tools::EXEC_COMMAND.to_string())
     } else {
         Some(normalized)
     }
@@ -31,7 +31,7 @@ pub(super) fn canonicalize_tool_name(raw: &str) -> Option<String> {
 /// Canonicalize a tool call and optionally validate against known tools.
 ///
 /// When `validate` is true, the result is checked against the known-tool allowlist.
-/// When `validate` is false, only canonicalization and unified_exec defaults are applied.
+/// When `validate` is false, only canonicalisation and exec_command defaults are applied.
 pub(super) fn canonicalize_tool_result(
     name: String,
     mut args: Value,
@@ -39,11 +39,11 @@ pub(super) fn canonicalize_tool_result(
 ) -> Option<(String, Value)> {
     let normalized = canonicalize_normalized_name(&name)?;
     let canonical = canonicalize_tool_name(&name)?;
-    if canonical == tools::UNIFIED_EXEC
-        && let Some(defaults) = unified_exec_defaults_from_normalized_name(&normalized)
+    if canonical == tools::EXEC_COMMAND
+        && let Some(defaults) = exec_command_defaults_from_normalized_name(&normalized)
         && let Some(payload) = args.as_object_mut()
     {
-        apply_unified_exec_defaults(payload, defaults);
+        apply_exec_command_defaults(payload, defaults);
     }
     if validate {
         if is_known_textual_tool(&canonical) {
@@ -62,9 +62,9 @@ pub(crate) fn is_known_textual_tool(name: &str) -> bool {
         tools::WRITE_FILE
             | tools::EDIT_FILE
             | tools::READ_FILE
-            | tools::UNIFIED_FILE
-            | tools::UNIFIED_EXEC
-            | tools::UNIFIED_SEARCH
+            | tools::EXEC_COMMAND
+            | tools::WRITE_STDIN
+            | tools::CODE_SEARCH
             | tools::GREP_FILE
             | tools::LIST_FILES
             | tools::APPLY_PATCH
@@ -106,14 +106,14 @@ fn canonicalize_normalized_name(raw: &str) -> Option<String> {
     }
 }
 
-pub(super) fn unified_exec_defaults_for_name(raw: &str) -> Option<UnifiedExecDefaults> {
+pub(super) fn exec_command_defaults_for_name(raw: &str) -> Option<ExecCommandDefaults> {
     canonicalize_normalized_name(raw)
-        .and_then(|normalized| unified_exec_defaults_from_normalized_name(normalized.as_str()))
+        .and_then(|normalized| exec_command_defaults_from_normalized_name(normalized.as_str()))
 }
 
-pub(super) fn apply_unified_exec_defaults(
+pub(super) fn apply_exec_command_defaults(
     payload: &mut serde_json::Map<String, Value>,
-    defaults: UnifiedExecDefaults,
+    defaults: ExecCommandDefaults,
 ) {
     payload
         .entry("action".to_string())
@@ -125,36 +125,32 @@ pub(super) fn apply_unified_exec_defaults(
     }
 }
 
-fn unified_exec_defaults_from_normalized_name(normalized: &str) -> Option<UnifiedExecDefaults> {
+fn exec_command_defaults_from_normalized_name(normalized: &str) -> Option<ExecCommandDefaults> {
     match normalized {
-        tools::UNIFIED_EXEC => Some(UnifiedExecDefaults {
-            action: "run",
-            force_tty: None,
-        }),
         "run" | "runcmd" | "runcommand" | "terminalrun" | "terminalcmd" | "terminalcommand"
         | "command" | "shell" | "bash" | "container_exec" | "exec" | "exec_command" => {
-            Some(UnifiedExecDefaults {
+            Some(ExecCommandDefaults {
                 action: "run",
                 force_tty: None,
             })
         }
-        "run_pty_cmd" | "create_pty_session" => Some(UnifiedExecDefaults {
+        "run_pty_cmd" | "create_pty_session" => Some(ExecCommandDefaults {
             action: "run",
             force_tty: Some(true),
         }),
-        "send_pty_input" => Some(UnifiedExecDefaults {
+        "send_pty_input" => Some(ExecCommandDefaults {
             action: "write",
             force_tty: None,
         }),
-        "read_pty_session" => Some(UnifiedExecDefaults {
+        "read_pty_session" => Some(ExecCommandDefaults {
             action: "poll",
             force_tty: None,
         }),
-        "list_pty_sessions" => Some(UnifiedExecDefaults {
+        "list_pty_sessions" => Some(ExecCommandDefaults {
             action: "list",
             force_tty: None,
         }),
-        "close_pty_session" => Some(UnifiedExecDefaults {
+        "close_pty_session" => Some(ExecCommandDefaults {
             action: "close",
             force_tty: None,
         }),

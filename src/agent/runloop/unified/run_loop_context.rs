@@ -1439,14 +1439,17 @@ mod tests {
             1,
         );
 
-        assert!(!state.has_successful_readonly_signature("unified_file:ro:len10-fnv1234"));
+        assert!(!state.has_successful_readonly_signature("file_operation:ro:len10-fnv1234"));
         assert!(
-            state.record_successful_readonly_signature("unified_file:ro:len10-fnv1234".to_string())
+            state.record_successful_readonly_signature(
+                "file_operation:ro:len10-fnv1234".to_string()
+            )
         );
-        assert!(state.has_successful_readonly_signature("unified_file:ro:len10-fnv1234"));
+        assert!(state.has_successful_readonly_signature("file_operation:ro:len10-fnv1234"));
         assert!(
-            !state
-                .record_successful_readonly_signature("unified_file:ro:len10-fnv1234".to_string())
+            !state.record_successful_readonly_signature(
+                "file_operation:ro:len10-fnv1234".to_string()
+            )
         );
     }
 
@@ -1461,20 +1464,20 @@ mod tests {
         );
 
         assert_eq!(
-            state.record_shell_command_run("unified_exec::cargo check".to_string()),
+            state.record_shell_command_run("exec_command::cargo check".to_string()),
             1
         );
         assert_eq!(
-            state.record_shell_command_run("unified_exec::cargo check".to_string()),
+            state.record_shell_command_run("exec_command::cargo check".to_string()),
             2
         );
         assert_eq!(
-            state.record_shell_command_run("unified_exec::cargo test".to_string()),
+            state.record_shell_command_run("exec_command::cargo test".to_string()),
             1
         );
         assert_eq!(
             state.last_shell_command_signature.as_deref(),
-            Some("unified_exec::cargo test")
+            Some("exec_command::cargo test")
         );
     }
 
@@ -1488,7 +1491,7 @@ mod tests {
             1,
         );
 
-        state.record_shell_command_run("unified_exec::cargo check".to_string());
+        state.record_shell_command_run("exec_command::cargo check".to_string());
         state.reset_shell_command_run_streak();
         assert_eq!(state.consecutive_same_shell_command_runs, 0);
         assert!(state.last_shell_command_signature.is_none());
@@ -1505,15 +1508,15 @@ mod tests {
         );
 
         assert_eq!(
-            state.record_file_read_family_call("unified_file::read::src/lib.rs".to_string()),
+            state.record_file_read_family_call("apply_patch::read::src/lib.rs".to_string()),
             1
         );
         assert_eq!(
-            state.record_file_read_family_call("unified_file::read::src/lib.rs".to_string()),
+            state.record_file_read_family_call("apply_patch::read::src/lib.rs".to_string()),
             2
         );
         assert_eq!(
-            state.record_file_read_family_call("unified_file::read::src/main.rs".to_string()),
+            state.record_file_read_family_call("apply_patch::read::src/main.rs".to_string()),
             1
         );
 
@@ -1546,7 +1549,7 @@ mod tests {
     #[test]
     fn cross_turn_tracker_no_warning_on_first_turn() {
         let mut tracker = CrossTurnTracker::new();
-        let read_sigs = vec!["unified_file::read::src/main.rs".to_string()];
+        let read_sigs = vec!["apply_patch::read::src/main.rs".to_string()];
         let written = HashSet::new();
         assert!(tracker.seal_turn(&read_sigs, &written, None).is_none());
     }
@@ -1554,7 +1557,7 @@ mod tests {
     #[test]
     fn cross_turn_tracker_detects_repeated_turn() {
         let mut tracker = CrossTurnTracker::new();
-        let read_sigs = vec!["unified_file::read::src/main.rs".to_string()];
+        let read_sigs = vec!["apply_patch::read::src/main.rs".to_string()];
         let written = HashSet::new();
 
         // First turn: no warning
@@ -1569,8 +1572,8 @@ mod tests {
     #[test]
     fn cross_turn_tracker_no_false_positive_different_turns() {
         let mut tracker = CrossTurnTracker::new();
-        let read_sigs_1 = vec!["unified_file::read::src/main.rs".to_string()];
-        let read_sigs_2 = vec!["unified_file::read::src/lib.rs".to_string()];
+        let read_sigs_1 = vec!["apply_patch::read::src/main.rs".to_string()];
+        let read_sigs_2 = vec!["apply_patch::read::src/lib.rs".to_string()];
         let written = HashSet::new();
 
         assert!(tracker.seal_turn(&read_sigs_1, &written, None).is_none());
@@ -1584,9 +1587,9 @@ mod tests {
 
         // Use different signatures each turn to avoid cross-turn loop detection
         // and isolate the stuck (zero-mutation) detection.
-        let sigs_1 = vec!["unified_file::read::src/a.rs".to_string()];
-        let sigs_2 = vec!["unified_file::read::src/b.rs".to_string()];
-        let sigs_3 = vec!["unified_file::read::src/c.rs".to_string()];
+        let sigs_1 = vec!["apply_patch::read::src/a.rs".to_string()];
+        let sigs_2 = vec!["apply_patch::read::src/b.rs".to_string()];
+        let sigs_3 = vec!["apply_patch::read::src/c.rs".to_string()];
 
         assert!(tracker.seal_turn(&sigs_1, &written, None).is_none());
         assert!(tracker.seal_turn(&sigs_2, &written, None).is_none());
@@ -1603,20 +1606,20 @@ mod tests {
         let empty_written = HashSet::new();
 
         // Two read-only turns with different signatures (avoid cross-turn loop)
-        let sigs_a = vec!["unified_file::read::src/a.rs".to_string()];
-        let sigs_b = vec!["unified_file::read::src/b.rs".to_string()];
+        let sigs_a = vec!["apply_patch::read::src/a.rs".to_string()];
+        let sigs_b = vec!["apply_patch::read::src/b.rs".to_string()];
         assert!(tracker.seal_turn(&sigs_a, &empty_written, None).is_none());
         assert!(tracker.seal_turn(&sigs_b, &empty_written, None).is_none());
 
         // A mutating turn resets the counter
         let mut written = HashSet::new();
         written.insert("src/main.rs".to_string());
-        let sigs_c = vec!["unified_file::read::src/c.rs".to_string()];
+        let sigs_c = vec!["apply_patch::read::src/c.rs".to_string()];
         assert!(tracker.seal_turn(&sigs_c, &written, None).is_none());
 
         // Two more read-only turns: no stuck warning (counter was reset)
-        let sigs_d = vec!["unified_file::read::src/d.rs".to_string()];
-        let sigs_e = vec!["unified_file::read::src/e.rs".to_string()];
+        let sigs_d = vec!["apply_patch::read::src/d.rs".to_string()];
+        let sigs_e = vec!["apply_patch::read::src/e.rs".to_string()];
         assert!(tracker.seal_turn(&sigs_d, &empty_written, None).is_none());
         assert!(tracker.seal_turn(&sigs_e, &empty_written, None).is_none());
     }
@@ -1647,12 +1650,12 @@ mod tests {
 
         // Same signatures in different order should produce same fingerprint
         let sigs_a = vec![
-            "unified_file::read::src/main.rs".to_string(),
-            "unified_search::grep::fn".to_string(),
+            "apply_patch::read::src/main.rs".to_string(),
+            "code_search::grep::fn".to_string(),
         ];
         let sigs_b = vec![
-            "unified_search::grep::fn".to_string(),
-            "unified_file::read::src/main.rs".to_string(),
+            "code_search::grep::fn".to_string(),
+            "apply_patch::read::src/main.rs".to_string(),
         ];
 
         assert!(tracker.seal_turn(&sigs_a, &written, None).is_none());

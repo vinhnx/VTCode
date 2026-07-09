@@ -373,7 +373,7 @@ pub(crate) fn signature_key_for(name: &str, args: &serde_json::Value) -> String 
 
 /// Generate a read-normalized signature key for cross-turn dedup.
 ///
-/// For read-only tools (`unified_file` with `read` action, `unified_search`,
+/// For read-only tools (`file_operation` with `read` action, `search_dispatch`,
 /// `read_file`, `grep_file`, `list_files`), pagination and read-offset fields
 /// are stripped before hashing. This ensures that re-reading the same file with
 /// a different `offset`/`limit` (a common model behavior) is recognized as the
@@ -520,13 +520,13 @@ fn path_targets_plan_artifact(path: &str) -> bool {
 fn is_plan_artifact_write(name: &str, args: &serde_json::Value) -> bool {
     use vtcode_core::config::constants::tools as tool_names;
     use vtcode_core::tools::names::canonical_tool_name;
-    use vtcode_core::tools::tool_intent::unified_file_action;
+    use vtcode_core::tools::tool_intent::file_operation_action;
 
     let canonical = canonical_tool_name(name);
     match canonical {
         tool_names::TASK_TRACKER => true,
         tool_names::UNIFIED_FILE => {
-            if !unified_file_action(args)
+            if !file_operation_action(args)
                 .map(|action| action.eq_ignore_ascii_case("read"))
                 .unwrap_or(false)
             {
@@ -587,7 +587,7 @@ pub(crate) fn update_repetition_tracker(
     // Update NL2Repo-Bench metrics based on tool intent.
     //
     // IMPORTANT: Check execution tools FIRST. `classify_tool_intent` marks
-    // `unified_exec(action=run)` as `mutating: true` because shell commands *can*
+    // `command_session(action=run)` as `mutating: true` because shell commands *can*
     // mutate state, but for the Edit-Test heuristic, any execution/verification
     // step (cargo check, cargo test, etc.) should RESET the mutation counter,
     // not increment it.
@@ -717,7 +717,7 @@ mod tests {
                 "first".into(),
                 vec![uni::ToolCall::function(
                     "call_1".into(),
-                    "unified_file".into(),
+                    "file_operation".into(),
                     "{}".into(),
                 )],
             ),
@@ -726,7 +726,7 @@ mod tests {
                 "second".into(),
                 vec![uni::ToolCall::function(
                     "call_1".into(),
-                    "unified_search".into(),
+                    "search_dispatch".into(),
                     "{}".into(),
                 )],
             ),
@@ -735,7 +735,7 @@ mod tests {
         push_tool_response(
             &mut history,
             "call_1".to_string(),
-            Some("unified_search"),
+            Some("search_dispatch"),
             "{\"output\":\"second\"}".to_string(),
         );
 
@@ -766,7 +766,7 @@ mod tests {
                 String::new(),
                 vec![uni::ToolCall::function(
                     "call_0".into(),
-                    "unified_file".into(),
+                    "file_operation".into(),
                     "{}".into(),
                 )],
             ),
@@ -852,11 +852,11 @@ mod tests {
     #[test]
     fn reset_after_balancer_recovery_clears_attempts_and_counters() {
         let mut tracker = LoopTracker::new();
-        tracker.record("unified_search:{\"action\":\"grep\"}".to_string());
-        tracker.record("unified_search:{\"action\":\"grep\"}".to_string());
+        tracker.record("search_dispatch:{\"action\":\"grep\"}".to_string());
+        tracker.record("search_dispatch:{\"action\":\"grep\"}".to_string());
         tracker.consecutive_mutations = 2;
         tracker.consecutive_navigations = 4;
-        tracker.record_low_signal("unified_search::grep::src".to_string());
+        tracker.record_low_signal("search_dispatch::grep::src".to_string());
         tracker.navigation_loop_recoveries = 3;
 
         tracker.reset_after_balancer_recovery();
@@ -1254,11 +1254,11 @@ mod tests {
     // --- read_normalized_signature_key tests ---
 
     #[test]
-    fn read_normalized_signature_key_normalizes_unified_file_read_offset() {
+    fn read_normalized_signature_key_normalizes_file_operation_read_offset() {
         let args_a = json!({"action": "read", "path": "src/lib.rs", "offset": 0, "limit": 100});
         let args_b = json!({"action": "read", "path": "src/lib.rs", "offset": 50, "limit": 200});
-        let key_a = read_normalized_signature_key("unified_file", &args_a);
-        let key_b = read_normalized_signature_key("unified_file", &args_b);
+        let key_a = read_normalized_signature_key("file_operation", &args_a);
+        let key_b = read_normalized_signature_key("file_operation", &args_b);
         assert_eq!(
             key_a, key_b,
             "same file read with different offset/limit should produce the same normalized key"
@@ -1269,8 +1269,8 @@ mod tests {
     fn read_normalized_signature_key_differentiates_different_paths() {
         let args_a = json!({"action": "read", "path": "src/lib.rs"});
         let args_b = json!({"action": "read", "path": "src/main.rs"});
-        let key_a = read_normalized_signature_key("unified_file", &args_a);
-        let key_b = read_normalized_signature_key("unified_file", &args_b);
+        let key_a = read_normalized_signature_key("file_operation", &args_a);
+        let key_b = read_normalized_signature_key("file_operation", &args_b);
         assert_ne!(key_a, key_b, "different paths must produce different keys");
     }
 
@@ -1278,8 +1278,8 @@ mod tests {
     fn read_normalized_signature_key_unifies_search_pagination() {
         let args_a = json!({"action": "grep", "pattern": "fn main", "path": "src", "page": 1});
         let args_b = json!({"action": "grep", "pattern": "fn main", "path": "src", "page": 2});
-        let key_a = read_normalized_signature_key("unified_search", &args_a);
-        let key_b = read_normalized_signature_key("unified_search", &args_b);
+        let key_a = read_normalized_signature_key("search_dispatch", &args_a);
+        let key_b = read_normalized_signature_key("search_dispatch", &args_b);
         assert_eq!(
             key_a, key_b,
             "same search with different page should produce the same normalized key"
@@ -1290,8 +1290,8 @@ mod tests {
     fn read_normalized_signature_key_preserves_mutation_for_write() {
         let args_a = json!({"path": "src/lib.rs", "content": "old"});
         let args_b = json!({"path": "src/lib.rs", "content": "new"});
-        let key_a = read_normalized_signature_key("unified_file", &args_a);
-        let key_b = read_normalized_signature_key("unified_file", &args_b);
+        let key_a = read_normalized_signature_key("file_operation", &args_a);
+        let key_b = read_normalized_signature_key("file_operation", &args_b);
         assert_ne!(key_a, key_b, "mutating writes must NOT be normalized away");
     }
 
@@ -1322,11 +1322,11 @@ mod tests {
 
         // Verify normalization: same file + different offset/limit → same key
         let key_a = read_normalized_signature_key(
-            "unified_file",
+            "file_operation",
             &json!({"action":"read","path":"src/lib.rs","offset":0,"limit":100}),
         );
         let key_b = read_normalized_signature_key(
-            "unified_file",
+            "file_operation",
             &json!({"action":"read","path":"src/lib.rs","offset":50,"limit":500}),
         );
         assert_eq!(
@@ -1336,7 +1336,7 @@ mod tests {
 
         // Verify: different file → different key
         let key_c = read_normalized_signature_key(
-            "unified_file",
+            "file_operation",
             &json!({"action":"read","path":"src/main.rs","offset":0,"limit":100}),
         );
         assert_ne!(
@@ -1346,11 +1346,11 @@ mod tests {
 
         // Verify: search pagination normalized away
         let s_key_a = read_normalized_signature_key(
-            "unified_search",
+            "search_dispatch",
             &json!({"action":"grep","pattern":"fn main","path":"src","page":1}),
         );
         let s_key_b = read_normalized_signature_key(
-            "unified_search",
+            "search_dispatch",
             &json!({"action":"grep","pattern":"fn main","path":"src","page":2}),
         );
         assert_eq!(
@@ -1360,11 +1360,11 @@ mod tests {
 
         // Verify: write NOT normalized
         let w_key_a = read_normalized_signature_key(
-            "unified_file",
+            "file_operation",
             &json!({"action":"write","path":"src/lib.rs","content":"old"}),
         );
         let w_key_b = read_normalized_signature_key(
-            "unified_file",
+            "file_operation",
             &json!({"action":"write","path":"src/lib.rs","content":"new"}),
         );
         assert_ne!(w_key_a, w_key_b, "writes must not be normalized away");
@@ -1375,7 +1375,7 @@ mod tests {
             "read".into(),
             vec![uni::ToolCall::function(
                 "tc_exact".into(),
-                "unified_file".into(),
+                "file_operation".into(),
                 serde_json::to_string(
                     &json!({"action":"read","path":"src/lib.rs","offset":0,"limit":100}),
                 )
@@ -1393,7 +1393,7 @@ mod tests {
             "read other".into(),
             vec![uni::ToolCall::function(
                 "tc_other".into(),
-                "unified_file".into(),
+                "file_operation".into(),
                 serde_json::to_string(&json!({"action":"read","path":"src/main.rs"})).unwrap(),
             )],
         ));
@@ -1414,7 +1414,7 @@ mod tests {
         // The guards.rs TTL cache (B3) handles this case.
         let result = find_duplicate_in_history(
             &history,
-            "unified_file",
+            "file_operation",
             &json!({"action":"read","path":"src/lib.rs","offset":0,"limit":500}),
         );
         // This is expected None — the function only returns when the Tool is

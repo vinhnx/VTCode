@@ -41,7 +41,7 @@ pub(crate) fn render_file_operation_indicator(
         name if name == tool_names::SEARCH_REPLACE => ("❋", "Search/replace in"),
         name if name == tool_names::DELETE_FILE => ("❋", "Deleting"),
         name if name == tool_names::UNIFIED_FILE => {
-            // Determine action from unified_file parameters
+            // Determine action from file_operation parameters
             let action = args
                 .get("action")
                 .and_then(Value::as_str)
@@ -114,7 +114,7 @@ pub(crate) fn is_file_modification_tool(tool_name: &str, args: &Value) -> bool {
             true
         }
         name if name == tool_names::UNIFIED_FILE => {
-            // Check if unified_file is doing a write operation
+            // Check if file_operation is doing a write operation
             let action = args
                 .get("action")
                 .and_then(Value::as_str)
@@ -442,7 +442,7 @@ pub(crate) fn describe_tool_action(tool_name: &str, args: &Value) -> (String, Ha
                 )
             }),
         actual_name if actual_name == tool_names::UNIFIED_EXEC => {
-            match tool_intent::unified_exec_action(args).unwrap_or("run") {
+            match tool_intent::command_session_action(args).unwrap_or("run") {
                 "run" => describe_shell_command(args)
                     .map(|(desc, used)| {
                         (
@@ -503,7 +503,7 @@ pub(crate) fn describe_tool_action(tool_name: &str, args: &Value) -> (String, Ha
                     HashSet::new(),
                 ),
                 _ => (
-                    format!("{}unified_exec", if is_mcp_tool { "MCP " } else { "" }),
+                    format!("{}command_session", if is_mcp_tool { "MCP " } else { "" }),
                     HashSet::new(),
                 ),
             }
@@ -727,7 +727,7 @@ mod tests {
     }
 
     #[test]
-    fn describe_tool_action_handles_unified_exec_run_command() {
+    fn describe_tool_action_handles_command_session_run_command() {
         let (description, used_keys) = describe_tool_action(
             tool_names::UNIFIED_EXEC,
             &json!({
@@ -757,7 +757,7 @@ mod tests {
     }
 
     #[test]
-    fn describe_tool_action_annotates_unified_file_skill_doc_reads_with_skill_name() {
+    fn describe_tool_action_annotates_file_operation_skill_doc_reads_with_skill_name() {
         let (description, used_keys) = describe_tool_action(
             tool_names::UNIFIED_FILE,
             &json!({

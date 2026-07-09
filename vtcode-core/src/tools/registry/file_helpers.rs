@@ -315,10 +315,21 @@ impl ToolRegistry {
     pub async fn grep_file(&self, args: Value) -> Result<Value> {
         let mut payload = args;
         if let Some(obj) = payload.as_object_mut() {
-            obj.entry("action".to_string())
-                .or_insert_with(|| json!("grep"));
+            let has_path = obj
+                .get("path")
+                .and_then(|value| value.as_str())
+                .map(str::trim)
+                .is_some_and(|path| !path.is_empty());
+            if !has_path {
+                obj.insert("path".to_string(), json!("."));
+            }
         }
-        self.execute_tool(tools::UNIFIED_SEARCH, payload).await
+
+        let input = serde_json::from_value(payload)?;
+        self.grep_file_manager()
+            .perform_search(input)
+            .await
+            .map(|result| json!(result))
     }
 
     pub fn last_grep_file_result(&self) -> Option<GrepSearchResult> {
@@ -327,7 +338,7 @@ impl ToolRegistry {
 
     pub async fn list_files(&self, args: Value) -> Result<Value> {
         // Dispatch directly to the underlying list implementation so a top-level
-        // `list_files` call can safely run alongside `unified_search` in the same batch.
+        // `list_files` call can safely run alongside `search_dispatch` in the same batch.
         let tool = self.inventory.file_ops_tool().clone();
         tool.execute(args).await
     }

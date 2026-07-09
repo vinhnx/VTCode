@@ -577,10 +577,10 @@ impl ToolRegistry {
             return false;
         }
 
-        if !crate::tools::tool_intent::unified_exec_action_in(args, &["poll", "continue"]) {
+        if !crate::tools::tool_intent::command_session_action_in(args, &["poll", "continue"]) {
             return false;
         }
-        if crate::tools::tool_intent::unified_exec_action_is(args, "continue")
+        if crate::tools::tool_intent::command_session_action_is(args, "continue")
             && crate::tools::command_args::interactive_input_text(args).is_some()
         {
             return false;
@@ -735,7 +735,7 @@ impl ToolRegistry {
             .resolve_public_tool(name)
             .map(|resolution| resolution.registration_name().to_string())
             .map_err(|error| anyhow!(error.to_string()))?;
-        let effective_args = execution_kernel::remap_public_unified_file_alias_args(
+        let effective_args = execution_kernel::remap_public_file_operation_alias_args(
             name,
             routed_name.as_str(),
             args,
@@ -1594,10 +1594,10 @@ impl ToolRegistry {
                     let _execution_guard = self.memory_pool.get_value();
                     let _string_guard = self.memory_pool.get_string();
                     let _vec_guard = self.memory_pool.get_vec();
-                    self.execute_unified_exec_internal(args, exec_settlement_mode)
+                    self.execute_command_session_internal(args, exec_settlement_mode)
                         .await
                 } else {
-                    self.execute_unified_exec_internal(args, exec_settlement_mode)
+                    self.execute_command_session_internal(args, exec_settlement_mode)
                         .await
                 }
             } else if let Some(registration) = self.inventory.registration_for(&tool_name) {
@@ -1736,13 +1736,13 @@ impl ToolRegistry {
                     if tool_name_owned == tools::UNIFIED_EXEC {
                         timeout_error.recovery_suggestions = vec![
                             Cow::Borrowed(
-                                "Use unified_exec with action='poll' to check command progress",
+                                "Use write_stdin with empty chars to poll command progress",
                             ),
                             Cow::Borrowed(
-                                "Use unified_exec with action='list' to find active sessions",
+                                "Use exec_command with a fresh command if the original session is stale",
                             ),
                             Cow::Borrowed(
-                                "Use unified_exec with action='close' if a stale session is still active",
+                                "Ask for manual cleanup if a stale session is still active",
                             ),
                         ];
                     }

@@ -420,8 +420,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_tool_registry_integration() {
-        use crate::config::constants::tools;
-
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let _cwd_guard = CwdGuard::new();
         std::env::set_current_dir(&temp_dir).expect("Failed to change dir");
@@ -432,18 +430,15 @@ mod tests {
             .await
             .expect("Failed to init registry");
 
-        // Test that we can execute basic tools
+        // Test that we can execute the hidden internal list-files route.
         let list_args = serde_json::json!({
-            "action": "list",
             "path": "."
         });
 
-        let result = registry
-            .execute_tool(tools::UNIFIED_SEARCH, list_args)
-            .await;
+        let result = registry.list_files(list_args).await;
         assert!(result.is_ok());
 
-        let response: serde_json::Value = result.expect("Failed to execute unified_search:list");
+        let response: serde_json::Value = result.expect("Failed to execute list_files");
         assert!(response.is_object() || response.is_array());
     }
 

@@ -18,7 +18,7 @@ pub(crate) fn read_file_path_arg(args: &Value) -> Option<&str> {
 pub(crate) fn is_read_file_style_call(canonical_tool_name: &str, args: &Value) -> bool {
     match canonical_tool_name {
         tool_names::READ_FILE => true,
-        tool_names::UNIFIED_FILE => tool_intent::unified_file_action(args)
+        tool_names::UNIFIED_FILE => tool_intent::file_operation_action(args)
             .unwrap_or("read")
             .eq_ignore_ascii_case("read"),
         _ => false,
@@ -92,29 +92,29 @@ mod tests {
     #[test]
     fn spool_chunk_read_path_matches_read_file_spool_reads() {
         let args = json!({
-            "path": ".vtcode/context/tool_outputs/unified_exec_123.txt",
+            "path": ".vtcode/context/tool_outputs/command_session_123.txt",
             "offset": 41,
             "limit": 40
         });
 
         assert_eq!(
             spool_chunk_read_path(tools::READ_FILE, &args),
-            Some(".vtcode/context/tool_outputs/unified_exec_123.txt")
+            Some(".vtcode/context/tool_outputs/command_session_123.txt")
         );
     }
 
     #[test]
-    fn spool_chunk_read_path_matches_unified_file_read_spool_reads() {
+    fn spool_chunk_read_path_matches_file_operation_read_spool_reads() {
         let args = json!({
             "action": "read",
-            "path": ".vtcode/context/tool_outputs/unified_exec_456.txt",
+            "path": ".vtcode/context/tool_outputs/command_session_456.txt",
             "offset": 81,
             "limit": 40
         });
 
         assert_eq!(
             spool_chunk_read_path(tools::UNIFIED_FILE, &args),
-            Some(".vtcode/context/tool_outputs/unified_exec_456.txt")
+            Some(".vtcode/context/tool_outputs/command_session_456.txt")
         );
     }
 
@@ -130,10 +130,10 @@ mod tests {
     }
 
     #[test]
-    fn spool_chunk_read_path_ignores_non_read_unified_file_actions() {
+    fn spool_chunk_read_path_ignores_non_read_file_operation_actions() {
         let args = json!({
             "action": "write",
-            "path": ".vtcode/context/tool_outputs/unified_exec_789.txt",
+            "path": ".vtcode/context/tool_outputs/command_session_789.txt",
             "content": "replacement"
         });
 

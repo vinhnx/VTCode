@@ -163,7 +163,7 @@ mod tests {
     #[test]
     fn parses_single_dsml_invoke_with_string_params() {
         let text = concat!(
-            "<\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}invoke name=\"unified_search\">\n",
+            "<\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}invoke name=\"code_search\">\n",
             "<\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}parameter name=\"action\" string=\"true\">list</\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}parameter>\n",
             "<\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}parameter name=\"path\" string=\"true\">/src</\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}parameter>\n",
             "<\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}parameter name=\"scope\" string=\"true\">full</\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}parameter>\n",
@@ -171,7 +171,7 @@ mod tests {
         );
 
         let (name, args) = parse_dsml_tool_call(text).expect("should parse");
-        assert_eq!(name, "unified_search");
+        assert_eq!(name, "code_search");
         assert_eq!(args["action"], Value::String("list".to_string()));
         assert_eq!(args["path"], Value::String("/src".to_string()));
         assert_eq!(args["scope"], Value::String("full".to_string()));
@@ -195,7 +195,7 @@ mod tests {
     #[test]
     fn parses_first_invoke_only_when_multiple_present() {
         let text = concat!(
-            "<\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}invoke name=\"unified_search\">\n",
+            "<\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}invoke name=\"code_search\">\n",
             "  <\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}parameter name=\"a\" string=\"true\">1</\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}parameter>\n",
             "</\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}invoke>\n",
             "<\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}invoke name=\"read_file\">\n",
@@ -204,7 +204,7 @@ mod tests {
         );
 
         let (name, args) = parse_dsml_tool_call(text).expect("should parse");
-        assert_eq!(name, "unified_search");
+        assert_eq!(name, "code_search");
         assert_eq!(args["a"], Value::String("1".to_string()));
         assert!(args.get("b").is_none());
     }
@@ -217,13 +217,13 @@ mod tests {
     #[test]
     fn handles_json_value_params_without_string_true() {
         let text = concat!(
-            "<\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}invoke name=\"unified_search\">\n",
+            "<\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}invoke name=\"code_search\">\n",
             "<\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}parameter name=\"count\">42</\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}parameter>\n",
             "</\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}invoke>",
         );
 
         let (name, args) = parse_dsml_tool_call(text).expect("should parse");
-        assert_eq!(name, "unified_search");
+        assert_eq!(name, "code_search");
         assert_eq!(args["count"], Value::Number(serde_json::Number::from(42)));
     }
 

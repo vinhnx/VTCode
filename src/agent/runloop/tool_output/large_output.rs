@@ -17,8 +17,8 @@
 //! ## Usage
 //!
 //! ```rust,ignore
-//! // When processing large unified_exec output:
-//! let result = spool_large_output(output, "unified_exec", &config)?;
+//! // When processing large command_session output:
+//! let result = spool_large_output(output, "command_session", &config)?;
 //! if let Some(spool) = result {
 //!     // Send notification to client
 //!     println!("{}", format_agent_notification(&spool));
@@ -188,8 +188,8 @@ Tool: {}
 {}
 --- End Preview ---
 
-To read full content, use: unified_exec({{"command":"cat {}"}})
-To read specific lines, use: unified_file({{"action":"read","path":"{}","offset":<start>,"limit":<line_count>}})"#,
+To read full content, use: exec_command({{"cmd":"cat {}"}})
+To read specific lines, use: exec_command({{"cmd":"sed -n '<start>,<end>p' {}"}})"#,
             self.file_path.display(),
             self.size_bytes,
             self.line_count,

@@ -205,28 +205,28 @@ mod tests {
     #[test]
     fn cli_permission_overrides_append_unique_entries() {
         let mut config = VTCodeConfig::default();
-        config.permissions.allow = vec!["read_file".to_string()];
+        config.permissions.allow = vec!["exec_command".to_string()];
 
         apply_cli_permission_overrides(
             &mut config,
             &[
-                "read_file,unified_search".to_string(),
-                "unified_exec".to_string(),
+                "exec_command,code_search".to_string(),
+                "write_stdin".to_string(),
             ],
-            &["apply_patch".to_string(), "unified_exec".to_string()],
+            &["apply_patch".to_string(), "exec_command".to_string()],
         );
 
         assert_eq!(
             config.permissions.allow,
             vec![
-                "read_file".to_string(),
-                "unified_search".to_string(),
-                "unified_exec".to_string()
+                "exec_command".to_string(),
+                "code_search".to_string(),
+                "write_stdin".to_string()
             ]
         );
         assert_eq!(
             config.permissions.deny,
-            vec!["apply_patch".to_string(), "unified_exec".to_string()]
+            vec!["apply_patch".to_string(), "exec_command".to_string()]
         );
     }
 

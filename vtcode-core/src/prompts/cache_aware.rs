@@ -1,11 +1,12 @@
 use crate::config::constants::tools;
 use crate::llm::provider::ToolDefinition;
 
-/// Priority tools (unified tools + critical controls) that should appear first
+/// Priority tools that should appear first in model-visible definitions.
 const PRIORITY_TOOLS: &[&str] = &[
-    tools::UNIFIED_SEARCH,
-    tools::UNIFIED_FILE,
-    tools::UNIFIED_EXEC,
+    tools::EXEC_COMMAND,
+    tools::CODE_SEARCH,
+    tools::APPLY_PATCH,
+    tools::WRITE_STDIN,
     tools::REQUEST_USER_INPUT,
     tools::TASK_TRACKER,
     tools::FINISH_PLANNING,
@@ -76,7 +77,7 @@ mod tests {
     }
 
     #[test]
-    fn sort_tool_definitions_prioritizes_unified_tools() {
+    fn sort_tool_definitions_prioritizes_current_core_tools() {
         let tools = vec![
             ToolDefinition::function(
                 "zebra_tool".to_string(),
@@ -84,7 +85,7 @@ mod tests {
                 serde_json::json!({}),
             ),
             ToolDefinition::function(
-                "unified_search".to_string(),
+                "code_search".to_string(),
                 "search".to_string(),
                 serde_json::json!({}),
             ),
@@ -99,8 +100,8 @@ mod tests {
                 serde_json::json!({}),
             ),
             ToolDefinition::function(
-                "unified_file".to_string(),
-                "file".to_string(),
+                "exec_command".to_string(),
+                "shell".to_string(),
                 serde_json::json!({}),
             ),
         ];
@@ -115,8 +116,8 @@ mod tests {
         assert_eq!(
             names,
             vec![
-                "unified_search",
-                "unified_file",
+                "exec_command",
+                "code_search",
                 "request_user_input",
                 "alpha_tool",
                 "zebra_tool"

@@ -760,13 +760,13 @@ mod tests {
                         signature: None,
                     },
                     AnthropicContentBlock::Text {
-                        text: "Calling read_file".to_string(),
+                        text: "Calling exec_command".to_string(),
                         citations: None,
                         cache_control: None,
                     },
                     AnthropicContentBlock::ToolUse {
                         id: "call_123".to_string(),
-                        name: "read_file".to_string(),
+                        name: "exec_command".to_string(),
                         input: json!({"path": "src/main.rs"}),
                     },
                 ]),
@@ -789,7 +789,7 @@ mod tests {
         assert_eq!(llm_request.messages.len(), 1);
         let message = &llm_request.messages[0];
         assert_eq!(message.reasoning.as_deref(), Some("inspect files"));
-        assert_eq!(message.content.as_text().as_ref(), "Calling read_file");
+        assert_eq!(message.content.as_text().as_ref(), "Calling exec_command");
         assert_eq!(
             message
                 .tool_calls
@@ -797,7 +797,7 @@ mod tests {
                 .and_then(|calls| calls.first())
                 .and_then(|call| call.function.as_ref())
                 .map(|function| function.name.as_str()),
-            Some("read_file")
+            Some("exec_command")
         );
     }
 

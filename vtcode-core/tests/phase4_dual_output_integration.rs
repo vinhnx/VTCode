@@ -9,22 +9,24 @@ use vtcode_config::constants::tools;
 use vtcode_core::tools::registry::ToolRegistry;
 
 #[tokio::test]
-async fn test_grep_dual_output_integration() {
+async fn test_code_search_dual_output_integration() {
     // Setup: Create a registry with workspace
     let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let registry = ToolRegistry::new(workspace).await;
 
-    // Test: Execute grep_file with dual output
+    // Test: Execute code_search with dual output
     let args = json!({
-        "pattern": "pub fn",
+        "action": "structural",
+        "pattern": "pub fn $NAME($$$ARGS) $$$BODY",
         "path": "src/tools",
+        "lang": "rust",
         "max_results": 10
     });
 
     let result = registry
-        .execute_tool_dual(tools::GREP_FILE, args)
+        .execute_tool_dual(tools::CODE_SEARCH, args)
         .await
-        .expect("grep_file execution should succeed");
+        .expect("code_search execution should succeed");
 
     // Verify: Dual output structure
     assert!(
@@ -35,7 +37,7 @@ async fn test_grep_dual_output_integration() {
         !result.ui_content.is_empty(),
         "UI content should not be empty"
     );
-    // Tool name may be unified_search or grep_file depending on implementation
+    // Tool name may vary based on implementation
     assert!(!result.tool_name.is_empty());
     assert!(result.success, "Tool should succeed");
 
@@ -64,8 +66,8 @@ async fn test_grep_dual_output_integration() {
         );
     }
 
-    // Verify: Summary structure for grep results
-    // Should contain match count and file information
+    // Verify: Summary structure for search results
+    // Should contain match or search information
     assert!(
         result.llm_content.to_lowercase().contains("match")
             || result.llm_content.to_lowercase().contains("found")
@@ -76,21 +78,21 @@ async fn test_grep_dual_output_integration() {
 }
 
 #[tokio::test]
-async fn test_list_dual_output_integration() {
+async fn test_shell_listing_dual_output_integration() {
     // Setup: Create a registry with workspace
     let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let registry = ToolRegistry::new(workspace).await;
 
-    // Test: Execute list_files with dual output
+    // Test: Execute a shell listing with dual output
     let args = json!({
-        "path": "src/tools",
-        "max_depth": 2
+        "cmd": "find src/tools -maxdepth 2 -type f | sort | head -n 20",
+        "yield_time_ms": 1000
     });
 
     let result = registry
-        .execute_tool_dual(tools::LIST_FILES, args)
+        .execute_tool_dual(tools::EXEC_COMMAND, args)
         .await
-        .expect("list_files execution should succeed");
+        .expect("exec_command listing should succeed");
 
     // Verify: Basic structure
     assert!(!result.llm_content.is_empty());
@@ -120,22 +122,21 @@ async fn test_list_dual_output_integration() {
 }
 
 #[tokio::test]
-async fn test_read_file_dual_output() {
+async fn test_file_inspection_dual_output() {
     // Setup: Create a registry
     let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let registry = ToolRegistry::new(workspace).await;
 
-    // Test: Execute read_file with ReadSummarizer
-    // Use unified_file with action="read" for the unified tool system
+    // Test: Inspect a file through exec_command.
     let args = json!({
-        "action": "read",
-        "path": "README.md"
+        "cmd": "sed -n '1,120p' README.md",
+        "yield_time_ms": 1000
     });
 
     let result = registry
-        .execute_tool_dual("unified_file", args)
+        .execute_tool_dual(tools::EXEC_COMMAND, args)
         .await
-        .expect("unified_file read execution should succeed");
+        .expect("exec_command file inspection should succeed");
 
     // Verify: Dual output with summarization
     assert!(!result.llm_content.is_empty());
@@ -172,22 +173,21 @@ async fn test_read_file_dual_output() {
 }
 
 #[tokio::test]
-async fn test_bash_dual_output() {
+async fn test_exec_command_dual_output() {
     // Setup: Create a registry
     let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let registry = ToolRegistry::new(workspace).await;
 
-    // Test: Execute run_pty_cmd with BashSummarizer
-    // Use unified_exec for the unified tool system
+    // Test: Execute exec_command with BashSummarizer
     let args = json!({
-        "command": "ls -la src/tools",
-        "timeout_ms": 5000
+        "cmd": "ls -la src/tools",
+        "yield_time_ms": 1000
     });
 
     let result = registry
-        .execute_tool_dual("unified_exec", args)
+        .execute_tool_dual(tools::EXEC_COMMAND, args)
         .await
-        .expect("unified_exec execution should succeed");
+        .expect("exec_command execution should succeed");
 
     // Verify: Dual output with summarization
     assert!(!result.llm_content.is_empty());
@@ -226,25 +226,24 @@ async fn test_bash_dual_output() {
 }
 
 #[tokio::test]
-async fn test_edit_dual_output() {
+async fn test_apply_patch_dual_output() {
     // Setup: Create a registry
     let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let test_file = workspace.join("test_temp_write.txt");
 
     let registry = ToolRegistry::new(workspace).await;
 
-    // Test with unified_file which creates a temp file
+    // Test with apply_patch which creates a temp file
     use std::fs;
+    let patch = "*** Begin Patch\n*** Add File: test_temp_write.txt\n+Test content for write operation\n+Line 2\n+Line 3\n*** End Patch\n";
     let args = json!({
-        "action": "write",
-        "path": test_file.to_str().unwrap(),
-        "content": "Test content for write operation\nLine 2\nLine 3\n"
+        "patch": patch
     });
 
     let result = registry
-        .execute_tool_dual("unified_file", args)
+        .execute_tool_dual(tools::APPLY_PATCH, args)
         .await
-        .expect("unified_file write execution should succeed");
+        .expect("apply_patch execution should succeed");
 
     // Cleanup
     let _ = fs::remove_file(&test_file);

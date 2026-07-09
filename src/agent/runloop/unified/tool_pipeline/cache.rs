@@ -27,15 +27,15 @@ fn is_readonly_repo_browsing_tool(tool_name: &str, args: &Value) -> bool {
     matches!(
         tool_name,
         tools::READ_FILE | tools::LIST_FILES | "grep_search" | "find_files"
-    ) || (tool_name == tools::UNIFIED_FILE && tool_intent::unified_file_action_is(args, "read"))
+    ) || (tool_name == tools::UNIFIED_FILE && tool_intent::file_operation_action_is(args, "read"))
         || (tool_name == tools::UNIFIED_SEARCH
-            && tool_intent::unified_search_action_in(args, &["grep", "list"]))
+            && tool_intent::search_dispatch_action_in(args, &["grep", "list"]))
 }
 
 fn is_stable_tool_catalog_lookup(tool_name: &str, args: &Value) -> bool {
     matches!(tool_name, "search_tools" | "get_errors" | "agent_info")
         || (tool_name == tools::UNIFIED_SEARCH
-            && tool_intent::unified_search_action_in(args, &["tools", "errors", "agent"]))
+            && tool_intent::search_dispatch_action_in(args, &["tools", "errors", "agent"]))
 }
 
 /// Enhanced cache key creation that includes workspace context in the target path
@@ -259,7 +259,7 @@ mod tests {
     }
 
     #[test]
-    fn caches_unified_exec_run_with_git_diff_path() {
+    fn caches_command_session_run_with_git_diff_path() {
         let args = json!({
             "action": "run",
             "command": ["git", "diff", "src/main.rs"]
@@ -270,7 +270,7 @@ mod tests {
     }
 
     #[test]
-    fn does_not_cache_non_run_unified_exec_action() {
+    fn does_not_cache_non_run_command_session_action() {
         let args = json!({
             "action": "poll",
             "session_id": "run-123"
@@ -319,7 +319,7 @@ mod tests {
     }
 
     #[test]
-    fn stream_command_parts_skips_non_run_unified_exec() {
+    fn stream_command_parts_skips_non_run_command_session() {
         let args = json!({
             "action": "poll",
             "session_id": "run-123"
@@ -329,7 +329,7 @@ mod tests {
     }
 
     #[test]
-    fn caches_unified_file_read_calls() {
+    fn caches_file_operation_read_calls() {
         let args = json!({
             "action": "read",
             "path": "src/main.rs"
@@ -340,7 +340,7 @@ mod tests {
     }
 
     #[test]
-    fn caches_unified_search_list_calls() {
+    fn caches_search_dispatch_list_calls() {
         let args = json!({
             "action": "list",
             "path": "src"
@@ -351,7 +351,7 @@ mod tests {
     }
 
     #[test]
-    fn caches_unified_search_tools_metadata_calls() {
+    fn caches_search_dispatch_tools_metadata_calls() {
         let args = json!({
             "action": "tools",
             "keyword": "patch"

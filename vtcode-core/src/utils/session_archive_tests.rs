@@ -175,10 +175,10 @@ fn session_message_preserves_tool_calls_reasoning_details_and_origin_tool() {
     })]);
     original.tool_calls = Some(vec![ToolCall::function(
         "call_1".to_string(),
-        "unified_exec".to_string(),
+        "command_session".to_string(),
         "{\"cmd\":\"cargo fmt\"}".to_string(),
     )]);
-    original.origin_tool = Some("unified_exec".to_string());
+    original.origin_tool = Some("command_session".to_string());
 
     let stored = SessionMessage::from(&original);
     let restored = Message::from(&stored);
@@ -364,7 +364,7 @@ async fn session_progress_transcript_skips_tool_noise_and_duplicates() -> Result
 
     let path = archive.persist_progress(SessionProgressArgs {
         total_messages: recent.len(),
-        distinct_tools: vec!["unified_exec".to_owned()],
+        distinct_tools: vec!["command_session".to_owned()],
         messages: recent.clone(),
         recent_messages: recent,
         turn_number: 2,
@@ -985,12 +985,12 @@ fn snapshot_compaction_shrinks_large_single_message_payloads() -> Result<()> {
             reasoning_details: None,
             tool_calls: Some(Box::new(vec![ToolCall::function(
                 "call_1".to_string(),
-                "unified_exec".to_string(),
+                "command_session".to_string(),
                 "{\"cmd\":\"echo giant payload\"}".repeat(100),
             )])),
             tool_call_id: None,
             phase: None,
-            origin_tool: Some(Box::new("unified_exec".repeat(50))),
+            origin_tool: Some(Box::new("command_session".repeat(50))),
             metadata: None,
         }],
         progress: Some(Box::new(SessionProgress {

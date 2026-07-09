@@ -9,14 +9,12 @@ async fn create_file_succeeds_for_new_path() {
     let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
     registry.initialize_async().await.unwrap();
 
-    // Use unified_file with action="write" and a new path (create_file is an alias)
     let args = json!({
-        "action": "write",
         "path": "src/lib.rs",
         "content": "fn main() {}\n"
     });
     let result = registry
-        .execute_tool("unified_file", args)
+        .execute_tool("create_file", args)
         .await
         .expect("tool execution should succeed");
 
@@ -45,14 +43,12 @@ async fn create_file_fails_when_file_exists() {
     let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
     registry.initialize_async().await.unwrap();
 
-    // Use unified_file with action="write" on existing file
     let args = json!({
-        "action": "write",
         "path": "main.rs",
         "content": "replaced"
     });
     let value = registry
-        .execute_tool("unified_file", args)
+        .execute_tool("create_file", args)
         .await
         .expect("tool execution should return error payload");
 

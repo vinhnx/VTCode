@@ -1039,7 +1039,7 @@ fn condense_collected_lines(lines: &mut Vec<String>) {
 
     // Add omission indicator with actionable guidance
     condensed.push(format!(
-        "… [+{} lines omitted ({} total). To read omitted ranges: unified_file offset={} limit={}]",
+        "… [+{} lines omitted ({} total). To read omitted ranges: file_operation offset={} limit={}]",
         omitted_count,
         total_lines,
         head_count + 1,
@@ -1073,7 +1073,7 @@ fn condense_for_batch(lines: &mut Vec<String>) -> (bool, usize) {
 
     let mut condensed: Vec<String> = lines[..head_count].to_vec();
     condensed.push(format!(
-        "… [+{} lines omitted ({} total). To read omitted ranges: unified_file offset={} limit={}]",
+        "… [+{} lines omitted ({} total). To read omitted ranges: file_operation offset={} limit={}]",
         omitted_count,
         lines.len(),
         head_count + 1,

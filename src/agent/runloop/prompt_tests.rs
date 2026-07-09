@@ -72,8 +72,10 @@ fn test_should_accept_refinement_rejects_role_play() {
 fn test_finalize_refined_prompt_uses_canonical_diagnostic_tools() {
     let refined = finalize_refined_prompt("debug the failing command".to_string());
 
-    assert!(refined.contains("`unified_search`"));
-    assert!(refined.contains("`unified_exec`"));
+    assert!(refined.contains("`exec_command`"));
+    assert!(refined.contains("`code_search`"));
+    assert!(!refined.contains("search_dispatch"));
+    assert!(!refined.contains("command_session"));
     assert!(!refined.contains("debug_agent"));
     assert!(!refined.contains("search_tools"));
 }

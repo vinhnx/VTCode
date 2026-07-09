@@ -31,6 +31,21 @@ const SPOOL_CHUNK_INLINE_HEAD_BYTES: usize = 8 * 1024;
 const SPOOL_CHUNK_INLINE_TAIL_BYTES: usize = 8 * 1024;
 const MAX_CONSECUTIVE_SAME_FILE_READ_FAMILY_CALLS: usize = 4;
 
+fn shell_single_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\\''"))
+}
+
+fn public_spool_grep_args(path: &str, pattern: &str) -> Value {
+    json!({
+        "cmd": format!(
+            "rg --line-number --column --color=never {} {}",
+            shell_single_quote(pattern),
+            shell_single_quote(path)
+        ),
+        "max_output_tokens": 4000
+    })
+}
+
 /// Read a spool file's content for inline embedding when the spool-chunk
 /// guard trips. Returns `None` if the file is missing, empty, or unreadable.
 /// Caps content at `SPOOL_CHUNK_INLINE_MAX_BYTES` to bound the response size
@@ -74,10 +89,10 @@ fn read_spool_preview_for_guard(path: &str) -> Option<String> {
 /// `grep warning|error|TODO` placeholder.
 ///
 /// Recognized patterns:
-///   - `run-<id>.txt`   -> `unified_exec action=poll session_id=<id>`
-///   - `unified_search_<ts>.txt` -> `unified_search action=grep pattern="." path=<spool>`
-///   - `unified_exec_<ts>.txt`   -> fallback to head/tail preview tool
-///   - `outline_<ts>.txt`         -> `unified_search action=grep` on the spool
+///   - `run-<id>.txt`   -> `write_stdin chars="" session_id=<id>`
+///   - `search_dispatch_<ts>.txt` -> `exec_command` running `rg` on the spool
+///   - `command_session_<ts>.txt`   -> fallback to head/tail preview tool
+///   - `outline_<ts>.txt`         -> `exec_command` running `rg` on the spool
 fn derive_spool_fallback(path: &str) -> Option<(String, Value)> {
     let file_name = Path::new(path).file_name()?.to_str()?.to_string();
 
@@ -86,10 +101,11 @@ fn derive_spool_fallback(path: &str) -> Option<(String, Value)> {
         .and_then(|stem| stem.strip_prefix("run-"))
     {
         return Some((
-            tool_names::UNIFIED_EXEC.to_string(),
+            tool_names::WRITE_STDIN.to_string(),
             json!({
-                "action": "poll",
                 "session_id": sid,
+                "chars": "",
+                "yield_time_ms": 1000,
             }),
         ));
     }
@@ -98,13 +114,8 @@ fn derive_spool_fallback(path: &str) -> Option<(String, Value)> {
     let prefix = stem.split('_').next()?;
     match prefix {
         "unified" | "outline" | "search" => Some((
-            tool_names::UNIFIED_SEARCH.to_string(),
-            json!({
-                "action": "grep",
-                "path": path,
-                "pattern": ".",
-                "max_results": 200,
-            }),
+            tool_names::EXEC_COMMAND.to_string(),
+            public_spool_grep_args(path, "."),
         )),
         _ => None,
     }
@@ -232,7 +243,7 @@ fn repeated_file_read_family_key(canonical_tool_name: &str, args: &Value) -> Opt
         }
         tool_names::UNIFIED_EXEC => {
             // Track file-reading shell commands in the family guard to prevent
-            // bypass via unified_exec. Only commands on the is_readonly_unified_exec_command
+            // bypass via command_session. Only commands on the is_readonly_command_session_command
             // allowlist (tool_intent.rs) reach this point — cat, head, tail, bat.
             // less/more are not on that allowlist so they get readonly_classification=false
             // and are caught by enforce_repeated_shell_run_guard instead.
@@ -287,10 +298,10 @@ pub(crate) enum ReadFamilyCapDecision {
 /// guard messages.
 ///
 /// Family keys look like:
-///   - `read_file::<path>`
-///   - `unified_file::read::<path>`
-///   - `unified_file::read::<path>::off=N::lim=M::raw=bool`
-///   - `unified_exec::run::<command>`
+///   - legacy direct-read key followed by `<path>`
+///   - unified file-read key followed by `<path>`
+///   - unified file-read key followed by `<path>::off=N::lim=M::raw=bool`
+///   - `command_session::run::<command>`
 ///
 /// The slice-suffix segments (`off=`, `lim=`, `raw=`) are not useful in a
 /// user-facing "repeated exploration of '<target>'" message, so they are
@@ -299,13 +310,13 @@ pub(crate) enum ReadFamilyCapDecision {
 /// fallback if no readable segment is found.
 fn read_family_target(family_key: &str) -> String {
     let mut segments = family_key.split("::");
-    // Skip the leading tool name (`read_file`/`unified_file`/`unified_exec`).
+    // Skip the leading tool name.
     segments.next();
     // The next segment is the action marker (`read`/`run`) for unified tools,
-    // or the path itself for `read_file`. Skip it only if it is an action.
+    // or the path itself for legacy direct reads. Skip it only if it is an action.
     let second = segments.next().unwrap_or("");
     if !matches!(second, "read" | "run") {
-        // `read_file::<path>` — the second segment IS the target.
+        // Direct-read keys have the target in the second segment.
         if !second.is_empty()
             && !second.starts_with("off=")
             && !second.starts_with("lim=")
@@ -634,13 +645,7 @@ fn max_sequential_spool_chunk_reads_per_turn(ctx: &TurnProcessingContext<'_>) ->
 fn spool_chunk_guard_fallback_args(path: &str) -> Value {
     derive_spool_fallback(path)
         .map(|(_, args)| args)
-        .unwrap_or_else(|| {
-            json!({
-                "action": "grep",
-                "path": path,
-                "pattern": SPOOL_CHUNK_GREP_PATTERN
-            })
-        })
+        .unwrap_or_else(|| public_spool_grep_args(path, SPOOL_CHUNK_GREP_PATTERN))
 }
 
 #[cold]
@@ -648,7 +653,7 @@ fn spool_chunk_guard_fallback_tool(path: &str) -> Option<String> {
     if let Some((tool, _)) = derive_spool_fallback(path) {
         Some(tool)
     } else {
-        Some(tool_names::UNIFIED_SEARCH.to_string())
+        Some(tool_names::EXEC_COMMAND.to_string())
     }
 }
 
@@ -677,9 +682,11 @@ fn build_spool_chunk_guard_error_content(path: &str, max_reads_per_turn: usize) 
         obj.insert(
             "next_action".to_string(),
             Value::String(
-                "STOP calling read_file/unified_file on this spool. The full \
-                 content is in `inline_content` below. Synthesize your final \
-                 answer from the existing conversation history."
+                "STOP requesting this spool. Use the `inline_content` below \
+                 and the existing conversation history to synthesise your final \
+                 answer. If additional inspection is still required, use \
+                 `exec_command` for targeted shell inspection, `write_stdin` \
+                 for session continuation, or `apply_patch` for edits."
                     .to_string(),
             ),
         );
@@ -689,7 +696,7 @@ fn build_spool_chunk_guard_error_content(path: &str, max_reads_per_turn: usize) 
                 "inline_content_note".to_string(),
                 Value::String(
                     "Full spool content embedded inline. Do NOT re-read this \
-                     spool file — the per-turn cap will continue to block you."
+                     spool file; the per-turn cap will continue to block you."
                         .to_string(),
                 ),
             );
@@ -797,10 +804,10 @@ mod tests {
 
         assert_eq!(
             parsed.get("fallback_tool").and_then(Value::as_str),
-            Some(tool_names::UNIFIED_EXEC)
+            Some(tool_names::WRITE_STDIN)
         );
-        assert_eq!(parsed["fallback_tool_args"]["action"], "poll");
         assert_eq!(parsed["fallback_tool_args"]["session_id"], "1");
+        assert_eq!(parsed["fallback_tool_args"]["chars"], "");
         assert!(parsed.get("next_action").and_then(Value::as_str).is_some());
         assert_eq!(
             parsed.get("loop_detected").and_then(Value::as_bool),
@@ -815,7 +822,7 @@ mod tests {
     #[test]
     fn spool_chunk_guard_error_resolves_to_search_grep_for_search_prefix() {
         let payload = build_spool_chunk_guard_error_content(
-            ".vtcode/context/tool_outputs/unified_search_1782625284532136.txt",
+            ".vtcode/context/tool_outputs/search_dispatch_1782625284532136.txt",
             3,
         );
         let parsed: Value =
@@ -823,12 +830,13 @@ mod tests {
 
         assert_eq!(
             parsed.get("fallback_tool").and_then(Value::as_str),
-            Some(tool_names::UNIFIED_SEARCH)
+            Some(tool_names::EXEC_COMMAND)
         );
-        assert_eq!(parsed["fallback_tool_args"]["action"], "grep");
-        assert_eq!(
-            parsed["fallback_tool_args"]["path"],
-            ".vtcode/context/tool_outputs/unified_search_1782625284532136.txt"
+        assert!(
+            parsed["fallback_tool_args"]["cmd"]
+                .as_str()
+                .is_some_and(|cmd| cmd
+                    .contains(".vtcode/context/tool_outputs/search_dispatch_1782625284532136.txt"))
         );
         assert_eq!(
             parsed.get("loop_detected").and_then(Value::as_bool),
@@ -851,12 +859,12 @@ mod tests {
 
         assert_eq!(
             parsed.get("fallback_tool").and_then(Value::as_str),
-            Some(tool_names::UNIFIED_SEARCH)
+            Some(tool_names::EXEC_COMMAND)
         );
-        assert_eq!(parsed["fallback_tool_args"]["action"], "grep");
-        assert_eq!(
-            parsed["fallback_tool_args"]["pattern"],
-            SPOOL_CHUNK_GREP_PATTERN
+        assert!(
+            parsed["fallback_tool_args"]["cmd"]
+                .as_str()
+                .is_some_and(|cmd| cmd.contains(SPOOL_CHUNK_GREP_PATTERN))
         );
     }
 
@@ -864,25 +872,25 @@ mod tests {
     fn derive_spool_fallback_recognizes_pty_session_id() {
         let (tool, args) = derive_spool_fallback(".vtcode/context/tool_outputs/run-abc123.txt")
             .expect("pty session spool should resolve to a fallback");
-        assert_eq!(tool, tool_names::UNIFIED_EXEC);
-        assert_eq!(args["action"], "poll");
+        assert_eq!(tool, tool_names::WRITE_STDIN);
         assert_eq!(args["session_id"], "abc123");
+        assert_eq!(args["chars"], "");
     }
 
     #[test]
-    fn repeated_file_read_family_key_tracks_cat_via_unified_exec() {
+    fn repeated_file_read_family_key_tracks_cat_via_command_session() {
         let args = serde_json::json!({"command": "cat README.md"});
         let key = repeated_file_read_family_key(tool_names::UNIFIED_EXEC, &args);
-        assert_eq!(key, Some("unified_exec::run::cat README.md".to_string()));
+        assert_eq!(key, Some("command_session::run::cat README.md".to_string()));
     }
 
     #[test]
-    fn repeated_file_read_family_key_tracks_head_via_unified_exec() {
+    fn repeated_file_read_family_key_tracks_head_via_command_session() {
         let args = serde_json::json!({"command": "head -n 10 file.txt"});
         let key = repeated_file_read_family_key(tool_names::UNIFIED_EXEC, &args);
         assert_eq!(
             key,
-            Some("unified_exec::run::head -n 10 file.txt".to_string())
+            Some("command_session::run::head -n 10 file.txt".to_string())
         );
     }
 
@@ -904,7 +912,10 @@ mod tests {
     fn repeated_file_read_family_key_handles_cmd_alias() {
         let args = serde_json::json!({"cmd": "cat Cargo.toml"});
         let key = repeated_file_read_family_key(tool_names::UNIFIED_EXEC, &args);
-        assert_eq!(key, Some("unified_exec::run::cat Cargo.toml".to_string()));
+        assert_eq!(
+            key,
+            Some("command_session::run::cat Cargo.toml".to_string())
+        );
     }
 
     #[test]
@@ -916,7 +927,7 @@ mod tests {
 
     #[test]
     fn read_family_cap_decision_below_cap_for_non_read_tool() {
-        // Non-read family tools (e.g. unified_exec ls) have no family key, so
+        // Non-read family tools (e.g. command_session ls) have no family key, so
         // the decision is always BelowCap regardless of streak.
         let decision = check_read_family_cap(
             tool_names::UNIFIED_EXEC,
@@ -968,23 +979,35 @@ mod tests {
         // Direct unit test for the target extractor: paginated reads should
         // report the path as the target, not the slice-suffix fields.
         assert_eq!(
-            read_family_target("unified_file::read::src/cli/update.rs::off=81::lim=229"),
+            read_family_target(&format!(
+                "{}::read::src/cli/update.rs::off=81::lim=229",
+                tool_names::UNIFIED_FILE
+            )),
             "src/cli/update.rs"
         );
         assert_eq!(
-            read_family_target("read_file::src/main.rs::off=80::lim=200::raw=true"),
+            read_family_target(&format!(
+                "{}::src/main.rs::off=80::lim=200::raw=true",
+                tool_names::READ_FILE
+            )),
             "src/main.rs"
         );
         assert_eq!(
-            read_family_target("unified_file::read::src/cli/update.rs"),
+            read_family_target(&format!(
+                "{}::read::src/cli/update.rs",
+                tool_names::UNIFIED_FILE
+            )),
             "src/cli/update.rs"
         );
         assert_eq!(
-            read_family_target("unified_exec::run::cat README.md"),
+            read_family_target("command_session::run::cat README.md"),
             "cat README.md"
         );
-        // `read_file` has no action marker — the second segment is the path.
-        assert_eq!(read_family_target("read_file::src/lib.rs"), "src/lib.rs");
+        // Legacy direct-read keys have no action marker, so the second segment is the path.
+        assert_eq!(
+            read_family_target(&format!("{}::src/lib.rs", tool_names::READ_FILE)),
+            "src/lib.rs"
+        );
     }
 
     #[test]

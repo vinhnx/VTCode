@@ -255,7 +255,7 @@ async fn detect_direct_subagent_spawn_input(
 }
 
 fn parse_direct_tool_input(input: &str) -> Option<DirectToolInput> {
-    if let Some(args) = detect_direct_unified_file_read(input) {
+    if let Some(args) = detect_direct_file_operation_read(input) {
         return Some(DirectToolInput::Execute {
             tool_name: tools::UNIFIED_FILE.to_string(),
             args,
@@ -292,7 +292,7 @@ fn parse_direct_tool_input(input: &str) -> Option<DirectToolInput> {
     )
 }
 
-fn detect_direct_unified_file_read(input: &str) -> Option<serde_json::Value> {
+fn detect_direct_file_operation_read(input: &str) -> Option<serde_json::Value> {
     let trimmed = input.trim();
     if trimmed.is_empty() {
         return None;
@@ -301,7 +301,7 @@ fn detect_direct_unified_file_read(input: &str) -> Option<serde_json::Value> {
     let without_run = strip_prefix_case_insensitive(trimmed, "run ")
         .unwrap_or(trimmed)
         .trim_start();
-    let tool_prefix = strip_prefix_case_insensitive(without_run, "unified_file")?;
+    let tool_prefix = strip_prefix_case_insensitive(without_run, "file_operation")?;
     let after_tool = tool_prefix.trim_start();
     let after_read = strip_prefix_case_insensitive(after_tool, "read")?.trim_start();
     if after_read.is_empty() {
@@ -309,7 +309,7 @@ fn detect_direct_unified_file_read(input: &str) -> Option<serde_json::Value> {
     }
 
     let (path_part, _) = split_path_and_suffix(after_read);
-    let path = normalize_unified_file_path(path_part);
+    let path = normalize_file_operation_path(path_part);
     if path.is_empty() {
         return None;
     }
@@ -515,7 +515,7 @@ fn strip_optional_word_prefix_case_insensitive<'a>(input: &'a str, prefix: &str)
     strip_bounded_prefix_case_insensitive(input, prefix).unwrap_or(input)
 }
 
-fn normalize_unified_file_path(input: &str) -> String {
+fn normalize_file_operation_path(input: &str) -> String {
     let mut normalized = input.trim();
     normalized = strip_optional_word_prefix(normalized, "on");
     normalized = strip_optional_word_prefix(normalized, "from");
@@ -711,7 +711,7 @@ mod tests {
     }
 
     #[test]
-    fn direct_unified_exec_skips_confirmation_prompts() {
+    fn direct_command_session_skips_confirmation_prompts() {
         assert!(direct_tool_skips_confirmations(tools::UNIFIED_EXEC));
         assert!(!direct_tool_skips_confirmations(tools::UNIFIED_FILE));
     }
@@ -806,10 +806,10 @@ mod tests {
     }
 
     #[test]
-    fn parses_direct_unified_file_read_with_mode_omitted() {
+    fn parses_direct_file_operation_read_with_mode_omitted() {
         let parsed =
-            parse_direct_tool_input("unified_file read on /tmp/example.md with mode omitted")
-                .expect("direct unified_file");
+            parse_direct_tool_input("file_operation read on /tmp/example.md with mode omitted")
+                .expect("direct file_operation");
         match parsed {
             DirectToolInput::Execute {
                 tool_name, args, ..
@@ -820,15 +820,15 @@ mod tests {
                 assert_eq!(args["condense"], false);
             }
             DirectToolInput::InvalidBang { .. } => {
-                panic!("expected unified_file read to parse");
+                panic!("expected file_operation read to parse");
             }
         }
     }
 
     #[test]
-    fn parses_run_prefixed_unified_file_read() {
-        let parsed = parse_direct_tool_input("run unified_file read /tmp/example.md")
-            .expect("direct unified_file");
+    fn parses_run_prefixed_file_operation_read() {
+        let parsed = parse_direct_tool_input("run file_operation read /tmp/example.md")
+            .expect("direct file_operation");
         match parsed {
             DirectToolInput::Execute {
                 tool_name, args, ..
@@ -839,7 +839,7 @@ mod tests {
                 assert_eq!(args["condense"], false);
             }
             DirectToolInput::InvalidBang { .. } => {
-                panic!("expected unified_file read to parse");
+                panic!("expected file_operation read to parse");
             }
         }
     }

@@ -148,7 +148,7 @@ mod tests {
     }
 
     #[test]
-    fn unified_file_read_bypasses_file_conflict_flow() {
+    fn file_operation_read_bypasses_file_conflict_flow() {
         let output = json!({
             "success": true,
             "conflict_detected": true,

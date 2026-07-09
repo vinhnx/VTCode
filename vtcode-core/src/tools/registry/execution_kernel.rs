@@ -73,12 +73,12 @@ fn is_missing_required_arg(tool_name: &str, args: &Value, key: &str) -> bool {
 }
 
 #[cfg(test)]
-fn parse_unified_file_max_payload_bytes(raw: Option<&str>) -> Option<usize> {
+fn parse_file_operation_max_payload_bytes(raw: Option<&str>) -> Option<usize> {
     raw.and_then(|value| value.trim().parse::<usize>().ok())
         .filter(|value| *value >= 1024)
 }
 
-fn configured_unified_file_max_payload_bytes() -> usize {
+fn configured_file_operation_max_payload_bytes() -> usize {
     // Single source of truth for the cap: both preflight and the post-decode
     // size check in `apply_patch` resolve the env-var override the same way
     // (including the 1 KiB safety floor), so the two stages always agree.
@@ -159,9 +159,9 @@ fn serialized_payload_size_bytes(args: &Value) -> usize {
         .unwrap_or_else(|_| args.to_string().len())
 }
 
-fn unified_file_action_for_limit(normalized_tool_name: &str, args: &Value) -> Option<String> {
+fn file_operation_action_for_limit(normalized_tool_name: &str, args: &Value) -> Option<String> {
     if normalized_tool_name == tool_names::UNIFIED_FILE {
-        return crate::tools::tool_intent::unified_file_action(args)
+        return crate::tools::tool_intent::file_operation_action(args)
             .map(|a| a.to_ascii_lowercase());
     }
     if normalized_tool_name == tool_names::APPLY_PATCH {
@@ -173,7 +173,7 @@ fn unified_file_action_for_limit(normalized_tool_name: &str, args: &Value) -> Op
     None
 }
 
-pub(super) fn remap_public_unified_file_alias_args(
+pub(super) fn remap_public_file_operation_alias_args(
     requested_name: &str,
     normalized_tool_name: &str,
     args: &Value,
@@ -205,13 +205,13 @@ pub(super) fn remap_public_unified_file_alias_args(
     Some(Value::Object(mapped))
 }
 
-fn enforce_unified_file_payload_limit(
+fn enforce_file_operation_payload_limit(
     normalized_tool_name: &str,
     args: &Value,
     max_payload_bytes: usize,
     failures: &mut Vec<String>,
 ) {
-    let Some(action) = unified_file_action_for_limit(normalized_tool_name, args) else {
+    let Some(action) = file_operation_action_for_limit(normalized_tool_name, args) else {
         return;
     };
     if action != "patch" && action != "edit" {
@@ -266,7 +266,7 @@ pub(super) fn normalize_tool_args<'a>(
 
     if normalized_tool_name == tool_names::UNIFIED_SEARCH {
         let search_args =
-            crate::tools::tool_intent::normalize_unified_search_args(normalized.as_ref());
+            crate::tools::tool_intent::normalize_search_dispatch_args(normalized.as_ref());
         if search_args != *normalized.as_ref() {
             normalized = std::borrow::Cow::Owned(search_args);
         }
@@ -305,7 +305,7 @@ pub(super) fn preflight_validate_call(
         .map_err(|e| anyhow!("Unknown tool: {}: {e}", canonical_tool_name(name)))?;
 
     if let Some(remapped_args) =
-        remap_public_unified_file_alias_args(name, &normalized_tool_name, args)
+        remap_public_file_operation_alias_args(name, &normalized_tool_name, args)
     {
         preflight_validate_resolved_call(registry, &normalized_tool_name, &remapped_args)
     } else {
@@ -336,7 +336,7 @@ pub(super) fn preflight_validate_resolved_call(
         effective_args = Some(validation_args.as_ref().clone());
     } else if normalized_tool_name == tool_names::UNIFIED_FILE
         && let Some(remapped_args) =
-            crate::tools::tool_intent::remap_unified_file_command_args_to_unified_exec(
+            crate::tools::tool_intent::remap_file_operation_command_args_to_command_session(
                 validation_args.as_ref(),
             )
     {
@@ -362,7 +362,7 @@ pub(super) fn preflight_validate_resolved_call(
     }
     if validation_tool_name == tool_names::UNIFIED_EXEC {
         failures.extend(
-            crate::tools::command_args::unified_exec_missing_required_args(
+            crate::tools::command_args::command_session_missing_required_args(
                 validation_args.as_ref(),
             )
             .into_iter()
@@ -407,7 +407,7 @@ pub(super) fn preflight_validate_resolved_call(
         validation_tool_name.as_str(),
         tool_names::RUN_PTY_CMD | tool_names::CREATE_PTY_SESSION | tool_names::SHELL
     ) || (validation_tool_name == tool_names::UNIFIED_EXEC
-        && crate::tools::command_args::unified_exec_requires_command_safety(
+        && crate::tools::command_args::command_session_requires_command_safety(
             validation_args.as_ref(),
         ));
     if should_validate_command
@@ -418,10 +418,10 @@ pub(super) fn preflight_validate_resolved_call(
     {
         failures.push(format!("Command security check failed: {err}"));
     }
-    enforce_unified_file_payload_limit(
+    enforce_file_operation_payload_limit(
         &validation_tool_name,
         validation_args.as_ref(),
-        configured_unified_file_max_payload_bytes(),
+        configured_file_operation_max_payload_bytes(),
         &mut failures,
     );
 
@@ -434,14 +434,14 @@ pub(super) fn preflight_validate_resolved_call(
     }
 
     if validation_tool_name == tool_names::UNIFIED_EXEC
-        && crate::tools::tool_intent::unified_exec_action(validation_args.as_ref()).is_none()
+        && crate::tools::tool_intent::command_session_action(validation_args.as_ref()).is_none()
     {
         return Err(anyhow!(
             "Invalid arguments for tool '{routed_tool_name}': missing action; provide `action` or inferable exec arguments"
         ));
     }
     if validation_tool_name == tool_names::UNIFIED_SEARCH
-        && crate::tools::tool_intent::unified_search_action(validation_args.as_ref()).is_none()
+        && crate::tools::tool_intent::search_dispatch_action(validation_args.as_ref()).is_none()
     {
         return Err(anyhow!(
             "Invalid arguments for tool '{routed_tool_name}': missing action; provide `action` or inferable search arguments"
@@ -486,9 +486,9 @@ pub(super) fn preflight_validate_resolved_call(
 mod tests {
     use super::super::assembly::public_tool_name_candidates;
     use super::{
-        ToolRegistry, configured_unified_file_max_payload_bytes,
-        enforce_unified_file_payload_limit, is_missing_required_arg, normalize_tool_args,
-        parse_unified_file_max_payload_bytes, preflight_validate_call,
+        ToolRegistry, configured_file_operation_max_payload_bytes,
+        enforce_file_operation_payload_limit, is_missing_required_arg, normalize_tool_args,
+        parse_file_operation_max_payload_bytes, preflight_validate_call,
         preflight_validate_resolved_call,
     };
     use crate::config::constants::tools as tool_names;
@@ -512,7 +512,7 @@ mod tests {
             "patch": "*** Begin Patch\n*** End Patch\n"
         });
 
-        enforce_unified_file_payload_limit(tool_names::UNIFIED_FILE, &args, 1024, &mut failures);
+        enforce_file_operation_payload_limit(tool_names::UNIFIED_FILE, &args, 1024, &mut failures);
         assert!(failures.is_empty());
     }
 
@@ -524,7 +524,7 @@ mod tests {
             "patch": "x".repeat(512)
         });
 
-        enforce_unified_file_payload_limit(tool_names::UNIFIED_FILE, &args, 128, &mut failures);
+        enforce_file_operation_payload_limit(tool_names::UNIFIED_FILE, &args, 128, &mut failures);
         assert_eq!(failures.len(), 1);
         assert!(failures[0].contains("payload too large"));
         assert!(failures[0].contains("Split the change"));
@@ -539,7 +539,7 @@ mod tests {
             "new_str": "x".repeat(512)
         });
 
-        enforce_unified_file_payload_limit(tool_names::EDIT_FILE, &args, 128, &mut failures);
+        enforce_file_operation_payload_limit(tool_names::EDIT_FILE, &args, 128, &mut failures);
         assert_eq!(failures.len(), 1);
         assert!(failures[0].contains("action='edit'"));
     }
@@ -552,7 +552,7 @@ mod tests {
             "path": "README.md"
         });
 
-        enforce_unified_file_payload_limit(tool_names::UNIFIED_FILE, &args, 1, &mut failures);
+        enforce_file_operation_payload_limit(tool_names::UNIFIED_FILE, &args, 1, &mut failures);
         assert!(failures.is_empty());
     }
 
@@ -583,25 +583,25 @@ mod tests {
 
     #[test]
     fn parse_payload_limit_accepts_safe_override() {
-        let parsed = parse_unified_file_max_payload_bytes(Some("2048"));
+        let parsed = parse_file_operation_max_payload_bytes(Some("2048"));
         assert_eq!(parsed, Some(2048));
     }
 
     #[test]
     fn parse_payload_limit_rejects_too_small_values() {
-        let parsed = parse_unified_file_max_payload_bytes(Some("512"));
+        let parsed = parse_file_operation_max_payload_bytes(Some("512"));
         assert_eq!(parsed, None);
     }
 
     #[test]
     fn parse_payload_limit_rejects_invalid_values() {
-        let parsed = parse_unified_file_max_payload_bytes(Some("not-a-number"));
+        let parsed = parse_file_operation_max_payload_bytes(Some("not-a-number"));
         assert_eq!(parsed, None);
     }
 
     #[test]
     fn configured_payload_limit_is_always_safe() {
-        let configured = configured_unified_file_max_payload_bytes();
+        let configured = configured_file_operation_max_payload_bytes();
         assert!(configured >= 1024);
     }
 
@@ -709,7 +709,7 @@ mod tests {
     }
 
     #[test]
-    fn unified_search_schema_args_infers_action_from_pattern() -> Result<()> {
+    fn search_dispatch_schema_args_infers_action_from_pattern() -> Result<()> {
         let args = json!({
             "pattern": "LLMStreamEvent::",
             "path": "."
@@ -724,7 +724,7 @@ mod tests {
     }
 
     #[test]
-    fn unified_search_schema_args_infers_list_action_from_glob_pattern() -> Result<()> {
+    fn search_dispatch_schema_args_infers_list_action_from_glob_pattern() -> Result<()> {
         let args = json!({
             "pattern": "**/*.rs",
             "path": "src"
@@ -739,7 +739,7 @@ mod tests {
     }
 
     #[test]
-    fn unified_search_schema_args_preserves_non_inferable_payload() -> Result<()> {
+    fn search_dispatch_schema_args_preserves_non_inferable_payload() -> Result<()> {
         let args = json!({
             "max_results": 10
         });
@@ -750,7 +750,7 @@ mod tests {
     }
 
     #[test]
-    fn unified_search_schema_args_normalizes_case_variants() -> Result<()> {
+    fn search_dispatch_schema_args_normalizes_case_variants() -> Result<()> {
         let args = json!({
             "Pattern": "ReasoningStage",
             "Path": "."
@@ -848,7 +848,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn unified_exec_preflight_rejects_run_without_command() {
+    async fn command_session_preflight_rejects_run_without_command() {
         let (_temp, registry) = new_test_registry().await;
 
         let err = preflight_validate_resolved_call(
@@ -941,7 +941,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn unified_exec_preflight_rejects_missing_action_without_inferable_args() {
+    async fn command_session_preflight_rejects_missing_action_without_inferable_args() {
         let (_temp, registry) = new_test_registry().await;
 
         let err = preflight_validate_resolved_call(&registry, tool_names::UNIFIED_EXEC, &json!({}))
@@ -949,13 +949,13 @@ mod tests {
 
         assert!(
             err.to_string().contains(
-                "Invalid arguments for tool 'unified_exec': missing action; provide `action` or inferable exec arguments"
+                "Invalid arguments for tool 'command_session': missing action; provide `action` or inferable exec arguments"
             )
         );
     }
 
     #[tokio::test]
-    async fn unified_exec_preflight_rejects_write_without_input() {
+    async fn command_session_preflight_rejects_write_without_input() {
         let (_temp, registry) = new_test_registry().await;
 
         let err = preflight_validate_resolved_call(
@@ -972,7 +972,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn unified_exec_preflight_rejects_poll_without_session_id() {
+    async fn command_session_preflight_rejects_poll_without_session_id() {
         let (_temp, registry) = new_test_registry().await;
 
         let err = preflight_validate_resolved_call(
@@ -989,7 +989,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn unified_exec_preflight_accepts_list_without_extra_args() -> Result<()> {
+    async fn command_session_preflight_accepts_list_without_extra_args() -> Result<()> {
         let (_temp, registry) = new_test_registry().await;
 
         let result = preflight_validate_resolved_call(
@@ -1003,7 +1003,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn unified_exec_preflight_accepts_inspect_with_spool_path() -> Result<()> {
+    async fn command_session_preflight_accepts_inspect_with_spool_path() -> Result<()> {
         let (_temp, registry) = new_test_registry().await;
 
         let result = preflight_validate_resolved_call(
@@ -1017,7 +1017,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn unified_file_command_payload_preflight_remaps_to_unified_exec() -> Result<()> {
+    async fn file_operation_command_payload_preflight_remaps_to_command_session() -> Result<()> {
         let (_temp, registry) = new_test_registry().await;
 
         let result = preflight_validate_resolved_call(

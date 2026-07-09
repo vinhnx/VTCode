@@ -64,8 +64,8 @@ pub enum ExecCommandSource {
     #[default]
     Agent,
     User,
-    UnifiedExecStartup,
-    UnifiedExecWriteStdin,
+    CommandSessionStartup,
+    CommandSessionWriteStdin,
 }
 
 /// Parsed command information
@@ -99,7 +99,7 @@ pub enum ToolEmitter {
         auto_approved: bool,
     },
     /// Unified command-session execution
-    UnifiedExec {
+    CommandSession {
         command: Vec<String>,
         cwd: PathBuf,
         source: ExecCommandSource,
@@ -137,15 +137,15 @@ impl ToolEmitter {
         }
     }
 
-    /// Create emitter for unified exec
-    pub fn unified_exec(
+    /// Create emitter for command-session execution.
+    pub fn command_session(
         command: &[String],
         cwd: PathBuf,
         source: ExecCommandSource,
         process_id: Option<String>,
     ) -> Self {
         let parsed_cmd = parse_command(command);
-        Self::UnifiedExec {
+        Self::CommandSession {
             command: command.to_vec(),
             cwd,
             source,
@@ -211,8 +211,8 @@ impl ToolEmitter {
                     .await;
             }
 
-            // Shell/UnifiedExec begin
-            (Self::Shell { .. } | Self::UnifiedExec { .. }, ToolEventStage::Begin) => {
+            // Shell/CommandSession begin
+            (Self::Shell { .. } | Self::CommandSession { .. }, ToolEventStage::Begin) => {
                 let event = ToolEvent::Begin(ToolEventBegin {
                     call_id: ctx.call_id.to_string(),
                     tool_name: self.tool_name().into(),
@@ -221,8 +221,8 @@ impl ToolEmitter {
                 ctx.session.send_event(event).await;
             }
 
-            // Shell/UnifiedExec success
-            (Self::Shell { .. } | Self::UnifiedExec { .. }, ToolEventStage::Success(output)) => {
+            // Shell/CommandSession success
+            (Self::Shell { .. } | Self::CommandSession { .. }, ToolEventStage::Success(output)) => {
                 let event = ToolEvent::Success(ToolEventSuccess {
                     call_id: ctx.call_id.to_string(),
                     output: output.combined_output(),
@@ -230,8 +230,8 @@ impl ToolEmitter {
                 ctx.session.send_event(event).await;
             }
 
-            // Shell/UnifiedExec failure
-            (Self::Shell { .. } | Self::UnifiedExec { .. }, ToolEventStage::Failure(kind)) => {
+            // Shell/CommandSession failure
+            (Self::Shell { .. } | Self::CommandSession { .. }, ToolEventStage::Failure(kind)) => {
                 let error = match kind {
                     ToolEventFailureKind::Output(output) => output.combined_output(),
                     ToolEventFailureKind::Message(msg) => msg.clone(),
@@ -359,7 +359,7 @@ impl ToolEmitter {
         match self {
             Self::Shell { .. } => CompactStr::from(tools::SHELL),
             Self::ApplyPatch { .. } => CompactStr::from(tools::APPLY_PATCH),
-            Self::UnifiedExec { .. } => CompactStr::from(tools::UNIFIED_EXEC),
+            Self::CommandSession { .. } => CompactStr::from(tools::EXEC_COMMAND),
             Self::Generic { tool_name } => tool_name.clone(),
         }
     }
@@ -456,13 +456,13 @@ mod tests {
         let patch = ToolEmitter::apply_patch(HashMap::new(), true);
         assert_eq!(patch.tool_name(), "apply_patch");
 
-        let exec = ToolEmitter::unified_exec(
+        let exec = ToolEmitter::command_session(
             &["echo".to_string()],
             PathBuf::new(),
             ExecCommandSource::Agent,
             None,
         );
-        assert_eq!(exec.tool_name(), "unified_exec");
+        assert_eq!(exec.tool_name(), "exec_command");
 
         let generic = ToolEmitter::generic("custom_tool");
         assert_eq!(generic.tool_name(), "custom_tool");

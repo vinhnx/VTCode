@@ -7,7 +7,7 @@ use super::ToolRegistry;
 const PTY_FORCE_SPOOL_MIN_BYTES: usize = 12_000;
 
 fn is_pty_output_tool(tool_name: &str) -> bool {
-    crate::tools::tool_intent::canonical_unified_exec_tool_name(tool_name).is_some()
+    crate::tools::tool_intent::canonical_command_session_tool_name(tool_name).is_some()
 }
 
 fn output_field_bytes(value: &Value) -> usize {
@@ -167,8 +167,8 @@ impl ToolRegistry {
     /// 2. If spooled, returns a file reference instead of truncated content
     /// 3. Otherwise, applies standard sanitization
     ///
-    /// This is more token-efficient as agents can use unified_file/unified_search
-    /// to explore large outputs on demand.
+    /// This is more token-efficient as agents can inspect spooled files with
+    /// shell commands or use `code_search` for code structure on demand.
     pub(super) async fn process_tool_output(
         &self,
         tool_name: &str,

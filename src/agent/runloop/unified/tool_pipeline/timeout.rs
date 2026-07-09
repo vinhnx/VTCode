@@ -131,7 +131,7 @@ mod tests {
         let reporter = ProgressReporter::new();
         let start = Instant::now();
         let handle = spawn_timeout_warning_task(
-            "unified_exec".to_string(),
+            "command_session".to_string(),
             start,
             CancellationToken::new(),
             Duration::from_millis(5_200),
@@ -160,7 +160,7 @@ mod tests {
         let reporter = ProgressReporter::new();
         let cancel_token = CancellationToken::new();
         let handle = spawn_timeout_warning_task(
-            "unified_exec".to_string(),
+            "command_session".to_string(),
             Instant::now(),
             cancel_token.clone(),
             Duration::from_millis(5_200),

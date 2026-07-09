@@ -222,9 +222,9 @@ mod tests {
     #[test]
     fn tool_usage_normalises_removed_internal_labels() {
         let telemetry = TelemetryManager::new();
-        telemetry.record_tool_usage("unified_exec", true);
-        telemetry.record_tool_usage("unified_search", false);
-        telemetry.record_tool_usage("unified_file", true);
+        telemetry.record_tool_usage("command_session", true);
+        telemetry.record_tool_usage("search_dispatch", false);
+        telemetry.record_tool_usage("file_operation", true);
 
         let snapshot = telemetry.get_snapshot().expect("snapshot");
         assert_eq!(snapshot.total_tool_calls, 3);

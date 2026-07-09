@@ -43,7 +43,7 @@ pub(crate) const WEB_SEARCH_DESCRIPTION: &str = "Searches the web for a query an
 #[derive(Debug, Deserialize)]
 struct WebSearchArgs {
     /// Search query. `pattern` is accepted as an alias so the
-    /// `unified_search` action can use a single field name.
+    /// `search_dispatch` action can use a single field name.
     #[serde(default, alias = "pattern")]
     query: Option<String>,
     #[serde(default)]

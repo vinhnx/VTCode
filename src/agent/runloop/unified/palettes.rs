@@ -927,7 +927,7 @@ mod tests {
                 started_at: Utc.with_ymd_and_hms(2026, 3, 11, 9, 0, 0).unwrap(),
                 ended_at: Utc.with_ymd_and_hms(2026, 3, 11, 9, 5, 0).unwrap(),
                 total_messages: 12,
-                distinct_tools: vec!["unified_exec".to_string(), "unified_search".to_string()],
+                distinct_tools: vec!["exec_command".to_string(), "code_search".to_string()],
                 transcript: Vec::new(),
                 messages: Vec::new(),
                 progress: None,

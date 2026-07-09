@@ -89,8 +89,10 @@ fn default_scheduled_tasks_enabled() -> bool {
 
 fn default_full_auto_allowed_tools() -> Vec<String> {
     vec![
-        tools::READ_FILE.to_string(),
-        tools::UNIFIED_SEARCH.to_string(),
+        tools::EXEC_COMMAND.to_string(),
+        tools::WRITE_STDIN.to_string(),
+        tools::APPLY_PATCH.to_string(),
+        tools::CODE_SEARCH.to_string(),
     ]
 }
 

@@ -59,9 +59,9 @@ fn serialize_responses_function_tool(
 fn should_strip_any_of_for_builtin_tool(tool_name: &str) -> bool {
     matches!(
         tool_name,
-        tools::UNIFIED_SEARCH
-            | tools::UNIFIED_EXEC
-            | tools::UNIFIED_FILE
+        tools::CODE_SEARCH
+            | tools::EXEC_COMMAND
+            | tools::APPLY_PATCH
             | tools::THINK
             | tools::SEARCH_TOOLS
             | tools::WEB_SEARCH
@@ -77,9 +77,7 @@ fn should_strip_any_of_for_builtin_tool(tool_name: &str) -> bool {
             | tools::LIST_SKILLS
             | tools::LOAD_SKILL
             | tools::LOAD_SKILL_RESOURCE
-            | tools::EXEC_COMMAND
             | tools::WRITE_STDIN
-            | tools::RUN_PTY_CMD
             | tools::CREATE_PTY_SESSION
             | tools::LIST_PTY_SESSIONS
             | tools::CLOSE_PTY_SESSION
@@ -92,7 +90,6 @@ fn should_strip_any_of_for_builtin_tool(tool_name: &str) -> bool {
             | tools::EDIT_FILE
             | tools::DELETE_FILE
             | tools::CREATE_FILE
-            | tools::APPLY_PATCH
             | tools::SEARCH_REPLACE
             | tools::FILE_OP
             | tools::MOVE_FILE

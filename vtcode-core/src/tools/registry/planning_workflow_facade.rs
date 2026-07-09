@@ -7,8 +7,8 @@ use super::ToolRegistry;
 impl ToolRegistry {
     /// Enable planning workflow (read-only enforcement).
     ///
-    /// When enabled, mutating tools (`unified_file` writes/edits, `apply_patch`,
-    /// `unified_exec` runs, etc.)
+    /// When enabled, mutating tools (`file_operation` writes/edits, `apply_patch`,
+    /// `command_session` runs, etc.)
     /// are blocked and the agent can only read/analyze the codebase.
     ///
     /// `PlanningWorkflowState` is the single source of truth; this method delegates to it

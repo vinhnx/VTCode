@@ -31,24 +31,24 @@ async fn test_execute_tool_ref_uses_optimizations() {
     assert_eq!(cache_capacity, 8);
     assert_eq!(initial_cache_size, 0);
 
-    // Test 1: Execute read_file tool multiple times - should use hot cache
+    // Test 1: Execute file_read tool multiple times - should use hot cache
     let args = json!({
         "path": test_file.to_string_lossy()
     });
 
     // First execution - should populate cache
-    let result1 = registry.execute_tool_ref("read_file", &args).await;
+    let result1 = registry.execute_tool_ref(tools::READ_FILE, &args).await;
     assert!(result1.is_ok());
 
     // Check that cache might have been populated (depends on tool implementation)
     let (cache_size_after_first, _) = registry.hot_cache_stats();
 
     // Second execution - should potentially use cache
-    let result2 = registry.execute_tool_ref("read_file", &args).await;
+    let result2 = registry.execute_tool_ref(tools::READ_FILE, &args).await;
     assert!(result2.is_ok());
 
     // Third execution with alias - should resolve and potentially cache
-    let result3 = registry.execute_tool_ref("read_file", &args).await;
+    let result3 = registry.execute_tool_ref(tools::READ_FILE, &args).await;
     result3.unwrap();
 
     // Verify results are consistent. The second read may reuse a recent

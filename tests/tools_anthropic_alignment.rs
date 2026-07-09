@@ -2,12 +2,11 @@
 use assert_fs::TempDir;
 use serde_json::json;
 use std::fs;
-use tempfile::tempdir;
 use vtcode_core::ToolRegistry;
 use vtcode_core::config::constants::tools;
 
 #[tokio::test]
-async fn list_files_pagination_and_default_response_format() {
+async fn search_dispatch_list_action_is_not_public() {
     let dir = TempDir::new().unwrap();
     let ws = dir.path().to_path_buf();
 
@@ -16,84 +15,45 @@ async fn list_files_pagination_and_default_response_format() {
     fs::write(ws.join("src/a.rs"), "fn a() {}\n").unwrap();
     fs::write(ws.join("src/b.rs"), "fn b() {}\n").unwrap();
 
-    // Workspace policy with constraints
-    let vtcode_dir = ws.join(".vtcode");
-    fs::create_dir_all(&vtcode_dir).unwrap();
-    fs::write(
-        vtcode_dir.join("tool-policy.json"),
-        json!({
-            "version": 1,
-            "available_tools": [tools::UNIFIED_SEARCH],
-            "policies": { tools::UNIFIED_SEARCH: "allow" },
-            "constraints": { tools::UNIFIED_SEARCH: { "max_items_per_call": 10, "default_response_format": "concise" } }
-        }).to_string(),
-    ).unwrap();
-
     let registry = ToolRegistry::new(ws.clone()).await;
     registry.allow_all_tools().await.unwrap_or_else(|err| {
         panic!("tool policy should be available for test: {err}");
     });
-    let out = registry
-        .execute_tool(
+    let err = registry
+        .execute_public_tool_ref(
             tools::UNIFIED_SEARCH,
-            json!({
+            &json!({
+                "action": "list",
                 "path": "src",
                 "page": 1,
                 "per_page": 1
             }),
         )
         .await
-        .unwrap();
+        .expect_err("search_dispatch_internal should not be public");
 
-    assert_eq!(out["response_format"], "concise");
-    assert_eq!(out["page"], 1);
-    assert_eq!(out["per_page"], 1);
+    assert!(err.to_string().contains("Unknown tool"));
 }
 
 #[tokio::test]
-#[ignore = "requires Anthropic API"]
-async fn grep_file_default_concise_and_cap() {
-    // Skip if ripgrep is not available
-    if std::process::Command::new("rg")
-        .arg("--version")
-        .output()
-        .is_err()
-    {
-        eprintln!("skipping grep_file_default_concise_and_cap: ripgrep not installed");
-        return;
-    }
-    let dir = tempdir().unwrap();
+async fn search_dispatch_grep_action_is_not_public() {
+    let dir = TempDir::new().unwrap();
     let ws = dir.path().to_path_buf();
     fs::write(ws.join("file.txt"), "TODO: one\nTODO: two\n").unwrap();
 
-    // Minimal policy that allows grep and caps results
-    let vtcode_dir = ws.join(".vtcode");
-    fs::create_dir_all(&vtcode_dir).unwrap();
-    fs::write(
-        vtcode_dir.join("tool-policy.json"),
-        json!({
-            "version": 1,
-            "available_tools": [tools::UNIFIED_SEARCH],
-            "policies": { tools::UNIFIED_SEARCH: "allow" },
-            "constraints": { tools::UNIFIED_SEARCH: { "max_results_per_call": 1, "default_response_format": "concise" } }
-        }).to_string(),
-    ).unwrap();
-
     let registry = ToolRegistry::new(ws.clone()).await;
-    let out = registry
-        .execute_tool(
+    let err = registry
+        .execute_public_tool_ref(
             tools::UNIFIED_SEARCH,
-            json!({
+            &json!({
+                "action": "grep",
                 "pattern": "TODO",
                 "path": ".",
                 "max_results": 1000
             }),
         )
         .await
-        .unwrap();
+        .expect_err("search_dispatch_internal should not be public");
 
-    // Defaulted to concise
-    assert_eq!(out["response_format"], "concise");
-    // Cap applied and guidance may be present
-    assert!(out["matches"].as_array().unwrap().len() <= 1);
+    assert!(err.to_string().contains("Unknown tool"));
 }

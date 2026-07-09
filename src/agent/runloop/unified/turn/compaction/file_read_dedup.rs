@@ -21,7 +21,7 @@ fn collect_file_read_tool_kinds(history: &[Message]) -> HashMap<String, FileRead
                     args.get("action")
                         .and_then(Value::as_str)
                         .filter(|a| *a == "read")
-                        .map(|_| FileReadToolKind::UnifiedFileRead)
+                        .map(|_| FileReadToolKind::FileOperationRead)
                 })
             } else {
                 None
@@ -123,7 +123,7 @@ fn file_read_dedup_candidate(
 
     if !matches!(
         kind,
-        FileReadToolKind::ReadFile | FileReadToolKind::UnifiedFileRead
+        FileReadToolKind::ReadFile | FileReadToolKind::FileOperationRead
     ) {
         return None;
     }

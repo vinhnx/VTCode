@@ -2,23 +2,26 @@
 use super::*;
 
 #[test]
-fn preflight_fallback_normalizes_unified_search_args() {
+fn preflight_fallback_normalizes_search_dispatch_args() {
     let error =
-        anyhow!("Invalid arguments for tool 'unified_search': \"action\" is a required property");
+        anyhow!("Invalid arguments for tool 'search_dispatch': \"action\" is a required property");
     let args = json!({
         "Pattern": "LLMStreamEvent::",
         "Path": "."
     });
     let fallback = preflight_validation_fallback(tool_names::UNIFIED_SEARCH, &args, &error)
-        .expect("fallback expected for recoverable unified_search preflight");
-    assert_eq!(fallback.0, tool_names::UNIFIED_SEARCH);
-    assert_eq!(fallback.1["action"], "grep");
-    assert_eq!(fallback.1["pattern"], "LLMStreamEvent::");
+        .expect("fallback expected for recoverable search_dispatch preflight");
+    assert_eq!(fallback.0, tool_names::EXEC_COMMAND);
+    assert!(
+        fallback.1["cmd"]
+            .as_str()
+            .is_some_and(|cmd| cmd.contains("LLMStreamEvent::"))
+    );
 }
 
 #[test]
 fn preflight_fallback_maps_keyword_to_pattern_for_grep() {
-    let error = anyhow!("Invalid arguments for tool 'unified_search': missing field `pattern`");
+    let error = anyhow!("Invalid arguments for tool 'search_dispatch': missing field `pattern`");
     let args = json!({
         "action": "grep",
         "keyword": "system prompt",
@@ -26,13 +29,16 @@ fn preflight_fallback_maps_keyword_to_pattern_for_grep() {
     });
     let fallback = preflight_validation_fallback(tool_names::UNIFIED_SEARCH, &args, &error)
         .expect("fallback expected for grep missing pattern");
-    assert_eq!(fallback.0, tool_names::UNIFIED_SEARCH);
-    assert_eq!(fallback.1["action"], "grep");
-    assert_eq!(fallback.1["pattern"], "system prompt");
+    assert_eq!(fallback.0, tool_names::EXEC_COMMAND);
+    assert!(
+        fallback.1["cmd"]
+            .as_str()
+            .is_some_and(|cmd| cmd.contains("system prompt"))
+    );
 }
 
 #[test]
-fn preflight_fallback_remaps_unified_search_read_action() {
+fn preflight_fallback_remaps_search_dispatch_read_action() {
     let error = anyhow!("Tool execution failed: Invalid action: read");
     let args = json!({
         "action": "read",
@@ -41,24 +47,35 @@ fn preflight_fallback_remaps_unified_search_read_action() {
     });
     let fallback = preflight_validation_fallback(tool_names::UNIFIED_SEARCH, &args, &error)
         .expect("fallback expected for invalid read action");
-    assert_eq!(fallback.0, tool_names::UNIFIED_SEARCH);
-    assert_eq!(fallback.1["action"], "grep");
-    assert_eq!(fallback.1["pattern"], "retry");
+    assert_eq!(fallback.0, tool_names::EXEC_COMMAND);
+    assert!(
+        fallback.1["cmd"]
+            .as_str()
+            .is_some_and(|cmd| cmd.contains("retry"))
+    );
 }
 
 #[test]
-fn recovery_fallback_skips_list_degradation_for_search_refinement() {
+fn recovery_fallback_skips_list_degradation_for_text_search_refinement() {
     let grep = recovery_fallback_for_tool(
         tool_names::UNIFIED_SEARCH,
         &json!({"action":"grep","path":"src","pattern":"Result<"}),
     );
+
+    assert!(grep.is_none());
+}
+
+#[test]
+fn recovery_fallback_maps_structural_search_to_code_search() {
     let structural = recovery_fallback_for_tool(
         tool_names::UNIFIED_SEARCH,
         &json!({"action":"structural","path":"src","pattern":"fn $NAME() {}","lang":"rust"}),
-    );
+    )
+    .expect("structural fallback should use public code_search");
 
-    assert!(grep.is_none());
-    assert!(structural.is_none());
+    assert_eq!(structural.0, tool_names::CODE_SEARCH);
+    assert_eq!(structural.1["action"], "structural");
+    assert_eq!(structural.1["lang"], "rust");
 }
 
 #[test]
@@ -69,39 +86,43 @@ fn recovery_fallback_preserves_list_for_file_discovery_calls() {
     )
     .expect("list fallback expected");
 
-    assert_eq!(fallback.0, tool_names::UNIFIED_SEARCH);
-    assert_eq!(fallback.1["action"], "list");
-    assert_eq!(fallback.1["path"], "src");
-    assert_eq!(fallback.1["mode"], "tree");
+    assert_eq!(fallback.0, tool_names::EXEC_COMMAND);
+    assert!(
+        fallback.1["cmd"]
+            .as_str()
+            .is_some_and(|cmd| cmd.contains("'src'"))
+    );
 }
 
 #[test]
-fn preflight_fallback_remaps_unified_file_command_payload_to_unified_exec() {
-    let error = anyhow!("Missing action in unified_file");
+fn preflight_fallback_remaps_file_operation_command_payload_to_command_session() {
+    let error = anyhow!("Missing action in file_operation");
     let args = json!({
         "command": "git status --short",
         "cwd": "."
     });
     let fallback = preflight_validation_fallback(tool_names::UNIFIED_FILE, &args, &error)
-        .expect("fallback expected for unified_file command payload");
-    assert_eq!(fallback.0, tool_names::UNIFIED_EXEC);
-    assert_eq!(fallback.1["action"], "run");
-    assert_eq!(fallback.1["command"], "git status --short");
-    assert_eq!(fallback.1["cwd"], ".");
+        .expect("fallback expected for file_operation command payload");
+    assert_eq!(fallback.0, tool_names::EXEC_COMMAND);
+    assert_eq!(fallback.1["cmd"], "git status --short");
+    assert_eq!(fallback.1["workdir"], ".");
 }
 
 #[test]
-fn preflight_fallback_remaps_unified_file_list_to_unified_search_list() {
-    let error = anyhow!("Invalid arguments for tool 'unified_file': unknown variant `list`");
+fn preflight_fallback_remaps_file_operation_list_to_search_dispatch_list() {
+    let error = anyhow!("Invalid arguments for tool 'file_operation': unknown variant `list`");
     let args = json!({
         "action": "list",
         "path": "src"
     });
     let fallback = preflight_validation_fallback(tool_names::UNIFIED_FILE, &args, &error)
-        .expect("fallback expected for unified_file list payload");
-    assert_eq!(fallback.0, tool_names::UNIFIED_SEARCH);
-    assert_eq!(fallback.1["action"], "list");
-    assert_eq!(fallback.1["path"], "src");
+        .expect("fallback expected for file_operation list payload");
+    assert_eq!(fallback.0, tool_names::EXEC_COMMAND);
+    assert!(
+        fallback.1["cmd"]
+            .as_str()
+            .is_some_and(|cmd| cmd.contains("'src'"))
+    );
 }
 
 #[test]
@@ -174,15 +195,18 @@ fn validation_error_payload_includes_fallback_metadata() {
     let payload = build_validation_error_content_with_fallback(
         "Tool preflight validation failed: x".to_string(),
         "preflight",
-        Some(tool_names::UNIFIED_SEARCH.to_string()),
-        Some(json!({"action":"grep","pattern":"foo","path":"."})),
+        Some(tool_names::EXEC_COMMAND.to_string()),
+        Some(json!({"cmd":"rg --line-number --column --color=never 'foo' '.'"})),
     );
     let parsed: serde_json::Value =
         serde_json::from_str(&payload).expect("validation payload should be json");
     assert_eq!(parsed["error_class"], "invalid_arguments");
     assert_eq!(parsed["is_recoverable"], true);
-    assert_eq!(parsed["fallback_tool"], tool_names::UNIFIED_SEARCH);
-    assert_eq!(parsed["fallback_tool_args"]["action"], "grep");
+    assert_eq!(parsed["fallback_tool"], tool_names::EXEC_COMMAND);
+    assert_eq!(
+        parsed["fallback_tool_args"]["cmd"],
+        "rg --line-number --column --color=never 'foo' '.'"
+    );
     assert_eq!(
         parsed.get("next_action"),
         Some(&json!("Retry with fallback_tool_args."))
@@ -195,15 +219,18 @@ fn validation_error_payload_marks_loop_detection_without_prose_hint() {
     let payload = build_validation_error_content_with_fallback(
         "Tool 'read_file' is blocked due to excessive repetition (Loop Detected).".to_string(),
         "loop_detection",
-        Some(tool_names::UNIFIED_SEARCH.to_string()),
-        Some(json!({"action":"list","path":"."})),
+        Some(tool_names::EXEC_COMMAND.to_string()),
+        Some(json!({"cmd":"find '.' -maxdepth 1 -mindepth 1 -print"})),
     );
     let parsed: serde_json::Value =
         serde_json::from_str(&payload).expect("validation payload should be json");
     // `loop_detected` is internal control logic and is stripped from model output.
     assert!(parsed.get("loop_detected").is_none());
-    assert_eq!(parsed["fallback_tool"], tool_names::UNIFIED_SEARCH);
-    assert_eq!(parsed["fallback_tool_args"]["action"], "list");
+    assert_eq!(parsed["fallback_tool"], tool_names::EXEC_COMMAND);
+    assert_eq!(
+        parsed["fallback_tool_args"]["cmd"],
+        "find '.' -maxdepth 1 -mindepth 1 -print"
+    );
     assert_eq!(
         parsed.get("next_action"),
         Some(&json!("Retry with fallback_tool_args."))

@@ -4,8 +4,8 @@ use tempfile::tempdir;
 use vtcode_core::tools::registry::{ToolErrorType, ToolExecutionError};
 
 #[test]
-fn fallback_from_error_extracts_unified_exec_poll() {
-    let error = "Tool failed. Use unified_exec with action=\"poll\" and session_id=\"run-ab12\" instead of read_file.";
+fn fallback_from_error_extracts_command_session_poll() {
+    let error = "Tool failed. Use command_session with action=\"poll\" and session_id=\"run-ab12\" instead of read_file.";
     let fallback = fallback_from_error(tool_names::UNIFIED_FILE, error, None);
     assert_eq!(
         fallback,
@@ -17,7 +17,7 @@ fn fallback_from_error_extracts_unified_exec_poll() {
 }
 
 #[test]
-fn fallback_from_error_recovers_unified_search_invalid_read_action() {
+fn fallback_from_error_recovers_search_dispatch_invalid_read_action() {
     let error = "Tool execution failed: Invalid action: read";
     let fallback = fallback_from_error(tool_names::UNIFIED_SEARCH, error, None);
     assert_eq!(
@@ -359,13 +359,13 @@ fn maybe_inline_spooled_compacts_next_read_duplicates() {
     let serialized = maybe_inline_spooled(
         tool_names::READ_FILE,
         &serde_json::json!({
-            "path": ".vtcode/context/tool_outputs/unified_exec_1.txt",
-            "spool_path": ".vtcode/context/tool_outputs/unified_exec_1.txt",
+            "path": ".vtcode/context/tool_outputs/command_session_1.txt",
+            "spool_path": ".vtcode/context/tool_outputs/command_session_1.txt",
             "has_more": true,
             "next_offset": 81,
             "chunk_limit": 40,
             "next_read_args": {
-                "path": ".vtcode/context/tool_outputs/unified_exec_1.txt",
+                "path": ".vtcode/context/tool_outputs/command_session_1.txt",
                 "offset": 81,
                 "limit": 40
             }
@@ -382,13 +382,13 @@ fn maybe_inline_spooled_compacts_next_read_duplicates() {
     assert_eq!(
         parsed.get("path"),
         Some(&serde_json::json!(
-            ".vtcode/context/tool_outputs/unified_exec_1.txt"
+            ".vtcode/context/tool_outputs/command_session_1.txt"
         ))
     );
     assert_eq!(
         parsed.get("next_read_args"),
         Some(&serde_json::json!({
-            "p": ".vtcode/context/tool_outputs/unified_exec_1.txt",
+            "p": ".vtcode/context/tool_outputs/command_session_1.txt",
             "o": 81,
             "l": 40
         }))
@@ -425,9 +425,9 @@ fn maybe_inline_spooled_keeps_loop_recovery_fields() {
         tool_names::READ_FILE,
         &serde_json::json!({
             "loop_detected": true,
-            "spool_path": ".vtcode/context/tool_outputs/unified_exec_loop.txt",
+            "spool_path": ".vtcode/context/tool_outputs/command_session_loop.txt",
             "next_read_args": {
-                "path": ".vtcode/context/tool_outputs/unified_exec_loop.txt",
+                "path": ".vtcode/context/tool_outputs/command_session_loop.txt",
                 "offset": 81,
                 "limit": 40
             },
@@ -447,13 +447,13 @@ fn maybe_inline_spooled_keeps_loop_recovery_fields() {
     assert_eq!(
         parsed.get("spool_path"),
         Some(&serde_json::json!(
-            ".vtcode/context/tool_outputs/unified_exec_loop.txt"
+            ".vtcode/context/tool_outputs/command_session_loop.txt"
         ))
     );
     assert_eq!(
         parsed.get("next_read_args"),
         Some(&serde_json::json!({
-            "p": ".vtcode/context/tool_outputs/unified_exec_loop.txt",
+            "p": ".vtcode/context/tool_outputs/command_session_loop.txt",
             "o": 81,
             "l": 40
         }))
@@ -484,7 +484,7 @@ fn maybe_inline_spooled_uses_reference_only_for_spooled_exec_output() {
             "output": "preview text",
             "stdout": "preview text",
             "stderr": "warning text",
-            "spool_path": ".vtcode/context/tool_outputs/unified_exec_1.txt",
+            "spool_path": ".vtcode/context/tool_outputs/command_session_1.txt",
             "exit_code": 0,
             "is_exited": true
         }),
@@ -499,7 +499,7 @@ fn maybe_inline_spooled_uses_reference_only_for_spooled_exec_output() {
     assert_eq!(
         parsed.get("spool_path"),
         Some(&serde_json::json!(
-            ".vtcode/context/tool_outputs/unified_exec_1.txt"
+            ".vtcode/context/tool_outputs/command_session_1.txt"
         ))
     );
     assert_eq!(
@@ -530,7 +530,7 @@ fn maybe_inline_spooled_uses_reference_only_for_spooled_search_output() {
                 }
             ],
             "content": large_match_payload,
-            "spool_path": ".vtcode/context/tool_outputs/unified_search_1.txt",
+            "spool_path": ".vtcode/context/tool_outputs/search_dispatch_1.txt",
             "truncated": true
         }),
     );
@@ -542,7 +542,7 @@ fn maybe_inline_spooled_uses_reference_only_for_spooled_search_output() {
     assert_eq!(
         parsed.get("spool_path"),
         Some(&serde_json::json!(
-            ".vtcode/context/tool_outputs/unified_search_1.txt"
+            ".vtcode/context/tool_outputs/search_dispatch_1.txt"
         ))
     );
     assert_eq!(
@@ -563,7 +563,7 @@ async fn maybe_inline_spooled_with_preview_includes_tail_excerpt_from_spool_file
     tokio::fs::create_dir_all(&spool_dir)
         .await
         .expect("create spool dir");
-    let spool_relative = ".vtcode/context/tool_outputs/unified_exec_test.txt";
+    let spool_relative = ".vtcode/context/tool_outputs/command_session_test.txt";
     let spool_absolute = workspace.path().join(spool_relative);
     let mut content = String::new();
     for idx in 0..40 {
@@ -789,7 +789,7 @@ async fn tool_output_summary_input_uses_spool_file_tail_for_exec_output() {
     let temp = tempdir().unwrap();
     let spool_dir = temp.path().join(".vtcode/context/tool_outputs");
     std::fs::create_dir_all(&spool_dir).unwrap();
-    let spool_path = spool_dir.join("unified_exec_1.txt");
+    let spool_path = spool_dir.join("command_session_1.txt");
     let spool_content = (1..=150)
         .map(|idx| format!("line-{idx}"))
         .collect::<Vec<_>>()
@@ -799,7 +799,7 @@ async fn tool_output_summary_input_uses_spool_file_tail_for_exec_output() {
     let output = serde_json::json!({
         "output": "preview text",
         "stderr_preview": "warning text",
-        "spool_path": ".vtcode/context/tool_outputs/unified_exec_1.txt",
+        "spool_path": ".vtcode/context/tool_outputs/command_session_1.txt",
         "exit_code": 0,
         "is_exited": true
     });
@@ -878,13 +878,13 @@ async fn tool_output_summary_input_decodes_invalid_utf8_spool_lossily() {
     let temp = tempdir().unwrap();
     let spool_dir = temp.path().join(".vtcode/context/tool_outputs");
     std::fs::create_dir_all(&spool_dir).unwrap();
-    let spool_path = spool_dir.join("unified_exec_invalid.txt");
+    let spool_path = spool_dir.join("command_session_invalid.txt");
     std::fs::write(&spool_path, b"ok\n\xff\xfe\nlast line\n").unwrap();
 
     let output = serde_json::json!({
         "output": "preview text",
         "stderr_preview": "warning text",
-        "spool_path": ".vtcode/context/tool_outputs/unified_exec_invalid.txt",
+        "spool_path": ".vtcode/context/tool_outputs/command_session_invalid.txt",
         "exit_code": 0,
         "is_exited": true
     });

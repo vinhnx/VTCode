@@ -457,8 +457,8 @@ mod tests {
         assert_eq!(active.description, "planner description");
         assert_eq!(active.color.as_deref(), Some("blue"));
         assert_eq!(active.instructions, "planner instructions");
-        assert_eq!(active.tools, Some(vec!["unified_search".to_string()]));
-        assert_eq!(active.disallowed_tools, vec!["unified_file".to_string()]);
+        assert_eq!(active.tools, Some(vec!["search_dispatch".to_string()]));
+        assert_eq!(active.disallowed_tools, vec!["file_operation".to_string()]);
         assert_eq!(active.permissions.default, PermissionDefault::Deny);
         assert_eq!(active.model.as_deref(), Some("gpt-5.1"));
         assert_eq!(active.reasoning_effort, Some(ReasoningEffortLevel::High));
@@ -531,8 +531,8 @@ mod tests {
         assert_eq!(active.color.as_deref(), Some("blue"));
         assert_eq!(active.aliases, vec!["builder".to_string()]);
         assert_eq!(active.instructions, "worker instructions");
-        assert_eq!(active.tools, Some(vec!["unified_search".to_string()]));
-        assert_eq!(active.disallowed_tools, vec!["unified_file".to_string()]);
+        assert_eq!(active.tools, Some(vec!["search_dispatch".to_string()]));
+        assert_eq!(active.disallowed_tools, vec!["file_operation".to_string()]);
         assert_eq!(active.permissions.default, PermissionDefault::Deny);
         assert_eq!(active.model.as_deref(), Some("gpt-5.1"));
         assert_eq!(active.reasoning_effort, Some(ReasoningEffortLevel::High));
@@ -681,9 +681,15 @@ mod tests {
     fn default_build_agent_allows_baseline_read_and_exec_tools() {
         let active = ActivePrimaryAgentState::default();
 
-        assert!(primary_agent_allows_tool(active.active(), "unified_search"));
-        assert!(primary_agent_allows_tool(active.active(), "unified_file"));
-        assert!(primary_agent_allows_tool(active.active(), "unified_exec"));
+        assert!(primary_agent_allows_tool(
+            active.active(),
+            "search_dispatch"
+        ));
+        assert!(primary_agent_allows_tool(active.active(), "file_operation"));
+        assert!(primary_agent_allows_tool(
+            active.active(),
+            "command_session"
+        ));
         assert!(primary_agent_allows_tool(active.active(), "run_pty_cmd"));
         assert_eq!(active.active().permissions.default, PermissionDefault::Ask);
     }
@@ -694,9 +700,9 @@ mod tests {
         // `apply_primary_agent_tool_policy`) hard-blocks mutating tools before
         // any global `[tools.policies]` entry can reach them. This is why the
         // `plan` and `duck` read-only primaries do not need explicit
-        // `tool_policy_overrides` Deny entries for `apply_patch`, `unified_exec`,
+        // `tool_policy_overrides` Deny entries for `apply_patch`, `command_session`,
         // etc.: those tools are never exposed to the agent in the first place.
-        // `unified_file` is allow-listed for reads; its write actions are gated
+        // `file_operation` is allow-listed for reads; its write actions are gated
         // per-action by the planning workflow + the Deny permission default, so a
         // per-tool Deny (which cannot distinguish read vs write) would break reads.
         for spec in [builtin_primary_duck_agent(), builtin_plan_agent()] {
@@ -705,19 +711,19 @@ mod tests {
 
             // Read-only primaries expose only their read allow-list.
             assert!(
-                primary_agent_allows_tool(&active, "unified_search"),
-                "{name} should expose unified_search"
+                primary_agent_allows_tool(&active, "search_dispatch"),
+                "{name} should expose search_dispatch"
             );
             assert!(
-                primary_agent_allows_tool(&active, "unified_file"),
-                "{name} should expose unified_file for reads"
+                primary_agent_allows_tool(&active, "file_operation"),
+                "{name} should expose file_operation for reads"
             );
 
             // Mutating tools outside the allow-list are hard-blocked regardless
             // of global policy.
             assert!(
-                !primary_agent_allows_tool(&active, "unified_exec"),
-                "{name} must not expose unified_exec"
+                !primary_agent_allows_tool(&active, "command_session"),
+                "{name} must not expose command_session"
             );
             assert!(
                 !primary_agent_allows_tool(&active, "apply_patch"),
@@ -738,15 +744,15 @@ mod tests {
     fn tool_policy_intersects_allow_list_then_applies_deny_list() {
         let mut spec = test_spec("worker");
         spec.tools = Some(vec![
-            "unified_search".to_string(),
-            "unified_file".to_string(),
+            "search_dispatch".to_string(),
+            "file_operation".to_string(),
         ]);
         spec.disallowed_tools = vec!["UNIFIED_SEARCH".to_string()];
         let active = ActivePrimaryAgent::from_spec(&spec);
 
-        assert!(!primary_agent_allows_tool(&active, "unified_exec"));
-        assert!(!primary_agent_allows_tool(&active, "unified_search"));
-        assert!(primary_agent_allows_tool(&active, "unified_file"));
+        assert!(!primary_agent_allows_tool(&active, "command_session"));
+        assert!(!primary_agent_allows_tool(&active, "search_dispatch"));
+        assert!(primary_agent_allows_tool(&active, "file_operation"));
     }
 
     #[test]
@@ -756,13 +762,13 @@ mod tests {
         spec.disallowed_tools = Vec::new();
         let active = ActivePrimaryAgent::from_spec(&spec);
 
-        assert!(!primary_agent_allows_tool(&active, "unified_search"));
+        assert!(!primary_agent_allows_tool(&active, "search_dispatch"));
     }
 
     #[test]
     fn subagent_cleanup_tools_bypass_policy_but_new_work_obeys_policy() {
         let mut spec = test_spec("restricted");
-        spec.tools = Some(vec!["unified_search".to_string()]);
+        spec.tools = Some(vec!["search_dispatch".to_string()]);
         spec.disallowed_tools = vec![
             tools::SPAWN_AGENT.to_string(),
             tools::WAIT_AGENT.to_string(),
@@ -774,8 +780,8 @@ mod tests {
         let active = ActivePrimaryAgent::from_spec(&spec);
 
         // Non-cleanup tools respect the policy.
-        assert!(!primary_agent_allows_tool(&active, "unified_exec"));
-        assert!(!primary_agent_allows_tool(&active, "unified_file"));
+        assert!(!primary_agent_allows_tool(&active, "command_session"));
+        assert!(!primary_agent_allows_tool(&active, "file_operation"));
         assert!(!primary_agent_allows_tool(&active, tools::SPAWN_AGENT));
         assert!(!primary_agent_allows_tool(
             &active,
@@ -1107,8 +1113,8 @@ mod tests {
             name: name.to_string(),
             description: format!("{name} description"),
             prompt: format!("{name} instructions"),
-            tools: Some(vec!["unified_search".to_string()]),
-            disallowed_tools: vec!["unified_file".to_string()],
+            tools: Some(vec!["search_dispatch".to_string()]),
+            disallowed_tools: vec!["file_operation".to_string()],
             model: Some("gpt-5.1".to_string()),
             color: Some("blue".to_string()),
             reasoning_effort: Some(ReasoningEffortLevel::High),

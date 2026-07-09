@@ -35,14 +35,18 @@ mod e2e_tests {
             "max_bytes": 1000
         });
 
-        let result1 = registry.execute_tool_ref("read_file", &read_args).await;
+        let result1 = registry
+            .execute_tool_ref(vtcode_core::config::constants::tools::READ_FILE, &read_args)
+            .await;
         assert!(result1.is_ok(), "First read should succeed");
 
         let content1 = result1.unwrap();
         assert_eq!(content1["content"], test_content);
 
         // Test 2: Second read should use cache (verify by checking cache stats)
-        let result2 = registry.execute_tool("read_file", read_args).await;
+        let result2 = registry
+            .execute_tool(vtcode_core::config::constants::tools::READ_FILE, read_args)
+            .await;
         assert!(result2.is_ok(), "Second read should succeed");
 
         let content2 = result2.unwrap();
@@ -65,7 +69,9 @@ mod e2e_tests {
             "max_bytes": 1000
         });
 
-        let result3 = registry.execute_tool("read_file", read_args2).await;
+        let result3 = registry
+            .execute_tool(vtcode_core::config::constants::tools::READ_FILE, read_args2)
+            .await;
         assert!(result3.is_ok(), "Read after write should succeed");
 
         let content3 = result3.unwrap();
@@ -150,18 +156,20 @@ mod e2e_tests {
         let registry = ToolRegistry::new(workspace_root.clone()).await;
 
         // List directory (should cache result)
-        let list_args = json!({
-            "action": "list",
-            "path": "subdir"
-        });
+        let list_args = json!({ "path": "subdir" });
 
         let result1 = registry
-            .execute_tool_ref("unified_search", &list_args)
+            .execute_tool_ref(
+                vtcode_core::config::constants::tools::LIST_FILES,
+                &list_args,
+            )
             .await;
         assert!(result1.is_ok(), "First list should succeed");
 
         // Second list should use cache
-        let result2 = registry.execute_tool("unified_search", list_args).await;
+        let result2 = registry
+            .execute_tool(vtcode_core::config::constants::tools::LIST_FILES, list_args)
+            .await;
         assert!(result2.is_ok(), "Second list should succeed");
 
         // Second list should reuse the cached result. The second call annotates
@@ -199,7 +207,9 @@ mod e2e_tests {
             "path": test_file.to_string_lossy()
         });
 
-        let result1 = registry.execute_tool_ref("read_file", &read_args).await;
+        let result1 = registry
+            .execute_tool_ref(vtcode_core::config::constants::tools::READ_FILE, &read_args)
+            .await;
         assert!(result1.is_ok());
         assert_eq!(result1.unwrap()["content"], "original");
 
@@ -210,11 +220,15 @@ mod e2e_tests {
             "new_str": "modified"
         });
 
-        let edit_result = registry.execute_tool("edit_file", edit_args).await;
+        let edit_result = registry
+            .execute_tool(vtcode_core::config::constants::tools::EDIT_FILE, edit_args)
+            .await;
         assert!(edit_result.is_ok(), "Edit should succeed");
 
         // Read again - should get updated content (cache should be invalidated)
-        let result2 = registry.execute_tool("read_file", read_args).await;
+        let result2 = registry
+            .execute_tool(vtcode_core::config::constants::tools::READ_FILE, read_args)
+            .await;
         assert!(result2.is_ok());
         assert_eq!(result2.unwrap()["content"], "modified");
     }
@@ -336,7 +350,7 @@ mod e2e_tests {
     }
 
     #[tokio::test]
-    async fn test_edit_file_exact_match() {
+    async fn test_file_edit_exact_match() {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let workspace_root =
             fs::canonicalize(temp_dir.path()).expect("Failed to canonicalize workspace");
@@ -364,9 +378,9 @@ mod e2e_tests {
         });
 
         let result = registry
-            .execute_tool("edit_file", edit_args)
+            .execute_tool(vtcode_core::config::constants::tools::EDIT_FILE, edit_args)
             .await
-            .expect("edit_file should succeed");
+            .expect("file_edit should succeed");
         assert_eq!(result["success"], true);
 
         // Verify file content
@@ -375,7 +389,7 @@ mod e2e_tests {
     }
 
     #[tokio::test]
-    async fn test_edit_file_multiple_occurrences() {
+    async fn test_file_edit_multiple_occurrences() {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let workspace_root =
             fs::canonicalize(temp_dir.path()).expect("Failed to canonicalize workspace");
@@ -403,9 +417,9 @@ mod e2e_tests {
         });
 
         let result = registry
-            .execute_tool("edit_file", edit_args)
+            .execute_tool(vtcode_core::config::constants::tools::EDIT_FILE, edit_args)
             .await
-            .expect("edit_file should succeed");
+            .expect("file_edit should succeed");
         assert_eq!(result["success"], true);
 
         // Verify file content - all occurrences should be replaced
@@ -414,7 +428,7 @@ mod e2e_tests {
     }
 
     #[tokio::test]
-    async fn test_edit_file_with_newlines() {
+    async fn test_file_edit_with_newlines() {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let workspace_root =
             fs::canonicalize(temp_dir.path()).expect("Failed to canonicalize workspace");
@@ -442,9 +456,9 @@ mod e2e_tests {
         });
 
         let result = registry
-            .execute_tool("edit_file", edit_args)
+            .execute_tool(vtcode_core::config::constants::tools::EDIT_FILE, edit_args)
             .await
-            .expect("edit_file should succeed");
+            .expect("file_edit should succeed");
         assert_eq!(result["success"], true);
 
         // Verify file content

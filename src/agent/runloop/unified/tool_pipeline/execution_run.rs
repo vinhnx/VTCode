@@ -410,7 +410,7 @@ pub(crate) fn exec_settlement_mode_for_tool_call(
         return ExecSettlementMode::Manual;
     }
 
-    let Some(action) = tool_intent::unified_exec_action(args) else {
+    let Some(action) = tool_intent::command_session_action(args) else {
         return ExecSettlementMode::Manual;
     };
 

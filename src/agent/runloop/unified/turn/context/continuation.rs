@@ -639,7 +639,7 @@ mod tests {
             uni::Message::assistant("I will run cargo clippy now.".to_string()).with_tool_calls(
                 vec![uni::ToolCall::function(
                     "call_1".to_string(),
-                    "unified_exec".to_string(),
+                    "command_session".to_string(),
                     "{}".to_string(),
                 )],
             ),
@@ -777,7 +777,7 @@ mod tests {
             .push(uni::Message::assistant(String::new()).with_tool_calls(vec![
                 uni::ToolCall::function(
                     "call_1".to_string(),
-                    "unified_exec".to_string(),
+                    "command_session".to_string(),
                     "{}".to_string(),
                 ),
             ]));
@@ -926,7 +926,7 @@ mod tests {
             uni::Message::assistant("Running clippy now.".to_string()).with_tool_calls(vec![
                 uni::ToolCall::function(
                     "call_1".to_string(),
-                    "unified_exec".to_string(),
+                    "command_session".to_string(),
                     "{}".to_string(),
                 ),
             ]),
@@ -946,7 +946,7 @@ mod tests {
             uni::Message::assistant("Let me compile and run it to confirm it works:".to_string())
                 .with_tool_calls(vec![uni::ToolCall::function(
                     "call_1".to_string(),
-                    "unified_exec".to_string(),
+                    "command_session".to_string(),
                     "{}".to_string(),
                 )]),
             uni::Message::tool_response("call_1".to_string(), "Hello, World!".to_string()),
@@ -1077,8 +1077,8 @@ mod tests {
         // and asks "How would you like to proceed?" - this should NOT trigger
         // the relaxed continuation path.
         let blocker_explanation = "I don't have a direct web-fetch tool available in this session. \
-            My available tools are scoped to local file/code operations, and both `unified_exec` \
-            (for `curl`/`wget`) and `unified_search` (web action) require explicit safety approval \
+            My available tools are scoped to local file/code operations, and `exec_command` \
+            requires explicit safety approval \
             for outbound network requests. A few options: 1. Approve the network call 2. Use a \
             subagent 3. Paste the content. How would you like to proceed? If you want me to fetch \
             it, please confirm and I'll retry with the appropriate sandbox permission.";
@@ -1087,7 +1087,7 @@ mod tests {
             uni::Message::assistant("I'll try to fetch it.".to_string()).with_tool_calls(vec![
                 uni::ToolCall::function(
                     "call_1".to_string(),
-                    "unified_exec".to_string(),
+                    "exec_command".to_string(),
                     "{}".to_string(),
                 ),
             ]),
@@ -1112,7 +1112,7 @@ mod tests {
             uni::Message::user("what's in this repo?".to_string()),
             uni::Message::assistant(String::new()).with_tool_calls(vec![uni::ToolCall::function(
                 "call_1".to_string(),
-                "unified_file".to_string(),
+                "exec_command".to_string(),
                 "{}".to_string(),
             )]),
             uni::Message::tool_response("call_1".to_string(), "README summary".to_string()),
@@ -1136,7 +1136,7 @@ mod tests {
             .push(uni::Message::assistant(String::new()).with_tool_calls(vec![
                 uni::ToolCall::function(
                     "call_1".to_string(),
-                    "unified_file".to_string(),
+                    "file_operation".to_string(),
                     "{}".to_string(),
                 ),
             ]));
@@ -1209,7 +1209,7 @@ mod tests {
             uni::Message::assistant("Running clippy now.".to_string()).with_tool_calls(vec![
                 uni::ToolCall::function(
                     "call_1".to_string(),
-                    "unified_exec".to_string(),
+                    "command_session".to_string(),
                     "{}".to_string(),
                 ),
             ]),
@@ -1249,7 +1249,7 @@ mod tests {
             uni::Message::assistant("Running clippy now.".to_string()).with_tool_calls(vec![
                 uni::ToolCall::function(
                     "call_1".to_string(),
-                    "unified_exec".to_string(),
+                    "command_session".to_string(),
                     "{}".to_string(),
                 ),
             ]),

@@ -204,7 +204,7 @@ impl AgentRunner {
         let args = &prepared.effective_args;
         let shell_command = if tool_intent::is_command_run_tool_call(resolved_tool_name, args)
             || (resolved_tool_name == tools::UNIFIED_EXEC
-                && tool_intent::unified_exec_action(args).is_none())
+                && tool_intent::command_session_action(args).is_none())
         {
             command_args::command_text(args).ok().flatten()
         } else {

@@ -517,7 +517,7 @@ fn mask_tool_actions_for_mode(tool: &ToolDefinition, planning_active: bool) -> T
 
 pub fn reduce_tool_result(tool_name: &str, result: Value) -> Value {
     let canonical_tool_name =
-        tool_intent::canonical_unified_exec_tool_name(tool_name).unwrap_or(tool_name);
+        tool_intent::canonical_command_session_tool_name(tool_name).unwrap_or(tool_name);
     match canonical_tool_name {
         crate::config::constants::tools::UNIFIED_SEARCH => reduce_search_result(result),
         crate::config::constants::tools::READ_FILE => reduce_read_file_result(result),
@@ -608,7 +608,7 @@ fn reduce_search_result(result: Value) -> Value {
     serde_json::json!({
         "total_files": files.len(),
         "sample": files.iter().take(5).cloned().collect::<Vec<_>>(),
-        "note": format!("Showing 5 of {} files. Use unified_search for specific patterns.", files.len())
+        "note": format!("Showing 5 of {} files. Use search_dispatch for specific patterns.", files.len())
     })
 }
 
@@ -1027,7 +1027,7 @@ mod tests {
     }
 
     #[test]
-    fn filter_tool_definitions_masks_unified_file_actions_in_planning() {
+    fn filter_tool_definitions_masks_file_operation_actions_in_planning() {
         let tools = Arc::new(vec![tool_with_action_enum(
             tools::UNIFIED_FILE,
             &["read", "write", "edit", "patch", "delete", "move", "copy"],
@@ -1053,7 +1053,7 @@ mod tests {
     }
 
     #[test]
-    fn filter_tool_definitions_masks_unified_exec_actions_in_planning() {
+    fn filter_tool_definitions_masks_command_session_actions_in_planning() {
         let tools = Arc::new(vec![tool_with_action_enum(
             tools::UNIFIED_EXEC,
             &[
@@ -1136,12 +1136,12 @@ mod tests {
             filter_tool_definitions_for_mode(Some(tools), true, false).expect("filtered tools");
         assert_eq!(filtered.len(), 2);
 
-        let unified_file = filtered
+        let file_operation = filtered
             .iter()
             .find(|t| t.function_name() == tools::UNIFIED_FILE)
-            .expect("unified_file should be present");
+            .expect("file_operation should be present");
 
-        let action_enum = unified_file
+        let action_enum = file_operation
             .function
             .as_ref()
             .unwrap()

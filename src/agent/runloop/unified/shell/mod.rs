@@ -16,7 +16,7 @@ mod tests {
         let result = detect_explicit_run_command("run ls -a");
         assert!(result.is_some());
         let (tool_name, args) = result.expect("command expected");
-        assert_eq!(tool_name, "unified_exec");
+        assert_eq!(tool_name, "exec_command");
         assert_eq!(args["command"], "ls -a");
     }
 
@@ -25,7 +25,7 @@ mod tests {
         let result = detect_explicit_run_command("run git status");
         assert!(result.is_some());
         let (tool_name, args) = result.expect("command expected");
-        assert_eq!(tool_name, "unified_exec");
+        assert_eq!(tool_name, "exec_command");
         assert_eq!(args["command"], "git status");
     }
 
@@ -34,7 +34,7 @@ mod tests {
         let result = detect_explicit_run_command("run cargo build --release");
         assert!(result.is_some());
         let (tool_name, args) = result.expect("command expected");
-        assert_eq!(tool_name, "unified_exec");
+        assert_eq!(tool_name, "exec_command");
         assert_eq!(args["command"], "cargo build --release");
     }
 
@@ -43,7 +43,7 @@ mod tests {
         let result = detect_explicit_run_command("Run npm install");
         assert!(result.is_some());
         let (tool_name, args) = result.expect("command expected");
-        assert_eq!(tool_name, "unified_exec");
+        assert_eq!(tool_name, "exec_command");
         assert_eq!(args["command"], "npm install");
     }
 
@@ -52,7 +52,7 @@ mod tests {
         let result = detect_explicit_run_command("eun cargo check");
         assert!(result.is_some());
         let (tool_name, args) = result.expect("command expected");
-        assert_eq!(tool_name, "unified_exec");
+        assert_eq!(tool_name, "exec_command");
         assert_eq!(args["command"], "cargo check");
     }
 
@@ -92,7 +92,7 @@ mod tests {
         let result = detect_explicit_run_command("show diff src/main.rs");
         assert!(result.is_some());
         let (tool_name, args) = result.expect("direct command expected");
-        assert_eq!(tool_name, "unified_exec");
+        assert_eq!(tool_name, "exec_command");
         assert_eq!(args["command"], "git diff -- src/main.rs");
     }
 

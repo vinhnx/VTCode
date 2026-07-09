@@ -740,7 +740,7 @@ async fn skips_reasoning_progress_events_when_streaming_is_unavailable() {
 async fn suppresses_harmony_tool_call_wire_text_from_output_deltas() {
     let provider = ReasoningThenChunkedContentProvider {
         chunks: vec![
-            "<|start|>assistant<|channel|>commentary to=functions.unified_search <|constrain|>json<|message|>{\"pattern\":\"runloop\"}<|call|>".to_string(),
+            "<|start|>assistant<|channel|>commentary to=functions.code_search <|constrain|>json<|message|>{\"pattern\":\"runloop\"}<|call|>".to_string(),
             "<|start|>assistant<|channel|>final<|message|>safe answer<|end|>".to_string(),
         ],
         reasoning_chunks: vec![],

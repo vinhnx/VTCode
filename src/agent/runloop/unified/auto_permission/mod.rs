@@ -796,7 +796,7 @@ mod tests {
                 String::new(),
                 vec![uni::ToolCall::function(
                     "call_1".to_string(),
-                    "unified_exec".to_string(),
+                    "command_session".to_string(),
                     json!({"action":"run","command":"git push --force"}).to_string(),
                 )],
             ),
@@ -849,7 +849,7 @@ mod tests {
             String::new(),
             vec![uni::ToolCall::function(
                 "call_1".to_string(),
-                "unified_file".to_string(),
+                "file_operation".to_string(),
                 json!({
                     "action": "write",
                     "path": "scripts/cleanup.sh",
@@ -862,8 +862,12 @@ mod tests {
             "action": "run",
             "command": ["/bin/zsh", "-lc", "./scripts/cleanup.sh"],
         });
-        let permission_request =
-            build_permission_request(workspace_root, workspace_root, "unified_exec", Some(&args));
+        let permission_request = build_permission_request(
+            workspace_root,
+            workspace_root,
+            "command_session",
+            Some(&args),
+        );
 
         let context =
             prior_script_context(workspace_root, &history, &permission_request, Some(&args))

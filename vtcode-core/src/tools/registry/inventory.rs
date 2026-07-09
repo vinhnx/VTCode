@@ -100,13 +100,13 @@ pub(super) struct ToolInventory {
     skill_manager: SkillManager,
     /// Configured `web_fetch` instance (built from `[web_fetch]` user config).
     /// The same instance is registered with the LLM-facing tool map and is
-    /// used directly by the unified_search dispatcher so the user's
+    /// used directly by the search_dispatch dispatcher so the user's
     /// allow/block lists apply.
     web_fetch_tool: WebFetchTool,
     /// Configured `web_search` instance (built from `[web_search]` user
     /// config). Sharing the instance with the registered tool ensures
     /// per-instance cooldown, cache, and session cap are observed across
-    /// both the standalone `web_search` and `unified_search action="web"`
+    /// both the standalone `web_search` and `search_dispatch action="web"`
     /// entry points.
     web_search_tool: WebSearchTool,
 }
@@ -152,9 +152,9 @@ impl ToolInventory {
         }
     }
 
-    /// Direct accessor for the configured `WebFetchTool`. The unified_search
+    /// Direct accessor for the configured `WebFetchTool`. The search_dispatch
     /// dispatcher uses this so user-configured allow/block lists apply to
-    /// `unified_search action="web" url=...` invocations.
+    /// `search_dispatch action="web" url=...` invocations.
     pub fn web_fetch_tool(&self) -> &WebFetchTool {
         &self.web_fetch_tool
     }
@@ -162,7 +162,7 @@ impl ToolInventory {
     /// Direct accessor for the configured `WebSearchTool`. Sharing this with
     /// the registered tool keeps the per-instance cooldown, cache, and
     /// session cap observed across both standalone `web_search` and the
-    /// unified_search action="web" entry point.
+    /// search_dispatch action="web" entry point.
     pub fn web_search_tool(&self) -> &WebSearchTool {
         &self.web_search_tool
     }
@@ -541,7 +541,7 @@ mod tests {
         let inventory = make_test_inventory();
 
         // Register a visible "parent" tool with an alias
-        let parent = make_visible_registration("unified_file").with_aliases(["read_file"]);
+        let parent = make_visible_registration("file_operation").with_aliases(["read_file"]);
         inventory.register_tool(parent).unwrap();
 
         // Register a hidden "internal" tool with the same name as the alias
@@ -562,7 +562,7 @@ mod tests {
         let inventory = make_test_inventory();
 
         // Register a visible "parent" tool with an alias
-        let parent = make_visible_registration("unified_file").with_aliases(["read_file"]);
+        let parent = make_visible_registration("file_operation").with_aliases(["read_file"]);
         inventory.register_tool(parent).unwrap();
 
         // Register a VISIBLE tool with the same name as the alias
@@ -601,7 +601,7 @@ mod tests {
         let inventory = make_test_inventory();
 
         // Register a visible tool with an alias
-        let parent = make_visible_registration("unified_file").with_aliases(["read_file"]);
+        let parent = make_visible_registration("file_operation").with_aliases(["read_file"]);
         inventory.register_tool(parent).unwrap();
 
         // Register a hidden internal tool
@@ -626,7 +626,7 @@ mod tests {
         let usage_entry = metrics.usage.get("read_file");
         assert!(usage_entry.is_some(), "Alias usage should still be tracked");
         let (canonical, count) = usage_entry.unwrap();
-        assert_eq!(canonical, "unified_file");
+        assert_eq!(canonical, "file_operation");
         assert_eq!(
             *count, initial_count,
             "Direct hidden registration lookups should not increment alias usage"
@@ -637,7 +637,7 @@ mod tests {
     fn test_case_insensitive_alias_lookup() {
         let inventory = make_test_inventory();
 
-        let tool = make_visible_registration("unified_file").with_aliases(["Read_File"]);
+        let tool = make_visible_registration("file_operation").with_aliases(["Read_File"]);
         inventory.register_tool(tool).unwrap();
 
         // Should resolve regardless of case

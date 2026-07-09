@@ -34,14 +34,14 @@ fn structured_resume_lines_preserve_tool_context() {
     assistant.reasoning = Some("Need to run formatter before checks.".to_string());
     assistant.tool_calls = Some(vec![uni::ToolCall::function(
         "call_123".to_string(),
-        "unified_exec".to_string(),
+        "exec_command".to_string(),
         "{\"cmd\":\"cargo fmt\"}".to_string(),
     )]);
 
     let tool_output = r#"{"output":" Finished dev profile [unoptimized + debuginfo]\n","exit_code":0,"backend":"pipe"}"#;
     let mut tool_response =
         uni::Message::tool_response("call_123".to_string(), tool_output.to_string());
-    tool_response.origin_tool = Some("unified_exec".to_string());
+    tool_response.origin_tool = Some("exec_command".to_string());
 
     let history = vec![
         uni::Message::user("run cargo fmt".to_string()),
@@ -62,7 +62,7 @@ fn structured_resume_lines_preserve_tool_context() {
         line.style == MessageStyle::Tool
             && line
                 .text
-                .contains("Tool unified_exec [tool_call_id: call_123]:")
+                .contains("Tool exec_command [tool_call_id: call_123]:")
     }));
     // Tool arguments should show a concise summary instead of raw JSON
     assert!(lines.iter().any(|line| {

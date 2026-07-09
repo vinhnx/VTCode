@@ -11,14 +11,14 @@ pub const APPLY_PATCH: &str = "apply_patch";
 pub const CODE_SEARCH: &str = "code_search";
 
 // ============================================================
-// INTERNAL UNIFIED TOOLS
+// LEGACY INTERNAL DISPATCHERS
 // ============================================================
-/// Internal unified search and discovery dispatcher.
-pub const UNIFIED_SEARCH: &str = "unified_search";
-/// Internal unified shell execution and code execution dispatcher.
-pub const UNIFIED_EXEC: &str = "unified_exec";
-/// Internal unified file operations dispatcher.
-pub const UNIFIED_FILE: &str = "unified_file";
+/// Internal search and discovery dispatcher retained behind public tools.
+pub const UNIFIED_SEARCH: &str = "search_dispatch_internal";
+/// Internal shell execution and code execution dispatcher retained behind public tools.
+pub const UNIFIED_EXEC: &str = "command_session_internal";
+/// Internal file operations dispatcher retained behind public tools.
+pub const UNIFIED_FILE: &str = "file_operation_internal";
 
 // ============================================================
 // TOOL IDS

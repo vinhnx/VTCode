@@ -58,59 +58,14 @@ struct ToolOption {
 
 const TOOL_OPTIONS: &[ToolOption] = &[
     ToolOption {
-        id: tools::READ_FILE,
-        description: "Read individual files directly.",
-        badge: "Read",
-    },
-    ToolOption {
-        id: tools::LIST_FILES,
-        description: "List and discover files within the workspace.",
-        badge: "Read",
-    },
-    ToolOption {
-        id: tools::UNIFIED_SEARCH,
-        description: "Search code and file contents.",
-        badge: "Read",
-    },
-    ToolOption {
-        id: tools::UNIFIED_EXEC,
+        id: tools::EXEC_COMMAND,
         description: "Run shell commands and scripts.",
         badge: "Exec",
     },
     ToolOption {
-        id: tools::UNIFIED_FILE,
-        description: "Use the umbrella file-operations tool.",
-        badge: "Write",
-    },
-    ToolOption {
-        id: tools::EDIT_FILE,
-        description: "Apply focused edits to existing files.",
-        badge: "Write",
-    },
-    ToolOption {
-        id: tools::WRITE_FILE,
-        description: "Write whole-file contents.",
-        badge: "Write",
-    },
-    ToolOption {
-        id: tools::CREATE_FILE,
-        description: "Create a new file at a specific path.",
-        badge: "Write",
-    },
-    ToolOption {
-        id: tools::DELETE_FILE,
-        description: "Delete a file from the workspace.",
-        badge: "Write",
-    },
-    ToolOption {
-        id: tools::MOVE_FILE,
-        description: "Move or rename files.",
-        badge: "Write",
-    },
-    ToolOption {
-        id: tools::COPY_FILE,
-        description: "Copy files within the workspace.",
-        badge: "Write",
+        id: tools::WRITE_STDIN,
+        description: "Send input to an active shell command session.",
+        badge: "Exec",
     },
     ToolOption {
         id: tools::APPLY_PATCH,
@@ -118,9 +73,9 @@ const TOOL_OPTIONS: &[ToolOption] = &[
         badge: "Write",
     },
     ToolOption {
-        id: tools::SEARCH_REPLACE,
-        description: "Run focused search-and-replace edits.",
-        badge: "Write",
+        id: tools::CODE_SEARCH,
+        description: "Search code structure and symbol outlines.",
+        badge: "Read",
     },
     ToolOption {
         id: tools::REQUEST_USER_INPUT,
@@ -1487,18 +1442,18 @@ mod tests {
 name: reviewer
 description: Review code
 tools:
-  - read_file
-  - list_files
-  - unified_search
+  - exec_command
+  - apply_patch
+  - code_search
 model: inherit
 color: blue
 reasoning_effort: medium
 permissions:
   default: deny
   allow:
-    - read_file
+    - code_search
   ask:
-    - unified_exec
+    - exec_command
 background: true
 maxTurns: 7
 memory: project
@@ -1523,9 +1478,9 @@ Review the target changes."#,
         assert!(rendered.contains("description: Updated description"));
         assert!(rendered.contains("permissions:\n  default: deny\n"));
         assert!(rendered.contains("allow:"));
-        assert!(rendered.contains("- read_file"));
+        assert!(rendered.contains("- code_search"));
         assert!(rendered.contains("ask:"));
-        assert!(rendered.contains("- unified_exec"));
+        assert!(rendered.contains("- exec_command"));
         assert!(rendered.contains("skills:"));
         assert!(rendered.contains("nickname_candidates:"));
         assert!(rendered.ends_with("\nReview the target changes."));
@@ -1535,11 +1490,11 @@ Review the target changes."#,
             load_subagent_from_file(&path, SubagentSource::ProjectVtcode).expect("reload rendered");
         assert_eq!(
             rendered_spec.permissions.allow,
-            vec!["read_file".to_string()]
+            vec!["code_search".to_string()]
         );
         assert_eq!(
             rendered_spec.permissions.ask,
-            vec!["unified_exec".to_string()]
+            vec!["exec_command".to_string()]
         );
     }
 
@@ -1547,16 +1502,16 @@ Review the target changes."#,
     fn ordered_tools_keeps_known_tools_stable_and_sorts_custom_values() {
         let ordered = ordered_tools(vec![
             "zzz".to_string(),
-            tools::UNIFIED_SEARCH.to_string(),
-            tools::READ_FILE.to_string(),
+            tools::CODE_SEARCH.to_string(),
+            tools::EXEC_COMMAND.to_string(),
             "aaa".to_string(),
         ]);
 
         assert_eq!(
             ordered,
             vec![
-                tools::READ_FILE.to_string(),
-                tools::UNIFIED_SEARCH.to_string(),
+                tools::EXEC_COMMAND.to_string(),
+                tools::CODE_SEARCH.to_string(),
                 "aaa".to_string(),
                 "zzz".to_string(),
             ]
@@ -1614,8 +1569,8 @@ Review the target changes."#,
         draft.reasoning_effort = Some(" medium ".to_string());
         draft.tools = vec![
             "zzz".to_string(),
-            tools::READ_FILE.to_string(),
-            tools::READ_FILE.to_string(),
+            tools::EXEC_COMMAND.to_string(),
+            tools::EXEC_COMMAND.to_string(),
         ];
 
         draft.normalize_for_save();
@@ -1637,8 +1592,8 @@ Review the target changes."#,
         );
         draft.description = "Review auth changes".to_string();
         draft.tools = vec![
-            tools::READ_FILE.to_string(),
-            tools::UNIFIED_SEARCH.to_string(),
+            tools::EXEC_COMMAND.to_string(),
+            tools::CODE_SEARCH.to_string(),
         ];
         draft.color = Some("teal".to_string());
         draft.reasoning_effort = Some("high".to_string());

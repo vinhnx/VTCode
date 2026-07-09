@@ -65,7 +65,7 @@ impl ToolRegistry {
     /// Check whether a tool invocation is safe to retry.
     ///
     /// Retries are allowed for read-only operations and for unified tools when
-    /// their specific action is read-only (`unified_file:read`, `unified_exec:poll|list`).
+    /// their specific action is read-only (`file_operation:read`, `command_session:poll|list`).
     pub fn is_retry_safe_call(&self, tool_name: &str, args: &Value) -> bool {
         crate::tools::tool_intent::classify_tool_intent(tool_name, args).retry_safe
     }
@@ -139,7 +139,7 @@ impl ToolRegistry {
     }
 
     /// Check if a unified tool call represents a read-only action.
-    /// Allows `unified_file` with action "read" and `unified_exec` with read-only actions
+    /// Allows `file_operation` with action "read" and `command_session` with read-only actions
     /// (poll/list/inspect/continue without input) plus allowlisted run commands or `--dry-run`.
     #[expect(dead_code)]
     pub(super) fn is_readonly_unified_action(&self, tool_name: &str, args: &Value) -> bool {
@@ -211,7 +211,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn planning_workflow_allows_readonly_unified_exec_runs() -> Result<()> {
+    async fn planning_workflow_allows_readonly_command_session_runs() -> Result<()> {
         let temp_dir = TempDir::new()?;
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
         registry.enable_planning();

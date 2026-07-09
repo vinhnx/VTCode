@@ -17,31 +17,78 @@ fn trimmed_non_empty_string_field(value: &Value, key: &str) -> Option<String> {
         .map(str::to_string)
 }
 
+fn shell_single_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\\''"))
+}
+
+fn public_exec_fallback(command: String) -> (String, Value) {
+    (
+        tool_names::EXEC_COMMAND.to_string(),
+        json!({
+            "cmd": command
+        }),
+    )
+}
+
+fn public_list_fallback(path: &str) -> (String, Value) {
+    public_exec_fallback(format!(
+        "find {} -maxdepth 1 -mindepth 1 -print",
+        shell_single_quote(path)
+    ))
+}
+
+fn public_grep_fallback(args: &Value) -> Option<(String, Value)> {
+    let pattern = trimmed_non_empty_string_field(args, "pattern")
+        .or_else(|| trimmed_non_empty_string_field(args, "keyword"))
+        .or_else(|| trimmed_non_empty_string_field(args, "query"))?;
+    let path = trimmed_non_empty_string_field(args, "path").unwrap_or_else(|| ".".to_string());
+    Some(public_exec_fallback(format!(
+        "rg --line-number --column --color=never {} {}",
+        shell_single_quote(&pattern),
+        shell_single_quote(&path)
+    )))
+}
+
+fn public_search_fallback_for_args(args: Value) -> Option<(String, Value)> {
+    match tool_intent::search_dispatch_action(&args).unwrap_or("grep") {
+        action if action.eq_ignore_ascii_case("list") => {
+            let path = args.get("path").and_then(Value::as_str).unwrap_or(".");
+            Some(public_list_fallback(path))
+        }
+        action if action.eq_ignore_ascii_case("grep") => public_grep_fallback(&args),
+        action
+            if action.eq_ignore_ascii_case("structural")
+                || action.eq_ignore_ascii_case("outline") =>
+        {
+            Some((tool_names::CODE_SEARCH.to_string(), args))
+        }
+        _ => None,
+    }
+}
+
 pub(super) fn recovery_fallback_for_tool(tool_name: &str, args: &Value) -> Option<(String, Value)> {
     match tool_name {
         tool_names::UNIFIED_SEARCH => {
-            let normalized = tool_intent::normalize_unified_search_args(args);
-            let action = tool_intent::unified_search_action(&normalized).unwrap_or("grep");
+            let normalized = tool_intent::normalize_search_dispatch_args(args);
+            let action = tool_intent::search_dispatch_action(&normalized).unwrap_or("grep");
             if action.eq_ignore_ascii_case("list") {
-                Some((
-                    tool_names::UNIFIED_SEARCH.to_string(),
-                    json!({
-                        "action": "list",
-                        "path": normalized.get("path").and_then(|v| v.as_str()).unwrap_or("."),
-                        "mode": normalized.get("mode").and_then(|v| v.as_str()).unwrap_or("list")
-                    }),
-                ))
+                let path = normalized
+                    .get("path")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or(".");
+                Some(public_list_fallback(path))
+            } else if action.eq_ignore_ascii_case("structural")
+                || action.eq_ignore_ascii_case("outline")
+            {
+                Some((tool_names::CODE_SEARCH.to_string(), normalized))
             } else {
                 None
             }
         }
-        "list files" => Some((
-            tool_names::UNIFIED_SEARCH.to_string(),
-            json!({
-                "action": "list",
-                "path": args.get("path").and_then(|v| v.as_str()).unwrap_or(".")
-            }),
-        )),
+        "list files" => {
+            let path = args.get("path").and_then(|v| v.as_str()).unwrap_or(".");
+            Some(public_list_fallback(path))
+        }
         "search text" => None,
         tool_names::READ_FILE | "read file" | "repo_browser.read_file" => {
             let parent_path = args
@@ -50,18 +97,12 @@ pub(super) fn recovery_fallback_for_tool(tool_name: &str, args: &Value) -> Optio
                 .and_then(|path| std::path::Path::new(path).parent())
                 .and_then(|path| path.to_str())
                 .unwrap_or(".");
-            Some((
-                tool_names::UNIFIED_SEARCH.to_string(),
-                json!({
-                    "action": "list",
-                    "path": parent_path
-                }),
-            ))
+            Some(public_list_fallback(parent_path))
         }
         tool_names::UNIFIED_FILE => {
-            let action = tool_intent::unified_file_action(args).unwrap_or("read");
+            let action = tool_intent::file_operation_action(args).unwrap_or("read");
             if action.eq_ignore_ascii_case("write") {
-                unified_file_write_fallback(args)
+                file_operation_write_fallback(args)
             } else {
                 let path = trimmed_non_empty_string_field(args, "path")
                     .or_else(|| trimmed_non_empty_string_field(args, "file_path"))
@@ -70,30 +111,18 @@ pub(super) fn recovery_fallback_for_tool(tool_name: &str, args: &Value) -> Optio
                     .or_else(|| trimmed_non_empty_string_field(args, "file"))
                     .or_else(|| trimmed_non_empty_string_field(args, "p"))
                     .unwrap_or_else(|| ".".to_string());
-                Some((
-                    tool_names::UNIFIED_SEARCH.to_string(),
-                    json!({
-                        "action": "list",
-                        "path": path
-                    }),
-                ))
+                Some(public_list_fallback(&path))
             }
         }
-        _ => Some((
-            tool_names::UNIFIED_SEARCH.to_string(),
-            json!({
-                "action": "list",
-                "path": "."
-            }),
-        )),
+        _ => Some(public_list_fallback(".")),
     }
 }
 
-/// Build a `unified_exec` fallback for a `unified_file` write that failed
+/// Build an `exec_command` fallback for a `file_operation` write that failed
 /// (e.g. content exceeded the safe write limit or JSON arguments were corrupted).
 ///
 /// Uses `cat` with a heredoc to write the file content via shell.
-fn unified_file_write_fallback(args: &Value) -> Option<(String, Value)> {
+fn file_operation_write_fallback(args: &Value) -> Option<(String, Value)> {
     let path = args
         .get("path")
         .or_else(|| args.get("file_path"))
@@ -106,15 +135,11 @@ fn unified_file_write_fallback(args: &Value) -> Option<(String, Value)> {
     let content = args.get("content").and_then(Value::as_str)?;
 
     let delimiter = unique_heredoc_delimiter(content)?;
-    let escaped_path = path.replace('\'', "'\\''");
-    let command = format!("cat > '{escaped_path}' << '{delimiter}'\n{content}\n{delimiter}");
-    Some((
-        tool_names::UNIFIED_EXEC.to_string(),
-        json!({
-            "action": "run",
-            "command": command
-        }),
-    ))
+    let command = format!(
+        "cat > {} << '{delimiter}'\n{content}\n{delimiter}",
+        shell_single_quote(path)
+    );
+    Some(public_exec_fallback(command))
 }
 
 /// Pick a heredoc delimiter that does not appear as a standalone line in `content`.
@@ -182,11 +207,11 @@ pub(super) fn preflight_validation_fallback(
         return Some((tool_names::REQUEST_USER_INPUT.to_string(), normalized));
     }
 
-    let is_unified_search = tool_name == tool_names::UNIFIED_SEARCH
-        || error_text.contains("tool 'unified_search'")
-        || error_text.contains("for 'unified_search'");
-    if is_unified_search {
-        let mut normalized = tool_intent::normalize_unified_search_args(args_val);
+    let is_search_dispatch = tool_name == tool_names::UNIFIED_SEARCH
+        || error_text.contains("tool 'search_dispatch'")
+        || error_text.contains("for 'search_dispatch'");
+    if is_search_dispatch {
+        let mut normalized = tool_intent::normalize_search_dispatch_args(args_val);
         let inferred_pattern = trimmed_non_empty_string_field(&normalized, "pattern")
             .or_else(|| trimmed_non_empty_string_field(&normalized, "keyword"))
             .or_else(|| trimmed_non_empty_string_field(&normalized, "query"));
@@ -213,31 +238,36 @@ pub(super) fn preflight_validation_fallback(
         }
 
         if normalized != *args_val && normalized.get("action").is_some() {
-            return Some((tool_names::UNIFIED_SEARCH.to_string(), normalized));
+            return public_search_fallback_for_args(normalized);
         }
     }
 
-    let is_unified_file = tool_name == tool_names::UNIFIED_FILE
-        || error_text.contains("tool 'unified_file'")
-        || error_text.contains("for 'unified_file'");
-    if !is_unified_file {
+    let is_file_operation = tool_name == tool_names::UNIFIED_FILE
+        || error_text.contains("tool 'file_operation'")
+        || error_text.contains("for 'file_operation'");
+    if !is_file_operation {
         return None;
     }
 
-    if tool_intent::unified_file_action_is(args_val, "list") {
+    if tool_intent::file_operation_action_is(args_val, "list") {
         let path =
             trimmed_non_empty_string_field(args_val, "path").unwrap_or_else(|| ".".to_string());
-        return Some((
-            tool_names::UNIFIED_SEARCH.to_string(),
-            json!({
-                "action": "list",
-                "path": path,
-            }),
-        ));
+        return Some(public_list_fallback(&path));
     }
 
-    tool_intent::remap_unified_file_command_args_to_unified_exec(args_val)
-        .map(|args| (tool_names::UNIFIED_EXEC.to_string(), args))
+    tool_intent::remap_file_operation_command_args_to_command_session(args_val).and_then(|args| {
+        let command = args
+            .get("command")
+            .and_then(Value::as_str)
+            .map(str::to_string)?;
+        let mut fallback_args = json!({ "cmd": command });
+        if let Some(cwd) = args.get("cwd").and_then(Value::as_str)
+            && let Some(obj) = fallback_args.as_object_mut()
+        {
+            obj.insert("workdir".to_string(), Value::String(cwd.to_string()));
+        }
+        Some((tool_names::EXEC_COMMAND.to_string(), fallback_args))
+    })
 }
 
 pub(super) fn try_recover_preflight_with_fallback(
@@ -289,25 +319,28 @@ mod tests {
     }
 
     #[test]
-    fn preflight_validation_fallback_promotes_unified_search_keyword_to_pattern() {
+    fn preflight_validation_fallback_promotes_search_dispatch_keyword_to_pattern() {
         let args = json!({
             "action": "read",
             "path": "src",
             "keyword": "  todo  "
         });
-        let error = anyhow!("tool 'unified_search' validation failed");
+        let error = anyhow!("tool 'search_dispatch' validation failed");
 
         let (tool_name, recovered_args) =
             preflight_validation_fallback(tool_names::UNIFIED_SEARCH, &args, &error)
-                .expect("unified_search fallback should recover");
+                .expect("search_dispatch fallback should recover");
 
-        assert_eq!(tool_name, tool_names::UNIFIED_SEARCH);
-        assert_eq!(recovered_args["action"], "grep");
-        assert_eq!(recovered_args["pattern"], "todo");
+        assert_eq!(tool_name, tool_names::EXEC_COMMAND);
+        assert!(
+            recovered_args["cmd"]
+                .as_str()
+                .is_some_and(|cmd| cmd.contains("todo"))
+        );
     }
 
     #[test]
-    fn recovery_fallback_unified_file_write_returns_unified_exec() {
+    fn recovery_fallback_file_operation_write_returns_exec_command() {
         let args = json!({
             "action": "write",
             "path": "docs/output.md",
@@ -316,11 +349,10 @@ mod tests {
 
         let (tool_name, fallback_args) =
             super::recovery_fallback_for_tool(tool_names::UNIFIED_FILE, &args)
-                .expect("unified_file write should have fallback");
+                .expect("file_operation write should have fallback");
 
-        assert_eq!(tool_name, tool_names::UNIFIED_EXEC);
-        assert_eq!(fallback_args["action"], "run");
-        let command = fallback_args["command"]
+        assert_eq!(tool_name, tool_names::EXEC_COMMAND);
+        let command = fallback_args["cmd"]
             .as_str()
             .expect("command should be a string");
         assert!(
@@ -338,7 +370,7 @@ mod tests {
     }
 
     #[test]
-    fn recovery_fallback_unified_file_write_quotes_path_with_spaces() {
+    fn recovery_fallback_file_operation_write_quotes_path_with_spaces() {
         let args = json!({
             "action": "write",
             "path": "my files/output.md",
@@ -347,10 +379,10 @@ mod tests {
 
         let (tool_name, fallback_args) =
             super::recovery_fallback_for_tool(tool_names::UNIFIED_FILE, &args)
-                .expect("unified_file write should have fallback");
+                .expect("file_operation write should have fallback");
 
-        assert_eq!(tool_name, tool_names::UNIFIED_EXEC);
-        let command = fallback_args["command"].as_str().expect("command");
+        assert_eq!(tool_name, tool_names::EXEC_COMMAND);
+        let command = fallback_args["cmd"].as_str().expect("command");
         assert!(
             command.contains("'my files/output.md'"),
             "path with spaces should be quoted"
@@ -358,7 +390,7 @@ mod tests {
     }
 
     #[test]
-    fn recovery_fallback_unified_file_write_infers_action_from_content() {
+    fn recovery_fallback_file_operation_write_infers_action_from_content() {
         let args = json!({
             "path": "output.txt",
             "content": "Hello, world!"
@@ -366,14 +398,14 @@ mod tests {
 
         let (tool_name, fallback_args) =
             super::recovery_fallback_for_tool(tool_names::UNIFIED_FILE, &args)
-                .expect("unified_file with content should have write fallback");
+                .expect("file_operation with content should have write fallback");
 
-        assert_eq!(tool_name, tool_names::UNIFIED_EXEC);
-        assert_eq!(fallback_args["action"], "run");
+        assert_eq!(tool_name, tool_names::EXEC_COMMAND);
+        assert!(fallback_args["cmd"].as_str().is_some());
     }
 
     #[test]
-    fn recovery_fallback_unified_file_read_preserves_path() {
+    fn recovery_fallback_file_operation_read_preserves_path() {
         let args = json!({
             "action": "read",
             "path": "src/main.rs"
@@ -381,11 +413,14 @@ mod tests {
 
         let (tool_name, fallback_args) =
             super::recovery_fallback_for_tool(tool_names::UNIFIED_FILE, &args)
-                .expect("unified_file read should have fallback");
+                .expect("file_operation read should have fallback");
 
-        assert_eq!(tool_name, tool_names::UNIFIED_SEARCH);
-        assert_eq!(fallback_args["action"], "list");
-        assert_eq!(fallback_args["path"], "src/main.rs");
+        assert_eq!(tool_name, tool_names::EXEC_COMMAND);
+        assert!(
+            fallback_args["cmd"]
+                .as_str()
+                .is_some_and(|cmd| cmd.contains("'src/main.rs'"))
+        );
     }
 
     #[test]

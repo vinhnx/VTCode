@@ -756,7 +756,7 @@ rule:
   - good example of using `context` plus `selector: call_expression` to work around tree-sitter-c fragment ambiguity
   - tree-sitter-c parses `test($A)` as `macro_type_specifier`, but `test($A);` as `expression_statement -> call_expression`
   - prefer this form whenever a plain `foo($A)` pattern parses incorrectly as a macro-related node instead of a call
-  - contextual patterns are pattern objects (`context` + `selector` inside `pattern`), which require the CLI skill path via `unified_exec`; the public structural surface's `selector` field works with simple string patterns but does not support the `context` field
+  - contextual patterns are pattern objects (`context` + `selector` inside `pattern`), which require the CLI skill path via `exec_command`; the public structural surface's `selector` field works with simple string patterns but does not support the `context` field
   - example YAML:
 
 ```yaml
@@ -1234,7 +1234,7 @@ fix: "bar($MAYBE_COMMA$newArg)"
 - Rewriter-local `transform` variables and `utils` stay local the same way.
 - A rewriter can still call other rewriters from the same list inside its own `transform` section, enabling multi-pass rewrite pipelines.
 - For simple pattern-to-pattern rewrites, use `workflow="rewrite"` on the public structural surface to preview replacements without applying them. This runs `ast-grep run --pattern=... --rewrite=... --json=compact --color=never` and returns each match with its proposed `replacement` and `replacementOffsets`. The surface remains read-only; no files are modified.
-- For advanced rewrite operations using `rewriters`, `transform.rewrite`, `joinBy`, or `FixConfig` with `expandStart`/`expandEnd`, use the CLI skill path via `unified_exec`.
+- For advanced rewrite operations using `rewriters`, `transform.rewrite`, `joinBy`, or `FixConfig` with `expandStart`/`expandEnd`, use the CLI skill path via `exec_command`.
 
 ## Pattern Syntax
 
@@ -1365,7 +1365,7 @@ fix: "bar($MAYBE_COMMA$newArg)"
 - `transform.rewrite` has three important behavioral properties: (1) it rewrites descendants of the captured source metavariable, not the source itself; (2) overlapping rewriter matches are prevented so each sub-node is rewritten at most once; (3) higher-level AST matches are preferred before nested ones, and for one node only the first matching rewriter in declaration order is applied.
 - Use `joinBy` when the rewritten sub-nodes must be stitched with a different separator than the original source text. For example, `joinBy: "\n"` converts comma-separated imports into newline-separated direct imports.
 - For simple pattern-to-pattern rewrites, use `workflow="rewrite"` on the public structural surface to preview replacements without applying them. Each result includes the original `text`, proposed `replacement`, `replacementOffsets`, and `metaVariables`.
-- For advanced `transform.rewrite`, `rewriters`, `joinBy`, and `FixConfig` operations, use the CLI skill path via `unified_exec`.
+- For advanced `transform.rewrite`, `rewriters`, `joinBy`, and `FixConfig` operations, use the CLI skill path via `exec_command`.
 
 ## Rewrite Essentials
 
@@ -1475,7 +1475,7 @@ fix: "bar($MAYBE_COMMA$newArg)"
 - JS/Python support for applying ast-grep `fix` directly is still experimental, so prefer explicit patch generation when you need dependable automation.
 - If a task crosses this boundary, stop trying to encode it as more YAML and switch to a proper programmatic implementation.
 
-Switch to direct CLI work through `unified_exec` when the task needs:
+Switch to direct CLI work through `exec_command` when the task needs:
 
 - `ast-grep --help`
 - `ast-grep help`

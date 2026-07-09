@@ -72,7 +72,7 @@ fn message_history() -> Vec<Message> {
         Message::tool_response_with_origin(
             "call-1".to_string(),
             serde_json::json!({"summary":"Tests live under vtcode-core/tests"}).to_string(),
-            "unified_search".to_string(),
+            "search_dispatch".to_string(),
         ),
     ]
 }
@@ -132,7 +132,7 @@ fn dedup_latest_facts_extracts_user_and_tool_memory() {
     assert!(
         facts
             .iter()
-            .any(|fact| fact.source == "tool:unified_search")
+            .any(|fact| fact.source == "tool:search_dispatch")
     );
 }
 
@@ -543,7 +543,7 @@ async fn summary_falls_back_to_prompt_only_json_when_native_schema_is_unsupporte
         }],
         &[GroundedFactRecord {
             fact: "Tests live under vtcode-core/tests".to_string(),
-            source: encode_topic_source(MemoryTopic::RepositoryFacts, "tool:unified_search"),
+            source: encode_topic_source(MemoryTopic::RepositoryFacts, "tool:search_dispatch"),
         }],
         &[],
     )
@@ -927,7 +927,7 @@ fn migrates_legacy_memory_over_scaffold_only_target() {
             MemoryTopic::RepositoryFacts,
             &[GroundedFactRecord {
                 fact: "Tests live under vtcode-core/tests".to_string(),
-                source: encode_topic_source(MemoryTopic::RepositoryFacts, "tool:unified_search"),
+                source: encode_topic_source(MemoryTopic::RepositoryFacts, "tool:search_dispatch"),
             }],
         ),
     )

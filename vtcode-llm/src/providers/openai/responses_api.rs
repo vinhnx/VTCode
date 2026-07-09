@@ -781,13 +781,13 @@ mod tests {
                 Message::assistant_with_tools(
                     String::new(),
                     vec![ToolCall::function(
-                        "direct_unified_exec_1".to_string(),
-                        "unified_exec".to_string(),
+                        "direct_exec_command_1".to_string(),
+                        "exec_command".to_string(),
                         "{\"command\":\"cargo fmt\"}".to_string(),
                     )],
                 ),
                 Message::tool_response(
-                    "direct_unified_exec_1".to_string(),
+                    "direct_exec_command_1".to_string(),
                     "{\"output\":\"\",\"exit_code\":0,\"backend\":\"pipe\"}".to_string(),
                 ),
                 Message::assistant("cargo fmt completed successfully.".to_string()),
@@ -802,9 +802,9 @@ mod tests {
         assert_eq!(payload.input[0]["role"], "user");
         assert_eq!(payload.input[1]["type"], "function_call");
         assert!(payload.input[1].get("id").is_none());
-        assert_eq!(payload.input[1]["call_id"], "direct_unified_exec_1");
+        assert_eq!(payload.input[1]["call_id"], "direct_exec_command_1");
         assert_eq!(payload.input[2]["type"], "function_call_output");
-        assert_eq!(payload.input[2]["call_id"], "direct_unified_exec_1");
+        assert_eq!(payload.input[2]["call_id"], "direct_exec_command_1");
         assert_eq!(
             payload.input[2]["output"],
             "{\"output\":\"\",\"exit_code\":0,\"backend\":\"pipe\"}"
@@ -822,7 +822,7 @@ mod tests {
                     String::new(),
                     vec![ToolCall::function(
                         "call_orphan".to_string(),
-                        "unified_exec".to_string(),
+                        "exec_command".to_string(),
                         "{\"command\":\"cargo fmt\"}".to_string(),
                     )],
                 ),
@@ -856,7 +856,7 @@ mod tests {
                     String::new(),
                     vec![ToolCall::function(
                         "call_1".to_string(),
-                        "unified_exec".to_string(),
+                        "exec_command".to_string(),
                         "{\"command\":\"echo late\"}".to_string(),
                     )],
                 ),
@@ -902,7 +902,7 @@ mod tests {
                     String::new(),
                     vec![ToolCall::function(
                         "call_T4IsdQtJifUHQUXutDlwoFLd".to_string(),
-                        "unified_exec".to_string(),
+                        "exec_command".to_string(),
                         r#"{"command":"cd /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode && cargo fmt","workdir":"/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode","sandbox_permissions":"use_default","additional_permissions":{"fs_read":[],"fs_write":[]}}"#.to_string(),
                     )],
                 ),
@@ -944,7 +944,7 @@ mod tests {
                     "type": "function_call",
                     "id": "fc_123",
                     "call_id": "call_123",
-                    "name": "unified_exec",
+                    "name": "exec_command",
                     "arguments": "{\"command\":\"cargo fmt\"}"
                 }
             ]
@@ -961,7 +961,7 @@ mod tests {
                 .function
                 .as_ref()
                 .map(|function| function.name.as_str()),
-            Some("unified_exec")
+            Some("exec_command")
         );
     }
 
@@ -974,7 +974,7 @@ mod tests {
                     "id": "fc_456",
                     "call_id": "call_456",
                     "namespace": "repo_browser",
-                    "name": "list_files",
+                    "name": "code_search",
                     "arguments": "{\"path\":\".\"}"
                 }
             ]
@@ -1125,7 +1125,7 @@ mod tests {
                     "type": "function_call",
                     "id": "fc_789",
                     "call_id": "call_789",
-                    "name": "unified_exec",
+                    "name": "exec_command",
                     "arguments": "{\"command\":\"cargo test\"}"
                 }
             ]
@@ -1138,7 +1138,7 @@ mod tests {
         assert_eq!(tool_calls.len(), 1);
         assert_eq!(tool_calls[0].id, "call_789");
         let function = tool_calls[0].function.as_ref().expect("function call");
-        assert_eq!(function.name, "unified_exec");
+        assert_eq!(function.name, "exec_command");
         assert_eq!(function.arguments, "{\"command\":\"cargo test\"}");
 
         let payload = build_standard_responses_payload(
@@ -1156,7 +1156,7 @@ mod tests {
 
         assert_eq!(payload.input[0]["type"], "function_call");
         assert_eq!(payload.input[0]["call_id"], "call_789");
-        assert_eq!(payload.input[0]["name"], "unified_exec");
+        assert_eq!(payload.input[0]["name"], "exec_command");
         assert_eq!(
             payload.input[0]["arguments"],
             "{\"command\":\"cargo test\"}"
@@ -1210,7 +1210,7 @@ mod tests {
                     "status": "completed",
                     "tools": [
                         {
-                            "name": "read_file",
+                            "name": "exec_command",
                             "description": "Read a file"
                         },
                         {
@@ -1232,7 +1232,7 @@ mod tests {
 
         assert_eq!(
             parsed.tool_references,
-            vec!["read_file".to_string(), "write_file".to_string()]
+            vec!["exec_command".to_string(), "apply_patch".to_string()]
         );
     }
 
@@ -1294,7 +1294,7 @@ mod tests {
                     String::new(),
                     vec![ToolCall::function(
                         "call_1".to_string(),
-                        "unified_exec".to_string(),
+                        "exec_command".to_string(),
                         "{\"command\":\"cargo check\"}".to_string(),
                     )],
                 ),

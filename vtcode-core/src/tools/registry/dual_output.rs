@@ -57,7 +57,7 @@ impl ToolRegistry {
         // Check if we have a summarizer for this tool
         match tool_name.as_str() {
             tools::UNIFIED_SEARCH => {
-                match tool_intent::unified_search_action(&args).unwrap_or("grep") {
+                match tool_intent::search_dispatch_action(&args).unwrap_or("grep") {
                     "grep" => {
                         let summarizer = GrepSummarizer::default();
                         match summarizer.summarize(&ui_content, None) {
@@ -124,7 +124,7 @@ impl ToolRegistry {
                 }
             }
             tools::UNIFIED_FILE => {
-                match tool_intent::unified_file_action(&args).unwrap_or("read") {
+                match tool_intent::file_operation_action(&args).unwrap_or("read") {
                     "read" => {
                         let mut metadata = args.clone();
                         if let Value::Object(map) = &mut metadata
@@ -153,7 +153,7 @@ impl ToolRegistry {
                                     ui_tokens = %savings.ui_tokens,
                                     llm_tokens = %savings.llm_tokens,
                                     savings_pct = %savings.savings_percent,
-                                    "Applied unified_file read summarization"
+                                    "Applied file_operation read summarization"
                                 );
                                 Ok(SplitToolResult::new(
                                     tool_name.as_str(),
@@ -166,7 +166,7 @@ impl ToolRegistry {
                                     tool = tools::UNIFIED_FILE,
                                     action = "read",
                                     error = %e,
-                                    "Failed to summarize unified_file read output, using simple result"
+                                    "Failed to summarize file_operation read output, using simple result"
                                 );
                                 Ok(SplitToolResult::simple(tool_name.as_str(), ui_content))
                             }
@@ -184,7 +184,7 @@ impl ToolRegistry {
                                     ui_tokens = %savings.ui_tokens,
                                     llm_tokens = %savings.llm_tokens,
                                     savings_pct = %savings.savings_percent,
-                                    "Applied unified_file mutation summarization"
+                                    "Applied file_operation mutation summarization"
                                 );
                                 Ok(SplitToolResult::new(
                                     tool_name.as_str(),
@@ -197,7 +197,7 @@ impl ToolRegistry {
                                     tool = tools::UNIFIED_FILE,
                                     action = "mutate",
                                     error = %e,
-                                    "Failed to summarize unified_file mutation output, using simple result"
+                                    "Failed to summarize file_operation mutation output, using simple result"
                                 );
                                 Ok(SplitToolResult::simple(tool_name.as_str(), ui_content))
                             }
@@ -206,40 +206,43 @@ impl ToolRegistry {
                     _ => Ok(SplitToolResult::simple(tool_name.as_str(), ui_content)),
                 }
             }
-            tools::UNIFIED_EXEC => match tool_intent::unified_exec_action(&args).unwrap_or("run") {
-                "run" | "code" => {
-                    let summarizer = BashSummarizer::default();
-                    let metadata = args.as_object().map(|_| args.clone());
-                    match summarizer.summarize(&ui_content, metadata.as_ref()) {
-                        Ok(llm_content) => {
-                            let savings = summarizer.estimate_savings(&ui_content, &llm_content);
-                            debug!(
-                                tool = tools::UNIFIED_EXEC,
-                                action = "run",
-                                ui_tokens = %savings.ui_tokens,
-                                llm_tokens = %savings.llm_tokens,
-                                savings_pct = %savings.savings_percent,
-                                "Applied unified_exec summarization"
-                            );
-                            Ok(SplitToolResult::new(
-                                tool_name.as_str(),
-                                llm_content,
-                                ui_content,
-                            ))
-                        }
-                        Err(e) => {
-                            warn!(
-                                tool = tools::UNIFIED_EXEC,
-                                action = "run",
-                                error = %e,
-                                "Failed to summarize unified_exec output, using simple result"
-                            );
-                            Ok(SplitToolResult::simple(tool_name.as_str(), ui_content))
+            tools::UNIFIED_EXEC => {
+                match tool_intent::command_session_action(&args).unwrap_or("run") {
+                    "run" | "code" => {
+                        let summarizer = BashSummarizer::default();
+                        let metadata = args.as_object().map(|_| args.clone());
+                        match summarizer.summarize(&ui_content, metadata.as_ref()) {
+                            Ok(llm_content) => {
+                                let savings =
+                                    summarizer.estimate_savings(&ui_content, &llm_content);
+                                debug!(
+                                    tool = tools::UNIFIED_EXEC,
+                                    action = "run",
+                                    ui_tokens = %savings.ui_tokens,
+                                    llm_tokens = %savings.llm_tokens,
+                                    savings_pct = %savings.savings_percent,
+                                    "Applied command_session summarization"
+                                );
+                                Ok(SplitToolResult::new(
+                                    tool_name.as_str(),
+                                    llm_content,
+                                    ui_content,
+                                ))
+                            }
+                            Err(e) => {
+                                warn!(
+                                    tool = tools::UNIFIED_EXEC,
+                                    action = "run",
+                                    error = %e,
+                                    "Failed to summarize command_session output, using simple result"
+                                );
+                                Ok(SplitToolResult::simple(tool_name.as_str(), ui_content))
+                            }
                         }
                     }
+                    _ => Ok(SplitToolResult::simple(tool_name.as_str(), ui_content)),
                 }
-                _ => Ok(SplitToolResult::simple(tool_name.as_str(), ui_content)),
-            },
+            }
             tools::READ_FILE => {
                 // Apply read file summarization
                 let summarizer = ReadSummarizer::default();

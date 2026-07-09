@@ -412,7 +412,7 @@ fn should_cache_success_output(name: &str, output: &Value, command_success: bool
 }
 
 fn is_command_tool(name: &str) -> bool {
-    tool_intent::canonical_unified_exec_tool_name(name).is_some()
+    tool_intent::canonical_command_session_tool_name(name).is_some()
 }
 
 fn extract_pty_stream_command(tool_name: &str, args: &Value) -> Option<String> {
@@ -511,7 +511,7 @@ mod tests {
     }
 
     #[test]
-    fn extracts_command_for_unified_exec_run_action() {
+    fn extracts_command_for_command_session_run_action() {
         let args = json!({
             "action": "run",
             "command": ["cargo", "check", "-p", "vtcode-core"]
@@ -523,7 +523,7 @@ mod tests {
     }
 
     #[test]
-    fn ignores_non_run_unified_exec_actions() {
+    fn ignores_non_run_command_session_actions() {
         let args = json!({
             "action": "poll",
             "session_id": "run-123"
@@ -630,13 +630,13 @@ mod tests {
     #[test]
     fn suppresses_loading_ui_for_spool_file_reads() {
         let read_args = json!({
-            "path": ".vtcode/context/tool_outputs/unified_exec_123.txt",
+            "path": ".vtcode/context/tool_outputs/command_session_123.txt",
             "offset": 41,
             "limit": 40
         });
         let unified_args = json!({
             "action": "read",
-            "path": ".vtcode/context/tool_outputs/unified_exec_123.txt",
+            "path": ".vtcode/context/tool_outputs/command_session_123.txt",
             "offset": 41,
             "limit": 40
         });
@@ -666,7 +666,7 @@ mod tests {
         });
         let unified_write_args = json!({
             "action": "write",
-            "path": ".vtcode/context/tool_outputs/unified_exec_123.txt",
+            "path": ".vtcode/context/tool_outputs/command_session_123.txt",
             "content": "replacement"
         });
 

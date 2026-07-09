@@ -281,7 +281,7 @@ async fn test_run_tool_call_forwards_runtime_agent_permissions_to_routing() {
         "path": "notes.md",
         "content": "hello"
     }))
-    .expect("serialize unified_file args");
+    .expect("serialize file_operation args");
     let call = vtcode_core::llm::provider::ToolCall::function(
         "call_active_agent_deny".to_string(),
         tools::UNIFIED_FILE.to_string(),
@@ -665,7 +665,7 @@ async fn test_run_tool_call_invalid_preflight_does_not_consume_budget() {
 }
 
 #[tokio::test]
-async fn test_run_tool_call_unified_exec_git_diff_uses_cache_on_repeat() {
+async fn test_run_tool_call_command_session_git_diff_uses_cache_on_repeat() {
     let mut test_ctx = TestContext::new().await;
     std::fs::create_dir_all(&test_ctx.workspace).expect("create workspace directory");
     std::fs::write(test_ctx.workspace.join("a.txt"), "same-content\n").expect("write a.txt");
@@ -713,15 +713,15 @@ async fn test_run_tool_call_unified_exec_git_diff_uses_cache_on_repeat() {
         "action": "run",
         "command": "git diff --no-index ./a.txt ./b.txt"
     }))
-    .expect("serialize unified_exec args");
+    .expect("serialize command_session args");
 
     let first_call = vtcode_core::llm::provider::ToolCall::function(
-        "call_unified_exec_1".to_string(),
+        "call_command_session_1".to_string(),
         tools::UNIFIED_EXEC.to_string(),
         args.clone(),
     );
     let second_call = vtcode_core::llm::provider::ToolCall::function(
-        "call_unified_exec_2".to_string(),
+        "call_command_session_2".to_string(),
         tools::UNIFIED_EXEC.to_string(),
         args,
     );
@@ -742,7 +742,7 @@ async fn test_run_tool_call_unified_exec_git_diff_uses_cache_on_repeat() {
         false,
     )
     .await
-    .expect("first unified_exec call must run");
+    .expect("first command_session call must run");
 
     let second_outcome = run_tool_call(
         &mut ctx,
@@ -757,7 +757,7 @@ async fn test_run_tool_call_unified_exec_git_diff_uses_cache_on_repeat() {
         false,
     )
     .await
-    .expect("second unified_exec call must run");
+    .expect("second command_session call must run");
 
     let extract_session_id = |status: &ToolExecutionStatus| -> String {
         match status {
@@ -858,10 +858,10 @@ async fn test_run_tool_call_rejects_escalated_shell_when_hitl_disabled() {
         "sandbox_permissions": "require_escalated",
         "justification": "Do you want to run this command without sandbox restrictions?"
     }))
-    .expect("serialize unified_exec args");
+    .expect("serialize command_session args");
 
     let call = vtcode_core::llm::provider::ToolCall::function(
-        "call_unified_exec_escalated".to_string(),
+        "call_command_session_escalated".to_string(),
         tools::UNIFIED_EXEC.to_string(),
         args,
     );
@@ -943,10 +943,10 @@ async fn test_run_tool_call_allows_escalated_shell_with_saved_prefix_rule() {
         "sandbox_permissions": "require_escalated",
         "justification": "Do you want to run this command without sandbox restrictions?"
     }))
-    .expect("serialize unified_exec args");
+    .expect("serialize command_session args");
 
     let call = vtcode_core::llm::provider::ToolCall::function(
-        "call_unified_exec_escalated_saved_prefix".to_string(),
+        "call_command_session_escalated_saved_prefix".to_string(),
         tools::UNIFIED_EXEC.to_string(),
         args,
     );

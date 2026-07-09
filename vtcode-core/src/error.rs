@@ -558,7 +558,7 @@ mod tests {
     #[test]
     fn test_tool_execution_error_conversion_uses_original_context() {
         let err = ToolExecutionError::with_original_error(
-            "unified_exec".to_string(),
+            "command_session".to_string(),
             ToolErrorType::Timeout,
             "Tool execution failed".to_string(),
             "timed out waiting for process".to_string(),

@@ -37,7 +37,7 @@ pub fn tool_action_label(tool_name: &str, args: &Value) -> Cow<'static, str> {
         name if name == tool_names::CLOSE_PTY_SESSION => Cow::Borrowed("Close command session"),
         name if name == tool_names::RESIZE_PTY_SESSION => Cow::Borrowed("Resize command session"),
         name if name == tool_names::UNIFIED_EXEC => {
-            match tool_intent::unified_exec_action(args).unwrap_or("run") {
+            match tool_intent::command_session_action(args).unwrap_or("run") {
                 "run" => Cow::Borrowed("Run command"),
                 "write" => Cow::Borrowed("Send command input"),
                 "poll" => Cow::Borrowed("Read command session"),
@@ -49,14 +49,14 @@ pub fn tool_action_label(tool_name: &str, args: &Value) -> Cow<'static, str> {
                 _ => Cow::Borrowed("Exec action"),
             }
         }
-        name if name == tool_names::UNIFIED_SEARCH => {
-            let normalized = tool_intent::normalize_unified_search_args(args);
+        name if name == tool_names::CODE_SEARCH || name == tool_names::UNIFIED_SEARCH => {
+            let normalized = tool_intent::normalize_search_dispatch_args(args);
             let workflow = normalized
                 .get("workflow")
                 .and_then(Value::as_str)
                 .unwrap_or("query");
 
-            match tool_intent::unified_search_action(&normalized).unwrap_or("grep") {
+            match tool_intent::search_dispatch_action(&normalized).unwrap_or("grep") {
                 "grep" => Cow::Borrowed("Search text"),
                 "list" => Cow::Borrowed("List files"),
                 "structural" => match workflow {
@@ -76,7 +76,7 @@ pub fn tool_action_label(tool_name: &str, args: &Value) -> Cow<'static, str> {
             }
         }
         name if name == tool_names::UNIFIED_FILE => {
-            match tool_intent::unified_file_action(args).unwrap_or("read") {
+            match tool_intent::file_operation_action(args).unwrap_or("read") {
                 "read" => Cow::Borrowed("Read file"),
                 "write" => Cow::Borrowed("Write file"),
                 "edit" => Cow::Borrowed("Edit file"),
@@ -126,9 +126,9 @@ mod tests {
     use serde_json::json;
 
     #[test]
-    fn unified_search_structural_query_uses_default_label() {
+    fn code_search_structural_query_uses_default_label() {
         let label = tool_action_label(
-            tools::UNIFIED_SEARCH,
+            tools::CODE_SEARCH,
             &json!({"action": "structural", "pattern": "fn $NAME() {}"}),
         );
 
@@ -136,9 +136,9 @@ mod tests {
     }
 
     #[test]
-    fn unified_search_structural_scan_uses_distinct_label() {
+    fn code_search_structural_scan_uses_distinct_label() {
         let label = tool_action_label(
-            tools::UNIFIED_SEARCH,
+            tools::CODE_SEARCH,
             &json!({"action": "structural", "workflow": "scan"}),
         );
 
@@ -146,9 +146,9 @@ mod tests {
     }
 
     #[test]
-    fn unified_search_structural_test_uses_distinct_label() {
+    fn code_search_structural_test_uses_distinct_label() {
         let label = tool_action_label(
-            tools::UNIFIED_SEARCH,
+            tools::CODE_SEARCH,
             &json!({"workflow": "test", "config_path": "sgconfig.yml"}),
         );
 

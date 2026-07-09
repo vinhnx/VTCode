@@ -314,7 +314,7 @@ pub struct VTCodePtySession {
     pub scrollback: Option<String>,
 }
 
-/// Backend-neutral exec session metadata used by `unified_exec`.
+/// Backend-neutral exec session metadata used by `command_session`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct VTCodeExecSession {
     pub id: ExecSessionId,

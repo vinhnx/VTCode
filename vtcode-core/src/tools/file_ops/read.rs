@@ -723,7 +723,7 @@ mod read_tests {
         );
         assert_eq!(
             pty_session_id_from_tool_output_path(Path::new(
-                ".vtcode/context/tool_outputs/unified_exec_123.txt"
+                ".vtcode/context/tool_outputs/command_session_123.txt"
             )),
             None
         );
@@ -1119,7 +1119,7 @@ mod read_tests {
         let file_ops = FileOpsTool::new(workspace_root, grep_manager);
 
         let args = json!({
-            "path": ".vtcode/context/tool_outputs/unified_exec_123.txt"
+            "path": ".vtcode/context/tool_outputs/command_session_123.txt"
         });
         let err = file_ops.read_file(args).await.unwrap_err().to_string();
 
@@ -1186,7 +1186,7 @@ mod read_tests {
         let workspace_root = temp_dir.path().to_path_buf();
         let spool_dir = workspace_root.join(".vtcode/context/tool_outputs");
         fs::create_dir_all(&spool_dir).unwrap();
-        let spool_file = spool_dir.join("unified_exec_123.txt");
+        let spool_file = spool_dir.join("command_session_123.txt");
         let spool_content = (1..=120)
             .map(|i| format!("line{i}"))
             .collect::<Vec<_>>()
@@ -1197,7 +1197,7 @@ mod read_tests {
         let file_ops = FileOpsTool::new(workspace_root, grep_manager);
 
         let args = json!({
-            "path": ".vtcode/context/tool_outputs/unified_exec_123.txt"
+            "path": ".vtcode/context/tool_outputs/command_session_123.txt"
         });
 
         let result = file_ops.read_file(args).await.unwrap();
@@ -1208,7 +1208,7 @@ mod read_tests {
         assert_eq!(
             result["next_read_args"],
             json!({
-                "path": ".vtcode/context/tool_outputs/unified_exec_123.txt",
+                "path": ".vtcode/context/tool_outputs/command_session_123.txt",
                 "offset": SPOOL_CHUNK_DEFAULT_LIMIT_LINES + 1,
                 "limit": SPOOL_CHUNK_DEFAULT_LIMIT_LINES
             })
@@ -1225,7 +1225,7 @@ mod read_tests {
         let workspace_root = temp_dir.path().to_path_buf();
         let spool_dir = workspace_root.join(".vtcode/context/tool_outputs");
         fs::create_dir_all(&spool_dir).unwrap();
-        let spool_file = spool_dir.join("unified_exec_999.txt");
+        let spool_file = spool_dir.join("command_session_999.txt");
         let spool_content = (1..=5)
             .map(|i| format!("line{i}"))
             .collect::<Vec<_>>()
@@ -1236,7 +1236,7 @@ mod read_tests {
         let file_ops = FileOpsTool::new(workspace_root, grep_manager);
 
         let args = json!({
-            "path": ".vtcode/context/tool_outputs/unified_exec_999.txt"
+            "path": ".vtcode/context/tool_outputs/command_session_999.txt"
         });
 
         let result = file_ops.read_file(args).await.unwrap();
@@ -1257,7 +1257,7 @@ mod read_tests {
         let workspace_root = temp_dir.path().to_path_buf();
         let spool_dir = workspace_root.join(".vtcode/context/tool_outputs");
         fs::create_dir_all(&spool_dir).unwrap();
-        let spool_file = spool_dir.join("unified_exec_exact.txt");
+        let spool_file = spool_dir.join("command_session_exact.txt");
         let spool_content = (1..=SPOOL_CHUNK_DEFAULT_LIMIT_LINES)
             .map(|i| format!("line{i}"))
             .collect::<Vec<_>>()
@@ -1269,7 +1269,7 @@ mod read_tests {
 
         let result = file_ops
             .read_file(json!({
-                "path": ".vtcode/context/tool_outputs/unified_exec_exact.txt"
+                "path": ".vtcode/context/tool_outputs/command_session_exact.txt"
             }))
             .await
             .unwrap();
@@ -1287,7 +1287,7 @@ mod read_tests {
         let workspace_root = temp_dir.path().to_path_buf();
         let spool_dir = workspace_root.join(".vtcode/context/tool_outputs");
         fs::create_dir_all(&spool_dir).unwrap();
-        let spool_file = spool_dir.join("unified_exec_456.txt");
+        let spool_file = spool_dir.join("command_session_456.txt");
         let spool_content = (1..=120)
             .map(|i| format!("line{i}"))
             .collect::<Vec<_>>()
@@ -1299,7 +1299,7 @@ mod read_tests {
 
         let result = file_ops
             .read_file(json!({
-                "p": ".vtcode/context/tool_outputs/unified_exec_456.txt",
+                "p": ".vtcode/context/tool_outputs/command_session_456.txt",
                 "o": 81,
                 "l": 40
             }))
@@ -1309,7 +1309,7 @@ mod read_tests {
         assert_eq!(result["success"], true);
         assert_eq!(
             result["path"],
-            ".vtcode/context/tool_outputs/unified_exec_456.txt"
+            ".vtcode/context/tool_outputs/command_session_456.txt"
         );
         assert_eq!(result["spool_chunked"], true);
         assert_eq!(result["lines_returned"], 40);

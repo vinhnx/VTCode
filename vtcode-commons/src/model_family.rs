@@ -27,8 +27,8 @@ pub enum ShellToolType {
     ShellCommand,
     /// Use local shell execution
     Local,
-    /// Use unified exec pattern (Codex-style)
-    UnifiedExec,
+    /// Use Codex exec_command pattern (Codex-style)
+    ExecCommand,
 }
 
 /// Truncation policy for model output
@@ -222,7 +222,7 @@ pub fn find_family_for_model(slug: &str) -> ModelFamily {
             slug, "codex", Provider::OpenAI,
             context_window: Some(MEDIUM_CONTEXT_WINDOW),
             supports_thinking: true,
-            shell_type: ShellToolType::UnifiedExec,
+            shell_type: ShellToolType::ExecCommand,
         );
     }
     if slug.starts_with("gpt-oss") || slug.contains("gpt-oss") {

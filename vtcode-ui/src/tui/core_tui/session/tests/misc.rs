@@ -240,7 +240,7 @@ fn non_file_tool_status_keeps_static_file_operation_indicator() {
         vec![make_segment("❋ Editing vtcode.toml...")],
     );
     session.handle_command(InlineCommand::SetInputStatus {
-        left: Some("Running tool: unified_search".to_string()),
+        left: Some("Running tool: code_search".to_string()),
         right: None,
     });
 

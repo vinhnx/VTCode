@@ -12,8 +12,8 @@ use crate::core::loop_detector::LoopDetector;
 use crate::tools::apply_patch::decode_apply_patch_input;
 use crate::tools::command_args::{command_text, interactive_input_text};
 use crate::tools::tool_intent::{
-    self, classify_tool_intent, unified_exec_action, unified_exec_action_in,
-    unified_file_action_in, unified_file_action_is, unified_search_action_is,
+    self, classify_tool_intent, command_session_action, command_session_action_in,
+    file_operation_action_in, file_operation_action_is, search_dispatch_action_is,
 };
 use anyhow::{Context, Result};
 use hashbrown::{HashMap, HashSet};
@@ -95,18 +95,18 @@ pub struct AutonomousExecutor {
 impl AutonomousExecutor {
     #[inline]
     fn canonical_tool_key(tool_name: &str) -> &str {
-        tool_intent::canonical_unified_exec_tool_name(tool_name).unwrap_or(tool_name)
+        tool_intent::canonical_command_session_tool_name(tool_name).unwrap_or(tool_name)
     }
 
     #[inline]
     fn is_command_session_tool(tool_name: &str) -> bool {
-        tool_intent::canonical_unified_exec_tool_name(tool_name).is_some()
+        tool_intent::canonical_command_session_tool_name(tool_name).is_some()
     }
 
     #[inline]
     fn is_command_session_run(tool_name: &str, args: &Value) -> bool {
         tool_intent::is_command_run_tool_call(tool_name, args)
-            || (tool_name == tools::UNIFIED_EXEC && unified_exec_action(args).is_none())
+            || (tool_name == tools::UNIFIED_EXEC && command_session_action(args).is_none())
     }
 
     pub fn new() -> Self {
@@ -255,13 +255,13 @@ impl AutonomousExecutor {
     fn is_destructive_operation(&self, tool_name: &str, args: &Value) -> bool {
         match tool_name {
             tools::APPLY_PATCH | tools::DELETE_FILE => true,
-            tools::UNIFIED_FILE => unified_file_action_in(args, &["delete"]),
+            tools::UNIFIED_FILE => file_operation_action_in(args, &["delete"]),
             _ if Self::is_command_session_run(tool_name, args) => command_text(args)
                 .ok()
                 .flatten()
                 .is_some_and(|cmd| self.is_destructive_command(&cmd)),
             _ if Self::is_command_session_tool(tool_name)
-                && unified_exec_action_in(args, &["write", "continue"]) =>
+                && command_session_action_in(args, &["write", "continue"]) =>
             {
                 interactive_input_text(args).is_some_and(|input| self.is_destructive_command(input))
             }
@@ -315,20 +315,20 @@ impl AutonomousExecutor {
                 )?;
             }
             _ if Self::is_command_session_tool(tool_name)
-                && unified_exec_action_in(args, &["write", "continue"]) =>
+                && command_session_action_in(args, &["write", "continue"]) =>
             {
                 if let Some(input) = interactive_input_text(args) {
                     self.validate_command_text(input)?;
                 }
             }
-            tools::UNIFIED_FILE if unified_file_action_in(args, &["write", "edit", "delete"]) => {
+            tools::UNIFIED_FILE if file_operation_action_in(args, &["write", "edit", "delete"]) => {
                 self.validate_file_path(args.get("path"))?;
             }
-            tools::UNIFIED_FILE if unified_file_action_in(args, &["move", "copy"]) => {
+            tools::UNIFIED_FILE if file_operation_action_in(args, &["move", "copy"]) => {
                 self.validate_file_path(args.get("path"))?;
                 self.validate_file_path(args.get("destination"))?;
             }
-            tools::UNIFIED_SEARCH if unified_search_action_is(args, "list") => {
+            tools::UNIFIED_SEARCH if search_dispatch_action_is(args, "list") => {
                 self.validate_list_files_args(args)?;
             }
             _ => {}
@@ -435,7 +435,7 @@ impl AutonomousExecutor {
     /// Generate dry-run preview for verification
     pub fn generate_preview(&self, tool_name: &str, args: &Value) -> String {
         if tool_name == tools::WRITE_FILE
-            || (tool_name == tools::UNIFIED_FILE && unified_file_action_is(args, "write"))
+            || (tool_name == tools::UNIFIED_FILE && file_operation_action_is(args, "write"))
         {
             let path = args
                 .get("path")
@@ -458,7 +458,7 @@ impl AutonomousExecutor {
 
             format!("Will write {lines} lines ({size_kb} KB) to: {path}\nPreview:{preview}")
         } else if tool_name == tools::EDIT_FILE
-            || (tool_name == tools::UNIFIED_FILE && unified_file_action_is(args, "edit"))
+            || (tool_name == tools::UNIFIED_FILE && file_operation_action_is(args, "edit"))
         {
             let path = args
                 .get("path")
@@ -507,8 +507,10 @@ impl AutonomousExecutor {
         }
 
         match canonical_tool_name {
-            tools::UNIFIED_FILE => unified_file_action_in(args, &["write", "edit", "move", "copy"]),
-            tools::UNIFIED_EXEC => unified_exec_action_in(args, &["run", "code", "close"]),
+            tools::UNIFIED_FILE => {
+                file_operation_action_in(args, &["write", "edit", "move", "copy"])
+            }
+            tools::UNIFIED_EXEC => command_session_action_in(args, &["run", "code", "close"]),
             _ => false,
         }
     }
@@ -766,7 +768,7 @@ mod tests {
     }
 
     #[test]
-    fn test_exec_aliases_use_unified_exec_preview_policy() {
+    fn test_exec_aliases_use_command_session_preview_policy() {
         let executor = AutonomousExecutor::new();
 
         assert_eq!(
@@ -877,7 +879,7 @@ mod tests {
     }
 
     #[test]
-    fn test_unified_exec_validation_uses_command_aliases() {
+    fn test_command_session_validation_uses_command_aliases() {
         let executor = AutonomousExecutor::new();
 
         let err = executor
@@ -888,7 +890,7 @@ mod tests {
     }
 
     #[test]
-    fn test_unified_file_validation_checks_destinations() {
+    fn test_file_operation_validation_checks_destinations() {
         let mut executor = AutonomousExecutor::new();
         executor.set_workspace_dir(PathBuf::from("/workspace"));
 

@@ -821,7 +821,7 @@ mod tests {
             String::new(),
             vec![ToolCall::function(
                 "call_search".to_string(),
-                "unified_search".to_string(),
+                "code_search".to_string(),
                 "{\"action\": \"grep\", \"pattern\": \"persistent_memory\", \"path\": \"vtcode-core/src</parameter>\n<</invoke>\n</minimax:tool_call>".to_string(),
             )],
         );

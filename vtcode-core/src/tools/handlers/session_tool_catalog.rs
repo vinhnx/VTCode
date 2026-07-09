@@ -791,7 +791,6 @@ fn remove_schema_descriptions_impl(value: &mut Value, inside_properties_map: boo
 #[cfg(test)]
 pub(crate) use vtcode_utility_tool_specs::{
     apply_patch_parameters, exec_command_parameters, list_files_parameters,
-    unified_search_parameters,
 };
 
 #[cfg(test)]
@@ -831,15 +830,6 @@ mod tests {
                 )),
             registration(tools::CODE_SEARCH)
                 .with_description("Search code")
-                .with_parameter_schema(empty_object_schema()),
-            registration(tools::UNIFIED_EXEC)
-                .with_description("Unified exec")
-                .with_parameter_schema(empty_object_schema()),
-            registration(tools::UNIFIED_FILE)
-                .with_description("Unified file")
-                .with_parameter_schema(empty_object_schema()),
-            registration(tools::UNIFIED_SEARCH)
-                .with_description("Unified search")
                 .with_parameter_schema(empty_object_schema()),
             registration(tools::READ_FILE)
                 .with_llm_visibility(false)
@@ -958,9 +948,6 @@ mod tests {
             registration(tools::CODE_SEARCH)
                 .with_description("Search code")
                 .with_parameter_schema(empty_object_schema()),
-            registration(tools::UNIFIED_SEARCH)
-                .with_description("Unified search")
-                .with_parameter_schema(unified_search_parameters()),
             registration(tools::LIST_FILES)
                 .with_llm_visibility(false)
                 .with_description("List files")
@@ -1176,19 +1163,7 @@ mod tests {
             .with_llm_visibility(false)
             .with_description("List files with pagination")
             .with_parameter_schema(list_files_parameters());
-        let unified_file = registration(tools::UNIFIED_FILE)
-            .with_description("Unified file ops")
-            .with_parameter_schema(empty_object_schema());
-        let unified_search = registration(tools::UNIFIED_SEARCH)
-            .with_description("Unified search")
-            .with_parameter_schema(unified_search_parameters());
-
-        let catalog = SessionToolCatalog::rebuild_from_registrations(vec![
-            read_file,
-            list_files,
-            unified_file,
-            unified_search,
-        ]);
+        let catalog = SessionToolCatalog::rebuild_from_registrations(vec![read_file, list_files]);
 
         let interactive_names = catalog.public_tool_names(SessionToolsConfig::full_public(
             SessionSurface::Interactive,

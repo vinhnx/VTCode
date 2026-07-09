@@ -706,14 +706,14 @@ pub fn list_auth_overlay(url: &str) -> OverlayRequest {
 
 pub fn set_busy_status(session: &mut Session) {
     session.handle_command(InlineCommand::SetInputStatus {
-        left: Some("Running tool: unified_search".to_string()),
+        left: Some("Running tool: code_search".to_string()),
         right: None,
     });
 }
 
 pub fn set_app_session_busy_status(session: &mut AppSession) {
     session.handle_command(app_types::InlineCommand::SetInputStatus {
-        left: Some("Running tool: unified_search".to_string()),
+        left: Some("Running tool: code_search".to_string()),
         right: None,
     });
 }

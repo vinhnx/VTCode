@@ -66,13 +66,13 @@ Use this skill for ast-grep project setup, rule authoring, rule debugging, and C
 
 ## Routing
 
-- Prefer `unified_search` with `action="structural"` and `workflow="scan"` for read-only project scans. Use `severities: ["error", "warning"]` to filter findings by severity level and focus on actionable issues.
-- Prefer `unified_search` with `action="structural"` and `workflow="test"` for read-only ast-grep rule tests.
-- Prefer `unified_search` with `action="structural"` and `workflow="rewrite"` for dry-run rewrite previews. This runs `ast-grep run --pattern=... --rewrite=... --json=compact --color=never` and returns proposed replacements without applying them. Required fields: `pattern`, `rewrite`. Optional: `lang`, `selector`, `strictness`, `globs`, `context_lines`, `max_results`.
+- Prefer `code_search` with `action="structural"` and `workflow="scan"` for read-only project scans. Use `severities: ["error", "warning"]` to filter findings by severity level and focus on actionable issues.
+- Prefer `code_search` with `action="structural"` and `workflow="test"` for read-only ast-grep rule tests.
+- Prefer `code_search` with `action="structural"` and `workflow="rewrite"` for dry-run rewrite previews. This runs `ast-grep run --pattern=... --rewrite=... --json=compact --color=never` and returns proposed replacements without applying them. Required fields: `pattern`, `rewrite`. Optional: `lang`, `selector`, `strictness`, `globs`, `context_lines`, `max_results`.
 - Prefer structural `debug_query` on the public tool surface before falling back to raw `ast-grep run --debug-query`.
 - Use `kind` on the public structural surface to match nodes by tree-sitter node kind (e.g. `function_item`, `call_expression`). `kind` supports ESQuery-style compound selectors like `A > B`, `A + B`, `A ~ B`, `A, B`, and pseudo-selectors like `:has()`, `:not()`, `:is()`, `:nth-child()`. `kind` can be used alone or combined with `pattern`.
 - Stay on the public structural surface first when the task is only running project checks, reporting findings, or previewing rewrites.
-- Use `unified_exec` only when the public structural surface cannot express the requested ast-grep flow.
+- Use `exec_command` only when the public structural surface cannot express the requested ast-grep flow.
 
 ## Quick Start
 
@@ -581,7 +581,7 @@ rule:
 
 Useful for test discovery, migration targeting, or repository audits where meta-variable patterns are too limited.
 
-- Contextual matching for function calls: Go’s tree-sitter grammar parses `fmt.Println($A)` as a type conversion, not a call expression, because Go syntax allows both. Use a contextual pattern with `selector: call_expression` to disambiguate. Note: contextual patterns are pattern objects (`context` + `selector` inside `pattern`), which require the CLI skill path via `unified_exec`. The public structural surface’s `selector` field works with simple string patterns but does not support the `context` field:
+- Contextual matching for function calls: Go’s tree-sitter grammar parses `fmt.Println($A)` as a type conversion, not a call expression, because Go syntax allows both. Use a contextual pattern with `selector: call_expression` to disambiguate. Note: contextual patterns are pattern objects (`context` + `selector` inside `pattern`), which require the CLI skill path via `exec_command`. The public structural surface’s `selector` field works with simple string patterns but does not support the `context` field:
 
 ```yaml
 id: match-function-call
@@ -663,7 +663,7 @@ This matches structs that use inheritance via base class clauses. The full `stru
 ## C Catalog Highlights
 
 - Parsing C as Cpp can reduce duplicated rule authoring, but only use that route when the repository intentionally opts into the parser tradeoff with `languageGlobs`; do not blur C and C++ semantics by default.
-- Match function calls in C with contextual patterns: tree-sitter-c parses code fragments differently depending on surrounding syntax. A bare `test($A)` becomes `macro_type_specifier`, while `test($A);` becomes `expression_statement -> call_expression`. Use `context` plus `selector: call_expression` to disambiguate. Note: contextual patterns are pattern objects (`context` + `selector` inside `pattern`), which require the CLI skill path via `unified_exec`. The public structural surface's `selector` field works with simple string patterns but does not support the `context` field:
+- Match function calls in C with contextual patterns: tree-sitter-c parses code fragments differently depending on surrounding syntax. A bare `test($A)` becomes `macro_type_specifier`, while `test($A);` becomes `expression_statement -> call_expression`. Use `context` plus `selector: call_expression` to disambiguate. Note: contextual patterns are pattern objects (`context` + `selector` inside `pattern`), which require the CLI skill path via `exec_command`. The public structural surface's `selector` field works with simple string patterns but does not support the `context` field:
 
 ```yaml
 id: match-function-call
@@ -1079,7 +1079,7 @@ fix: "bar($MAYBE_COMMA$newArg)"
 - Meta variables captured inside one rewriter do not leak to sibling rewriters or the outer rule. Rewriter-local `transform` variables and `utils` are also scoped to that one rewriter.
 - String-form shorthand `rewrite(rewriters, source, joinBy?)` is valid in newer ast-grep versions, but prefer object form when compatibility or debugging clarity matters.
 - For simple pattern-to-pattern rewrites, use `workflow="rewrite"` on the public structural surface to preview replacements without applying them. This runs `ast-grep run --pattern=... --rewrite=... --json=compact --color=never` and returns each match with its proposed `replacement` and `replacementOffsets`. The surface remains read-only; no files are modified.
-- For advanced rewrite operations using `rewriters`, `transform.rewrite`, `joinBy`, or `FixConfig` with `expandStart`/`expandEnd`, use the CLI skill path via `unified_exec`. VT Code’s public structural surface does not expose multi-rewriter or transform-pipeline behavior.
+- For advanced rewrite operations using `rewriters`, `transform.rewrite`, `joinBy`, or `FixConfig` with `expandStart`/`expandEnd`, use the CLI skill path via `exec_command`. VT Code’s public structural surface does not expose multi-rewriter or transform-pipeline behavior.
 
 ## Pattern Syntax
 
@@ -1205,7 +1205,7 @@ languageInjections:
 - Use `joinBy` when the rewritten sub-nodes must be stitched with a different separator than the original source text. For example, `joinBy: "\n"` converts comma-separated imports into newline-separated direct imports.
 - For simple pattern-to-pattern rewrites, use `workflow="rewrite"` on the public structural surface to preview replacements without applying them. Each result includes the original `text`, proposed `replacement`, `replacementOffsets`, and `metaVariables`. The surface remains read-only; no files are modified.
 - For FixConfig rewrites with range expansion (expandStart/expandEnd), use `workflow="rewrite"` with `fix_config` on the public structural surface. The tool generates a temporary YAML rule and runs `sg scan` internally.
-- For advanced `transform.rewrite`, `rewriters`, `joinBy`, and multi-pass transform operations, use the CLI skill path via `unified_exec`.
+- For advanced `transform.rewrite`, `rewriters`, `joinBy`, and multi-pass transform operations, use the CLI skill path via `exec_command`.
 
 ## Rewrite Essentials
 
@@ -1382,7 +1382,7 @@ In the public structural tool:
 - Applying ast-grep `fix` through the JS/Python APIs is still experimental, so prefer generating explicit patches in code when reliability matters.
 - If the target language has no suitable JS/Python parser path for the desired automation, prefer a Rust implementation or another repo-native AST approach instead of overcomplicating ast-grep rules.
 
-## Use `unified_exec` For
+## Use `exec_command` For
 
 - `ast-grep --help`
 - `ast-grep new`

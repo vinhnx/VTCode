@@ -177,7 +177,7 @@ fn test_detect_textual_tool_call_supports_json_payload() {
 fn test_detect_textual_tool_call_parses_function_style_block() {
     let message = "```rust\nrun_pty_cmd(\"ls -a\", workdir=WORKSPACE_DIR, max_tokens=1000)\n```";
     let (name, args) = detect_textual_tool_call(message).expect("should parse");
-    assert_eq!(name, tools::UNIFIED_EXEC);
+    assert_eq!(name, tools::EXEC_COMMAND);
     assert_eq!(args["action"], serde_json::json!("run"));
     assert_eq!(args["tty"], serde_json::json!(true));
     assert_eq!(args["command"], serde_json::json!(["ls", "-a"]));
@@ -190,7 +190,7 @@ fn test_detect_textual_tool_call_skips_non_tool_function_blocks() {
     let message =
         "```rust\nprintf!(\"hi\");\n```\n```rust\nrun_pty_cmd {\n    command: \"pwd\"\n}\n```";
     let (name, args) = detect_textual_tool_call(message).expect("should parse");
-    assert_eq!(name, tools::UNIFIED_EXEC);
+    assert_eq!(name, tools::EXEC_COMMAND);
     assert_eq!(args["action"], serde_json::json!("run"));
     assert_eq!(args["tty"], serde_json::json!(true));
     assert_eq!(args["command"], serde_json::json!(["pwd"]));
@@ -292,7 +292,7 @@ fn test_detect_textual_tool_call_skips_malformed_deep_candidate() {
 fn test_detect_tagged_tool_call_parses_basic_command() {
     let message = "<tool_call>run_pty_cmd\n<arg_key>command\n<arg_value>ls -a\n</tool_call>";
     let (name, args) = detect_textual_tool_call(message).expect("should parse");
-    assert_eq!(name, tools::UNIFIED_EXEC);
+    assert_eq!(name, tools::EXEC_COMMAND);
     assert_eq!(
         args,
         serde_json::json!({
@@ -307,7 +307,7 @@ fn test_detect_tagged_tool_call_parses_basic_command() {
 fn test_detect_tagged_tool_call_respects_indexed_arguments() {
     let message = "<tool_call>run_pty_cmd\n<arg_key>command.0\n<arg_value>python\n<arg_key>command.1\n<arg_value>-c\n<arg_key>command.2\n<arg_value>print('hi')\n</tool_call>";
     let (name, args) = detect_textual_tool_call(message).expect("should parse");
-    assert_eq!(name, tools::UNIFIED_EXEC);
+    assert_eq!(name, tools::EXEC_COMMAND);
     assert_eq!(
         args,
         serde_json::json!({
@@ -322,7 +322,7 @@ fn test_detect_tagged_tool_call_respects_indexed_arguments() {
 fn test_detect_tagged_tool_call_handles_one_based_indexes() {
     let message = "<tool_call>run_pty_cmd\n<arg_key>command.1\n<arg_value>ls\n<arg_key>command.2\n<arg_value>-a\n</tool_call>";
     let (name, args) = detect_textual_tool_call(message).expect("should parse");
-    assert_eq!(name, tools::UNIFIED_EXEC);
+    assert_eq!(name, tools::EXEC_COMMAND);
     assert_eq!(
         args,
         serde_json::json!({
@@ -337,7 +337,7 @@ fn test_detect_tagged_tool_call_handles_one_based_indexes() {
 fn test_detect_tagged_tool_call_parses_minimax_xml_invocation() {
     let message = r#"
 <minimax:tool_call>
-<invoke name="unified_file">
+<invoke name="read_file">
 <parameter name="action">read</parameter>
 <parameter name="path">vtcode-core/src/core/agent/runtime/mod.rs</parameter>
 <parameter name="offset">1</parameter>
@@ -346,7 +346,7 @@ fn test_detect_tagged_tool_call_parses_minimax_xml_invocation() {
 </minimax:tool_call>
 "#;
     let (name, args) = detect_textual_tool_call(message).expect("should parse");
-    assert_eq!(name, tools::UNIFIED_FILE);
+    assert_eq!(name, tools::READ_FILE);
     assert_eq!(
         args,
         serde_json::json!({
@@ -367,7 +367,7 @@ fn test_detect_tagged_tool_call_parses_minimax_xml_invocation_without_parameters
 </minimax:tool_call>
 "#;
     let (name, args) = detect_textual_tool_call(message).expect("should parse");
-    assert_eq!(name, tools::UNIFIED_EXEC);
+    assert_eq!(name, tools::EXEC_COMMAND);
     assert_eq!(args, serde_json::json!({ "action": "list" }));
 }
 
@@ -375,7 +375,7 @@ fn test_detect_tagged_tool_call_parses_minimax_xml_invocation_without_parameters
 fn test_strip_textual_tool_call_regions_removes_minimax_markup() {
     let message = r#"Done with the analysis.
 <minimax:tool_call>
-<invoke name="unified_file">
+<invoke name="read_file">
 <parameter name="action">read</parameter>
 <parameter name="path">README.md</parameter>
 </invoke>
@@ -394,7 +394,7 @@ Please review the summary."#;
 fn test_detect_minimax_child_element_parameters() {
     let message = r#"
 <minimax:tool_call>
-<invoke name="unified_exec">
+<invoke name="exec_command">
 <action>run</action>
 <command>python3 -c "print('hello')"</command>
 </invoke>
@@ -402,7 +402,7 @@ fn test_detect_minimax_child_element_parameters() {
 "#;
     let (name, args) =
         detect_textual_tool_call(message).expect("should parse child-element format");
-    assert_eq!(name, tools::UNIFIED_EXEC);
+    assert_eq!(name, tools::EXEC_COMMAND);
     assert_eq!(
         args,
         serde_json::json!({
@@ -415,15 +415,15 @@ fn test_detect_minimax_child_element_parameters() {
 #[test]
 fn test_detect_minimax_noisy_format() {
     let message = r#"]<]minimax[>[<tool_call>
-]<]minimax[>[<invoke name="unified_search">]<]minimax[>[<action>grep]<]minimax[>[</action>]<]minimax[>[<path>.vtcode/context/tool_outputs/unified_search_1782625284532136.txt</path>]<]minimax[>[<pattern>^(pub |fn |struct |impl |pub struct |pub fn |pub trait )</pattern>]<]minimax[>[</invoke>
+]<]minimax[>[<invoke name="code_search">]<]minimax[>[<action>structural]<]minimax[>[</action>]<]minimax[>[<path>.vtcode/context/tool_outputs/code_search_1782625284532136.txt</path>]<]minimax[>[<pattern>^(pub |fn |struct |impl |pub struct |pub fn |pub trait )</pattern>]<]minimax[>[</invoke>
 ]<]minimax[>[</tool_call>"#;
     let (name, args) = detect_textual_tool_call(message).expect("should parse noisy format");
-    assert_eq!(name, tools::UNIFIED_SEARCH);
+    assert_eq!(name, tools::CODE_SEARCH);
     assert_eq!(
         args,
         serde_json::json!({
-            "action": "grep",
-            "path": ".vtcode/context/tool_outputs/unified_search_1782625284532136.txt",
+            "action": "structural",
+            "path": ".vtcode/context/tool_outputs/code_search_1782625284532136.txt",
             "pattern": "^(pub |fn |struct |impl |pub struct |pub fn |pub trait )"
         })
     );
@@ -434,7 +434,7 @@ fn test_detect_minimax_parameter_name_format_still_works() {
     // Regression test: ensure the old <parameter name="..."> format still works
     let message = r#"
 <minimax:tool_call>
-<invoke name="unified_file">
+<invoke name="read_file">
 <parameter name="action">read</parameter>
 <parameter name="path">README.md</parameter>
 </invoke>
@@ -442,7 +442,7 @@ fn test_detect_minimax_parameter_name_format_still_works() {
 "#;
     let (name, args) =
         detect_textual_tool_call(message).expect("should parse parameter name format");
-    assert_eq!(name, tools::UNIFIED_FILE);
+    assert_eq!(name, tools::READ_FILE);
     assert_eq!(
         args,
         serde_json::json!({
@@ -477,7 +477,7 @@ fn test_strip_textual_tool_call_regions_removes_channel_and_function_markup() {
 fn test_detect_rust_struct_tool_call_parses_command_block() {
     let message = "Here you go:\n```rust\nrun_pty_cmd {\n    command: \"ls -a\",\n    workdir: \"/tmp\",\n    timeout: 5.0\n}\n```";
     let (name, args) = detect_textual_tool_call(message).expect("should parse");
-    assert_eq!(name, tools::UNIFIED_EXEC);
+    assert_eq!(name, tools::EXEC_COMMAND);
     assert_eq!(
         args,
         serde_json::json!({
@@ -495,7 +495,7 @@ fn test_detect_rust_struct_tool_call_handles_trailing_commas() {
     let message =
         "```rust\nrun_pty_cmd {\n    command: \"git status\",\n    workdir: \".\",\n}\n```";
     let (name, args) = detect_textual_tool_call(message).expect("should parse");
-    assert_eq!(name, tools::UNIFIED_EXEC);
+    assert_eq!(name, tools::EXEC_COMMAND);
     assert_eq!(
         args,
         serde_json::json!({
@@ -511,7 +511,7 @@ fn test_detect_rust_struct_tool_call_handles_trailing_commas() {
 fn test_detect_rust_struct_tool_call_handles_semicolons() {
     let message = "```rust\nrun_pty_cmd {\n    command = \"pwd\";\n    workdir = \"/tmp\";\n}\n```";
     let (name, args) = detect_textual_tool_call(message).expect("should parse");
-    assert_eq!(name, tools::UNIFIED_EXEC);
+    assert_eq!(name, tools::EXEC_COMMAND);
     assert_eq!(
         args,
         serde_json::json!({
@@ -527,7 +527,7 @@ fn test_detect_rust_struct_tool_call_handles_semicolons() {
 fn test_detect_rust_struct_tool_call_maps_run_alias() {
     let message = "```rust\nrun {\n    command: \"ls\",\n    args: [\"-a\"]\n}\n```";
     let (name, args) = detect_textual_tool_call(message).expect("should parse");
-    assert_eq!(name, "unified_exec");
+    assert_eq!(name, tools::EXEC_COMMAND);
     assert_eq!(
         args,
         serde_json::json!({
@@ -542,7 +542,7 @@ fn test_detect_rust_struct_tool_call_maps_run_alias() {
 fn test_detect_textual_function_maps_run_alias() {
     let message = "run(command: \"npm\", args: [\"test\"])";
     let (name, args) = detect_textual_tool_call(message).expect("should parse");
-    assert_eq!(name, "unified_exec");
+    assert_eq!(name, tools::EXEC_COMMAND);
     assert_eq!(
         args,
         serde_json::json!({
@@ -557,7 +557,7 @@ fn test_detect_textual_function_maps_run_alias() {
 fn test_detect_textual_tool_call_canonicalizes_name_variants() {
     let message = "```rust\nRun Pty Cmd {\n    command = \"pwd\";\n}\n```";
     let (name, args) = detect_textual_tool_call(message).expect("should parse");
-    assert_eq!(name, tools::UNIFIED_EXEC);
+    assert_eq!(name, tools::EXEC_COMMAND);
     assert_eq!(
         args,
         serde_json::json!({
@@ -644,7 +644,7 @@ fn test_parse_harmony_channel_tool_call_with_constrain() {
 fn test_parse_harmony_channel_tool_call_without_constrain() {
     let message = "<|start|>assistant<|channel|>commentary to=container.exec<|message|>{\"cmd\":[\"ls\", \"-la\"]}<|call|>";
     let (name, args) = detect_textual_tool_call(message).expect("should parse harmony format");
-    assert_eq!(name, "unified_exec");
+    assert_eq!(name, tools::EXEC_COMMAND);
     assert_eq!(args["command"], serde_json::json!(["ls", "-la"]));
 }
 
@@ -653,25 +653,25 @@ fn test_parse_harmony_channel_tool_call_with_string_cmd() {
     let message =
         "<|start|>assistant<|channel|>commentary to=bash<|message|>{\"cmd\":\"pwd\"}<|call|>";
     let (name, args) = detect_textual_tool_call(message).expect("should parse harmony format");
-    assert_eq!(name, "unified_exec");
+    assert_eq!(name, tools::EXEC_COMMAND);
     assert_eq!(args["command"], serde_json::json!("pwd"));
 }
 
 #[test]
 fn test_parse_harmony_channel_tool_call_with_recipient_before_channel() {
-    let message = "<|start|>assistant to=functions.unified_search<|channel|>commentary <|constrain|>json<|message|>{\"action\":\"list\",\"path\":\"src\"}<|call|>";
+    let message = "<|start|>assistant to=functions.code_search<|channel|>commentary <|constrain|>json<|message|>{\"action\":\"outline\",\"path\":\"src\"}<|call|>";
     let (name, args) = detect_textual_tool_call(message).expect("should parse harmony format");
-    assert_eq!(name, "unified_search");
-    assert_eq!(args["action"], serde_json::json!("list"));
+    assert_eq!(name, tools::CODE_SEARCH);
+    assert_eq!(args["action"], serde_json::json!("outline"));
     assert_eq!(args["path"], serde_json::json!("src"));
 }
 
 #[test]
 fn test_parse_harmony_channel_tool_call_tolerates_single_quoted_payload() {
-    let message = "<|start|>assistant to=functions.unified_search<|channel|>commentary <|constrain|>json<|message|>{'action':'list','path':'src'}<|call|>";
+    let message = "<|start|>assistant to=functions.code_search<|channel|>commentary <|constrain|>json<|message|>{'action':'outline','path':'src'}<|call|>";
     let (name, args) = detect_textual_tool_call(message).expect("should parse harmony format");
-    assert_eq!(name, "unified_search");
-    assert_eq!(args["action"], serde_json::json!("list"));
+    assert_eq!(name, tools::CODE_SEARCH);
+    assert_eq!(args["action"], serde_json::json!("outline"));
     assert_eq!(args["path"], serde_json::json!("src"));
 }
 
@@ -916,7 +916,7 @@ fn test_parse_tagged_tool_call_handles_nested_json() {
     let result = detect_textual_tool_call(message);
     assert!(result.is_some(), "Should parse nested JSON");
     let (name, args) = result.unwrap();
-    assert_eq!(name, tools::UNIFIED_EXEC);
+    assert_eq!(name, tools::EXEC_COMMAND);
     assert_eq!(args.get("action"), Some(&serde_json::json!("run")));
     assert_eq!(args.get("tty"), Some(&serde_json::json!(true)));
     assert!(args.get("command").and_then(|v| v.as_array()).is_some());

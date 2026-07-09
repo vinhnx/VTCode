@@ -115,9 +115,9 @@ mod tests {
         }
         assert!(prompt.contains("build tools"));
         assert!(prompt.contains("test tools"));
-        assert!(!prompt.contains("unified_exec"));
-        assert!(!prompt.contains("unified_file"));
-        assert!(!prompt.contains("unified_search"));
+        assert!(!prompt.contains("command_session"));
+        assert!(!prompt.contains("file_operation"));
+        assert!(!prompt.contains("search_dispatch"));
         assert!(!prompt.contains("read_file"));
         assert!(!prompt.contains("write_file"));
     }
@@ -134,6 +134,6 @@ mod tests {
         assert!(prompt.contains("does not translate Unix command flags to PowerShell"));
         assert!(prompt.contains("write_stdin"));
         assert!(prompt.contains("apply_patch"));
-        assert!(!prompt.contains("unified_exec"));
+        assert!(!prompt.contains("command_session"));
     }
 }

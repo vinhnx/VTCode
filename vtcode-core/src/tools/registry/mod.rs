@@ -95,7 +95,6 @@ pub use timeout::{
     AdaptiveTimeoutTuning, ToolLatencyStats, ToolTimeoutCategory, ToolTimeoutPolicy,
 };
 pub use tool_catalog_facade::SessionToolCatalogState;
-pub(crate) use unified_actions::{UnifiedExecAction, UnifiedFileAction, UnifiedSearchAction};
 
 // Re-export trait interfaces for external consumers.
 pub use interfaces::{
@@ -724,7 +723,7 @@ mod tests {
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
 
         let response = registry
-            .execute_harness_unified_exec(json!({
+            .execute_harness_command_session(json!({
                 "action": "run",
                 "command": "printf vtcode",
                 "tty": false,
@@ -744,7 +743,7 @@ mod tests {
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
 
         let response = registry
-            .execute_harness_unified_exec_terminal_run(json!({
+            .execute_harness_command_session_terminal_run(json!({
                 "action": "run",
                 "command": ["/bin/sh", "-lc", "printf vtcode-terminal"],
                 "tty": true,
@@ -828,7 +827,7 @@ mod tests {
         registry.allow_all_tools().await?;
 
         let initial = registry
-            .execute_harness_unified_exec(delayed_exec_args(false, 50))
+            .execute_harness_command_session(delayed_exec_args(false, 50))
             .await?;
         let session_id = initial["session_id"]
             .as_str()
@@ -887,7 +886,7 @@ mod tests {
             .expect("interactive run should expose session_id")
             .to_string();
         registry
-            .execute_harness_unified_exec(json!({
+            .execute_harness_command_session(json!({
                 "action": "close",
                 "session_id": session_id,
             }))
@@ -897,7 +896,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn unified_exec_run_preserves_requested_session_id_for_follow_up_calls() -> Result<()> {
+    async fn command_session_run_preserves_requested_session_id_for_follow_up_calls() -> Result<()>
+    {
         let temp_dir = TempDir::new()?;
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
         registry.allow_all_tools().await?;
@@ -908,7 +908,7 @@ mod tests {
             .expect("run args should be an object")
             .insert("session_id".to_string(), json!("check_sh"));
 
-        let initial = registry.execute_harness_unified_exec(run_args).await?;
+        let initial = registry.execute_harness_command_session(run_args).await?;
         assert_eq!(initial["session_id"], "check_sh");
         assert_eq!(
             initial["next_continue_args"],
@@ -916,7 +916,7 @@ mod tests {
         );
 
         let response = registry
-            .execute_harness_unified_exec(json!({
+            .execute_harness_command_session(json!({
                 "action": "poll",
                 "session_id": "check_sh",
                 "yield_time_ms": 10,
@@ -930,7 +930,7 @@ mod tests {
 
         if response.get("exit_code").is_none() {
             registry
-                .execute_harness_unified_exec(json!({
+                .execute_harness_command_session(json!({
                     "action": "close",
                     "session_id": "check_sh",
                 }))
@@ -948,7 +948,7 @@ mod tests {
         registry.execution_history.set_loop_detection_limits(5, 2);
 
         let initial = registry
-            .execute_harness_unified_exec(long_running_exec_args(false, 10))
+            .execute_harness_command_session(long_running_exec_args(false, 10))
             .await?;
         let session_id = initial["session_id"]
             .as_str()
@@ -983,13 +983,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn unified_exec_accepts_compact_session_alias_for_poll() -> Result<()> {
+    async fn command_session_accepts_compact_session_alias_for_poll() -> Result<()> {
         let temp_dir = TempDir::new()?;
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
         registry.allow_all_tools().await?;
 
         let initial = registry
-            .execute_harness_unified_exec(long_running_exec_args(true, 10))
+            .execute_harness_command_session(long_running_exec_args(true, 10))
             .await?;
         let session_id = initial["session_id"]
             .as_str()
@@ -997,7 +997,7 @@ mod tests {
             .to_string();
 
         let response = registry
-            .execute_harness_unified_exec(json!({
+            .execute_harness_command_session(json!({
                 "s": session_id,
                 "yield_time_ms": 10
             }))
@@ -1012,13 +1012,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn unified_exec_inspect_accepts_compact_session_alias() -> Result<()> {
+    async fn command_session_inspect_accepts_compact_session_alias() -> Result<()> {
         let temp_dir = TempDir::new()?;
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
         registry.allow_all_tools().await?;
 
         let initial = registry
-            .execute_harness_unified_exec(long_running_exec_args(true, 10))
+            .execute_harness_command_session(long_running_exec_args(true, 10))
             .await?;
         let session_id = initial["session_id"]
             .as_str()
@@ -1026,7 +1026,7 @@ mod tests {
             .to_string();
 
         let response = registry
-            .execute_harness_unified_exec(json!({
+            .execute_harness_command_session(json!({
                 "action": "inspect",
                 "s": session_id,
                 "head_lines": 1,
@@ -1083,7 +1083,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn read_only_unified_exec_results_are_fast_reused() -> Result<()> {
+    async fn read_only_command_session_results_are_fast_reused() -> Result<()> {
         let temp_dir = TempDir::new()?;
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
         registry.allow_all_tools().await?;

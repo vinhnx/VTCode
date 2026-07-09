@@ -519,7 +519,7 @@ mod tests {
     fn server_request_update_serializes_correctly() {
         let tool_call = ToolCallRecord {
             id: "tc-1".to_string(),
-            name: "unified_search".to_string(),
+            name: "code_search".to_string(),
             arguments: json!({"query": "fn main"}),
             result: None,
             timestamp: "2025-01-01T00:00:00Z".to_string(),

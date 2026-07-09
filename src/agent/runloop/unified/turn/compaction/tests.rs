@@ -383,7 +383,7 @@ fn read_file_tool_call(id: &str, path: &str) -> ToolCall {
     )
 }
 
-fn unified_file_read_tool_call(id: &str, path: &str) -> ToolCall {
+fn file_operation_read_tool_call(id: &str, path: &str) -> ToolCall {
     ToolCall::function(
         id.to_string(),
         tool_names::UNIFIED_FILE.to_string(),
@@ -769,7 +769,7 @@ fn dedup_repeated_file_reads_rewrites_only_older_exact_matches() {
             .to_string(),
             tool_names::READ_FILE.to_string(),
         ),
-        assistant_with_tool_call(unified_file_read_tool_call("call-2", "src/lib.rs")),
+        assistant_with_tool_call(file_operation_read_tool_call("call-2", "src/lib.rs")),
         Message::tool_response(
             "call-2".to_string(),
             json!({
@@ -917,7 +917,7 @@ fn recovery_context_previews_extract_structured_tool_guidance() {
                 "is_recoverable": true,
                 "hint": "Pattern looks like a code fragment.",
                 "next_action": "Retry with a larger parseable pattern.",
-                "fallback_tool": "unified_search",
+                "fallback_tool": "search_dispatch",
                 "fallback_tool_args": {"action": "structural", "path": "src/agent"}
             })
             .to_string(),
@@ -930,7 +930,7 @@ fn recovery_context_previews_extract_structured_tool_guidance() {
     assert!(previews[1].contains("No matches found in src/agent"));
     assert!(previews[1].contains("Pattern looks like a code fragment."));
     assert!(previews[1].contains("Next action: Retry with a larger parseable pattern."));
-    assert!(previews[1].contains("Fallback tool: unified_search"));
+    assert!(previews[1].contains("Fallback tool: search_dispatch"));
 }
 
 #[test]

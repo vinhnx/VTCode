@@ -55,7 +55,7 @@ pub(crate) async fn handle_toggle_planning_workflow(
         ctx.renderer.line(MessageStyle::Output, "")?;
         ctx.renderer.line(
             MessageStyle::Info,
-            "Allowed tools: read_file, list_files, grep_file, unified_search, request_user_input",
+            "Allowed tools: exec_command for shell inspection and text search, code_search for semantic or structural code search, apply_patch for allowed plan file edits, request_user_input for planning interview prompts",
         )?;
         crate::agent::runloop::unified::planning_workflow_state::render_planning_workflow_next_step_hint(
             ctx.renderer,

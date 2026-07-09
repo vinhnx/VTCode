@@ -733,7 +733,7 @@ mod tests {
         let outcome = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
             output: serde_json::json!({
                 "output": "preview text that should stay out of transcript persistence",
-                "spool_path": ".vtcode/context/tool_outputs/unified_exec_1.txt",
+                "spool_path": ".vtcode/context/tool_outputs/exec_command_1.txt",
                 "exit_code": 0,
                 "is_exited": true
             }),

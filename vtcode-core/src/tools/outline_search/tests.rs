@@ -225,7 +225,7 @@ async fn outline_full_passes_through_records() {
     assert_eq!(members[0]["name"], "x");
     assert_eq!(members[0]["kind"], "field");
     // `full` view must preserve the raw zero-based `range`, the derived
-    // 1-based `lineRange` (for `unified_file read` pagination), and `astKind`
+    // 1-based `lineRange` (for `file_operation read` pagination), and `astKind`
     // for both items and members — the contract advertised these but they were
     // previously discarded during deserialization.
     // alpha: range lines 0..=0 (0-based) -> lineRange {1, 1}.

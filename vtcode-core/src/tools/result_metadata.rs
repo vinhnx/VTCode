@@ -196,7 +196,7 @@ impl ScorerRegistry {
     /// Score a tool result
     pub fn score(&self, tool_name: &str, result: &Value) -> ResultMetadata {
         let canonical_tool_name =
-            tool_intent::canonical_unified_exec_tool_name(tool_name).unwrap_or(tool_name);
+            tool_intent::canonical_command_session_tool_name(tool_name).unwrap_or(tool_name);
         if let Some(scorer) = self.scorers.get(canonical_tool_name) {
             scorer.score(result)
         } else {

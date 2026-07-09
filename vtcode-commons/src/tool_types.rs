@@ -26,12 +26,10 @@ pub type CompactStr = compact_str::CompactString;
 /// Canonical tool name constants used by both LLM and tools subsystems.
 /// These match the values defined in `vtcode-config::constants::tools`.
 pub mod tool_names {
-    /// Unified search tool (grep, list, structural, web, etc.)
-    pub const UNIFIED_SEARCH: &str = "unified_search";
-    /// Unified execution tool (run, poll, write, inspect, etc.)
-    pub const UNIFIED_EXEC: &str = "unified_exec";
-    /// Legacy run_pty_cmd alias
-    pub const RUN_PTY_CMD: &str = "run_pty_cmd";
+    /// Advanced semantic code search tool
+    pub const CODE_SEARCH: &str = "code_search";
+    /// Shell command execution tool
+    pub const EXEC_COMMAND: &str = "exec_command";
 }
 
 /// Use direct tool name without alias resolution.

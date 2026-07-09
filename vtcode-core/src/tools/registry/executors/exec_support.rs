@@ -119,9 +119,9 @@ pub(super) fn serialized_payload_size_bytes(args: &Value) -> usize {
 }
 
 #[cold]
-pub(super) fn missing_unified_exec_action_error(args: &Value) -> anyhow::Error {
+pub(super) fn missing_command_session_action_error(args: &Value) -> anyhow::Error {
     anyhow!(
-        "Missing unified_exec action. Use `action` or fields: \
+        "Missing command session action. Use `action` or fields: \
          `command|cmd|raw_command` (run), `session_id`+`input|chars|text` (write), \
          `session_id` (poll), `action:\"continue\"` with `session_id` and optional `input|chars|text`, \
          `spool_path|query|head_lines|tail_lines|max_matches|literal` (inspect), \
@@ -131,18 +131,9 @@ pub(super) fn missing_unified_exec_action_error(args: &Value) -> anyhow::Error {
 }
 
 #[cold]
-pub(super) fn missing_unified_file_action_error(args: &Value) -> anyhow::Error {
+pub(super) fn missing_search_dispatch_action_error(args: &Value) -> anyhow::Error {
     anyhow!(
-        "Missing action in unified_file. Provide `action` or file-operation fields such as \
-         `path`, `content`, `old_str`, `patch`, or `destination`. Received keys: {}",
-        summarized_arg_keys(args)
-    )
-}
-
-#[cold]
-pub(super) fn missing_unified_search_action_error(args: &Value) -> anyhow::Error {
-    anyhow!(
-        "Missing unified_search action. Use `action` or fields: \
+        "Missing search action. Use `action` or fields: \
          `pattern|query` (grep), `action:\"structural\"` with `pattern` (structural search), `path` (list), `keyword` (tools), \
          `scope` (errors), `url` (web), `sub_action|name` (skill). Keys: {}",
         summarized_arg_keys(args)
@@ -227,6 +218,7 @@ pub(super) fn attach_exec_response_context(
     response["is_exited"] = json!(is_exited);
 }
 
+#[cfg(test)]
 pub(super) fn extract_run_session_id_from_tool_output_path(path: &str) -> Option<String> {
     let file_name = Path::new(path).file_name()?.to_str()?;
     let session_id = file_name.strip_suffix(".txt")?;
@@ -237,6 +229,7 @@ pub(super) fn extract_run_session_id_from_tool_output_path(path: &str) -> Option
     }
 }
 
+#[cfg(test)]
 pub(super) fn extract_run_session_id_from_read_file_error(error_message: &str) -> Option<String> {
     let marker = "session_id=\"";
     let start = error_message.find(marker)? + marker.len();
@@ -248,26 +241,6 @@ pub(super) fn extract_run_session_id_from_read_file_error(error_message: &str) -
     } else {
         None
     }
-}
-
-pub(super) fn build_read_pty_fallback_args(args: &Value, error_message: &str) -> Option<Value> {
-    let session_id = args
-        .get("path")
-        .or_else(|| args.get("file_path"))
-        .or_else(|| args.get("filepath"))
-        .or_else(|| args.get("target_path"))
-        .and_then(Value::as_str)
-        .and_then(extract_run_session_id_from_tool_output_path)
-        .or_else(|| extract_run_session_id_from_read_file_error(error_message))?;
-
-    let mut payload = serde_json::Map::new();
-    payload.insert("session_id".to_string(), json!(session_id));
-
-    if let Some(yield_time_ms) = args.get("yield_time_ms").cloned() {
-        payload.insert("yield_time_ms".to_string(), yield_time_ms);
-    }
-
-    Some(Value::Object(payload))
 }
 
 pub(super) fn attach_pty_continuation(response: &mut Value, session_id: &str) {
@@ -915,7 +888,7 @@ pub(super) fn resolve_exec_run_session_id(
     payload: &serde_json::Map<String, Value>,
 ) -> Result<String> {
     crate::tools::command_args::session_id_text_from_payload(payload)
-        .map(|session_id| validate_exec_session_id(session_id, "unified_exec run"))
+        .map(|session_id| validate_exec_session_id(session_id, "exec_command run"))
         .transpose()?
         .map(str::to_string)
         .map_or_else(|| Ok(generate_session_id("run")), Ok)

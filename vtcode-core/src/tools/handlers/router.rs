@@ -55,7 +55,7 @@ fn normalize_router_tool_name(tool_name: &str) -> Option<String> {
         .replace(['(', ')', '\'', '"'], "");
 
     let mapped = match normalized.as_str() {
-        alias if tool_intent::canonical_unified_exec_tool_name(alias).is_some() => {
+        alias if tool_intent::canonical_command_session_tool_name(alias).is_some() => {
             tools::UNIFIED_EXEC
         }
         "exec_code" | "run_code" | "run_command" | "run_command_pty" => tools::UNIFIED_EXEC,
@@ -494,19 +494,19 @@ mod tests {
     fn test_normalize_router_tool_name_exec_code_label() {
         assert_eq!(
             normalize_router_tool_name("Exec code").as_deref(),
-            Some("unified_exec")
+            Some("command_session")
         );
         assert_eq!(
             normalize_router_tool_name("run command (PTY)").as_deref(),
-            Some("unified_exec")
+            Some("command_session")
         );
         assert_eq!(
             normalize_router_tool_name("bash").as_deref(),
-            Some("unified_exec")
+            Some("command_session")
         );
         assert_eq!(
             normalize_router_tool_name("container.exec").as_deref(),
-            Some("unified_exec")
+            Some("command_session")
         );
     }
 
@@ -572,14 +572,14 @@ mod tests {
     fn test_suggest_similar_tool_names_uses_normalized_form() {
         let mut handlers = HashMap::new();
         handlers.insert(
-            CompactStr::from("unified_exec"),
+            CompactStr::from("command_session"),
             DispatchEntry {
-                canonical_name: "unified_exec".to_string(),
+                canonical_name: "command_session".to_string(),
                 handler: Arc::new(MockHandler) as Arc<dyn ToolHandler>,
             },
         );
 
         let suggestions = suggest_similar_tool_names("Exec code", &handlers);
-        assert_eq!(suggestions, vec!["unified_exec"]);
+        assert_eq!(suggestions, vec!["command_session"]);
     }
 }

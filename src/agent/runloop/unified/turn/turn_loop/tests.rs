@@ -399,7 +399,7 @@ fn count_assistant_text_responses_in_turn_skips_tool_call_messages() {
         String::new(),
         vec![uni::ToolCall::function(
             "tool_call_0".to_string(),
-            "unified_search".to_string(),
+            "code_search".to_string(),
             "{}".to_string(),
         )],
     ));
@@ -451,7 +451,7 @@ fn count_assistant_text_responses_in_turn_ignores_history_before_baseline() {
         String::new(),
         vec![uni::ToolCall::function(
             "tool_call_0".to_string(),
-            "unified_search".to_string(),
+            "code_search".to_string(),
             "{}".to_string(),
         )],
     ));

@@ -22,21 +22,21 @@ fn test_is_file_modification_tool_apply_patch() {
 }
 
 #[test]
-fn test_is_file_modification_tool_unified_file_write() {
+fn test_is_file_modification_tool_file_operation_write() {
     let args = json!({"path": "/tmp/test.txt", "content": "hello"});
-    assert!(is_file_modification_tool("unified_file", &args));
+    assert!(is_file_modification_tool("file_operation", &args));
 }
 
 #[test]
-fn test_is_file_modification_tool_unified_file_edit() {
+fn test_is_file_modification_tool_file_operation_edit() {
     let args = json!({"path": "/tmp/test.txt", "old_str": "foo", "new_str": "bar"});
-    assert!(is_file_modification_tool("unified_file", &args));
+    assert!(is_file_modification_tool("file_operation", &args));
 }
 
 #[test]
-fn test_is_file_modification_tool_unified_file_read() {
+fn test_is_file_modification_tool_file_operation_read() {
     let args = json!({"path": "/tmp/test.txt", "action": "read"});
-    assert!(!is_file_modification_tool("unified_file", &args));
+    assert!(!is_file_modification_tool("file_operation", &args));
 }
 
 #[test]

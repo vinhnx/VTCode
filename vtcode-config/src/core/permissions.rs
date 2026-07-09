@@ -65,8 +65,8 @@ impl AgentPermissionsConfig {
 /// Check whether a rule string is already a recognized semantic rule.
 ///
 /// Semantic rules operate on `PermissionRequestKind` rather than exact tool
-/// names, which means they work correctly regardless of whether the LLM calls
-/// `read_file` directly or `unified_file(action="read")`.
+/// names, which means they work correctly across current and internal helper
+/// routes.
 fn is_semantic_rule(rule: &str) -> bool {
     matches!(
         rule.to_ascii_lowercase().as_str(),
@@ -76,9 +76,8 @@ fn is_semantic_rule(rule: &str) -> bool {
 
 /// Normalize a tool-name permission rule to its semantic category.
 ///
-/// Raw internal tool names like `"read_file"` or `"unified_file"` are mapped to
-/// the semantic rule `"read"` so they correctly match all read operations
-/// regardless of which tool the LLM actually invokes.
+/// Raw helper names like `"read_file"` are mapped to semantic rules so they
+/// correctly match the underlying operation.
 fn normalize_tool_name_to_semantic(tool_name: &str) -> String {
     match tool_name.to_ascii_lowercase().as_str() {
         // Read operations
@@ -99,14 +98,6 @@ fn normalize_tool_name_to_semantic(tool_name: &str) -> String {
 
         // Web fetch operations
         "webfetch" | "web_fetch" | "fetch" => "webfetch".to_string(),
-
-        // Unified tools: pass through as-is so they compile to ExactTool rules.
-        // These are multi-action dispatch tools where a single tool name maps to
-        // multiple PermissionRequestKind variants (e.g., unified_file produces
-        // Read, Edit, and Write depending on the action argument). Collapsing
-        // them to a single semantic category would silently narrow deny/allow
-        // rules to only one action type.
-        "unified_file" | "unified_exec" | "unified_search" => tool_name.to_string(),
 
         // Pass through unknown rules as-is (will become ExactTool)
         other => other.to_string(),
@@ -449,17 +440,17 @@ mod tests {
     fn parses_exact_tool_rules() {
         let config: PermissionsConfig = toml::from_str(
             r#"
-            allow = ["read_file", "unified_search"]
-            deny = ["unified_exec"]
+            allow = ["read_file", "code_search"]
+            deny = ["exec_command"]
             "#,
         )
         .expect("permissions config");
 
         assert_eq!(
             config.allow,
-            vec!["read_file".to_string(), "unified_search".to_string()]
+            vec!["read_file".to_string(), "code_search".to_string()]
         );
-        assert_eq!(config.deny, vec!["unified_exec".to_string()]);
+        assert_eq!(config.deny, vec!["exec_command".to_string()]);
     }
 
     #[test]
@@ -480,7 +471,7 @@ mod tests {
         // because the struct field expects AutoPermissionConfig, not a list.
         let err = toml::from_str::<PermissionsConfig>(
             r#"
-            auto = ["unified_exec"]
+            auto = ["exec_command"]
             "#,
         )
         .unwrap_err();
@@ -573,21 +564,12 @@ mod tests {
     }
 
     #[test]
-    fn unified_tools_pass_through_as_exact_tool_rules() {
-        // Unified tools are multi-action dispatch tools that should NOT be
-        // collapsed to semantic rules. They pass through as-is so they compile
-        // to ExactTool rules matching on exact_tool_name.
+    fn public_permission_tool_names_use_semantic_rules_when_known() {
+        assert_eq!(super::normalize_permission_rule("exec_command"), "bash");
+        assert_eq!(super::normalize_permission_rule("apply_patch"), "edit");
         assert_eq!(
-            super::normalize_permission_rule("unified_file"),
-            "unified_file"
-        );
-        assert_eq!(
-            super::normalize_permission_rule("unified_exec"),
-            "unified_exec"
-        );
-        assert_eq!(
-            super::normalize_permission_rule("unified_search"),
-            "unified_search"
+            super::normalize_permission_rule("code_search"),
+            "code_search"
         );
     }
 

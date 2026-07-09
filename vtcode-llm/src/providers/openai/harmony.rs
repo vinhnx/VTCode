@@ -33,14 +33,14 @@ pub(super) fn uses_harmony(model: &str) -> bool {
 }
 
 pub(super) fn parse_harmony_tool_name(recipient: &str) -> String {
-    // Handle harmony format namespace mappings (e.g., "repo_browser.list_files" -> "list_files")
+    // Handle harmony format namespace mappings (e.g., "functions.code_search" -> "code_search")
     // Direct tool name aliases are handled by canonical_tool_name() in the registry
     match recipient {
-        "repo_browser.list_files" => tools::LIST_FILES.to_string(),
-        "repo_browser.read_file" => tools::READ_FILE.to_string(),
-        "repo_browser.write_file" => tools::WRITE_FILE.to_string(),
-        "container.exec" | "bash" => tools::UNIFIED_EXEC.to_string(),
-        "grep" => tools::GREP_FILE.to_string(),
+        "functions.code_search" => tools::CODE_SEARCH.to_string(),
+        "functions.exec_command" => tools::EXEC_COMMAND.to_string(),
+        "functions.apply_patch" => tools::APPLY_PATCH.to_string(),
+        "container.exec" | "bash" => tools::EXEC_COMMAND.to_string(),
+        "grep" => tools::CODE_SEARCH.to_string(),
         _ => {
             // Try to extract the function name after the last dot
             if let Some(dot_pos) = recipient.rfind('.') {

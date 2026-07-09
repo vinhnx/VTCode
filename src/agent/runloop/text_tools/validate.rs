@@ -18,7 +18,7 @@ pub(crate) struct TextualToolSchema {
 /// Returns the schema for a canonical textual tool name.
 pub(crate) fn textual_tool_schema(name: &str) -> Option<TextualToolSchema> {
     match name {
-        tools::UNIFIED_EXEC | tools::RUN_PTY_CMD => Some(TextualToolSchema {
+        tools::EXEC_COMMAND | tools::RUN_PTY_CMD => Some(TextualToolSchema {
             positional_param: Some("command"),
             required_params: &["command"],
         }),

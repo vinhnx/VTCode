@@ -5,13 +5,13 @@ use serde_json::json;
 use vtcode_core::config::constants::tools;
 use vtcode_core::llm::provider::ToolDefinition;
 
-pub const TOOL_READ_FILE_DESCRIPTION: &str = "Read the contents of a text or source file accessible to the IDE workspace. Returns file content with line numbers. For binary files or very large files, consider shell-based inspection via unified_exec instead.";
+pub const TOOL_READ_FILE_DESCRIPTION: &str = "Read the contents of a text or source file accessible to the IDE workspace. Returns file content with line numbers. For binary files or very large files, consider shell-based inspection via exec_command instead.";
 pub const TOOL_READ_FILE_URI_ARG: &str = "uri";
 pub const TOOL_READ_FILE_PATH_ARG: &str = "path";
 pub const TOOL_READ_FILE_LINE_ARG: &str = "line";
 pub const TOOL_READ_FILE_LIMIT_ARG: &str = "limit";
 
-pub const TOOL_LIST_FILES_DESCRIPTION: &str = "Explore workspace files in a SUBDIRECTORY (root path is blocked). Requires path like 'src/' or 'vtcode-core/'. For root overview, use shell commands via unified_exec.";
+pub const TOOL_LIST_FILES_DESCRIPTION: &str = "Explore workspace files in a SUBDIRECTORY (root path is blocked). Requires path like 'src/' or 'vtcode-core/'. For root overview, use shell commands via exec_command.";
 pub const TOOL_LIST_FILES_PATH_ARG: &str = "path";
 pub const TOOL_LIST_FILES_MODE_ARG: &str = "mode";
 pub const TOOL_LIST_FILES_PAGE_ARG: &str = "page";

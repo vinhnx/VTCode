@@ -366,7 +366,7 @@ mod tests {
     fn prepared_command_tool_call() -> PreparedAssistantToolCall {
         PreparedAssistantToolCall::new(uni::ToolCall::function(
             "call_1".to_string(),
-            "unified_exec".to_string(),
+            "exec_command".to_string(),
             r#"{"action":"run","command":"cargo clippy"}"#.to_string(),
         ))
     }
@@ -394,7 +394,7 @@ mod tests {
         let mut history = vec![uni::Message::user("u".to_string())];
         let tool_calls = vec![PreparedAssistantToolCall::new(uni::ToolCall::function(
             "call_1".to_string(),
-            "unified_search".to_string(),
+            "code_search".to_string(),
             r#"{"action":"grep","pattern":"foo"}"#.to_string(),
         ))];
 
@@ -421,7 +421,7 @@ mod tests {
         let mut history = vec![uni::Message::user("u".to_string())];
         let tool_calls = vec![PreparedAssistantToolCall::new(uni::ToolCall::function(
             "call_1".to_string(),
-            "unified_search".to_string(),
+            "code_search".to_string(),
             r#"{"action":"grep","pattern":"foo"}"#.to_string(),
         ))];
 
@@ -453,7 +453,7 @@ mod tests {
 
         let tool_calls = vec![PreparedAssistantToolCall::new(uni::ToolCall::function(
             "call_1".to_string(),
-            "unified_search".to_string(),
+            "code_search".to_string(),
             r#"{"action":"grep","pattern":"loop"}"#.to_string(),
         ))];
         let mut repeated_tool_attempts = LoopTracker::new();
@@ -662,7 +662,7 @@ mod tests {
             processing_result: TurnProcessingResult::TextResponse {
                 text: r#"
 <minimax:tool_call>
-<invoke name="unified_file">
+<invoke name="apply_patch">
 <parameter name="action">read</parameter>
 <parameter name="path">vtcode-core/src/core/agent/runtime/mod.rs</parameter>
 </invoke>
@@ -705,7 +705,7 @@ mod tests {
             processing_result: TurnProcessingResult::TextResponse {
                 text: r#"The requested change was not applied because tools were disabled.
 <minimax:tool_call>
-<invoke name="unified_file">
+<invoke name="apply_patch">
 <parameter name="action">write</parameter>
 <parameter name="path">README.md</parameter>
 </invoke>
@@ -776,7 +776,7 @@ Please re-run with tools enabled."#
                 uni::Message::assistant("Running cargo fmt now.".to_string()).with_tool_calls(
                     vec![uni::ToolCall::function(
                         "call_1".to_string(),
-                        "unified_exec".to_string(),
+                        "exec_command".to_string(),
                         r#"{"action":"run","command":"cargo fmt"}"#.to_string(),
                     )],
                 ),

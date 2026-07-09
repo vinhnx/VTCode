@@ -3,7 +3,6 @@ use serde_json::Value;
 use std::path::Path;
 use vtcode_core::config::constants::tools;
 use vtcode_core::llm::provider::ToolDefinition;
-use vtcode_core::tools::tool_intent;
 
 use super::schemas::{build_list_files_definition, build_read_file_definition};
 use super::titles::render_title;
@@ -148,15 +147,16 @@ impl AcpToolRegistry {
         function_name: &str,
         args: Option<&Value>,
     ) -> crate::acp::ToolKind {
+        let _ = args;
         match function_name {
-            tools::UNIFIED_SEARCH => crate::acp::ToolKind::Search,
-            tools::UNIFIED_EXEC => crate::acp::ToolKind::Execute,
-            tools::UNIFIED_FILE => unified_file_tool_kind(args),
             tools::READ_FILE => crate::acp::ToolKind::Read,
-            tools::GREP_FILE | tools::LIST_FILES => crate::acp::ToolKind::Search,
+            tools::GREP_FILE | tools::LIST_FILES | tools::CODE_SEARCH => {
+                crate::acp::ToolKind::Search
+            }
             tools::RUN_PTY_CMD
             | tools::EXEC_PTY_CMD
             | tools::EXEC_COMMAND
+            | tools::WRITE_STDIN
             | tools::EXECUTE_CODE
             | tools::SHELL => crate::acp::ToolKind::Execute,
             tools::WRITE_FILE
@@ -185,28 +185,6 @@ impl AcpToolRegistry {
 
     pub fn has_local_tools(&self) -> bool {
         !self.local_definitions.is_empty()
-    }
-}
-
-fn unified_file_tool_kind(args: Option<&Value>) -> crate::acp::ToolKind {
-    let Some(action) = args.and_then(tool_intent::unified_file_action) else {
-        return crate::acp::ToolKind::Other;
-    };
-
-    match action {
-        action if action.eq_ignore_ascii_case("read") => crate::acp::ToolKind::Read,
-        action if action.eq_ignore_ascii_case("delete") => crate::acp::ToolKind::Delete,
-        action if action.eq_ignore_ascii_case("move") => crate::acp::ToolKind::Move,
-        action
-            if action.eq_ignore_ascii_case("write")
-                || action.eq_ignore_ascii_case("create")
-                || action.eq_ignore_ascii_case("edit")
-                || action.eq_ignore_ascii_case("patch")
-                || action.eq_ignore_ascii_case("copy") =>
-        {
-            crate::acp::ToolKind::Edit
-        }
-        _ => crate::acp::ToolKind::Other,
     }
 }
 

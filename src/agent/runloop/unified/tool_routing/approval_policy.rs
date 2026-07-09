@@ -30,7 +30,7 @@ fn shell_command_accesses_network(command_words: &[String]) -> bool {
 fn tool_accesses_network(tool_name: &str, tool_args: Option<&Value>) -> bool {
     let canonical = vtcode_core::tools::names::canonical_tool_name(tool_name);
     match canonical {
-        "web_search" | "fetch_url" | "unified_search:web" => true,
+        "web_search" | "fetch_url" | "search_dispatch:web" => true,
         vtcode_core::config::constants::tools::UNIFIED_EXEC => {
             vtcode_core::tools::command_args::command_words(tool_args.unwrap_or(&Value::Null))
                 .ok()
@@ -93,7 +93,7 @@ mod tests {
             "command": "cargo check -p vtcode",
         });
 
-        let risk_context = build_tool_risk_context("unified_exec", Some(&args));
+        let risk_context = build_tool_risk_context("exec_command", Some(&args));
         assert!(!risk_context.accesses_network);
     }
 
@@ -104,7 +104,7 @@ mod tests {
             "command": "cargo install cargo-nextest",
         });
 
-        let risk_context = build_tool_risk_context("unified_exec", Some(&args));
+        let risk_context = build_tool_risk_context("exec_command", Some(&args));
         assert!(risk_context.accesses_network);
     }
 
@@ -115,7 +115,7 @@ mod tests {
             "command": "gh pr checks",
         });
 
-        let risk_context = build_tool_risk_context("unified_exec", Some(&args));
+        let risk_context = build_tool_risk_context("exec_command", Some(&args));
         assert!(risk_context.accesses_network);
     }
 }

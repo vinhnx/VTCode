@@ -344,7 +344,7 @@ fn tool_args_diff_preview(tool_name: &str, tool_args: Option<&Value>) -> Option<
             let content = args.get("content").and_then(Value::as_str)?;
             (None, content)
         }
-        "unified_file" => {
+        "file_operation" => {
             let action = args
                 .get("action")
                 .and_then(Value::as_str)
@@ -823,41 +823,41 @@ mod tests {
     use serde_json::json;
 
     #[test]
-    fn unified_exec_extracts_command_when_action_is_run() {
+    fn command_session_extracts_command_when_action_is_run() {
         let args = json!({
             "action": "run",
             "command": "cargo check"
         });
-        let command = extract_shell_command_text("unified_exec", Some(&args));
+        let command = extract_shell_command_text("command_session", Some(&args));
         assert_eq!(command.as_deref(), Some("cargo check"));
     }
 
     #[test]
-    fn unified_exec_extracts_cmd_alias_when_action_is_inferred() {
+    fn command_session_extracts_cmd_alias_when_action_is_inferred() {
         let args = json!({
             "cmd": "cargo check"
         });
-        let command = extract_shell_command_text("unified_exec", Some(&args));
+        let command = extract_shell_command_text("command_session", Some(&args));
         assert_eq!(command.as_deref(), Some("cargo check"));
     }
 
     #[test]
-    fn unified_exec_extracts_indexed_command_parts_when_action_is_inferred() {
+    fn command_session_extracts_indexed_command_parts_when_action_is_inferred() {
         let args = json!({
             "command.0": "cargo",
             "command.1": "check"
         });
-        let command = extract_shell_command_text("unified_exec", Some(&args));
+        let command = extract_shell_command_text("command_session", Some(&args));
         assert_eq!(command.as_deref(), Some("cargo check"));
     }
 
     #[test]
-    fn unified_exec_ignores_non_run_actions() {
+    fn command_session_ignores_non_run_actions() {
         let args = json!({
             "action": "poll",
             "session_id": "run-123"
         });
-        let command = extract_shell_command_text("unified_exec", Some(&args));
+        let command = extract_shell_command_text("command_session", Some(&args));
         assert_eq!(command, None);
     }
 
@@ -877,20 +877,20 @@ mod tests {
             "sandbox_permissions": "with_additional_permissions"
         });
         assert!(!shell_allows_persistent_decisions(
-            "unified_exec",
+            "command_session",
             Some(&args)
         ));
     }
 
     #[test]
-    fn non_shell_unified_exec_actions_keep_persistent_decisions() {
+    fn non_shell_command_session_actions_keep_persistent_decisions() {
         let args = json!({
             "action": "poll",
             "session_id": "run-123",
             "sandbox_permissions": "with_additional_permissions"
         });
         assert!(shell_allows_persistent_decisions(
-            "unified_exec",
+            "command_session",
             Some(&args)
         ));
     }
@@ -928,7 +928,7 @@ mod tests {
             "justification": "Do you want to build the project outside the sandbox?"
         });
 
-        let justification = extract_shell_approval_justification("unified_exec", Some(&args));
+        let justification = extract_shell_approval_justification("command_session", Some(&args));
         assert_eq!(
             justification.as_deref(),
             Some("Do you want to build the project outside the sandbox?")
@@ -943,7 +943,7 @@ mod tests {
             "justification": "ignored"
         });
 
-        let justification = extract_shell_approval_justification("unified_exec", Some(&args));
+        let justification = extract_shell_approval_justification("command_session", Some(&args));
         assert_eq!(justification, None);
     }
 
@@ -956,7 +956,7 @@ mod tests {
         });
 
         let prefix_rule =
-            extract_shell_persistent_approval_prefix_rule("unified_exec", Some(&args));
+            extract_shell_persistent_approval_prefix_rule("command_session", Some(&args));
         assert_eq!(prefix_rule, None);
     }
 
@@ -969,7 +969,7 @@ mod tests {
         });
 
         let prefix_rule =
-            extract_shell_persistent_approval_prefix_rule("unified_exec", Some(&args));
+            extract_shell_persistent_approval_prefix_rule("command_session", Some(&args));
         assert_eq!(prefix_rule, None);
     }
 
@@ -980,7 +980,7 @@ mod tests {
             "command": ["cargo", "test", "-p", "vtcode"]
         });
 
-        let command = extract_shell_approval_command_prefix_words("unified_exec", Some(&args));
+        let command = extract_shell_approval_command_prefix_words("command_session", Some(&args));
         assert_eq!(
             command,
             Some(vec![
@@ -1000,7 +1000,7 @@ mod tests {
             "sandbox_permissions": "require_escalated"
         });
 
-        let scope = extract_shell_approval_scope_signature("unified_exec", Some(&args));
+        let scope = extract_shell_approval_scope_signature("command_session", Some(&args));
         assert_eq!(
             scope.as_deref(),
             Some("sandbox_permissions=\"require_escalated\"|additional_permissions=null")
@@ -1017,7 +1017,7 @@ mod tests {
         });
 
         let entry = render_shell_persistent_approval_prefix_entry(
-            "unified_exec",
+            "command_session",
             Some(&args),
             &["cargo".to_string(), "test".to_string()],
         );
@@ -1048,7 +1048,7 @@ mod tests {
     #[test]
     fn non_mcp_tools_keep_standard_prompt_kind() {
         assert_eq!(
-            tool_permission_prompt_kind("unified_exec"),
+            tool_permission_prompt_kind("command_session"),
             ToolPermissionPromptKind::Standard
         );
     }

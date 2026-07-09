@@ -1066,7 +1066,7 @@ fn push_clean_transcript_line(target: &mut Vec<String>, line: String) {
 }
 
 fn normalize_session_tool_name(name: &str) -> String {
-    crate::tools::tool_intent::canonical_unified_exec_tool_name(name)
+    crate::tools::tool_intent::canonical_command_session_tool_name(name)
         .unwrap_or(name)
         .to_string()
 }

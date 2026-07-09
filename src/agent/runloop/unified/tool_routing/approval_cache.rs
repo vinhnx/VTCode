@@ -72,7 +72,7 @@ pub(super) fn web_fetch_domain(tool_args: Option<&Value>) -> Option<String> {
 
 pub(super) fn cache_key(tool_name: &str, tool_args: Option<&Value>) -> String {
     // For non-shell tools, the shell suffix is None, so the key degrades to the
-    // bare tool name. Qualify `unified_search` with its action to prevent
+    // bare tool name. Qualify `search_dispatch` with its action to prevent
     // cross-action cache contamination (e.g. a grep approval auto-approving a
     // web fetch).
     if let Some(suffix) =
@@ -85,9 +85,9 @@ pub(super) fn cache_key(tool_name: &str, tool_args: Option<&Value>) -> String {
 
     if tool_name == UNIFIED_SEARCH
         && let Some(args) = tool_args
-        && vtcode_core::tools::tool_intent::unified_search_action_is(args, "web")
+        && vtcode_core::tools::tool_intent::search_dispatch_action_is(args, "web")
     {
-        return "unified_search:web".to_string();
+        return "search_dispatch:web".to_string();
     }
 
     // For web_fetch / fetch_url, key by domain so that approving

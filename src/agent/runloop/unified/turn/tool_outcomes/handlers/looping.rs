@@ -8,7 +8,7 @@ use crate::agent::runloop::unified::tool_reads::{is_read_file_style_call, read_f
 
 pub(super) use crate::agent::runloop::unified::tool_reads::spool_chunk_read_path;
 
-// Read-offset field aliases recognized across read_file / unified_file.
+// Read-offset field aliases recognized across read_file / file_operation.
 // Keep this aligned with `helpers::READ_OFFSET_KEYS` — the two lists must
 // agree on what counts as a "where to start reading" field, otherwise the
 // family-cap slice suffix would miss idioms like `line_start`/`start_line`
@@ -66,7 +66,7 @@ fn normalized_shell_command_arg(args: &Value, max_chars: usize) -> Option<String
         .filter(|command| !command.is_empty())
 }
 
-fn unified_search_globs_arg(args: &Value) -> Option<String> {
+fn search_dispatch_globs_arg(args: &Value) -> Option<String> {
     let globs = args.get("globs")?;
     match globs {
         Value::String(value) => {
@@ -129,7 +129,7 @@ fn read_file_limit_value(args: &Value) -> Option<usize> {
     })
 }
 
-/// Read-only flag. `unified_file`/`read_file` honor `raw` (bypass LLM
+/// Read-only flag. `file_operation`/`read_file` honor `raw` (bypass LLM
 /// summarization). Two reads of the same path + same slice but different `raw`
 /// modes return *different* payloads, so they must not be treated as the same
 /// family call. `true`/`false`/absent are all distinct suffixes.
@@ -271,7 +271,7 @@ pub(crate) fn low_signal_family_key(canonical_tool_name: &str, args: &Value) -> 
             )
         }),
         tool_names::UNIFIED_FILE => {
-            let action = tool_intent::unified_file_action(args).unwrap_or("read");
+            let action = tool_intent::file_operation_action(args).unwrap_or("read");
             if !action.eq_ignore_ascii_case("read") {
                 return None;
             }
@@ -286,8 +286,8 @@ pub(crate) fn low_signal_family_key(canonical_tool_name: &str, args: &Value) -> 
         tool_names::UNIFIED_EXEC => normalized_shell_command_arg(args, 160)
             .map(|command| format!("{canonical_tool_name}::run::{command}")),
         tool_names::UNIFIED_SEARCH => {
-            let normalized = tool_intent::normalize_unified_search_args(args);
-            let action = tool_intent::unified_search_action(&normalized).unwrap_or("grep");
+            let normalized = tool_intent::normalize_search_dispatch_args(args);
+            let action = tool_intent::search_dispatch_action(&normalized).unwrap_or("grep");
             let mut key = format!("{canonical_tool_name}::{action}");
             // Include pattern for grep/structural so different searches on the same
             // path are tracked separately (avoids false-positive family cap violations).
@@ -302,7 +302,7 @@ pub(crate) fn low_signal_family_key(canonical_tool_name: &str, args: &Value) -> 
                     key.push_str(&pattern);
                 }
             }
-            if let Some(globs) = unified_search_globs_arg(&normalized) {
+            if let Some(globs) = search_dispatch_globs_arg(&normalized) {
                 key.push_str("::globs=");
                 key.push_str(&globs);
             } else {
@@ -462,7 +462,7 @@ mod tests {
         // Sanity: the bare read keeps the legacy key (no slice suffix).
         assert_eq!(
             base.as_deref(),
-            Some("unified_file::read::src/cli/update.rs")
+            Some("file_operation::read::src/cli/update.rs")
         );
         assert!(off81.unwrap().ends_with("::off=81::lim=229"));
         assert!(off80.unwrap().ends_with("::off=80::lim=200"));
@@ -499,7 +499,7 @@ mod tests {
 
     #[test]
     fn low_signal_family_key_read_file_distinguishes_paginated_reads() {
-        // read_file (not unified_file) must also be slice-aware.
+        // read_file (not file_operation) must also be slice-aware.
         let off0 = low_signal_family_key(
             tool_names::READ_FILE,
             &json!({"path": "src/lib.rs", "offset": 0}),

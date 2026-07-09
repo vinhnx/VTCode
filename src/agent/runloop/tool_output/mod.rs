@@ -38,7 +38,7 @@ use styles::{GitStyles, LsStyles};
 
 pub(crate) fn spooled_output_hint(path: &str) -> String {
     format!(
-        "Large output was spooled to \"{path}\". Use unified_file (action='read') or unified_search (action='grep') to inspect details."
+        "Large output was spooled to \"{path}\". Use exec_command with shell tools such as cat, sed, or rg to inspect details."
     )
 }
 
@@ -203,7 +203,7 @@ pub(crate) async fn render_tool_output(
             return render_terminal_tool_output(renderer, val, vt_config, allow_tool_ansi).await;
         }
         Some(tools::UNIFIED_EXEC)
-            if !is_git_diff_output && should_render_unified_exec_terminal_panel(val) =>
+            if !is_git_diff_output && should_render_command_session_terminal_panel(val) =>
         {
             return render_terminal_tool_output(renderer, val, vt_config, allow_tool_ansi).await;
         }
@@ -493,7 +493,7 @@ fn render_simple_tool_status(
     Ok(())
 }
 
-fn should_render_unified_exec_terminal_panel(val: &Value) -> bool {
+fn should_render_command_session_terminal_panel(val: &Value) -> bool {
     let has_command = val
         .get("command")
         .map(|command| match command {
@@ -640,44 +640,44 @@ mod tests {
 
     use super::{
         collect_inline_output, preferred_follow_up_rendered_body, render_tool_output,
-        should_render_unified_exec_terminal_panel, spooled_output_hint, tracker_summary_lines,
+        should_render_command_session_terminal_panel, spooled_output_hint, tracker_summary_lines,
     };
 
     #[test]
-    fn unified_exec_terminal_panel_detects_command_payload() {
+    fn command_session_terminal_panel_detects_command_payload() {
         let payload = json!({
             "command": "cargo check",
             "output": "Checking vtcode"
         });
-        assert!(should_render_unified_exec_terminal_panel(&payload));
+        assert!(should_render_command_session_terminal_panel(&payload));
     }
 
     #[test]
-    fn unified_exec_terminal_panel_detects_session_payload() {
+    fn command_session_terminal_panel_detects_session_payload() {
         let payload = json!({
             "session_id": "run-123",
             "is_exited": true
         });
-        assert!(should_render_unified_exec_terminal_panel(&payload));
+        assert!(should_render_command_session_terminal_panel(&payload));
     }
 
     #[test]
-    fn unified_exec_terminal_panel_ignores_non_terminal_payload() {
+    fn command_session_terminal_panel_ignores_non_terminal_payload() {
         let payload = json!({
             "sessions": [],
             "success": true
         });
-        assert!(!should_render_unified_exec_terminal_panel(&payload));
+        assert!(!should_render_command_session_terminal_panel(&payload));
     }
 
     #[test]
-    fn unified_exec_terminal_panel_skips_git_diff_payload() {
+    fn command_session_terminal_panel_skips_git_diff_payload() {
         let payload = json!({
             "command": "git diff -- src/main.rs",
             "output": "diff --git a/src/main.rs b/src/main.rs",
             "content_type": "git_diff"
         });
-        assert!(!should_render_unified_exec_terminal_panel(&payload));
+        assert!(!should_render_command_session_terminal_panel(&payload));
     }
 
     #[test]
@@ -706,7 +706,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn render_tool_output_unified_exec_git_diff_renders_diff_not_command_preview() {
+    async fn render_tool_output_command_session_git_diff_renders_diff_not_command_preview() {
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
         let mut renderer =
             AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
@@ -736,7 +736,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn render_tool_output_unified_exec_git_diff_stdout_renders_diff_not_command_preview() {
+    async fn render_tool_output_command_session_git_diff_stdout_renders_diff_not_command_preview() {
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
         let mut renderer =
             AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
@@ -768,7 +768,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn render_tool_output_unified_exec_renders_structured_hints() {
+    async fn render_tool_output_command_session_renders_structured_hints() {
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
         let mut renderer =
             AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
@@ -794,8 +794,8 @@ mod tests {
 
         let inline_output = collect_inline_output(&mut receiver);
         assert!(inline_output.contains("Large output was spooled to"));
-        assert!(inline_output.contains("unified_file (action='read')"));
-        assert!(inline_output.contains("unified_search (action='grep')"));
+        assert!(inline_output.contains("exec_command"));
+        assert!(inline_output.contains("cat, sed, or rg"));
         assert!(!inline_output.contains("read_file/grep_file"));
         assert!(inline_output.contains("Reuse `next_continue_args`."));
     }
@@ -852,8 +852,8 @@ mod tests {
 
         let inline_output = collect_inline_output(&mut receiver);
         assert!(inline_output.contains("Large output was spooled to"));
-        assert!(inline_output.contains("unified_file (action='read')"));
-        assert!(inline_output.contains("unified_search (action='grep')"));
+        assert!(inline_output.contains("exec_command"));
+        assert!(inline_output.contains("cat, sed, or rg"));
         assert!(!inline_output.contains("read_file/grep_file"));
     }
 
@@ -878,8 +878,8 @@ mod tests {
 
         let inline_output = collect_inline_output(&mut receiver);
         assert!(inline_output.contains("Large output was spooled to"));
-        assert!(inline_output.contains("unified_file (action='read')"));
-        assert!(inline_output.contains("unified_search (action='grep')"));
+        assert!(inline_output.contains("exec_command"));
+        assert!(inline_output.contains("cat, sed, or rg"));
         assert!(!inline_output.contains("read_file/grep_file"));
     }
 
@@ -904,8 +904,8 @@ mod tests {
             inline_output.matches("Large output was spooled to").count(),
             1
         );
-        assert!(inline_output.contains("unified_file"));
-        assert!(inline_output.contains("unified_search"));
+        assert!(inline_output.contains("exec_command"));
+        assert!(inline_output.contains("cat, sed, or rg"));
     }
 
     #[tokio::test]
@@ -1014,7 +1014,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn render_tool_output_unified_exec_keeps_exit_127_output_and_guidance() {
+    async fn render_tool_output_command_session_keeps_exit_127_output_and_guidance() {
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
         let mut renderer =
             AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
@@ -1084,7 +1084,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn render_tool_output_write_file_diff_truncation_uses_unified_file_hint() {
+    async fn render_tool_output_write_file_diff_truncation_uses_file_operation_hint() {
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
         let mut renderer =
             AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
@@ -1106,7 +1106,7 @@ mod tests {
         .expect("write file diff payload should render");
 
         let inline_output = collect_inline_output(&mut receiver);
-        assert!(inline_output.contains("use unified_file for full view"));
+        assert!(inline_output.contains("use exec_command with sed for full view"));
         assert!(!inline_output.contains("use read_file for full view"));
     }
 

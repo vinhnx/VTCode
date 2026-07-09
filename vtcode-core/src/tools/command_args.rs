@@ -3,7 +3,7 @@
 use serde_json::Value;
 
 use crate::tools::tool_intent::{
-    unified_exec_action, unified_exec_action_in, unified_exec_action_is,
+    command_session_action, command_session_action_in, command_session_action_is,
 };
 
 const INDEXED_COMMAND_TYPE_ERROR: &str = "command array must contain only strings";
@@ -154,34 +154,34 @@ pub fn session_id_text(args: &Value) -> Option<&str> {
     args.as_object().and_then(session_id_text_from_payload)
 }
 
-pub fn unified_exec_missing_required_args(args: &Value) -> Vec<&'static str> {
-    if unified_exec_action(args).is_none() {
+pub fn command_session_missing_required_args(args: &Value) -> Vec<&'static str> {
+    if command_session_action(args).is_none() {
         return Vec::new();
     }
 
     let mut missing = Vec::new();
-    if unified_exec_action_is(args, "run") {
+    if command_session_action_is(args, "run") {
         if command_text(args).ok().flatten().is_none() {
             missing.push("command");
         }
-    } else if unified_exec_action_is(args, "write") {
+    } else if command_session_action_is(args, "write") {
         if session_id_text(args).is_none() {
             missing.push("session_id");
         }
         if interactive_input_text(args).is_none() {
             missing.push("input or chars or text");
         }
-    } else if unified_exec_action_in(args, &["poll", "continue", "close"]) {
+    } else if command_session_action_in(args, &["poll", "continue", "close"]) {
         if session_id_text(args).is_none() {
             missing.push("session_id");
         }
-    } else if unified_exec_action_is(args, "inspect") {
+    } else if command_session_action_is(args, "inspect") {
         let has_session_id = session_id_text(args).is_some();
         let has_spool_path = has_nonempty_string_field(args, "spool_path");
         if !has_session_id && !has_spool_path {
             missing.push("session_id or spool_path");
         }
-    } else if unified_exec_action_is(args, "code") {
+    } else if command_session_action_is(args, "code") {
         let has_code =
             has_nonempty_string_field(args, "code") || has_nonempty_string_field(args, "command");
         if !has_code {
@@ -192,8 +192,8 @@ pub fn unified_exec_missing_required_args(args: &Value) -> Vec<&'static str> {
     missing
 }
 
-pub fn unified_exec_requires_command_safety(args: &Value) -> bool {
-    unified_exec_action_is(args, "run")
+pub fn command_session_requires_command_safety(args: &Value) -> bool {
+    command_session_action_is(args, "run")
 }
 
 pub fn working_dir_text_from_payload(payload: &serde_json::Map<String, Value>) -> Option<&str> {
@@ -210,7 +210,7 @@ pub fn working_dir_text(args: &Value) -> Option<&str> {
     args.as_object().and_then(working_dir_text_from_payload)
 }
 
-/// Extract the raw command string from unified_exec-style arguments without
+/// Extract the raw command string from command_session-style arguments without
 /// splitting it into words. This is useful for checking shell syntax that
 /// would be lost after `shell_words::split`, such as redirections and pipes.
 pub fn raw_command_text(args: &Value) -> Option<String> {
@@ -427,11 +427,11 @@ pub fn normalize_shell_args(args: &Value) -> Result<Value, &'static str> {
 #[cfg(test)]
 mod tests {
     use super::{
+        command_session_missing_required_args, command_session_requires_command_safety,
         command_text, command_words, has_indexed_command_parts, interactive_input_text,
         is_readonly_command_string, normalize_indexed_command_args, normalize_shell_args,
         normalized_command_value, parse_indexed_command_parts, raw_command_text, session_id_text,
-        session_id_text_from_payload, unified_exec_missing_required_args,
-        unified_exec_requires_command_safety, working_dir_text, working_dir_text_from_payload,
+        session_id_text_from_payload, working_dir_text, working_dir_text_from_payload,
     };
     use serde_json::{Value, json};
 
@@ -645,29 +645,31 @@ mod tests {
     }
 
     #[test]
-    fn unified_exec_missing_required_args_is_action_aware() {
+    fn command_session_missing_required_args_is_action_aware() {
         assert_eq!(
-            unified_exec_missing_required_args(&json!({"action": "run"})),
+            command_session_missing_required_args(&json!({"action": "run"})),
             vec!["command"]
         );
         assert_eq!(
-            unified_exec_missing_required_args(&json!({"action": "write", "session_id": "run-1"})),
+            command_session_missing_required_args(
+                &json!({"action": "write", "session_id": "run-1"})
+            ),
             vec!["input or chars or text"]
         );
         assert_eq!(
-            unified_exec_missing_required_args(&json!({"action": "inspect"})),
+            command_session_missing_required_args(&json!({"action": "inspect"})),
             vec!["session_id or spool_path"]
         );
-        assert!(unified_exec_missing_required_args(&json!({"action": "list"})).is_empty());
+        assert!(command_session_missing_required_args(&json!({"action": "list"})).is_empty());
     }
 
     #[test]
-    fn unified_exec_requires_command_safety_only_for_run() {
-        assert!(unified_exec_requires_command_safety(&json!({
+    fn command_session_requires_command_safety_only_for_run() {
+        assert!(command_session_requires_command_safety(&json!({
             "action": "run",
             "command": "cargo check"
         })));
-        assert!(!unified_exec_requires_command_safety(&json!({
+        assert!(!command_session_requires_command_safety(&json!({
             "action": "poll",
             "session_id": "run-1"
         })));

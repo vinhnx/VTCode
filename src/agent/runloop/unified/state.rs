@@ -107,7 +107,8 @@ pub(crate) struct SessionStats {
 impl SessionStats {
     pub(crate) fn record_tool(&mut self, name: &str) {
         let normalized_name =
-            vtcode_core::tools::tool_intent::canonical_unified_exec_tool_name(name).unwrap_or(name);
+            vtcode_core::tools::tool_intent::canonical_command_session_tool_name(name)
+                .unwrap_or(name);
         self.tools.insert(normalized_name.to_string());
     }
 

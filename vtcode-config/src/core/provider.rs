@@ -877,7 +877,7 @@ value = "debug-secret-123"
 [tool_search]
 enabled = false
 defer_by_default = false
-always_available_tools = ["unified_search", "custom_tool"]
+always_available_tools = ["code_search", "custom_tool"]
 "#,
         )
         .expect("config should parse");
@@ -886,7 +886,7 @@ always_available_tools = ["unified_search", "custom_tool"]
         assert!(!parsed.tool_search.defer_by_default);
         assert_eq!(
             parsed.tool_search.always_available_tools,
-            vec!["unified_search".to_string(), "custom_tool".to_string()]
+            vec!["code_search".to_string(), "custom_tool".to_string()]
         );
     }
 

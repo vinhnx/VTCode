@@ -40,9 +40,9 @@ const SUBPROCESS_STOP_PREFIX: &str = "subprocesses:stop:";
 const SUBPROCESS_CANCEL_PREFIX: &str = "subprocesses:cancel:";
 const ACTIVE_AGENT_INSPECTOR_REFRESH_MS: u64 = 750;
 const DEFAULT_AGENT_DESCRIPTION_TEXT: &str = "Describe when VT Code should delegate to this agent.";
-const DEFAULT_AGENT_BODY_TEXT: &str = "\nYou are a focused VT Code subagent.\n\nScope:\n- Describe the tasks this agent should handle.\n- Keep behavior narrow and task-specific.\n\nConstraints:\n- Use VT Code tool ids in frontmatter such as `read_file`, `list_files`, `unified_search`, and `unified_exec`.\n- Prefer the narrowest tool set that fits the job.\n- Return concise, actionable results.\n\nOutput:\n- State what you checked.\n- Summarize findings or changes.\n- Call out verification or remaining risks when relevant.\n";
+const DEFAULT_AGENT_BODY_TEXT: &str = "\nYou are a focused VT Code subagent.\n\nScope:\n- Describe the tasks this agent should handle.\n- Keep behaviour narrow and task-specific.\n\nConstraints:\n- Use `exec_command` for shell inspection and text search, `apply_patch` for edits, and `code_search` for semantic or structural code search.\n- Prefer the narrowest tool set that fits the job.\n- Return concise, actionable results.\n\nOutput:\n- State what you checked.\n- Summarise findings or changes.\n- Call out verification or remaining risks when relevant.\n";
 const DEFAULT_AGENT_TOOL_IDS: [&str; 3] =
-    [tools::READ_FILE, tools::LIST_FILES, tools::UNIFIED_SEARCH];
+    [tools::EXEC_COMMAND, tools::APPLY_PATCH, tools::CODE_SEARCH];
 const SUBAGENT_CONTROLLER_INACTIVE_MESSAGE: &str =
     "Subagent controller is not active in this session.";
 
@@ -669,11 +669,11 @@ fn validate_agent_name(name: &str) -> Result<()> {
 
 fn scaffold_agent_markdown(name: &str) -> String {
     format!(
-        "---\nname: {name}\ndescription: {description}\ntools:\n  - {read_file}\n  - {list_files}\n  - {unified_search}\nmodel: inherit\ncolor: blue\nreasoning_effort: medium\npermissions:\n  default: deny\n  allow:\n    - {read_file}\n    - {list_files}\n    - {unified_search}\n---\n{body}",
+        "---\nname: {name}\ndescription: {description}\ntools:\n  - {exec_command}\n  - {apply_patch}\n  - {code_search}\nmodel: inherit\ncolor: blue\nreasoning_effort: medium\npermissions:\n  default: deny\n  allow:\n    - {exec_command}\n    - {apply_patch}\n    - {code_search}\n---\n{body}",
         description = DEFAULT_AGENT_DESCRIPTION_TEXT,
-        read_file = DEFAULT_AGENT_TOOL_IDS[0],
-        list_files = DEFAULT_AGENT_TOOL_IDS[1],
-        unified_search = DEFAULT_AGENT_TOOL_IDS[2],
+        exec_command = DEFAULT_AGENT_TOOL_IDS[0],
+        apply_patch = DEFAULT_AGENT_TOOL_IDS[1],
+        code_search = DEFAULT_AGENT_TOOL_IDS[2],
         body = DEFAULT_AGENT_BODY_TEXT,
     )
 }

@@ -527,13 +527,13 @@ mod tests {
             uni::Message::assistant_with_tools(
                 String::new(),
                 vec![uni::ToolCall::function(
-                    "direct_unified_exec_1".to_string(),
+                    "direct_command_session_1".to_string(),
                     tool_names::UNIFIED_EXEC.to_string(),
                     serde_json::json!({"action":"run","command":"cargo check"}).to_string(),
                 )],
             ),
             uni::Message::tool_response(
-                "direct_unified_exec_1".to_string(),
+                "direct_command_session_1".to_string(),
                 serde_json::json!({"exit_code":0}).to_string(),
             ),
         ];
@@ -550,13 +550,13 @@ mod tests {
             uni::Message::assistant_with_tools(
                 String::new(),
                 vec![uni::ToolCall::function(
-                    "direct_unified_exec_1".to_string(),
+                    "direct_command_session_1".to_string(),
                     tool_names::UNIFIED_EXEC.to_string(),
                     serde_json::json!({"command":"cargo check"}).to_string(),
                 )],
             ),
             uni::Message::tool_response(
-                "direct_unified_exec_1".to_string(),
+                "direct_command_session_1".to_string(),
                 serde_json::json!({"exit_code":0}).to_string(),
             ),
         ];
@@ -571,13 +571,13 @@ mod tests {
             uni::Message::assistant_with_tools(
                 String::new(),
                 vec![uni::ToolCall::function(
-                    "direct_unified_file_1".to_string(),
+                    "direct_file_operation_1".to_string(),
                     tool_names::UNIFIED_FILE.to_string(),
                     serde_json::json!({"action":"read","path":"docs/project/TODO.md"}).to_string(),
                 )],
             ),
             uni::Message::tool_response(
-                "direct_unified_file_1".to_string(),
+                "direct_file_operation_1".to_string(),
                 serde_json::json!({"error":"limit must be greater than zero"}).to_string(),
             ),
         ];
@@ -767,7 +767,7 @@ mod tests {
     fn completion_reply_text_returns_none_without_direct_tool_tail() {
         let history = vec![
             uni::Message::tool_response(
-                "direct_unified_exec_1".to_string(),
+                "direct_command_session_1".to_string(),
                 serde_json::json!({"exit_code":0}).to_string(),
             ),
             uni::Message::assistant("cargo check completed.".to_string()),
@@ -782,13 +782,13 @@ mod tests {
             uni::Message::assistant_with_tools(
                 String::new(),
                 vec![uni::ToolCall::function(
-                    "direct_unified_exec_1".to_string(),
+                    "direct_command_session_1".to_string(),
                     tool_names::UNIFIED_EXEC.to_string(),
                     serde_json::json!({"action":"run","command":"cargo fmt"}).to_string(),
                 )],
             ),
             uni::Message::tool_response(
-                "direct_unified_exec_1".to_string(),
+                "direct_command_session_1".to_string(),
                 serde_json::json!({"exit_code":0,"output":""}).to_string(),
             ),
         ];
@@ -807,13 +807,13 @@ mod tests {
             uni::Message::assistant_with_tools(
                 String::new(),
                 vec![uni::ToolCall::function(
-                    "direct_unified_exec_1".to_string(),
+                    "direct_command_session_1".to_string(),
                     tool_names::UNIFIED_EXEC.to_string(),
                     serde_json::json!({"action":"run","command":"cargo fmt"}).to_string(),
                 )],
             ),
             uni::Message::tool_response(
-                "direct_unified_exec_1".to_string(),
+                "direct_command_session_1".to_string(),
                 serde_json::json!({"exit_code":0,"output":""}).to_string(),
             ),
         ];
@@ -837,13 +837,13 @@ mod tests {
             uni::Message::assistant_with_tools(
                 String::new(),
                 vec![uni::ToolCall::function(
-                    "direct_unified_exec_1".to_string(),
+                    "direct_command_session_1".to_string(),
                     tool_names::UNIFIED_EXEC.to_string(),
                     serde_json::json!({"action":"run","command":"cargo fmt"}).to_string(),
                 )],
             ),
             uni::Message::tool_response(
-                "direct_unified_exec_1".to_string(),
+                "direct_command_session_1".to_string(),
                 serde_json::json!({"exit_code":0,"output":""}).to_string(),
             ),
             uni::Message::assistant("`cargo fmt` completed successfully.".to_string()),

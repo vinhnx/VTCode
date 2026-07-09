@@ -94,7 +94,7 @@ fn write_test_background_subagent(workspace_root: &std::path::Path) {
 name: background-demo
 description: Minimal demo agent for the managed background subprocess flow.
 tools:
-  - unified_exec
+  - command_session
 background: true
 maxTurns: 2
 initialPrompt: Report readiness once.
@@ -534,7 +534,7 @@ fn filter_child_tools_removes_subagent_tools_in_children() {
 }
 
 #[test]
-fn filter_child_tools_keeps_unified_exec_for_shell_capable_agents() {
+fn filter_child_tools_keeps_command_session_for_shell_capable_agents() {
     let defs = vec![
         ToolDefinition::function(
             tools::UNIFIED_EXEC.to_string(),

@@ -13,7 +13,7 @@ This file captures runtime invariants for automation-oriented usage of VT Code.
 - Discover built-in tool contracts from the binary at runtime:
   - `vtcode schema tools`
   - `vtcode schema tools --mode minimal`
-  - `vtcode schema tools --name unified_search --name unified_file`
+  - `vtcode schema tools --name exec_command --name code_search`
 
 ## Safety Defaults
 
