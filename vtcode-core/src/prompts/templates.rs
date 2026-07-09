@@ -1,8 +1,11 @@
 use super::config::{AgentPersonality, ResponseStyle};
+use crate::config::types::{ResolvedShellPromptProfile, ShellPromptProfile};
 use once_cell::sync::Lazy;
 
 static TOOL_USAGE_PROMPT: Lazy<String> = Lazy::new(|| {
-    "Tools: use exec_command.cmd for shell commands, including `ls`, `rg`, `find`, `cat`, `sed`, `awk`, build tools, test tools, and validation; use write_stdin for active command sessions; use apply_patch for file edits when exposed by the model.".to_string()
+    PromptTemplates::tool_usage_prompt_for_profile(
+        ShellPromptProfile::Auto.resolve_for_current_platform(),
+    )
 });
 
 /// Prompt template collection
@@ -51,6 +54,18 @@ impl PromptTemplates {
         TOOL_USAGE_PROMPT.as_str()
     }
 
+    /// Get tool usage prompt for a resolved shell profile.
+    pub fn tool_usage_prompt_for_profile(profile: ResolvedShellPromptProfile) -> String {
+        match profile {
+            ResolvedShellPromptProfile::UnixLike => {
+                "Tools: use exec_command.cmd for Unix-like shell commands, including `ls`, `rg`, `find`, `cat`, `sed`, `awk`, build tools, test tools, and validation; use write_stdin for active command sessions; use apply_patch for file edits when exposed by the model. VT Code does not rewrite GNU flags for macOS BSD tools.".to_string()
+            }
+            ResolvedShellPromptProfile::PowerShell => {
+                "Tools: use exec_command.cmd for native PowerShell commands, including `Get-ChildItem`, `Select-String`, `Get-Content`, `Where-Object`, build tools, test tools, and validation; use write_stdin for active command sessions; use apply_patch for file edits when exposed by the model. Use WSL for Unix-like workflows on Windows; VT Code does not translate Unix command flags to PowerShell.".to_string()
+            }
+        }
+    }
+
     /// Get workspace context prompt
     pub fn workspace_context_prompt() -> &'static str {
         "Work within project workspace. Consider existing code structure."
@@ -75,6 +90,7 @@ impl PromptTemplates {
 #[cfg(test)]
 mod tests {
     use super::PromptTemplates;
+    use crate::config::types::ResolvedShellPromptProfile;
 
     #[test]
     fn skills_prompt_mentions_description_routing() {
@@ -85,7 +101,8 @@ mod tests {
 
     #[test]
     fn tool_usage_prompt_prefers_codex_baseline_tools() {
-        let prompt = PromptTemplates::tool_usage_prompt();
+        let prompt =
+            PromptTemplates::tool_usage_prompt_for_profile(ResolvedShellPromptProfile::UnixLike);
         assert!(prompt.contains("exec_command"));
         assert!(prompt.contains("exec_command.cmd"));
         assert!(prompt.contains("write_stdin"));
@@ -103,5 +120,20 @@ mod tests {
         assert!(!prompt.contains("unified_search"));
         assert!(!prompt.contains("read_file"));
         assert!(!prompt.contains("write_file"));
+    }
+
+    #[test]
+    fn tool_usage_prompt_supports_powershell_profile() {
+        let prompt =
+            PromptTemplates::tool_usage_prompt_for_profile(ResolvedShellPromptProfile::PowerShell);
+
+        assert!(prompt.contains("native PowerShell commands"));
+        assert!(prompt.contains("`Get-ChildItem`"));
+        assert!(prompt.contains("`Select-String`"));
+        assert!(prompt.contains("WSL"));
+        assert!(prompt.contains("does not translate Unix command flags to PowerShell"));
+        assert!(prompt.contains("write_stdin"));
+        assert!(prompt.contains("apply_patch"));
+        assert!(!prompt.contains("unified_exec"));
     }
 }

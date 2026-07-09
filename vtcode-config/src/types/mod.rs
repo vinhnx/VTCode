@@ -3,6 +3,7 @@
 use crate::core::PromptCachingConfig;
 use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::BTreeMap;
+use std::env;
 use std::fmt;
 use std::path::PathBuf;
 
@@ -151,6 +152,166 @@ impl<'de> Deserialize<'de> for ToolDocumentationMode {
             Ok(Self::default())
         }
     }
+}
+
+/// Configured shell syntax profile used for model-facing command examples.
+///
+/// This is prompt guidance only. Command approval, sandboxing, and allow-list
+/// policy are enforced elsewhere in the runtime.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+#[derive(Default)]
+pub enum ShellPromptProfile {
+    /// Detect from the current platform. Unix-like shells are used for Linux,
+    /// macOS, and WSL. Native Windows uses PowerShell.
+    #[default]
+    Auto,
+    /// Use Unix-like shell syntax in prompt examples.
+    UnixLike,
+    /// Use native PowerShell syntax in prompt examples.
+    PowerShell,
+}
+
+impl ShellPromptProfile {
+    /// Return the textual representation for configuration.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::UnixLike => "unix_like",
+            Self::PowerShell => "powershell",
+        }
+    }
+
+    /// Parse a shell prompt profile from user configuration.
+    pub fn parse(value: &str) -> Option<Self> {
+        let normalized = value.trim();
+        if normalized.eq_ignore_ascii_case("auto") {
+            Some(Self::Auto)
+        } else if normalized.eq_ignore_ascii_case("unix_like")
+            || normalized.eq_ignore_ascii_case("unix-like")
+            || normalized.eq_ignore_ascii_case("unix")
+            || normalized.eq_ignore_ascii_case("posix")
+        {
+            Some(Self::UnixLike)
+        } else if normalized.eq_ignore_ascii_case("powershell")
+            || normalized.eq_ignore_ascii_case("power_shell")
+            || normalized.eq_ignore_ascii_case("windows")
+        {
+            Some(Self::PowerShell)
+        } else {
+            None
+        }
+    }
+
+    /// Allowed configuration values for validation.
+    pub fn allowed_values() -> &'static [&'static str] {
+        &["auto", "unix_like", "powershell"]
+    }
+
+    /// Resolve this configured value against the current runtime platform.
+    pub fn resolve_for_current_platform(self) -> ResolvedShellPromptProfile {
+        self.resolve_for_platform(ShellProfilePlatform::current())
+    }
+
+    /// Resolve this configured value against an explicit platform.
+    pub fn resolve_for_platform(
+        self,
+        platform: ShellProfilePlatform,
+    ) -> ResolvedShellPromptProfile {
+        match self {
+            Self::Auto => match platform {
+                ShellProfilePlatform::NativeWindows => ResolvedShellPromptProfile::PowerShell,
+                ShellProfilePlatform::UnixLike | ShellProfilePlatform::Wsl => {
+                    ResolvedShellPromptProfile::UnixLike
+                }
+            },
+            Self::UnixLike => ResolvedShellPromptProfile::UnixLike,
+            Self::PowerShell => ResolvedShellPromptProfile::PowerShell,
+        }
+    }
+}
+
+impl fmt::Display for ShellPromptProfile {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl<'de> Deserialize<'de> for ShellPromptProfile {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let raw = String::deserialize(deserializer)?;
+        if let Some(parsed) = Self::parse(&raw) {
+            Ok(parsed)
+        } else {
+            Ok(Self::default())
+        }
+    }
+}
+
+/// Platform category used to resolve [`ShellPromptProfile::Auto`].
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ShellProfilePlatform {
+    UnixLike,
+    Wsl,
+    NativeWindows,
+}
+
+impl ShellProfilePlatform {
+    pub fn current() -> Self {
+        if cfg!(windows) {
+            Self::NativeWindows
+        } else if is_wsl_environment() {
+            Self::Wsl
+        } else {
+            Self::UnixLike
+        }
+    }
+}
+
+/// Prompt profile after automatic platform resolution.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ResolvedShellPromptProfile {
+    UnixLike,
+    PowerShell,
+}
+
+impl ResolvedShellPromptProfile {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::UnixLike => "unix_like",
+            Self::PowerShell => "powershell",
+        }
+    }
+}
+
+impl fmt::Display for ResolvedShellPromptProfile {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+fn is_wsl_environment() -> bool {
+    if env::var_os("WSL_DISTRO_NAME").is_some() || env::var_os("WSL_INTEROP").is_some() {
+        return true;
+    }
+
+    for path in ["/proc/sys/kernel/osrelease", "/proc/version"] {
+        if let Ok(contents) = std::fs::read_to_string(path)
+            && contents.to_ascii_lowercase().contains("microsoft")
+        {
+            return true;
+        }
+    }
+
+    false
 }
 
 /// Verbosity level for model output (GPT-5.4-family and compatible models)
@@ -391,5 +552,56 @@ mod tests {
         );
         assert_eq!(ReasoningEffortLevel::Max.as_str(), "max");
         assert!(ReasoningEffortLevel::allowed_values().contains(&"max"));
+    }
+
+    #[test]
+    fn shell_prompt_profile_parses_aliases() {
+        assert_eq!(
+            ShellPromptProfile::parse("auto"),
+            Some(ShellPromptProfile::Auto)
+        );
+        assert_eq!(
+            ShellPromptProfile::parse("unix-like"),
+            Some(ShellPromptProfile::UnixLike)
+        );
+        assert_eq!(
+            ShellPromptProfile::parse("posix"),
+            Some(ShellPromptProfile::UnixLike)
+        );
+        assert_eq!(
+            ShellPromptProfile::parse("PowerShell"),
+            Some(ShellPromptProfile::PowerShell)
+        );
+        assert_eq!(ShellPromptProfile::parse("unknown"), None);
+    }
+
+    #[test]
+    fn auto_shell_prompt_profile_selects_platform_defaults() {
+        let profile = ShellPromptProfile::Auto;
+
+        assert_eq!(
+            profile.resolve_for_platform(ShellProfilePlatform::UnixLike),
+            ResolvedShellPromptProfile::UnixLike
+        );
+        assert_eq!(
+            profile.resolve_for_platform(ShellProfilePlatform::Wsl),
+            ResolvedShellPromptProfile::UnixLike
+        );
+        assert_eq!(
+            profile.resolve_for_platform(ShellProfilePlatform::NativeWindows),
+            ResolvedShellPromptProfile::PowerShell
+        );
+    }
+
+    #[test]
+    fn explicit_shell_prompt_profiles_override_platform_defaults() {
+        assert_eq!(
+            ShellPromptProfile::UnixLike.resolve_for_platform(ShellProfilePlatform::NativeWindows),
+            ResolvedShellPromptProfile::UnixLike
+        );
+        assert_eq!(
+            ShellPromptProfile::PowerShell.resolve_for_platform(ShellProfilePlatform::Wsl),
+            ResolvedShellPromptProfile::PowerShell
+        );
     }
 }

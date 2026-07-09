@@ -5,11 +5,13 @@
 //! guidance, skill metadata, and runtime notices.
 
 use crate::config::constants::prompt_budget as prompt_budget_constants;
-use crate::config::types::SystemPromptMode;
+use crate::config::types::{ShellPromptProfile, SystemPromptMode};
 use crate::llm::providers::gemini::wire::Content;
 use crate::project_doc::read_project_doc;
 use crate::prompts::context::PromptContext;
-use crate::prompts::guidelines::generate_tool_guidelines;
+use crate::prompts::guidelines::{
+    generate_tool_guidelines_for_profile, render_shell_profile_guidance,
+};
 use crate::prompts::output_styles::OutputStyleApplier;
 use crate::prompts::resources::{apply_system_prompt_layers, resolve_system_prompt_layers};
 use crate::prompts::system_prompt_cache::PROMPT_CACHE;
@@ -23,7 +25,7 @@ use tracing::warn;
 /// Shared Planning workflow header used by both static and incremental prompt builders.
 pub const PLANNING_WORKFLOW_READ_ONLY_HEADER: &str = "# PLANNING WORKFLOW (READ-ONLY)";
 /// Shared Planning workflow notice line describing strict read-only enforcement.
-pub const PLANNING_WORKFLOW_READ_ONLY_NOTICE_LINE: &str = "Mutating file edits are blocked, including `apply_patch`. Use `exec_command.cmd` only for read-only repository inspection, such as `ls`, `rg`, `find`, `cat`, `sed`, `awk`, `cargo check`, and `git status`; keep `task_tracker` current. Plan artifacts under `.vtcode/plans/` are allowed.";
+pub const PLANNING_WORKFLOW_READ_ONLY_NOTICE_LINE: &str = "Mutating file edits are blocked, including `apply_patch`. Use `exec_command.cmd` only for read-only repository inspection with the active shell profile's syntax; keep `task_tracker` current. Plan artifacts under `.vtcode/plans/` are allowed.";
 /// Shared Planning workflow instruction line for transitioning to implementation.
 pub const PLANNING_WORKFLOW_EXIT_INSTRUCTION_LINE: &str =
     "Call `finish_planning` to present the plan. Mutating tools stay disabled until user approves.";
@@ -82,8 +84,8 @@ const SHARED_CONTRACT_LINES: &[&str] = &[
     "Use retrieved evidence when citation-sensitive.",
     "Preserve task goal, tracker state, touched files, verification status, and decisions across compaction.",
     "Keep outputs concise; keep agent loops simple and let the model choose the next useful step.",
-    "Prefer `code_search` for ast-grep structural queries and Tree-sitter outlines; use `exec_command.cmd` with `rg` for text search.",
-    "`spool_path` holds full tool output. Inspect it once with a targeted shell command through `exec_command.cmd`, such as `rg`, `sed`, or `cat`, instead of repeatedly dumping the whole file. Past-turn errors are already in history.",
+    "Prefer `code_search` for ast-grep structural queries and Tree-sitter outlines; use `exec_command.cmd` with commands from the active shell profile for text search.",
+    "`spool_path` holds full tool output. Inspect it once with a targeted shell command through `exec_command.cmd` instead of repeatedly dumping the whole file. Past-turn errors are already in history.",
 ];
 
 /// Default/Lightweight/Specialized mode: expanded contract lines beyond shared rules.
@@ -108,7 +110,7 @@ const MINIMAL_SPECIFIC_LINES: &[&str] = &[
 const DEFAULT_OPERATING_PROFILE_DELTA: &str = r#"## Operating Profile
 
 - Available tools in the default profile are `exec_command`, `write_stdin`, and `apply_patch`.
-- Put normal shell commands, including `ls`, `rg`, `find`, `cat`, `sed`, `awk`, build tools, and test tools, in `exec_command.cmd`; they are not separate function tools.
+- Put normal shell commands in `exec_command.cmd`; they are not separate function tools. Follow the active shell profile's syntax.
 - Treat completion language as a checkpoint, not proof; only stop when verification is resolved.
 - When tools are available, read files and search the codebase before answering; use tools to implement directly rather than describing what should be done.
 - Use Planning workflow for research/spec work; stay read-only until implementation intent is explicit."#;
@@ -197,11 +199,24 @@ pub struct SystemPromptConfig;
 
 /// Generate system instruction
 pub async fn generate_system_instruction(_config: &SystemPromptConfig) -> Content {
-    // OPTIMIZATION: default_system_prompt() is &'static str, use directly
-    let instruction = default_system_prompt().to_string();
+    let current_dir = env::current_dir();
+    let instruction = if let Ok(project_root) = current_dir.as_deref() {
+        compose_system_instruction_text(
+            project_root,
+            Some(&crate::config::VTCodeConfig::default()),
+            None,
+        )
+        .await
+    } else {
+        let mut prompt = default_system_prompt().to_string();
+        append_prompt_section(
+            &mut prompt,
+            &render_shell_profile_guidance(ShellPromptProfile::Auto.resolve_for_current_platform()),
+        );
+        prompt
+    };
 
-    // Apply output style if possible (using current directory as project root)
-    if let Ok(current_dir) = env::current_dir() {
+    if let Ok(current_dir) = current_dir {
         let styled_instruction = apply_output_style(instruction, None, &current_dir).await;
         Content::system_text(styled_instruction)
     } else {
@@ -258,8 +273,21 @@ pub async fn compose_system_instruction_text(
         append_prompt_section(&mut instruction, STRUCTURED_REASONING_INSTRUCTIONS);
     }
 
+    let shell_profile = vtcode_config
+        .map(|cfg| cfg.agent.shell_prompt_profile)
+        .unwrap_or(ShellPromptProfile::Auto)
+        .resolve_for_current_platform();
+    append_prompt_section(
+        &mut instruction,
+        &render_shell_profile_guidance(shell_profile),
+    );
+
     if let Some(ctx) = prompt_context {
-        let guidelines = generate_tool_guidelines(&ctx.available_tools, ctx.capability_level);
+        let guidelines = generate_tool_guidelines_for_profile(
+            &ctx.available_tools,
+            ctx.capability_level,
+            shell_profile,
+        );
         if !guidelines.is_empty() {
             append_prompt_section(&mut instruction, guidelines.trim_start_matches('\n'));
         }
@@ -598,7 +626,7 @@ mod tests {
     use super::*;
     use crate::config::VTCodeConfig;
     use crate::config::constants::tools;
-    use crate::config::types::SystemPromptMode;
+    use crate::config::types::{ResolvedShellPromptProfile, SystemPromptMode};
     use std::path::PathBuf;
 
     const REMOVED_MODEL_FACING_TOOL_NAMES: &[&str] = &[
@@ -635,8 +663,8 @@ mod tests {
 
         // Minimal prompt should remain compact and deterministic without AGENTS.md injection
         assert!(
-            result.len() < 2200,
-            "Minimal mode should produce <2.2K chars (was {} chars)",
+            result.len() < 2800,
+            "Minimal mode should produce <2.8K chars (was {} chars)",
             result.len()
         );
         assert!(
@@ -658,11 +686,12 @@ mod tests {
             compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
 
         assert!(
-            result.len() <= 1900,
-            "Default mode should stay sparse (<=1.9K chars, was {} chars)",
+            result.len() <= 2500,
+            "Default mode should stay sparse (<=2.5K chars, was {} chars)",
             result.len()
         );
         assert!(result.contains("`exec_command`, `write_stdin`, and `apply_patch`"));
+        assert!(result.contains("## Shell Profile"));
         assert!(!result.contains("task_tracker"));
         assert!(!result.contains("@file"));
         assert!(result.contains("Planning workflow"));
@@ -682,8 +711,8 @@ mod tests {
 
         assert!(result.len() > 100, "Lightweight should be >100 chars");
         assert!(
-            result.len() < 1600,
-            "Lightweight should be compact (<1.6K chars, was {} chars)",
+            result.len() < 2200,
+            "Lightweight should be compact (<2.2K chars, was {} chars)",
             result.len()
         );
         assert!(result.contains("task_tracker"));
@@ -758,8 +787,8 @@ mod tests {
             compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
 
         assert!(
-            result.len() <= 2200,
-            "Specialized should stay sparse (<=2.2K chars, was {} chars)",
+            result.len() <= 2800,
+            "Specialized should stay sparse (<=2.8K chars, was {} chars)",
             result.len()
         );
         assert!(result.contains("task_tracker"));
@@ -802,7 +831,7 @@ mod tests {
     fn test_default_prompt_token_count() {
         let approx_tokens = default_system_prompt().len() / 4;
         assert!(
-            approx_tokens < 470,
+            approx_tokens < 430,
             "Default prompt should stay compact, got ~{approx_tokens}"
         );
     }
@@ -841,7 +870,7 @@ mod tests {
 
         assert!(prompt.contains("### Instruction map"));
         assert!(prompt.contains("### On-demand loading"));
-        assert!(approx_tokens <= 1100, "got ~{approx_tokens} tokens");
+        assert!(approx_tokens <= 1250, "got ~{approx_tokens} tokens");
     }
 
     #[tokio::test]
@@ -881,12 +910,7 @@ mod tests {
 
         assert!(result.contains("`exec_command`, `write_stdin`, and `apply_patch`"));
         assert!(result.contains("exec_command.cmd"));
-        for command in ["ls", "rg", "find", "cat", "sed", "awk"] {
-            assert!(
-                result.contains(&format!("`{command}`")),
-                "{command} should appear only as an exec_command.cmd example"
-            );
-        }
+        assert!(result.contains("## Shell Profile"));
         assert!(!result.contains("task_tracker"));
         assert!(!result.contains("list_files"));
         assert!(!result.contains("read_file"));
@@ -1091,6 +1115,32 @@ mod tests {
             prompt.contains("exec_command"),
             "Composed default prompt should keep baseline shell guidance"
         );
+        assert!(prompt.contains("## Shell Profile"));
+        assert!(prompt.contains("controls prompt examples and expected command syntax only"));
+    }
+
+    #[tokio::test]
+    async fn test_composed_prompts_render_explicit_shell_profiles() {
+        let project_root = PathBuf::from(".");
+        let mut config = VTCodeConfig::default();
+        config.agent.include_temporal_context = false;
+        config.agent.include_working_directory = false;
+        config.agent.instruction_max_bytes = 0;
+
+        config.agent.shell_prompt_profile = ShellPromptProfile::UnixLike;
+        let unix_prompt = compose_system_instruction_text(&project_root, Some(&config), None).await;
+        assert!(unix_prompt.contains("Active shell profile: `unix_like`"));
+        assert!(unix_prompt.contains("does not rewrite GNU flags for macOS BSD tools"));
+        assert!(unix_prompt.contains("does not translate GNU-to-BSD"));
+
+        config.agent.shell_prompt_profile = ShellPromptProfile::PowerShell;
+        let powershell_prompt =
+            compose_system_instruction_text(&project_root, Some(&config), None).await;
+        assert!(powershell_prompt.contains("Active shell profile: `powershell`"));
+        assert!(powershell_prompt.contains("`Get-ChildItem`"));
+        assert!(powershell_prompt.contains("use WSL"));
+        assert!(powershell_prompt.contains("Unix-to-PowerShell"));
+        assert!(!powershell_prompt.contains("`ls`, `rg`, `find`, `cat`, `sed`, and `awk`"));
     }
 
     #[test]
@@ -1216,7 +1266,11 @@ mod tests {
 
     #[test]
     fn test_search_guidance_prefers_structural_and_rg() {
-        let guidelines = generate_tool_guidelines(&[tools::EXEC_COMMAND.to_string()], None);
+        let guidelines = generate_tool_guidelines_for_profile(
+            &[tools::EXEC_COMMAND.to_string()],
+            None,
+            ResolvedShellPromptProfile::UnixLike,
+        );
         assert!(
             guidelines.contains("`exec_command.cmd` with `ls`, `rg`"),
             "Tool guidance should browse through shell commands"

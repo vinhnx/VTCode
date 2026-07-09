@@ -2,7 +2,7 @@ use std::collections::BTreeSet;
 use std::fmt::Write as _;
 
 use crate::config::constants::tools;
-use crate::config::types::CapabilityLevel;
+use crate::config::types::{CapabilityLevel, ResolvedShellPromptProfile, ShellPromptProfile};
 use crate::core::agent::harness_kernel::SessionToolCatalogSnapshot;
 use crate::prompts::sections::SectionBoundaryMode;
 
@@ -20,6 +20,19 @@ pub fn generate_tool_guidelines(
     available_tools: &[String],
     capability_level: Option<CapabilityLevel>,
 ) -> String {
+    generate_tool_guidelines_for_profile(
+        available_tools,
+        capability_level,
+        ShellPromptProfile::Auto.resolve_for_current_platform(),
+    )
+}
+
+/// Generate compact cross-tool guidance with an explicit shell prompt profile.
+pub fn generate_tool_guidelines_for_profile(
+    available_tools: &[String],
+    capability_level: Option<CapabilityLevel>,
+    shell_profile: ResolvedShellPromptProfile,
+) -> String {
     let has_exec = available_tools.iter().any(|tool| tool == TOOL_EXEC_COMMAND);
     let has_stdin = available_tools.iter().any(|tool| tool == TOOL_WRITE_STDIN);
     let has_search = available_tools.iter().any(|tool| tool == TOOL_CODE_SEARCH);
@@ -31,9 +44,13 @@ pub fn generate_tool_guidelines(
     if let Some(mode_line) = capability_mode_line(capability_level, has_exec, has_apply_patch) {
         lines.push(mode_line.to_string());
     }
-    if let Some(browse_guidance) =
-        browse_tool_guidance(has_exec, has_search, has_list_files, has_read_file)
-    {
+    if let Some(browse_guidance) = browse_tool_guidance(
+        has_exec,
+        has_search,
+        has_list_files,
+        has_read_file,
+        shell_profile,
+    ) {
         lines.push(browse_guidance);
     }
     if has_apply_patch {
@@ -42,10 +59,7 @@ pub fn generate_tool_guidelines(
         );
     }
     if has_exec {
-        lines.push(
-            "- Use `exec_command.cmd` for build tools, test tools, `git diff -- <path>`, and shell-only tasks."
-                .to_string(),
-        );
+        lines.push(shell_task_guidance(shell_profile).to_string());
     }
     if has_stdin {
         lines.push("- Use `write_stdin` only with an active exec_command session.".to_string());
@@ -54,10 +68,7 @@ pub fn generate_tool_guidelines(
         lines.push("- Completion is a checkpoint: keep verification resolved.".to_string());
     }
     if has_search && has_exec {
-        lines.push(
-            "- Use `code_search` only for semantic structural searches or outlines; use `exec_command.cmd` with `rg` for text search."
-                .to_string(),
-        );
+        lines.push(semantic_search_guidance(shell_profile).to_string());
     } else if has_search {
         lines.push("- Use semantic code search for structural searches and outlines.".to_string());
     }
@@ -83,6 +94,20 @@ pub fn append_runtime_tool_prompt_sections(
     tool_snapshot: &SessionToolCatalogSnapshot,
     include_catalog_metadata: bool,
 ) {
+    append_runtime_tool_prompt_sections_for_profile(
+        prompt,
+        tool_snapshot,
+        include_catalog_metadata,
+        ShellPromptProfile::Auto.resolve_for_current_platform(),
+    );
+}
+
+pub fn append_runtime_tool_prompt_sections_for_profile(
+    prompt: &mut String,
+    tool_snapshot: &SessionToolCatalogSnapshot,
+    include_catalog_metadata: bool,
+    shell_profile: ResolvedShellPromptProfile,
+) {
     remove_prompt_section(prompt, "## Active Tools");
     remove_prompt_section(prompt, "[Runtime Tool Catalog]");
     while prompt.ends_with('\n') {
@@ -90,8 +115,11 @@ pub fn append_runtime_tool_prompt_sections(
     }
 
     let available_tools = snapshot_tool_names(tool_snapshot);
-    let guidelines =
-        generate_runtime_tool_guidelines(&available_tools, tool_snapshot.planning_active);
+    let guidelines = generate_runtime_tool_guidelines_for_profile(
+        &available_tools,
+        tool_snapshot.planning_active,
+        shell_profile,
+    );
     if !guidelines.is_empty() {
         append_prompt_block(prompt, guidelines.trim_start_matches('\n'));
     }
@@ -143,9 +171,13 @@ fn find_prompt_section_bounds(prompt: &str, section_header: &str) -> Option<(usi
     )
 }
 
-fn generate_runtime_tool_guidelines(available_tools: &[String], planning_active: bool) -> String {
+fn generate_runtime_tool_guidelines_for_profile(
+    available_tools: &[String],
+    planning_active: bool,
+    shell_profile: ResolvedShellPromptProfile,
+) -> String {
     if !planning_active {
-        return generate_tool_guidelines(available_tools, None);
+        return generate_tool_guidelines_for_profile(available_tools, None, shell_profile);
     }
 
     let has_exec = available_tools.iter().any(|tool| tool == TOOL_EXEC_COMMAND);
@@ -161,9 +193,13 @@ fn generate_runtime_tool_guidelines(available_tools: &[String], planning_active:
 
     let mut lines =
         vec!["- Planning workflow active: stay within the read-safe tool list.".to_string()];
-    if let Some(browse_guidance) =
-        browse_tool_guidance(has_exec, has_search, has_list_files, has_read_file)
-    {
+    if let Some(browse_guidance) = browse_tool_guidance(
+        has_exec,
+        has_search,
+        has_list_files,
+        has_read_file,
+        shell_profile,
+    ) {
         lines.push(browse_guidance);
     }
     if has_exec {
@@ -209,12 +245,10 @@ fn browse_tool_guidance(
     has_search: bool,
     has_list_files: bool,
     has_read_file: bool,
+    shell_profile: ResolvedShellPromptProfile,
 ) -> Option<String> {
     if has_exec {
-        return Some(
-            "- Use `exec_command.cmd` with `ls`, `rg`, `find`, `cat`, `sed`, and `awk` for repository browsing."
-                .to_string(),
-        );
+        return Some(shell_browse_guidance(shell_profile).to_string());
     }
 
     if !(has_search || has_list_files || has_read_file) {
@@ -224,6 +258,50 @@ fn browse_tool_guidance(
     Some(
         "- Use available read-only repository tools for browsing; do not modify files.".to_string(),
     )
+}
+
+pub fn render_shell_profile_guidance(shell_profile: ResolvedShellPromptProfile) -> String {
+    match shell_profile {
+        ResolvedShellPromptProfile::UnixLike => {
+            "## Shell Profile\n- Active shell profile: `unix_like`. Use Unix-like command syntax in `exec_command.cmd`, for example `ls`, `rg`, `find`, `cat`, `sed`, and `awk`.\n- On macOS, write BSD-compatible flags for BSD tools. VT Code does not rewrite GNU flags for macOS BSD tools.\n- The shell profile controls prompt examples and expected command syntax only; command policy, sandboxing, and approvals remain separate runtime checks.\n- VT Code does not translate GNU-to-BSD, BSD-to-GNU, Unix-to-PowerShell, or PowerShell-to-Unix command flags.".to_string()
+        }
+        ResolvedShellPromptProfile::PowerShell => {
+            "## Shell Profile\n- Active shell profile: `powershell`. Use native PowerShell syntax in `exec_command.cmd`, for example `Get-ChildItem`, `Select-String`, `Get-Content`, and `Where-Object`.\n- On native Windows, use WSL when you need Unix-like workflows or Unix command examples.\n- The shell profile controls prompt examples and expected command syntax only; command policy, sandboxing, and approvals remain separate runtime checks.\n- VT Code does not translate GNU-to-BSD, BSD-to-GNU, Unix-to-PowerShell, or PowerShell-to-Unix command flags.".to_string()
+        }
+    }
+}
+
+fn shell_browse_guidance(shell_profile: ResolvedShellPromptProfile) -> &'static str {
+    match shell_profile {
+        ResolvedShellPromptProfile::UnixLike => {
+            "- Use `exec_command.cmd` with `ls`, `rg`, `find`, `cat`, `sed`, and `awk` for repository browsing."
+        }
+        ResolvedShellPromptProfile::PowerShell => {
+            "- Use `exec_command.cmd` with native PowerShell commands such as `Get-ChildItem`, `Select-String`, `Get-Content`, and `Where-Object` for repository browsing."
+        }
+    }
+}
+
+fn shell_task_guidance(shell_profile: ResolvedShellPromptProfile) -> &'static str {
+    match shell_profile {
+        ResolvedShellPromptProfile::UnixLike => {
+            "- Use `exec_command.cmd` for build tools, test tools, `git diff -- <path>`, and shell-only tasks."
+        }
+        ResolvedShellPromptProfile::PowerShell => {
+            "- Use `exec_command.cmd` for build tools, test tools, `git diff -- <path>`, and shell-only tasks using native PowerShell syntax."
+        }
+    }
+}
+
+fn semantic_search_guidance(shell_profile: ResolvedShellPromptProfile) -> &'static str {
+    match shell_profile {
+        ResolvedShellPromptProfile::UnixLike => {
+            "- Use `code_search` only for semantic structural searches or outlines; use `exec_command.cmd` with `rg` for text search."
+        }
+        ResolvedShellPromptProfile::PowerShell => {
+            "- Use `code_search` only for semantic structural searches or outlines; use `exec_command.cmd` with `rg` if installed, or `Select-String` for native PowerShell text search."
+        }
+    }
 }
 
 fn capability_mode_line(
@@ -283,7 +361,11 @@ mod tests {
     #[test]
     fn test_tool_preference_guidance() {
         let tools = vec![TOOL_EXEC_COMMAND.to_string(), TOOL_CODE_SEARCH.to_string()];
-        let guidelines = generate_tool_guidelines(&tools, None);
+        let guidelines = generate_tool_guidelines_for_profile(
+            &tools,
+            None,
+            ResolvedShellPromptProfile::UnixLike,
+        );
         assert!(guidelines.contains("semantic structural searches or outlines"));
         assert!(guidelines.contains("`exec_command.cmd` with `rg`"));
         assert!(guidelines.contains("git diff -- <path>"));
@@ -308,7 +390,11 @@ mod tests {
             TOOL_WRITE_STDIN.to_string(),
             TOOL_APPLY_PATCH.to_string(),
         ];
-        let guidelines = generate_tool_guidelines(&tools, None);
+        let guidelines = generate_tool_guidelines_for_profile(
+            &tools,
+            None,
+            ResolvedShellPromptProfile::UnixLike,
+        );
 
         assert!(guidelines.contains("`exec_command`"));
         assert!(guidelines.contains("exec_command.cmd"));
@@ -323,6 +409,42 @@ mod tests {
         assert!(!guidelines.contains("task_tracker"));
         assert!(!guidelines.contains("list_files"));
         assert!(!guidelines.contains("read_file"));
+    }
+
+    #[test]
+    fn powershell_guidance_uses_native_command_examples() {
+        let tools = vec![
+            TOOL_EXEC_COMMAND.to_string(),
+            TOOL_CODE_SEARCH.to_string(),
+            TOOL_APPLY_PATCH.to_string(),
+        ];
+        let guidelines = generate_tool_guidelines_for_profile(
+            &tools,
+            None,
+            ResolvedShellPromptProfile::PowerShell,
+        );
+
+        assert!(guidelines.contains("native PowerShell commands"));
+        assert!(guidelines.contains("`Get-ChildItem`"));
+        assert!(guidelines.contains("`Select-String`"));
+        assert!(guidelines.contains("native PowerShell syntax"));
+        assert!(guidelines.contains("`code_search` only for semantic"));
+        assert!(!guidelines.contains("`ls`, `rg`, `find`, `cat`, `sed`, and `awk`"));
+    }
+
+    #[test]
+    fn shell_profile_prompt_keeps_policy_and_syntax_separate() {
+        let unix = render_shell_profile_guidance(ResolvedShellPromptProfile::UnixLike);
+        assert!(unix.contains("Active shell profile: `unix_like`"));
+        assert!(unix.contains("does not rewrite GNU flags for macOS BSD tools"));
+        assert!(unix.contains("controls prompt examples and expected command syntax only"));
+        assert!(unix.contains("does not translate GNU-to-BSD"));
+
+        let powershell = render_shell_profile_guidance(ResolvedShellPromptProfile::PowerShell);
+        assert!(powershell.contains("Active shell profile: `powershell`"));
+        assert!(powershell.contains("WSL"));
+        assert!(powershell.contains("Unix-like workflows"));
+        assert!(powershell.contains("PowerShell-to-Unix"));
     }
 
     #[test]
@@ -372,7 +494,11 @@ mod tests {
             TOOL_EXEC_COMMAND.to_string(),
             TOOL_CODE_SEARCH.to_string(),
         ];
-        let guidelines = generate_tool_guidelines(&tools, Some(CapabilityLevel::Editing));
+        let guidelines = generate_tool_guidelines_for_profile(
+            &tools,
+            Some(CapabilityLevel::Editing),
+            ResolvedShellPromptProfile::UnixLike,
+        );
 
         assert!(!guidelines.contains("Capabilities: limited"));
         assert!(!guidelines.contains("Capabilities: read-only"));
@@ -392,7 +518,11 @@ mod tests {
             TOOL_TASK_TRACKER.to_string(),
             TOOL_CODE_SEARCH.to_string(),
         ];
-        let guidelines = generate_runtime_tool_guidelines(&tools, true);
+        let guidelines = generate_runtime_tool_guidelines_for_profile(
+            &tools,
+            true,
+            ResolvedShellPromptProfile::UnixLike,
+        );
         assert!(guidelines.contains("Keep `task_tracker` updated"));
         assert!(guidelines.contains("blockers and verification open"));
     }
@@ -436,7 +566,11 @@ mod tests {
             TOOL_LIST_FILES.to_string(),
             "apply_patch".to_string(),
         ];
-        let guidelines = generate_tool_guidelines(&tools, None);
+        let guidelines = generate_tool_guidelines_for_profile(
+            &tools,
+            None,
+            ResolvedShellPromptProfile::UnixLike,
+        );
         assert!(!guidelines.contains("read_file"));
         assert!(!guidelines.contains("list_files"));
         assert!(!guidelines.contains("code_search"));
@@ -451,7 +585,11 @@ mod tests {
             TOOL_CODE_SEARCH.to_string(),
             TOOL_APPLY_PATCH.to_string(),
         ];
-        let guidelines = generate_tool_guidelines(&tools, None);
+        let guidelines = generate_tool_guidelines_for_profile(
+            &tools,
+            None,
+            ResolvedShellPromptProfile::UnixLike,
+        );
         assert!(
             guidelines.contains("parallel"),
             "Should include parallel tool call guidance"
@@ -469,11 +607,103 @@ mod tests {
             TOOL_EXEC_COMMAND.to_string(),
             TOOL_CODE_SEARCH.to_string(),
         ];
-        let guidelines = generate_runtime_tool_guidelines(&tools, true);
+        let guidelines = generate_runtime_tool_guidelines_for_profile(
+            &tools,
+            true,
+            ResolvedShellPromptProfile::UnixLike,
+        );
 
         assert!(guidelines.contains("Planning workflow active"));
         assert!(guidelines.contains("`exec_command` only for read-only verification"));
         assert!(!guidelines.contains("Inspect before edit"));
+    }
+
+    #[test]
+    fn runtime_tool_guidance_uses_explicit_powershell_profile() {
+        let tools = vec![
+            TOOL_APPLY_PATCH.to_string(),
+            TOOL_EXEC_COMMAND.to_string(),
+            TOOL_CODE_SEARCH.to_string(),
+        ];
+        let guidelines = generate_runtime_tool_guidelines_for_profile(
+            &tools,
+            false,
+            ResolvedShellPromptProfile::PowerShell,
+        );
+
+        assert!(guidelines.contains("native PowerShell commands"));
+        assert!(guidelines.contains("`Get-ChildItem`"));
+        assert!(guidelines.contains("`Select-String`"));
+        assert!(guidelines.contains("native PowerShell syntax"));
+        assert!(!guidelines.contains("`ls`, `rg`, `find`, `cat`, `sed`, and `awk`"));
+    }
+
+    #[test]
+    fn runtime_tool_guidance_uses_explicit_unix_like_profile() {
+        let tools = vec![
+            TOOL_APPLY_PATCH.to_string(),
+            TOOL_EXEC_COMMAND.to_string(),
+            TOOL_CODE_SEARCH.to_string(),
+        ];
+        let guidelines = generate_runtime_tool_guidelines_for_profile(
+            &tools,
+            false,
+            ResolvedShellPromptProfile::UnixLike,
+        );
+
+        assert!(guidelines.contains("`ls`, `rg`, `find`, `cat`, `sed`, and `awk`"));
+        assert!(guidelines.contains("`exec_command.cmd` with `rg`"));
+        assert!(guidelines.contains("shell-only tasks"));
+        assert!(!guidelines.contains("native PowerShell commands"));
+        assert!(!guidelines.contains("`Get-ChildItem`"));
+    }
+
+    #[test]
+    fn runtime_tool_prompt_sections_use_explicit_profile_for_active_tools() {
+        let mut powershell_prompt = "Base prompt".to_string();
+        let mut unix_prompt = "Base prompt".to_string();
+        let snapshot = SessionToolCatalogSnapshot::new(
+            7,
+            9,
+            false,
+            false,
+            Some(std::sync::Arc::new(vec![
+                crate::llm::provider::ToolDefinition::function(
+                    TOOL_EXEC_COMMAND.to_string(),
+                    "Shell".to_string(),
+                    serde_json::json!({"type": "object"}),
+                ),
+                crate::llm::provider::ToolDefinition::function(
+                    TOOL_CODE_SEARCH.to_string(),
+                    "Semantic search".to_string(),
+                    serde_json::json!({"type": "object"}),
+                ),
+            ])),
+            false,
+        );
+
+        append_runtime_tool_prompt_sections_for_profile(
+            &mut powershell_prompt,
+            &snapshot,
+            false,
+            ResolvedShellPromptProfile::PowerShell,
+        );
+        append_runtime_tool_prompt_sections_for_profile(
+            &mut unix_prompt,
+            &snapshot,
+            false,
+            ResolvedShellPromptProfile::UnixLike,
+        );
+
+        assert!(powershell_prompt.contains("## Active Tools"));
+        assert!(powershell_prompt.contains("`Get-ChildItem`"));
+        assert!(powershell_prompt.contains("`Select-String`"));
+        assert!(!powershell_prompt.contains("`ls`, `rg`, `find`, `cat`, `sed`, and `awk`"));
+
+        assert!(unix_prompt.contains("## Active Tools"));
+        assert!(unix_prompt.contains("`ls`, `rg`, `find`, `cat`, `sed`, and `awk`"));
+        assert!(unix_prompt.contains("`exec_command.cmd` with `rg`"));
+        assert!(!unix_prompt.contains("`Get-ChildItem`"));
     }
 
     #[test]

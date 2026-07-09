@@ -2,6 +2,11 @@
 
 > **Note:** legacy text-search dispatcher names are internal implementation details. The AI-facing default path for text search is `exec_command.cmd` with `rg`.
 
+Shell examples follow the active shell prompt profile. Linux, macOS, and WSL
+use the Unix-like profile by default; native Windows uses PowerShell. VT Code
+does not rewrite GNU flags for macOS BSD tools and does not translate Unix
+commands to PowerShell. Use WSL when you want Unix-like workflows on Windows.
+
 ## Overview
 
 Use **ripgrep** (`rg`) through `exec_command.cmd` for fast pattern matching across codebases. It provides regex-based and literal string searching with file filtering, context lines, and language-specific searches. Use `code_search` for semantic code search, such as ast-grep structural patterns and Tree-sitter outlines.

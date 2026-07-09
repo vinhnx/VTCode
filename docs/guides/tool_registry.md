@@ -37,6 +37,23 @@ semantic code search. Plain text search belongs in `exec_command.cmd` with
 Tree-sitter outlines. Legacy internal dispatcher and file helper names must not
 gain a second public declaration path.
 
+## Shell prompt profiles
+
+VT Code selects a shell prompt profile for model-facing command examples:
+
+| Platform | Default prompt profile | Notes |
+|---|---|---|
+| Linux | `unix_like` | Use Unix-like command syntax in `exec_command.cmd`. |
+| macOS | `unix_like` | Use BSD-compatible flags for BSD tools. VT Code does not rewrite GNU flags. |
+| WSL | `unix_like` | WSL is the recommended route for Unix-like workflows on Windows. |
+| Native Windows | `powershell` | Use native PowerShell syntax such as `Get-ChildItem`, `Select-String`, and `Get-Content`. |
+
+Set `agent.shell_prompt_profile` to `auto`, `unix_like`, or `powershell` to
+override the prompt profile. This setting controls prompt examples and expected
+command syntax only. Command approval, sandboxing, and allow-list policy remain
+runtime checks. VT Code does not translate GNU-to-BSD, BSD-to-GNU,
+Unix-to-PowerShell, or PowerShell-to-Unix command flags.
+
 ## Adding a new tool
 
 First decide whether this should be a built-in VT Code tool at all.

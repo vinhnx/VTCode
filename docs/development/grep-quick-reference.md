@@ -2,6 +2,11 @@
 
 > **Note:** legacy text-search dispatcher names are internal implementation details. Use `exec_command.cmd` with `rg` for AI-facing text search. Use `code_search` for ast-grep structural queries and Tree-sitter outlines.
 
+Shell examples follow the active shell prompt profile. Linux, macOS, and WSL
+use the Unix-like profile by default; native Windows uses PowerShell. VT Code
+does not rewrite GNU flags for macOS BSD tools and does not translate Unix
+commands to PowerShell. Use WSL when you want Unix-like workflows on Windows.
+
 ## Essential Parameters
 
 ```sh

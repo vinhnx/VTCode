@@ -29,7 +29,7 @@ use crate::llm::provider::{
 use crate::llm::providers::gemini::wire::Part;
 use crate::prompts::{
     PromptContext, RuntimePromptContract, append_runtime_mode_sections,
-    append_runtime_tool_prompt_sections, upsert_harness_limits_section,
+    append_runtime_tool_prompt_sections_for_profile, upsert_harness_limits_section,
 };
 use crate::utils::colors::style;
 use anyhow::Result;
@@ -251,7 +251,17 @@ impl AgentRunner {
             self.config().agent.harness.max_tool_wall_clock_secs,
             self.config().agent.harness.max_tool_retries,
         );
-        append_runtime_tool_prompt_sections(&mut system_prompt, &tool_snapshot, true);
+        let shell_profile = self
+            .config()
+            .agent
+            .shell_prompt_profile
+            .resolve_for_current_platform();
+        append_runtime_tool_prompt_sections_for_profile(
+            &mut system_prompt,
+            &tool_snapshot,
+            true,
+            shell_profile,
+        );
 
         Ok(RuntimePromptBundle {
             system_instruction: Arc::new(system_prompt),

@@ -137,8 +137,8 @@ pub use telemetry::TelemetryConfig;
 pub use terminal_title::{DEFAULT_TERMINAL_TITLE_ITEMS, TerminalTitleConfig};
 pub use timeouts::{TimeoutsConfig, resolve_timeout};
 pub use types::{
-    ReasoningEffortLevel, SystemPromptMode, ToolDocumentationMode, UiSurfacePreference,
-    VerbosityLevel,
+    ReasoningEffortLevel, ResolvedShellPromptProfile, ShellProfilePlatform, ShellPromptProfile,
+    SystemPromptMode, ToolDocumentationMode, UiSurfacePreference, VerbosityLevel,
 };
 pub use workspace_env::{
     read_workspace_env_value, workspace_env_path, workspace_env_path_display,
