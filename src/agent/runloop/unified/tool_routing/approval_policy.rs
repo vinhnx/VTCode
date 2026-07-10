@@ -1,4 +1,5 @@
 use serde_json::Value;
+use vtcode_core::config::constants::tools;
 use vtcode_core::exec_policy::AskForApproval;
 use vtcode_core::tools::{ToolRiskContext, ToolSource, WorkspaceTrust};
 
@@ -31,7 +32,7 @@ fn tool_accesses_network(tool_name: &str, tool_args: Option<&Value>) -> bool {
     let canonical = vtcode_core::tools::names::canonical_tool_name(tool_name);
     match canonical {
         "web_search" | "fetch_url" | "search_dispatch:web" => true,
-        vtcode_core::config::constants::tools::UNIFIED_EXEC => {
+        tools::EXEC_COMMAND => {
             vtcode_core::tools::command_args::command_words(tool_args.unwrap_or(&Value::Null))
                 .ok()
                 .flatten()
@@ -85,37 +86,45 @@ pub(super) fn approval_policy_rejects_prompt(
 mod tests {
     use super::build_tool_risk_context;
     use serde_json::json;
+    use vtcode_core::config::constants::tools;
 
     #[test]
     fn cargo_check_is_not_marked_as_network_access() {
         let args = json!({
-            "action": "run",
-            "command": "cargo check -p vtcode",
+            "cmd": "cargo check -p vtcode",
         });
 
-        let risk_context = build_tool_risk_context("exec_command", Some(&args));
+        let risk_context = build_tool_risk_context(tools::EXEC_COMMAND, Some(&args));
         assert!(!risk_context.accesses_network);
     }
 
     #[test]
     fn cargo_install_is_marked_as_network_access() {
         let args = json!({
-            "action": "run",
-            "command": "cargo install cargo-nextest",
+            "cmd": "cargo install cargo-nextest",
         });
 
-        let risk_context = build_tool_risk_context("exec_command", Some(&args));
+        let risk_context = build_tool_risk_context(tools::EXEC_COMMAND, Some(&args));
         assert!(risk_context.accesses_network);
     }
 
     #[test]
-    fn gh_commands_are_marked_as_network_access() {
+    fn gh_pr_checks_is_marked_as_network_access() {
         let args = json!({
-            "action": "run",
-            "command": "gh pr checks",
+            "cmd": "gh pr checks",
         });
 
-        let risk_context = build_tool_risk_context("exec_command", Some(&args));
+        let risk_context = build_tool_risk_context(tools::EXEC_COMMAND, Some(&args));
         assert!(risk_context.accesses_network);
+    }
+
+    #[test]
+    fn non_shell_public_tool_is_not_marked_as_network_access() {
+        let args = json!({
+            "cmd": "cargo install cargo-nextest",
+        });
+
+        let risk_context = build_tool_risk_context(tools::CODE_SEARCH, Some(&args));
+        assert!(!risk_context.accesses_network);
     }
 }
