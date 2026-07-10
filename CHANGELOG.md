@@ -2,6 +2,17 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.135.1 - 2026-07-10
+
+### Highlights
+#### Bug Fixes
+
+- Use u64 for assumed system memory constant to fix 32-bit builds (4db0d8d6) 
+#### Features
+
+- Implement read limits configuration and update related cache handling (0f47cb4b) 
+- Implement session mode resolution and persistence logic (be087eae) 
+### Other Changes
 ## 0.135.0 - 2026-07-09
 
 ### Highlights
