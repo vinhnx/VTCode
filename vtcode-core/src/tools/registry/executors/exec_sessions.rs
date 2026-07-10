@@ -189,6 +189,16 @@ impl ToolRegistry {
         args: Value,
         exec_settlement_mode: ExecSettlementMode,
     ) -> Result<Value> {
+        self.execute_command_session_poll_for_tool(args, exec_settlement_mode, tools::UNIFIED_EXEC)
+            .await
+    }
+
+    pub(super) async fn execute_command_session_poll_for_tool(
+        &self,
+        args: Value,
+        exec_settlement_mode: ExecSettlementMode,
+        progress_tool_name: &'static str,
+    ) -> Result<Value> {
         acquire_executor_rate_limit("write_stdin:poll", 4.0)?;
 
         let payload = exec_session_payload(&args, "command session read requires a JSON object")?;
@@ -202,13 +212,14 @@ impl ToolRegistry {
             .await?;
         let yield_time_ms =
             clamp_exec_yield_ms(payload.get("yield_time_ms").and_then(Value::as_u64), 1000);
+        let max_tokens = max_output_tokens_from_payload(payload);
 
         self.build_passthrough_exec_response(
             &session,
             Duration::from_millis(yield_time_ms),
             session.should_settle_noninteractive(exec_settlement_mode),
-            None,
-            tools::UNIFIED_EXEC,
+            max_tokens,
+            progress_tool_name,
         )
         .await
     }

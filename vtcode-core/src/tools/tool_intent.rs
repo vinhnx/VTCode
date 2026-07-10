@@ -450,8 +450,13 @@ fn exec_command_intent(args: &Value) -> ToolIntent {
     }
 }
 
-fn write_stdin_intent(_args: &Value) -> ToolIntent {
-    ToolIntent::mutating()
+fn write_stdin_intent(args: &Value) -> ToolIntent {
+    match crate::tools::command_args::write_stdin_dispatch(args) {
+        Ok(crate::tools::command_args::WriteStdinDispatch::Poll) => ToolIntent::read_only(),
+        Ok(crate::tools::command_args::WriteStdinDispatch::Write) | Err(_) => {
+            ToolIntent::mutating()
+        }
+    }
 }
 
 fn memory_tool_intent(args: &Value) -> ToolIntent {
@@ -1279,6 +1284,32 @@ mod tests {
         assert!(intent.mutating);
         assert!(intent.destructive);
         assert!(!intent.readonly_unified_action);
+    }
+
+    #[test]
+    fn write_stdin_empty_chars_is_read_only_and_retry_safe() {
+        let intent = classify_tool_intent(
+            tools::WRITE_STDIN,
+            &json!({"session_id": "abc123", "chars": ""}),
+        );
+
+        assert!(!intent.mutating);
+        assert!(!intent.destructive);
+        assert!(!intent.readonly_unified_action);
+        assert!(intent.retry_safe);
+    }
+
+    #[test]
+    fn write_stdin_non_empty_chars_is_mutating() {
+        let intent = classify_tool_intent(
+            tools::WRITE_STDIN,
+            &json!({"session_id": "abc123", "chars": "  status\n"}),
+        );
+
+        assert!(intent.mutating);
+        assert!(intent.destructive);
+        assert!(!intent.readonly_unified_action);
+        assert!(!intent.retry_safe);
     }
 
     #[test]

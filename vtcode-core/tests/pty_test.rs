@@ -591,6 +591,181 @@ async fn test_exec_command_write_stdin_continues_session() {
 
 #[cfg(unix)]
 #[tokio::test]
+async fn test_write_stdin_empty_chars_polls_without_sending_input() {
+    let (_temp, registry) = temp_registry().await;
+
+    let start = registry
+        .execute_tool(
+            "exec_command",
+            json!({
+                "cmd": "IFS= read -r line; printf '<%s>\\n' \"$line\"",
+                "yield_time_ms": 0,
+            }),
+        )
+        .await
+        .expect("start command waiting for stdin");
+    let sid = exec_session_id(&start);
+
+    let poll = registry
+        .execute_tool(
+            "write_stdin",
+            json!({
+                "session_id": sid.as_str(),
+                "chars": "",
+                "yield_time_ms": 25,
+                "max_output_tokens": 4,
+            }),
+        )
+        .await
+        .expect("poll public exec command session");
+
+    assert_eq!(poll["success"], true);
+    assert_eq!(poll["session_id"].as_str(), Some(sid.as_str()));
+    assert_eq!(poll["is_exited"].as_bool(), Some(false));
+    assert_eq!(poll["output"].as_str().unwrap_or_default(), "");
+
+    let write = registry
+        .execute_tool(
+            "write_stdin",
+            json!({
+                "session_id": sid.as_str(),
+                "chars": "  keep  \n",
+                "yield_time_ms": 250,
+            }),
+        )
+        .await
+        .expect("write exact bytes after public poll");
+
+    assert_eq!(write["success"], true);
+    assert_eq!(write["session_id"].as_str(), Some(sid.as_str()));
+    assert!(
+        write["output"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("<  keep  >"),
+        "write_stdin output was: {write:?}"
+    );
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn test_write_stdin_empty_poll_honours_output_cap() {
+    let (temp, registry) = temp_registry_with_config(Some(
+        r#"[context.dynamic]
+enabled = true
+tool_output_threshold = 64
+max_spooled_files = 7
+spool_max_age_secs = 12
+"#,
+    ))
+    .await;
+
+    let start = registry
+        .execute_tool(
+            "exec_command",
+            json!({
+                "cmd": "sleep 0.5; printf 'abcdefghijklmnopqrstuvwxyz\\n'; sleep 2",
+                "yield_time_ms": 0,
+            }),
+        )
+        .await
+        .expect("start delayed output command");
+    let sid = exec_session_id(&start);
+
+    let poll = registry
+        .execute_tool(
+            "write_stdin",
+            json!({
+                "session_id": sid.as_str(),
+                "chars": "",
+                "yield_time_ms": 1000,
+                "max_output_tokens": 1,
+            }),
+        )
+        .await
+        .expect("poll with capped output");
+
+    assert_eq!(poll["success"], true);
+    assert_eq!(poll["session_id"].as_str(), Some(sid.as_str()));
+    assert_eq!(poll["is_exited"].as_bool(), Some(false));
+    assert_eq!(poll["truncated"].as_bool(), Some(true));
+    let spool_path = poll["spool_path"]
+        .as_str()
+        .expect("capped poll output should be spooled");
+    assert!(
+        spool_path.contains("write_stdin_"),
+        "spool path should use the public tool name: {spool_path}"
+    );
+    let spooled = fs::read_to_string(temp.path().join(spool_path)).expect("read spool file");
+    assert!(
+        spooled.contains("abcdefghijklmnopqrstuvwxyz"),
+        "spool file should contain full polled output: {spooled:?}"
+    );
+
+    let _ = registry
+        .execute_tool(
+            "close_pty_session",
+            json!({
+                "session_id": sid.as_str(),
+            }),
+        )
+        .await;
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn test_repeated_write_stdin_empty_polls_observe_fresh_output_and_exit() {
+    let (_temp, registry) = temp_registry().await;
+
+    let start = registry
+        .execute_tool(
+            "exec_command",
+            json!({
+                "cmd": "sleep 0.5; printf 'delayed-output\\n'; sleep 1.2",
+                "yield_time_ms": 0,
+            }),
+        )
+        .await
+        .expect("start delayed command");
+    let sid = exec_session_id(&start);
+    let poll_args = json!({
+        "session_id": sid.as_str(),
+        "chars": "",
+        "yield_time_ms": 1000,
+        "max_output_tokens": 16,
+    });
+
+    let first = registry
+        .execute_tool("write_stdin", poll_args.clone())
+        .await
+        .expect("first public poll");
+
+    assert_eq!(first["success"], true);
+    assert_eq!(first["session_id"].as_str(), Some(sid.as_str()));
+    assert_eq!(first["is_exited"].as_bool(), Some(false));
+    assert!(
+        first["output"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("delayed-output"),
+        "first poll output was: {first:?}"
+    );
+    assert!(first.get("reused_recent_result").is_none());
+
+    let second = registry
+        .execute_tool("write_stdin", poll_args)
+        .await
+        .expect("second identical public poll");
+
+    assert_eq!(second["success"], true);
+    assert_eq!(second["session_id"].as_str(), Some(sid.as_str()));
+    assert_eq!(second["is_exited"].as_bool(), Some(true));
+    assert_eq!(second["exit_code"].as_i64(), Some(0));
+    assert!(second.get("reused_recent_result").is_none());
+}
+
+#[cfg(unix)]
+#[tokio::test]
 async fn test_write_stdin_reports_missing_and_closed_session_ids() {
     let (_temp, registry) = temp_registry().await;
 
@@ -641,6 +816,7 @@ async fn test_write_stdin_reports_missing_and_closed_session_ids() {
         closed.get("error").is_some(),
         "closed session response should be a structured error: {closed:?}"
     );
+    assert_eq!(closed["error"]["tool_name"], "write_stdin");
 }
 
 #[cfg(unix)]

@@ -958,19 +958,38 @@ impl ToolRegistry {
         self.dispatch_command_session_run_alias(args, false)
     }
 
-    pub(super) fn write_stdin_executor(&self, mut args: Value) -> BoxFuture<'_, Result<Value>> {
-        if let Some(payload) = args.as_object_mut() {
-            if !payload.contains_key("input")
-                && let Some(chars) = payload.get("chars").cloned()
-            {
-                payload.insert("input".to_string(), chars);
-            }
-        }
+    pub(super) fn write_stdin_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move {
-            let args = with_command_session_action_default(args, "write");
-            self.execute_command_session_write_for_tool(args, tools::WRITE_STDIN)
-                .await
-                .map(super::normalize_tool_output)
+            let dispatch = crate::tools::command_args::write_stdin_dispatch(&args)
+                .map_err(|error| anyhow!(error))?;
+            let mut args = crate::tools::command_args::normalize_shell_args(&args)
+                .map_err(|error| anyhow!(error))?;
+            let payload = args
+                .as_object_mut()
+                .ok_or_else(|| anyhow!("write_stdin requires a JSON object"))?;
+            payload.insert(
+                "action".to_string(),
+                json!(dispatch.command_session_action()),
+            );
+            if dispatch == crate::tools::command_args::WriteStdinDispatch::Poll {
+                payload.remove("input");
+            }
+
+            let response = match dispatch {
+                crate::tools::command_args::WriteStdinDispatch::Write => {
+                    self.execute_command_session_write_for_tool(args, tools::WRITE_STDIN)
+                        .await
+                }
+                crate::tools::command_args::WriteStdinDispatch::Poll => {
+                    self.execute_command_session_poll_for_tool(
+                        args,
+                        ExecSettlementMode::Manual,
+                        tools::WRITE_STDIN,
+                    )
+                    .await
+                }
+            }?;
+            Ok(response)
         })
     }
 

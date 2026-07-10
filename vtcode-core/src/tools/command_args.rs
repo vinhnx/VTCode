@@ -9,6 +9,38 @@ use crate::tools::tool_intent::{
 const INDEXED_COMMAND_TYPE_ERROR: &str = "command array must contain only strings";
 const COMMAND_VALUE_TYPE_ERROR: &str = "command must be a string or array of strings";
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum WriteStdinDispatch {
+    Write,
+    Poll,
+}
+
+impl WriteStdinDispatch {
+    #[must_use]
+    pub(crate) const fn command_session_action(self) -> &'static str {
+        match self {
+            Self::Write => "write",
+            Self::Poll => "poll",
+        }
+    }
+}
+
+pub(crate) fn write_stdin_dispatch(args: &Value) -> Result<WriteStdinDispatch, &'static str> {
+    let payload = args
+        .as_object()
+        .ok_or("write_stdin requires a JSON object")?;
+    let chars = payload
+        .get("chars")
+        .and_then(Value::as_str)
+        .ok_or("write_stdin requires string chars")?;
+
+    if chars.is_empty() {
+        Ok(WriteStdinDispatch::Poll)
+    } else {
+        Ok(WriteStdinDispatch::Write)
+    }
+}
+
 fn collect_indexed_command_parts(
     payload: &serde_json::Map<String, Value>,
     start_index: usize,
@@ -427,11 +459,13 @@ pub fn normalize_shell_args(args: &Value) -> Result<Value, &'static str> {
 #[cfg(test)]
 mod tests {
     use super::{
-        command_session_missing_required_args, command_session_requires_command_safety,
-        command_text, command_words, has_indexed_command_parts, interactive_input_text,
-        is_readonly_command_string, normalize_indexed_command_args, normalize_shell_args,
-        normalized_command_value, parse_indexed_command_parts, raw_command_text, session_id_text,
+        WriteStdinDispatch, command_session_missing_required_args,
+        command_session_requires_command_safety, command_text, command_words,
+        has_indexed_command_parts, interactive_input_text, is_readonly_command_string,
+        normalize_indexed_command_args, normalize_shell_args, normalized_command_value,
+        parse_indexed_command_parts, raw_command_text, session_id_text,
         session_id_text_from_payload, working_dir_text, working_dir_text_from_payload,
+        write_stdin_dispatch,
     };
     use serde_json::{Value, json};
 
@@ -541,6 +575,30 @@ mod tests {
         assert_eq!(
             interactive_input_text(&json!({"chars": "  echo hi\n"})),
             Some("  echo hi\n")
+        );
+    }
+
+    #[test]
+    fn write_stdin_dispatch_distinguishes_write_from_poll() {
+        assert_eq!(
+            write_stdin_dispatch(&json!({"chars": ""})),
+            Ok(WriteStdinDispatch::Poll)
+        );
+        assert_eq!(
+            write_stdin_dispatch(&json!({"chars": "  status\n"})),
+            Ok(WriteStdinDispatch::Write)
+        );
+    }
+
+    #[test]
+    fn write_stdin_dispatch_requires_public_chars() {
+        assert_eq!(
+            write_stdin_dispatch(&json!({"input": "status\n"})),
+            Err("write_stdin requires string chars")
+        );
+        assert_eq!(
+            write_stdin_dispatch(&json!({"chars": 1})),
+            Err("write_stdin requires string chars")
         );
     }
 

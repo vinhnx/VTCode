@@ -568,11 +568,18 @@ impl ToolRegistry {
         Some(structured)
     }
 
-    async fn should_skip_loop_detection_for_active_exec_continuation(
+    async fn should_skip_loop_detection_for_exec_continuation(
         &self,
         tool_name: &str,
         args: &Value,
     ) -> bool {
+        if tool_name == tools::WRITE_STDIN {
+            return matches!(
+                crate::tools::command_args::write_stdin_dispatch(args),
+                Ok(crate::tools::command_args::WriteStdinDispatch::Poll)
+            );
+        }
+
         if tool_name != tools::UNIFIED_EXEC {
             return false;
         }
@@ -1074,12 +1081,12 @@ impl ToolRegistry {
         }
 
         let skip_loop_detection = self
-            .should_skip_loop_detection_for_active_exec_continuation(&tool_name, args)
+            .should_skip_loop_detection_for_exec_continuation(&tool_name, args)
             .await;
         if skip_loop_detection {
             trace!(
                 tool = %tool_name,
-                "Skipping identical-call loop detection for active exec continuation"
+                "Skipping identical-call loop detection for stateful exec continuation"
             );
         }
 

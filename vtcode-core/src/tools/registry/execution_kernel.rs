@@ -280,9 +280,18 @@ pub(super) fn normalize_tool_args<'a>(
 }
 
 fn public_exec_validation_args(normalized_tool_name: &str, args: &Value) -> Result<Option<Value>> {
+    let write_stdin_dispatch = match normalized_tool_name {
+        tool_names::WRITE_STDIN => Some(
+            crate::tools::command_args::write_stdin_dispatch(args)
+                .map_err(|error| anyhow!(error))?,
+        ),
+        _ => None,
+    };
     let action = match normalized_tool_name {
         tool_names::EXEC_COMMAND => "run",
-        tool_names::WRITE_STDIN => "write",
+        tool_names::WRITE_STDIN => write_stdin_dispatch
+            .map(crate::tools::command_args::WriteStdinDispatch::command_session_action)
+            .ok_or_else(|| anyhow!("write_stdin dispatch was not resolved"))?,
         _ => return Ok(None),
     };
     let mut exec_args =
@@ -290,6 +299,9 @@ fn public_exec_validation_args(normalized_tool_name: &str, args: &Value) -> Resu
     let payload = exec_args
         .as_object_mut()
         .ok_or_else(|| anyhow!("{normalized_tool_name} requires a JSON object"))?;
+    if write_stdin_dispatch == Some(crate::tools::command_args::WriteStdinDispatch::Poll) {
+        payload.remove("input");
+    }
     payload.insert("action".to_string(), Value::String(action.to_string()));
     Ok(Some(exec_args))
 }
@@ -938,6 +950,49 @@ mod tests {
         assert_eq!(result.effective_args["input"], "git reset --hard HEAD~1\n");
         assert!(!result.readonly_classification);
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn write_stdin_preflight_uses_session_poll_validation() -> Result<()> {
+        let (_temp, registry) = new_test_registry().await;
+
+        let result = preflight_validate_call(
+            &registry,
+            tool_names::WRITE_STDIN,
+            &json!({
+                "session_id": "run-1",
+                "chars": "",
+                "yield_time_ms": 25,
+                "max_output_tokens": 7
+            }),
+        )?;
+
+        assert_eq!(result.normalized_tool_name, tool_names::WRITE_STDIN);
+        assert_eq!(result.effective_args["action"], "poll");
+        assert!(result.effective_args.get("input").is_none());
+        assert_eq!(result.effective_args["yield_time_ms"], 25);
+        assert_eq!(result.effective_args["max_output_tokens"], 7);
+        assert!(result.readonly_classification);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn write_stdin_poll_preflight_rejects_non_string_session_id() {
+        let (_temp, registry) = new_test_registry().await;
+
+        let error = preflight_validate_call(
+            &registry,
+            tool_names::WRITE_STDIN,
+            &json!({"session_id": 1, "chars": ""}),
+        )
+        .expect_err("non-string session id should fail preflight");
+
+        assert!(error.to_string().contains("write_stdin"));
+        assert!(
+            error
+                .to_string()
+                .contains("Missing required argument: session_id")
+        );
     }
 
     #[tokio::test]

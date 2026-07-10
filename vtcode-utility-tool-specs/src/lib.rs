@@ -133,7 +133,7 @@ pub fn write_stdin_parameters() -> Value {
         "required": ["session_id", "chars"],
         "properties": {
             "session_id": {"type": "string", "description": "Active execution session id."},
-            "chars": {"type": "string", "description": "Bytes to write to stdin."},
+            "chars": {"type": "string", "description": "Bytes to write to stdin. Pass an empty string to poll without sending input."},
             "yield_time_ms": {"type": "integer", "description": "Wait before returning fresh session output (ms).", "default": 1000},
             "max_output_tokens": {"type": "integer", "description": "Output token cap for the continuation response. Large or truncated output can return a spool_path for the full output."}
         },
@@ -324,6 +324,12 @@ mod tests {
         let stdin_params = write_stdin_parameters();
         assert_eq!(stdin_params["required"], json!(["session_id", "chars"]));
         assert!(stdin_params["properties"]["session_id"].is_object());
+        assert_eq!(stdin_params["properties"]["chars"]["type"], "string");
+        assert!(
+            stdin_params["properties"]["chars"]["description"]
+                .as_str()
+                .is_some_and(|description| description.contains("empty string"))
+        );
         assert!(stdin_params["properties"]["chars"].is_object());
         assert!(
             stdin_params["properties"]["yield_time_ms"]["description"]
