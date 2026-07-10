@@ -312,7 +312,7 @@ impl AgentRunner {
                 ),
                 deferred_tool_policy,
                 anthropic_native_memory_enabled,
-                tool_profile: crate::tools::handlers::ToolProfile::CodexDefault,
+                tool_profile: session_config.effective().tools.profile,
             })
             .await
             .into_iter()

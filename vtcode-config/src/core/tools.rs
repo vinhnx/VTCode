@@ -14,6 +14,8 @@ pub enum ToolProfile {
     #[default]
     CodexDefault,
     /// VTCode specialised tools, including code_search and eligible dynamic tools.
+    #[serde(rename = "advanced_vtcode")]
+    #[cfg_attr(feature = "schema", schemars(rename = "advanced_vtcode"))]
     AdvancedVtCode,
 }
 
@@ -435,6 +437,19 @@ mod tests {
         let round_tripped: ToolsConfig =
             toml::from_str(&serialised).expect("serialised tools config should parse");
         assert_eq!(round_tripped.profile, ToolProfile::AdvancedVtCode);
+    }
+
+    #[test]
+    fn tool_profile_rejects_unintended_derived_spelling() {
+        let error = toml::from_str::<ToolsConfig>("profile = \"advanced_vt_code\"")
+            .expect_err("unintended spelling should fail")
+            .to_string();
+
+        assert!(
+            error.contains("unknown variant `advanced_vt_code`"),
+            "{error}"
+        );
+        assert!(error.contains("`advanced_vtcode`"), "{error}");
     }
 
     #[test]

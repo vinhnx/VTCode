@@ -15,7 +15,7 @@ use vtcode_core::config::tool_call_delay_for_rate;
 use vtcode_core::config::types::{
     AgentConfig as CoreAgentConfig, ModelSelectionSource, ReasoningEffortLevel, UiSurfacePreference,
 };
-use vtcode_core::config::{AgentClientProtocolZedConfig, CommandsConfig, ToolsConfig};
+use vtcode_core::config::{AgentClientProtocolZedConfig, CommandsConfig, ToolProfile, ToolsConfig};
 use vtcode_core::core::agent::snapshots::{
     DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
 };
@@ -269,7 +269,27 @@ async fn read_only_primary_agents_hide_local_tools() {
     assert!(build_names.contains(&tools::EXEC_COMMAND.to_string()));
     assert!(build_names.contains(&tools::WRITE_STDIN.to_string()));
     assert!(build_names.contains(&tools::APPLY_PATCH.to_string()));
-    assert!(build_names.contains(&tools::CODE_SEARCH.to_string()));
+    assert!(!build_names.contains(&tools::CODE_SEARCH.to_string()));
+}
+
+#[tokio::test]
+async fn advanced_global_profile_does_not_expand_acp_local_baseline() {
+    let temp = TempDir::new().unwrap();
+    let tools_config = ToolsConfig {
+        profile: ToolProfile::AdvancedVtCode,
+        ..ToolsConfig::default()
+    };
+    let agent = build_agent_with_tools_config(temp.path(), tools_config).await;
+    let local_names = definition_names(agent.acp_tool_registry.definitions_for(&[], true));
+
+    assert_eq!(
+        local_names,
+        vec![
+            tools::EXEC_COMMAND.to_string(),
+            tools::WRITE_STDIN.to_string(),
+            tools::APPLY_PATCH.to_string(),
+        ]
+    );
 }
 
 #[tokio::test]

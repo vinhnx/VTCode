@@ -34,6 +34,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tempfile::TempDir;
+use vtcode_config::ToolProfile;
 use vtcode_config::core::permissions::{AgentPermissionsConfig, PermissionDefault};
 
 fn provider_tool_names(snapshot: &SessionToolCatalogSnapshot) -> Vec<&str> {
@@ -319,7 +320,7 @@ async fn build_universal_tools_matches_registry_agent_runner_snapshot() {
                     &runner.model,
                     Some(runner.config()),
                 ),
-            tool_profile: crate::tools::handlers::ToolProfile::CodexDefault,
+            tool_profile: runner.config().tools.profile,
         })
         .await;
     let registry_tool_names = registry_tools
@@ -337,6 +338,10 @@ async fn build_universal_tools_matches_registry_agent_runner_snapshot() {
     assert!(
         !registry_tool_names.contains(&tools::UNIFIED_EXEC.to_string()),
         "AgentRunner default profile must not advertise command_session; got {registry_tool_names:?}"
+    );
+    assert!(
+        !registry_tool_names.contains(&tools::CODE_SEARCH.to_string()),
+        "AgentRunner default profile must not advertise code_search; got {registry_tool_names:?}"
     );
     let mut expected = Vec::new();
     for tool in registry_tools {
@@ -356,6 +361,38 @@ async fn build_universal_tools_matches_registry_agent_runner_snapshot() {
     let mut actual = actual;
     actual.sort();
     assert_eq!(actual, expected);
+}
+
+#[tokio::test]
+async fn advanced_tool_profile_reaches_agent_runner_catalogue_and_validation() {
+    let temp = TempDir::new().expect("tempdir");
+    let mut config = VTCodeConfig::default();
+    config.tools.profile = ToolProfile::AdvancedVtCode;
+    let runner = Box::pin(AgentRunner::new_with_bootstrap(
+        AgentType::Single,
+        ModelId::default(),
+        "test-key".to_string(),
+        temp.path().to_path_buf(),
+        "thread-advanced-tool-profile".to_string(),
+        RunnerSettings {
+            reasoning_effort: None,
+            verbosity: None,
+        },
+        None,
+        ThreadBootstrap::new(None),
+        Some(config),
+        None,
+    ))
+    .await
+    .expect("runner");
+
+    let snapshot = runner
+        .build_universal_tool_snapshot()
+        .await
+        .expect("advanced snapshot");
+
+    assert_provider_exposes_tool(&snapshot, tools::CODE_SEARCH);
+    assert!(runner.is_valid_tool(tools::CODE_SEARCH).await);
 }
 
 #[tokio::test]

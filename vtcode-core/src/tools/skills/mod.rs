@@ -13,7 +13,7 @@ use crate::skills::model::{SkillErrorInfo, SkillLoadOutcome};
 use crate::skills::types::{Skill, SkillManifestMetadata, SkillVariety};
 use crate::tool_policy::ToolPolicy;
 use crate::tools::handlers::{
-    DeferredToolPolicy, SessionSurface, SessionToolsConfig, ToolModelCapabilities,
+    DeferredToolPolicy, SessionSurface, SessionToolsConfig, ToolModelCapabilities, ToolProfile,
 };
 use crate::tools::registry::{
     ToolMetadata, ToolRegistration, ToolRegistry, native_cgp_tool_factory,
@@ -55,6 +55,7 @@ pub struct SkillToolSessionRuntime {
     model_capabilities: ToolModelCapabilities,
     deferred_tool_policy: DeferredToolPolicy,
     anthropic_native_memory_enabled: bool,
+    tool_profile: ToolProfile,
     on_tools_changed: Option<ToolChangeNotifier>,
     fork_executor: Option<Arc<dyn ForkSkillExecutor>>,
 }
@@ -74,6 +75,7 @@ impl SkillToolSessionRuntime {
             model_capabilities,
             deferred_tool_policy: DeferredToolPolicy::default(),
             anthropic_native_memory_enabled: false,
+            tool_profile: ToolProfile::default(),
             on_tools_changed,
             fork_executor: None,
         }
@@ -91,6 +93,11 @@ impl SkillToolSessionRuntime {
 
     pub fn with_anthropic_native_memory_enabled(mut self, enabled: bool) -> Self {
         self.anthropic_native_memory_enabled = enabled;
+        self
+    }
+
+    pub fn with_tool_profile(mut self, tool_profile: ToolProfile) -> Self {
+        self.tool_profile = tool_profile;
         self
     }
 
@@ -144,7 +151,8 @@ impl SkillToolSessionRuntime {
                         self.model_capabilities,
                     )
                     .with_deferred_tool_policy(self.deferred_tool_policy.clone())
-                    .with_anthropic_native_memory_enabled(self.anthropic_native_memory_enabled),
+                    .with_anthropic_native_memory_enabled(self.anthropic_native_memory_enabled)
+                    .with_tool_profile(self.tool_profile),
                 )
                 .await;
             *active_tools.write().await = refreshed;
@@ -1062,7 +1070,8 @@ Use `/rust-skills`.
             Some(Arc::new(move |_| {
                 notifier_count.fetch_add(1, Ordering::SeqCst);
             })),
-        );
+        )
+        .with_tool_profile(ToolProfile::AdvancedVtCode);
 
         let tool = LoadSkillTool::with_codex_home(
             temp_dir.path().to_path_buf(),
@@ -1088,6 +1097,13 @@ Use `/rust-skills`.
                 .await
                 .iter()
                 .any(|tool| tool.function_name() == skill_name)
+        );
+        assert!(
+            active_tools
+                .read()
+                .await
+                .iter()
+                .any(|tool| tool.function_name() == crate::config::constants::tools::CODE_SEARCH)
         );
     }
 

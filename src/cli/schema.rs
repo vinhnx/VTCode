@@ -4,8 +4,8 @@ use std::collections::HashSet;
 use std::env;
 use std::time::{SystemTime, UNIX_EPOCH};
 use vtcode_core::cli::args::{SchemaCommands, SchemaMode, SchemaOutputFormat};
-use vtcode_core::config::ToolDocumentationMode;
 use vtcode_core::config::types::CapabilityLevel;
+use vtcode_core::config::{ToolDocumentationMode, VTCodeConfig};
 use vtcode_core::tools::ToolRegistry;
 use vtcode_core::tools::handlers::{SessionSurface, SessionToolsConfig, ToolModelCapabilities};
 
@@ -24,42 +24,26 @@ struct ToolsSchemaDocument {
     tools: Vec<ToolSchemaEntry>,
 }
 
-pub async fn handle_schema_command(command: SchemaCommands) -> Result<()> {
+pub async fn handle_schema_command(
+    command: SchemaCommands,
+    config: &VTCodeConfig,
+) -> Result<String> {
     match command {
         SchemaCommands::Tools {
             mode,
             format,
             names,
-        } => emit_tools_schema(mode, format, &names).await,
+        } => render_tools_schema(mode, format, &names, config).await,
     }
 }
 
-async fn emit_tools_schema(
+async fn render_tools_schema(
     mode: SchemaMode,
     format: SchemaOutputFormat,
     names: &[String],
-) -> Result<()> {
-    let tool_mode = to_tool_documentation_mode(mode);
-    let workspace = env::current_dir().context("failed to resolve current working directory")?;
-    let registry = ToolRegistry::new(workspace).await;
-    let mut tools: Vec<ToolSchemaEntry> = registry
-        .schema_entries(SessionToolsConfig::full_public(
-            SessionSurface::Interactive,
-            CapabilityLevel::CodeSearch,
-            tool_mode,
-            ToolModelCapabilities::default(),
-        ))
-        .await
-        .into_iter()
-        .map(|entry| ToolSchemaEntry {
-            name: entry.name,
-            description: entry.description,
-            parameters: entry.parameters,
-        })
-        .collect();
-
-    tools.sort_by(|left, right| left.name.cmp(&right.name));
-    tools = filter_tools_by_name(tools, names);
+    config: &VTCodeConfig,
+) -> Result<String> {
+    let tools = collect_tools_schema(mode, names, config).await?;
 
     match format {
         SchemaOutputFormat::Json => {
@@ -73,23 +57,51 @@ async fn emit_tools_schema(
                 mode: schema_mode_label(mode),
                 tools,
             };
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&payload)
-                    .context("failed to serialize tool schema document")?
-            );
+            let payload = serde_json::to_string_pretty(&payload)
+                .context("failed to serialize tool schema document")?;
+            Ok(format!("{payload}\n"))
         }
         SchemaOutputFormat::Ndjson => {
+            let mut output = String::new();
             for tool in tools {
-                println!(
-                    "{}",
-                    serde_json::to_string(&tool).context("failed to serialize tool schema row")?
-                );
+                let row =
+                    serde_json::to_string(&tool).context("failed to serialize tool schema row")?;
+                output.push_str(&row);
+                output.push('\n');
             }
+            Ok(output)
         }
     }
+}
 
-    Ok(())
+async fn collect_tools_schema(
+    mode: SchemaMode,
+    names: &[String],
+    config: &VTCodeConfig,
+) -> Result<Vec<ToolSchemaEntry>> {
+    let workspace = env::current_dir().context("failed to resolve current working directory")?;
+    let registry = ToolRegistry::new(workspace).await;
+    let mut tools: Vec<ToolSchemaEntry> = registry
+        .schema_entries(
+            SessionToolsConfig::full_public(
+                SessionSurface::Interactive,
+                CapabilityLevel::CodeSearch,
+                to_tool_documentation_mode(mode),
+                ToolModelCapabilities::default(),
+            )
+            .with_tool_profile(config.tools.profile),
+        )
+        .await
+        .into_iter()
+        .map(|entry| ToolSchemaEntry {
+            name: entry.name,
+            description: entry.description,
+            parameters: entry.parameters,
+        })
+        .collect();
+
+    tools.sort_by(|left, right| left.name.cmp(&right.name));
+    Ok(filter_tools_by_name(tools, names))
 }
 
 fn filter_tools_by_name(tools: Vec<ToolSchemaEntry>, names: &[String]) -> Vec<ToolSchemaEntry> {
@@ -122,9 +134,28 @@ fn schema_mode_label(mode: SchemaMode) -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use super::{ToolSchemaEntry, filter_tools_by_name, to_tool_documentation_mode};
+    use super::{
+        ToolSchemaEntry, collect_tools_schema, filter_tools_by_name, to_tool_documentation_mode,
+    };
     use vtcode_core::cli::args::SchemaMode;
-    use vtcode_core::config::ToolDocumentationMode;
+    use vtcode_core::config::{ToolDocumentationMode, ToolProfile, VTCodeConfig};
+
+    #[tokio::test]
+    async fn tools_schema_uses_effective_tool_profile() {
+        let names = vec![vtcode_core::config::constants::tools::CODE_SEARCH.to_string()];
+        let baseline = collect_tools_schema(SchemaMode::Minimal, &names, &VTCodeConfig::default())
+            .await
+            .expect("baseline schema");
+        let mut advanced_config = VTCodeConfig::default();
+        advanced_config.tools.profile = ToolProfile::AdvancedVtCode;
+        let advanced = collect_tools_schema(SchemaMode::Minimal, &names, &advanced_config)
+            .await
+            .expect("advanced schema");
+
+        assert!(baseline.is_empty());
+        assert_eq!(advanced.len(), 1);
+        assert_eq!(advanced[0].name, names[0]);
+    }
 
     #[test]
     fn schema_mode_maps_to_tool_documentation_mode() {

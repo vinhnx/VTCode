@@ -143,7 +143,7 @@ pub(crate) async fn dispatch_command(
             review::handle_review_command(core_cfg, cfg, options).await?;
         }
         Commands::Schema { command } => {
-            schema::handle_schema_command(command).await?;
+            print!("{}", dispatch_schema_command(command, cfg).await?);
         }
         Commands::Analyze { analysis_type } => {
             handle_analyze_command(
@@ -255,4 +255,56 @@ pub(crate) async fn dispatch_command(
     }
 
     Ok(())
+}
+
+async fn dispatch_schema_command(
+    command: vtcode_core::cli::args::SchemaCommands,
+    config: &vtcode_core::config::VTCodeConfig,
+) -> Result<String> {
+    schema::handle_schema_command(command, config).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::dispatch_schema_command;
+    use crate::startup::StartupContext;
+    use clap::Parser;
+    use tempfile::TempDir;
+    use vtcode_commons::env_lock;
+    use vtcode_core::cli::args::{Cli, Commands};
+    use vtcode_core::config::ToolProfile;
+
+    #[tokio::test]
+    async fn schema_dispatch_receives_generic_profile_override_from_startup() {
+        let env_guard = env_lock::lock();
+        let temp = TempDir::new().expect("temp dir");
+        env_guard.set_var("OPENAI_API_KEY", "test");
+        let args = Cli::parse_from([
+            "vtcode",
+            "--workspace",
+            temp.path().to_str().expect("workspace path"),
+            "-c",
+            "tools.profile=advanced_vtcode",
+            "schema",
+            "tools",
+            "--format",
+            "ndjson",
+            "--name",
+            vtcode_core::config::constants::tools::CODE_SEARCH,
+        ]);
+        let startup = StartupContext::from_cli_args(&args)
+            .await
+            .expect("startup context");
+        let command = args.command.clone().expect("schema command");
+
+        assert_eq!(startup.config.tools.profile, ToolProfile::AdvancedVtCode);
+        let Commands::Schema { command } = command else {
+            panic!("expected schema command");
+        };
+        let output = dispatch_schema_command(command, &startup.config)
+            .await
+            .expect("schema dispatch");
+
+        assert!(output.contains("\"name\":\"code_search\""), "{output}");
+    }
 }

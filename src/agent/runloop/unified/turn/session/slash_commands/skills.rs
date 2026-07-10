@@ -258,32 +258,52 @@ fn skill_invocation_status_message(skill_name: &str) -> String {
 fn skill_runtime(
     ctx: &SlashCommandContext<'_>,
 ) -> vtcode_core::tools::skills::SkillToolSessionRuntime {
-    let tool_documentation_mode = ctx
-        .vt_cfg
-        .as_ref()
-        .as_ref()
+    skill_runtime_for_session(
+        ctx.tool_registry,
+        ctx.tools,
+        ctx.tool_catalog,
+        ctx.config,
+        ctx.vt_cfg.as_ref(),
+    )
+}
+
+fn skill_runtime_for_session(
+    tool_registry: &vtcode_core::tools::ToolRegistry,
+    tools: &Arc<tokio::sync::RwLock<Vec<uni::ToolDefinition>>>,
+    tool_catalog: &Arc<crate::agent::runloop::unified::tool_catalog::ToolCatalogState>,
+    config: &vtcode_core::config::types::AgentConfig,
+    vt_cfg: Option<&vtcode_core::config::loader::VTCodeConfig>,
+) -> vtcode_core::tools::skills::SkillToolSessionRuntime {
+    let tool_documentation_mode = vt_cfg
         .map(|cfg| cfg.agent.tool_documentation_mode)
         .unwrap_or_default();
 
     vtcode_core::tools::skills::SkillToolSessionRuntime::new(
-        Arc::new(ctx.tool_registry.clone()),
-        Some(Arc::clone(ctx.tools)),
+        Arc::new(tool_registry.clone()),
+        Some(Arc::clone(tools)),
         tool_documentation_mode,
-        ToolModelCapabilities::for_model_name(&ctx.config.model),
-        Some(tool_catalog_change_notifier(ctx.tool_catalog)),
+        ToolModelCapabilities::for_model_name(&config.model),
+        Some(tool_catalog_change_notifier(tool_catalog)),
     )
+    .with_tool_profile(configured_tool_profile(vt_cfg))
     .with_fork_executor(Arc::new(
         vtcode_core::skills::executor::ChildAgentSkillExecutor::new(
-            Arc::new(ctx.tool_registry.clone()),
+            Arc::new(tool_registry.clone()),
             vtcode_core::skills::executor::ForkSkillRuntimeConfig {
-                workspace: ctx.config.workspace.clone(),
-                model: ctx.config.model.clone(),
-                api_key: ctx.config.api_key.clone(),
-                openai_chatgpt_auth: ctx.config.openai_chatgpt_auth.clone(),
-                vt_cfg: ctx.vt_cfg.as_ref().cloned(),
+                workspace: config.workspace.clone(),
+                model: config.model.clone(),
+                api_key: config.api_key.clone(),
+                openai_chatgpt_auth: config.openai_chatgpt_auth.clone(),
+                vt_cfg: vt_cfg.cloned(),
             },
         ),
     ))
+}
+
+fn configured_tool_profile(
+    config: Option<&vtcode_core::config::loader::VTCodeConfig>,
+) -> vtcode_core::config::ToolProfile {
+    config.map(|cfg| cfg.tools.profile).unwrap_or_default()
 }
 
 async fn execute_skill_action(
@@ -1120,7 +1140,89 @@ fn show_skill_actions_modal(ctx: &mut SlashCommandContext<'_>, entry: &Interacti
 
 #[cfg(test)]
 mod tests {
-    use super::skill_invocation_status_message;
+    use std::sync::Arc;
+
+    use clap::Parser;
+    use hashbrown::HashMap;
+    use tempfile::TempDir;
+    use tokio::sync::RwLock;
+    use vtcode_core::cli::args::Cli;
+    use vtcode_core::config::constants::tools;
+    use vtcode_core::config::types::ModelSelectionSource;
+    use vtcode_core::config::{ToolProfile, VTCodeConfig};
+    use vtcode_core::core::agent::config::{RuntimeModelSelection, build_runtime_agent_config};
+    use vtcode_core::skills::{Skill, SkillManifest};
+    use vtcode_core::tools::ToolRegistry;
+
+    use super::{
+        configured_tool_profile, skill_invocation_status_message, skill_runtime_for_session,
+    };
+
+    #[test]
+    fn skill_runtime_profile_comes_from_effective_config() {
+        let mut config = VTCodeConfig::default();
+        config.tools.profile = ToolProfile::AdvancedVtCode;
+
+        assert_eq!(
+            configured_tool_profile(Some(&config)),
+            ToolProfile::AdvancedVtCode
+        );
+        assert_eq!(configured_tool_profile(None), ToolProfile::CodexDefault);
+    }
+
+    #[tokio::test]
+    async fn slash_skill_activation_retains_advanced_catalogue() {
+        let temp = TempDir::new().expect("temp dir");
+        let registry = ToolRegistry::new(temp.path().to_path_buf()).await;
+        let tool_catalog = registry.tool_catalog_state();
+        let active_tools = Arc::new(RwLock::new(Vec::new()));
+        let active_skills = Arc::new(RwLock::new(HashMap::new()));
+        let mut vt_cfg = VTCodeConfig::default();
+        vt_cfg.tools.profile = ToolProfile::AdvancedVtCode;
+        let config = build_runtime_agent_config(
+            &Cli::parse_from(["vtcode"]),
+            &vt_cfg,
+            temp.path().to_path_buf(),
+            RuntimeModelSelection {
+                model: "gpt-5".to_string(),
+                provider: "openai".to_string(),
+                model_source: ModelSelectionSource::WorkspaceConfig,
+            },
+            "test-key".to_string(),
+            vtcode_core::ui::theme::DEFAULT_THEME_ID.to_string(),
+        );
+        let runtime = skill_runtime_for_session(
+            &registry,
+            &active_tools,
+            &tool_catalog,
+            &config,
+            Some(&vt_cfg),
+        );
+        let skill = Skill::new(
+            SkillManifest {
+                name: "slash-profile-skill".to_string(),
+                description: "Slash profile regression skill".to_string(),
+                ..SkillManifest::default()
+            },
+            temp.path().join("slash-profile-skill"),
+            "Use the regression skill.".to_string(),
+        )
+        .expect("skill");
+
+        runtime
+            .activate_skill(&active_skills, skill)
+            .await
+            .expect("slash skill activation");
+
+        let tool_names = active_tools
+            .read()
+            .await
+            .iter()
+            .map(|tool| tool.function_name().to_string())
+            .collect::<Vec<_>>();
+        assert!(tool_names.contains(&tools::CODE_SEARCH.to_string()));
+        assert!(tool_names.contains(&"slash-profile-skill".to_string()));
+    }
 
     #[test]
     fn command_skills_use_slash_alias_in_status() {

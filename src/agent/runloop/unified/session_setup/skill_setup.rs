@@ -61,6 +61,7 @@ pub(crate) async fn register_skill_tools(
         ToolModelCapabilities::for_model_name(&config.model),
         Some(tool_catalog_change_notifier(tool_catalog)),
     )
+    .with_tool_profile(vt_cfg.map(|cfg| cfg.tools.profile).unwrap_or_default())
     .with_fork_executor(Arc::new(
         vtcode_core::skills::executor::ChildAgentSkillExecutor::new(
             Arc::new(tool_registry.clone()),
