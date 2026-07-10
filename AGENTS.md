@@ -89,7 +89,8 @@ Session-independent knowledge lives in `.vtcode/memory/` (gitignored): `gotchas.
 
 ## Build & Verification
 
-Prefer `./scripts/check-dev.sh` (10-30s) over `./scripts/check.sh` (2-5m) for iteration.
+- CI build caching: `Swatinem/rust-cache` keys off the target triple only when `CARGO_BUILD_TARGET` is set or you pass `key:`. Builds that pass `--target` via the CLI (e.g. `cross build --target`) share ONE cache key across matrix jobs on the same runner OS, causing colliding/failing saves and every target restoring a mismatched cache. Always namespace the cache per target (`with: { key: ${{ matrix.target }} }`) in cross-target matrix jobs.
+- Prefer `./scripts/check-dev.sh` (10-30s) over `./scripts/check.sh` (2-5m) for iteration.
 
 | Change | Command |
 |---|---|
