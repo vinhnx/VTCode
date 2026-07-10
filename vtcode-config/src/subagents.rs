@@ -1154,11 +1154,20 @@ fn normalize_subagent_tools(tools: Vec<String>) -> Vec<String> {
 }
 
 fn normalize_subagent_tool_name(tool: &str) -> &'static [&'static str] {
-    match tool.trim().to_ascii_lowercase().as_str() {
-        "read" | "grep" | "grep_file" | "grepfile" | "glob" | "list" | "list_files"
-        | "listfiles" => &[tools::CODE_SEARCH],
+    let normalized = tool.trim().to_ascii_lowercase();
+    let normalized = normalized
+        .strip_suffix("(*)")
+        .map(str::trim)
+        .unwrap_or(normalized.as_str());
+
+    match normalized {
+        "read" | "read_file" | "readfile" | "grep" | "grep_file" | "grepfile" | "glob" | "list"
+        | "list_file" | "list_files" | "listfile" | "listfiles" | "list-files" => {
+            &[tools::EXEC_COMMAND]
+        }
+        "code_search" => &[tools::CODE_SEARCH],
         "write" | "edit" | "multiedit" | "multi_edit" | "multi-edit" => &[tools::APPLY_PATCH],
-        "bash" | "shell" | "command" => &[tools::EXEC_COMMAND],
+        "bash" | "shell" | "command" | "exec_command" => &[tools::EXEC_COMMAND],
         "patch" | "applypatch" | "apply_patch" => &[tools::APPLY_PATCH],
         "agent" | "task" => &[tools::SPAWN_AGENT],
         "askuserquestion" | "ask_user_question" | "requestuserinput" | "request_user_input" => {
@@ -1555,7 +1564,7 @@ mod tests {
         ReasoningEffortLevel, SubagentDiscoveryInput, SubagentMcpServer, SubagentMemoryScope,
         SubagentRuntimeLimits, SubagentSource, builtin_plan_agent, builtin_primary_duck_agent,
         builtin_subagents, classify_agent_spec_field, discover_subagents, load_cli_agents,
-        load_subagent_from_file,
+        load_subagent_from_file, normalize_subagent_tools,
     };
     use crate::constants::tools;
     use crate::core::permissions::PermissionDefault;
@@ -1778,13 +1787,7 @@ Primary prompt."#,
         assert_eq!(spec.name, "build");
         assert_eq!(spec.description, "Primary build agent");
         assert_eq!(spec.prompt, "Primary prompt.");
-        assert_eq!(
-            spec.tools,
-            Some(vec![
-                tools::CODE_SEARCH.to_string(),
-                tools::EXEC_COMMAND.to_string(),
-            ])
-        );
+        assert_eq!(spec.tools, Some(vec![tools::EXEC_COMMAND.to_string()]));
         assert_eq!(spec.disallowed_tools, vec![tools::APPLY_PATCH.to_string()]);
         assert_eq!(spec.permissions.default, PermissionDefault::Ask);
         assert_eq!(spec.permissions.allow, vec![tools::CODE_SEARCH.to_string()]);
@@ -1952,7 +1955,7 @@ Review the target changes."#,
         assert_eq!(spec.description, "Review code");
         assert_eq!(spec.model.as_deref(), Some("sonnet"));
         assert_eq!(spec.color.as_deref(), Some("blue"));
-        assert_eq!(spec.tools, Some(vec![tools::CODE_SEARCH.to_string()]));
+        assert_eq!(spec.tools, Some(vec![tools::EXEC_COMMAND.to_string()]));
         assert_eq!(spec.disallowed_tools, vec![tools::APPLY_PATCH.to_string()]);
         assert!(spec.background);
         assert_eq!(spec.mode, AgentMode::Primary);
@@ -1982,7 +1985,6 @@ Debug the issue."#,
         assert_eq!(
             spec.tools,
             Some(vec![
-                tools::CODE_SEARCH.to_string(),
                 tools::EXEC_COMMAND.to_string(),
                 tools::APPLY_PATCH.to_string(),
             ])
@@ -2012,6 +2014,36 @@ Run shell commands."#,
         assert_eq!(spec.tools, Some(vec![tools::EXEC_COMMAND.to_string()]));
         assert!(!spec.is_read_only());
         Ok(())
+    }
+
+    #[test]
+    fn normalizes_claude_read_aliases_to_one_exec_command() {
+        let normalized = normalize_subagent_tools(
+            ["Read", "Grep", "Glob", "list_files", "LISTFILES", "Read(*)"]
+                .into_iter()
+                .map(ToString::to_string)
+                .collect(),
+        );
+
+        assert_eq!(normalized, vec![tools::EXEC_COMMAND.to_string()]);
+    }
+
+    #[test]
+    fn keeps_explicit_code_search_distinct_from_claude_read_aliases() {
+        let normalized = normalize_subagent_tools(
+            ["code_search", "Read", "Code_Search", "Glob(*)"]
+                .into_iter()
+                .map(ToString::to_string)
+                .collect(),
+        );
+
+        assert_eq!(
+            normalized,
+            vec![
+                tools::CODE_SEARCH.to_string(),
+                tools::EXEC_COMMAND.to_string(),
+            ]
+        );
     }
 
     #[test]

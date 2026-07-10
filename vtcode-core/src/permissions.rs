@@ -493,9 +493,28 @@ fn build_request_kind(
         return PermissionRequestKind::Mcp { server, tool };
     }
 
+    if normalized_tool_name == tools::CODE_SEARCH {
+        let paths = tool_args.map_or_else(Vec::new, |args| {
+            extract_candidate_paths(workspace_root, current_dir, normalized_tool_name, args)
+        });
+        return PermissionRequestKind::Read { paths };
+    }
+
     let Some(args) = tool_args else {
         return PermissionRequestKind::Other;
     };
+
+    if normalized_tool_name == tools::EXEC_COMMAND {
+        if !tool_intent::classify_tool_intent(normalized_tool_name, args).mutating {
+            return PermissionRequestKind::Read { paths: Vec::new() };
+        }
+
+        let command = command_args::command_text(args)
+            .ok()
+            .flatten()
+            .unwrap_or_default();
+        return PermissionRequestKind::Bash { command };
+    }
 
     if tool_intent::is_command_run_tool_call(normalized_tool_name, args)
         && let Ok(Some(command)) = command_args::command_text(args)
@@ -517,9 +536,10 @@ fn build_request_kind(
 
 fn advertised_permission_args(normalized_tool_name: &str) -> Vec<Value> {
     match normalized_tool_name {
-        tools::UNIFIED_EXEC | tools::EXEC_PTY_CMD | tools::EXEC_COMMAND | "exec" => {
+        tools::UNIFIED_EXEC | tools::EXEC_PTY_CMD | "exec" => {
             vec![json!({ "action": "run", "command": "true" })]
         }
+        tools::EXEC_COMMAND => vec![json!({ "cmd": "rg --files" })],
         tools::RUN_PTY_CMD | tools::CREATE_PTY_SESSION | tools::SHELL | "bash" => {
             vec![json!({ "command": "true" })]
         }
@@ -765,8 +785,8 @@ fn domain_matches_allowed(domain: &str, allowed: &str) -> bool {
 mod tests {
     use super::{
         PermissionRequest, PermissionRequestKind, PermissionRuleDecision,
-        ResolvedPermissionDecision, build_permission_request, evaluate_agent_permissions,
-        evaluate_effective_permissions, evaluate_permissions,
+        ResolvedPermissionDecision, build_advertised_permission_requests, build_permission_request,
+        evaluate_agent_permissions, evaluate_effective_permissions, evaluate_permissions,
     };
     use crate::config::{PermissionsConfig, constants::tools};
     use serde_json::json;
@@ -1069,6 +1089,137 @@ mod tests {
         );
         assert_eq!(
             evaluate_agent_permissions(&permissions, &workspace, &cwd, &write_request),
+            ResolvedPermissionDecision::Deny
+        );
+    }
+
+    #[test]
+    fn agent_read_permission_allows_public_code_search_and_read_only_exec_command() {
+        let (_temp, workspace, cwd) = workspace_roots();
+        let mut permissions = agent_permissions(PermissionDefault::Deny);
+        permissions.allow = vec!["Read".to_string()];
+
+        let code_search = build_permission_request(
+            &workspace,
+            &cwd,
+            tools::CODE_SEARCH,
+            Some(&json!({"query": "PermissionRequest"})),
+        );
+        let exec_command = build_permission_request(
+            &workspace,
+            &cwd,
+            tools::EXEC_COMMAND,
+            Some(&json!({"cmd": "rg --files"})),
+        );
+
+        assert!(matches!(
+            code_search.kind,
+            PermissionRequestKind::Read { .. }
+        ));
+        assert!(matches!(
+            exec_command.kind,
+            PermissionRequestKind::Read { .. }
+        ));
+        assert_eq!(
+            evaluate_agent_permissions(&permissions, &workspace, &cwd, &code_search),
+            ResolvedPermissionDecision::Allow
+        );
+        assert_eq!(
+            evaluate_agent_permissions(&permissions, &workspace, &cwd, &exec_command),
+            ResolvedPermissionDecision::Allow
+        );
+    }
+
+    #[test]
+    fn mutating_exec_command_remains_bash_under_read_only_permissions() {
+        let (_temp, workspace, cwd) = workspace_roots();
+        let mut permissions = agent_permissions(PermissionDefault::Deny);
+        permissions.allow = vec!["Read".to_string()];
+        let request = build_permission_request(
+            &workspace,
+            &cwd,
+            tools::EXEC_COMMAND,
+            Some(&json!({"cmd": "printf changed > file.txt"})),
+        );
+
+        assert_eq!(
+            request.kind,
+            PermissionRequestKind::Bash {
+                command: "printf changed > file.txt".to_string()
+            }
+        );
+        assert_eq!(
+            evaluate_agent_permissions(&permissions, &workspace, &cwd, &request),
+            ResolvedPermissionDecision::Deny
+        );
+    }
+
+    #[test]
+    fn exec_command_advertisement_uses_a_read_only_public_probe() {
+        let (_temp, workspace, cwd) = workspace_roots();
+        let requests = build_advertised_permission_requests(&workspace, &cwd, tools::EXEC_COMMAND);
+
+        assert_eq!(requests.len(), 1);
+        assert!(matches!(
+            requests[0].kind,
+            PermissionRequestKind::Read { .. }
+        ));
+    }
+
+    #[test]
+    fn public_read_requests_preserve_global_deny_and_ask_precedence() {
+        let (_temp, workspace, cwd) = workspace_roots();
+        let request = build_permission_request(
+            &workspace,
+            &cwd,
+            tools::EXEC_COMMAND,
+            Some(&json!({"cmd": "rg --files"})),
+        );
+        let mut permissions = agent_permissions(PermissionDefault::Deny);
+        permissions.allow = vec!["Read".to_string()];
+
+        let deny = PermissionsConfig {
+            deny: vec!["Read".to_string()],
+            ..PermissionsConfig::default()
+        };
+        assert_eq!(
+            evaluate_effective_permissions(&deny, &permissions, &workspace, &cwd, &request),
+            ResolvedPermissionDecision::Deny
+        );
+
+        let ask = PermissionsConfig {
+            ask: vec!["Read".to_string()],
+            ..PermissionsConfig::default()
+        };
+        assert_eq!(
+            evaluate_effective_permissions(&ask, &permissions, &workspace, &cwd, &request),
+            ResolvedPermissionDecision::Ask
+        );
+    }
+
+    #[test]
+    fn explicit_bash_rules_continue_to_govern_mutating_exec_command() {
+        let (_temp, workspace, cwd) = workspace_roots();
+        let request = build_permission_request(
+            &workspace,
+            &cwd,
+            tools::EXEC_COMMAND,
+            Some(&json!({"cmd": "printf changed > file.txt"})),
+        );
+        let mut permissions = agent_permissions(PermissionDefault::Deny);
+        permissions.allow = vec!["Bash(printf changed*)".to_string()];
+
+        assert_eq!(
+            evaluate_agent_permissions(&permissions, &workspace, &cwd, &request),
+            ResolvedPermissionDecision::Allow
+        );
+
+        let global = PermissionsConfig {
+            deny: vec!["Bash(printf changed*)".to_string()],
+            ..PermissionsConfig::default()
+        };
+        assert_eq!(
+            evaluate_effective_permissions(&global, &permissions, &workspace, &cwd, &request),
             ResolvedPermissionDecision::Deny
         );
     }

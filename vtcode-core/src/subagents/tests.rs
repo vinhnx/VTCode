@@ -501,7 +501,7 @@ fn read_only_test_spec(name: &str) -> SubagentSpec {
 }
 
 #[test]
-fn filter_child_tools_removes_subagent_tools_in_children() {
+fn filter_child_tools_keeps_public_read_tools_and_removes_mutation_tools() {
     let defs = vec![
         ToolDefinition::function(
             tools::SPAWN_AGENT.to_string(),
@@ -509,13 +509,23 @@ fn filter_child_tools_removes_subagent_tools_in_children() {
             serde_json::json!({"type": "object"}),
         ),
         ToolDefinition::function(
-            tools::UNIFIED_SEARCH.to_string(),
+            tools::CODE_SEARCH.to_string(),
             "Search".to_string(),
             serde_json::json!({"type": "object"}),
         ),
         ToolDefinition::function(
-            tools::LIST_FILES.to_string(),
-            "List".to_string(),
+            tools::EXEC_COMMAND.to_string(),
+            "Exec".to_string(),
+            serde_json::json!({"type": "object"}),
+        ),
+        ToolDefinition::function(
+            tools::APPLY_PATCH.to_string(),
+            "Patch".to_string(),
+            serde_json::json!({"type": "object"}),
+        ),
+        ToolDefinition::function(
+            tools::WRITE_STDIN.to_string(),
+            "Continue".to_string(),
             serde_json::json!({"type": "object"}),
         ),
         ToolDefinition::function(
@@ -529,8 +539,11 @@ fn filter_child_tools_removes_subagent_tools_in_children() {
         .find(|spec| spec.name == "explorer")
         .expect("explorer");
     let filtered = filter_child_tools(&spec, defs, true);
-    assert_eq!(filtered.len(), 1);
-    assert_eq!(filtered[0].function_name(), tools::UNIFIED_SEARCH);
+    let names = filtered
+        .iter()
+        .map(ToolDefinition::function_name)
+        .collect::<Vec<_>>();
+    assert_eq!(names, vec![tools::CODE_SEARCH, tools::EXEC_COMMAND]);
 }
 
 #[test]

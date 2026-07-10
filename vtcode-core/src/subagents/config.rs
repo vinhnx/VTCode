@@ -227,7 +227,9 @@ fn parent_rule_matches_spec_tools(rule: &str, spec_allowed: &[String]) -> bool {
 fn tool_supports_read_permission(tool: &str) -> bool {
     matches!(
         tool.trim(),
-        tools::READ_FILE
+        tools::CODE_SEARCH
+            | tools::EXEC_COMMAND
+            | tools::READ_FILE
             | tools::GREP_FILE
             | tools::LIST_FILES
             | tools::UNIFIED_SEARCH
@@ -428,18 +430,18 @@ const FINAL_RESPONSE_CONTRACT: &str = "Return your final response using this exa
 Use `- None` for empty sections. Keep it concise and grounded in the work you actually performed.";
 
 const READ_ONLY_TOOL_REMINDER: &str = "Tool reminder: stay inside the exposed read-only tool set for this child. \
-Do not guess hidden or legacy helpers such as `list_files`, `read_file`, `file_operation`, or `command_session` when they \
-are not visible. For workspace discovery here, prefer `search_dispatch`; if that is insufficient, report the blocker \
-instead of retrying denied calls.";
+Use `exec_command` for workspace discovery and file reading. Use advanced `code_search` for structural or outline work. \
+When `exec_command` returns a live session, poll it with `write_stdin` and empty `chars`. If these tools are insufficient, \
+report the blocker instead of retrying denied calls.";
 
 const READ_ONLY_PLANNING_WORKFLOW_REMINDER: &str = "This delegated agent already runs with a read-only tool surface. \
 Do not try to enter or exit planning workflow, do not call hidden mutating tools, and do not retry the same denied tool \
 call; adjust strategy or report the blocker instead.";
 
-const WRITE_TOOL_REMINDER: &str = "Tool reminder: `list_files` on the workspace root (`.`) is blocked, and \
-`list_files` already uses search internally. Do not pair `list_files` with `search_dispatch` in the same batch. \
-Use a specific subdirectory, `search_dispatch` for workspace-wide discovery, or `command_session` with \
-`git diff --name-only` / `git diff --stat` when reviewing current changes.";
+const WRITE_TOOL_REMINDER: &str = "Tool reminder: use `exec_command` with targeted commands for workspace discovery \
+and file reading. Use advanced `code_search` for structural or outline work. When `exec_command` returns a live session, \
+continue or poll it with `write_stdin`. Use `exec_command` with `git diff --name-only` or `git diff --stat` when reviewing \
+current changes.";
 
 const WRITE_SYNTHESIS_REMINDER: &str = "CRITICAL: After reading files to gather context, you MUST synthesize \
 your findings and begin implementation. Do not continue reading additional files. The harness enforces a hard \
@@ -552,4 +554,63 @@ pub fn filter_child_tools(
             true
         })
         .collect()
+}
+
+#[cfg(test)]
+mod slice4_tests {
+    use super::{
+        READ_ONLY_TOOL_REMINDER, WRITE_TOOL_REMINDER, build_child_config, filter_child_tools,
+    };
+    use crate::config::VTCodeConfig;
+    use crate::config::constants::tools;
+    use crate::llm::provider::ToolDefinition;
+
+    fn definition(name: &str) -> ToolDefinition {
+        ToolDefinition::function(
+            name.to_string(),
+            name.to_string(),
+            serde_json::json!({"type": "object"}),
+        )
+    }
+
+    #[test]
+    fn explorer_keeps_public_read_tools_through_intersection_and_filtering() {
+        let mut parent = VTCodeConfig::default();
+        parent.permissions.allow = vec!["Read".to_string()];
+        let spec = vtcode_config::builtin_subagents()
+            .into_iter()
+            .find(|spec| spec.name == "explorer")
+            .expect("explorer");
+
+        let child = build_child_config(&parent, &spec, "small", None);
+        assert_eq!(child.permissions.allow, vec!["Read".to_string()]);
+
+        let filtered = filter_child_tools(
+            &spec,
+            vec![
+                definition(tools::CODE_SEARCH),
+                definition(tools::EXEC_COMMAND),
+                definition(tools::APPLY_PATCH),
+                definition(tools::WRITE_STDIN),
+            ],
+            spec.is_read_only(),
+        );
+        let names = filtered
+            .iter()
+            .map(ToolDefinition::function_name)
+            .collect::<Vec<_>>();
+
+        assert_eq!(names, vec![tools::CODE_SEARCH, tools::EXEC_COMMAND]);
+    }
+
+    #[test]
+    fn child_tool_reminders_name_only_public_search_and_execution_tools() {
+        for reminder in [READ_ONLY_TOOL_REMINDER, WRITE_TOOL_REMINDER] {
+            assert!(reminder.contains("`exec_command`"));
+            assert!(reminder.contains("`write_stdin`"));
+            assert!(reminder.contains("`code_search`"));
+            assert!(!reminder.contains("search_dispatch"));
+            assert!(!reminder.contains("command_session"));
+        }
+    }
 }
