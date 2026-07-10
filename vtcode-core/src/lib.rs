@@ -231,7 +231,7 @@ pub use config::{
     AgentClientProtocolConfig, AgentClientProtocolTransport, AgentClientProtocolZedConfig,
     AgentClientProtocolZedToolsConfig, AgentConfig, IdeContextConfig, IdeContextProviderConfig,
     IdeContextProviderFamily, IdeContextProviderMode, IdeContextProvidersConfig,
-    PluginRuntimeConfig, PluginTrustLevel, VTCodeConfig, WorkspaceTrustLevel,
+    PluginRuntimeConfig, PluginTrustLevel, ToolProfile, VTCodeConfig, WorkspaceTrustLevel,
 };
 pub use core::agent::core::Agent;
 pub use core::agent::runner::AgentRunner;

@@ -78,8 +78,8 @@ pub use core::{
     ProviderOverrideConfig, ProviderPromptCachingConfig, ResourceLimitsConfig,
     ResourceLimitsPreset, SandboxConfig, SandboxPolicy, SeccompConfig, SeccompProfilePreset,
     SecurityConfig, SensitivePathsConfig, SkillsConfig, SkillsRenderMode, ThinkingDisplayMode,
-    ToolPolicy, ToolSearchAlgorithm, ToolsConfig, WebFetchConfig, WebFetchMode, WebSearchConfig,
-    WebSearchProvider,
+    ToolPolicy, ToolProfile, ToolSearchAlgorithm, ToolsConfig, WebFetchConfig, WebFetchMode,
+    WebSearchConfig, WebSearchProvider,
 };
 pub use debug::{DebugConfig, TraceLevel};
 pub use defaults::{

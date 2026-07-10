@@ -20,6 +20,25 @@ fn default_config_selects_build_primary_agent() {
 }
 
 #[test]
+fn tool_profile_parses_and_serialises_in_tools_table() {
+    let config: VTCodeConfig = toml::from_str(
+        r#"
+[tools]
+profile = "advanced_vtcode"
+"#,
+    )
+    .expect("tool profile should parse from the tools table");
+    assert_eq!(
+        config.tools.profile,
+        crate::core::ToolProfile::AdvancedVtCode
+    );
+
+    let serialised = toml::to_string(&config).expect("configuration should serialise");
+    assert!(serialised.contains("[tools]"));
+    assert!(serialised.contains("profile = \"advanced_vtcode\""));
+}
+
+#[test]
 #[serial]
 fn test_layered_config_loading() {
     let workspace = assert_fs::TempDir::new().expect("failed to create workspace");
@@ -120,11 +139,16 @@ fn test_config_builder_overrides() {
                 "agent.default_model".to_string(),
                 toml::Value::String("gemini-1.5-pro".to_string()),
             )
+            .cli_overrides(&[("tools.profile".to_string(), "advanced_vtcode".to_string())])
             .build()
             .expect("failed to build config");
 
         assert_eq!(manager.config().agent.provider, "gemini");
         assert_eq!(manager.config().agent.default_model, "gemini-1.5-pro");
+        assert_eq!(
+            manager.config().tools.profile,
+            crate::core::ToolProfile::AdvancedVtCode
+        );
 
         let layers = manager.layer_stack().layers();
         // Workspace + Runtime

@@ -18,6 +18,7 @@ use vtcode_utility_tool_specs::parse_tool_input_schema;
 
 use super::tool_handler::{ConfiguredToolSpec, ResponsesApiTool, ToolSpec};
 
+pub use crate::config::ToolProfile;
 pub use crate::tools::registry::ToolCatalogSource;
 
 /// The surface (execution context) where tools are exposed.
@@ -59,17 +60,6 @@ pub enum DeferredToolSearchKind {
     Anthropic(ToolSearchAlgorithm),
     /// OpenAI's hosted tool search.
     OpenAIHosted,
-}
-
-/// Model-facing tool profile for a session.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum ToolProfile {
-    /// Codex-compatible baseline: exec_command, write_stdin, and apply_patch.
-    #[default]
-    CodexDefault,
-    /// VTCode specialised tools. This profile is reserved for non-baseline
-    /// tools such as code_search.
-    AdvancedVtCode,
 }
 
 const DIRECT_TOOL_EXPOSURE_THRESHOLD: usize = 100;
@@ -983,6 +973,112 @@ mod tests {
         );
 
         assert_eq!(names, vec![tools::CODE_SEARCH.to_string()]);
+    }
+
+    #[test]
+    fn advanced_profile_retains_eligible_specialised_and_dynamic_tools() {
+        let registrations = vec![
+            registration(tools::CODE_SEARCH)
+                .with_description("Search code")
+                .with_parameter_schema(empty_object_schema()),
+            registration("mcp::context7::search")
+                .with_catalog_source(ToolCatalogSource::Mcp)
+                .with_llm_visibility(false)
+                .with_description("Search documentation")
+                .with_parameter_schema(empty_object_schema())
+                .with_aliases(["mcp__context7__search"]),
+            registration(tools::LOAD_SKILL)
+                .with_catalog_source(ToolCatalogSource::Builtin)
+                .with_description("Load a skill")
+                .with_parameter_schema(empty_object_schema()),
+            registration(tools::START_PLANNING)
+                .with_catalog_source(ToolCatalogSource::Builtin)
+                .with_description("Start planning")
+                .with_parameter_schema(empty_object_schema()),
+            registration(tools::SPAWN_AGENT)
+                .with_catalog_source(ToolCatalogSource::Builtin)
+                .with_description("Spawn an agent")
+                .with_parameter_schema(empty_object_schema()),
+            registration(tools::CRON_CREATE)
+                .with_catalog_source(ToolCatalogSource::Builtin)
+                .with_description("Create a scheduled prompt")
+                .with_parameter_schema(empty_object_schema()),
+            registration("dynamic_plugin_tool")
+                .with_catalog_source(ToolCatalogSource::Dynamic)
+                .with_description("Run a dynamic plugin tool")
+                .with_parameter_schema(empty_object_schema()),
+        ];
+
+        let catalog = SessionToolCatalog::rebuild_from_registrations(registrations);
+        let names = catalog.public_tool_names(
+            SessionToolsConfig::full_public(
+                SessionSurface::Interactive,
+                CapabilityLevel::CodeSearch,
+                ToolDocumentationMode::Full,
+                ToolModelCapabilities::default(),
+            )
+            .with_tool_profile(ToolProfile::AdvancedVtCode),
+        );
+
+        assert_eq!(
+            names,
+            vec![
+                tools::CODE_SEARCH.to_string(),
+                "mcp__context7__search".to_string(),
+                tools::LOAD_SKILL.to_string(),
+                tools::START_PLANNING.to_string(),
+                tools::SPAWN_AGENT.to_string(),
+                tools::CRON_CREATE.to_string(),
+                "dynamic_plugin_tool".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn acp_surface_stays_on_codex_baseline_with_advanced_profile() {
+        let registrations = vec![
+            registration(tools::EXEC_COMMAND)
+                .with_description("Run command")
+                .with_parameter_schema(empty_object_schema()),
+            registration(tools::WRITE_STDIN)
+                .with_description("Write stdin")
+                .with_parameter_schema(empty_object_schema()),
+            registration(tools::APPLY_PATCH)
+                .with_llm_visibility(false)
+                .with_description("Apply patch")
+                .with_parameter_schema(apply_patch_parameters())
+                .with_behavior(ToolBehavior::apply_patch(
+                    ToolMutationModel::Mutating,
+                    false,
+                    true,
+                )),
+            registration(tools::CODE_SEARCH)
+                .with_description("Search code")
+                .with_parameter_schema(empty_object_schema()),
+            registration(tools::LOAD_SKILL)
+                .with_description("Load a skill")
+                .with_parameter_schema(empty_object_schema()),
+        ];
+
+        let catalog = SessionToolCatalog::rebuild_from_registrations(registrations);
+        let names = catalog.public_tool_names(
+            SessionToolsConfig::full_public(
+                SessionSurface::Acp,
+                CapabilityLevel::CodeSearch,
+                ToolDocumentationMode::Full,
+                ToolModelCapabilities::default(),
+            )
+            .with_tool_profile(ToolProfile::AdvancedVtCode),
+        );
+
+        assert_eq!(
+            names,
+            vec![
+                tools::EXEC_COMMAND.to_string(),
+                tools::WRITE_STDIN.to_string(),
+                tools::APPLY_PATCH.to_string(),
+            ]
+        );
     }
 
     #[test]

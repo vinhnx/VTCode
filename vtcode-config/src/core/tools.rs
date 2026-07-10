@@ -5,10 +5,26 @@ use std::time::Duration;
 use crate::constants::{defaults, tools};
 use crate::core::plugins::PluginRuntimeConfig;
 
+/// Model-facing tool profile for a session.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ToolProfile {
+    /// Codex-compatible baseline: exec_command, write_stdin, and apply_patch.
+    #[default]
+    CodexDefault,
+    /// VTCode specialised tools, including code_search and eligible dynamic tools.
+    AdvancedVtCode,
+}
+
 /// Tools configuration
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ToolsConfig {
+    /// Model-facing tool profile.
+    #[serde(default)]
+    pub profile: ToolProfile,
+
     /// Default policy for tools not explicitly listed
     #[serde(default = "default_tool_policy")]
     pub default_policy: ToolPolicy,
@@ -195,6 +211,7 @@ impl Default for ToolsConfig {
             .map(|(tool, policy)| ((*tool).into(), policy.clone()))
             .collect::<IndexMap<_, _>>();
         Self {
+            profile: ToolProfile::default(),
             default_policy: default_tool_policy(),
             policies,
             max_tool_loops: default_max_tool_loops(),
@@ -400,6 +417,48 @@ const DEFAULT_TOOL_POLICIES: &[(&str, ToolPolicy)] = &[
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tools_config_defaults_to_codex_profile() {
+        assert_eq!(ToolsConfig::default().profile, ToolProfile::CodexDefault);
+    }
+
+    #[test]
+    fn tool_profile_round_trips_through_toml() {
+        let config: ToolsConfig = toml::from_str("profile = \"advanced_vtcode\"")
+            .expect("advanced tool profile should parse");
+        assert_eq!(config.profile, ToolProfile::AdvancedVtCode);
+
+        let serialised = toml::to_string(&config).expect("tools config should serialise");
+        assert!(serialised.contains("profile = \"advanced_vtcode\""));
+
+        let round_tripped: ToolsConfig =
+            toml::from_str(&serialised).expect("serialised tools config should parse");
+        assert_eq!(round_tripped.profile, ToolProfile::AdvancedVtCode);
+    }
+
+    #[test]
+    fn invalid_tool_profile_reports_allowed_values() {
+        let error = toml::from_str::<ToolsConfig>("profile = \"experimental\"")
+            .expect_err("unknown tool profile should fail")
+            .to_string();
+
+        assert!(error.contains("unknown variant `experimental`"), "{error}");
+        assert!(error.contains("`codex_default`"), "{error}");
+        assert!(error.contains("`advanced_vtcode`"), "{error}");
+    }
+
+    #[cfg(feature = "schema")]
+    #[test]
+    fn tools_config_schema_includes_profile_values() {
+        let schema = schemars::schema_for!(ToolsConfig);
+        let schema_json = serde_json::to_value(schema).expect("schema should serialise");
+        let schema_text = serde_json::to_string(&schema_json).expect("schema should stringify");
+
+        assert!(schema_json["properties"].get("profile").is_some());
+        assert!(schema_text.contains("codex_default"));
+        assert!(schema_text.contains("advanced_vtcode"));
+    }
 
     #[test]
     fn editor_config_defaults_are_enabled() {
