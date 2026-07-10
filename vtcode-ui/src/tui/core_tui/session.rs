@@ -68,6 +68,7 @@ mod driver;
 mod events;
 pub(crate) mod message_renderer;
 mod messages;
+pub(crate) mod mode_switch_guard;
 mod reflow;
 pub(crate) mod reverse_search;
 mod spinner;

@@ -657,12 +657,28 @@ fn app_restore_input_draft_command_preserves_attachments_in_order() {
 }
 
 #[test]
-fn busy_tab_cycles_primary_agent_without_retargeting_current_run() {
+fn busy_tab_does_not_cycle_primary_agent() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
     set_busy_status(&mut session);
     session.set_input("queue this next".to_string());
 
     let event = session.process_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
-    assert!(matches!(event, Some(InlineEvent::CyclePrimaryAgent)));
+    assert!(event.is_none());
     assert_eq!(session.input_manager.content(), "queue this next");
+}
+
+#[test]
+fn busy_tab_shows_mode_switch_notice() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    set_busy_status(&mut session);
+
+    let _ = session.process_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+
+    let transcript = visible_transcript(&mut session);
+    assert!(
+        transcript
+            .iter()
+            .any(|line| line.contains("Mode switching is disabled")),
+        "expected a mode-switch busy notice, got: {transcript:?}"
+    );
 }

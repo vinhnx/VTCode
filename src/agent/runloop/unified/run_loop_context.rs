@@ -744,6 +744,7 @@ impl HarnessTurnState {
         *count
     }
 
+    #[cfg(test)]
     pub(crate) fn reset_file_read_path_counts(&mut self) {
         self.file_read_path_counts.clear();
     }

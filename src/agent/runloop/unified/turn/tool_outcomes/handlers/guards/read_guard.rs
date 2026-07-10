@@ -543,11 +543,11 @@ mod tests {
 
     #[test]
     fn max_same_file_path_read_calls_is_stricter_than_family_cap() {
-        assert!(
+        const _: () = assert!(
             MAX_SAME_FILE_PATH_READ_CALLS >= MAX_CONSECUTIVE_SAME_FILE_READ_FAMILY_CALLS,
             "per-file-path cap must be >= family cap"
         );
-        assert!(
+        const _: () = assert!(
             MAX_SAME_FILE_PATH_READ_CALLS < 10,
             "per-file-path cap must catch excessive reads"
         );

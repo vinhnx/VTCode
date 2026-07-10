@@ -1,7 +1,9 @@
 use super::*;
 use ratatui::crossterm::event::KeyModifiers;
 
-use super::super::types::{OverlayEvent, OverlaySubmission, SubmittedInput};
+use super::super::types::{InlineSegment, OverlayEvent, OverlaySubmission, SubmittedInput};
+use crate::tui::core_tui::runner::TuiSessionDriver;
+use crate::tui::core_tui::session::mode_switch_guard::{self};
 use crate::tui::ui::tui::session::modal::{ModalKeyModifiers, ModalListKeyResult};
 
 pub(super) fn handle_paste(session: &mut Session, content: &str) {
@@ -568,7 +570,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 return None;
             }
 
-            if can_cycle_primary_agent(session, &key) {
+            if mode_switch_guard::try_cycle_primary_agent(session, &key) {
                 session.mark_dirty();
                 return Some(InlineEvent::CyclePrimaryAgent);
             }
@@ -581,6 +583,10 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
 
             session.clear_inline_prompt_suggestion();
             session.mark_dirty();
+            if session.is_running_activity() {
+                push_mode_switch_busy_notice(session);
+                return None;
+            }
             Some(InlineEvent::CyclePrimaryAgentPrevious)
         }
         KeyCode::Backspace => {
@@ -707,7 +713,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 if session.accept_inline_prompt_suggestion() {
                     return None;
                 }
-                if can_cycle_primary_agent(session, &key) {
+                if mode_switch_guard::try_cycle_primary_agent(session, &key) {
                     session.mark_dirty();
                     return Some(InlineEvent::CyclePrimaryAgent);
                 }
@@ -757,6 +763,33 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
 
 fn can_cycle_primary_agent(session: &Session, key: &KeyEvent) -> bool {
     key.modifiers == KeyModifiers::NONE && !session.has_active_overlay()
+}
+
+/// Notice shown when the user requests a primary-agent mode switch while a turn
+/// is actively processing. Mode switches are locked for the duration of a turn.
+fn push_mode_switch_busy_notice(session: &mut Session) {
+    session.push_line(
+        InlineMessageKind::Warning,
+        vec![InlineSegment {
+            text: mode_switch_guard::MODE_SWITCH_BUSY_NOTICE.to_string(),
+            style: Arc::new(InlineTextStyle::default()),
+        }],
+    );
+    session.mark_dirty();
+}
+
+impl mode_switch_guard::ModeSwitchGuardSession for Session {
+    fn is_running_activity(&self) -> bool {
+        TuiSessionDriver::is_running_activity(self)
+    }
+
+    fn can_cycle_primary_agent(&self, key: &KeyEvent) -> bool {
+        can_cycle_primary_agent(self, key)
+    }
+
+    fn notify_mode_switch_busy(&mut self) {
+        push_mode_switch_busy_notice(self);
+    }
 }
 
 fn take_submitted_input(session: &mut Session) -> Option<SubmittedInput> {

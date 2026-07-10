@@ -31,6 +31,8 @@ You can also press `Tab` on an empty idle composer to cycle to the `plan` primar
 
 `/plan` starts or continues the planning workflow. It is a workflow command, not a session state selector.
 
+While a turn is actively processing, `/plan` is dropped with a notice (mode switches are locked for the duration of a turn). The automatic in-turn planning intent detection still engages on its own; only explicit `/plan` entry while busy is deferred.
+
 ```text
 /plan
 ```

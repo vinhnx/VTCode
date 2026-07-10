@@ -54,10 +54,6 @@ There are also some things to watch out for in tool use. For example, the number
 
 https://github.com/vinhnx/VTCode/issues/698
 
----
-
-IMPORTANT: when the agent loop processing is running, prevent switch mode (e.g. from tool-free to tool-enabled) from happening mid-turn. The agent loop should complete the current turn before switching modes, to avoid inconsistent state and context corruption. This may involve locking the mode state during turn processing or queuing mode switch requests until the turn is fully processed. also disable keyboard shortcuts that can trigger mode switches during active processing, to ensure that the agent's state remains stable and predictable.
-
 ===
 
 /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/memory/token-efficiency-analysis.md
