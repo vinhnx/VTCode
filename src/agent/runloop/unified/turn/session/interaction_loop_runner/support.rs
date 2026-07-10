@@ -103,10 +103,10 @@ pub(super) fn extract_recent_follow_up_hint(history: &[uni::Message]) -> Option<
             .and_then(PtyContinuationArgs::from_value)
         {
             return Some((
-                tool_names::UNIFIED_EXEC.to_string(),
+                tool_names::WRITE_STDIN.to_string(),
                 json!({
-                    "action": "continue",
-                    "session_id": next_continue.session_id
+                    "session_id": next_continue.session_id,
+                    "chars": ""
                 }),
             ));
         }
@@ -1674,17 +1674,21 @@ mod tests {
             .to_string(),
         )];
 
-        let hint = extract_recent_follow_up_hint(&history);
+        let (tool_name, args) = extract_recent_follow_up_hint(&history).expect("continuation hint");
         assert_eq!(
-            hint,
-            Some((
-                tool_names::UNIFIED_EXEC.to_string(),
-                serde_json::json!({
-                    "action": "continue",
-                    "session_id": "run-123"
-                })
-            ))
+            tool_name,
+            tool_names::WRITE_STDIN,
+            "continuation hints must use the public write_stdin tool"
         );
+        assert_ne!(tool_name, tool_names::UNIFIED_EXEC);
+        assert_eq!(
+            args,
+            serde_json::json!({
+                "session_id": "run-123",
+                "chars": ""
+            })
+        );
+        assert!(args.get("action").is_none());
     }
 
     #[test]
