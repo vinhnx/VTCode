@@ -33,7 +33,7 @@ toml = { workspace = true }
 tree-sitter = "0.26"
 tree-sitter-bash = "0.25"
 tracing = { workspace = true }
-vtcode-commons = { path = "../vtcode-commons", version = "0.135.1" }
+vtcode-commons = { path = "../vtcode-commons", version = "0.135.2" }
 
 [dev-dependencies]
 serde_json = { workspace = true }
