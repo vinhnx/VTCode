@@ -253,7 +253,7 @@ impl FileCache {
     /// target_memory_ratio: 0.0 to 1.0 (fraction of total system memory to use).
     pub fn adjust_capacity(&self, target_memory_ratio: f64) {
         // Heuristic: Assume 16GB system if we can't query (conservative default)
-        const ASSUMED_SYSTEM_MEMORY: usize = 16 * 1024 * 1024 * 1024;
+        const ASSUMED_SYSTEM_MEMORY: u64 = 16 * 1024 * 1024 * 1024;
 
         #[allow(clippy::cast_sign_loss)]
         let target_bytes = ((ASSUMED_SYSTEM_MEMORY as f64 * target_memory_ratio).max(0.0)) as usize;
