@@ -35,6 +35,9 @@ pub fn parse_response(response_json: Value, model: String) -> Result<LLMResponse
     let mut reasoning_details_vec = Vec::with_capacity(block_count);
     let mut tool_references = Vec::new();
     let mut compaction: Option<String> = None;
+    // Raw advisor server_tool_use + advisor_tool_result blocks, preserved verbatim
+    // for faithful round-trip on subsequent turns (transport: reasoning_details).
+    let mut advisor_blocks: Vec<Value> = Vec::new();
 
     for block in content {
         match block.get("type").and_then(|t| t.as_str()) {
@@ -100,7 +103,22 @@ pub fn parse_response(response_json: Value, model: String) -> Result<LLMResponse
                     }
                 }
             }
-            Some("server_tool_use") => {} // No-op
+            Some("server_tool_use") => {
+                // The advisor tool is the only supported server-side tool. Preserve
+                // the block verbatim so it can be round-tripped on the next turn.
+                if block
+                    .get("name")
+                    .and_then(|n| n.as_str())
+                    .is_some_and(|name| name == "advisor")
+                {
+                    advisor_blocks.push(block.clone());
+                }
+            }
+            Some("advisor_tool_result") => {
+                // Preserve the advisor result verbatim (advisor_result,
+                // advisor_redacted_result, or advisor_tool_result_error).
+                advisor_blocks.push(block.clone());
+            }
             Some("tool_search_tool_result") => {
                 if let Some(content_block) = block.get("content")
                     && content_block.get("type").and_then(|t| t.as_str())
@@ -192,6 +210,14 @@ pub fn parse_response(response_json: Value, model: String) -> Result<LLMResponse
     }
 
     let usage = response_json.get("usage").map(parse_usage);
+
+    if !advisor_blocks.is_empty() {
+        let detail = json!({
+            "type": "advisor",
+            "blocks": advisor_blocks,
+        });
+        reasoning_details_vec.push(detail.to_string());
+    }
 
     Ok(LLMResponse {
         content: if text_parts.is_empty() {

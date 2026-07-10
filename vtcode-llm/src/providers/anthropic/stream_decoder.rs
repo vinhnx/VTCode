@@ -41,6 +41,8 @@ pub fn create_stream(
         let mut aggregator = shared::StreamAggregator::new(model);
         let mut reasoning_blocks = BTreeMap::new();
         let mut finalized_reasoning_details = Vec::new();
+        // Raw advisor server_tool_use + advisor_tool_result blocks for round-trip.
+        let mut advisor_blocks: Vec<Value> = Vec::new();
 
         while let Some(chunk_result) = body_stream.next().await {
             let chunk = chunk_result.map_err(|err| {
@@ -117,6 +119,31 @@ pub fn create_stream(
                             func.insert("name".to_string(), Value::String(tool_use.name));
                             delta.insert("function".to_string(), Value::Object(func));
                             aggregator.tool_builders[index].apply_delta(&Value::Object(delta));
+                        }
+                        AnthropicStreamEvent::ContentBlockStart {
+                            content_block:
+                                AnthropicContentBlock::ServerToolUse { id, name, input },
+                            ..
+                        } => {
+                            if name == "advisor" {
+                                advisor_blocks.push(serde_json::json!({
+                                    "type": "server_tool_use",
+                                    "id": id,
+                                    "name": name,
+                                    "input": input,
+                                }));
+                            }
+                        }
+                        AnthropicStreamEvent::ContentBlockStart {
+                            content_block:
+                                AnthropicContentBlock::AdvisorToolResult { tool_use_id, content },
+                            ..
+                        } => {
+                            advisor_blocks.push(serde_json::json!({
+                                "type": "advisor_tool_result",
+                                "tool_use_id": tool_use_id,
+                                "content": content,
+                            }));
                         }
                         AnthropicStreamEvent::ContentBlockDelta { index, delta } => {
                             match delta {
@@ -252,6 +279,15 @@ pub fn create_stream(
         let mut response = aggregator.finalize();
         if !finalized_reasoning_details.is_empty() {
             response.reasoning_details = Some(finalized_reasoning_details);
+        }
+        if !advisor_blocks.is_empty() {
+            let detail = serde_json::json!({
+                "type": "advisor",
+                "blocks": advisor_blocks,
+            });
+            let mut details = response.reasoning_details.unwrap_or_default();
+            details.push(detail.to_string());
+            response.reasoning_details = Some(details);
         }
         response.request_id = request_id.clone();
         response.organization_id = organization_id.clone();

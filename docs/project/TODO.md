@@ -1,13 +1,3 @@
-implement claude advisor tool
-
-Note:
-
-1. configurable in vtcode config and /config modal settings
-2. Only for Anthropic Providers and Models only
-3. add new command /advisor and wire continuation selection for point 2
-
---
-
 context engineering: managing the context the model sees at each inference step, so that multi-turn tool use is not drowned by history, noise, tool definitions, and intermediate results.
 
 ===

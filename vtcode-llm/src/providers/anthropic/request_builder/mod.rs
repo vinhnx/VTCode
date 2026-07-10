@@ -10,12 +10,13 @@ use crate::provider::{
     LLMError, LLMRequest, PromptCacheProfile,
 };
 use crate::providers::anthropic_types::{
-    AnthropicFallbackParam, AnthropicOutputConfig, AnthropicOutputFormat, AnthropicRequest,
-    AnthropicTaskBudget, CacheControl, ThinkingConfig, ThinkingDisplay,
+    AnthropicAdvisorCaching, AnthropicAdvisorTool, AnthropicFallbackParam, AnthropicOutputConfig,
+    AnthropicOutputFormat, AnthropicRequest, AnthropicTaskBudget, AnthropicTool, CacheControl,
+    ThinkingConfig, ThinkingDisplay,
 };
-use serde_json::Value;
+use serde_json::{Value, json};
 use vtcode_config::constants::reasoning;
-use vtcode_config::core::{AnthropicConfig, AnthropicPromptCacheSettings};
+use vtcode_config::core::{AdvisorConfig, AnthropicConfig, AnthropicPromptCacheSettings};
 use vtcode_config::types::ReasoningEffortLevel;
 
 use super::capabilities::{
@@ -90,15 +91,71 @@ pub fn convert_to_anthropic_format(
     let mut breakpoints_remaining = max_breakpoints;
 
     let tools_breakpoints_before = breakpoints_remaining;
-    let tools = build_tools(request, &tools_cache_control, &mut breakpoints_remaining)?;
+    let mut tools = build_tools(request, &tools_cache_control, &mut breakpoints_remaining)?;
     let tools_breakpoints_used = tools_breakpoints_before.saturating_sub(breakpoints_remaining);
 
+    // Inject the Anthropic server-side advisor tool when enabled and the executor
+    // model forms a valid pair with the configured advisor model.
+    let advisor_injected = if let Some(advisor_tool) =
+        resolve_advisor_tool(resolved_model, &ctx.anthropic_config.advisor)
+    {
+        let mut built = tools.unwrap_or_default();
+        built.push(advisor_tool);
+        tools = Some(built);
+        true
+    } else {
+        false
+    };
+
     let SystemPromptBuildResult {
-        system_value,
+        mut system_value,
         breakpoints_used,
         has_uncached_runtime_context,
     } = build_system_prompt(request, &system_cache_control, breakpoints_remaining);
     breakpoints_remaining = breakpoints_remaining.saturating_sub(breakpoints_used);
+
+    // When the advisor tool is active, append a system-prompt block guiding the
+    // executor model on when to invoke it (per Anthropic's recommended prompt
+    // for coding tasks).
+    if advisor_injected {
+        let advisor_guidance = concat!(
+            "You have access to an advisor tool that pairs a faster executor model with a ",
+            "higher-intelligence advisor model for strategic guidance mid-generation. ",
+            "Use the advisor tool when you:\n",
+            "- Need a second opinion on a complex architectural decision\n",
+            "- Are unsure about the best approach to a multi-step problem\n",
+            "- Want to validate your plan before executing many tool calls\n",
+            "- Hit a blocker you cannot resolve alone\n",
+            "When the advisor returns guidance, incorporate it into your response. ",
+            "If the advisor suggests a different approach, weigh it against your own reasoning.",
+        );
+        let guidance_block = json!({
+            "type": "text",
+            "text": advisor_guidance,
+        });
+        match &mut system_value {
+            Some(Value::Array(blocks)) => {
+                blocks.push(guidance_block);
+            }
+            Some(Value::String(text)) => {
+                let existing = std::mem::take(text);
+                system_value = Some(Value::Array(vec![
+                    json!({ "type": "text", "text": existing }),
+                    guidance_block,
+                ]));
+            }
+            Some(other) => {
+                // Non-string/non-array system value — wrap in an array with the guidance.
+                system_value = Some(Value::Array(vec![
+                    json!({ "type": "text", "text": other.to_string() }),
+                    guidance_block,
+                ]));
+            }
+            None => {
+                system_value = Some(Value::Array(vec![guidance_block]));
+            }
+        }
+    }
 
     let messages_cache_control =
         if ctx.prompt_cache_enabled && ctx.prompt_cache_settings.cache_user_messages {
@@ -299,5 +356,150 @@ fn effort_from_reasoning_for_adaptive(effort: ReasoningEffortLevel) -> &'static 
             reasoning::LOW
         }
         _ => effort.as_str(),
+    }
+}
+
+/// Whether the given model is an Anthropic model eligible to act as an advisor
+/// executor. Server-side advisor tooling is only available on Anthropic models.
+///
+/// Model ids may carry a `-YYYYMMDD` version pin; this strips the single known
+/// dated suffix before checking against the supported set. Keep this in lockstep
+/// with `vtcode_config::constants::models::anthropic::normalize_model_id` so the
+/// executor check and the advisor-pair validation agree on normalization.
+pub(crate) fn is_anthropic_executor_model(model: &str) -> bool {
+    use vtcode_config::constants::models::anthropic::SUPPORTED_MODELS;
+    // Strip any trailing `-YYYYMMDD` version suffix for normalization.
+    let normalized = if let Some(idx) = model.rfind('-') {
+        let suffix = &model[idx + 1..];
+        if suffix.len() == 8 && suffix.chars().all(|c| c.is_ascii_digit()) {
+            &model[..idx]
+        } else {
+            model
+        }
+    } else {
+        model
+    };
+    SUPPORTED_MODELS.contains(&normalized)
+}
+
+/// Single source of truth for the Anthropic server-side advisor tool.
+///
+/// Resolves and builds the `advisor_20260301` tool, or returns `None` when the
+/// advisor is disabled, the executor is not an eligible Anthropic model, or the
+/// executor/advisor model pair fails `validate_advisor_pair`. Both the request
+/// builder (tool injection) and the provider (beta-header gating) call this so
+/// the two can never disagree.
+pub(crate) fn resolve_advisor_tool(
+    executor: &str,
+    advisor: &AdvisorConfig,
+) -> Option<AnthropicTool> {
+    if !advisor.enabled {
+        return None;
+    }
+
+    if !is_anthropic_executor_model(executor) {
+        return None;
+    }
+
+    let advisor_model = if advisor.model.is_empty() {
+        vtcode_config::constants::models::anthropic::default_advisor_model(executor).to_string()
+    } else {
+        advisor.model.clone()
+    };
+
+    if let Err(reason) =
+        vtcode_config::constants::models::anthropic::validate_advisor_pair(executor, &advisor_model)
+    {
+        tracing::warn!(%reason, "advisor tool disabled: invalid model pair");
+        return None;
+    }
+
+    // Validate max_tokens if specified (API minimum is 1024).
+    if let Some(max_tokens) = advisor.max_tokens
+        && max_tokens < 1024
+    {
+        tracing::warn!(
+            max_tokens,
+            "advisor tool disabled: max_tokens must be >= 1024"
+        );
+        return None;
+    }
+
+    let caching = advisor.caching.and_then(|c| {
+        c.enabled.then_some(AnthropicAdvisorCaching {
+            cache_type: "ephemeral".to_string(),
+            ttl: c.ttl.as_str().to_string(),
+        })
+    });
+
+    Some(AnthropicTool::Advisor(AnthropicAdvisorTool {
+        tool_type: "advisor_20260301".to_string(),
+        name: "advisor".to_string(),
+        model: advisor_model,
+        max_uses: advisor.max_uses,
+        max_tokens: advisor.max_tokens,
+        caching,
+    }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use vtcode_config::core::AdvisorConfig;
+
+    fn advisor_config(enabled: bool, model: &str, max_uses: Option<u32>) -> AdvisorConfig {
+        AdvisorConfig {
+            enabled,
+            model: model.to_string(),
+            max_uses,
+            max_tokens: None,
+            caching: None,
+        }
+    }
+
+    #[test]
+    fn resolve_advisor_tool_disabled_returns_none() {
+        let cfg = advisor_config(false, "", None);
+        assert!(resolve_advisor_tool("claude-sonnet-4-6", &cfg).is_none());
+    }
+
+    #[test]
+    fn resolve_advisor_tool_non_anthropic_executor_returns_none() {
+        let cfg = advisor_config(true, "", None);
+        assert!(resolve_advisor_tool("gpt-4o", &cfg).is_none());
+    }
+
+    #[test]
+    fn resolve_advisor_tool_defaults_to_valid_pair() {
+        let cfg = advisor_config(true, "", None);
+        let tool = resolve_advisor_tool("claude-sonnet-4-6", &cfg);
+        assert!(matches!(tool, Some(AnthropicTool::Advisor(_))));
+        if let Some(AnthropicTool::Advisor(t)) = tool {
+            assert_eq!(t.model, "claude-opus-4-8");
+            assert_eq!(t.name, "advisor");
+            assert_eq!(t.tool_type, "advisor_20260301");
+        }
+    }
+
+    #[test]
+    fn resolve_advisor_tool_invalid_pair_returns_none() {
+        // Advisor less capable than the executor must be rejected.
+        let cfg = advisor_config(true, "claude-haiku-4-5", None);
+        assert!(resolve_advisor_tool("claude-opus-4-8", &cfg).is_none());
+    }
+
+    #[test]
+    fn resolve_advisor_tool_accepts_self_advising_model() {
+        let cfg = advisor_config(true, "claude-fable-5", None);
+        assert!(resolve_advisor_tool("claude-fable-5", &cfg).is_some());
+        // Fable may only advise Fable.
+        assert!(resolve_advisor_tool("claude-opus-4-8", &cfg).is_none());
+    }
+
+    #[test]
+    fn resolve_advisor_tool_supports_dated_executor_suffix() {
+        let cfg = advisor_config(true, "", None);
+        // `-20251001` version pin must not break the supported-model check.
+        assert!(resolve_advisor_tool("claude-sonnet-4-6-20251001", &cfg).is_some());
     }
 }

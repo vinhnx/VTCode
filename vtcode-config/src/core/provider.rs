@@ -1,3 +1,4 @@
+use crate::core::advisor::AdvisorConfig;
 use serde::{Deserialize, Serialize};
 use vtcode_commons::reasoning::ReasoningEffortLevel;
 
@@ -509,6 +510,12 @@ pub struct AnthropicConfig {
     /// Useful for proactive management of rate limits and costs
     #[serde(default = "default_count_tokens_enabled")]
     pub count_tokens_enabled: bool,
+
+    /// Claude Advisor server-side tool configuration. The advisor pairs a faster
+    /// executor model with a higher-intelligence advisor model for strategic
+    /// guidance mid-generation. Only honored for Anthropic models and providers.
+    #[serde(default)]
+    pub advisor: AdvisorConfig,
 }
 
 impl Default for AnthropicConfig {
@@ -525,6 +532,7 @@ impl Default for AnthropicConfig {
             task_budget_beta: default_task_budget_beta(),
             thinking_display: None,
             count_tokens_enabled: default_count_tokens_enabled(),
+            advisor: AdvisorConfig::default(),
         }
     }
 }

@@ -229,6 +229,7 @@ mod tests {
                 strict: None,
                 defer_loading: None,
                 namespace: None,
+                advisor: None,
             }])),
             model: models::anthropic::DEFAULT_MODEL.to_string(),
             ..Default::default()
@@ -263,6 +264,7 @@ mod tests {
                 strict: None,
                 defer_loading: None,
                 namespace: None,
+                advisor: None,
             }])),
             model: models::anthropic::DEFAULT_MODEL.to_string(),
             ..Default::default()
@@ -287,6 +289,7 @@ mod tests {
                 strict: None,
                 defer_loading: None,
                 namespace: None,
+                advisor: None,
             }])),
             model: models::anthropic::DEFAULT_MODEL.to_string(),
             ..Default::default()
@@ -319,6 +322,7 @@ mod tests {
                 strict: None,
                 defer_loading: None,
                 namespace: None,
+                advisor: None,
             }])),
             model: models::anthropic::DEFAULT_MODEL.to_string(),
             ..Default::default()

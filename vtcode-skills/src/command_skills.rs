@@ -157,6 +157,12 @@ pub const COMMAND_SKILL_SPECS: &[CommandSkillSpec] = &[
         "configuration"
     ),
     built_in_command_spec!(
+        "advisor",
+        "Open the Claude Advisor server-side tool settings (usage: /advisor [path])",
+        "/advisor [path]",
+        "configuration"
+    ),
+    built_in_command_spec!(
         "permissions",
         "Open the permissions settings section and effective summary",
         "/permissions",

@@ -76,6 +76,8 @@ pub(crate) fn build_messages(
                     allow_container_uploads,
                 ));
 
+                blocks.extend(build_advisor_blocks(msg));
+
                 blocks.extend(build_tool_use_blocks(msg));
 
                 if blocks.is_empty() {
@@ -197,6 +199,62 @@ pub(crate) fn build_messages(
     }
 
     Ok(messages)
+}
+
+/// Re-emits preserved advisor server_tool_use + advisor_tool_result blocks from a
+/// previous turn. The blocks are stored verbatim in `reasoning_details` under the
+/// `advisor` type so they round-trip without being re-dispatched locally.
+fn build_advisor_blocks(msg: &Message) -> Vec<AnthropicContentBlock> {
+    let Some(details) = &msg.reasoning_details else {
+        return Vec::new();
+    };
+
+    let mut blocks = Vec::new();
+    for detail in details {
+        // `reasoning_details` may store entries as stringified JSON (`Value::String`),
+        // so normalize first — mirroring `build_reasoning_blocks`.
+        let Some(normalized) = normalize_reasoning_detail_object(detail) else {
+            continue;
+        };
+        if normalized.get("type").and_then(|t| t.as_str()) != Some("advisor") {
+            continue;
+        }
+        let Some(stored) = normalized.get("blocks").and_then(|b| b.as_array()) else {
+            continue;
+        };
+        for block in stored {
+            match block.get("type").and_then(|t| t.as_str()) {
+                Some("server_tool_use") => {
+                    let id = block
+                        .get("id")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or_default()
+                        .to_string();
+                    let name = block
+                        .get("name")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or_default()
+                        .to_string();
+                    let input = block.get("input").cloned().unwrap_or_else(|| json!({}));
+                    blocks.push(AnthropicContentBlock::ServerToolUse { id, name, input });
+                }
+                Some("advisor_tool_result") => {
+                    let tool_use_id = block
+                        .get("tool_use_id")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or_default()
+                        .to_string();
+                    let content = block.get("content").cloned().unwrap_or_else(|| json!({}));
+                    blocks.push(AnthropicContentBlock::AdvisorToolResult {
+                        tool_use_id,
+                        content,
+                    });
+                }
+                _ => {}
+            }
+        }
+    }
+    blocks
 }
 
 fn build_reasoning_blocks(msg: &Message) -> Vec<AnthropicContentBlock> {
@@ -419,7 +477,9 @@ pub fn tool_result_blocks(content: &str) -> Vec<Value> {
 
 #[cfg(test)]
 mod tests {
-    use super::{build_reasoning_blocks, content_blocks_from_message_content};
+    use super::{
+        build_advisor_blocks, build_reasoning_blocks, content_blocks_from_message_content,
+    };
     use crate::provider::{ContentPart, Message, MessageContent};
     use crate::providers::anthropic_types::AnthropicContentBlock;
     use serde_json::json;
@@ -493,5 +553,53 @@ mod tests {
             AnthropicContentBlock::Text { text, .. }
                 if text == "[File input not directly supported: file_abc123]"
         ));
+    }
+
+    #[test]
+    fn build_advisor_blocks_re_emits_preserved_advisor_blocks() {
+        // `reasoning_details` stores entries as stringified JSON (`Value::String`),
+        // exactly as `parse_response`/`create_stream` emit them. The builder must
+        // normalize and round-trip the advisor `server_tool_use` + `advisor_tool_result`.
+        let detail = json!({
+            "type": "advisor",
+            "blocks": [
+                {
+                    "type": "server_tool_use",
+                    "id": "srvtoolu_01",
+                    "name": "advisor",
+                    "input": {}
+                },
+                {
+                    "type": "advisor_tool_result",
+                    "tool_use_id": "srvtoolu_01",
+                    "content": {"type": "advisor_result", "advisor_result": "do X"}
+                }
+            ]
+        })
+        .to_string();
+
+        let message =
+            Message::assistant(String::new()).with_reasoning_details(Some(vec![json!(detail)]));
+
+        let blocks = build_advisor_blocks(&message);
+        assert_eq!(blocks.len(), 2);
+        assert!(matches!(
+            &blocks[0],
+            AnthropicContentBlock::ServerToolUse { id, name, .. }
+                if id == "srvtoolu_01" && name == "advisor"
+        ));
+        assert!(matches!(
+            &blocks[1],
+            AnthropicContentBlock::AdvisorToolResult { tool_use_id, .. }
+                if tool_use_id == "srvtoolu_01"
+        ));
+    }
+
+    #[test]
+    fn build_advisor_blocks_skips_non_advisor_details() {
+        let message = Message::assistant(String::new()).with_reasoning_details(Some(vec![json!(
+            r#"{"type":"thinking","thinking":"trace"}"#
+        )]));
+        assert!(build_advisor_blocks(&message).is_empty());
     }
 }

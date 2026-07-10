@@ -896,6 +896,7 @@ mod request_builder_tests {
                 strict: None,
                 defer_loading: None,
                 namespace: None,
+                    advisor: None,
             }])),
             ..Default::default()
         };
@@ -936,6 +937,7 @@ mod request_builder_tests {
                 strict: None,
                 defer_loading: None,
                 namespace: None,
+                    advisor: None,
             }])),
             ..Default::default()
         };
@@ -968,6 +970,7 @@ mod request_builder_tests {
                 strict: None,
                 defer_loading: None,
                 namespace: None,
+                    advisor: None,
             }])),
             ..Default::default()
         };
@@ -1027,6 +1030,7 @@ mod request_builder_tests {
                 strict: None,
                 defer_loading: None,
                 namespace: None,
+                    advisor: None,
             }])),
             ..Default::default()
         };

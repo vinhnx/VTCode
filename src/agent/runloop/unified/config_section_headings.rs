@@ -353,6 +353,11 @@ static SECTION_HEADINGS: &[(&str, &str, &str)] = &[
         "Hosted search tool configuration for Anthropic models.",
     ),
     (
+        "provider.anthropic.advisor",
+        "Claude Advisor",
+        "Anthropic server-side advisor tool: pair a faster executor model with a higher-intelligence advisor for strategic guidance mid-generation.",
+    ),
+    (
         "provider.openai",
         "OpenAI",
         "OpenAI-specific request settings.",

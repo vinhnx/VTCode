@@ -169,6 +169,11 @@ pub enum AnthropicContentBlock {
     /// Native web search result blocks returned by Anthropic web search tools.
     #[serde(rename = "web_search_tool_result")]
     WebSearchToolResult { tool_use_id: String, content: Value },
+    /// Advisor tool result block returned by the server-side advisor sub-inference.
+    /// `content` is the verbatim result union (`advisor_result`,
+    /// `advisor_redacted_result`, or `advisor_tool_result_error`).
+    #[serde(rename = "advisor_tool_result")]
+    AdvisorToolResult { tool_use_id: String, content: Value },
     /// Fallback content block marking model boundary in server-side fallback
     #[serde(rename = "fallback")]
     Fallback {
@@ -290,6 +295,8 @@ pub enum AnthropicTool {
     Memory(AnthropicMemoryTool),
     /// Native Anthropic web search tool revision
     WebSearch(AnthropicWebSearchTool),
+    /// Anthropic server-side advisor tool (beta `advisor-tool-2026-03-01`).
+    Advisor(AnthropicAdvisorTool),
     /// Regular function tool
     Function(AnthropicFunctionTool),
 }
@@ -354,6 +361,41 @@ pub struct AnthropicWebSearchTool {
     /// Optional Anthropic-native web search configuration.
     #[serde(flatten, default, skip_serializing_if = "Map::is_empty")]
     pub options: Map<String, Value>,
+}
+
+/// Anthropic server-side advisor tool definition (beta `advisor-tool-2026-03-01`).
+///
+/// The executor model consults the advisor model for strategic guidance
+/// mid-generation. The tool takes no client-supplied input; the server builds
+/// the advisor's view from the full transcript.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AnthropicAdvisorTool {
+    /// Fixed advisor tool type.
+    #[serde(rename = "type")]
+    pub tool_type: String, // "advisor_20260301"
+    /// Fixed advisor tool name.
+    pub name: String, // "advisor"
+    /// Advisor model id (e.g. "claude-opus-4-8").
+    pub model: String,
+    /// Maximum number of advisor invocations per request.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_uses: Option<u32>,
+    /// Caps the advisor's total output (thinking plus text) per call (min 1024).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_tokens: Option<u32>,
+    /// Enables prompt caching for the advisor's own transcript across calls.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub caching: Option<AnthropicAdvisorCaching>,
+}
+
+/// Prompt-caching configuration for the advisor tool.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AnthropicAdvisorCaching {
+    /// Fixed cache type.
+    #[serde(rename = "type")]
+    pub cache_type: String, // "ephemeral"
+    /// Cache lifetime ("5m" or "1h").
+    pub ttl: String,
 }
 
 #[derive(Debug, Deserialize)]
