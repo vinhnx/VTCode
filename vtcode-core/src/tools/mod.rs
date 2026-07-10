@@ -158,6 +158,7 @@ pub mod native_memory;
 pub mod path_env;
 pub mod plugins;
 pub mod pty;
+pub mod read_limits;
 pub mod resilience;
 
 pub use resilience::rate_limiter;

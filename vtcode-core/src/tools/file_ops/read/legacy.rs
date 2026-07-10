@@ -87,7 +87,7 @@ impl FileOpsTool {
         // bounded in memory (the excessive tail is scanned and discarded, never
         // materialized). `size_lines` stays accurate because every line is still
         // counted.
-        let cap = crate::tools::cache::absolute_line_cap();
+        let cap = crate::tools::read_limits::absolute_line_cap();
         let (capped_content, total_lines, is_truncated) = read_bounded_text(file_path, cap).await?;
 
         let metadata = json!({

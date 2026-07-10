@@ -523,7 +523,7 @@ impl ReadFileHandler {
         anyhow::ensure!(offset > 0, "offset must be a 1-indexed line number");
         anyhow::ensure!(limit > 0, "limit must be greater than zero");
 
-        let absolute_max = crate::tools::cache::absolute_line_cap();
+        let absolute_max = crate::tools::read_limits::absolute_line_cap();
 
         let effective_limit =
             if matches!(mode, ReadMode::Slice) && max_tokens.is_none() && limit < MIN_BATCH_LIMIT {
@@ -1413,7 +1413,7 @@ mod tests {
         };
         let outcome = handler.handle_detailed(args).await?;
 
-        let cap = crate::tools::cache::read_limit_lines();
+        let cap = crate::tools::read_limits::read_limit_lines();
         assert!(
             outcome.capped_by_limit,
             "request larger than the cap must be clamped"

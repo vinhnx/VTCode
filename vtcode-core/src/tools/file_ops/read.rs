@@ -539,7 +539,7 @@ impl FileOpsTool {
                         // correctly excluded and use their own `offset_bytes`/
                         // `page_size_bytes` continuation path.
                         else if has_more
-                            && applied_limit == crate::tools::cache::absolute_line_cap()
+                            && applied_limit == crate::tools::read_limits::absolute_line_cap()
                         {
                             let next_offset = requested_offset.saturating_add(lines_returned);
                             let next_action = if capped_by_limit {
@@ -1072,7 +1072,7 @@ mod read_tests {
         let (read_content, metadata, truncated) =
             file_ops.read_file_legacy(&test_file, &input).await.unwrap();
 
-        let cap = crate::tools::cache::read_limit_lines();
+        let cap = crate::tools::read_limits::read_limit_lines();
         assert_eq!(read_content.lines().count(), cap);
         assert!(truncated);
         assert_eq!(metadata["is_truncated"], true);
@@ -1384,7 +1384,7 @@ mod read_tests {
         assert_eq!(result["next_read_args"]["offset"], 401);
         assert_eq!(
             result["next_read_args"]["limit"],
-            crate::tools::cache::read_limit_lines()
+            crate::tools::read_limits::read_limit_lines()
         );
     }
 
@@ -1413,7 +1413,7 @@ mod read_tests {
         assert_eq!(page1["capped_by_limit"], true);
         assert_eq!(page1["has_more"], true);
         assert_eq!(page1["next_read_args"]["offset"], 401);
-        let cap = crate::tools::cache::read_limit_lines();
+        let cap = crate::tools::read_limits::read_limit_lines();
 
         // Page 2: follows the continuation. `capped_by_limit` is now false, but
         // the chain must still surface `next_read_args` because the read hit
