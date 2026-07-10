@@ -6,20 +6,6 @@
 
 use serde_json::json;
 
-/// Canonicalize shell tool names to the public exec_command form.
-///
-/// This mirrors the canonicalization in vtcode-core's `tools::tool_intent` module,
-/// using inline string constants to avoid a circular dependency.
-fn canonical_exec_command_tool_name(tool_name: &str) -> Option<&'static str> {
-    const EXEC_COMMAND: &str = "exec_command";
-    match tool_name {
-        "exec_command" | "write_stdin" | "shell" | "bash" | "exec" | "container.exec" => {
-            Some(EXEC_COMMAND)
-        }
-        _ => None,
-    }
-}
-
 use super::{
     ContentPart, CustomItem, FunctionCallItem, ItemStatus, MessageItem, MessageRole,
     OpenResponseError, OpenUsage, OutputItem, ReasoningItem, Response, ResponseStatus,
@@ -623,13 +609,10 @@ impl ResponseBuilder {
             }),
 
             ThreadItemDetails::ToolInvocation(invocation) => {
-                let tool_name = canonical_exec_command_tool_name(&invocation.tool_name)
-                    .unwrap_or(invocation.tool_name.as_str())
-                    .to_string();
                 OutputItem::FunctionCall(FunctionCallItem {
                     id: item.id.clone().into(),
                     status,
-                    name: tool_name,
+                    name: invocation.tool_name.clone(),
                     arguments: invocation.arguments.clone().unwrap_or(json!({})),
                     call_id: Some(self.resolve_tool_call_correlation_id(
                         &item.id,
@@ -1521,18 +1504,23 @@ mod tests {
     }
 
     #[test]
-    fn test_tool_invocation_uses_canonical_arguments() {
+    fn test_exec_command_invocation_preserves_public_name_and_arguments() {
         let mut builder = ResponseBuilder::new("gpt-5");
         let mut emitter = VecStreamEmitter::new();
+
+        let arguments = json!({
+            "cmd": "git status --short",
+            "workdir": "/workspace",
+            "yield_time_ms": 1000,
+            "max_output_tokens": 2000,
+            "tty": false
+        });
 
         let item = ThreadItem {
             id: "tool_1".to_string(),
             details: ThreadItemDetails::ToolInvocation(ToolInvocationItem {
                 tool_name: "exec_command".to_string(),
-                arguments: Some(json!({
-                    "command": ["git", "status"],
-                    "yield_time_ms": 1000
-                })),
+                arguments: Some(arguments.clone()),
                 tool_call_id: Some("tool_call_0".to_string()),
                 status: ToolCallStatus::Completed,
             }),
@@ -1546,9 +1534,82 @@ mod tests {
         match &builder.response().output[0] {
             OutputItem::FunctionCall(call) => {
                 assert_eq!(call.name, "exec_command");
-                assert_eq!(call.arguments["command"][0], "git");
-                assert_eq!(call.arguments["yield_time_ms"], 1000);
+                assert_eq!(call.arguments, arguments);
+                assert_eq!(call.id.as_ref(), "tool_1");
+                assert_eq!(call.status, ItemStatus::Completed);
                 assert_eq!(call.call_id.as_deref(), Some("tool_call_0"));
+            }
+            other => panic!("expected function call, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_write_stdin_invocation_preserves_public_name_and_arguments() {
+        let mut builder = ResponseBuilder::new("gpt-5");
+        let mut emitter = VecStreamEmitter::new();
+
+        let arguments = json!({
+            "session_id": "session-1",
+            "chars": "",
+            "yield_time_ms": 250,
+            "max_output_tokens": 512
+        });
+        let item = ThreadItem {
+            id: "tool_2".to_string(),
+            details: ThreadItemDetails::ToolInvocation(ToolInvocationItem {
+                tool_name: "write_stdin".to_string(),
+                arguments: Some(arguments.clone()),
+                tool_call_id: Some("tool_call_1".to_string()),
+                status: ToolCallStatus::InProgress,
+            }),
+        };
+
+        builder.process_event(
+            &ThreadEvent::ItemStarted(ItemStartedEvent { item }),
+            &mut emitter,
+        );
+
+        match &builder.response().output[0] {
+            OutputItem::FunctionCall(call) => {
+                assert_eq!(call.name, "write_stdin");
+                assert_eq!(call.arguments, arguments);
+                assert!(call.arguments.get("cmd").is_none());
+                assert_eq!(call.id.as_ref(), "tool_2");
+                assert_eq!(call.status, ItemStatus::InProgress);
+                assert_eq!(call.call_id.as_deref(), Some("tool_call_1"));
+            }
+            other => panic!("expected function call, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_legacy_shell_alias_is_preserved_without_argument_adaptation() {
+        let mut builder = ResponseBuilder::new("gpt-5");
+        let mut emitter = VecStreamEmitter::new();
+
+        let arguments = json!({
+            "command": ["git", "status"]
+        });
+        let item = ThreadItem {
+            id: "tool_legacy".to_string(),
+            details: ThreadItemDetails::ToolInvocation(ToolInvocationItem {
+                tool_name: "shell".to_string(),
+                arguments: Some(arguments.clone()),
+                tool_call_id: Some("tool_call_legacy".to_string()),
+                status: ToolCallStatus::Completed,
+            }),
+        };
+
+        builder.process_event(
+            &ThreadEvent::ItemCompleted(ItemCompletedEvent { item }),
+            &mut emitter,
+        );
+
+        match &builder.response().output[0] {
+            OutputItem::FunctionCall(call) => {
+                assert_eq!(call.name, "shell");
+                assert_eq!(call.arguments, arguments);
+                assert_ne!(call.name, "exec_command");
             }
             other => panic!("expected function call, got {other:?}"),
         }
