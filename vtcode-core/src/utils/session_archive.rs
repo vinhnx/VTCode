@@ -1150,6 +1150,17 @@ impl SessionArchive {
         }
     }
 
+    /// Records the active primary agent (session "mode") so a later resume can
+    /// restore it. Called once the active agent is selected, after the archive
+    /// and thread have been started.
+    pub fn set_primary_agent(&mut self, primary_agent: impl Into<String>) {
+        self.metadata.primary_agent = Some(primary_agent.into());
+    }
+
+    pub fn metadata(&self) -> &SessionArchiveMetadata {
+        &self.metadata
+    }
+
     fn build_final_snapshot(
         &self,
         transcript: Vec<String>,
@@ -2090,7 +2101,7 @@ fn is_session_file(path: &Path) -> bool {
 
 #[cfg(test)]
 mod metadata_compat_tests {
-    use super::SessionArchiveMetadata;
+    use super::{SessionArchive, SessionArchiveMetadata};
 
     #[test]
     fn primary_agent_metadata_is_backward_compatible() {
@@ -2108,6 +2119,23 @@ mod metadata_compat_tests {
 
         let value = serde_json::to_value(&metadata).expect("serialize metadata");
         assert!(value.get("primary_agent").is_none());
+    }
+
+    #[test]
+    fn set_primary_agent_records_mode_on_archive() {
+        let metadata =
+            SessionArchiveMetadata::new("ws", "/tmp/ws", "gpt-5.4", "openai", "test", "low");
+        let mut archive = tokio::runtime::Runtime::new()
+            .expect("runtime")
+            .block_on(SessionArchive::new_with_identifier(
+                metadata,
+                "ws-0000".to_string(),
+            ))
+            .expect("create archive");
+        assert_eq!(archive.metadata().primary_agent, None);
+
+        archive.set_primary_agent("plan");
+        assert_eq!(archive.metadata().primary_agent.as_deref(), Some("plan"));
     }
 }
 

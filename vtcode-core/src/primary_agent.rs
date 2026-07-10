@@ -79,6 +79,12 @@ impl ActivePrimaryAgent {
             tool_policy_overrides: runtime.tool_policy_overrides.clone(),
         }
     }
+
+    /// Canonical primary agent name (the active session "mode").
+    #[must_use]
+    pub fn name(&self) -> &str {
+        &self.identity.name
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

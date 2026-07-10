@@ -58,7 +58,10 @@ pub(super) use diagnostics::{
 // config_toml, the future checkup flow, etc.) share one tested
 // load -> mutate -> save -> refresh persistence unit instead of re-implementing
 // the ConfigManager dance inline.
-#[expect(unused_imports, reason = "guard-rail for the upcoming /checkup 7-step flow")]
+#[expect(
+    unused_imports,
+    reason = "guard-rail for the upcoming /checkup 7-step flow"
+)]
 pub(super) use diagnostics::memory::config_persistence::persist_workspace_config_change;
 pub(super) use effort::handle_set_effort;
 pub(super) use interactive::{

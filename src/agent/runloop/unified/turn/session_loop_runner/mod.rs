@@ -111,7 +111,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         } else {
             None
         };
-        let (thread_handle, session_archive) = if let Some(resume) = resume_ref {
+        let (thread_handle, mut session_archive) = if let Some(resume) = resume_ref {
             if history_enabled {
                 let mut prepared = vtcode_core::core::threads::prepare_archived_session(
                     resume.listing().clone(),
@@ -218,6 +218,11 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             thread_handle.thread_id().as_str(),
         )
         .await?;
+        // Persist the active primary agent ("mode") so a future resume restores
+        // it instead of falling back to the config default.
+        if let Some(archive) = session_archive.as_mut() {
+            archive.set_primary_agent(session_state.active_primary_agent.active().name());
+        }
         let harness_config = vt_cfg
             .as_ref()
             .map(|cfg| cfg.agent.harness.clone())

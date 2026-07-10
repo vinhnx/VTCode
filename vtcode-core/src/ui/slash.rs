@@ -174,13 +174,7 @@ mod tests {
         assert_eq!(
             names,
             vec![
-                "checkup",
-                "clear",
-                "command",
-                "compact",
-                "config",
-                "continue",
-                "copy"
+                "checkup", "clear", "command", "compact", "config", "continue", "copy"
             ]
         );
     }

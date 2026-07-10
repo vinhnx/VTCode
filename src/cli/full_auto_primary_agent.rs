@@ -42,6 +42,7 @@ fn resolve_full_auto_primary_agent_runtime_from_specs(
         Some(vt_cfg),
         true,
         primary_agent_explicitly_configured,
+        None,
     )?;
     let active_primary_agent = active.active().clone();
     let mut runtime_vt_cfg = build_primary_agent_runtime_config(vt_cfg, &active_primary_agent);

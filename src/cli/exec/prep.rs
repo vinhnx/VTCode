@@ -182,7 +182,7 @@ pub(super) async fn prepare_exec_run(
     let history_enabled = history_persistence_enabled();
     let reserved_archive_id = crate::main_helpers::runtime_archive_session_id();
 
-    let (session_id, archive, thread_bootstrap) = if let Some(listing) = resume_listing {
+    let (session_id, mut archive, thread_bootstrap) = if let Some(listing) = resume_listing {
         if history_enabled {
             let prepared = prepare_archived_session(
                 listing,
@@ -223,6 +223,11 @@ pub(super) async fn prepare_exec_run(
         let bootstrap = ThreadBootstrap::new(Some(metadata));
         (session_id, archive, bootstrap)
     };
+
+    // Persist the active primary agent ("mode") so a future resume can restore it.
+    if let Some(archive) = archive.as_mut() {
+        archive.set_primary_agent(primary_agent_runtime.active_primary_agent.name());
+    }
 
     Ok(ExecPreparedRun {
         config: run_config,
