@@ -4,12 +4,13 @@ use crate::config::constants::tools;
 use crate::config::loader::VTCodeConfig;
 use crate::config::models::Provider;
 use crate::config::types::CapabilityLevel;
-use crate::llm::provider::{ToolDefinition, ToolSearchAlgorithm};
+use crate::llm::provider::{ToolDefinition, ToolNamespace, ToolSearchAlgorithm};
 use crate::llm::providers::gemini::wire::FunctionDeclaration;
 use crate::tool_policy::ToolPolicy;
 use crate::tools::mcp::MCP_QUALIFIED_TOOL_PREFIX;
 use crate::tools::registry::{ToolHandler as RegistryToolHandler, ToolRegistration};
 use crate::tools::tool_intent::ToolSurfaceKind;
+use crate::utils::tool_name_parsing::parse_canonical_mcp_tool_name;
 use rustc_hash::FxHashSet;
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -59,6 +60,13 @@ pub enum DeferredToolSearchKind {
     Anthropic(ToolSearchAlgorithm),
     /// OpenAI's hosted tool search.
     OpenAIHosted,
+    /// Client-local tool search (`unified_search action="tools"`) for
+    /// providers with no hosted tool search. Unlike the hosted variants,
+    /// this does not add a wire-level tool: `unified_search` is already a
+    /// core tool that is always present. Deferred tool definitions are
+    /// omitted from the request payload entirely (see request assembly)
+    /// rather than sent with `defer_loading: true`.
+    ClientLocal,
 }
 
 const DIRECT_TOOL_EXPOSURE_THRESHOLD: usize = 100;
@@ -92,8 +100,29 @@ impl DeferredToolPolicy {
         }
     }
 
+    /// Creates a policy for client-local tool search. Used for providers
+    /// with no hosted tool search when `client_tool_search` is enabled.
+    #[must_use]
+    pub fn client_local(always_available_tools: impl IntoIterator<Item = String>) -> Self {
+        Self {
+            search_kind: Some(DeferredToolSearchKind::ClientLocal),
+            always_available_tools: always_available_tools.into_iter().collect(),
+        }
+    }
+
     fn is_enabled(&self) -> bool {
         self.search_kind.is_some()
+    }
+
+    /// Returns whether this policy defers via client-local tool search
+    /// rather than a provider-hosted mechanism. Callers that assemble the
+    /// wire-level request tool list use this to decide whether deferred
+    /// tool definitions may be omitted from the payload -- hosted policies
+    /// (Anthropic/OpenAI) require the full deferred definitions to remain
+    /// on the wire, so this must stay `false` for those.
+    #[must_use]
+    pub fn is_client_local(&self) -> bool {
+        matches!(self.search_kind, Some(DeferredToolSearchKind::ClientLocal))
     }
 
     fn keeps_entry_available(&self, entry: &ToolCatalogEntry) -> bool {
@@ -116,7 +145,10 @@ impl DeferredToolPolicy {
             Some(DeferredToolSearchKind::OpenAIHosted) => {
                 Some(ToolDefinition::hosted_tool_search())
             }
-            None => None,
+            // `unified_search` is a core tool and always present; there is
+            // no separate wire-level tool to inject for client-local
+            // deferral.
+            Some(DeferredToolSearchKind::ClientLocal) | None => None,
         }
     }
 }
@@ -171,7 +203,25 @@ pub fn deferred_tool_policy_for_runtime(
                 .unwrap_or_default();
             DeferredToolPolicy::openai_hosted(always_available_tools)
         }
-        _ => DeferredToolPolicy::default(),
+        _ => {
+            // No provider-hosted tool search is available (e.g. Gemini).
+            // Fall back to client-local deferral only when explicitly
+            // opted into via `client_tool_search`; otherwise keep today's
+            // eager catalog. The `DIRECT_TOOL_EXPOSURE_THRESHOLD` gating
+            // that decides whether deferral is actually worthwhile for a
+            // given catalog size lives downstream in
+            // `SessionToolCatalog::model_tools`, exactly as it does for
+            // the hosted arms above -- this function only decides whether
+            // deferral is *possible* for the runtime, not whether it is
+            // *used* for the current catalog.
+            let client_tool_search_enabled =
+                vtcode_config.is_some_and(|cfg| cfg.tools.client_tool_search);
+            if client_tool_search_enabled {
+                DeferredToolPolicy::client_local(Vec::new())
+            } else {
+                DeferredToolPolicy::default()
+            }
+        }
     }
 }
 
@@ -284,6 +334,9 @@ pub struct ToolCatalogEntry {
     /// documentation mode's default max length. Used for MCP tools whose
     /// descriptions can be arbitrarily long.
     pub max_description_length: Option<usize>,
+    /// Namespace grouping derived from the registration (currently only MCP
+    /// tools, keyed by server name). `None` for core/builtin tools.
+    pub namespace: Option<ToolNamespace>,
 }
 
 /// A simplified tool schema entry for serialization.
@@ -406,6 +459,17 @@ impl SessionToolCatalog {
                     if defer_loading && !expose_tools_directly {
                         tool = tool.with_defer_loading(true);
                         has_deferred_tools = true;
+                        // Namespace metadata is only attached to deferred
+                        // tools. It never reaches the wire payload (provider
+                        // formatters build their JSON manually field-by-field
+                        // for function tools and never serde-serialize the
+                        // whole `ToolDefinition`), but restricting it to the
+                        // deferred case keeps the blast radius small and
+                        // matches the article's design: namespace grouping
+                        // only matters once a tool is discoverable-only.
+                        if let Some(namespace) = entry.namespace.clone() {
+                            tool = tool.with_namespace(namespace);
+                        }
                     }
                     tools.push(tool);
                 }
@@ -497,6 +561,16 @@ impl ToolCatalogEntry {
             // MCP tool descriptions from external servers can be arbitrarily
             // long. Cap them to prevent token inflation.
             entry.max_description_length = Some(MCP_TOOL_DESCRIPTION_MAX_LEN);
+            if let Some((server, _tool)) = parse_canonical_mcp_tool_name(registration.name()) {
+                let namespace_description = metadata
+                    .server_hint()
+                    .map(ToString::to_string)
+                    .unwrap_or_else(|| format!("Tools provided by MCP server '{server}'"));
+                entry.namespace = Some(ToolNamespace {
+                    name: server.to_string(),
+                    description: namespace_description,
+                });
+            }
             return Some(entry);
         }
 
@@ -586,6 +660,7 @@ impl ToolCatalogEntry {
             kind,
             configured_spec,
             max_description_length: None,
+            namespace: None,
         }
     }
 
@@ -1142,6 +1217,115 @@ mod tests {
     }
 
     #[test]
+    fn mcp_tool_registration_derives_namespace_from_server_name() {
+        let mcp_tool = registration("mcp::context7::search")
+            .with_catalog_source(ToolCatalogSource::Mcp)
+            .with_llm_visibility(false)
+            .with_description("search docs")
+            .with_parameter_schema(empty_object_schema())
+            .with_aliases(["mcp__context7__search"]);
+
+        let catalog = SessionToolCatalog::rebuild_from_registrations(vec![mcp_tool]);
+        let entry = catalog
+            .entries()
+            .iter()
+            .find(|entry| entry.public_name == "mcp__context7__search")
+            .expect("mcp entry should be present");
+
+        let namespace = entry
+            .namespace
+            .as_ref()
+            .expect("mcp tool should derive a namespace from its server name");
+        assert_eq!(namespace.name, "context7");
+        assert_eq!(
+            namespace.description,
+            "Tools provided by MCP server 'context7'"
+        );
+    }
+
+    #[test]
+    fn core_tool_registration_has_no_namespace() {
+        let unified_search = registration(tools::UNIFIED_SEARCH)
+            .with_description("Search")
+            .with_parameter_schema(empty_object_schema());
+
+        let catalog = SessionToolCatalog::rebuild_from_registrations(vec![unified_search]);
+        let entry = catalog
+            .entries()
+            .iter()
+            .find(|entry| entry.public_name == tools::UNIFIED_SEARCH)
+            .expect("core tool entry should be present");
+
+        assert!(
+            entry.namespace.is_none(),
+            "core/builtin tools should not derive a namespace"
+        );
+    }
+
+    #[test]
+    fn model_tools_attach_namespace_only_to_deferred_mcp_tools() {
+        let unified_search = registration(tools::UNIFIED_SEARCH)
+            .with_description("Search")
+            .with_parameter_schema(empty_object_schema());
+        let mcp_tool = registration("mcp::context7::search")
+            .with_catalog_source(ToolCatalogSource::Mcp)
+            .with_llm_visibility(false)
+            .with_description("search docs")
+            .with_parameter_schema(empty_object_schema())
+            .with_aliases(["mcp__context7__search"]);
+
+        let mut registrations = vec![unified_search, mcp_tool];
+        for index in 0..DIRECT_TOOL_EXPOSURE_THRESHOLD {
+            let name: &'static str =
+                Box::leak(format!("mcp::context7::resolve_{index}").into_boxed_str());
+            let alias = format!("mcp__context7__resolve_{index}");
+            registrations.push(
+                registration(name)
+                    .with_catalog_source(ToolCatalogSource::Mcp)
+                    .with_llm_visibility(false)
+                    .with_description(format!("resolve docs {index}"))
+                    .with_parameter_schema(empty_object_schema())
+                    .with_aliases([alias]),
+            );
+        }
+
+        let catalog = SessionToolCatalog::rebuild_from_registrations(registrations);
+        let definitions = catalog.model_tools(
+            SessionToolsConfig::full_public(
+                SessionSurface::Interactive,
+                CapabilityLevel::CodeSearch,
+                ToolDocumentationMode::Full,
+                ToolModelCapabilities::default(),
+            )
+            .with_deferred_tool_policy(DeferredToolPolicy::anthropic(
+                ToolSearchAlgorithm::Regex,
+                Vec::new(),
+            )),
+        );
+
+        let core_tool = definitions
+            .iter()
+            .find(|tool| tool.function_name() == tools::UNIFIED_SEARCH)
+            .expect("unified_search should be present");
+        assert_eq!(core_tool.defer_loading, None);
+        assert!(
+            core_tool.namespace.is_none(),
+            "non-deferred core tools should never carry namespace metadata"
+        );
+
+        let deferred_mcp_tool = definitions
+            .iter()
+            .find(|tool| tool.function_name() == "mcp__context7__search")
+            .expect("deferred mcp tool should be present");
+        assert_eq!(deferred_mcp_tool.defer_loading, Some(true));
+        let namespace = deferred_mcp_tool
+            .namespace
+            .as_ref()
+            .expect("deferred mcp tool should carry namespace metadata");
+        assert_eq!(namespace.name, "context7");
+    }
+
+    #[test]
     fn openai_policy_injects_tool_search_for_large_catalogs() {
         let unified_search = registration(tools::UNIFIED_SEARCH)
             .with_description("Search")
@@ -1340,6 +1524,40 @@ mod tests {
         let unsupported =
             deferred_tool_policy_for_runtime(Some(Provider::OpenAI), false, Some(&config));
         assert!(!unsupported.is_enabled());
+    }
+
+    #[test]
+    fn client_local_policy_selected_when_flag_enabled_for_unsupported_provider() {
+        let mut config = VTCodeConfig::default();
+        config.tools.client_tool_search = true;
+
+        let gemini = deferred_tool_policy_for_runtime(Some(Provider::Gemini), false, Some(&config));
+        assert!(gemini.is_enabled());
+        assert!(gemini.is_client_local());
+        assert_eq!(gemini.tool_search_definition(), None);
+
+        // No provider inferred (e.g. unknown/custom model) is also covered
+        // by the fallthrough arm.
+        let no_provider = deferred_tool_policy_for_runtime(None, false, Some(&config));
+        assert!(no_provider.is_enabled());
+        assert!(no_provider.is_client_local());
+    }
+
+    #[test]
+    fn client_local_policy_not_selected_when_flag_disabled() {
+        // Default config has `client_tool_search` off, so unsupported
+        // providers keep today's eager fallthrough unchanged.
+        let config = VTCodeConfig::default();
+        assert!(!config.tools.client_tool_search);
+
+        let gemini = deferred_tool_policy_for_runtime(Some(Provider::Gemini), false, Some(&config));
+        assert!(!gemini.is_enabled());
+        assert!(!gemini.is_client_local());
+
+        // Absent config must also preserve default-off semantics.
+        let no_config = deferred_tool_policy_for_runtime(Some(Provider::Gemini), false, None);
+        assert!(!no_config.is_enabled());
+        assert!(!no_config.is_client_local());
     }
 
     #[test]

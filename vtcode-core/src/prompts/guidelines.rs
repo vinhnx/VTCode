@@ -4,7 +4,9 @@ use std::fmt::Write as _;
 use crate::config::constants::tools;
 use crate::config::types::CapabilityLevel;
 use crate::core::agent::harness_kernel::SessionToolCatalogSnapshot;
+use crate::llm::provider::ToolDefinition;
 use crate::prompts::sections::SectionBoundaryMode;
+use crate::tools::registry::tool_groups;
 
 const TOOL_UNIFIED_EXEC: &str = tools::UNIFIED_EXEC;
 const TOOL_UNIFIED_FILE: &str = tools::UNIFIED_FILE;
@@ -116,6 +118,60 @@ pub fn append_runtime_tool_prompt_sections(
         );
         append_prompt_block(prompt, &catalog_metadata);
     }
+}
+
+/// Builds and appends the `[Deferred Tools]` summary section for
+/// client-local tool deferral (`client_tool_search`). Emitted only when at
+/// least one tool was actually omitted from the wire payload, so providers
+/// with the flag off (or with nothing currently deferred) see no change to
+/// the prompt.
+///
+/// Namespaced groups (MCP servers) get one line each via
+/// [`tool_groups`]'s `deferred_count`; un-namespaced deferred tools (which
+/// carry no group metadata) are rolled up into a single trailing count line.
+/// Group order comes from `tool_groups`'s `BTreeMap`, which is sorted by
+/// name -- this keeps the section deterministic across calls with the same
+/// tool set, which matters for prompt-cache stability.
+///
+/// Idempotent: removes any previously appended `[Deferred Tools]` section
+/// before appending a fresh one, matching the pattern used by
+/// [`append_runtime_tool_prompt_sections`] so this survives the
+/// prompt-rebuild-on-alignment-mismatch retry path without duplicating.
+pub fn append_deferred_tools_prompt_section(prompt: &mut String, tools: &[ToolDefinition]) {
+    remove_prompt_section(prompt, "[Deferred Tools]");
+
+    let mut lines: Vec<String> = tool_groups(tools)
+        .into_iter()
+        .filter(|group| group.deferred_count > 0)
+        .map(|group| {
+            format!(
+                "- {} ({} tools): {}",
+                group.name,
+                group.deferred_count,
+                group.description.unwrap_or_default()
+            )
+        })
+        .collect();
+
+    let unnamespaced_deferred = tools
+        .iter()
+        .filter(|tool| tool.namespace.is_none() && tool.defer_loading == Some(true))
+        .count();
+    if unnamespaced_deferred > 0 {
+        lines.push(format!(
+            "- {unnamespaced_deferred} additional deferred tools"
+        ));
+    }
+
+    if lines.is_empty() {
+        return;
+    }
+
+    let section = format!(
+        "[Deferred Tools]\n{}\nUse unified_search with action=\"tools\" and a keyword to load any of these before calling them.",
+        lines.join("\n")
+    );
+    append_prompt_block(prompt, &section);
 }
 
 fn append_prompt_block(prompt: &mut String, block: &str) {
@@ -474,12 +530,12 @@ mod tests {
             true,
             false,
             Some(std::sync::Arc::new(vec![
-                crate::llm::provider::ToolDefinition::function(
+                ToolDefinition::function(
                     TOOL_UNIFIED_SEARCH.to_string(),
                     "Search".to_string(),
                     serde_json::json!({"type": "object"}),
                 ),
-                crate::llm::provider::ToolDefinition::function(
+                ToolDefinition::function(
                     TOOL_UNIFIED_FILE.to_string(),
                     "File".to_string(),
                     serde_json::json!({"type": "object"}),
@@ -505,13 +561,11 @@ mod tests {
             2,
             false,
             false,
-            Some(std::sync::Arc::new(vec![
-                crate::llm::provider::ToolDefinition::function(
-                    TOOL_UNIFIED_SEARCH.to_string(),
-                    "Search".to_string(),
-                    serde_json::json!({"type": "object"}),
-                ),
-            ])),
+            Some(std::sync::Arc::new(vec![ToolDefinition::function(
+                TOOL_UNIFIED_SEARCH.to_string(),
+                "Search".to_string(),
+                serde_json::json!({"type": "object"}),
+            )])),
             false,
         );
         let second = SessionToolCatalogSnapshot::new(
@@ -519,13 +573,11 @@ mod tests {
             9,
             true,
             true,
-            Some(std::sync::Arc::new(vec![
-                crate::llm::provider::ToolDefinition::function(
-                    TOOL_UNIFIED_FILE.to_string(),
-                    "File".to_string(),
-                    serde_json::json!({"type": "object"}),
-                ),
-            ])),
+            Some(std::sync::Arc::new(vec![ToolDefinition::function(
+                TOOL_UNIFIED_FILE.to_string(),
+                "File".to_string(),
+                serde_json::json!({"type": "object"}),
+            )])),
             false,
         );
 
@@ -538,5 +590,126 @@ mod tests {
         assert!(!prompt.contains("version: 1"));
         assert!(prompt.contains("request_user_input_enabled: true"));
         assert!(!prompt.contains("request_user_input_enabled: false"));
+    }
+
+    #[test]
+    fn deferred_tools_prompt_section_matches_documented_format_and_sorts_groups() {
+        use crate::llm::provider::ToolNamespace;
+
+        let mut docs_search = ToolDefinition::function(
+            "docs_search".to_string(),
+            "Search the docs server".to_string(),
+            serde_json::json!({"type": "object"}),
+        );
+        docs_search.namespace = Some(ToolNamespace {
+            name: "docs".to_string(),
+            description: "Tools provided by MCP server 'docs'".to_string(),
+        });
+        docs_search.defer_loading = Some(true);
+
+        let mut context7_lookup = ToolDefinition::function(
+            "context7_lookup".to_string(),
+            "Look up documentation".to_string(),
+            serde_json::json!({"type": "object"}),
+        );
+        context7_lookup.namespace = Some(ToolNamespace {
+            name: "context7".to_string(),
+            description: "Tools provided by MCP server 'context7'".to_string(),
+        });
+        context7_lookup.defer_loading = Some(true);
+
+        // A second `context7` tool that is not currently deferred -- it
+        // should count toward the group's `tool_count` (via `tool_groups`)
+        // but not its `deferred_count`, matching the group struct's own
+        // invariant that `tool_count` can exceed `deferred_count`.
+        let mut context7_resolve = ToolDefinition::function(
+            "context7_resolve".to_string(),
+            "Resolve a library id".to_string(),
+            serde_json::json!({"type": "object"}),
+        );
+        context7_resolve.namespace = Some(ToolNamespace {
+            name: "context7".to_string(),
+            description: "Tools provided by MCP server 'context7'".to_string(),
+        });
+
+        let mut standalone_deferred = ToolDefinition::function(
+            "grimoire_incantation".to_string(),
+            "Cast a rare arcane incantation".to_string(),
+            serde_json::json!({"type": "object"}),
+        );
+        standalone_deferred.defer_loading = Some(true);
+
+        let core_tool = ToolDefinition::function(
+            TOOL_UNIFIED_SEARCH.to_string(),
+            "Search".to_string(),
+            serde_json::json!({"type": "object"}),
+        );
+
+        let tools = vec![
+            docs_search,
+            context7_lookup,
+            context7_resolve,
+            standalone_deferred,
+            core_tool,
+        ];
+
+        let mut prompt = "Base prompt".to_string();
+        append_deferred_tools_prompt_section(&mut prompt, &tools);
+
+        assert!(prompt.contains("[Deferred Tools]"));
+        // `context7` sorts before `docs` alphabetically (BTreeMap ordering
+        // from `tool_groups`); this is the deterministic order the section
+        // must preserve across calls with the same tool set.
+        let context7_pos = prompt.find("context7 (1 tools)").expect("context7 line");
+        let docs_pos = prompt.find("docs (1 tools)").expect("docs line");
+        assert!(
+            context7_pos < docs_pos,
+            "context7 group should be listed before docs"
+        );
+        assert!(prompt.contains("- context7 (1 tools): Tools provided by MCP server 'context7'"));
+        assert!(prompt.contains("- docs (1 tools): Tools provided by MCP server 'docs'"));
+        assert!(prompt.contains("- 1 additional deferred tools"));
+        assert!(prompt.contains(
+            "Use unified_search with action=\"tools\" and a keyword to load any of these before calling them."
+        ));
+        // The non-deferred `context7_resolve` tool bumps the group's total
+        // tool count but must not appear in the deferred-count line.
+        assert!(!prompt.contains("(2 tools)"));
+    }
+
+    #[test]
+    fn deferred_tools_prompt_section_absent_when_nothing_deferred() {
+        let tools = vec![ToolDefinition::function(
+            TOOL_UNIFIED_SEARCH.to_string(),
+            "Search".to_string(),
+            serde_json::json!({"type": "object"}),
+        )];
+
+        let mut prompt = "Base prompt".to_string();
+        append_deferred_tools_prompt_section(&mut prompt, &tools);
+
+        assert_eq!(prompt, "Base prompt");
+        assert!(!prompt.contains("[Deferred Tools]"));
+    }
+
+    #[test]
+    fn deferred_tools_prompt_section_is_idempotent_on_rebuild() {
+        let deferred = {
+            let mut tool = ToolDefinition::function(
+                "grimoire_incantation".to_string(),
+                "Cast a rare arcane incantation".to_string(),
+                serde_json::json!({"type": "object"}),
+            );
+            tool.defer_loading = Some(true);
+            tool
+        };
+        let tools = vec![deferred];
+
+        let mut prompt = "Base prompt".to_string();
+        append_deferred_tools_prompt_section(&mut prompt, &tools);
+        append_deferred_tools_prompt_section(&mut prompt, &tools);
+
+        assert_eq!(prompt.matches("[Deferred Tools]").count(), 1);
+        assert_eq!(prompt.matches("additional deferred tools").count(), 1);
     }
 }

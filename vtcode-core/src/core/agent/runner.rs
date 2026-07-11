@@ -79,6 +79,12 @@ pub struct AgentRunner {
     tool_registry: ToolRegistry,
     /// System prompt content
     system_prompt: String,
+    /// Token-budget report for `system_prompt`, computed at session
+    /// construction time (or recomputed by `set_system_prompt`). Reused by
+    /// `compose_task_system_prompt` for non-simple tasks so the budget
+    /// warning and preflight check stay accurate without recomposing the
+    /// prompt on every turn.
+    system_prompt_report: crate::prompts::system::SystemPromptReport,
     /// Session information
     session_id: String,
     /// Initial archived history used to seed the first task on this runner.
@@ -319,7 +325,7 @@ impl AgentRunner {
             .collect::<Vec<_>>();
         let mut prompt_context = PromptContext::from_workspace_tools(&workspace, available_tools);
         prompt_context.load_available_skills();
-        let system_prompt = helpers::compose_system_prompt_with_appendix(
+        let (system_prompt, system_prompt_report) = helpers::compose_system_prompt_with_appendix(
             workspace.as_path(),
             session_config.effective(),
             &prompt_context,
@@ -355,6 +361,7 @@ impl AgentRunner {
             provider_client,
             tool_registry,
             system_prompt,
+            system_prompt_report,
             session_id,
             bootstrap_messages,
             _workspace: workspace,
@@ -420,8 +427,16 @@ impl AgentRunner {
     }
 
     /// Override the composed system prompt for downstream embedders.
+    ///
+    /// Recomputes `system_prompt_report` against the overridden text so the
+    /// budget warning and preflight check stay accurate even when the prompt
+    /// bypasses the normal section-based composition pipeline.
     pub fn set_system_prompt(&mut self, system_prompt: impl Into<String>) {
         self.system_prompt = system_prompt.into();
+        self.system_prompt_report = crate::prompts::system::SystemPromptReport::measure(
+            &self.system_prompt,
+            self.config().agent.max_system_prompt_tokens,
+        );
     }
 
     /// Clone the underlying tool registry so embedders can register custom tools.

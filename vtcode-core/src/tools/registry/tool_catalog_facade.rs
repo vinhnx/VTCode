@@ -61,7 +61,17 @@ impl ToolEmbeddingIndex {
                 let func = tool.function.as_ref()?;
                 let name = func.name.clone();
                 let description = func.description.clone();
-                let combined = format!("{name} {description}");
+                // Fold the tool's namespace name/description into the indexed
+                // terms (but not the returned `description`) so a query for
+                // a server name ranks that server's tools higher, matching
+                // the article's "namespace-aware" search behavior.
+                let combined = match tool.namespace.as_ref() {
+                    Some(namespace) => format!(
+                        "{name} {description} {} {}",
+                        namespace.name, namespace.description
+                    ),
+                    None => format!("{name} {description}"),
+                };
                 let terms: Vec<String> = combined
                     .split_whitespace()
                     .map(|t| {
@@ -187,6 +197,70 @@ impl ToolEmbeddingIndex {
     pub fn epoch(&self) -> u64 {
         self.epoch
     }
+}
+
+// ─── Derived Tool Groups ─────────────────────────────────────────────────────
+
+/// A namespace-derived grouping of tools, computed from
+/// [`ToolDefinition::namespace`]. Purely a client-side view for search
+/// results and diagnostics.
+///
+/// IMPORTANT DESIGN CONSTRAINT: groups are never sent to the provider as
+/// wire-level "stub" tools. Provider-hosted tool search (Anthropic's
+/// tool_search_tool_* beta, OpenAI's hosted tool_search) requires the full
+/// deferred tool definitions to already be present in the request payload --
+/// there is no server-side concept of a group stub the model can expand
+/// later. Sending a fake stub entry (e.g. a placeholder tool named after the
+/// group) would invite the model to hallucinate a call to a tool that does
+/// not exist. Namespace/group metadata therefore stays entirely client-side:
+/// it powers local BM25 ranking (see `ToolEmbeddingIndex::build`) and the
+/// `by_group` field in local tool search results, but is never itself placed
+/// on the wire.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ToolGroup {
+    /// The namespace name (e.g. an MCP server name).
+    pub name: String,
+    /// The namespace description. Always `Some` for namespaced groups --
+    /// `tool_groups` only creates a group when a tool carries a namespace,
+    /// and it takes the description from that namespace, not per-tool.
+    pub description: Option<String>,
+    /// Total number of tools in this group.
+    pub tool_count: usize,
+    /// Number of tools in this group that are currently deferred
+    /// (`defer_loading == Some(true)`).
+    pub deferred_count: usize,
+}
+
+/// Fold tool definitions into namespace-derived groups.
+///
+/// Tools without a namespace are skipped -- they are core tools and do not
+/// belong to any group. Groups are returned sorted by name for a
+/// deterministic, stable ordering across calls.
+#[must_use]
+pub fn tool_groups(tools: &[ToolDefinition]) -> Vec<ToolGroup> {
+    let mut groups: std::collections::BTreeMap<String, ToolGroup> =
+        std::collections::BTreeMap::new();
+
+    for tool in tools {
+        let Some(namespace) = tool.namespace.as_ref() else {
+            continue;
+        };
+
+        let group = groups
+            .entry(namespace.name.clone())
+            .or_insert_with(|| ToolGroup {
+                name: namespace.name.clone(),
+                description: Some(namespace.description.clone()),
+                tool_count: 0,
+                deferred_count: 0,
+            });
+        group.tool_count += 1;
+        if tool.defer_loading == Some(true) {
+            group.deferred_count += 1;
+        }
+    }
+
+    groups.into_values().collect()
 }
 
 #[derive(Debug, Clone)]
@@ -505,6 +579,33 @@ impl super::ToolRegistry {
     pub fn tool_catalog_state(&self) -> Arc<SessionToolCatalogState> {
         Arc::clone(&self.tool_catalog_state)
     }
+
+    /// Attach the session's live model-facing tool definitions so registry
+    /// consumers (e.g. local tool search) can read and un-defer them.
+    ///
+    /// The interactive runloop calls this once, right after it builds the
+    /// `Arc<RwLock<Vec<ToolDefinition>>>` it hands to the provider. Headless
+    /// paths may never call this; every consumer of `session_model_tools()`
+    /// must treat `None` as "no session tool list available" and degrade
+    /// gracefully rather than error.
+    pub fn attach_session_model_tools(&self, tools: Arc<RwLock<Vec<ToolDefinition>>>) {
+        let mut guard = self
+            .session_model_tools
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        *guard = Some(tools);
+    }
+
+    /// Fetch the attached session tool list, if any.
+    ///
+    /// Clones the inner `Arc` out from behind the std `RwLock` so callers
+    /// never hold that lock across an `.await`.
+    pub fn session_model_tools(&self) -> Option<Arc<RwLock<Vec<ToolDefinition>>>> {
+        self.session_model_tools
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+    }
 }
 
 #[cfg(test)]
@@ -659,5 +760,70 @@ mod tests {
         let tools = vec![tool_with_desc("read_file", "Read a file")];
         let index = ToolEmbeddingIndex::build(&tools, 42);
         assert_eq!(index.epoch(), 42);
+    }
+
+    #[tokio::test]
+    async fn session_model_tools_defaults_to_none_and_round_trips_through_attach() {
+        let registry =
+            crate::tools::registry::ToolRegistry::new(std::path::PathBuf::from("/tmp/test")).await;
+
+        assert!(
+            registry.session_model_tools().is_none(),
+            "session tools should be unattached by default"
+        );
+
+        let session_tools = Arc::new(RwLock::new(vec![function_tool("demo_tool")]));
+        registry.attach_session_model_tools(Arc::clone(&session_tools));
+
+        let fetched = registry
+            .session_model_tools()
+            .expect("session tools should be attached after attach_session_model_tools");
+        assert!(
+            Arc::ptr_eq(&fetched, &session_tools),
+            "getter should return the same Arc that was attached"
+        );
+    }
+
+    #[test]
+    fn tool_groups_folds_namespaced_tools_and_skips_ungrouped_core_tools() {
+        use crate::llm::provider::ToolNamespace;
+
+        let core_tool = function_tool("read_file");
+
+        let mut docs_search = tool_with_desc("docs_search", "Search the docs server");
+        docs_search.namespace = Some(ToolNamespace {
+            name: "docs".to_string(),
+            description: "Tools provided by MCP server 'docs'".to_string(),
+        });
+        docs_search.defer_loading = Some(true);
+
+        let mut docs_fetch = tool_with_desc("docs_fetch", "Fetch a doc by id");
+        docs_fetch.namespace = Some(ToolNamespace {
+            name: "docs".to_string(),
+            description: "Tools provided by MCP server 'docs'".to_string(),
+        });
+
+        let mut github_issue = tool_with_desc("github_open_issue", "Open a GitHub issue");
+        github_issue.namespace = Some(ToolNamespace {
+            name: "github".to_string(),
+            description: "Tools provided by MCP server 'github'".to_string(),
+        });
+        github_issue.defer_loading = Some(true);
+
+        let tools = vec![core_tool, docs_search, docs_fetch, github_issue];
+        let groups = tool_groups(&tools);
+
+        // Sorted by name: "docs" before "github".
+        assert_eq!(groups.len(), 2);
+
+        let docs_group = &groups[0];
+        assert_eq!(docs_group.name, "docs");
+        assert_eq!(docs_group.tool_count, 2);
+        assert_eq!(docs_group.deferred_count, 1);
+
+        let github_group = &groups[1];
+        assert_eq!(github_group.name, "github");
+        assert_eq!(github_group.tool_count, 1);
+        assert_eq!(github_group.deferred_count, 1);
     }
 }

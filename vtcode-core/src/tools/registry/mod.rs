@@ -92,7 +92,7 @@ pub use telemetry::ToolTelemetryEvent;
 pub use timeout::{
     AdaptiveTimeoutTuning, ToolLatencyStats, ToolTimeoutCategory, ToolTimeoutPolicy,
 };
-pub use tool_catalog_facade::SessionToolCatalogState;
+pub use tool_catalog_facade::{SessionToolCatalogState, ToolGroup, tool_groups};
 pub(crate) use unified_actions::{UnifiedExecAction, UnifiedFileAction, UnifiedSearchAction};
 
 // Re-export trait interfaces for external consumers.
@@ -122,6 +122,11 @@ use std::sync::RwLock;
 
 /// Callback for tool progress and output streaming
 pub type ToolProgressCallback = Arc<dyn Fn(&str, &str) + Send + Sync>;
+
+/// The session's live model-facing tool definition list, shared with the
+/// provider request builder via `Arc<tokio::sync::RwLock<..>>` so both sides
+/// observe un-defer updates made by `SessionToolCatalogState::note_tool_references`.
+pub type SessionModelTools = Arc<tokio::sync::RwLock<Vec<crate::llm::provider::ToolDefinition>>>;
 
 use super::traits::Tool;
 #[cfg(test)]
@@ -198,6 +203,12 @@ pub struct ToolRegistry {
     subagent_controller: Arc<RwLock<Option<Arc<SubagentController>>>>,
     /// Session-scoped scheduled prompts for interactive loops and cron tools.
     session_scheduler: Arc<tokio::sync::Mutex<crate::scheduler::SessionScheduler>>,
+    /// The session's live model-facing tool definitions, attached once the
+    /// runloop builds its `Arc<tokio::sync::RwLock<Vec<ToolDefinition>>>`.
+    /// Kept behind a std `RwLock` so the getter can clone the inner `Arc` out
+    /// without ever holding a lock across an `.await`. `None` in headless or
+    /// pre-attachment contexts; all consumers must degrade gracefully.
+    session_model_tools: Arc<RwLock<Option<SessionModelTools>>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

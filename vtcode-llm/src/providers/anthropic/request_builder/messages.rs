@@ -478,11 +478,140 @@ pub fn tool_result_blocks(content: &str) -> Vec<Value> {
 #[cfg(test)]
 mod tests {
     use super::{
-        build_advisor_blocks, build_reasoning_blocks, content_blocks_from_message_content,
+        build_advisor_blocks, build_messages, build_reasoning_blocks,
+        content_blocks_from_message_content,
     };
-    use crate::provider::{ContentPart, Message, MessageContent};
-    use crate::providers::anthropic_types::AnthropicContentBlock;
+    use crate::provider::{ContentPart, LLMRequest, Message, MessageContent};
+    use crate::providers::anthropic_types::{AnthropicContentBlock, CacheControl};
     use serde_json::json;
+    use vtcode_config::core::AnthropicPromptCacheSettings;
+
+    fn message_anchor_flags(messages: &[super::AnthropicMessage]) -> Vec<bool> {
+        messages
+            .iter()
+            .map(|msg| {
+                msg.content.iter().any(|block| {
+                    matches!(
+                        block,
+                        AnthropicContentBlock::Text {
+                            cache_control: Some(_),
+                            ..
+                        }
+                    )
+                })
+            })
+            .collect()
+    }
+
+    fn rolling_anchor_fixture() -> (LLMRequest, Vec<Message>, Option<CacheControl>) {
+        let request = LLMRequest::default();
+        let messages = vec![
+            Message::user("aaaa".to_string()),
+            Message::user("bbbb".to_string()),
+            Message::user("cccc".to_string()),
+        ];
+        let cache_control = Some(CacheControl {
+            control_type: "ephemeral".to_string(),
+            ttl: Some("5m".to_string()),
+        });
+        (request, messages, cache_control)
+    }
+
+    #[test]
+    fn build_messages_anchors_only_last_two_qualifying_messages() {
+        let (request, source_messages, cache_control) = rolling_anchor_fixture();
+        let settings = AnthropicPromptCacheSettings {
+            min_message_length_for_cache: 1,
+            ..AnthropicPromptCacheSettings::default()
+        };
+        let mut breakpoints_remaining = 4usize;
+
+        let messages = build_messages(
+            &request,
+            &source_messages,
+            &cache_control,
+            &settings,
+            &mut breakpoints_remaining,
+        )
+        .expect("build_messages");
+
+        assert_eq!(message_anchor_flags(&messages), vec![false, true, true]);
+        assert_eq!(breakpoints_remaining, 2);
+    }
+
+    #[test]
+    fn build_messages_skips_anchors_when_breakpoint_budget_exhausted() {
+        let (request, source_messages, cache_control) = rolling_anchor_fixture();
+        let settings = AnthropicPromptCacheSettings {
+            min_message_length_for_cache: 1,
+            ..AnthropicPromptCacheSettings::default()
+        };
+        let mut breakpoints_remaining = 0usize;
+
+        let messages = build_messages(
+            &request,
+            &source_messages,
+            &cache_control,
+            &settings,
+            &mut breakpoints_remaining,
+        )
+        .expect("build_messages");
+
+        assert_eq!(message_anchor_flags(&messages), vec![false, false, false]);
+        assert_eq!(breakpoints_remaining, 0);
+    }
+
+    #[test]
+    fn build_messages_anchors_newest_message_when_only_one_breakpoint_left() {
+        let (request, source_messages, cache_control) = rolling_anchor_fixture();
+        let settings = AnthropicPromptCacheSettings {
+            min_message_length_for_cache: 1,
+            ..AnthropicPromptCacheSettings::default()
+        };
+        let mut breakpoints_remaining = 1usize;
+
+        let messages = build_messages(
+            &request,
+            &source_messages,
+            &cache_control,
+            &settings,
+            &mut breakpoints_remaining,
+        )
+        .expect("build_messages");
+
+        assert_eq!(message_anchor_flags(&messages), vec![false, false, true]);
+        assert_eq!(breakpoints_remaining, 0);
+    }
+
+    #[test]
+    fn build_messages_ignores_short_messages_when_selecting_anchors() {
+        let request = LLMRequest::default();
+        let source_messages = vec![
+            Message::user("a".repeat(300)),
+            Message::user("hi".to_string()),
+            Message::user("b".repeat(300)),
+        ];
+        let cache_control = Some(CacheControl {
+            control_type: "ephemeral".to_string(),
+            ttl: Some("5m".to_string()),
+        });
+        let settings = AnthropicPromptCacheSettings::default();
+        let mut breakpoints_remaining = 4usize;
+
+        let messages = build_messages(
+            &request,
+            &source_messages,
+            &cache_control,
+            &settings,
+            &mut breakpoints_remaining,
+        )
+        .expect("build_messages");
+
+        // Both long messages qualify (default threshold is 256 chars); the short
+        // middle message never receives an anchor.
+        assert_eq!(message_anchor_flags(&messages), vec![true, false, true]);
+        assert_eq!(breakpoints_remaining, 2);
+    }
 
     #[test]
     fn build_reasoning_blocks_decodes_stringified_json_detail() {

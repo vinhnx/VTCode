@@ -19,6 +19,13 @@ pub const ANTHROPIC_MIN_MESSAGE_LENGTH_FOR_CACHE: usize = 256;
 
 pub const GEMINI_EXPLICIT_DEFAULT_TTL_SECONDS: u64 = 60 * 60; // 1 hour default for explicit caches
 
+/// Approximate provider-side prompt cache lifetimes used for the cache-gap
+/// warning (advisory only). A pause longer than these likely means the next
+/// request re-pays full cache-creation cost.
+pub const ANTHROPIC_CACHE_GAP_WARNING_SECONDS: u64 = 5 * 60; // ephemeral 5m TTL
+pub const OPENAI_CACHE_GAP_WARNING_SECONDS: u64 = 10 * 60; // in-memory cache window
+pub const DEFAULT_CACHE_GAP_WARNING_SECONDS: u64 = 5 * 60;
+
 pub const OPENROUTER_CACHE_DISCOUNT_ENABLED: bool = true;
 pub const XAI_CACHE_ENABLED: bool = true;
 pub const DEEPSEEK_CACHE_ENABLED: bool = true;

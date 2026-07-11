@@ -196,6 +196,9 @@ pub mod provider_builder;
 pub mod provider_config;
 /// Re-exported provider implementations.
 pub mod providers;
+/// Shared idle-gap tracker for detecting when the provider prompt cache has
+/// likely expired between dispatched LLM requests.
+pub mod request_gap;
 /// Adapter for the Rig agent framework.
 pub mod rig_adapter;
 mod single_response;
@@ -203,6 +206,8 @@ mod single_response;
 pub mod tool_bridge;
 /// LLM request/response types, errors, and backend kind.
 pub mod types;
+/// Provider-normalized usage accumulation and cache-aware session cost estimation.
+pub mod usage_cost;
 /// Shared utilities for request/response processing.
 pub mod utils;
 

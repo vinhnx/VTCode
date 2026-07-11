@@ -399,15 +399,15 @@ function buildSummaryFromParsed(
 
     const providersRaw = mcp ? (asArray(mcp["providers"]) ?? []) : [];
     const mcpProviders: VtcodeMcpProviderSummary[] = [];
-    providersRaw.forEach((entry) => {
+    for (const entry of providersRaw) {
         const provider = asRecord(entry);
         if (!provider) {
-            return;
+            continue;
         }
 
         const name = asString(provider["name"]);
         if (!name) {
-            return;
+            continue;
         }
 
         const command = asString(provider["command"]);
@@ -423,7 +423,7 @@ function buildSummaryFromParsed(
             enabled: enabledValue,
             args,
         });
-    });
+    }
 
     return {
         hasConfig: true,

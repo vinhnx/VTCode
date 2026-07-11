@@ -573,6 +573,59 @@ pub struct Usage {
     pub output_tokens: u64,
 }
 
+impl Usage {
+    /// Number of input tokens billed at the full input rate: neither served
+    /// from cache nor written to it. `input_tokens` is the total prompt token
+    /// count (uncached + cached + cache-creation), so both cached and
+    /// cache-creation tokens are subtracted out here.
+    #[must_use]
+    pub fn uncached_input_tokens(&self) -> u64 {
+        self.input_tokens
+            .saturating_sub(self.cached_input_tokens)
+            .saturating_sub(self.cache_creation_tokens)
+    }
+
+    /// Cache hit rate as a fraction (0.0 to 1.0): cached input over total input.
+    /// Returns `None` when no input tokens were recorded.
+    #[must_use]
+    pub fn cache_hit_rate(&self) -> Option<f64> {
+        if self.input_tokens == 0 {
+            return None;
+        }
+        Some(self.cached_input_tokens as f64 / self.input_tokens as f64)
+    }
+
+    /// Human-readable summary of prompt cache efficiency.
+    #[must_use]
+    pub fn cache_summary(&self) -> String {
+        let total_input = self.input_tokens;
+        if total_input == 0 {
+            return "No input tokens recorded.".to_string();
+        }
+
+        let cached = self.cached_input_tokens;
+        let creation = self.cache_creation_tokens;
+        let uncached = self.uncached_input_tokens();
+        let rate = cached as f64 / total_input as f64 * 100.0;
+        format!(
+            "Cache: {cached} cached / {total_input} total input ({rate:.1}% hit rate), \
+             {creation} cache-creation, {uncached} uncached"
+        )
+    }
+
+    /// Accumulate another usage sample into this one.
+    pub fn add(&mut self, other: &Usage) {
+        self.input_tokens = self.input_tokens.saturating_add(other.input_tokens);
+        self.cached_input_tokens = self
+            .cached_input_tokens
+            .saturating_add(other.cached_input_tokens);
+        self.cache_creation_tokens = self
+            .cache_creation_tokens
+            .saturating_add(other.cache_creation_tokens);
+        self.output_tokens = self.output_tokens.saturating_add(other.output_tokens);
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
 pub struct ItemCompletedEvent {
@@ -916,6 +969,104 @@ mod tests {
 
         assert_eq!(restored, event);
         Ok(())
+    }
+
+    #[test]
+    fn usage_uncached_input_tokens_saturates() {
+        let usage = Usage {
+            input_tokens: 1_000,
+            cached_input_tokens: 800,
+            cache_creation_tokens: 100,
+            output_tokens: 50,
+        };
+        assert_eq!(usage.uncached_input_tokens(), 100);
+
+        let inconsistent = Usage {
+            input_tokens: 100,
+            cached_input_tokens: 150,
+            cache_creation_tokens: 0,
+            output_tokens: 0,
+        };
+        assert_eq!(inconsistent.uncached_input_tokens(), 0);
+
+        let inconsistent_with_creation = Usage {
+            input_tokens: 100,
+            cached_input_tokens: 80,
+            cache_creation_tokens: 50,
+            output_tokens: 0,
+        };
+        assert_eq!(inconsistent_with_creation.uncached_input_tokens(), 0);
+    }
+
+    #[test]
+    fn usage_cache_hit_rate() {
+        assert_eq!(Usage::default().cache_hit_rate(), None);
+
+        let usage = Usage {
+            input_tokens: 1_000,
+            cached_input_tokens: 750,
+            cache_creation_tokens: 0,
+            output_tokens: 0,
+        };
+        let rate = usage.cache_hit_rate().expect("rate");
+        assert!((rate - 0.75).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn usage_cache_summary_formats() {
+        assert_eq!(
+            Usage::default().cache_summary(),
+            "No input tokens recorded."
+        );
+
+        let usage = Usage {
+            input_tokens: 1_000,
+            cached_input_tokens: 800,
+            cache_creation_tokens: 100,
+            output_tokens: 50,
+        };
+        assert_eq!(
+            usage.cache_summary(),
+            "Cache: 800 cached / 1000 total input (80.0% hit rate), 100 cache-creation, 100 uncached"
+        );
+    }
+
+    #[test]
+    fn usage_add_accumulates_all_fields_with_saturation() {
+        let mut total = Usage {
+            input_tokens: 100,
+            cached_input_tokens: 20,
+            cache_creation_tokens: 5,
+            output_tokens: 10,
+        };
+        total.add(&Usage {
+            input_tokens: 50,
+            cached_input_tokens: 10,
+            cache_creation_tokens: 2,
+            output_tokens: 8,
+        });
+
+        assert_eq!(total.input_tokens, 150);
+        assert_eq!(total.cached_input_tokens, 30);
+        assert_eq!(total.cache_creation_tokens, 7);
+        assert_eq!(total.output_tokens, 18);
+
+        let mut saturating = Usage {
+            input_tokens: u64::MAX,
+            cached_input_tokens: u64::MAX,
+            cache_creation_tokens: u64::MAX,
+            output_tokens: u64::MAX,
+        };
+        saturating.add(&Usage {
+            input_tokens: 1,
+            cached_input_tokens: 1,
+            cache_creation_tokens: 1,
+            output_tokens: 1,
+        });
+        assert_eq!(saturating.input_tokens, u64::MAX);
+        assert_eq!(saturating.cached_input_tokens, u64::MAX);
+        assert_eq!(saturating.cache_creation_tokens, u64::MAX);
+        assert_eq!(saturating.output_tokens, u64::MAX);
     }
 
     #[test]

@@ -40,7 +40,7 @@ schemars = { workspace = true, optional = true, features = ["indexmap2"] }
 [features]
 default = ["bootstrap"]
 bootstrap = []
-schema = ["dep:schemars", "vtcode-auth/schema"]
+schema = ["dep:schemars", "vtcode-auth/schema", "vtcode-commons/schema"]
 
 [dev-dependencies]
 assert_fs = { workspace = true }

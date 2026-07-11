@@ -3151,6 +3151,8 @@ function syncIdeContextEnvironmentVariable(): void {
     if (canonicalPath) {
         process.env[CANONICAL_IDE_CONTEXT_ENV_VARIABLE] = canonicalPath;
     } else {
+        // process.env is an object keyed by variable name, not an array.
+        // ast-grep-ignore: no-array-delete
         delete process.env[CANONICAL_IDE_CONTEXT_ENV_VARIABLE];
     }
 
@@ -3158,6 +3160,8 @@ function syncIdeContextEnvironmentVariable(): void {
     if (legacyPath) {
         process.env[LEGACY_IDE_CONTEXT_ENV_VARIABLE] = legacyPath;
     } else {
+        // process.env is an object keyed by variable name, not an array.
+        // ast-grep-ignore: no-array-delete
         delete process.env[LEGACY_IDE_CONTEXT_ENV_VARIABLE];
     }
 }
@@ -3302,6 +3306,8 @@ function getVtcodeEnvironment(
     if (contextPath) {
         env[CANONICAL_IDE_CONTEXT_ENV_VARIABLE] = contextPath;
     } else {
+        // env is a Record<string, string> keyed by variable name, not an array.
+        // ast-grep-ignore: no-array-delete
         delete env[CANONICAL_IDE_CONTEXT_ENV_VARIABLE];
     }
 
@@ -3309,6 +3315,8 @@ function getVtcodeEnvironment(
     if (legacyContextPath) {
         env[LEGACY_IDE_CONTEXT_ENV_VARIABLE] = legacyContextPath;
     } else {
+        // env is a Record<string, string> keyed by variable name, not an array.
+        // ast-grep-ignore: no-array-delete
         delete env[LEGACY_IDE_CONTEXT_ENV_VARIABLE];
     }
 

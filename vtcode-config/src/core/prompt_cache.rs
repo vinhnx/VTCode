@@ -36,6 +36,16 @@ pub struct PromptCachingConfig {
     #[serde(default = "default_cache_friendly_prompt_shaping")]
     pub cache_friendly_prompt_shaping: bool,
 
+    /// Warn before a request when the pause since the previous request likely
+    /// exceeded the provider prompt cache lifetime (advisory only).
+    #[serde(default = "default_true")]
+    pub gap_warning_enabled: bool,
+
+    /// Override for the cache-gap warning threshold in seconds. When unset,
+    /// a provider-specific default is used (Anthropic 300s, OpenAI 600s).
+    #[serde(default)]
+    pub gap_warning_threshold_secs: Option<u64>,
+
     /// Provider specific overrides
     #[serde(default)]
     pub providers: ProviderPromptCachingConfig,
@@ -51,6 +61,8 @@ impl Default for PromptCachingConfig {
             enable_auto_cleanup: default_auto_cleanup(),
             min_quality_threshold: default_min_quality_threshold(),
             cache_friendly_prompt_shaping: default_cache_friendly_prompt_shaping(),
+            gap_warning_enabled: default_true(),
+            gap_warning_threshold_secs: None,
             providers: ProviderPromptCachingConfig::default(),
         }
     }
@@ -85,6 +97,37 @@ impl PromptCachingConfig {
             "zai" => self.providers.zai.enabled,
             _ => false,
         }
+    }
+
+    /// Resolve the cache-gap warning threshold in seconds for a provider.
+    ///
+    /// Returns `None` when the warning should not fire: gap warnings disabled,
+    /// caching disabled for the provider, or OpenAI configured with 24h
+    /// extended retention (where a short pause cannot expire the cache).
+    pub fn gap_threshold_secs(&self, provider_name: &str) -> Option<u64> {
+        if !self.gap_warning_enabled || !self.is_provider_enabled(provider_name) {
+            return None;
+        }
+
+        let provider = provider_name.to_ascii_lowercase();
+        if provider == "openai"
+            && matches!(
+                self.providers.openai.prompt_cache_retention,
+                Some(PromptCacheRetention::H24)
+            )
+        {
+            return None;
+        }
+
+        if let Some(threshold) = self.gap_warning_threshold_secs {
+            return Some(threshold);
+        }
+
+        Some(match provider.as_str() {
+            "anthropic" | "minimax" => prompt_cache::ANTHROPIC_CACHE_GAP_WARNING_SECONDS,
+            "openai" => prompt_cache::OPENAI_CACHE_GAP_WARNING_SECONDS,
+            _ => prompt_cache::DEFAULT_CACHE_GAP_WARNING_SECONDS,
+        })
     }
 }
 
@@ -722,6 +765,88 @@ prompt_cache_key_mode = "off"
         cfg.providers.gemini.enabled = true;
         cfg.providers.gemini.mode = GeminiPromptCacheMode::Off;
         assert!(!cfg.is_provider_enabled("gemini"));
+    }
+
+    #[test]
+    fn gap_threshold_uses_provider_defaults() {
+        let cfg = PromptCachingConfig::default();
+        assert_eq!(
+            cfg.gap_threshold_secs("anthropic"),
+            Some(prompt_cache::ANTHROPIC_CACHE_GAP_WARNING_SECONDS)
+        );
+        assert_eq!(
+            cfg.gap_threshold_secs("minimax"),
+            Some(prompt_cache::ANTHROPIC_CACHE_GAP_WARNING_SECONDS)
+        );
+        assert_eq!(
+            cfg.gap_threshold_secs("openai"),
+            Some(prompt_cache::OPENAI_CACHE_GAP_WARNING_SECONDS)
+        );
+        assert_eq!(
+            cfg.gap_threshold_secs("gemini"),
+            Some(prompt_cache::DEFAULT_CACHE_GAP_WARNING_SECONDS)
+        );
+    }
+
+    #[test]
+    fn gap_threshold_respects_disable_switches() {
+        let cfg = PromptCachingConfig {
+            gap_warning_enabled: false,
+            ..Default::default()
+        };
+        assert_eq!(cfg.gap_threshold_secs("anthropic"), None);
+
+        let mut cfg = PromptCachingConfig::default();
+        cfg.providers.anthropic.enabled = false;
+        assert_eq!(cfg.gap_threshold_secs("anthropic"), None);
+        assert_eq!(cfg.gap_threshold_secs("minimax"), None);
+
+        let cfg = PromptCachingConfig {
+            enabled: false,
+            ..Default::default()
+        };
+        assert_eq!(cfg.gap_threshold_secs("openai"), None);
+    }
+
+    #[test]
+    fn gap_threshold_skips_openai_with_extended_retention() {
+        let mut cfg = PromptCachingConfig::default();
+        cfg.providers.openai.prompt_cache_retention = Some(PromptCacheRetention::H24);
+        assert_eq!(cfg.gap_threshold_secs("openai"), None);
+
+        cfg.providers.openai.prompt_cache_retention = Some(PromptCacheRetention::InMemory);
+        assert_eq!(
+            cfg.gap_threshold_secs("openai"),
+            Some(prompt_cache::OPENAI_CACHE_GAP_WARNING_SECONDS)
+        );
+    }
+
+    #[test]
+    fn gap_threshold_honors_explicit_override() {
+        let cfg = PromptCachingConfig {
+            gap_warning_threshold_secs: Some(42),
+            ..Default::default()
+        };
+        assert_eq!(cfg.gap_threshold_secs("anthropic"), Some(42));
+        assert_eq!(cfg.gap_threshold_secs("openai"), Some(42));
+    }
+
+    #[test]
+    fn gap_warning_fields_parse_from_toml() {
+        let parsed: PromptCachingConfig = toml::from_str(
+            r#"
+gap_warning_enabled = false
+gap_warning_threshold_secs = 120
+"#,
+        )
+        .expect("prompt cache config should parse");
+
+        assert!(!parsed.gap_warning_enabled);
+        assert_eq!(parsed.gap_warning_threshold_secs, Some(120));
+
+        let defaults: PromptCachingConfig = toml::from_str("").expect("empty config");
+        assert!(defaults.gap_warning_enabled);
+        assert_eq!(defaults.gap_warning_threshold_secs, None);
     }
 
     #[test]

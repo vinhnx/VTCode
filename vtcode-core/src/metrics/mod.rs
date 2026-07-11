@@ -214,6 +214,14 @@ impl MetricsCollector {
         }
     }
 
+    /// Record the estimated token overhead of the tool definitions sent in a
+    /// request, accumulated across the session for transparency reporting.
+    pub fn record_sdk_tool_definition_tokens(&self, tokens: u64) {
+        if let Ok(mut metrics) = self.sdk.lock() {
+            metrics.record_tool_definition_tokens(tokens);
+        }
+    }
+
     // ========== Filtering Metrics ==========
 
     /// Record a filtering operation

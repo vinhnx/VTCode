@@ -54,6 +54,10 @@ pub(crate) async fn finalize_model_selection(
     _full_auto: bool,
     compaction: ModelSwitchCompactionTargets<'_>,
 ) -> Result<()> {
+    // Captured before `compaction` is moved into the compaction request below
+    // (Phase E4): whether a request was already dispatched this session, used
+    // to decide if a later reasoning-effort change invalidates a live cache.
+    let had_prior_request = compaction.session_stats.has_sent_request();
     let prev_provider = config.provider.clone();
     let prev_model = config.model.clone();
     let workspace = config.workspace.clone();
@@ -237,6 +241,18 @@ pub(crate) async fn finalize_model_selection(
             format!("Reasoning effort remains '{}'.", selection.reasoning)
         };
         renderer.line(MessageStyle::Info, &message)?;
+
+        if selection.reasoning_changed
+            && had_prior_request
+            && vt_cfg
+                .as_ref()
+                .is_some_and(|cfg| cfg.prompt_cache.is_provider_enabled(&config.provider))
+        {
+            renderer.line(
+                MessageStyle::Info,
+                "This changes the request prefix, so the provider prompt cache will be invalidated; the next request re-pays full input cost.",
+            )?;
+        }
     }
 
     if selection.service_tier_supported {

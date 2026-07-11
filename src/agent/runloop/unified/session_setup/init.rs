@@ -286,6 +286,7 @@ pub(crate) async fn initialize_session(
             )
             .await,
     ));
+    tool_registry.attach_session_model_tools(tools.clone());
     register_skill_tools(
         &mut tool_registry,
         &tools,
@@ -324,12 +325,13 @@ pub(crate) async fn initialize_session(
     } else {
         Vec::new()
     };
-    let base_system_prompt = read_system_prompt(
+    let (base_system_prompt, system_prompt_report) = read_system_prompt(
         &config.workspace,
         session_bootstrap.prompt_addendum.as_deref(),
         &available_subagents,
     )
     .await;
+    session_bootstrap.system_prompt_report = system_prompt_report;
     let resumed_primary_agent = resume.and_then(|r| r.snapshot().metadata.primary_agent.clone());
     let active_primary_agent = if let Some(controller) = subagent_controller.as_ref() {
         active_primary_agent_from_specs_for_mode(

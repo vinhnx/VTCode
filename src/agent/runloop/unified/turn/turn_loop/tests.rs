@@ -376,6 +376,7 @@ fn accumulate_turn_usage_merges_prompt_completion_and_cached_tokens() {
     let mut total = HarnessUsage::default();
 
     accumulate_turn_usage(
+        "openai",
         &mut total,
         &Some(uni::Usage {
             prompt_tokens: 100,
@@ -388,6 +389,7 @@ fn accumulate_turn_usage_merges_prompt_completion_and_cached_tokens() {
         }),
     );
     accumulate_turn_usage(
+        "openai",
         &mut total,
         &Some(uni::Usage {
             prompt_tokens: 40,
@@ -404,6 +406,30 @@ fn accumulate_turn_usage_merges_prompt_completion_and_cached_tokens() {
     assert_eq!(total.cached_input_tokens, 15);
     assert_eq!(total.output_tokens, 30);
     assert!(has_turn_usage(&total));
+}
+
+#[test]
+fn accumulate_turn_usage_normalizes_anthropic_exclusive_input() {
+    let mut total = HarnessUsage::default();
+
+    accumulate_turn_usage(
+        "anthropic",
+        &mut total,
+        &Some(uni::Usage {
+            prompt_tokens: 100,
+            completion_tokens: 20,
+            total_tokens: 120,
+            cached_prompt_tokens: None,
+            cache_creation_tokens: Some(50),
+            cache_read_tokens: Some(400),
+            iterations: None,
+        }),
+    );
+
+    assert_eq!(total.input_tokens, 550);
+    assert_eq!(total.cached_input_tokens, 400);
+    assert_eq!(total.cache_creation_tokens, 50);
+    assert_eq!(total.output_tokens, 20);
 }
 
 #[tokio::test]

@@ -253,18 +253,164 @@ pub async fn read_agent_guidelines(project_root: &Path) -> Option<String> {
     }
 }
 
+/// A named layer of the composed system prompt.
+///
+/// The token-budget trimmer (see [`SectionKind::trim_priority`]) drops whole
+/// sections rather than truncating text mid-layer, so each section's text is
+/// stored verbatim (including any leading/trailing whitespace baked into its
+/// source constant) exactly as it would have been appended by the legacy
+/// single-string builder.
+struct PromptSection {
+    kind: SectionKind,
+    text: String,
+}
+
+/// Identifies which layer of the system prompt a [`PromptSection`] belongs to.
+///
+/// Variants mirror the layers `compose_system_instruction_text` actually
+/// assembles today. Agent identity is not a separate variant: it is applied
+/// as an in-place text substitution on the base contract (title/intro lines)
+/// rather than an appended section, so it is folded into [`Self::BaseContract`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SectionKind {
+    /// Canonical contract + operating profile (with any workspace prompt-layer
+    /// override/append and agent-identity substitution already applied).
+    /// Always present and never trimmed to satisfy the token budget.
+    BaseContract,
+    /// Optional `<analysis>/<plan>/<uncertainty>/<verification>` tagging
+    /// guidance. Advisory; trimmed first when over budget.
+    StructuredReasoning,
+    /// Lean "## Skills" routing section rendered from available skill
+    /// metadata. Advisory; trimmed alongside structured reasoning.
+    Skills,
+    /// "## Environment" addenda (languages, interaction mode, MCP sources,
+    /// temporal context, working directory).
+    EnvironmentAddenda,
+    /// "## Active Tools" dynamic tool guidance derived from the active tool
+    /// catalog.
+    ToolGuidelines,
+}
+
+impl SectionKind {
+    /// Static section name used in [`SystemPromptReport::trimmed_sections`].
+    const fn name(self) -> &'static str {
+        match self {
+            Self::BaseContract => "base_contract",
+            Self::StructuredReasoning => "structured_reasoning",
+            Self::Skills => "skills",
+            Self::EnvironmentAddenda => "environment_addenda",
+            Self::ToolGuidelines => "tool_guidelines",
+        }
+    }
+
+    /// Trim order: lower values are dropped first. `None` means the section
+    /// is never dropped to satisfy the token budget.
+    const fn trim_priority(self) -> Option<u8> {
+        match self {
+            Self::StructuredReasoning => Some(0),
+            Self::Skills => Some(1),
+            Self::EnvironmentAddenda => Some(2),
+            Self::ToolGuidelines => Some(3),
+            Self::BaseContract => None,
+        }
+    }
+}
+
+/// Result of measuring a composed system prompt against the configured token
+/// budget (`agent.max_system_prompt_tokens`).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct SystemPromptReport {
+    /// `estimate_token_count` of the final composed text (after trimming, if
+    /// trimming occurred).
+    pub token_estimate: u64,
+    /// Whether `token_estimate` exceeds `agent.max_system_prompt_tokens`.
+    pub over_budget: bool,
+    /// Names of sections dropped to satisfy the budget, in drop order. Empty
+    /// unless `agent.trim_system_prompt` is enabled and trimming occurred.
+    pub trimmed_sections: Vec<&'static str>,
+}
+
+impl SystemPromptReport {
+    /// Measure `text` against `max_tokens` with no trimming applied.
+    ///
+    /// Useful when a system prompt was assembled or overridden outside the
+    /// normal section-based pipeline (e.g. downstream embedders calling
+    /// `AgentRunner::set_system_prompt`, or appendix text appended after
+    /// [`compose_system_instruction_with_report`] already measured the
+    /// sectioned prompt).
+    #[must_use]
+    pub fn measure(text: &str, max_tokens: u64) -> Self {
+        let token_estimate = estimate_token_count(text);
+        Self {
+            token_estimate,
+            over_budget: token_estimate > max_tokens,
+            trimmed_sections: Vec::new(),
+        }
+    }
+}
+
 /// Compose the base system instruction plus compact tool/skill/environment addenda.
 pub async fn compose_system_instruction_text(
-    _project_root: &Path,
+    project_root: &Path,
     vtcode_config: Option<&crate::config::VTCodeConfig>,
     prompt_context: Option<&PromptContext>,
 ) -> String {
+    compose_system_instruction_with_report(project_root, vtcode_config, prompt_context)
+        .await
+        .0
+}
+
+/// Compose the system instruction and return the token-budget report
+/// alongside it. See [`SystemPromptReport`] and [`SectionKind::trim_priority`]
+/// for the budget/trim behavior driven by `agent.max_system_prompt_tokens`,
+/// `agent.system_prompt_budget_warning`, and `agent.trim_system_prompt`.
+pub async fn compose_system_instruction_with_report(
+    project_root: &Path,
+    vtcode_config: Option<&crate::config::VTCodeConfig>,
+    prompt_context: Option<&PromptContext>,
+) -> (String, SystemPromptReport) {
+    let sections = build_prompt_sections(project_root, vtcode_config, prompt_context).await;
+    let (max_tokens, warn_enabled, trim_enabled) = system_prompt_budget_settings(vtcode_config);
+    apply_token_budget(sections, max_tokens, warn_enabled, trim_enabled)
+}
+
+/// Resolve the effective `(max_system_prompt_tokens, budget_warning_enabled,
+/// trim_enabled)` settings, falling back to the `AgentConfig` defaults when
+/// no config is available.
+fn system_prompt_budget_settings(
+    vtcode_config: Option<&crate::config::VTCodeConfig>,
+) -> (u64, bool, bool) {
+    vtcode_config.map_or(
+        (
+            prompt_budget_constants::DEFAULT_MAX_SYSTEM_PROMPT_TOKENS,
+            true,
+            false,
+        ),
+        |cfg| {
+            (
+                cfg.agent.max_system_prompt_tokens,
+                cfg.agent.system_prompt_budget_warning,
+                cfg.agent.trim_system_prompt,
+            )
+        },
+    )
+}
+
+/// Build the ordered prompt sections. Each section's text is stored exactly
+/// as the legacy single-string builder would have appended it, so
+/// [`join_prompt_sections`] reproduces byte-identical output when nothing is
+/// trimmed.
+async fn build_prompt_sections(
+    project_root: &Path,
+    vtcode_config: Option<&crate::config::VTCodeConfig>,
+    prompt_context: Option<&PromptContext>,
+) -> Vec<PromptSection> {
     let prompt_mode = vtcode_config
         .map(|c| c.agent.system_prompt_mode)
         .unwrap_or(SystemPromptMode::Default);
     let static_base_prompt = static_profile_prompt(prompt_mode);
-    let resolved_layers = resolve_system_prompt_layers(_project_root).await;
-    let base_prompt = apply_system_prompt_layers(static_base_prompt, &resolved_layers);
+    let resolved_layers = resolve_system_prompt_layers(project_root).await;
+    let mut base_prompt = apply_system_prompt_layers(static_base_prompt, &resolved_layers);
 
     tracing::trace!(
         mode = ?prompt_mode,
@@ -272,43 +418,131 @@ pub async fn compose_system_instruction_text(
         "Selected system prompt mode"
     );
 
-    let base_len = base_prompt.len();
-    let config_overhead = vtcode_config.map_or(0, |_| 1024);
-    let estimated_capacity = base_len + config_overhead + 1024;
-    let mut instruction = String::with_capacity(estimated_capacity);
-    instruction.push_str(&base_prompt);
-
     // Apply agent identity based on the default primary agent configuration.
     // This combines "VT Code" with the active agent mode so the LLM knows its role.
     if let Some(cfg) = vtcode_config {
         let agent_label = agent_identity_label(&cfg.default_primary_agent);
-        instruction = apply_agent_identity(&instruction, &agent_label);
+        base_prompt = apply_agent_identity(&base_prompt, &agent_label);
     }
 
+    let mut sections = vec![PromptSection {
+        kind: SectionKind::BaseContract,
+        text: base_prompt,
+    }];
+
     if should_include_structured_reasoning(vtcode_config, prompt_mode) {
-        append_prompt_section(&mut instruction, STRUCTURED_REASONING_INSTRUCTIONS);
+        sections.push(PromptSection {
+            kind: SectionKind::StructuredReasoning,
+            text: STRUCTURED_REASONING_INSTRUCTIONS.to_string(),
+        });
     }
 
     if let Some(ctx) = prompt_context {
         let guidelines = generate_tool_guidelines(&ctx.available_tools, ctx.capability_level);
         if !guidelines.is_empty() {
-            append_prompt_section(&mut instruction, guidelines.trim_start_matches('\n'));
+            sections.push(PromptSection {
+                kind: SectionKind::ToolGuidelines,
+                text: guidelines.trim_start_matches('\n').to_string(),
+            });
         }
         if let Some(skills_section) = render_prompt_skills_section(&ctx.available_skill_metadata) {
-            append_prompt_section(&mut instruction, &skills_section);
+            sections.push(PromptSection {
+                kind: SectionKind::Skills,
+                text: skills_section,
+            });
         }
     }
 
     if let Some(environment_section) = render_environment_addenda(vtcode_config, prompt_context) {
-        append_prompt_section(&mut instruction, &environment_section);
+        sections.push(PromptSection {
+            kind: SectionKind::EnvironmentAddenda,
+            text: environment_section,
+        });
     }
 
-    instruction
+    sections
 }
 
-fn append_prompt_section(prompt: &mut String, section: &str) {
-    prompt.push_str("\n\n");
-    prompt.push_str(section);
+/// Join ordered prompt sections exactly as the legacy single-string builder
+/// did: the first section verbatim, then each subsequent section separated
+/// by a blank line.
+fn join_prompt_sections(sections: &[PromptSection]) -> String {
+    let capacity = sections.iter().map(|section| section.text.len() + 2).sum();
+    let mut joined = String::with_capacity(capacity);
+    for (index, section) in sections.iter().enumerate() {
+        if index > 0 {
+            joined.push_str("\n\n");
+        }
+        joined.push_str(&section.text);
+    }
+    joined
+}
+
+/// Enforce the configured system-prompt token budget against the composed
+/// sections.
+///
+/// When under budget, sections are joined and returned unchanged. When over
+/// budget and `trim_enabled` is false, the full untrimmed text is still used
+/// but a warning is logged (gated on `warn_enabled`). When over budget and
+/// `trim_enabled` is true, whole sections are dropped in
+/// [`SectionKind::trim_priority`] order (lowest first), re-measuring after
+/// each drop, until the prompt fits or only untrimmable sections remain.
+fn apply_token_budget(
+    mut sections: Vec<PromptSection>,
+    max_tokens: u64,
+    warn_enabled: bool,
+    trim_enabled: bool,
+) -> (String, SystemPromptReport) {
+    let mut text = join_prompt_sections(&sections);
+    let mut token_estimate = estimate_token_count(&text);
+    let mut trimmed_sections: Vec<&'static str> = Vec::new();
+
+    if token_estimate > max_tokens {
+        if trim_enabled {
+            while token_estimate > max_tokens {
+                let drop_index = sections
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(index, section)| {
+                        section
+                            .kind
+                            .trim_priority()
+                            .map(|priority| (priority, index))
+                    })
+                    .min_by_key(|(priority, _)| *priority)
+                    .map(|(_, index)| index);
+                let Some(drop_index) = drop_index else {
+                    break;
+                };
+                let dropped = sections.remove(drop_index);
+                trimmed_sections.push(dropped.kind.name());
+                text = join_prompt_sections(&sections);
+                token_estimate = estimate_token_count(&text);
+            }
+
+            if !trimmed_sections.is_empty() {
+                tracing::warn!(
+                    token_estimate,
+                    max_system_prompt_tokens = max_tokens,
+                    dropped_sections = ?trimmed_sections,
+                    "Trimmed system prompt sections to satisfy token budget"
+                );
+            }
+        } else if warn_enabled {
+            tracing::warn!(
+                token_estimate,
+                max_system_prompt_tokens = max_tokens,
+                "System prompt exceeds configured token budget"
+            );
+        }
+    }
+
+    let report = SystemPromptReport {
+        token_estimate,
+        over_budget: token_estimate > max_tokens,
+        trimmed_sections,
+    };
+    (text, report)
 }
 
 /// Apply agent identity to the system prompt by replacing the title and intro lines.
@@ -488,15 +722,30 @@ fn should_include_structured_reasoning(
 /// Note: This function maintains backward compatibility by not accepting prompt_context.
 /// For enhanced prompts with dynamic guidelines, call `compose_system_instruction_text` directly.
 pub async fn generate_system_instruction_with_config(
-    _config: &SystemPromptConfig,
+    config: &SystemPromptConfig,
     project_root: &Path,
     vtcode_config: Option<&crate::config::VTCodeConfig>,
 ) -> Content {
+    let (content, _report) =
+        generate_system_instruction_with_config_and_report(config, project_root, vtcode_config)
+            .await;
+    content
+}
+
+/// Same as [`generate_system_instruction_with_config`] but also returns the
+/// [`SystemPromptReport`] for the composed prompt, whether served from cache
+/// or freshly built.
+pub async fn generate_system_instruction_with_config_and_report(
+    _config: &SystemPromptConfig,
+    project_root: &Path,
+    vtcode_config: Option<&crate::config::VTCodeConfig>,
+) -> (Content, SystemPromptReport) {
     let cache_key = cache_key(project_root, vtcode_config, None);
-    let instruction = match PROMPT_CACHE.get(&cache_key) {
+    let (instruction, report) = match PROMPT_CACHE.get(&cache_key) {
         Some(cached) => cached,
         None => {
-            let built = compose_system_instruction_text(project_root, vtcode_config, None).await;
+            let built =
+                compose_system_instruction_with_report(project_root, vtcode_config, None).await;
             PROMPT_CACHE.insert(cache_key, built.clone());
             built
         }
@@ -504,26 +753,37 @@ pub async fn generate_system_instruction_with_config(
 
     // Apply output style if configured
     let styled_instruction = apply_output_style(instruction, vtcode_config, project_root).await;
-    Content::system_text(styled_instruction)
+    (Content::system_text(styled_instruction), report)
 }
 
 /// Generate the stable base system instruction without workspace configuration.
 pub async fn generate_system_instruction_with_guidelines(
-    _config: &SystemPromptConfig,
+    config: &SystemPromptConfig,
     project_root: &Path,
 ) -> Content {
+    let (content, _report) =
+        generate_system_instruction_with_guidelines_and_report(config, project_root).await;
+    content
+}
+
+/// Same as [`generate_system_instruction_with_guidelines`] but also returns
+/// the [`SystemPromptReport`] for the composed prompt.
+pub async fn generate_system_instruction_with_guidelines_and_report(
+    _config: &SystemPromptConfig,
+    project_root: &Path,
+) -> (Content, SystemPromptReport) {
     let cache_key = cache_key(project_root, None, None);
-    let instruction = match PROMPT_CACHE.get(&cache_key) {
+    let (instruction, report) = match PROMPT_CACHE.get(&cache_key) {
         Some(cached) => cached,
         None => {
-            let built = compose_system_instruction_text(project_root, None, None).await;
+            let built = compose_system_instruction_with_report(project_root, None, None).await;
             PROMPT_CACHE.insert(cache_key, built.clone());
             built
         }
     };
     // Apply output style if configured
     let styled_instruction = apply_output_style(instruction, None, project_root).await;
-    Content::system_text(styled_instruction)
+    (Content::system_text(styled_instruction), report)
 }
 
 /// Apply output style to a generated system instruction
@@ -581,6 +841,15 @@ fn cache_key(
             .hash(&mut hasher);
         // Use discriminant since SystemPromptMode doesn't derive Hash
         std::mem::discriminant(&cfg.agent.system_prompt_mode).hash(&mut hasher);
+        // Token-budget settings affect whether/how sections get trimmed, so
+        // toggling any of them must invalidate the cached prompt.
+        cfg.agent.max_system_prompt_tokens.hash(&mut hasher);
+        cfg.agent.system_prompt_budget_warning.hash(&mut hasher);
+        cfg.agent.trim_system_prompt.hash(&mut hasher);
+        // `agent_identity_label` rewrites the composed prompt based on the
+        // primary agent, so configs differing only here must not collide in
+        // the process-global PROMPT_CACHE.
+        cfg.default_primary_agent.hash(&mut hasher);
     } else {
         "default".hash(&mut hasher);
     }
@@ -619,10 +888,6 @@ pub fn estimate_token_count(text: &str) -> u64 {
     // Round up to avoid underestimation
     text.len().div_ceil(4) as u64
 }
-
-/// Default soft budget for system prompt tokens.
-/// When the prompt exceeds this, a warning is logged but no truncation occurs.
-pub const DEFAULT_MAX_SYSTEM_PROMPT_TOKENS: u64 = 8000;
 
 #[cfg(test)]
 mod tests {
@@ -1798,6 +2063,307 @@ mod tests {
         assert!(
             default_tokens < 600,
             "Default prompt tokens: {default_tokens}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_golden_under_budget_output_is_byte_identical() {
+        let workspace = tempfile::TempDir::new().expect("workspace");
+        let mut config = VTCodeConfig::default();
+        config.agent.include_temporal_context = false;
+        config.agent.include_working_directory = false;
+        config.agent.instruction_max_bytes = 0;
+
+        let result = compose_system_instruction_text(workspace.path(), Some(&config), None).await;
+
+        let expected = r#"# VT Code (Build mode)
+
+VT Code (Build mode). Be concise and safe.
+
+## Contract
+
+- If context is missing, say so, do not guess, finish unblocked slices.
+- Do not use emoji in responses.
+- Use retrieved evidence when citation-sensitive.
+- Preserve task goal, tracker state, touched files, verification status, and decisions across compaction.
+- Keep outputs concise; keep agent loops simple and let the model choose the next useful step.
+- Prefer `ast-grep` for code-shape queries; keep text grep for prose and config.
+- `spool_path` holds full tool output — read once with `unified_search action=grep` + specific pattern, not multiple `read_file` calls. Past-turn errors are already in history.
+- Start with existing `AGENTS.md` and `CLAUDE.md`; inspect code first, match local patterns, use `@file`.
+- Take safe, reversible steps; recover from tool errors with corrected parameters, smaller scope, or one focused clarification.
+- Ask only for material behavior, API, UX, or credential changes.
+- Keep control on the main thread. Delegate bounded, independent work only.
+- Verify changes yourself; never claim a check passed unless you ran it.
+- Keep user updates brief and high-signal.
+- Read files before answering. Never speculate about code you have not opened.
+- Make only requested changes. When the active agent has tool access, use tools to implement directly; otherwise stay within the active agent mode.
+
+## Operating Profile
+
+- Use `task_tracker` for non-trivial work.
+- Treat completion language as a checkpoint, not proof; only stop when the tracker is current and verification is resolved.
+- When tools are available, read files and search the codebase before answering; use tools to implement directly rather than describing what should be done.
+- Use Planning workflow for research/spec work; stay read-only until implementation intent is explicit."#;
+        assert_eq!(
+            result, expected,
+            "single-section base-contract output must stay byte-identical"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_golden_multi_section_output_is_byte_identical() {
+        use crate::skills::model::{SkillMetadata, SkillScope};
+
+        let workspace = tempfile::TempDir::new().expect("workspace");
+        let mut config = VTCodeConfig::default();
+        config.agent.system_prompt_mode = SystemPromptMode::Lightweight;
+        config.agent.include_temporal_context = false;
+        config.agent.include_working_directory = true;
+        config.agent.instruction_max_bytes = 0;
+        config.agent.include_structured_reasoning_tags = Some(true);
+
+        let mut ctx = PromptContext::default();
+        ctx.add_tool("unified_search".to_string());
+        ctx.add_tool("unified_exec".to_string());
+        ctx.add_skill_metadata(SkillMetadata {
+            name: "skill-creator".to_string(),
+            description: "Create skills".to_string(),
+            short_description: None,
+            path: PathBuf::from("/tmp/skill-creator/SKILL.md"),
+            scope: SkillScope::System,
+            manifest: None,
+        });
+        ctx.set_current_directory(PathBuf::from("/workspace"));
+
+        let result =
+            compose_system_instruction_text(workspace.path(), Some(&config), Some(&ctx)).await;
+
+        let expected = r#"# VT Code (Build mode)
+
+VT Code (Build mode). Be concise and safe.
+
+## Contract
+
+- If context is missing, say so, do not guess, finish unblocked slices.
+- Do not use emoji in responses.
+- Use retrieved evidence when citation-sensitive.
+- Preserve task goal, tracker state, touched files, verification status, and decisions across compaction.
+- Keep outputs concise; keep agent loops simple and let the model choose the next useful step.
+- Prefer `ast-grep` for code-shape queries; keep text grep for prose and config.
+- `spool_path` holds full tool output — read once with `unified_search action=grep` + specific pattern, not multiple `read_file` calls. Past-turn errors are already in history.
+- Start with existing `AGENTS.md` and `CLAUDE.md`; inspect code first, match local patterns, use `@file`.
+- Take safe, reversible steps; recover from tool errors with corrected parameters, smaller scope, or one focused clarification.
+- Ask only for material behavior, API, UX, or credential changes.
+- Keep control on the main thread. Delegate bounded, independent work only.
+- Verify changes yourself; never claim a check passed unless you ran it.
+- Keep user updates brief and high-signal.
+- Read files before answering. Never speculate about code you have not opened.
+- Make only requested changes. When the active agent has tool access, use tools to implement directly; otherwise stay within the active agent mode.
+
+## Operating Profile
+
+- Act and verify in one thread.
+- Completion language is a checkpoint.
+- Use `task_tracker` for nontrivial work.
+
+
+## Structured Reasoning
+
+Use tags when helpful: `<analysis>` facts/options, `<plan>` steps, `<uncertainty>` blockers, `<verification>` checks. When a decision must be consumed by code or tools, prefer JSON or function-call shaped output over prose.
+
+
+## Active Tools
+- Prefer `unified_search` over shell browsing.
+- Use `unified_exec` for verification, `git diff -- <path>`, and shell-only tasks.
+- Completion is a checkpoint: keep `task_tracker` current; verification resolved.
+- Prefer search over shell for exploration.
+- `action=outline` for "what's here?" (symbol map, no pattern needed); `action=structural` for code shape; `action=grep` for text. Set `lang` for structural/outline.
+- If calls repeat, re-plan instead of retrying.
+- Run independent tools in parallel (read files or commands at once).
+
+## Skills
+Use a skill only when the user names it or the task clearly matches. Load details on demand.
+- skill-creator: Create skills
+
+## Environment
+- Working directory: /workspace"#;
+        assert_eq!(
+            result, expected,
+            "multi-section joined output must stay byte-identical"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_over_budget_without_trim_keeps_full_text_and_reports_over_budget() {
+        use crate::skills::model::{SkillMetadata, SkillScope};
+
+        let workspace = tempfile::TempDir::new().expect("workspace");
+        let mut config = VTCodeConfig::default();
+        config.agent.system_prompt_mode = SystemPromptMode::Lightweight;
+        config.agent.include_temporal_context = false;
+        config.agent.include_working_directory = true;
+        config.agent.instruction_max_bytes = 0;
+        config.agent.include_structured_reasoning_tags = Some(true);
+        config.agent.max_system_prompt_tokens = 1;
+        config.agent.trim_system_prompt = false;
+        config.agent.system_prompt_budget_warning = true;
+
+        let mut ctx = PromptContext::default();
+        ctx.add_tool("unified_search".to_string());
+        ctx.add_tool("unified_exec".to_string());
+        ctx.add_skill_metadata(SkillMetadata {
+            name: "skill-creator".to_string(),
+            description: "Create skills".to_string(),
+            short_description: None,
+            path: PathBuf::from("/tmp/skill-creator/SKILL.md"),
+            scope: SkillScope::System,
+            manifest: None,
+        });
+        ctx.set_current_directory(PathBuf::from("/workspace"));
+
+        let sections = build_prompt_sections(workspace.path(), Some(&config), Some(&ctx)).await;
+        let full_text = join_prompt_sections(&sections);
+        let full_tokens = estimate_token_count(&full_text);
+        assert!(
+            full_tokens > config.agent.max_system_prompt_tokens,
+            "test setup must exceed the configured budget"
+        );
+
+        let (text, report) =
+            compose_system_instruction_with_report(workspace.path(), Some(&config), Some(&ctx))
+                .await;
+
+        assert_eq!(
+            text, full_text,
+            "trim disabled: full untrimmed text must still be used"
+        );
+        assert!(
+            report.over_budget,
+            "token estimate exceeds configured budget"
+        );
+        assert_eq!(report.token_estimate, full_tokens);
+        assert!(
+            report.trimmed_sections.is_empty(),
+            "no sections should be dropped when trimming is disabled"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_over_budget_with_trim_drops_sections_in_priority_order() {
+        use crate::skills::model::{SkillMetadata, SkillScope};
+
+        let workspace = tempfile::TempDir::new().expect("workspace");
+        let mut config = VTCodeConfig::default();
+        config.agent.system_prompt_mode = SystemPromptMode::Lightweight;
+        config.agent.include_temporal_context = false;
+        config.agent.include_working_directory = true;
+        config.agent.instruction_max_bytes = 0;
+        config.agent.include_structured_reasoning_tags = Some(true);
+        config.agent.trim_system_prompt = true;
+        config.agent.system_prompt_budget_warning = true;
+
+        let mut ctx = PromptContext::default();
+        ctx.add_tool("unified_search".to_string());
+        ctx.add_tool("unified_exec".to_string());
+        ctx.add_skill_metadata(SkillMetadata {
+            name: "skill-creator".to_string(),
+            description: "Create skills".to_string(),
+            short_description: None,
+            path: PathBuf::from("/tmp/skill-creator/SKILL.md"),
+            scope: SkillScope::System,
+            manifest: None,
+        });
+        ctx.set_current_directory(PathBuf::from("/workspace"));
+
+        let sections = build_prompt_sections(workspace.path(), Some(&config), Some(&ctx)).await;
+        // Budget set to exactly the base-contract-only token count so every
+        // droppable (trim_priority = Some(_)) section must be dropped, while
+        // the untrimmable base contract always survives.
+        let base_only_tokens = sections
+            .iter()
+            .find(|section| section.kind == SectionKind::BaseContract)
+            .map(|section| estimate_token_count(&section.text))
+            .expect("base contract section is always present");
+        config.agent.max_system_prompt_tokens = base_only_tokens;
+
+        let (text, report) =
+            compose_system_instruction_with_report(workspace.path(), Some(&config), Some(&ctx))
+                .await;
+
+        assert_eq!(
+            report.trimmed_sections,
+            vec![
+                "structured_reasoning",
+                "skills",
+                "environment_addenda",
+                "tool_guidelines",
+            ],
+            "sections must drop in lowest-trim-priority-first order"
+        );
+        assert!(
+            text.contains("## Contract"),
+            "base contract must never be dropped"
+        );
+        assert!(!text.contains("## Structured Reasoning"));
+        assert!(!text.contains("## Skills"));
+        assert!(!text.contains("## Environment"));
+        assert!(!text.contains("## Active Tools"));
+        assert!(
+            !report.over_budget,
+            "text should fit budget once every droppable section is gone"
+        );
+    }
+
+    #[test]
+    fn test_cache_key_changes_with_budget_settings() {
+        let project_root = PathBuf::from("/workspace");
+        let base_config = VTCodeConfig::default();
+        let base_key = cache_key(&project_root, Some(&base_config), None);
+
+        let mut max_tokens_changed = VTCodeConfig::default();
+        max_tokens_changed.agent.max_system_prompt_tokens += 1;
+        assert_ne!(
+            base_key,
+            cache_key(&project_root, Some(&max_tokens_changed), None),
+            "cache key must change when max_system_prompt_tokens changes"
+        );
+
+        let mut warning_changed = VTCodeConfig::default();
+        warning_changed.agent.system_prompt_budget_warning =
+            !warning_changed.agent.system_prompt_budget_warning;
+        assert_ne!(
+            base_key,
+            cache_key(&project_root, Some(&warning_changed), None),
+            "cache key must change when system_prompt_budget_warning changes"
+        );
+
+        let mut trim_changed = VTCodeConfig::default();
+        trim_changed.agent.trim_system_prompt = !trim_changed.agent.trim_system_prompt;
+        assert_ne!(
+            base_key,
+            cache_key(&project_root, Some(&trim_changed), None),
+            "cache key must change when trim_system_prompt changes"
+        );
+    }
+
+    #[test]
+    fn test_cache_key_changes_with_default_primary_agent() {
+        let project_root = PathBuf::from("/workspace");
+        let base_config = VTCodeConfig {
+            default_primary_agent: "build".to_string(),
+            ..Default::default()
+        };
+        let base_key = cache_key(&project_root, Some(&base_config), None);
+
+        let auto_config = VTCodeConfig {
+            default_primary_agent: "auto".to_string(),
+            ..Default::default()
+        };
+        assert_ne!(
+            base_key,
+            cache_key(&project_root, Some(&auto_config), None),
+            "cache key must change when default_primary_agent changes, since \
+             agent_identity_label rewrites the composed prompt"
         );
     }
 }

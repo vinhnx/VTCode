@@ -2,7 +2,7 @@
 //!
 //! A loop is a long-lived scheduler that invokes the vtcode harness repeatedly.
 //! `LoopRunState` captures the durable state a loop scheduler reads on resume:
-//! current step index, cumulative token cost, last artifact path, and status.
+//! current step index, last artifact path, and status.
 //!
 //! State is persisted as JSON under `{workspace}/.vtcode/state/loop-{id}.json`.
 
@@ -27,8 +27,6 @@ pub struct LoopRunState {
     pub loop_id: String,
     /// Zero-based index of the current step.
     pub step_index: u32,
-    /// Cumulative token usage across all steps so far.
-    pub cumulative_tokens: TokenUsage,
     /// Path to the last artifact produced by the loop (e.g., a diff, a report).
     pub last_artifact_path: Option<PathBuf>,
     /// Current lifecycle status.
@@ -37,10 +35,6 @@ pub struct LoopRunState {
     pub started_at: DateTime<Utc>,
     /// When the loop state was last persisted.
     pub updated_at: DateTime<Utc>,
-    /// When the last LLM request was sent. Used to detect cache expiration
-    /// after long pauses (the article flags this as a silent cost driver).
-    #[serde(default)]
-    pub last_request_at: Option<DateTime<Utc>>,
 }
 
 /// Lifecycle status of a loop run.
@@ -64,48 +58,16 @@ impl LoopRunState {
         Self {
             loop_id: loop_id.into(),
             step_index: 0,
-            cumulative_tokens: TokenUsage::default(),
             last_artifact_path: None,
             status: LoopStatus::Running,
             started_at: now,
             updated_at: now,
-            last_request_at: None,
         }
     }
 
     /// Advance to the next step and update the timestamp.
     pub fn advance_step(&mut self) {
         self.step_index = self.step_index.saturating_add(1);
-        self.updated_at = Utc::now();
-    }
-
-    /// Record token usage from a completed step.
-    pub fn record_usage(&mut self, usage: &TokenUsage) {
-        self.cumulative_tokens.input_tokens = self
-            .cumulative_tokens
-            .input_tokens
-            .saturating_add(usage.input_tokens);
-        self.cumulative_tokens.output_tokens = self
-            .cumulative_tokens
-            .output_tokens
-            .saturating_add(usage.output_tokens);
-        self.cumulative_tokens.cached_input_tokens = self
-            .cumulative_tokens
-            .cached_input_tokens
-            .saturating_add(usage.cached_input_tokens);
-        self.cumulative_tokens.cache_creation_tokens = self
-            .cumulative_tokens
-            .cache_creation_tokens
-            .saturating_add(usage.cache_creation_tokens);
-        // Guard against NaN: if either operand is NaN, the addition produces NaN,
-        // and NaN >= max_budget_usd evaluates to false, allowing an unbounded loop.
-        // Clamp to finite values to ensure the budget check always works.
-        let new_cost = self.cumulative_tokens.total_cost_usd + usage.total_cost_usd;
-        self.cumulative_tokens.total_cost_usd = if new_cost.is_finite() {
-            new_cost
-        } else {
-            f64::MAX
-        };
         self.updated_at = Utc::now();
     }
 
@@ -130,176 +92,6 @@ impl LoopRunState {
     /// Returns true if the loop can be resumed.
     pub fn is_resumable(&self) -> bool {
         matches!(self.status, LoopStatus::Paused | LoopStatus::Running)
-    }
-
-    /// Record that an LLM request was just sent. Called before each provider
-    /// request so cache-gap detection can measure the pause since the last one.
-    pub fn note_request_sent(&mut self) {
-        self.last_request_at = Some(Utc::now());
-        self.updated_at = Utc::now();
-    }
-
-    /// Check whether the cache may have expired since the last request.
-    ///
-    /// Returns `Some(duration)` if the gap exceeds `threshold_secs`, indicating
-    /// the next request will likely incur full cache creation cost. The article
-    /// identifies this as a silent cost driver: "resuming a session after a long
-    /// pause with its cache expired."
-    #[must_use]
-    pub fn cache_gap_exceeds(&self, threshold_secs: i64) -> Option<chrono::TimeDelta> {
-        let last = self.last_request_at?;
-        let elapsed = Utc::now() - last;
-        if elapsed.num_seconds() >= threshold_secs {
-            Some(elapsed)
-        } else {
-            None
-        }
-    }
-
-    /// Produce a human-readable summary of cache efficiency for this session.
-    #[must_use]
-    pub fn cache_summary(&self) -> String {
-        let t = &self.cumulative_tokens;
-        let total_input = t.input_tokens;
-        let cached = t.cached_input_tokens;
-        let creation = t.cache_creation_tokens;
-        let uncached = t.uncached_input_tokens();
-
-        if total_input == 0 {
-            return "No input tokens recorded.".to_string();
-        }
-
-        let rate = cached as f64 / total_input as f64 * 100.0;
-        format!(
-            "Cache: {cached} cached / {total_input} total input ({rate:.1}% hit rate), \
-             {creation} cache-creation, {uncached} uncached"
-        )
-    }
-}
-
-// ─── Token Usage ─────────────────────────────────────────────────────────────
-
-/// Cumulative token usage for a loop run.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct TokenUsage {
-    /// Number of input tokens consumed.
-    pub input_tokens: u64,
-    /// Number of output tokens produced.
-    pub output_tokens: u64,
-    /// Estimated total cost in USD.
-    pub total_cost_usd: f64,
-    /// Number of input tokens served from cache (cache hits).
-    /// These tokens cost significantly less than uncached tokens.
-    #[serde(default)]
-    pub cached_input_tokens: u64,
-    /// Number of input tokens that created new cache entries.
-    #[serde(default)]
-    pub cache_creation_tokens: u64,
-}
-
-impl TokenUsage {
-    /// Total tokens (input + output).
-    #[must_use]
-    pub fn total_tokens(&self) -> u64 {
-        self.input_tokens.saturating_add(self.output_tokens)
-    }
-
-    /// Number of input tokens that were NOT served from cache.
-    /// These are the expensive tokens that drive most of the input cost.
-    #[must_use]
-    pub fn uncached_input_tokens(&self) -> u64 {
-        self.input_tokens.saturating_sub(self.cached_input_tokens)
-    }
-
-    /// Cache hit rate as a fraction (0.0 to 1.0).
-    /// Returns None if there are no input tokens.
-    #[must_use]
-    pub fn cache_hit_rate(&self) -> Option<f64> {
-        if self.input_tokens == 0 {
-            return None;
-        }
-        Some(self.cached_input_tokens as f64 / self.input_tokens as f64)
-    }
-
-    /// Cache-aware effective cost in USD.
-    ///
-    /// Cached tokens cost ~10% of uncached tokens (matching OpenAI's 10x
-    /// pricing differential). This gives a more accurate cost estimate than
-    /// treating all input tokens at the same rate.
-    ///
-    /// The formula: effective_cost = (uncached_tokens * base_rate)
-    ///                              + (cached_tokens * base_rate * 0.1)
-    ///                              + (cache_creation_tokens * base_rate * 0.25)
-    ///                              + (output_tokens * output_rate)
-    ///
-    /// Recomputes cost from token counts and per-token rates rather than
-    /// adjusting `total_cost_usd`, since we need granular cache discounts.
-    #[must_use]
-    pub fn cache_adjusted_cost_usd(&self, base_input_rate: f64, output_rate: f64) -> f64 {
-        let uncached = self.uncached_input_tokens() as f64;
-        let cached = self.cached_input_tokens as f64;
-        let creation = self.cache_creation_tokens as f64;
-        let output = self.output_tokens as f64;
-
-        // Cached tokens cost 10% of base rate, creation costs 25% premium
-        (uncached * base_input_rate)
-            + (cached * base_input_rate * 0.1)
-            + (creation * base_input_rate * 0.25)
-            + (output * output_rate)
-    }
-}
-
-// ─── Cost Budget ─────────────────────────────────────────────────────────────
-
-/// Budget constraints for a loop run. Checked before each step to prevent
-/// unbounded iteration cost — the primary failure mode Osmani identifies.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CostBudget {
-    /// Maximum total tokens (input + output) before the loop stops.
-    pub max_total_tokens: u64,
-    /// Maximum total cost in USD before the loop stops.
-    pub max_cost_usd: f64,
-    /// Maximum number of steps before the loop stops.
-    pub max_steps: u32,
-}
-
-impl Default for CostBudget {
-    fn default() -> Self {
-        Self {
-            max_total_tokens: 1_000_000,
-            max_cost_usd: 10.0,
-            max_steps: 50,
-        }
-    }
-}
-
-/// Result of checking a loop run state against a budget.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum BudgetStatus {
-    /// The loop can continue.
-    Ok,
-    /// The token limit has been reached.
-    TokenLimitReached,
-    /// The cost limit has been reached.
-    CostLimitReached,
-    /// The step limit has been reached.
-    StepLimitReached,
-}
-
-impl CostBudget {
-    /// Check whether the loop run state is within budget.
-    #[must_use]
-    pub fn check(&self, state: &LoopRunState) -> BudgetStatus {
-        if state.step_index >= self.max_steps {
-            return BudgetStatus::StepLimitReached;
-        }
-        if state.cumulative_tokens.total_tokens() >= self.max_total_tokens {
-            return BudgetStatus::TokenLimitReached;
-        }
-        if state.cumulative_tokens.total_cost_usd >= self.max_cost_usd {
-            return BudgetStatus::CostLimitReached;
-        }
-        BudgetStatus::Ok
     }
 }
 
@@ -423,8 +215,6 @@ mod tests {
         assert_eq!(state.step_index, 0);
         assert_eq!(state.status, LoopStatus::Running);
         assert!(state.last_artifact_path.is_none());
-        assert_eq!(state.cumulative_tokens.input_tokens, 0);
-        assert_eq!(state.cumulative_tokens.output_tokens, 0);
     }
 
     #[test]
@@ -435,30 +225,6 @@ mod tests {
         assert_eq!(state.step_index, 1);
         state.advance_step();
         assert_eq!(state.step_index, 2);
-    }
-
-    #[test]
-    fn loop_run_state_record_usage_accumulates() {
-        let mut state = LoopRunState::new("test");
-        state.record_usage(&TokenUsage {
-            input_tokens: 100,
-            output_tokens: 50,
-            total_cost_usd: 0.01,
-            ..Default::default()
-        });
-        assert_eq!(state.cumulative_tokens.input_tokens, 100);
-        assert_eq!(state.cumulative_tokens.output_tokens, 50);
-        assert!((state.cumulative_tokens.total_cost_usd - 0.01).abs() < f64::EPSILON);
-
-        state.record_usage(&TokenUsage {
-            input_tokens: 200,
-            output_tokens: 100,
-            total_cost_usd: 0.02,
-            ..Default::default()
-        });
-        assert_eq!(state.cumulative_tokens.input_tokens, 300);
-        assert_eq!(state.cumulative_tokens.output_tokens, 150);
-        assert!((state.cumulative_tokens.total_cost_usd - 0.03).abs() < f64::EPSILON);
     }
 
     #[test]
@@ -482,88 +248,10 @@ mod tests {
     }
 
     #[test]
-    fn token_usage_total_tokens() {
-        let usage = TokenUsage {
-            input_tokens: 100,
-            output_tokens: 50,
-            total_cost_usd: 0.0,
-            ..Default::default()
-        };
-        assert_eq!(usage.total_tokens(), 150);
-    }
-
-    #[test]
-    fn cost_budget_ok_within_limits() {
-        let budget = CostBudget {
-            max_total_tokens: 1000,
-            max_cost_usd: 1.0,
-            max_steps: 10,
-        };
-        let state = LoopRunState::new("test");
-        assert_eq!(budget.check(&state), BudgetStatus::Ok);
-    }
-
-    #[test]
-    fn cost_budget_step_limit_reached() {
-        let budget = CostBudget {
-            max_total_tokens: 1_000_000,
-            max_cost_usd: 100.0,
-            max_steps: 3,
-        };
-        let mut state = LoopRunState::new("test");
-        state.advance_step(); // 1
-        assert_eq!(budget.check(&state), BudgetStatus::Ok);
-        state.advance_step(); // 2
-        assert_eq!(budget.check(&state), BudgetStatus::Ok);
-        state.advance_step(); // 3
-        assert_eq!(budget.check(&state), BudgetStatus::StepLimitReached);
-    }
-
-    #[test]
-    fn cost_budget_token_limit_reached() {
-        let budget = CostBudget {
-            max_total_tokens: 500,
-            max_cost_usd: 100.0,
-            max_steps: 100,
-        };
-        let mut state = LoopRunState::new("test");
-        state.record_usage(&TokenUsage {
-            input_tokens: 300,
-            output_tokens: 250,
-            total_cost_usd: 0.0,
-            ..Default::default()
-        });
-        assert_eq!(budget.check(&state), BudgetStatus::TokenLimitReached);
-    }
-
-    #[test]
-    fn cost_budget_cost_limit_reached() {
-        let budget = CostBudget {
-            max_total_tokens: 1_000_000,
-            max_cost_usd: 0.05,
-            max_steps: 100,
-        };
-        let mut state = LoopRunState::new("test");
-        state.record_usage(&TokenUsage {
-            input_tokens: 100,
-            output_tokens: 50,
-            total_cost_usd: 0.06,
-            ..Default::default()
-        });
-        assert_eq!(budget.check(&state), BudgetStatus::CostLimitReached);
-    }
-
-    #[test]
     fn loop_state_round_trip_persistence() {
         let tmp = TempDir::new().expect("temp dir");
         let mut state = LoopRunState::new("round-trip-test");
         state.advance_step();
-        state.record_usage(&TokenUsage {
-            input_tokens: 500,
-            output_tokens: 200,
-            total_cost_usd: 0.05,
-            ..Default::default()
-        });
         state.last_artifact_path = Some(PathBuf::from("/tmp/artifact.txt"));
 
         let path = save_loop_state(tmp.path(), &state).expect("save");
@@ -574,8 +262,6 @@ mod tests {
             .expect("should exist");
         assert_eq!(loaded.loop_id, "round-trip-test");
         assert_eq!(loaded.step_index, 1);
-        assert_eq!(loaded.cumulative_tokens.input_tokens, 500);
-        assert_eq!(loaded.cumulative_tokens.output_tokens, 200);
         assert!(loaded.last_artifact_path.is_some());
         assert_eq!(loaded.status, LoopStatus::Running);
     }
@@ -630,12 +316,10 @@ mod tests {
             let state = LoopRunState {
                 loop_id: "serde-test".to_string(),
                 step_index: 0,
-                cumulative_tokens: TokenUsage::default(),
                 last_artifact_path: None,
                 status: status.clone(),
                 started_at: Utc::now(),
                 updated_at: Utc::now(),
-                last_request_at: None,
             };
             let json = serde_json::to_string(&state).expect("serialize");
             let deserialized: LoopRunState = serde_json::from_str(&json).expect("deserialize");

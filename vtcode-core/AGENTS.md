@@ -29,3 +29,5 @@ Implement in `vtcode-llm/src/providers/` (the canonical home). Use `adding-llm-p
 - `lib.rs` is 500+ lines — append re-exports, don't restructure.
 - `#[cfg_attr(not(test), allow(...))]` clippy suppressions — do not remove.
 - Provider implementations live in `vtcode-llm/src/providers/`, not in core. Core's `llm/providers/` is a re-export facade.
+- `llm/usage_cost.rs` is the canonical session-cost normalization: `raw_usd` for budget enforcement, `effective_usd` (cache-discounted) for display. Do not compute costs inline from `Usage`.
+- `llm/request_gap.rs::RequestGapTracker` (+ `format_gap`) is the single home for cache-gap timing, embedded in both runloop `SessionStats` and headless `AgentSessionState` — do not re-add per-site `last_request_at` timers.

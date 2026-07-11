@@ -11,6 +11,7 @@ use crate::core::state_schema::SchemaVersion;
 use crate::exec::events::Usage;
 use crate::llm::provider::{Message, ResponsesContinuationState, responses_continuation_key};
 use crate::llm::providers::gemini::wire::{Content, FunctionResponse, Part};
+use crate::llm::request_gap::RequestGapTracker;
 use hashbrown::HashMap;
 use parking_lot::Mutex;
 use std::sync::Arc;
@@ -92,6 +93,16 @@ pub struct AgentSessionState {
     /// Cached total estimated token count for the conversation history.
     /// Updated incrementally on each push to avoid O(n) scans per turn.
     cached_total_tokens: usize,
+
+    /// Tracks the idle gap since the last dispatched LLM request, so a long
+    /// enough pause can warn that the provider prompt cache has likely
+    /// expired. Shared with the interactive session state; see
+    /// [`RequestGapTracker`].
+    request_gap: RequestGapTracker,
+
+    /// Reasoning effort used for the last dispatched request, used to detect
+    /// mid-task changes that invalidate the provider prompt cache.
+    last_reasoning_effort: Option<crate::config::types::ReasoningEffortLevel>,
 }
 
 /// Statistics tracked during an agent session.
@@ -101,32 +112,20 @@ pub struct SessionStats {
     pub total_duration: Duration,
     pub turn_durations: Vec<Duration>,
     pub total_usage: Usage,
+    /// Provider name for the active session, used to normalize per-turn usage
+    /// (see [`crate::llm::usage_cost::provider_reports_exclusive_input`]). An
+    /// empty string is treated as a non-exclusive-input provider, which
+    /// preserves existing behavior for callers that never set it.
+    pub provider_name: String,
 }
 
 impl SessionStats {
     pub fn merge_usage(&mut self, usage: crate::llm::provider::Usage) {
-        self.total_usage.input_tokens = self
-            .total_usage
-            .input_tokens
-            .saturating_add(usage.prompt_tokens as u64);
-        self.total_usage.output_tokens = self
-            .total_usage
-            .output_tokens
-            .saturating_add(usage.completion_tokens as u64);
-        let cached = usage.cache_read_tokens_or_fallback();
-        if cached > 0 {
-            self.total_usage.cached_input_tokens = self
-                .total_usage
-                .cached_input_tokens
-                .saturating_add(cached as u64);
-        }
-        let cache_creation = usage.cache_creation_tokens_or_zero();
-        if cache_creation > 0 {
-            self.total_usage.cache_creation_tokens = self
-                .total_usage
-                .cache_creation_tokens
-                .saturating_add(cache_creation as u64);
-        }
+        self.total_usage
+            .add(&crate::llm::usage_cost::normalized_turn_usage(
+                &self.provider_name,
+                &usage,
+            ));
     }
 }
 
@@ -184,7 +183,41 @@ impl AgentSessionState {
             turn_durations_ms: Vec::with_capacity(max_turns),
             turn_tool_latencies: Vec::with_capacity(32),
             cached_total_tokens: 0,
+            request_gap: RequestGapTracker::default(),
+            last_reasoning_effort: None,
         }
+    }
+
+    /// Records that an LLM request was just dispatched, so the next call to
+    /// [`Self::cache_gap_exceeds`] can measure the idle gap since this request.
+    pub fn note_request_sent(&mut self) {
+        self.request_gap.note_request_sent();
+    }
+
+    /// Returns the elapsed time since the last dispatched request when it
+    /// exceeds `threshold`, or `None` if there was no prior request or the gap
+    /// is still within the threshold. Used to warn that the provider prompt
+    /// cache has likely expired before the next request re-pays full input
+    /// cost.
+    pub fn cache_gap_exceeds(&self, threshold: Duration) -> Option<Duration> {
+        self.request_gap.cache_gap_exceeds(threshold)
+    }
+
+    /// Checks whether `effort` differs from the reasoning effort used for the
+    /// previous request in this session, then stores `effort` as the new
+    /// baseline. Returns `true` only when a prior effort was recorded and it
+    /// differs from `effort` (i.e. this is a genuine mid-task change, not the
+    /// first request of the session).
+    pub fn note_reasoning_effort_change(
+        &mut self,
+        effort: Option<crate::config::types::ReasoningEffortLevel>,
+    ) -> bool {
+        let changed = matches!(
+            (self.last_reasoning_effort, effort),
+            (Some(previous), Some(current)) if previous != current
+        );
+        self.last_reasoning_effort = effort;
+        changed
     }
 
     /// Record a completed turn.
@@ -557,8 +590,47 @@ impl AgentSessionState {
 #[cfg(test)]
 mod tests {
     use super::AgentSessionState;
+    use crate::config::types::ReasoningEffortLevel;
     use crate::llm::provider::Message;
     use crate::llm::providers::gemini::wire::Part;
+    use std::thread;
+    use std::time::Duration;
+
+    /// `cache_gap_exceeds`/`note_request_sent` delegate to the shared
+    /// `RequestGapTracker`, which owns the full behavioral test coverage
+    /// (see `crate::llm::request_gap`); this just pins the delegation.
+    #[test]
+    fn cache_gap_exceeds_delegates_to_request_gap_tracker() {
+        let mut state = AgentSessionState::new("session".to_string(), 4, 4, 16_000);
+        assert_eq!(state.cache_gap_exceeds(Duration::from_millis(1)), None);
+
+        state.note_request_sent();
+        thread::sleep(Duration::from_millis(15));
+        let gap = state.cache_gap_exceeds(Duration::from_millis(5));
+        assert!(gap.is_some_and(|elapsed| elapsed >= Duration::from_millis(15)));
+    }
+
+    #[test]
+    fn note_reasoning_effort_change_is_false_on_first_request() {
+        let mut state = AgentSessionState::new("session".to_string(), 4, 4, 16_000);
+        assert!(!state.note_reasoning_effort_change(Some(ReasoningEffortLevel::Medium)));
+    }
+
+    #[test]
+    fn note_reasoning_effort_change_is_false_when_unchanged() {
+        let mut state = AgentSessionState::new("session".to_string(), 4, 4, 16_000);
+        assert!(!state.note_reasoning_effort_change(Some(ReasoningEffortLevel::Medium)));
+        assert!(!state.note_reasoning_effort_change(Some(ReasoningEffortLevel::Medium)));
+    }
+
+    #[test]
+    fn note_reasoning_effort_change_is_true_when_changed() {
+        let mut state = AgentSessionState::new("session".to_string(), 4, 4, 16_000);
+        assert!(!state.note_reasoning_effort_change(Some(ReasoningEffortLevel::Medium)));
+        assert!(state.note_reasoning_effort_change(Some(ReasoningEffortLevel::High)));
+        // Baseline is now High; requesting High again is not a change.
+        assert!(!state.note_reasoning_effort_change(Some(ReasoningEffortLevel::High)));
+    }
 
     #[test]
     fn previous_response_chain_is_scoped_to_provider_and_model() {

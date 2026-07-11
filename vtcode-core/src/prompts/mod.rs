@@ -26,7 +26,8 @@ pub use few_shot::{
     DEFAULT_FEW_SHOT_BUDGET_TOKENS, FewShotExample, FewShotStore, render_few_shot_section,
 };
 pub use guidelines::{
-    append_runtime_tool_prompt_sections, generate_tool_guidelines, infer_capability_level,
+    append_deferred_tools_prompt_section, append_runtime_tool_prompt_sections,
+    generate_tool_guidelines, infer_capability_level,
 };
 pub use harness_limits::upsert_harness_limits_section;
 pub use resources::{

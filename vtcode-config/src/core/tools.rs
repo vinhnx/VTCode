@@ -71,6 +71,16 @@ pub struct ToolsConfig {
     /// and lower limits for mutating tools.
     #[serde(default)]
     pub loop_thresholds: IndexMap<String, usize>,
+
+    /// Enables client-local deferred tool loading for providers without a
+    /// hosted tool search (e.g. Gemini). When enabled, tools flagged
+    /// `defer_loading: true` are omitted from the request payload instead
+    /// of being sent eagerly, and a compact summary of what is discoverable
+    /// is appended to the system prompt; the model loads them via the
+    /// local `unified_search action="tools"`. This changes model behavior,
+    /// so it defaults to `false`.
+    #[serde(default = "default_client_tool_search")]
+    pub client_tool_search: bool,
 }
 
 /// External editor integration configuration
@@ -208,6 +218,7 @@ impl Default for ToolsConfig {
             plugins: PluginRuntimeConfig::default(),
             editor: EditorToolConfig::default(),
             loop_thresholds: IndexMap::new(),
+            client_tool_search: default_client_tool_search(),
         }
     }
 }
@@ -386,6 +397,11 @@ const fn default_editor_suspend_tui() -> bool {
     true
 }
 
+#[inline]
+const fn default_client_tool_search() -> bool {
+    false
+}
+
 const DEFAULT_TOOL_POLICIES: &[(&str, ToolPolicy)] = &[
     // Core workflow tools (non-destructive)
     (tools::START_PLANNING, ToolPolicy::Allow),
@@ -469,6 +485,25 @@ mod tests {
         ] {
             assert!(!config.policies.contains_key(legacy_tool));
         }
+    }
+
+    #[test]
+    fn client_tool_search_defaults_to_disabled() {
+        let config = ToolsConfig::default();
+        assert!(!config.client_tool_search);
+
+        let deserialized: ToolsConfig = toml::from_str("default_policy = \"prompt\"\n")
+            .expect("tools config should parse without client_tool_search");
+        assert!(!deserialized.client_tool_search);
+
+        let enabled: ToolsConfig = toml::from_str(
+            r#"
+default_policy = "prompt"
+client_tool_search = true
+"#,
+        )
+        .expect("tools config should parse with client_tool_search");
+        assert!(enabled.client_tool_search);
     }
 
     #[test]

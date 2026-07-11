@@ -10,7 +10,7 @@ use anyhow::Result;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 
 use crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter;
@@ -62,8 +62,7 @@ use post_tool_recovery::{
     dispatch_post_tool_failure, normalize_tool_free_recovery_break_outcome,
 };
 use usage_accounting::{
-    accumulate_turn_usage, estimate_session_cost_usd, has_turn_usage,
-    stop_reason_from_finish_reason,
+    accumulate_turn_usage, estimate_session_costs, has_turn_usage, stop_reason_from_finish_reason,
 };
 use vtcode_core::config::types::AgentConfig;
 use vtcode_core::core::agent::error_recovery::ErrorType;
@@ -598,6 +597,36 @@ pub(crate) async fn run_turn_loop(
         let recovery_pass = turn_processing_ctx.consume_recovery_pass();
 
         let tool_free_recovery = recovery_pass && turn_processing_ctx.recovery_is_tool_free();
+
+        // Cache-gap advisory (Phase E1): warn once per gap when the user
+        // paused long enough for the provider prompt cache to have expired,
+        // so this request may unexpectedly re-pay full input cost.
+        let cache_gap_provider_name = turn_processing_ctx.config.provider.clone();
+        if let Some(threshold) = turn_processing_ctx.vt_cfg.and_then(|cfg| {
+            cfg.prompt_cache
+                .gap_threshold_secs(&cache_gap_provider_name)
+        }) {
+            let threshold = Duration::from_secs(threshold);
+            if turn_processing_ctx
+                .session_stats
+                .total_usage()
+                .cached_input_tokens
+                > 0
+                && let Some(elapsed) = turn_processing_ctx
+                    .session_stats
+                    .cache_gap_exceeds(threshold)
+            {
+                let _ = turn_processing_ctx.renderer.line(
+                    MessageStyle::Info,
+                    &format!(
+                        "~{} since the last request; the provider prompt cache has likely expired, so this request may re-pay full input cost.",
+                        vtcode_core::llm::request_gap::format_gap(elapsed)
+                    ),
+                );
+            }
+        }
+        turn_processing_ctx.session_stats.note_request_sent();
+
         let (response, response_streamed) = match execute_llm_request(
             &mut turn_processing_ctx,
             step_count,
@@ -690,10 +719,11 @@ pub(crate) async fn run_turn_loop(
 
         // Track turn usage and context pressure before later processing borrows `response`.
         let response_usage = response.usage.clone();
-        accumulate_turn_usage(&mut turn_usage, &response_usage);
+        let provider_name = turn_processing_ctx.config.provider.clone();
+        accumulate_turn_usage(&provider_name, &mut turn_usage, &response_usage);
         turn_processing_ctx
             .session_stats
-            .record_usage(&response_usage);
+            .record_usage(&provider_name, &response_usage);
         turn_processing_ctx
             .session_stats
             .set_stop_reason(Some(stop_reason_from_finish_reason(
@@ -703,18 +733,17 @@ pub(crate) async fn run_turn_loop(
             .vt_cfg
             .and_then(|cfg| cfg.agent.harness.max_budget_usd);
         let total_usage = turn_processing_ctx.session_stats.total_usage();
-        let provider_name = turn_processing_ctx.config.provider.clone();
-        match estimate_session_cost_usd(&provider_name, &active_model, &total_usage) {
-            Some(total_cost_usd) => {
+        match estimate_session_costs(&provider_name, &active_model, &total_usage) {
+            Some(estimate) => {
                 turn_processing_ctx
                     .session_stats
-                    .set_total_cost_usd(Some(total_cost_usd));
+                    .set_total_cost_usd(Some(estimate.raw_usd));
                 if let Some(max_budget_usd) = max_budget_usd
-                    && total_cost_usd > max_budget_usd
+                    && estimate.raw_usd > max_budget_usd
                 {
                     turn_processing_ctx
                         .session_stats
-                        .mark_budget_limit_reached(max_budget_usd, total_cost_usd);
+                        .mark_budget_limit_reached(max_budget_usd, estimate.raw_usd);
                     turn_processing_ctx
                         .context_manager
                         .update_token_usage(&response_usage);
@@ -724,10 +753,33 @@ pub(crate) async fn run_turn_loop(
                         .validate_token_tracking(&response_usage);
                     result = TurnLoopResult::Blocked {
                         reason: Some(format!(
-                            "Stopped after reaching budget limit (max: ${max_budget_usd:.4}, spent: ${total_cost_usd:.4})."
+                            "Stopped after reaching budget limit (max: ${max_budget_usd:.4}, spent: ${:.4}, cache-adjusted: ${:.4}).",
+                            estimate.raw_usd, estimate.effective_usd
                         )),
                     };
                     break;
+                }
+                if let Some(max_budget_usd) = max_budget_usd
+                    && !turn_processing_ctx.session_stats.budget_warning_emitted()
+                {
+                    let threshold = turn_processing_ctx
+                        .vt_cfg
+                        .map(|cfg| cfg.agent.harness.budget_warning_threshold)
+                        .unwrap_or(0.75);
+                    if estimate.raw_usd >= threshold * max_budget_usd {
+                        turn_processing_ctx
+                            .session_stats
+                            .mark_budget_warning_emitted();
+                        let _ = turn_processing_ctx.renderer.line(
+                            MessageStyle::Info,
+                            &format!(
+                                "Session cost ${:.4} has reached {:.0}% of the ${max_budget_usd:.2} budget. {}",
+                                estimate.raw_usd,
+                                threshold * 100.0,
+                                total_usage.cache_summary(),
+                            ),
+                        );
+                    }
                 }
             }
             None => {

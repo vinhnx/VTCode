@@ -2,6 +2,8 @@ use lru::LruCache;
 use std::num::NonZeroUsize;
 use std::sync::{LazyLock, Mutex};
 
+use crate::prompts::system::SystemPromptReport;
+
 /// Maximum cache size (increased from 32 to 128 for multi-project workflows)
 const MAX_CACHE_SIZE: usize = 128;
 
@@ -21,17 +23,22 @@ pub trait PromptProvider {
 
 /// Simple in-memory prompt cache keyed by provider + task type.
 /// Uses LRU eviction to manage memory in multi-project workflows.
-pub struct SystemPromptCache {
-    entries: Mutex<LruCache<String, String>>,
+///
+/// Generic over the cached value `V` so callers can cache either a plain
+/// composed prompt string or a `(String, SystemPromptReport)` pair, letting
+/// cache hits surface the same token-budget report a cache miss would have
+/// computed.
+pub struct SystemPromptCache<V: Clone> {
+    entries: Mutex<LruCache<String, V>>,
 }
 
-impl Default for SystemPromptCache {
+impl<V: Clone> Default for SystemPromptCache<V> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl SystemPromptCache {
+impl<V: Clone> SystemPromptCache<V> {
     pub fn new() -> Self {
         let cache_size = NonZeroUsize::new(MAX_CACHE_SIZE).unwrap_or(NonZeroUsize::MIN);
         Self {
@@ -41,9 +48,9 @@ impl SystemPromptCache {
 
     /// Get cached prompt or build it if missing.
     /// Uses LRU eviction when cache is full (no more clear-on-overflow).
-    pub fn get_or_insert_with<F>(&self, key: &str, builder: F) -> String
+    pub fn get_or_insert_with<F>(&self, key: &str, builder: F) -> V
     where
-        F: FnOnce() -> String,
+        F: FnOnce() -> V,
     {
         // Check if already cached (LruCache.get() requires mutable access for LRU update)
         {
@@ -67,13 +74,13 @@ impl SystemPromptCache {
     }
 
     /// Get cached value, returning None on miss (for async callers that want to build outside the lock)
-    pub fn get(&self, key: &str) -> Option<String> {
+    pub fn get(&self, key: &str) -> Option<V> {
         let mut store = self.entries.lock().unwrap_or_else(|p| p.into_inner());
         store.get(key).cloned()
     }
 
     /// Insert a value into the cache
-    pub fn insert(&self, key: String, value: String) {
+    pub fn insert(&self, key: String, value: V) {
         let mut store = self.entries.lock().unwrap_or_else(|p| p.into_inner());
         store.put(key, value);
         // LRU cache automatically evicts least recently used entry when full
@@ -86,5 +93,8 @@ impl SystemPromptCache {
     }
 }
 
-/// Global prompt cache shared across runs.
-pub static PROMPT_CACHE: LazyLock<SystemPromptCache> = LazyLock::new(SystemPromptCache::new);
+/// Global prompt cache shared across runs. Caches the composed prompt string
+/// together with its [`SystemPromptReport`] so cache hits surface the same
+/// token-budget report a cache miss would have computed.
+pub static PROMPT_CACHE: LazyLock<SystemPromptCache<(String, SystemPromptReport)>> =
+    LazyLock::new(SystemPromptCache::new);
