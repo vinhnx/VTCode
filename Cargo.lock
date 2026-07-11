@@ -6814,22 +6814,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tracing-opentelemetry"
-version = "0.33.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "adbc64cba7137545b8044cb1fe9814f7aacf3c6b5f9b45be8bb5db538befdb26"
-dependencies = [
- "js-sys",
- "opentelemetry",
- "smallvec",
- "tracing",
- "tracing-core",
- "tracing-log",
- "tracing-subscriber",
- "web-time",
-]
-
-[[package]]
 name = "tracing-subscriber"
 version = "0.3.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7386,7 +7370,6 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.18",
  "tokio",
- "tokio-util",
  "tracing",
  "url",
  "uuid",
@@ -7527,7 +7510,6 @@ dependencies = [
  "async-trait",
  "axum",
  "base64",
- "bytes",
  "chrono",
  "clap",
  "colorchoice-clap",
@@ -7556,7 +7538,6 @@ dependencies = [
  "nucleo-matcher",
  "num_cpus",
  "once_cell",
- "openai-harmony",
  "parking_lot",
  "portable-pty",
  "proptest",
@@ -7570,7 +7551,6 @@ dependencies = [
  "rusqlite",
  "rustc-hash 2.1.2",
  "schemars 1.2.1",
- "semver",
  "serde",
  "serde-saphyr",
  "serde_json",
@@ -7585,12 +7565,9 @@ dependencies = [
  "textwrap",
  "thiserror 2.0.18",
  "tokio",
- "tokio-stream",
- "tokio-tungstenite 0.29.0",
  "tokio-util",
  "toml",
  "tower",
- "tower-http 0.7.0",
  "tracing",
  "tracing-subscriber",
  "tree-sitter",
@@ -7641,7 +7618,6 @@ dependencies = [
  "serde",
  "serde_json",
  "tracing",
- "tracing-opentelemetry",
  "uuid",
 ]
 
@@ -7764,7 +7740,6 @@ dependencies = [
  "anyhow",
  "dirs",
  "hashbrown 0.17.1",
- "libc",
  "nix 0.31.3",
  "once_cell",
  "rustc-hash 2.1.2",
@@ -7787,13 +7762,11 @@ dependencies = [
 name = "vtcode-session-store"
 version = "0.135.2"
 dependencies = [
- "anyhow",
  "chrono",
  "serde",
  "serde_json",
  "tempfile",
  "thiserror 2.0.18",
- "tracing",
  "vtcode-exec-events",
  "walkdir",
 ]

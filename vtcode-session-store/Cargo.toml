@@ -15,10 +15,8 @@ categories = ["development-tools", "data-structures"]
 
 [dependencies]
 vtcode-exec-events = { path = "../vtcode-exec-events", version = "0.135.2" }
-anyhow = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-tracing = { workspace = true }
 chrono = { workspace = true }
 walkdir = "2.5"
 thiserror = { workspace = true }

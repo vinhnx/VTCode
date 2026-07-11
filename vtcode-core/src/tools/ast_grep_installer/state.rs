@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(test)]
 use super::super::install_support::vtcode_state_dir_from_home;
 use super::super::install_support::{
-    cache_is_stale, create_lock_file, load_json_cache, lock_is_active, save_json_cache,
+    acquire_lock_file, cache_is_stale, load_json_cache, lock_is_active, save_json_cache,
     unix_timestamp_now, vtcode_state_dir,
 };
 #[cfg(test)]
@@ -110,15 +110,23 @@ impl InstallPaths {
 
 impl InstallLockGuard {
     pub(super) fn acquire(paths: &InstallPaths) -> Result<Self> {
+        // Fast-path check to avoid the syscall overhead of attempting a lock
+        // acquisition that is very likely to fail. This is only an
+        // optimization: correctness under concurrent processes comes from
+        // the atomic `create_new` in `acquire_lock_file`, which is the sole
+        // arbiter of who wins the race even if two processes both pass this
+        // check simultaneously.
         if Self::is_install_in_progress(paths) {
             bail!("ast-grep installation already in progress");
         }
 
-        let file = create_lock_file(&paths.lock_path)?;
-        Ok(Self {
-            path: paths.lock_path.clone(),
-            _file: file,
-        })
+        match acquire_lock_file(&paths.lock_path, INSTALL_LOCK_MAX_AGE_SECS)? {
+            Some(file) => Ok(Self {
+                path: paths.lock_path.clone(),
+                _file: file,
+            }),
+            None => bail!("ast-grep installation already in progress"),
+        }
     }
 
     fn is_install_in_progress(paths: &InstallPaths) -> bool {
@@ -135,6 +143,7 @@ impl Drop for InstallLockGuard {
 #[cfg(test)]
 mod tests {
     use super::{InstallLockGuard, InstallPaths, InstallationCache};
+    use std::sync::{Arc, Barrier};
     use tempfile::TempDir;
 
     #[test]
@@ -163,6 +172,57 @@ mod tests {
         std::fs::write(&paths.lock_path, "lock").expect("lock file");
 
         assert!(InstallLockGuard::is_install_in_progress(&paths));
+    }
+
+    /// Regression test for the check-then-act lock race: spawn several
+    /// threads that all race to acquire the install lock at (as close to)
+    /// the same instant, and assert that exactly one of them wins. Before
+    /// the fix, `create_lock_file` used `create(true).truncate(true)`
+    /// instead of `create_new(true)`, so multiple racing callers could each
+    /// observe "no lock in progress" and then all successfully "acquire" the
+    /// lock by truncating the same file out from under one another.
+    ///
+    /// A `done_barrier` keeps every acquired guard alive until all threads
+    /// have made their attempt, so a fast winner cannot drop its guard (and
+    /// thus remove the lock file) before a slower thread's atomic
+    /// `create_new` call runs -- which would let more than one thread "win"
+    /// and make the test flaky.
+    #[test]
+    fn install_lock_only_one_concurrent_acquirer_wins() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let paths = InstallPaths::from_home(temp_dir.path());
+        std::fs::create_dir_all(&paths.state_dir).expect("state dir");
+
+        const THREADS: usize = 8;
+        let start_barrier = Arc::new(Barrier::new(THREADS));
+        let done_barrier = Arc::new(Barrier::new(THREADS));
+
+        let handles: Vec<_> = (0..THREADS)
+            .map(|_| {
+                let paths = paths.clone();
+                let start_barrier = Arc::clone(&start_barrier);
+                let done_barrier = Arc::clone(&done_barrier);
+                std::thread::spawn(move || {
+                    start_barrier.wait();
+                    let guard = InstallLockGuard::acquire(&paths);
+                    let acquired = guard.is_ok();
+                    done_barrier.wait();
+                    drop(guard);
+                    acquired
+                })
+            })
+            .collect();
+
+        let successes = handles
+            .into_iter()
+            .map(|handle| handle.join().expect("thread panicked"))
+            .filter(|acquired| *acquired)
+            .count();
+
+        assert_eq!(
+            successes, 1,
+            "exactly one thread should win the install lock"
+        );
     }
 
     #[test]

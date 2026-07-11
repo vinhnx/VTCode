@@ -34,6 +34,68 @@ pub async fn write_file_with_context(path: &Path, content: &str, context: &str) 
         .with_context(|| format!("Failed to write {}: {}", context, path.display()))
 }
 
+/// Write a file atomically with a contextual error message, ensuring the
+/// parent directory exists.
+///
+/// The content is first written to a temporary file created in the same
+/// directory as `path` (so the final rename stays on the same filesystem and
+/// is therefore atomic), then the temp file is renamed onto `path`. This
+/// prevents concurrent readers -- e.g. another vtcode process sharing the
+/// same workspace -- from ever observing a partially written file.
+///
+/// On rename failure the temp file is best-effort removed before returning
+/// the error.
+pub async fn write_file_atomic_with_context(
+    path: &Path,
+    content: &str,
+    context: &str,
+) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        ensure_dir_exists(parent).await?;
+    }
+
+    let temp_path = atomic_temp_path(path);
+
+    fs::write(&temp_path, content)
+        .await
+        .with_context(|| format!("Failed to write {}: {}", context, temp_path.display()))?;
+
+    if let Err(err) = fs::rename(&temp_path, path).await {
+        let _ = fs::remove_file(&temp_path).await;
+        return Err(err)
+            .with_context(|| format!("Failed to write {}: {}", context, path.display()));
+    }
+
+    Ok(())
+}
+
+/// Build a unique temp file path in the same directory as `path`, suitable
+/// for a write-then-rename atomic publish of `path`.
+fn atomic_temp_path(path: &Path) -> PathBuf {
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static ATOMIC_WRITE_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+    let dir = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("vtcode-atomic-write");
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_nanos())
+        .unwrap_or(0);
+    let counter = ATOMIC_WRITE_COUNTER.fetch_add(1, Ordering::Relaxed);
+
+    dir.join(format!(
+        ".{file_name}.tmp-{}-{nanos:x}-{counter:x}",
+        std::process::id()
+    ))
+}
+
 /// Write a JSON file
 pub async fn write_json_file<T: Serialize>(path: &Path, data: &T) -> Result<()> {
     let json = serde_json::to_string_pretty(data)

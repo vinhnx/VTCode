@@ -4,6 +4,7 @@ use tokio::fs;
 
 use super::constants::SUBAGENT_PREVIEW_LINES;
 use super::types::{PersistedBackgroundRecord, PersistedBackgroundState};
+use crate::utils::file_utils::write_file_atomic_with_context;
 use crate::utils::session_archive::{SessionListing, SessionSnapshot};
 
 const BACKGROUND_DEMO_AGENT: &str = "background-demo";
@@ -50,9 +51,7 @@ pub(crate) async fn persist_background_state(
             .with_context(|| format!("Failed to create {}", parent.display()))?;
     }
     let payload = serde_json::to_string_pretty(&PersistedBackgroundState { records })?;
-    fs::write(&path, payload)
-        .await
-        .with_context(|| format!("Failed to write {}", path.display()))?;
+    write_file_atomic_with_context(&path, &payload, "background subagent state").await?;
     Ok(())
 }
 

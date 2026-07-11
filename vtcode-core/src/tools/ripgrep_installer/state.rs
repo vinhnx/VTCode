@@ -1,10 +1,10 @@
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use serde::{Deserialize, Serialize};
 use std::fs::{self, File};
 use std::path::PathBuf;
 
 use super::super::install_support::{
-    cache_is_stale, create_lock_file, load_json_cache, lock_is_active, save_json_cache,
+    acquire_lock_file, cache_is_stale, load_json_cache, lock_is_active, save_json_cache,
     unix_timestamp_now, vtcode_state_dir_or_default,
 };
 
@@ -83,8 +83,10 @@ impl InstallationCache {
 impl InstallLockGuard {
     pub(super) fn acquire() -> Result<Self> {
         let path = lock_path();
-        let file = create_lock_file(&path)?;
-        Ok(Self { path, _file: file })
+        match acquire_lock_file(&path, INSTALL_LOCK_MAX_AGE_SECS)? {
+            Some(file) => Ok(Self { path, _file: file }),
+            None => Err(anyhow!("Ripgrep installation already in progress")),
+        }
     }
 
     pub(super) fn is_install_in_progress() -> bool {

@@ -962,3 +962,60 @@ fn migrates_legacy_memory_over_scaffold_only_target() {
         std::fs::read_to_string(target_dir.join(REPOSITORY_FACTS_FILENAME)).expect("target facts");
     assert!(migrated.contains("Tests live under vtcode-core/tests"));
 }
+
+#[tokio::test]
+async fn lock_age_reports_fresh_file_as_not_stale() {
+    let workspace = tempdir().expect("workspace");
+    let lock_path = workspace.path().join(".memory.lock");
+    std::fs::write(&lock_path, "").expect("lock file");
+
+    let age = lock_age(&lock_path).await.expect("age should resolve");
+    assert!(
+        age < Duration::from_secs(LOCK_STALE_AFTER_SECS),
+        "freshly created lock reported as already stale: {age:?}"
+    );
+}
+
+#[tokio::test]
+async fn acquire_with_stale_after_steals_orphaned_lock() {
+    let workspace = tempdir().expect("workspace");
+    let lock_path = workspace.path().join(".memory.lock");
+    std::fs::write(&lock_path, "").expect("orphaned lock file");
+
+    let lock = MemoryLock::acquire_with_stale_after(&lock_path, Duration::ZERO)
+        .await
+        .expect("stale lock should be stolen");
+
+    assert_eq!(lock.path, lock_path);
+    assert!(lock_path.exists());
+}
+
+#[tokio::test]
+async fn acquire_succeeds_when_no_lock_file_exists() {
+    let workspace = tempdir().expect("workspace");
+    let lock_path = workspace.path().join(".memory.lock");
+
+    let lock = MemoryLock::acquire(&lock_path)
+        .await
+        .expect("acquire should succeed without contention");
+
+    assert!(lock_path.exists());
+    assert_eq!(lock.path, lock_path);
+}
+
+#[tokio::test]
+async fn fresh_lock_is_not_treated_as_stale_under_large_threshold() {
+    let workspace = tempdir().expect("workspace");
+    let lock_path = workspace.path().join(".memory.lock");
+    std::fs::write(&lock_path, "").expect("lock file");
+
+    // Rather than driving the full ~2s retry/timeout loop with a huge
+    // threshold, assert directly on the staleness predicate that
+    // `acquire_with_stale_after` uses: a freshly written lock file must not
+    // already exceed a generous stale-after window.
+    let age = lock_age(&lock_path).await.expect("age should resolve");
+    assert!(
+        age < Duration::from_secs(LOCK_STALE_AFTER_SECS),
+        "freshly created lock would be incorrectly stolen: {age:?}"
+    );
+}
