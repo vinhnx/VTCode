@@ -34,8 +34,8 @@ use crate::tools::registry::{
     RiskLevel, ToolRiskContext, ToolRiskScorer, ToolSource, WorkspaceTrust,
 };
 use crate::tools::tool_intent::{
-    classify_tool_intent, unified_exec_action_in, unified_exec_action_is, unified_file_action_is,
-    unified_search_action_is,
+    action_qualified_policy_name, classify_tool_intent, unified_exec_action_in,
+    unified_exec_action_is, unified_file_action_is,
 };
 use vtcode_config::core::DotfileProtectionConfig;
 
@@ -951,13 +951,17 @@ impl SafetyGateway {
             ToolSource::Internal
         };
 
-        let web_search =
-            tool_name == tools::UNIFIED_SEARCH && unified_search_action_is(args, "web");
-        let risk_tool_name = if web_search {
-            "unified_search:web"
-        } else {
-            tool_name
-        };
+        // `unified_search`'s `web` action and `mcp`'s `connect`/`disconnect`
+        // actions must be scored/gated under their action-qualified names
+        // (`unified_search:web`, `mcp:connect`, `mcp:disconnect`) rather than
+        // their low-risk bare names. `action_qualified_policy_name` is the
+        // single source of truth shared with the policy-evaluation path
+        // (`policy_evaluation_name`) so the two decisions cannot drift out of
+        // lockstep; see its doc comment for the exact matching rules,
+        // including the legacy `mcp_connect_server`/`mcp_disconnect_server`
+        // alias handling.
+        let risk_tool_name =
+            action_qualified_policy_name(tool_name, Some(args)).unwrap_or(tool_name);
 
         let mut ctx = ToolRiskContext::new(
             risk_tool_name.to_string(),
@@ -973,9 +977,11 @@ impl SafetyGateway {
             ctx = ctx.as_destructive();
         }
 
-        // Check for network access (web_search here is the action-qualified
-        // `unified_search:web` form computed above).
-        if ToolRiskScorer::is_network_tool(tool_name) || web_search {
+        // Check for network access. `risk_tool_name` is already the
+        // action-qualified form (e.g. `unified_search:web`, `mcp:connect`)
+        // when applicable, so a single check against it covers both the
+        // base network tools and the action-qualified ones.
+        if ToolRiskScorer::is_network_tool(risk_tool_name) {
             ctx = ctx.accesses_network();
         }
 

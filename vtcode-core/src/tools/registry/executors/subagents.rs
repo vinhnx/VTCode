@@ -49,10 +49,11 @@ impl ToolRegistry {
     }
 
     /// Unified `agent` executor: dispatches on `action`
-    /// (spawn | spawn_subprocess | send_input | resume).
+    /// (spawn | spawn_subprocess | send_input | resume | wait | close).
     /// For legacy alias calls that omit `action`, the action is inferred from
     /// the argument shape: `id` + `message`/`items` implies send_input, `id`
-    /// alone implies resume, otherwise spawn.
+    /// alone implies resume, otherwise spawn. `wait` and `close` require an
+    /// explicit `action` since the schema marks it required.
     pub(crate) fn agent_executor(&self, mut args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move {
             let action = args
@@ -78,8 +79,10 @@ impl ToolRegistry {
                 }
                 "send_input" => self.send_input_executor(args).await,
                 "resume" | "resume_agent" => self.resume_agent_executor(args).await,
+                "wait" => self.wait_agent_executor(args).await,
+                "close" => self.close_agent_executor(args).await,
                 other => Err(anyhow!(
-                    "agent: unknown action '{other}'. Use action='spawn' (delegate a task), 'spawn_subprocess' (background daemon), 'send_input' (requires id + message), or 'resume' (requires id). To wait for or close children, call the wait_agent / close_agent tools."
+                    "agent: unknown action '{other}'. Use action='spawn' (delegate a task), 'spawn_subprocess' (background daemon), 'send_input' (requires id + message), 'resume' (requires id), 'wait' (requires ids), or 'close' (requires id)."
                 )),
             }
         })
@@ -176,5 +179,54 @@ impl ToolRegistry {
             )
             .await
         })
+    }
+}
+
+#[cfg(test)]
+mod agent_action_dispatch_tests {
+    use super::ToolRegistry;
+    use serde_json::json;
+
+    /// `agent_executor` must dispatch `action='wait'`/`'close'` to
+    /// `wait_agent_executor`/`close_agent_executor`. Both of those validate
+    /// their required args (`ids`/`id`) before touching the subagent
+    /// controller, so a bare `ToolRegistry::new` (no controller active) still
+    /// exercises the routing: the errors below prove the match arm was
+    /// reached, not the unknown-action fallback.
+    #[tokio::test]
+    async fn agent_executor_dispatches_wait_and_close_actions() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let registry = ToolRegistry::new(temp.path().to_path_buf()).await;
+
+        let wait_err = registry
+            .agent_executor(json!({"action": "wait"}))
+            .await
+            .expect_err("wait without ids should fail");
+        let wait_text = wait_err.to_string();
+        assert!(!wait_text.contains("unknown action"));
+        assert!(wait_text.contains("wait_agent requires an ids array"));
+
+        let close_err = registry
+            .agent_executor(json!({"action": "close"}))
+            .await
+            .expect_err("close without id should fail");
+        let close_text = close_err.to_string();
+        assert!(!close_text.contains("unknown action"));
+        assert!(close_text.contains("close_agent requires id"));
+    }
+
+    #[tokio::test]
+    async fn agent_executor_rejects_unknown_action_with_guidance() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let registry = ToolRegistry::new(temp.path().to_path_buf()).await;
+
+        let err = registry
+            .agent_executor(json!({"action": "bogus"}))
+            .await
+            .expect_err("unknown agent action should error");
+        let text = err.to_string();
+        assert!(text.contains("unknown action 'bogus'"));
+        assert!(text.contains("wait"));
+        assert!(text.contains("close"));
     }
 }

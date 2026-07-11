@@ -619,6 +619,44 @@ pub fn unified_search_action_in(args: &Value, expected: &[&str]) -> bool {
     action_matches_any(unified_search_action(args), expected)
 }
 
+/// Determine the action for the `mcp` tool based on args. Unlike
+/// `unified_search`/`unified_file`, the `mcp` schema marks `action` as
+/// required, so no shape-based inference is needed here.
+pub fn mcp_action(args: &Value) -> Option<&str> {
+    args.get("action").and_then(|v| v.as_str())
+}
+
+pub fn mcp_action_is(args: &Value, expected: &str) -> bool {
+    action_matches(mcp_action(args), expected)
+}
+
+/// Single source of truth for the action-qualified policy/risk identity of a
+/// (tool, args) pair. Returns None when the tool is evaluated under its bare
+/// name. Both the policy-evaluation path (policy_evaluation_name) and the
+/// risk-scoring path (build_risk_context) MUST route through this so the two
+/// decisions cannot drift out of lockstep.
+pub fn action_qualified_policy_name(tool_name: &str, args: Option<&Value>) -> Option<&'static str> {
+    if tool_name == tools::UNIFIED_SEARCH
+        && args.is_some_and(|args| unified_search_action_is(args, "web"))
+    {
+        return Some("unified_search:web");
+    }
+
+    if tool_name == tools::MCP_CONNECT_SERVER
+        || (tool_name == tools::MCP && args.is_some_and(|args| mcp_action_is(args, "connect")))
+    {
+        return Some("mcp:connect");
+    }
+
+    if tool_name == tools::MCP_DISCONNECT_SERVER
+        || (tool_name == tools::MCP && args.is_some_and(|args| mcp_action_is(args, "disconnect")))
+    {
+        return Some("mcp:disconnect");
+    }
+
+    None
+}
+
 fn unified_exec_has_input(args: &Value) -> bool {
     interactive_input_text(args).is_some()
 }
@@ -1051,10 +1089,10 @@ pub fn normalize_unified_search_args(args: &Value) -> Value {
 #[cfg(test)]
 mod tests {
     use super::{
-        canonical_unified_exec_tool_name, classify_tool_intent, is_command_run_tool_call,
-        is_edited_file_conflict_guarded_call, is_parallel_safe_call, normalize_unified_search_args,
-        remap_unified_file_command_args_to_unified_exec, should_use_spool_reference_only,
-        unified_file_action,
+        action_qualified_policy_name, canonical_unified_exec_tool_name, classify_tool_intent,
+        is_command_run_tool_call, is_edited_file_conflict_guarded_call, is_parallel_safe_call,
+        normalize_unified_search_args, remap_unified_file_command_args_to_unified_exec,
+        should_use_spool_reference_only, unified_file_action,
     };
     use crate::config::constants::tools;
     use serde_json::json;
@@ -1959,6 +1997,70 @@ mod tests {
         assert!(
             result.get("path").is_none(),
             "no path should be injected when neither pattern nor path is present"
+        );
+    }
+
+    // ── action_qualified_policy_name: single source of truth for the
+    // policy-evaluation and risk-scoring gates ─────────────────────────
+
+    #[test]
+    fn action_qualified_policy_name_matches_unified_search_web_action() {
+        assert_eq!(
+            action_qualified_policy_name(tools::UNIFIED_SEARCH, Some(&json!({"action": "web"}))),
+            Some("unified_search:web")
+        );
+    }
+
+    #[test]
+    fn action_qualified_policy_name_leaves_bare_unified_search_unqualified() {
+        assert_eq!(
+            action_qualified_policy_name(tools::UNIFIED_SEARCH, Some(&json!({"action": "grep"}))),
+            None
+        );
+        assert_eq!(
+            action_qualified_policy_name(tools::UNIFIED_SEARCH, None),
+            None
+        );
+    }
+
+    #[test]
+    fn action_qualified_policy_name_matches_mcp_connect_via_action() {
+        assert_eq!(
+            action_qualified_policy_name(tools::MCP, Some(&json!({"action": "connect"}))),
+            Some("mcp:connect")
+        );
+    }
+
+    #[test]
+    fn action_qualified_policy_name_matches_mcp_connect_via_legacy_alias_without_args() {
+        assert_eq!(
+            action_qualified_policy_name(tools::MCP_CONNECT_SERVER, None),
+            Some("mcp:connect")
+        );
+    }
+
+    #[test]
+    fn action_qualified_policy_name_matches_mcp_disconnect_via_action() {
+        assert_eq!(
+            action_qualified_policy_name(tools::MCP, Some(&json!({"action": "disconnect"}))),
+            Some("mcp:disconnect")
+        );
+    }
+
+    #[test]
+    fn action_qualified_policy_name_matches_mcp_disconnect_via_legacy_alias_without_args() {
+        assert_eq!(
+            action_qualified_policy_name(tools::MCP_DISCONNECT_SERVER, None),
+            Some("mcp:disconnect")
+        );
+    }
+
+    #[test]
+    fn action_qualified_policy_name_returns_none_for_unknown_tool() {
+        assert_eq!(action_qualified_policy_name(tools::READ_FILE, None), None);
+        assert_eq!(
+            action_qualified_policy_name(tools::MCP, Some(&json!({"action": "list_tools"}))),
+            None
         );
     }
 }

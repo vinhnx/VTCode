@@ -713,6 +713,10 @@ fn should_defer_tool_loading(entry: &ToolCatalogEntry, config: &SessionToolsConf
 }
 
 fn is_core_tool_entry(entry: &ToolCatalogEntry, config: &SessionToolsConfig) -> bool {
+    // `entry.public_name` is always the canonical registration name, never an
+    // alias (spawn_agent/spawn_background_subprocess/send_input/wait_agent/
+    // resume_agent/close_agent all route to the single `agent` registration),
+    // so only the canonical name needs to be matched here.
     match entry.public_name.as_str() {
         tools::UNIFIED_SEARCH
         | tools::UNIFIED_FILE
@@ -721,12 +725,6 @@ fn is_core_tool_entry(entry: &ToolCatalogEntry, config: &SessionToolsConfig) -> 
         | tools::START_PLANNING
         | tools::FINISH_PLANNING
         | tools::AGENT
-        | tools::SPAWN_AGENT
-        | tools::SPAWN_BACKGROUND_SUBPROCESS
-        | tools::SEND_INPUT
-        | tools::WAIT_AGENT
-        | tools::RESUME_AGENT
-        | tools::CLOSE_AGENT
         | tools::LIST_SKILLS
         | tools::LOAD_SKILL
         | tools::LOAD_SKILL_RESOURCE => true,

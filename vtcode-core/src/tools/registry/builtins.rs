@@ -20,9 +20,9 @@ use crate::tools::web_fetch::{WEB_FETCH_DESCRIPTION, WebFetchTool};
 use crate::tools::web_search::{WEB_SEARCH_DESCRIPTION, WebSearchTool};
 use serde_json::json;
 use vtcode_utility_tool_specs::{
-    agent_parameters, apply_patch_parameters, close_agent_parameters, cron_parameters,
-    list_files_parameters, read_file_parameters, unified_exec_parameters, unified_file_parameters,
-    unified_search_parameters, wait_agent_parameters,
+    agent_parameters, apply_patch_parameters, cron_parameters, list_files_parameters,
+    read_file_parameters, unified_exec_parameters, unified_file_parameters,
+    unified_search_parameters,
 };
 
 use super::distributed::{BUILTIN_TOOLS, tool_config};
@@ -217,7 +217,7 @@ fn register_agent(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistrati
         ToolRegistry::agent_executor,
     )
     .with_description(
-        "Spawn and steer delegated child agents. Use action='spawn' to delegate a scoped task (the child inherits the current toolset and returns its agent id); action='spawn_subprocess' to launch a managed background subprocess for long-running daemons (file watchers, dev servers) — do NOT use it for one-shot shell commands, use unified_exec instead; action='send_input' to send follow-up input to a running child (requires id); action='resume' to reopen a completed/closed child from saved context (requires id). To block on results use wait_agent; to free a child's budget use close_agent. Children and subprocesses are session-scoped; they die with the vtcode process.",
+        "Spawn and steer delegated child agents. Use action='spawn' to delegate a scoped task (the child inherits the current toolset and returns its agent id); action='spawn_subprocess' to launch a managed background subprocess for long-running daemons (file watchers, dev servers) — do NOT use it for one-shot shell commands, use unified_exec instead; action='send_input' to send follow-up input to a running child (requires id); action='resume' to reopen a completed/closed child from saved context (requires id); action='wait' to block the current foreground turn until one or more children reach a terminal state (requires ids array; do NOT pass an empty ids array; default timeout 300s, pass timeout_ms to extend); action='close' to cancel a child's active work and free its tool budget (requires id; do NOT close a child you still need results from — wait first; a closed subtree needs action='resume' to bring back). Children and subprocesses are session-scoped; they die with the vtcode process.",
     )
     .with_parameter_schema(agent_parameters())
     .with_aliases([
@@ -225,6 +225,8 @@ fn register_agent(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistrati
         tools::SPAWN_BACKGROUND_SUBPROCESS,
         tools::SEND_INPUT,
         tools::RESUME_AGENT,
+        tools::WAIT_AGENT,
+        tools::CLOSE_AGENT,
         "delegate",
         "subagent",
         "background_subagent",
@@ -232,37 +234,9 @@ fn register_agent(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistrati
         "message_agent",
         "continue_agent",
         "resume_subagent",
+        "wait_subagent",
+        "close_subagent",
     ])
-}
-
-#[distributed_slice(BUILTIN_TOOLS)]
-fn register_wait_agent(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
-    ToolRegistration::new(
-        tools::WAIT_AGENT,
-        CapabilityLevel::Basic,
-        false,
-        ToolRegistry::wait_agent_executor,
-    )
-    .with_description(
-        "Wait for child agents to reach a terminal state. Use this when you spawned an agent and need its result before continuing. Do NOT call wait_agent with an empty ids array — provide at least one agent id from a prior spawn_agent call. Default timeout 300s; pass timeout_ms to extend for long-running delegated tasks.",
-    )
-    .with_parameter_schema(wait_agent_parameters())
-    .with_aliases(["wait_subagent"])
-}
-
-#[distributed_slice(BUILTIN_TOOLS)]
-fn register_close_agent(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
-    ToolRegistration::new(
-        tools::CLOSE_AGENT,
-        CapabilityLevel::Basic,
-        false,
-        ToolRegistry::close_agent_executor,
-    )
-    .with_description(
-        "Close a child agent subtree, cancelling any active work and marking the thread closed. Use this when you are done with a delegated agent and want to free its tool budget. Do NOT close an agent you still need results from — call wait_agent first. Closed subtrees cannot be queried; resume_agent is required to bring one back.",
-    )
-    .with_parameter_schema(close_agent_parameters())
-    .with_aliases(["close_subagent"])
 }
 
 // ---------------------------------------------------------------------------
@@ -400,7 +374,7 @@ fn register_mcp(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration
         ToolRegistry::mcp_executor,
     )
     .with_description(
-        "Discover Model Context Protocol capabilities without loading full schemas for every tool. Use action='search_tools' to find MCP tools by natural-language query (progressive detail_level: name, name_description, full); action='get_tool_details' to fetch the full input schema for one MCP tool name; action='list_servers' to list configured servers and their connection state. Do NOT call list_servers every turn — server state changes rarely. Lifecycle ops (connect/disconnect a server) are separate tools that require Prompt confirmation: mcp_connect_server / mcp_disconnect_server.",
+        "Discover and manage Model Context Protocol capabilities. Use action='search_tools' to find MCP tools by natural-language query (progressive detail_level: name, name_description, full); action='get_tool_details' to fetch the full input schema for one MCP tool name; action='list_servers' to list configured servers and their connection state; action='connect' to connect one configured server by name when its tools are referenced but not yet initialized (requires user confirmation via ToolPolicy::Prompt); action='disconnect' to free resources or reset a misbehaving server connection (requires user confirmation; do NOT disconnect mid-task — in-flight calls from that server will fail). Do NOT call list_servers every turn — server state changes rarely.",
     )
     .with_parameter_schema(mcp_parameters())
     .with_permission(ToolPolicy::Allow)
@@ -408,39 +382,11 @@ fn register_mcp(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration
         tools::MCP_SEARCH_TOOLS,
         tools::MCP_GET_TOOL_DETAILS,
         tools::MCP_LIST_SERVERS,
+        tools::MCP_CONNECT_SERVER,
+        tools::MCP_DISCONNECT_SERVER,
         "mcp_tool_search",
         "mcp_tool_details",
     ])
-}
-
-#[distributed_slice(BUILTIN_TOOLS)]
-fn register_mcp_connect_server(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
-    ToolRegistration::new(
-        tools::MCP_CONNECT_SERVER,
-        CapabilityLevel::CodeSearch,
-        false,
-        ToolRegistry::mcp_connect_server_executor,
-    )
-    .with_description(
-        "Connect one configured MCP server by name. Use this when an MCP tool is referenced but the server has not been initialized yet. Do NOT call connect_server unless the server's tools are needed — the connection has overhead. Requires user confirmation via the permissions system (ToolPolicy::Prompt).",
-    )
-    .with_parameter_schema(mcp_server_name_parameters())
-    .with_permission(ToolPolicy::Prompt)
-}
-
-#[distributed_slice(BUILTIN_TOOLS)]
-fn register_mcp_disconnect_server(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
-    ToolRegistration::new(
-        tools::MCP_DISCONNECT_SERVER,
-        CapabilityLevel::CodeSearch,
-        false,
-        ToolRegistry::mcp_disconnect_server_executor,
-    )
-    .with_description(
-        "Disconnect one active MCP server by name. Use this to free resources or reset a misbehaving MCP connection. Do NOT disconnect servers mid-task — any in-flight tool calls from that server will fail. Requires user confirmation via the permissions system (ToolPolicy::Prompt).",
-    )
-    .with_parameter_schema(mcp_server_name_parameters())
-    .with_permission(ToolPolicy::Prompt)
 }
 
 // ---------------------------------------------------------------------------
@@ -681,8 +627,8 @@ fn mcp_parameters() -> serde_json::Value {
         "properties": {
             "action": {
                 "type": "string",
-                "enum": ["search_tools", "get_tool_details", "list_servers"],
-                "description": "search_tools: find MCP tools by natural-language query. get_tool_details: fetch the full input schema for one MCP tool name. list_servers: list configured servers and their connection state."
+                "enum": ["search_tools", "get_tool_details", "list_servers", "connect", "disconnect"],
+                "description": "search_tools: find MCP tools by natural-language query. get_tool_details: fetch the full input schema for one MCP tool name. list_servers: list configured servers and their connection state. connect: connect one configured MCP server by name (requires name; requires Prompt confirmation). disconnect: disconnect one active MCP server by name (requires name; requires Prompt confirmation)."
             },
             "query": {
                 "type": "string",
@@ -701,23 +647,9 @@ fn mcp_parameters() -> serde_json::Value {
             },
             "name": {
                 "type": "string",
-                "description": "get_tool_details: exact MCP tool name to inspect."
+                "description": "get_tool_details: exact MCP tool name to inspect. connect/disconnect: configured MCP server name."
             }
         },
-        "additionalProperties": false
-    })
-}
-
-fn mcp_server_name_parameters() -> serde_json::Value {
-    json!({
-        "type": "object",
-        "properties": {
-            "name": {
-                "type": "string",
-                "description": "Configured MCP server name."
-            }
-        },
-        "required": ["name"],
         "additionalProperties": false
     })
 }
@@ -743,8 +675,8 @@ mod tests {
         // intentionally reduces this count; the `llm_visible_builtin_tool_count_stays_bounded`
         // test guards the user-visible tool budget.)
         assert!(
-            BUILTIN_TOOLS.len() >= 28,
-            "expected at least 28 distributed tool factories, found {}",
+            BUILTIN_TOOLS.len() >= 24,
+            "expected at least 24 distributed tool factories, found {}",
             BUILTIN_TOOLS.len()
         );
     }
@@ -761,7 +693,7 @@ mod tests {
     /// `expose_in_llm(false)` and are intentionally excluded from this count.
     #[test]
     fn llm_visible_builtin_tool_count_stays_bounded() {
-        const MAX_LLM_VISIBLE_BUILTIN_TOOLS: usize = 19;
+        const MAX_LLM_VISIBLE_BUILTIN_TOOLS: usize = 15;
 
         let registrations = builtin_tool_registrations(None);
         let visible = registrations
@@ -870,12 +802,15 @@ mod tests {
         assert!(agent_description.contains("inherits the current toolset"));
         assert!(agent_description.contains("follow-up input"));
         assert!(agent_description.contains("long-running daemons"));
+        assert!(agent_description.contains("terminal state"));
         let agent_aliases = agent.metadata().aliases();
         for legacy in [
             tools::SPAWN_AGENT,
             tools::SPAWN_BACKGROUND_SUBPROCESS,
             tools::SEND_INPUT,
             tools::RESUME_AGENT,
+            tools::WAIT_AGENT,
+            tools::CLOSE_AGENT,
         ] {
             assert!(
                 agent_aliases.iter().any(|alias| alias == legacy),
@@ -883,16 +818,14 @@ mod tests {
             );
         }
 
-        let wait_agent = registrations
-            .iter()
-            .find(|registration| registration.name() == tools::WAIT_AGENT)
-            .expect("wait_agent registration should exist");
+        // wait_agent / close_agent no longer register standalone tools; they
+        // are folded into `agent` (action='wait' / action='close') and kept
+        // only as aliases.
         assert!(
-            wait_agent
-                .metadata()
-                .description()
-                .expect("wait_agent description")
-                .contains("terminal state")
+            registrations
+                .iter()
+                .all(|registration| registration.name() != tools::WAIT_AGENT
+                    && registration.name() != tools::CLOSE_AGENT)
         );
     }
 
@@ -1089,9 +1022,51 @@ mod tests {
             .filter(|registration| registration.expose_in_llm())
             .count();
         assert!(
-            exposed <= 18,
-            "exposed built-in tool count is {exposed}; expected <= 18. \
+            exposed <= 14,
+            "exposed built-in tool count is {exposed}; expected <= 14. \
              Consolidate, defer, or raise the cap in review."
+        );
+    }
+
+    /// End-to-end regression for the tool-consolidation work: builds the real
+    /// `SessionToolCatalog` from the actual builtin registrations (not a
+    /// synthetic subset) and asserts the number of tool definitions/function
+    /// declarations the model actually sees, for a default non-native-memory
+    /// config, stays within the post-fold cap. This complements
+    /// `default_config_exposed_tool_count_within_cap` (which only counts
+    /// `expose_in_llm()` registrations) by exercising the full catalog
+    /// pipeline, including dedup-by-public-name and deferred-loading
+    /// collapsing.
+    #[test]
+    fn emitted_model_tool_count_stays_within_cap_for_default_config() {
+        use crate::config::ToolDocumentationMode;
+        use crate::tools::handlers::{
+            SessionSurface, SessionToolCatalog, SessionToolsConfig, ToolModelCapabilities,
+        };
+
+        let registrations = builtin_tool_registrations(None);
+        let catalog = SessionToolCatalog::rebuild_from_registrations(registrations);
+        let config = SessionToolsConfig::full_public(
+            SessionSurface::Interactive,
+            CapabilityLevel::CodeSearch,
+            ToolDocumentationMode::Full,
+            ToolModelCapabilities::default(),
+        );
+
+        let model_tools = catalog.model_tools(config.clone());
+        assert!(
+            model_tools.len() <= 14,
+            "emitted model_tools count is {}; expected <= 14. \
+             Consolidate, defer, or raise the cap in review.",
+            model_tools.len()
+        );
+
+        let function_declarations = catalog.function_declarations(config);
+        assert!(
+            function_declarations.len() <= 14,
+            "emitted function_declarations count is {}; expected <= 14. \
+             Consolidate, defer, or raise the cap in review.",
+            function_declarations.len()
         );
     }
 }

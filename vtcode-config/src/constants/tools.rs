@@ -13,9 +13,11 @@ pub const UNIFIED_FILE: &str = "unified_file";
 // ============================================================
 pub const THINK: &str = "think";
 pub const SEARCH_TOOLS: &str = "search_tools";
-/// Unified MCP discovery tool (action: search_tools | get_tool_details | list_servers).
-/// `mcp_connect_server` / `mcp_disconnect_server` stay standalone: their lifecycle
-/// ops are rare and config-gated, so they are not folded into this discovery tool.
+/// Unified MCP tool (action: search_tools | get_tool_details | list_servers |
+/// connect | disconnect). `connect`/`disconnect` are config-gated lifecycle
+/// ops evaluated under the action-qualified policy keys `mcp:connect` /
+/// `mcp:disconnect` (default Prompt) so they keep their human-in-the-loop
+/// confirmation even though the base `mcp` tool is `ToolPolicy::Allow`.
 pub const MCP: &str = "mcp";
 pub const MCP_SEARCH_TOOLS: &str = "mcp_search_tools";
 pub const MCP_GET_TOOL_DETAILS: &str = "mcp_get_tool_details";
@@ -91,9 +93,12 @@ pub const MEMORY: &str = "memory";
 pub const ASK_QUESTIONS: &str = "ask_questions";
 /// Legacy alias routed to `request_user_input` (deprecated tabbed shape).
 pub const ASK_USER_QUESTION: &str = "ask_user_question";
-/// Unified subagent lifecycle tool (action: spawn | spawn_subprocess | send_input | resume).
-/// `wait_agent` and `close_agent` stay standalone: the policy layer treats them
-/// as always-allowed cleanup tools by name.
+/// Unified subagent lifecycle tool (action: spawn | spawn_subprocess |
+/// send_input | resume | wait | close). `wait_agent`/`close_agent` are now
+/// aliases routed to `agent` (action='wait'/'close'); `LIFECYCLE_CLEANUP_TOOLS`
+/// still lists their names so the policy layer keeps treating them as
+/// always-allowed cleanup calls regardless of the active primary agent's
+/// restricted tool policy.
 pub const AGENT: &str = "agent";
 /// Unified scheduled-prompt tool (action: create | list | delete).
 pub const CRON: &str = "cron";

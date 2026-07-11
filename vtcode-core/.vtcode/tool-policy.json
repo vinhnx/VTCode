@@ -5,8 +5,6 @@
     "cron",
     "finish_planning",
     "mcp",
-    "mcp_connect_server",
-    "mcp_disconnect_server",
     "request_user_input",
     "start_planning",
     "task_tracker",
@@ -19,8 +17,6 @@
   "policies": {
     "apply_patch": "prompt",
     "finish_planning": "prompt",
-    "mcp_connect_server": "prompt",
-    "mcp_disconnect_server": "prompt",
     "mcp": "allow",
     "request_user_input": "allow",
     "start_planning": "allow",
@@ -32,8 +28,8 @@
     "web_search": "prompt",
     "cron": "prompt",
     "list_files": "allow",
-    "memory": "allow",
-    "read_file": "allow"
+    "read_file": "allow",
+    "memory": "allow"
   },
   "constraints": {},
   "mcp": {

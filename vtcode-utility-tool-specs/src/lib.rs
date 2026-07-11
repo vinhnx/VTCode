@@ -12,9 +12,7 @@ mod mcp_tool;
 mod responses_api;
 
 pub use collaboration::{
-    agent_parameters, close_agent_parameters, request_user_input_description,
-    request_user_input_parameters, resume_agent_parameters, send_input_parameters,
-    spawn_agent_parameters, spawn_background_subprocess_parameters, wait_agent_parameters,
+    agent_parameters, request_user_input_description, request_user_input_parameters,
 };
 pub use json_schema::{AdditionalProperties, JsonSchema, parse_tool_input_schema};
 #[cfg(feature = "mcp")]
@@ -92,45 +90,6 @@ pub fn cron_parameters() -> Value {
                 "description": "create: one-shot fire time in RFC3339 or local datetime form. Use instead of `cron` or `delay_minutes` for reminders."
             },
             "id": {"type": "string", "description": "delete: session scheduled task id to delete."}
-        }
-    })
-}
-
-#[must_use]
-pub fn cron_create_parameters() -> Value {
-    json!({
-        "type": "object",
-        "required": ["prompt"],
-        "additionalProperties": false,
-        "properties": {
-            "prompt": {"type": "string", "description": "Prompt to run when the task fires."},
-            "name": {"type": "string", "description": "Optional short label for the task."},
-            "cron": {"type": "string", "description": "Five-field cron expression for recurring tasks."},
-            "delay_minutes": {"type": "integer", "description": "Fixed recurring interval in minutes."},
-            "run_at": {
-                "type": "string",
-                "description": "One-shot fire time in RFC3339 or local datetime form. Use this instead of `cron` or `delay_minutes` for reminders."
-            }
-        }
-    })
-}
-
-#[must_use]
-pub fn cron_list_parameters() -> Value {
-    json!({
-        "type": "object",
-        "properties": {},
-        "additionalProperties": false
-    })
-}
-
-#[must_use]
-pub fn cron_delete_parameters() -> Value {
-    json!({
-        "type": "object",
-        "required": ["id"],
-        "properties": {
-            "id": {"type": "string", "description": "Session scheduled task id to delete."}
         }
     })
 }

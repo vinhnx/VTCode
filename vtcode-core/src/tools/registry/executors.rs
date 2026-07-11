@@ -1053,10 +1053,14 @@ impl ToolRegistry {
     delegate_to_self!(apply_patch_executor, execute_apply_patch);
 
     /// Unified `mcp` executor: dispatches on `action`
-    /// (search_tools | get_tool_details | list_servers).
+    /// (search_tools | get_tool_details | list_servers | connect | disconnect).
     /// For legacy alias calls that omit `action`, the action is inferred from
     /// the argument shape: `query` implies search_tools, `name` implies
-    /// get_tool_details, otherwise list_servers.
+    /// get_tool_details, otherwise list_servers. `connect`/`disconnect` require
+    /// an explicit `action` since the schema marks it required, and are
+    /// evaluated under the action-qualified policy keys `mcp:connect` /
+    /// `mcp:disconnect` so they keep their Prompt confirmation even though
+    /// `mcp` itself is `ToolPolicy::Allow`.
     pub(super) fn mcp_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move {
             let action = args
@@ -1076,8 +1080,10 @@ impl ToolRegistry {
                 "search_tools" => self.mcp_search_tools_executor(args).await,
                 "get_tool_details" => self.mcp_get_tool_details_executor(args).await,
                 "list_servers" => self.mcp_list_servers_executor(args).await,
+                "connect" => self.mcp_connect_server_executor(args).await,
+                "disconnect" => self.mcp_disconnect_server_executor(args).await,
                 other => Err(anyhow!(
-                    "mcp: unknown action '{other}'. Use action='search_tools' (query), 'get_tool_details' (name), or 'list_servers'. To connect or disconnect a server, call the mcp_connect_server / mcp_disconnect_server tools."
+                    "mcp: unknown action '{other}'. Use action='search_tools' (query), 'get_tool_details' (name), 'list_servers', 'connect' (name), or 'disconnect' (name)."
                 )),
             }
         })
@@ -2057,3 +2063,52 @@ mod unified_action_error_tests {
 #[cfg(test)]
 #[path = "executors/sandbox_runtime_tests.rs"]
 mod sandbox_runtime_tests;
+
+#[cfg(test)]
+mod mcp_action_dispatch_tests {
+    use super::ToolRegistry;
+    use serde_json::json;
+
+    /// `mcp_executor` must dispatch `action='connect'`/`'disconnect'` to
+    /// `mcp_connect_server_executor`/`mcp_disconnect_server_executor` rather
+    /// than falling through to the unknown-action branch. A bare
+    /// `ToolRegistry::new` has no MCP client configured, so both calls fail
+    /// at the `mcp_client()` lookup inside the delegated executor -- but the
+    /// error text proves the dispatch reached the right function.
+    #[tokio::test]
+    async fn mcp_executor_dispatches_connect_and_disconnect_actions() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let registry = ToolRegistry::new(temp.path().to_path_buf()).await;
+
+        let connect_err = registry
+            .mcp_executor(json!({"action": "connect", "name": "example"}))
+            .await
+            .expect_err("connect without an active mcp client should fail");
+        let connect_text = connect_err.to_string();
+        assert!(!connect_text.contains("unknown action"));
+        assert!(connect_text.contains("MCP client not available"));
+
+        let disconnect_err = registry
+            .mcp_executor(json!({"action": "disconnect", "name": "example"}))
+            .await
+            .expect_err("disconnect without an active mcp client should fail");
+        let disconnect_text = disconnect_err.to_string();
+        assert!(!disconnect_text.contains("unknown action"));
+        assert!(disconnect_text.contains("MCP client not available"));
+    }
+
+    #[tokio::test]
+    async fn mcp_executor_rejects_unknown_action_with_guidance() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let registry = ToolRegistry::new(temp.path().to_path_buf()).await;
+
+        let err = registry
+            .mcp_executor(json!({"action": "bogus"}))
+            .await
+            .expect_err("unknown mcp action should error");
+        let text = err.to_string();
+        assert!(text.contains("unknown action 'bogus'"));
+        assert!(text.contains("connect"));
+        assert!(text.contains("disconnect"));
+    }
+}

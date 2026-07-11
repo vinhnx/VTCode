@@ -233,6 +233,55 @@ mod tests {
     }
 
     #[test]
+    fn folded_lifecycle_aliases_resolve_to_their_new_parents() {
+        // `wait_agent` / `close_agent` were folded into `agent`
+        // (action='wait'/'close'), and `mcp_connect_server` /
+        // `mcp_disconnect_server` were folded into `mcp`
+        // (action='connect'/'disconnect'). The legacy names must keep
+        // resolving through the public-route alias table to their new
+        // canonical registration so old callers still work.
+        use super::super::builtins::builtin_tool_registrations;
+
+        let registrations = builtin_tool_registrations(None);
+        let assembly = ToolAssembly::from_registrations(registrations);
+
+        for (alias, expected_parent) in [
+            (tools::WAIT_AGENT, tools::AGENT),
+            (tools::CLOSE_AGENT, tools::AGENT),
+            (tools::MCP_CONNECT_SERVER, tools::MCP),
+            (tools::MCP_DISCONNECT_SERVER, tools::MCP),
+        ] {
+            let resolved = assembly
+                .resolve_public_tool(alias)
+                .unwrap_or_else(|err| panic!("expected {alias} to resolve, got error: {err}"));
+            assert_eq!(
+                resolved.registration_name(),
+                expected_parent,
+                "expected legacy alias {alias} to resolve to {expected_parent}"
+            );
+        }
+
+        // The legacy names must not themselves be standalone catalog entries
+        // (`entry.public_name` is always the canonical registration name,
+        // never one of the folded alias names).
+        for legacy_name in [
+            tools::WAIT_AGENT,
+            tools::CLOSE_AGENT,
+            tools::MCP_CONNECT_SERVER,
+            tools::MCP_DISCONNECT_SERVER,
+        ] {
+            assert!(
+                assembly
+                    .catalog()
+                    .entries()
+                    .iter()
+                    .all(|entry| entry.public_name != legacy_name),
+                "expected {legacy_name} to not be a standalone catalog entry"
+            );
+        }
+    }
+
+    #[test]
     fn public_tool_name_candidates_keep_lowercase_human_label() {
         let candidates = public_tool_name_candidates("Exec code");
         assert!(candidates.iter().any(|candidate| candidate == "exec code"));

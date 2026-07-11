@@ -478,19 +478,23 @@ fn full_auto_unavailable_reason(tool_name: &str) -> String {
 /// requested action when the action changes the tool's risk profile.
 ///
 /// `unified_search` is a low-risk read-only tool for most actions, but its
-/// `web` action performs an outbound network fetch. Evaluating the bare name
-/// would let the read-only risk score auto-approve the fetch, bypassing HITL.
-/// Returning `unified_search:web` aligns the policy decision with the risk
-/// scorer, which already classifies that name as a network operation.
+/// `web` action performs an outbound network fetch, and `mcp` is a low-risk
+/// discovery tool for most actions, but its `connect`/`disconnect` actions
+/// open or tear down a network connection to an MCP server. Evaluating the
+/// bare name in either case would let the low-risk score auto-approve the
+/// network operation, bypassing HITL.
+///
+/// The action-qualified name is computed by
+/// `tool_intent::action_qualified_policy_name`, the single source of truth
+/// shared with the risk-scoring path (`build_risk_context`), so the two
+/// gating decisions cannot drift out of lockstep. See that function's doc
+/// comment for the exact matching rules, including the legacy
+/// `mcp_connect_server`/`mcp_disconnect_server` alias handling.
 fn policy_evaluation_name<'a>(tool_name: &'a str, tool_args: Option<&Value>) -> Cow<'a, str> {
-    use vtcode_core::config::constants::tools::UNIFIED_SEARCH;
-    use vtcode_core::tools::tool_intent::unified_search_action_is;
+    use vtcode_core::tools::tool_intent::action_qualified_policy_name;
 
-    if tool_name == UNIFIED_SEARCH
-        && let Some(args) = tool_args
-        && unified_search_action_is(args, "web")
-    {
-        return Cow::Borrowed("unified_search:web");
+    if let Some(qualified) = action_qualified_policy_name(tool_name, tool_args) {
+        return Cow::Borrowed(qualified);
     }
 
     Cow::Borrowed(tool_name)

@@ -488,6 +488,23 @@ mod tests {
         ));
     }
 
+    #[test]
+    fn mcp_connect_and_disconnect_are_not_auto_approved_by_risk() {
+        // `mcp` itself is a low-risk discovery tool (Allow by default), but its
+        // connect/disconnect actions open/tear down a network connection and
+        // must stay HITL-gated via the action-qualified policy keys, never
+        // auto-promoted to Allow by the low-risk auto-approval heuristic.
+        assert!(!ToolPolicyGateway::should_auto_approve_by_risk(
+            "mcp:connect"
+        ));
+        assert!(!ToolPolicyGateway::should_auto_approve_by_risk(
+            "mcp:disconnect"
+        ));
+        // The bare mcp tool (discovery actions) stays auto-approved for low
+        // friction.
+        assert!(ToolPolicyGateway::should_auto_approve_by_risk(tools::MCP));
+    }
+
     #[tokio::test]
     async fn apply_policy_constraints_caps_inferred_unified_search_list_calls() {
         let gateway = gateway_with_constraints(

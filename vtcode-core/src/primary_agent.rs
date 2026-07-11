@@ -210,6 +210,19 @@ pub fn resolve_primary_agent(
 
 /// Returns `true` for cleanup-only child-agent tools that must remain
 /// available regardless of the active primary agent's tool policy.
+///
+/// NOTE: after `wait_agent`/`close_agent` were folded into the unified
+/// `agent` tool (action='wait'/'close'), `LIFECYCLE_CLEANUP_TOOLS` no longer
+/// matches any name that is actually *emitted* to the model — the emitted
+/// name is always `tools::AGENT` ("agent"). This carve-out therefore only
+/// takes effect if a caller passes one of the legacy granular names
+/// (`wait_agent`/`close_agent`) directly rather than the folded name.
+/// Expressing true per-action granularity at runtime (allow cleanup actions
+/// on the folded `agent` tool while denying `spawn`) requires
+/// execution-time action gating, the same mechanism used for
+/// `mcp:connect`/`mcp:disconnect` (see `action_qualified_policy_name` in
+/// `tool_intent.rs`), and is deferred — see
+/// `apply_primary_agent_tool_policy`'s doc comment for the specific gap.
 fn is_subagent_cleanup_tool(tool_name: &str) -> bool {
     tools::LIFECYCLE_CLEANUP_TOOLS.contains(&tool_name)
 }
@@ -260,6 +273,23 @@ pub fn primary_agent_allows_tool(agent: &ActivePrimaryAgent, tool_name: &str) ->
         .any(|denied| normalise_tool_name(denied) == tool_name)
 }
 
+/// Filters the emitted tool list down to those `primary_agent_allows_tool`
+/// permits for `agent`.
+///
+/// KNOWN LIMITATION: filtering is by each tool's canonical
+/// `function_name()`, and `normalise_tool_name` only lowercases/trims — it
+/// does not alias-resolve. For multi-action tools that fold several legacy
+/// actions into one emitted name (e.g. `agent` folding
+/// spawn/wait/close/send_input/resume, or `mcp` folding connect/disconnect),
+/// a granular allow/deny entry such as `"spawn_agent"` in
+/// `disallowed_tools`/`tools` has no effect on the folded `agent` tool: the
+/// whole tool is either present or absent based on whether `"agent"` itself
+/// is allowed. Expressing "allow cleanup (wait/close) but deny spawn"
+/// therefore cannot be done here; it requires execution-time action gating —
+/// the same action-qualified mechanism already used to keep `mcp:connect`/
+/// `mcp:disconnect` HITL-gated separately from bare `mcp` (see
+/// `action_qualified_policy_name` in `tool_intent.rs`) — applied per-action
+/// at the point the subagent tool call is dispatched. That is deferred.
 #[must_use]
 pub fn apply_primary_agent_tool_policy(
     tools: Option<Arc<Vec<ToolDefinition>>>,
@@ -765,6 +795,21 @@ mod tests {
         assert!(!primary_agent_allows_tool(&active, "unified_search"));
     }
 
+    // NOTE: `spawn_agent`/`wait_agent`/`close_agent`/etc. are legacy granular
+    // subagent-lifecycle tool names. Since wait/close were folded into the
+    // unified `agent` tool (action='wait'/'close'), these granular names are
+    // never actually emitted to the model — the only subagent tool name that
+    // ever reaches `apply_primary_agent_tool_policy`'s runtime filtering is
+    // `tools::AGENT` ("agent"). The assertions below against the granular
+    // names are legacy-taxonomy coverage of the `primary_agent_allows_tool`/
+    // `is_subagent_cleanup_tool` predicates directly (useful if a caller ever
+    // passes a legacy name explicitly), NOT a test of the runtime filtering
+    // path exercised by `apply_primary_agent_tool_policy`. The final
+    // assertion covers that real runtime path: with an allow-list that
+    // excludes "agent", the whole folded tool is filtered out, and there is
+    // currently no way to allow cleanup (wait/close) while denying spawn for
+    // the emitted "agent" tool (see `apply_primary_agent_tool_policy`'s doc
+    // comment for the deferred execution-time action-gating fix).
     #[test]
     fn subagent_cleanup_tools_bypass_policy_but_new_work_obeys_policy() {
         let mut spec = test_spec("restricted");
@@ -794,6 +839,11 @@ mod tests {
         // and absent from the allow list.
         assert!(primary_agent_allows_tool(&active, tools::WAIT_AGENT));
         assert!(primary_agent_allows_tool(&active, tools::CLOSE_AGENT));
+
+        // Runtime reality: the allow list excludes "agent" (the only name
+        // ever emitted for subagent tools post-fold), so the whole tool is
+        // filtered out regardless of the cleanup carve-out above.
+        assert!(!primary_agent_allows_tool(&active, tools::AGENT));
     }
 
     #[test]
