@@ -113,11 +113,13 @@ use crate::tools::result::ToolResult as SplitToolResult;
 use crate::tools::safety_gateway::SafetyGateway;
 use parking_lot::Mutex; // Use parking_lot for better performance
 use rustc_hash::FxHashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
+use crate::exec::code_executor::{BuiltinToolExecutor, BuiltinToolInfo};
 use crate::mcp::McpClient;
 use crate::subagents::SubagentController;
 use crate::tools::edited_file_monitor::EditedFileMonitor;
+use async_trait::async_trait;
 use std::sync::RwLock;
 
 /// Callback for tool progress and output streaming
@@ -209,6 +211,103 @@ pub struct ToolRegistry {
     /// without ever holding a lock across an `.await`. `None` in headless or
     /// pre-attachment contexts; all consumers must degrade gracefully.
     session_model_tools: Arc<RwLock<Option<SessionModelTools>>>,
+
+    /// Weak self-reference installed once the registry is owned as
+    /// `Arc<ToolRegistry>` (see [`ToolRegistry::set_self_ref`]). Lets the
+    /// `unified_exec` code executor expose built-in tools to snippets as
+    /// callable library functions. Stored as `Weak` (not `Arc`) so it does not
+    /// form a strong reference cycle that would leak the registry for the
+    /// whole process.
+    self_ref: Arc<RwLock<Option<Weak<ToolRegistry>>>>,
+}
+
+/// Built-in tools exposed to agent code snippets via the `CodeExecutor` SDK.
+/// Curated to safe, non-recursive operations: file I/O, search, web fetch,
+/// scheduling, memory, and task tracking. Deliberately excludes
+/// `unified_exec` (would recurse) and subagent/HITL tools.
+const BUILTIN_CODE_TOOLS: &[&str] = &[
+    crate::config::constants::tools::UNIFIED_FILE,
+    crate::config::constants::tools::UNIFIED_SEARCH,
+    crate::config::constants::tools::WEB_FETCH,
+    crate::config::constants::tools::WEB_SEARCH,
+    crate::config::constants::tools::CRON,
+    crate::config::constants::tools::MEMORY,
+    crate::config::constants::tools::TASK_TRACKER,
+];
+
+fn builtin_code_tool_description(name: &str) -> String {
+    match name {
+        n if n == crate::config::constants::tools::UNIFIED_FILE => {
+            "Read, write, edit, move, copy, or delete files."
+        }
+        n if n == crate::config::constants::tools::UNIFIED_SEARCH => {
+            "Search: grep text, list files, structural (ast-grep), or list errors."
+        }
+        n if n == crate::config::constants::tools::WEB_FETCH => {
+            "Fetch a URL and return an analyzed summary (or markdown)."
+        }
+        n if n == crate::config::constants::tools::WEB_SEARCH => {
+            "Run a web search and return ranked results."
+        }
+        n if n == crate::config::constants::tools::CRON => {
+            "Manage scheduled prompts: action create|list|delete."
+        }
+        n if n == crate::config::constants::tools::MEMORY => {
+            "Read or update persistent project memory."
+        }
+        n if n == crate::config::constants::tools::TASK_TRACKER => {
+            "Track multi-step task checklists."
+        }
+        _ => "Built-in vtcode tool.",
+    }
+    .to_string()
+}
+
+impl ToolRegistry {
+    /// Install a weak self-reference so built-in tools can be exposed to code
+    /// snippets through the `unified_exec` code executor. Call this once the
+    /// registry is owned as `Arc<ToolRegistry>` (e.g. at session bootstrap).
+    /// Stores a `Weak` reference so no strong cycle is created.
+    pub fn set_self_ref(&self, arc: Arc<ToolRegistry>) {
+        *self.self_ref.write().unwrap() = Some(Arc::downgrade(&arc));
+    }
+
+    /// Resolve the built-in executor for code snippets (curated subset), if a
+    /// weak self-reference was installed at bootstrap. Upgrades the `Weak` so
+    /// the registry still drives tool execution, without extending its
+    /// lifetime. Returns `None` when the registry has already been dropped.
+    pub(crate) fn builtin_executor_for_code(&self) -> Option<Arc<dyn BuiltinToolExecutor>> {
+        self.self_ref
+            .read()
+            .unwrap()
+            .as_ref()
+            .and_then(|weak| weak.upgrade())
+            .map(|arc| arc as Arc<dyn BuiltinToolExecutor>)
+    }
+}
+
+#[async_trait]
+impl BuiltinToolExecutor for ToolRegistry {
+    async fn execute_builtin_tool(
+        &self,
+        tool_name: &str,
+        args: &serde_json::Value,
+    ) -> anyhow::Result<serde_json::Value> {
+        if !BUILTIN_CODE_TOOLS.contains(&tool_name) {
+            anyhow::bail!("tool '{tool_name}' is not exposed to code snippets");
+        }
+        self.execute_tool(tool_name, args.clone()).await
+    }
+
+    fn list_builtin_tools(&self) -> anyhow::Result<Vec<BuiltinToolInfo>> {
+        Ok(BUILTIN_CODE_TOOLS
+            .iter()
+            .map(|name| BuiltinToolInfo {
+                name: name.to_string(),
+                description: builtin_code_tool_description(name),
+            })
+            .collect())
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1855,5 +1954,70 @@ mod tests {
         assert_eq!(consecutive_failures, 5);
 
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn builtin_tool_executor_exposes_curated_subset() -> Result<()> {
+        let dir = TempDir::new()?;
+        let registry = Arc::new(ToolRegistry::new(dir.path().to_path_buf()).await);
+        registry.set_self_ref(Arc::clone(&registry));
+
+        let tools = registry.list_builtin_tools()?;
+        let names: std::collections::HashSet<_> = tools.iter().map(|t| t.name.as_str()).collect();
+        assert!(names.contains(tools::UNIFIED_FILE));
+        assert!(names.contains(tools::CRON));
+        // Recursive / orchestration tools stay out of code snippets.
+        assert!(!names.contains(tools::UNIFIED_EXEC));
+        assert!(!names.contains(tools::AGENT));
+
+        // Non-curated tools are rejected by the built-in executor.
+        let rejected = registry
+            .execute_builtin_tool(tools::UNIFIED_EXEC, &json!({}))
+            .await;
+        assert!(rejected.is_err());
+
+        // A curated tool executes and returns real content.
+        fs::write(dir.path().join("note.txt"), "hello-builtin")?;
+        let res = registry
+            .execute_builtin_tool(
+                tools::UNIFIED_FILE,
+                &json!({"action": "read", "path": dir.path().join("note.txt")}),
+            )
+            .await?;
+        assert!(res.to_string().contains("hello-builtin"));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn builtin_executor_self_ref_uses_weak_not_strong_cycle() {
+        let dir = TempDir::new().unwrap();
+        let registry = Arc::new(ToolRegistry::new(dir.path().to_path_buf()).await);
+        registry.set_self_ref(Arc::clone(&registry));
+
+        // The weak self-reference must NOT add a strong reference: after
+        // `set_self_ref` returns the passed clone is dropped, leaving only the
+        // `registry` binding as a strong ref (strong=1) plus the stored `Weak`
+        // (weak=1). A strong self-cycle would show strong=2 and leak the
+        // registry (and the MCP client / subagent controller it owns) for the
+        // whole process.
+        assert_eq!(Arc::strong_count(&registry), 1);
+        assert_eq!(Arc::weak_count(&registry), 1);
+
+        // `builtin_executor_for_code` upgrades the weak ref and resolves the
+        // curated executor so code snippets can call built-in tools.
+        let exec = registry
+            .builtin_executor_for_code()
+            .expect("weak self-reference resolves");
+        let out = exec
+            .execute_builtin_tool(tools::CRON, &json!({"action": "list"}))
+            .await
+            .unwrap();
+        assert!(out.is_object());
+        // Uncrated tools remain rejected through the resolved executor.
+        assert!(
+            exec.execute_builtin_tool(tools::UNIFIED_EXEC, &json!({}))
+                .await
+                .is_err()
+        );
     }
 }

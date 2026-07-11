@@ -10,7 +10,6 @@ use linkme::distributed_slice;
 use crate::config::constants::tools;
 use crate::config::types::CapabilityLevel;
 use crate::tool_policy::ToolPolicy;
-use crate::tools::defuddle::{DEFUDDLE_FETCH_DESCRIPTION, DefuddleTool};
 use crate::tools::handlers::{
     FinishPlanningTool, PlanningWorkflowState, StartPlanningTool, TaskTrackerTool,
 };
@@ -21,11 +20,9 @@ use crate::tools::web_fetch::{WEB_FETCH_DESCRIPTION, WebFetchTool};
 use crate::tools::web_search::{WEB_SEARCH_DESCRIPTION, WebSearchTool};
 use serde_json::json;
 use vtcode_utility_tool_specs::{
-    apply_patch_parameters, close_agent_parameters, cron_create_parameters, cron_delete_parameters,
-    cron_list_parameters, list_files_parameters, read_file_parameters, resume_agent_parameters,
-    send_input_parameters, spawn_agent_parameters, spawn_background_subprocess_parameters,
-    unified_exec_parameters, unified_file_parameters, unified_search_parameters,
-    wait_agent_parameters,
+    agent_parameters, apply_patch_parameters, close_agent_parameters, cron_parameters,
+    list_files_parameters, read_file_parameters, unified_exec_parameters, unified_file_parameters,
+    unified_search_parameters, wait_agent_parameters,
 };
 
 use super::distributed::{BUILTIN_TOOLS, tool_config};
@@ -119,44 +116,26 @@ fn register_memory(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistrat
 }
 
 #[distributed_slice(BUILTIN_TOOLS)]
-fn register_cron_create(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
+fn register_cron(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
     ToolRegistration::new(
-        tools::CRON_CREATE,
+        tools::CRON,
         CapabilityLevel::Basic,
         false,
-        ToolRegistry::cron_create_executor,
+        ToolRegistry::cron_executor,
     )
     .with_description(
-        "Create a session-scoped scheduled prompt using a cron expression, fixed interval, or one-shot fire time. Use cron_create to defer work, schedule recurring checks, or fire a one-shot reminder. Do NOT schedule per-minute jobs — they exhaust the per-turn tool budget and will be rate-limited. Scheduled prompts are session-scoped; jobs die when the vtcode process exits. Returns the created scheduled prompt id.",
+        "Create, list, or delete session-scoped scheduled prompts. Use action='create' to schedule a prompt via a cron expression, fixed interval, or one-shot fire time (exactly one of cron/delay_minutes/run_at); action='list' shows scheduled prompts with ids and status; action='delete' removes one by id. Do NOT schedule per-minute jobs — they exhaust the per-turn tool budget and will be rate-limited. Scheduled prompts are session-scoped; jobs die when the vtcode process exits.",
     )
-    .with_parameter_schema(cron_create_parameters())
-    .with_aliases(["schedule_task", "loop_create"])
-}
-
-#[distributed_slice(BUILTIN_TOOLS)]
-fn register_cron_list(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
-    ToolRegistration::new(
+    .with_parameter_schema(cron_parameters())
+    .with_aliases([
+        tools::CRON_CREATE,
         tools::CRON_LIST,
-        CapabilityLevel::Basic,
-        false,
-        ToolRegistry::cron_list_executor,
-    )
-    .with_description("List session-scoped scheduled prompts for the current VT Code process. Returns scheduled prompts with their ids, expressions, and status.")
-    .with_parameter_schema(cron_list_parameters())
-    .with_aliases(["scheduled_tasks"])
-}
-
-#[distributed_slice(BUILTIN_TOOLS)]
-fn register_cron_delete(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
-    ToolRegistration::new(
         tools::CRON_DELETE,
-        CapabilityLevel::Basic,
-        false,
-        ToolRegistry::cron_delete_executor,
-    )
-    .with_description("Delete a session-scoped scheduled prompt by id. Use cron_list to find the id of the prompt to delete.")
-    .with_parameter_schema(cron_delete_parameters())
-    .with_aliases(["cancel_scheduled_task"])
+        "schedule_task",
+        "loop_create",
+        "scheduled_tasks",
+        "cancel_scheduled_task",
+    ])
 }
 
 // ---------------------------------------------------------------------------
@@ -230,50 +209,30 @@ fn register_task_tracker(plan_state: Option<&PlanningWorkflowState>) -> ToolRegi
 // ---------------------------------------------------------------------------
 
 #[distributed_slice(BUILTIN_TOOLS)]
-fn register_spawn_agent(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
+fn register_agent(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
     ToolRegistration::new(
+        tools::AGENT,
+        CapabilityLevel::Basic,
+        false,
+        ToolRegistry::agent_executor,
+    )
+    .with_description(
+        "Spawn and steer delegated child agents. Use action='spawn' to delegate a scoped task (the child inherits the current toolset and returns its agent id); action='spawn_subprocess' to launch a managed background subprocess for long-running daemons (file watchers, dev servers) — do NOT use it for one-shot shell commands, use unified_exec instead; action='send_input' to send follow-up input to a running child (requires id); action='resume' to reopen a completed/closed child from saved context (requires id). To block on results use wait_agent; to free a child's budget use close_agent. Children and subprocesses are session-scoped; they die with the vtcode process.",
+    )
+    .with_parameter_schema(agent_parameters())
+    .with_aliases([
         tools::SPAWN_AGENT,
-        CapabilityLevel::Basic,
-        false,
-        ToolRegistry::spawn_agent_executor,
-    )
-    .with_description(
-        "Spawn a delegated child agent for a scoped task. The child inherits the current toolset, can spawn its own child agents, and returns its agent id plus current status.",
-    )
-    .with_parameter_schema(spawn_agent_parameters())
-    .with_aliases(["agent", "delegate", "subagent"])
-}
-
-#[distributed_slice(BUILTIN_TOOLS)]
-fn register_spawn_background_subprocess(
-    _plan_state: Option<&PlanningWorkflowState>,
-) -> ToolRegistration {
-    ToolRegistration::new(
         tools::SPAWN_BACKGROUND_SUBPROCESS,
-        CapabilityLevel::Basic,
-        false,
-        ToolRegistry::spawn_background_subprocess_executor,
-    )
-    .with_description(
-        "Launch a managed background subprocess that outlives the current turn. Use this for long-running daemons (file watchers, dev servers, indexers) where you need to return control to the model immediately. Do NOT use this for one-shot shell commands — use unified_exec with action=run instead. Background subprocesses are session-scoped; they die with the vtcode process.",
-    )
-    .with_parameter_schema(spawn_background_subprocess_parameters())
-    .with_aliases(["background_subagent", "launch_background_helper"])
-}
-
-#[distributed_slice(BUILTIN_TOOLS)]
-fn register_send_input(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
-    ToolRegistration::new(
         tools::SEND_INPUT,
-        CapabilityLevel::Basic,
-        false,
-        ToolRegistry::send_input_executor,
-    )
-    .with_description(
-        "Send follow-up input to an existing child agent. Use to continue a delegated task with new context or direction. Do NOT use this to ask the model a one-off question — answer inline instead. Requires an existing agent_id from a prior spawn_agent call.",
-    )
-    .with_parameter_schema(send_input_parameters())
-    .with_aliases(["message_agent", "continue_agent"])
+        tools::RESUME_AGENT,
+        "delegate",
+        "subagent",
+        "background_subagent",
+        "launch_background_helper",
+        "message_agent",
+        "continue_agent",
+        "resume_subagent",
+    ])
 }
 
 #[distributed_slice(BUILTIN_TOOLS)]
@@ -289,21 +248,6 @@ fn register_wait_agent(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegis
     )
     .with_parameter_schema(wait_agent_parameters())
     .with_aliases(["wait_subagent"])
-}
-
-#[distributed_slice(BUILTIN_TOOLS)]
-fn register_resume_agent(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
-    ToolRegistration::new(
-        tools::RESUME_AGENT,
-        CapabilityLevel::Basic,
-        false,
-        ToolRegistry::resume_agent_executor,
-    )
-    .with_description(
-        "Resume a previously completed or closed child agent subtree from its saved context. Use this to continue work in a delegated agent after it has closed. Do NOT call resume_agent on a still-running child — use send_input instead. Resume is session-scoped: agents cannot be resumed across separate vtcode sessions.",
-    )
-    .with_parameter_schema(resume_agent_parameters())
-    .with_aliases(["resume_subagent"])
 }
 
 #[distributed_slice(BUILTIN_TOOLS)]
@@ -379,7 +323,12 @@ fn register_web_fetch(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegist
             },
             "prompt": {
                 "type": "string",
-                "description": "Question or instruction for analyzing the fetched content. Omit for a default summary."
+                "description": "Question or instruction for analyzing the fetched content. Omit for a default summary. Ignored when format='markdown'."
+            },
+            "format": {
+                "type": "string",
+                "enum": ["summary", "markdown"],
+                "description": "Output format. 'summary' (default) returns an analyzed summary plus a temp_file with full content. 'markdown' returns the page as cleaned markdown via the defuddle.md service — rate-limited to ONE call per session; remote http(s) URLs only."
             },
             "max_bytes": {
                 "type": "integer",
@@ -394,7 +343,13 @@ fn register_web_fetch(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegist
         "additionalProperties": false
     }))
     .with_permission(ToolPolicy::Prompt)
-    .with_aliases(["fetch_url", "web"])
+    .with_aliases([
+        "fetch_url",
+        "web",
+        tools::DEFUDDLE_FETCH,
+        "defuddle",
+        "extract_markdown",
+    ])
 }
 
 // ---------------------------------------------------------------------------
@@ -436,86 +391,26 @@ fn register_web_search(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegis
         .with_aliases(["search_web", "websearch"])
 }
 
-// ---------------------------------------------------------------------------
-// DEFUDDLE FETCH (built-in, one-shot markdown extraction via defuddle.md)
-// ---------------------------------------------------------------------------
-
 #[distributed_slice(BUILTIN_TOOLS)]
-fn register_defuddle_fetch(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
-    let defuddle = DefuddleTool::new();
-    let defuddle_for_factory = defuddle.clone();
-    let defuddle_factory = native_cgp_tool_factory(move || defuddle_for_factory.clone());
-    ToolRegistration::from_tool_instance(
-        tools::DEFUDDLE_FETCH,
-        CapabilityLevel::Basic,
-        defuddle,
-    )
-    .with_native_cgp_factory(defuddle_factory)
-    .with_description(DEFUDDLE_FETCH_DESCRIPTION)
-    .with_parameter_schema(json!({
-        "type": "object",
-        "properties": {
-            "url": {
-                "type": "string",
-                "format": "uri",
-                "pattern": "^https?://",
-                "description": "REMOTE web page URL (http:// or https:// ONLY). Do NOT use for local file paths — use unified_file action=read instead."
-            },
-            "max_bytes": {
-                "type": "integer",
-                "description": "Hard cap on the returned markdown size in bytes (default: 262144, max: 262144)."
-            }
-        },
-        "required": ["url"],
-        "additionalProperties": false
-    }))
-    .with_permission(ToolPolicy::Prompt)
-    .with_aliases(["defuddle", "extract_markdown"])
-}
-
-#[distributed_slice(BUILTIN_TOOLS)]
-fn register_mcp_search_tools(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
+fn register_mcp(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
     ToolRegistration::new(
+        tools::MCP,
+        CapabilityLevel::CodeSearch,
+        false,
+        ToolRegistry::mcp_executor,
+    )
+    .with_description(
+        "Discover Model Context Protocol capabilities without loading full schemas for every tool. Use action='search_tools' to find MCP tools by natural-language query (progressive detail_level: name, name_description, full); action='get_tool_details' to fetch the full input schema for one MCP tool name; action='list_servers' to list configured servers and their connection state. Do NOT call list_servers every turn — server state changes rarely. Lifecycle ops (connect/disconnect a server) are separate tools that require Prompt confirmation: mcp_connect_server / mcp_disconnect_server.",
+    )
+    .with_parameter_schema(mcp_parameters())
+    .with_permission(ToolPolicy::Allow)
+    .with_aliases([
         tools::MCP_SEARCH_TOOLS,
-        CapabilityLevel::CodeSearch,
-        false,
-        ToolRegistry::mcp_search_tools_executor,
-    )
-    .with_description(
-        "Search only MCP tool catalogs with progressive detail levels (name, name_description, full). Use this to discover MCP capabilities without loading full schemas for every tool. Pass detail_level=full to get complete input schema excerpts.",
-    )
-    .with_parameter_schema(mcp_search_tools_parameters())
-    .with_permission(ToolPolicy::Allow)
-    .with_aliases(["mcp_tool_search"])
-}
-
-#[distributed_slice(BUILTIN_TOOLS)]
-fn register_mcp_get_tool_details(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
-    ToolRegistration::new(
         tools::MCP_GET_TOOL_DETAILS,
-        CapabilityLevel::CodeSearch,
-        false,
-        ToolRegistry::mcp_get_tool_details_executor,
-    )
-    .with_description(
-        "Fetch full MCP tool details for one specific MCP tool name, including its input schema.",
-    )
-    .with_parameter_schema(mcp_get_tool_details_parameters())
-    .with_permission(ToolPolicy::Allow)
-    .with_aliases(["mcp_tool_details"])
-}
-
-#[distributed_slice(BUILTIN_TOOLS)]
-fn register_mcp_list_servers(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
-    ToolRegistration::new(
         tools::MCP_LIST_SERVERS,
-        CapabilityLevel::CodeSearch,
-        false,
-        ToolRegistry::mcp_list_servers_executor,
-    )
-    .with_description("List configured MCP servers and their current connection state. Returns server names, protocols, and connection status.")
-    .with_parameter_schema(mcp_list_servers_parameters())
-    .with_permission(ToolPolicy::Allow)
+        "mcp_tool_search",
+        "mcp_tool_details",
+    ])
 }
 
 #[distributed_slice(BUILTIN_TOOLS)]
@@ -561,7 +456,7 @@ fn register_unified_exec(_plan_state: Option<&PlanningWorkflowState>) -> ToolReg
         ToolRegistry::unified_exec_executor,
     )
     .with_description(
-        "Execute shell commands and code: actions run, write, poll, continue, inspect, list, close, code. Use action=run for one-shot commands; action=write + action=poll for interactive shells. Do NOT use action=write without a follow-up poll/close — the session leaks. Default timeout 180s (max 1800s). All shell calls run through the active sandbox policy. Requires Prompt confirmation.",
+        "Execute shell commands and code: actions run, write, poll, continue, inspect, list, close, code. Use action=run for one-shot commands; action=write + action=poll for interactive shells. For action=code, write Python/JavaScript that filters, aggregates, or loops over data in-process — connected MCP tools are callable as library functions from the snippet, so prefer computing over fetching and return only small summaries instead of dumping large output into context (spooled tool results are plain files you can read/grep from code). Do NOT use action=write without a follow-up poll/close — the session leaks. Default timeout 180s (max 1800s). All shell calls run through the active sandbox policy. Requires Prompt confirmation.",
     )
     .with_parameter_schema(unified_exec_parameters())
     .with_aliases([
@@ -779,49 +674,36 @@ fn register_apply_patch(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegi
 // - load_skill
 // - load_skill_resource
 
-fn mcp_search_tools_parameters() -> serde_json::Value {
+fn mcp_parameters() -> serde_json::Value {
     json!({
         "type": "object",
+        "required": ["action"],
         "properties": {
+            "action": {
+                "type": "string",
+                "enum": ["search_tools", "get_tool_details", "list_servers"],
+                "description": "search_tools: find MCP tools by natural-language query. get_tool_details: fetch the full input schema for one MCP tool name. list_servers: list configured servers and their connection state."
+            },
             "query": {
                 "type": "string",
-                "description": "Natural language query describing MCP capability to find."
+                "description": "search_tools: natural language query describing the MCP capability to find."
             },
             "detail_level": {
                 "type": "string",
                 "enum": ["name", "name_description", "full"],
-                "description": "Response detail level: names only, names with descriptions, or full schema excerpts."
+                "description": "search_tools: response detail level (names only, names with descriptions, or full schema excerpts)."
             },
             "limit": {
                 "type": "integer",
                 "minimum": 1,
                 "maximum": 25,
-                "description": "Maximum number of results to return."
-            }
-        },
-        "required": ["query"],
-        "additionalProperties": false
-    })
-}
-
-fn mcp_get_tool_details_parameters() -> serde_json::Value {
-    json!({
-        "type": "object",
-        "properties": {
+                "description": "search_tools: maximum number of results to return."
+            },
             "name": {
                 "type": "string",
-                "description": "Exact MCP tool name to inspect."
+                "description": "get_tool_details: exact MCP tool name to inspect."
             }
         },
-        "required": ["name"],
-        "additionalProperties": false
-    })
-}
-
-fn mcp_list_servers_parameters() -> serde_json::Value {
-    json!({
-        "type": "object",
-        "properties": {},
         "additionalProperties": false
     })
 }
@@ -855,12 +737,42 @@ mod tests {
     #[test]
     fn distributed_slice_contains_all_builtin_tools() {
         use crate::tools::registry::distributed::BUILTIN_TOOLS;
-        // The distributed slice should contain at least 30 tool factories.
+        // The distributed slice should contain at least 28 tool factories.
         // This catches accidentally missing #[distributed_slice] annotations.
+        // (Consolidation via action-param tools — web/cron/agent/mcp merges —
+        // intentionally reduces this count; the `llm_visible_builtin_tool_count_stays_bounded`
+        // test guards the user-visible tool budget.)
         assert!(
-            BUILTIN_TOOLS.len() >= 30,
-            "expected at least 30 distributed tool factories, found {}",
+            BUILTIN_TOOLS.len() >= 28,
+            "expected at least 28 distributed tool factories, found {}",
             BUILTIN_TOOLS.len()
+        );
+    }
+
+    /// Cap regression for tool-count creep.
+    ///
+    /// Every new #[distributed_slice(BUILTIN_TOOLS)] declaration the model can
+    /// see costs the model attention at choice time. This asserts the number
+    /// of LLM-visible builtin tools stays bounded. If a legitimate feature
+    /// needs a new primary tool, consolidate, defer (behind the deferred-load
+    /// path), or deliberately raise `MAX_LLM_VISIBLE_BUILTIN_TOOLS` in review.
+    ///
+    /// Hidden/internal tools (e.g. `read_file`, PTY session tools) set
+    /// `expose_in_llm(false)` and are intentionally excluded from this count.
+    #[test]
+    fn llm_visible_builtin_tool_count_stays_bounded() {
+        const MAX_LLM_VISIBLE_BUILTIN_TOOLS: usize = 19;
+
+        let registrations = builtin_tool_registrations(None);
+        let visible = registrations
+            .iter()
+            .filter(|registration| registration.expose_in_llm())
+            .count();
+
+        assert!(
+            visible <= MAX_LLM_VISIBLE_BUILTIN_TOOLS,
+            "LLM-visible builtin tool count is {visible}, exceeding the cap of {MAX_LLM_VISIBLE_BUILTIN_TOOLS}. \
+             Consolidate, defer, or deliberately raise the cap in review."
         );
     }
 
@@ -950,29 +862,26 @@ mod tests {
         let plan_state = PlanningWorkflowState::new(PathBuf::from("/workspace"));
         let registrations = builtin_tool_registrations(Some(&plan_state));
 
-        let spawn_agent = registrations
+        let agent = registrations
             .iter()
-            .find(|registration| registration.name() == tools::SPAWN_AGENT)
-            .expect("spawn_agent registration should exist");
-        assert!(
-            spawn_agent
-                .metadata()
-                .description()
-                .expect("spawn_agent description")
-                .contains("inherits the current toolset")
-        );
-
-        let send_input = registrations
-            .iter()
-            .find(|registration| registration.name() == tools::SEND_INPUT)
-            .expect("send_input registration should exist");
-        assert!(
-            send_input
-                .metadata()
-                .description()
-                .expect("send_input description")
-                .contains("follow-up input")
-        );
+            .find(|registration| registration.name() == tools::AGENT)
+            .expect("agent registration should exist");
+        let agent_description = agent.metadata().description().expect("agent description");
+        assert!(agent_description.contains("inherits the current toolset"));
+        assert!(agent_description.contains("follow-up input"));
+        assert!(agent_description.contains("long-running daemons"));
+        let agent_aliases = agent.metadata().aliases();
+        for legacy in [
+            tools::SPAWN_AGENT,
+            tools::SPAWN_BACKGROUND_SUBPROCESS,
+            tools::SEND_INPUT,
+            tools::RESUME_AGENT,
+        ] {
+            assert!(
+                agent_aliases.iter().any(|alias| alias == legacy),
+                "agent should keep legacy alias {legacy}"
+            );
+        }
 
         let wait_agent = registrations
             .iter()
@@ -984,18 +893,6 @@ mod tests {
                 .description()
                 .expect("wait_agent description")
                 .contains("terminal state")
-        );
-
-        let spawn_background = registrations
-            .iter()
-            .find(|registration| registration.name() == tools::SPAWN_BACKGROUND_SUBPROCESS)
-            .expect("spawn_background_subprocess registration should exist");
-        assert!(
-            spawn_background
-                .metadata()
-                .description()
-                .expect("spawn_background_subprocess description")
-                .contains("outlives the current turn")
         );
     }
 
@@ -1176,5 +1073,25 @@ mod tests {
                  OR a constraint cue ('max ', 'rate-limit', 'session', 'Prompt', 'timeout', 'inherits', ...).\nDescription: {description}"
             );
         }
+    }
+
+    #[test]
+    fn default_config_exposed_tool_count_within_cap() {
+        // Regression guard for the tool-consolidation work: the number of
+        // LLM-exposed built-in tools must stay bounded so the model does not
+        // waste attention choosing between near-duplicates. Any new
+        // registration must either consolidate an existing tool, be deferred
+        // behind the deferred-loading path, or deliberately raise this cap in
+        // review.
+        let registrations = builtin_tool_registrations(None);
+        let exposed: usize = registrations
+            .iter()
+            .filter(|registration| registration.expose_in_llm())
+            .count();
+        assert!(
+            exposed <= 18,
+            "exposed built-in tool count is {exposed}; expected <= 18. \
+             Consolidate, defer, or raise the cap in review."
+        );
     }
 }

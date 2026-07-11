@@ -34,6 +34,35 @@ pub fn spawn_agent_parameters() -> Value {
 }
 
 #[must_use]
+pub fn agent_parameters() -> Value {
+    json!({
+        "type": "object",
+        "required": ["action"],
+        "properties": {
+            "action": {
+                "type": "string",
+                "enum": ["spawn", "spawn_subprocess", "send_input", "resume"],
+                "description": "spawn: delegate a scoped task to a child agent (requires message). spawn_subprocess: launch a managed background subprocess for long-running daemons (requires message). send_input: send follow-up input to a running child (requires id + message or items). resume: reopen a completed/closed child from saved context (requires id). Use the separate wait_agent / close_agent tools to join or close children."
+            },
+            "agent_type": {"type": "string", "description": "spawn/spawn_subprocess: subagent type or name to run."},
+            "message": {"type": "string", "description": "spawn/spawn_subprocess: task prompt. send_input: follow-up prompt for the child."},
+            "items": {
+                "type": "array",
+                "description": "Structured context items for the child.",
+                "items": collaboration_input_item_schema()
+            },
+            "fork_context": {"type": "boolean", "description": "spawn: seed the child with the current thread history.", "default": false},
+            "model": {"type": "string", "description": "spawn/spawn_subprocess: model override. Omit to use parent model."},
+            "reasoning_effort": {"type": "string", "description": "spawn/spawn_subprocess: reasoning effort override."},
+            "background": {"type": "boolean", "description": "spawn: run the child agent in background and return immediately.", "default": false},
+            "max_turns": {"type": "integer", "description": "spawn/spawn_subprocess: optional turn limit for the child."},
+            "id": {"type": "string", "description": "send_input/resume: child agent id."},
+            "interrupt": {"type": "boolean", "description": "send_input: abort current child work and restart with this input; false (default) queues it.", "default": false}
+        }
+    })
+}
+
+#[must_use]
 pub fn spawn_background_subprocess_parameters() -> Value {
     json!({
         "type": "object",

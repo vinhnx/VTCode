@@ -720,6 +720,7 @@ fn is_core_tool_entry(entry: &ToolCatalogEntry, config: &SessionToolsConfig) -> 
         | tools::TASK_TRACKER
         | tools::START_PLANNING
         | tools::FINISH_PLANNING
+        | tools::AGENT
         | tools::SPAWN_AGENT
         | tools::SPAWN_BACKGROUND_SUBPROCESS
         | tools::SEND_INPUT

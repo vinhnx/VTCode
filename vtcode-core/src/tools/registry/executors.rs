@@ -131,6 +131,36 @@ macro_rules! delegate_to_self {
 }
 
 impl ToolRegistry {
+    /// Unified `cron` executor: dispatches on `action` (create | list | delete).
+    /// For legacy alias calls that omit `action`, the action is inferred from
+    /// the argument shape: `prompt` implies create, `id` implies delete,
+    /// otherwise list.
+    pub(super) fn cron_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
+        Box::pin(async move {
+            let action = args
+                .get("action")
+                .and_then(Value::as_str)
+                .map(str::to_ascii_lowercase)
+                .unwrap_or_else(|| {
+                    if args.get("prompt").is_some() {
+                        "create".to_string()
+                    } else if args.get("id").is_some() {
+                        "delete".to_string()
+                    } else {
+                        "list".to_string()
+                    }
+                });
+            match action.as_str() {
+                "create" => self.cron_create_executor(args).await,
+                "list" => self.cron_list_executor(args).await,
+                "delete" => self.cron_delete_executor(args).await,
+                other => bail!(
+                    "cron: unknown action '{other}'. Use action='create' (schedule a prompt), 'list', or 'delete' (requires id)."
+                ),
+            }
+        })
+    }
+
     pub(super) fn cron_create_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move {
             let prompt = args
@@ -778,11 +808,16 @@ impl ToolRegistry {
             .ok_or_else(|| anyhow!("MCP client not available"))?;
 
         let workspace_root = self.workspace_root_owned();
+        // Expose built-in tools to the snippet as callable library functions
+        // (curated, non-recursive subset) when a weak self-reference was
+        // installed at session bootstrap.
+        let builtin_executor = self.builtin_executor_for_code();
         let executor = crate::exec::code_executor::CodeExecutor::new(
             language,
             mcp_client.clone(),
             workspace_root.clone(),
-        );
+        )
+        .with_builtin_executor(builtin_executor);
         let execution_start = SystemTime::now();
 
         let result = executor.execute(code).await?;
@@ -1016,6 +1051,37 @@ impl ToolRegistry {
         execute_mcp_disconnect_server
     );
     delegate_to_self!(apply_patch_executor, execute_apply_patch);
+
+    /// Unified `mcp` executor: dispatches on `action`
+    /// (search_tools | get_tool_details | list_servers).
+    /// For legacy alias calls that omit `action`, the action is inferred from
+    /// the argument shape: `query` implies search_tools, `name` implies
+    /// get_tool_details, otherwise list_servers.
+    pub(super) fn mcp_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
+        Box::pin(async move {
+            let action = args
+                .get("action")
+                .and_then(Value::as_str)
+                .map(str::to_ascii_lowercase)
+                .unwrap_or_else(|| {
+                    if args.get("query").is_some() {
+                        "search_tools".to_string()
+                    } else if args.get("name").is_some() {
+                        "get_tool_details".to_string()
+                    } else {
+                        "list_servers".to_string()
+                    }
+                });
+            match action.as_str() {
+                "search_tools" => self.mcp_search_tools_executor(args).await,
+                "get_tool_details" => self.mcp_get_tool_details_executor(args).await,
+                "list_servers" => self.mcp_list_servers_executor(args).await,
+                other => Err(anyhow!(
+                    "mcp: unknown action '{other}'. Use action='search_tools' (query), 'get_tool_details' (name), or 'list_servers'. To connect or disconnect a server, call the mcp_connect_server / mcp_disconnect_server tools."
+                )),
+            }
+        })
+    }
 
     // PTY executors -- distinct signatures, kept explicit.
     // `run_pty_cmd` and `create_pty_session` are intentional aliases: both

@@ -274,4 +274,53 @@ mod tests {
         assert!(result.get("spool_path").is_none());
         assert_eq!(result.get("output"), value.get("output"));
     }
+
+    #[tokio::test]
+    async fn large_outputs_from_any_tool_spool_to_path_with_guidance() {
+        let temp = tempfile::tempdir().unwrap();
+        let registry = ToolRegistry::new(temp.path().to_path_buf()).await;
+
+        // Representative tool types: search, file read, web fetch, exec, and an MCP tool.
+        // Every one must land on disk as a `spool_path` the model can post-process
+        // (unified_file / unified_search / unified_exec) instead of being inlined.
+        let tool_names = [
+            tools::UNIFIED_SEARCH,
+            tools::UNIFIED_FILE,
+            tools::WEB_FETCH,
+            tools::UNIFIED_EXEC,
+            "mcp_get_tool_details",
+        ];
+        let big = "a".repeat(20_000);
+        for tool in tool_names {
+            // PTY/exec tools emit `output`; the rest emit `content`.
+            let field = if tool == tools::UNIFIED_EXEC {
+                "output"
+            } else {
+                "content"
+            };
+            let mut value = json!({});
+            value[field] = json!(big);
+            let result = registry
+                .process_tool_output(tool, value.clone(), tool.starts_with("mcp"))
+                .await;
+
+            assert!(
+                result.get("spool_path").is_some(),
+                "tool {tool} should spool large output to a file path"
+            );
+            assert!(
+                result.get("spool_note").is_some(),
+                "tool {tool} should explain how to post-process the spooled file"
+            );
+            let inline = result
+                .get("content")
+                .or_else(|| result.get("output"))
+                .and_then(Value::as_str)
+                .unwrap_or("");
+            assert!(
+                inline.len() < big.len(),
+                "tool {tool} should condense the preview, not inline the full blob"
+            );
+        }
+    }
 }

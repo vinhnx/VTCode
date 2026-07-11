@@ -12,9 +12,9 @@ mod mcp_tool;
 mod responses_api;
 
 pub use collaboration::{
-    close_agent_parameters, request_user_input_description, request_user_input_parameters,
-    resume_agent_parameters, send_input_parameters, spawn_agent_parameters,
-    spawn_background_subprocess_parameters, wait_agent_parameters,
+    agent_parameters, close_agent_parameters, request_user_input_description,
+    request_user_input_parameters, resume_agent_parameters, send_input_parameters,
+    spawn_agent_parameters, spawn_background_subprocess_parameters, wait_agent_parameters,
 };
 pub use json_schema::{AdditionalProperties, JsonSchema, parse_tool_input_schema};
 #[cfg(feature = "mcp")]
@@ -69,6 +69,31 @@ pub fn apply_patch_parameter_schema(input_description: &str) -> Value {
 #[must_use]
 pub fn apply_patch_parameters() -> Value {
     apply_patch_parameter_schema(DEFAULT_APPLY_PATCH_INPUT_DESCRIPTION)
+}
+
+#[must_use]
+pub fn cron_parameters() -> Value {
+    json!({
+        "type": "object",
+        "required": ["action"],
+        "additionalProperties": false,
+        "properties": {
+            "action": {
+                "type": "string",
+                "enum": ["create", "list", "delete"],
+                "description": "create: schedule a prompt (requires prompt + exactly one of cron/delay_minutes/run_at). list: show scheduled prompts. delete: remove one by id."
+            },
+            "prompt": {"type": "string", "description": "create: prompt to run when the task fires."},
+            "name": {"type": "string", "description": "create: optional short label for the task."},
+            "cron": {"type": "string", "description": "create: five-field cron expression for recurring tasks."},
+            "delay_minutes": {"type": "integer", "description": "create: fixed recurring interval in minutes."},
+            "run_at": {
+                "type": "string",
+                "description": "create: one-shot fire time in RFC3339 or local datetime form. Use instead of `cron` or `delay_minutes` for reminders."
+            },
+            "id": {"type": "string", "description": "delete: session scheduled task id to delete."}
+        }
+    })
 }
 
 #[must_use]
@@ -133,7 +158,7 @@ pub fn unified_exec_parameters() -> Value {
             "tail_lines": {"type": "integer", "description": "Tail preview lines."},
             "max_matches": {"type": "integer", "description": "Max filtered matches.", "default": 200},
             "literal": {"type": "boolean", "description": "Treat query as literal text.", "default": false},
-            "code": {"type": "string", "description": "Raw Python or JavaScript source for `action=code`. Send the source directly, not JSON or markdown fences."},
+            "code": {"type": "string", "description": "Raw Python or JavaScript source for `action=code`. Send the source directly, not JSON or markdown fences. Connected MCP tools are callable as library functions from this snippet, so use it to filter/aggregate large data in-process and return only small summaries instead of dumping output into context."},
             "language": {
                 "type": "string",
                 "enum": ["python3", "javascript"],

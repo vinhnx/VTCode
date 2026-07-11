@@ -950,9 +950,9 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **User Questions**: "What can you tell me about Agent Justification System?", "How does Overview work?", "How does Architecture work?"
 
 - **File**: `docs/tools/defuddle_fetch.md`
-  - **Content**: Defuddle Fetch Tool
-  - **Topics**: Usage, Output, Guard Rails, Related Tools
-  - **User Questions**: "What can you tell me about Defuddle Fetch Tool?", "How does Usage work?", "How does Output work?"
+  - **Content**: Defuddle Fetch (now `web_fetch` `format=markdown`)
+  - **Topics**: Guard Rails, Related Tools
+  - **User Questions**: "What can you tell me about Defuddle Fetch (now `web_fetch` `format=markdown`)?", "How does Guard Rails work?", "How does Related Tools work?"
 
 - **File**: `docs/tools/EDITOR_CONFIG.md`
   - **Content**: External Editor Configuration

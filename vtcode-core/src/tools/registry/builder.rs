@@ -201,6 +201,7 @@ impl ToolRegistry {
                 crate::scheduler::SessionScheduler::new(),
             )),
             session_model_tools: Arc::new(RwLock::new(None)),
+            self_ref: Arc::new(RwLock::new(None)),
         };
 
         registry.rebuild_tool_assembly().await;

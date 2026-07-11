@@ -328,6 +328,9 @@ mod tests {
         };
 
         let registry = Arc::new(ToolRegistry::new(agent_config.workspace.clone()).await);
+        // Install a self-reference so built-in tools are exposed to
+        // `unified_exec` code snippets as callable library functions.
+        registry.set_self_ref(Arc::clone(&registry));
 
         let components = AgentComponentBuilder::new(&agent_config)
             .with_session_info(custom_session.clone())

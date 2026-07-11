@@ -297,7 +297,7 @@ pub use mcp::{
     tool_discovery::{DetailLevel, ToolDiscovery, ToolDiscoveryResult},
     validate_mcp_config,
 };
-pub use memory::{RssCheckpoint, MemoryMonitor, MemoryPressure, MemoryReport};
+pub use memory::{MemoryMonitor, MemoryPressure, MemoryReport, RssCheckpoint};
 pub use models_manager::{
     ModelFamily, ModelPreset, ModelsCache, ModelsManager, builtin_model_presets,
     model_family::find_family_for_model,

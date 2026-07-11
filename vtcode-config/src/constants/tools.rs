@@ -13,6 +13,10 @@ pub const UNIFIED_FILE: &str = "unified_file";
 // ============================================================
 pub const THINK: &str = "think";
 pub const SEARCH_TOOLS: &str = "search_tools";
+/// Unified MCP discovery tool (action: search_tools | get_tool_details | list_servers).
+/// `mcp_connect_server` / `mcp_disconnect_server` stay standalone: their lifecycle
+/// ops are rare and config-gated, so they are not folded into this discovery tool.
+pub const MCP: &str = "mcp";
 pub const MCP_SEARCH_TOOLS: &str = "mcp_search_tools";
 pub const MCP_GET_TOOL_DETAILS: &str = "mcp_get_tool_details";
 pub const MCP_LIST_SERVERS: &str = "mcp_list_servers";
@@ -87,7 +91,13 @@ pub const MEMORY: &str = "memory";
 pub const ASK_QUESTIONS: &str = "ask_questions";
 /// Legacy alias routed to `request_user_input` (deprecated tabbed shape).
 pub const ASK_USER_QUESTION: &str = "ask_user_question";
-/// Schedule a session-scoped task using a cron or one-shot schedule.
+/// Unified subagent lifecycle tool (action: spawn | spawn_subprocess | send_input | resume).
+/// `wait_agent` and `close_agent` stay standalone: the policy layer treats them
+/// as always-allowed cleanup tools by name.
+pub const AGENT: &str = "agent";
+/// Unified scheduled-prompt tool (action: create | list | delete).
+pub const CRON: &str = "cron";
+/// Legacy alias for `cron` action=create.
 pub const CRON_CREATE: &str = "cron_create";
 /// List session-scoped scheduled tasks.
 pub const CRON_LIST: &str = "cron_list";
@@ -171,6 +181,7 @@ const _: () = {
     // Tool IDs
     validate_tool_name(THINK);
     validate_tool_name(SEARCH_TOOLS);
+    validate_tool_name(MCP);
     validate_tool_name(MCP_SEARCH_TOOLS);
     validate_tool_name(MCP_GET_TOOL_DETAILS);
     validate_tool_name(MCP_LIST_SERVERS);
@@ -225,6 +236,8 @@ const _: () = {
     validate_tool_name(MEMORY);
     validate_tool_name(ASK_QUESTIONS);
     validate_tool_name(ASK_USER_QUESTION);
+    validate_tool_name(AGENT);
+    validate_tool_name(CRON);
     validate_tool_name(CRON_CREATE);
     validate_tool_name(CRON_LIST);
     validate_tool_name(CRON_DELETE);

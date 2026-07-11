@@ -34,7 +34,7 @@ const TEMP_SUBDIR: &str = "web_fetch";
 /// Max age in seconds before temp files are cleaned up (1 hour).
 const TEMP_MAX_AGE_SECS: u64 = 3600;
 
-pub(crate) const WEB_FETCH_DESCRIPTION: &str = "Fetches content from a URL and returns an analyzed summary. Accepts: { url: string, prompt?: string, max_bytes?: number, timeout_secs?: number }. Omit prompt for a default summary. For docs domains, try /llms.txt first: for 'abc.com', fetch https://abc.com/llms.txt before the homepage, then traverse linked URLs for relevant Markdown sources. Default max_bytes is 500KB (fits most pages). Do NOT set max_bytes without reason — the default is generous. Truncated responses include truncation metadata so you can retry with a higher budget. Prefer llms.txt over llms-full.txt (can be multi-megabyte). Returns a `temp_file` path to ephemeral fetched content. Read it to analyze. Temp files are auto-cleaned; do not persist elsewhere.";
+pub(crate) const WEB_FETCH_DESCRIPTION: &str = "Fetches content from a URL and returns an analyzed summary. Accepts: { url: string, prompt?: string, format?: 'summary'|'markdown', max_bytes?: number, timeout_secs?: number }. Set format='markdown' to get the page as cleaned markdown via the defuddle.md extraction service instead of a summary — that service is rate-limited to ONE call per session, so use it sparingly and only for remote http(s) URLs (never local files). Omit prompt for a default summary. For docs domains, try /llms.txt first: for 'abc.com', fetch https://abc.com/llms.txt before the homepage, then traverse linked URLs for relevant Markdown sources. Default max_bytes is 500KB (fits most pages). Do NOT set max_bytes without reason — the default is generous. Truncated responses include truncation metadata so you can retry with a higher budget. Prefer llms.txt over llms-full.txt (can be multi-megabyte). Returns a `temp_file` path to ephemeral fetched content. Read it to analyze. Temp files are auto-cleaned; do not persist elsewhere.";
 
 #[derive(Debug, Deserialize)]
 struct WebFetchArgs {
@@ -57,6 +57,9 @@ pub struct WebFetchTool {
     pub blocked_patterns: Vec<String>,
     /// Allowed domains (for exemptions in restricted mode or primary list in whitelist mode)
     pub allowed_domains: HashSet<String>,
+    /// Defuddle markdown-extraction backend (used when `format: "markdown"`).
+    /// Shared session-cap state survives clones (Arc counter inside).
+    pub defuddle: crate::tools::defuddle::DefuddleTool,
     /// Strict HTTPS-only mode
     pub strict_https_only: bool,
 }
@@ -186,6 +189,7 @@ impl WebFetchTool {
             blocked_domains: HashSet::new(),
             blocked_patterns: Vec::new(),
             allowed_domains: HashSet::new(),
+            defuddle: crate::tools::defuddle::DefuddleTool::new(),
             strict_https_only: true,
         }
     }
@@ -203,6 +207,7 @@ impl WebFetchTool {
             blocked_domains: blocked_domains.into_iter().collect(),
             blocked_patterns,
             allowed_domains: allowed_domains.into_iter().collect(),
+            defuddle: crate::tools::defuddle::DefuddleTool::new(),
             strict_https_only,
         }
     }
@@ -772,6 +777,26 @@ impl Tool for WebFetchTool {
         // - Simple "fetch https://..." style calls are handled natively by VT Code.
         // - We do not force upstream agents or MCP tools to construct a full prompt.
         // - MCP tools like `get_current_time` remain unaffected (they are separate).
+        // `format: "markdown"` routes to the defuddle.md extraction backend
+        // (absorbs the former standalone `defuddle_fetch` tool). Session cap
+        // and URL validation are enforced by the backend itself.
+        if let Some(obj) = args.as_object_mut() {
+            let wants_markdown = obj
+                .get("format")
+                .and_then(Value::as_str)
+                .is_some_and(|f| f.eq_ignore_ascii_case("markdown"));
+            if wants_markdown {
+                let mut defuddle_args = serde_json::Map::new();
+                if let Some(url) = obj.get("url").cloned() {
+                    defuddle_args.insert("url".to_string(), url);
+                }
+                if let Some(max_bytes) = obj.get("max_bytes").cloned() {
+                    defuddle_args.insert("max_bytes".to_string(), max_bytes);
+                }
+                return self.defuddle.execute(Value::Object(defuddle_args)).await;
+            }
+        }
+
         if let Some(obj) = args.as_object_mut() {
             let has_url = obj.get("url").is_some_and(Value::is_string);
             let has_prompt = obj.get("prompt").is_some_and(Value::is_string);

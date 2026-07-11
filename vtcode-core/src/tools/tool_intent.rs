@@ -179,9 +179,7 @@ fn builtin_tool_behavior_canonical(tool: &str) -> Option<ToolBehavior> {
         | tools::TASK_TRACKER
         | tools::GET_ERRORS
         | tools::SEARCH_TOOLS
-        | tools::MCP_SEARCH_TOOLS
-        | tools::MCP_GET_TOOL_DETAILS
-        | tools::MCP_LIST_SERVERS
+        | tools::MCP
         | tools::THINK => Some(ToolBehavior::function(
             if tool == tools::MEMORY {
                 ToolMutationModel::ByArgs(memory_tool_intent)

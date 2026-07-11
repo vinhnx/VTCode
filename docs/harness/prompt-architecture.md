@@ -130,8 +130,8 @@ include:
   side effects.
 
 Tools exempted from the anti-pattern/constraint requirement are
-single-action or read-only helpers (`cron_list`, `cron_delete`,
-`mcp_list_servers`, etc.) where the model can safely call them without
+single-action or read-only helpers (`cron` action=`list`/`delete`,
+`mcp` action=`list_servers`, etc.) where the model can safely call them without
 explicit guard-rails. See the test for the full allowlist and cue
 vocabularies.
 

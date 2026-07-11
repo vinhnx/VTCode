@@ -66,7 +66,7 @@ VT Code has undergone significant improvements:
 - **Decision Transparency System** - Complete audit trail with reasoning and confidence scores
 - **Error Recovery & Resilience** - Intelligent error handling with pattern detection and multiple recovery strategies
 - **Ast-grep Outline Mode** — Token-efficient symbol maps (`action=outline`) via `unified_search` for cheap "what's in this file/directory?" queries, auto-installs ast-grep on first use
-- **Web Search & Fetch** — `web_search` and `defuddle_fetch` tools with TOML-driven network allowlist and domain-scoped approval caching
+- **Web Search & Fetch** — `web_search` and `web_fetch` (with `format="markdown"` defuddle extraction) tools with TOML-driven network allowlist and domain-scoped approval caching
 - **Post-Tool Recovery Cycles** — Automatic detection and cap enforcement for post-tool recovery loops with temporary file cleanup
 - **CLI `did you mean?`** — Fuzzy suggestions for unrecognized commands with colorized output
 - **Session Resume** — `/continue` slash command to resume the most recent session
@@ -360,7 +360,7 @@ This documentation reflects version 0.133.21 of VT Code, which includes signific
 - Error recovery and resilience with intelligent pattern detection
 - Conversation summarization for long-running sessions
 - Enhanced Terminal User Interface (TUI) with improved mouse support and text selection
-- `web_search` and `defuddle_fetch` tools with TOML-driven network allowlist
+- `web_search` and `web_fetch` (with `format="markdown"` defuddle extraction) tools with TOML-driven network allowlist
 - `unified_search` outline mode for token-efficient symbol maps (auto-installs ast-grep)
 - Post-tool recovery cycle tracking with cap checks and temporary file cleanup
 - CLI `did you mean?` suggestions for unrecognized commands

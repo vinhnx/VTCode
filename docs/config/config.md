@@ -560,7 +560,7 @@ enabled = false
 `automation.scheduled_tasks.enabled` controls VT Code's internal scheduler surfaces:
 
 - one-shot reminder interception such as `remind me at 3pm to ...`
-- scheduler tools `cron_create`, `cron_list`, and `cron_delete`
+- scheduler tool `cron` (actions: `create`, `list`, `delete`; legacy names `cron_create`, `cron_list`, `cron_delete` still route to it)
 - durable `vtcode schedule ...` commands and the local scheduler daemon
 
 This subsystem is opt-in. Set it to `true` when you want VT Code scheduling enabled.

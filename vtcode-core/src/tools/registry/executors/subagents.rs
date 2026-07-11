@@ -48,6 +48,43 @@ impl ToolRegistry {
             .await
     }
 
+    /// Unified `agent` executor: dispatches on `action`
+    /// (spawn | spawn_subprocess | send_input | resume).
+    /// For legacy alias calls that omit `action`, the action is inferred from
+    /// the argument shape: `id` + `message`/`items` implies send_input, `id`
+    /// alone implies resume, otherwise spawn.
+    pub(crate) fn agent_executor(&self, mut args: Value) -> BoxFuture<'_, Result<Value>> {
+        Box::pin(async move {
+            let action = args
+                .get("action")
+                .and_then(Value::as_str)
+                .map(str::to_ascii_lowercase)
+                .unwrap_or_else(|| {
+                    let has_id = args.get("id").is_some();
+                    let has_input = args.get("message").is_some() || args.get("items").is_some();
+                    match (has_id, has_input) {
+                        (true, true) => "send_input".to_string(),
+                        (true, false) => "resume".to_string(),
+                        _ => "spawn".to_string(),
+                    }
+                });
+            if let Some(obj) = args.as_object_mut() {
+                obj.remove("action");
+            }
+            match action.as_str() {
+                "spawn" => self.spawn_agent_executor(args).await,
+                "spawn_subprocess" | "spawn_background_subprocess" => {
+                    self.spawn_background_subprocess_executor(args).await
+                }
+                "send_input" => self.send_input_executor(args).await,
+                "resume" | "resume_agent" => self.resume_agent_executor(args).await,
+                other => Err(anyhow!(
+                    "agent: unknown action '{other}'. Use action='spawn' (delegate a task), 'spawn_subprocess' (background daemon), 'send_input' (requires id + message), or 'resume' (requires id). To wait for or close children, call the wait_agent / close_agent tools."
+                )),
+            }
+        })
+    }
+
     pub(crate) fn spawn_agent_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move {
             self.execute_subagent_request::<crate::subagents::SpawnAgentRequest, _, _, _>(
