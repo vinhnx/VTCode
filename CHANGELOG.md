@@ -2,6 +2,31 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.135.3 - 2026-07-11
+
+### Highlights
+#### Bug Fixes
+
+- Namespace cache per target in CI to prevent collisions (014e8924) 
+#### Features
+
+- Add /checkup command and optimize diagnostics output (7d26d11a) 
+- Enable debug assertions and overflow checks in release builds (f8768d32) 
+- Implement mode switch guard to prevent cycling during active turns (7551e9bc) 
+### Other Changes
+#### Other
+
+- Implement guards for tool call validation including read, shell run, spool, and task tracker guards (e9e19936) 
+- Add Claude Advisor server-side tool configuration and integration (7612fb8a) 
+- Implement response chain handling, turn snapshot capture, tool shaping, request gap tracking, and usage cost estimation (73b1019f) 
+- Implement automatic compaction orchestration and memory envelope management (2743ca18) 
+- Add unified per-session state store with append-only event log and derived views (9d6901cd) 
+- Implement unified executors for cron, mcp, and agent actions; enhance tool descriptions and parameters; improve output processing for large results. (22276fb4) 
+- Consolidate agent and MCP tool registrations; update parameters and descriptions for clarity. Enhance action dispatching for wait and close actions in agents. Adjust risk scoring for MCP connect/disconnect actions. Remove unused parameter schemas and streamline collaboration specs. (69222268) 
+- Add tests for memory lock functionality and implement atomic file writes (f5055f80) 
+#### Refactors
+
+- Expose normalize_model_id function and simplify model normalization logic (6efca878) 
 ## 0.135.2 - 2026-07-10
 
 ### Highlights
