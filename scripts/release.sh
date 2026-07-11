@@ -642,7 +642,7 @@ trigger_docs_rs_rebuild() {
     local crates=(
         vtcode-core vtcode-config
         vtcode-commons vtcode-indexer vtcode-bash-runner
-        vtcode-exec-events vtcode-acp vtcode-auth
+        vtcode-exec-events vtcode-session-store vtcode-acp vtcode-auth
         vtcode-macros
         vtcode-utility-tool-specs vtcode-a2a vtcode-mcp
         vtcode-ui vtcode-safety vtcode-llm vtcode-skills

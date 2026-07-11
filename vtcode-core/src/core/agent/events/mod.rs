@@ -18,6 +18,7 @@ use crate::exec::events::{
 };
 use parking_lot::Mutex;
 use serde_json::Value;
+use std::path::Path;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -30,6 +31,37 @@ where
     F: FnMut(&ThreadEvent) + Send + 'static,
 {
     Arc::new(Mutex::new(Box::new(callback)))
+}
+
+/// Build an event sink that persists every recorded event to the unified
+/// per-session store ([`vtcode_session_store`]), making it the canonical
+/// source of truth for session state/history. Returns `None` (non-fatally) if
+/// the store cannot be opened.
+pub fn session_store_sink(workspace: &Path, session_id: &str) -> Option<EventSink> {
+    let log = match vtcode_session_store::open(workspace, session_id) {
+        Ok(log) => log,
+        Err(err) => {
+            tracing::warn!("session store unavailable for {session_id}: {err}");
+            return None;
+        }
+    };
+    Some(event_sink(move |e: &ThreadEvent| {
+        if let Err(err) = log.append(e) {
+            tracing::debug!("session store append failed: {err}");
+        }
+    }))
+}
+
+/// Combine two optional event sinks into one that fans out to both.
+pub fn combine_event_sinks(a: Option<EventSink>, b: Option<EventSink>) -> Option<EventSink> {
+    match (a, b) {
+        (None, None) => None,
+        (Some(s), None) | (None, Some(s)) => Some(s),
+        (Some(a), Some(b)) => Some(event_sink(move |e: &ThreadEvent| {
+            a.lock()(e);
+            b.lock()(e);
+        })),
+    }
 }
 
 #[derive(Debug, Clone)]

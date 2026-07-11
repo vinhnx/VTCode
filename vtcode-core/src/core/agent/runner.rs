@@ -9,6 +9,7 @@ use crate::core::agent::features::FeatureSet;
 use crate::core::agent::session_config::ResolvedSessionConfig;
 use crate::core::agent::steering::SteeringMessage;
 use crate::core::threads::{ThreadBootstrap, ThreadRuntimeHandle, build_thread_archive_metadata};
+use std::path::Path;
 
 /// Settings for the agent runner
 #[derive(Clone, Default)]
@@ -401,6 +402,11 @@ impl AgentRunner {
     /// Clone the underlying thread handle so callers can capture snapshots.
     pub fn thread_handle(&self) -> ThreadRuntimeHandle {
         self.thread_handle.clone()
+    }
+
+    /// Workspace root this runner operates within.
+    pub fn workspace(&self) -> &Path {
+        &self._workspace
     }
 
     /// Enable read-only planning workflow for the underlying tool registry.

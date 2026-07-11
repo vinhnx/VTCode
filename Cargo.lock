@@ -7340,6 +7340,7 @@ dependencies = [
  "vtcode-commons",
  "vtcode-config",
  "vtcode-core",
+ "vtcode-session-store",
  "vtcode-ui",
  "webbrowser",
 ]
@@ -7617,6 +7618,7 @@ dependencies = [
  "vtcode-macros",
  "vtcode-mcp",
  "vtcode-safety",
+ "vtcode-session-store",
  "vtcode-skills",
  "vtcode-ui",
  "vtcode-utility-tool-specs",
@@ -7779,6 +7781,21 @@ dependencies = [
  "tree-sitter",
  "tree-sitter-bash",
  "vtcode-commons",
+]
+
+[[package]]
+name = "vtcode-session-store"
+version = "0.135.2"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tracing",
+ "vtcode-exec-events",
+ "walkdir",
 ]
 
 [[package]]

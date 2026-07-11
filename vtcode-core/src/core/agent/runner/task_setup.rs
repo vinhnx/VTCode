@@ -52,9 +52,15 @@ impl AgentRunner {
         let steering_receiver = self.steering_receiver.lock().take();
 
         let agent_prefix = format!("[{}]", self.agent_type);
+        // Persist every recorded event to the unified per-session store so it
+        // becomes the single source of truth for session state/history.
+        let session_sink =
+            crate::core::agent::events::session_store_sink(self.workspace(), &self.session_id);
+        let event_sink =
+            crate::core::agent::events::combine_event_sinks(self.event_sink.clone(), session_sink);
         let mut event_recorder = ExecEventRecorder::new(
             self.session_id.clone(),
-            self.event_sink.clone(),
+            event_sink,
             Some(self.thread_handle.clone()),
         );
         event_recorder.turn_started();

@@ -22,6 +22,7 @@ mod init_project;
 mod man;
 mod messages;
 mod notify;
+mod session_store;
 mod sessions;
 pub(crate) mod skills_index;
 mod snapshots;

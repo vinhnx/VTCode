@@ -49,6 +49,7 @@ Cargo workspace, ~30 crates. Rust stable, MSRV 1.88, edition 2024. `default-memb
 | `vtcode-utility-tool-specs` | JSON schemas for utility, file, and collaboration/HITL tools |
 | `vtcode-llm` | LLM provider abstraction, client implementations, streaming (partial extraction) |
 | `vtcode-skills` | Skill types, discovery, loading, and validation (partial extraction) |
+| `vtcode-session-store` | Unified per-session state store: append-only `ThreadEvent` log, derived views, retention, cross-session query (single source of truth) |
 | `vtcode-safety` | Command safety detection, execution policies, sandboxing |
 | `vtcode-a2a` | Agent2Agent (A2A) protocol client and server |
 | `vtcode-mcp` | Model Context Protocol client, connection pooling, tool discovery |
@@ -76,6 +77,7 @@ Every crate has its own AGENTS.md with crate-specific conventions:
 | `vtcode-utility-tool-specs` | [vtcode-utility-tool-specs/AGENTS.md](vtcode-utility-tool-specs/AGENTS.md) |
 | `vtcode-llm` | [vtcode-llm/AGENTS.md](vtcode-llm/AGENTS.md) |
 | `vtcode-skills` | [vtcode-skills/AGENTS.md](vtcode-skills/AGENTS.md) |
+| `vtcode-session-store` | [vtcode-session-store/AGENTS.md](vtcode-session-store/AGENTS.md) |
 | `vtcode-safety` | [vtcode-safety/AGENTS.md](vtcode-safety/AGENTS.md) |
 | `vtcode-a2a` | [vtcode-a2a/AGENTS.md](vtcode-a2a/AGENTS.md) |
 | `vtcode-mcp` | [vtcode-mcp/AGENTS.md](vtcode-mcp/AGENTS.md) |

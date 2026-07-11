@@ -20,7 +20,7 @@ Options:
   --start-from CRATE Resume publishing from the provided crate name. Valid
                      crates: vtcode-commons,
                      vtcode-auth, vtcode-exec-events,
-                     vtcode-macros,
+                     vtcode-session-store, vtcode-macros,
                      vtcode-config,
                      vtcode-indexer, vtcode-bash-runner,
                      vtcode-utility-tool-specs.
@@ -97,6 +97,7 @@ CRATES=(
     vtcode-commons
     vtcode-auth
     vtcode-exec-events
+    vtcode-session-store
     vtcode-macros
     vtcode-config
     vtcode-indexer

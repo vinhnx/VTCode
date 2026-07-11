@@ -118,6 +118,7 @@ vtcode-commons = { path = "../vtcode-commons", version = "0.135.2" }
 vtcode-ui = { path = "../vtcode-ui", version = "0.135.2" }
 vtcode-macros = { path = "../vtcode-macros", version = "0.135.2" }
 vtcode-exec-events = { path = "../vtcode-exec-events", version = "0.135.2" }
+vtcode-session-store = { path = "../vtcode-session-store", version = "0.135.2" }
 vtcode-auth = { path = "../vtcode-auth", version = "0.135.2" }
 vtcode-config = { path = "../vtcode-config", version = "0.135.2" }
 vtcode-utility-tool-specs = { path = "../vtcode-utility-tool-specs", version = "0.135.2" }
