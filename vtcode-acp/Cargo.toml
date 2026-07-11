@@ -29,8 +29,8 @@ tracing = { workspace = true }
 uuid = { workspace = true, features = ["v4"] }
 url = { workspace = true }
 percent-encoding = "2.3"
-vtcode-core = { path = "../vtcode-core", version = "0.135.2" }
-vtcode-config = { path = "../vtcode-config", version = "0.135.2" }
+vtcode-core = { path = "../vtcode-core", version = "0.135.3" }
+vtcode-config = { path = "../vtcode-config", version = "0.135.3" }
 
 [dev-dependencies]
 assert_fs = { workspace = true }
