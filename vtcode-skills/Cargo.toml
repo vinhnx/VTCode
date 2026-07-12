@@ -1,6 +1,6 @@
 [package]
 name = "vtcode-skills"
-version = "0.135.3"
+version = "0.135.4"
 edition.workspace = true
 license.workspace = true
 description = "Skill types, discovery, loading, and validation for VT Code"
@@ -22,8 +22,8 @@ tempfile.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
-vtcode-commons = { path = "../vtcode-commons", version = "0.135.3" }
-vtcode-config = { path = "../vtcode-config", version = "0.135.3" }
+vtcode-commons = { path = "../vtcode-commons", version = "0.135.4" }
+vtcode-config = { path = "../vtcode-config", version = "0.135.4" }
 zip = { version = "8.6", default-features = false, features = ["deflate"] }
 
 [dev-dependencies]
