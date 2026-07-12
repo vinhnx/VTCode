@@ -1,6 +1,6 @@
 [package]
 name = "vtcode-eval"
-version = "0.135.4"
+version = "0.135.5"
 edition = "2024"
 license = "MIT"
 
