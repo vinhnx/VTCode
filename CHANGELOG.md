@@ -2,6 +2,19 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.135.4 - 2026-07-12
+
+### Highlights
+### Other Changes
+#### Other
+
+- Implement progress monitoring and reinforcement learning engine with persistence (233f9751) 
+- Refactor context engineering documentation and enhance planning recovery in turn loop (c895b2c7) 
+- Refactor post-tool recovery logic and enhance planning recovery handling (bd0aed15) 
+- Refactor read extent handling and improve recovery fallback logic (bbab7878) 
+- Implement tool result reducers, evaluation rendering, and tool rejection handling (c17728b3) 
+- Update TODO (9924d22d) 
+- Refactor assertions for floating-point comparisons and improve case-insensitive path checks (9152aae4) 
 ## 0.135.3 - 2026-07-11
 
 ### Highlights
