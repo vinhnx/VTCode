@@ -2,6 +2,14 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.135.5 - 2026-07-12
+
+### Highlights
+### Other Changes
+#### Other
+
+- Add evaluation suite command and context reset functionality (53beae8d) 
+- Add eval suite runner and context reset logic (5ecc0441) 
 ## 0.135.4 - 2026-07-12
 
 ### Highlights
