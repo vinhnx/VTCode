@@ -59,8 +59,8 @@ use post_tool_recovery::PostToolFailureRecovery;
 #[cfg(test)]
 use post_tool_recovery::maybe_recover_after_post_tool_llm_failure;
 use post_tool_recovery::{
-    PostToolFailureAction, complete_turn_after_failed_tool_free_recovery,
-    dispatch_post_tool_failure, normalize_tool_free_recovery_break_outcome,
+    PostToolFailureAction, PostToolRecoveryContext, dispatch_post_tool_failure,
+    normalize_tool_free_recovery_break_outcome,
 };
 use usage_accounting::{
     accumulate_turn_usage, estimate_session_costs, has_turn_usage, stop_reason_from_finish_reason,
@@ -126,37 +126,6 @@ const RECOVERY_TOOL_CALL_RETRY_DIRECTIVE: &str = "Recovery: tools are disabled, 
      attempt included tool-call or function-call markup; summarize the findings from \
      the tool outputs already in history as a final answer, without any <tool_call>, \
      <function=...>, or other tool-call syntax.";
-
-/// Shared logic for the `PostToolFailureRecovery::RetryToolFree` arm.
-///
-/// Checks the post-tool recovery cycle cap. If the cap is reached, completes
-/// the turn with a deterministic fallback answer and returns `Some(result)`.
-/// Otherwise returns `None`. The caller should increment the cycle counter,
-/// switch to tool-free recovery, and `continue` the turn loop.
-fn check_recovery_cycle_cap(
-    cycles: u8,
-    working_history: &mut Vec<uni::Message>,
-    stage: &str,
-    err: &anyhow::Error,
-    salvaged_text: Option<String>,
-    plan_session: Option<&mut PlanningWorkflowSessionState>,
-) -> Option<TurnLoopResult> {
-    if cycles >= MAX_POST_TOOL_RECOVERY_CYCLES {
-        tracing::warn!(
-            cycles,
-            "Post-tool recovery cycle cap reached; concluding turn \
-             with deterministic fallback answer"
-        );
-        return Some(complete_turn_after_failed_tool_free_recovery(
-            working_history,
-            stage,
-            Some(err),
-            salvaged_text,
-            plan_session,
-        ));
-    }
-    None
-}
 
 /// Count how many assistant text responses the model has emitted in this
 /// turn so far.  Used by the anti-runaway guard to short-circuit when the
@@ -661,19 +630,18 @@ pub(crate) async fn run_turn_loop(
                     restore_status_right.clone(),
                 );
 
-                match dispatch_post_tool_failure(
-                    turn_processing_ctx.renderer,
-                    turn_processing_ctx.working_history,
-                    turn_processing_ctx.harness_state,
-                    &err,
+                let planning = turn_processing_ctx.is_planning_active();
+                match dispatch_post_tool_failure(PostToolRecoveryContext {
+                    renderer: &mut *turn_processing_ctx.renderer,
+                    working_history: &mut *turn_processing_ctx.working_history,
+                    harness_state: &mut *turn_processing_ctx.harness_state,
+                    plan_session: planning.then_some(&mut *turn_processing_ctx.plan_session),
+                    err: &err,
                     step_count,
                     turn_history_start_len,
-                    "execute_llm_request",
+                    stage: "execute_llm_request",
                     tool_free_recovery,
-                    turn_processing_ctx
-                        .is_planning_active()
-                        .then_some(&mut *turn_processing_ctx.plan_session),
-                )? {
+                })? {
                     PostToolFailureAction::Continue => continue,
                     PostToolFailureAction::Break(r) => {
                         result = r;
@@ -753,9 +721,7 @@ pub(crate) async fn run_turn_loop(
                 let threshold = turn_processing_ctx
                     .vt_cfg
                     .map(|cfg| cfg.agent.harness.budget_warning_threshold)
-                    .unwrap_or(
-                        vtcode_core::llm::usage_cost::DEFAULT_BUDGET_WARNING_RATIO,
-                    );
+                    .unwrap_or(vtcode_core::llm::usage_cost::DEFAULT_BUDGET_WARNING_RATIO);
                 match vtcode_core::llm::usage_cost::BudgetStatus::classify(
                     estimate.raw_usd,
                     max_budget_usd,
@@ -875,19 +841,18 @@ pub(crate) async fn run_turn_loop(
                 }
                 let tool_free_recovery = turn_processing_ctx.recovery_pass_used()
                     && turn_processing_ctx.recovery_is_tool_free();
-                match dispatch_post_tool_failure(
-                    turn_processing_ctx.renderer,
-                    turn_processing_ctx.working_history,
-                    turn_processing_ctx.harness_state,
-                    &err,
+                let planning = turn_processing_ctx.is_planning_active();
+                match dispatch_post_tool_failure(PostToolRecoveryContext {
+                    renderer: &mut *turn_processing_ctx.renderer,
+                    working_history: &mut *turn_processing_ctx.working_history,
+                    harness_state: &mut *turn_processing_ctx.harness_state,
+                    plan_session: planning.then_some(&mut *turn_processing_ctx.plan_session),
+                    err: &err,
                     step_count,
                     turn_history_start_len,
-                    "process_llm_response",
+                    stage: "process_llm_response",
                     tool_free_recovery,
-                    turn_processing_ctx
-                        .is_planning_active()
-                        .then_some(&mut *turn_processing_ctx.plan_session),
-                )? {
+                })? {
                     PostToolFailureAction::Continue => continue,
                     PostToolFailureAction::Break(r) => {
                         result = r;
@@ -995,17 +960,18 @@ pub(crate) async fn run_turn_loop(
                 );
                 let tool_free_recovery = ctx.harness_state.recovery_pass_used()
                     && ctx.harness_state.recovery_is_tool_free();
-                match dispatch_post_tool_failure(
-                    ctx.renderer,
-                    working_history,
-                    ctx.harness_state,
-                    &err,
+                let planning = ctx.is_planning_active();
+                match dispatch_post_tool_failure(PostToolRecoveryContext {
+                    renderer: &mut *ctx.renderer,
+                    working_history: &mut *working_history,
+                    harness_state: &mut *ctx.harness_state,
+                    plan_session: planning.then_some(&mut *ctx.plan_session),
+                    err: &err,
                     step_count,
                     turn_history_start_len,
-                    "handle_turn_processing_result",
+                    stage: "handle_turn_processing_result",
                     tool_free_recovery,
-                    ctx.is_planning_active().then_some(&mut *ctx.plan_session),
-                )? {
+                })? {
                     PostToolFailureAction::Continue => continue,
                     PostToolFailureAction::Break(r) => {
                         result = r;
@@ -1060,8 +1026,7 @@ pub(crate) async fn run_turn_loop(
                     outcome_result,
                     tool_free_recovery,
                     salvaged,
-                    ctx.is_planning_active()
-                        .then_some(&mut *ctx.plan_session),
+                    ctx.is_planning_active().then_some(&mut *ctx.plan_session),
                 );
                 break;
             }

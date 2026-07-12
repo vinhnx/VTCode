@@ -1,13 +1,13 @@
+use super::post_tool_recovery::complete_turn_after_failed_tool_free_recovery;
 use super::post_tool_recovery::prepare_post_tool_tool_free_recovery;
 use super::post_tool_recovery::{ensure_post_tool_resume_directive, has_tool_response_since};
 use super::{
     HarnessUsage, PLANNING_RECOVERY_SYNTHESIS_FALLBACK, POST_TOOL_RECOVERY_REASON,
     POST_TOOL_RESUME_DIRECTIVE, PostToolFailureRecovery, RECOVERY_CONTRACT_VIOLATION_REASON,
     RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER, accumulate_turn_usage,
-    complete_turn_after_failed_tool_free_recovery, count_assistant_text_responses_for_guard,
-    count_assistant_text_responses_in_turn, has_turn_usage,
-    maybe_recover_after_post_tool_llm_failure, normalize_tool_free_recovery_break_outcome,
-    run_turn_loop,
+    count_assistant_text_responses_for_guard, count_assistant_text_responses_in_turn,
+    has_turn_usage, maybe_recover_after_post_tool_llm_failure,
+    normalize_tool_free_recovery_break_outcome, run_turn_loop,
 };
 use crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState;
 use crate::agent::runloop::unified::turn::context::TurnLoopResult;
@@ -386,7 +386,9 @@ fn plan_mode_recovery_fallback_marks_interview_pending_and_preserves_research() 
     plan_session.enter(PlanningEntrySource::UserRequest);
     assert!(!plan_session.interview_pending());
 
-    let mut history = vec![uni::Message::user("plan launch-time optimization".to_string())];
+    let mut history = vec![uni::Message::user(
+        "plan launch-time optimization".to_string(),
+    )];
     let outcome = complete_turn_after_failed_tool_free_recovery(
         &mut history,
         "test.stage",
@@ -419,7 +421,9 @@ fn plan_mode_recovery_fallback_prefers_salvaged_prose() {
     let mut plan_session = PlanningWorkflowSessionState::default();
     plan_session.enter(PlanningEntrySource::UserRequest);
 
-    let mut history = vec![uni::Message::user("plan launch-time optimization".to_string())];
+    let mut history = vec![uni::Message::user(
+        "plan launch-time optimization".to_string(),
+    )];
     let outcome = complete_turn_after_failed_tool_free_recovery(
         &mut history,
         "test.stage",

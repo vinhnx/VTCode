@@ -6,9 +6,9 @@ use vtcode_core::llm::provider as uni;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::{
-    PLANNING_RECOVERY_SYNTHESIS_FALLBACK, POST_TOOL_RECOVERY_REASON, POST_TOOL_RESUME_DIRECTIVE,
-    RECOVERY_CONTRACT_VIOLATION_REASON, RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER,
-    check_recovery_cycle_cap,
+    MAX_POST_TOOL_RECOVERY_CYCLES, PLANNING_RECOVERY_SYNTHESIS_FALLBACK, POST_TOOL_RECOVERY_REASON,
+    POST_TOOL_RESUME_DIRECTIVE, RECOVERY_CONTRACT_VIOLATION_REASON,
+    RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER,
 };
 use crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState;
 use crate::agent::runloop::unified::run_loop_context::HarnessTurnState;
@@ -160,17 +160,7 @@ pub(super) fn complete_turn_after_failed_tool_free_recovery(
         let planning_fallback = salvaged_text
             .filter(|text| !text.trim().is_empty())
             .unwrap_or_else(|| PLANNING_RECOVERY_SYNTHESIS_FALLBACK.to_string());
-        let has_recent_fallback = working_history.iter().rev().take(3).any(|message| {
-            message.role == uni::MessageRole::Assistant
-                && message.phase == Some(uni::AssistantPhase::FinalAnswer)
-                && message.content.as_text().starts_with(&planning_fallback)
-        });
-        if !has_recent_fallback {
-            working_history.push(
-                uni::Message::assistant(planning_fallback)
-                    .with_phase(Some(uni::AssistantPhase::FinalAnswer)),
-            );
-        }
+        push_final_answer_if_absent(working_history, &planning_fallback);
         tracing::warn!(
             stage = failure_stage,
             "Plan-mode tool-free recovery failed; marking interview pending for next turn."
@@ -182,13 +172,11 @@ pub(super) fn complete_turn_after_failed_tool_free_recovery(
     // canned fallback string: a partially cleaned answer still reflects the
     // tool outputs gathered this turn, while the canned string discards them.
     if let Some(salvaged) = salvaged_text.filter(|text| !text.trim().is_empty()) {
-        working_history.push(
-            uni::Message::assistant(format!(
-                "[!] Recovery synthesis was interrupted; best-effort answer below \
-                 (tool-call markup removed):\n\n{salvaged}"
-            ))
-            .with_phase(Some(uni::AssistantPhase::FinalAnswer)),
+        let answer = format!(
+            "[!] Recovery synthesis was interrupted; best-effort answer below \
+             (tool-call markup removed):\n\n{salvaged}"
         );
+        push_final_answer_if_absent(working_history, &answer);
         tracing::warn!(
             stage = failure_stage,
             "Tool-free recovery failed; concluding turn with salvaged synthesis prose."
@@ -212,35 +200,32 @@ pub(super) fn complete_turn_after_failed_tool_free_recovery(
                 .join("\n")
         )
     };
+    push_final_answer_if_absent(working_history, &fallback);
 
-    let has_recent_fallback = working_history.iter().rev().take(3).any(|message| {
-        message.role == uni::MessageRole::Assistant
-            && message.phase == Some(uni::AssistantPhase::FinalAnswer)
-            && message
-                .content
-                .as_text()
-                .starts_with(RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER)
-    });
-    if !has_recent_fallback {
-        working_history.push(
-            uni::Message::assistant(fallback).with_phase(Some(uni::AssistantPhase::FinalAnswer)),
-        );
-    }
-
-    if let Some(err) = err {
-        tracing::warn!(
-            stage = failure_stage,
-            error = %err,
-            "Final tool-free recovery pass failed; concluding turn with deterministic fallback answer."
-        );
-    } else {
-        tracing::warn!(
-            stage = failure_stage,
-            "Final tool-free recovery pass failed; concluding turn with deterministic fallback answer."
-        );
-    }
+    tracing::warn!(
+        stage = failure_stage,
+        error = ?err,
+        "Final tool-free recovery pass failed; concluding turn with deterministic fallback answer."
+    );
 
     TurnLoopResult::Completed
+}
+
+/// Push an `Assistant` `FinalAnswer` message only if the tail of
+/// `working_history` does not already contain the same fallback text, so
+/// repeated recovery attempts don't stack duplicate final answers.
+fn push_final_answer_if_absent(working_history: &mut Vec<uni::Message>, text: &str) {
+    let already_present = working_history.iter().rev().take(3).any(|message| {
+        message.role == uni::MessageRole::Assistant
+            && message.phase == Some(uni::AssistantPhase::FinalAnswer)
+            && message.content.as_text() == text
+    });
+    if !already_present {
+        working_history.push(
+            uni::Message::assistant(text.to_string())
+                .with_phase(Some(uni::AssistantPhase::FinalAnswer)),
+        );
+    }
 }
 
 pub(super) fn normalize_tool_free_recovery_break_outcome(
@@ -282,22 +267,41 @@ pub(super) enum PostToolFailureAction {
     Fallthrough,
 }
 
+/// Bundled inputs for post-tool failure recovery. Replaces the nine positional
+/// borrows that previously reached directly into the turn context, giving the
+/// recovery module a single, stable interface (guard rail) and making it
+/// independently testable without the full turn-loop context.
+pub(super) struct PostToolRecoveryContext<'a> {
+    pub renderer: &'a mut AnsiRenderer,
+    pub working_history: &'a mut Vec<uni::Message>,
+    pub harness_state: &'a mut HarnessTurnState,
+    pub plan_session: Option<&'a mut PlanningWorkflowSessionState>,
+    pub err: &'a anyhow::Error,
+    pub step_count: usize,
+    pub turn_history_start_len: usize,
+    pub stage: &'static str,
+    pub tool_free_recovery: bool,
+}
+
 /// Dispatch the post-tool failure recovery match block, deduplicating the
 /// near-identical 3× match in `run_turn_loop`.
 ///
 /// Returns the action the caller should take: continue the loop, break with a
 /// result, or fall through to error display.
 pub(super) fn dispatch_post_tool_failure(
-    renderer: &mut AnsiRenderer,
-    working_history: &mut Vec<uni::Message>,
-    harness_state: &mut HarnessTurnState,
-    err: &anyhow::Error,
-    step_count: usize,
-    turn_history_start_len: usize,
-    stage: &'static str,
-    tool_free_recovery: bool,
-    plan_session: Option<&mut PlanningWorkflowSessionState>,
+    ctx: PostToolRecoveryContext<'_>,
 ) -> Result<PostToolFailureAction> {
+    let PostToolRecoveryContext {
+        renderer,
+        working_history,
+        harness_state,
+        plan_session,
+        err,
+        step_count,
+        turn_history_start_len,
+        stage,
+        tool_free_recovery,
+    } = ctx;
     let recovery = maybe_recover_after_post_tool_llm_failure(
         renderer,
         working_history,
@@ -370,4 +374,35 @@ fn concat_compact(a: &str, b: &str) -> String {
     buf.push_str(a);
     buf.push_str(b);
     buf
+}
+
+/// Shared logic for the `PostToolFailureRecovery::RetryToolFree` arm.
+///
+/// Checks the post-tool recovery cycle cap. If the cap is reached, completes
+/// the turn with a deterministic fallback answer and returns `Some(result)`.
+/// Otherwise returns `None`. The caller should increment the cycle counter,
+/// switch to tool-free recovery, and `continue` the turn loop.
+fn check_recovery_cycle_cap(
+    cycles: u8,
+    working_history: &mut Vec<uni::Message>,
+    stage: &str,
+    err: &anyhow::Error,
+    salvaged_text: Option<String>,
+    plan_session: Option<&mut PlanningWorkflowSessionState>,
+) -> Option<TurnLoopResult> {
+    if cycles >= MAX_POST_TOOL_RECOVERY_CYCLES {
+        tracing::warn!(
+            cycles,
+            "Post-tool recovery cycle cap reached; concluding turn \
+             with deterministic fallback answer"
+        );
+        return Some(complete_turn_after_failed_tool_free_recovery(
+            working_history,
+            stage,
+            Some(err),
+            salvaged_text,
+            plan_session,
+        ));
+    }
+    None
 }
