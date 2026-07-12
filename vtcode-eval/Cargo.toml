@@ -1,0 +1,19 @@
+[package]
+name = "vtcode-eval"
+version = "0.135.4"
+edition = "2024"
+license = "MIT"
+
+[dependencies]
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+chrono = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+vtcode-commons = { path = "../vtcode-commons" }
+vtcode-core = { path = "../vtcode-core" }
+vtcode-exec-events = { path = "../vtcode-exec-events" }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }

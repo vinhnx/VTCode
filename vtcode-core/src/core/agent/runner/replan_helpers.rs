@@ -14,6 +14,16 @@ use serde_json::json;
 use tracing::warn;
 
 impl AgentRunner {
+    /// Build a `TaskTrackerTool` from the runner's workspace and planning
+    /// workflow state. Extracted to avoid repeating construction in
+    /// `apply_required_tracker_updates` and `replan_from_failure`.
+    fn tracker_tool(&self) -> TaskTrackerTool {
+        TaskTrackerTool::new(
+            self._workspace.clone(),
+            self.tool_registry.planning_workflow_state(),
+        )
+    }
+
     /// Re-plan from the current state after an evaluator rejection.
     ///
     /// Following the long-running harness pattern: "the evaluator takes on part
@@ -78,10 +88,7 @@ impl AgentRunner {
     /// Apply the evaluator's `required_tracker_updates` by adding each as a
     /// new tracker item.
     async fn apply_required_tracker_updates(&self, updates: &[String]) {
-        let tracker_tool = TaskTrackerTool::new(
-            self._workspace.clone(),
-            self.tool_registry.planning_workflow_state(),
-        );
+        let tracker_tool = self.tracker_tool();
         for update in updates {
             let trimmed = update.trim();
             if trimmed.is_empty() {
@@ -135,10 +142,7 @@ impl AgentRunner {
         }
 
         if !replan.new_tracker_items.is_empty() {
-            let tracker_tool = TaskTrackerTool::new(
-                self._workspace.clone(),
-                self.tool_registry.planning_workflow_state(),
-            );
+            let tracker_tool = self.tracker_tool();
             let items: Vec<serde_json::Value> = replan
                 .new_tracker_items
                 .iter()

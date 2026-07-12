@@ -336,7 +336,7 @@ impl ContinuationController {
             crate::core::agent::context_reset::maybe_write_reset_on_stall(
                 &self.workspace_root,
                 monitor.consecutive_stalls(),
-                &self.context_reset_mode,
+                self.context_reset_mode.as_str(),
                 self.context_reset_stall_threshold,
             );
         }

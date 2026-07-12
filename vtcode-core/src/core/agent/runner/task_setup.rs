@@ -8,6 +8,7 @@ use anyhow::Result;
 use std::time::Instant;
 
 use crate::core::agent::events::ExecEventRecorder;
+use crate::core::agent::harness_artifacts;
 use crate::core::agent::progress_monitor::ProgressMonitor;
 use crate::core::agent::runner::continuation::ContinuationController;
 use crate::core::agent::runtime::AgentRuntime;
@@ -208,11 +209,7 @@ impl AgentRunner {
     /// fresh from external artifacts only. The manifest is consumed (deleted)
     /// so it only triggers once.
     fn apply_context_reset_if_pending(&self, session_state: &mut AgentSessionState) {
-        let manifest_path = self
-            ._workspace
-            .join(".vtcode")
-            .join("tasks")
-            .join(crate::core::agent::context_reset::CONTEXT_RESET_FILE);
+        let manifest_path = harness_artifacts::current_context_reset_path(&self._workspace);
 
         if !manifest_path.exists() {
             return;

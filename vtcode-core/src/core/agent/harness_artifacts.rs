@@ -17,6 +17,13 @@ pub fn current_task_path(workspace_root: &Path) -> PathBuf {
     workspace_root.join(TASKS_DIR).join(CURRENT_TASK_FILE)
 }
 
+/// Return the path to the current context reset manifest file.
+pub fn current_context_reset_path(workspace_root: &Path) -> PathBuf {
+    workspace_root
+        .join(TASKS_DIR)
+        .join(crate::core::agent::context_reset::CONTEXT_RESET_FILE)
+}
+
 /// Return the path to the current spec artifact file.
 pub fn current_spec_path(workspace_root: &Path) -> PathBuf {
     workspace_root.join(TASKS_DIR).join(CURRENT_SPEC_FILE)

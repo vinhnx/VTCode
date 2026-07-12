@@ -7613,11 +7613,15 @@ name = "vtcode-eval"
 version = "0.135.4"
 dependencies = [
  "anyhow",
+ "async-trait",
  "chrono",
  "serde",
  "serde_json",
- "tempfile",
- "tracing",
+ "thiserror 2.0.18",
+ "tokio",
+ "vtcode-commons",
+ "vtcode-core",
+ "vtcode-exec-events",
 ]
 
 [[package]]
