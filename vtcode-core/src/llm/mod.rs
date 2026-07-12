@@ -201,6 +201,8 @@ pub mod providers;
 pub mod request_gap;
 /// Adapter for the Rig agent framework.
 pub mod rig_adapter;
+/// RL optimization loop: adaptive action selection (bandit / actor-critic).
+pub mod rl;
 mod single_response;
 /// Tool-call correlation and intent extraction for LLM responses.
 pub mod tool_bridge;

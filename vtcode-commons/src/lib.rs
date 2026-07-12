@@ -63,6 +63,7 @@ pub mod utils;
 pub mod validation;
 pub mod vtcodegitignore;
 pub mod walk;
+pub mod workspace_snapshot;
 pub use colors::{blend_colors, color_from_hex, contrasting_color, is_light_color, style};
 pub use editor::{
     EditorPoint, EditorTarget, normalize_editor_hash_fragment, parse_editor_target,

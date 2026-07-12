@@ -4,7 +4,7 @@
 
 ## Key Modules
 
-`core/agent/` runtime | `llm/` **thin re-export layer** + `models_manager/` + `factory.rs` + `cgp.rs` | `tools/` + `tool_policy.rs` registry | `safety/` + `sandboxing/` + `exec_policy/` + `command_safety/` policies | `config/` + `constants.rs` | `context/` + `memory/` conversation | `prompts/` | `exec/events.rs` (re-exports `vtcode-exec-events::ThreadEvent`) | `git/` worktree management | `loop_memory.rs` + `loop_state.rs` loop persistence | `tools/web_search/` | `tools/defuddle/` | `tools/outline_search/` | `compaction/` unified auto+manual orchestrator + shared memory envelope (single source of truth for both runloops)
+`core/agent/` runtime (+ `progress_monitor.rs`: durable goal-progress via injected `ProgressLedgerSink`) | `llm/` **thin re-export layer** + `models_manager/` + `factory.rs` + `cgp.rs` + `rl/` (adaptive action selection: `signal`/`ledger`/`engine`/`eval`) | `tools/` + `tool_policy.rs` registry | `safety/` + `sandboxing/` + `exec_policy/` + `command_safety/` policies | `config/` + `constants.rs` | `context/` + `memory/` conversation | `prompts/` | `exec/events.rs` (re-exports `vtcode-exec-events::ThreadEvent`) | `git/` worktree management | `loop_memory.rs` + `loop_state.rs` loop persistence | `tools/web_search/` | `tools/defuddle/` | `tools/outline_search/` | `compaction/` unified auto+manual orchestrator + shared memory envelope (single source of truth for both runloops)
 
 ## Rules
 
@@ -29,5 +29,5 @@ Implement in `vtcode-llm/src/providers/` (the canonical home). Use `adding-llm-p
 - `lib.rs` is 500+ lines — append re-exports, don't restructure.
 - `#[cfg_attr(not(test), allow(...))]` clippy suppressions — do not remove.
 - Provider implementations live in `vtcode-llm/src/providers/`, not in core. Core's `llm/providers/` is a re-export facade.
-- `llm/usage_cost.rs` is the canonical session-cost normalization: `raw_usd` for budget enforcement, `effective_usd` (cache-discounted) for display. Do not compute costs inline from `Usage`.
+- `llm/usage_cost.rs` is the canonical session-cost normalization: `raw_usd` for budget enforcement, `effective_usd` (cache-discounted) for display. Do not compute costs inline from `Usage`. `BudgetStatus::classify` is the single budget decision (used by both the runner `execute.rs` and binary `turn_loop.rs`) — do not re-derive `> max` / `>= threshold*max` inline.
 - `llm/request_gap.rs::RequestGapTracker` (+ `format_gap`) is the single home for cache-gap timing, embedded in both runloop `SessionStats` and headless `AgentSessionState` — do not re-add per-site `last_request_at` timers.

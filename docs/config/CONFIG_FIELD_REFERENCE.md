@@ -426,6 +426,9 @@ python3 scripts/generate_config_field_reference.py
 | `optimization.agent_execution.max_idle_cycles` | `integer` | yes | `-` | Maximum consecutive idle cycles before entering deep sleep |
 | `optimization.agent_execution.max_memory_mb` | `integer` | yes | `-` | Maximum memory usage in MB |
 | `optimization.agent_execution.resource_monitor_interval_ms` | `integer` | yes | `-` | Resource monitoring interval in milliseconds |
+| `optimization.rl.strategy` | `string` | no | `"bandit"` | RL adaptive action-selection strategy: `bandit` (UCB / epsilon-greedy) or `actor_critic`. |
+| `optimization.rl.epsilon` | `number` | no | `0.15` | Exploration constant for the bandit (higher = more exploration). |
+| `optimization.rl.latency_weight` | `number` | no | `0.5` | Reward-shaping weight trading off latency vs success (`0.0..=1.0`). |
 | `optimization.agent_execution.state_history_size` | `integer` | yes | `-` | State transition history size |
 | `optimization.agent_execution.use_optimized_loop` | `boolean` | yes | `-` | Enable optimized agent execution loop |
 | `optimization.async_pipeline.batch_timeout_ms` | `integer` | yes | `-` | Batch timeout in milliseconds |

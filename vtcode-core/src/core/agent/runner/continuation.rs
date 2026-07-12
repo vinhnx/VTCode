@@ -5,6 +5,8 @@ use serde_json::json;
 use std::path::PathBuf;
 use vtcode_config::core::agent::ContinuationPolicy;
 
+use crate::core::agent::progress_monitor::{ProgressMonitor, milestone_status_from_str};
+use vtcode_session_store::Milestone;
 use crate::core::agent::session::AgentSessionState;
 use crate::core::agent::task::Task;
 use crate::tools::Tool;
@@ -64,6 +66,10 @@ pub(super) struct ContinuationController {
     review_like: bool,
     inferred_verify_commands: Vec<String>,
     manages_internal_scaffold: bool,
+    /// Optional durable progress ledger mirroring the task tracker, persisted
+    /// across turns/compaction so long-horizon work can be resumed and stalled
+    /// runs detected. `None` when progress tracking is disabled for the session.
+    progress: Option<ProgressMonitor>,
 }
 
 impl ContinuationController {
@@ -84,7 +90,23 @@ impl ContinuationController {
             review_like,
             inferred_verify_commands,
             manages_internal_scaffold: false,
+            progress: None,
         }
+    }
+
+    /// Attach a durable progress monitor. Once set, the controller keeps the
+    /// monitor's ledger in sync with the task tracker and records advance/stall
+    /// signals on each assessment.
+    pub(super) fn with_progress_monitor(mut self, monitor: ProgressMonitor) -> Self {
+        self.progress = Some(monitor);
+        self
+    }
+
+    /// Borrow the progress monitor, if one is attached.
+    #[must_use]
+    #[allow(dead_code)] // surfaced to the runloop via the persisted ledger; kept for diagnostics
+    pub(super) fn progress_monitor(&self) -> Option<&ProgressMonitor> {
+        self.progress.as_ref()
     }
 
     pub(super) async fn prepare(&mut self, task: &Task) -> Result<()> {
@@ -126,6 +148,7 @@ impl ContinuationController {
             if let Some(reloaded) = self.load_tracker().await? {
                 reloaded
             } else {
+                self.note_progress_stall();
                 return Ok(CompletionAssessment::Continue {
                     reason: "Task tracker could not be loaded.".to_string(),
                     prompt:
@@ -146,6 +169,9 @@ impl ContinuationController {
             self.manages_internal_scaffold = false;
         }
 
+        self.sync_progress_milestones(&checklist);
+        self.checkpoint_progress();
+
         let incomplete_items = checklist
             .items
             .iter()
@@ -162,6 +188,7 @@ impl ContinuationController {
 
         if !incomplete_items.is_empty() {
             let joined = incomplete_items.join(", ");
+            self.note_progress_advance();
             return Ok(CompletionAssessment::Continue {
                 reason: format!("Task tracker is incomplete: {joined}."),
                 prompt: format!(
@@ -182,6 +209,7 @@ impl ContinuationController {
                 )
                 .await?;
             }
+            self.note_progress_advance();
             return Ok(CompletionAssessment::Accept);
         }
 
@@ -190,6 +218,7 @@ impl ContinuationController {
                 .await?;
         }
 
+        self.note_progress_advance();
         Ok(CompletionAssessment::Verify { commands })
     }
 
@@ -213,6 +242,7 @@ impl ContinuationController {
                 .await?;
             }
 
+            self.note_progress_stall();
             return Ok(CompletionAssessment::Continue {
                 reason: summary,
                 prompt: build_verification_failure_prompt(failure),
@@ -229,6 +259,7 @@ impl ContinuationController {
                 .await?;
         }
 
+        self.note_progress_advance();
         Ok(CompletionAssessment::Accept)
     }
 
@@ -241,6 +272,51 @@ impl ContinuationController {
             ContinuationPolicy::Off => false,
             ContinuationPolicy::ExecOnly => self.full_auto_active,
             ContinuationPolicy::All => true,
+        }
+    }
+
+    /// Mirror the live task tracker into the durable progress ledger so
+    /// completion ratio, milestone status, and resume state stay accurate.
+    /// Pure state sync — persistence side effects are delegated to the monitor's
+    /// injected sink; the human-readable memory checkpoint is a separate,
+    /// explicit step ([`Self::checkpoint_progress`]).
+    fn sync_progress_milestones(&mut self, checklist: &TrackerChecklist) {
+        if let Some(monitor) = &mut self.progress {
+            let milestones = checklist
+                .items
+                .iter()
+                .map(|item| Milestone {
+                    id: item
+                        .index
+                        .map(|i| i.to_string())
+                        .unwrap_or_else(|| item.description.clone()),
+                    description: item.description.clone(),
+                    status: milestone_status_from_str(&item.status),
+                })
+                .collect();
+            monitor.set_milestones(milestones);
+        }
+    }
+
+    /// Proactively ground progress into durable memory (via the monitor's sink)
+    /// so a resumed/forked session can re-ground without waiting for compaction.
+    fn checkpoint_progress(&self) {
+        if let Some(monitor) = &self.progress {
+            monitor.checkpoint();
+        }
+    }
+
+    /// Record forward progress (no-op without an attached monitor).
+    fn note_progress_advance(&mut self) {
+        if let Some(monitor) = &mut self.progress {
+            monitor.record_advance();
+        }
+    }
+
+    /// Record a setback/stall (no-op without an attached monitor).
+    fn note_progress_stall(&mut self) {
+        if let Some(monitor) = &mut self.progress {
+            monitor.record_stall();
         }
     }
 

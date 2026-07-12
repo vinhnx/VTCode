@@ -18,12 +18,16 @@
 pub mod error;
 pub mod event_log;
 pub mod migration;
+pub mod progress;
 pub mod query;
 pub mod retention;
 
 pub use error::SessionStoreError;
 pub use event_log::{SessionEventLog, SessionManifest, TurnIndex, TurnIndexEntry};
 pub use migration::{MigrationReport, migrate_legacy};
+pub use progress::{
+    Milestone, MilestoneStatus, ProgressLedger, load_progress, progress_path, save_progress,
+};
 pub use query::{FactRecord, SessionSummary, query_facts, recent_sessions};
 pub use retention::{RetentionPolicy, apply_retention, gc_legacy};
 

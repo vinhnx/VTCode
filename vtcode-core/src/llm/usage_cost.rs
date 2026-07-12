@@ -331,4 +331,196 @@ mod tests {
         assert!(estimate_session_costs_with_pricing(missing_input, &usage).is_none());
         assert!(estimate_session_costs_with_pricing(missing_output, &usage).is_none());
     }
+
+    #[test]
+    fn session_budget_tracks_spend_and_thresholds() {
+        let mut budget = SessionBudget::new(Some(1.0));
+        assert_eq!(budget.status(), BudgetStatus::Ok);
+        // 0.5 -> Ok
+        assert_eq!(budget.record(0.5), BudgetStatus::Ok);
+        // 0.3 -> 0.8 >= 0.75 cap -> Warning
+        assert_eq!(
+            budget.record(0.3),
+            BudgetStatus::Warning {
+                spent: 0.8,
+                max: 1.0
+            }
+        );
+        // 0.3 -> 1.1 >= cap -> Exceeded
+        assert_eq!(
+            budget.record(0.3),
+            BudgetStatus::Exceeded {
+                spent: 1.1,
+                max: 1.0
+            }
+        );
+        assert!((budget.spent_usd() - 1.1).abs() < 1e-9);
+        assert!((budget.remaining_usd().unwrap() - 0.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn session_budget_unlimited_is_always_ok() {
+        let mut budget = SessionBudget::new(None);
+        assert_eq!(budget.record(1000.0), BudgetStatus::Ok);
+        assert_eq!(budget.remaining_usd(), None);
+    }
+
+    #[test]
+    fn budget_status_classify_matches_harness_semantics() {
+        // Unlimited.
+        assert_eq!(BudgetStatus::classify(999.0, None, 0.75), BudgetStatus::Ok);
+        // Under warning.
+        assert_eq!(
+            BudgetStatus::classify(0.5, Some(1.0), 0.75),
+            BudgetStatus::Ok
+        );
+        // At/above warning, within cap.
+        assert_eq!(
+            BudgetStatus::classify(0.8, Some(1.0), 0.75),
+            BudgetStatus::Warning {
+                spent: 0.8,
+                max: 1.0
+            }
+        );
+        // Exactly at cap is NOT exceeded (strict `>`), matching runner semantics.
+        assert!(!BudgetStatus::classify(1.0, Some(1.0), 0.75).is_exceeded());
+        // Over cap.
+        assert!(BudgetStatus::classify(1.01, Some(1.0), 0.75).is_exceeded());
+        // Configurable threshold.
+        assert_eq!(
+            BudgetStatus::classify(0.6, Some(1.0), 0.5),
+            BudgetStatus::Warning {
+                spent: 0.6,
+                max: 1.0
+            }
+        );
+    }
 }
+
+/// Default fraction of the budget at which the harness warns before hard
+/// exhaustion. Mirrors `agent.harness.budget_warning_threshold`'s default so a
+/// [`SessionBudget`] built without an explicit threshold behaves like the
+/// harness default.
+pub const DEFAULT_BUDGET_WARNING_RATIO: f64 = 0.75;
+
+/// Outcome of classifying cumulative spend against a budget cap.
+///
+/// This is the single source of truth for the harness budget decision. Both the
+/// `vtcode-core` runner ([`crate::core::agent::runner`]) and the binary crate's
+/// turn loop classify spend through [`BudgetStatus::classify`] rather than
+/// re-deriving the `> max` / `>= threshold * max` comparisons inline.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum BudgetStatus {
+    /// Under the warning threshold.
+    Ok,
+    /// At or above the warning ratio but still within the cap.
+    Warning {
+        /// Cumulative spend so far (USD).
+        spent: f64,
+        /// Configured cap (USD).
+        max: f64,
+    },
+    /// Over the cap — the run should stop or escalate.
+    Exceeded {
+        /// Cumulative spend so far (USD).
+        spent: f64,
+        /// Configured cap (USD).
+        max: f64,
+    },
+}
+
+impl BudgetStatus {
+    /// Classify `spent_usd` against an optional `max_usd` cap and a
+    /// `warning_threshold` fraction (`0.0..=1.0`).
+    ///
+    /// - `max_usd == None` → always [`BudgetStatus::Ok`] (unlimited).
+    /// - `spent_usd > max` → [`BudgetStatus::Exceeded`] (strict, matching the
+    ///   harness "stop after reaching the budget limit" semantics).
+    /// - `spent_usd >= warning_threshold * max` → [`BudgetStatus::Warning`].
+    /// - otherwise → [`BudgetStatus::Ok`].
+    #[must_use]
+    pub fn classify(spent_usd: f64, max_usd: Option<f64>, warning_threshold: f64) -> Self {
+        let Some(max) = max_usd else {
+            return BudgetStatus::Ok;
+        };
+        if spent_usd > max {
+            BudgetStatus::Exceeded {
+                spent: spent_usd,
+                max,
+            }
+        } else if spent_usd >= warning_threshold * max {
+            BudgetStatus::Warning {
+                spent: spent_usd,
+                max,
+            }
+        } else {
+            BudgetStatus::Ok
+        }
+    }
+
+    /// Whether the cap has been exceeded (the run should stop/escalate).
+    #[must_use]
+    pub fn is_exceeded(&self) -> bool {
+        matches!(self, BudgetStatus::Exceeded { .. })
+    }
+}
+
+/// Durable per-session cost budget for long-running (full-auto) sessions.
+///
+/// Long-horizon tasks accrue cost continuously; the harness should pause or
+/// escalate at thresholds rather than burning unbounded spend. `SessionBudget`
+/// accumulates the conservative `raw_usd` figure (see [`SessionCostEstimate`])
+/// and reports a [`BudgetStatus`] on each recorded turn. It delegates the
+/// decision to [`BudgetStatus::classify`] so callers that instead recompute the
+/// running total each turn (like the harness) share identical semantics.
+#[derive(Debug, Clone)]
+pub struct SessionBudget {
+    max_usd: Option<f64>,
+    warning_threshold: f64,
+    spent_usd: f64,
+}
+
+impl SessionBudget {
+    /// Create a budget with the default warning ratio. `None` max means
+    /// unlimited (status is always `Ok`).
+    #[must_use]
+    pub fn new(max_usd: Option<f64>) -> Self {
+        Self::with_warning_threshold(max_usd, DEFAULT_BUDGET_WARNING_RATIO)
+    }
+
+    /// Create a budget with an explicit warning threshold (e.g. from
+    /// `agent.harness.budget_warning_threshold`).
+    #[must_use]
+    pub fn with_warning_threshold(max_usd: Option<f64>, warning_threshold: f64) -> Self {
+        Self {
+            max_usd,
+            warning_threshold,
+            spent_usd: 0.0,
+        }
+    }
+
+    /// Record a turn's spend and return the resulting status.
+    pub fn record(&mut self, raw_usd: f64) -> BudgetStatus {
+        self.spent_usd += raw_usd.max(0.0);
+        self.status()
+    }
+
+    /// Current status given accumulated spend.
+    #[must_use]
+    pub fn status(&self) -> BudgetStatus {
+        BudgetStatus::classify(self.spent_usd, self.max_usd, self.warning_threshold)
+    }
+
+    /// Cumulative spend so far (USD).
+    #[must_use]
+    pub fn spent_usd(&self) -> f64 {
+        self.spent_usd
+    }
+
+    /// Remaining budget, or `None` when unlimited.
+    #[must_use]
+    pub fn remaining_usd(&self) -> Option<f64> {
+        self.max_usd.map(|m| (m - self.spent_usd).max(0.0))
+    }
+}
+

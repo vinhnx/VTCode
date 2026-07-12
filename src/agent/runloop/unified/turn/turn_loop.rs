@@ -738,48 +738,53 @@ pub(crate) async fn run_turn_loop(
                 turn_processing_ctx
                     .session_stats
                     .set_total_cost_usd(Some(estimate.raw_usd));
-                if let Some(max_budget_usd) = max_budget_usd
-                    && estimate.raw_usd > max_budget_usd
-                {
-                    turn_processing_ctx
-                        .session_stats
-                        .mark_budget_limit_reached(max_budget_usd, estimate.raw_usd);
-                    turn_processing_ctx
-                        .context_manager
-                        .update_token_usage(&response_usage);
-                    #[cfg(debug_assertions)]
-                    turn_processing_ctx
-                        .context_manager
-                        .validate_token_tracking(&response_usage);
-                    result = TurnLoopResult::Blocked {
-                        reason: Some(format!(
-                            "Stopped after reaching budget limit (max: ${max_budget_usd:.4}, spent: ${:.4}, cache-adjusted: ${:.4}).",
-                            estimate.raw_usd, estimate.effective_usd
-                        )),
-                    };
-                    break;
-                }
-                if let Some(max_budget_usd) = max_budget_usd
-                    && !turn_processing_ctx.session_stats.budget_warning_emitted()
-                {
-                    let threshold = turn_processing_ctx
-                        .vt_cfg
-                        .map(|cfg| cfg.agent.harness.budget_warning_threshold)
-                        .unwrap_or(0.75);
-                    if estimate.raw_usd >= threshold * max_budget_usd {
+                let threshold = turn_processing_ctx
+                    .vt_cfg
+                    .map(|cfg| cfg.agent.harness.budget_warning_threshold)
+                    .unwrap_or(
+                        vtcode_core::llm::usage_cost::DEFAULT_BUDGET_WARNING_RATIO,
+                    );
+                match vtcode_core::llm::usage_cost::BudgetStatus::classify(
+                    estimate.raw_usd,
+                    max_budget_usd,
+                    threshold,
+                ) {
+                    vtcode_core::llm::usage_cost::BudgetStatus::Exceeded { max, .. } => {
+                        turn_processing_ctx
+                            .session_stats
+                            .mark_budget_limit_reached(max, estimate.raw_usd);
+                        turn_processing_ctx
+                            .context_manager
+                            .update_token_usage(&response_usage);
+                        #[cfg(debug_assertions)]
+                        turn_processing_ctx
+                            .context_manager
+                            .validate_token_tracking(&response_usage);
+                        result = TurnLoopResult::Blocked {
+                            reason: Some(format!(
+                                "Stopped after reaching budget limit (max: ${max:.4}, spent: ${:.4}, cache-adjusted: ${:.4}).",
+                                estimate.raw_usd, estimate.effective_usd
+                            )),
+                        };
+                        break;
+                    }
+                    vtcode_core::llm::usage_cost::BudgetStatus::Warning { max, .. }
+                        if !turn_processing_ctx.session_stats.budget_warning_emitted() =>
+                    {
                         turn_processing_ctx
                             .session_stats
                             .mark_budget_warning_emitted();
                         let _ = turn_processing_ctx.renderer.line(
                             MessageStyle::Info,
                             &format!(
-                                "Session cost ${:.4} has reached {:.0}% of the ${max_budget_usd:.2} budget. {}",
+                                "Session cost ${:.4} has reached {:.0}% of the ${max:.2} budget. {}",
                                 estimate.raw_usd,
                                 threshold * 100.0,
                                 total_usage.cache_summary(),
                             ),
                         );
                     }
+                    _ => {}
                 }
             }
             None => {

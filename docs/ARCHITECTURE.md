@@ -23,6 +23,12 @@ selection. See `vtcode-core/src/components.rs` and `vtcode-core/src/llm/cgp.rs`.
 VT Code treats the model as the reasoning engine and the harness as the runtime that makes that reasoning useful. Phase 1 of the
 exec/full-auto runtime is built around that split rather than around a separate agent subsystem.
 
+> **Capability is a composition.** The model is one of seven reinforcing
+> subsystems (model · harness · context · tools · evals · sandbox · state)
+> whose job is to keep the agent making *monotonic progress* on long-horizon
+> tasks. See [`docs/guides/agent-capability-composition.md`](guides/agent-capability-composition.md)
+> for the full mapping.
+
 Harness primitives in VT Code map to the runtime like this:
 
 - **Instruction memory**: AGENTS.md loading, project docs, prompt assembly, onboarding guidance, and session bootstrap live in `vtcode-core/src/prompts/`, `vtcode-core/src/core/agent/`, and the workspace instruction loaders.

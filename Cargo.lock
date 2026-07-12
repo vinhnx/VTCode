@@ -7435,6 +7435,7 @@ dependencies = [
  "anstyle-query",
  "anyhow",
  "base64",
+ "chrono",
  "compact_str",
  "dirs",
  "futures",

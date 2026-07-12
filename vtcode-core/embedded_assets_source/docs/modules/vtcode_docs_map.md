@@ -258,6 +258,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: Preconditions, 1) Build and publish a macOS asset (local), 2) Build Linux assets (GitHub Actions), 3) (Optional) Build Windows asset, 4) Update ACP registry entry
   - **User Questions**: "What can you tell me about ACP Registry Release Checklist?", "How does Preconditions work?", "How does 1) Build and publish a macOS asset (local) work?"
 
+- **File**: `docs/guides/agent-capability-composition.md`
+  - **Content**: Agent Capability as a Composed System
+  - **Topics**: The seven components, The three environmental constraints, The progress invariant, How the pieces reinforce each other
+  - **User Questions**: "What can you tell me about Agent Capability as a Composed System?", "How does The seven components work?", "How does The three environmental constraints work?"
+
 - **File**: `docs/guides/INIT_COMMAND_GUIDE.md`
   - **Content**: Agent Initialization Guide
   - **Topics**: Overview, Key Features, Usage, Generated Content Structure, Relationship to Rules and Memory
@@ -738,6 +743,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Content**: Open Responses Specification Conformance
   - **Topics**: Conformance Overview, What is Open Responses?, Implementation Details, Conformance Levels, Response Object Structure
   - **User Questions**: "What can you tell me about Open Responses Specification Conformance?", "How does Conformance Overview work?", "How does What is Open Responses? work?"
+
+- **File**: `docs/project/PLAN-loop-engineering.md`
+  - **Content**: PLAN Loop Engineering
+  - **Topics**: Principles, Lifecycle, Cross-references
+  - **User Questions**: "What can you tell me about PLAN Loop Engineering?", "How does Principles work?", "How does Lifecycle work?"
 
 - **File**: `docs/pty/PTY_ANSI_HANDLING.md`
   - **Content**: PTY Output ANSI Handling

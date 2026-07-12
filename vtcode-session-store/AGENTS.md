@@ -7,7 +7,8 @@ agent session's state, context, and history.
 ## Conventions
 
 - `events.jsonl` is canonical; `derived/` and `index/` are regenerated views —
-  never persist session history anywhere else.
+  never persist session history anywhere else. `progress` (`ProgressLedger`,
+  `derived/progress.json`) is the compaction-safe goal-progress view.
 - Append-only: do not mutate historical events; new facts go through `append`.
 - Off the hot path: never read the log back into agent context; use derived
   queries (`reconstruct_turn`, `query_facts`) only for revert/compaction/analytics.

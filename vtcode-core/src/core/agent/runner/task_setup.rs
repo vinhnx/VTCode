@@ -8,6 +8,7 @@ use anyhow::Result;
 use std::time::Instant;
 
 use crate::core::agent::events::ExecEventRecorder;
+use crate::core::agent::progress_monitor::ProgressMonitor;
 use crate::core::agent::runner::continuation::ContinuationController;
 use crate::core::agent::runtime::AgentRuntime;
 use crate::core::agent::session::AgentSessionState;
@@ -159,7 +160,12 @@ impl AgentRunner {
             full_auto_active,
             self.tool_registry.is_planning_active(),
             review_like,
-        );
+        )
+        .with_progress_monitor(ProgressMonitor::with_persistence(
+            self.workspace().to_path_buf(),
+            &self.session_id,
+            &effective_task.id,
+        ));
         continuation_controller.prepare(&effective_task).await?;
 
         let max_budget_usd = self.config().agent.harness.max_budget_usd;

@@ -15,6 +15,7 @@ pub mod error_recovery;
 pub mod events;
 pub mod features;
 pub mod handoff;
+pub mod progress_monitor;
 pub mod runner;
 pub mod runtime;
 pub mod session;

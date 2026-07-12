@@ -900,33 +900,36 @@ impl AgentRunner {
                 ) {
                     Some(estimate) => {
                         runtime.state.total_cost_usd = Some(estimate.raw_usd);
-                        if let Some(max_budget_usd) = max_budget_usd
-                            && estimate.raw_usd > max_budget_usd
-                        {
-                            runtime.state.outcome =
-                                TaskOutcome::budget_limit_reached(max_budget_usd, estimate.raw_usd);
-                            break;
-                        }
-                        if let Some(max_budget_usd) = max_budget_usd
-                            && !budget_warning_emitted
-                        {
-                            let threshold = self.config().agent.harness.budget_warning_threshold;
-                            if estimate.raw_usd >= threshold * max_budget_usd {
+                        let threshold = self.config().agent.harness.budget_warning_threshold;
+                        match crate::llm::usage_cost::BudgetStatus::classify(
+                            estimate.raw_usd,
+                            max_budget_usd,
+                            threshold,
+                        ) {
+                            crate::llm::usage_cost::BudgetStatus::Exceeded { max, .. } => {
+                                runtime.state.outcome =
+                                    TaskOutcome::budget_limit_reached(max, estimate.raw_usd);
+                                break;
+                            }
+                            crate::llm::usage_cost::BudgetStatus::Warning { max, .. }
+                                if !budget_warning_emitted =>
+                            {
                                 budget_warning_emitted = true;
                                 warn!(
                                     provider = %self.config().agent.provider,
                                     model = %turn_model,
                                     cost_usd = estimate.raw_usd,
-                                    max_budget_usd,
+                                    max_budget_usd = max,
                                     "Session cost approaching budget limit"
                                 );
                                 runtime.state.warnings.push(format!(
-                                    "Session cost ${:.4} has reached {:.0}% of the ${max_budget_usd:.2} budget. {}",
+                                    "Session cost ${:.4} has reached {:.0}% of the ${max:.2} budget. {}",
                                     estimate.raw_usd,
                                     threshold * 100.0,
                                     runtime.state.stats.total_usage.cache_summary()
                                 ));
                             }
+                            _ => {}
                         }
                     }
                     None => {
