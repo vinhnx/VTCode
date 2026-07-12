@@ -197,7 +197,6 @@ pub fn snapshot_path(session_dir: &Path) -> PathBuf {
     session_dir.join("derived").join("workspace_snapshot.json")
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -254,4 +253,3 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmp);
     }
 }
-

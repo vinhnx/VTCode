@@ -117,6 +117,35 @@ includes:
 `session_start` with source `compact` remains supported for compatibility, but
 `pre_compact` is the first-class hook for compaction-aware automation.
 
+## Orient Phase
+
+Every session should begin by gathering orientation context from external artifacts. This follows the long-running harness pattern: the agent reads the progress ledger, harness artifacts, loop memory, and git log to understand the current state before acting.
+
+The orient phase produces an `OrientationContext` (see `vtcode-core/src/core/agent/bootstrap.rs`) that includes:
+
+- Progress ledger summary (goal, completion ratio, confidence, stall status)
+- Harness artifact summaries (spec, contract, sprint contract, evaluation, outcome verification)
+- Recent git log (last 5 commits)
+- Loop memory notes and decisions from previous iterations
+- Handoff context from a previous agent, if any
+
+This context is injected as a `[Orientation Context]` section in the system prompt, using summaries and references rather than full content to keep the context lean.
+
+## Handoff Protocol
+
+When one agent hands off to another, it produces a `HandoffRequest` (see `vtcode-core/src/core/agent/handoff.rs`) that includes:
+
+- **State summary**: what was accomplished, what remains
+- **Boundary status**: explicit list of features/deliverables with Done/InProgress/NotStarted/Blocked status
+- **Modified files**: files changed in this session
+- **Test results**: last test run outcome with actual output
+- **Open decisions**: unresolved questions for the next agent
+- **Known issues**: bugs, limitations, tech debt the next agent should know
+- **Next actions**: recommended next steps
+- **Task context**: the original task description
+
+The handoff prompt is rendered as a structured markdown section that the next agent can parse without re-exploring the codebase. This prevents the "inheriting a collaborator's mess" problem: the boundary status makes explicit what is done vs. what was left incomplete.
+
 ## Related Controls
 
 These VT Code settings line up with common agent-loop controls:

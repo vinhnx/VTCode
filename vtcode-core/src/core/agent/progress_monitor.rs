@@ -213,10 +213,8 @@ mod tests {
             persists: persists.clone(),
             checkpoints: checkpoints.clone(),
         };
-        let mut monitor = ProgressMonitor::with_sink(
-            ProgressLedger::new("s1", "goal"),
-            Box::new(sink),
-        );
+        let mut monitor =
+            ProgressMonitor::with_sink(ProgressLedger::new("s1", "goal"), Box::new(sink));
 
         monitor.set_milestones(vec![Milestone {
             id: "1".into(),
@@ -250,9 +248,7 @@ mod tests {
 #[must_use]
 pub fn milestone_status_from_str(status: &str) -> MilestoneStatus {
     match status.trim().to_ascii_lowercase().as_str() {
-        "done" | "complete" | "completed" | "pass" | "passed" | "success" => {
-            MilestoneStatus::Done
-        }
+        "done" | "complete" | "completed" | "pass" | "passed" | "success" => MilestoneStatus::Done,
         "blocked" | "stuck" | "waiting" => MilestoneStatus::Blocked,
         "in_progress" | "in progress" | "active" | "running" => MilestoneStatus::InProgress,
         _ => MilestoneStatus::Pending,

@@ -6,12 +6,12 @@ use std::path::PathBuf;
 use vtcode_config::core::agent::ContinuationPolicy;
 
 use crate::core::agent::progress_monitor::{ProgressMonitor, milestone_status_from_str};
-use vtcode_session_store::Milestone;
 use crate::core::agent::session::AgentSessionState;
 use crate::core::agent::task::Task;
 use crate::tools::Tool;
 use crate::tools::handlers::TaskTrackerTool;
 use crate::tools::handlers::planning_workflow::PlanningWorkflowState;
+use vtcode_session_store::Milestone;
 
 const INTERNAL_SCAFFOLD_MARKER: &str = "<!-- vtcode:internal_scaffold -->";
 

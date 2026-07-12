@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use vtcode_config::optimization::OptimizationConfig;
 
 use super::ledger::RewardLedger;
-use super::signal::{RlStrategy, RewardSignal};
+use super::signal::{RewardSignal, RlStrategy};
 
 /// A candidate action for the selector.
 #[derive(Debug, Clone, PartialEq, Eq)]

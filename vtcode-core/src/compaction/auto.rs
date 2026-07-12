@@ -31,6 +31,9 @@ pub struct AutoCompactionOutcome {
     pub compacted_len: usize,
     pub mode: CompactionMode,
     pub history_artifact_path: Option<String>,
+    /// The session memory envelope produced during compaction.
+    /// Used by the caller to write persistent checkpoints.
+    pub envelope: Option<crate::compaction::memory_envelope::SessionMemoryEnvelope>,
 }
 
 /// Inputs for [`auto_compact_messages`].
@@ -143,5 +146,6 @@ pub async fn auto_compact_messages(
         compacted_len,
         mode,
         history_artifact_path,
+        envelope,
     }))
 }

@@ -1,6 +1,7 @@
 use super::AgentRunner;
 use crate::compaction::auto::{AutoCompactionInput, auto_compact_messages};
 use crate::compaction::memory_envelope::{MemoryEnvelopePlacement, local_compaction_config};
+use crate::core::agent::compaction_checkpoint::write_compaction_checkpoint;
 use crate::core::agent::conversation::conversation_from_messages;
 use crate::core::agent::session::AgentSessionState;
 use crate::exec::events::CompactionTrigger;
@@ -60,6 +61,14 @@ impl AgentRunner {
         session_state.conversation = conversation_from_messages(&session_state.messages);
         session_state.normalize();
         session_state.last_processed_message_idx = session_state.conversation.len();
+
+        // Write compaction summary to persistent artifacts for later sessions.
+        // This follows the context engineering principle: "the summary should be
+        // written into a persistent artifact, such as progress.md, so that later
+        // sessions can read it."
+        if let Some(ref envelope) = outcome.envelope {
+            write_compaction_checkpoint(self._workspace.as_path(), envelope);
+        }
 
         event_recorder.compact_boundary(
             CompactionTrigger::Auto,

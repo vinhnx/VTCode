@@ -1,5 +1,9 @@
 use super::AgentRunner;
 use super::continuation::VerificationResult;
+use super::evaluator_types::{EVALUATOR_SCORE_THRESHOLD, EvaluatorResponse, EvaluatorScorecard};
+use super::planner_types::{
+    PlannerItem, PlannerResponse, deserialize_string_or_object, deserialize_string_or_vec,
+};
 use crate::core::agent::events::ExecEventRecorder;
 use crate::core::agent::harness_artifacts;
 use crate::core::agent::session::AgentSessionState;
@@ -10,43 +14,9 @@ use crate::tools::handlers::TaskTrackerTool;
 use crate::tools::traits::Tool;
 use anyhow::{Context, Result};
 use serde::Deserialize;
-use serde::Deserializer;
 use serde_json::json;
 use std::fmt::Write;
 use tracing::warn;
-
-fn deserialize_string_or_vec<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let value = serde_json::Value::deserialize(deserializer)?;
-    match value {
-        serde_json::Value::String(s) => Ok(vec![s]),
-        serde_json::Value::Array(arr) => {
-            let mut result = Vec::new();
-            for item in arr {
-                if let serde_json::Value::String(s) = item {
-                    result.push(s);
-                }
-            }
-            Ok(result)
-        }
-        _ => Ok(Vec::new()),
-    }
-}
-
-fn deserialize_string_or_object<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let value = serde_json::Value::deserialize(deserializer)?;
-    match value {
-        serde_json::Value::String(s) => Ok(Some(s)),
-        serde_json::Value::Object(_) => Ok(Some(value.to_string())),
-        serde_json::Value::Null => Ok(None),
-        _ => Ok(None),
-    }
-}
 
 #[derive(Debug, Clone)]
 pub(super) struct PlannerArtifacts {
@@ -67,197 +37,6 @@ pub(super) enum EvaluatorGateOutcome {
     Accept,
     Continue { prompt: String },
     Exhausted { reason: String },
-}
-
-#[derive(Debug, Deserialize)]
-struct PlannerResponse {
-    #[serde(
-        alias = "execution_spec",
-        deserialize_with = "deserialize_string_or_object"
-    )]
-    spec_markdown: Option<String>,
-    #[serde(
-        default,
-        alias = "execution_contract",
-        deserialize_with = "deserialize_string_or_object"
-    )]
-    contract_markdown: Option<String>,
-    #[serde(default, alias = "task_title")]
-    task_title: Option<String>,
-    #[serde(default, alias = "tracker_items")]
-    items: Vec<PlannerItem>,
-}
-
-#[derive(Debug, Deserialize)]
-struct PlannerItem {
-    #[serde(default)]
-    description: String,
-    #[serde(default)]
-    files: Vec<String>,
-    #[serde(default)]
-    outcome: String,
-    #[serde(
-        default,
-        alias = "verification_command",
-        deserialize_with = "deserialize_string_or_vec"
-    )]
-    verify: Vec<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct EvaluatorResponse {
-    verdict: String,
-    summary: String,
-    #[serde(default)]
-    high_severity_findings: usize,
-    #[serde(default)]
-    scorecard: Option<EvaluatorScorecard>,
-    #[serde(default)]
-    findings: Vec<EvaluatorFinding>,
-    #[serde(default)]
-    unmet_contract_items: Vec<String>,
-    #[serde(default)]
-    residual_risks: Vec<String>,
-    #[serde(default)]
-    required_tracker_updates: Vec<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct EvaluatorFinding {
-    severity: String,
-    title: String,
-    #[serde(default)]
-    detail: Option<String>,
-}
-
-#[derive(Debug, Clone, Copy, Deserialize, Default)]
-struct EvaluatorScorecard {
-    #[serde(default)]
-    contract_fidelity: Option<u8>,
-    #[serde(default)]
-    functionality: Option<u8>,
-    #[serde(default)]
-    code_quality: Option<u8>,
-    #[serde(default)]
-    verification_integrity: Option<u8>,
-}
-
-const EVALUATOR_SCORE_THRESHOLD: u8 = 4;
-
-impl EvaluatorScorecard {
-    fn entries(&self) -> [(&'static str, Option<u8>); 4] {
-        [
-            ("Contract fidelity", self.contract_fidelity),
-            ("Functionality", self.functionality),
-            ("Code quality", self.code_quality),
-            ("Verification integrity", self.verification_integrity),
-        ]
-    }
-
-    fn missing_criteria(&self) -> Vec<String> {
-        self.entries()
-            .into_iter()
-            .filter(|(_, score)| score.is_none())
-            .map(|(label, _)| label.to_string())
-            .collect()
-    }
-
-    fn invalid_criteria(&self) -> Vec<String> {
-        self.entries()
-            .into_iter()
-            .filter_map(|(label, score)| {
-                score
-                    .filter(|score| !(1..=5).contains(score))
-                    .map(|score| format!("{label} {score}/5"))
-            })
-            .collect()
-    }
-
-    fn failing_criteria(&self) -> Vec<String> {
-        self.entries()
-            .into_iter()
-            .filter_map(|(label, score)| {
-                score
-                    .filter(|score| (1..=5).contains(score) && *score < EVALUATOR_SCORE_THRESHOLD)
-                    .map(|score| format!("{label} {score}/5"))
-            })
-            .collect()
-    }
-
-    fn has_scores(&self) -> bool {
-        self.entries().into_iter().any(|(_, score)| score.is_some())
-    }
-}
-
-impl EvaluatorResponse {
-    fn effective_scorecard(&self) -> EvaluatorScorecard {
-        self.scorecard.unwrap_or_default()
-    }
-
-    fn missing_criteria(&self) -> Vec<String> {
-        self.effective_scorecard().missing_criteria()
-    }
-
-    fn invalid_criteria(&self) -> Vec<String> {
-        self.effective_scorecard().invalid_criteria()
-    }
-
-    fn failing_criteria(&self) -> Vec<String> {
-        self.effective_scorecard().failing_criteria()
-    }
-
-    fn passed(&self) -> bool {
-        self.verdict.eq_ignore_ascii_case("pass")
-            && self.high_severity_findings == 0
-            && self.missing_criteria().is_empty()
-            && self.invalid_criteria().is_empty()
-            && self.failing_criteria().is_empty()
-    }
-
-    fn effective_summary(&self) -> String {
-        use std::fmt::Write as _;
-
-        let mut summary = self.summary.trim().to_string();
-        let missing_criteria = self.missing_criteria();
-        let invalid_criteria = self.invalid_criteria();
-        let failing_criteria = self.failing_criteria();
-
-        let mut append_clause = |labels: &[String], prefix: &str| {
-            if labels.is_empty() {
-                return;
-            }
-            if !summary.is_empty() {
-                summary.push(' ');
-            }
-            // Allocation-free: writes directly into the existing String buffer.
-            let _ = write!(summary, "{prefix}: {}.", labels.join(", "));
-        };
-
-        append_clause(&missing_criteria, "Scorecard incomplete: missing");
-        append_clause(&invalid_criteria, "Scorecard invalid (scores must be 1-5)");
-        if !failing_criteria.is_empty() {
-            let prefix =
-                format!("Scorecard below threshold (>= {EVALUATOR_SCORE_THRESHOLD}/5 required)");
-            append_clause(&failing_criteria, &prefix);
-        }
-
-        if summary.is_empty() {
-            if self.high_severity_findings > 0 {
-                return format!(
-                    "Evaluator reported {} high-severity finding(s).",
-                    self.high_severity_findings
-                );
-            }
-            if missing_criteria.is_empty()
-                && invalid_criteria.is_empty()
-                && failing_criteria.is_empty()
-            {
-                return "Evaluator returned no summary.".to_string();
-            }
-        }
-
-        summary
-    }
 }
 
 impl AgentRunner {
@@ -352,68 +131,6 @@ impl AgentRunner {
     /// them up transparently.
     ///
     /// TODO: Add an LLM-based planner call here that produces a genuinely
-    /// revised spec/contract/tracker.  The current implementation simply
-    /// annotates the existing artifacts with evaluator context.
-    pub(super) async fn replan_from_failure(
-        &mut self,
-        _task: &Task,
-        evaluation: &EvaluationArtifacts,
-        revision_round: usize,
-    ) -> Option<PlannerArtifacts> {
-        let spec_path = harness_artifacts::current_spec_path(&self._workspace);
-        let contract_path = harness_artifacts::current_contract_path(&self._workspace);
-        let tracker_path = harness_artifacts::current_task_path(&self._workspace);
-
-        // Annotate the existing spec with evaluator feedback.
-        let existing_spec = tokio::fs::read_to_string(&spec_path)
-            .await
-            .unwrap_or_default();
-        let annotated_spec = format!(
-            "{existing_spec}\n\n\
-             --- Revision Round {revision_round} ---\n\
-             Evaluator feedback:\n{evaluation_summary}\n",
-            evaluation_summary = evaluation.summary,
-        );
-        let _ = harness_artifacts::write_spec(&self._workspace, &annotated_spec)
-            .await
-            .inspect_err(|e| warn!(error = %e, "replan_from_failure: failed to annotate spec"));
-
-        // Annotate the existing contract similarly.
-        let existing_contract = tokio::fs::read_to_string(&contract_path)
-            .await
-            .unwrap_or_default();
-        let annotated_contract = format!(
-            "{existing_contract}\n\n\
-             --- Revision Round {revision_round} ---\n\
-             Evaluator feedback:\n{evaluation_summary}\n",
-            evaluation_summary = evaluation.summary,
-        );
-        let _ = harness_artifacts::write_contract(&self._workspace, &annotated_contract)
-            .await
-            .inspect_err(|e| warn!(error = %e, "replan_from_failure: failed to annotate contract"));
-
-        Some(PlannerArtifacts {
-            spec_path,
-            contract_path,
-            tracker_path,
-        })
-    }
-
-    pub(super) fn augment_generator_task(&self, task: &Task, artifacts: &PlannerArtifacts) -> Task {
-        let mut effective_task = task.clone();
-        let addendum = format!(
-            "Generator contract:\n- Treat `{}`, `{}`, and `{}` as the source of truth.\n- The execution contract defines what done must look like in observable terms.\n- Work one tracker step at a time.\n- Do not mark a step done until the implementation and verification evidence both support it.\n- Keep the tracker current.\n- Leave resumable state before yielding.",
-            artifacts.spec_path.display(),
-            artifacts.contract_path.display(),
-            artifacts.tracker_path.display()
-        );
-        effective_task.instructions = Some(match task.instructions.as_deref() {
-            Some(existing) if !existing.trim().is_empty() => format!("{existing}\n\n{addendum}"),
-            _ => addendum,
-        });
-        effective_task
-    }
-
     pub(super) async fn run_evaluator_phase(
         &mut self,
         task: &Task,
@@ -555,91 +272,6 @@ impl AgentRunner {
         }
     }
 
-    fn fallback_spec_markdown(&self, task: &Task) -> String {
-        format!(
-            "# Execution Spec\n\n## Goal\n{}\n\n## Acceptance Criteria\n- Complete the requested work.\n- Keep the tracker concrete and verifiable.\n\n## Assumptions\n- Scope remains limited to the user request.\n- Verification should use the lightest project-appropriate command available.\n",
-            task.description.trim()
-        )
-    }
-
-    fn fallback_planner_items(&self, task: &Task) -> Vec<serde_json::Value> {
-        let verify = self.fallback_verify_commands();
-        vec![json!({
-            "description": task.description,
-            "outcome": "Requested work is implemented and the tracker reflects the final state.",
-            "verify": verify,
-        })]
-    }
-
-    fn build_planner_tracker_items(
-        &self,
-        task: &Task,
-        items: Vec<PlannerItem>,
-    ) -> Vec<serde_json::Value> {
-        let fallback_verify = self.fallback_verify_commands();
-        let tracker_items = items
-            .into_iter()
-            .filter_map(|item| self.normalize_planner_item(task, item, &fallback_verify))
-            .collect::<Vec<_>>();
-        if tracker_items.is_empty() {
-            self.fallback_planner_items(task)
-        } else {
-            tracker_items
-        }
-    }
-
-    fn normalize_planner_item(
-        &self,
-        task: &Task,
-        item: PlannerItem,
-        fallback_verify: &[String],
-    ) -> Option<serde_json::Value> {
-        let description = item.description.trim();
-        let description = if description.is_empty() {
-            task.description.trim()
-        } else {
-            description
-        };
-        if description.is_empty() {
-            return None;
-        }
-
-        let outcome = item.outcome.trim();
-        let outcome = if outcome.is_empty() {
-            "Requested work is implemented and the tracker reflects the final state."
-        } else {
-            outcome
-        };
-        let files = item
-            .files
-            .into_iter()
-            .map(|file| file.trim().to_string())
-            .filter(|file| !file.is_empty())
-            .collect::<Vec<_>>();
-        let verify = item
-            .verify
-            .into_iter()
-            .map(|command| command.trim().to_string())
-            .filter(|command| !command.is_empty())
-            .collect::<Vec<_>>();
-        let verify = if verify.is_empty() {
-            fallback_verify.to_vec()
-        } else {
-            verify
-        };
-
-        Some(json!({
-            "description": description,
-            "files": files,
-            "outcome": outcome,
-            "verify": verify,
-        }))
-    }
-
-    fn fallback_verify_commands(&self) -> Vec<String> {
-        super::workspace_detection::infer_default_verify_commands(self._workspace.as_path())
-    }
-
     /// Issue a tool-less, single-turn JSON-only request against the active
     /// provider and decode the response into `T`. Used by harness sub-roles
     /// (planner, evaluator) that need structured output with no tool calls.
@@ -736,121 +368,19 @@ impl AgentRunner {
         )
         .await
     }
+}
 
-    fn render_evaluation(&self, evaluation: &EvaluatorResponse) -> String {
-        let mut markdown = format!(
-            "# Evaluation\n\n## Verdict\n{}\n\n## Summary\n{}\n",
-            evaluation.verdict.trim(),
-            evaluation.effective_summary()
-        );
-
-        if let Some(scorecard) = evaluation.scorecard.as_ref()
-            && scorecard.has_scores()
-        {
-            markdown.push_str("\n## Scorecard\n");
-            for (label, score) in scorecard.entries() {
-                if let Some(score) = score {
-                    let _ = writeln!(markdown, "- {label}: {score}/5");
-                }
-            }
-        }
-
-        if !evaluation.findings.is_empty() {
-            markdown.push_str("\n## Findings\n");
-            for finding in &evaluation.findings {
-                let _ = write!(
-                    markdown,
-                    "- [{}] {}",
-                    finding.severity.trim(),
-                    finding.title.trim()
-                );
-                if let Some(detail) = finding
-                    .detail
-                    .as_deref()
-                    .filter(|text| !text.trim().is_empty())
-                {
-                    markdown.push_str(": ");
-                    markdown.push_str(detail.trim());
-                }
-                markdown.push('\n');
-            }
-        }
-
-        if !evaluation.unmet_contract_items.is_empty() {
-            markdown.push_str("\n## Unmet Contract Items\n");
-            for item in &evaluation.unmet_contract_items {
-                markdown.push_str("- ");
-                markdown.push_str(item.trim());
-                markdown.push('\n');
-            }
-        }
-
-        if !evaluation.residual_risks.is_empty() {
-            markdown.push_str("\n## Residual Risks\n");
-            for risk in &evaluation.residual_risks {
-                markdown.push_str("- ");
-                markdown.push_str(risk.trim());
-                markdown.push('\n');
-            }
-        }
-
-        if !evaluation.required_tracker_updates.is_empty() {
-            markdown.push_str("\n## Required Tracker Updates\n");
-            for update in &evaluation.required_tracker_updates {
-                markdown.push_str("- ");
-                markdown.push_str(update.trim());
-                markdown.push('\n');
-            }
-        }
-
-        markdown
+pub(super) fn render_markdown_list(markdown: &mut String, header: &str, items: &[String]) {
+    if items.is_empty() {
+        return;
     }
-
-    fn render_contract_markdown(&self, task: &Task, tracker_items: &[serde_json::Value]) -> String {
-        let mut markdown = format!(
-            "# Execution Contract\n\n## Goal\n{}\n\n## Done Criteria\n",
-            task.description.trim()
-        );
-
-        if tracker_items.is_empty() {
-            markdown.push_str("- Deliver the requested change.\n");
-            markdown.push_str("- Keep the result verifiable.\n");
-        } else {
-            for (index, item) in tracker_items.iter().enumerate() {
-                let description = item
-                    .get("description")
-                    .and_then(serde_json::Value::as_str)
-                    .map(str::trim)
-                    .filter(|value| !value.is_empty())
-                    .unwrap_or(task.description.trim());
-                let outcome = item
-                    .get("outcome")
-                    .and_then(serde_json::Value::as_str)
-                    .map(str::trim)
-                    .filter(|value| !value.is_empty())
-                    .unwrap_or("Requested work is implemented and tracked.");
-                let files = json_string_list(item, "files");
-                let verify = json_string_list(item, "verify");
-
-                let _ = writeln!(markdown, "- Step {}: {}", index + 1, description);
-                let _ = writeln!(markdown, "- Outcome: {outcome}");
-                if !files.is_empty() {
-                    let _ = writeln!(markdown, "- Files: {}", files.join(", "));
-                }
-                if !verify.is_empty() {
-                    let _ = writeln!(markdown, "- Verify: {}", verify.join(" | "));
-                }
-            }
-        }
-
-        markdown.push_str(
-            "\n## Review Standard\n- Prefer observable behavior over claimed completion.\n- Prefer failing borderline output over accepting unverifiable work.\n",
-        );
-        markdown
+    let _ = writeln!(markdown, "\n## {header}");
+    for item in items {
+        let _ = writeln!(markdown, "- {}", item.trim());
     }
 }
 
-fn json_string_list(item: &serde_json::Value, key: &str) -> Vec<String> {
+pub(super) fn json_string_list(item: &serde_json::Value, key: &str) -> Vec<String> {
     item.get(key)
         .and_then(serde_json::Value::as_array)
         .into_iter()

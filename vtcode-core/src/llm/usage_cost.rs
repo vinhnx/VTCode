@@ -523,4 +523,3 @@ impl SessionBudget {
         self.max_usd.map(|m| (m - self.spent_usd).max(0.0))
     }
 }
-

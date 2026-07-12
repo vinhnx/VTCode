@@ -1,6 +1,10 @@
 use super::AgentRunner;
 use super::continuation::{CompletionAssessment, VerificationResult};
 use super::escalation::{EscalationDecision, EscalationGate};
+use super::execute_helpers::{
+    emit_blocked_handoff_events, prepare_responses_request_messages, record_terminal_turn_event,
+    stop_reason_from_finish_reason, summarize_verification_output,
+};
 use super::helpers::detect_textual_exec_tool_call;
 use super::orchestration::EvaluatorGateOutcome;
 use super::prompt_alignment;
@@ -22,7 +26,6 @@ use crate::core::agent::task::{ContextItem, Task, TaskOutcome, TaskResults};
 use crate::exec::events::HarnessEventKind;
 use crate::llm::provider::{
     FinishReason, Message, ResponsesContinuationState, ToolCall, ToolChoice, ToolDefinition,
-    prepare_responses_continuation_request, responses_continuation_key,
     supports_responses_chaining,
 };
 use crate::llm::providers::gemini::wire::Part;
@@ -35,104 +38,6 @@ use anyhow::Result;
 use serde_json::json;
 use std::sync::Arc;
 use tracing::{debug, warn};
-
-fn record_terminal_turn_event(
-    event_recorder: &mut ExecEventRecorder,
-    outcome: &TaskOutcome,
-    usage: vtcode_exec_events::Usage,
-) {
-    if outcome.is_success() {
-        event_recorder.record_thread_event(vtcode_exec_events::ThreadEvent::TurnCompleted(
-            vtcode_exec_events::TurnCompletedEvent { usage },
-        ));
-    } else {
-        event_recorder.record_thread_event(vtcode_exec_events::ThreadEvent::TurnFailed(
-            vtcode_exec_events::TurnFailedEvent {
-                message: outcome.description(),
-                usage: Some(usage),
-            },
-        ));
-    }
-}
-
-fn emit_blocked_handoff_events(
-    event_recorder: &mut ExecEventRecorder,
-    current_path: &std::path::Path,
-    archive_path: &std::path::Path,
-) {
-    for path in [current_path, archive_path] {
-        event_recorder.harness_event(
-            HarnessEventKind::BlockedHandoffWritten,
-            Some("Blocked handoff written".to_string()),
-            None,
-            Some(path.display().to_string()),
-            None,
-            None,
-            None,
-        );
-    }
-}
-
-fn summarize_verification_output(result: &serde_json::Value) -> String {
-    result
-        .get("output")
-        .and_then(serde_json::Value::as_str)
-        .or_else(|| result.get("stderr").and_then(serde_json::Value::as_str))
-        .or_else(|| result.get("stdout").and_then(serde_json::Value::as_str))
-        .map(str::trim)
-        .filter(|text| !text.is_empty())
-        .map(|text| {
-            let truncated = text
-                .lines()
-                .take(20)
-                .collect::<Vec<_>>()
-                .join("\n")
-                .trim()
-                .to_string();
-            if truncated.len() < text.len() {
-                format!("{truncated}\n...")
-            } else {
-                truncated
-            }
-        })
-        .unwrap_or_default()
-}
-
-fn prepare_responses_request_messages<'a>(
-    previous_chains: &mut hashbrown::HashMap<(String, String), ResponsesContinuationState>,
-    provider_name: &str,
-    provider_supports_responses_compaction: bool,
-    model: &str,
-    messages: &'a [Message],
-) -> (std::borrow::Cow<'a, [Message]>, Option<String>) {
-    let key = responses_continuation_key(provider_name, model);
-    let continuation = key.as_ref().and_then(|k| previous_chains.get(k));
-    let prepared = prepare_responses_continuation_request(
-        provider_name,
-        provider_supports_responses_compaction,
-        messages,
-        continuation,
-    );
-    if prepared.clear_stale_chain
-        && let Some(key) = key
-    {
-        previous_chains.remove(&key);
-    }
-
-    (prepared.messages, prepared.previous_response_id)
-}
-
-fn stop_reason_from_finish_reason(finish_reason: &FinishReason) -> String {
-    match finish_reason {
-        FinishReason::Stop => "end_turn".to_string(),
-        FinishReason::Length => "max_tokens".to_string(),
-        FinishReason::ToolCalls => "tool_calls".to_string(),
-        FinishReason::ContentFilter => "content_filter".to_string(),
-        FinishReason::Pause => "pause_turn".to_string(),
-        FinishReason::Refusal => "refusal".to_string(),
-        FinishReason::Error(message) => message.clone(),
-    }
-}
 
 pub(super) struct RuntimePromptBundle {
     system_instruction: Arc<String>,
