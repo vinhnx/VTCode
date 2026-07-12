@@ -8,30 +8,14 @@ use crate::agent::runloop::unified::tool_reads::{is_read_file_style_call, read_f
 
 pub(super) use crate::agent::runloop::unified::tool_reads::spool_chunk_read_path;
 
-// Read-offset field aliases recognized across read_file / unified_file.
-// Keep this aligned with `helpers::READ_OFFSET_KEYS` — the two lists must
-// agree on what counts as a "where to start reading" field, otherwise the
-// family-cap slice suffix would miss idioms like `line_start`/`start_line`
-// and falsely collapse paginated reads into one family key (issue: agent
-// deadlocks when paginating a large file, emitting a garbage final answer).
-const READ_FILE_OFFSET_KEYS: &[&str] = &[
-    "offset",
-    "offset_lines",
-    "offset_bytes",
-    "line_start",
-    "line_end",
-    "start_line",
-];
-// Read-limit field aliases. `helpers::READ_OFFSET_KEYS` lumps limit fields
-// into the same normalization list; we keep them separate here because the
-// slice suffix distinguishes `off=` from `lim=`.
-const READ_FILE_LIMIT_KEYS: &[&str] = &[
-    "limit",
-    "limit_lines",
-    "page_size_lines",
-    "max_lines",
-    "chunk_lines",
-];
+// Read-offset / read-limit field aliases are the canonical vocabulary owned by
+// `tool_outcomes::read_extent` — the single source of truth shared with the
+// cross-turn dedup normalizer and the summarization gate. The family-cap slice
+// suffix distinguishes `off=` from `lim=`, so it consumes the two lists
+// separately. Previously each site kept its own drifting copy; delegating here
+// guarantees they can never diverge (which used to falsely collapse paginated
+// reads into one family key and deadlock the agent on large files).
+use crate::agent::runloop::unified::turn::tool_outcomes::read_extent::{LIMIT_KEYS, OFFSET_KEYS};
 
 fn compact_loop_key_part(value: &str, max_chars: usize) -> String {
     value.trim().chars().take(max_chars).collect()
@@ -104,11 +88,11 @@ fn has_any_arg_by_keys(args: &Value, keys: &[&str]) -> bool {
 }
 
 fn read_file_has_offset_arg(args: &Value) -> bool {
-    has_any_arg_by_keys(args, READ_FILE_OFFSET_KEYS)
+    has_any_arg_by_keys(args, OFFSET_KEYS)
 }
 
 fn read_file_offset_value(args: &Value) -> Option<usize> {
-    first_arg_value_by_keys(args, READ_FILE_OFFSET_KEYS).and_then(|value| {
+    first_arg_value_by_keys(args, OFFSET_KEYS).and_then(|value| {
         value
             .as_u64()
             .and_then(|n| usize::try_from(n).ok())
@@ -117,11 +101,11 @@ fn read_file_offset_value(args: &Value) -> Option<usize> {
 }
 
 fn read_file_has_limit_arg(args: &Value) -> bool {
-    has_any_arg_by_keys(args, READ_FILE_LIMIT_KEYS)
+    has_any_arg_by_keys(args, LIMIT_KEYS)
 }
 
 fn read_file_limit_value(args: &Value) -> Option<usize> {
-    first_arg_value_by_keys(args, READ_FILE_LIMIT_KEYS).and_then(|value| {
+    first_arg_value_by_keys(args, LIMIT_KEYS).and_then(|value| {
         value
             .as_u64()
             .and_then(|n| usize::try_from(n).ok())

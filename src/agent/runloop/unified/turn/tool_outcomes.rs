@@ -11,6 +11,7 @@ pub(crate) mod error_handling;
 mod execution_result;
 pub(crate) mod handlers;
 pub(crate) mod helpers;
+pub(crate) mod read_extent;
 mod response_content;
 mod subagent_memory;
 

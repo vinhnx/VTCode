@@ -144,6 +144,25 @@ fn gather_files_read_this_turn(working_history: &[uni::Message]) -> Vec<String> 
     files
 }
 
+/// Build the deterministic recovery fallback, optionally appending the list of
+/// files already read this turn so the next turn can reuse them instead of
+/// re-exploring. `lead_in` is the provider-agnostic message shown first.
+fn build_recovery_fallback(working_history: &[uni::Message], lead_in: &str) -> String {
+    let files_read = gather_files_read_this_turn(working_history);
+    if files_read.is_empty() {
+        lead_in.to_string()
+    } else {
+        format!(
+            "{lead_in}\n\nFiles already read this turn (do NOT re-read):\n{}",
+            files_read
+                .iter()
+                .map(|f| format!("  - {f}"))
+                .collect::<Vec<_>>()
+                .join("\n")
+        )
+    }
+}
+
 pub(super) fn complete_turn_after_failed_tool_free_recovery(
     working_history: &mut Vec<uni::Message>,
     failure_stage: &str,
@@ -153,13 +172,17 @@ pub(super) fn complete_turn_after_failed_tool_free_recovery(
 ) -> TurnLoopResult {
     // Plan mode: never dead-end. Preserve the planning session and re-force
     // the interview on the next turn. Surface the model's salvaged prose if
-    // available, otherwise the plan-aware fallback message. The generic
-    // "Recovery synthesis failed" message would leave planning stuck.
+    // available; otherwise fall back to the plan-aware message. Either way,
+    // keep the research already gathered this turn (the files-read list) so
+    // nothing useful is lost — the generic dead-end message does this, and
+    // plan mode must be at least as informative.
     if let Some(plan_session) = plan_session {
         plan_session.mark_interview_pending();
         let planning_fallback = salvaged_text
             .filter(|text| !text.trim().is_empty())
-            .unwrap_or_else(|| PLANNING_RECOVERY_SYNTHESIS_FALLBACK.to_string());
+            .unwrap_or_else(|| {
+                build_recovery_fallback(working_history, PLANNING_RECOVERY_SYNTHESIS_FALLBACK)
+            });
         push_final_answer_if_absent(working_history, &planning_fallback);
         tracing::warn!(
             stage = failure_stage,
@@ -184,22 +207,8 @@ pub(super) fn complete_turn_after_failed_tool_free_recovery(
         return TurnLoopResult::Completed;
     }
 
-    // Build a richer fallback that lists files already read, so the next
-    // turn can reuse them instead of re-exploring.
-    let files_read = gather_files_read_this_turn(working_history);
-    let fallback = if files_read.is_empty() {
-        RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER.to_string()
-    } else {
-        format!(
-            "{RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER}\n\n\
-             Files already read this turn (do NOT re-read):\n{}",
-            files_read
-                .iter()
-                .map(|f| format!("  - {f}"))
-                .collect::<Vec<_>>()
-                .join("\n")
-        )
-    };
+    let fallback =
+        build_recovery_fallback(working_history, RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER);
     push_final_answer_if_absent(working_history, &fallback);
 
     tracing::warn!(

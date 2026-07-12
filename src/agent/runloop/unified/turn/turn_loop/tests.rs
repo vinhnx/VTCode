@@ -439,6 +439,48 @@ fn plan_mode_recovery_fallback_prefers_salvaged_prose() {
 }
 
 #[test]
+fn plan_mode_recovery_fallback_lists_files_read_when_present() {
+    use vtcode_core::core::interfaces::session::PlanningEntrySource;
+
+    let mut plan_session = PlanningWorkflowSessionState::default();
+    plan_session.enter(PlanningEntrySource::UserRequest);
+
+    // Simulate the turn_640 shape: a wall-clock-budgeted plan turn that read
+    // several files before the tool-free recovery follow-up failed.
+    let mut history = vec![
+        uni::Message::user("plan launch-time optimization".to_string()),
+        uni::Message::tool_response(
+            "call_1".to_string(),
+            "{\"path\": \"src/main.rs\", \"content\": \"...\"}".to_string(),
+        ),
+        uni::Message::tool_response(
+            "call_2".to_string(),
+            "{\"path\": \"src/startup/mod.rs\", \"content\": \"...\"}".to_string(),
+        ),
+    ];
+    let outcome = complete_turn_after_failed_tool_free_recovery(
+        &mut history,
+        "test.stage",
+        Some(&anyhow!("Network error")),
+        None,
+        Some(&mut plan_session),
+    );
+
+    assert!(matches!(outcome, TurnLoopResult::Completed));
+    assert!(plan_session.interview_pending());
+    let last = history.last().unwrap();
+    let text = last.content.as_text();
+    // Plan mode must stay at least as informative as the generic dead-end:
+    // it must still surface the files already read so the next turn can reuse
+    // them instead of re-exploring.
+    assert!(text.contains("Files already read this turn"));
+    assert!(text.contains("src/main.rs"));
+    assert!(text.contains("src/startup/mod.rs"));
+    // And it must lead with the plan-aware message, not the generic one.
+    assert!(text.contains(PLANNING_RECOVERY_SYNTHESIS_FALLBACK));
+}
+
+#[test]
 fn accumulate_turn_usage_merges_prompt_completion_and_cached_tokens() {
     let mut total = HarnessUsage::default();
 

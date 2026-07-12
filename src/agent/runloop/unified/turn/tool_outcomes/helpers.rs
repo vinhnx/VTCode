@@ -1,4 +1,5 @@
 use crate::agent::runloop::unified::tool_pipeline::{ToolExecutionStatus, ToolPipelineOutcome};
+use crate::agent::runloop::unified::turn::tool_outcomes::read_extent;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::time::Instant;
 use vtcode_core::llm::provider as uni;
@@ -171,7 +172,7 @@ pub(crate) fn find_duplicate_in_history(
         if let uni::MessageRole::Tool = msg.role {
             if let Some(ref call_id) = msg.tool_call_id {
                 if let Some((tc_args, assistant_idx)) = call_id_map.get(call_id.as_str()) {
-                    if abs_idx > *assistant_idx && read_extent_covers_query(tc_args, args) {
+                    if abs_idx > *assistant_idx && read_extent::extent_covers(tc_args, args) {
                         return Some(msg.content.as_text().to_string());
                     }
                 }
@@ -390,73 +391,12 @@ pub(crate) fn read_normalized_signature_key(name: &str, args: &serde_json::Value
     };
 
     // Strip pagination / read-offset fields that don't change *what* is read.
-    for key in READ_OFFSET_KEYS {
-        obj.remove(*key);
+    for key in read_extent::normalization_strip_keys() {
+        obj.remove(key);
     }
 
     let normalized = serde_json::Value::Object(obj);
     signature_key_for(name, &normalized)
-}
-
-/// Fields stripped from read-only tool args for cross-turn dedup normalization.
-const READ_OFFSET_KEYS: &[&str] = &[
-    "offset",
-    "offset_lines",
-    "offset_bytes",
-    "line_start",
-    "line_end",
-    "start_line",
-    "limit",
-    "limit_lines",
-    "max_lines",
-    "chunk_lines",
-    "encoding",
-    "page",
-    "per_page",
-];
-
-/// Check whether a cached read's extent covers the query's extent.
-///
-/// Returns `true` when both calls use the same raw mode, target the same
-/// offset, and the cached limit is at least as large as the query limit.
-/// This prevents false loop detection when the model requests a larger
-/// limit or different offset than a previous read of the same file
-/// (issue #680).
-fn read_extent_covers_query(
-    cached_args: &serde_json::Value,
-    query_args: &serde_json::Value,
-) -> bool {
-    let cached_raw = cached_args
-        .get("raw")
-        .and_then(serde_json::Value::as_bool)
-        .unwrap_or(false);
-    let query_raw = query_args
-        .get("raw")
-        .and_then(serde_json::Value::as_bool)
-        .unwrap_or(false);
-    if cached_raw != query_raw {
-        return false;
-    }
-
-    let cached_offset = cached_args
-        .get("offset")
-        .and_then(serde_json::Value::as_u64)
-        .unwrap_or(0);
-    let query_offset = query_args
-        .get("offset")
-        .and_then(serde_json::Value::as_u64)
-        .unwrap_or(0);
-    if cached_offset != query_offset {
-        return false;
-    }
-
-    let cached_limit = cached_args.get("limit").and_then(serde_json::Value::as_u64);
-    let query_limit = query_args.get("limit").and_then(serde_json::Value::as_u64);
-    match (cached_limit, query_limit) {
-        (Some(c), Some(q)) => c >= q,
-        (None, None) => true,
-        _ => false,
-    }
 }
 
 /// Returns `true` when `(name, args)` describe a read-only tool invocation.
@@ -1428,25 +1368,25 @@ mod tests {
     #[test]
     fn read_extent_covers_query_rejects_larger_limit() {
         // Cached limit=200 must NOT cover query limit=220
-        assert!(!read_extent_covers_query(
+        assert!(!read_extent::extent_covers(
             &json!({"action":"read","path":"AGENTS.md","offset":0,"limit":200}),
             &json!({"action":"read","path":"AGENTS.md","offset":0,"limit":220}),
         ));
 
         // Cached limit=200 covers query limit=200 (same)
-        assert!(read_extent_covers_query(
+        assert!(read_extent::extent_covers(
             &json!({"action":"read","path":"AGENTS.md","offset":0,"limit":200}),
             &json!({"action":"read","path":"AGENTS.md","offset":0,"limit":200}),
         ));
 
         // Cached limit=200 covers query limit=100 (subset)
-        assert!(read_extent_covers_query(
+        assert!(read_extent::extent_covers(
             &json!({"action":"read","path":"AGENTS.md","offset":0,"limit":200}),
             &json!({"action":"read","path":"AGENTS.md","offset":0,"limit":100}),
         ));
 
         // Different offset must not match
-        assert!(!read_extent_covers_query(
+        assert!(!read_extent::extent_covers(
             &json!({"action":"read","path":"AGENTS.md","offset":0,"limit":200}),
             &json!({"action":"read","path":"AGENTS.md","offset":50,"limit":200}),
         ));
@@ -1455,19 +1395,19 @@ mod tests {
     #[test]
     fn read_extent_covers_query_rejects_different_raw_mode() {
         // Non-raw cached must NOT cover raw=true query
-        assert!(!read_extent_covers_query(
+        assert!(!read_extent::extent_covers(
             &json!({"action":"read","path":"AGENTS.md","offset":0,"limit":200}),
             &json!({"action":"read","path":"AGENTS.md","offset":0,"limit":200,"raw":true}),
         ));
 
         // Raw cached covers raw query
-        assert!(read_extent_covers_query(
+        assert!(read_extent::extent_covers(
             &json!({"action":"read","path":"AGENTS.md","offset":0,"limit":200,"raw":true}),
             &json!({"action":"read","path":"AGENTS.md","offset":0,"limit":200,"raw":true}),
         ));
 
         // Raw cached must NOT cover non-raw query
-        assert!(!read_extent_covers_query(
+        assert!(!read_extent::extent_covers(
             &json!({"action":"read","path":"AGENTS.md","offset":0,"limit":200,"raw":true}),
             &json!({"action":"read","path":"AGENTS.md","offset":0,"limit":200}),
         ));
@@ -1476,19 +1416,19 @@ mod tests {
     #[test]
     fn read_extent_covers_query_handles_missing_limit() {
         // Both missing limit → matches (same default read)
-        assert!(read_extent_covers_query(
+        assert!(read_extent::extent_covers(
             &json!({"action":"read","path":"AGENTS.md"}),
             &json!({"action":"read","path":"AGENTS.md"}),
         ));
 
         // Cached has limit, query doesn't → mismatch
-        assert!(!read_extent_covers_query(
+        assert!(!read_extent::extent_covers(
             &json!({"action":"read","path":"AGENTS.md","limit":200}),
             &json!({"action":"read","path":"AGENTS.md"}),
         ));
 
         // Cached has no limit, query does → mismatch
-        assert!(!read_extent_covers_query(
+        assert!(!read_extent::extent_covers(
             &json!({"action":"read","path":"AGENTS.md"}),
             &json!({"action":"read","path":"AGENTS.md","limit":200}),
         ));
