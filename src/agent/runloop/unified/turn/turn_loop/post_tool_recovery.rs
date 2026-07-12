@@ -6,9 +6,11 @@ use vtcode_core::llm::provider as uni;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::{
-    POST_TOOL_RECOVERY_REASON, POST_TOOL_RESUME_DIRECTIVE, RECOVERY_CONTRACT_VIOLATION_REASON,
-    RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER, check_recovery_cycle_cap,
+    PLANNING_RECOVERY_SYNTHESIS_FALLBACK, POST_TOOL_RECOVERY_REASON, POST_TOOL_RESUME_DIRECTIVE,
+    RECOVERY_CONTRACT_VIOLATION_REASON, RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER,
+    check_recovery_cycle_cap,
 };
+use crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState;
 use crate::agent::runloop::unified::run_loop_context::HarnessTurnState;
 use crate::agent::runloop::unified::turn::context::TurnLoopResult;
 
@@ -147,7 +149,35 @@ pub(super) fn complete_turn_after_failed_tool_free_recovery(
     failure_stage: &str,
     err: Option<&anyhow::Error>,
     salvaged_text: Option<String>,
+    plan_session: Option<&mut PlanningWorkflowSessionState>,
 ) -> TurnLoopResult {
+    // Plan mode: never dead-end. Preserve the planning session and re-force
+    // the interview on the next turn. Surface the model's salvaged prose if
+    // available, otherwise the plan-aware fallback message. The generic
+    // "Recovery synthesis failed" message would leave planning stuck.
+    if let Some(plan_session) = plan_session {
+        plan_session.mark_interview_pending();
+        let planning_fallback = salvaged_text
+            .filter(|text| !text.trim().is_empty())
+            .unwrap_or_else(|| PLANNING_RECOVERY_SYNTHESIS_FALLBACK.to_string());
+        let has_recent_fallback = working_history.iter().rev().take(3).any(|message| {
+            message.role == uni::MessageRole::Assistant
+                && message.phase == Some(uni::AssistantPhase::FinalAnswer)
+                && message.content.as_text().starts_with(&planning_fallback)
+        });
+        if !has_recent_fallback {
+            working_history.push(
+                uni::Message::assistant(planning_fallback)
+                    .with_phase(Some(uni::AssistantPhase::FinalAnswer)),
+            );
+        }
+        tracing::warn!(
+            stage = failure_stage,
+            "Plan-mode tool-free recovery failed; marking interview pending for next turn."
+        );
+        return TurnLoopResult::Completed;
+    }
+
     // Prefer prose salvaged from a rejected synthesis response over the
     // canned fallback string: a partially cleaned answer still reflects the
     // tool outputs gathered this turn, while the canned string discards them.
@@ -218,6 +248,7 @@ pub(super) fn normalize_tool_free_recovery_break_outcome(
     outcome_result: TurnLoopResult,
     tool_free_recovery: bool,
     salvaged_text: Option<String>,
+    plan_session: Option<&mut PlanningWorkflowSessionState>,
 ) -> TurnLoopResult {
     let should_fallback = tool_free_recovery
         && matches!(
@@ -233,6 +264,7 @@ pub(super) fn normalize_tool_free_recovery_break_outcome(
             "handle_turn_processing_result.tool_free_recovery_contract_violation",
             None,
             salvaged_text,
+            plan_session,
         );
     }
 
@@ -264,6 +296,7 @@ pub(super) fn dispatch_post_tool_failure(
     turn_history_start_len: usize,
     stage: &'static str,
     tool_free_recovery: bool,
+    plan_session: Option<&mut PlanningWorkflowSessionState>,
 ) -> Result<PostToolFailureAction> {
     let recovery = maybe_recover_after_post_tool_llm_failure(
         renderer,
@@ -288,6 +321,7 @@ pub(super) fn dispatch_post_tool_failure(
                     &direct_stage,
                     Some(err),
                     salvaged,
+                    plan_session,
                 );
                 Ok(PostToolFailureAction::Break(result))
             } else {
@@ -303,6 +337,7 @@ pub(super) fn dispatch_post_tool_failure(
                 &cycle_stage,
                 err,
                 salvaged,
+                plan_session,
             ) {
                 return Ok(PostToolFailureAction::Break(r));
             }
@@ -319,6 +354,7 @@ pub(super) fn dispatch_post_tool_failure(
                     &directive_stage,
                     Some(err),
                     salvaged,
+                    plan_session,
                 )
             } else {
                 TurnLoopResult::Completed

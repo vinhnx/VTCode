@@ -1,13 +1,15 @@
 use super::post_tool_recovery::prepare_post_tool_tool_free_recovery;
 use super::post_tool_recovery::{ensure_post_tool_resume_directive, has_tool_response_since};
 use super::{
-    HarnessUsage, POST_TOOL_RECOVERY_REASON, POST_TOOL_RESUME_DIRECTIVE, PostToolFailureRecovery,
-    RECOVERY_CONTRACT_VIOLATION_REASON, RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER,
-    accumulate_turn_usage, complete_turn_after_failed_tool_free_recovery,
-    count_assistant_text_responses_for_guard, count_assistant_text_responses_in_turn,
-    has_turn_usage, maybe_recover_after_post_tool_llm_failure,
-    normalize_tool_free_recovery_break_outcome, run_turn_loop,
+    HarnessUsage, PLANNING_RECOVERY_SYNTHESIS_FALLBACK, POST_TOOL_RECOVERY_REASON,
+    POST_TOOL_RESUME_DIRECTIVE, PostToolFailureRecovery, RECOVERY_CONTRACT_VIOLATION_REASON,
+    RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER, accumulate_turn_usage,
+    complete_turn_after_failed_tool_free_recovery, count_assistant_text_responses_for_guard,
+    count_assistant_text_responses_in_turn, has_turn_usage,
+    maybe_recover_after_post_tool_llm_failure, normalize_tool_free_recovery_break_outcome,
+    run_turn_loop,
 };
+use crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState;
 use crate::agent::runloop::unified::turn::context::TurnLoopResult;
 use crate::agent::runloop::unified::turn::turn_processing::test_support::TestTurnProcessingBacking;
 use anyhow::anyhow;
@@ -268,6 +270,7 @@ fn complete_turn_after_failed_tool_free_recovery_appends_fallback_once() {
         "test.stage",
         Some(&anyhow!("Network error")),
         None,
+        None,
     );
     assert!(matches!(outcome, TurnLoopResult::Completed));
     let fallback_count = history
@@ -281,7 +284,7 @@ fn complete_turn_after_failed_tool_free_recovery_appends_fallback_once() {
     assert_eq!(fallback_count, 1);
 
     let outcome_again =
-        complete_turn_after_failed_tool_free_recovery(&mut history, "test.stage", None, None);
+        complete_turn_after_failed_tool_free_recovery(&mut history, "test.stage", None, None, None);
     assert!(matches!(outcome_again, TurnLoopResult::Completed));
     let fallback_count_again = history
         .iter()
@@ -302,6 +305,7 @@ fn complete_turn_after_failed_tool_free_recovery_prefers_salvaged_prose() {
         "test.stage",
         None,
         Some("Here is the launch-time plan: reduce config IO.".to_string()),
+        None,
     );
     assert!(matches!(outcome, TurnLoopResult::Completed));
     let last = history.last().unwrap();
@@ -318,6 +322,7 @@ fn complete_turn_after_failed_tool_free_recovery_prefers_salvaged_prose() {
         "test.stage",
         None,
         Some("   \n".to_string()),
+        None,
     );
     assert!(matches!(outcome, TurnLoopResult::Completed));
     assert_eq!(
@@ -335,6 +340,7 @@ fn normalize_tool_free_recovery_break_outcome_converts_contract_violation_to_com
             reason: Some(RECOVERY_CONTRACT_VIOLATION_REASON.to_string()),
         },
         true,
+        None,
         None,
     );
 
@@ -356,6 +362,7 @@ fn normalize_tool_free_recovery_break_outcome_keeps_non_recovery_blocked_result(
         },
         true,
         None,
+        None,
     );
 
     assert!(matches!(
@@ -369,6 +376,62 @@ fn normalize_tool_free_recovery_break_outcome_keeps_non_recovery_blocked_result(
             && message.phase == Some(uni::AssistantPhase::FinalAnswer)
             && message.content.as_text() == RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER
     }));
+}
+
+#[test]
+fn plan_mode_recovery_fallback_marks_interview_pending_and_preserves_research() {
+    use vtcode_core::core::interfaces::session::PlanningEntrySource;
+
+    let mut plan_session = PlanningWorkflowSessionState::default();
+    plan_session.enter(PlanningEntrySource::UserRequest);
+    assert!(!plan_session.interview_pending());
+
+    let mut history = vec![uni::Message::user("plan launch-time optimization".to_string())];
+    let outcome = complete_turn_after_failed_tool_free_recovery(
+        &mut history,
+        "test.stage",
+        Some(&anyhow!("Network error")),
+        None,
+        Some(&mut plan_session),
+    );
+
+    assert!(matches!(outcome, TurnLoopResult::Completed));
+    // Planning session must survive the failed recovery so the next turn
+    // re-forces the interview instead of dead-ending.
+    assert!(plan_session.interview_pending());
+    // The plan-aware fallback must be shown (not the generic dead-end one).
+    assert!(history.iter().any(|message| {
+        message.role == uni::MessageRole::Assistant
+            && message.phase == Some(uni::AssistantPhase::FinalAnswer)
+            && message.content.as_text() == PLANNING_RECOVERY_SYNTHESIS_FALLBACK
+    }));
+    assert!(!history.iter().any(|message| {
+        message.role == uni::MessageRole::Assistant
+            && message.phase == Some(uni::AssistantPhase::FinalAnswer)
+            && message.content.as_text() == RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER
+    }));
+}
+
+#[test]
+fn plan_mode_recovery_fallback_prefers_salvaged_prose() {
+    use vtcode_core::core::interfaces::session::PlanningEntrySource;
+
+    let mut plan_session = PlanningWorkflowSessionState::default();
+    plan_session.enter(PlanningEntrySource::UserRequest);
+
+    let mut history = vec![uni::Message::user("plan launch-time optimization".to_string())];
+    let outcome = complete_turn_after_failed_tool_free_recovery(
+        &mut history,
+        "test.stage",
+        None,
+        Some("Partial plan: batch config reads.".to_string()),
+        Some(&mut plan_session),
+    );
+
+    assert!(matches!(outcome, TurnLoopResult::Completed));
+    assert!(plan_session.interview_pending());
+    let last = history.last().unwrap();
+    assert!(last.content.as_text().contains("batch config reads"));
 }
 
 #[test]

@@ -17,6 +17,7 @@ use crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter;
 use crate::agent::runloop::unified::inline_events::harness::{
     turn_completed_event, turn_failed_event, turn_started_event,
 };
+use crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState;
 use crate::agent::runloop::unified::run_loop_context::HarnessTurnState;
 use crate::agent::runloop::unified::run_loop_context::RunLoopContext;
 use crate::agent::runloop::unified::run_loop_context::TurnPhase;
@@ -106,6 +107,12 @@ const MAX_ASSISTANT_TEXT_RESPONSES_PER_TURN: u32 = 2;
 const MAX_POST_TOOL_RECOVERY_CYCLES: u8 = 2;
 pub(crate) const POST_TOOL_RECOVERY_REASON: &str = "Tool follow-up failed. Tools disabled; respond with text using context and recent tool outputs.";
 const RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER: &str = "Recovery synthesis failed; no tool call applied. The tool outputs gathered above contain the information needed. Re-state your request and the next turn will reuse the gathered context from this conversation history.";
+/// Plan-mode variant of [`RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER`]. In plan
+/// mode the turn must not dead-end: planning research is preserved and the
+/// interview is re-forced on the next turn (the planning session state is left
+/// `interview_pending`), so this message tells the user to continue planning
+/// rather than re-state a generic request.
+const PLANNING_RECOVERY_SYNTHESIS_FALLBACK: &str = "Planning research completed, but the final synthesis failed (transient provider error). Your gathered context is preserved and the planning interview will be presented on the next turn — re-state your request or press Enter to continue planning.";
 /// Reason set on `TurnLoopResult::Blocked` when the model emits tool calls or
 /// textual tool-call markup during a tool-free recovery pass.  Shared between
 /// `result_handler` (producer) and `post_tool_recovery` (consumer).
@@ -132,6 +139,7 @@ fn check_recovery_cycle_cap(
     stage: &str,
     err: &anyhow::Error,
     salvaged_text: Option<String>,
+    plan_session: Option<&mut PlanningWorkflowSessionState>,
 ) -> Option<TurnLoopResult> {
     if cycles >= MAX_POST_TOOL_RECOVERY_CYCLES {
         tracing::warn!(
@@ -144,6 +152,7 @@ fn check_recovery_cycle_cap(
             stage,
             Some(err),
             salvaged_text,
+            plan_session,
         ));
     }
     None
@@ -197,7 +206,7 @@ pub(crate) struct TurnLoopContext<'a> {
     pub handle: &'a InlineHandle,
     pub session: &'a mut InlineSession,
     pub session_stats: &'a mut crate::agent::runloop::unified::state::SessionStats,
-    pub plan_session: &'a mut crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState,
+    pub plan_session: &'a mut PlanningWorkflowSessionState,
     pub auto_finish_planning_attempted: &'a mut bool,
     pub mcp_panel_state: &'a mut mcp_events::McpPanelState,
     pub tool_result_cache: &'a Arc<RwLock<ToolResultCache>>,
@@ -243,7 +252,7 @@ impl<'a> TurnLoopContext<'a> {
         handle: &'a InlineHandle,
         session: &'a mut InlineSession,
         session_stats: &'a mut crate::agent::runloop::unified::state::SessionStats,
-        plan_session: &'a mut crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState,
+        plan_session: &'a mut PlanningWorkflowSessionState,
         auto_finish_planning_attempted: &'a mut bool,
         mcp_panel_state: &'a mut mcp_events::McpPanelState,
         tool_result_cache: &'a Arc<RwLock<ToolResultCache>>,
@@ -661,6 +670,9 @@ pub(crate) async fn run_turn_loop(
                     turn_history_start_len,
                     "execute_llm_request",
                     tool_free_recovery,
+                    turn_processing_ctx
+                        .is_planning_active()
+                        .then_some(&mut *turn_processing_ctx.plan_session),
                 )? {
                     PostToolFailureAction::Continue => continue,
                     PostToolFailureAction::Break(r) => {
@@ -872,6 +884,9 @@ pub(crate) async fn run_turn_loop(
                     turn_history_start_len,
                     "process_llm_response",
                     tool_free_recovery,
+                    turn_processing_ctx
+                        .is_planning_active()
+                        .then_some(&mut *turn_processing_ctx.plan_session),
                 )? {
                     PostToolFailureAction::Continue => continue,
                     PostToolFailureAction::Break(r) => {
@@ -902,7 +917,12 @@ pub(crate) async fn run_turn_loop(
             turn_processing_ctx.retry_recovery_pass();
             continue;
         }
-        if turn_config.request_user_input_enabled {
+        // During the tool-free recovery pass, tools are disabled at the API
+        // level, so an injected `request_user_input` interview call can never
+        // be executed — it only trips the recovery contract guard and collapses
+        // the turn to a dead-end fallback. Skip interview synthesis/forcing
+        // here; the recovery synthesis can still produce a valid text answer.
+        if turn_config.request_user_input_enabled && !tool_free_recovery {
             let should_attempt_synthesis = {
                 turn_processing_ctx.is_planning_active()
                     && should_attempt_dynamic_interview_generation(
@@ -984,6 +1004,7 @@ pub(crate) async fn run_turn_loop(
                     turn_history_start_len,
                     "handle_turn_processing_result",
                     tool_free_recovery,
+                    ctx.is_planning_active().then_some(&mut *ctx.plan_session),
                 )? {
                     PostToolFailureAction::Continue => continue,
                     PostToolFailureAction::Break(r) => {
@@ -1039,6 +1060,8 @@ pub(crate) async fn run_turn_loop(
                     outcome_result,
                     tool_free_recovery,
                     salvaged,
+                    ctx.is_planning_active()
+                        .then_some(&mut *ctx.plan_session),
                 );
                 break;
             }
