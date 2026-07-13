@@ -177,32 +177,34 @@ pub(super) fn complete_turn_after_failed_tool_free_recovery(
     // nothing useful is lost — the generic dead-end message does this, and
     // plan mode must be at least as informative.
     //
-    // EXCEPTIONS:
-    // 1. If the budget is exhausted, do NOT mark interview as pending
-    //    because no further LLM calls are possible and re-forcing the interview
-    //    would loop forever. Instead, finalize the plan from gathered evidence.
-    // 2. If the error is transient (retryable), do NOT mark interview as pending
-    //    because the same error will likely occur on the next turn, creating
-    //    an infinite loop. Instead, finalize the plan from gathered evidence.
+    // EXCEPTION:
+    // If the budget is exhausted, do NOT mark interview as pending because no
+    // further LLM calls are possible and re-forcing the interview would loop
+    // forever. Instead, finalize the plan from gathered evidence.
+    //
+    // Transient (retryable) errors are intentionally NOT finalized here. The
+    // interview-synthesis call now retries internally and falls back to an
+    // adaptive interview, so re-forcing the interview on the next turn makes
+    // forward progress instead of dead-ending. We keep the planning session
+    // alive and preserve the research gathered this turn.
     let is_transient_error = err
         .map(|e| vtcode_commons::classify_anyhow_error(e).is_retryable())
         .unwrap_or(false);
     if let Some(plan_session) = plan_session {
-        if plan_session.is_budget_exhausted() || is_transient_error {
-            let fallback_msg = if plan_session.is_budget_exhausted() {
-                super::PLANNING_BUDGET_EXHAUSTED_FINALIZE
-            } else {
-                PLANNING_RECOVERY_SYNTHESIS_FALLBACK
-            };
+        if plan_session.is_budget_exhausted() {
             let planning_fallback = salvaged_text
                 .filter(|text| !text.trim().is_empty())
-                .unwrap_or_else(|| build_recovery_fallback(working_history, fallback_msg));
+                .unwrap_or_else(|| {
+                    build_recovery_fallback(
+                        working_history,
+                        super::PLANNING_BUDGET_EXHAUSTED_FINALIZE,
+                    )
+                });
             push_final_answer_if_absent(working_history, &planning_fallback);
             tracing::warn!(
                 stage = failure_stage,
-                budget_exhausted = plan_session.is_budget_exhausted(),
-                transient_error = is_transient_error,
-                "Plan-mode tool-free recovery failed; finalizing plan from gathered evidence."
+                budget_exhausted = true,
+                "Plan-mode tool-free recovery failed with budget exhausted; finalizing plan from gathered evidence."
             );
             return TurnLoopResult::Completed;
         }
@@ -215,6 +217,7 @@ pub(super) fn complete_turn_after_failed_tool_free_recovery(
         push_final_answer_if_absent(working_history, &planning_fallback);
         tracing::warn!(
             stage = failure_stage,
+            transient_error = is_transient_error,
             "Plan-mode tool-free recovery failed; marking interview pending for next turn."
         );
         return TurnLoopResult::Completed;
@@ -443,4 +446,89 @@ fn check_recovery_cycle_cap(
         ));
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState;
+    use vtcode_commons::llm::LLMError;
+
+    fn transient_err() -> anyhow::Error {
+        anyhow::Error::new(LLMError::Network {
+            message: "simulated network blip".to_string(),
+            metadata: None,
+        })
+    }
+
+    #[test]
+    fn tool_free_recovery_keeps_planning_alive_on_transient_error() {
+        let mut working_history: Vec<uni::Message> = Vec::new();
+        let mut plan_session = PlanningWorkflowSessionState::default();
+
+        let result = complete_turn_after_failed_tool_free_recovery(
+            &mut working_history,
+            "stage",
+            Some(&transient_err()),
+            None,
+            Some(&mut plan_session),
+        );
+
+        assert!(matches!(result, TurnLoopResult::Completed));
+        assert!(
+            plan_session.interview_pending(),
+            "transient error must keep planning alive by re-forcing the interview"
+        );
+    }
+
+    #[test]
+    fn tool_free_recovery_keeps_planning_alive_on_non_transient_error() {
+        let mut working_history: Vec<uni::Message> = Vec::new();
+        let mut plan_session = PlanningWorkflowSessionState::default();
+        let err = anyhow::Error::new(LLMError::InvalidRequest {
+            message: "bad request".to_string(),
+            metadata: None,
+        });
+
+        let result = complete_turn_after_failed_tool_free_recovery(
+            &mut working_history,
+            "stage",
+            Some(&err),
+            None,
+            Some(&mut plan_session),
+        );
+
+        assert!(matches!(result, TurnLoopResult::Completed));
+        assert!(
+            plan_session.interview_pending(),
+            "any tool-free recovery failure must keep planning alive (not dead-end)"
+        );
+    }
+
+    #[test]
+    fn tool_free_recovery_finalizes_when_budget_exhausted() {
+        let mut working_history: Vec<uni::Message> = Vec::new();
+        let mut plan_session = PlanningWorkflowSessionState::default();
+        plan_session.mark_budget_exhausted();
+
+        let result = complete_turn_after_failed_tool_free_recovery(
+            &mut working_history,
+            "stage",
+            Some(&transient_err()),
+            None,
+            Some(&mut plan_session),
+        );
+
+        assert!(matches!(result, TurnLoopResult::Completed));
+        assert!(
+            !plan_session.interview_pending(),
+            "budget-exhausted must not re-force the interview (would loop forever)"
+        );
+        assert!(
+            working_history
+                .iter()
+                .any(|m| m.role == uni::MessageRole::Assistant),
+            "budget-exhausted must finalize the plan with a fallback answer"
+        );
+    }
 }

@@ -732,3 +732,146 @@ fn select_best_plan_validation_prefers_more_complete_candidate() {
         .expect("expected selected validation");
     assert_eq!(selected, candidate);
 }
+
+// ---------------------------------------------------------------------------
+// A1: `synthesize_interview_args_with_retry` resilience to transient errors.
+// ---------------------------------------------------------------------------
+
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+use vtcode_core::llm::provider::{LLMError, LLMRequest, LLMResponse};
+
+/// Mock provider that replays a fixed queue of outcomes per `generate` call,
+/// then falls back to a transient `Network` error once the queue is drained.
+struct MockRetryProvider {
+    queued: Mutex<Vec<Result<LLMResponse, LLMError>>>,
+    calls: Arc<AtomicUsize>,
+}
+
+impl MockRetryProvider {
+    fn new(queued: Vec<Result<LLMResponse, LLMError>>) -> (Self, Arc<AtomicUsize>) {
+        let calls = Arc::new(AtomicUsize::new(0));
+        (
+            Self {
+                queued: Mutex::new(queued),
+                calls: calls.clone(),
+            },
+            calls,
+        )
+    }
+}
+
+#[async_trait::async_trait]
+impl uni::LLMProvider for MockRetryProvider {
+    fn name(&self) -> &str {
+        "mock"
+    }
+
+    fn supported_models(&self) -> Vec<String> {
+        Vec::new()
+    }
+
+    fn validate_request(&self, _request: &LLMRequest) -> Result<(), LLMError> {
+        Ok(())
+    }
+
+    async fn generate(&self, _request: LLMRequest) -> Result<LLMResponse, LLMError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        let mut queue = self.queued.lock().unwrap();
+        if let Some(next) = queue.first().cloned() {
+            let _ = queue.remove(0);
+            next
+        } else {
+            Err(LLMError::Network {
+                message: "simulated network blip".to_string(),
+                metadata: None,
+            })
+        }
+    }
+}
+
+#[tokio::test]
+async fn synthesize_interview_args_retries_transient_network_then_succeeds() {
+    let ok = LLMResponse {
+        content: Some("{\"questions\":[]}".to_string()),
+        ..Default::default()
+    };
+    let (provider, calls) = MockRetryProvider::new(vec![
+        Err(LLMError::Network {
+            message: "blip 1".to_string(),
+            metadata: None,
+        }),
+        Err(LLMError::Network {
+            message: "blip 2".to_string(),
+            metadata: None,
+        }),
+        Ok(ok),
+    ]);
+    let mut provider: Box<dyn uni::LLMProvider> = Box::new(provider);
+
+    let result = synthesize_interview_args_with_retry(&mut provider, LLMRequest::default()).await;
+
+    assert!(
+        result.is_ok(),
+        "transient network errors must be retried until success"
+    );
+    assert_eq!(
+        calls.load(Ordering::SeqCst),
+        3,
+        "should retry twice then succeed on the third attempt"
+    );
+}
+
+#[tokio::test]
+async fn synthesize_interview_args_surfaces_non_retryable_without_retry() {
+    let (provider, calls) = MockRetryProvider::new(vec![Err(LLMError::Authentication {
+        message: "bad key".to_string(),
+        metadata: None,
+    })]);
+    let mut provider: Box<dyn uni::LLMProvider> = Box::new(provider);
+
+    let result = synthesize_interview_args_with_retry(&mut provider, LLMRequest::default()).await;
+
+    assert!(
+        result.is_err(),
+        "non-retryable (auth) errors must propagate immediately"
+    );
+    assert_eq!(
+        calls.load(Ordering::SeqCst),
+        1,
+        "should not retry a non-retryable error"
+    );
+}
+
+#[tokio::test]
+async fn synthesize_interview_args_gives_up_after_policy_exhaustion() {
+    let (provider, calls) = MockRetryProvider::new(vec![
+        Err(LLMError::Network {
+            message: "n1".to_string(),
+            metadata: None,
+        }),
+        Err(LLMError::Network {
+            message: "n2".to_string(),
+            metadata: None,
+        }),
+        Err(LLMError::Network {
+            message: "n3".to_string(),
+            metadata: None,
+        }),
+    ]);
+    let mut provider: Box<dyn uni::LLMProvider> = Box::new(provider);
+
+    let result = synthesize_interview_args_with_retry(&mut provider, LLMRequest::default()).await;
+
+    assert!(
+        result.is_err(),
+        "should give up after the retry budget is exhausted"
+    );
+    assert_eq!(
+        calls.load(Ordering::SeqCst),
+        3,
+        "default RetryPolicy allows 3 attempts (2 retries)"
+    );
+}

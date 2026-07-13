@@ -173,6 +173,9 @@ fn count_assistant_text_responses_for_guard(
 pub(crate) struct TurnLoopOutcome {
     pub result: TurnLoopResult,
     pub turn_modified_files: BTreeSet<PathBuf>,
+    /// When set, the interaction loop should switch the active primary agent
+    /// to this name after the turn completes.
+    pub pending_primary_agent: Option<String>,
 }
 
 pub(crate) struct TurnLoopContext<'a> {
@@ -442,6 +445,7 @@ pub(crate) async fn run_turn_loop(
     // Initialize the outcome result
     let mut result = TurnLoopResult::Completed;
     let mut turn_modified_files = BTreeSet::new();
+    let mut pending_primary_agent: Option<String> = None;
     *ctx.auto_finish_planning_attempted = false;
 
     ctx.set_phase(TurnPhase::Preparing);
@@ -1018,6 +1022,13 @@ pub(crate) async fn run_turn_loop(
 
         match turn_outcome {
             TurnHandlerOutcome::Continue => continue,
+            TurnHandlerOutcome::SwitchPrimaryAgent(agent) => {
+                // Plan-mode "switch to build/auto agent" decision: end the turn
+                // normally and let the interaction loop perform the handoff.
+                pending_primary_agent = Some(agent);
+                result = TurnLoopResult::Completed;
+                break;
+            }
             TurnHandlerOutcome::Break(outcome_result) => {
                 // When the model violates the tool-free recovery contract
                 // (emits tool calls or textual tool-call markup instead of a
@@ -1070,6 +1081,7 @@ pub(crate) async fn run_turn_loop(
     Ok(TurnLoopOutcome {
         result,
         turn_modified_files,
+        pending_primary_agent,
     })
 }
 

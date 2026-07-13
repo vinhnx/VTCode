@@ -1610,6 +1610,7 @@ async fn evaluator_failure_forces_revision_before_success() {
             1,
         )),
         text_response("Revision 1: task is complete."),
+        text_response("Revision applied. Task is complete."),
         json_response(evaluator_response_json(
             "pass",
             "All issues have been addressed.",
@@ -1709,6 +1710,7 @@ async fn evaluator_scorecard_below_threshold_forces_revision() {
             (5, 3, 5, 5),
         )),
         text_response("Revision 1: task is complete."),
+        text_response("Revision applied. Task is complete."),
         json_response(evaluator_response_json(
             "pass",
             "All issues have been addressed.",
@@ -1771,6 +1773,7 @@ async fn evaluator_missing_scorecard_forces_revision() {
             "required_tracker_updates": [],
         })),
         text_response("Revision 1: task is complete."),
+        text_response("Revision applied. Task is complete."),
         json_response(evaluator_response_json(
             "pass",
             "All issues have been addressed.",
@@ -1831,6 +1834,7 @@ async fn evaluator_out_of_range_scorecard_forces_revision() {
             (5, 9, 5, 5),
         )),
         text_response("Revision 1: task is complete."),
+        text_response("Revision applied. Task is complete."),
         json_response(evaluator_response_json(
             "pass",
             "All issues have been addressed.",
@@ -1887,6 +1891,7 @@ async fn evaluator_exhaustion_writes_blocked_handoff_with_artifact_paths() {
             1,
         )),
         text_response("Revision 1: task is complete."),
+        text_response("Revision applied. Task is complete."),
         json_response(evaluator_response_json(
             "fail",
             "Second evaluator rejection.",

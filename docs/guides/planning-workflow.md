@@ -83,11 +83,27 @@ Only `Next open decision` is used as the explicit reopen marker for follow-up pl
 
 ## Review Gate
 
-After a plan is ready, the execution confirmation should use this 3-way gate:
+After a plan is ready, a confirmation popup presents a structured summary (phases/steps
+checklist, or the raw plan when the structured data is absent) and a decision gate. The
+default selection for a complete draft is **Auto-accept**; for a draft still missing
+required content it is **Edit plan**.
 
-1. Yes, auto-review permissions where configured
-2. Yes, manually approve permission prompts
-3. Type feedback to revise the plan
+Approval options:
+
+- **Execute** — approve and execute the plan on the current primary agent with per-step
+  HITL permission confirmations.
+- **Auto-accept** — approve and auto-execute the plan on the current primary agent
+  (skip per-step confirmations). This is the default for a complete draft.
+- **Switch to build agent** — hand the plan off to the `build` primary agent and execute
+  it with per-step HITL confirmations (manual edit approvals).
+- **Switch to auto agent** — hand the plan off to the `auto` primary agent and
+  auto-execute the plan (skip per-step confirmations).
+- **Edit plan** — return to the planning workflow to revise (type `/edit` or select it).
+- **Cancel** — discard the plan without executing.
+
+Handoff options perform a true primary-agent switch: the chosen agent becomes active and
+executes the approved plan. `finish_planning` is invoked either way, disabling planning
+mode and enabling mutating tools.
 
 ## Best Practices
 

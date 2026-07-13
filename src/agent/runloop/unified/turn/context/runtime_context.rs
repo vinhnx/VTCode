@@ -23,6 +23,9 @@ pub(crate) enum TurnProcessingResult {
 pub(crate) enum TurnHandlerOutcome {
     Continue,
     Break(TurnLoopResult),
+    /// Switch the active primary agent to the named agent and continue the
+    /// session. Used by the plan-mode "switch to build/auto agent" gate.
+    SwitchPrimaryAgent(String),
 }
 
 pub(crate) struct TurnOutcomeContext<'a> {

@@ -9,6 +9,7 @@
 use serde_json::Value;
 use vtcode_core::config::constants::tools;
 use vtcode_core::llm::provider as uni;
+use vtcode_core::retry::{RetryPolicy, RetryPolicyCoreExt};
 use vtcode_core::tools::handlers::planning_workflow::{
     PlanningWorkflowState, validate_plan_content,
 };
@@ -138,6 +139,38 @@ fn interview_need_state(
     }
 }
 
+/// Synthesize the planning-workflow interview arguments, retrying transient
+/// (network / 5xx / timeout / rate-limit) provider errors before giving up.
+///
+/// The interview-argument synthesis LLM call previously had no retry of its
+/// own, so a single transient network blip could abort plan mode entirely. We
+/// now retry with the canonical [`RetryPolicy`] backoff. If every attempt
+/// fails we surface the error to the caller, which falls back to an adaptive
+/// interview rather than dead-ending the planning session.
+async fn synthesize_interview_args_with_retry(
+    provider_client: &mut Box<dyn uni::LLMProvider>,
+    request: uni::LLMRequest,
+) -> anyhow::Result<uni::LLMResponse> {
+    let policy = RetryPolicy::default();
+    let mut attempt: u32 = 0;
+    loop {
+        match provider_client.generate(request.clone()).await {
+            Ok(response) => return Ok(response),
+            Err(err) => {
+                let anyhow_err = anyhow::Error::new(err);
+                let decision = policy.decision_for_anyhow(&anyhow_err, attempt, None);
+                if !decision.retryable {
+                    return Err(anyhow_err);
+                }
+                if let Some(delay) = decision.delay {
+                    tokio::time::sleep(delay).await;
+                }
+                attempt = attempt.saturating_add(1);
+            }
+        }
+    }
+}
+
 pub(crate) async fn synthesize_planning_workflow_interview_args(
     provider_client: &mut Box<dyn uni::LLMProvider>,
     active_model: &str,
@@ -197,13 +230,12 @@ Return JSON only.",
         ..Default::default()
     };
 
-    let generated = provider_client
-        .generate(request)
+    let generated = synthesize_interview_args_with_retry(provider_client, request)
         .await
         .inspect_err(|err| {
             tracing::warn!(
                 error = %err,
-                "Interview synthesis LLM call failed; falling back to adaptive interview"
+                "Interview-arg synthesis failed; falling back to adaptive interview"
             );
         })
         .ok()

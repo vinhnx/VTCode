@@ -98,6 +98,16 @@ When enabled, `vtcode exec --full-auto` writes a small set of working artefacts 
 
 This keeps long-running work resumable and makes evaluator-driven revision rounds explicit instead of relying on the generator to judge itself.
 
+Each revision round follows a fixed LLM-call lifecycle:
+
+1. **Planner** expands the task into a spec, contract, feature list, and tracker.
+2. **Build** executes the tracker (may issue multiple turns, including tool calls, until it signals completion).
+3. **Evaluator** judges the candidate and returns a verdict.
+4. On rejection, a **Replanner** rewrites the spec/contract/tracker from evaluator feedback.
+5. The **Build** phase runs again (its own completion-signaling turn) before the **Evaluator** re-runs.
+
+A round is exhausted once `max_revision_rounds` replans have been attempted; the run then writes a blocked-handoff artifact instead of silently accepting the candidate. Because the build phase must complete (produce a completion-signaling response) before re-evaluation, every revision round consumes at least one additional build turn — test mocks must queue a completion response after each replanner turn.
+
 ## Regression Testing
 
 For long-running automation, use the `vtcode-eval` crate to build a regression

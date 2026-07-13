@@ -72,6 +72,10 @@ pub enum InlineListSelection {
     PlanApprovalEditPlan,
     /// Auto-accept all future plans in this session.
     PlanApprovalAutoAccept,
+    /// Hand off to the build primary agent and execute the plan.
+    PlanApprovalSwitchBuild,
+    /// Hand off to the auto primary agent (auto-execute with per-step HITL).
+    PlanApprovalSwitchAuto,
 }
 
 /// A selectable item inside a list overlay.

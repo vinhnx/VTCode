@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 use tokio::sync::Notify;
+use vtcode_config::{builtin_primary_auto_agent, builtin_primary_build_agent};
 use vtcode_core::config::constants::tools;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::core::interfaces::session::PlanningEntrySource;
@@ -241,6 +242,24 @@ pub(super) async fn handle_finish_planning(
     Some(ToolPipelineOutcome::from_status(tool_result))
 }
 
+/// Map a plan-confirmation outcome to the primary-agent name the turn loop
+/// should hand off to, if any.
+///
+/// `SwitchBuild`/`SwitchAuto` request a real primary-agent switch (the chosen
+/// agent executes the plan); every other outcome keeps the current agent. Kept
+/// as a pure function so the `pending_primary_agent` threading decision is
+/// unit-testable without a full [`RunLoopContext`].
+fn plan_confirmation_outcome_to_pending_agent(outcome: &PlanConfirmationOutcome) -> Option<String> {
+    match outcome {
+        PlanConfirmationOutcome::SwitchBuild => Some(builtin_primary_build_agent().name),
+        PlanConfirmationOutcome::SwitchAuto => Some(builtin_primary_auto_agent().name),
+        PlanConfirmationOutcome::Execute
+        | PlanConfirmationOutcome::AutoAccept
+        | PlanConfirmationOutcome::EditPlan
+        | PlanConfirmationOutcome::Cancel => None,
+    }
+}
+
 async fn handle_pending_confirmation(
     ctx: &mut RunLoopContext<'_>,
     output: &Value,
@@ -262,49 +281,77 @@ async fn handle_pending_confirmation(
     )
     .await;
 
-    let final_output = match confirmation_outcome {
+    let (final_output, agent_switch) = match confirmation_outcome {
         Ok(outcome) => {
-            if matches!(
-                outcome,
-                PlanConfirmationOutcome::Execute | PlanConfirmationOutcome::AutoAccept
-            ) {
-                finish_planning_workflow(ctx.tool_registry, ctx.plan_session, ctx.handle, true)
-                    .await;
-                ctx.handle
-                    .set_skip_confirmations(matches!(outcome, PlanConfirmationOutcome::AutoAccept));
-                tracing::info!(
-                    target: "vtcode.planning_workflow",
-                    "User approved plan execution, transitioning to coder profile (mutating tools enabled)"
-                );
-            } else if matches!(outcome, PlanConfirmationOutcome::EditPlan) {
-                ctx.tool_registry
-                    .set_planning_phase(PlanLifecyclePhase::DraftReady);
-                tracing::info!(
-                    target: "vtcode.planning_workflow",
-                    "User requested plan edit, remaining in Planning workflow"
-                );
-            } else {
-                ctx.tool_registry
-                    .set_planning_phase(PlanLifecyclePhase::DraftReady);
-            }
-            plan_confirmation_outcome_to_json(&outcome)
+            let switch = match outcome {
+                PlanConfirmationOutcome::Execute | PlanConfirmationOutcome::AutoAccept => {
+                    finish_planning_workflow(ctx.tool_registry, ctx.plan_session, ctx.handle, true)
+                        .await;
+                    ctx.handle.set_skip_confirmations(matches!(
+                        outcome,
+                        PlanConfirmationOutcome::AutoAccept
+                    ));
+                    tracing::info!(
+                        target: "vtcode.planning_workflow",
+                        "User approved plan execution, transitioning to coder profile (mutating tools enabled)"
+                    );
+                    None
+                }
+                PlanConfirmationOutcome::SwitchBuild | PlanConfirmationOutcome::SwitchAuto => {
+                    finish_planning_workflow(ctx.tool_registry, ctx.plan_session, ctx.handle, true)
+                        .await;
+                    // Build agent executes with per-step HITL (manual edit
+                    // approvals); the auto agent auto-executes the plan.
+                    ctx.handle.set_skip_confirmations(matches!(
+                        outcome,
+                        PlanConfirmationOutcome::SwitchAuto
+                    ));
+                    tracing::info!(
+                        target: "vtcode.planning_workflow",
+                        agent = plan_confirmation_outcome_to_pending_agent(&outcome)
+                            .unwrap_or_default(),
+                        "User handed plan off to a primary agent; switching primary agent"
+                    );
+                    plan_confirmation_outcome_to_pending_agent(&outcome)
+                }
+                PlanConfirmationOutcome::EditPlan => {
+                    ctx.tool_registry
+                        .set_planning_phase(PlanLifecyclePhase::DraftReady);
+                    tracing::info!(
+                        target: "vtcode.planning_workflow",
+                        "User requested plan edit, remaining in Planning workflow"
+                    );
+                    None
+                }
+                PlanConfirmationOutcome::Cancel => {
+                    ctx.tool_registry
+                        .set_planning_phase(PlanLifecyclePhase::DraftReady);
+                    None
+                }
+            };
+            (plan_confirmation_outcome_to_json(&outcome), switch)
         }
         Err(e) => {
             ctx.tool_registry
                 .set_planning_phase(PlanLifecyclePhase::DraftReady);
-            serde_json::json!({
-                "status": "error",
-                "error": format!("Plan confirmation failed: {}", e)
-            })
+            (
+                serde_json::json!({
+                    "status": "error",
+                    "error": format!("Plan confirmation failed: {}", e)
+                }),
+                None,
+            )
         }
     };
 
-    ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
+    let mut final_outcome = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
         output: final_output,
         stdout: None,
         modified_files: vec![],
         command_success: true,
-    })
+    });
+    final_outcome.pending_primary_agent = agent_switch;
+    final_outcome
 }
 
 fn build_plan_content(output: &Value) -> PlanContent {
@@ -481,7 +528,7 @@ fn build_start_planning_lines(output: &Value) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{FinishPlanningDisposition, finish_planning_disposition};
+    use super::*;
 
     #[test]
     fn finish_planning_requires_pending_confirmation_to_auto_accept() {
@@ -504,6 +551,36 @@ mod tests {
         assert_eq!(
             finish_planning_disposition(Some("pending_confirmation"), true, true),
             FinishPlanningDisposition::ConfirmReview
+        );
+    }
+
+    #[test]
+    fn switch_outcomes_request_primary_agent_handoff() {
+        // Switch outcomes request a real primary-agent handoff; every other
+        // outcome keeps the current agent (no pending switch).
+        assert_eq!(
+            plan_confirmation_outcome_to_pending_agent(&PlanConfirmationOutcome::SwitchBuild),
+            Some(builtin_primary_build_agent().name)
+        );
+        assert_eq!(
+            plan_confirmation_outcome_to_pending_agent(&PlanConfirmationOutcome::SwitchAuto),
+            Some(builtin_primary_auto_agent().name)
+        );
+        assert_eq!(
+            plan_confirmation_outcome_to_pending_agent(&PlanConfirmationOutcome::Execute),
+            None
+        );
+        assert_eq!(
+            plan_confirmation_outcome_to_pending_agent(&PlanConfirmationOutcome::AutoAccept),
+            None
+        );
+        assert_eq!(
+            plan_confirmation_outcome_to_pending_agent(&PlanConfirmationOutcome::EditPlan),
+            None
+        );
+        assert_eq!(
+            plan_confirmation_outcome_to_pending_agent(&PlanConfirmationOutcome::Cancel),
+            None
         );
     }
 }

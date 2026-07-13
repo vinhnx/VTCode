@@ -211,6 +211,7 @@ mod tests {
         let outcome = TurnLoopOutcome {
             result: TurnLoopResult::Completed,
             turn_modified_files: BTreeSet::new(),
+            pending_primary_agent: None,
         };
         conversation_history.push(uni::Message::assistant("done".to_string()));
 
@@ -252,6 +253,7 @@ mod tests {
         let outcome = TurnLoopOutcome {
             result: TurnLoopResult::Cancelled,
             turn_modified_files: BTreeSet::new(),
+            pending_primary_agent: None,
         };
 
         apply_turn_outcome(
@@ -292,6 +294,7 @@ mod tests {
         let outcome = TurnLoopOutcome {
             result: TurnLoopResult::Completed,
             turn_modified_files: BTreeSet::new(),
+            pending_primary_agent: None,
         };
         conversation_history.push(uni::Message::assistant("done".to_string()));
 

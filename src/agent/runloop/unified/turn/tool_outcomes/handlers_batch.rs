@@ -246,6 +246,11 @@ async fn execute_parallel_group<'a, 'b>(
                     TurnHandlerOutcome::Continue => {
                         anyhow::bail!("Unexpected Continue outcome in break-matched handler")
                     }
+                    TurnHandlerOutcome::SwitchPrimaryAgent(_) => {
+                        anyhow::bail!(
+                            "Unexpected SwitchPrimaryAgent outcome in break-matched handler"
+                        )
+                    }
                 };
                 return Ok(Some(
                     interrupt_parallel_group(
