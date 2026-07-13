@@ -3,11 +3,12 @@ use super::post_tool_recovery::prepare_post_tool_tool_free_recovery;
 use super::post_tool_recovery::{ensure_post_tool_resume_directive, has_tool_response_since};
 use super::{
     HarnessUsage, PLANNING_RECOVERY_SYNTHESIS_FALLBACK, POST_TOOL_RECOVERY_REASON,
-    POST_TOOL_RESUME_DIRECTIVE, PostToolFailureRecovery, RECOVERY_CONTRACT_VIOLATION_REASON,
-    RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER, accumulate_turn_usage,
-    count_assistant_text_responses_for_guard, count_assistant_text_responses_in_turn,
-    has_turn_usage, maybe_recover_after_post_tool_llm_failure,
-    normalize_tool_free_recovery_break_outcome, run_turn_loop,
+    POST_TOOL_RECOVERY_REASON_PLAN_MODE, POST_TOOL_RESUME_DIRECTIVE, PostToolFailureRecovery,
+    RECOVERY_CONTRACT_VIOLATION_REASON, RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER,
+    accumulate_turn_usage, count_assistant_text_responses_for_guard,
+    count_assistant_text_responses_in_turn, has_turn_usage,
+    maybe_recover_after_post_tool_llm_failure, normalize_tool_free_recovery_break_outcome,
+    run_turn_loop,
 };
 use crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState;
 use crate::agent::runloop::unified::turn::context::TurnLoopResult;
@@ -129,6 +130,7 @@ fn retryable_post_tool_follow_up_failure_schedules_tool_free_recovery_once() {
         1,
         "streaming",
         true,
+        false,
     )
     .expect("recovery should succeed");
     assert_eq!(action, PostToolFailureRecovery::RetryToolFree);
@@ -141,6 +143,7 @@ fn retryable_post_tool_follow_up_failure_schedules_tool_free_recovery_once() {
         1,
         "streaming",
         true,
+        false,
     )
     .expect("repeat recovery should succeed");
     assert_eq!(action_again, PostToolFailureRecovery::RetryToolFree);
@@ -167,6 +170,55 @@ fn retryable_post_tool_follow_up_failure_schedules_tool_free_recovery_once() {
 }
 
 #[test]
+fn plan_mode_recovery_uses_plan_aware_directive() {
+    // In plan mode the tool-free recovery pass must inject the plan-aware
+    // reason (which demands a `<proposed_plan>` from gathered research) instead
+    // of the generic "respond with text" reason — otherwise the model treats
+    // the pass as another research step and emits `<invoke>` tool-call markup
+    // instead of finalizing the plan (checkpoints turn_648 / turn_650).
+    let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+    let handle = InlineHandle::new_for_tests(tx);
+    let mut renderer = AnsiRenderer::with_inline_ui(handle, Default::default());
+    let mut history = vec![
+        uni::Message::user("plan launch-time optimization".to_string()),
+        uni::Message::assistant("".to_string()),
+        uni::Message::tool_response("call_1".to_string(), "{\"ok\":true}".to_string()),
+    ];
+
+    let action = maybe_recover_after_post_tool_llm_failure(
+        &mut renderer,
+        &mut history,
+        &anyhow!("Network error"),
+        2,
+        1,
+        "streaming",
+        true,
+        true,
+    )
+    .expect("recovery should succeed");
+    assert_eq!(action, PostToolFailureRecovery::RetryToolFree);
+
+    let plan_directive_count = history
+        .iter()
+        .filter(|message| {
+            message.role == uni::MessageRole::System
+                && message.content.as_text() == POST_TOOL_RECOVERY_REASON_PLAN_MODE
+        })
+        .count();
+    assert_eq!(plan_directive_count, 1);
+
+    // The generic reason must NOT be injected in plan mode.
+    let generic_directive_count = history
+        .iter()
+        .filter(|message| {
+            message.role == uni::MessageRole::System
+                && message.content.as_text() == POST_TOOL_RECOVERY_REASON
+        })
+        .count();
+    assert_eq!(generic_directive_count, 0);
+}
+
+#[test]
 fn retryable_post_tool_follow_up_failure_stops_after_recovery_pass_is_spent() {
     let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
     let handle = InlineHandle::new_for_tests(tx);
@@ -184,6 +236,7 @@ fn retryable_post_tool_follow_up_failure_stops_after_recovery_pass_is_spent() {
         2,
         1,
         "streaming",
+        false,
         false,
     )
     .expect("recovery classification should succeed");
@@ -245,6 +298,7 @@ fn post_tool_follow_up_failure_chain_consumes_tool_free_recovery_pass() {
         1,
         "execute_llm_request",
         true,
+        false,
     )
     .expect("recovery classification should succeed");
     assert_eq!(action, PostToolFailureRecovery::RetryToolFree);

@@ -7,8 +7,8 @@ use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::{
     MAX_POST_TOOL_RECOVERY_CYCLES, PLANNING_RECOVERY_SYNTHESIS_FALLBACK, POST_TOOL_RECOVERY_REASON,
-    POST_TOOL_RESUME_DIRECTIVE, RECOVERY_CONTRACT_VIOLATION_REASON,
-    RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER,
+    POST_TOOL_RECOVERY_REASON_PLAN_MODE, POST_TOOL_RESUME_DIRECTIVE,
+    RECOVERY_CONTRACT_VIOLATION_REASON, RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER,
 };
 use crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState;
 use crate::agent::runloop::unified::run_loop_context::HarnessTurnState;
@@ -63,6 +63,7 @@ pub(super) fn maybe_recover_after_post_tool_llm_failure(
     turn_history_start_len: usize,
     failure_stage: &'static str,
     allow_tool_free_retry: bool,
+    planning_active: bool,
 ) -> Result<PostToolFailureRecovery> {
     let has_partial_tool_progress =
         has_tool_response_since(working_history, turn_history_start_len);
@@ -95,8 +96,15 @@ pub(super) fn maybe_recover_after_post_tool_llm_failure(
     let action = if should_retry {
         // Tool-free recovery: inject only the tools-disabled recovery reason.
         // The resume directive would contradict it (see
-        // `prepare_post_tool_tool_free_recovery`).
-        prepare_post_tool_tool_free_recovery(working_history, POST_TOOL_RECOVERY_REASON);
+        // `prepare_post_tool_tool_free_recovery`). In plan mode use the
+        // plan-aware reason so the model finalizes the `<proposed_plan>` from
+        // gathered research instead of re-attempting tool calls.
+        let reason = if planning_active {
+            POST_TOOL_RECOVERY_REASON_PLAN_MODE
+        } else {
+            POST_TOOL_RECOVERY_REASON
+        };
+        prepare_post_tool_tool_free_recovery(working_history, reason);
         renderer.line(
             MessageStyle::Info,
             "[!] Follow-up failed after tool execution; scheduling a final tool-free recovery pass.",
@@ -368,6 +376,7 @@ pub(super) fn dispatch_post_tool_failure(
         stage,
         tool_free_recovery,
     } = ctx;
+    let planning_active = plan_session.is_some();
     // Plan-mode: if this turn's tool wall-clock budget was exhausted, the
     // planning context is saturated — the model spent the entire budget on
     // research and the synthesis still failed. Mark the session
@@ -390,6 +399,7 @@ pub(super) fn dispatch_post_tool_failure(
         turn_history_start_len,
         stage,
         !tool_free_recovery,
+        planning_active,
     )?;
 
     match recovery {

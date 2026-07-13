@@ -140,6 +140,18 @@ const RECOVERY_TOOL_CALL_RETRY_DIRECTIVE: &str = "Recovery: tools are disabled, 
      attempt included tool-call or function-call markup; summarize the findings from \
      the tool outputs already in history as a final answer, without any <tool_call>, \
      <function=...>, or other tool-call syntax.";
+/// Plan-mode variant of [`POST_TOOL_RECOVERY_REASON`]. In plan mode the agent
+/// must emit the `<proposed_plan>` from the research already gathered, not start
+/// more research — so the recovery reason names the plan format explicitly.
+/// Without this, the model treats the tool-free recovery pass as another
+/// research step and emits `<invoke>`/`<tool_call>` markup instead of a plan
+/// (observed in checkpoints turn_648 and turn_650).
+const POST_TOOL_RECOVERY_REASON_PLAN_MODE: &str = "Planning research completed, but the final plan synthesis failed (transient provider error). Tools are disabled. Produce the `<proposed_plan>` NOW from the context and tool outputs already in this conversation: keep each step to a single line (`Action -> files/symbols -> verify:`), prefer file:symbol references, and do NOT emit any tool calls or tool-call markup.";
+/// Plan-mode variant of [`RECOVERY_TOOL_CALL_RETRY_DIRECTIVE`]. The generic
+/// directive only says \"respond with plain text\"; in plan mode the agent must
+/// instead finalize the `<proposed_plan>` from gathered research, otherwise it
+/// loops emitting `<invoke>` research calls during the tool-free recovery pass.
+const RECOVERY_TOOL_CALL_RETRY_DIRECTIVE_PLAN_MODE: &str = "Recovery: in plan mode, tools are disabled and you must finalize the plan. Emit ONLY the `<proposed_plan>` now from the research already gathered in this conversation — each step on a single line (`Action -> files/symbols -> verify:`), no prose, no tool calls, and no `<tool_call>`/`<invoke>`/`<function=...>` markup.";
 
 /// Count how many assistant text responses the model has emitted in this
 /// turn so far.  Used by the anti-runaway guard to short-circuit when the
@@ -502,7 +514,14 @@ pub(crate) async fn run_turn_loop(
             break;
         }
 
-        if maybe_handle_planning_exit_trigger(&mut ctx, working_history, step_count).await? {
+        if maybe_handle_planning_exit_trigger(
+            &mut ctx,
+            working_history,
+            step_count,
+            &mut pending_primary_agent,
+        )
+        .await?
+        {
             break;
         }
 
@@ -939,11 +958,14 @@ pub(crate) async fn run_turn_loop(
                 .is_some_and(|tc| !tc.is_empty())
             && turn_processing_ctx.recovery_retry_count() < MAX_RECOVERY_RETRIES
         {
+            let directive = if turn_processing_ctx.is_planning_active() {
+                RECOVERY_TOOL_CALL_RETRY_DIRECTIVE_PLAN_MODE
+            } else {
+                RECOVERY_TOOL_CALL_RETRY_DIRECTIVE
+            };
             turn_processing_ctx
                 .working_history
-                .push(uni::Message::system(
-                    RECOVERY_TOOL_CALL_RETRY_DIRECTIVE.to_string(),
-                ));
+                .push(uni::Message::system(directive.to_string()));
             turn_processing_ctx.retry_recovery_pass();
             continue;
         }
@@ -1087,9 +1109,12 @@ pub(crate) async fn run_turn_loop(
                         max = MAX_RECOVERY_RETRIES,
                         "Recovery contract violation; retrying tool-free synthesis pass"
                     );
-                    working_history.push(uni::Message::system(
-                        RECOVERY_TOOL_CALL_RETRY_DIRECTIVE.to_string(),
-                    ));
+                    let directive = if ctx.is_planning_active() {
+                        RECOVERY_TOOL_CALL_RETRY_DIRECTIVE_PLAN_MODE
+                    } else {
+                        RECOVERY_TOOL_CALL_RETRY_DIRECTIVE
+                    };
+                    working_history.push(uni::Message::system(directive.to_string()));
                     continue;
                 }
                 // Wall-clock-exhausted planning turns must finalize instead of

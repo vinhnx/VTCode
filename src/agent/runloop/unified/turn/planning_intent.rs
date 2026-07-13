@@ -56,6 +56,14 @@ pub(crate) fn detect_planning_intent(
         return PlanningIntent::ExitAndImplement;
     }
 
+    // Priority 2.5: Explicit plan-approval words/phrases ("approve", "lgtm",
+    // "ship it", ...). These must be recognized so a user typing "approve"
+    // triggers `finish_planning` (and the HITL confirmation) instead of the
+    // model self-approving by mutating the plan file and staying in plan mode.
+    if is_approval_phrase(&normalized) {
+        return PlanningIntent::ExitAndImplement;
+    }
+
     // Priority 3: Exit trigger phrases (longer phrases).
     if is_exit_trigger_phrase(&normalized) {
         return PlanningIntent::ExitAndImplement;
@@ -179,6 +187,8 @@ fn is_direct_exit_command(trimmed: &str) -> bool {
         "yes",
         "go",
         "start",
+        "approve",
+        "approved",
         "implement now",
         "start implementing",
         "start implementation",
@@ -190,6 +200,31 @@ fn is_direct_exit_command(trimmed: &str) -> bool {
         "exit planning workflow and implement",
     ];
     direct_commands.contains(&trimmed)
+}
+
+/// Check if text expresses explicit plan approval.
+///
+/// Uses whole-word token matching for single approval words (so "disapprove"
+/// does NOT match "approve") plus a small set of multi-word approval phrases.
+fn is_approval_phrase(normalized: &str) -> bool {
+    let approval_words = ["approve", "approved", "lgtm", "accepted", "accept"];
+    if normalized
+        .split_whitespace()
+        .any(|w| approval_words.contains(&w))
+    {
+        return true;
+    }
+
+    let approval_phrases = [
+        "approve the plan",
+        "approve this plan",
+        "approve the proposed plan",
+        "looks good",
+        "ship it",
+        "accept the plan",
+        "accept this plan",
+    ];
+    approval_phrases.iter().any(|p| normalized.contains(p))
 }
 
 /// Check if text contains an exit trigger phrase.
@@ -302,6 +337,38 @@ mod tests {
         assert_eq!(
             detect_planning_intent("continue", false),
             PlanningIntent::None
+        );
+    }
+
+    #[test]
+    fn detects_approve_as_exit_intent() {
+        assert_eq!(
+            detect_planning_intent("approve", false),
+            PlanningIntent::ExitAndImplement
+        );
+        assert_eq!(
+            detect_planning_intent("approved", false),
+            PlanningIntent::ExitAndImplement
+        );
+        assert_eq!(
+            detect_planning_intent("approve the plan", false),
+            PlanningIntent::ExitAndImplement
+        );
+        assert_eq!(
+            detect_planning_intent("lgtm", false),
+            PlanningIntent::ExitAndImplement
+        );
+        assert_eq!(
+            detect_planning_intent("looks good, let's go", false),
+            PlanningIntent::ExitAndImplement
+        );
+    }
+
+    #[test]
+    fn disapprove_is_not_exit_intent() {
+        assert_eq!(
+            detect_planning_intent("I disapprove, keep planning", false),
+            PlanningIntent::StayInPlanning
         );
     }
 

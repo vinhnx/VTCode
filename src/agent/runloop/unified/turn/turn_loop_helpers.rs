@@ -343,6 +343,7 @@ pub(super) async fn maybe_handle_planning_exit_trigger(
     ctx: &mut TurnLoopContext<'_>,
     working_history: &mut Vec<uni::Message>,
     step_count: usize,
+    pending_primary_agent: &mut Option<String>,
 ) -> Result<bool> {
     if !ctx.is_planning_active() {
         return Ok(false);
@@ -440,6 +441,14 @@ pub(super) async fn maybe_handle_planning_exit_trigger(
                     Some(tool_names::FINISH_PLANNING),
                     serde_json::to_string(output).unwrap_or_else(|_| "{}".to_string()),
                 );
+            }
+
+            // Propagate a plan-mode agent handoff (SwitchBuild/SwitchAuto from the
+            // HITL confirmation) so the interaction loop actually switches the
+            // active agent instead of silently staying in plan mode. This field
+            // was previously discarded because the function only returned a bool.
+            if let Some(agent) = pipe_outcome.pending_primary_agent.clone() {
+                *pending_primary_agent = Some(agent);
             }
 
             if !planning_fully_disabled(ctx) {
