@@ -18,6 +18,7 @@ impl ToolRegistry {
         let was_active = self.planning_workflow_state.is_active();
         self.planning_workflow_state.enable();
         if !was_active {
+            *self.cached_available_tools.write() = None;
             // Invalidate the tool catalog cache so the next snapshot reflects the
             // planning-workflow-filtered tool set rather than serving a stale pre-transition entry.
             self.tool_catalog_state
@@ -30,6 +31,7 @@ impl ToolRegistry {
         let was_active = self.planning_workflow_state.is_active();
         self.planning_workflow_state.disable();
         if was_active {
+            *self.cached_available_tools.write() = None;
             // Invalidate the catalog cache so mutating tools reappear immediately.
             self.tool_catalog_state
                 .note_explicit_refresh("planning_workflow_disabled");
@@ -68,6 +70,7 @@ impl ToolRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::constants::tools;
     use crate::tools::handlers::PlanLifecyclePhase;
     use tempfile::TempDir;
 
@@ -107,5 +110,25 @@ mod tests {
             "enabling an already-active planning workflow must not bump the epoch"
         );
         assert!(registry.is_planning_active());
+    }
+
+    #[tokio::test]
+    async fn planning_transitions_invalidate_available_tools() {
+        let temp_dir = TempDir::new().expect("tempdir");
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+
+        let inactive = registry.available_tools().await;
+        assert!(!inactive.contains(&tools::CODE_SEARCH.to_string()));
+        assert!(!inactive.contains(&tools::REQUEST_USER_INPUT.to_string()));
+
+        registry.enable_planning();
+        let active = registry.available_tools().await;
+        assert!(active.contains(&tools::CODE_SEARCH.to_string()));
+        assert!(active.contains(&tools::REQUEST_USER_INPUT.to_string()));
+
+        registry.disable_planning();
+        let inactive_again = registry.available_tools().await;
+        assert!(!inactive_again.contains(&tools::CODE_SEARCH.to_string()));
+        assert!(!inactive_again.contains(&tools::REQUEST_USER_INPUT.to_string()));
     }
 }

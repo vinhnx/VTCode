@@ -262,7 +262,7 @@ pub(crate) async fn initialize_session(
 
     let tools = Arc::new(RwLock::new(
         tool_registry
-            .model_tools(interactive_session_tools_config(
+            .model_tools(interactive_session_base_tools_config(
                 &config.model,
                 vt_cfg,
                 tool_documentation_mode,
@@ -302,6 +302,7 @@ pub(crate) async fn initialize_session(
             tool_documentation_mode,
             deferred_tool_policy.clone(),
             anthropic_native_memory_enabled,
+            tool_registry.is_planning_active(),
         );
         tool_registry
             .enable_full_auto_permission_for_session(
@@ -639,7 +640,7 @@ pub(crate) async fn refresh_tool_snapshot(
         vt_cfg,
     );
     let next = tool_registry
-        .model_tools(interactive_session_tools_config(
+        .model_tools(interactive_session_base_tools_config(
             &config.model,
             vt_cfg,
             tool_documentation_mode,
@@ -656,6 +657,7 @@ fn interactive_session_tools_config(
     tool_documentation_mode: vtcode_core::config::ToolDocumentationMode,
     deferred_tool_policy: DeferredToolPolicy,
     anthropic_native_memory_enabled: bool,
+    planning_active: bool,
 ) -> SessionToolsConfig {
     SessionToolsConfig::full_public(
         SessionSurface::Interactive,
@@ -663,9 +665,29 @@ fn interactive_session_tools_config(
         tool_documentation_mode,
         ToolModelCapabilities::for_model_name(model),
     )
+    .with_planning_active(planning_active)
     .with_deferred_tool_policy(deferred_tool_policy)
     .with_anthropic_native_memory_enabled(anthropic_native_memory_enabled)
     .with_tool_profile(vt_cfg.map(|cfg| cfg.tools.profile).unwrap_or_default())
+}
+
+fn interactive_session_base_tools_config(
+    model: &str,
+    vt_cfg: Option<&VTCodeConfig>,
+    tool_documentation_mode: vtcode_core::config::ToolDocumentationMode,
+    deferred_tool_policy: DeferredToolPolicy,
+    anthropic_native_memory_enabled: bool,
+) -> SessionToolsConfig {
+    // The attached list is a stable superset. Each turn filters it with the
+    // registry's current planning state before exposing tools to the model.
+    interactive_session_tools_config(
+        model,
+        vt_cfg,
+        tool_documentation_mode,
+        deferred_tool_policy,
+        anthropic_native_memory_enabled,
+        true,
+    )
 }
 
 async fn maybe_attach_mcp_client(
@@ -738,6 +760,7 @@ mod tests {
                 vtcode_core::config::ToolDocumentationMode::default(),
                 DeferredToolPolicy::default(),
                 false,
+                registry.is_planning_active(),
             ))
             .await;
         let default_tools = registry
@@ -747,6 +770,7 @@ mod tests {
                 vtcode_core::config::ToolDocumentationMode::default(),
                 DeferredToolPolicy::default(),
                 false,
+                registry.is_planning_active(),
             ))
             .await;
 
@@ -759,6 +783,47 @@ mod tests {
             default_tools
                 .iter()
                 .all(|tool| tool.function_name() != tools::CODE_SEARCH)
+        );
+    }
+
+    #[tokio::test]
+    async fn planning_transition_exposes_planning_tools_from_attached_base() {
+        let temp = TempDir::new().expect("temp dir");
+        let registry = ToolRegistry::new(temp.path().to_path_buf()).await;
+        let base_tools = Arc::new(RwLock::new(
+            registry
+                .model_tools(interactive_session_base_tools_config(
+                    "gpt-5",
+                    None,
+                    vtcode_core::config::ToolDocumentationMode::default(),
+                    DeferredToolPolicy::default(),
+                    false,
+                ))
+                .await,
+        ));
+        let tool_catalog = registry.tool_catalog_state();
+
+        let inactive = tool_catalog
+            .filtered_snapshot_with_stats(&base_tools, registry.is_planning_active(), false)
+            .await;
+        let inactive_names = inactive.active_tool_names.as_ref();
+        assert!(!inactive_names.iter().any(|name| name == tools::CODE_SEARCH));
+        assert!(
+            !inactive_names
+                .iter()
+                .any(|name| name == tools::REQUEST_USER_INPUT)
+        );
+
+        registry.enable_planning();
+        let active = tool_catalog
+            .filtered_snapshot_with_stats(&base_tools, registry.is_planning_active(), true)
+            .await;
+        let active_names = active.active_tool_names.as_ref();
+        assert!(active_names.iter().any(|name| name == tools::CODE_SEARCH));
+        assert!(
+            active_names
+                .iter()
+                .any(|name| name == tools::REQUEST_USER_INPUT)
         );
     }
 

@@ -30,14 +30,15 @@ impl ToolRegistry {
             .tool_assembly
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let mut names = assembly
-            .catalog()
-            .public_tool_names(SessionToolsConfig::full_public(
+        let mut names = assembly.catalog().public_tool_names(
+            SessionToolsConfig::full_public(
                 surface,
                 capability_level,
                 ToolDocumentationMode::Full,
                 ToolModelCapabilities::default(),
-            ));
+            )
+            .with_planning_active(self.is_planning_active()),
+        );
         if !self.has_subagent_controller() {
             names.retain(|name| !is_subagent_tool(name));
         }

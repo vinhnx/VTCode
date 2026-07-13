@@ -265,7 +265,7 @@ pub struct SessionToolsConfig {
 }
 
 impl SessionToolsConfig {
-    /// Creates a full public configuration with all tools visible.
+    /// Creates a public configuration for a session outside the planning workflow.
     pub fn full_public(
         surface: SessionSurface,
         capability_level: CapabilityLevel,
@@ -276,13 +276,20 @@ impl SessionToolsConfig {
             surface,
             capability_level,
             documentation_mode,
-            planning_active: true,
+            planning_active: false,
             request_user_input_enabled: true,
             model_capabilities,
             deferred_tool_policy: DeferredToolPolicy::default(),
             anthropic_native_memory_enabled: false,
             tool_profile: ToolProfile::CodexDefault,
         }
+    }
+
+    /// Marks whether the planning workflow is active.
+    #[must_use]
+    pub fn with_planning_active(mut self, planning_active: bool) -> Self {
+        self.planning_active = planning_active;
+        self
     }
 
     /// Sets the deferred tool policy.
@@ -990,12 +997,15 @@ mod tests {
         ];
 
         let catalog = SessionToolCatalog::rebuild_from_registrations(registrations);
-        let names = catalog.public_tool_names(SessionToolsConfig::full_public(
-            SessionSurface::Interactive,
-            CapabilityLevel::CodeSearch,
-            ToolDocumentationMode::Full,
-            ToolModelCapabilities::default(),
-        ));
+        let names = catalog.public_tool_names(
+            SessionToolsConfig::full_public(
+                SessionSurface::Interactive,
+                CapabilityLevel::CodeSearch,
+                ToolDocumentationMode::Full,
+                ToolModelCapabilities::default(),
+            )
+            .with_planning_active(true),
+        );
 
         assert_eq!(
             names,

@@ -150,6 +150,7 @@ impl SkillToolSessionRuntime {
                         self.tool_documentation_mode,
                         self.model_capabilities,
                     )
+                    .with_planning_active(true)
                     .with_deferred_tool_policy(self.deferred_tool_policy.clone())
                     .with_anthropic_native_memory_enabled(self.anthropic_native_memory_enabled)
                     .with_tool_profile(self.tool_profile),
@@ -1105,6 +1106,32 @@ Use `/rust-skills`.
                 .iter()
                 .any(|tool| tool.function_name() == crate::config::constants::tools::CODE_SEARCH)
         );
+    }
+
+    #[tokio::test]
+    async fn skill_refresh_retains_planning_tools_in_default_base() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let active_tools = Arc::new(RwLock::new(Vec::new()));
+        let registry = Arc::new(ToolRegistry::new(temp_dir.path().to_path_buf()).await);
+        let runtime = SkillToolSessionRuntime::new(
+            registry,
+            Some(Arc::clone(&active_tools)),
+            ToolDocumentationMode::Full,
+            ToolModelCapabilities::default(),
+            None,
+        );
+
+        runtime.refresh_tool_snapshot("test_refresh").await;
+
+        let active_tools = active_tools.read().await;
+        assert!(
+            active_tools.iter().any(|tool| {
+                tool.function_name() == crate::config::constants::tools::CODE_SEARCH
+            })
+        );
+        assert!(active_tools.iter().any(|tool| {
+            tool.function_name() == crate::config::constants::tools::REQUEST_USER_INPUT
+        }));
     }
 
     #[tokio::test]
