@@ -144,6 +144,27 @@ fn gather_files_read_this_turn(working_history: &[uni::Message]) -> Vec<String> 
     files
 }
 
+/// Plan-mode recovery fallback. When the tool-free synthesis fails, the
+/// "salvaged" text is usually just a rambling recovery monologue with tool-call
+/// markup stripped out — not a plan. Injecting that as the plan the user sees is
+/// worse than the structured plan-mode message. We only keep the salvage when it
+/// actually contains a `<proposed_plan>` (a real, if partial, plan); otherwise we
+/// fall back to the informative plan-mode message so the turn ends cleanly
+/// instead of leaking garbage into the proposed plan.
+fn plan_mode_recovery_fallback(
+    salvaged_text: Option<String>,
+    structured_message: &str,
+    working_history: &[uni::Message],
+) -> String {
+    if let Some(text) = salvaged_text
+        && text.trim().contains("<proposed_plan")
+    {
+        text
+    } else {
+        build_recovery_fallback(working_history, structured_message)
+    }
+}
+
 /// Build the deterministic recovery fallback, optionally appending the list of
 /// files already read this turn so the next turn can reuse them instead of
 /// re-exploring. `lead_in` is the provider-agnostic message shown first.
@@ -197,9 +218,8 @@ pub(super) fn complete_turn_after_failed_tool_free_recovery(
             } else {
                 super::PLANNING_RECOVERY_EXHAUSTED_FINALIZE
             };
-            let planning_fallback = salvaged_text
-                .filter(|text| !text.trim().is_empty())
-                .unwrap_or_else(|| build_recovery_fallback(working_history, finalize_message));
+            let planning_fallback =
+                plan_mode_recovery_fallback(salvaged_text, finalize_message, working_history);
             push_final_answer_if_absent(working_history, &planning_fallback);
             tracing::warn!(
                 stage = failure_stage,
@@ -210,11 +230,11 @@ pub(super) fn complete_turn_after_failed_tool_free_recovery(
             return TurnLoopResult::Completed;
         }
         plan_session.mark_interview_pending();
-        let planning_fallback = salvaged_text
-            .filter(|text| !text.trim().is_empty())
-            .unwrap_or_else(|| {
-                build_recovery_fallback(working_history, PLANNING_RECOVERY_SYNTHESIS_FALLBACK)
-            });
+        let planning_fallback = plan_mode_recovery_fallback(
+            salvaged_text,
+            PLANNING_RECOVERY_SYNTHESIS_FALLBACK,
+            working_history,
+        );
         push_final_answer_if_absent(working_history, &planning_fallback);
         tracing::warn!(
             stage = failure_stage,
@@ -597,6 +617,75 @@ mod tests {
                 .iter()
                 .any(|m| m.role == uni::MessageRole::Assistant),
             "budget-exhausted must finalize the plan with a fallback answer"
+        );
+    }
+
+    #[test]
+    fn plan_mode_recovery_rejects_garbled_tool_call_salvage() {
+        // When the tool-free synthesis fails and the only "salvage" is a
+        // rambling monologue with tool-call markup stripped out (no real
+        // plan), plan mode must NOT inject that garbage as the proposed plan.
+        let mut working_history: Vec<uni::Message> = Vec::new();
+        let mut plan_session = PlanningWorkflowSessionState::default();
+        let garbled = "I have enough to plan. <invoke name=\"unified_search\"> \
+            read more files</invoke> Here is my half-baked plan.";
+
+        let result = complete_turn_after_failed_tool_free_recovery(
+            &mut working_history,
+            "stage",
+            None,
+            Some(garbled.to_string()),
+            Some(&mut plan_session),
+        );
+
+        assert!(matches!(result, TurnLoopResult::Completed));
+        assert!(
+            plan_session.interview_pending(),
+            "non-exhausted plan failure must re-force the interview"
+        );
+        let text = working_history
+            .iter()
+            .rev()
+            .find(|m| m.role == uni::MessageRole::Assistant)
+            .expect("a final answer must be pushed")
+            .content
+            .as_text();
+        assert!(
+            text.contains("final synthesis failed"),
+            "plan-mode fallback must be the structured message, not garbled salvage: {text}"
+        );
+        assert!(
+            !text.contains("unified_search"),
+            "garbled tool-call salvage must not leak into the plan: {text}"
+        );
+    }
+
+    #[test]
+    fn plan_mode_recovery_keeps_partial_proposed_plan_salvage() {
+        // A real (if partial) proposed plan in the salvage is worth keeping.
+        let mut working_history: Vec<uni::Message> = Vec::new();
+        let mut plan_session = PlanningWorkflowSessionState::default();
+        let partial_plan = "<proposed_plan>\n- Action: add caching -> src/cache.rs\n  verify: cargo test\n</proposed_plan>";
+
+        let result = complete_turn_after_failed_tool_free_recovery(
+            &mut working_history,
+            "stage",
+            None,
+            Some(partial_plan.to_string()),
+            Some(&mut plan_session),
+        );
+
+        assert!(matches!(result, TurnLoopResult::Completed));
+        let text = working_history
+            .iter()
+            .rev()
+            .find(|m| m.role == uni::MessageRole::Assistant)
+            .expect("a final answer must be pushed")
+            .content
+            .as_text();
+        assert!(
+            text.contains("<proposed_plan"),
+            "a real partial plan must be kept as the plan: {text}"
         );
     }
 }

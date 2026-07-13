@@ -453,7 +453,7 @@ fn plan_mode_recovery_exhausted_finalizes_instead_of_reforcing_interview() {
 }
 
 #[test]
-fn plan_mode_recovery_fallback_prefers_salvaged_prose() {
+fn plan_mode_recovery_rejects_non_plan_salvage() {
     use vtcode_core::core::interfaces::session::PlanningEntrySource;
 
     let mut plan_session = PlanningWorkflowSessionState::default();
@@ -466,6 +466,7 @@ fn plan_mode_recovery_fallback_prefers_salvaged_prose() {
         &mut history,
         "test.stage",
         None,
+        // Salvage that is prose, not a real `<proposed_plan>`.
         Some("Partial plan: batch config reads.".to_string()),
         Some(&mut plan_session),
     );
@@ -473,7 +474,10 @@ fn plan_mode_recovery_fallback_prefers_salvaged_prose() {
     assert!(matches!(outcome, TurnLoopResult::Completed));
     assert!(plan_session.interview_pending());
     let last = history.last().unwrap();
-    assert!(last.content.as_text().contains("batch config reads"));
+    // The garbled/non-plan salvage must NOT be injected as the plan; the
+    // structured plan-mode message is used instead.
+    assert!(last.content.as_text().contains("final synthesis failed"));
+    assert!(!last.content.as_text().contains("batch config reads"));
 }
 
 #[test]

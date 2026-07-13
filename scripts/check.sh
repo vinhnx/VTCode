@@ -214,7 +214,7 @@ run_harness_regression_tests() {
 
     if cargo nextest run -p vtcode-core -E 'binary(/pty_tests/)' \
         && cargo nextest run -p vtcode-bash-runner -E 'binary(/pipe_tests/)' \
-        && cargo nextest run -p vtcode -E 'binary(/inline_events/)'; then
+        && cargo nextest run -p vtcode -E 'test(/inline_events/)'; then
         print_success "Harness PTY/TUI regression tests passed!"
         return 0
     else
