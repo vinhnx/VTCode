@@ -21,6 +21,17 @@ fn more_restrictive_policy(left: ToolPolicy, right: ToolPolicy) -> ToolPolicy {
 }
 
 impl ToolRegistry {
+    pub(super) async fn visible_policy_names(
+        &self,
+        session_tools_config: crate::tools::handlers::SessionToolsConfig,
+    ) -> Vec<String> {
+        self.model_tools(session_tools_config)
+            .await
+            .iter()
+            .map(|tool| self.resolve_runtime_policy_name(tool.function_name()))
+            .collect()
+    }
+
     fn resolve_runtime_policy_name(&self, name: &str) -> String {
         if is_legacy_mcp_tool_name(name) || parse_canonical_mcp_tool_name(name).is_some() {
             return name.to_string();
@@ -68,22 +79,68 @@ impl ToolRegistry {
     }
 
     pub async fn enable_full_auto_permission(&self, allowed_tools: &[String]) {
+        self.enable_full_auto_permission_for_session(
+            allowed_tools,
+            crate::tools::handlers::SessionToolsConfig::full_public(
+                crate::tools::handlers::SessionSurface::Interactive,
+                crate::config::types::CapabilityLevel::CodeSearch,
+                crate::config::ToolDocumentationMode::Full,
+                crate::tools::handlers::ToolModelCapabilities::default(),
+            ),
+        )
+        .await;
+    }
+
+    /// Enable full-auto mode against the tools visible in a specific session.
+    pub async fn enable_full_auto_permission_for_session(
+        &self,
+        allowed_tools: &[String],
+        session_tools_config: crate::tools::handlers::SessionToolsConfig,
+    ) {
+        #[cfg(test)]
+        let test_hooks = {
+            let policy_gateway = self.policy_gateway.lock().await;
+            policy_gateway.full_auto_catalogue_test_hooks()
+        };
+        #[cfg(test)]
+        test_hooks.pause_before_enable_lifecycle().await;
+        let lifecycle = {
+            let policy_gateway = self.policy_gateway.lock().await;
+            policy_gateway.full_auto_catalogue_lifecycle()
+        };
+        let _lifecycle_guard = lifecycle.lock().await;
         let normalized_allowed_tools: Vec<String> = allowed_tools
             .iter()
             .map(|tool| self.resolve_runtime_policy_name(tool))
             .collect();
-        let available_tools = self.available_tools().await;
-        let visible_policy_names: Vec<String> = available_tools
-            .iter()
-            .map(|tool| self.resolve_runtime_policy_name(tool))
-            .collect();
+        let visible_policy_names = self
+            .visible_policy_names(session_tools_config.clone())
+            .await;
+        #[cfg(test)]
+        test_hooks.pause_after_enable_snapshot().await;
         self.policy_gateway
             .lock()
             .await
-            .enable_full_auto_permission(&normalized_allowed_tools, &visible_policy_names);
+            .enable_full_auto_permission(
+                &normalized_allowed_tools,
+                &visible_policy_names,
+                session_tools_config,
+            );
     }
 
     pub async fn disable_full_auto_permission(&self) {
+        #[cfg(test)]
+        let test_hooks = {
+            let policy_gateway = self.policy_gateway.lock().await;
+            policy_gateway.full_auto_catalogue_test_hooks()
+        };
+        #[cfg(test)]
+        test_hooks.pause_before_disable_lifecycle().await;
+        let lifecycle = {
+            let policy_gateway = self.policy_gateway.lock().await;
+            policy_gateway.full_auto_catalogue_lifecycle()
+        };
+        let _lifecycle_guard = lifecycle.lock().await;
         self.policy_gateway
             .lock()
             .await

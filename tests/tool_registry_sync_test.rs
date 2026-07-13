@@ -1,12 +1,14 @@
 #![allow(missing_docs)]
 use assert_fs::TempDir;
+use futures::future::BoxFuture;
+use serde_json::{Value, json};
 use vtcode_core::config::ToolDocumentationMode;
 use vtcode_core::config::constants::tools;
 use vtcode_core::config::types::CapabilityLevel;
-use vtcode_core::tools::ToolRegistry;
 use vtcode_core::tools::handlers::{
     SessionSurface, SessionToolsConfig, ToolModelCapabilities, ToolProfile,
 };
+use vtcode_core::tools::{ToolRegistration, ToolRegistry};
 
 fn default_public_tool_names() -> Vec<String> {
     vec![
@@ -14,6 +16,13 @@ fn default_public_tool_names() -> Vec<String> {
         tools::WRITE_STDIN.to_string(),
         tools::APPLY_PATCH.to_string(),
     ]
+}
+
+fn dynamic_tool_executor<'a>(
+    _registry: &'a ToolRegistry,
+    _args: Value,
+) -> BoxFuture<'a, anyhow::Result<Value>> {
+    Box::pin(async { Ok(json!({"status": "ok"})) })
 }
 
 #[tokio::test]
@@ -91,4 +100,87 @@ async fn advanced_profile_exposes_code_search_outside_default_catalog() {
     let names: Vec<_> = schema_entries.into_iter().map(|entry| entry.name).collect();
 
     assert!(names.contains(&tools::CODE_SEARCH.to_string()));
+}
+
+#[tokio::test]
+async fn wildcard_full_auto_tracks_late_tools_visible_to_the_effective_profile() {
+    let temp = TempDir::new().expect("tempdir");
+    let registry = ToolRegistry::new(temp.path().to_path_buf()).await;
+    let default_config = SessionToolsConfig::full_public(
+        SessionSurface::Interactive,
+        CapabilityLevel::CodeSearch,
+        ToolDocumentationMode::Full,
+        ToolModelCapabilities::default(),
+    );
+    let advanced_config = default_config
+        .clone()
+        .with_tool_profile(ToolProfile::AdvancedVtCode);
+    let profile_filtered_tool = "profile_filtered_dynamic_tool";
+    let late_advanced_tool = "late_advanced_dynamic_tool";
+    let post_explicit_tool = "post_explicit_dynamic_tool";
+
+    registry
+        .enable_full_auto_permission_for_session(&[tools::WILDCARD_ALL.to_string()], default_config)
+        .await;
+    registry
+        .register_tool(
+            ToolRegistration::new(
+                profile_filtered_tool,
+                CapabilityLevel::Basic,
+                false,
+                dynamic_tool_executor,
+            )
+            .with_description("profile-filtered dynamic tool"),
+        )
+        .await
+        .expect("register profile-filtered dynamic tool");
+    assert!(
+        !registry
+            .is_allowed_in_full_auto(profile_filtered_tool)
+            .await
+    );
+
+    registry
+        .enable_full_auto_permission_for_session(
+            &[tools::WILDCARD_ALL.to_string()],
+            advanced_config,
+        )
+        .await;
+    assert!(
+        registry
+            .is_allowed_in_full_auto(profile_filtered_tool)
+            .await
+    );
+
+    registry
+        .register_tool(
+            ToolRegistration::new(
+                late_advanced_tool,
+                CapabilityLevel::Basic,
+                false,
+                dynamic_tool_executor,
+            )
+            .with_description("late advanced dynamic tool"),
+        )
+        .await
+        .expect("register late advanced dynamic tool");
+    assert!(registry.is_allowed_in_full_auto(late_advanced_tool).await);
+
+    registry
+        .enable_full_auto_permission(&[tools::EXEC_COMMAND.to_string()])
+        .await;
+    registry
+        .register_tool(
+            ToolRegistration::new(
+                post_explicit_tool,
+                CapabilityLevel::Basic,
+                false,
+                dynamic_tool_executor,
+            )
+            .with_description("dynamic tool registered after an explicit allow-list"),
+        )
+        .await
+        .expect("register post-explicit dynamic tool");
+    assert!(!registry.is_allowed_in_full_auto(late_advanced_tool).await);
+    assert!(!registry.is_allowed_in_full_auto(post_explicit_tool).await);
 }

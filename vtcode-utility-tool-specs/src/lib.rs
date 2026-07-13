@@ -117,10 +117,26 @@ pub fn exec_command_parameters() -> Value {
         "required": ["cmd"],
         "properties": {
             "cmd": {"type": "string", "description": "Shell command to execute, subject to command policy. Examples include `ls`, `rg`, `find`, `cat`, `sed`, `awk`, build tools, and test tools."},
-            "yield_time_ms": {"type": "integer", "description": "Wait before returning output (ms). If the command is still running, the response includes a session_id for write_stdin.", "default": 1000},
+            "yield_time_ms": {"type": "integer", "description": "Wait before returning output (ms). If the command is still running, the response includes a session_id for write_stdin.", "default": 10000},
             "max_output_tokens": {"type": "integer", "description": "Output token cap. Large or truncated output can return a spool_path for the full output."},
             "workdir": {"type": "string", "description": "Working directory."},
-            "tty": {"type": "boolean", "description": "Run the command in PTY mode for interactive or terminal-sensitive commands.", "default": false}
+            "tty": {"type": "boolean", "description": "Run the command in PTY mode for interactive or terminal-sensitive commands.", "default": false},
+            "sandbox_permissions": {
+                "type": "string",
+                "enum": ["use_default", "with_additional_permissions", "require_escalated", "bypass_sandbox"],
+                "description": "Sandbox permission mode for this command.",
+                "default": "use_default"
+            },
+            "additional_permissions": {
+                "type": "object",
+                "description": "Additional filesystem access requested with sandbox_permissions set to with_additional_permissions.",
+                "properties": {
+                    "fs_read": {"type": "array", "items": {"type": "string"}},
+                    "fs_write": {"type": "array", "items": {"type": "string"}}
+                },
+                "additionalProperties": false
+            },
+            "justification": {"type": "string", "description": "Short approval question required for escalated or bypassed sandbox execution."}
         },
         "additionalProperties": false
     })
@@ -306,6 +322,34 @@ mod tests {
         );
         assert_eq!(exec_params["properties"]["tty"]["type"], "boolean");
         assert_eq!(exec_params["properties"]["tty"]["default"], false);
+        assert_eq!(exec_params["properties"]["yield_time_ms"]["default"], 10000);
+        assert_eq!(
+            exec_params["properties"]["sandbox_permissions"]["enum"],
+            json!([
+                "use_default",
+                "with_additional_permissions",
+                "require_escalated",
+                "bypass_sandbox"
+            ])
+        );
+        assert_eq!(
+            exec_params["properties"]["sandbox_permissions"]["default"],
+            "use_default"
+        );
+        assert_eq!(
+            exec_params["properties"]["additional_permissions"]["properties"]["fs_read"]["items"]["type"],
+            "string"
+        );
+        assert_eq!(
+            exec_params["properties"]["additional_permissions"]["properties"]["fs_write"]["items"]
+                ["type"],
+            "string"
+        );
+        assert_eq!(
+            exec_params["properties"]["additional_permissions"]["additionalProperties"],
+            false
+        );
+        assert_eq!(exec_params["properties"]["justification"]["type"], "string");
         assert_eq!(exec_params["additionalProperties"], false);
         for command in ["ls", "rg", "find", "cat", "sed", "awk"] {
             assert!(

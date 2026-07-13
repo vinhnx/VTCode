@@ -87,6 +87,8 @@ pub struct AgentRunner {
     _workspace: PathBuf,
     /// Frozen session-scoped configuration snapshot
     session_config: Arc<ResolvedSessionConfig>,
+    /// Tool catalogue configuration used for this runner's model surface.
+    session_tools_config: crate::tools::handlers::SessionToolsConfig,
     /// Model identifier
     model: String,
     /// API key (for provider client construction in future flows)
@@ -300,20 +302,21 @@ impl AgentRunner {
         {
             warn!("Failed to initialize dynamic context directories: {}", err);
         }
+        let session_tools_config = crate::tools::handlers::SessionToolsConfig {
+            surface: crate::tools::handlers::SessionSurface::AgentRunner,
+            capability_level: crate::config::types::CapabilityLevel::CodeSearch,
+            documentation_mode: session_config.effective().agent.tool_documentation_mode,
+            planning_active: tool_registry.is_planning_active(),
+            request_user_input_enabled: false,
+            model_capabilities: crate::tools::handlers::ToolModelCapabilities::for_model_name(
+                &model.as_str(),
+            ),
+            deferred_tool_policy,
+            anthropic_native_memory_enabled,
+            tool_profile: session_config.effective().tools.profile,
+        };
         let available_tools = tool_registry
-            .model_tools(crate::tools::handlers::SessionToolsConfig {
-                surface: crate::tools::handlers::SessionSurface::AgentRunner,
-                capability_level: crate::config::types::CapabilityLevel::CodeSearch,
-                documentation_mode: session_config.effective().agent.tool_documentation_mode,
-                planning_active: tool_registry.is_planning_active(),
-                request_user_input_enabled: false,
-                model_capabilities: crate::tools::handlers::ToolModelCapabilities::for_model_name(
-                    &model.as_str(),
-                ),
-                deferred_tool_policy,
-                anthropic_native_memory_enabled,
-                tool_profile: session_config.effective().tools.profile,
-            })
+            .model_tools(session_tools_config.clone())
             .await
             .into_iter()
             .map(|tool| tool.function_name().to_string())
@@ -360,6 +363,7 @@ impl AgentRunner {
             bootstrap_messages,
             _workspace: workspace,
             session_config,
+            session_tools_config,
             model: model.to_string(),
             _api_key: api_key,
             reasoning_effort: settings.reasoning_effort,
@@ -461,7 +465,10 @@ impl AgentRunner {
     /// Enable full-auto execution with the provided allow-list.
     pub async fn enable_full_auto(&mut self, allowed_tools: &[String]) {
         self.tool_registry
-            .enable_full_auto_permission(allowed_tools)
+            .enable_full_auto_permission_for_session(
+                allowed_tools,
+                self.session_tools_config.clone(),
+            )
             .await;
     }
 

@@ -9,14 +9,49 @@ use super::{ToolLatencyStats, ToolRegistry, ToolTimeoutCategory};
 
 impl ToolRegistry {
     pub(super) async fn sync_policy_catalog(&self) {
+        let lifecycle = {
+            let policy_gateway = self.policy_gateway.lock().await;
+            policy_gateway.full_auto_catalogue_lifecycle()
+        };
+        let _lifecycle_guard = lifecycle.lock().await;
+        self.sync_policy_catalog_serialized().await;
+    }
+
+    async fn sync_policy_catalog_serialized(&self) {
         // Include aliases so policy prompts stay in sync with exposed names
         let available = self.available_tools().await;
         let mcp_keys = self.mcp_policy_keys().await;
-        self.policy_gateway
+        let full_auto_catalogue_config = self
+            .policy_gateway
             .lock()
             .await
-            .sync_available_tools(available, &mcp_keys)
-            .await;
+            .full_auto_catalogue_config();
+        let full_auto_visible_policy_names = if let Some(config) = &full_auto_catalogue_config {
+            Some(self.visible_policy_names(config.clone()).await)
+        } else {
+            None
+        };
+        #[cfg(test)]
+        {
+            let test_hooks = self
+                .policy_gateway
+                .lock()
+                .await
+                .full_auto_catalogue_test_hooks();
+            test_hooks.pause_after_refresh_snapshot().await;
+        }
+        {
+            let mut policy_gateway = self.policy_gateway.lock().await;
+            policy_gateway
+                .sync_available_tools(available, &mcp_keys)
+                .await;
+            if let (Some(config), Some(visible_policy_names)) = (
+                full_auto_catalogue_config.as_ref(),
+                full_auto_visible_policy_names.as_ref(),
+            ) {
+                policy_gateway.refresh_full_auto_catalogue(config, visible_policy_names);
+            }
+        }
 
         // Seed default permissions from tool metadata when policy manager is present
         let policy_seeds = {

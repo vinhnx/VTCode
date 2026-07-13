@@ -319,6 +319,54 @@ mod tests {
         Box::pin(async move { Ok(json!({"version": 2})) })
     }
 
+    fn catalogue_race_executor<'a>(
+        _registry: &'a ToolRegistry,
+        _args: Value,
+    ) -> BoxFuture<'a, Result<Value>> {
+        Box::pin(async { Ok(json!({"status": "ok"})) })
+    }
+
+    fn advanced_session_tools_config() -> SessionToolsConfig {
+        SessionToolsConfig::full_public(
+            SessionSurface::Interactive,
+            CapabilityLevel::CodeSearch,
+            ConfigToolDocumentationMode::Full,
+            ToolModelCapabilities::default(),
+        )
+        .with_tool_profile(ToolProfile::AdvancedVtCode)
+    }
+
+    async fn policy_catalogue_test_hooks(
+        registry: &ToolRegistry,
+    ) -> Arc<policy::PolicyCatalogueTestHooks> {
+        registry
+            .policy_gateway
+            .lock()
+            .await
+            .full_auto_catalogue_test_hooks()
+    }
+
+    async fn wait_for_catalogue_pause(pause: &policy::PolicyCatalogueTestPause) {
+        tokio::time::timeout(Duration::from_secs(5), pause.wait_until_reached())
+            .await
+            .expect("catalogue operation reached the controlled pause");
+    }
+
+    async fn assert_catalogue_task_remains_pending<T>(
+        task: &mut tokio::task::JoinHandle<T>,
+        task_name: &str,
+    ) {
+        tokio::select! {
+            outcome = &mut *task => match outcome {
+                Ok(_) => panic!("{task_name} completed while catalogue refresh was paused"),
+                Err(error) => panic!(
+                    "{task_name} failed while catalogue refresh was paused: {error}"
+                ),
+            },
+            () = tokio::time::sleep(Duration::from_millis(50)) => {}
+        }
+    }
+
     #[tokio::test]
     async fn registers_builtin_tools() -> Result<()> {
         let temp_dir = TempDir::new()?;
@@ -1848,6 +1896,164 @@ mod tests {
                 .await?
         );
 
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn wildcard_initialisation_retains_registration_from_snapshot_window() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        let hooks = policy_catalogue_test_hooks(&registry).await;
+        let snapshot_pause = policy::PolicyCatalogueTestPause::default();
+        hooks.install_after_enable_snapshot(snapshot_pause.clone());
+
+        let enabling_registry = registry.clone();
+        let enable_task = tokio::spawn(async move {
+            enabling_registry
+                .enable_full_auto_permission_for_session(
+                    &[tools::WILDCARD_ALL.to_string()],
+                    advanced_session_tools_config(),
+                )
+                .await;
+        });
+        wait_for_catalogue_pause(&snapshot_pause).await;
+
+        let tool_name = "wildcard_snapshot_window_dynamic_tool";
+        let registering_registry = registry.clone();
+        let registration_task = tokio::spawn(async move {
+            registering_registry
+                .register_tool(
+                    ToolRegistration::new(
+                        tool_name,
+                        CapabilityLevel::Basic,
+                        false,
+                        catalogue_race_executor,
+                    )
+                    .with_description("tool registered after the wildcard snapshot"),
+                )
+                .await
+        });
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while !registry.has_tool(tool_name).await {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("registration entered the wildcard snapshot window");
+        assert!(!registration_task.is_finished());
+
+        snapshot_pause.resume();
+        enable_task.await.expect("wildcard enable task");
+        registration_task.await.expect("registration task")?;
+
+        assert!(registry.is_allowed_in_full_auto(tool_name).await);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn in_flight_catalogue_refresh_cannot_restore_wildcard_after_disable() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        let config = advanced_session_tools_config();
+        registry
+            .enable_full_auto_permission_for_session(&[tools::WILDCARD_ALL.to_string()], config)
+            .await;
+
+        let hooks = policy_catalogue_test_hooks(&registry).await;
+        let refresh_pause = policy::PolicyCatalogueTestPause::default();
+        hooks.install_after_refresh_snapshot(refresh_pause.clone());
+        let registering_registry = registry.clone();
+        let registration_task = tokio::spawn(async move {
+            registering_registry
+                .register_tool(
+                    ToolRegistration::new(
+                        "disable_during_refresh_dynamic_tool",
+                        CapabilityLevel::Basic,
+                        false,
+                        catalogue_race_executor,
+                    )
+                    .with_description("tool whose registration pauses catalogue refresh"),
+                )
+                .await
+        });
+        wait_for_catalogue_pause(&refresh_pause).await;
+
+        let disable_pause = policy::PolicyCatalogueTestPause::default();
+        hooks.install_before_disable_lifecycle(disable_pause.clone());
+        let disabling_registry = registry.clone();
+        let mut disable_task = tokio::spawn(async move {
+            disabling_registry.disable_full_auto_permission().await;
+        });
+        wait_for_catalogue_pause(&disable_pause).await;
+        disable_pause.resume();
+        assert!(!registration_task.is_finished());
+        assert_catalogue_task_remains_pending(&mut disable_task, "disable task").await;
+
+        refresh_pause.resume();
+        registration_task.await.expect("registration task")?;
+        disable_task.await.expect("disable task");
+
+        assert_eq!(registry.current_full_auto_allowlist().await, None);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn in_flight_refresh_cannot_overwrite_same_config_explicit_replacement() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        let config = advanced_session_tools_config();
+        registry
+            .enable_full_auto_permission_for_session(
+                &[tools::WILDCARD_ALL.to_string()],
+                config.clone(),
+            )
+            .await;
+
+        let hooks = policy_catalogue_test_hooks(&registry).await;
+        let refresh_pause = policy::PolicyCatalogueTestPause::default();
+        hooks.install_after_refresh_snapshot(refresh_pause.clone());
+        let registering_registry = registry.clone();
+        let registration_task = tokio::spawn(async move {
+            registering_registry
+                .register_tool(
+                    ToolRegistration::new(
+                        "replacement_during_refresh_dynamic_tool",
+                        CapabilityLevel::Basic,
+                        false,
+                        catalogue_race_executor,
+                    )
+                    .with_description("tool whose registration pauses catalogue refresh"),
+                )
+                .await
+        });
+        wait_for_catalogue_pause(&refresh_pause).await;
+
+        let replacement_pause = policy::PolicyCatalogueTestPause::default();
+        hooks.install_before_enable_lifecycle(replacement_pause.clone());
+        let replacing_registry = registry.clone();
+        let mut replacement_task = tokio::spawn(async move {
+            replacing_registry
+                .enable_full_auto_permission_for_session(&[tools::EXEC_COMMAND.to_string()], config)
+                .await;
+        });
+        wait_for_catalogue_pause(&replacement_pause).await;
+        replacement_pause.resume();
+        assert!(!registration_task.is_finished());
+        assert_catalogue_task_remains_pending(&mut replacement_task, "replacement task").await;
+
+        refresh_pause.resume();
+        registration_task.await.expect("registration task")?;
+        replacement_task.await.expect("replacement task");
+
+        assert_eq!(
+            registry.current_full_auto_allowlist().await,
+            Some(vec![tools::EXEC_COMMAND.to_string()])
+        );
+        assert!(
+            !registry
+                .is_allowed_in_full_auto("replacement_during_refresh_dynamic_tool")
+                .await
+        );
         Ok(())
     }
 

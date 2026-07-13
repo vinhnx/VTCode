@@ -188,18 +188,6 @@ pub(crate) async fn initialize_session(
             warn!("Failed to apply tool policies from config: {}", err);
         }
         maybe_attach_mcp_client(&mut tool_registry, cfg, async_mcp_manager.as_ref()).await;
-        if full_auto {
-            let automation_cfg = cfg.automation.full_auto.clone();
-            tool_registry
-                .enable_full_auto_permission(&automation_cfg.allowed_tools)
-                .await;
-            full_auto_allowlist = Some(
-                tool_registry
-                    .current_full_auto_allowlist()
-                    .await
-                    .unwrap_or_default(),
-            );
-        }
     }
 
     let workspace_trust_level = match session_bootstrap.acp_workspace_trust {
@@ -301,6 +289,28 @@ pub(crate) async fn initialize_session(
         &deferred_tool_policy,
     )
     .await;
+
+    if full_auto && let Some(cfg) = vt_cfg {
+        let session_tools_config = interactive_session_tools_config(
+            &config.model,
+            vt_cfg,
+            tool_documentation_mode,
+            deferred_tool_policy.clone(),
+            anthropic_native_memory_enabled,
+        );
+        tool_registry
+            .enable_full_auto_permission_for_session(
+                &cfg.automation.full_auto.allowed_tools,
+                session_tools_config,
+            )
+            .await;
+        full_auto_allowlist = Some(
+            tool_registry
+                .current_full_auto_allowlist()
+                .await
+                .unwrap_or_default(),
+        );
+    }
 
     let trajectory = build_trajectory_logger(&config.workspace, vt_cfg);
     let available_subagents = if let Some(controller) = subagent_controller.as_ref() {
