@@ -47,12 +47,15 @@ While a turn is actively processing, `/plan` is dropped with a notice (mode swit
 
 ## Plan Output Format
 
-Planning output should stay decision-complete but sparse:
+Planning output should stay decision-complete but sparse — treat it like a
+compact spec, not prose. Keep the whole `<proposed_plan>` under ~1500 tokens;
+prefer `file:symbol` references over narrative. This bound exists because an
+overly verbose plan is truncated at the model's output-token limit (cut off
+mid-plan) and must then be condensed and re-emitted.
 
 ```markdown
 Repository facts checked:
-- [file, symbol, or behaviour confirmed from the repo]
-- [existing pattern or constraint verified before planning]
+- [file:symbol or behaviour confirmed from the repo]
 
 Next open decision: [if any], otherwise: No remaining scope decisions.
 
@@ -60,22 +63,20 @@ Next open decision: [if any], otherwise: No remaining scope decisions.
 # [Task Title]
 
 ## Summary
-[2-4 lines: goal, user impact, what will change, what will not]
+[1-3 lines: goal, user impact, what changes / what does not]
 
-## Implementation Steps
-1. [Step] -> files: [paths] -> verify: [check]
-2. [Step] -> files: [paths] -> verify: [check]
-3. [Step] -> files: [paths] -> verify: [check]
+## Steps
+1. [Action] -> files/symbols -> verify: [check]
+2. [Action] -> files/symbols -> verify: [check]
 
-## Test Cases and Validation
-1. Build and lint: [project build and lint command(s) based on detected toolchain]
-2. Tests: [project test command(s) based on detected toolchain]
-3. Targeted behaviour checks: [explicit commands/manual checks]
+## Validation
+- build/lint: [detected toolchain command]
+- tests: [detected toolchain command]
+- behaviour: [targeted check]
 
-## Assumptions and Defaults
-1. [Explicit assumption]
-2. [Default chosen when user did not specify]
-3. [Out-of-scope items intentionally not changed]
+## Assumptions
+- [assumption or default chosen]
+- [out-of-scope item intentionally not changed]
 </proposed_plan>
 ```
 

@@ -340,7 +340,7 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 - **File**: `docs/guides/planning-workflow.md`
   - **Content**: Planning Workflow
-  - **Topics**: Overview, Usage, Plan Output Format, Summary, Implementation Steps
+  - **Topics**: Overview, Usage, Plan Output Format, Summary, Steps
   - **User Questions**: "What can you tell me about Planning Workflow?", "How does Overview work?", "How does Usage work?"
 
 - **File**: `docs/guides/responses-api-reasoning.md`

@@ -28,7 +28,13 @@ pub const PLANNING_WORKFLOW_READ_ONLY_NOTICE_LINE: &str = "Mutating tools (write
 pub const PLANNING_WORKFLOW_EXIT_INSTRUCTION_LINE: &str =
     "Call `finish_planning` to present the plan. Mutating tools stay disabled until user approves.";
 /// Shared Planning workflow instruction line for decision-complete planning output.
-pub const PLANNING_WORKFLOW_PLAN_QUALITY_LINE: &str = "Explore repo facts, ask only material blocking questions. Emit one `<proposed_plan>` with summary, steps, test cases, assumptions. Unresolved items: `Next open decision: ...`.";
+/// Compact, spec-like plan quality line. The previous wording ("summary,
+/// steps, test cases, assumptions") let the model emit verbosely large plans
+/// that blew the generation token budget and were cut off mid-`<proposed_plan>`
+/// — which previously re-triggered the recovery loop forever. This mandates a
+/// tight spec that fits a small token budget and prefers file:symbol
+/// references over prose.
+pub const PLANNING_WORKFLOW_PLAN_QUALITY_LINE: &str = "Keep plans compact and spec-like. Emit ONE `<proposed_plan>` that fits ~1500 tokens: a 1-3 line Summary; a tight numbered step list where each step is `Action -> files/symbols -> verify:`; one Validation line (build/lint + test commands); Assumptions as short bullets. Prefer file:symbol references over prose. Ask only material blocking questions; unresolved: `Next open decision: ...`.";
 /// Shared Planning workflow policy line requiring context-aware interview closure before final plans.
 pub const PLANNING_WORKFLOW_INTERVIEW_POLICY_LINE: &str = "Use `request_user_input` for interview questions informed by repo context. Continue until scope/decomposition/verification decisions are closed before finalizing `<proposed_plan>`.";
 /// Shared Planning workflow policy line for runtimes where `request_user_input` is unavailable.

@@ -77,8 +77,10 @@ pub(crate) fn planning_workflow_interview_ready(
     plan_session: &PlanningWorkflowSessionState,
 ) -> bool {
     // Do NOT allow interview when budget is exhausted — no further LLM calls
-    // are possible and re-forcing would loop forever.
-    if plan_session.is_budget_exhausted() {
+    // are possible and re-forcing would loop forever. The same applies when
+    // post-tool recovery is exhausted: the planning context is saturated and
+    // re-forcing the interview would re-research and loop forever.
+    if plan_session.is_budget_exhausted() || plan_session.is_recovery_exhausted() {
         return false;
     }
     has_discovery_tool(session_stats)
@@ -92,8 +94,9 @@ pub(crate) fn should_attempt_dynamic_interview_generation(
     plan_session: &PlanningWorkflowSessionState,
 ) -> bool {
     // Do NOT attempt interview generation when budget is exhausted — no further
-    // LLM calls are possible and the interview would loop forever.
-    if plan_session.is_budget_exhausted() {
+    // LLM calls are possible and the interview would loop forever. The same
+    // applies when post-tool recovery is exhausted (saturated planning context).
+    if plan_session.is_budget_exhausted() || plan_session.is_recovery_exhausted() {
         return false;
     }
     let response_has_plan = response_text
@@ -276,8 +279,10 @@ pub(crate) fn maybe_force_planning_workflow_interview(
     synthesized_interview_args: Option<Value>,
 ) -> TurnProcessingResult {
     // Do NOT force the interview when budget is exhausted — no further LLM
-    // calls are possible and re-forcing would loop forever.
-    if plan_session.is_budget_exhausted() {
+    // calls are possible and re-forcing would loop forever. The same applies
+    // when post-tool recovery is exhausted (saturated planning context):
+    // re-forcing the interview would re-research and loop forever.
+    if plan_session.is_budget_exhausted() || plan_session.is_recovery_exhausted() {
         return processing_result;
     }
     let allow_interview = planning_workflow_interview_ready(session_stats, plan_session);

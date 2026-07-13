@@ -191,20 +191,21 @@ pub(super) fn complete_turn_after_failed_tool_free_recovery(
         .map(|e| vtcode_commons::classify_anyhow_error(e).is_retryable())
         .unwrap_or(false);
     if let Some(plan_session) = plan_session {
-        if plan_session.is_budget_exhausted() {
+        if plan_session.is_budget_exhausted() || plan_session.is_recovery_exhausted() {
+            let finalize_message = if plan_session.is_budget_exhausted() {
+                super::PLANNING_BUDGET_EXHAUSTED_FINALIZE
+            } else {
+                super::PLANNING_RECOVERY_EXHAUSTED_FINALIZE
+            };
             let planning_fallback = salvaged_text
                 .filter(|text| !text.trim().is_empty())
-                .unwrap_or_else(|| {
-                    build_recovery_fallback(
-                        working_history,
-                        super::PLANNING_BUDGET_EXHAUSTED_FINALIZE,
-                    )
-                });
+                .unwrap_or_else(|| build_recovery_fallback(working_history, finalize_message));
             push_final_answer_if_absent(working_history, &planning_fallback);
             tracing::warn!(
                 stage = failure_stage,
-                budget_exhausted = true,
-                "Plan-mode tool-free recovery failed with budget exhausted; finalizing plan from gathered evidence."
+                budget_exhausted = plan_session.is_budget_exhausted(),
+                recovery_exhausted = plan_session.is_recovery_exhausted(),
+                "Plan-mode tool-free recovery failed; finalizing plan from gathered evidence."
             );
             return TurnLoopResult::Completed;
         }
@@ -429,7 +430,7 @@ fn check_recovery_cycle_cap(
     stage: &str,
     err: &anyhow::Error,
     salvaged_text: Option<String>,
-    plan_session: Option<&mut PlanningWorkflowSessionState>,
+    mut plan_session: Option<&mut PlanningWorkflowSessionState>,
 ) -> Option<TurnLoopResult> {
     if cycles >= MAX_POST_TOOL_RECOVERY_CYCLES {
         tracing::warn!(
@@ -437,6 +438,14 @@ fn check_recovery_cycle_cap(
             "Post-tool recovery cycle cap reached; concluding turn \
              with deterministic fallback answer"
         );
+        // In plan mode, repeated tool-free synthesis failures mean the
+        // planning context is saturated. Mark the session recovery-exhausted
+        // so the next turn does NOT re-force the interview (which would
+        // re-research the still-huge context and loop forever). The call
+        // below then finalizes the plan from gathered evidence.
+        if let Some(plan_session) = plan_session.as_deref_mut() {
+            plan_session.mark_recovery_exhausted();
+        }
         return Some(complete_turn_after_failed_tool_free_recovery(
             working_history,
             stage,

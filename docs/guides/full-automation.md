@@ -106,7 +106,7 @@ Each revision round follows a fixed LLM-call lifecycle:
 4. On rejection, a **Replanner** rewrites the spec/contract/tracker from evaluator feedback.
 5. The **Build** phase runs again (its own completion-signaling turn) before the **Evaluator** re-runs.
 
-A round is exhausted once `max_revision_rounds` replans have been attempted; the run then writes a blocked-handoff artifact instead of silently accepting the candidate. Because the build phase must complete (produce a completion-signaling response) before re-evaluation, every revision round consumes at least one additional build turn — test mocks must queue a completion response after each replanner turn.
+A round is exhausted once `max_revision_rounds` replans have been attempted; the run then writes a blocked-handoff artifact instead of silently accepting the candidate. Because the build phase must complete (produce a completion-signaling response) before re-evaluation, every revision round consumes at least one additional build turn. The eval test harness uses a role-aware mock (`RoleQueuedProvider`) that matches responses to the calling sub-agent by system prompt and returns a completion default for any build turn it did not explicitly queue, so tests declare *what each role says* rather than the exact wire-order of calls.
 
 ## Regression Testing
 

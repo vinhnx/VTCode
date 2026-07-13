@@ -303,6 +303,15 @@ impl TestTurnProcessingBacking {
             .activate_recovery_with_mode(reason.to_string(), RecoveryMode::ToolFreeSynthesis);
     }
 
+    /// Activate planning workflow for an integration test (mirrors what the
+    /// `start_planning` tool does): enable planning on the registry and enter
+    /// the planning session so `is_planning_active()` returns true.
+    pub(crate) fn activate_planning_for_test(&mut self) {
+        self.tool_registry.enable_planning();
+        self.plan_session
+            .enter(vtcode_core::core::interfaces::session::PlanningEntrySource::UserRequest);
+    }
+
     pub(crate) fn last_history_message_contains(&self, needle: &str) -> bool {
         self.working_history
             .last()

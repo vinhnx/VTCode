@@ -43,6 +43,8 @@ use vtcode_ui::tui::app::{InlineHandle, InlineSession};
 
 #[path = "turn_loop/notifications.rs"]
 mod notifications;
+#[path = "turn_loop/planning_workflow_recovery.rs"]
+mod planning_workflow_recovery;
 #[path = "turn_loop/post_tool_recovery.rs"]
 mod post_tool_recovery;
 #[path = "turn_loop/usage_accounting.rs"]
@@ -118,6 +120,13 @@ const PLANNING_RECOVERY_SYNTHESIS_FALLBACK: &str = "Planning research completed,
 /// from the evidence already gathered — the budget is spent and no further
 /// LLM calls are possible this session.
 const PLANNING_BUDGET_EXHAUSTED_FINALIZE: &str = "Budget exhausted. Finalize the plan NOW from the evidence already gathered in this conversation. Do NOT attempt any more tool calls or LLM requests — synthesize your final answer immediately.";
+/// Plan-mode fallback when the post-tool recovery cycle cap is reached. This
+/// happens when the planning context is saturated (too much research for a
+/// tool-free synthesis to succeed) and every recovery attempt fails. Like the
+/// budget-exhausted variant, finalize the plan NOW from the evidence gathered
+/// instead of re-forcing the interview — re-researching the still-huge context
+/// would fail again and loop forever across turns.
+const PLANNING_RECOVERY_EXHAUSTED_FINALIZE: &str = "Planning synthesis failed after repeated recovery attempts — the conversation context is saturated. Finalize the plan NOW from the evidence already gathered in this conversation. Do NOT attempt more tool calls or LLM requests — synthesize your final answer immediately.";
 /// Reason set on `TurnLoopResult::Blocked` when the model emits tool calls or
 /// textual tool-call markup during a tool-free recovery pass.  Shared between
 /// `result_handler` (producer) and `post_tool_recovery` (consumer).
@@ -459,6 +468,10 @@ pub(crate) async fn run_turn_loop(
     let mut step_count = 0;
     let mut current_max_tool_loops = turn_config.max_tool_loops;
     let mut turn_history_start_len = working_history.len();
+    // Bounded condense-retry counter for truncated planning syntheses (see
+    // the re-prompt block after generation). Prevents an oversized plan from
+    // looping the turn.
+    let mut plan_condense_attempts: u8 = 0;
     let mut turn_usage = HarnessUsage::default();
     // Optimization: Interned signatures with exponential backoff for loop detection
     let mut repeated_tool_attempts = LoopTracker::new();
@@ -829,6 +842,25 @@ pub(crate) async fn run_turn_loop(
             if turn_processing_ctx.is_planning_active() {
                 turn_processing_ctx.plan_session.increment_turns();
             }
+        }
+
+        // Plan-mode robustness: if the planning synthesis was truncated at the
+        // model's output token limit, the emitted plan is incomplete ("cut off
+        // mid-flight"). Rather than accept a partial plan or re-enter the
+        // recovery path (which previously looped forever), ask for a tighter
+        // spec and retry once. Bounded so a genuinely oversized plan cannot
+        // loop. The policy lives in `planning_workflow_recovery` so this loop
+        // stays free of plan-mode specifics.
+        let planning_active = turn_processing_ctx.is_planning_active();
+        if planning_workflow_recovery::maybe_condense_truncated_plan(
+            &mut *turn_processing_ctx.working_history,
+            &mut *turn_processing_ctx.renderer,
+            planning_active,
+            tool_free_recovery,
+            &mut plan_condense_attempts,
+            &response,
+        ) {
+            continue;
         }
 
         // Process the LLM response

@@ -214,12 +214,14 @@ pub(super) fn filter_interview_tool_calls(
     }
 
     // Do NOT mark interview as pending when budget is exhausted — no further
-    // LLM calls are possible and re-forcing would loop forever.
+    // LLM calls are possible and re-forcing would loop forever. The same
+    // applies when post-tool recovery is exhausted (saturated planning context).
     if needs_interview
         && had_interview
         && (had_non_interview || !allow_interview)
         && !response_has_plan
         && !plan_session.is_budget_exhausted()
+        && !plan_session.is_recovery_exhausted()
     {
         plan_session.mark_interview_pending();
     }

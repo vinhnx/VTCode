@@ -18,6 +18,12 @@ pub(crate) struct PlanningWorkflowSessionState {
     /// the interview from being re-forced on the next turn, which would
     /// loop forever because no further LLM calls are possible.
     budget_exhausted: bool,
+    /// Set when the post-tool recovery cycle cap is reached during planning
+    /// (repeated tool-free synthesis failures because the planning context is
+    /// saturated). Prevents the interview from being re-forced on the next
+    /// turn, which would re-research the still-huge context and fail again —
+    /// looping forever across turns.
+    recovery_exhausted: bool,
 }
 
 impl PlanningWorkflowSessionState {
@@ -29,11 +35,13 @@ impl PlanningWorkflowSessionState {
         self.last_interview_cancelled = false;
         self.entry_source = Some(entry_source);
         self.budget_exhausted = false;
+        self.recovery_exhausted = false;
     }
 
     pub(crate) fn exit(&mut self) {
         self.entry_source = None;
         self.budget_exhausted = false;
+        self.recovery_exhausted = false;
     }
 
     #[cfg(test)]
@@ -93,6 +101,14 @@ impl PlanningWorkflowSessionState {
 
     pub(crate) fn is_budget_exhausted(&self) -> bool {
         self.budget_exhausted
+    }
+
+    pub(crate) fn mark_recovery_exhausted(&mut self) {
+        self.recovery_exhausted = true;
+    }
+
+    pub(crate) fn is_recovery_exhausted(&self) -> bool {
+        self.recovery_exhausted
     }
 }
 

@@ -872,7 +872,7 @@ fn render_initial_plan_file_content(
         content.push_str(&format!("Description: {description}\n"));
     }
     content.push('\n');
-    content.push_str("> Planning workflow is active. Research first, then materialize one concrete `<proposed_plan>` draft here.\n");
+    content.push_str("> Planning workflow is active. Research first, then materialize one compact `<proposed_plan>` spec here (fit ~1500 tokens; steps as `Action -> files -> verify:`, prefer file:symbol refs over prose).\n");
     content.push_str(&format!(
         "> Suggested validation defaults: build/lint {}; tests {}.\n",
         validation_hints.build_and_lint, validation_hints.tests
@@ -1130,7 +1130,7 @@ impl Tool for StartPlanningTool {
             "instructions": [
                 "1. Explore files and capture repository facts before drafting the plan",
                 "2. Ask or close only material blocking decisions",
-                "3. Emit one concrete <proposed_plan> draft and persist it to the plan file",
+                "3. Emit one compact <proposed_plan> spec (fit ~1500 tokens; steps as `Action -> files -> verify:`, file:symbol refs over prose) and persist it to the plan file",
                 "4. Use finish_planning when ready for the user to review and approve"
             ],
             "workflow_phases": [

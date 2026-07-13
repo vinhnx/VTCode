@@ -912,18 +912,78 @@ impl LLMProvider for QueuedProvider {
     }
 }
 
+/// Roles in the orchestrated harness LLM-call lifecycle.
+///
+/// The harness drives several distinct sub-agents (planner, build, evaluator,
+/// replanner) through the same `LLMProvider`. `RoleQueuedProvider` maps each
+/// `generate` call to its role via the system prompt so responses are matched
+/// by role instead of by flat position. This keeps tests resilient to harness
+/// flow changes (e.g. an added build turn between a replan and re-evaluation):
+/// when a role's queue is empty, a role-appropriate default is returned instead
+/// of erroring on a missing queued response.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum HarnessRole {
+    Planner,
+    Build,
+    Evaluator,
+    Replanner,
+}
+
+fn harness_role_of(request: &LLMRequest) -> HarnessRole {
+    let sys = request
+        .system_prompt
+        .as_ref()
+        .map(|s| s.as_str())
+        .unwrap_or("");
+    if sys.contains("harness replanner") {
+        HarnessRole::Replanner
+    } else if sys.contains("harness evaluator") {
+        HarnessRole::Evaluator
+    } else if sys.contains("harness planner") {
+        HarnessRole::Planner
+    } else {
+        HarnessRole::Build
+    }
+}
+
 #[derive(Clone)]
-struct RecordingQueuedProvider {
-    responses: Arc<Mutex<VecDeque<LLMResponse>>>,
+struct RoleQueuedProvider {
+    planner: Arc<Mutex<VecDeque<LLMResponse>>>,
+    build: Arc<Mutex<VecDeque<LLMResponse>>>,
+    evaluator: Arc<Mutex<VecDeque<LLMResponse>>>,
+    replanner: Arc<Mutex<VecDeque<LLMResponse>>>,
     requests: Arc<Mutex<Vec<LLMRequest>>>,
 }
 
-impl RecordingQueuedProvider {
-    fn new(responses: Vec<LLMResponse>) -> Self {
+impl RoleQueuedProvider {
+    fn new() -> Self {
         Self {
-            responses: Arc::new(Mutex::new(responses.into())),
+            planner: Arc::new(Mutex::new(VecDeque::new())),
+            build: Arc::new(Mutex::new(VecDeque::new())),
+            evaluator: Arc::new(Mutex::new(VecDeque::new())),
+            replanner: Arc::new(Mutex::new(VecDeque::new())),
             requests: Arc::new(Mutex::new(Vec::new())),
         }
+    }
+
+    fn planner(&mut self, response: LLMResponse) -> &mut Self {
+        self.planner.lock().push_back(response);
+        self
+    }
+
+    fn build(&mut self, response: LLMResponse) -> &mut Self {
+        self.build.lock().push_back(response);
+        self
+    }
+
+    fn evaluator(&mut self, response: LLMResponse) -> &mut Self {
+        self.evaluator.lock().push_back(response);
+        self
+    }
+
+    fn replanner(&mut self, response: LLMResponse) -> &mut Self {
+        self.replanner.lock().push_back(response);
+        self
     }
 
     fn recorded_requests(&self) -> Vec<LLMRequest> {
@@ -931,21 +991,40 @@ impl RecordingQueuedProvider {
     }
 }
 
+fn default_response_for(role: HarnessRole) -> LLMResponse {
+    match role {
+        HarnessRole::Planner => json_response(planner_response_json("pwd")),
+        HarnessRole::Build => text_response("All requested changes have been applied."),
+        HarnessRole::Evaluator => json_response(evaluator_response_json(
+            "pass",
+            "default evaluator response",
+            0,
+        )),
+        HarnessRole::Replanner => text_response("Revision 1: task is complete."),
+    }
+}
+
 #[async_trait]
-impl LLMProvider for RecordingQueuedProvider {
+impl LLMProvider for RoleQueuedProvider {
     fn name(&self) -> &str {
         "openai"
     }
 
     async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
-        self.requests.lock().push(request);
-        self.responses
-            .lock()
-            .pop_front()
-            .ok_or(LLMError::InvalidRequest {
-                message: "RecordingQueuedProvider has no queued responses".to_string(),
-                metadata: None,
-            })
+        self.requests.lock().push(request.clone());
+        let role = harness_role_of(&request);
+        let queue = match role {
+            HarnessRole::Planner => &self.planner,
+            HarnessRole::Build => &self.build,
+            HarnessRole::Evaluator => &self.evaluator,
+            HarnessRole::Replanner => &self.replanner,
+        };
+        let mut q = queue.lock();
+        if let Some(response) = q.pop_front() {
+            Ok(response)
+        } else {
+            Ok(default_response_for(role))
+        }
     }
 
     fn supported_models(&self) -> Vec<String> {
@@ -1228,8 +1307,9 @@ async fn runner_keeps_openai_requests_stateless_and_reuses_session_cache_key() {
     runner
         .enable_full_auto(&[tools::TASK_TRACKER.to_string()])
         .await;
-    let provider = RecordingQueuedProvider::new(vec![
-        tool_call_response_with_request_id(
+    let mut provider = RoleQueuedProvider::new();
+    provider
+        .build(tool_call_response_with_request_id(
             tools::TASK_TRACKER,
             json!({
                 "action": "update",
@@ -1237,11 +1317,10 @@ async fn runner_keeps_openai_requests_stateless_and_reuses_session_cache_key() {
                 "status": "completed",
             }),
             "resp_first_turn",
-        ),
-        text_response("All work is complete."),
-        text_response("All work is complete."),
-        text_response("All work is complete."),
-    ]);
+        ))
+        .build(text_response("All work is complete."))
+        .build(text_response("All work is complete."))
+        .build(text_response("All work is complete."));
     let recorded = provider.clone();
     runner.provider_client = Box::new(provider);
 
@@ -1593,30 +1672,30 @@ async fn evaluator_failure_forces_revision_before_success() {
     runner
         .enable_full_auto(&[tools::TASK_TRACKER.to_string()])
         .await;
-    runner.provider_client = Box::new(QueuedProvider::new(vec![
-        json_response(planner_response_json("pwd")),
-        tool_call_response(
+    let mut provider = RoleQueuedProvider::new();
+    provider
+        .planner(json_response(planner_response_json("pwd")))
+        .build(tool_call_response(
             tools::TASK_TRACKER,
             json!({
                 "action": "update",
                 "index": 1,
                 "status": "completed",
             }),
-        ),
-        text_response("The task is complete."),
-        json_response(evaluator_response_json(
+        ))
+        .build(text_response("The task is complete."))
+        .evaluator(json_response(evaluator_response_json(
             "fail",
             "A high-severity issue remains.",
             1,
-        )),
-        text_response("Revision 1: task is complete."),
-        text_response("Revision applied. Task is complete."),
-        json_response(evaluator_response_json(
+        )))
+        .replanner(text_response("Revision 1: task is complete."))
+        .evaluator(json_response(evaluator_response_json(
             "pass",
             "All issues have been addressed.",
             0,
-        )),
-    ]));
+        )));
+    runner.provider_client = Box::new(provider);
 
     let result = Box::pin(runner.execute_task(&task("Evaluator revision", "exec-task"), &[]))
         .await
@@ -1640,23 +1719,23 @@ async fn evaluator_request_includes_verification_results() {
     runner
         .enable_full_auto(&[tools::TASK_TRACKER.to_string()])
         .await;
-    let provider = RecordingQueuedProvider::new(vec![
-        json_response(planner_response_json("pwd")),
-        tool_call_response(
+    let mut provider = RoleQueuedProvider::new();
+    provider
+        .planner(json_response(planner_response_json("pwd")))
+        .build(tool_call_response(
             tools::TASK_TRACKER,
             json!({
                 "action": "update",
                 "index": 1,
                 "status": "completed",
             }),
-        ),
-        text_response("The task is complete."),
-        json_response(evaluator_response_json(
+        ))
+        .build(text_response("The task is complete."))
+        .evaluator(json_response(evaluator_response_json(
             "pass",
             "Verification evidence looks good.",
             0,
-        )),
-    ]);
+        )));
     let recorded = provider.clone();
     runner.provider_client = Box::new(provider);
 
@@ -1692,31 +1771,31 @@ async fn evaluator_scorecard_below_threshold_forces_revision() {
     runner
         .enable_full_auto(&[tools::TASK_TRACKER.to_string()])
         .await;
-    runner.provider_client = Box::new(QueuedProvider::new(vec![
-        json_response(planner_response_json("pwd")),
-        tool_call_response(
+    let mut provider = RoleQueuedProvider::new();
+    provider
+        .planner(json_response(planner_response_json("pwd")))
+        .build(tool_call_response(
             tools::TASK_TRACKER,
             json!({
                 "action": "update",
                 "index": 1,
                 "status": "completed",
             }),
-        ),
-        text_response("The task is complete."),
-        json_response(evaluator_response_json_with_scorecard(
+        ))
+        .build(text_response("The task is complete."))
+        .evaluator(json_response(evaluator_response_json_with_scorecard(
             "pass",
             "Looks mostly good.",
             0,
             (5, 3, 5, 5),
-        )),
-        text_response("Revision 1: task is complete."),
-        text_response("Revision applied. Task is complete."),
-        json_response(evaluator_response_json(
+        )))
+        .replanner(text_response("Revision 1: task is complete."))
+        .evaluator(json_response(evaluator_response_json(
             "pass",
             "All issues have been addressed.",
             0,
-        )),
-    ]));
+        )));
+    runner.provider_client = Box::new(provider);
 
     let result =
         Box::pin(runner.execute_task(&task("Evaluator scorecard revision", "exec-task"), &[]))
@@ -1752,18 +1831,19 @@ async fn evaluator_missing_scorecard_forces_revision() {
     runner
         .enable_full_auto(&[tools::TASK_TRACKER.to_string()])
         .await;
-    runner.provider_client = Box::new(QueuedProvider::new(vec![
-        json_response(planner_response_json("pwd")),
-        tool_call_response(
+    let mut provider = RoleQueuedProvider::new();
+    provider
+        .planner(json_response(planner_response_json("pwd")))
+        .build(tool_call_response(
             tools::TASK_TRACKER,
             json!({
                 "action": "update",
                 "index": 1,
                 "status": "completed",
             }),
-        ),
-        text_response("The task is complete."),
-        json_response(json!({
+        ))
+        .build(text_response("The task is complete."))
+        .evaluator(json_response(json!({
             "verdict": "pass",
             "summary": "Looks mostly good.",
             "high_severity_findings": 0,
@@ -1771,15 +1851,14 @@ async fn evaluator_missing_scorecard_forces_revision() {
             "unmet_contract_items": [],
             "residual_risks": [],
             "required_tracker_updates": [],
-        })),
-        text_response("Revision 1: task is complete."),
-        text_response("Revision applied. Task is complete."),
-        json_response(evaluator_response_json(
+        })))
+        .replanner(text_response("Revision 1: task is complete."))
+        .evaluator(json_response(evaluator_response_json(
             "pass",
             "All issues have been addressed.",
             0,
-        )),
-    ]));
+        )));
+    runner.provider_client = Box::new(provider);
 
     let result = Box::pin(runner.execute_task(
         &task("Evaluator missing scorecard revision", "exec-task"),
@@ -1816,31 +1895,31 @@ async fn evaluator_out_of_range_scorecard_forces_revision() {
     runner
         .enable_full_auto(&[tools::TASK_TRACKER.to_string()])
         .await;
-    runner.provider_client = Box::new(QueuedProvider::new(vec![
-        json_response(planner_response_json("pwd")),
-        tool_call_response(
+    let mut provider = RoleQueuedProvider::new();
+    provider
+        .planner(json_response(planner_response_json("pwd")))
+        .build(tool_call_response(
             tools::TASK_TRACKER,
             json!({
                 "action": "update",
                 "index": 1,
                 "status": "completed",
             }),
-        ),
-        text_response("The task is complete."),
-        json_response(evaluator_response_json_with_scorecard(
+        ))
+        .build(text_response("The task is complete."))
+        .evaluator(json_response(evaluator_response_json_with_scorecard(
             "pass",
             "Looks mostly good.",
             0,
             (5, 9, 5, 5),
-        )),
-        text_response("Revision 1: task is complete."),
-        text_response("Revision applied. Task is complete."),
-        json_response(evaluator_response_json(
+        )))
+        .replanner(text_response("Revision 1: task is complete."))
+        .evaluator(json_response(evaluator_response_json(
             "pass",
             "All issues have been addressed.",
             0,
-        )),
-    ]));
+        )));
+    runner.provider_client = Box::new(provider);
 
     let result = Box::pin(runner.execute_task(
         &task("Evaluator invalid scorecard revision", "exec-task"),
@@ -1874,30 +1953,30 @@ async fn evaluator_exhaustion_writes_blocked_handoff_with_artifact_paths() {
     runner
         .enable_full_auto(&[tools::TASK_TRACKER.to_string()])
         .await;
-    runner.provider_client = Box::new(QueuedProvider::new(vec![
-        json_response(planner_response_json("pwd")),
-        tool_call_response(
+    let mut provider = RoleQueuedProvider::new();
+    provider
+        .planner(json_response(planner_response_json("pwd")))
+        .build(tool_call_response(
             tools::TASK_TRACKER,
             json!({
                 "action": "update",
                 "index": 1,
                 "status": "completed",
             }),
-        ),
-        text_response("The task is complete."),
-        json_response(evaluator_response_json(
+        ))
+        .build(text_response("The task is complete."))
+        .evaluator(json_response(evaluator_response_json(
             "fail",
             "First evaluator rejection.",
             1,
-        )),
-        text_response("Revision 1: task is complete."),
-        text_response("Revision applied. Task is complete."),
-        json_response(evaluator_response_json(
+        )))
+        .replanner(text_response("Revision 1: task is complete."))
+        .evaluator(json_response(evaluator_response_json(
             "fail",
             "Second evaluator rejection.",
             1,
-        )),
-    ]));
+        )));
+    runner.provider_client = Box::new(provider);
 
     let result = Box::pin(runner.execute_task(&task("Evaluator exhaustion", "exec-task"), &[]))
         .await
