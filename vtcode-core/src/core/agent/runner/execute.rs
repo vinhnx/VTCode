@@ -892,7 +892,7 @@ impl AgentRunner {
                 {
                     effective_tool_calls = Some(vec![ToolCall::function(
                         format!("call_text_{turn}"),
-                        tools::UNIFIED_EXEC.to_string(),
+                        tools::EXEC_COMMAND.to_string(),
                         args_value.to_string(),
                     )]);
                 }

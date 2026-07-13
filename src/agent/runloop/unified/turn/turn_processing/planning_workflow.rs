@@ -66,6 +66,8 @@ fn has_discovery_tool(session_stats: &crate::agent::runloop::unified::state::Ses
         tools::LIST_FILES,
         tools::GREP_FILE,
         tools::UNIFIED_SEARCH,
+        tools::UNIFIED_EXEC,
+        tools::CODE_SEARCH,
     ]
     .iter()
     .any(|tool| session_stats.has_tool(tool))

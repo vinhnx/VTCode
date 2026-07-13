@@ -36,8 +36,34 @@ pub(super) fn detect_textual_exec_tool_call(text: &str) -> Option<Value> {
     let parsed = serde_json::from_str::<Value>(block)
         .or_else(|_| json5::from_str::<Value>(block))
         .ok()?;
-    parsed.as_object()?;
-    Some(parsed)
+    let payload = parsed.as_object()?;
+    if payload
+        .get("action")
+        .and_then(Value::as_str)
+        .is_some_and(|action| action != "run")
+    {
+        return None;
+    }
+
+    let command = crate::tools::command_args::command_text(&parsed)
+        .ok()
+        .flatten()?;
+    let mut public_args = serde_json::Map::new();
+    public_args.insert("cmd".to_string(), Value::String(command));
+    for key in [
+        "yield_time_ms",
+        "max_output_tokens",
+        "workdir",
+        "tty",
+        "sandbox_permissions",
+        "additional_permissions",
+        "justification",
+    ] {
+        if let Some(value) = payload.get(key) {
+            public_args.insert(key.to_string(), value.clone());
+        }
+    }
+    Some(Value::Object(public_args))
 }
 
 /// Compose the system prompt for a workspace using the configured prompt
@@ -82,7 +108,7 @@ mod tests {
         let text = "```tool:command_session\n{\"command\":\"pwd\"}\n```";
         assert_eq!(
             detect_textual_exec_tool_call(text),
-            Some(json!({"command":"pwd"}))
+            Some(json!({"cmd":"pwd"}))
         );
     }
 
@@ -91,7 +117,16 @@ mod tests {
         let text = "```run_pty_cmd\n{\"command\":\"pwd\"}\n```";
         assert_eq!(
             detect_textual_exec_tool_call(text),
-            Some(json!({"command":"pwd"}))
+            Some(json!({"cmd":"pwd"}))
+        );
+    }
+
+    #[test]
+    fn converts_command_arrays_to_public_exec_command_shape() {
+        let text = "```command_session\n{\"action\":\"run\",\"command\":[\"printf\",\"hello world\"]}\n```";
+        assert_eq!(
+            detect_textual_exec_tool_call(text),
+            Some(json!({"cmd":"printf 'hello world'"}))
         );
     }
 

@@ -57,6 +57,21 @@ fn maybe_force_planning_workflow_interview_inserts_tool_call() {
 }
 
 #[test]
+fn public_discovery_tools_make_planning_interview_ready() {
+    for tool in [tools::EXEC_COMMAND, tools::CODE_SEARCH] {
+        let mut stats = SessionStats::default();
+        let mut plan_session = PlanningWorkflowSessionState::default();
+        stats.record_tool(tool);
+        plan_session.increment_turns();
+
+        assert!(
+            planning_workflow_interview_ready(&stats, &plan_session),
+            "{tool} should count as planning discovery"
+        );
+    }
+}
+
+#[test]
 fn maybe_force_planning_workflow_interview_includes_distinct_question_options() {
     let mut stats = SessionStats::default();
     let mut plan_session = PlanningWorkflowSessionState::default();
