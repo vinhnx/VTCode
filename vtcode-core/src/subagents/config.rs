@@ -16,7 +16,7 @@ use super::constants::{
 use crate::config::VTCodeConfig;
 use crate::config::constants::tools;
 use crate::config::models::ModelId;
-use crate::config::types::ReasoningEffortLevel;
+use crate::config::types::{ReasoningEffortLevel, SystemPromptMode, ToolDocumentationMode};
 use crate::core::threads::build_thread_archive_metadata;
 use crate::llm::provider::ToolDefinition;
 use crate::tools::mcp::MCP_QUALIFIED_TOOL_PREFIX;
@@ -97,28 +97,88 @@ fn build_child_config_from_runtime(
     let mut child = parent.clone();
     child.agent.default_model = model.to_string();
     child.runtime_agent_permissions = Some(runtime.permissions.clone());
+    // Apply a lightweight default profile so a delegated child does not replay
+    // the parent bootstrap cost on every turn. This is currently a fixed
+    // default; a future enhancement may let a subagent spec opt into a heavier
+    // profile via explicit `system_prompt_mode`/`tool_documentation_mode`
+    // fields, but today the lightweight profile is always applied.
+    apply_subagent_lightweight_profile(&mut child);
+    normalize_child_max_turns_config(&mut child, max_turns);
+
+    child.permissions.allow = resolve_child_allowed_tools(parent, runtime);
+    child.permissions.deny = resolve_child_denied_tools(parent, runtime);
+    merge_child_hooks(&mut child, runtime.hooks.as_ref());
+    // Drop parent MCP providers by default; only attach servers explicitly
+    // requested by the subagent spec. This prevents multiplying MCP schema
+    // tax across every child. (H1: intentional behavioral change — specs that
+    // need a parent MCP server must declare it via `mcp_servers`.)
+    child.mcp.providers = resolve_child_mcp_providers(parent, runtime);
+    child
+}
+
+/// Forces the minimal system-prompt and tool-documentation modes for a
+/// subagent child config. Isolated so the subagent profile contract is
+/// testable without building a full runtime.
+fn apply_subagent_lightweight_profile(child: &mut VTCodeConfig) {
+    child.agent.system_prompt_mode = SystemPromptMode::Minimal;
+    child.agent.tool_documentation_mode = ToolDocumentationMode::Minimal;
+}
+
+/// Resolves the child's allow-list. When the spec declares tools, the child
+/// allow-list is the intersection of the parent allow-list and the declared
+/// tools (with subagent-internal tools removed). When the spec declares
+/// nothing, the parent allow-list is inherited unchanged.
+fn resolve_child_allowed_tools(
+    parent: &VTCodeConfig,
+    runtime: &ResolvedAgentRuntimeView,
+) -> Vec<String> {
+    let allowed_tools = runtime.tools.clone().unwrap_or_default();
+    if allowed_tools.is_empty() {
+        return parent.permissions.allow.clone();
+    }
+    let filtered: Vec<String> = allowed_tools
+        .into_iter()
+        .filter(|tool| !SUBAGENT_TOOL_NAMES.iter().any(|blocked| blocked == tool))
+        .collect();
+    intersect_allowed_tools(&parent.permissions.allow, &filtered)
+}
+
+/// Resolves the child's deny-list: the parent deny-list, extended with the
+/// spec's disallowed tools and the always-blocked subagent-internal tools.
+fn resolve_child_denied_tools(
+    parent: &VTCodeConfig,
+    runtime: &ResolvedAgentRuntimeView,
+) -> Vec<String> {
+    let mut denied = parent.permissions.deny.clone();
+    denied.extend(runtime.disallowed_tools.clone());
+    for tool in SUBAGENT_TOOL_NAMES {
+        if !denied.iter().any(|entry| entry == *tool) {
+            denied.push((*tool).to_string());
+        }
+    }
+    denied
+}
+
+/// Resolves the child's MCP providers. Parent providers are NOT inherited;
+/// only servers named or inlined by the spec are attached. This keeps the
+/// child bootstrap lean and avoids replaying the parent's MCP schema tax.
+fn resolve_child_mcp_providers(
+    parent: &VTCodeConfig,
+    runtime: &ResolvedAgentRuntimeView,
+) -> Vec<McpProviderConfig> {
+    let mut providers = Vec::new();
+    merge_child_mcp_servers(
+        &mut providers,
+        &parent.mcp.providers,
+        runtime.mcp_servers.as_slice(),
+    );
+    providers
+}
+
+fn normalize_child_max_turns_config(child: &mut VTCodeConfig, max_turns: Option<usize>) {
     if let Some(max_turns) = normalize_child_max_turns(max_turns) {
         child.automation.full_auto.max_turns = max_turns;
     }
-
-    let mut allowed_tools = runtime.tools.clone().unwrap_or_default();
-    if !allowed_tools.is_empty() {
-        allowed_tools.retain(|tool| !SUBAGENT_TOOL_NAMES.iter().any(|blocked| blocked == tool));
-        child.permissions.allow =
-            intersect_allowed_tools(&parent.permissions.allow, &allowed_tools);
-    }
-
-    let mut disallowed_tools = parent.permissions.deny.clone();
-    disallowed_tools.extend(runtime.disallowed_tools.clone());
-    for tool in SUBAGENT_TOOL_NAMES {
-        if !disallowed_tools.iter().any(|entry| entry == tool) {
-            disallowed_tools.push((*tool).to_string());
-        }
-    }
-    child.permissions.deny = disallowed_tools;
-    merge_child_hooks(&mut child, runtime.hooks.as_ref());
-    merge_child_mcp_servers(&mut child, runtime.mcp_servers.as_slice());
-    child
 }
 
 pub fn normalize_child_max_turns(max_turns: Option<usize>) -> Option<usize> {
@@ -364,28 +424,30 @@ fn merge_child_hooks(child: &mut VTCodeConfig, hooks: Option<&HooksConfig>) {
         .extend(hooks.lifecycle.notification.clone());
 }
 
-fn merge_child_mcp_servers(child: &mut VTCodeConfig, servers: &[SubagentMcpServer]) {
+fn merge_child_mcp_servers(
+    providers: &mut Vec<McpProviderConfig>,
+    parent_providers: &[McpProviderConfig],
+    servers: &[SubagentMcpServer],
+) {
     for server in servers {
         match server {
             SubagentMcpServer::Named(name) => {
-                if child
-                    .mcp
-                    .providers
-                    .iter()
-                    .any(|provider| provider.name == *name)
-                {
+                if providers.iter().any(|provider| provider.name == *name) {
                     continue;
+                }
+                if let Some(parent_provider) = parent_providers
+                    .iter()
+                    .find(|provider| provider.name == *name)
+                {
+                    providers.push(parent_provider.clone());
                 }
             }
             SubagentMcpServer::Inline(definition) => {
                 for (name, value) in definition {
                     let provider = inline_mcp_provider(name, value);
                     if let Some(provider) = provider {
-                        child
-                            .mcp
-                            .providers
-                            .retain(|existing| existing.name != provider.name);
-                        child.mcp.providers.push(provider);
+                        providers.retain(|existing| existing.name != provider.name);
+                        providers.push(provider);
                     }
                 }
             }
@@ -553,3 +615,115 @@ pub fn filter_child_tools(
         })
         .collect()
 }
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::constants::models;
+    use vtcode_config::core::permissions::PermissionDefault;
+    use vtcode_config::{
+        AgentMode, IsolationMode, McpProviderConfig, SubagentMcpServer, SubagentSource, SubagentSpec,
+    };
+
+    fn test_subagent_spec() -> SubagentSpec {
+        SubagentSpec {
+            name: "test-agent".to_string(),
+            description: "Test agent".to_string(),
+            prompt: "Do the thing".to_string(),
+            tools: None,
+            disallowed_tools: Vec::new(),
+            model: None,
+            color: None,
+            reasoning_effort: None,
+            permissions: AgentPermissionsConfig::new(PermissionDefault::Ask),
+            skills: Vec::new(),
+            mcp_servers: Vec::new(),
+            hooks: None,
+            background: false,
+            mode: AgentMode::default(),
+            max_turns: None,
+            nickname_candidates: Vec::new(),
+            initial_prompt: None,
+            memory: None,
+            isolation: None,
+            aliases: Vec::new(),
+            source: SubagentSource::Builtin,
+            file_path: None,
+            warnings: Vec::new(),
+            tool_policy_overrides: BTreeMap::new(),
+        }
+    }
+
+    #[test]
+    fn child_config_uses_lightweight_default_profile() {
+        let mut parent = VTCodeConfig::default();
+        parent.agent.system_prompt_mode = SystemPromptMode::Specialized;
+        parent.agent.tool_documentation_mode = ToolDocumentationMode::Full;
+        parent.mcp.providers.push(McpProviderConfig::default());
+
+        let spec = test_subagent_spec();
+        let child = build_child_config(&parent, &spec, models::openai::GPT_5_4, None);
+
+        assert_eq!(
+            child.agent.system_prompt_mode,
+            SystemPromptMode::Minimal,
+            "subagent should default to Minimal system prompt mode"
+        );
+        assert_eq!(
+            child.agent.tool_documentation_mode,
+            ToolDocumentationMode::Minimal,
+            "subagent should default to Minimal tool documentation mode"
+        );
+        assert!(
+            child.mcp.providers.is_empty(),
+            "subagent should not inherit parent MCP providers unless explicitly requested"
+        );
+    }
+
+    #[test]
+    fn child_config_attaches_explicit_mcp_servers() {
+        let mut parent = VTCodeConfig::default();
+        parent.mcp.providers.push(McpProviderConfig::default());
+
+        let mut spec = test_subagent_spec();
+        parent.mcp.providers[0].name = "context7".to_string();
+        spec.mcp_servers = vec![SubagentMcpServer::Named("context7".to_string())];
+
+        let child = build_child_config(&parent, &spec, models::openai::GPT_5_4, None);
+
+        assert_eq!(child.mcp.providers.len(), 1);
+        assert_eq!(child.mcp.providers[0].name, "context7");
+    }
+
+    /// Guard-rail test for the extracted MCP-resolution helper: it must
+    /// isolatedly drop every parent provider unless the spec names it.
+    #[test]
+    fn resolve_child_mcp_providers_drops_unnamed_parent_servers() {
+        let mut parent = VTCodeConfig::default();
+        parent.mcp.providers.push(McpProviderConfig::default());
+
+        let spec = test_subagent_spec();
+        let runtime = ResolvedAgentRuntimeView::from_spec(&spec);
+
+        let providers = resolve_child_mcp_providers(&parent, &runtime);
+        assert!(
+            providers.is_empty(),
+            "parent MCP providers must not leak into the child unless explicitly named"
+        );
+    }
+
+    #[test]
+    fn resolve_child_mcp_providers_keeps_named_parent_server() {
+        let mut parent = VTCodeConfig::default();
+        parent.mcp.providers.push(McpProviderConfig::default());
+        parent.mcp.providers[0].name = "context7".to_string();
+
+        let mut spec = test_subagent_spec();
+        spec.mcp_servers = vec![SubagentMcpServer::Named("context7".to_string())];
+        let runtime = ResolvedAgentRuntimeView::from_spec(&spec);
+
+        let providers = resolve_child_mcp_providers(&parent, &runtime);
+        assert_eq!(providers.len(), 1);
+        assert_eq!(providers[0].name, "context7");
+    }
+}
+

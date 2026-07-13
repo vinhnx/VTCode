@@ -456,7 +456,11 @@ pub struct AgentHarnessConfig {
     /// Default: true. Disable to keep the full history across a model switch.
     #[serde(default = "default_harness_compact_on_model_switch")]
     pub compact_on_model_switch: bool,
-    /// Provider-native tool-result clearing policy.
+    /// Provider-native tool-result clearing policy. When enabled, old tool
+    /// results are stripped from the context once it grows past
+    /// `trigger_tokens`, keeping only the most recent `keep_tool_uses` results
+    /// and always retaining at least `clear_at_least_tokens`. This bounds
+    /// per-turn context growth and is enabled by default.
     #[serde(default)]
     pub tool_result_clearing: ToolResultClearingConfig,
     /// Optional maximum estimated API cost in USD before VT Code stops the session.
@@ -1150,7 +1154,7 @@ const fn default_harness_context_reset_stall_threshold() -> u32 {
 
 #[inline]
 const fn default_tool_result_clearing_enabled() -> bool {
-    false
+    true
 }
 
 #[inline]
@@ -1971,7 +1975,7 @@ budget_warning_threshold = 0.5
         let config = AgentConfig::default();
         let clearing = config.harness.tool_result_clearing;
 
-        assert!(!clearing.enabled);
+        assert!(clearing.enabled);
         assert_eq!(clearing.trigger_tokens, 100_000);
         assert_eq!(clearing.keep_tool_uses, 3);
         assert_eq!(clearing.clear_at_least_tokens, 30_000);

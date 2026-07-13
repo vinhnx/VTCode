@@ -1069,4 +1069,52 @@ mod tests {
             function_declarations.len()
         );
     }
+
+    /// End-to-end regression for the first-request token budget: the actual
+    /// builtin tool schemas sent in Progressive mode must fit in a small
+    /// token envelope, leaving room for the system prompt and conversation.
+    #[test]
+    fn emitted_model_tool_schema_fits_within_first_request_budget() {
+        use crate::config::ToolDocumentationMode;
+        use crate::tools::handlers::{
+            SessionSurface, SessionToolCatalog, SessionToolsConfig, ToolModelCapabilities,
+        };
+        use serde::Serialize;
+
+        #[derive(Serialize)]
+        struct ToolSchemaEstimate<'a> {
+            name: &'a str,
+            description: &'a str,
+            parameters: &'a serde_json::Value,
+        }
+
+        let registrations = builtin_tool_registrations(None);
+        let catalog = SessionToolCatalog::rebuild_from_registrations(registrations);
+        let config = SessionToolsConfig::full_public(
+            SessionSurface::Interactive,
+            CapabilityLevel::CodeSearch,
+            ToolDocumentationMode::Progressive,
+            ToolModelCapabilities::default(),
+        );
+
+        let schema_entries = catalog.schema_entries(config);
+        let total_tokens: usize = schema_entries
+            .iter()
+            .map(|entry| {
+                let estimate = ToolSchemaEstimate {
+                    name: &entry.name,
+                    description: &entry.description,
+                    parameters: &entry.parameters,
+                };
+                serde_json::to_string(&estimate)
+                    .map(|s| s.len() / 4)
+                    .unwrap_or(0)
+            })
+            .sum();
+
+        assert!(
+            total_tokens <= 3_000,
+            "emitted model tool schema tokens in Progressive mode is {total_tokens}; expected <= 3_000"
+        );
+    }
 }

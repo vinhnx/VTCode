@@ -74,7 +74,7 @@ python3 scripts/generate_config_field_reference.py
 | `agent.harness.orchestration_mode` | `string` | no | `"plan_build_evaluate"` | Select the exec/full-auto harness orchestration path. |
 | `agent.harness.tool_result_clearing.clear_at_least_tokens` | `integer` | no | `30000` | - |
 | `agent.harness.tool_result_clearing.clear_tool_inputs` | `boolean` | no | `false` | - |
-| `agent.harness.tool_result_clearing.enabled` | `boolean` | no | `false` | - |
+| `agent.harness.tool_result_clearing.enabled` | `boolean` | no | `true` | - |
 | `agent.harness.tool_result_clearing.keep_tool_uses` | `integer` | no | `3` | - |
 | `agent.harness.tool_result_clearing.trigger_tokens` | `integer` | no | `100000` | - |
 | `agent.idle_turn_limit` | `integer` | no | `3` | Maximum consecutive idle turns (no tool calls, no meaningful response) before the agent runner treats the session as stalled and aborts the loop. |
@@ -689,7 +689,7 @@ python3 scripts/generate_config_field_reference.py
 | `timeouts.pty_ceiling_seconds` | `integer` | no | `300` | Maximum duration (in seconds) for PTY-backed commands. |
 | `timeouts.streaming_ceiling_seconds` | `integer` | no | `600` | Maximum duration (in seconds) for streaming API responses. |
 | `timeouts.warning_threshold_percent` | `integer` | no | `80` | Percentage (0-100) of the ceiling after which the UI should warn. |
-| `tools.client_tool_search` | `boolean` | no | `false` | Enables client-local deferred tool loading for providers without a hosted tool search (e.g. Gemini). When enabled, tools flagged `defer_loading: true` are omitted from the request payload instead of being sent eagerly, and a compact summary of what is discoverable is appended to the system prompt; the model loads them via the local `unified_search action="tools"`. This changes model behavior, so it defaults to `false`. |
+| `tools.client_tool_search` | `boolean` | no | `true` | Enables client-local deferred tool loading for providers without a hosted tool search (e.g. Gemini). When enabled, tools flagged `defer_loading: true` are omitted from the request payload instead of being sent eagerly, and a compact summary of what is discoverable is appended to the system prompt; the model loads them via the local `unified_search action="tools"`. Enabled by default because eager MCP schemas are the dominant source of token inflation. Set to `false` to restore the eager catalog. |
 | `tools.default_policy` | `string` | no | `"prompt"` | Default policy for tools not explicitly listed |
 | `tools.editor.enabled` | `boolean` | no | `true` | Enable external editor support for `/edit` and keyboard shortcuts |
 | `tools.editor.preferred_editor` | `string` | no | `""` | Preferred editor command override (supports arguments, e.g. "code --wait") |

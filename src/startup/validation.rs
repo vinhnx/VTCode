@@ -141,7 +141,68 @@ pub(super) fn validate_startup_configuration(
         tracing::warn!("could not validate configured model catalog: {e}");
     }
 
+    if !quiet {
+        warn_token_overhead(config);
+    }
+
     Ok(())
+}
+
+/// Returns non-fatal warnings describing configuration choices that are likely
+/// to inflate the per-request token cost:
+///
+/// - many configured MCP servers (schema tax on every request),
+/// - heavy `system_prompt_mode` / `tool_documentation_mode`,
+/// - disabled tool-result clearing (unbounded context growth).
+///
+/// Kept pure (no logging side effects) so it can be unit-tested in isolation;
+/// `warn_token_overhead` is the logging wrapper.
+fn collect_token_overhead_warnings(config: &VTCodeConfig) -> Vec<String> {
+    use vtcode_core::config::{SystemPromptMode, ToolDocumentationMode};
+
+    const MCP_SERVER_OVERHEAD_WARN_THRESHOLD: usize = 8;
+
+    let mut warnings = Vec::new();
+
+    let mcp_servers = config.mcp.providers.len();
+    if mcp_servers > MCP_SERVER_OVERHEAD_WARN_THRESHOLD {
+        warnings.push(format!(
+            "configured {mcp_servers} MCP servers (threshold {MCP_SERVER_OVERHEAD_WARN_THRESHOLD}); each server's tool schemas are sent on every request unless deferred. Consider reducing the count or relying on deferred tool loading (tools.client_tool_search defaults to true) to lower token cost."
+        ));
+    }
+
+    if matches!(config.agent.system_prompt_mode, SystemPromptMode::Specialized) {
+        warnings.push(
+            "agent.system_prompt_mode = 'specialized' sends a larger base system prompt on every request. Prefer 'minimal' or 'lightweight' (default) to reduce token cost.".to_string(),
+        );
+    }
+
+    if matches!(
+        config.agent.tool_documentation_mode,
+        ToolDocumentationMode::Full
+    ) {
+        warnings.push(
+            "agent.tool_documentation_mode = 'full' sends complete tool documentation on every request. Prefer 'progressive' (default) to keep tool schemas small.".to_string(),
+        );
+    }
+
+    if !config.agent.harness.tool_result_clearing.enabled {
+        warnings.push(
+            "agent.harness.tool_result_clearing is disabled; old tool results accumulate in context and raise per-turn token cost. Enable it (the default) to bound context growth.".to_string(),
+        );
+    }
+
+    warnings
+}
+
+/// Logs the warnings returned by `collect_token_overhead_warnings`. Token
+/// efficiency is a correctness concern — every harness token is context the
+/// model cannot spend on the task — so surfacing these at startup lets users
+/// audit and trim their setup before paying for it.
+fn warn_token_overhead(config: &VTCodeConfig) {
+    for warning in collect_token_overhead_warnings(config) {
+        tracing::warn!("{warning}");
+    }
 }
 
 #[cfg(test)]
@@ -149,6 +210,7 @@ mod tests {
     use super::*;
     use assert_fs::TempDir;
     use std::env;
+    use vtcode_config::McpProviderConfig;
     use vtcode_commons::env_lock;
     use vtcode_core::config::loader::ConfigBuilder;
 
@@ -272,5 +334,68 @@ mod tests {
 
         env_guard.restore_var("VTCODE_CONFIG", previous_config_dir);
         Ok(())
+    }
+
+    #[test]
+    fn token_overhead_warnings_empty_for_default_config() {
+        let config = VTCodeConfig::default();
+        assert!(
+            collect_token_overhead_warnings(&config).is_empty(),
+            "default config should not trigger token-overhead warnings"
+        );
+    }
+
+    #[test]
+    fn token_overhead_warns_on_specialized_prompt_mode() {
+        let mut config = VTCodeConfig::default();
+        config.agent.system_prompt_mode = vtcode_core::config::SystemPromptMode::Specialized;
+        let warnings = collect_token_overhead_warnings(&config);
+        assert!(
+            warnings
+                .iter()
+                .any(|w| w.contains("system_prompt_mode = 'specialized'")),
+            "expected a warning for specialized system prompt mode: {warnings:?}"
+        );
+    }
+
+    #[test]
+    fn token_overhead_warns_on_full_tool_docs() {
+        let mut config = VTCodeConfig::default();
+        config.agent.tool_documentation_mode = vtcode_core::config::ToolDocumentationMode::Full;
+        let warnings = collect_token_overhead_warnings(&config);
+        assert!(
+            warnings
+                .iter()
+                .any(|w| w.contains("tool_documentation_mode = 'full'")),
+            "expected a warning for full tool documentation mode: {warnings:?}"
+        );
+    }
+
+    #[test]
+    fn token_overhead_warns_on_disabled_tool_result_clearing() {
+        let mut config = VTCodeConfig::default();
+        config.agent.harness.tool_result_clearing.enabled = false;
+        let warnings = collect_token_overhead_warnings(&config);
+        assert!(
+            warnings
+                .iter()
+                .any(|w| w.contains("tool_result_clearing is disabled")),
+            "expected a warning for disabled tool-result clearing: {warnings:?}"
+        );
+    }
+
+    #[test]
+    fn token_overhead_warns_on_many_mcp_servers() {
+        let mut config = VTCodeConfig::default();
+        for _ in 0..12 {
+            config.mcp.providers.push(McpProviderConfig::default());
+        }
+        let warnings = collect_token_overhead_warnings(&config);
+        assert!(
+            warnings
+                .iter()
+                .any(|w| w.contains("MCP servers")),
+            "expected a warning for many MCP servers: {warnings:?}"
+        );
     }
 }
