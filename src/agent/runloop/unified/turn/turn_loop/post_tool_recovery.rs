@@ -351,7 +351,9 @@ pub(super) fn dispatch_post_tool_failure(
     // gathered evidence instead of re-forcing the interview, which would
     // re-research the still-huge context for another full wall-clock budget
     // and loop forever across turns (observed in checkpoint turn_647).
-    if harness_state.wall_clock_exhausted_emitted
+    // `wall_clock_exhausted()` (time-based) also covers exhaustion without a
+    // rejected tool call, e.g. a provider error right after a long tool batch.
+    if (harness_state.wall_clock_exhausted_emitted || harness_state.wall_clock_exhausted())
         && let Some(session) = plan_session.as_deref_mut()
     {
         session.mark_recovery_exhausted();

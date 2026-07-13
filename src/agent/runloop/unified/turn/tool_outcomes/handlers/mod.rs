@@ -64,6 +64,16 @@ pub(super) fn flush_wall_clock_directive(ctx: &mut TurnProcessingContext<'_>) {
         && let Some(exhaustion) = ctx.harness_state.wall_clock_budget_exhaustion()
     {
         ctx.push_system_message(exhaustion.synthesis_directive_message());
+        // Arm the tool-free recovery pass so the next request strips tool
+        // definitions at the API level (`tools: None` + `ToolChoice::none`).
+        // The directive alone is advisory: models kept emitting tool calls
+        // after it, burning requests on rejected calls instead of
+        // synthesizing (observed in checkpoints turn_637 and turn_647).
+        if ctx.harness_state.recovery_reason.is_none() {
+            ctx.harness_state.recovery_reason =
+                Some("tool wall-clock budget exhausted".to_string());
+        }
+        ctx.harness_state.switch_to_tool_free_recovery();
     }
 }
 
