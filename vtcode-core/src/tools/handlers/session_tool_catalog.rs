@@ -645,7 +645,11 @@ impl ToolCatalogEntry {
             return false;
         }
 
-        if !profile_allows_tool(config.tool_profile, self.public_name.as_str()) {
+        if !profile_allows_tool(
+            config.tool_profile,
+            self.public_name.as_str(),
+            config.planning_active,
+        ) {
             return false;
         }
 
@@ -661,12 +665,15 @@ impl ToolCatalogEntry {
     }
 }
 
-fn profile_allows_tool(profile: ToolProfile, tool_name: &str) -> bool {
+fn profile_allows_tool(profile: ToolProfile, tool_name: &str, planning_active: bool) -> bool {
     match profile {
-        ToolProfile::CodexDefault => matches!(
-            tool_name,
-            tools::EXEC_COMMAND | tools::WRITE_STDIN | tools::APPLY_PATCH
-        ),
+        ToolProfile::CodexDefault => {
+            matches!(
+                tool_name,
+                tools::EXEC_COMMAND | tools::WRITE_STDIN | tools::APPLY_PATCH
+            ) || (planning_active
+                && matches!(tool_name, tools::CODE_SEARCH | tools::REQUEST_USER_INPUT))
+        }
         ToolProfile::AdvancedVtCode => !matches!(
             tool_name,
             tools::UNIFIED_EXEC
@@ -933,12 +940,14 @@ mod tests {
         ];
 
         let catalog = SessionToolCatalog::rebuild_from_registrations(registrations);
-        let names = catalog.public_tool_names(SessionToolsConfig::full_public(
+        let mut config = SessionToolsConfig::full_public(
             SessionSurface::AgentRunner,
             CapabilityLevel::CodeSearch,
             ToolDocumentationMode::Full,
             ToolModelCapabilities::default(),
-        ));
+        );
+        config.planning_active = false;
+        let names = catalog.public_tool_names(config);
 
         assert_eq!(
             names,
@@ -967,6 +976,34 @@ mod tests {
                 "{file_tool} must stay out of the default file surface"
             );
         }
+    }
+
+    #[test]
+    fn default_profile_exposes_planning_tools_during_planning() {
+        let registrations = vec![
+            registration(tools::CODE_SEARCH)
+                .with_description("Search code")
+                .with_parameter_schema(empty_object_schema()),
+            registration(tools::REQUEST_USER_INPUT)
+                .with_description("Ask the user")
+                .with_parameter_schema(empty_object_schema()),
+        ];
+
+        let catalog = SessionToolCatalog::rebuild_from_registrations(registrations);
+        let names = catalog.public_tool_names(SessionToolsConfig::full_public(
+            SessionSurface::Interactive,
+            CapabilityLevel::CodeSearch,
+            ToolDocumentationMode::Full,
+            ToolModelCapabilities::default(),
+        ));
+
+        assert_eq!(
+            names,
+            vec![
+                tools::CODE_SEARCH.to_string(),
+                tools::REQUEST_USER_INPUT.to_string(),
+            ]
+        );
     }
 
     #[test]

@@ -494,19 +494,19 @@ mod tests {
     fn test_normalize_router_tool_name_exec_code_label() {
         assert_eq!(
             normalize_router_tool_name("Exec code").as_deref(),
-            Some("command_session")
+            Some(tools::UNIFIED_EXEC)
         );
         assert_eq!(
             normalize_router_tool_name("run command (PTY)").as_deref(),
-            Some("command_session")
+            Some(tools::UNIFIED_EXEC)
         );
         assert_eq!(
             normalize_router_tool_name("bash").as_deref(),
-            Some("command_session")
+            Some(tools::UNIFIED_EXEC)
         );
         assert_eq!(
             normalize_router_tool_name("container.exec").as_deref(),
-            Some("command_session")
+            Some(tools::UNIFIED_EXEC)
         );
     }
 
@@ -572,14 +572,14 @@ mod tests {
     fn test_suggest_similar_tool_names_uses_normalized_form() {
         let mut handlers = HashMap::new();
         handlers.insert(
-            CompactStr::from("command_session"),
+            CompactStr::from(tools::UNIFIED_EXEC),
             DispatchEntry {
-                canonical_name: "command_session".to_string(),
+                canonical_name: tools::UNIFIED_EXEC.to_string(),
                 handler: Arc::new(MockHandler) as Arc<dyn ToolHandler>,
             },
         );
 
         let suggestions = suggest_similar_tool_names("Exec code", &handlers);
-        assert_eq!(suggestions, vec!["command_session"]);
+        assert_eq!(suggestions, vec![tools::UNIFIED_EXEC]);
     }
 }

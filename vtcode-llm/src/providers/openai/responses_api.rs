@@ -1232,7 +1232,7 @@ mod tests {
 
         assert_eq!(
             parsed.tool_references,
-            vec!["exec_command".to_string(), "apply_patch".to_string()]
+            vec!["exec_command".to_string(), "write_file".to_string()]
         );
     }
 
