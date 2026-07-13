@@ -28,14 +28,12 @@ use crate::agent::runloop::unified::ui_interaction_stream_helpers::common_prefix
 // Harmony marker detection and constants are centralized in `harmony.rs`
 // alongside `strip_harmony_syntax`. This module imports them rather than
 // duplicating the marker list.
-use crate::agent::runloop::unified::turn::harmony::contains_harmony_marker;
-
-const HARMONY_TERMINATORS: &[&str] = &["<|call|>", "<|return|>", "<|end|>"];
+use crate::agent::runloop::unified::turn::harmony::{HARMONY_END_TAGS, contains_harmony_marker};
 
 fn incomplete_harmony_block_start(raw: &str) -> Option<usize> {
     let start_pos = raw.rfind("<|start|>")?;
     let tail = &raw[start_pos..];
-    let has_terminator = HARMONY_TERMINATORS
+    let has_terminator = HARMONY_END_TAGS
         .iter()
         .any(|terminator| tail.contains(terminator));
     if has_terminator {
@@ -168,8 +166,8 @@ impl StreamSanitizer {
 
     /// Sanitize final (complete) text — called once at stream end or for
     /// non-streamed responses. Strips flat noise tokens, then harmony syntax.
-    pub(crate) fn finalize(&self, text: String) -> String {
-        let stripped = strip_provider_noise(&text);
+    pub(crate) fn finalize(&self, text: &str) -> String {
+        let stripped = strip_provider_noise(text);
         if contains_harmony_marker(&stripped) {
             strip_harmony_syntax(&stripped)
         } else {
@@ -267,23 +265,20 @@ mod tests {
         let s = StreamSanitizer::new();
         let input =
             "]<]minimax[>[<|start|>assistant<|channel|>commentary<|message|>hidden<|call|> visible";
-        let result = s.finalize(input.to_string());
+        let result = s.finalize(input);
         assert_eq!(result, "visible");
     }
 
     #[test]
     fn finalize_preserves_clean_text() {
         let s = StreamSanitizer::new();
-        assert_eq!(
-            s.finalize("Just normal text".to_string()),
-            "Just normal text"
-        );
+        assert_eq!(s.finalize("Just normal text"), "Just normal text");
     }
 
     #[test]
     fn finalize_strips_standalone_minimax_noise() {
         let s = StreamSanitizer::new();
-        assert_eq!(s.finalize("]<]minimax[>[Hello".to_string()), "Hello");
+        assert_eq!(s.finalize("]<]minimax[>[Hello"), "Hello");
     }
 
     #[test]

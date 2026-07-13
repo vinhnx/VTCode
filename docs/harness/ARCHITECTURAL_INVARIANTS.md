@@ -271,6 +271,36 @@ Key guarantees:
 
 ---
 
+## 18. Evaluate Outcomes, Not Claims
+
+Agent output claiming success is not evidence of success. Every completion claim must be backed by actual verification output: test results, build output, runtime behavior, or environment state.
+
+**Violation**: Agent declares a task complete or a sprint passes without showing actual tool output that proves correctness (test pass counts, build exit codes, command output).
+
+**Remediation**: Write an outcome verification artifact (`current_outcome_verification.md`) that records: (1) what verification commands were run, (2) what their actual output was, (3) whether tests passed or failed with counts, (4) whether the build succeeded. The evaluator must check this artifact, not the agent's claims.
+
+---
+
+## 19. Sprint Contract Negotiation
+
+Before implementation begins, the generator and evaluator must agree on "what counts as done" through a structured sprint contract. Vague requirements become testable acceptance criteria.
+
+**Violation**: Agent begins implementation without a sprint contract that specifies scope, acceptance criteria, and out-of-scope items.
+
+**Remediation**: Write a sprint contract artifact (`current_sprint_contract.md`) before coding. Include: (1) what this sprint will deliver, (2) acceptance criteria that can be verified mechanically, (3) what is explicitly out of scope, (4) scoring dimensions with hard thresholds.
+
+---
+
+## 20. Reward Hacking Prevention in Eval Environments
+
+The eval and sandbox environment must not contain shortcuts the agent can exploit instead of solving the real task. Hidden tests must not be in the container, future commits must not be in `.git/objects`, and production secrets must not be exposed directly.
+
+**Violation**: Eval environment contains hidden tests in the filesystem, future commits in `.git/objects`, or production secrets (API keys, OAuth tokens, SSH keys) exposed directly to the agent.
+
+**Remediation**: Store hidden tests outside the container. Use controlled tool capabilities for secrets — the tool internally checks permissions, limits parameters, and logs audit trails. Verify environment state (files, tests, git clean) not agent output text. See [HARNESS_EVALUATION.md](HARNESS_EVALUATION.md) for the full checklist.
+
+---
+
 ## Enforcement
 
 These invariants should be enforced by:

@@ -248,6 +248,47 @@ pub fn clean_reasoning_text(text: &str) -> String {
         .join("\n")
 }
 
+/// Compact reasoning text for on-screen display.
+///
+/// Unlike [`clean_reasoning_text`], which removes *all* blank lines, this
+/// collapses runs of two or more blank/whitespace-only lines into a single
+/// blank line so paragraph structure is preserved while "blank-line spam"
+/// from the model is removed. Leading/trailing whitespace on every line is
+/// trimmed and leading/trailing blank lines of the whole block are dropped.
+///
+/// ```
+/// # use vtcode_commons::formatting::compact_reasoning_text;
+/// assert_eq!(compact_reasoning_text("line1\n\n\n\nline2\n"), "line1\n\nline2");
+/// assert_eq!(compact_reasoning_text("  a  \n\n\n  b  \n"), "a\n\nb");
+/// assert_eq!(compact_reasoning_text("\n\n\n"), "");
+/// assert_eq!(compact_reasoning_text(""), "");
+/// ```
+pub fn compact_reasoning_text(text: &str) -> String {
+    let mut out: Vec<&str> = Vec::with_capacity(text.lines().count());
+    let mut prev_blank = false;
+    for line in text.lines() {
+        let trimmed = line.trim();
+        let is_blank = trimmed.is_empty();
+        if is_blank {
+            if prev_blank {
+                continue;
+            }
+            out.push("");
+            prev_blank = true;
+        } else {
+            out.push(trimmed);
+            prev_blank = false;
+        }
+    }
+    while out.first().is_some_and(|l| l.trim().is_empty()) {
+        out.remove(0);
+    }
+    while out.last().is_some_and(|l| l.trim().is_empty()) {
+        out.pop();
+    }
+    out.join("\n")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -285,6 +326,35 @@ mod tests {
     #[test]
     fn truncate_byte_budget_zero() {
         assert_eq!(truncate_byte_budget("abc", 0, "..."), "...");
+    }
+
+    #[test]
+    fn compact_reasoning_text_collapses_blank_runs() {
+        assert_eq!(
+            compact_reasoning_text("line1\n\n\n\nline2\n"),
+            "line1\n\nline2"
+        );
+        assert_eq!(compact_reasoning_text("a\n\n\n\n\n\nb"), "a\n\nb");
+    }
+
+    #[test]
+    fn compact_reasoning_text_preserves_single_paragraph_breaks() {
+        assert_eq!(
+            compact_reasoning_text("para one\n\npara two\n"),
+            "para one\n\npara two"
+        );
+    }
+
+    #[test]
+    fn compact_reasoning_text_trims_trailing_whitespace() {
+        assert_eq!(compact_reasoning_text("  a  \n\n\n  b  \n"), "a\n\nb");
+    }
+
+    #[test]
+    fn compact_reasoning_text_strips_leading_trailing_blanks() {
+        assert_eq!(compact_reasoning_text("\n\n\nmid\n\n\n"), "mid");
+        assert_eq!(compact_reasoning_text("\n\n\n"), "");
+        assert_eq!(compact_reasoning_text(""), "");
     }
 
     #[test]

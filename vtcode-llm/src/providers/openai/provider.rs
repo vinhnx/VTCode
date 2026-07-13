@@ -800,6 +800,8 @@ impl OpenAIProvider {
             preserve_structured_history_on_replay: backend_defaults
                 .preserve_structured_history_on_replay,
             preserve_assistant_phase_on_replay: false,
+            reasoning_context: None,
+            safety_identifier: None,
         };
 
         request_builder::build_responses_request(request, &ctx)

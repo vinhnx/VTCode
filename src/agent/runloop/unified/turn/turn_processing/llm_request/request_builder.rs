@@ -1,622 +1,40 @@
+//! Turn-request build orchestrator.
+//!
+//! Ties together the sibling `llm_request` submodules -- `snapshot`
+//! (per-turn state), `prompt_assembly` (system prompt + tool catalog),
+//! `tool_shaping` (wire-facing tool filtering), `context_management`
+//! (provider compaction/edits payload), and `response_chain`
+//! (Responses-API history handling) -- into the single wire-ready
+//! [`uni::LLMRequest`] for a turn via [`build_turn_request`]. Invariant:
+//! this module owns no turn-state derivation of its own; it only
+//! sequences calls into the submodules above and assembles their outputs
+//! into [`TurnRequestBuildResult`].
+
 use anyhow::Result;
-use std::borrow::Cow;
 use std::fmt::Write as _;
-use std::str::FromStr;
 use std::sync::Arc;
 
-use dirs::home_dir;
-
-use vtcode_core::config::{
-    OpenAIPromptCacheKeyMode, PromptCachingConfig, build_openai_prompt_cache_key,
-};
-use vtcode_core::core::agent::features::FeatureSet;
+use vtcode_core::config::build_openai_prompt_cache_key;
 use vtcode_core::core::agent::harness_kernel::{
-    HarnessRequestPlanInput, SessionToolCatalogSnapshot, build_harness_request_plan,
-    stable_system_prefix_hash,
+    HarnessRequestPlanInput, build_harness_request_plan, stable_system_prefix_hash,
 };
-use vtcode_core::core::agent::runner::prompt_alignment;
-use vtcode_core::llm::provider::{
-    self as uni, ParallelToolConfig, prepare_responses_continuation_request,
-    records_responses_continuation_state,
-};
-use vtcode_core::permissions::{
-    build_advertised_permission_requests, evaluate_effective_permissions,
-};
-use vtcode_core::prompts::{
-    DEFAULT_FEW_SHOT_BUDGET_TOKENS, FewShotStore, PromptContext,
-    append_runtime_tool_prompt_sections, render_few_shot_section,
-    temporal::generate_temporal_context, upsert_harness_limits_section,
-};
-use vtcode_core::subagents::load_primary_memory_appendix;
-use vtcode_core::tools::handlers::anthropic_native_memory_enabled_for_runtime;
-use vtcode_core::{
-    ActivePrimaryAgent, apply_primary_agent_prompt_context, apply_primary_agent_tool_policy,
-};
+use vtcode_core::llm::provider::{self as uni, ParallelToolConfig};
 
+use super::context_management::resolve_context_management;
 use super::metrics::{ToolCatalogCacheMetrics, emit_tool_catalog_cache_metrics};
-use crate::agent::runloop::unified::incremental_system_prompt::PromptCacheShapingMode;
-use crate::agent::runloop::unified::run_loop_context::TurnExecutionSnapshot;
-use crate::agent::runloop::unified::turn::compaction::{
-    build_server_compaction_context_management, resolve_compaction_threshold,
+use super::prompt_assembly::{
+    PromptAssemblyInput, assemble_prompt, render_primary_agent_runtime_context,
 };
+use super::response_chain::{prepare_responses_request_history, prepend_request_context_message};
+use super::snapshot::{TurnRequestSnapshot, resolve_effective_reasoning_effort};
+use super::tool_shaping::{client_local_wire_tools, uses_out_of_band_copilot_tools};
 use crate::agent::runloop::unified::turn::context::TurnProcessingContext;
-
-pub(super) fn is_openai_prompt_cache_enabled(
-    provider_name: &str,
-    global_prompt_cache_enabled: bool,
-    openai_prompt_cache_enabled: bool,
-) -> bool {
-    provider_name.eq_ignore_ascii_case("openai")
-        && global_prompt_cache_enabled
-        && openai_prompt_cache_enabled
-}
-
-pub(super) fn resolve_prompt_cache_shaping_mode(
-    provider_name: &str,
-    prompt_cache: &PromptCachingConfig,
-) -> PromptCacheShapingMode {
-    if !prompt_cache.cache_friendly_prompt_shaping
-        || !prompt_cache.is_provider_enabled(provider_name)
-    {
-        return PromptCacheShapingMode::Disabled;
-    }
-
-    if matches!(
-        provider_name.to_ascii_lowercase().as_str(),
-        "anthropic" | "minimax"
-    ) {
-        PromptCacheShapingMode::AnthropicBlockRuntimeContext
-    } else {
-        PromptCacheShapingMode::TrailingRuntimeContext
-    }
-}
-
-#[derive(Clone)]
-pub(super) struct TurnRequestSnapshot {
-    pub provider_name: String,
-    pub planning_active: bool,
-    pub full_auto: bool,
-    pub auto_permission: bool,
-    pub tool_free_recovery: bool,
-    pub recovery_reason: Option<String>,
-    pub request_user_input_enabled: bool,
-    pub context_window_size: usize,
-    pub turn_timeout_secs: u64,
-    pub active_model: String,
-    pub active_primary_agent: ActivePrimaryAgent,
-    pub openai_prompt_cache_enabled: bool,
-    pub openai_prompt_cache_key_mode: OpenAIPromptCacheKeyMode,
-    pub prompt_cache_shaping_mode: PromptCacheShapingMode,
-    pub capabilities: uni::ProviderCapabilities,
-    pub execution: TurnExecutionSnapshot,
-}
-
-struct PromptAssemblyInput<'a> {
-    turn: &'a TurnRequestSnapshot,
-}
-
-struct PromptAssemblyOutput {
-    system_prompt: String,
-    tool_snapshot: SessionToolCatalogSnapshot,
-}
 
 pub(super) struct TurnRequestBuildResult {
     pub request: uni::LLMRequest,
     pub has_tools: bool,
     pub runtime_tools: Option<Arc<Vec<uni::ToolDefinition>>>,
     pub continuation_messages: Vec<uni::Message>,
-}
-
-fn uses_out_of_band_copilot_tools(provider_name: &str) -> bool {
-    provider_name.eq_ignore_ascii_case(vtcode_core::copilot::COPILOT_PROVIDER_KEY)
-}
-
-/// Build the few-shot section for the current turn.
-///
-/// Returns `None` when no examples match or when selection is skipped
-/// (no query available, empty store). The selection uses keyword-tag
-/// overlap with the most recent user message and is bounded by
-/// [`DEFAULT_FEW_SHOT_BUDGET_TOKENS`].
-fn build_few_shot_section(ctx: &mut TurnProcessingContext<'_>) -> Option<String> {
-    let query = latest_user_query(ctx.working_history.as_slice())?;
-    let store = FewShotStore::load(Some(ctx.config.workspace.as_path()), home_dir().as_deref());
-    if store.is_empty() {
-        return None;
-    }
-    let chosen = store.select(&query, DEFAULT_FEW_SHOT_BUDGET_TOKENS);
-    if chosen.is_empty() {
-        return None;
-    }
-    Some(render_few_shot_section(&chosen))
-}
-
-/// Return the text of the most recent user message in `history`. Used as
-/// the query for few-shot selection. Returns `None` when no user message
-/// is present (e.g., empty / tool-only history).
-fn latest_user_query(history: &[uni::Message]) -> Option<String> {
-    history
-        .iter()
-        .rev()
-        .find(|message| matches!(message.role, uni::MessageRole::User))
-        .map(|message| message.content.as_text().into_owned())
-        .filter(|text: &String| !text.trim().is_empty())
-}
-
-fn append_copilot_runtime_guidance(system_prompt: &mut String) {
-    let _ = writeln!(
-        system_prompt,
-        "\n[GitHub Copilot Client Tools]\n- the VT Code tools named in this prompt are exposed as Copilot client tools outside the normal JSON tool list\n- when a tool is needed, emit the actual client tool call instead of describing the call in plain text\n- do not claim a tool was rejected, blocked, or unavailable unless the runtime returned that result"
-    );
-}
-
-pub(super) fn capture_turn_request_snapshot(
-    ctx: &mut TurnProcessingContext<'_>,
-    active_model: &str,
-    tool_free_recovery: bool,
-) -> TurnRequestSnapshot {
-    let prompt_cache_config = &ctx.config.prompt_cache;
-    let planning_active = ctx.is_planning_active();
-    let auto_permission = ctx.full_auto && !planning_active;
-    let provider_name = ctx.provider_client.name().to_ascii_lowercase();
-    let openai_prompt_cache_enabled = is_openai_prompt_cache_enabled(
-        &provider_name,
-        prompt_cache_config.enabled,
-        prompt_cache_config.providers.openai.enabled,
-    );
-    let prompt_cache_shaping_mode =
-        resolve_prompt_cache_shaping_mode(&provider_name, prompt_cache_config);
-    let request_user_input_enabled =
-        FeatureSet::from_config(ctx.vt_cfg).request_user_input_enabled(planning_active, true);
-    let active_primary_agent = ctx.active_primary_agent.active().clone();
-    let active_model = resolve_effective_request_model(active_model, &active_primary_agent);
-    let context_window_size = ctx.provider_client.effective_context_size(&active_model);
-    let turn_timeout_secs = ctx
-        .vt_cfg
-        .map(|cfg| cfg.optimization.agent_execution.max_execution_time_secs)
-        .unwrap_or(300);
-    let openai_prompt_cache_key_mode = prompt_cache_config
-        .providers
-        .openai
-        .prompt_cache_key_mode
-        .clone();
-    let full_auto = ctx.full_auto;
-    let capabilities = uni::get_cached_capabilities(&**ctx.provider_client, &active_model);
-
-    TurnRequestSnapshot {
-        provider_name,
-        planning_active,
-        full_auto,
-        auto_permission,
-        tool_free_recovery,
-        recovery_reason: ctx.recovery_reason().map(str::to_string),
-        request_user_input_enabled,
-        context_window_size,
-        turn_timeout_secs,
-        active_model,
-        active_primary_agent,
-        openai_prompt_cache_enabled,
-        openai_prompt_cache_key_mode,
-        prompt_cache_shaping_mode,
-        capabilities,
-        execution: ctx.harness_state.execution_snapshot(),
-    }
-}
-
-pub(super) fn resolve_effective_request_model(
-    base_model: &str,
-    active_primary_agent: &ActivePrimaryAgent,
-) -> String {
-    active_primary_agent
-        .model
-        .as_deref()
-        .map(str::trim)
-        .filter(|model| !model.is_empty() && !model.eq_ignore_ascii_case("inherit"))
-        .unwrap_or(base_model)
-        .to_string()
-}
-
-async fn assemble_prompt(
-    ctx: &mut TurnProcessingContext<'_>,
-    input: PromptAssemblyInput<'_>,
-) -> Result<PromptAssemblyOutput> {
-    let prompt_output = build_prompt_output(ctx, PromptAssemblyInput { turn: input.turn }).await?;
-
-    validate_prompt_output_with_rebuild(ctx, input.turn, prompt_output).await
-}
-
-async fn build_prompt_output(
-    ctx: &mut TurnProcessingContext<'_>,
-    input: PromptAssemblyInput<'_>,
-) -> Result<PromptAssemblyOutput> {
-    let mut system_prompt = ctx
-        .context_manager
-        .build_system_prompt(
-            crate::agent::runloop::unified::context_manager::SystemPromptParams {
-                full_auto: input.turn.full_auto,
-                auto_permission: input.turn.auto_permission,
-                planning_active: input.turn.planning_active,
-                request_user_input_enabled: input.turn.request_user_input_enabled,
-            },
-        )
-        .await?;
-
-    append_active_primary_agent_skills(&mut system_prompt, ctx, &input.turn.active_primary_agent);
-
-    upsert_harness_limits_section(
-        &mut system_prompt,
-        input.turn.execution.max_tool_calls,
-        input.turn.execution.max_tool_wall_clock_secs,
-        input.turn.execution.max_tool_retries,
-    );
-
-    let tool_snapshot = if input.turn.tool_free_recovery {
-        let _ = writeln!(
-            system_prompt,
-            "\n[Recovery Mode]\n- tools_disabled: true\n- answer_mode: summarize only from evidence already collected in this turn\n- if evidence is incomplete, say so explicitly\n- do_not_request_more_tools: true\n- keep_response_brief: true"
-        );
-        if let Some(reason) = input.turn.recovery_reason.as_deref() {
-            let _ = writeln!(system_prompt, "- recovery_reason: {reason}");
-        }
-        SessionToolCatalogSnapshot::new(
-            ctx.tool_catalog.current_version(),
-            ctx.tool_catalog.current_epoch(),
-            input.turn.planning_active,
-            input.turn.request_user_input_enabled,
-            None,
-            false,
-        )
-    } else if !input.turn.capabilities.tools {
-        SessionToolCatalogSnapshot::new(
-            ctx.tool_catalog.current_version(),
-            ctx.tool_catalog.current_epoch(),
-            input.turn.planning_active,
-            input.turn.request_user_input_enabled,
-            None,
-            false,
-        )
-    } else {
-        let base_snapshot = ctx
-            .tool_catalog
-            .filtered_snapshot_with_stats(
-                ctx.tools,
-                input.turn.planning_active,
-                input.turn.request_user_input_enabled,
-            )
-            .await;
-        apply_primary_agent_policy_to_tool_snapshot(
-            base_snapshot,
-            &input.turn.active_primary_agent,
-            &ctx.config.workspace,
-            ctx.vt_cfg,
-        )
-    };
-
-    append_runtime_tool_prompt_sections(
-        &mut system_prompt,
-        &tool_snapshot,
-        !input.turn.prompt_cache_shaping_mode.is_enabled(),
-    );
-
-    if tool_snapshot.has_tools() && uses_out_of_band_copilot_tools(&input.turn.provider_name) {
-        append_copilot_runtime_guidance(&mut system_prompt);
-    }
-
-    // Section 18.3.3 of the agentic-AI guide: inject at most
-    // DEFAULT_FEW_SHOT_BUDGET_TOKENS of relevant few-shot examples selected
-    // from `.vtcode/prompts/examples/`. Skip in recovery mode (the model is
-    // in "summarize only" mode and adding examples would distract).
-    if !input.turn.tool_free_recovery
-        && let Some(section) = build_few_shot_section(ctx)
-    {
-        let _ = writeln!(system_prompt, "\n{section}");
-    }
-
-    Ok(PromptAssemblyOutput {
-        system_prompt,
-        tool_snapshot,
-    })
-}
-
-fn apply_primary_agent_policy_to_tool_snapshot(
-    snapshot: SessionToolCatalogSnapshot,
-    active_primary_agent: &ActivePrimaryAgent,
-    workspace: &std::path::Path,
-    vt_cfg: Option<&vtcode_core::config::loader::VTCodeConfig>,
-) -> SessionToolCatalogSnapshot {
-    let filtered = apply_primary_agent_tool_policy(snapshot.snapshot, active_primary_agent);
-    let filtered =
-        apply_permission_policy_to_tools(filtered, active_primary_agent, workspace, vt_cfg);
-    SessionToolCatalogSnapshot::new(
-        snapshot.version,
-        snapshot.epoch,
-        snapshot.planning_active,
-        snapshot.request_user_input_enabled,
-        filtered,
-        snapshot.cache_hit,
-    )
-}
-
-/// Filter tools by effective permissions. Tools where ALL advertised permission
-/// requests are denied by the agent's permissions are hidden. This mirrors the
-/// AgentRunner's `is_tool_exposed` check so both paths agree on what the model
-/// sees.
-///
-/// When the active agent has `PermissionDefault::Auto`, the
-/// `automation.full_auto.allowed_tools` config is also enforced so that
-/// interactive `auto` matches the `--full-auto` CLI blast radius.
-fn apply_permission_policy_to_tools(
-    tools: Option<Arc<Vec<vtcode_core::llm::provider::ToolDefinition>>>,
-    active_primary_agent: &ActivePrimaryAgent,
-    workspace: &std::path::Path,
-    vt_cfg: Option<&vtcode_core::config::loader::VTCodeConfig>,
-) -> Option<Arc<Vec<vtcode_core::llm::provider::ToolDefinition>>> {
-    use vtcode_config::core::permissions::PermissionDefault;
-    use vtcode_core::permissions::ResolvedPermissionDecision;
-
-    let tools = tools?;
-    let Some(cfg) = vt_cfg else {
-        return Some(tools);
-    };
-    let current_dir = std::env::current_dir().unwrap_or_else(|_| workspace.to_path_buf());
-    let agent_permissions = &active_primary_agent.permissions;
-
-    // When the auto agent is active, enforce the full-auto allow-list from
-    // config so interactive auto has the same blast radius as --full-auto.
-    // An empty allowlist means no tools are allowed (matching CLI behaviour);
-    // a wildcard ["*"] means unrestricted.
-    let full_auto_allowlist: Option<&[String]> =
-        if agent_permissions.default == PermissionDefault::Auto {
-            let allowed = &cfg.automation.full_auto.allowed_tools;
-            if cfg.automation.full_auto.enabled && !allowed.iter().any(|t| t == "*") {
-                Some(allowed.as_slice())
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-
-    let filtered: Vec<_> = tools
-        .iter()
-        .filter(|tool| {
-            let name = tool.function_name();
-
-            // Enforce full-auto allow-list if present.
-            if let Some(allowlist) = full_auto_allowlist
-                && !allowlist.iter().any(|allowed| allowed == name)
-            {
-                return false;
-            }
-
-            let requests = build_advertised_permission_requests(workspace, &current_dir, name);
-            if requests.is_empty() {
-                return true;
-            }
-            // Hide the tool only when ALL advertised actions are denied.
-            let all_denied = requests.iter().all(|request| {
-                evaluate_effective_permissions(
-                    &cfg.permissions,
-                    agent_permissions,
-                    workspace,
-                    &current_dir,
-                    request,
-                ) == ResolvedPermissionDecision::Deny
-            });
-            !all_denied
-        })
-        .cloned()
-        .collect();
-
-    (!filtered.is_empty()).then(|| Arc::new(filtered))
-}
-
-fn active_primary_agent_prompt_context(
-    ctx: &TurnProcessingContext<'_>,
-    agent: &ActivePrimaryAgent,
-) -> PromptContext {
-    let mut prompt_context = PromptContext::from_workspace_tools(
-        ctx.config.workspace.as_path(),
-        std::iter::empty::<String>(),
-    );
-    apply_primary_agent_prompt_context(&mut prompt_context, agent);
-    prompt_context
-}
-
-fn append_active_primary_agent_skills(
-    system_prompt: &mut String,
-    ctx: &TurnProcessingContext<'_>,
-    agent: &ActivePrimaryAgent,
-) {
-    if agent.skills.is_empty() {
-        return;
-    }
-
-    let prompt_context = active_primary_agent_prompt_context(ctx, agent);
-    let mut lines = Vec::new();
-    lines.push("## Active Primary Agent Skills".to_string());
-    lines.push("These skills are scoped to the active primary agent for this request.".to_string());
-
-    if prompt_context.available_skill_metadata.is_empty() {
-        for skill in &agent.skills {
-            lines.push(format!("- {skill}"));
-        }
-    } else {
-        let mut skills = prompt_context.available_skill_metadata;
-        skills.sort_by(|left, right| left.name.cmp(&right.name));
-        for skill in skills {
-            lines.push(format!("- {}: {}", skill.name, skill.description));
-        }
-    }
-
-    let _ = writeln!(system_prompt, "\n{}", lines.join("\n"));
-}
-
-fn validate_prompt_output_alignment(
-    prompt_output: &PromptAssemblyOutput,
-    turn: &TurnRequestSnapshot,
-) -> Result<(), prompt_alignment::AlignmentError> {
-    prompt_alignment::validate_prompt_catalog_alignment(
-        &prompt_output.system_prompt,
-        &prompt_output.tool_snapshot,
-        turn.planning_active,
-        turn.request_user_input_enabled,
-    )
-}
-
-async fn validate_prompt_output_with_rebuild(
-    ctx: &mut TurnProcessingContext<'_>,
-    turn: &TurnRequestSnapshot,
-    prompt_output: PromptAssemblyOutput,
-) -> Result<PromptAssemblyOutput> {
-    let rebuild_turn = turn.clone();
-    prompt_alignment::rebuild_once_on_alignment_mismatch(
-        ctx,
-        prompt_output,
-        move |ctx| {
-            let turn = rebuild_turn.clone();
-            Box::pin(
-                async move { build_prompt_output(ctx, PromptAssemblyInput { turn: &turn }).await },
-            )
-        },
-        |_, prompt_output| validate_prompt_output_alignment(prompt_output, turn),
-        "prompt/catalog alignment mismatch during unified request assembly; rebuilding prompt",
-        "prompt/catalog alignment mismatch persisted after unified prompt rebuild",
-    )
-    .await
-}
-
-fn resolve_context_management(
-    ctx: &TurnProcessingContext<'_>,
-    turn: &TurnRequestSnapshot,
-    active_model: &str,
-) -> Option<serde_json::Value> {
-    let Some(vt_cfg) = ctx.vt_cfg else {
-        return resolve_server_compaction_context_management(turn, None, None);
-    };
-
-    if turn.provider_name.eq_ignore_ascii_case("anthropic") {
-        return build_anthropic_context_management(vt_cfg, turn, active_model);
-    }
-
-    resolve_server_compaction_context_management(
-        turn,
-        Some(vt_cfg),
-        vt_cfg.agent.harness.auto_compaction_threshold_tokens,
-    )
-}
-
-fn resolve_server_compaction_context_management(
-    turn: &TurnRequestSnapshot,
-    vt_cfg: Option<&vtcode_core::config::loader::VTCodeConfig>,
-    configured_threshold: Option<u64>,
-) -> Option<serde_json::Value> {
-    let features = FeatureSet::from_config(vt_cfg);
-    if !features.auto_compaction_enabled(turn.capabilities.responses_compaction) {
-        return None;
-    }
-
-    build_server_compaction_context_management(configured_threshold, turn.context_window_size)
-}
-
-fn build_anthropic_context_management(
-    vt_cfg: &vtcode_core::config::loader::VTCodeConfig,
-    turn: &TurnRequestSnapshot,
-    active_model: &str,
-) -> Option<serde_json::Value> {
-    if !turn.capabilities.context_edits {
-        return None;
-    }
-
-    let mut edits = Vec::new();
-    let clearing = &vt_cfg.agent.harness.tool_result_clearing;
-    if clearing.enabled {
-        let mut edit = serde_json::Map::from_iter([
-            (
-                "type".to_string(),
-                serde_json::Value::String("clear_tool_uses_20250919".to_string()),
-            ),
-            (
-                "trigger".to_string(),
-                serde_json::json!({
-                    "type": "input_tokens",
-                    "value": clearing.trigger_tokens,
-                }),
-            ),
-            (
-                "keep".to_string(),
-                serde_json::json!({
-                    "type": "tool_uses",
-                    "value": clearing.keep_tool_uses,
-                }),
-            ),
-            (
-                "clear_at_least".to_string(),
-                serde_json::json!({
-                    "type": "input_tokens",
-                    "value": clearing.clear_at_least_tokens,
-                }),
-            ),
-            (
-                "clear_tool_inputs".to_string(),
-                serde_json::Value::Bool(clearing.clear_tool_inputs),
-            ),
-        ]);
-
-        if anthropic_native_memory_enabled_for_runtime(
-            vtcode_core::config::models::Provider::from_str(&turn.provider_name).ok(),
-            active_model,
-            Some(vt_cfg),
-        ) {
-            edit.insert(
-                "exclude_tools".to_string(),
-                serde_json::json!([vtcode_core::config::constants::tools::MEMORY]),
-            );
-        }
-
-        edits.push(serde_json::Value::Object(edit));
-    }
-
-    if vt_cfg.agent.harness.auto_compaction_enabled
-        && let Some(trigger_tokens) = resolve_compaction_threshold(
-            vt_cfg.agent.harness.auto_compaction_threshold_tokens,
-            turn.context_window_size,
-        )
-    {
-        let mut compact_edit = serde_json::Map::new();
-        compact_edit.insert(
-            "type".to_string(),
-            serde_json::Value::String("compact_20260112".to_string()),
-        );
-        compact_edit.insert(
-            "trigger".to_string(),
-            serde_json::json!({
-                "type": "input_tokens",
-                "value": trigger_tokens,
-            }),
-        );
-
-        if let Some(instructions) = &vt_cfg.agent.harness.auto_compaction_instructions {
-            compact_edit.insert(
-                "instructions".to_string(),
-                serde_json::Value::String(instructions.clone()),
-            );
-        }
-
-        if vt_cfg.agent.harness.auto_compaction_pause_after {
-            compact_edit.insert(
-                "pause_after_compaction".to_string(),
-                serde_json::Value::Bool(true),
-            );
-        }
-
-        edits.push(serde_json::Value::Object(compact_edit));
-    }
-
-    (!edits.is_empty()).then(|| {
-        serde_json::json!({
-            "edits": edits,
-        })
-    })
 }
 
 pub(super) fn interrupted_provider_error(provider_name: &str) -> anyhow::Error {
@@ -627,210 +45,6 @@ pub(super) fn interrupted_provider_error(provider_name: &str) -> anyhow::Error {
         ),
         metadata: None,
     })
-}
-
-pub(super) fn update_previous_response_chain_after_success(
-    session_stats: &mut crate::agent::runloop::unified::state::SessionStats,
-    provider_name: &str,
-    provider_supports_responses_compaction: bool,
-    active_model: &str,
-    response_request_id: Option<&str>,
-    messages: &[uni::Message],
-) {
-    if records_responses_continuation_state(provider_name, provider_supports_responses_compaction) {
-        session_stats.set_previous_response_chain(
-            provider_name,
-            active_model,
-            response_request_id,
-            messages,
-        );
-    }
-}
-
-fn prepare_responses_request_history<'a>(
-    session_stats: &mut crate::agent::runloop::unified::state::SessionStats,
-    provider_name: &str,
-    provider_supports_responses_compaction: bool,
-    active_model: &str,
-    messages: &'a [uni::Message],
-) -> (Cow<'a, [uni::Message]>, Option<String>) {
-    let prepared = prepare_responses_continuation_request(
-        provider_name,
-        provider_supports_responses_compaction,
-        messages,
-        session_stats.previous_response_chain_for(provider_name, active_model),
-    );
-    if prepared.clear_stale_chain {
-        session_stats.clear_previous_response_chain_for(provider_name, active_model);
-    }
-
-    (prepared.messages, prepared.previous_response_id)
-}
-
-fn prepend_request_context_message(
-    mut messages: Vec<uni::Message>,
-    context_message: Option<uni::Message>,
-) -> Vec<uni::Message> {
-    let Some(context_message) = context_message else {
-        return messages;
-    };
-
-    let mut request_messages = Vec::with_capacity(messages.len() + 1);
-    request_messages.push(context_message);
-    request_messages.append(&mut messages);
-    request_messages
-}
-
-fn resolve_effective_reasoning_effort(
-    cfg: Option<&vtcode_core::config::loader::VTCodeConfig>,
-    turn_snapshot: &TurnRequestSnapshot,
-) -> Option<vtcode_core::config::types::ReasoningEffortLevel> {
-    if !turn_snapshot.capabilities.reasoning_effort || turn_snapshot.tool_free_recovery {
-        return None;
-    }
-
-    turn_snapshot
-        .active_primary_agent
-        .reasoning_effort
-        .or_else(|| cfg.map(|cfg| cfg.agent.reasoning_effort))
-}
-
-async fn render_primary_agent_runtime_context(
-    ctx: &TurnProcessingContext<'_>,
-    turn_snapshot: &TurnRequestSnapshot,
-    tool_snapshot: &SessionToolCatalogSnapshot,
-    agent: &ActivePrimaryAgent,
-    reasoning_effort: Option<vtcode_core::config::types::ReasoningEffortLevel>,
-) -> String {
-    let mut lines = Vec::new();
-    lines.push("## Active Primary Agent Runtime State".to_string());
-    lines.push(format!("- Active agent: {}", agent.display_name));
-    lines.push(format!("- Spec name: {}", agent.identity.name));
-    lines.push(format!("- Request model: {}", turn_snapshot.active_model));
-    if let Some(model) = agent
-        .model
-        .as_deref()
-        .map(str::trim)
-        .filter(|model| !model.is_empty() && !model.eq_ignore_ascii_case("inherit"))
-    {
-        lines.push(format!("- Agent model: {model}"));
-    }
-    if let Some(effort) = reasoning_effort {
-        lines.push(format!("- Request reasoning effort: {}", effort.as_str()));
-    }
-    if let Some(raw_effort) = agent.reasoning_effort {
-        lines.push(format!("- Agent reasoning effort: {}", raw_effort.as_str()));
-    }
-    lines.push(format!(
-        "- Session state: planning_workflow={}, auto_permission={}, full_auto={}",
-        turn_snapshot.planning_active, turn_snapshot.auto_permission, turn_snapshot.full_auto
-    ));
-    lines.push(format!(
-        "- Active primary permission default: {}",
-        permission_default_label(agent.permissions.default)
-    ));
-    lines.push(format!(
-        "- Effective request tools: {}",
-        render_tool_names(tool_snapshot)
-    ));
-    if let Some(tools) = agent.tools.as_ref().filter(|tools| !tools.is_empty()) {
-        lines.push(format!(
-            "- Primary-agent tool allow-list: {}",
-            tools.join(", ")
-        ));
-    }
-    if !agent.disallowed_tools.is_empty() {
-        lines.push(format!(
-            "- Primary-agent disallowed tools: {}",
-            agent.disallowed_tools.join(", ")
-        ));
-    }
-    if !agent.skills.is_empty() {
-        let prompt_context = active_primary_agent_prompt_context(ctx, agent);
-        if prompt_context.available_skill_metadata.is_empty() {
-            lines.push(format!(
-                "- Active primary skills: {}",
-                agent.skills.join(", ")
-            ));
-        } else {
-            let mut names = prompt_context
-                .available_skill_metadata
-                .iter()
-                .map(|skill| skill.name.as_str())
-                .collect::<Vec<_>>();
-            names.sort_unstable();
-            lines.push(format!("- Active primary skills: {}", names.join(", ")));
-        }
-    }
-    if let Some(cfg) = ctx.vt_cfg
-        && cfg.agent.include_temporal_context
-    {
-        lines.push(
-            generate_temporal_context(cfg.agent.temporal_context_use_utc)
-                .trim()
-                .to_string(),
-        );
-    }
-
-    lines.push("### Instructions".to_string());
-    lines.push(agent.instructions.trim().to_string());
-    if let Some(memory_appendix) = active_primary_agent_memory_appendix(ctx, agent) {
-        lines.push("### Memory Appendix".to_string());
-        lines.push(memory_appendix);
-    }
-    lines.join("\n")
-}
-
-fn active_primary_agent_memory_appendix(
-    ctx: &TurnProcessingContext<'_>,
-    agent: &ActivePrimaryAgent,
-) -> Option<String> {
-    match load_primary_memory_appendix(
-        ctx.config.workspace.as_path(),
-        agent.identity.name.as_str(),
-        agent.memory,
-    ) {
-        Ok(appendix) => appendix,
-        Err(err) => {
-            tracing::warn!(
-                agent_name = %agent.identity.name,
-                error = %err,
-                "Failed to load active primary-agent memory appendix"
-            );
-            None
-        }
-    }
-}
-
-fn render_tool_names(tool_snapshot: &SessionToolCatalogSnapshot) -> String {
-    let Some(tools) = tool_snapshot.snapshot.as_deref() else {
-        return "none".to_string();
-    };
-    if tools.is_empty() {
-        return "none".to_string();
-    }
-
-    tools
-        .iter()
-        .map(|tool| {
-            tool.function
-                .as_ref()
-                .map(|function| function.name.as_str())
-                .unwrap_or(tool.tool_type.as_str())
-        })
-        .collect::<Vec<_>>()
-        .join(", ")
-}
-
-fn permission_default_label(
-    default: vtcode_config::core::permissions::PermissionDefault,
-) -> &'static str {
-    match default {
-        vtcode_config::core::permissions::PermissionDefault::Ask => "ask",
-        vtcode_config::core::permissions::PermissionDefault::Allow => "allow",
-        vtcode_config::core::permissions::PermissionDefault::Auto => "auto",
-        vtcode_config::core::permissions::PermissionDefault::Deny => "deny",
-    }
 }
 
 pub(super) async fn build_turn_request(
@@ -858,6 +72,7 @@ pub(super) async fn build_turn_request(
         &prompt_output.tool_snapshot,
         &turn_snapshot.active_primary_agent,
         reasoning_effort,
+        prompt_output.agent_prompt_context.as_ref(),
     )
     .await;
     let _ = writeln!(prompt_output.system_prompt, "\n{primary_agent_context}");
@@ -942,8 +157,18 @@ pub(super) async fn build_turn_request(
     let request_plan = build_harness_request_plan(HarnessRequestPlanInput {
         messages: request_messages,
         system_prompt: prompt_output.system_prompt,
-        tools: if use_out_of_band_copilot_tools {
+        tools: if use_out_of_band_copilot_tools || turn_snapshot.tool_free_recovery {
+            // Strip tool definitions during tool-free recovery (including
+            // wall-clock exhaustion recovery) so the model cannot even attempt
+            // tool calls. ToolChoice::none() alone is advisory — the model
+            // still sees definitions and may try (observed in turn_637).
             None
+        } else if turn_snapshot.client_local_tool_deferral {
+            // No hosted tool search for this provider: deferred tools are
+            // not sent eagerly. The model discovers them via the local
+            // `unified_search action="tools"` (see `[Deferred Tools]` in
+            // the system prompt, appended in `build_prompt_output`).
+            client_local_wire_tools(prompt_output.tool_snapshot.snapshot.clone())
         } else {
             prompt_output.tool_snapshot.snapshot.clone()
         },
@@ -974,24 +199,18 @@ pub(super) async fn build_turn_request(
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
-    use std::sync::Arc;
 
     use serde_json::json;
     use vtcode_config::core::permissions::{AgentPermissionsConfig, PermissionDefault};
     use vtcode_config::{SubagentMemoryScope, SubagentSource, SubagentSpec};
     use vtcode_core::config::loader::VTCodeConfig;
     use vtcode_core::config::types::ReasoningEffortLevel;
-    use vtcode_core::core::agent::harness_kernel::SessionToolCatalogSnapshot;
     use vtcode_core::llm::provider::{self as uni, ToolDefinition};
-    use vtcode_core::prompts::append_runtime_tool_prompt_sections;
     use vtcode_core::{EditorContextSnapshot, EditorFileContext};
 
-    use super::{
-        PromptAssemblyOutput, build_turn_request, capture_turn_request_snapshot,
-        stable_system_prefix_hash, update_previous_response_chain_after_success,
-        validate_prompt_output_alignment,
-    };
-    use crate::agent::runloop::unified::turn::compaction::build_server_compaction_context_management;
+    use super::super::response_chain::update_previous_response_chain_after_success;
+    use super::super::snapshot::capture_turn_request_snapshot;
+    use super::{build_turn_request, stable_system_prefix_hash};
     use crate::agent::runloop::unified::turn::turn_processing::test_support::TestTurnProcessingBacking;
 
     fn test_primary_agent_spec(name: &str, prompt: &str) -> SubagentSpec {
@@ -1220,6 +439,93 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn client_local_tool_deferral_omits_deferred_tools_from_wire_payload() {
+        let mut backing = TestTurnProcessingBacking::new(4).await;
+        backing.add_tool_definition(named_tool("read_file")).await;
+        backing
+            .add_tool_definition(
+                ToolDefinition::function(
+                    "context7_lookup".to_string(),
+                    "Look up documentation via context7".to_string(),
+                    json!({
+                        "type": "object",
+                        "properties": {
+                            "query": { "type": "string" }
+                        }
+                    }),
+                )
+                .with_defer_loading(true),
+            )
+            .await;
+
+        let mut ctx = backing.turn_processing_context();
+        let mut snapshot = capture_turn_request_snapshot(&mut ctx, "noop-model", false);
+        // Simulate the ClientLocal policy being active for this turn (no
+        // provider-hosted tool search, `client_tool_search` enabled) without
+        // wiring the full config/provider plumbing that would normally
+        // compute this flag -- see `capture_turn_request_snapshot` above for
+        // how it is derived from `active_deferred_tool_policy` in production.
+        snapshot.client_local_tool_deferral = true;
+
+        let built =
+            build_turn_request(&mut ctx, 1, "noop-model", &snapshot, Some(320), None, false)
+                .await
+                .expect("client-local request should build");
+
+        let tool_names = request_tool_names(&built.request);
+        assert!(tool_names.contains(&"read_file".to_string()));
+        assert!(!tool_names.contains(&"context7_lookup".to_string()));
+
+        // `runtime_tools` must stay unfiltered: Copilot's out-of-band tool
+        // exposure and stats consumers need the full catalog even when the
+        // wire payload omits deferred definitions.
+        assert_eq!(
+            built.runtime_tools.as_ref().map(|tools| tools.len()),
+            Some(2)
+        );
+    }
+
+    #[tokio::test]
+    async fn hosted_tool_search_keeps_deferred_tools_on_the_wire() {
+        let mut backing = TestTurnProcessingBacking::new(4).await;
+        backing.add_tool_definition(named_tool("read_file")).await;
+        backing
+            .add_tool_definition(
+                ToolDefinition::function(
+                    "context7_lookup".to_string(),
+                    "Look up documentation via context7".to_string(),
+                    json!({
+                        "type": "object",
+                        "properties": {
+                            "query": { "type": "string" }
+                        }
+                    }),
+                )
+                .with_defer_loading(true),
+            )
+            .await;
+
+        let mut ctx = backing.turn_processing_context();
+        let mut snapshot = capture_turn_request_snapshot(&mut ctx, "noop-model", false);
+        snapshot.provider_name = "anthropic".to_string();
+        // Provider-hosted tool search (Anthropic/OpenAI) never sets this
+        // flag -- `deferred_tool_policy_for_runtime` only returns
+        // `ClientLocal` on the no-hosted-search fallthrough arm. Asserting
+        // it is false here pins the safety requirement that hosted payloads
+        // stay byte-identical: every deferred tool remains on the wire.
+        assert!(!snapshot.client_local_tool_deferral);
+
+        let built =
+            build_turn_request(&mut ctx, 1, "noop-model", &snapshot, Some(320), None, false)
+                .await
+                .expect("hosted request should build");
+
+        let tool_names = request_tool_names(&built.request);
+        assert!(tool_names.contains(&"read_file".to_string()));
+        assert!(tool_names.contains(&"context7_lookup".to_string()));
+    }
+
+    #[tokio::test]
     async fn openai_responses_replays_full_structured_history_without_suffixing() {
         let mut backing = TestTurnProcessingBacking::new(4).await;
         let prior_messages = vec![
@@ -1251,26 +557,6 @@ mod tests {
                 uni::Message::assistant("hi".to_string()),
                 uni::Message::user("continue".to_string())
             ]
-        );
-    }
-
-    #[test]
-    fn openai_session_stats_does_not_record_previous_response_chain() {
-        let mut session_stats = crate::agent::runloop::unified::state::SessionStats::default();
-        let messages = vec![uni::Message::user("hello".to_string())];
-
-        update_previous_response_chain_after_success(
-            &mut session_stats,
-            "openai",
-            true,
-            "gpt-5.4",
-            Some("resp_123"),
-            &messages,
-        );
-
-        assert_eq!(
-            session_stats.previous_response_chain_for("openai", "gpt-5.4"),
-            None
         );
     }
 
@@ -1934,26 +1220,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn server_supported_request_build_keeps_context_management_payload() {
-        let mut cfg = VTCodeConfig::default();
-        cfg.agent.harness.auto_compaction_enabled = true;
-        cfg.agent.harness.auto_compaction_threshold_tokens = Some(512);
-
-        let payload = build_server_compaction_context_management(
-            cfg.agent.harness.auto_compaction_threshold_tokens,
-            2_000,
-        );
-
-        assert_eq!(
-            payload,
-            Some(json!([{
-                "type": "compaction",
-                "compact_threshold": 512,
-            }]))
-        );
-    }
-
     #[tokio::test]
     async fn anthropic_request_build_combines_clearing_and_compaction_when_enabled() {
         let mut backing = TestTurnProcessingBacking::new(4).await;
@@ -2032,7 +1298,11 @@ mod tests {
             }))
         );
 
-        ctx.vt_cfg = Some(Box::leak(Box::new(VTCodeConfig::default())));
+        // Default now enables auto-compaction, so explicitly disable it here to
+        // assert the "no context management payload" (disabled) path.
+        let mut disabled_cfg = VTCodeConfig::default();
+        disabled_cfg.agent.harness.auto_compaction_enabled = false;
+        ctx.vt_cfg = Some(Box::leak(Box::new(disabled_cfg)));
         let built = build_turn_request(
             &mut ctx,
             1,
@@ -2071,47 +1341,6 @@ mod tests {
                 "compact_threshold": 512,
             }]))
         );
-    }
-
-    #[tokio::test]
-    async fn prompt_alignment_detects_stale_runtime_tool_catalog_metadata() {
-        let mut backing = TestTurnProcessingBacking::new(4).await;
-        let mut ctx = backing.turn_processing_context();
-        let turn = capture_turn_request_snapshot(&mut ctx, "noop-model", false);
-
-        let make_snapshot = || {
-            SessionToolCatalogSnapshot::new(
-                7,
-                11,
-                turn.planning_active,
-                turn.request_user_input_enabled,
-                Some(Arc::new(Vec::new())),
-                false,
-            )
-        };
-
-        let misaligned_prompt = format!(
-            "Base prompt\n[Runtime Tool Catalog]\n- version: 1\n- epoch: 11\n- available_tools: 0\n- request_user_input_enabled: {}\n",
-            turn.request_user_input_enabled
-        );
-        let misaligned_output = PromptAssemblyOutput {
-            system_prompt: misaligned_prompt,
-            tool_snapshot: make_snapshot(),
-        };
-
-        let aligned_snapshot = make_snapshot();
-        let mut aligned_prompt = "Base prompt".to_string();
-        append_runtime_tool_prompt_sections(&mut aligned_prompt, &aligned_snapshot, true);
-        let aligned_output = PromptAssemblyOutput {
-            system_prompt: aligned_prompt,
-            tool_snapshot: aligned_snapshot,
-        };
-
-        let err = validate_prompt_output_alignment(&misaligned_output, &turn)
-            .expect_err("stale runtime metadata should be rejected");
-        assert!(err.should_rebuild_runtime_prompt());
-        validate_prompt_output_alignment(&aligned_output, &turn)
-            .expect("aligned runtime metadata should pass");
     }
 
     #[test]

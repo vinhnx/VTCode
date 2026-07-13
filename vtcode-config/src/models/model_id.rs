@@ -30,6 +30,12 @@ pub enum ModelId {
     Gemini35Flash,
 
     // OpenAI models
+    /// GPT-5.6 Sol - Frontier model for complex professional work in the GPT-5.6 family
+    GPT56Sol,
+    /// GPT-5.6 Terra - GPT-5.6 model that balances intelligence and cost
+    GPT56Terra,
+    /// GPT-5.6 Luna - GPT-5.6 model optimized for cost-sensitive workloads
+    GPT56Luna,
     /// GPT-5.5 - Next-gen OpenAI model dated release (2026-04-23)
     GPT55,
     /// GPT-5.4 - Mainline frontier GPT model for general-purpose and coding work

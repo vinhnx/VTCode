@@ -2,6 +2,7 @@ use anyhow::Error;
 use serde_json::{Value, json};
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::tools::tool_intent;
+use vtcode_core::tools::validation::condensed_schema_hint;
 
 use crate::agent::runloop::unified::request_user_input::normalize_request_user_input_fallback_args;
 use crate::agent::runloop::unified::turn::context::TurnProcessingContext;
@@ -162,6 +163,25 @@ pub(super) fn build_validation_error_content_with_fallback(
     fallback_tool: Option<String>,
     fallback_tool_args: Option<Value>,
 ) -> String {
+    build_validation_error_content_with_schema_hint(
+        error,
+        validation_stage,
+        fallback_tool,
+        fallback_tool_args,
+        None,
+    )
+}
+
+/// Like [`build_validation_error_content_with_fallback`], but optionally
+/// includes a condensed schema hint so the model can self-correct its
+/// arguments instead of retrying blind.
+pub(super) fn build_validation_error_content_with_schema_hint(
+    error: String,
+    validation_stage: &'static str,
+    fallback_tool: Option<String>,
+    fallback_tool_args: Option<Value>,
+    parameter_schema: Option<&Value>,
+) -> String {
     let is_recoverable = fallback_tool.is_some();
     let loop_detected = validation_stage == "loop_detection";
     let next_action = if is_recoverable {
@@ -185,6 +205,11 @@ pub(super) fn build_validation_error_content_with_fallback(
         }
         if let Some(args) = fallback_tool_args {
             obj.insert("fallback_tool_args".to_string(), args);
+        }
+        // Include a condensed schema hint so the model sees the expected
+        // parameter shape instead of guessing blindly.
+        if let Some(schema) = parameter_schema.and_then(condensed_schema_hint) {
+            obj.insert("expected_schema".to_string(), schema);
         }
     }
     compact_model_tool_payload(payload).to_string()

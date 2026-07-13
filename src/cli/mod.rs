@@ -22,12 +22,14 @@ mod init_project;
 mod man;
 mod messages;
 mod notify;
+mod session_store;
 mod sessions;
 pub(crate) mod skills_index;
 mod snapshots;
 mod trajectory;
 
 pub mod analyze;
+pub mod bench_allocator;
 pub mod benchmark;
 pub mod dependencies;
 pub mod exec;

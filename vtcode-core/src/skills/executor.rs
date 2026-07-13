@@ -552,7 +552,7 @@ impl ForkSkillExecutor for ChildAgentSkillExecutor {
         );
         task.instructions = Some(skill.instructions.clone());
 
-        let results = runner.execute_task(&task, &[]).await?;
+        let results = Box::pin(runner.execute_task(&task, &[])).await?;
         let mut artifact_paths = results.modified_files.clone();
         let handoff_paths = blocked_handoff_paths(&results.thread_events);
         for path in handoff_paths {

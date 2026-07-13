@@ -1,14 +1,15 @@
 //! Worktree reconciliation: diff, verify, merge.
 //!
 //! After a worktree-isolated subagent finishes, the `WorktreeReconciler`
-//! captures the branch diff, runs a read-only verifier sub-agent, and
-//! merges approved changes back into the main branch.
+//! captures the branch diff, asks a [`DiffVerifier`](crate::git::verify::DiffVerifier)
+//! to approve or reject it, and merges approved changes back into the main
+//! branch.
 
 use anyhow::{Context, Result, anyhow};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use super::WorktreeManager;
+use super::{DiffVerifier, WorktreeManager};
 
 // ─── ReconcileResult ────────────────────────────────────────────────────────
 
@@ -202,23 +203,19 @@ impl WorktreeReconciler {
     /// 1. Verify the worktree is clean.
     /// 2. Check the branch has commits ahead of main.
     /// 3. Capture the diff and changed files.
-    /// 4. Call the verifier callback with diff description and file paths.
+    /// 4. Ask `verifier` to approve or reject the diff.
     /// 5. If approved, merge the branch and clean up the worktree.
     /// 6. If rejected, return the result without merging.
     ///
-    /// The `verify` callback receives `(diff_text, changed_files)` and
-    /// returns `(approved, issues, reasoning)`. This decouples the reconciler
-    /// from `SubagentController` to keep the git module free of subagent
-    /// dependencies.
-    pub fn reconcile<F>(
+    /// `verifier` receives `(diff_text, changed_files)` and returns a verdict.
+    /// This decouples the reconciler from `SubagentController` to keep the git
+    /// module free of subagent dependencies.
+    pub fn reconcile(
         &self,
         worktree_name: &str,
         worktree_path: &Path,
-        verify: F,
-    ) -> Result<ReconcileResult>
-    where
-        F: FnOnce(&str, &[PathBuf]) -> Result<(bool, Vec<String>, String)>,
-    {
+        verifier: &(dyn DiffVerifier + Send + Sync),
+    ) -> Result<ReconcileResult> {
         let branch = Self::branch_name(worktree_name);
 
         // 1. Pre-flight: worktree must be clean.
@@ -255,7 +252,10 @@ impl WorktreeReconciler {
         }
 
         // 4. Verify.
-        let (approved, issues, reasoning) = verify(&diff_text, &changed_files)?;
+        let verdict = verifier.verify(&diff_text, &changed_files)?;
+        let approved = verdict.approved;
+        let issues = verdict.issues;
+        let reasoning = verdict.reasoning;
 
         if !approved {
             return Ok(ReconcileResult {

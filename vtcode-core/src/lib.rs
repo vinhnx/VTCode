@@ -297,7 +297,7 @@ pub use mcp::{
     tool_discovery::{DetailLevel, ToolDiscovery, ToolDiscoveryResult},
     validate_mcp_config,
 };
-pub use memory::{MemoryCheckpoint, MemoryMonitor, MemoryPressure, MemoryReport};
+pub use memory::{MemoryMonitor, MemoryPressure, MemoryReport, RssCheckpoint};
 pub use models_manager::{
     ModelFamily, ModelPreset, ModelsCache, ModelsManager, builtin_model_presets,
     model_family::find_family_for_model,
@@ -350,8 +350,8 @@ pub use sandboxing::{
 pub use tools::OptimizedToolRegistry;
 pub use tools::grep_file::GrepSearchManager;
 pub use tools::registry::{
-    McpBridge, PtySessionControl, SharedRegistry, ToolCatalog, ToolMetrics, ToolRegistryApi,
-    ToolResilience, ToolSecurity,
+    McpBridge, PtySessionControl, SharedRegistry, ToolCatalog, ToolGroup, ToolMetrics,
+    ToolRegistryApi, ToolResilience, ToolSecurity, tool_groups,
 };
 pub use tools::{ToolRegistration, ToolRegistry};
 pub use ui::diff_renderer::DiffRenderer;

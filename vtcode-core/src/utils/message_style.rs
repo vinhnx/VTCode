@@ -19,6 +19,7 @@ pub enum MessageStyle {
     McpStatus,
     User,
     Reasoning,
+    ReasoningEmphasis,
     Warning,
 }
 
@@ -39,6 +40,7 @@ impl MessageStyle {
             Self::McpStatus => styles.mcp,
             Self::User => styles.user,
             Self::Reasoning => styles.reasoning,
+            Self::ReasoningEmphasis => styles.reasoning.bold(),
             Self::Warning => styles.error,
         }
     }
@@ -48,6 +50,7 @@ impl MessageStyle {
         match self {
             Self::Response | Self::Tool => "  ",
             Self::Reasoning => "  ❋ ",
+            Self::ReasoningEmphasis => "  ▸ ",
             Self::ToolDetail | Self::ToolOutput | Self::ToolError => "    ",
             _ => "",
         }
@@ -64,6 +67,7 @@ impl MessageStyle {
             Self::Status | Self::McpStatus => InlineMessageKind::Info,
             Self::User => InlineMessageKind::User,
             Self::Reasoning => InlineMessageKind::Policy,
+            Self::ReasoningEmphasis => InlineMessageKind::Policy,
             Self::Warning => InlineMessageKind::Warning,
         }
     }

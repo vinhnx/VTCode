@@ -8,6 +8,8 @@ use anyhow::Result;
 use std::time::Instant;
 
 use crate::core::agent::events::ExecEventRecorder;
+use crate::core::agent::harness_artifacts;
+use crate::core::agent::progress_monitor::ProgressMonitor;
 use crate::core::agent::runner::continuation::ContinuationController;
 use crate::core::agent::runtime::AgentRuntime;
 use crate::core::agent::session::AgentSessionState;
@@ -52,9 +54,15 @@ impl AgentRunner {
         let steering_receiver = self.steering_receiver.lock().take();
 
         let agent_prefix = format!("[{}]", self.agent_type);
+        // Persist every recorded event to the unified per-session store so it
+        // becomes the single source of truth for session state/history.
+        let session_sink =
+            crate::core::agent::events::session_store_sink(self.workspace(), &self.session_id);
+        let event_sink =
+            crate::core::agent::events::combine_event_sinks(self.event_sink.clone(), session_sink);
         let mut event_recorder = ExecEventRecorder::new(
             self.session_id.clone(),
-            self.event_sink.clone(),
+            event_sink,
             Some(self.thread_handle.clone()),
         );
         event_recorder.turn_started();
@@ -109,7 +117,24 @@ impl AgentRunner {
         session_state.reconcile_token_count();
         session_state.last_processed_message_idx = session_state.conversation.len();
 
+        // Context reset: if a reset manifest exists from a previous session
+        // (written by `maybe_write_reset_after_compaction` or
+        // `maybe_write_reset_on_stall`), clear the conversation history so
+        // this session starts fresh from external artifacts only. The orient
+        // context in the system prompt already includes the reset banner.
+        self.apply_context_reset_if_pending(&mut session_state);
+
         let mut runtime = AgentRuntime::new(session_state, None, steering_receiver);
+
+        if prompt_bundle.system_prompt_report.over_budget
+            && self.config().agent.system_prompt_budget_warning
+        {
+            runtime.state.warnings.push(format!(
+                "Base system prompt is ~{} tokens (budget {}); later appendices (session context, runtime line, subagents roster) add more. Consider a leaner system prompt mode or enable agent.trim_system_prompt.",
+                prompt_bundle.system_prompt_report.token_estimate,
+                self.config().agent.max_system_prompt_tokens
+            ));
+        }
 
         if let Err(err) = self.tool_registry.initialize_async().await {
             tracing::warn!(
@@ -143,7 +168,14 @@ impl AgentRunner {
             full_auto_active,
             self.tool_registry.is_planning_active(),
             review_like,
-        );
+            self.config().agent.harness.context_reset_mode.clone(),
+            self.config().agent.harness.context_reset_stall_threshold,
+        )
+        .with_progress_monitor(ProgressMonitor::with_persistence(
+            self.workspace().to_path_buf(),
+            &self.session_id,
+            &effective_task.id,
+        ));
         continuation_controller.prepare(&effective_task).await?;
 
         let max_budget_usd = self.config().agent.harness.max_budget_usd;
@@ -165,5 +197,36 @@ impl AgentRunner {
             max_budget_usd,
             max_revision_rounds,
         })
+    }
+
+    /// Check for a pending context reset manifest and clear conversation
+    /// history if one exists.
+    ///
+    /// This completes the context reset mechanism (TD-017): the manifest was
+    /// written by `maybe_write_reset_after_compaction` or
+    /// `maybe_write_reset_on_stall` during a previous session, and this method
+    /// acts on it by clearing the conversation history so the agent starts
+    /// fresh from external artifacts only. The manifest is consumed (deleted)
+    /// so it only triggers once.
+    fn apply_context_reset_if_pending(&self, session_state: &mut AgentSessionState) {
+        let manifest_path = harness_artifacts::current_context_reset_path(&self._workspace);
+
+        if !manifest_path.exists() {
+            return;
+        }
+
+        tracing::info!(
+            "Context reset manifest detected — clearing conversation history for fresh start"
+        );
+        session_state.clear_conversation_history();
+
+        // Consume the manifest so it only triggers once.
+        if let Err(e) = std::fs::remove_file(&manifest_path) {
+            tracing::warn!(
+                error = %e,
+                path = %manifest_path.display(),
+                "Failed to remove context reset manifest after applying reset"
+            );
+        }
     }
 }

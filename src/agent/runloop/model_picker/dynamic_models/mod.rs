@@ -12,6 +12,7 @@ use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
 use vtcode_core::config::models::Provider;
 use vtcode_core::copilot::{CopilotAuthStatusKind, list_available_models, probe_auth_status};
 use vtcode_core::llm::providers::llamacpp::fetch_llamacpp_models;
+use vtcode_core::llm::providers::lmstudio::fetch_lmstudio_models;
 use vtcode_core::llm::providers::ollama::fetch_ollama_models;
 
 use self::cache::CachedDynamicModelStore;
@@ -75,6 +76,14 @@ impl DynamicModelRegistry {
                 fetch_llamacpp_models,
             )
             .await;
+        let lmstudio_base_url = endpoints.resolved_base_url(Provider::LmStudio);
+        let (lmstudio_result, lmstudio_warning) = cache_store
+            .fetch_with_cache(
+                Provider::LmStudio,
+                endpoints.base_url(Provider::LmStudio),
+                fetch_lmstudio_models,
+            )
+            .await;
 
         let copilot_auth_cfg = vt_cfg
             .map(|cfg| cfg.auth.copilot.clone())
@@ -136,6 +145,15 @@ impl DynamicModelRegistry {
         );
         if let Some(warning) = llamacpp_warning {
             registry.record_warning(Provider::LlamaCpp, warning);
+        }
+        registry.process_fetch(
+            Provider::LmStudio,
+            lmstudio_result,
+            lmstudio_base_url,
+            &static_index,
+        );
+        if let Some(warning) = lmstudio_warning {
+            registry.record_warning(Provider::LmStudio, warning);
         }
         if let Some((copilot_result, copilot_warning)) = copilot_fetch {
             registry.process_fetch(

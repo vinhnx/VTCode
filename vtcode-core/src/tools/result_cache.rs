@@ -14,7 +14,7 @@ use std::sync::Arc;
 /// Identifies a cached tool result
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct ToolCacheKey {
-    /// Tool name (e.g., tools::UNIFIED_SEARCH, tools::UNIFIED_SEARCH)
+    /// Tool name (e.g., tools::UNIFIED_SEARCH, tools::GREP_FILE)
     pub tool: String,
     /// Normalized parameters (serialized, hashed for speed)
     pub params_hash: u64,

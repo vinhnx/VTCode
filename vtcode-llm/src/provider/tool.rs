@@ -81,6 +81,12 @@ pub struct ToolDefinition {
     /// instead of the full tool definition.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub namespace: Option<ToolNamespace>,
+
+    /// Anthropic server-side advisor tool configuration. Carries the advisor's
+    /// options (model, max_uses, max_tokens, caching) so that inbound proxy
+    /// requests can round-trip through `ToolDefinition` without losing data.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub advisor: Option<Value>,
 }
 
 /// Shell tool definition for GPT-5.1 shell tool type
@@ -178,6 +184,7 @@ impl ToolDefinition {
             strict: None,
             defer_loading: None,
             namespace: None,
+            advisor: None,
         }
     }
 

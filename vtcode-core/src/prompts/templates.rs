@@ -38,7 +38,9 @@ impl PromptTemplates {
     /// Get response style prompt addition
     pub fn response_style_prompt(style: &ResponseStyle) -> &'static str {
         match style {
-            ResponseStyle::Concise => "Keep responses concise and to the point.",
+            ResponseStyle::Concise => {
+                "Lead with the conclusion. Include the evidence needed to support it, any material caveat, and the next action. Omit secondary detail and repetition."
+            }
             ResponseStyle::Detailed => "Provide detailed explanations and comprehensive answers.",
             ResponseStyle::Conversational => {
                 "Use a conversational tone and explain concepts clearly."

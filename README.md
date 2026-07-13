@@ -24,7 +24,7 @@ VT Code is a Rust coding agent built for long-running autonomous workflows, with
 - **Agent runtime** - Interactive TUI, slash commands, streaming, `ask`/`exec` CLI, session resume
 - **Coding tools** - Safe file ops, ripgrep search + ast-grep outline symbol maps, fuzzy discovery, code intelligence, project indexing, terminal execution
 - **Extensibility** - Agent Skills, MCP client/server, lifecycle hooks, subagents, custom providers, Zed ACP, VS Code, Claude Code
-- **Model providers** - 21+ LLM providers: Anthropic, OpenAI, Gemini, OpenRouter, Ollama, LM Studio, and more
+- **Model providers** - 21+ LLM providers: Anthropic, OpenAI, Gemini, OpenRouter, **local inference via Ollama, LM Studio, and llama.cpp** (managed with the `/local` command), and more
 - **Safety** - Restricted shell sandbox, tool guardrails, subprocess isolation, full audit logging
 - **Protocols** - Open Responses, Agent2Agent (A2A), ATIF, Anthropic Messages API
 - **Loop engineering** - Worktree isolation for parallel agents, propose/verify sub-agent separation, durable loop state, cost guardrails
@@ -78,6 +78,30 @@ VT Code supports 21+ LLM providers out of the box, plus any OpenAI-compatible AP
 
 Read: [Provider Guides](./docs/providers/PROVIDER_GUIDES.md).
 
+## Local models (experimental)
+
+Run models entirely on your machine for privacy, offline use, or zero token
+cost. VT Code supports three local backends, all managed from the TUI:
+
+- **Ollama** (`ollama serve`) — best-supported local backend; auto-loads pulled models.
+- **LM Studio** (`lms server start`) — OpenAI-compatible; select the loaded model in the picker.
+- **llama.cpp** (`llama-server -m model.gguf`) — most automated; auto-starts via `LLAMACPP_MODEL_PATH`.
+
+```shell
+/local                 # interactive local server manager
+/local start ollama   # start a specific backend
+/local troubleshoot   # diagnose connection / model issues
+```
+
+Before each generation VT Code verifies the server is up and the model is
+loaded, and on failure prints the exact recovery command (e.g.
+`ollama pull gpt-oss:20b`) instead of a cryptic error. Local inference is
+**experimental** and depends on your hardware — see
+[Local Models guide](./docs/guides/local-models.md) for trade-offs, hardware
+sizing, and a reliable-setup checklist, and
+[Local Inference Servers](./docs/providers/local-servers.md) for the full
+`/local` reference.
+
 ## Development
 
 ```shell
@@ -107,19 +131,21 @@ cargo nextest run        # parallel test runner
 I'd love to have you, bug reports, docs, features, ideas, all welcome. Start with [issues](https://github.com/vinhnx/vtcode/issues) or [good first issues](https://github.com/vinhnx/vtcode/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22). AI agents see [AGENTS.md](./AGENTS.md). Humans see [CONTRIBUTING.md](./docs/CONTRIBUTING.md).
 
 <p align="center">
-  <a href="https://github.com/kernitus"><img src="https://avatars.githubusercontent.com/u/2789734?s=60" width="40" height="40" alt="@kernitus" title="@kernitus (33 commits)" style="border-radius: 50%" /></a>&nbsp;
-  <a href="https://github.com/oiwn"><img src="https://avatars.githubusercontent.com/u/398035?s=60" width="40" height="40" alt="@oiwn" title="@oiwn (10 commits)" style="border-radius: 50%" /></a>&nbsp;
+  <a href="https://github.com/kernitus"><img src="https://avatars.githubusercontent.com/u/2789734?s=60" width="40" height="40" alt="@kernitus" title="@kernitus (54 commits)" style="border-radius: 50%" /></a>&nbsp;
+  <a href="https://github.com/oiwn"><img src="https://avatars.githubusercontent.com/u/398035?s=60" width="40" height="40" alt="@oiwn" title="@oiwn (12 commits)" style="border-radius: 50%" /></a>&nbsp;
   <a href="https://github.com/chenrui333"><img src="https://avatars.githubusercontent.com/u/1580956?s=60" width="40" height="40" alt="@chenrui333" title="@chenrui333 (6 commits)" style="border-radius: 50%" /></a>&nbsp;
   <a href="https://github.com/Sachin-Bhat"><img src="https://avatars.githubusercontent.com/u/25080916?s=60" width="40" height="40" alt="@Sachin-Bhat" title="@Sachin-Bhat (6 commits)" style="border-radius: 50%" /></a>&nbsp;
   <a href="https://github.com/gzsombor"><img src="https://avatars.githubusercontent.com/u/66230?s=60" width="40" height="40" alt="@gzsombor" title="@gzsombor (4 commits)" style="border-radius: 50%" /></a>&nbsp;
   <a href="https://github.com/lucaszhu-hue"><img src="https://avatars.githubusercontent.com/u/278269343?s=60" width="40" height="40" alt="@lucaszhu-hue" title="@lucaszhu-hue (4 commits)" style="border-radius: 50%" /></a>&nbsp;
+  <a href="https://github.com/leonj1"><img src="https://avatars.githubusercontent.com/u/5171829?s=60" width="40" height="40" alt="@leonj1" title="@leonj1 (4 commits)" style="border-radius: 50%" /></a>&nbsp;
   <a href="https://github.com/poelzi"><img src="https://avatars.githubusercontent.com/u/66107?s=60" width="40" height="40" alt="@poelzi" title="@poelzi (2 commits)" style="border-radius: 50%" /></a>&nbsp;
   <a href="https://github.com/EvoLinkAI"><img src="https://avatars.githubusercontent.com/u/253253881?s=60" width="40" height="40" alt="@EvoLinkAI" title="@EvoLinkAI (2 commits)" style="border-radius: 50%" /></a>&nbsp;
   <a href="https://github.com/gurdasnijor"><img src="https://avatars.githubusercontent.com/u/1755404?s=60" width="40" height="40" alt="@gurdasnijor" title="@gurdasnijor (2 commits)" style="border-radius: 50%" /></a>&nbsp;
-  <a href="https://github.com/leonj1"><img src="https://avatars.githubusercontent.com/u/5171829?s=60" width="40" height="40" alt="@leonj1" title="@leonj1 (2 commits)" style="border-radius: 50%" /></a>&nbsp;
   <a href="https://github.com/morler"><img src="https://avatars.githubusercontent.com/u/478444?s=60" width="40" height="40" alt="@morler" title="@morler (2 commits)" style="border-radius: 50%" /></a>&nbsp;
   <a href="https://github.com/uiYzzi"><img src="https://avatars.githubusercontent.com/u/40852301?s=60" width="40" height="40" alt="@uiYzzi" title="@uiYzzi (2 commits)" style="border-radius: 50%" /></a>&nbsp;
-  <a href="https://github.com/RobertBorg"><img src="https://avatars.githubusercontent.com/u/1288566?s=60" width="40" height="40" alt="@RobertBorg" title="@RobertBorg (1 commit)" style="border-radius: 50%" /></a>
+  <a href="https://github.com/search?q=li%40maisiliym.criome.net&type=commits"><img src="https://avatars.githubusercontent.com/u/0?s=60" width="40" height="40" alt="@li" title="li (2 commits)" style="border-radius: 50%" /></a>&nbsp;
+  <a href="https://github.com/RobertBorg"><img src="https://avatars.githubusercontent.com/u/1288566?s=60" width="40" height="40" alt="@RobertBorg" title="@RobertBorg (1 commit)" style="border-radius: 50%" /></a>&nbsp;
+  <a href="https://github.com/ForrestThump"><img src="https://avatars.githubusercontent.com/u/44280834?s=60" width="40" height="40" alt="@ForrestThump" title="@ForrestThump (1 commit)" style="border-radius: 50%" /></a>
 </p>
 
 ## Support

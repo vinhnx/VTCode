@@ -68,5 +68,4 @@ session_max_requests = 12
 
 ## Related Tools
 
-- `web_fetch` — fetch full page content from a specific URL
-- `defuddle_fetch` — fetch and extract structured content from documents
+- `web_fetch` — fetch full page content from a specific URL; pass `format="markdown"` for defuddle-style cleaned-markdown extraction (consolidates the former `defuddle_fetch` tool)

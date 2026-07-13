@@ -9,6 +9,7 @@ use crate::core::agent::features::FeatureSet;
 use crate::core::agent::session_config::ResolvedSessionConfig;
 use crate::core::agent::steering::SteeringMessage;
 use crate::core::threads::{ThreadBootstrap, ThreadRuntimeHandle, build_thread_archive_metadata};
+use std::path::Path;
 
 /// Settings for the agent runner
 #[derive(Clone, Default)]
@@ -41,13 +42,19 @@ use vtcode_config::auth::OpenAIChatGptAuthHandle;
 mod config_helpers;
 mod constants;
 mod continuation;
+mod contract_render;
 mod escalation;
+mod evaluator_types;
 mod execute;
 mod execute_checks;
+mod execute_helpers;
 mod helpers;
 mod orchestration;
 mod output;
+mod planner_helpers;
+mod planner_types;
 pub mod prompt_alignment;
+mod replan_helpers;
 mod retry;
 mod summarize;
 mod summary;
@@ -58,6 +65,8 @@ mod tool_args;
 mod tool_dispatch_common;
 mod tool_exec;
 mod tool_execution_guard;
+mod tool_rejection;
+mod tool_types;
 mod types;
 mod validation;
 mod workspace_detection;
@@ -79,6 +88,12 @@ pub struct AgentRunner {
     tool_registry: ToolRegistry,
     /// System prompt content
     system_prompt: String,
+    /// Token-budget report for `system_prompt`, computed at session
+    /// construction time (or recomputed by `set_system_prompt`). Reused by
+    /// `compose_task_system_prompt` for non-simple tasks so the budget
+    /// warning and preflight check stay accurate without recomposing the
+    /// prompt on every turn.
+    system_prompt_report: crate::prompts::system::SystemPromptReport,
     /// Session information
     session_id: String,
     /// Initial archived history used to seed the first task on this runner.
@@ -323,7 +338,7 @@ impl AgentRunner {
             .collect::<Vec<_>>();
         let mut prompt_context = PromptContext::from_workspace_tools(&workspace, available_tools);
         prompt_context.load_available_skills();
-        let system_prompt = helpers::compose_system_prompt_with_appendix(
+        let (system_prompt, system_prompt_report) = helpers::compose_system_prompt_with_appendix(
             workspace.as_path(),
             session_config.effective(),
             &prompt_context,
@@ -359,6 +374,7 @@ impl AgentRunner {
             provider_client,
             tool_registry,
             system_prompt,
+            system_prompt_report,
             session_id,
             bootstrap_messages,
             _workspace: workspace,
@@ -401,6 +417,11 @@ impl AgentRunner {
         self.thread_handle.clone()
     }
 
+    /// Workspace root this runner operates within.
+    pub fn workspace(&self) -> &Path {
+        &self._workspace
+    }
+
     /// Enable read-only planning workflow for the underlying tool registry.
     pub fn enable_planning(&self) {
         self.tool_registry.enable_planning();
@@ -425,8 +446,16 @@ impl AgentRunner {
     }
 
     /// Override the composed system prompt for downstream embedders.
+    ///
+    /// Recomputes `system_prompt_report` against the overridden text so the
+    /// budget warning and preflight check stay accurate even when the prompt
+    /// bypasses the normal section-based composition pipeline.
     pub fn set_system_prompt(&mut self, system_prompt: impl Into<String>) {
         self.system_prompt = system_prompt.into();
+        self.system_prompt_report = crate::prompts::system::SystemPromptReport::measure(
+            &self.system_prompt,
+            self.config().agent.max_system_prompt_tokens,
+        );
     }
 
     /// Clone the underlying tool registry so embedders can register custom tools.

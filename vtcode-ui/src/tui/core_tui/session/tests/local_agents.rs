@@ -221,33 +221,38 @@ fn core_tab_cycles_primary_agent_when_composer_is_empty() {
 }
 
 #[test]
-fn tab_cycles_primary_agent_while_running() {
+fn tab_does_not_cycle_primary_agent_while_running() {
     let mut session = app_session_with_input("", 0);
     load_primary_agent_palette(&mut session);
     set_app_session_busy_status(&mut session);
 
     let event = session.process_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
 
-    assert!(matches!(
-        event,
-        Some(app_types::InlineEvent::CyclePrimaryAgent)
-    ));
+    assert!(event.is_none());
     assert_eq!(session.core.input_manager.content(), "");
 }
 
 #[test]
-fn tab_cycles_primary_agent_while_running_with_draft() {
+fn tab_does_not_cycle_primary_agent_while_running_with_draft() {
     let mut session = app_session_with_input("Review this", "Review this".len());
     load_primary_agent_palette(&mut session);
     set_app_session_busy_status(&mut session);
 
     let event = session.process_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
 
-    assert!(matches!(
-        event,
-        Some(app_types::InlineEvent::CyclePrimaryAgent)
-    ));
+    assert!(event.is_none());
     assert_eq!(session.core.input_manager.content(), "Review this");
+}
+
+#[test]
+fn shift_tab_does_not_cycle_primary_agent_while_running() {
+    let mut session = app_session_with_input("", 0);
+    load_primary_agent_palette(&mut session);
+    set_app_session_busy_status(&mut session);
+
+    let event = session.process_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT));
+
+    assert!(event.is_none());
 }
 
 #[test]

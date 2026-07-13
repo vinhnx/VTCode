@@ -76,6 +76,16 @@ impl ContextManager {
         self.workspace_root = Some(workspace_root.to_path_buf());
     }
 
+    #[cfg(test)]
+    pub(crate) fn default_for_test() -> Self {
+        Self::new(
+            String::new(),
+            (),
+            Arc::new(RwLock::new(HashMap::new())),
+            None,
+        )
+    }
+
     pub(crate) fn set_editor_context_snapshot(
         &mut self,
         snapshot: Option<EditorContextSnapshot>,
@@ -150,9 +160,9 @@ impl ContextManager {
             } else if total_tokens > completion_tokens {
                 total_tokens.saturating_sub(completion_tokens)
             } else {
-                self.cached_stats
-                    .total_token_usage
-                    .saturating_add(completion_tokens)
+                // Neither prompt_tokens nor (total - completion) is available;
+                // can't estimate prompt pressure. Preserve previous reading.
+                self.cached_stats.total_token_usage
             };
 
             self.cached_stats.total_token_usage = estimated_prompt_pressure;
@@ -198,7 +208,7 @@ impl ContextManager {
     /// Cap prompt-pressure tracking after local history compaction.
     pub(crate) fn cap_token_usage_after_compaction(&mut self, threshold: Option<usize>) {
         self.cached_stats.total_token_usage = match threshold {
-            Some(limit) if limit > 0 => self.cached_stats.total_token_usage.min(limit - 1),
+            Some(limit) if limit > 0 => self.cached_stats.total_token_usage.min(limit),
             Some(_) | None => 0,
         };
     }
@@ -304,6 +314,7 @@ impl ContextManager {
         {
             return path
                 .parent()
+                .filter(|p| p.starts_with(workspace))
                 .map(Path::to_path_buf)
                 .or_else(|| Some(workspace.clone()));
         }
@@ -311,7 +322,11 @@ impl ContextManager {
         self.instruction_activity_paths
             .iter()
             .find(|path| path.starts_with(workspace))
-            .and_then(|path| path.parent().map(Path::to_path_buf))
+            .and_then(|path| {
+                path.parent()
+                    .filter(|p| p.starts_with(workspace))
+                    .map(Path::to_path_buf)
+            })
             .or_else(|| Some(workspace.clone()))
     }
 

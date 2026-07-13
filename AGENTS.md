@@ -49,6 +49,8 @@ Cargo workspace, ~30 crates. Rust stable, MSRV 1.88, edition 2024. `default-memb
 | `vtcode-utility-tool-specs` | JSON schemas for utility, file, and collaboration/HITL tools |
 | `vtcode-llm` | LLM provider abstraction, client implementations, streaming (partial extraction) |
 | `vtcode-skills` | Skill types, discovery, loading, and validation (partial extraction) |
+| `vtcode-session-store` | Unified per-session state store: append-only `ThreadEvent` log, derived views, retention, cross-session query (single source of truth) |
+| `vtcode-eval` | Agent evaluation framework: pass@k/pass^k metrics, capability/regression evals, environment-based outcome verification |
 | `vtcode-safety` | Command safety detection, execution policies, sandboxing |
 | `vtcode-a2a` | Agent2Agent (A2A) protocol client and server |
 | `vtcode-mcp` | Model Context Protocol client, connection pooling, tool discovery |
@@ -76,6 +78,8 @@ Every crate has its own AGENTS.md with crate-specific conventions:
 | `vtcode-utility-tool-specs` | [vtcode-utility-tool-specs/AGENTS.md](vtcode-utility-tool-specs/AGENTS.md) |
 | `vtcode-llm` | [vtcode-llm/AGENTS.md](vtcode-llm/AGENTS.md) |
 | `vtcode-skills` | [vtcode-skills/AGENTS.md](vtcode-skills/AGENTS.md) |
+| `vtcode-session-store` | [vtcode-session-store/AGENTS.md](vtcode-session-store/AGENTS.md) |
+| `vtcode-eval` | [vtcode-eval/AGENTS.md](vtcode-eval/AGENTS.md) |
 | `vtcode-safety` | [vtcode-safety/AGENTS.md](vtcode-safety/AGENTS.md) |
 | `vtcode-a2a` | [vtcode-a2a/AGENTS.md](vtcode-a2a/AGENTS.md) |
 | `vtcode-mcp` | [vtcode-mcp/AGENTS.md](vtcode-mcp/AGENTS.md) |
@@ -89,7 +93,9 @@ Session-independent knowledge lives in `.vtcode/memory/` (gitignored): `gotchas.
 
 ## Build & Verification
 
-Prefer `./scripts/check-dev.sh` (10-30s) over `./scripts/check.sh` (2-5m) for iteration.
+- CI build caching: `Swatinem/rust-cache` keys off the target triple only when `CARGO_BUILD_TARGET` is set or you pass `key:`. Builds that pass `--target` via the CLI (e.g. `cross build --target`) share ONE cache key across matrix jobs on the same runner OS, causing colliding/failing saves and every target restoring a mismatched cache. Always namespace the cache per target (`with: { key: ${{ matrix.target }} }`) in cross-target matrix jobs.
+- Prefer `./scripts/check-dev.sh` (10-30s) over `./scripts/check.sh` (2-5m) for iteration.
+- Release builds keep `debug-assertions = true` and `overflow-checks = true` in `[profile.release]`. `debug_assert!` and overflow checks are NOT disabled in prod: a violated invariant must crash loud, not let the program run under wrong assumptions (see kristoff.it/blog/fix-your-asserts). Use `assert!`/`debug_assert!` for invariants that always hold; gate expensive diagnostics behind `#[cfg(debug_assertions)]` since that branch still compiles out of release when the flag is off elsewhere.
 
 | Change | Command |
 |---|---|

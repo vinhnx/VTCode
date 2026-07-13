@@ -12,15 +12,23 @@ use crate::llm::provider::{
 };
 use crate::llm::utils::truncate_to_token_limit;
 
+pub mod auto;
+pub mod memory_envelope;
 pub mod summarizer;
 
 const DEFAULT_COMPACTION_TARGET_THRESHOLD: f64 = 0.50;
 const DEFAULT_COMPACTION_KEEP_LAST_MESSAGES: usize = 10;
 const DEFAULT_RETAINED_USER_MESSAGE_TOKENS: usize = 20_000;
-const DEFAULT_RETAINED_USER_MESSAGES: usize = 4;
+const DEFAULT_RETAINED_USER_MESSAGES: usize = 6;
 const SUMMARY_PREFIX: &str = "Previous conversation summary:\n";
 const ABSTRACT_PREFIX: &str = "Earlier context (abstract):\n";
 const DETAIL_PREFIX: &str = "Recent context (summary):\n";
+
+/// Default summarization prompt. Structures the summary for continuity: after
+/// reading it, the next context must feel like a seamless continuation, not a
+/// fresh start. Kept as a `const` so `CompactionConfig::default` does not
+/// re-allocate a ~1KB literal on every construction.
+const DEFAULT_SUMMARY_PROMPT: &str = "Summarize the conversation so far using this exact structure. The goal is continuity: after reading this summary, the next context must feel like a seamless continuation of the same task, not a fresh start.\n\n## Goal\n[What the user is trying to accomplish]\n\n## Constraints & Preferences\n- [Requirements, preferences, or constraints from the user]\n\n## What I Was Just Doing\n[The single most recent action in progress: what step the agent was executing, which tool or edit was underway, and where it left off. This is the continuity anchor.]\n\n## Last Action & Result\n[The last completed action and its outcome (success, error, or partial). Include the exact error or status if relevant.]\n\n## Progress\n### Done\n- [Completed work]\n\n### In Progress\n- [Current work]\n\n### Blocked\n- [Blocking issues, if any]\n\n## Key Decisions\n- **[Decision]**: [Reason]\n\n## Next Steps\n1. [Most important next step]\n\n## Critical Context\n- [Facts needed to continue]\n\nKeep it concise and actionable. Always preserve the current task objective and acceptance criteria, file paths that were read or modified, test results and error messages, and decisions with their reasoning.";
 
 /// Compaction configuration for context window management.
 #[derive(Debug, Clone)]
@@ -55,8 +63,7 @@ impl Default for CompactionConfig {
         Self {
             trigger_threshold: DEFAULT_COMPACTION_TRIGGER_RATIO,
             target_threshold: DEFAULT_COMPACTION_TARGET_THRESHOLD,
-            summary_prompt: "Summarize the conversation so far using this exact structure:\n\n## Goal\n[What the user is trying to accomplish]\n\n## Constraints & Preferences\n- [Requirements, preferences, or constraints from the user]\n\n## Progress\n### Done\n- [Completed work]\n\n### In Progress\n- [Current work]\n\n### Blocked\n- [Blocking issues, if any]\n\n## Key Decisions\n- **[Decision]**: [Reason]\n\n## Next Steps\n1. [Most important next step]\n\n## Critical Context\n- [Facts needed to continue]\n\nKeep it concise and actionable. Always preserve the current task objective and acceptance criteria, file paths that were read or modified, test results and error messages, and decisions with their reasoning."
-                .to_string(),
+            summary_prompt: DEFAULT_SUMMARY_PROMPT.to_string(),
             keep_last_messages: DEFAULT_COMPACTION_KEEP_LAST_MESSAGES,
             retained_user_message_tokens: DEFAULT_RETAINED_USER_MESSAGE_TOKENS,
             retained_user_messages: DEFAULT_RETAINED_USER_MESSAGES,
@@ -106,6 +113,10 @@ pub async fn compact_history(
         &summary,
         config.retained_user_message_tokens,
         config.retained_user_messages,
+        // The public `compact_history` entry feeds the fork/branch builder,
+        // which produces a minimal resume artifact (envelope + summary +
+        // retained users only) — no live continuity tail.
+        false,
     ))
 }
 
@@ -361,6 +372,8 @@ async fn summarize_locally(
         &summary,
         config.retained_user_message_tokens,
         config.retained_user_messages,
+        // Live compaction: retain the most recent turn verbatim for continuity.
+        true,
     ))
 }
 
@@ -444,18 +457,34 @@ async fn summarize_locally_hierarchical(
         config.retained_user_messages,
     );
 
-    // Assemble: [abstract, detail, ...retained_recent]
+    // Assemble: [abstract, detail, ...retained_recent, ...continuity_tail]
     let mut new_history = Vec::with_capacity(2 + retained.len());
     new_history.push(Message::system(format!(
         "{ABSTRACT_PREFIX}{abstract_summary}"
     )));
     new_history.push(Message::system(format!("{DETAIL_PREFIX}{detail_summary}")));
     new_history.extend(retained);
+    // Live compaction: retain the most recent turn verbatim for continuity.
+    for message in continuity_tail(history) {
+        if !new_history.iter().any(|existing| {
+            existing.role == message.role && existing.content.as_text() == message.content.as_text()
+        }) {
+            new_history.push(message.clone());
+        }
+    }
     Ok(new_history)
 }
 
 fn build_summary_prompt(history: &[Message], instructions: &str) -> String {
-    let mut formatted = String::new();
+    // Pre-size for the header plus every (non-empty) message body, avoiding
+    // repeated reallocations while the summary prompt is assembled.
+    let estimated_len = instructions.len()
+        + history
+            .iter()
+            .map(|m| m.content.as_text().len())
+            .sum::<usize>()
+        + history.len() * 16;
+    let mut formatted = String::with_capacity(estimated_len);
     let now: DateTime<Utc> = Utc::now();
     let _ = writeln!(
         &mut formatted,
@@ -486,6 +515,7 @@ fn build_local_compacted_history(
     summary: &str,
     retained_user_message_tokens: usize,
     retained_user_messages: usize,
+    include_continuity_tail: bool,
 ) -> Vec<Message> {
     let retained_users = collect_retained_user_messages(
         history,
@@ -498,7 +528,54 @@ fn build_local_compacted_history(
         summary.trim()
     )));
     new_history.extend(retained_users);
+
+    // Continuity anchor: always retain the most recent turn verbatim so the
+    // model keeps "what it was just doing" — its last assistant action and any
+    // in-progress tool calls — rather than losing it inside the summary. Only
+    // applied on the live compaction path; the fork builder passes `false`.
+    if include_continuity_tail {
+        for message in continuity_tail(history) {
+            if !new_history.iter().any(|existing| {
+                existing.role == message.role
+                    && existing.content.as_text() == message.content.as_text()
+            }) {
+                new_history.push(message.clone());
+            }
+        }
+    }
     new_history
+}
+
+/// The trailing run of messages forming the most recent turn. This slice must
+/// survive compaction verbatim to preserve conversational continuity.
+fn continuity_tail(history: &[Message]) -> &[Message] {
+    if history.is_empty() {
+        return &[];
+    }
+    let last_user = history
+        .iter()
+        .rposition(|message| message.role == MessageRole::User)
+        .unwrap_or(0);
+    let mut tail = &history[last_user..];
+    // Drop a trailing assistant message that still carries pending tool calls
+    // with no following tool result. An interrupted turn (e.g. the run loop hit
+    // its turn budget or errored before tool results were appended) leaves such
+    // a message at the end of history; sending it to a provider is invalid
+    // because every tool call must be paired with a tool result. A complete turn
+    // ends with a `Tool` message, which is *not* trimmed here.
+    while let Some(last) = tail.last() {
+        if last.role == MessageRole::Assistant
+            && last
+                .tool_calls
+                .as_ref()
+                .is_some_and(|calls| !calls.is_empty())
+        {
+            tail = &tail[..tail.len() - 1];
+        } else {
+            break;
+        }
+    }
+    tail
 }
 
 fn collect_retained_user_messages(
@@ -523,7 +600,7 @@ fn collect_retained_user_messages(
         .collect();
     user_scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
-    let mut selected: Vec<(usize, Message)> = Vec::new();
+    let mut selected: Vec<(usize, Message)> = Vec::with_capacity(max_messages.min(history.len()));
     let mut remaining = token_budget;
 
     for (original_idx, _score, message) in &user_scored {
@@ -572,9 +649,94 @@ fn collect_retained_user_messages(
         }
     }
 
-    // Re-sort by original conversation order to preserve chronology.
+    // Re-sort by original conversation order, then enforce tool-call/turn
+    // coherence so the compacted history is valid to send back to a provider.
     selected.sort_by_key(|(idx, _)| *idx);
-    selected.into_iter().map(|(_, msg)| msg).collect()
+    coherence_tool_call_pairs(history, &selected)
+        .into_iter()
+        .map(|(_, msg)| msg)
+        .collect()
+}
+
+/// Keep retained tool-call turns internally consistent.
+///
+/// A `Tool` message references a tool call the model must have seen, and an
+/// `Assistant` message that still carries `tool_calls` must be followed by the
+/// results those calls produced. Sending either without its counterpart is
+/// invalid: providers reject unmatched tool calls, and orphaned tool results
+/// reference a call the model never observed. This pass:
+///
+/// - **Force-keeps** the `Tool` messages immediately following any retained
+///   `Assistant` that carries `tool_calls`, so the model observes each call's
+///   return value. A complete turn ends with its results, which survive even
+///   if they push past the soft `max_messages` cap.
+/// - **Drops** a retained `Tool` message whose calling `Assistant` (the message
+///   directly before it in `history`) was *not* retained — an orphaned result
+///   the model cannot reconcile.
+///
+/// Tool results that follow a plain `Assistant` (no `tool_calls`) are ordinary
+/// turn output and are kept exactly as selected.
+fn coherence_tool_call_pairs(
+    history: &[Message],
+    selected: &[(usize, Message)],
+) -> Vec<(usize, Message)> {
+    let mut keep: std::collections::HashSet<usize> = selected.iter().map(|(i, _)| *i).collect();
+
+    for (idx, msg) in selected {
+        if msg.role == MessageRole::Assistant
+            && msg
+                .tool_calls
+                .as_ref()
+                .is_some_and(|calls| !calls.is_empty())
+        {
+            let mut j = *idx + 1;
+            while let Some(next) = history.get(j) {
+                if next.role == MessageRole::Tool {
+                    keep.insert(j);
+                    j += 1;
+                } else {
+                    break;
+                }
+            }
+        }
+    }
+
+    selected
+        .iter()
+        .filter(|(idx, msg)| {
+            if msg.role == MessageRole::Tool {
+                // Walk backward through this contiguous result run to decide
+                // coherence against the calling assistant turn.
+                let mut cursor = *idx;
+                loop {
+                    match history.get(cursor) {
+                        Some(m) if m.role == MessageRole::Tool => {
+                            cursor = match cursor.checked_sub(1) {
+                                Some(c) => c,
+                                None => break,
+                            };
+                        }
+                        Some(m)
+                            if m.role == MessageRole::Assistant
+                                && m.tool_calls.as_ref().is_some_and(|c| !c.is_empty()) =>
+                        {
+                            // Reached the calling assistant: coherent only if it
+                            // was retained.
+                            return keep.contains(&cursor);
+                        }
+                        _ => {
+                            // Plain assistant or boundary: ordinary output.
+                            return keep.contains(idx);
+                        }
+                    }
+                }
+                keep.contains(idx)
+            } else {
+                keep.contains(idx)
+            }
+        })
+        .cloned()
+        .collect()
 }
 
 /// Score a message for importance-weighted retention during compaction.
@@ -678,16 +840,17 @@ fn truncate_user_message(message: &Message, token_budget: usize) -> Option<Messa
 mod tests {
     use super::{
         CompactionConfig, ManualCompactionOptions, compact_history, compact_history_manual,
-        manual_compaction_strategy,
+        continuity_tail, manual_compaction_strategy,
     };
     use crate::config::types::{ReasoningEffortLevel, VerbosityLevel};
     use crate::exec::events::CompactionMode;
     use crate::llm::provider::{
-        LLMError, LLMProvider, LLMRequest, LLMResponse, Message, ResponsesCompactionOptions,
+        LLMError, LLMProvider, LLMRequest, LLMResponse, Message, MessageRole,
+        ResponsesCompactionOptions,
     };
     use async_trait::async_trait;
     use std::sync::Mutex;
-    use vtcode_commons::llm::FinishReason;
+    use vtcode_commons::llm::{FinishReason, ToolCall};
 
     struct StubProvider;
 
@@ -930,6 +1093,59 @@ mod tests {
             Message::assistant("working".to_string()),
             Message::user("second request".to_string()),
         ]
+    }
+
+    /// Build an assistant message that carries a (single) pending tool call.
+    fn assistant_with_calls(content: &str, call_id: &str) -> Message {
+        let mut message = Message::assistant(content.to_string());
+        message.tool_calls = Some(vec![ToolCall {
+            id: call_id.to_string(),
+            call_type: "function".to_string(),
+            function: None,
+            text: None,
+            thought_signature: None,
+        }]);
+        message
+    }
+
+    #[test]
+    fn collect_retained_keeps_tool_result_with_its_assistant() {
+        // When the assistant tool-call turn is retained, its tool result must
+        // survive so the turn stays coherent (the model sees each call's return).
+        let history = vec![
+            Message::user("u1".to_string()),
+            assistant_with_calls("calling tool", "c1"),
+            Message::tool_response("c1".to_string(), "r1".to_string()),
+            Message::user("u2".to_string()),
+        ];
+        let retained = super::collect_retained_user_messages(&history, 20_000, 4);
+        assert!(retained.iter().any(|m| m.content.as_text().contains("u1")));
+        assert!(retained.iter().any(|m| m.content.as_text().contains("u2")));
+        assert!(
+            retained.iter().any(|m| m.content.as_text().contains("r1")),
+            "tool result paired with its retained assistant must survive"
+        );
+    }
+
+    #[test]
+    fn collect_retained_drops_orphaned_tool_result() {
+        // If the assistant tool-call turn is dropped (over the retention cap),
+        // its tool result is orphaned — the model never saw the call — and must
+        // not survive compaction, because an orphaned result is invalid to send
+        // to a provider.
+        let history = vec![
+            Message::user("u1".to_string()),
+            assistant_with_calls("calling tool", "c1"),
+            Message::tool_response("c1".to_string(), "r1".to_string()),
+            Message::user("u2".to_string()),
+        ];
+        let retained = super::collect_retained_user_messages(&history, 20_000, 3);
+        assert!(retained.iter().any(|m| m.content.as_text().contains("u1")));
+        assert!(retained.iter().any(|m| m.content.as_text().contains("u2")));
+        assert!(
+            !retained.iter().any(|m| m.content.as_text().contains("r1")),
+            "orphaned tool result must be dropped"
+        );
     }
 
     #[tokio::test]
@@ -1273,7 +1489,9 @@ mod tests {
             .await
             .expect("compacted history");
 
-        // Summary + importance-weighted retained messages (user messages + tool response).
+        // Summary + importance-weighted retained messages (user messages + tool
+        // response). The public `compact_history` entry is the fork/branch
+        // builder, which intentionally omits the live continuity tail.
         assert_eq!(compacted.len(), 4);
         assert_eq!(
             compacted[0].content.as_text(),
@@ -1378,5 +1596,42 @@ mod tests {
         assert!(prompt.contains("file paths that were read or modified"));
         assert!(prompt.contains("test results and error messages"));
         assert!(prompt.contains("decisions with their reasoning"));
+    }
+
+    #[test]
+    fn continuity_tail_keeps_complete_turn_but_drops_unmatched_tool_call() {
+        // A completed turn: user -> assistant(tool call) -> tool result. The
+        // tail must keep the whole turn intact (the tool result makes the
+        // trailing assistant tool call valid to send).
+        let complete = vec![
+            Message::user("do the thing".into()),
+            {
+                let mut m = Message::assistant("calling".into());
+                m.tool_calls = Some(vec![ToolCall::function(
+                    "c1".into(),
+                    "run".into(),
+                    "{}".into(),
+                )]);
+                m
+            },
+            Message::tool_response("c1".into(), "ran".into()),
+        ];
+        assert_eq!(continuity_tail(&complete).len(), 3);
+
+        // An interrupted turn: user -> assistant(tool call) with no tool
+        // result. Sending the trailing assistant message to a provider is
+        // invalid, so the tail must drop it and keep only the user message.
+        let interrupted = vec![Message::user("do the thing".into()), {
+            let mut m = Message::assistant("calling".into());
+            m.tool_calls = Some(vec![ToolCall::function(
+                "c1".into(),
+                "run".into(),
+                "{}".into(),
+            )]);
+            m
+        }];
+        let tail = continuity_tail(&interrupted);
+        assert_eq!(tail.len(), 1);
+        assert_eq!(tail[0].role, MessageRole::User);
     }
 }

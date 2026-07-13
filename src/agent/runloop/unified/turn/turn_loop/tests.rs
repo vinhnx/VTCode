@@ -1,13 +1,15 @@
+use super::post_tool_recovery::complete_turn_after_failed_tool_free_recovery;
 use super::post_tool_recovery::prepare_post_tool_tool_free_recovery;
 use super::post_tool_recovery::{ensure_post_tool_resume_directive, has_tool_response_since};
 use super::{
-    HarnessUsage, POST_TOOL_RECOVERY_REASON, POST_TOOL_RESUME_DIRECTIVE, PostToolFailureRecovery,
-    RECOVERY_CONTRACT_VIOLATION_REASON, RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER,
-    accumulate_turn_usage, complete_turn_after_failed_tool_free_recovery,
+    HarnessUsage, PLANNING_RECOVERY_SYNTHESIS_FALLBACK, POST_TOOL_RECOVERY_REASON,
+    POST_TOOL_RESUME_DIRECTIVE, PostToolFailureRecovery, RECOVERY_CONTRACT_VIOLATION_REASON,
+    RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER, accumulate_turn_usage,
     count_assistant_text_responses_for_guard, count_assistant_text_responses_in_turn,
     has_turn_usage, maybe_recover_after_post_tool_llm_failure,
     normalize_tool_free_recovery_break_outcome, run_turn_loop,
 };
+use crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState;
 use crate::agent::runloop::unified::turn::context::TurnLoopResult;
 use crate::agent::runloop::unified::turn::turn_processing::test_support::TestTurnProcessingBacking;
 use anyhow::anyhow;
@@ -83,6 +85,9 @@ fn prepare_post_tool_tool_free_recovery_is_idempotent_near_history_tail() {
     prepare_post_tool_tool_free_recovery(&mut history, POST_TOOL_RECOVERY_REASON);
     prepare_post_tool_tool_free_recovery(&mut history, POST_TOOL_RECOVERY_REASON);
 
+    // The resume directive must NOT be injected for tool-free recovery: it
+    // instructs the model to follow tool-output guidance, contradicting the
+    // tools-disabled synthesis contract.
     let resume_directive_count = history
         .iter()
         .filter(|message| {
@@ -90,7 +95,7 @@ fn prepare_post_tool_tool_free_recovery_is_idempotent_near_history_tail() {
                 && message.content.as_text() == POST_TOOL_RESUME_DIRECTIVE
         })
         .count();
-    assert_eq!(resume_directive_count, 1);
+    assert_eq!(resume_directive_count, 0);
 
     let recovery_reason_count = history
         .iter()
@@ -140,6 +145,8 @@ fn retryable_post_tool_follow_up_failure_schedules_tool_free_recovery_once() {
     .expect("repeat recovery should succeed");
     assert_eq!(action_again, PostToolFailureRecovery::RetryToolFree);
 
+    // Retry path injects only the recovery reason; the resume directive is
+    // reserved for the turn-ending (StopAfterDirective) path.
     let directive_count = history
         .iter()
         .filter(|message| {
@@ -147,7 +154,7 @@ fn retryable_post_tool_follow_up_failure_schedules_tool_free_recovery_once() {
                 && message.content.as_text() == POST_TOOL_RESUME_DIRECTIVE
         })
         .count();
-    assert_eq!(directive_count, 1);
+    assert_eq!(directive_count, 0);
 
     let recovery_reason_count = history
         .iter()
@@ -185,6 +192,11 @@ fn retryable_post_tool_follow_up_failure_stops_after_recovery_pass_is_spent() {
     assert!(!history.iter().any(|message| {
         message.role == uni::MessageRole::System
             && message.content.as_text() == POST_TOOL_RECOVERY_REASON
+    }));
+    // Turn-ending path keeps the resume directive for the next turn.
+    assert!(history.iter().any(|message| {
+        message.role == uni::MessageRole::System
+            && message.content.as_text() == POST_TOOL_RESUME_DIRECTIVE
     }));
 }
 
@@ -257,6 +269,8 @@ fn complete_turn_after_failed_tool_free_recovery_appends_fallback_once() {
         &mut history,
         "test.stage",
         Some(&anyhow!("Network error")),
+        None,
+        None,
     );
     assert!(matches!(outcome, TurnLoopResult::Completed));
     let fallback_count = history
@@ -270,7 +284,7 @@ fn complete_turn_after_failed_tool_free_recovery_appends_fallback_once() {
     assert_eq!(fallback_count, 1);
 
     let outcome_again =
-        complete_turn_after_failed_tool_free_recovery(&mut history, "test.stage", None);
+        complete_turn_after_failed_tool_free_recovery(&mut history, "test.stage", None, None, None);
     assert!(matches!(outcome_again, TurnLoopResult::Completed));
     let fallback_count_again = history
         .iter()
@@ -284,6 +298,40 @@ fn complete_turn_after_failed_tool_free_recovery_appends_fallback_once() {
 }
 
 #[test]
+fn complete_turn_after_failed_tool_free_recovery_prefers_salvaged_prose() {
+    let mut history = vec![uni::Message::user("summarize".to_string())];
+    let outcome = complete_turn_after_failed_tool_free_recovery(
+        &mut history,
+        "test.stage",
+        None,
+        Some("Here is the launch-time plan: reduce config IO.".to_string()),
+        None,
+    );
+    assert!(matches!(outcome, TurnLoopResult::Completed));
+    let last = history.last().unwrap();
+    assert_eq!(last.role, uni::MessageRole::Assistant);
+    assert_eq!(last.phase, Some(uni::AssistantPhase::FinalAnswer));
+    let text = last.content.as_text();
+    assert!(text.contains("reduce config IO"));
+    assert!(text != RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER);
+
+    // Whitespace-only salvage falls back to the canned answer.
+    let mut history = vec![uni::Message::user("summarize".to_string())];
+    let outcome = complete_turn_after_failed_tool_free_recovery(
+        &mut history,
+        "test.stage",
+        None,
+        Some("   \n".to_string()),
+        None,
+    );
+    assert!(matches!(outcome, TurnLoopResult::Completed));
+    assert_eq!(
+        history.last().unwrap().content.as_text(),
+        RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER
+    );
+}
+
+#[test]
 fn normalize_tool_free_recovery_break_outcome_converts_contract_violation_to_completed() {
     let mut history = vec![uni::Message::user("summarize".to_string())];
     let outcome = normalize_tool_free_recovery_break_outcome(
@@ -292,6 +340,8 @@ fn normalize_tool_free_recovery_break_outcome_converts_contract_violation_to_com
             reason: Some(RECOVERY_CONTRACT_VIOLATION_REASON.to_string()),
         },
         true,
+        None,
+        None,
     );
 
     assert!(matches!(outcome, TurnLoopResult::Completed));
@@ -311,6 +361,8 @@ fn normalize_tool_free_recovery_break_outcome_keeps_non_recovery_blocked_result(
             reason: Some("Stopped after reaching budget limit.".to_string()),
         },
         true,
+        None,
+        None,
     );
 
     assert!(matches!(
@@ -327,10 +379,113 @@ fn normalize_tool_free_recovery_break_outcome_keeps_non_recovery_blocked_result(
 }
 
 #[test]
+fn plan_mode_recovery_fallback_marks_interview_pending_and_preserves_research() {
+    use vtcode_core::core::interfaces::session::PlanningEntrySource;
+
+    let mut plan_session = PlanningWorkflowSessionState::default();
+    plan_session.enter(PlanningEntrySource::UserRequest);
+    assert!(!plan_session.interview_pending());
+
+    let mut history = vec![uni::Message::user(
+        "plan launch-time optimization".to_string(),
+    )];
+    let outcome = complete_turn_after_failed_tool_free_recovery(
+        &mut history,
+        "test.stage",
+        Some(&anyhow!("Network error")),
+        None,
+        Some(&mut plan_session),
+    );
+
+    assert!(matches!(outcome, TurnLoopResult::Completed));
+    // Planning session must survive the failed recovery so the next turn
+    // re-forces the interview instead of dead-ending.
+    assert!(plan_session.interview_pending());
+    // The plan-aware fallback must be shown (not the generic dead-end one).
+    assert!(history.iter().any(|message| {
+        message.role == uni::MessageRole::Assistant
+            && message.phase == Some(uni::AssistantPhase::FinalAnswer)
+            && message.content.as_text() == PLANNING_RECOVERY_SYNTHESIS_FALLBACK
+    }));
+    assert!(!history.iter().any(|message| {
+        message.role == uni::MessageRole::Assistant
+            && message.phase == Some(uni::AssistantPhase::FinalAnswer)
+            && message.content.as_text() == RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER
+    }));
+}
+
+#[test]
+fn plan_mode_recovery_fallback_prefers_salvaged_prose() {
+    use vtcode_core::core::interfaces::session::PlanningEntrySource;
+
+    let mut plan_session = PlanningWorkflowSessionState::default();
+    plan_session.enter(PlanningEntrySource::UserRequest);
+
+    let mut history = vec![uni::Message::user(
+        "plan launch-time optimization".to_string(),
+    )];
+    let outcome = complete_turn_after_failed_tool_free_recovery(
+        &mut history,
+        "test.stage",
+        None,
+        Some("Partial plan: batch config reads.".to_string()),
+        Some(&mut plan_session),
+    );
+
+    assert!(matches!(outcome, TurnLoopResult::Completed));
+    assert!(plan_session.interview_pending());
+    let last = history.last().unwrap();
+    assert!(last.content.as_text().contains("batch config reads"));
+}
+
+#[test]
+fn plan_mode_recovery_fallback_lists_files_read_when_present() {
+    use vtcode_core::core::interfaces::session::PlanningEntrySource;
+
+    let mut plan_session = PlanningWorkflowSessionState::default();
+    plan_session.enter(PlanningEntrySource::UserRequest);
+
+    // Simulate the turn_640 shape: a wall-clock-budgeted plan turn that read
+    // several files before the tool-free recovery follow-up failed.
+    let mut history = vec![
+        uni::Message::user("plan launch-time optimization".to_string()),
+        uni::Message::tool_response(
+            "call_1".to_string(),
+            "{\"path\": \"src/main.rs\", \"content\": \"...\"}".to_string(),
+        ),
+        uni::Message::tool_response(
+            "call_2".to_string(),
+            "{\"path\": \"src/startup/mod.rs\", \"content\": \"...\"}".to_string(),
+        ),
+    ];
+    let outcome = complete_turn_after_failed_tool_free_recovery(
+        &mut history,
+        "test.stage",
+        Some(&anyhow!("Network error")),
+        None,
+        Some(&mut plan_session),
+    );
+
+    assert!(matches!(outcome, TurnLoopResult::Completed));
+    assert!(plan_session.interview_pending());
+    let last = history.last().unwrap();
+    let text = last.content.as_text();
+    // Plan mode must stay at least as informative as the generic dead-end:
+    // it must still surface the files already read so the next turn can reuse
+    // them instead of re-exploring.
+    assert!(text.contains("Files already read this turn"));
+    assert!(text.contains("src/main.rs"));
+    assert!(text.contains("src/startup/mod.rs"));
+    // And it must lead with the plan-aware message, not the generic one.
+    assert!(text.contains(PLANNING_RECOVERY_SYNTHESIS_FALLBACK));
+}
+
+#[test]
 fn accumulate_turn_usage_merges_prompt_completion_and_cached_tokens() {
     let mut total = HarnessUsage::default();
 
     accumulate_turn_usage(
+        "openai",
         &mut total,
         &Some(uni::Usage {
             prompt_tokens: 100,
@@ -343,6 +498,7 @@ fn accumulate_turn_usage_merges_prompt_completion_and_cached_tokens() {
         }),
     );
     accumulate_turn_usage(
+        "openai",
         &mut total,
         &Some(uni::Usage {
             prompt_tokens: 40,
@@ -359,6 +515,30 @@ fn accumulate_turn_usage_merges_prompt_completion_and_cached_tokens() {
     assert_eq!(total.cached_input_tokens, 15);
     assert_eq!(total.output_tokens, 30);
     assert!(has_turn_usage(&total));
+}
+
+#[test]
+fn accumulate_turn_usage_normalizes_anthropic_exclusive_input() {
+    let mut total = HarnessUsage::default();
+
+    accumulate_turn_usage(
+        "anthropic",
+        &mut total,
+        &Some(uni::Usage {
+            prompt_tokens: 100,
+            completion_tokens: 20,
+            total_tokens: 120,
+            cached_prompt_tokens: None,
+            cache_creation_tokens: Some(50),
+            cache_read_tokens: Some(400),
+            iterations: None,
+        }),
+    );
+
+    assert_eq!(total.input_tokens, 550);
+    assert_eq!(total.cached_input_tokens, 400);
+    assert_eq!(total.cache_creation_tokens, 50);
+    assert_eq!(total.output_tokens, 20);
 }
 
 #[tokio::test]
@@ -570,4 +750,102 @@ fn count_assistant_text_responses_in_turn_matches_observed_pattern() {
             >= super::MAX_ASSISTANT_TEXT_RESPONSES_PER_TURN,
         "anti-runaway guard would trip on this history"
     );
+}
+
+/// End-to-end regression test for the tool-free recovery contract-violation
+/// retry (checkpoint turn_621): when the model emits textual tool-call markup
+/// during a tool-free synthesis pass instead of prose, the turn loop must
+/// retry up to `MAX_RECOVERY_RETRIES` times with a corrective directive rather
+/// than immediately concluding with the canned fallback answer. After retries
+/// are exhausted, the turn must conclude with the salvaged prose from the
+/// rejected synthesis response.
+#[tokio::test]
+async fn tool_free_recovery_retries_on_contract_violation_then_salvages() {
+    use std::sync::{Arc, Mutex};
+
+    #[derive(Clone)]
+    struct ContractViolationProvider {
+        requests: Arc<Mutex<usize>>,
+        content: String,
+    }
+
+    #[async_trait::async_trait]
+    impl uni::LLMProvider for ContractViolationProvider {
+        fn name(&self) -> &str {
+            "openai"
+        }
+        fn supports_streaming(&self) -> bool {
+            false
+        }
+        async fn generate(
+            &self,
+            request: uni::LLMRequest,
+        ) -> Result<uni::LLMResponse, uni::LLMError> {
+            *self.requests.lock().expect("requests lock") += 1;
+            Ok(uni::LLMResponse {
+                content: Some(self.content.clone()),
+                model: request.model.clone(),
+                tool_calls: None,
+                usage: None,
+                finish_reason: uni::FinishReason::Stop,
+                reasoning: None,
+                reasoning_details: None,
+                organization_id: None,
+                request_id: None,
+                tool_references: Vec::new(),
+                compaction: None,
+            })
+        }
+        fn supported_models(&self) -> Vec<String> {
+            vec!["noop-model".to_string()]
+        }
+        fn validate_request(&self, _request: &uni::LLMRequest) -> Result<(), uni::LLMError> {
+            Ok(())
+        }
+    }
+
+    let mut backing = TestTurnProcessingBacking::new(4).await;
+    backing.activate_tool_free_recovery_for_test("post-tool follow-up failure");
+
+    // Markup with surrounding prose so the salvage step has non-trivial text.
+    // A dangling `</tool_call>` close tag trips `contains_pseudo_tool_call_markers`
+    // (so the recovery guard fires) but has no matching opening `<tool_call>`
+    // for `strip_textual_tool_call_regions` to remove, so the response cannot
+    // be "cleaned" into a valid final answer. The turn must retry, then salvage.
+    let markup = "Here is my plan: the change was not applied because tools were disabled. \
+                  </tool_call> Please re-run with tools enabled.";
+    let requests = Arc::new(Mutex::new(0usize));
+    backing.set_provider(Box::new(ContractViolationProvider {
+        requests: requests.clone(),
+        content: markup.to_string(),
+    }));
+
+    let mut history = vec![uni::Message::user("summarize the tool outputs".to_string())];
+    run_turn_loop(&mut history, backing.turn_loop_context())
+        .await
+        .expect("turn loop should complete after recovery retries");
+
+    // Exactly MAX_RECOVERY_RETRIES retries: 1 initial recovery pass + 3 retries.
+    assert_eq!(
+        *requests.lock().expect("requests lock"),
+        super::MAX_RECOVERY_RETRIES as usize + 1,
+        "recovery must retry exactly MAX_RECOVERY_RETRIES times before falling back"
+    );
+
+    // The turn must conclude with the salvaged prose, not the canned string.
+    let final_text = history
+        .iter()
+        .rev()
+        .find(|m| m.role == uni::MessageRole::Assistant)
+        .map(|m| m.content.as_text().to_string())
+        .unwrap_or_default();
+    assert!(
+        final_text.contains("Here is my plan:"),
+        "expected salvaged prose, got: {final_text}"
+    );
+    assert!(
+        !final_text.contains(RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER),
+        "must not emit canned fallback when salvage is available"
+    );
+    assert!(backing.recovery_is_tool_free());
 }

@@ -283,7 +283,11 @@ fn reasoning_preset(
     }
 }
 
-fn openai_reasoning_efforts(include_none: bool, include_xhigh: bool) -> Vec<ReasoningEffortPreset> {
+fn openai_reasoning_efforts(
+    include_none: bool,
+    include_xhigh: bool,
+    include_max: bool,
+) -> Vec<ReasoningEffortPreset> {
     let mut efforts = Vec::new();
     if include_none {
         efforts.push(reasoning_preset(
@@ -300,11 +304,60 @@ fn openai_reasoning_efforts(include_none: bool, include_xhigh: bool) -> Vec<Reas
             "Maximum reasoning",
         ));
     }
+    if include_max {
+        efforts.push(reasoning_preset(
+            ReasoningEffortLevel::Max,
+            "Maximum adaptive reasoning",
+        ));
+    }
     efforts
 }
 
 fn openai_presets() -> Vec<ModelPreset> {
     vec![
+        ModelPreset {
+            id: "gpt-5.6-sol".to_string(),
+            model: "gpt-5.6-sol".to_string(),
+            display_name: "GPT-5.6 Sol".to_string(),
+            description: "Frontier model for complex professional work in the GPT-5.6 family"
+                .to_string(),
+            provider: Provider::OpenAI,
+            default_reasoning_effort: ReasoningEffortLevel::High,
+            supported_reasoning_efforts: openai_reasoning_efforts(true, true, true),
+            is_default: false,
+            upgrade: None,
+            show_in_picker: true,
+            supported_in_api: true,
+            context_window: Some(1_050_000),
+        },
+        ModelPreset {
+            id: "gpt-5.6-terra".to_string(),
+            model: "gpt-5.6-terra".to_string(),
+            display_name: "GPT-5.6 Terra".to_string(),
+            description: "GPT-5.6 model that balances intelligence and cost".to_string(),
+            provider: Provider::OpenAI,
+            default_reasoning_effort: ReasoningEffortLevel::High,
+            supported_reasoning_efforts: openai_reasoning_efforts(true, true, true),
+            is_default: false,
+            upgrade: None,
+            show_in_picker: true,
+            supported_in_api: true,
+            context_window: Some(1_050_000),
+        },
+        ModelPreset {
+            id: "gpt-5.6-luna".to_string(),
+            model: "gpt-5.6-luna".to_string(),
+            display_name: "GPT-5.6 Luna".to_string(),
+            description: "GPT-5.6 model optimized for cost-sensitive workloads".to_string(),
+            provider: Provider::OpenAI,
+            default_reasoning_effort: ReasoningEffortLevel::High,
+            supported_reasoning_efforts: openai_reasoning_efforts(true, true, true),
+            is_default: false,
+            upgrade: None,
+            show_in_picker: true,
+            supported_in_api: true,
+            context_window: Some(1_050_000),
+        },
         ModelPreset {
             id: "gpt-5.4".to_string(),
             model: "gpt-5.4".to_string(),
@@ -312,7 +365,7 @@ fn openai_presets() -> Vec<ModelPreset> {
             description: "Frontier model for complex professional work".to_string(),
             provider: Provider::OpenAI,
             default_reasoning_effort: ReasoningEffortLevel::None,
-            supported_reasoning_efforts: openai_reasoning_efforts(true, true),
+            supported_reasoning_efforts: openai_reasoning_efforts(true, true, false),
             is_default: true,
             upgrade: None,
             show_in_picker: true,
@@ -345,7 +398,7 @@ fn openai_presets() -> Vec<ModelPreset> {
                 .to_string(),
             provider: Provider::OpenAI,
             default_reasoning_effort: ReasoningEffortLevel::High,
-            supported_reasoning_efforts: openai_reasoning_efforts(true, true),
+            supported_reasoning_efforts: openai_reasoning_efforts(true, true, false),
             is_default: false,
             upgrade: None,
             show_in_picker: true,
@@ -360,7 +413,7 @@ fn openai_presets() -> Vec<ModelPreset> {
                 .to_string(),
             provider: Provider::OpenAI,
             default_reasoning_effort: ReasoningEffortLevel::High,
-            supported_reasoning_efforts: openai_reasoning_efforts(true, true),
+            supported_reasoning_efforts: openai_reasoning_efforts(true, true, false),
             is_default: false,
             upgrade: None,
             show_in_picker: true,
@@ -374,7 +427,7 @@ fn openai_presets() -> Vec<ModelPreset> {
             description: "GPT-5.1 variant optimized for agentic coding".to_string(),
             provider: Provider::OpenAI,
             default_reasoning_effort: ReasoningEffortLevel::High,
-            supported_reasoning_efforts: openai_reasoning_efforts(false, false),
+            supported_reasoning_efforts: openai_reasoning_efforts(false, false, false),
             is_default: false,
             upgrade: None,
             show_in_picker: true,
@@ -390,7 +443,7 @@ fn openai_presets() -> Vec<ModelPreset> {
                     .to_string(),
             provider: Provider::OpenAI,
             default_reasoning_effort: ReasoningEffortLevel::High,
-            supported_reasoning_efforts: openai_reasoning_efforts(false, false),
+            supported_reasoning_efforts: openai_reasoning_efforts(false, false, false),
             is_default: false,
             upgrade: None,
             show_in_picker: true,
@@ -404,7 +457,7 @@ fn openai_presets() -> Vec<ModelPreset> {
             description: "GPT-5 variant optimized for agentic coding".to_string(),
             provider: Provider::OpenAI,
             default_reasoning_effort: ReasoningEffortLevel::High,
-            supported_reasoning_efforts: openai_reasoning_efforts(false, false),
+            supported_reasoning_efforts: openai_reasoning_efforts(false, false, false),
             is_default: false,
             upgrade: None,
             show_in_picker: true,
@@ -418,7 +471,7 @@ fn openai_presets() -> Vec<ModelPreset> {
             description: "Latest frontier model with improved reasoning and coding".to_string(),
             provider: Provider::OpenAI,
             default_reasoning_effort: ReasoningEffortLevel::None,
-            supported_reasoning_efforts: openai_reasoning_efforts(true, true),
+            supported_reasoning_efforts: openai_reasoning_efforts(true, true, false),
             is_default: false,
             upgrade: None,
             show_in_picker: true,
@@ -493,7 +546,7 @@ fn openai_presets() -> Vec<ModelPreset> {
             description: "OpenAI reasoning model for harder multi-step work".to_string(),
             provider: Provider::OpenAI,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: openai_reasoning_efforts(false, false),
+            supported_reasoning_efforts: openai_reasoning_efforts(false, false, false),
             is_default: false,
             upgrade: None,
             show_in_picker: true,
@@ -507,7 +560,7 @@ fn openai_presets() -> Vec<ModelPreset> {
             description: "Smaller OpenAI reasoning model with strong tool use".to_string(),
             provider: Provider::OpenAI,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: openai_reasoning_efforts(false, false),
+            supported_reasoning_efforts: openai_reasoning_efforts(false, false, false),
             is_default: false,
             upgrade: None,
             show_in_picker: true,

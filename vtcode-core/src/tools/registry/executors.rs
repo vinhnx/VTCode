@@ -129,6 +129,37 @@ macro_rules! delegate_to_self {
 }
 
 impl ToolRegistry {
+    /// Unified `cron` executor: dispatches on `action` (create | list | delete).
+    /// For legacy alias calls that omit `action`, the action is inferred from
+    /// the argument shape: `prompt` implies create, `id` implies delete,
+    /// otherwise list.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(super) fn cron_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
+        Box::pin(async move {
+            let action = args
+                .get("action")
+                .and_then(Value::as_str)
+                .map(str::to_ascii_lowercase)
+                .unwrap_or_else(|| {
+                    if args.get("prompt").is_some() {
+                        "create".to_string()
+                    } else if args.get("id").is_some() {
+                        "delete".to_string()
+                    } else {
+                        "list".to_string()
+                    }
+                });
+            match action.as_str() {
+                "create" => self.cron_create_executor(args).await,
+                "list" => self.cron_list_executor(args).await,
+                "delete" => self.cron_delete_executor(args).await,
+                other => bail!(
+                    "cron: unknown action '{other}'. Use action='create' (schedule a prompt), 'list', or 'delete' (requires id)."
+                ),
+            }
+        })
+    }
+
     pub(super) fn cron_create_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move {
             let prompt = args
@@ -530,157 +561,7 @@ impl ToolRegistry {
     /// fallback was possible and executed, `None` otherwise (caller should
     /// propagate the original error).
     async fn try_structural_to_grep_fallback(&self, args: &Value) -> Option<Value> {
-        // Only fall back for search-like workflows that can be approximated
-        // by text search (query and count). Rewrite/apply/test/new/scan
-        // require AST structure and cannot be replaced by grep.
-        let workflow = args
-            .get("workflow")
-            .and_then(|v| v.as_str())
-            .unwrap_or("query");
-        if !matches!(workflow, "query" | "count") {
-            return None;
-        }
-
-        let pattern = args.get("pattern").and_then(|v| v.as_str())?;
-        if pattern.trim().is_empty() {
-            return None;
-        }
-
-        // Build grep args from the structural search args.
-        let mut grep_args = json!({
-            "action": "grep",
-            "pattern": pattern,
-        });
-
-        // Forward path if present.
-        if let Some(path) = args.get("path").and_then(|v| v.as_str()) {
-            grep_args["path"] = json!(path);
-        } else {
-            grep_args["path"] = json!(".");
-        }
-
-        // Forward lang as a type filter when possible.
-        if let Some(lang) = args.get("lang").and_then(|v| v.as_str()) {
-            // Map common ast-grep language names to ripgrep type names.
-            let type_pattern = match lang {
-                "rust" => Some("rust"),
-                "python" | "py" => Some("python"),
-                "javascript" | "js" => Some("js"),
-                "typescript" | "ts" => Some("ts"),
-                "go" | "golang" => Some("go"),
-                "java" => Some("java"),
-                "c" => Some("c"),
-                "cpp" | "c++" => Some("cpp"),
-                "ruby" => Some("ruby"),
-                "php" => Some("php"),
-                "swift" => Some("swift"),
-                "kotlin" | "kt" => Some("kotlin"),
-                "css" => Some("css"),
-                "html" => Some("html"),
-                "json" => Some("json"),
-                "yaml" | "yml" => Some("yaml"),
-                "toml" => Some("toml"),
-                "sh" | "bash" | "shell" => Some("sh"),
-                _ => None,
-            };
-            if let Some(tp) = type_pattern {
-                grep_args["type_pattern"] = json!(tp);
-            }
-        }
-
-        // Forward globs as glob_pattern. When multiple globs are provided,
-        // combine them using ripgrep's brace expansion syntax (e.g. "*.{rs,toml}").
-        // Handles both single-string and array forms.
-        if let Some(globs) = args.get("globs") {
-            if let Some(arr) = globs.as_array() {
-                let glob_strs: Vec<&str> = arr
-                    .iter()
-                    .filter_map(|g| g.as_str())
-                    .filter(|g| !g.trim().is_empty())
-                    .collect();
-                match glob_strs.len() {
-                    0 => {}
-                    1 => {
-                        grep_args["glob_pattern"] = json!(glob_strs[0]);
-                    }
-                    _ => {
-                        // Build a brace expansion pattern: *.{ext1,ext2}
-                        let exts: Vec<&str> = glob_strs
-                            .iter()
-                            .filter_map(|g| g.strip_prefix("*.").or_else(|| g.strip_prefix("**.")))
-                            .collect();
-                        if exts.len() == glob_strs.len() {
-                            grep_args["glob_pattern"] = json!(format!("*.{{{}}}", exts.join(",")));
-                        } else {
-                            grep_args["glob_pattern"] = json!(glob_strs[0]);
-                        }
-                    }
-                }
-            } else if let Some(s) = globs.as_str() {
-                if !s.trim().is_empty() {
-                    grep_args["glob_pattern"] = json!(s);
-                }
-            }
-        }
-
-        // Forward exclude patterns as extra ignore globs. The grep backend
-        // already prepends `!` when passing these to ripgrep, so store them
-        // without the `!` prefix. Do NOT overwrite `glob_pattern` which holds
-        // the include glob set above.
-        if let Some(exclude) = args.get("exclude") {
-            let exclude_entries: Vec<String> = match exclude.as_array() {
-                Some(arr) => arr
-                    .iter()
-                    .filter_map(|v| v.as_str())
-                    .filter(|s| !s.trim().is_empty())
-                    .map(|s| s.to_string())
-                    .collect(),
-                None => exclude
-                    .as_str()
-                    .filter(|s| !s.trim().is_empty())
-                    .map(|s| vec![s.to_string()])
-                    .unwrap_or_default(),
-            };
-            if !exclude_entries.is_empty() {
-                grep_args["extra_ignore_globs"] = json!(exclude_entries);
-            }
-        }
-
-        // Forward context_lines.
-        if let Some(ctx) = args.get("context_lines").and_then(|v| v.as_u64()) {
-            grep_args["context_lines"] = json!(ctx);
-        }
-
-        // Forward max_results. Structural search defaults to 100; grep defaults
-        // to 5. Match the structural default to avoid surprising truncation.
-        if let Some(max) = args.get("max_results").and_then(|v| v.as_u64()) {
-            grep_args["max_results"] = json!(max);
-        } else {
-            grep_args["max_results"] = json!(100u64);
-        }
-
-        // Forward regex field as a grep regex pattern (kind-only queries).
-        // When no explicit regex override is provided, the structural pattern
-        // (e.g. `fn $NAME($$ARGS)`) contains AST metavariables that are not
-        // valid regex. Treat it as a literal pattern so ripgrep does not try
-        // to interpret `$`, `(`, `)` etc. as regex syntax.
-        if let Some(regex) = args.get("regex").and_then(|v| v.as_str()) {
-            if !regex.trim().is_empty() {
-                grep_args["pattern"] = json!(regex);
-                grep_args["literal"] = json!(false);
-            }
-        } else {
-            grep_args["literal"] = json!(true);
-        }
-
-        let has_pattern = grep_args
-            .get("pattern")
-            .and_then(|v| v.as_str())
-            .map(|p| !p.trim().is_empty())
-            .unwrap_or(false);
-        if !has_pattern {
-            return None;
-        }
+        let grep_args = structural_args_to_grep_args(args)?;
 
         let manager = self.inventory.grep_file_manager();
         let input: crate::tools::grep_file::GrepSearchInput = match serde_json::from_value(
@@ -727,11 +608,16 @@ impl ToolRegistry {
             .ok_or_else(|| anyhow!("MCP client not available"))?;
 
         let workspace_root = self.workspace_root_owned();
+        // Expose built-in tools to the snippet as callable library functions
+        // (curated, non-recursive subset) when a weak self-reference was
+        // installed at session bootstrap.
+        let builtin_executor = self.builtin_executor_for_code();
         let executor = crate::exec::code_executor::CodeExecutor::new(
             language,
             mcp_client.clone(),
             workspace_root.clone(),
-        );
+        )
+        .with_builtin_executor(builtin_executor);
         let execution_start = SystemTime::now();
 
         let result = executor.execute(code).await?;
@@ -946,6 +832,44 @@ impl ToolRegistry {
     );
     delegate_to_self!(apply_patch_executor, execute_apply_patch);
 
+    /// Unified `mcp` executor: dispatches on `action`
+    /// (search_tools | get_tool_details | list_servers | connect | disconnect).
+    /// For legacy alias calls that omit `action`, the action is inferred from
+    /// the argument shape: `query` implies search_tools, `name` implies
+    /// get_tool_details, otherwise list_servers. `connect`/`disconnect` require
+    /// an explicit `action` since the schema marks it required, and are
+    /// evaluated under the action-qualified policy keys `mcp:connect` /
+    /// `mcp:disconnect` so they keep their Prompt confirmation even though
+    /// `mcp` itself is `ToolPolicy::Allow`.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(super) fn mcp_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
+        Box::pin(async move {
+            let action = args
+                .get("action")
+                .and_then(Value::as_str)
+                .map(str::to_ascii_lowercase)
+                .unwrap_or_else(|| {
+                    if args.get("query").is_some() {
+                        "search_tools".to_string()
+                    } else if args.get("name").is_some() {
+                        "get_tool_details".to_string()
+                    } else {
+                        "list_servers".to_string()
+                    }
+                });
+            match action.as_str() {
+                "search_tools" => self.mcp_search_tools_executor(args).await,
+                "get_tool_details" => self.mcp_get_tool_details_executor(args).await,
+                "list_servers" => self.mcp_list_servers_executor(args).await,
+                "connect" => self.mcp_connect_server_executor(args).await,
+                "disconnect" => self.mcp_disconnect_server_executor(args).await,
+                other => Err(anyhow!(
+                    "mcp: unknown action '{other}'. Use action='search_tools' (query), 'get_tool_details' (name), 'list_servers', 'connect' (name), or 'disconnect' (name)."
+                )),
+            }
+        })
+    }
+
     // PTY executors -- distinct signatures, kept explicit.
     // `run_pty_cmd` and `create_pty_session` are intentional aliases: both
     // create a PTY session and run a command. The separate names exist for
@@ -1091,6 +1015,302 @@ fn ensure_search_dispatch_grep_pattern(args: &Value) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Translate structural-search (`ast-grep`) arguments into grep-search
+/// arguments. Extracted from `try_structural_to_grep_fallback` so the
+/// mapping rules can be unit-tested without a `GrepSearchManager` or a
+/// tokio runtime. Returns `None` when the workflow/pattern cannot be
+/// approximated by text search.
+fn structural_args_to_grep_args(args: &Value) -> Option<Value> {
+    // Only fall back for search-like workflows that can be approximated
+    // by text search (query and count). Rewrite/apply/test/new/scan
+    // require AST structure and cannot be replaced by grep.
+    let workflow = args
+        .get("workflow")
+        .and_then(|v| v.as_str())
+        .unwrap_or("query");
+    if !matches!(workflow, "query" | "count") {
+        return None;
+    }
+
+    let pattern = args.get("pattern").and_then(|v| v.as_str())?;
+    if pattern.trim().is_empty() {
+        return None;
+    }
+
+    // Build grep args from the structural search args.
+    let mut grep_args = json!({
+        "action": "grep",
+        "pattern": pattern,
+    });
+
+    // Forward path if present.
+    if let Some(path) = args.get("path").and_then(|v| v.as_str()) {
+        grep_args["path"] = json!(path);
+    } else {
+        grep_args["path"] = json!(".");
+    }
+
+    // Forward lang as a type filter when possible.
+    if let Some(lang) = args.get("lang").and_then(|v| v.as_str()) {
+        // Map common ast-grep language names to ripgrep type names.
+        let type_pattern = match lang {
+            "rust" => Some("rust"),
+            "python" | "py" => Some("python"),
+            "javascript" | "js" => Some("js"),
+            "typescript" | "ts" => Some("ts"),
+            "go" | "golang" => Some("go"),
+            "java" => Some("java"),
+            "c" => Some("c"),
+            "cpp" | "c++" => Some("cpp"),
+            "ruby" => Some("ruby"),
+            "php" => Some("php"),
+            "swift" => Some("swift"),
+            "kotlin" | "kt" => Some("kotlin"),
+            "css" => Some("css"),
+            "html" => Some("html"),
+            "json" => Some("json"),
+            "yaml" | "yml" => Some("yaml"),
+            "toml" => Some("toml"),
+            "sh" | "bash" | "shell" => Some("sh"),
+            _ => None,
+        };
+        if let Some(tp) = type_pattern {
+            grep_args["type_pattern"] = json!(tp);
+        }
+    }
+
+    // Forward globs as glob_pattern. When multiple globs are provided,
+    // combine them using ripgrep's brace expansion syntax (e.g. "*.{rs,toml}").
+    // Handles both single-string and array forms.
+    if let Some(globs) = args.get("globs") {
+        if let Some(arr) = globs.as_array() {
+            let glob_strs: Vec<&str> = arr
+                .iter()
+                .filter_map(|g| g.as_str())
+                .filter(|g| !g.trim().is_empty())
+                .collect();
+            match glob_strs.len() {
+                0 => {}
+                1 => {
+                    grep_args["glob_pattern"] = json!(glob_strs[0]);
+                }
+                _ => {
+                    // Build a brace expansion pattern: *.{ext1,ext2}
+                    let exts: Vec<&str> = glob_strs
+                        .iter()
+                        .filter_map(|g| g.strip_prefix("*.").or_else(|| g.strip_prefix("**.")))
+                        .collect();
+                    if exts.len() == glob_strs.len() {
+                        grep_args["glob_pattern"] = json!(format!("*.{{{}}}", exts.join(",")));
+                    } else {
+                        grep_args["glob_pattern"] = json!(glob_strs[0]);
+                    }
+                }
+            }
+        } else if let Some(s) = globs.as_str() {
+            if !s.trim().is_empty() {
+                grep_args["glob_pattern"] = json!(s);
+            }
+        }
+    }
+
+    // Forward exclude patterns as extra ignore globs. The grep backend
+    // already prepends `!` when passing these to ripgrep, so store them
+    // without the `!` prefix. Do NOT overwrite `glob_pattern` which holds
+    // the include glob set above.
+    if let Some(exclude) = args.get("exclude") {
+        let exclude_entries: Vec<String> = match exclude.as_array() {
+            Some(arr) => arr
+                .iter()
+                .filter_map(|v| v.as_str())
+                .filter(|s| !s.trim().is_empty())
+                .map(|s| s.to_string())
+                .collect(),
+            None => exclude
+                .as_str()
+                .filter(|s| !s.trim().is_empty())
+                .map(|s| vec![s.to_string()])
+                .unwrap_or_default(),
+        };
+        if !exclude_entries.is_empty() {
+            grep_args["extra_ignore_globs"] = json!(exclude_entries);
+        }
+    }
+
+    // Forward context_lines.
+    if let Some(ctx) = args.get("context_lines").and_then(|v| v.as_u64()) {
+        grep_args["context_lines"] = json!(ctx);
+    }
+
+    // Forward max_results. Structural search defaults to 100; grep defaults
+    // to 5. Match the structural default to avoid surprising truncation.
+    if let Some(max) = args.get("max_results").and_then(|v| v.as_u64()) {
+        grep_args["max_results"] = json!(max);
+    } else {
+        grep_args["max_results"] = json!(100u64);
+    }
+
+    // Forward regex field as a grep regex pattern (kind-only queries).
+    // When no explicit regex override is provided, the structural pattern
+    // (e.g. `fn $NAME($$ARGS)`) contains AST metavariables that are not
+    // valid regex. Treat it as a literal pattern so ripgrep does not try
+    // to interpret `$`, `(`, `)` etc. as regex syntax.
+    if let Some(regex) = args.get("regex").and_then(|v| v.as_str()) {
+        if !regex.trim().is_empty() {
+            grep_args["pattern"] = json!(regex);
+            grep_args["literal"] = json!(false);
+        }
+    } else {
+        grep_args["literal"] = json!(true);
+    }
+
+    let has_pattern = grep_args
+        .get("pattern")
+        .and_then(|v| v.as_str())
+        .map(|p| !p.trim().is_empty())
+        .unwrap_or(false);
+    if !has_pattern {
+        return None;
+    }
+
+    Some(grep_args)
+}
+
+#[cfg(test)]
+mod structural_args_to_grep_args_tests {
+    use super::structural_args_to_grep_args;
+    use serde_json::json;
+
+    #[test]
+    fn maps_pattern_lang_and_globs_to_grep_args() {
+        let args = json!({
+            "workflow": "query",
+            "pattern": "fn $NAME($$$ARGS)",
+            "path": "src",
+            "lang": "rust",
+            "globs": ["*.rs", "*.toml"],
+        });
+
+        let grep_args = structural_args_to_grep_args(&args).expect("expected Some(grep_args)");
+
+        assert_eq!(grep_args["action"], json!("grep"));
+        assert_eq!(grep_args["pattern"], json!("fn $NAME($$$ARGS)"));
+        assert_eq!(grep_args["path"], json!("src"));
+        assert_eq!(grep_args["type_pattern"], json!("rust"));
+        assert_eq!(grep_args["glob_pattern"], json!("*.{rs,toml}"));
+        // No explicit regex override: pattern is treated as literal text.
+        assert_eq!(grep_args["literal"], json!(true));
+        // Default max_results carried over from structural search default.
+        assert_eq!(grep_args["max_results"], json!(100u64));
+    }
+
+    #[test]
+    fn defaults_path_to_current_dir_when_absent() {
+        let args = json!({
+            "workflow": "count",
+            "pattern": "TODO",
+        });
+
+        let grep_args = structural_args_to_grep_args(&args).expect("expected Some(grep_args)");
+        assert_eq!(grep_args["path"], json!("."));
+    }
+
+    #[test]
+    fn single_glob_is_forwarded_without_brace_expansion() {
+        let args = json!({
+            "workflow": "query",
+            "pattern": "foo",
+            "globs": "*.rs",
+        });
+
+        let grep_args = structural_args_to_grep_args(&args).expect("expected Some(grep_args)");
+        assert_eq!(grep_args["glob_pattern"], json!("*.rs"));
+    }
+
+    #[test]
+    fn mixed_globs_without_common_extension_prefix_fall_back_to_first_glob() {
+        let args = json!({
+            "workflow": "query",
+            "pattern": "foo",
+            "globs": ["*.rs", "Makefile"],
+        });
+
+        let grep_args = structural_args_to_grep_args(&args).expect("expected Some(grep_args)");
+        assert_eq!(grep_args["glob_pattern"], json!("*.rs"));
+    }
+
+    #[test]
+    fn exclude_entries_are_forwarded_without_bang_prefix() {
+        let args = json!({
+            "workflow": "query",
+            "pattern": "foo",
+            "exclude": ["target/**", "*.lock"],
+        });
+
+        let grep_args = structural_args_to_grep_args(&args).expect("expected Some(grep_args)");
+        assert_eq!(
+            grep_args["extra_ignore_globs"],
+            json!(["target/**", "*.lock"])
+        );
+    }
+
+    #[test]
+    fn context_lines_and_explicit_max_results_are_carried_over() {
+        let args = json!({
+            "workflow": "query",
+            "pattern": "foo",
+            "context_lines": 3,
+            "max_results": 25,
+        });
+
+        let grep_args = structural_args_to_grep_args(&args).expect("expected Some(grep_args)");
+        assert_eq!(grep_args["context_lines"], json!(3));
+        assert_eq!(grep_args["max_results"], json!(25));
+    }
+
+    #[test]
+    fn regex_override_replaces_pattern_and_disables_literal_mode() {
+        let args = json!({
+            "workflow": "query",
+            "pattern": "fn $NAME($$$ARGS)",
+            "regex": "fn\\s+\\w+",
+        });
+
+        let grep_args = structural_args_to_grep_args(&args).expect("expected Some(grep_args)");
+        assert_eq!(grep_args["pattern"], json!("fn\\s+\\w+"));
+        assert_eq!(grep_args["literal"], json!(false));
+    }
+
+    #[test]
+    fn bails_to_none_for_workflows_requiring_ast_structure() {
+        let args = json!({
+            "workflow": "rewrite",
+            "pattern": "fn $NAME($$$ARGS)",
+        });
+
+        assert_eq!(structural_args_to_grep_args(&args), None);
+    }
+
+    #[test]
+    fn bails_to_none_for_empty_pattern() {
+        let args = json!({
+            "workflow": "query",
+            "pattern": "   ",
+        });
+
+        assert_eq!(structural_args_to_grep_args(&args), None);
+    }
+
+    #[test]
+    fn bails_to_none_when_pattern_is_missing() {
+        let args = json!({
+            "workflow": "query",
+        });
+
+        assert_eq!(structural_args_to_grep_args(&args), None);
+    }
 }
 
 #[cfg(test)]
@@ -1959,3 +2179,52 @@ mod unified_action_error_tests {
 #[cfg(test)]
 #[path = "executors/sandbox_runtime_tests.rs"]
 mod sandbox_runtime_tests;
+
+#[cfg(test)]
+mod mcp_action_dispatch_tests {
+    use super::ToolRegistry;
+    use serde_json::json;
+
+    /// `mcp_executor` must dispatch `action='connect'`/`'disconnect'` to
+    /// `mcp_connect_server_executor`/`mcp_disconnect_server_executor` rather
+    /// than falling through to the unknown-action branch. A bare
+    /// `ToolRegistry::new` has no MCP client configured, so both calls fail
+    /// at the `mcp_client()` lookup inside the delegated executor -- but the
+    /// error text proves the dispatch reached the right function.
+    #[tokio::test]
+    async fn mcp_executor_dispatches_connect_and_disconnect_actions() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let registry = ToolRegistry::new(temp.path().to_path_buf()).await;
+
+        let connect_err = registry
+            .mcp_executor(json!({"action": "connect", "name": "example"}))
+            .await
+            .expect_err("connect without an active mcp client should fail");
+        let connect_text = connect_err.to_string();
+        assert!(!connect_text.contains("unknown action"));
+        assert!(connect_text.contains("MCP client not available"));
+
+        let disconnect_err = registry
+            .mcp_executor(json!({"action": "disconnect", "name": "example"}))
+            .await
+            .expect_err("disconnect without an active mcp client should fail");
+        let disconnect_text = disconnect_err.to_string();
+        assert!(!disconnect_text.contains("unknown action"));
+        assert!(disconnect_text.contains("MCP client not available"));
+    }
+
+    #[tokio::test]
+    async fn mcp_executor_rejects_unknown_action_with_guidance() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let registry = ToolRegistry::new(temp.path().to_path_buf()).await;
+
+        let err = registry
+            .mcp_executor(json!({"action": "bogus"}))
+            .await
+            .expect_err("unknown mcp action should error");
+        let text = err.to_string();
+        assert!(text.contains("unknown action 'bogus'"));
+        assert!(text.contains("connect"));
+        assert!(text.contains("disconnect"));
+    }
+}

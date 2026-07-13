@@ -25,6 +25,12 @@ pub const UNIFIED_FILE: &str = "file_operation_internal";
 // ============================================================
 pub const THINK: &str = "think";
 pub const SEARCH_TOOLS: &str = "search_tools";
+/// Unified MCP tool (action: search_tools | get_tool_details | list_servers |
+/// connect | disconnect). `connect`/`disconnect` are config-gated lifecycle
+/// ops evaluated under the action-qualified policy keys `mcp:connect` /
+/// `mcp:disconnect` (default Prompt) so they keep their human-in-the-loop
+/// confirmation even though the base `mcp` tool is `ToolPolicy::Allow`.
+pub const MCP: &str = "mcp";
 pub const MCP_SEARCH_TOOLS: &str = "mcp_search_tools";
 pub const MCP_GET_TOOL_DETAILS: &str = "mcp_get_tool_details";
 pub const MCP_LIST_SERVERS: &str = "mcp_list_servers";
@@ -96,7 +102,16 @@ pub const MEMORY: &str = "memory";
 pub const ASK_QUESTIONS: &str = "ask_questions";
 /// Legacy alias routed to `request_user_input` (deprecated tabbed shape).
 pub const ASK_USER_QUESTION: &str = "ask_user_question";
-/// Schedule a session-scoped task using a cron or one-shot schedule.
+/// Unified subagent lifecycle tool (action: spawn | spawn_subprocess |
+/// send_input | resume | wait | close). `wait_agent`/`close_agent` are now
+/// aliases routed to `agent` (action='wait'/'close'); `LIFECYCLE_CLEANUP_TOOLS`
+/// still lists their names so the policy layer keeps treating them as
+/// always-allowed cleanup calls regardless of the active primary agent's
+/// restricted tool policy.
+pub const AGENT: &str = "agent";
+/// Unified scheduled-prompt tool (action: create | list | delete).
+pub const CRON: &str = "cron";
+/// Legacy alias for `cron` action=create.
 pub const CRON_CREATE: &str = "cron_create";
 /// List session-scoped scheduled tasks.
 pub const CRON_LIST: &str = "cron_list";
@@ -186,6 +201,7 @@ const _: () = {
     // Tool IDs
     validate_tool_name(THINK);
     validate_tool_name(SEARCH_TOOLS);
+    validate_tool_name(MCP);
     validate_tool_name(MCP_SEARCH_TOOLS);
     validate_tool_name(MCP_GET_TOOL_DETAILS);
     validate_tool_name(MCP_LIST_SERVERS);
@@ -237,6 +253,8 @@ const _: () = {
     validate_tool_name(MEMORY);
     validate_tool_name(ASK_QUESTIONS);
     validate_tool_name(ASK_USER_QUESTION);
+    validate_tool_name(AGENT);
+    validate_tool_name(CRON);
     validate_tool_name(CRON_CREATE);
     validate_tool_name(CRON_LIST);
     validate_tool_name(CRON_DELETE);

@@ -109,3 +109,27 @@ Pre-deployment evaluations are necessary but insufficient. Agent behavior is co-
 - **Systematic Monitoring**: Build privacy-preserving infrastructure to monitor how agents are actually deployed and used in the wild.
 - **Evidence-Based Design**: Use real-world usage patterns to iterate on tool abstractions and security boundaries.
 - **Agent Trace**: Maintain a high-fidelity system of record for all agent contributions to ensure accountability and provenance.
+
+## 12. Evaluate Outcomes, Not Claims
+
+An agent saying "bug fixed" is meaningless; what matters is whether the tests pass. An agent saying "feature complete" is meaningless; what matters is whether the feature works in the environment.
+
+- **Verification Proof**: Every completion claim must be backed by actual command output (test results, build output, runtime behavior).
+- **Outcome Over Assertion**: The harness records what verification commands were run and what their actual output was, not what the agent claims happened.
+- **Sprint Contracts**: Before implementation begins, generator and evaluator negotiate "what counts as done" through a structured contract. Vague user stories become testable acceptance criteria.
+
+## 13. Orient Before Acting
+
+An agent that acts without orienting is likely to repeat work, miss context, or make wrong assumptions. Every session should begin by reading external artifacts to understand the current state.
+
+- **Read the Artifacts**: Progress ledger, harness artifacts, loop memory, git log, and handoff context exist so the agent can orient without re-exploring from scratch.
+- **Just-in-Time Context**: Load references (paths, commit hashes, summaries) rather than full content. The orient phase gathers what's needed; the agent drills deeper only when working in that area.
+- **Boundary Awareness**: Know what is done, what is in-progress, and what is not started. Never guess whether something is intentionally incomplete or a leftover mess.
+
+## 14. The Agent Harness Co-Evolves with the Model
+
+Every harness component encodes assumptions about model weaknesses. As models improve, these assumptions may become invalid.
+
+- **Start Simple**: Begin with the simplest workable system. Use evals to identify real failure modes, then add structure for those specific failures.
+- **Periodically Prune**: Components that were once necessary may become overhead. Remove them when they no longer carry load. See [HARNESS_EVALUATION.md](HARNESS_EVALUATION.md) for the component load-bearing audit process.
+- **Stable Abstractions**: Separate Session (append-only log), Harness (control layer), and Sandbox (execution environment) so implementations can change without breaking the product.

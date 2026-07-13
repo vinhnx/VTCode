@@ -101,6 +101,33 @@ pub(in crate::agent::runloop::slash_commands) async fn execute_built_in_command_
         }
         "permissions" => Ok(SlashCommandOutcome::ShowPermissions),
         "memory" => Ok(SlashCommandOutcome::ShowMemory),
+        "advisor" => {
+            // Open the Claude Advisor server-side tool settings. With no argument the
+            // command opens the advisor section; an optional path drills into a child
+            // field (e.g. `/advisor model`).
+            match args.trim() {
+                "" => Ok(SlashCommandOutcome::ShowSettingsAtPath {
+                    path: "provider.anthropic.advisor".to_string(),
+                }),
+                "help" | "--help" | "-h" => {
+                    renderer.line(
+                        MessageStyle::Info,
+                        "Claude Advisor — server-side tool pairing a faster executor with a \
+                         higher-intelligence advisor for strategic guidance mid-generation.\n\n\
+                         Usage:\n  /advisor              Open advisor settings\n\
+                         /advisor model         Edit advisor model\n\
+                         /advisor max_uses      Edit max invocations per request\n\
+                         /advisor help          Show this help\n\n\
+                         Only available for Anthropic providers. The executor and advisor \
+                         models must form a valid pair (see provider.anthropic.advisor config).",
+                    )?;
+                    Ok(SlashCommandOutcome::Handled)
+                }
+                field => Ok(SlashCommandOutcome::ShowSettingsAtPath {
+                    path: format!("provider.anthropic.advisor.{field}"),
+                }),
+            }
+        }
         "statusline" => Ok(SlashCommandOutcome::StartStatuslineSetup {
             instructions: (!args.trim().is_empty()).then(|| args.trim().to_string()),
         }),
@@ -185,9 +212,9 @@ pub(in crate::agent::runloop::slash_commands) async fn execute_built_in_command_
             renderer.line(MessageStyle::Info, "No active run to pause.")?;
             Ok(SlashCommandOutcome::Handled)
         }
-        "doctor" => match parse_doctor_args(args, renderer.supports_inline_ui()) {
-            Ok(DoctorCommand::Interactive) => Ok(SlashCommandOutcome::StartDoctorInteractive),
-            Ok(DoctorCommand::Run { quick }) => Ok(SlashCommandOutcome::RunDoctor { quick }),
+        "checkup" => match parse_checkup_args(args, renderer.supports_inline_ui()) {
+            Ok(CheckupCommand::Interactive) => Ok(SlashCommandOutcome::StartCheckupInteractive),
+            Ok(CheckupCommand::Run { quick }) => Ok(SlashCommandOutcome::RunCheckup { quick }),
             Err(message) => {
                 renderer.line(MessageStyle::Error, &message)?;
                 Ok(SlashCommandOutcome::Handled)
@@ -515,15 +542,15 @@ pub(in crate::agent::runloop::slash_commands) fn parse_effort_args(
 }
 
 #[derive(Debug)]
-pub(in crate::agent::runloop::slash_commands) enum DoctorCommand {
+pub(in crate::agent::runloop::slash_commands) enum CheckupCommand {
     Interactive,
     Run { quick: bool },
 }
 
-pub(in crate::agent::runloop::slash_commands) fn parse_doctor_args(
+pub(in crate::agent::runloop::slash_commands) fn parse_checkup_args(
     args: &str,
     supports_inline_ui: bool,
-) -> std::result::Result<DoctorCommand, String> {
+) -> std::result::Result<CheckupCommand, String> {
     let mut quick = false;
     let mut full = false;
 
@@ -533,7 +560,7 @@ pub(in crate::agent::runloop::slash_commands) fn parse_doctor_args(
             "--full" | "full" => full = true,
             _ => {
                 return Err(
-                    "Usage: /doctor [--quick|--full]\nExamples: /doctor, /doctor --quick"
+                    "Usage: /checkup [--quick|--full]\nExamples: /checkup, /checkup --quick"
                         .to_string(),
                 );
             }
@@ -546,8 +573,8 @@ pub(in crate::agent::runloop::slash_commands) fn parse_doctor_args(
     }
 
     if !quick && !full && supports_inline_ui {
-        return Ok(DoctorCommand::Interactive);
+        return Ok(CheckupCommand::Interactive);
     }
 
-    Ok(DoctorCommand::Run { quick })
+    Ok(CheckupCommand::Run { quick })
 }

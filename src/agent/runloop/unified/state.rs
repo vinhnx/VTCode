@@ -8,6 +8,8 @@ use vtcode_core::exec::events::Usage as HarnessUsage;
 use vtcode_core::llm::provider::{
     Message, PromptCacheProfile, ResponsesContinuationState, responses_continuation_key,
 };
+use vtcode_core::llm::request_gap::RequestGapTracker;
+use vtcode_core::llm::usage_cost;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) enum ModelPickerTarget {
@@ -99,9 +101,15 @@ pub(crate) struct SessionStats {
     total_usage: HarnessUsage,
     total_cost_usd: Option<f64>,
     cost_warning_emitted: bool,
+    budget_warning_emitted: bool,
     stop_reason: Option<String>,
     budget_limit: Option<(f64, f64)>,
     total_turns: usize,
+    /// Tracks the idle gap since the last dispatched LLM request, so a long
+    /// enough pause can warn that the provider prompt cache has likely
+    /// expired. Shared with the headless session state; see
+    /// [`RequestGapTracker`].
+    request_gap: RequestGapTracker,
 }
 
 impl SessionStats {
@@ -120,26 +128,16 @@ impl SessionStats {
         self.tools.iter().cloned().collect()
     }
 
-    pub(crate) fn record_usage(&mut self, usage: &Option<vtcode_core::llm::provider::Usage>) {
+    pub(crate) fn record_usage(
+        &mut self,
+        provider: &str,
+        usage: &Option<vtcode_core::llm::provider::Usage>,
+    ) {
         let Some(usage) = usage else {
             return;
         };
-        self.total_usage.input_tokens = self
-            .total_usage
-            .input_tokens
-            .saturating_add(u64::from(usage.prompt_tokens));
-        self.total_usage.cached_input_tokens = self
-            .total_usage
-            .cached_input_tokens
-            .saturating_add(u64::from(usage.cache_read_tokens_or_fallback()));
-        self.total_usage.cache_creation_tokens = self
-            .total_usage
-            .cache_creation_tokens
-            .saturating_add(u64::from(usage.cache_creation_tokens_or_zero()));
-        self.total_usage.output_tokens = self
-            .total_usage
-            .output_tokens
-            .saturating_add(u64::from(usage.completion_tokens));
+        self.total_usage
+            .add(&usage_cost::normalized_turn_usage(provider, usage));
     }
 
     pub(crate) fn total_usage(&self) -> HarnessUsage {
@@ -168,6 +166,36 @@ impl SessionStats {
 
     pub(crate) fn mark_cost_warning_emitted(&mut self) {
         self.cost_warning_emitted = true;
+    }
+
+    pub(crate) fn budget_warning_emitted(&self) -> bool {
+        self.budget_warning_emitted
+    }
+
+    pub(crate) fn mark_budget_warning_emitted(&mut self) {
+        self.budget_warning_emitted = true;
+    }
+
+    /// Records that an LLM request was just dispatched, so the next call to
+    /// [`Self::cache_gap_exceeds`] can measure the idle gap since this request.
+    pub(crate) fn note_request_sent(&mut self) {
+        self.request_gap.note_request_sent();
+    }
+
+    /// Returns whether an LLM request has been dispatched at any point this
+    /// session. More precise than inferring from accumulated token usage
+    /// (which can be zero even after a request, e.g. an error response).
+    pub(crate) fn has_sent_request(&self) -> bool {
+        self.request_gap.has_sent_request()
+    }
+
+    /// Returns the elapsed time since the last dispatched request when it
+    /// exceeds `threshold`, or `None` if there was no prior request or the gap
+    /// is still within the threshold. Used to warn that the provider prompt
+    /// cache has likely expired before the next request re-pays full input
+    /// cost.
+    pub(crate) fn cache_gap_exceeds(&self, threshold: Duration) -> Option<Duration> {
+        self.request_gap.cache_gap_exceeds(threshold)
     }
 
     pub(crate) fn mark_budget_limit_reached(&mut self, max_budget_usd: f64, actual_cost_usd: f64) {
@@ -709,6 +737,24 @@ mod tests {
         stats.record_tool(tools::EXEC_COMMAND);
 
         assert_eq!(stats.sorted_tools(), vec![tools::UNIFIED_EXEC.to_string()]);
+    }
+
+    /// Thin delegation check: `SessionStats` forwards to the embedded
+    /// `RequestGapTracker` correctly. Exhaustive edge-case coverage
+    /// (no-prior-request, below-threshold, above-threshold) lives on
+    /// `RequestGapTracker`'s own unit tests in
+    /// `vtcode_core::llm::request_gap`.
+    #[test]
+    fn cache_gap_exceeds_delegates_to_request_gap_tracker() {
+        let mut stats = SessionStats::default();
+        assert!(!stats.has_sent_request());
+        assert_eq!(stats.cache_gap_exceeds(Duration::from_millis(1)), None);
+
+        stats.note_request_sent();
+        assert!(stats.has_sent_request());
+        thread::sleep(Duration::from_millis(15));
+        let gap = stats.cache_gap_exceeds(Duration::from_millis(5));
+        assert!(gap.is_some_and(|elapsed| elapsed >= Duration::from_millis(15)));
     }
 
     #[test]

@@ -305,7 +305,7 @@ impl SubagentController {
         );
         task.instructions = Some(compose_subagent_instructions(&spec, memory_appendix));
 
-        let results = runner.execute_task(&task, &[]).await?;
+        let results = Box::pin(runner.execute_task(&task, &[])).await?;
         let messages = runner.session_messages();
         let transcript_path =
             persist_child_archive(&archive, &messages, spec.name.as_str()).await?;

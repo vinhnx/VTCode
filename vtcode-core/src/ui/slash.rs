@@ -173,7 +173,9 @@ mod tests {
         let names = names_for("c");
         assert_eq!(
             names,
-            vec!["clear", "command", "compact", "config", "continue", "copy"]
+            vec![
+                "checkup", "clear", "command", "compact", "config", "continue", "copy"
+            ]
         );
     }
 
@@ -185,8 +187,8 @@ mod tests {
 
     #[test]
     fn fuzzy_matches_include_description_keywords() {
-        let names = names_for("diagnostic");
-        assert!(names.contains(&"doctor"));
+        let names = names_for("check");
+        assert!(names.contains(&"checkup"));
     }
 
     #[test]

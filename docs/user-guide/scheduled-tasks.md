@@ -32,11 +32,13 @@ Behavior:
 - A session can hold at most 50 scheduled tasks
 - One-shot tasks scheduled at `:00` or `:30` may fire up to 90 seconds early
 
-VT Code also exposes three built-in session tools for parity with the scheduler runtime:
+VT Code also exposes one built-in session tool, `cron`, for parity with the scheduler runtime. It takes an `action`:
 
-- `cron_create`
-- `cron_list`
-- `cron_delete`
+- `cron` with `action="create"` — schedule a prompt (cron expression, `delay_minutes`, or `run_at`)
+- `cron` with `action="list"` — show scheduled prompts
+- `cron` with `action="delete"` — remove one by id
+
+(The legacy names `cron_create`, `cron_list`, and `cron_delete` still route to `cron` as aliases.)
 
 ## Durable scheduling
 

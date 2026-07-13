@@ -106,6 +106,27 @@ model_id_table! {
         description: "High-efficiency frontier model for fast inference with excellent quality-to-speed balance",
     },
     // OpenAI models
+    GPT56Sol {
+        provider: OpenAI,
+        id: models::openai::GPT_5_6_SOL,
+        parse: [models::openai::GPT_5_6_SOL, models::openai::GPT_5_6],
+        display: "GPT-5.6 Sol",
+        description: "Frontier model for complex professional work in the GPT-5.6 family",
+    },
+    GPT56Terra {
+        provider: OpenAI,
+        id: models::openai::GPT_5_6_TERRA,
+        parse: [models::openai::GPT_5_6_TERRA],
+        display: "GPT-5.6 Terra",
+        description: "GPT-5.6 model that balances intelligence and cost",
+    },
+    GPT56Luna {
+        provider: OpenAI,
+        id: models::openai::GPT_5_6_LUNA,
+        parse: [models::openai::GPT_5_6_LUNA],
+        display: "GPT-5.6 Luna",
+        description: "GPT-5.6 model optimized for cost-sensitive workloads",
+    },
     GPT55 {
         provider: OpenAI,
         id: models::openai::GPT_5_5,

@@ -742,6 +742,13 @@ impl AgentRuntime {
         if !full_reasoning.is_empty() {
             assistant_message = assistant_message.with_reasoning(Some(full_reasoning.clone()));
         }
+        if let Some(details) = &response.reasoning_details {
+            let values: Vec<serde_json::Value> = details
+                .iter()
+                .map(|s| serde_json::Value::String(s.clone()))
+                .collect();
+            assistant_message = assistant_message.with_reasoning_details(Some(values));
+        }
 
         match aggregated_tool_calls.as_ref() {
             Some(calls) => {

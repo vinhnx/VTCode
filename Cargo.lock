@@ -1456,16 +1456,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ctor"
-version = "1.0.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "01334b89b69ff726750c5ce5073fc8bd860e99aa9a8fc5ca11b04730e3aee97a"
-dependencies = [
- "link-section",
- "linktime-proc-macro",
-]
-
-[[package]]
 name = "curve25519-dalek"
 version = "4.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3367,12 +3357,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "link-section"
-version = "0.18.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24670b639492630905459a6c7d47f063d33c2d4fcd5362f6e5827c5613976c9f"
-
-[[package]]
 name = "linked-hash-map"
 version = "0.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3397,12 +3381,6 @@ dependencies = [
  "quote",
  "syn 2.0.118",
 ]
-
-[[package]]
-name = "linktime-proc-macro"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8c7b0a3383c2a1002d11349c92c85a666a5fb679e96c79d782cf0dbe557fd6ee"
 
 [[package]]
 name = "linux-raw-sys"
@@ -6473,6 +6451,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "tikv-jemalloc-sys"
+version = "0.6.1+5.3.0-1-ge13ca993e8ccb9ba9847cc330696e02839f328f7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cd8aa5b2ab86a2cefa406d889139c162cbb230092f7d1d7cbc1716405d852a3b"
+dependencies = [
+ "cc",
+ "libc",
+]
+
+[[package]]
+name = "tikv-jemallocator"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0359b4327f954e0567e69fb191cf1436617748813819c94b8cd4a431422d053a"
+dependencies = [
+ "libc",
+ "tikv-jemalloc-sys",
+]
+
+[[package]]
 name = "time"
 version = "0.3.53"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6813,22 +6811,6 @@ dependencies = [
  "log",
  "once_cell",
  "tracing-core",
-]
-
-[[package]]
-name = "tracing-opentelemetry"
-version = "0.33.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "adbc64cba7137545b8044cb1fe9814f7aacf3c6b5f9b45be8bb5db538befdb26"
-dependencies = [
- "js-sys",
- "opentelemetry",
- "smallvec",
- "tracing",
- "tracing-core",
- "tracing-log",
- "tracing-subscriber",
- "web-time",
 ]
 
 [[package]]
@@ -7285,7 +7267,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode"
-version = "0.134.14"
+version = "0.135.5"
 dependencies = [
  "agent-client-protocol",
  "anstyle",
@@ -7298,8 +7280,8 @@ dependencies = [
  "chrono",
  "clap",
  "colorchoice",
+ "criterion",
  "crossterm",
- "ctor",
  "dialoguer",
  "dirs",
  "futures",
@@ -7307,9 +7289,9 @@ dependencies = [
  "indexmap 2.14.0",
  "insta",
  "itertools 0.15.0",
- "libc",
  "memchr",
  "mimalloc",
+ "nix 0.31.3",
  "once_cell",
  "predicates",
  "pretty_assertions",
@@ -7329,6 +7311,7 @@ dependencies = [
  "smallvec",
  "tempfile",
  "thiserror 2.0.18",
+ "tikv-jemallocator",
  "tokio",
  "tokio-util",
  "toml",
@@ -7341,13 +7324,15 @@ dependencies = [
  "vtcode-commons",
  "vtcode-config",
  "vtcode-core",
+ "vtcode-eval",
+ "vtcode-session-store",
  "vtcode-ui",
  "webbrowser",
 ]
 
 [[package]]
 name = "vtcode-a2a"
-version = "0.134.14"
+version = "0.135.5"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -7371,7 +7356,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-acp"
-version = "0.134.14"
+version = "0.135.5"
 dependencies = [
  "agent-client-protocol",
  "anyhow",
@@ -7386,7 +7371,6 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.18",
  "tokio",
- "tokio-util",
  "tracing",
  "url",
  "uuid",
@@ -7396,7 +7380,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-auth"
-version = "0.134.14"
+version = "0.135.5"
 dependencies = [
  "anyhow",
  "apple-native-keyring-store",
@@ -7426,7 +7410,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-bash-runner"
-version = "0.134.14"
+version = "0.135.5"
 dependencies = [
  "anyhow",
  "assert_fs",
@@ -7446,18 +7430,20 @@ dependencies = [
 
 [[package]]
 name = "vtcode-commons"
-version = "0.134.14"
+version = "0.135.5"
 dependencies = [
  "anstyle",
  "anstyle-query",
  "anyhow",
  "base64",
+ "chrono",
  "compact_str",
  "dirs",
  "futures",
  "hashbrown 0.17.1",
  "ignore",
  "left-right",
+ "libc",
  "memchr",
  "once_cell",
  "percent-encoding",
@@ -7480,7 +7466,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-config"
-version = "0.134.14"
+version = "0.135.5"
 dependencies = [
  "anyhow",
  "assert_fs",
@@ -7511,7 +7497,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-core"
-version = "0.134.14"
+version = "0.135.5"
 dependencies = [
  "ansi-to-tui",
  "anstream",
@@ -7526,7 +7512,6 @@ dependencies = [
  "async-trait",
  "axum",
  "base64",
- "bytes",
  "chrono",
  "clap",
  "colorchoice-clap",
@@ -7555,7 +7540,6 @@ dependencies = [
  "nucleo-matcher",
  "num_cpus",
  "once_cell",
- "openai-harmony",
  "parking_lot",
  "portable-pty",
  "proptest",
@@ -7569,7 +7553,6 @@ dependencies = [
  "rusqlite",
  "rustc-hash 2.1.2",
  "schemars 1.2.1",
- "semver",
  "serde",
  "serde-saphyr",
  "serde_json",
@@ -7584,12 +7567,9 @@ dependencies = [
  "textwrap",
  "thiserror 2.0.18",
  "tokio",
- "tokio-stream",
- "tokio-tungstenite 0.29.0",
  "tokio-util",
  "toml",
  "tower",
- "tower-http 0.7.0",
  "tracing",
  "tracing-subscriber",
  "tree-sitter",
@@ -7617,6 +7597,7 @@ dependencies = [
  "vtcode-macros",
  "vtcode-mcp",
  "vtcode-safety",
+ "vtcode-session-store",
  "vtcode-skills",
  "vtcode-ui",
  "vtcode-utility-tool-specs",
@@ -7628,8 +7609,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "vtcode-eval"
+version = "0.135.5"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "vtcode-commons",
+ "vtcode-core",
+ "vtcode-exec-events",
+]
+
+[[package]]
 name = "vtcode-exec-events"
-version = "0.134.14"
+version = "0.135.5"
 dependencies = [
  "chrono",
  "hashbrown 0.17.1",
@@ -7639,13 +7636,12 @@ dependencies = [
  "serde",
  "serde_json",
  "tracing",
- "tracing-opentelemetry",
  "uuid",
 ]
 
 [[package]]
 name = "vtcode-indexer"
-version = "0.134.14"
+version = "0.135.5"
 dependencies = [
  "anyhow",
  "fs2",
@@ -7667,7 +7663,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-llm"
-version = "0.134.14"
+version = "0.135.5"
 dependencies = [
  "anstyle",
  "anyhow",
@@ -7715,7 +7711,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-macros"
-version = "0.134.14"
+version = "0.135.5"
 dependencies = [
  "quote",
  "syn 2.0.118",
@@ -7723,7 +7719,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-mcp"
-version = "0.134.14"
+version = "0.135.5"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -7757,12 +7753,12 @@ dependencies = [
 
 [[package]]
 name = "vtcode-safety"
-version = "0.134.14"
+version = "0.135.5"
 dependencies = [
  "anyhow",
  "dirs",
  "hashbrown 0.17.1",
- "libc",
+ "nix 0.31.3",
  "once_cell",
  "rustc-hash 2.1.2",
  "serde",
@@ -7781,8 +7777,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "vtcode-session-store"
+version = "0.135.5"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.18",
+ "vtcode-exec-events",
+ "walkdir",
+]
+
+[[package]]
 name = "vtcode-skills"
-version = "0.134.14"
+version = "0.135.5"
 dependencies = [
  "anyhow",
  "base64",
@@ -7807,7 +7816,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-ui"
-version = "0.134.14"
+version = "0.135.5"
 dependencies = [
  "anstyle",
  "anstyle-git",
@@ -7855,7 +7864,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-utility-tool-specs"
-version = "0.134.14"
+version = "0.135.5"
 dependencies = [
  "rmcp",
  "serde",
@@ -8753,7 +8762,7 @@ dependencies = [
 
 [[package]]
 name = "xtask"
-version = "0.134.14"
+version = "0.135.5"
 dependencies = [
  "clap",
  "clap_complete",

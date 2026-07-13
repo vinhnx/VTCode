@@ -25,13 +25,12 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
-tokio-util = { workspace = true, features = ["compat"] }
 tracing = { workspace = true }
 uuid = { workspace = true, features = ["v4"] }
 url = { workspace = true }
 percent-encoding = "2.3"
-vtcode-core = { path = "../vtcode-core", version = "0.134.14" }
-vtcode-config = { path = "../vtcode-config", version = "0.134.14" }
+vtcode-core = { path = "../vtcode-core", version = "0.135.5" }
+vtcode-config = { path = "../vtcode-config", version = "0.135.5" }
 
 [dev-dependencies]
 assert_fs = { workspace = true }

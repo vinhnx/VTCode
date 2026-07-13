@@ -99,6 +99,29 @@ When enabled, `vtcode exec --full-auto` writes a small set of working artefacts 
 
 This keeps long-running work resumable and makes evaluator-driven revision rounds explicit instead of relying on the generator to judge itself.
 
+## Regression Testing
+
+For long-running automation, use the `vtcode-eval` crate to build a regression
+eval suite that verifies the agent still handles previously-passing tasks after
+model or harness changes.
+
+### Running Eval Suites
+
+Use the `vtcode exec eval` CLI command to run an eval suite:
+
+```bash
+vtcode exec eval --suite my-suite.json --output report.md
+```
+
+The suite JSON file contains an `EvalSuite` with tasks, each specifying a prompt,
+setup/verify commands, and category (capability or regression). The runner
+executes each task through the agent, verifies outcomes with environment probes
+(command exit codes), computes pass@k and pass^k metrics, and outputs a
+markdown report.
+
+See [docs/harness/HARNESS_EVALUATION.md](../harness/HARNESS_EVALUATION.md) for
+the methodology and [vtcode-eval](../../vtcode-eval/) for the framework.
+
 ## Profile File Recommendations
 
 The profile file is a simple acknowledgement document. Suggested content:

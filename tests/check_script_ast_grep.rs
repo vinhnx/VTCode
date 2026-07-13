@@ -50,5 +50,10 @@ fn check_script_delegates_ast_grep_to_vtcode_command() {
     assert_eq!(args.lines().collect::<Vec<_>>(), ["check", "ast-grep"]);
 
     let cwd = fs::read_to_string(fake_bin.path().join("vtcode-cwd.log")).expect("read cwd log");
-    assert_eq!(cwd.trim(), workspace.display().to_string());
+    // `getcwd` may report a different path case than `CARGO_MANIFEST_DIR` on a
+    // case-insensitive filesystem (e.g. macOS APFS), so compare case-insensitively.
+    assert_eq!(
+        cwd.trim().to_lowercase(),
+        workspace.display().to_string().to_lowercase()
+    );
 }

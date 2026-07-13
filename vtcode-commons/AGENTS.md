@@ -9,7 +9,7 @@
 | Traits | `paths/` (WorkspacePaths, PathResolver), `errors/` (ErrorFormatter, ErrorReporter), `telemetry/` (TelemetrySink) |
 | Display | `ansi/`, `colors/`, `styling/`, `diff_preview/`, `color256_theme/`, `color_policy/` |
 | LLM | `llm/` (BackendKind, LLMError, Usage) |
-| Filesystem | `fs/`, `diff/`, `diff_paths/`, `vtcodegitignore/` |
+| Filesystem | `fs/`, `diff/`, `diff_paths/`, `vtcodegitignore/`, `workspace_snapshot/` (env-delta fingerprint: `capture`/`diff`/`is_drift`) |
 | Text | `tokens/`, `unicode/`, `sanitizer/`, `slug/`, `formatting/` |
 | Async | `async_utils/`, `thread_safety/` (RelaxedAtomic) |
 | Other | `editor/`, `http/`, `project/`, `validation/`, `serde_helpers/`, `env_lock/` |

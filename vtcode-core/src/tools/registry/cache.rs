@@ -19,7 +19,11 @@ impl ToolRegistry {
             "hits": stats.hits,
             "misses": stats.misses,
             "entries": stats.entries,
+            "file_entries": stats.file_entries,
+            "directory_entries": stats.directory_entries,
             "total_size_bytes": stats.total_size_bytes,
+            "file_size_bytes": stats.file_size_bytes,
+            "directory_size_bytes": stats.directory_size_bytes,
             "hit_rate": if stats.hits + stats.misses > 0 {
                 stats.hits as f64 / (stats.hits + stats.misses) as f64
             } else { 0.0 }

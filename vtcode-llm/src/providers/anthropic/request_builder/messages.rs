@@ -76,6 +76,8 @@ pub(crate) fn build_messages(
                     allow_container_uploads,
                 ));
 
+                blocks.extend(build_advisor_blocks(msg));
+
                 blocks.extend(build_tool_use_blocks(msg));
 
                 if blocks.is_empty() {
@@ -197,6 +199,62 @@ pub(crate) fn build_messages(
     }
 
     Ok(messages)
+}
+
+/// Re-emits preserved advisor server_tool_use + advisor_tool_result blocks from a
+/// previous turn. The blocks are stored verbatim in `reasoning_details` under the
+/// `advisor` type so they round-trip without being re-dispatched locally.
+fn build_advisor_blocks(msg: &Message) -> Vec<AnthropicContentBlock> {
+    let Some(details) = &msg.reasoning_details else {
+        return Vec::new();
+    };
+
+    let mut blocks = Vec::new();
+    for detail in details {
+        // `reasoning_details` may store entries as stringified JSON (`Value::String`),
+        // so normalize first — mirroring `build_reasoning_blocks`.
+        let Some(normalized) = normalize_reasoning_detail_object(detail) else {
+            continue;
+        };
+        if normalized.get("type").and_then(|t| t.as_str()) != Some("advisor") {
+            continue;
+        }
+        let Some(stored) = normalized.get("blocks").and_then(|b| b.as_array()) else {
+            continue;
+        };
+        for block in stored {
+            match block.get("type").and_then(|t| t.as_str()) {
+                Some("server_tool_use") => {
+                    let id = block
+                        .get("id")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or_default()
+                        .to_string();
+                    let name = block
+                        .get("name")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or_default()
+                        .to_string();
+                    let input = block.get("input").cloned().unwrap_or_else(|| json!({}));
+                    blocks.push(AnthropicContentBlock::ServerToolUse { id, name, input });
+                }
+                Some("advisor_tool_result") => {
+                    let tool_use_id = block
+                        .get("tool_use_id")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or_default()
+                        .to_string();
+                    let content = block.get("content").cloned().unwrap_or_else(|| json!({}));
+                    blocks.push(AnthropicContentBlock::AdvisorToolResult {
+                        tool_use_id,
+                        content,
+                    });
+                }
+                _ => {}
+            }
+        }
+    }
+    blocks
 }
 
 fn build_reasoning_blocks(msg: &Message) -> Vec<AnthropicContentBlock> {
@@ -419,10 +477,141 @@ pub fn tool_result_blocks(content: &str) -> Vec<Value> {
 
 #[cfg(test)]
 mod tests {
-    use super::{build_reasoning_blocks, content_blocks_from_message_content};
-    use crate::provider::{ContentPart, Message, MessageContent};
-    use crate::providers::anthropic_types::AnthropicContentBlock;
+    use super::{
+        build_advisor_blocks, build_messages, build_reasoning_blocks,
+        content_blocks_from_message_content,
+    };
+    use crate::provider::{ContentPart, LLMRequest, Message, MessageContent};
+    use crate::providers::anthropic_types::{AnthropicContentBlock, CacheControl};
     use serde_json::json;
+    use vtcode_config::core::AnthropicPromptCacheSettings;
+
+    fn message_anchor_flags(messages: &[super::AnthropicMessage]) -> Vec<bool> {
+        messages
+            .iter()
+            .map(|msg| {
+                msg.content.iter().any(|block| {
+                    matches!(
+                        block,
+                        AnthropicContentBlock::Text {
+                            cache_control: Some(_),
+                            ..
+                        }
+                    )
+                })
+            })
+            .collect()
+    }
+
+    fn rolling_anchor_fixture() -> (LLMRequest, Vec<Message>, Option<CacheControl>) {
+        let request = LLMRequest::default();
+        let messages = vec![
+            Message::user("aaaa".to_string()),
+            Message::user("bbbb".to_string()),
+            Message::user("cccc".to_string()),
+        ];
+        let cache_control = Some(CacheControl {
+            control_type: "ephemeral".to_string(),
+            ttl: Some("5m".to_string()),
+        });
+        (request, messages, cache_control)
+    }
+
+    #[test]
+    fn build_messages_anchors_only_last_two_qualifying_messages() {
+        let (request, source_messages, cache_control) = rolling_anchor_fixture();
+        let settings = AnthropicPromptCacheSettings {
+            min_message_length_for_cache: 1,
+            ..AnthropicPromptCacheSettings::default()
+        };
+        let mut breakpoints_remaining = 4usize;
+
+        let messages = build_messages(
+            &request,
+            &source_messages,
+            &cache_control,
+            &settings,
+            &mut breakpoints_remaining,
+        )
+        .expect("build_messages");
+
+        assert_eq!(message_anchor_flags(&messages), vec![false, true, true]);
+        assert_eq!(breakpoints_remaining, 2);
+    }
+
+    #[test]
+    fn build_messages_skips_anchors_when_breakpoint_budget_exhausted() {
+        let (request, source_messages, cache_control) = rolling_anchor_fixture();
+        let settings = AnthropicPromptCacheSettings {
+            min_message_length_for_cache: 1,
+            ..AnthropicPromptCacheSettings::default()
+        };
+        let mut breakpoints_remaining = 0usize;
+
+        let messages = build_messages(
+            &request,
+            &source_messages,
+            &cache_control,
+            &settings,
+            &mut breakpoints_remaining,
+        )
+        .expect("build_messages");
+
+        assert_eq!(message_anchor_flags(&messages), vec![false, false, false]);
+        assert_eq!(breakpoints_remaining, 0);
+    }
+
+    #[test]
+    fn build_messages_anchors_newest_message_when_only_one_breakpoint_left() {
+        let (request, source_messages, cache_control) = rolling_anchor_fixture();
+        let settings = AnthropicPromptCacheSettings {
+            min_message_length_for_cache: 1,
+            ..AnthropicPromptCacheSettings::default()
+        };
+        let mut breakpoints_remaining = 1usize;
+
+        let messages = build_messages(
+            &request,
+            &source_messages,
+            &cache_control,
+            &settings,
+            &mut breakpoints_remaining,
+        )
+        .expect("build_messages");
+
+        assert_eq!(message_anchor_flags(&messages), vec![false, false, true]);
+        assert_eq!(breakpoints_remaining, 0);
+    }
+
+    #[test]
+    fn build_messages_ignores_short_messages_when_selecting_anchors() {
+        let request = LLMRequest::default();
+        let source_messages = vec![
+            Message::user("a".repeat(300)),
+            Message::user("hi".to_string()),
+            Message::user("b".repeat(300)),
+        ];
+        let cache_control = Some(CacheControl {
+            control_type: "ephemeral".to_string(),
+            ttl: Some("5m".to_string()),
+        });
+        let settings = AnthropicPromptCacheSettings::default();
+        let mut breakpoints_remaining = 4usize;
+
+        let messages = build_messages(
+            &request,
+            &source_messages,
+            &cache_control,
+            &settings,
+            &mut breakpoints_remaining,
+        )
+        .expect("build_messages");
+
+        // Both long messages qualify (default threshold is 256 chars); the short
+        // middle message never receives an anchor.
+        assert_eq!(message_anchor_flags(&messages), vec![true, false, true]);
+        assert_eq!(breakpoints_remaining, 2);
+    }
 
     #[test]
     fn build_reasoning_blocks_decodes_stringified_json_detail() {
@@ -493,5 +682,53 @@ mod tests {
             AnthropicContentBlock::Text { text, .. }
                 if text == "[File input not directly supported: file_abc123]"
         ));
+    }
+
+    #[test]
+    fn build_advisor_blocks_re_emits_preserved_advisor_blocks() {
+        // `reasoning_details` stores entries as stringified JSON (`Value::String`),
+        // exactly as `parse_response`/`create_stream` emit them. The builder must
+        // normalize and round-trip the advisor `server_tool_use` + `advisor_tool_result`.
+        let detail = json!({
+            "type": "advisor",
+            "blocks": [
+                {
+                    "type": "server_tool_use",
+                    "id": "srvtoolu_01",
+                    "name": "advisor",
+                    "input": {}
+                },
+                {
+                    "type": "advisor_tool_result",
+                    "tool_use_id": "srvtoolu_01",
+                    "content": {"type": "advisor_result", "advisor_result": "do X"}
+                }
+            ]
+        })
+        .to_string();
+
+        let message =
+            Message::assistant(String::new()).with_reasoning_details(Some(vec![json!(detail)]));
+
+        let blocks = build_advisor_blocks(&message);
+        assert_eq!(blocks.len(), 2);
+        assert!(matches!(
+            &blocks[0],
+            AnthropicContentBlock::ServerToolUse { id, name, .. }
+                if id == "srvtoolu_01" && name == "advisor"
+        ));
+        assert!(matches!(
+            &blocks[1],
+            AnthropicContentBlock::AdvisorToolResult { tool_use_id, .. }
+                if tool_use_id == "srvtoolu_01"
+        ));
+    }
+
+    #[test]
+    fn build_advisor_blocks_skips_non_advisor_details() {
+        let message = Message::assistant(String::new()).with_reasoning_details(Some(vec![json!(
+            r#"{"type":"thinking","thinking":"trace"}"#
+        )]));
+        assert!(build_advisor_blocks(&message).is_empty());
     }
 }

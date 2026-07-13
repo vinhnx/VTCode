@@ -1,4 +1,5 @@
 use super::*;
+use crate::agent::runloop::unified::ui_interaction_stream_helpers::render_compact_reasoning_block;
 
 impl<'a> TurnProcessingContext<'a> {
     pub(crate) fn handle_assistant_response(
@@ -61,22 +62,23 @@ impl<'a> TurnProcessingContext<'a> {
                     let duplicates_content =
                         has_visible_text && reasoning_duplicates_content(reasoning_text, &text);
                     if !duplicates_content {
-                        let cleaned_for_display =
-                            vtcode_core::llm::providers::clean_reasoning_text(reasoning_text);
-                        if cleaned_for_display.trim().is_empty() {
+                        let compact =
+                            vtcode_commons::formatting::compact_reasoning_text(reasoning_text);
+                        if compact.trim().is_empty() {
                             continue;
                         }
-                        self.renderer
-                            .line(MessageStyle::Reasoning, &cleaned_for_display)?;
-                        if let Some(rendered_reasoning) = rendered_reasoning.as_mut() {
-                            rendered_reasoning.push(cleaned_for_display);
+                        let rendered =
+                            render_compact_reasoning_block(self.renderer, reasoning_text)?;
+                        if rendered && let Some(rendered_reasoning) = rendered_reasoning.as_mut() {
+                            rendered_reasoning.push(compact);
                         }
                     }
                 }
             }
 
             if let Some(detail_text) = detail_reasoning.as_deref() {
-                let cleaned_detail = vtcode_core::llm::providers::clean_reasoning_text(detail_text);
+                let cleaned_detail =
+                    vtcode_commons::formatting::compact_reasoning_text(detail_text);
                 let duplicates_content =
                     has_visible_text && reasoning_duplicates_content(&cleaned_detail, &text);
                 let duplicates_rendered =
@@ -89,8 +91,7 @@ impl<'a> TurnProcessingContext<'a> {
                             })
                         });
                 if !cleaned_detail.is_empty() && !duplicates_content && !duplicates_rendered {
-                    self.renderer
-                        .line(MessageStyle::Reasoning, &cleaned_detail)?;
+                    render_compact_reasoning_block(self.renderer, detail_text)?;
                 }
             }
             self.handle.set_reasoning_stage(None);

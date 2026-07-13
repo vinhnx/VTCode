@@ -1,14 +1,22 @@
-# Defuddle Fetch Tool
+# Defuddle Fetch (now `web_fetch` `format=markdown`)
 
-The `defuddle_fetch` tool fetches a URL through the [defuddle.md](https://defuddle.md) markdown extraction service and returns cleaned markdown inline. Use this as a fallback when `web_fetch` returns a payload that is hard to parse (heavy JS, paywalled HTML, raw RSS, etc.).
+> **Consolidated.** The standalone `defuddle_fetch` tool was merged into
+> [`web_fetch`](./web_fetch.md). Clean-markdown extraction is now a fetch *mode*,
+> not a separate tool, so the model has one fewer tool to choose between.
 
-## Usage
+Fetch cleaned markdown for a URL by calling `web_fetch` with `format="markdown"`:
 
 ```json
 {
-  "url": "https://example.com/complex-page"
+  "url": "https://example.com/complex-page",
+  "format": "markdown"
 }
 ```
+
+This routes through the [defuddle.md](https://defuddle.md) markdown extraction
+service and returns the cleaned markdown inline. Use it as a fallback when
+`web_fetch` (default `format="summary"`) returns a payload that is hard to parse
+(heavy JS, paywalled HTML, raw RSS, etc.).
 
 Optional parameters:
 
@@ -16,18 +24,6 @@ Optional parameters:
 |---|---|---|---|
 | `url` | `string` | — | URL to fetch and extract |
 | `max_bytes` | `number` | 256 KB | Maximum response size |
-
-## Output
-
-```json
-{
-  "url": "https://example.com/complex-page",
-  "markdown": "...",
-  "bytes": 12345,
-  "used_this_session": 1,
-  "session_cap": 1
-}
-```
 
 ## Guard Rails
 
@@ -38,5 +34,5 @@ Optional parameters:
 
 ## Related Tools
 
-- `web_fetch` — fetch full page content (unlimited calls, more robust)
+- `web_fetch` — fetch full page content (unlimited calls, more robust); `format="markdown"` gives defuddle extraction
 - `web_search` — search the web and get ranked result snippets

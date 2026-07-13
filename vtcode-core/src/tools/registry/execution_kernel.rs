@@ -7,7 +7,7 @@ use crate::config::constants::tools as tool_names;
 use crate::tools::apply_patch::{UNIFIED_FILE_MAX_PAYLOAD_BYTES_ENV, effective_max_payload_bytes};
 use crate::tools::error_messages::agent_execution;
 use crate::tools::names::canonical_tool_name;
-use crate::tools::validation::{commands, paths};
+use crate::tools::validation::{commands, condensed_schema_hint, paths};
 
 use super::ToolRegistry;
 
@@ -366,7 +366,7 @@ pub(super) fn preflight_validate_resolved_call(
     }
 
     let required = required_args_for_tool(&validation_tool_name);
-    let mut failures = Vec::new();
+    let mut failures = Vec::with_capacity(required.len());
     for key in required {
         if is_missing_required_arg(&validation_tool_name, validation_args.as_ref(), key) {
             failures.push(format!("Missing required argument: {key}"));
@@ -463,12 +463,23 @@ pub(super) fn preflight_validate_resolved_call(
         .inventory
         .registration_for(&validation_tool_name)
         .and_then(|registration| registration.parameter_schema().cloned());
-    if let Some(schema) = effective_parameter_schema.as_ref()
-        && let Err(errors) = jsonschema::validate(schema, validation_args.as_ref())
-    {
-        return Err(anyhow!(
-            "Invalid arguments for tool '{routed_tool_name}': {errors}"
-        ));
+    if let Some(schema) = effective_parameter_schema.as_ref() {
+        let error_msg = match jsonschema::validator_for(schema) {
+            Ok(validator) => validator
+                .iter_errors(validation_args.as_ref())
+                .map(|error| crate::tools::validation::describe_jsonschema_error(&error))
+                .collect::<Vec<_>>()
+                .join("; "),
+            Err(schema_error) => crate::tools::validation::describe_jsonschema_error(&schema_error),
+        };
+        if !error_msg.is_empty() {
+            let hint_msg = condensed_schema_hint(schema)
+                .map(|hint| format!("\nExpected schema (required fields and types): {hint}"))
+                .unwrap_or_default();
+            return Err(anyhow!(
+                "Invalid arguments for tool '{routed_tool_name}': {error_msg}{hint_msg}"
+            ));
+        }
     }
 
     let intent = crate::tools::tool_intent::classify_tool_intent(

@@ -212,7 +212,7 @@ pub fn session_with_slash_palette_commands() -> AppSession {
         vec![
             app_types::SlashCommandItem::new("new", "Start a new session"),
             app_types::SlashCommandItem::new("review", "Review current diff"),
-            app_types::SlashCommandItem::new("doctor", "Run diagnostics"),
+            app_types::SlashCommandItem::new("checkup", "Run diagnostics"),
             app_types::SlashCommandItem::new("command", "Run a terminal command"),
             app_types::SlashCommandItem::new("files", "Browse files"),
         ],

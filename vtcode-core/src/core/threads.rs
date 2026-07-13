@@ -386,6 +386,11 @@ pub async fn prepare_archived_session(
     let mut metadata =
         preserve_prompt_cache_lineage_if_compatible(metadata, &source.snapshot.metadata);
     metadata.continuation_metadata = source.snapshot.metadata.continuation_metadata.clone();
+    // Preserve the source session's primary agent ("mode") so a resume/fork keeps
+    // running the same agent instead of falling back to the config default.
+    if metadata.primary_agent.is_none() {
+        metadata.primary_agent = source.snapshot.metadata.primary_agent.clone();
+    }
     let mut bootstrap = ThreadBootstrap::from_listing(source.clone());
     bootstrap.metadata = Some(metadata.clone());
 
@@ -638,7 +643,8 @@ mod tests {
                     "old-provider",
                     "old-theme",
                     "medium",
-                ),
+                )
+                .with_primary_agent("plan"),
                 started_at: Utc::now(),
                 ended_at: Utc::now(),
                 total_messages: 2,
@@ -692,6 +698,17 @@ mod tests {
                 .expect("metadata")
                 .model,
             "new-model"
+        );
+        // Resume preserves the source session's primary agent ("mode").
+        assert_eq!(
+            prepared
+                .bootstrap
+                .metadata
+                .as_ref()
+                .expect("metadata")
+                .primary_agent
+                .as_deref(),
+            Some("plan")
         );
     }
 

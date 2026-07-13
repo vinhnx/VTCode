@@ -1,44 +1,39 @@
-mod file_read_dedup;
 mod memory_envelope;
 mod recovery_preview;
 
-use self::file_read_dedup::dedup_repeated_file_reads_for_local_compaction;
-#[cfg(test)]
-pub(crate) use self::memory_envelope::inject_latest_memory_envelope;
-#[cfg(test)]
-pub(crate) use self::memory_envelope::latest_memory_envelope_path_for_session;
-use self::memory_envelope::{
-    build_zero_cost_summarized_fork_history, configured_retained_user_messages,
-    insert_memory_envelope_message, load_latest_memory_envelope, local_compaction_config,
-    persist_memory_envelope, strip_existing_memory_envelope,
-};
-pub(crate) use self::memory_envelope::{
-    has_latest_memory_envelope, refresh_session_memory_envelope,
-};
+pub(crate) use self::memory_envelope::refresh_session_memory_envelope;
 pub(crate) use self::recovery_preview::build_recovery_context_previews_with_workspace;
 
-use anyhow::{Context, Result};
-use chrono::Utc;
-use serde::{Deserialize, Serialize};
+pub(crate) use vtcode_core::compaction::memory_envelope::{
+    MemoryEnvelopePersistence, MemoryEnvelopePlacement, SessionMemoryEnvelope,
+    SessionMemoryEnvelopeUpdate, build_session_memory_envelope,
+    build_zero_cost_summarized_fork_history, configured_retained_user_messages,
+    dedup_repeated_file_reads_for_local_compaction, default_memory_envelope_path_for_session,
+    derive_continuity_summary, effective_compaction_threshold, has_latest_memory_envelope,
+    insert_memory_envelope_message, latest_memory_envelope_path_for_session,
+    load_latest_memory_envelope, local_compaction_config, persist_memory_envelope,
+    read_task_tracker_snapshot, resolve_compaction_threshold, should_persist_memory_envelope,
+    strip_existing_memory_envelope, write_memory_envelope_to_path,
+};
+
+// Test-only symbols referenced by the runloop compaction test suite.
+#[cfg(test)]
+pub(crate) use vtcode_core::compaction::memory_envelope::{
+    DEDUPED_FILE_READ_NOTE, SESSION_MEMORY_ENVELOPE_SCHEMA_VERSION, inject_latest_memory_envelope,
+};
+#[cfg(test)]
+pub(crate) use vtcode_core::persistent_memory::{GroundedFactRecord, dedup_latest_facts};
+
+use anyhow::Result;
 use serde_json::{Value, json};
-use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use vtcode_commons::preview::{condense_text_bytes, tail_preview_text};
-use vtcode_config::constants::context::DEFAULT_COMPACTION_TRIGGER_RATIO;
-use vtcode_core::compaction::CompactionConfig;
-use vtcode_core::config::constants::tools as tool_names;
+use vtcode_core::compaction::auto::{AutoCompactionInput, auto_compact_messages};
 use vtcode_core::config::loader::VTCodeConfig;
-use vtcode_core::context::history_files::{HistoryFileManager, messages_to_history_messages};
-use vtcode_core::core::agent::harness_artifacts::{
-    current_task_path, read_evaluation_summary, read_spec_summary,
-};
 use vtcode_core::hooks::LifecycleHookEngine;
 use vtcode_core::llm::provider::{LLMProvider, Message, MessageRole};
-use vtcode_core::llm::utils::truncate_to_token_limit;
-use vtcode_core::persistent_memory::{
-    GroundedFactRecord, dedup_latest_facts, normalize_whitespace, truncate_for_fact,
-};
+use vtcode_core::persistent_memory::normalize_whitespace;
 
 use crate::agent::runloop::unified::context_manager::ContextManager;
 use crate::agent::runloop::unified::inline_events::harness::{
@@ -46,11 +41,6 @@ use crate::agent::runloop::unified::inline_events::harness::{
 };
 use crate::agent::runloop::unified::state::SessionStats;
 
-const MEMORY_ENVELOPE_HEADER: &str = "[Session Memory Envelope]";
-const MEMORY_ENVELOPE_SUFFIX: &str = ".memory.json";
-const SESSION_MEMORY_ENVELOPE_SCHEMA_VERSION: u32 = 2;
-const MEMORY_LIST_LIMIT: usize = 5;
-const DEDUPED_FILE_READ_NOTE: &str = "Older duplicate file read omitted during local compaction; a newer read of the same target slice is retained later in history.";
 const RECOVERY_PREVIEW_MAX_CHARS: usize = 220;
 const RECOVERY_PREVIEW_MAX_TOOL_OUTPUTS: usize = 3;
 const RECOVERY_PREVIEW_USER_LABEL: &str = "Latest user request";
@@ -60,18 +50,6 @@ const RECOVERY_PREVIEW_SPOOL_READ_HEAD_BYTES: usize = 2_000;
 const RECOVERY_PREVIEW_SPOOL_READ_TAIL_BYTES: usize = 1_500;
 const RECOVERY_PREVIEW_SPOOL_EXEC_TAIL_BYTES: usize = 4_000;
 const RECOVERY_PREVIEW_SPOOL_EXEC_MAX_LINES: usize = 80;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum MemoryEnvelopePersistence {
-    PersistToDisk,
-    InMemoryOnly,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum MemoryEnvelopePlacement {
-    Start,
-    BeforeLastUserOrSummary,
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct CompactionEnvelopeMode {
@@ -149,120 +127,7 @@ struct CompactionPlan {
     envelope_mode: CompactionEnvelopeMode,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub(crate) struct SessionMemoryEnvelope {
-    #[serde(default)]
-    pub session_id: String,
-    #[serde(default)]
-    pub schema_version: Option<u32>,
-    pub summary: String,
-    #[serde(default)]
-    pub objective: Option<String>,
-    pub task_summary: Option<String>,
-    pub spec_summary: Option<String>,
-    pub evaluation_summary: Option<String>,
-    #[serde(default)]
-    pub verification_summary: Option<String>,
-    #[serde(default)]
-    pub constraints: Vec<String>,
-    pub grounded_facts: Vec<GroundedFactRecord>,
-    pub touched_files: Vec<String>,
-    #[serde(default)]
-    pub open_questions: Vec<String>,
-    #[serde(default)]
-    pub verification_todo: Vec<String>,
-    #[serde(default)]
-    pub delegation_notes: Vec<String>,
-    pub history_artifact_path: Option<String>,
-    pub generated_at: String,
-}
-
-impl SessionMemoryEnvelope {
-    /// Returns true if this envelope carries the same meaningful content as
-    /// `other`. Generated timestamps and history artifact paths are ignored
-    /// because they change even when the underlying session state does not.
-    pub(crate) fn is_content_equivalent_to(&self, other: &SessionMemoryEnvelope) -> bool {
-        self.session_id == other.session_id
-            && self.schema_version == other.schema_version
-            && self.summary == other.summary
-            && self.objective == other.objective
-            && self.task_summary == other.task_summary
-            && self.spec_summary == other.spec_summary
-            && self.evaluation_summary == other.evaluation_summary
-            && self.verification_summary == other.verification_summary
-            && self.constraints == other.constraints
-            && self.grounded_facts == other.grounded_facts
-            && self.touched_files == other.touched_files
-            && self.open_questions == other.open_questions
-            && self.verification_todo == other.verification_todo
-            && self.delegation_notes == other.delegation_notes
-    }
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub(crate) struct SessionMemoryEnvelopeUpdate {
-    pub objective: Option<String>,
-    pub constraints: Vec<String>,
-    pub grounded_facts: Vec<GroundedFactRecord>,
-    pub touched_files: Vec<String>,
-    pub open_questions: Vec<String>,
-    pub verification_todo: Vec<String>,
-    pub delegation_notes: Vec<String>,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-struct TaskTrackerSnapshot {
-    summary: Option<String>,
-    objective: Option<String>,
-    verification_summary: Option<String>,
-    verification_todo: Vec<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-struct FileReadDedupKey {
-    target: String,
-    start_line: Option<u64>,
-    end_line: Option<u64>,
-    spool_path: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct FileReadDedupCandidate {
-    key: FileReadDedupKey,
-    placeholder_content: String,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum FileReadToolKind {
-    ReadFile,
-    FileOperationRead,
-}
-
 #[allow(clippy::cast_sign_loss)] // context_size is usize (non-negative), ratio is positive
-pub(crate) fn resolve_compaction_threshold(
-    configured_threshold: Option<u64>,
-    context_size: usize,
-) -> Option<u64> {
-    let configured_threshold = configured_threshold.filter(|threshold| *threshold > 0);
-    let derived_threshold = if context_size > 0 {
-        Some(
-            ((context_size as f64) * DEFAULT_COMPACTION_TRIGGER_RATIO)
-                .round()
-                .max(0.0) as u64,
-        )
-    } else {
-        None
-    };
-
-    configured_threshold.or(derived_threshold).map(|threshold| {
-        let mut threshold = threshold.max(1);
-        if context_size > 0 {
-            threshold = threshold.min(context_size as u64);
-        }
-        threshold
-    })
-}
-
 pub(crate) fn build_server_compaction_context_management(
     configured_threshold: Option<u64>,
     context_size: usize,
@@ -273,19 +138,6 @@ pub(crate) fn build_server_compaction_context_management(
             "compact_threshold": compact_threshold,
         }])
     })
-}
-
-fn effective_compaction_threshold(
-    vt_cfg: Option<&VTCodeConfig>,
-    provider: &dyn LLMProvider,
-    model: &str,
-) -> Option<usize> {
-    let context_size = provider.effective_context_size(model);
-    let configured_threshold =
-        vt_cfg.and_then(|cfg| cfg.agent.harness.auto_compaction_threshold_tokens);
-
-    resolve_compaction_threshold(configured_threshold, context_size)
-        .and_then(|threshold| usize::try_from(threshold).ok())
 }
 
 pub(crate) async fn build_summarized_fork_history(
@@ -398,6 +250,42 @@ pub(crate) async fn manual_compact_history_in_place(
     options: &vtcode_core::compaction::ManualCompactionOptions,
     native_only: bool,
 ) -> Result<Option<CompactionOutcome>> {
+    run_manual_compaction(
+        context,
+        state,
+        options,
+        native_only,
+        vtcode_core::exec::events::CompactionTrigger::Manual,
+    )
+    .await
+}
+
+/// Compact the conversation when the main session model or provider is switched
+/// mid-session, so the newly selected model starts from a summary rather than
+/// the outgoing model's raw trace. Mirrors `/compact` (forces `always_summarize`
+/// via `local_compaction_config(vt_cfg, true)` and routes through the same
+/// strategy dispatch) but is tagged with `CompactionTrigger::ModelSwitch`.
+pub(crate) async fn compact_history_on_model_switch_in_place(
+    context: CompactionContext<'_>,
+    state: CompactionState<'_>,
+) -> Result<Option<CompactionOutcome>> {
+    run_manual_compaction(
+        context,
+        state,
+        &vtcode_core::compaction::ManualCompactionOptions::default(),
+        false,
+        vtcode_core::exec::events::CompactionTrigger::ModelSwitch,
+    )
+    .await
+}
+
+async fn run_manual_compaction(
+    context: CompactionContext<'_>,
+    state: CompactionState<'_>,
+    options: &vtcode_core::compaction::ManualCompactionOptions,
+    native_only: bool,
+    trigger: vtcode_core::exec::events::CompactionTrigger,
+) -> Result<Option<CompactionOutcome>> {
     let CompactionContext {
         provider,
         model,
@@ -453,7 +341,7 @@ pub(crate) async fn manual_compact_history_in_place(
         },
         CompactionState::new(history, session_stats, context_manager),
         CompactionPlan {
-            trigger: vtcode_core::exec::events::CompactionTrigger::Manual,
+            trigger,
             envelope_mode: CompactionEnvelopeMode {
                 persistence: MemoryEnvelopePersistence::PersistToDisk,
                 placement: MemoryEnvelopePlacement::Start,
@@ -849,47 +737,77 @@ pub(crate) async fn maybe_auto_compact_history(
     context: CompactionContext<'_>,
     state: CompactionState<'_>,
 ) -> Result<Option<CompactionOutcome>> {
-    let current_prompt_pressure_tokens = state.context_manager.current_token_usage();
     let CompactionContext {
         provider,
         model,
+        session_id,
+        thread_id,
+        workspace_root,
         vt_cfg,
+        harness_emitter,
         ..
     } = context;
-    let Some(vt_cfg) = vt_cfg else {
-        return Ok(None);
-    };
+    let CompactionState {
+        history,
+        session_stats,
+        context_manager,
+    } = state;
 
-    if !vt_cfg.agent.harness.auto_compaction_enabled
-        || provider.supports_responses_compaction(model)
-    {
-        return Ok(None);
-    }
+    let current_prompt_pressure_tokens = context_manager.current_token_usage();
 
-    let Some(compact_threshold) = effective_compaction_threshold(Some(vt_cfg), provider, model)
+    // Delegate to the shared compaction orchestrator (used by both runloops).
+    // It enforces the `auto_compaction_enabled` gate, the token threshold, and
+    // the engine + memory-envelope + artifact compression in one place.
+    let Some(outcome) = auto_compact_messages(
+        AutoCompactionInput {
+            provider,
+            model,
+            session_id,
+            workspace_root,
+            vt_cfg,
+            current_token_usage: current_prompt_pressure_tokens,
+            touched_files: &session_stats.recent_touched_files(),
+            engine_cfg: local_compaction_config(vt_cfg, false),
+            manual_options: vtcode_core::compaction::ManualCompactionOptions::default(),
+            placement: MemoryEnvelopePlacement::BeforeLastUserOrSummary,
+        },
+        history,
+    )
+    .await?
     else {
         return Ok(None);
     };
 
-    if current_prompt_pressure_tokens < compact_threshold {
-        return Ok(None);
+    // Binary-specific post-step: reset response-chain and token tracking, then
+    // emit the canonical `thread.compact_boundary` event.
+    session_stats.clear_previous_response_chain_for(provider.name(), model);
+    context_manager
+        .cap_token_usage_after_compaction(effective_compaction_threshold(vt_cfg, provider, model));
+    if let Some(harness_emitter) = harness_emitter {
+        let event = compact_boundary_event(
+            thread_id.to_string(),
+            vtcode_core::exec::events::CompactionTrigger::Auto,
+            outcome.mode,
+            outcome.original_len,
+            outcome.compacted_len,
+            outcome.history_artifact_path.clone(),
+        );
+        let _ = harness_emitter.emit(event);
     }
-
-    compact_history_segment_in_place(
-        CompactionContext {
-            vt_cfg: Some(vt_cfg),
-            ..context
-        },
-        state,
-        CompactionPlan {
-            trigger: vtcode_core::exec::events::CompactionTrigger::Auto,
-            envelope_mode: CompactionEnvelopeMode {
-                persistence: MemoryEnvelopePersistence::PersistToDisk,
-                placement: MemoryEnvelopePlacement::BeforeLastUserOrSummary,
-            },
-        },
-    )
-    .await
+    tracing::info!(
+        provider = %provider.name(),
+        model = %model,
+        original_len = outcome.original_len,
+        compacted_len = outcome.compacted_len,
+        compaction_mode = %outcome.mode.as_str(),
+        "Applied automatic conversation compaction"
+    );
+    Ok(Some(CompactionOutcome {
+        original_len: outcome.original_len,
+        compacted_len: outcome.compacted_len,
+        mode: outcome.mode,
+        history_artifact_path: outcome.history_artifact_path,
+    }))
 }
 
 #[cfg(test)]

@@ -6,7 +6,9 @@ use crate::error_display;
 use crate::provider;
 use crate::providers::common::serialize_message_content_openai_for_model;
 use crate::rig_adapter::RigProviderCapabilities;
-use crate::system_prompt::{default_system_prompt, openai_gpt55_contract_addendum};
+use crate::system_prompt::{
+    default_system_prompt, openai_gpt55_contract_addendum, openai_gpt56_contract_addendum,
+};
 use hashbrown::HashSet;
 use rig::providers::openai::responses_api::{
     AdditionalParameters as RigResponsesAdditionalParameters, Include as RigResponsesInclude,
@@ -27,12 +29,24 @@ const NONE_REASONING_EFFORT_MODELS: &[&str] = &[
     openai_models::GPT_5_4,
 ];
 const MEDIUM_REASONING_EFFORT_MODELS: &[&str] = &[openai_models::GPT_5, openai_models::GPT_5_4_PRO];
+const HIGH_REASONING_EFFORT_MODELS: &[&str] = &[
+    openai_models::GPT_5_6_SOL,
+    openai_models::GPT_5_6_TERRA,
+    openai_models::GPT_5_6_LUNA,
+    openai_models::GPT_5_6,
+];
 const TEXT_VERBOSITY_MODELS: &[&str] = &[
     openai_models::GPT,
     openai_models::GPT_5_2,
     openai_models::GPT_5_4,
     openai_models::GPT_5_4_PRO,
     openai_models::GPT_5_3_CODEX,
+    openai_models::GPT_5_5,
+    openai_models::GPT_5_5_DATED,
+    openai_models::GPT_5_6_SOL,
+    openai_models::GPT_5_6_TERRA,
+    openai_models::GPT_5_6_LUNA,
+    openai_models::GPT_5_6,
 ];
 const LOW_VERBOSITY_MODELS: &[&str] = &[
     openai_models::GPT,
@@ -94,6 +108,8 @@ pub(crate) struct ResponsesRequestContext<'a> {
     pub include_structured_history_in_input: bool,
     pub preserve_structured_history_on_replay: bool,
     pub preserve_assistant_phase_on_replay: bool,
+    pub reasoning_context: Option<&'a str>,
+    pub safety_identifier: Option<&'a str>,
 }
 
 fn strip_non_native_assistant_phase(input: &mut [Value]) {
@@ -113,6 +129,13 @@ fn is_gpt55_model(model: &str) -> bool {
     model == openai_models::GPT_5_5 || model == openai_models::GPT_5_5_DATED
 }
 
+fn is_gpt56_model(model: &str) -> bool {
+    model == openai_models::GPT_5_6_SOL
+        || model == openai_models::GPT_5_6_TERRA
+        || model == openai_models::GPT_5_6_LUNA
+        || model == openai_models::GPT_5_6
+}
+
 fn is_openai_gpt_responses_model(model: &str) -> bool {
     model == openai_models::GPT || model.starts_with(openai_models::GPT_5)
 }
@@ -127,7 +150,7 @@ fn default_replay_instructions(model: &str) -> Option<String> {
             "You are Codex, based on GPT-5. {}",
             default_system_prompt()
         ))
-    } else if is_gpt55_model(model) {
+    } else if is_gpt55_model(model) || is_gpt56_model(model) {
         Some(default_system_prompt())
     } else {
         None
@@ -141,6 +164,8 @@ fn default_reasoning_effort_for_model(model: &str) -> Option<ReasoningEffortLeve
         Some(ReasoningEffortLevel::High)
     } else if MEDIUM_REASONING_EFFORT_MODELS.contains(&model) {
         Some(ReasoningEffortLevel::Medium)
+    } else if HIGH_REASONING_EFFORT_MODELS.contains(&model) {
+        Some(ReasoningEffortLevel::High)
     } else {
         None
     }
@@ -256,17 +281,26 @@ fn trimmed_non_empty(value: Option<&str>) -> Option<&str> {
 }
 
 fn augment_openai_instructions(model: &str, instructions: String) -> String {
-    if !is_gpt55_model(model) {
-        return instructions;
-    }
-
-    let addendum = openai_gpt55_contract_addendum();
-    if instructions.contains(addendum.trim()) {
-        instructions
-    } else if instructions.trim().is_empty() {
-        addendum
+    if is_gpt56_model(model) {
+        let addendum = openai_gpt56_contract_addendum();
+        if instructions.contains(addendum.trim()) {
+            instructions
+        } else if instructions.trim().is_empty() {
+            addendum
+        } else {
+            format!("{instructions}\n\n{addendum}")
+        }
+    } else if is_gpt55_model(model) {
+        let addendum = openai_gpt55_contract_addendum();
+        if instructions.contains(addendum.trim()) {
+            instructions
+        } else if instructions.trim().is_empty() {
+            addendum
+        } else {
+            format!("{instructions}\n\n{addendum}")
+        }
     } else {
-        format!("{instructions}\n\n{addendum}")
+        instructions
     }
 }
 
@@ -691,11 +725,17 @@ fn build_responses_request_from_history(
     if ctx.supports_reasoning
         && let Some(map) = openai_request.as_object_mut()
     {
-        let reasoning_value = map.entry("reasoning").or_insert(json!({}));
+        let reasoning_value = map.entry("reasoning".to_string()).or_insert(json!({}));
         if let Some(reasoning_obj) = reasoning_value.as_object_mut() {
             reasoning_obj
                 .entry("summary".to_string())
                 .or_insert_with(|| json!("auto"));
+            // Add reasoning.context for persisted reasoning (GPT-5.6+)
+            if let Some(context) = ctx.reasoning_context {
+                reasoning_obj
+                    .entry("context".to_string())
+                    .or_insert_with(|| json!(context));
+            }
         }
     }
 
@@ -743,6 +783,14 @@ fn build_responses_request_from_history(
         openai_request["text"] = text_format;
     }
 
+    // Add safety_identifier for abuse detection (hashed, not logged)
+    if let Some(safety_id) = trimmed_non_empty(ctx.safety_identifier)
+        && let Some(map) = openai_request.as_object_mut()
+    {
+        map.entry("safety_identifier".to_string())
+            .or_insert_with(|| json!(safety_id));
+    }
+
     // Rig 0.39 lacks typed `prompt_cache_key` and `prompt_cache_retention`
     // fields, so VT Code injects them after typed request construction at the
     // final JSON boundary. `or_insert` preserves future Rig output; remove
@@ -787,6 +835,8 @@ mod tests {
             include_structured_history_in_input: true,
             preserve_structured_history_on_replay: false,
             preserve_assistant_phase_on_replay: false,
+            reasoning_context: None,
+            safety_identifier: None,
         }
     }
 

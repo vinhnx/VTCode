@@ -15,7 +15,9 @@ use crate::agent::runloop::unified::external_url_guard::ExternalUrlGuardContext;
 use crate::agent::runloop::unified::inline_events::{
     InlineEventLoopResources, InlineInterruptCoordinator, poll_inline_loop_action,
 };
-use crate::agent::runloop::unified::model_selection::finalize_model_selection;
+use crate::agent::runloop::unified::model_selection::{
+    ModelSwitchCompactionTargets, finalize_model_selection,
+};
 use crate::agent::runloop::unified::session_setup::{
     apply_ide_context_snapshot, ide_context_status_label_from_bridge,
 };
@@ -274,6 +276,7 @@ pub(super) async fn run_interaction_loop_impl(
         let interrupts = InlineInterruptCoordinator::new(ctx.ctrl_c_state.as_ref());
         let use_unicode = ctx.renderer.should_use_unicode_formatting();
         let idle_wake_delay = STATUS_REFRESH_INTERVAL.saturating_sub(last_status_refresh.elapsed());
+        let harness_snapshot = ctx.tool_registry.harness_context_snapshot();
         let resources = InlineEventLoopResources {
             renderer: ctx.renderer,
             handle: ctx.handle,
@@ -294,7 +297,13 @@ pub(super) async fn run_interaction_loop_impl(
             startup_update_notice_rx: ctx.startup_update_notice_rx,
             header_context: ctx.header_context,
             use_unicode,
-            conversation_history_len: ctx.conversation_history.len(),
+            conversation_history: ctx.conversation_history,
+            session_stats: ctx.session_stats,
+            context_manager: ctx.context_manager,
+            session_id: &harness_snapshot.session_id,
+            thread_id: ctx.thread_id,
+            lifecycle_hooks: ctx.lifecycle_hooks.as_ref(),
+            harness_emitter: ctx.harness_emitter,
             idle_wake_delay,
         };
 
@@ -578,6 +587,7 @@ pub(super) async fn run_interaction_loop_impl(
                     } else {
                         None
                     };
+                    let harness_snapshot = ctx.tool_registry.harness_context_snapshot();
                     if target == ModelPickerTarget::Main
                         && let Err(err) = finalize_model_selection(
                             ctx.renderer,
@@ -590,7 +600,15 @@ pub(super) async fn run_interaction_loop_impl(
                             ctx.handle,
                             ctx.header_context,
                             ctx.full_auto,
-                            ctx.conversation_history.len(),
+                            ModelSwitchCompactionTargets {
+                                history: ctx.conversation_history,
+                                session_stats: ctx.session_stats,
+                                context_manager: ctx.context_manager,
+                                session_id: &harness_snapshot.session_id,
+                                thread_id: ctx.thread_id,
+                                lifecycle_hooks: ctx.lifecycle_hooks.as_ref(),
+                                harness_emitter: ctx.harness_emitter,
+                            },
                         )
                         .await
                     {

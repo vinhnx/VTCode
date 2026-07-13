@@ -22,6 +22,34 @@ use crate::agent::runloop::unified::tool_summary_helpers::{
 const RUN_SUMMARY_FIRST_WIDTH: usize = 62;
 const RUN_SUMMARY_CONTINUATION_WIDTH: usize = 58;
 
+/// Infer the action string for an internal file-operation call from its arguments.
+/// This is the single source of truth for action inference — all three call sites
+/// (`render_file_operation_indicator`, `is_file_modification_tool`, `describe_tool_action`)
+/// must use this function to stay consistent.
+fn file_operation_action(args: &Value) -> &'static str {
+    if let Some(action) = args.get("action").and_then(Value::as_str) {
+        return match action {
+            "write" | "create" => "write",
+            "edit" => "edit",
+            "patch" | "apply_patch" => "patch",
+            "delete" => "delete",
+            "move" => "move",
+            _ => "read",
+        };
+    }
+    if args.get("old_str").is_some() {
+        "edit"
+    } else if args.get("patch").is_some() {
+        "patch"
+    } else if args.get("content").is_some() {
+        "write"
+    } else if args.get("destination").is_some() {
+        "move"
+    } else {
+        "read"
+    }
+}
+
 /// Pre-execution indicators for file modification operations
 /// These provide visual feedback before the actual edit/write/patch is applied
 pub(crate) fn render_file_operation_indicator(
@@ -41,28 +69,14 @@ pub(crate) fn render_file_operation_indicator(
         name if name == tool_names::SEARCH_REPLACE => ("❋", "Search/replace in"),
         name if name == tool_names::DELETE_FILE => ("❋", "Deleting"),
         name if name == tool_names::UNIFIED_FILE => {
-            // Determine action from file_operation parameters
-            let action = args
-                .get("action")
-                .and_then(Value::as_str)
-                .or_else(|| {
-                    if args.get("old_str").is_some() {
-                        Some("edit")
-                    } else if args.get("patch").is_some() {
-                        Some("patch")
-                    } else if args.get("content").is_some() {
-                        Some("write")
-                    } else {
-                        None
-                    }
-                })
-                .unwrap_or("read");
+            let action = file_operation_action(args);
 
             match action {
                 "write" | "create" => ("❋", "Writing"),
                 "edit" => ("❋", "Editing"),
                 "patch" | "apply_patch" => ("❋", "Applying patch to"),
                 "delete" => ("❋", "Deleting"),
+                "move" => ("❋", "Moving"),
                 _ => return Ok(()), // Skip indicator for read operations
             }
         }
@@ -82,7 +96,7 @@ pub(crate) fn render_file_operation_indicator(
         })
         .unwrap_or_else(|| "file".to_string());
 
-    let mut line = String::new();
+    let mut line = String::with_capacity(64);
 
     // Icon
     line.push_str(indicator_icon);
@@ -114,26 +128,11 @@ pub(crate) fn is_file_modification_tool(tool_name: &str, args: &Value) -> bool {
             true
         }
         name if name == tool_names::UNIFIED_FILE => {
-            // Check if file_operation is doing a write operation
-            let action = args
-                .get("action")
-                .and_then(Value::as_str)
-                .or_else(|| {
-                    if args.get("old_str").is_some() {
-                        Some("edit")
-                    } else if args.get("patch").is_some() {
-                        Some("patch")
-                    } else if args.get("content").is_some() {
-                        Some("write")
-                    } else {
-                        None
-                    }
-                })
-                .unwrap_or("read");
+            let action = file_operation_action(args);
 
             matches!(
                 action,
-                "write" | "create" | "edit" | "patch" | "apply_patch" | "delete"
+                "write" | "create" | "edit" | "patch" | "apply_patch" | "delete" | "move"
             )
         }
         _ => false,
@@ -180,7 +179,7 @@ pub(crate) fn render_tool_call_summary(
         .get_fg_color()
         .unwrap_or(Color::Ansi(anstyle::AnsiColor::Green));
 
-    let mut line = String::new();
+    let mut line = String::with_capacity(128);
     line.push_str(&render_styled("•", palette.muted, Some("dim".to_string())));
     line.push(' ');
     let mut wrapped_run_segments: Option<Vec<String>> = None;
@@ -230,7 +229,7 @@ pub(crate) fn render_tool_call_summary(
     renderer.line(MessageStyle::Info, &line)?;
     if let Some(wrapped) = wrapped_run_segments {
         for segment in wrapped.into_iter().skip(1) {
-            let mut continuation = String::new();
+            let mut continuation = String::with_capacity(segment.len() + 32);
             continuation.push_str("  ");
             continuation.push_str(&render_styled("│", palette.muted, Some("dim".to_string())));
             continuation.push(' ');
@@ -240,7 +239,7 @@ pub(crate) fn render_tool_call_summary(
     }
 
     if let Some(command_line) = command_line {
-        let mut styled = String::new();
+        let mut styled = String::with_capacity(64);
         crate::agent::runloop::tool_output::push_tree_prefix(&mut styled, &palette);
         styled.push_str(&render_styled("$", palette.accent, None));
         styled.push(' ');
@@ -283,7 +282,7 @@ fn render_summary_with_highlights(
 
     ranges.sort_by_key(|(start, _)| *start);
 
-    let mut rendered = String::new();
+    let mut rendered = String::with_capacity(summary.len() * 3);
     let mut cursor = 0usize;
     for (start, end) in ranges {
         if start < cursor || start >= summary.len() || end > summary.len() {
@@ -308,7 +307,7 @@ fn render_run_command_segment(segment: &str, command_color: Color, args_color: C
         return render_styled(segment, args_color, None);
     }
 
-    let mut rendered = String::new();
+    let mut rendered = String::with_capacity(segment.len() * 2);
     rendered.push_str(&render_styled(command, command_color, None));
     if !args.is_empty() {
         rendered.push_str(&render_styled(&format!(" {args}"), args_color, None));
@@ -334,7 +333,7 @@ fn split_command_and_args(text: &str) -> (&str, &str) {
 }
 
 fn build_tool_summary(action_label: &str, headline: &str) -> String {
-    let normalized = headline.trim().trim_start_matches("MCP ").trim();
+    let normalized = headline.trim().trim_start_matches("MCP ");
     if action_label == "Run command" {
         if normalized.is_empty() {
             return "Ran command".to_string();
@@ -503,7 +502,7 @@ pub(crate) fn describe_tool_action(tool_name: &str, args: &Value) -> (String, Ha
                     HashSet::new(),
                 ),
                 _ => (
-                    format!("{}command_session", if is_mcp_tool { "MCP " } else { "" }),
+                    format!("{}exec_command", if is_mcp_tool { "MCP " } else { "" }),
                     HashSet::new(),
                 ),
             }
@@ -595,23 +594,7 @@ pub(crate) fn describe_tool_action(tool_name: &str, args: &Value) -> (String, Ha
                 })
         }
         actual_name if actual_name == tool_names::UNIFIED_FILE => {
-            let action = args
-                .get("action")
-                .and_then(Value::as_str)
-                .or_else(|| {
-                    if args.get("old_str").is_some() {
-                        Some("edit")
-                    } else if args.get("patch").is_some() {
-                        Some("patch")
-                    } else if args.get("content").is_some() {
-                        Some("write")
-                    } else if args.get("destination").is_some() {
-                        Some("move")
-                    } else {
-                        Some("read")
-                    }
-                })
-                .unwrap_or("read");
+            let action = file_operation_action(args);
 
             let (verb, keys): (&str, &[&str]) = match action {
                 "read" => ("Read file", &["path", "file_path", "target_path"]),
@@ -727,7 +710,7 @@ mod tests {
     }
 
     #[test]
-    fn describe_tool_action_handles_command_session_run_command() {
+    fn describe_tool_action_handles_unified_exec_run_command() {
         let (description, used_keys) = describe_tool_action(
             tool_names::UNIFIED_EXEC,
             &json!({
@@ -757,7 +740,7 @@ mod tests {
     }
 
     #[test]
-    fn describe_tool_action_annotates_file_operation_skill_doc_reads_with_skill_name() {
+    fn describe_tool_action_annotates_unified_file_skill_doc_reads_with_skill_name() {
         let (description, used_keys) = describe_tool_action(
             tool_names::UNIFIED_FILE,
             &json!({

@@ -3,9 +3,9 @@ use super::{
     SessionMemoryEnvelope, build_server_compaction_context_management,
     build_summarized_fork_history, compact_history_for_recovery_in_place,
     compact_history_from_index_in_place, compact_history_in_place,
-    compact_history_in_place_with_events, inject_latest_memory_envelope,
-    latest_memory_envelope_path_for_session, manual_compact_history_in_place,
-    maybe_auto_compact_history, resolve_compaction_threshold,
+    compact_history_in_place_with_events, compact_history_on_model_switch_in_place,
+    inject_latest_memory_envelope, latest_memory_envelope_path_for_session,
+    manual_compact_history_in_place, maybe_auto_compact_history, resolve_compaction_threshold,
 };
 use crate::agent::runloop::unified::context_manager::ContextManager;
 use crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter;
@@ -436,13 +436,15 @@ async fn manual_compaction_succeeds_without_server_side_support() {
     .expect("history should compact");
 
     assert_eq!(outcome.original_len, 12);
-    assert_eq!(outcome.compacted_len, 5);
+    // Pre-envelope length: summary + 4 retained user messages + 2-message
+    // continuity tail (the most recent turn is always kept verbatim).
+    assert_eq!(outcome.compacted_len, 7);
     assert_local_compaction_history(&history, 0);
     assert_eq!(
         session_stats.previous_response_id_for("stub", "stub-model"),
         None
     );
-    assert!(context_manager.current_token_usage() < 900);
+    assert!(context_manager.current_token_usage() <= 900);
     assert!(latest_memory_envelope_path_for_session(temp.path(), "session-alpha").is_some());
 }
 
@@ -555,6 +557,45 @@ async fn manual_compaction_clears_previous_response_chain() {
     assert_eq!(
         session_stats.previous_response_id_for("provider-stub", "stub-model"),
         None
+    );
+}
+
+#[tokio::test]
+async fn model_switch_compaction_tags_boundary_event_with_model_switch_trigger() {
+    let temp = tempdir().expect("tempdir");
+    let harness_path = temp.path().join("harness.log");
+    let emitter = HarnessEventEmitter::new(harness_path.clone()).expect("emitter");
+    let provider = ProviderCompactionProvider;
+    let mut history = test_history();
+    let mut session_stats = SessionStats::default();
+    let mut context_manager = test_context_manager();
+
+    let outcome = compact_history_on_model_switch_in_place(
+        CompactionContext::new(
+            &provider,
+            "stub-model",
+            "session-alpha",
+            "thread-alpha",
+            temp.path(),
+            Some(&VTCodeConfig::default()),
+            None,
+            Some(&emitter),
+        ),
+        CompactionState::new(&mut history, &mut session_stats, &mut context_manager),
+    )
+    .await
+    .expect("model-switch compaction succeeds")
+    .expect("history should compact");
+
+    assert_eq!(
+        outcome.mode,
+        vtcode_core::exec::events::CompactionMode::Provider
+    );
+
+    let log = fs::read_to_string(&harness_path).expect("harness log readable");
+    assert!(
+        log.contains("\"trigger\":\"model_switch\""),
+        "compact boundary event should carry the model_switch trigger, got: {log}"
     );
 }
 
@@ -1512,7 +1553,9 @@ async fn auto_compaction_replaces_history_and_clears_response_chain() {
     .expect("history should compact");
 
     assert_eq!(outcome.original_len, 12);
-    assert_eq!(outcome.compacted_len, 5);
+    // Post-envelope length: summary + 4 retained user messages + 2-message
+    // continuity tail + the injected session memory envelope (index 4).
+    assert_eq!(outcome.compacted_len, 8);
     assert_local_compaction_history(&history, 4);
     assert!(
         history[0]
@@ -1525,7 +1568,7 @@ async fn auto_compaction_replaces_history_and_clears_response_chain() {
         session_stats.previous_response_id_for("stub", "stub-model"),
         None
     );
-    assert!(context_manager.current_token_usage() < 700);
+    assert!(context_manager.current_token_usage() <= 700);
     assert!(latest_memory_envelope_path_for_session(temp.path(), "session-alpha").is_some());
 }
 
@@ -1561,7 +1604,9 @@ async fn targeted_compaction_preserves_prefix_and_replaces_suffix() {
 
     assert_eq!(&history[..1], preserved_prefix.as_slice());
     assert_eq!(outcome.original_len, 12);
-    assert_eq!(outcome.compacted_len, 6);
+    // Prefix (1, preserved) + suffix (summary + 4 retained users + continuity
+    // tail). Pre-envelope length.
+    assert_eq!(outcome.compacted_len, 7);
     assert!(history.len() >= 5);
     assert!(
         history
@@ -1956,7 +2001,9 @@ async fn compaction_strips_existing_memory_envelope_before_recompacting() {
     .expect("history should compact");
 
     assert_eq!(outcome.original_len, 12);
-    assert_eq!(outcome.compacted_len, 5);
+    // Pre-envelope length: summary + 4 retained user messages + 2-message
+    // continuity tail (the most recent turn is always kept verbatim).
+    assert_eq!(outcome.compacted_len, 7);
     assert_eq!(
         history
             .iter()

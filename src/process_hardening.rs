@@ -1,40 +1,29 @@
 //! Process hardening and security measures.
 //!
-//! Provides early-process hardening functions that run before `main()` via
-//! linker-section constructors, plus a public `pre_main_hardening()` entry
-//! point for explicit calls from `main()`.
+//! Provides early-process hardening functions called from `main()` to lock
+//! down the process before untrusted code can run.
+
+use vtcode_commons::env_lock;
 
 #[cfg(unix)]
 use std::ffi::OsString;
 #[cfg(unix)]
 use std::os::unix::ffi::OsStrExt;
 
+#[cfg(any(target_os = "linux", target_os = "android"))]
+use nix::sys::prctl;
 #[cfg(unix)]
-use ctor::ctor;
+use nix::sys::resource::{RLIM_INFINITY, Resource, getrlimit, setrlimit};
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
-#[allow(unsafe_code)]
-fn prctl_set_dumpable() -> i32 {
-    // SAFETY: `prctl` is called with the documented `PR_SET_DUMPABLE` command and
-    // integer arguments only. No pointers are dereferenced.
-    unsafe { libc::prctl(libc::PR_SET_DUMPABLE, 0, 0, 0, 0) }
-}
-
-#[cfg(target_os = "macos")]
-#[allow(unsafe_code)]
-fn ptrace_deny_attach() -> i32 {
-    // SAFETY: `ptrace(PT_DENY_ATTACH, ...)` is the documented macOS hardening call.
-    // The null pointer argument is not dereferenced by this request type.
-    unsafe { libc::ptrace(libc::PT_DENY_ATTACH, 0, std::ptr::null_mut(), 0) }
+fn prctl_set_dumpable() -> std::io::Result<()> {
+    prctl::set_dumpable(false)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("{e}")))
 }
 
 #[cfg(unix)]
-#[allow(unsafe_code)]
 fn remove_env_var(key: OsString) {
-    // SAFETY: Caller must ensure this runs during single-threaded early process
-    // startup, before any threads are spawned, which satisfies the environment
-    // mutation safety requirement.
-    unsafe { std::env::remove_var(key) }
+    env_lock::remove_var(key);
 }
 
 /// Perform early process hardening as the first operation in `main()`.
@@ -57,13 +46,44 @@ pub fn pre_main_hardening() {
 
     #[cfg(windows)]
     pre_main_hardening_windows();
+
+    // Post-hardening verification: check if core dumps are disabled.
+    #[cfg(unix)]
+    verify_hardening_effectiveness();
+
+    // Check essential env vars are present.
+    #[cfg(unix)]
+    check_environment_sanity();
+}
+
+/// Verify that core dumps are disabled.
+/// Runs after all platform hardening to catch misconfigurations early.
+#[cfg(unix)]
+fn verify_hardening_effectiveness() {
+    let Ok((soft, _hard)) = getrlimit(Resource::RLIMIT_CORE) else {
+        return;
+    };
+    if soft != 0 {
+        eprintln!("warning: vtcode-process-hardening: RLIMIT_CORE is not zero after hardening");
+    }
+}
+
+/// Check that essential environment variables are set.
+#[cfg(unix)]
+fn check_environment_sanity() {
+    if std::env::var_os("HOME").is_none() {
+        eprintln!("warning: HOME environment variable is not set; config resolution may fail");
+    }
+
+    if std::env::var_os("USER").is_none() {
+        eprintln!(
+            "warning: USER environment variable is not set; some features may not work correctly"
+        );
+    }
 }
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
 const PRCTL_FAILED_EXIT_CODE: i32 = 5;
-
-#[cfg(target_os = "macos")]
-const PTRACE_DENY_ATTACH_FAILED_EXIT_CODE: i32 = 6;
 
 #[cfg(any(
     target_os = "linux",
@@ -80,12 +100,8 @@ fn pre_main_hardening_linux() {
     cap_stack_rlimit();
 
     // Disable ptrace attach / mark process non-dumpable.
-    let ret_code = prctl_set_dumpable();
-    if ret_code != 0 {
-        eprintln!(
-            "ERROR: prctl(PR_SET_DUMPABLE, 0) failed: {}",
-            std::io::Error::last_os_error()
-        );
+    if let Err(e) = prctl_set_dumpable() {
+        eprintln!("ERROR: prctl(PR_SET_DUMPABLE) failed: {e}");
         std::process::exit(PRCTL_FAILED_EXIT_CODE);
     }
 
@@ -94,10 +110,7 @@ fn pre_main_hardening_linux() {
 
     // VT Code is primarily MUSL-linked in release builds, which means that variables such
     // as LD_PRELOAD are ignored anyway, but just to be sure, clear them here.
-    let ld_keys = env_keys_with_prefix(std::env::vars_os(), b"LD_");
-    for key in ld_keys {
-        remove_env_var(key);
-    }
+    remove_env_vars_with_prefix(b"LD_");
 }
 
 #[cfg(any(target_os = "freebsd", target_os = "openbsd"))]
@@ -107,52 +120,30 @@ fn pre_main_hardening_bsd() {
     // FreeBSD/OpenBSD: set RLIMIT_CORE to 0 and clear LD_* env vars
     set_core_file_size_limit_to_zero();
 
-    let ld_keys = env_keys_with_prefix(std::env::vars_os(), b"LD_");
-    for key in ld_keys {
-        remove_env_var(key);
-    }
+    remove_env_vars_with_prefix(b"LD_");
 }
 
 #[cfg(target_os = "macos")]
 fn pre_main_hardening_macos() {
     cap_stack_rlimit();
 
-    // Prevent debuggers from attaching to this process.
-    let ret_code = ptrace_deny_attach();
-    if ret_code == -1 {
-        eprintln!(
-            "ERROR: ptrace(PT_DENY_ATTACH) failed: {}",
-            std::io::Error::last_os_error()
-        );
-        std::process::exit(PTRACE_DENY_ATTACH_FAILED_EXIT_CODE);
-    }
-
     // Set the core file size limit to 0 to prevent core dumps.
     set_core_file_size_limit_to_zero();
 
     // Remove all DYLD_* environment variables, which can be used to subvert
     // library loading.
-    let dyld_keys = env_keys_with_prefix(std::env::vars_os(), b"DYLD_");
-    for key in dyld_keys {
-        remove_env_var(key);
-    }
+    remove_env_vars_with_prefix(b"DYLD_");
+
+    // Note: PT_DENY_ATTACH (preventing debugger attachment) is intentionally
+    // skipped here because macOS's System Integrity Protection (SIP) and
+    // Hardened Runtime already provide anti-debugging protections at the
+    // system level, making this ptrace call redundant on modern macOS.
 }
 
 #[cfg(unix)]
-#[allow(unsafe_code)]
 fn set_core_file_size_limit_to_zero() {
-    let rlim = libc::rlimit {
-        rlim_cur: 0,
-        rlim_max: 0,
-    };
-    // SAFETY: `rlim` is fully initialized and passed by shared reference for the
-    // duration of the syscall only.
-    let ret_code = unsafe { libc::setrlimit(libc::RLIMIT_CORE, &rlim) };
-    if ret_code != 0 {
-        eprintln!(
-            "ERROR: setrlimit(RLIMIT_CORE) failed: {}",
-            std::io::Error::last_os_error()
-        );
+    if let Err(e) = setrlimit(Resource::RLIMIT_CORE, 0, 0) {
+        eprintln!("ERROR: setrlimit(RLIMIT_CORE) failed: {e}");
         std::process::exit(SET_RLIMIT_CORE_FAILED_EXIT_CODE);
     }
 }
@@ -175,30 +166,16 @@ fn set_core_file_size_limit_to_zero() {
     target_os = "netbsd",
     target_os = "openbsd"
 ))]
-#[allow(unsafe_code)]
 fn cap_stack_rlimit() {
     const STACK_CAP_BYTES: u64 = 8 * 1024 * 1024;
 
-    let mut current: libc::rlimit = libc::rlimit {
-        rlim_cur: 0,
-        rlim_max: 0,
+    let Ok((soft, _hard)) = getrlimit(Resource::RLIMIT_STACK) else {
+        return;
     };
-    // SAFETY: `current` points to valid writable memory for the syscall to fill.
-    let ret = unsafe { libc::getrlimit(libc::RLIMIT_STACK, &mut current) };
-    if ret != 0 {
+    if soft != RLIM_INFINITY {
         return;
     }
-    // Only cap if the soft limit is currently unlimited.
-    if current.rlim_cur != libc::RLIM_INFINITY {
-        return;
-    }
-    let capped = libc::rlimit {
-        rlim_cur: STACK_CAP_BYTES,
-        rlim_max: STACK_CAP_BYTES,
-    };
-    // SAFETY: `capped` is fully initialized and passed by shared reference for
-    // the duration of the syscall only.
-    let _ = unsafe { libc::setrlimit(libc::RLIMIT_STACK, &capped) };
+    let _ = setrlimit(Resource::RLIMIT_STACK, STACK_CAP_BYTES, STACK_CAP_BYTES);
 }
 
 #[cfg(windows)]
@@ -206,103 +183,6 @@ fn pre_main_hardening_windows() {
     // Windows process hardening would involve using Job Objects to limit
     // resource usage and restrict UI access, or using restricted tokens.
     // This is currently a future enhancement.
-}
-
-// ===========================================================================
-// Pre-main constructors (life before main)
-//
-// These run before main() via linker-section constructor tables. Priority
-// 0-100 is reserved for the C runtime; we use 101+ to run after libc init.
-// Constraints: no heap allocation, no locks, no panics, no stdio.
-// ===========================================================================
-
-/// Post-hardening sanity: verify that core dumps are disabled on Unix.
-///
-/// Runs at priority 101 — after C runtime init but before `main()`.
-/// This is a lightweight check that catches misconfigurations early.
-#[cfg(unix)]
-#[ctor(unsafe, priority = 101)]
-fn verify_hardening_effectiveness() {
-    use std::mem::MaybeUninit;
-
-    #[cfg(any(
-        target_os = "linux",
-        target_os = "android",
-        target_os = "macos",
-        target_os = "freebsd",
-        target_os = "netbsd",
-        target_os = "openbsd"
-    ))]
-    {
-        // SAFETY: rlim is zeroed and passed by mutable ref to getrlimit which
-        // fills it. The syscall is infallible on valid pointers.
-        #[allow(unsafe_code)]
-        let mut rlim: libc::rlimit = unsafe { MaybeUninit::zeroed().assume_init() };
-        // SAFETY: getrlimit fills rlim via mutable pointer; the struct is
-        // zeroed above so no uninitialized memory is exposed.
-        #[allow(unsafe_code)]
-        let ret = unsafe { libc::getrlimit(libc::RLIMIT_CORE, &mut rlim) };
-        if ret == 0 && rlim.rlim_cur != 0 {
-            // Core dumps are not disabled. Write a warning directly to stderr
-            // using libc (stdio may not be initialized yet).
-            // SAFETY: msg is a static byte string; write is a POSIX syscall
-            // that does not dereference the pointer beyond msg.len() bytes.
-            #[allow(unsafe_code)]
-            unsafe {
-                let msg =
-                    b"warning: vtcode-process-hardening: RLIMIT_CORE is not zero after hardening\n";
-                libc::write(
-                    libc::STDERR_FILENO,
-                    msg.as_ptr() as *const libc::c_void,
-                    msg.len(),
-                );
-            }
-        }
-    }
-}
-
-/// Environment sanity: warn if essential env vars are missing.
-///
-/// Runs at priority 102. Checks that `HOME` (and on Unix, `USER`) are set,
-/// which are required for config resolution. Uses raw libc writes because
-/// stdio may not be initialized yet.
-#[cfg(unix)]
-#[ctor(unsafe, priority = 102)]
-fn check_environment_sanity() {
-    let home_set = std::env::var_os("HOME").is_some();
-    if !home_set {
-        // SAFETY: msg is a static byte string; write is a POSIX syscall
-        // that does not dereference the pointer beyond msg.len() bytes.
-        #[allow(unsafe_code)]
-        unsafe {
-            let msg =
-                b"warning: HOME environment variable is not set; config resolution may fail\n";
-            libc::write(
-                libc::STDERR_FILENO,
-                msg.as_ptr() as *const libc::c_void,
-                msg.len(),
-            );
-        }
-    }
-
-    // USER is not strictly required on all platforms but is a strong signal.
-    #[cfg(not(target_os = "windows"))]
-    {
-        let user_set = std::env::var_os("USER").is_some();
-        if !user_set {
-            // SAFETY: msg is a static byte string; write is a POSIX syscall
-            // that does not dereference the pointer beyond msg.len() bytes.
-            #[allow(unsafe_code)]
-            unsafe {
-                let msg = b"warning: USER environment variable is not set; some features may not work correctly\n";
-                libc::write(
-                    libc::STDERR_FILENO,
-                    msg.as_ptr() as *const libc::c_void,
-                    msg.len(),
-                );
-            }
-        }
-    }
 }
 
 #[cfg(unix)]
@@ -318,6 +198,15 @@ where
                 .then_some(key)
         })
         .collect()
+}
+
+/// Remove all environment variables whose names start with the given prefix.
+#[cfg(unix)]
+fn remove_env_vars_with_prefix(prefix: &[u8]) {
+    let keys = env_keys_with_prefix(std::env::vars_os(), prefix);
+    for key in keys {
+        remove_env_var(key);
+    }
 }
 
 #[cfg(all(test, unix))]

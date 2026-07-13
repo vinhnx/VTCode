@@ -319,7 +319,15 @@ pub(super) fn reasoning_level_label(level: ReasoningEffortLevel) -> &'static str
 pub(super) fn supports_gpt5_none_reasoning(model_id: &str) -> bool {
     matches!(
         model_id,
-        "gpt-5.2" | "gpt-5.4" | "gpt-5.4-pro" | "gpt-5.5" | "gpt-5.5-2026-04-23"
+        "gpt-5.2"
+            | "gpt-5.4"
+            | "gpt-5.4-pro"
+            | "gpt-5.5"
+            | "gpt-5.5-2026-04-23"
+            | "gpt-5.6-sol"
+            | "gpt-5.6-terra"
+            | "gpt-5.6-luna"
+            | "gpt-5.6"
     ) || matches!(model_id, "gpt-5.2-codex" | "gpt-5.3-codex")
 }
 
@@ -333,6 +341,10 @@ pub(super) fn supports_xhigh_reasoning(model_id: &str) -> bool {
             | "gpt-5.5"
             | "gpt-5.5-2026-04-23"
             | "gpt-5.3-codex"
+            | "gpt-5.6-sol"
+            | "gpt-5.6-terra"
+            | "gpt-5.6-luna"
+            | "gpt-5.6"
             | "claude-sonnet-5"
             | "claude-fable-5"
             | "claude-mythos-5"
@@ -343,7 +355,11 @@ pub(super) fn supports_xhigh_reasoning(model_id: &str) -> bool {
 pub(super) fn supports_max_reasoning(model_id: &str) -> bool {
     matches!(
         model_id,
-        "claude-sonnet-5"
+        "gpt-5.6-sol"
+            | "gpt-5.6-terra"
+            | "gpt-5.6-luna"
+            | "gpt-5.6"
+            | "claude-sonnet-5"
             | "claude-fable-5"
             | "claude-mythos-5"
             | "claude-opus-4-8"
@@ -361,10 +377,10 @@ pub(super) fn reasoning_level_description(level: ReasoningEffortLevel) -> &'stat
         ReasoningEffortLevel::Medium => reasoning::DESCRIPTION_MEDIUM,
         ReasoningEffortLevel::High => reasoning::DESCRIPTION_HIGH,
         ReasoningEffortLevel::XHigh => {
-            "Maximum reasoning for hardest long-running tasks (GPT-5.3+/GPT-5.4 family and Claude Opus 4.8/4.7)"
+            "Maximum reasoning for hardest long-running tasks (GPT-5.3+/GPT-5.4 family, GPT-5.6, and Claude Opus 4.8/4.7)"
         }
         ReasoningEffortLevel::Max => {
-            "Highest adaptive effort for supported Anthropic adaptive-thinking models; may use more tokens and can overthink"
+            "Maximum adaptive reasoning for GPT-5.6 and supported Anthropic models; may use more tokens"
         }
     }
 }

@@ -2,6 +2,11 @@ use crate::core::loop_detector::MAX_TOTAL_READONLY_CALLS;
 use crate::prompts::sections::{SectionBoundaryMode, find_prompt_section_bounds};
 use std::fmt::Write as _;
 
+/// Per-file-path read cap advertised in the system prompt. Must match
+/// `guards::MAX_SAME_FILE_PATH_READ_CALLS`. Reading the same file more than
+/// this many times in a turn triggers recovery.
+const MAX_SAME_FILE_PATH_READS: usize = 6;
+
 /// Keep prompt guidance aligned with the selected user-visible harness limits.
 ///
 /// This operation is idempotent: existing `[Harness Limits]` sections are removed before
@@ -28,16 +33,19 @@ pub fn upsert_harness_limits_section(
         prompt.pop();
     }
 
+    let section = format!(
+        "[Harness Limits]\n\
+         - max_tool_calls_per_turn: {max_tool_calls_label}\n\
+         - max_tool_wall_clock_secs: {max_tool_wall_clock_secs}\n\
+         - max_tool_retries: {max_tool_retries}\n\
+         - max_readonly_tool_calls: {MAX_TOTAL_READONLY_CALLS} (global budget across all read-only tools; produce output before exhausting)\n\
+         - max_same_file_path_reads: {MAX_SAME_FILE_PATH_READS} (per file path per turn; read a file once in full rather than paginating)"
+    );
+
     if prompt.is_empty() {
-        let _ = writeln!(
-            prompt,
-            "[Harness Limits]\n- max_tool_calls_per_turn: {max_tool_calls_label}\n- max_tool_wall_clock_secs: {max_tool_wall_clock_secs}\n- max_tool_retries: {max_tool_retries}\n- max_readonly_tool_calls: {MAX_TOTAL_READONLY_CALLS} (global budget across all read-only tools; produce output before exhausting)"
-        );
+        let _ = writeln!(prompt, "{section}");
     } else {
-        let _ = writeln!(
-            prompt,
-            "\n[Harness Limits]\n- max_tool_calls_per_turn: {max_tool_calls_label}\n- max_tool_wall_clock_secs: {max_tool_wall_clock_secs}\n- max_tool_retries: {max_tool_retries}\n- max_readonly_tool_calls: {MAX_TOTAL_READONLY_CALLS} (global budget across all read-only tools; produce output before exhausting)"
-        );
+        let _ = writeln!(prompt, "\n{section}");
     }
 }
 
@@ -56,6 +64,7 @@ mod tests {
         assert!(prompt.contains("- max_tool_wall_clock_secs: 180"));
         assert!(prompt.contains("- max_tool_retries: 2"));
         assert!(prompt.contains("- max_readonly_tool_calls: 30"));
+        assert!(prompt.contains("- max_same_file_path_reads: 6"));
     }
 
     #[test]
@@ -115,5 +124,6 @@ mod tests {
         assert!(prompt.contains("- max_tool_wall_clock_secs: 600"));
         assert!(prompt.contains("- max_tool_retries: 2"));
         assert!(prompt.contains("- max_readonly_tool_calls: 30"));
+        assert!(prompt.contains("- max_same_file_path_reads: 6"));
     }
 }

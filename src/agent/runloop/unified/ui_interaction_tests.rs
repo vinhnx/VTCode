@@ -921,6 +921,53 @@ async fn inline_streams_reasoning_deltas_live() {
 }
 
 #[tokio::test]
+async fn inline_streaming_compacts_blank_lines_and_highlights_decisions() {
+    let provider = ReasoningThenChunkedContentProvider {
+        chunks: vec!["done".to_string()],
+        // Blank-line spam around a decision line, split across chunks.
+        reasoning_chunks: vec![
+            "surveying the repo\n\n\n\n".to_string(),
+            "I will run the tests now".to_string(),
+            "\n\n\nthen summarize".to_string(),
+        ],
+    };
+    let request = build_request();
+    let (tx, mut rx) = mpsc::unbounded_channel::<InlineCommand>();
+    let handle = InlineHandle::new_for_tests(tx);
+    let spinner = PlaceholderSpinner::new(&handle, None, None, "");
+    let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
+    let ctrl_c_state = super::state::CtrlCState::new();
+    let ctrl_c_notify = Arc::new(Notify::new());
+
+    let (_resp, _emitted) = stream_and_render_response(
+        &provider,
+        request,
+        &spinner,
+        &mut renderer,
+        &Arc::new(ctrl_c_state),
+        &ctrl_c_notify,
+    )
+    .await
+    .expect("stream should succeed");
+
+    let mut reasoning_text = String::new();
+    while let Ok(command) = rx.try_recv() {
+        if let InlineCommand::Inline { segment, .. } = command {
+            reasoning_text.push_str(&segment.text);
+        }
+    }
+
+    assert!(
+        !reasoning_text.contains("\n\n"),
+        "blank-line spam should be collapsed, got: {reasoning_text:?}"
+    );
+    assert!(
+        reasoning_text.contains("I will run the tests now"),
+        "decision line must be present, got: {reasoning_text:?}"
+    );
+}
+
+#[tokio::test]
 async fn inline_streaming_does_not_replay_reasoning_on_completion() {
     let provider = ReasoningThenChunkedContentProvider {
         chunks: vec![],

@@ -30,6 +30,7 @@ pub(crate) const VAGUE_SUBAGENT_PROMPTS: &[&str] = &[
 ];
 
 pub(crate) const SUBAGENT_TOOL_NAMES: &[&str] = &[
+    tools::AGENT,
     tools::SPAWN_AGENT,
     tools::SPAWN_BACKGROUND_SUBPROCESS,
     tools::SEND_INPUT,

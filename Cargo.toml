@@ -1,6 +1,6 @@
 [package]
 name = "vtcode"
-version = "0.134.14"
+version = "0.135.5"
 edition = "2024"
 rust-version = "1.88"
 authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
@@ -96,14 +96,13 @@ proc-macro2 = "1"
 quote = "1"
 syn = "2"
 linkme = "0.3"
-ctor = "1.0"
 webbrowser = "1.2"
 tiktoken = "3.5"
 opentelemetry = { version = "0.32", default-features = false, features = ["trace", "metrics"] }
 tracing-opentelemetry = "0.33"
 
 [workspace.package]
-version = "0.134.14"
+version = "0.135.5"
 edition = "2024"
 license = "MIT"
 homepage = "https://github.com/vinhnx/vtcode"
@@ -129,6 +128,8 @@ members = [
     "vtcode-mcp",
     "vtcode-llm",
     "vtcode-skills",
+    "vtcode-session-store",
+    "vtcode-eval",
     "xtask",
 ]
 default-members = [".", "vtcode-core", "vtcode-ui"]
@@ -149,6 +150,8 @@ vtcode-a2a = { path = "vtcode-a2a" }
 vtcode-mcp = { path = "vtcode-mcp" }
 vtcode-llm = { path = "vtcode-llm" }
 vtcode-skills = { path = "vtcode-skills" }
+vtcode-session-store = { path = "vtcode-session-store" }
+vtcode-eval = { path = "vtcode-eval" }
 
 [workspace.lints]
 # Rust compiler lints
@@ -228,12 +231,14 @@ allow_attributes_without_reason = "allow"  # TODO: Phase in after suppression au
 
 
 [dependencies]
-vtcode-acp = { path = "vtcode-acp", version = "0.134.14" }
-vtcode-commons = { path = "vtcode-commons", version = "0.134.14" }
-vtcode-ui = { path = "vtcode-ui", version = "0.134.14" }
-vtcode-config = { path = "vtcode-config", version = "0.134.14" }
-vtcode-auth = { path = "vtcode-auth", version = "0.134.14" }
-vtcode-core = { path = "vtcode-core", version = "0.134.14", default-features = false }
+vtcode-acp = { path = "vtcode-acp", version = "0.135.5" }
+vtcode-commons = { path = "vtcode-commons", version = "0.135.5" }
+vtcode-ui = { path = "vtcode-ui", version = "0.135.5" }
+vtcode-config = { path = "vtcode-config", version = "0.135.5" }
+vtcode-auth = { path = "vtcode-auth", version = "0.135.5" }
+vtcode-core = { path = "vtcode-core", version = "0.135.5", default-features = false }
+vtcode-session-store = { path = "vtcode-session-store", version = "0.135.5" }
+vtcode-eval = { path = "vtcode-eval", version = "0.135.5" }
 anyhow = { workspace = true }
 clap = { workspace = true }
 serde_json = { workspace = true }
@@ -254,8 +259,7 @@ async-trait = { workspace = true }
 async-stream = "0.3"
 # Home directory detection
 dirs = { workspace = true }
-libc = { workspace = true }
-ctor = { workspace = true }
+nix = { version = "0.31", features = ["user", "process", "resource"] }
 # Hashing for large output file paths
 sha2 = { workspace = true }
 # ANSI styling
@@ -278,14 +282,25 @@ thiserror = { workspace = true }
 axum = { version = "0.8" }
 serde-saphyr = { workspace = true }
 mimalloc = { version = "0.1", default-features = false }
+tikv-jemallocator = { version = "0.6", optional = true, features = ["background_threads"] }
 
 [features]
 default = ["tool-chat", "desktop-notifications"]
 tool-chat = []
 profiling = []
+# Opt into jemalloc (background-thread purging) on any platform. Recommended for
+# Linux servers/containers, where it returns memory to the OS between bursty/sparse
+# idle gaps. On macOS `background_thread` is unsupported, so jemalloc pins like
+# mimalloc there; the default allocator is mimalloc. See src/allocator.rs and
+# `vtcode bench-allocator`.
+allocator-jemalloc = ["dep:tikv-jemallocator"]
 anthropic-api = ["vtcode-core/anthropic-api"]
 a2a-server = ["vtcode-core/a2a-server"]   # Enable OAuth callback server for provider authentication
 desktop-notifications = ["vtcode-core/desktop-notifications"]
+
+[[bench]]
+name = "allocator_throughput"
+harness = false
 
 [profile.dev]
 debug = 0
@@ -340,6 +355,11 @@ lto = true        # Enables Link-time Optimization for better performance and si
 opt-level = 3     # Optimize for performance on M4 (was "s" for size)
 strip = true      # Ensures debug symbols are removed.
 panic = "abort"   # Reduce size of panic paths.
+# Keep asserts active in shipped binaries: a violated invariant must crash loud,
+# not let the program run under wrong assumptions. Disabling asserts in prod
+# lets falsifiable invariants fester and misbehave silently. See kristoff.it/blog/fix-your-asserts.
+debug-assertions = true
+overflow-checks = true
 # Additional performance optimizations:
 incremental = false # Disable incremental compilation for better optimization
 
@@ -372,6 +392,7 @@ name = "vtcode"
 path = "src/main.rs"
 
 [dev-dependencies]
+criterion = { workspace = true }
 pretty_assertions = { workspace = true }
 tempfile = { workspace = true }
 assert_fs = { workspace = true }

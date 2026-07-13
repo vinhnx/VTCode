@@ -25,7 +25,9 @@ use vtcode_ui::tui::app::{InlineHandle, InlineSession};
 
 use crate::agent::runloop::mcp_events::McpPanelState;
 use crate::agent::runloop::unified::context_manager::ContextManager;
-use crate::agent::runloop::unified::run_loop_context::{HarnessTurnState, TurnId, TurnRunId};
+use crate::agent::runloop::unified::run_loop_context::{
+    HarnessTurnState, RecoveryMode, TurnId, TurnRunId,
+};
 use crate::agent::runloop::unified::state::{CtrlCState, SessionStats};
 use crate::agent::runloop::unified::status_line::InputStatusState;
 use crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator;
@@ -287,6 +289,18 @@ impl TestTurnProcessingBacking {
 
     pub(crate) fn recovery_is_tool_free(&self) -> bool {
         self.harness_state.recovery_is_tool_free()
+    }
+
+    /// Replace the backing's LLM provider (used by `run_turn_loop` integration tests).
+    pub(crate) fn set_provider(&mut self, provider: Box<dyn uni::LLMProvider>) {
+        self.provider_client = provider;
+    }
+
+    /// Force the turn into a tool-free recovery pass before `run_turn_loop`
+    /// starts, so the first request is already a recovery synthesis pass.
+    pub(crate) fn activate_tool_free_recovery_for_test(&mut self, reason: &str) {
+        self.harness_state
+            .activate_recovery_with_mode(reason.to_string(), RecoveryMode::ToolFreeSynthesis);
     }
 
     pub(crate) fn last_history_message_contains(&self, needle: &str) -> bool {

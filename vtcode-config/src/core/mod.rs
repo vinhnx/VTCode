@@ -1,3 +1,4 @@
+pub mod advisor;
 pub mod agent;
 pub mod auth;
 pub mod automation;
@@ -15,6 +16,7 @@ pub mod security;
 pub mod skills;
 pub mod tools;
 
+pub use advisor::{AdvisorCacheTtl, AdvisorCachingConfig, AdvisorConfig};
 pub use agent::{
     AgentCodexAppServerConfig, AgentConfig, AgentOnboardingConfig, AgentPromptSuggestionsConfig,
     MemoriesConfig, OpenResponsesConfig, PersistentMemoryConfig,

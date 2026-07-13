@@ -113,6 +113,12 @@ pub(crate) async fn handle_turn_processing_result<'a>(
                 && params.ctx.recovery_pass_used()
                 && params.ctx.recovery_is_tool_free()
             {
+                // Preserve any accompanying prose so an exhausted-retries
+                // fallback can salvage it instead of discarding the turn.
+                params
+                    .ctx
+                    .harness_state
+                    .record_recovery_rejected_synthesis(assistant_text.trim().to_string());
                 return Ok(TurnHandlerOutcome::Break(TurnLoopResult::Blocked {
                     reason: Some(RECOVERY_CONTRACT_VIOLATION_REASON.to_string()),
                 }));
@@ -266,6 +272,18 @@ pub(crate) async fn handle_turn_processing_result<'a>(
                         )
                         .await;
                 }
+                // Both cleanup attempts failed. Salvage the best-effort
+                // stripped prose so an exhausted-retries fallback can use it
+                // instead of the canned answer.
+                let salvage = crate::agent::runloop::text_tools::strip_textual_tool_call_regions(
+                    &crate::agent::runloop::text_tools::strip_dsml_markup(&text),
+                )
+                .trim()
+                .to_string();
+                params
+                    .ctx
+                    .harness_state
+                    .record_recovery_rejected_synthesis(salvage);
                 return Ok(TurnHandlerOutcome::Break(TurnLoopResult::Blocked {
                     reason: Some(RECOVERY_CONTRACT_VIOLATION_REASON.to_string()),
                 }));

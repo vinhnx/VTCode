@@ -1,143 +1,104 @@
 use super::AgentRunner;
-use crate::core::agent::conversation::{
-    build_messages_from_conversation, messages_from_conversation,
-};
-use crate::core::agent::harness_artifacts::{
-    read_contract_summary, read_evaluation_summary, read_spec_summary,
-};
+use crate::compaction::auto::{AutoCompactionInput, auto_compact_messages};
+use crate::compaction::memory_envelope::{MemoryEnvelopePlacement, local_compaction_config};
+use crate::core::agent::compaction_checkpoint::write_compaction_checkpoint;
+use crate::core::agent::context_reset::maybe_write_reset_after_compaction;
+use crate::core::agent::conversation::conversation_from_messages;
 use crate::core::agent::session::AgentSessionState;
-use crate::core::agent::state::summarize_list;
-use crate::llm::providers::gemini::wire::{Content, Part};
+use crate::exec::events::CompactionTrigger;
 use tracing::{info, warn};
 
 impl AgentRunner {
-    pub(super) fn summarize_conversation_if_needed(
-        &self,
-        session_state: &mut AgentSessionState,
-        preserve_recent_turns: usize,
-        utilization: f64,
-    ) {
-        if utilization < 0.90 {
-            return;
-        }
-
-        if session_state.conversation.len() <= preserve_recent_turns {
-            return;
-        }
-
-        let preferred_split_at = session_state
-            .conversation
-            .len()
-            .saturating_sub(preserve_recent_turns);
-
-        // Context Manager: Find a safe split point that doesn't break tool call/output pairs.
-        let split_at = session_state.find_safe_split_point(preferred_split_at);
-
-        if split_at == 0 {
-            return;
-        }
-
-        // Dynamic context discovery: Write full history to file before summarization
-        // This allows the agent to recover details via grep_file if needed
-        let history_file_path = self.persist_history_before_summarization(
-            &session_state.conversation[..split_at],
-            &session_state.session_id,
-            session_state.stats.turns_executed,
-            &session_state.modified_files,
-            &session_state.executed_commands,
-        );
-
-        let base_summary = format!(
-            "Summarized {} earlier turns to stay within context budget. Files: {}; Commands: {}; Warnings: {}.",
-            split_at,
-            summarize_list(&session_state.modified_files),
-            summarize_list(&session_state.executed_commands),
-            summarize_list(&session_state.warnings),
-        );
-
-        // Include history file reference in summary if available
-        let summary = if let Some(path) = history_file_path {
-            format!(
-                "{}\n\nFull conversation history saved to: {}\nUse grep_file to search for specific details if needed.",
-                base_summary,
-                path.display()
-            )
-        } else {
-            base_summary
-        };
-        let spec_summary = read_spec_summary(&self._workspace);
-        let contract_summary = read_contract_summary(&self._workspace);
-        let evaluation_summary = read_evaluation_summary(&self._workspace);
-        let summary = {
-            let mut enriched = summary;
-            // Spec is appended after a blank line; the contract and evaluation
-            // each on their own line, matching the prior render shape.
-            if let Some(spec) = spec_summary {
-                enriched.push_str("\n\n");
-                enriched.push_str(&spec);
-            }
-            for extra in [contract_summary, evaluation_summary].into_iter().flatten() {
-                enriched.push('\n');
-                enriched.push_str(&extra);
-            }
-            enriched
-        };
-
-        let mut new_conversation = Vec::with_capacity(1 + preserve_recent_turns);
-        new_conversation.push(Content::user_parts(vec![Part::Text {
-            text: summary,
-            thought_signature: None,
-        }]));
-        new_conversation.extend_from_slice(&session_state.conversation[split_at..]);
-        session_state.conversation = new_conversation;
-        session_state.messages = build_messages_from_conversation(&session_state.conversation);
-
-        session_state.normalize();
-
-        session_state.last_processed_message_idx = session_state.conversation.len();
-    }
-
-    /// Persist conversation history to a file before summarization
+    /// Compress the conversation trace when automatic compaction should fire.
     ///
-    /// This implements Cursor-style dynamic context discovery: full history
-    /// is written to `.vtcode/history/` so the agent can recover details
-    /// via grep_file if the summary loses important information.
-    pub(super) fn persist_history_before_summarization(
-        &self,
-        conversation: &[Content],
-        session_id: &str,
-        turn_number: usize,
-        modified_files: &[String],
-        executed_commands: &[String],
-    ) -> Option<std::path::PathBuf> {
-        use crate::context::history_files::{HistoryFileManager, messages_to_history_messages};
-
-        // Create history manager for this session
-        let mut manager = HistoryFileManager::new(&self._workspace, session_id);
-
-        // Convert the legacy Gemini conversation into provider-agnostic messages before writing it.
-        let messages = messages_to_history_messages(&messages_from_conversation(conversation), 0);
-
-        // Write history file
-        match manager.write_history_sync(
-            &messages,
-            turn_number,
-            "summarization",
-            modified_files,
-            executed_commands,
-        ) {
-            Ok(result) => {
-                info!(
-                    path = %result.file_path.display(),
-                    messages = result.metadata.message_count,
-                    "Persisted conversation history before summarization"
+    /// Delegates to the shared compaction orchestrator (the same path the
+    /// binary unified runloop uses) so both runloops keep identical
+    /// continuity behavior: the provider-native or local-LLM summary is built,
+    /// a recoverable full-history artifact is written, and a session memory
+    /// envelope is injected so the model retains what it was doing. A
+    /// `thread.compact_boundary` event is emitted and the Gemini `conversation`
+    /// view is rebuilt from the compacted universal `messages`.
+    pub(super) async fn maybe_auto_compact(
+        &mut self,
+        session_state: &mut AgentSessionState,
+        event_recorder: &mut crate::core::agent::events::ExecEventRecorder,
+        turn_model: &str,
+        preserve_recent_turns: usize,
+    ) {
+        let mut engine_cfg = local_compaction_config(Some(self.config()), false);
+        // Honor the existing `context.preserve_recent_turns` knob: keep at least
+        // this many recent messages verbatim before any summarization fires.
+        engine_cfg.keep_last_messages = preserve_recent_turns;
+        let outcome = match auto_compact_messages(
+            AutoCompactionInput {
+                provider: self.provider_client.as_ref(),
+                model: turn_model,
+                session_id: &self.session_id,
+                workspace_root: self._workspace.as_path(),
+                vt_cfg: Some(self.config()),
+                current_token_usage: session_state.total_tokens(),
+                touched_files: &session_state.modified_files,
+                engine_cfg,
+                manual_options: crate::compaction::ManualCompactionOptions::default(),
+                placement: MemoryEnvelopePlacement::BeforeLastUserOrSummary,
+            },
+            &mut session_state.messages,
+        )
+        .await
+        {
+            Ok(Some(outcome)) => outcome,
+            Ok(None) => return,
+            Err(error) => {
+                warn!(
+                    error = %error,
+                    "Automatic context compaction failed; continuing with full history"
                 );
-                Some(result.file_path)
+                return;
             }
-            Err(e) => {
-                warn!(error = %e, "Failed to persist conversation history before summarization");
-                None
-            }
+        };
+
+        // Rebuild the Gemini `conversation` view from the compacted universal
+        // `messages` and keep the processed-message cursor consistent.
+        session_state.conversation = conversation_from_messages(&session_state.messages);
+        session_state.normalize();
+        session_state.last_processed_message_idx = session_state.conversation.len();
+
+        // Write compaction summary to persistent artifacts for later sessions.
+        // This follows the context engineering principle: "the summary should be
+        // written into a persistent artifact, such as progress.md, so that later
+        // sessions can read it."
+        if let Some(ref envelope) = outcome.envelope {
+            write_compaction_checkpoint(self._workspace.as_path(), envelope);
         }
+
+        // If context reset is configured for on_compaction, write a reset
+        // manifest so the next session starts from a clean context rather
+        // than the compacted summary. This is distinct from compaction:
+        // compaction preserves conversational continuity; context reset
+        // deliberately discards it to clear noise and bad assumptions.
+        let reset_mode = self.config().agent.harness.context_reset_mode.as_str();
+        if maybe_write_reset_after_compaction(self._workspace.as_path(), reset_mode) {
+            info!(
+                "Context reset manifest written after compaction (mode: {})",
+                reset_mode
+            );
+        }
+
+        event_recorder.compact_boundary(
+            CompactionTrigger::Auto,
+            outcome.mode,
+            outcome.original_len,
+            outcome.compacted_len,
+            outcome.history_artifact_path.as_deref(),
+        );
+
+        info!(
+            provider = %self.provider_client.name(),
+            model = turn_model,
+            original_len = outcome.original_len,
+            compacted_len = outcome.compacted_len,
+            compaction_mode = %outcome.mode.as_str(),
+            "Applied automatic conversation compaction (core loop)"
+        );
     }
 }

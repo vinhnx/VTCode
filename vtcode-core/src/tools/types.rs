@@ -11,30 +11,17 @@ use std::time::Instant;
 pub struct EnhancedCacheEntry<T> {
     pub data: T,
     pub timestamp: Instant,
-    pub access_count: usize,
     pub size_bytes: usize,
-    pub last_accessed: Instant,
-    pub priority: u8, // 0=low, 1=medium, 2=high priority
 }
 
 impl<T> EnhancedCacheEntry<T> {
     #[inline]
     pub fn new(data: T, size_bytes: usize) -> Self {
-        let now = Instant::now();
         Self {
             data,
-            timestamp: now,
-            access_count: 1,
+            timestamp: Instant::now(),
             size_bytes,
-            last_accessed: now,
-            priority: 1,
         }
-    }
-
-    #[inline]
-    pub fn access(&mut self) {
-        self.access_count += 1;
-        self.last_accessed = Instant::now();
     }
 }
 
@@ -44,7 +31,11 @@ pub struct EnhancedCacheStats {
     pub hits: usize,
     pub misses: usize,
     pub entries: usize,
+    pub file_entries: usize,
+    pub directory_entries: usize,
     pub total_size_bytes: usize,
+    pub file_size_bytes: usize,
+    pub directory_size_bytes: usize,
     pub evictions: usize,
     pub memory_evictions: usize,
     pub expired_evictions: usize,

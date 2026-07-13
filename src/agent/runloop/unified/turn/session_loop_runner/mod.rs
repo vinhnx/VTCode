@@ -111,7 +111,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         } else {
             None
         };
-        let (thread_handle, session_archive) = if let Some(resume) = resume_ref {
+        let (thread_handle, mut session_archive) = if let Some(resume) = resume_ref {
             if history_enabled {
                 let mut prepared = vtcode_core::core::threads::prepare_archived_session(
                     resume.listing().clone(),
@@ -218,6 +218,11 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             thread_handle.thread_id().as_str(),
         )
         .await?;
+        // Persist the active primary agent ("mode") so a future resume restores
+        // it instead of falling back to the config default.
+        if let Some(archive) = session_archive.as_mut() {
+            archive.set_primary_agent(session_state.active_primary_agent.active().name());
+        }
         let harness_config = vt_cfg
             .as_ref()
             .map(|cfg| cfg.agent.harness.clone())
@@ -1023,13 +1028,15 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 tracing::debug!(error = %err, "harness thread.completed event emission failed");
             }
         }
-        let atif_metrics = harness_emitter
-            .as_ref()
-            .map(|emitter| {
-                emitter.finish_open_responses();
-                emitter.finish_atif()
-            })
-            .unwrap_or((0, 0, 0));
+        // `finish_atif` is retained for its side effect of writing the ATIF
+        // trajectory JSON file to disk; its returned token counts are no
+        // longer used for the exit summary (see the `session_total_usage`
+        // read below), which needs a normalized basis shared with the cache
+        // hit-rate calculation.
+        if let Some(emitter) = harness_emitter.as_ref() {
+            emitter.finish_open_responses();
+            emitter.finish_atif();
+        }
         agent_touched_paths.extend(context_manager.tracked_instruction_activity_paths());
         // Skip persistent memory on interrupt-exits (it makes LLM API calls which
         // delay shutdown significantly). For normal exits, cap it with a timeout.
@@ -1136,7 +1143,6 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             start_code_changes.as_ref(),
             end_code_changes.as_ref(),
         );
-        let (prompt_tokens, completion_tokens, cached_tokens) = atif_metrics;
         let finalization_succeeded = finalization_output.is_some();
         let resume_identifier = finalization_output
             .as_ref()
@@ -1174,6 +1180,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         if !finalization_succeeded {
             let _ = vtcode_ui::tui::panic_hook::restore_tui();
         }
+        let session_total_usage = session_stats.total_usage();
         print_exit_summary(ExitData {
             app_name: "VT Code",
             version: env!("CARGO_PKG_VERSION"),
@@ -1182,9 +1189,13 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             trust_label,
             reasoning: &reasoning_label,
             session_duration: session_started_at.elapsed(),
-            prompt_tokens,
-            completion_tokens,
-            cached_tokens,
+            prompt_tokens: session_total_usage.input_tokens,
+            completion_tokens: session_total_usage.output_tokens,
+            cached_tokens: session_total_usage.cached_input_tokens,
+            cache_creation_tokens: session_total_usage.cache_creation_tokens,
+            cache_hit_rate_percent: session_total_usage
+                .cache_hit_rate()
+                .map(|rate| rate * 100.0),
             code_additions,
             code_deletions,
             resume_identifier,

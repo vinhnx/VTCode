@@ -158,6 +158,7 @@ pub mod native_memory;
 pub mod path_env;
 pub mod plugins;
 pub mod pty;
+pub mod read_limits;
 pub mod resilience;
 
 pub use resilience::rate_limiter;
@@ -207,9 +208,6 @@ pub mod improvements_errors;
 pub mod improvements_registry_ext;
 mod install_support;
 pub mod optimized_registry;
-pub mod output_envelope;
-pub mod output_limits;
-pub mod output_pipeline;
 pub mod output_spooler;
 pub mod pattern_engine;
 pub mod request_response;

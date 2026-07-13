@@ -94,7 +94,7 @@ pub use telemetry::ToolTelemetryEvent;
 pub use timeout::{
     AdaptiveTimeoutTuning, ToolLatencyStats, ToolTimeoutCategory, ToolTimeoutPolicy,
 };
-pub use tool_catalog_facade::SessionToolCatalogState;
+pub use tool_catalog_facade::{SessionToolCatalogState, ToolGroup, tool_groups};
 
 // Re-export trait interfaces for external consumers.
 pub use interfaces::{
@@ -114,12 +114,16 @@ use crate::tools::result::ToolResult as SplitToolResult;
 use crate::tools::safety_gateway::SafetyGateway;
 use parking_lot::Mutex; // Use parking_lot for better performance
 use rustc_hash::FxHashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
+use crate::exec::code_executor::{BuiltinToolExecutor, BuiltinToolInfo};
 use crate::mcp::McpClient;
 use crate::subagents::SubagentController;
 use crate::tools::edited_file_monitor::EditedFileMonitor;
+use async_trait::async_trait;
 use std::sync::RwLock;
+
+pub type SessionModelTools = Arc<tokio::sync::RwLock<Vec<crate::llm::provider::ToolDefinition>>>;
 
 /// Callback for tool progress and output streaming
 pub type ToolProgressCallback = Arc<dyn Fn(&str, &str) + Send + Sync>;
@@ -199,6 +203,85 @@ pub struct ToolRegistry {
     subagent_controller: Arc<RwLock<Option<Arc<SubagentController>>>>,
     /// Session-scoped scheduled prompts for interactive loops and cron tools.
     session_scheduler: Arc<tokio::sync::Mutex<crate::scheduler::SessionScheduler>>,
+    /// Live model-facing tool definitions attached by the runloop.
+    session_model_tools: Arc<RwLock<Option<SessionModelTools>>>,
+    /// Weak self-reference used by the code executor's built-in tool bridge.
+    self_ref: Arc<RwLock<Option<Weak<ToolRegistry>>>>,
+}
+
+const BUILTIN_CODE_TOOLS: &[&str] = &[
+    crate::config::constants::tools::UNIFIED_FILE,
+    crate::config::constants::tools::UNIFIED_SEARCH,
+    crate::config::constants::tools::WEB_FETCH,
+    crate::config::constants::tools::WEB_SEARCH,
+    crate::config::constants::tools::CRON,
+    crate::config::constants::tools::MEMORY,
+    crate::config::constants::tools::TASK_TRACKER,
+];
+
+fn builtin_code_tool_description(name: &str) -> String {
+    match name {
+        n if n == crate::config::constants::tools::UNIFIED_FILE => {
+            "Read, write, edit, move, copy, or delete files."
+        }
+        n if n == crate::config::constants::tools::UNIFIED_SEARCH => {
+            "Search text, list files, run structural queries, or list errors."
+        }
+        n if n == crate::config::constants::tools::WEB_FETCH => {
+            "Fetch a URL and return an analysed summary or markdown."
+        }
+        n if n == crate::config::constants::tools::WEB_SEARCH => {
+            "Run a web search and return ranked results."
+        }
+        n if n == crate::config::constants::tools::CRON => "Manage scheduled prompts.",
+        n if n == crate::config::constants::tools::MEMORY => {
+            "Read or update persistent project memory."
+        }
+        n if n == crate::config::constants::tools::TASK_TRACKER => {
+            "Track multi-step task checklists."
+        }
+        _ => "Built-in VT Code tool.",
+    }
+    .to_string()
+}
+
+impl ToolRegistry {
+    pub fn set_self_ref(&self, registry: Arc<ToolRegistry>) {
+        *self.self_ref.write().unwrap() = Some(Arc::downgrade(&registry));
+    }
+
+    pub(crate) fn builtin_executor_for_code(&self) -> Option<Arc<dyn BuiltinToolExecutor>> {
+        self.self_ref
+            .read()
+            .unwrap()
+            .as_ref()
+            .and_then(Weak::upgrade)
+            .map(|registry| registry as Arc<dyn BuiltinToolExecutor>)
+    }
+}
+
+#[async_trait]
+impl BuiltinToolExecutor for ToolRegistry {
+    async fn execute_builtin_tool(
+        &self,
+        tool_name: &str,
+        args: &serde_json::Value,
+    ) -> anyhow::Result<serde_json::Value> {
+        if !BUILTIN_CODE_TOOLS.contains(&tool_name) {
+            anyhow::bail!("tool '{tool_name}' is not exposed to code snippets");
+        }
+        self.execute_tool(tool_name, args.clone()).await
+    }
+
+    fn list_builtin_tools(&self) -> anyhow::Result<Vec<BuiltinToolInfo>> {
+        Ok(BUILTIN_CODE_TOOLS
+            .iter()
+            .map(|name| BuiltinToolInfo {
+                name: (*name).to_string(),
+                description: builtin_code_tool_description(name),
+            })
+            .collect())
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -13,8 +13,8 @@
 
 use anyhow::{Context, Result};
 
-#[global_allocator]
-static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+mod allocator;
+
 use clap::FromArgMatches;
 use colorchoice::ColorChoice as GlobalColorChoice;
 use vtcode_commons::color_policy;

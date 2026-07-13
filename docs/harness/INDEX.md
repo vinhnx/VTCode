@@ -17,6 +17,18 @@ The principle: if an agent cannot complete a task autonomously from information 
 | [QUALITY_SCORE.md](QUALITY_SCORE.md)                       | Quality grading (A/B/C/D) for each VT Code domain across 5 dimensions.                                  |
 | [EXEC_PLANS.md](EXEC_PLANS.md)                             | Execution plan methodology. Template and guidelines for self-contained design documents.                |
 | [TECH_DEBT_TRACKER.md](TECH_DEBT_TRACKER.md)               | Known technical debt items with priority (P0–P3) and review cadence.                                    |
+| [HARNESS_EVALUATION.md](HARNESS_EVALUATION.md)             | Component load-bearing audit process, context reset vs compaction, reward hacking prevention, agent eval methodology. |
+
+### Key Implementation Files
+
+| File | Description |
+| --- | --- |
+| `vtcode-core/src/core/agent/evaluator.rs` | Structured evaluator with scoring dimensions and hard thresholds. |
+| `vtcode-core/src/core/agent/handoff.rs` | Enriched handoff protocol with boundary status, test results, known issues. |
+| `vtcode-core/src/core/agent/harness_artifacts.rs` | Sprint contract and outcome verification artifact support. |
+| `vtcode-core/src/core/agent/orient.rs` | Orient phase: gathers orientation context from external artifacts. |
+| `vtcode-core/src/core/agent/progress_monitor.rs` | Monotonic progress monitoring with stall detection. |
+| `vtcode-session-store/src/progress.rs` | Durable progress ledger with handoff metadata. |
 
 ### Directories
 

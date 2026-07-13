@@ -530,6 +530,57 @@
         },
         "context": 131072
       },
+      "gpt-5.6-sol": {
+        "id": "gpt-5.6-sol",
+        "name": "GPT-5.6 Sol",
+        "description": "Frontier model for complex professional work in the GPT-5.6 family.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1050000
+      },
+      "gpt-5.6-terra": {
+        "id": "gpt-5.6-terra",
+        "name": "GPT-5.6 Terra",
+        "description": "GPT-5.6 model that balances intelligence and cost.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1050000
+      },
+      "gpt-5.6-luna": {
+        "id": "gpt-5.6-luna",
+        "name": "GPT-5.6 Luna",
+        "description": "GPT-5.6 model optimized for cost-sensitive workloads.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1050000
+      },
       "gpt-5.5": {
         "id": "gpt-5.5",
         "name": "GPT-5.5",

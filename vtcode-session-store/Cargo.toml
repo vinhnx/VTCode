@@ -1,0 +1,29 @@
+[package]
+name = "vtcode-session-store"
+version.workspace = true
+edition.workspace = true
+rust-version = "1.88"
+authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
+description = "Unified per-session state store: append-only ThreadEvent log plus derived views, retention, and cross-session query."
+license.workspace = true
+readme = "README.md"
+homepage = "https://github.com/vinhnx/vtcode"
+repository = "https://github.com/vinhnx/vtcode"
+documentation = "https://docs.rs/vtcode-session-store"
+keywords = ["vtcode", "agent", "session", "state", "event-log"]
+categories = ["development-tools", "data-structures"]
+
+[dependencies]
+vtcode-exec-events = { path = "../vtcode-exec-events", version = "0.135.5" }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+walkdir = "2.5"
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

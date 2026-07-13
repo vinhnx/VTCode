@@ -189,6 +189,12 @@ impl AnsiRenderer {
         self.reasoning_visible
     }
 
+    /// Whether rendered output is streamed into an inline TUI sink (as opposed to
+    /// written directly to a terminal writer).
+    pub fn writes_to_inline_sink(&self) -> bool {
+        self.sink.is_some()
+    }
+
     pub fn set_screen_reader_mode(&mut self, enabled: bool) {
         self.screen_reader_mode = enabled;
     }
@@ -210,7 +216,11 @@ impl AnsiRenderer {
     }
 
     fn should_render_style(&self, style: MessageStyle) -> bool {
-        self.reasoning_visible || !matches!(style, MessageStyle::Reasoning)
+        self.reasoning_visible
+            || !matches!(
+                style,
+                MessageStyle::Reasoning | MessageStyle::ReasoningEmphasis
+            )
     }
 
     fn is_diagnostic_error_style(style: MessageStyle) -> bool {
@@ -228,7 +238,12 @@ impl AnsiRenderer {
     }
 
     fn indent_for_style(&self, style: MessageStyle) -> &'static str {
-        if self.screen_reader_mode && matches!(style, MessageStyle::Reasoning) {
+        if self.screen_reader_mode
+            && matches!(
+                style,
+                MessageStyle::Reasoning | MessageStyle::ReasoningEmphasis
+            )
+        {
             "  [reasoning] "
         } else {
             style.indent()
@@ -345,7 +360,10 @@ impl AnsiRenderer {
         if Self::is_diagnostic_error_style(style) {
             Self::log_transcript_error(text, style, self.sink.is_some());
         }
-        if matches!(style, MessageStyle::Response | MessageStyle::Reasoning) {
+        if matches!(
+            style,
+            MessageStyle::Response | MessageStyle::Reasoning | MessageStyle::ReasoningEmphasis
+        ) {
             return self.render_markdown(style, text);
         }
         if matches!(style, MessageStyle::Output | MessageStyle::ToolOutput) {
@@ -598,6 +616,7 @@ impl AnsiRenderer {
                 | MessageStyle::ToolDetail
                 | MessageStyle::Response
                 | MessageStyle::Reasoning
+                | MessageStyle::ReasoningEmphasis
         );
 
         // Strip ANSI codes from agent response to prevent interference with markdown rendering

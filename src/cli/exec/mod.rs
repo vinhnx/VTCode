@@ -1,3 +1,4 @@
+mod eval;
 mod event_output;
 mod prep;
 mod run;

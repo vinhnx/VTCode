@@ -196,6 +196,9 @@ impl StartupContext {
 
         vtcode_core::telemetry::perf::initialize_perf_telemetry(&config.telemetry);
         vtcode_core::tools::cache::configure_file_cache(&config.optimization.file_read_cache);
+        vtcode_core::tools::read_limits::configure_read_limits(
+            &config.optimization.file_read_cache,
+        );
         vtcode_core::tools::command_cache::configure_command_cache(
             &config.optimization.command_cache,
         );

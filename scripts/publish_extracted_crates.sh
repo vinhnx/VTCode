@@ -20,10 +20,10 @@ Options:
   --start-from CRATE Resume publishing from the provided crate name. Valid
                      crates: vtcode-commons,
                      vtcode-auth, vtcode-exec-events,
-                     vtcode-macros,
+                     vtcode-session-store, vtcode-macros,
                      vtcode-config,
                      vtcode-indexer, vtcode-bash-runner,
-                     vtcode-utility-tool-specs.
+                     vtcode-utility-tool-specs, vtcode-eval.
   --skip-tests       Skip running the workspace fmt/clippy/test checks. Use with
                      caution; the release plan expects the validation suite to
                      pass before publishing.
@@ -97,11 +97,13 @@ CRATES=(
     vtcode-commons
     vtcode-auth
     vtcode-exec-events
+    vtcode-session-store
     vtcode-macros
     vtcode-config
     vtcode-indexer
     vtcode-bash-runner
     vtcode-utility-tool-specs
+    vtcode-eval
 )
 
 # Validate that all workspace path dependencies of crates in the publish list

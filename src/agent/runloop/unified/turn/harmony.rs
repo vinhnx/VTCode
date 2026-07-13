@@ -10,6 +10,11 @@ pub(crate) const HARMONY_MARKERS: &[&str] = &[
     "<|end|>",
 ];
 
+/// Harmony end-of-block tags, used for matching the end of a `<|start|>` block.
+/// This is the single source of truth — `stream_sanitization` imports this
+/// instead of maintaining a duplicate list.
+pub(crate) const HARMONY_END_TAGS: &[&str] = &["<|end|>", "<|call|>", "<|return|>"];
+
 /// Returns `true` if `text` contains any harmony control-token marker.
 ///
 /// This is the single source of truth for harmony detection — both the stream
@@ -33,9 +38,8 @@ pub(crate) fn strip_harmony_syntax(text: &str) -> String {
             let after_msg = &rest[msg_pos + "<|message|>".len()..];
 
             // Find the end of this message
-            let end_tags = ["<|end|>", "<|call|>", "<|return|>"];
             let mut earliest_end = None;
-            for tag in end_tags {
+            for tag in HARMONY_END_TAGS {
                 if let Some(pos) = after_msg.find(tag)
                     && earliest_end.is_none_or(|(p, _)| pos < p)
                 {

@@ -9,8 +9,10 @@ use super::super::types::{
 };
 use crate::tui::core_tui::app::session::transient::TransientSurface;
 use crate::tui::core_tui::app::types::InlineMessageKind;
+use crate::tui::core_tui::runner::TuiSessionDriver;
 use crate::tui::core_tui::session::clipboard_image::{ClipboardImageError, read_clipboard_image};
 use crate::tui::core_tui::session::modal::{ModalKeyModifiers, ModalListKeyResult};
+use crate::tui::core_tui::session::mode_switch_guard::{self};
 use crate::tui::core_tui::session::reverse_search;
 use crate::tui::core_tui::style::theme_from_styles;
 use crate::tui::core_tui::types::InlineSegment;
@@ -582,6 +584,10 @@ pub(super) fn process_key_with_clipboard_image_reader(
         KeyCode::BackTab => {
             session.clear_inline_prompt_suggestion();
             session.mark_dirty();
+            if session.is_running_activity() {
+                push_mode_switch_busy_notice(session);
+                return None;
+            }
             Some(InlineEvent::CyclePrimaryAgentPrevious)
         }
         KeyCode::Esc => {
@@ -786,7 +792,7 @@ pub(super) fn process_key_with_clipboard_image_reader(
                 return None;
             }
 
-            if can_cycle_primary_agent(session, &key) {
+            if mode_switch_guard::try_cycle_primary_agent(session, &key) {
                 session.mark_dirty();
                 return Some(InlineEvent::CyclePrimaryAgent);
             }
@@ -937,7 +943,7 @@ pub(super) fn process_key_with_clipboard_image_reader(
                     session.update_input_triggers();
                     return None;
                 }
-                if can_cycle_primary_agent(session, &key) {
+                if mode_switch_guard::try_cycle_primary_agent(session, &key) {
                     session.mark_dirty();
                     return Some(InlineEvent::CyclePrimaryAgent);
                 }
@@ -1291,6 +1297,35 @@ fn can_cycle_primary_agent(session: &Session, key: &KeyEvent) -> bool {
         && !session.has_active_overlay()
 }
 
+/// Notice shown when the user requests a mode switch (primary-agent cycle or
+/// planning workflow) while a turn is actively processing. Mode switches are
+/// locked for the duration of a turn to keep agent state consistent.
+fn push_mode_switch_busy_notice(session: &mut Session) {
+    session.push_line(
+        InlineMessageKind::Warning,
+        vec![InlineSegment {
+            text: mode_switch_guard::MODE_SWITCH_BUSY_NOTICE.to_string(),
+            style: Arc::new(InlineTextStyle::default()),
+        }],
+    );
+    session.core.request_transcript_clear();
+    session.mark_dirty();
+}
+
+impl mode_switch_guard::ModeSwitchGuardSession for Session {
+    fn is_running_activity(&self) -> bool {
+        TuiSessionDriver::is_running_activity(self)
+    }
+
+    fn can_cycle_primary_agent(&self, key: &KeyEvent) -> bool {
+        can_cycle_primary_agent(self, key)
+    }
+
+    fn notify_mode_switch_busy(&mut self) {
+        push_mode_switch_busy_notice(self);
+    }
+}
+
 fn take_submitted_input(session: &mut Session) -> Option<SubmittedInput> {
     let submitted = session.core.input_manager.content().to_owned();
     let submitted_entry = session.core.input_manager.current_history_entry();
@@ -1328,9 +1363,15 @@ fn handle_running_slash_command_block_for_input(session: &mut Session, input: &s
         return false;
     };
 
-    let message = format!(
-        "'/{command_name}' is disabled while a task is in progress. Please wait for the current task to complete before using this command."
-    );
+    // Mode switches (agent selection, planning workflow) are locked while a turn
+    // is processing; surface the dedicated notice for those commands.
+    let message = if matches!(command_name, "mode" | "plan") {
+        mode_switch_guard::MODE_SWITCH_BUSY_NOTICE.to_string()
+    } else {
+        format!(
+            "'/{command_name}' is disabled while a task is in progress. Please wait for the current task to complete before using this command."
+        )
+    };
     session.push_line(
         InlineMessageKind::Warning,
         vec![InlineSegment {
@@ -1344,7 +1385,7 @@ fn handle_running_slash_command_block_for_input(session: &mut Session, input: &s
 }
 
 fn maybe_handle_busy_steering_command(session: &mut Session) -> Option<InlineEvent> {
-    if !session.is_running_activity() {
+    if !TuiSessionDriver::is_running_activity(session) {
         return None;
     }
 

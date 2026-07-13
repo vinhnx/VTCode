@@ -12,6 +12,8 @@
 //! See: <https://lmstudio.ai/docs/developer>
 
 use super::common::resolve_model;
+use super::local_readiness::resolve_local_model;
+use super::local_server::LocalProvider;
 use crate::client::LLMClient;
 use crate::error_display;
 use crate::provider::{LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, Message};
@@ -229,6 +231,17 @@ impl LmStudioProvider {
         );
         Self { inner, model_id }
     }
+
+    /// Verify the LM Studio server is up and the requested model is loaded
+    /// before generating. Returns the (possibly substituted) model id or a
+    /// structured error with a recovery command (`lms load <model>` /
+    /// `/local start lmstudio`).
+    async fn ensure_ready(&self, requested: &str) -> Result<String, LLMError> {
+        match resolve_local_model(LocalProvider::LmStudio, requested, None).await {
+            Ok(model) => Ok(model),
+            Err(err) => Err(err.to_llm_error("LM Studio")),
+        }
+    }
 }
 
 #[async_trait]
@@ -257,11 +270,19 @@ impl LLMProvider for LmStudioProvider {
         self.inner.supports_parallel_tool_config(model)
     }
 
-    async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
+    async fn generate(&self, mut request: LLMRequest) -> Result<LLMResponse, LLMError> {
+        let resolved = self.ensure_ready(&request.model).await?;
+        if !resolved.is_empty() {
+            request.model = resolved;
+        }
         self.inner.generate(request).await
     }
 
-    async fn stream(&self, request: LLMRequest) -> Result<LLMStream, LLMError> {
+    async fn stream(&self, mut request: LLMRequest) -> Result<LLMStream, LLMError> {
+        let resolved = self.ensure_ready(&request.model).await?;
+        if !resolved.is_empty() {
+            request.model = resolved;
+        }
         self.inner.stream(request).await
     }
 

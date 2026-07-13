@@ -1,45 +1,28 @@
 use super::AgentRunner;
 use super::constants::{LOOP_THROTTLE_BASE_MS, LOOP_THROTTLE_MAX_MS};
 use super::tool_execution_guard::ToolExecutionGuard;
+use super::tool_rejection::{
+    emit_failed_tool_outputs_for_completed_invocations, reject_denied_tool, reject_invalid_args,
+};
+use super::tool_types::{
+    PreparedRunnerToolBatch, PreparedRunnerToolCall, RunnerCallAdmission, ToolCallItemRef,
+};
 use crate::core::agent::events::{
     ExecEventRecorder, tool_invocation_completed_event, tool_output_payload_from_value,
 };
 use crate::core::agent::harness_kernel::{
-    FallbackRecommendation, PreparedToolBatch, PreparedToolBatchKind, PreparedToolCall,
-    reduce_tool_result,
+    FallbackRecommendation, PreparedToolBatch, PreparedToolBatchKind, reduce_tool_result,
 };
 use crate::core::agent::runtime::{AgentRuntime, RuntimeControl};
-use crate::exec::events::{ItemCompletedEvent, ThreadEvent, ThreadItemDetails, ToolCallStatus};
+use crate::exec::events::ToolCallStatus;
 use crate::llm::provider::ToolCall;
 use crate::tools::registry::{ToolErrorType, ToolExecutionError};
 use anyhow::Result;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use tokio::time::Duration;
-use tracing::{error, info, warn};
+use tracing::{info, warn};
 use vtcode_commons::ErrorCategory;
-
-struct ToolCallItemRef {
-    call_item_id: String,
-    synthetic_invocation: bool,
-}
-
-#[derive(Clone)]
-struct PreparedRunnerToolCall {
-    tool_call_id: String,
-    prepared: PreparedToolCall,
-}
-
-struct PreparedRunnerToolBatch {
-    kind: PreparedToolBatchKind,
-    calls: Vec<PreparedRunnerToolCall>,
-}
-
-enum RunnerCallAdmission {
-    Prepared(Box<PreparedRunnerToolCall>),
-    Rejected,
-    StopTurn,
-}
 
 fn snapshot_circuit_diagnostics(
     runner: &AgentRunner,
@@ -116,122 +99,6 @@ fn complete_tool_invocation(
 
     runtime.complete_tool_call(tool_call_id, status);
     super::tool_dispatch_common::drain_and_record_runtime_events(runtime, event_recorder);
-}
-
-fn reject_tool_call(
-    runtime: &mut AgentRuntime,
-    event_recorder: &mut ExecEventRecorder,
-    tool_name: &str,
-    args: Option<&serde_json::Value>,
-    tool_call_id: &str,
-    detail: &str,
-) {
-    if runtime.tool_call_item_id(tool_call_id).is_some() {
-        runtime.complete_tool_call(tool_call_id, ToolCallStatus::Failed);
-        let lifecycle_events = runtime.take_emitted_events();
-        event_recorder.record_thread_events(lifecycle_events.clone());
-        emit_failed_tool_outputs_for_completed_invocations(
-            event_recorder,
-            &lifecycle_events,
-            detail,
-        );
-        event_recorder.warning(detail);
-        return;
-    }
-
-    event_recorder.tool_rejected(tool_name, args, Some(tool_call_id), detail);
-}
-
-/// Reject a tool call whose arguments could not be parsed or admitted.
-///
-/// Logs at error level, pushes a structured tool error onto the conversation,
-/// and emits the rejection lifecycle events.
-fn reject_invalid_args(
-    runtime: &mut AgentRuntime,
-    event_recorder: &mut ExecEventRecorder,
-    agent_prefix: &str,
-    tool_name: &str,
-    tool_call_id: &str,
-    args: Option<&serde_json::Value>,
-    err: &dyn std::fmt::Display,
-    is_gemini: bool,
-    log_msg: &'static str,
-) {
-    let detail = format!("Invalid arguments for tool '{tool_name}': {err}");
-    error!(agent = %agent_prefix, tool = %tool_name, error = %err, "{log_msg}");
-    reject_tool_call(
-        runtime,
-        event_recorder,
-        tool_name,
-        args,
-        tool_call_id,
-        &detail,
-    );
-    runtime.state.push_tool_error(
-        tool_call_id.to_string(),
-        tool_name,
-        &serde_json::Value::String(detail),
-        is_gemini,
-    );
-}
-
-/// Reject a tool call that policy or feature gating disallows.
-///
-/// Records the warning on the session, logs at warn level (unless quiet), and
-/// emits the rejection lifecycle events.
-fn reject_denied_tool(
-    runtime: &mut AgentRuntime,
-    event_recorder: &mut ExecEventRecorder,
-    agent_prefix: &str,
-    tool_name: &str,
-    tool_call_id: &str,
-    args: Option<&serde_json::Value>,
-    is_gemini: bool,
-    quiet: bool,
-) {
-    let detail = format!("Tool execution denied: {tool_name}");
-    if !quiet {
-        warn!(agent = %agent_prefix, tool = %tool_name, message = %detail);
-    }
-    runtime.state.warnings.push(detail.clone());
-    runtime.state.push_tool_error(
-        tool_call_id.to_string(),
-        tool_name,
-        &serde_json::Value::String(detail.clone()),
-        is_gemini,
-    );
-    reject_tool_call(
-        runtime,
-        event_recorder,
-        tool_name,
-        args,
-        tool_call_id,
-        &detail,
-    );
-}
-
-fn emit_failed_tool_outputs_for_completed_invocations(
-    event_recorder: &mut ExecEventRecorder,
-    lifecycle_events: &[ThreadEvent],
-    detail: &str,
-) {
-    for event in lifecycle_events {
-        let ThreadEvent::ItemCompleted(ItemCompletedEvent { item }) = event else {
-            continue;
-        };
-        let ThreadItemDetails::ToolInvocation(details) = &item.details else {
-            continue;
-        };
-        event_recorder.tool_output_started(&item.id, details.tool_call_id.as_deref());
-        event_recorder.tool_output_finished(
-            &item.id,
-            details.tool_call_id.as_deref(),
-            details.status.clone(),
-            None,
-            detail,
-            None,
-        );
-    }
 }
 
 fn finish_successful_tool_output(

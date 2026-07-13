@@ -642,7 +642,7 @@ trigger_docs_rs_rebuild() {
     local crates=(
         vtcode-core vtcode-config
         vtcode-commons vtcode-indexer vtcode-bash-runner
-        vtcode-exec-events vtcode-acp vtcode-auth
+        vtcode-exec-events vtcode-session-store vtcode-eval vtcode-acp vtcode-auth
         vtcode-macros
         vtcode-utility-tool-specs vtcode-a2a vtcode-mcp
         vtcode-ui vtcode-safety vtcode-llm vtcode-skills
@@ -1156,9 +1156,6 @@ main() {
 
          # Build macOS binaries in parallel
          print_info "Building macOS binaries in parallel..."
-         
-         # Clear RUSTC_WRAPPER to avoid sccache permission issues
-         unset RUSTC_WRAPPER
          
          # Build both architectures in parallel on multi-core machines
          cargo build --release --target x86_64-apple-darwin &>/dev/null &

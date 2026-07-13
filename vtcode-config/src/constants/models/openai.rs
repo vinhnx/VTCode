@@ -1,6 +1,10 @@
 pub const DEFAULT_MODEL: &str = "gpt-5.5";
 pub const SUPPORTED_MODELS: &[&str] = &[
     GPT,
+    "gpt-5.6",            // GPT-5.6 alias (routes to gpt-5.6-sol)
+    "gpt-5.6-sol",        // GPT-5.6 Sol flagship model
+    "gpt-5.6-terra",      // GPT-5.6 Terra balanced model
+    "gpt-5.6-luna",       // GPT-5.6 Luna efficient model
     "gpt-5.5",            // GPT-5.5 flagship model
     "gpt-5.5-2026-04-23", // GPT-5.5 dated release (2026-04-23)
     "gpt-5.1",
@@ -28,6 +32,10 @@ pub const SUPPORTED_MODELS: &[&str] = &[
 /// Models that require the OpenAI Responses API
 pub const RESPONSES_API_MODELS: &[&str] = &[
     GPT,
+    GPT_5_6,
+    GPT_5_6_SOL,
+    GPT_5_6_TERRA,
+    GPT_5_6_LUNA,
     GPT_5_5,
     GPT_5_5_DATED,
     GPT_5_1,
@@ -51,6 +59,10 @@ pub const RESPONSES_API_MODELS: &[&str] = &[
 /// Models that support the OpenAI reasoning parameter payload
 pub const REASONING_MODELS: &[&str] = &[
     GPT,
+    GPT_5_6,
+    GPT_5_6_SOL,
+    GPT_5_6_TERRA,
+    GPT_5_6_LUNA,
     GPT_5_5,
     GPT_5_5_DATED,
     GPT_5_1,
@@ -80,6 +92,10 @@ pub const HARMONY_MODELS: &[&str] = &[GPT_OSS_20B, GPT_OSS_120B];
 
 // Convenience constants for commonly used models
 pub const GPT: &str = "gpt";
+pub const GPT_5_6_SOL: &str = "gpt-5.6-sol";
+pub const GPT_5_6_TERRA: &str = "gpt-5.6-terra";
+pub const GPT_5_6_LUNA: &str = "gpt-5.6-luna";
+pub const GPT_5_6: &str = "gpt-5.6";
 pub const GPT_5_5: &str = "gpt-5.5";
 pub const GPT_5_5_DATED: &str = "gpt-5.5-2026-04-23";
 pub const GPT_5_1: &str = "gpt-5.1";

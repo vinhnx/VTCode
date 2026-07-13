@@ -1,11 +1,12 @@
 use std::fmt::Write;
 use std::path::Path;
+use vtcode_core::config::constants::prompt_budget as prompt_budget_constants;
 use vtcode_core::config::loader::ConfigManager;
 use vtcode_core::config::types::SystemPromptMode;
 use vtcode_core::prompts::PromptContext;
 use vtcode_core::prompts::system::{
-    compose_system_instruction_text, default_lightweight_prompt, default_system_prompt,
-    minimal_system_prompt, specialized_system_prompt,
+    SystemPromptReport, compose_system_instruction_with_report, default_lightweight_prompt,
+    default_system_prompt, minimal_system_prompt, specialized_system_prompt,
 };
 
 fn fallback_base_system_prompt(vt_cfg: Option<&vtcode_core::config::VTCodeConfig>) -> &'static str {
@@ -21,7 +22,7 @@ pub(crate) async fn read_system_prompt(
     workspace: &Path,
     session_addendum: Option<&str>,
     available_subagents: &[(String, String, bool)],
-) -> String {
+) -> (String, SystemPromptReport) {
     let mut prompt_context =
         PromptContext::from_workspace_tools(workspace, std::iter::empty::<String>());
     prompt_context.load_available_skills();
@@ -31,14 +32,20 @@ pub(crate) async fn read_system_prompt(
         .ok()
         .map(|manager| manager.config().clone());
 
-    // Use the new compose_system_instruction_text with enhancements
-    let mut prompt =
-        compose_system_instruction_text(workspace, vt_cfg.as_ref(), Some(&prompt_context)).await;
+    // Use the new compose_system_instruction_with_report with enhancements
+    let (mut prompt, mut report) =
+        compose_system_instruction_with_report(workspace, vt_cfg.as_ref(), Some(&prompt_context))
+            .await;
 
     // Fallback prompt if composition fails (should rarely happen)
     // Use centralized vtcode-core prompt variants to preserve safety/loop/plan guidance.
     if prompt.is_empty() {
         prompt = fallback_base_system_prompt(vt_cfg.as_ref()).to_string();
+        let max_tokens = vt_cfg
+            .as_ref()
+            .map(|cfg| cfg.agent.max_system_prompt_tokens)
+            .unwrap_or(prompt_budget_constants::DEFAULT_MAX_SYSTEM_PROMPT_TOKENS);
+        report = SystemPromptReport::measure(&prompt, max_tokens);
     }
 
     if let Some(addendum) = session_addendum {
@@ -76,7 +83,7 @@ pub(crate) async fn read_system_prompt(
         prompt.push_str(section.trim_end());
     }
 
-    prompt
+    (prompt, report)
 }
 
 #[cfg(test)]
@@ -127,7 +134,7 @@ mod tests {
     async fn test_read_system_prompt_includes_explicit_subagent_execution_model() {
         let workspace = tempfile::TempDir::new().expect("workspace");
 
-        let prompt = read_system_prompt(
+        let (prompt, _report) = read_system_prompt(
             workspace.path(),
             None,
             &[(

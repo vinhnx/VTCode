@@ -57,6 +57,7 @@ pub(super) async fn initialize_header_context(
         notice.render(renderer)?;
     }
     maybe_render_openai_priority_notice(renderer, config, vt_cfg)?;
+    maybe_render_system_prompt_budget_warning(renderer, vt_cfg, session_bootstrap)?;
 
     handle.set_theme(vtcode_core::ui::inline_theme_from_core_styles(
         &vtcode_core::ui::theme::active_styles(),
@@ -135,6 +136,40 @@ fn maybe_render_openai_priority_notice(
         renderer.line(MessageStyle::Output, recommendation)?;
     }
     Ok(())
+}
+
+/// Render a one-time session-start warning when the composed system prompt
+/// exceeded its configured token budget. Mirrors the headless path's warning
+/// (pushed into `runtime.state.warnings` in `task_setup.rs`) so interactive
+/// and headless sessions surface the same signal.
+fn maybe_render_system_prompt_budget_warning(
+    renderer: &mut AnsiRenderer,
+    vt_cfg: Option<&VTCodeConfig>,
+    session_bootstrap: &SessionBootstrap,
+) -> Result<()> {
+    let report = &session_bootstrap.system_prompt_report;
+    if !report.over_budget {
+        return Ok(());
+    }
+
+    let warning_enabled = vt_cfg
+        .map(|cfg| cfg.agent.system_prompt_budget_warning)
+        .unwrap_or(true);
+    if !warning_enabled {
+        return Ok(());
+    }
+
+    let max_tokens = vt_cfg
+        .map(|cfg| cfg.agent.max_system_prompt_tokens)
+        .unwrap_or(vtcode_core::config::constants::prompt_budget::DEFAULT_MAX_SYSTEM_PROMPT_TOKENS);
+
+    renderer.line(
+        MessageStyle::Warning,
+        &format!(
+            "Base system prompt is ~{} tokens (budget {}); later appendices (session context, runtime line, subagents roster) add more. Consider a leaner system prompt mode or enable agent.trim_system_prompt.",
+            report.token_estimate, max_tokens
+        ),
+    )
 }
 
 pub(crate) fn apply_ide_context_snapshot(

@@ -19,6 +19,7 @@ impl AgentRunner {
         total_duration_ms: u128,
         average_turn_duration_ms: Option<f64>,
         max_turn_duration_ms: Option<u128>,
+        total_usage: &vtcode_exec_events::Usage,
     ) -> String {
         let mut summary = Vec::new();
 
@@ -89,6 +90,10 @@ impl AgentRunner {
         }
         summary.push(status_line);
         summary.push(format!("Outcome Code: {}", resolved_outcome.code()));
+
+        if total_usage.input_tokens > 0 {
+            summary.push(total_usage.cache_summary());
+        }
 
         if !executed_commands.is_empty() {
             summary.push("Executed Commands:".to_owned());

@@ -78,18 +78,29 @@ impl FileOpsTool {
             return Ok((content, metadata, truncated));
         }
 
-        let bytes = with_file_context(tokio::fs::read(file_path).await, "read file", file_path)?;
-        let content = String::from_utf8_lossy(&bytes).into_owned();
+        // Absolute line cap: even the legacy full-read path must not dump an
+        // unbounded file into context. This mirrors the cap enforced on the new
+        // handler path in `ReadFileHandler::handle_detailed`.
+        //
+        // The file is read as a streaming split on newlines rather than loaded
+        // whole: only the first `cap` lines are retained, so a multi-GB file is
+        // bounded in memory (the excessive tail is scanned and discarded, never
+        // materialized). `size_lines` stays accurate because every line is still
+        // counted.
+        let cap = crate::tools::read_limits::absolute_line_cap();
+        let (capped_content, total_lines, is_truncated) = read_bounded_text(file_path, cap).await?;
+
         let metadata = json!({
             "size_bytes": file_metadata.len(),
-            "size_lines": content.lines().count(),
-            "is_truncated": false,
+            "size_lines": total_lines,
+            "is_truncated": is_truncated,
             "type": "file",
             "content_kind": "text",
             "encoding": "utf8",
+            "applied_max_lines": cap,
         });
 
-        Ok((content, metadata, false))
+        Ok((capped_content, metadata, is_truncated))
     }
 
     pub(super) async fn read_file_chunked(
@@ -181,4 +192,36 @@ impl FileOpsTool {
 
         Ok((final_content, metadata, true))
     }
+}
+
+/// Stream a file and return at most `cap` lines of text, the true total line
+/// count, and whether the file exceeded the cap.
+///
+/// Reads line-by-line via a newline split so the file is never fully
+/// materialized: only the first `cap` lines are retained; the remainder is
+/// scanned and dropped. Line counting matches `str::lines` (a trailing newline
+/// does not introduce an extra empty line). Invalid UTF-8 is handled lossily,
+/// identical to the previous `from_utf8_lossy` behavior.
+async fn read_bounded_text(file_path: &Path, cap: usize) -> Result<(String, usize, bool)> {
+    use tokio::io::AsyncBufReadExt;
+
+    let file = with_file_context(
+        tokio::fs::File::open(file_path).await,
+        "open file",
+        file_path,
+    )?;
+    let reader = tokio::io::BufReader::new(file);
+    let mut split = reader.split(b'\n');
+
+    let mut total_lines = 0usize;
+    let mut collected: Vec<String> = Vec::with_capacity(cap);
+    while let Some(chunk) = with_file_context(split.next_segment().await, "read file", file_path)? {
+        total_lines += 1;
+        if total_lines <= cap {
+            collected.push(String::from_utf8_lossy(&chunk).into_owned());
+        }
+    }
+
+    let is_truncated = total_lines > cap;
+    Ok((collected.join("\n"), total_lines, is_truncated))
 }

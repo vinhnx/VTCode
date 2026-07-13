@@ -12,6 +12,7 @@ use vtcode_core::tools::validation::unified_path::validate_and_resolve_path;
 
 use super::error_handling::{serialize_json_for_model, truncate_text_for_model};
 use super::helpers::serialize_output;
+use super::read_extent;
 use crate::agent::runloop::unified::turn::context::TurnProcessingContext;
 
 const TOOL_OUTPUT_SUMMARY_MAX_INPUT_CHARS: usize = 12_000;
@@ -403,8 +404,20 @@ fn tool_output_summary_feature(
     let is_large_read = matches!(tool_name, tool_names::READ_FILE)
         || (tool_name == tool_names::UNIFIED_FILE
             && matches!(action, Some("read" | "read_chunk" | "cat")));
-    if is_large_read && (serialized_len > 6_000 || output.get("spool_path").is_some()) {
-        return Some(LightweightFeature::LargeReadSummary);
+    if is_large_read {
+        // Spooled output is genuinely huge (already offloaded to disk); always
+        // summarize regardless of how the read was scoped.
+        if output.get("spool_path").is_some() {
+            return Some(LightweightFeature::LargeReadSummary);
+        }
+        // A bounded read (explicit offset/limit/line-range) is a deliberate
+        // request for exact content. Summarizing it forces a wasteful raw
+        // re-read of the same slice, so honor the model's narrowing and return
+        // it verbatim. Only whole-file reads over the byte threshold are
+        // summarized.
+        if !read_extent::args_have_bounded_extent(args_val) && serialized_len > 6_000 {
+            return Some(LightweightFeature::LargeReadSummary);
+        }
     }
 
     if tool_name == tool_names::WEB_FETCH || content_type == "web_page" {
@@ -733,4 +746,86 @@ fn should_keep_search_recovery_success_next_action(
             .is_some_and(|matches| matches.is_empty())
         && has_non_empty_string_field(obj, "hint")
         && has_non_empty_string_field(obj, "next_action")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn big_read_output() -> serde_json::Value {
+        json!({ "content_kind": "text", "path": "src/cli/mod.rs" })
+    }
+
+    #[test]
+    fn whole_file_read_over_threshold_is_summarized() {
+        let args = json!({ "action": "read", "path": "src/cli/mod.rs" });
+        let feature = tool_output_summary_feature(
+            tool_names::UNIFIED_FILE,
+            &args,
+            &big_read_output(),
+            10_000,
+        );
+        assert!(matches!(
+            feature,
+            Some(LightweightFeature::LargeReadSummary)
+        ));
+    }
+
+    #[test]
+    fn bounded_read_is_not_summarized_even_when_large() {
+        // Reproduces the turn_640 waste: a ranged read got summarized, forcing
+        // a wasteful raw re-read of the identical `offset`/`limit` slice.
+        let args =
+            json!({ "action": "read", "path": "src/cli/mod.rs", "offset": 81, "limit": 189 });
+        let feature = tool_output_summary_feature(
+            tool_names::UNIFIED_FILE,
+            &args,
+            &big_read_output(),
+            10_000,
+        );
+        assert!(
+            feature.is_none(),
+            "bounded reads must be returned verbatim, not summarized"
+        );
+    }
+
+    #[test]
+    fn bounded_read_via_start_line_is_not_summarized() {
+        let args =
+            json!({ "action": "read", "path": "src/cli/mod.rs", "start_line": 10, "end_line": 40 });
+        let feature = tool_output_summary_feature(
+            tool_names::UNIFIED_FILE,
+            &args,
+            &big_read_output(),
+            10_000,
+        );
+        assert!(feature.is_none());
+    }
+
+    #[test]
+    fn spooled_bounded_read_is_still_summarized() {
+        // Genuinely huge output offloaded to disk must always be summarized,
+        // even when the read was scoped, so context is not blown out.
+        let args = json!({ "action": "read", "path": "big.log", "offset": 0, "limit": 500 });
+        let output = json!({
+            "content_kind": "text",
+            "path": "big.log",
+            "spool_path": ".vtcode/context/tool_outputs/big.log"
+        });
+        let feature =
+            tool_output_summary_feature(tool_names::UNIFIED_FILE, &args, &output, 200_000);
+        assert!(matches!(
+            feature,
+            Some(LightweightFeature::LargeReadSummary)
+        ));
+    }
+
+    #[test]
+    fn small_whole_file_read_is_not_summarized() {
+        let args = json!({ "action": "read", "path": "small.rs" });
+        let feature =
+            tool_output_summary_feature(tool_names::UNIFIED_FILE, &args, &big_read_output(), 500);
+        assert!(feature.is_none());
+    }
 }

@@ -178,7 +178,9 @@ pub(crate) fn build_tool_choice(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::provider::{LLMRequest, Message, ParallelToolConfig, ToolChoice, ToolDefinition};
+    use crate::provider::{
+        LLMRequest, Message, ParallelToolConfig, ToolChoice, ToolDefinition, ToolNamespace,
+    };
     use std::sync::Arc;
     use vtcode_config::constants::models;
 
@@ -229,6 +231,7 @@ mod tests {
                 strict: None,
                 defer_loading: None,
                 namespace: None,
+                advisor: None,
             }])),
             model: models::anthropic::DEFAULT_MODEL.to_string(),
             ..Default::default()
@@ -263,6 +266,7 @@ mod tests {
                 strict: None,
                 defer_loading: None,
                 namespace: None,
+                advisor: None,
             }])),
             model: models::anthropic::DEFAULT_MODEL.to_string(),
             ..Default::default()
@@ -287,6 +291,7 @@ mod tests {
                 strict: None,
                 defer_loading: None,
                 namespace: None,
+                advisor: None,
             }])),
             model: models::anthropic::DEFAULT_MODEL.to_string(),
             ..Default::default()
@@ -319,6 +324,7 @@ mod tests {
                 strict: None,
                 defer_loading: None,
                 namespace: None,
+                advisor: None,
             }])),
             model: models::anthropic::DEFAULT_MODEL.to_string(),
             ..Default::default()
@@ -428,6 +434,53 @@ mod tests {
                 "type": "auto",
                 "disable_parallel_tool_use": true
             }))
+        );
+    }
+
+    /// MANDATORY wire-payload safety test: client-side namespace metadata
+    /// (used for local BM25 ranking and `by_group` search results) must
+    /// never reach either provider's wire format. Both the Anthropic
+    /// formatter and the OpenAI-format serializer build their JSON manually,
+    /// field by field, rather than serde-serializing the whole
+    /// `ToolDefinition` -- this test guards that invariant against
+    /// regression (e.g. someone switching either formatter to
+    /// `serde_json::json!(tool)`).
+    #[test]
+    fn namespace_metadata_never_leaks_onto_the_wire() {
+        let namespaced_tool = ToolDefinition::function(
+            "context7_search".to_string(),
+            "Search context7 docs".to_string(),
+            json!({
+                "type": "object",
+                "properties": { "query": { "type": "string" } },
+                "required": ["query"]
+            }),
+        )
+        .with_defer_loading(true)
+        .with_namespace(ToolNamespace {
+            name: "context7".to_string(),
+            description: "Tools provided by MCP server 'context7'".to_string(),
+        });
+        let tools = vec![namespaced_tool];
+
+        // Anthropic formatter: builds `AnthropicFunctionTool` manually,
+        // field by field.
+        let anthropic_value = build_tools_via_formatter(&tools)
+            .expect("anthropic formatter should produce a value for a non-empty tool list");
+        let anthropic_json = serde_json::to_string(&anthropic_value).expect("serialize");
+        assert!(
+            !anthropic_json.contains("namespace"),
+            "Anthropic wire payload must never contain namespace metadata: {anthropic_json}"
+        );
+
+        // OpenAI-format serializer: also builds JSON manually, field by
+        // field, rather than serde-serializing the whole `ToolDefinition`.
+        let openai_value = crate::providers::common::serialize_tools_openai_format(&tools)
+            .expect("openai serializer should produce a value for a non-empty tool list");
+        let openai_json = serde_json::to_string(&openai_value).expect("serialize");
+        assert!(
+            !openai_json.contains("namespace"),
+            "OpenAI wire payload must never contain namespace metadata: {openai_json}"
         );
     }
 }

@@ -477,20 +477,13 @@ fn full_auto_unavailable_reason(tool_name: &str) -> String {
 /// Resolve the tool name used for policy evaluation, qualifying it with the
 /// requested action when the action changes the tool's risk profile.
 ///
-/// `search_dispatch` is a low-risk read-only tool for most actions, but its
-/// `web` action performs an outbound network fetch. Evaluating the bare name
-/// would let the read-only risk score auto-approve the fetch, bypassing HITL.
-/// Returning `search_dispatch:web` aligns the policy decision with the risk
-/// scorer, which already classifies that name as a network operation.
+/// Network-bearing actions are evaluated under action-qualified names so the
+/// policy and risk scorer make the same decision.
 fn policy_evaluation_name<'a>(tool_name: &'a str, tool_args: Option<&Value>) -> Cow<'a, str> {
-    use vtcode_core::config::constants::tools::UNIFIED_SEARCH;
-    use vtcode_core::tools::tool_intent::search_dispatch_action_is;
+    use vtcode_core::tools::tool_intent::action_qualified_policy_name;
 
-    if tool_name == UNIFIED_SEARCH
-        && let Some(args) = tool_args
-        && search_dispatch_action_is(args, "web")
-    {
-        return Cow::Borrowed("search_dispatch:web");
+    if let Some(qualified) = action_qualified_policy_name(tool_name, tool_args) {
+        return Cow::Borrowed(qualified);
     }
 
     Cow::Borrowed(tool_name)

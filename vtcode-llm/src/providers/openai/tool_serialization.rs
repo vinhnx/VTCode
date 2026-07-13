@@ -99,12 +99,18 @@ fn should_strip_any_of_for_builtin_tool(tool_name: &str) -> bool {
             | tools::MEMORY
             | tools::ASK_QUESTIONS
             | tools::ASK_USER_QUESTION
+            | tools::CRON
             | tools::CRON_CREATE
             | tools::CRON_LIST
             | tools::CRON_DELETE
+            | tools::MCP
+            | tools::MCP_SEARCH_TOOLS
+            | tools::MCP_GET_TOOL_DETAILS
+            | tools::MCP_LIST_SERVERS
             | tools::START_PLANNING
             | tools::FINISH_PLANNING
             | tools::TASK_TRACKER
+            | tools::AGENT
             | tools::SPAWN_AGENT
             | tools::SPAWN_BACKGROUND_SUBPROCESS
             | tools::SEND_INPUT

@@ -51,9 +51,18 @@ pub(super) use control::{
     handle_show_settings_at_path, handle_stop_agent, show_settings_at_path_from_context,
 };
 pub(super) use diagnostics::{
-    handle_run_doctor, handle_show_memory, handle_show_memory_config, handle_show_status,
-    handle_start_doctor_interactive, handle_start_terminal_setup,
+    handle_run_checkup, handle_show_memory, handle_show_memory_config, handle_show_status,
+    handle_start_checkup_interactive, handle_start_terminal_setup,
 };
+// Re-exported at the `slash_commands` level so sibling command modules (compact,
+// config_toml, the future checkup flow, etc.) share one tested
+// load -> mutate -> save -> refresh persistence unit instead of re-implementing
+// the ConfigManager dance inline.
+#[expect(
+    unused_imports,
+    reason = "guard-rail for the upcoming /checkup 7-step flow"
+)]
+pub(super) use diagnostics::memory::config_persistence::persist_workspace_config_change;
 pub(super) use effort::handle_set_effort;
 pub(super) use interactive::{
     handle_show_jobs_panel, handle_toggle_tasks_panel, handle_trigger_prompt_suggestions,

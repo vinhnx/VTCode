@@ -17,6 +17,7 @@ pub(crate) mod url_guard;
 mod mcp_support;
 mod mcp_tool_manager;
 mod model_selection;
+mod model_switch_compaction;
 pub(crate) mod palettes;
 pub(crate) mod plan_blocks;
 mod plan_confirmation;

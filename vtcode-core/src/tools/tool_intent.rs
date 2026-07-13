@@ -646,6 +646,39 @@ pub fn search_dispatch_action_in(args: &Value, expected: &[&str]) -> bool {
     action_matches_any(search_dispatch_action(args), expected)
 }
 
+/// Return the explicit action requested through the consolidated MCP tool.
+pub fn mcp_action(args: &Value) -> Option<&str> {
+    args.get("action").and_then(Value::as_str)
+}
+
+pub fn mcp_action_is(args: &Value, expected: &str) -> bool {
+    action_matches(mcp_action(args), expected)
+}
+
+/// Return the policy identity for actions whose risk differs from their
+/// otherwise low-risk parent tool.
+pub fn action_qualified_policy_name(tool_name: &str, args: Option<&Value>) -> Option<&'static str> {
+    if tool_name == tools::UNIFIED_SEARCH
+        && args.is_some_and(|args| search_dispatch_action_is(args, "web"))
+    {
+        return Some("search_dispatch:web");
+    }
+
+    if tool_name == tools::MCP_CONNECT_SERVER
+        || (tool_name == tools::MCP && args.is_some_and(|args| mcp_action_is(args, "connect")))
+    {
+        return Some("mcp:connect");
+    }
+
+    if tool_name == tools::MCP_DISCONNECT_SERVER
+        || (tool_name == tools::MCP && args.is_some_and(|args| mcp_action_is(args, "disconnect")))
+    {
+        return Some("mcp:disconnect");
+    }
+
+    None
+}
+
 fn command_session_has_input(args: &Value) -> bool {
     interactive_input_text(args).is_some()
 }

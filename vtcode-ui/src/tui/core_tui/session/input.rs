@@ -1385,7 +1385,13 @@ fn char_index_to_byte_index(content: &str, char_index: usize) -> usize {
 }
 
 fn byte_index_to_char_index(content: &str, byte_index: usize) -> usize {
-    content[..byte_index.min(content.len())].chars().count()
+    // Clamp to the nearest char boundary so a mid-multi-byte `byte_index`
+    // (e.g. from an out-of-sync selection range) never panics the slice.
+    let mut safe = byte_index.min(content.len());
+    while safe > 0 && !content.is_char_boundary(safe) {
+        safe -= 1;
+    }
+    content[..safe].chars().count()
 }
 
 fn compact_inline_segment(content: &str) -> String {
@@ -1427,9 +1433,9 @@ mod input_highlight_tests {
 
     #[test]
     fn slash_command_with_following_text() {
-        let tokens = kinds("/doctor hello");
+        let tokens = kinds("/checkup hello");
         assert_eq!(tokens[0].0, InputTokenKind::SlashCommand);
-        assert_eq!(tokens[0].1, "/doctor");
+        assert_eq!(tokens[0].1, "/checkup");
         assert_eq!(tokens[1].0, InputTokenKind::Normal);
     }
 
@@ -1476,6 +1482,19 @@ mod input_highlight_tests {
         let tokens = kinds("use @agent-explorer for this");
         assert_eq!(tokens[1].0, InputTokenKind::AgentReference);
         assert_eq!(tokens[1].1, "@agent-explorer");
+    }
+
+    #[test]
+    fn byte_index_to_char_index_is_char_boundary_safe() {
+        // Multi-byte content: "a→b" is [a, →(3 bytes), b] = 5 bytes.
+        let content = "a→b";
+        assert_eq!(byte_index_to_char_index(content, 0), 0);
+        // Byte indices inside the 3-byte '→' clamp to its start (char 1).
+        assert_eq!(byte_index_to_char_index(content, 2), 1);
+        // Byte index 4 is the start of 'b' (char 2).
+        assert_eq!(byte_index_to_char_index(content, 4), 2);
+        // Out-of-range indices clamp to the end (3 chars).
+        assert_eq!(byte_index_to_char_index(content, 99), 3);
     }
 
     #[test]

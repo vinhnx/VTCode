@@ -20,6 +20,9 @@ impl ModelId {
             ModelId::Gemini31ProPreviewCustomTools,
             ModelId::Gemini35Flash,
             // OpenAI models
+            ModelId::GPT56Sol,
+            ModelId::GPT56Terra,
+            ModelId::GPT56Luna,
             ModelId::GPT55,
             ModelId::GPT54,
             ModelId::GPT54Pro,

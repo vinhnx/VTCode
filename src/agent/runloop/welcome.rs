@@ -25,6 +25,10 @@ pub(crate) struct SessionBootstrap {
     pub header_highlights: Vec<InlineHeaderHighlight>,
     pub acp_workspace_trust: Option<AgentClientProtocolZedWorkspaceTrustMode>,
     pub release_highlights: Option<(semver::Version, Vec<String>)>,
+    /// Token-budget report for the composed system prompt. Populated after
+    /// `read_system_prompt` runs (session_setup/init.rs); defaults to an
+    /// under-budget report until then.
+    pub system_prompt_report: vtcode_core::prompts::system::SystemPromptReport,
 }
 
 pub(crate) async fn prepare_session_bootstrap(
@@ -110,6 +114,7 @@ pub(crate) async fn prepare_session_bootstrap(
         // tool prompt policy.
         acp_workspace_trust: None,
         release_highlights: None,
+        system_prompt_report: Default::default(),
     }
 }
 

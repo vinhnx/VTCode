@@ -30,6 +30,17 @@ static COMPLEXITY_AVOIDANCE_PATTERNS: Lazy<Regex> = Lazy::new(|| {
         .expect("valid regex pattern")
 });
 
+/// Matches reasoning lines that announce a decision, plan, or tool invocation.
+///
+/// Used to apply light emphasis when rendering the on-screen chain-of-thought
+/// so the agent's key decisions and tool calls stand out from filler text.
+static DECISION_TOOL_PATTERNS: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(
+        r"(?i)(^(i will|i'?ll|let me|next,|now i|i need to|i should|i can|step \d|plan:|approach:)|tool call|call the .* tool|run the .* (command|tool)|execute|invoke|use the .* tool)",
+    )
+    .expect("valid regex pattern")
+});
+
 /// Returns whether the active provider/model pair supports reasoning traces.
 pub(crate) fn model_supports_reasoning(provider: &dyn uni::LLMProvider, model: &str) -> bool {
     uni::get_cached_capabilities(provider, model).reasoning
@@ -94,6 +105,17 @@ pub(crate) fn has_high_uncertainty(text: &str) -> bool {
 /// Detects complexity avoidance patterns.
 pub(crate) fn is_avoiding_complexity(text: &str) -> bool {
     COMPLEXITY_AVOIDANCE_PATTERNS.is_match(text)
+}
+
+/// Detects reasoning lines that announce a decision, plan, or tool call.
+///
+/// Returns `true` for lines worth emphasizing in the compact on-screen trace.
+pub(crate) fn is_decision_or_tool_line(text: &str) -> bool {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return false;
+    }
+    DECISION_TOOL_PATTERNS.is_match(trimmed)
 }
 
 /// Analyzes reasoning text for multiple concern patterns.
@@ -174,6 +196,24 @@ mod tests {
         assert!(is_avoiding_complexity("This is too complex"));
         assert!(is_avoiding_complexity("Let's skip that for now"));
         assert!(!is_avoiding_complexity("Let me tackle this step by step"));
+    }
+
+    #[test]
+    fn test_decision_or_tool_line() {
+        assert!(is_decision_or_tool_line("I will run the tests now"));
+        assert!(is_decision_or_tool_line("Let me check the config file"));
+        assert!(is_decision_or_tool_line("Step 2: refactor the parser"));
+        assert!(is_decision_or_tool_line(
+            "call the grep tool to find usages"
+        ));
+        assert!(is_decision_or_tool_line(
+            "  Next, I need to execute the migration  "
+        ));
+        assert!(!is_decision_or_tool_line(
+            "The user asked about the build system"
+        ));
+        assert!(!is_decision_or_tool_line(""));
+        assert!(!is_decision_or_tool_line("   "));
     }
 
     #[test]

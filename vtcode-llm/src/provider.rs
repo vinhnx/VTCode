@@ -77,5 +77,6 @@ pub use responses_continuation::{
     responses_continuation_key, supports_responses_chaining, uses_incremental_responses_history,
 };
 pub use tool::{
-    FunctionDefinition, GrammarDefinition, ShellToolDefinition, ToolDefinition, ToolSearchAlgorithm,
+    FunctionDefinition, GrammarDefinition, ShellToolDefinition, ToolDefinition, ToolNamespace,
+    ToolSearchAlgorithm,
 };

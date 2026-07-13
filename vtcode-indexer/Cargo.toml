@@ -33,7 +33,7 @@ serde_json = { workspace = true }
 serde-saphyr = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
-vtcode-commons = { path = "../vtcode-commons", version = "0.134.14" }
+vtcode-commons = { path = "../vtcode-commons", version = "0.135.5" }
 
 [dev-dependencies]
 tempfile = { workspace = true }

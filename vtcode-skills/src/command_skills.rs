@@ -27,6 +27,9 @@ pub struct CommandSkillSpec {
     pub description: &'static str,
     pub usage: &'static str,
     pub category: &'static str,
+    /// Additional slash names that resolve to this command (the canonical name
+    /// stays `slash_name`). Used so legacy commands keep working after a rename.
+    pub aliases: &'static [&'static str],
     pub backend: CommandSkillBackend,
 }
 
@@ -115,6 +118,7 @@ macro_rules! built_in_command_spec {
             description: $description,
             usage: $usage,
             category: $category,
+            aliases: &[],
             backend: CommandSkillBackend::BuiltInCommand {
                 executor: BuiltInCommandExecutor::SlashAlias,
             },
@@ -130,6 +134,7 @@ macro_rules! traditional_command_spec {
             description: $description,
             usage: $usage,
             category: $category,
+            aliases: &[],
             backend: CommandSkillBackend::TraditionalSkill {
                 skill_name: concat!("cmd-", $slash),
                 skill_path: $skill_path,
@@ -149,6 +154,12 @@ pub const COMMAND_SKILL_SPECS: &[CommandSkillSpec] = &[
         "config",
         "Browse settings sections or focused memory controls (usage: /config [path|memory])",
         "/config [path|memory]",
+        "configuration"
+    ),
+    built_in_command_spec!(
+        "advisor",
+        "Open the Claude Advisor server-side tool settings (usage: /advisor [path])",
+        "/advisor [path]",
         "configuration"
     ),
     built_in_command_spec!(
@@ -298,12 +309,17 @@ pub const COMMAND_SKILL_SPECS: &[CommandSkillSpec] = &[
         "/pause",
         "status"
     ),
-    built_in_command_spec!(
-        "doctor",
-        "Run installation and configuration diagnostics (interactive in inline UI; usage: /doctor [--quick|--full])",
-        "/doctor [--quick|--full]",
-        "status"
-    ),
+    CommandSkillSpec {
+        slash_name: "checkup",
+        skill_name: "cmd-checkup",
+        description: "Run a workspace checkup: clean unused skills/MCPs, dedup and split AGENTS.md, toggle slow hooks, update VT Code, enable auto mode, and pre-approve read-only commands (usage: /checkup [--quick|--full])",
+        usage: "/checkup [--quick|--full]",
+        category: "status",
+        aliases: &["doctor"],
+        backend: CommandSkillBackend::BuiltInCommand {
+            executor: BuiltInCommandExecutor::SlashAlias,
+        },
+    },
     built_in_command_spec!(
         "update",
         "Check for new VT Code releases and install updates (usage: /update [check|install] [--force])",
@@ -447,7 +463,7 @@ pub fn command_skill_specs() -> &'static [CommandSkillSpec] {
 pub fn find_command_skill_by_slash_name(name: &str) -> Option<&'static CommandSkillSpec> {
     COMMAND_SKILL_SPECS
         .iter()
-        .find(|spec| spec.slash_name == name)
+        .find(|spec| spec.slash_name == name || spec.aliases.contains(&name))
 }
 
 pub fn find_command_skill_by_skill_name(name: &str) -> Option<&'static CommandSkillSpec> {
@@ -587,5 +603,17 @@ mod tests {
         assert!(plan.description.contains("planning workflow"));
         assert!(!plan.description.contains("mode"));
         assert_eq!(plan.usage, "/plan [task]");
+    }
+
+    #[test]
+    fn checkup_command_is_registered_and_doctor_aliases_it() {
+        let checkup = find_command_skill_by_slash_name("checkup").expect("checkup spec");
+        assert_eq!(checkup.slash_name, "checkup");
+        assert_eq!(checkup.usage, "/checkup [--quick|--full]");
+
+        // The legacy `/doctor` name must still resolve to the same (canonical) spec.
+        let doctor = find_command_skill_by_slash_name("doctor").expect("doctor alias");
+        assert_eq!(doctor.slash_name, "checkup");
+        assert_eq!(doctor.skill_name, "cmd-checkup");
     }
 }

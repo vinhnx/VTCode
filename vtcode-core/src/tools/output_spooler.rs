@@ -446,6 +446,17 @@ impl ToolOutputSpooler {
 
             obj.insert("spool_path".to_string(), json!(spool_path));
 
+            // Explicit, self-contained guidance so the model knows the spooled
+            // file is post-processable in code (unified_file / unified_search /
+            // unified_exec) instead of being re-inlined into context. This is the
+            // "leave deterministic computation to code" loop from the tool-system
+            // review: large data stays on disk; the model pulls only what it needs.
+            let spool_note = format!(
+                "Large output ({} bytes) spooled to `spool_path`. Do NOT re-inline the full file. Explore it with unified_file (offset/limit) or unified_search action=grep, or process it with unified_exec.",
+                spool_result.original_bytes
+            );
+            obj.insert("spool_note".to_string(), json!(spool_note));
+
             if let Some(src) = source_path {
                 obj.entry("source_path".to_string())
                     .or_insert_with(|| json!(src));

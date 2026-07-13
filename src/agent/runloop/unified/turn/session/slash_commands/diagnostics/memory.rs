@@ -7,7 +7,7 @@
 //! - Verify: `cargo check -p vtcode && cargo test -p vtcode slash_commands`
 
 #[path = "memory/config_persistence.rs"]
-mod config_persistence;
+pub(crate) mod config_persistence;
 #[path = "memory/navigation.rs"]
 mod navigation;
 #[path = "memory/presentation.rs"]

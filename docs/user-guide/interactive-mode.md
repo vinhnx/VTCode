@@ -30,9 +30,9 @@ The VT Code terminal UI includes an interactive mode that combines keyboard-firs
 | `Up/Down arrows`                            | Navigate through command history.                                               | Recall previous prompts or commands.                                                                                                      |
 | `Esc` + `Esc`                               | Open the rewind picker for checkpoint restore or summarize actions.             | Idle context only (while no task/PTY is running).                                                                                         |
 | `Enter`                                     | Queue the current input.                                                        | Plain input box only.                                                                                                                     |
-| `Tab`                                       | Accept the visible inline suggestion; on an empty idle composer, cycle primary agents; otherwise queue the current input. | Plain input box only. |
+| `Tab`                                       | Accept the visible inline suggestion; on an empty idle composer, cycle primary agents; otherwise queue the current input. | Plain input box only. Disabled while a turn is processing (shows a notice). |
 | `Ctrl+Enter`                                | Process now or steer now.                                                       | Idle: runs the current draft, or the newest queued message if the draft is empty. Active: steers the current turn with the current draft. |
-| `Shift+Tab` or `Alt+M`                      | Cycle primary agents.                                                           | Switches between available main-session agents.                                                                                            |
+| `Shift+Tab` or `Alt+M`                      | Cycle primary agents.                                                           | Switches between available main-session agents. Disabled while a turn is processing (shows a notice). |
 
 ### Multiline Input
 
@@ -111,8 +111,9 @@ Press `Alt+O` to open the fullscreen transcript review surface. It builds a plai
 - `/compact` compacts the current session history immediately when you want to shed context manually.
 - `/compact edit-prompt` and `/compact reset-prompt` manage the saved default prompt for manual compaction requests.
 - For providers with native Responses compaction, VT Code uses the provider-owned compacted state.
-- For local fallback compaction, VT Code rebuilds history around one structured summary plus retained recent user messages, then injects the session memory envelope.
-- `context.dynamic.retained_user_messages` controls that retained-user-message budget; the default is `4`.
+ - For local fallback compaction, VT Code rebuilds history around one structured summary plus retained recent user messages, then injects the session memory envelope.
+ - Switching the main session model or provider mid-conversation (via `/model` or the model palette) automatically compacts the existing history before the next turn, so the newly selected model starts from a summary instead of the outgoing model's raw trace. The previous-response chain is cleared so the new model is not chained to the old Responses/cache identity. Reselecting the same model leaves history untouched.
+ - `context.dynamic.retained_user_messages` controls that retained-user-message budget; the default is `4`.
 - On the local fallback path, VT Code also deduplicates older repeated single-file reads before summarization so the newest read stays available without repeatedly bloating the prompt.
 - `/fork` opens the archived-session picker. After selecting a session, VT Code now asks whether the new session should start from the full copied transcript or from a summarized fork.
 - A summarized fork starts from the same compacted handoff shape VT Code uses for local compaction: structured summary, retained user prompts, and the memory envelope.
@@ -121,6 +122,7 @@ Press `Alt+O` to open the fullscreen transcript review surface. It builds a plai
 - `/agent` opens the active-agent inspector. Selecting a child agent opens a modal over the current session instead of switching threads.
 - On an empty idle composer, `Tab` cycles primary agents and wraps back to the first agent.
 - The active primary agent is displayed in the session header badge and influences the session's instructions, model, granular permission policy, and tool access.
+- Mode switches are locked while a turn is actively processing. Pressing `Tab`/`Shift+Tab`/`Alt+M` (or running `/mode`/`/plan`) during a turn is dropped with a notice and applies only once the turn finishes. This keeps the agent's mode and tool-access state consistent for the duration of a turn; the in-turn automatic planning intent detection is unaffected.
 - `/subprocesses` opens the Local Agents drawer for delegated agents and managed background subprocesses.
 
 ## Scheduled Prompts And Reminders

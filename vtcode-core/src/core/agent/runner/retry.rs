@@ -139,7 +139,7 @@ impl AgentRunner {
                 let task = task.clone();
                 let contexts = contexts.to_vec();
                 let runner = &mut *ctx.runner;
-                Box::pin(async move { runner.execute_task(&task, &contexts).await })
+                Box::pin(async move { Box::pin(runner.execute_task(&task, &contexts)).await })
             },
             move |_policy| {
                 VtCodeError::execution(

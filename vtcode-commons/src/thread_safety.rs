@@ -326,19 +326,12 @@ pub struct MainThreadToken(PhantomData<*mut ()>);
 impl MainThreadToken {
     /// Create a new `MainThreadToken` without verifying the current thread.
     ///
-    /// # Safety
-    ///
-    /// The caller must guarantee that:
-    /// 1. They are executing on the thread that was (or will be) passed to
-    ///    [`designate_main_thread`], and
-    /// 2. The resulting token will not be transmitted to another thread
-    ///    through `unsafe` channels (the type is `!Send + !Sync`, which
-    ///    prevents safe channels from doing so).
-    #[expect(
-        unsafe_code,
-        reason = "phantom data marker; !Send + !Sync prevents token leakage"
-    )]
-    pub unsafe fn new_unchecked() -> Self {
+    /// The token's `!Send + !Sync` bounds prevent it from leaking to other
+    /// threads through safe channels, but the caller is responsible for
+    /// ensuring the token is only created on the designated main thread.
+    /// A token created on a non-main thread will not fail at construction,
+    /// but any downstream code relying on `try_new` will correctly reject it.
+    pub fn new_unchecked() -> Self {
         Self(PhantomData)
     }
 

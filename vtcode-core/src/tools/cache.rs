@@ -72,8 +72,11 @@ impl FileCache {
                 return Some(Arc::clone(&entry.data));
             } else {
                 // Entry expired, remove it
+                let size = entry.size_bytes;
                 self.file_cache.remove(key);
                 stats.expired_evictions += 1;
+                stats.total_size_bytes = stats.total_size_bytes.saturating_sub(size);
+                stats.file_size_bytes = stats.file_size_bytes.saturating_sub(size);
             }
         }
 
@@ -99,16 +102,13 @@ impl FileCache {
         let size_bytes = Self::estimate_value_size(&value);
         let entry = EnhancedCacheEntry::new(value, size_bytes);
 
-        let mut stats = self.stats.lock().await;
-
-        // Check memory limits (quick-cache handles eviction automatically, but we track stats)
-        if stats.total_size_bytes + size_bytes > self.max_size_bytes() {
-            stats.memory_evictions += 1;
-        }
-
         self.file_cache.insert(key, entry);
-        stats.entries = self.file_cache.len();
-        stats.total_size_bytes += size_bytes;
+
+        let mut stats = self.stats.lock().await;
+        stats.file_entries = self.file_cache.len();
+        stats.entries = stats.file_entries + stats.directory_entries;
+        stats.file_size_bytes += size_bytes;
+        stats.total_size_bytes = stats.file_size_bytes + stats.directory_size_bytes;
     }
 
     /// Get cached directory listing (clones for backwards compatibility)
@@ -125,8 +125,11 @@ impl FileCache {
                 stats.hits += 1;
                 return Some(Arc::clone(&entry.data));
             } else {
+                let size = entry.size_bytes;
                 self.directory_cache.remove(key);
                 stats.expired_evictions += 1;
+                stats.total_size_bytes = stats.total_size_bytes.saturating_sub(size);
+                stats.directory_size_bytes = stats.directory_size_bytes.saturating_sub(size);
             }
         }
 
@@ -144,11 +147,13 @@ impl FileCache {
         let size_bytes = Self::estimate_value_size(&value);
         let entry = EnhancedCacheEntry::new(value, size_bytes);
 
-        let mut stats = self.stats.lock().await;
-
         self.directory_cache.insert(key, entry);
-        stats.entries += self.directory_cache.len();
-        stats.total_size_bytes += size_bytes;
+
+        let mut stats = self.stats.lock().await;
+        stats.directory_entries = self.directory_cache.len();
+        stats.entries = stats.file_entries + stats.directory_entries;
+        stats.directory_size_bytes += size_bytes;
+        stats.total_size_bytes = stats.file_size_bytes + stats.directory_size_bytes;
     }
 
     /// Get cache statistics
@@ -186,58 +191,42 @@ impl FileCache {
         if current_size > max_size {
             // Tier 1: Clear directory cache first (cheaper to rebuild)
             self.directory_cache.clear();
+            stats.directory_entries = 0;
+            stats.directory_size_bytes = 0;
 
-            // Re-calculate size (approximate, since we don't iterate to sum remaining)
-            // Ideally we'd track directory vs file size separately, but for now we assume
-            // a significant portion was directories or we just set a flag.
-            // Since we cleared directories, we subtract their contribution if we tracked it,
-            // but we track total. For safety/simplicity in this "panic" mode:
+            // Recalculate total
+            stats.total_size_bytes = stats.file_size_bytes;
+            stats.entries = stats.file_entries;
 
-            // If we are VERY over limit (e.g. 150%), clear everything.
-            if current_size as f64 > max_size as f64 * 1.5 {
+            // If still very over limit (e.g. 150%), clear everything
+            if stats.total_size_bytes as f64 > max_size as f64 * 1.5 {
                 self.file_cache.clear();
+                stats.file_entries = 0;
+                stats.file_size_bytes = 0;
                 stats.total_size_bytes = 0;
                 stats.entries = 0;
                 stats.memory_evictions += 1;
-                return;
+            } else if stats.total_size_bytes > max_size {
+                // Moderately over: clear file cache as safety measure
+                self.file_cache.clear();
+                stats.file_entries = 0;
+                stats.file_size_bytes = 0;
+                stats.total_size_bytes = 0;
+                stats.entries = 0;
+                stats.memory_evictions += 1;
             }
-
-            // Tier 2: If just moderately over, we accept that directory clear helped
-            // and we rely on the implementation details of quick_cache to handle
-            // the file cache eviction over time or we trigger a partial clear.
-            // Since we can't easily partially clear quick_cache by size:
-
-            // We'll reset the total size tracking if we cleared everything,
-            // but here we cleared only directories.
-            // Let's rely on a simplified approach:
-            // If over limit, clear directory cache.
-            // If *still* conceptually over limit (checked next time or if we had separate counters),
-            // we'd clear files.
-
-            // Improvement: Track File and Dir sizes separately in future.
-            // For now, "Hard Limit" means clear all to be safe.
-            // But let's try to preserve files if possible.
-
-            // Since we can't accurately know how much we freed without separate counters,
-            // we will decrement stats based on an estimate or just reset if we clear all.
-
-            // Revised Strategy:
-            // 1. Clear directories.
-            // 2. If valid entries remain, we might still be over.
-            // But ensuring stability is key.
-
-            self.file_cache.clear(); // For now, safe clear all is better than OOM
-            stats.total_size_bytes = 0;
-            stats.entries = 0;
-            stats.memory_evictions += 1;
         } else if current_size as f64 > max_size as f64 * 0.9 {
-            // Tier 3: Soft limit warning or proactive pruning
-            // In a real implementation with an LRU, we'd trim the tail.
+            // Tier 3: Soft limit - proactive directory pruning
+            self.directory_cache.clear();
+            stats.directory_entries = 0;
+            stats.directory_size_bytes = 0;
+            stats.total_size_bytes = stats.file_size_bytes;
+            stats.entries = stats.file_entries;
         }
     }
 
     /// Set explicit memory limit in bytes
-    pub fn set_capacity_limit(&mut self, max_bytes: usize) {
+    pub fn set_capacity_limit(&self, max_bytes: usize) {
         self.max_size_bytes.store(max_bytes, Ordering::Relaxed);
     }
 
@@ -248,17 +237,6 @@ impl FileCache {
         self.ttl_millis
             .store(config.ttl_secs.saturating_mul(1000), Ordering::Relaxed);
     }
-
-    /// Adjust cache capacity based on system memory availability.
-    /// target_memory_ratio: 0.0 to 1.0 (fraction of total system memory to use).
-    pub fn adjust_capacity(&self, target_memory_ratio: f64) {
-        // Heuristic: Assume 16GB system if we can't query (conservative default)
-        const ASSUMED_SYSTEM_MEMORY: usize = 16 * 1024 * 1024 * 1024;
-
-        #[allow(clippy::cast_sign_loss)]
-        let target_bytes = ((ASSUMED_SYSTEM_MEMORY as f64 * target_memory_ratio).max(0.0)) as usize;
-        self.max_size_bytes.store(target_bytes, Ordering::Relaxed);
-    }
 }
 
 /// Configure global file cache from optimization settings.
@@ -267,6 +245,7 @@ pub fn configure_file_cache(config: &FileReadCacheConfig) {
     FILE_CACHE.apply_read_cache_config(config);
 }
 
+/// Get a clone of the current file read cache config
 pub fn file_read_cache_config() -> FileReadCacheConfig {
     FILE_READ_CACHE_CONFIG.read().clone()
 }

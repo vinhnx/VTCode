@@ -34,6 +34,7 @@ use crate::mcp::McpToolExecutor;
 use crate::utils::async_utils;
 use crate::utils::file_utils::{ensure_dir_exists, write_file_with_context};
 use anyhow::{Context, Result};
+use async_trait::async_trait;
 use hashbrown::HashMap;
 use serde_json::Value;
 use std::ffi::OsString;
@@ -106,6 +107,26 @@ impl Language {
     }
 }
 
+/// A built-in vtcode tool exposed to agent code snippets, mirroring the
+/// MCP tool surface so the model can call built-in tools as library
+/// functions and filter/aggregate data in-process.
+#[derive(Debug, Clone)]
+pub struct BuiltinToolInfo {
+    /// Public tool name (e.g. `unified_file`).
+    pub name: String,
+    /// Short description, used as the generated wrapper's docstring.
+    pub description: String,
+}
+
+/// Executor that runs built-in vtcode tools from code snippets.
+#[async_trait]
+pub trait BuiltinToolExecutor: Send + Sync {
+    /// Execute a built-in tool by name with JSON args.
+    async fn execute_builtin_tool(&self, tool_name: &str, args: &Value) -> Result<Value>;
+    /// List built-in tools exposed to code (a curated, safe subset).
+    fn list_builtin_tools(&self) -> Result<Vec<BuiltinToolInfo>>;
+}
+
 /// Result of code execution.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct ExecutionResult {
@@ -143,6 +164,7 @@ impl Default for ExecutionConfig {
 pub struct CodeExecutor {
     language: Language,
     mcp_client: Arc<dyn McpToolExecutor>,
+    builtin_executor: Option<Arc<dyn BuiltinToolExecutor>>,
     config: ExecutionConfig,
     workspace_root: PathBuf,
     enable_pii_protection: bool,
@@ -158,6 +180,7 @@ impl CodeExecutor {
         Self {
             language,
             mcp_client,
+            builtin_executor: None,
             config: ExecutionConfig::default(),
             workspace_root,
             enable_pii_protection: false,
@@ -176,6 +199,14 @@ impl CodeExecutor {
     /// in MCP tool calls to prevent accidental exposure.
     pub fn with_pii_protection(mut self, enabled: bool) -> Self {
         self.enable_pii_protection = enabled;
+        self
+    }
+
+    /// Expose built-in vtcode tools to the snippet as callable library
+    /// functions (mirroring the MCP tool surface). Pass `None` to keep only
+    /// MCP tools available from code.
+    pub fn with_builtin_executor(mut self, executor: Option<Arc<dyn BuiltinToolExecutor>>) -> Self {
+        self.builtin_executor = executor;
         self
     }
 
@@ -253,6 +284,16 @@ impl CodeExecutor {
             ipc_handler.enable_pii_protection()?;
         }
         let mcp_client = self.mcp_client.clone();
+        let builtin_executor = self.builtin_executor.clone();
+        let builtin_names = match &builtin_executor {
+            Some(exec) => exec.list_builtin_tools().ok().map(|tools| {
+                tools
+                    .iter()
+                    .map(|t| t.name.clone())
+                    .collect::<std::collections::HashSet<_>>()
+            }),
+            None => None,
+        };
         let execution_timeout = Duration::from_secs(self.config.timeout_secs);
 
         let ipc_task: JoinHandle<Result<()>> = tokio::spawn(async move {
@@ -290,35 +331,71 @@ impl CodeExecutor {
                     continue;
                 }
 
-                // Execute the tool
-                let result = match mcp_client
-                    .execute_mcp_tool(&request.tool_name, &request.args)
-                    .await
-                {
-                    Ok(result) => {
-                        debug!(tool_name = %request.tool_name, "Tool executed successfully");
-                        ToolResponse {
-                            id: request.id,
-                            success: true,
-                            result: Some(result),
-                            error: None,
-                            duration_ms: None,
-                            cache_hit: None,
+                // Execute the tool: built-in tools route to the built-in
+                // executor; everything else goes through the MCP client.
+                let is_builtin = builtin_names
+                    .as_ref()
+                    .is_some_and(|set| set.contains(request.tool_name.as_str()));
+                let result = if is_builtin {
+                    match builtin_executor
+                        .as_ref()
+                        .expect("builtin_names implies a builtin executor")
+                        .execute_builtin_tool(&request.tool_name, &request.args)
+                        .await
+                    {
+                        Ok(result) => {
+                            debug!(tool_name = %request.tool_name, "Built-in tool executed successfully");
+                            ToolResponse {
+                                id: request.id,
+                                success: true,
+                                result: Some(result),
+                                error: None,
+                                duration_ms: None,
+                                cache_hit: None,
+                            }
+                        }
+                        Err(e) => {
+                            debug!(tool_name = %request.tool_name, error = %e, "Built-in tool execution failed");
+                            ToolResponse {
+                                id: request.id,
+                                success: false,
+                                result: None,
+                                error: Some(e.to_string()),
+                                duration_ms: None,
+                                cache_hit: None,
+                            }
                         }
                     }
-                    Err(e) => {
-                        debug!(
-                            tool_name = %request.tool_name,
-                            error = %e,
-                            "Tool execution failed"
-                        );
-                        ToolResponse {
-                            id: request.id,
-                            success: false,
-                            result: None,
-                            error: Some(e.to_string()),
-                            duration_ms: None,
-                            cache_hit: None,
+                } else {
+                    match mcp_client
+                        .execute_mcp_tool(&request.tool_name, &request.args)
+                        .await
+                    {
+                        Ok(result) => {
+                            debug!(tool_name = %request.tool_name, "Tool executed successfully");
+                            ToolResponse {
+                                id: request.id,
+                                success: true,
+                                result: Some(result),
+                                error: None,
+                                duration_ms: None,
+                                cache_hit: None,
+                            }
+                        }
+                        Err(e) => {
+                            debug!(
+                                tool_name = %request.tool_name,
+                                error = %e,
+                                "Tool execution failed"
+                            );
+                            ToolResponse {
+                                id: request.id,
+                                success: false,
+                                result: None,
+                                error: Some(e.to_string()),
+                                duration_ms: None,
+                                cache_hit: None,
+                            }
                         }
                     }
                 };
@@ -552,6 +629,18 @@ mcp = MCPTools()
             ));
         }
 
+        // Expose built-in tools to code with the same `mcp._call_tool` IPC.
+        if let Some(builtin) = &self.builtin_executor {
+            if let Ok(builtin_tools) = builtin.list_builtin_tools() {
+                for tool in builtin_tools {
+                    sdk.push_str(&format!(
+                        "\ndef {}(**kwargs):\n    \"\"\"{}.\"\"\"\n    return mcp._call_tool('{}', kwargs)\n\n",
+                        sanitize_function_name(&tool.name), tool.description, tool.name
+                    ));
+                }
+            }
+        }
+
         Ok(sdk)
     }
 
@@ -643,6 +732,18 @@ const mcp = new MCPTools();
             ));
         }
 
+        // Expose built-in tools to code with the same `mcp.callTool` IPC.
+        if let Some(builtin) = &self.builtin_executor {
+            if let Ok(builtin_tools) = builtin.list_builtin_tools() {
+                for tool in builtin_tools {
+                    sdk.push_str(&format!(
+                        "async function {}(args = {{}}) {{\\n  // {}\\n  return await mcp.callTool('{}', args);\\n}}\\n\\n",
+                        sanitize_function_name(&tool.name), tool.description, tool.name
+                    ));
+                }
+            }
+        }
+
         Ok(sdk)
     }
 
@@ -721,6 +822,33 @@ mod tests {
             Arc::new(MockMcpToolExecutor),
             PathBuf::from("/workspace"),
         )
+    }
+
+    struct MockBuiltinExecutor;
+
+    #[async_trait]
+    impl BuiltinToolExecutor for MockBuiltinExecutor {
+        async fn execute_builtin_tool(&self, _name: &str, _args: &Value) -> Result<Value> {
+            Ok(json!({}))
+        }
+
+        fn list_builtin_tools(&self) -> Result<Vec<BuiltinToolInfo>> {
+            Ok(vec![BuiltinToolInfo {
+                name: "unified_file".to_string(),
+                description: "Read/write files".to_string(),
+            }])
+        }
+    }
+
+    #[tokio::test]
+    async fn generate_sdk_includes_builtin_wrappers() {
+        let executor = test_executor(Language::Python3)
+            .with_builtin_executor(Some(Arc::new(MockBuiltinExecutor)));
+        let sdk = executor.generate_python_sdk().await.unwrap();
+        assert!(sdk.contains("def unified_file("));
+        assert!(sdk.contains("mcp._call_tool('unified_file'"));
+        // MCP tools remain present alongside built-ins.
+        assert!(sdk.contains("def read_file("));
     }
 
     #[test]

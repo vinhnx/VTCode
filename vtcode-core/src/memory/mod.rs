@@ -39,7 +39,7 @@ pub struct MemoryMonitor {
 
 struct MemoryMonitorState {
     /// Memory checkpoint history for debugging
-    checkpoints: VecDeque<MemoryCheckpoint>,
+    checkpoints: VecDeque<RssCheckpoint>,
     /// Last recorded RSS in bytes
     last_rss_bytes: usize,
     /// Timestamp of last check
@@ -48,7 +48,7 @@ struct MemoryMonitorState {
 
 /// Memory checkpoint for debugging memory spikes
 #[derive(Debug, Clone)]
-pub struct MemoryCheckpoint {
+pub struct RssCheckpoint {
     /// Timestamp when checkpoint was recorded
     pub timestamp: u64,
     /// RSS memory at checkpoint (bytes)
@@ -71,7 +71,7 @@ pub struct MemoryReport {
     /// Usage percentage (0-100)
     pub usage_percent: f64,
     /// Recent memory checkpoints
-    pub recent_checkpoints: Vec<MemoryCheckpoint>,
+    pub recent_checkpoints: Vec<RssCheckpoint>,
 }
 
 impl MemoryMonitor {
@@ -168,7 +168,7 @@ impl MemoryMonitor {
                 return Ok(());
             }
 
-            state.checkpoints.push_back(MemoryCheckpoint {
+            state.checkpoints.push_back(RssCheckpoint {
                 timestamp: current_timestamp(),
                 rss_bytes: rss,
                 label,

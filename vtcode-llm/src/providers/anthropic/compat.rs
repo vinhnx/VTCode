@@ -106,6 +106,8 @@ pub enum AnthropicContentBlock {
     TextEditorCodeExecutionToolResult { tool_use_id: String, content: Value },
     #[serde(rename = "web_search_tool_result")]
     WebSearchToolResult { tool_use_id: String, content: Value },
+    #[serde(rename = "advisor_tool_result")]
+    AdvisorToolResult { tool_use_id: String, content: Value },
     /// Catch-all for unknown content block types added by the Anthropic API.
     #[serde(other)]
     Unknown,
@@ -128,6 +130,18 @@ pub enum AnthropicSystemPrompt {
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(untagged)]
 pub enum AnthropicTool {
+    Advisor {
+        #[serde(rename = "type")]
+        tool_type: String,
+        name: String,
+        model: String,
+        #[serde(default)]
+        max_uses: Option<u32>,
+        #[serde(default)]
+        max_tokens: Option<u32>,
+        #[serde(default)]
+        caching: Option<AnthropicAdvisorCachingCompat>,
+    },
     Function {
         name: String,
         description: Option<String>,
@@ -146,6 +160,13 @@ pub enum AnthropicTool {
         #[serde(flatten, default)]
         options: serde_json::Map<String, Value>,
     },
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct AnthropicAdvisorCachingCompat {
+    #[serde(rename = "type")]
+    pub cache_type: String,
+    pub ttl: String,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -309,6 +330,46 @@ pub fn convert_anthropic_to_llm_request(request: AnthropicMessagesRequest) -> LL
         let mut converted_tools = Vec::new();
         for tool in anthropic_tools {
             let tool_def = match tool {
+                AnthropicTool::Advisor {
+                    tool_type: _,
+                    name: _,
+                    model,
+                    max_uses,
+                    max_tokens,
+                    caching,
+                } => {
+                    let mut options = serde_json::Map::new();
+                    options.insert("model".to_string(), Value::String(model));
+                    if let Some(max_uses) = max_uses {
+                        options.insert("max_uses".to_string(), Value::Number(max_uses.into()));
+                    }
+                    if let Some(max_tokens) = max_tokens {
+                        options.insert("max_tokens".to_string(), Value::Number(max_tokens.into()));
+                    }
+                    if let Some(caching) = caching {
+                        options.insert(
+                            "caching".to_string(),
+                            json!({
+                                "type": caching.cache_type,
+                                "ttl": caching.ttl,
+                            }),
+                        );
+                    }
+                    ToolDefinition {
+                        tool_type: "advisor_20260301".to_string(),
+                        function: None,
+                        allowed_callers: None,
+                        input_examples: None,
+                        web_search: None,
+                        hosted_tool_config: None,
+                        shell: None,
+                        grammar: None,
+                        strict: None,
+                        defer_loading: None,
+                        namespace: None,
+                        advisor: Some(Value::Object(options)),
+                    }
+                }
                 AnthropicTool::Function {
                     name,
                     description,
@@ -343,6 +404,7 @@ pub fn convert_anthropic_to_llm_request(request: AnthropicMessagesRequest) -> LL
                             strict: None,
                             defer_loading: None,
                             namespace: None,
+                            advisor: None,
                         }
                     } else if tool_type.starts_with("code_execution_")
                         || tool_type.starts_with("memory_")
@@ -359,6 +421,7 @@ pub fn convert_anthropic_to_llm_request(request: AnthropicMessagesRequest) -> LL
                             strict: None,
                             defer_loading: None,
                             namespace: None,
+                            advisor: None,
                         }
                     } else {
                         continue;
@@ -663,6 +726,10 @@ fn convert_anthropic_blocks(blocks: &[AnthropicContentBlock]) -> ConvertedAnthro
             | AnthropicContentBlock::WebSearchToolResult {
                 tool_use_id,
                 content,
+            }
+            | AnthropicContentBlock::AdvisorToolResult {
+                tool_use_id,
+                content,
             } => converted.emitted_messages.push(Message::tool_response(
                 tool_use_id.clone(),
                 serialize_value(content),
@@ -730,6 +797,10 @@ fn anthropic_block_text(block: &AnthropicContentBlock) -> String {
             content,
         }
         | AnthropicContentBlock::WebSearchToolResult {
+            tool_use_id,
+            content,
+        }
+        | AnthropicContentBlock::AdvisorToolResult {
             tool_use_id,
             content,
         } => {

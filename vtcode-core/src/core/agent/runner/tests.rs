@@ -1287,8 +1287,7 @@ async fn exec_full_auto_continues_until_tracker_is_completed() {
         text_response("I have finished all the work."),
     ]));
 
-    let result = runner
-        .execute_task(&task("Harness continuation", "exec-task"), &[])
+    let result = Box::pin(runner.execute_task(&task("Harness continuation", "exec-task"), &[]))
         .await
         .expect("task result");
 
@@ -1331,8 +1330,7 @@ async fn runner_keeps_openai_requests_stateless_and_reuses_session_cache_key() {
     let recorded = provider.clone();
     runner.provider_client = Box::new(provider);
 
-    let result = runner
-        .execute_task(&task("Cache-aware continuation", "exec-task"), &[])
+    let result = Box::pin(runner.execute_task(&task("Cache-aware continuation", "exec-task"), &[]))
         .await
         .expect("task result");
 
@@ -1373,8 +1371,7 @@ async fn exec_full_auto_runs_verification_before_accepting_completion() {
         "The task is complete.",
     )]));
 
-    let result = runner
-        .execute_task(&task("Verification success", "exec-task"), &[])
+    let result = Box::pin(runner.execute_task(&task("Verification success", "exec-task"), &[]))
         .await
         .expect("task result");
 
@@ -1411,8 +1408,7 @@ async fn exec_full_auto_retries_after_verification_failure() {
         text_response("Task is now complete."),
     ]));
 
-    let result = runner
-        .execute_task(&task("Verification failure", "exec-task"), &[])
+    let result = Box::pin(runner.execute_task(&task("Verification failure", "exec-task"), &[]))
         .await
         .expect("task result");
 
@@ -1443,8 +1439,7 @@ async fn review_runs_skip_continuation_and_finish_single_pass() {
         "The task is complete.",
     )]));
 
-    let result = runner
-        .execute_task(&task("Review task", "review-task"), &[])
+    let result = Box::pin(runner.execute_task(&task("Review task", "review-task"), &[]))
         .await
         .expect("task result");
 
@@ -1471,8 +1466,7 @@ async fn planning_workflow_runs_skip_continuation_and_finish_single_pass() {
         "The task is complete.",
     )]));
 
-    let result = runner
-        .execute_task(&task("Planning workflow task", "exec-task"), &[])
+    let result = Box::pin(runner.execute_task(&task("Planning workflow task", "exec-task"), &[]))
         .await
         .expect("task result");
 
@@ -1495,8 +1489,7 @@ async fn exec_only_policy_skips_when_full_auto_is_disabled() {
         "The task is complete.",
     )]));
 
-    let result = runner
-        .execute_task(&task("Exec task", "exec-task"), &[])
+    let result = Box::pin(runner.execute_task(&task("Exec task", "exec-task"), &[]))
         .await
         .expect("task result");
 
@@ -1530,8 +1523,7 @@ async fn tool_loop_limit_writes_blocked_handoff_artifacts() {
         }),
     )]));
 
-    let result = runner
-        .execute_task(&task("Loop blocked", "exec-task"), &[])
+    let result = Box::pin(runner.execute_task(&task("Loop blocked", "exec-task"), &[]))
         .await
         .expect("task result");
 
@@ -1578,8 +1570,7 @@ async fn plan_build_evaluate_exec_creates_spec_and_evaluation_artifacts() {
         )),
     ]));
 
-    let result = runner
-        .execute_task(&task("Planner + evaluator", "exec-task"), &[])
+    let result = Box::pin(runner.execute_task(&task("Planner + evaluator", "exec-task"), &[]))
         .await
         .expect("task result");
 
@@ -1647,10 +1638,10 @@ async fn default_full_auto_exec_uses_plan_build_evaluate_harness() {
         )),
     ]));
 
-    let result = runner
-        .execute_task(&task("Default planner + evaluator", "exec-task"), &[])
-        .await
-        .expect("task result");
+    let result =
+        Box::pin(runner.execute_task(&task("Default planner + evaluator", "exec-task"), &[]))
+            .await
+            .expect("task result");
 
     assert_eq!(result.outcome, TaskOutcome::Success);
     assert!(
@@ -1711,8 +1702,7 @@ async fn evaluator_failure_forces_revision_before_success() {
         )),
     ]));
 
-    let result = runner
-        .execute_task(&task("Evaluator revision", "exec-task"), &[])
+    let result = Box::pin(runner.execute_task(&task("Evaluator revision", "exec-task"), &[]))
         .await
         .expect("task result");
 
@@ -1754,10 +1744,10 @@ async fn evaluator_request_includes_verification_results() {
     let recorded = provider.clone();
     runner.provider_client = Box::new(provider);
 
-    let result = runner
-        .execute_task(&task("Evaluator verification evidence", "exec-task"), &[])
-        .await
-        .expect("task result");
+    let result =
+        Box::pin(runner.execute_task(&task("Evaluator verification evidence", "exec-task"), &[]))
+            .await
+            .expect("task result");
 
     assert_eq!(result.outcome, TaskOutcome::Success);
 
@@ -1811,10 +1801,10 @@ async fn evaluator_scorecard_below_threshold_forces_revision() {
         )),
     ]));
 
-    let result = runner
-        .execute_task(&task("Evaluator scorecard revision", "exec-task"), &[])
-        .await
-        .expect("task result");
+    let result =
+        Box::pin(runner.execute_task(&task("Evaluator scorecard revision", "exec-task"), &[]))
+            .await
+            .expect("task result");
 
     assert_eq!(result.outcome, TaskOutcome::Success);
     let events = harness_events(&result);
@@ -1873,13 +1863,12 @@ async fn evaluator_missing_scorecard_forces_revision() {
         )),
     ]));
 
-    let result = runner
-        .execute_task(
-            &task("Evaluator missing scorecard revision", "exec-task"),
-            &[],
-        )
-        .await
-        .expect("task result");
+    let result = Box::pin(runner.execute_task(
+        &task("Evaluator missing scorecard revision", "exec-task"),
+        &[],
+    ))
+    .await
+    .expect("task result");
 
     assert_eq!(result.outcome, TaskOutcome::Success);
     let events = harness_events(&result);
@@ -1934,13 +1923,12 @@ async fn evaluator_out_of_range_scorecard_forces_revision() {
         )),
     ]));
 
-    let result = runner
-        .execute_task(
-            &task("Evaluator invalid scorecard revision", "exec-task"),
-            &[],
-        )
-        .await
-        .expect("task result");
+    let result = Box::pin(runner.execute_task(
+        &task("Evaluator invalid scorecard revision", "exec-task"),
+        &[],
+    ))
+    .await
+    .expect("task result");
 
     assert_eq!(result.outcome, TaskOutcome::Success);
     let events = harness_events(&result);
@@ -1991,8 +1979,7 @@ async fn evaluator_exhaustion_writes_blocked_handoff_with_artifact_paths() {
         )),
     ]));
 
-    let result = runner
-        .execute_task(&task("Evaluator exhaustion", "exec-task"), &[])
+    let result = Box::pin(runner.execute_task(&task("Evaluator exhaustion", "exec-task"), &[]))
         .await
         .expect("task result");
 

@@ -46,8 +46,8 @@ pub(super) async fn route_outcome(
         | SlashCommandOutcome::Notify { .. }
         | SlashCommandOutcome::StopAgent
         | SlashCommandOutcome::ManageMcp { .. }
-        | SlashCommandOutcome::StartDoctorInteractive
-        | SlashCommandOutcome::RunDoctor { .. }
+        | SlashCommandOutcome::StartCheckupInteractive
+        | SlashCommandOutcome::RunCheckup { .. }
         | SlashCommandOutcome::Update { .. }
         | SlashCommandOutcome::StartTerminalSetup
         | SlashCommandOutcome::ManageLocalServer { .. }) => {
@@ -151,10 +151,10 @@ async fn route_runtime_outcome(
         SlashCommandOutcome::Notify { message } => handlers::handle_notify(ctx, message).await,
         SlashCommandOutcome::StopAgent => handlers::handle_stop_agent(ctx).await,
         SlashCommandOutcome::ManageMcp { action } => handlers::handle_manage_mcp(ctx, action).await,
-        SlashCommandOutcome::StartDoctorInteractive => {
-            handlers::handle_start_doctor_interactive(ctx).await
+        SlashCommandOutcome::StartCheckupInteractive => {
+            handlers::handle_start_checkup_interactive(ctx).await
         }
-        SlashCommandOutcome::RunDoctor { quick } => handlers::handle_run_doctor(ctx, quick).await,
+        SlashCommandOutcome::RunCheckup { quick } => handlers::handle_run_checkup(ctx, quick).await,
         SlashCommandOutcome::Update {
             check_only,
             install,

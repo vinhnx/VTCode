@@ -54,6 +54,11 @@ pub(super) fn task_spec(command: &ExecCommandKind, dry_run: bool) -> TaskSpec {
             title: REVIEW_TASK_TITLE,
             instructions: REVIEW_TASK_INSTRUCTIONS,
         },
+        ExecCommandKind::Eval { .. } => TaskSpec {
+            id: "eval-task",
+            title: "Eval Task",
+            instructions: EXEC_TASK_INSTRUCTIONS,
+        },
         _ => TaskSpec {
             id: EXEC_TASK_ID,
             title: EXEC_TASK_TITLE,
@@ -116,6 +121,21 @@ pub(super) async fn handle_exec_command_impl(
     vt_cfg: &VTCodeConfig,
     options: ExecCommandOptions,
 ) -> Result<()> {
+    // Handle eval command separately — it runs multiple tasks, not a single one.
+    if let ExecCommandKind::Eval {
+        suite_path,
+        output_path,
+    } = &options.command
+    {
+        return super::eval::handle_eval_command(
+            config,
+            vt_cfg,
+            suite_path,
+            output_path.as_deref(),
+        )
+        .await;
+    }
+
     if config.provider.eq_ignore_ascii_case(CODEX_PROVIDER) {
         return handle_codex_exec_command_impl(config, vt_cfg, options).await;
     }

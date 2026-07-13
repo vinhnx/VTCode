@@ -36,6 +36,22 @@ pub struct AgentConfig {
     #[serde(default)]
     pub system_prompt_mode: SystemPromptMode,
 
+    /// Soft token budget for the fully composed system prompt (character-based
+    /// estimate, ~4 chars/token). Includes workspace instructions, guidelines,
+    /// and runtime addenda on top of the base prompt.
+    #[serde(default = "default_max_system_prompt_tokens")]
+    pub max_system_prompt_tokens: u64,
+
+    /// Warn when the composed system prompt exceeds `max_system_prompt_tokens`.
+    #[serde(default = "default_system_prompt_budget_warning")]
+    pub system_prompt_budget_warning: bool,
+
+    /// Trim low-priority system prompt sections when over budget. Opt-in:
+    /// silently dropping instructions changes agent behavior, so the default
+    /// only warns.
+    #[serde(default)]
+    pub trim_system_prompt: bool,
+
     /// Tool documentation mode controlling token overhead for tool definitions
     /// Options: minimal (~800 tokens), progressive (~1.2k), full (~3k current)
     /// Progressive: signatures upfront, detailed docs on-demand (recommended)
@@ -295,8 +311,70 @@ impl<'de> Deserialize<'de> for ContinuationPolicy {
     }
 }
 
+/// When to trigger a context reset — starting a clean session from external
+/// artifacts only, discarding conversation history to clear noise and bad
+/// assumptions. This is distinct from compaction, which preserves
+/// conversational continuity within the same task/agent loop.
+///
+/// Following the context engineering pattern: "Context reset uses external
+/// artifacts (files from note-taking, git logs, test results, task lists) as
+/// startup material to open a clean new context/session. It does not preserve
+/// the full conversation history, and can clear noise and bad assumptions so
+/// that a new agent can reorient itself."
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "schema", schemars(rename_all = "snake_case"))]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ContextResetMode {
+    /// Never reset — always carry forward conversation history (current behavior).
+    #[default]
+    Off,
+    /// Reset when the progress monitor detects a stall (no forward progress for
+    /// `context_reset_stall_threshold` consecutive turns).
+    OnStall,
+    /// Reset after every automatic compaction, so the post-compaction session
+    /// starts from artifacts only rather than the compacted summary.
+    OnCompaction,
+}
+
+impl ContextResetMode {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::OnStall => "on_stall",
+            Self::OnCompaction => "on_compaction",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        let normalized = value.trim();
+        if normalized.eq_ignore_ascii_case("off") {
+            Some(Self::Off)
+        } else if normalized.eq_ignore_ascii_case("on_stall")
+            || normalized.eq_ignore_ascii_case("on-stall")
+        {
+            Some(Self::OnStall)
+        } else if normalized.eq_ignore_ascii_case("on_compaction")
+            || normalized.eq_ignore_ascii_case("on-compaction")
+        {
+            Some(Self::OnCompaction)
+        } else {
+            None
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for ContextResetMode {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let raw = String::deserialize(deserializer)?;
+        Ok(Self::parse(&raw).unwrap_or_default())
+    }
+}
+
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum HarnessOrchestrationMode {
@@ -378,15 +456,36 @@ pub struct AgentHarnessConfig {
     /// generates its text response.
     #[serde(default)]
     pub auto_compaction_pause_after: bool,
+    /// Automatically compact conversation context when the main session model
+    /// or provider is switched mid-conversation, so the newly selected model
+    /// starts from a summary instead of the outgoing model's raw trace.
+    /// Default: true. Disable to keep the full history across a model switch.
+    #[serde(default = "default_harness_compact_on_model_switch")]
+    pub compact_on_model_switch: bool,
     /// Provider-native tool-result clearing policy.
     #[serde(default)]
     pub tool_result_clearing: ToolResultClearingConfig,
     /// Optional maximum estimated API cost in USD before VT Code stops the session.
     #[serde(default)]
     pub max_budget_usd: Option<f64>,
+    /// Fraction of `max_budget_usd` at which VT Code emits a one-time
+    /// near-budget warning. Ignored when `max_budget_usd` is unset.
+    #[serde(default = "default_harness_budget_warning_threshold")]
+    pub budget_warning_threshold: f64,
     /// Controls whether harness-managed continuation loops are enabled.
     #[serde(default)]
     pub continuation_policy: ContinuationPolicy,
+    /// When to trigger a context reset — starting a clean session from
+    /// external artifacts only, discarding conversation history. Distinct
+    /// from compaction (which preserves conversational continuity).
+    /// Default: `off` (carry forward history as before).
+    #[serde(default)]
+    pub context_reset_mode: ContextResetMode,
+    /// Number of consecutive stall turns before `on_stall` context reset
+    /// triggers. Ignored unless `context_reset_mode = "on_stall"`.
+    /// Default: 2.
+    #[serde(default = "default_harness_context_reset_stall_threshold")]
+    pub context_reset_stall_threshold: u32,
     /// Optional JSONL event log path for harness events.
     /// Defaults to `~/.vtcode/sessions/` when unset.
     #[serde(default)]
@@ -427,9 +526,13 @@ impl Default for AgentHarnessConfig {
             auto_compaction_threshold_tokens: None,
             auto_compaction_instructions: None,
             auto_compaction_pause_after: false,
+            compact_on_model_switch: default_harness_compact_on_model_switch(),
             tool_result_clearing: ToolResultClearingConfig::default(),
             max_budget_usd: None,
+            budget_warning_threshold: default_harness_budget_warning_threshold(),
             continuation_policy: ContinuationPolicy::default(),
+            context_reset_mode: ContextResetMode::default(),
+            context_reset_stall_threshold: default_harness_context_reset_stall_threshold(),
             event_log_path: None,
             orchestration_mode: HarnessOrchestrationMode::default(),
             max_revision_rounds: default_harness_max_revision_rounds(),
@@ -815,6 +918,9 @@ impl Default for AgentConfig {
             default_model: default_model(),
             theme: default_theme(),
             system_prompt_mode: SystemPromptMode::default(),
+            max_system_prompt_tokens: default_max_system_prompt_tokens(),
+            system_prompt_budget_warning: default_system_prompt_budget_warning(),
+            trim_system_prompt: false,
             tool_documentation_mode: ToolDocumentationMode::default(),
             shell_prompt_profile: ShellPromptProfile::default(),
             enable_split_tool_results: default_enable_split_tool_results(),
@@ -888,6 +994,13 @@ impl AgentConfig {
 
         if self.instruction_import_max_depth == 0 {
             return Err("instruction_import_max_depth must be greater than 0".to_string());
+        }
+
+        if !(0.0..=1.0).contains(&self.harness.budget_warning_threshold) {
+            return Err(format!(
+                "harness.budget_warning_threshold must be between 0.0 and 1.0, got {}",
+                self.harness.budget_warning_threshold
+            ));
         }
 
         self.persistent_memory.validate()?;
@@ -979,6 +1092,16 @@ const fn default_refine_max_passes() -> usize {
 }
 
 #[inline]
+const fn default_max_system_prompt_tokens() -> u64 {
+    prompt_budget::DEFAULT_MAX_SYSTEM_PROMPT_TOKENS
+}
+
+#[inline]
+const fn default_system_prompt_budget_warning() -> bool {
+    true
+}
+
+#[inline]
 const fn default_project_doc_max_bytes() -> usize {
     prompt_budget::DEFAULT_MAX_BYTES
 }
@@ -1020,7 +1143,16 @@ const fn default_harness_max_parallel_tool_calls() -> usize {
 
 #[inline]
 const fn default_harness_auto_compaction_enabled() -> bool {
-    false
+    true
+}
+
+const fn default_harness_compact_on_model_switch() -> bool {
+    true
+}
+
+#[inline]
+const fn default_harness_context_reset_stall_threshold() -> u32 {
+    2
 }
 
 #[inline]
@@ -1046,6 +1178,11 @@ const fn default_tool_result_clearing_clear_at_least_tokens() -> u64 {
 #[inline]
 const fn default_harness_max_revision_rounds() -> usize {
     2
+}
+
+#[inline]
+const fn default_harness_budget_warning_threshold() -> f64 {
+    0.75
 }
 
 #[inline]
@@ -1783,6 +1920,50 @@ mod tests {
     fn test_plan_confirmation_config_default() {
         let config = AgentConfig::default();
         assert!(config.require_plan_confirmation);
+    }
+
+    #[test]
+    fn test_system_prompt_budget_defaults() {
+        let config = AgentConfig::default();
+        assert_eq!(
+            config.max_system_prompt_tokens,
+            prompt_budget::DEFAULT_MAX_SYSTEM_PROMPT_TOKENS
+        );
+        assert!(config.system_prompt_budget_warning);
+        assert!(!config.trim_system_prompt);
+
+        let parsed: AgentConfig = toml::from_str(
+            r#"
+max_system_prompt_tokens = 4000
+system_prompt_budget_warning = false
+trim_system_prompt = true
+"#,
+        )
+        .expect("agent config should parse");
+        assert_eq!(parsed.max_system_prompt_tokens, 4000);
+        assert!(!parsed.system_prompt_budget_warning);
+        assert!(parsed.trim_system_prompt);
+    }
+
+    #[test]
+    fn test_budget_warning_threshold_default_and_validation() {
+        let config = AgentConfig::default();
+        assert!((config.harness.budget_warning_threshold - 0.75).abs() < f64::EPSILON);
+        assert!(config.validate_llm_params().is_ok());
+
+        let parsed: AgentHarnessConfig = toml::from_str(
+            r#"
+max_budget_usd = 5.0
+budget_warning_threshold = 0.5
+"#,
+        )
+        .expect("harness config should parse");
+        assert_eq!(parsed.max_budget_usd, Some(5.0));
+        assert!((parsed.budget_warning_threshold - 0.5).abs() < f64::EPSILON);
+
+        let mut invalid = AgentConfig::default();
+        invalid.harness.budget_warning_threshold = 1.5;
+        assert!(invalid.validate_llm_params().is_err());
     }
 
     #[test]

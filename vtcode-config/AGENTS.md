@@ -23,3 +23,5 @@ Two pathways: **OpenRouter** (code-generated) — edit `ModelId`, `Provider::Ope
 - `VTCodeConfig::load()` resolves layers — do not use `ConfigManager::load_from_workspace()` directly in production code.
 - `models/model_id/table.rs` (`model_id_table!`) is the single source for as_str/parse/display/description/provider per variant — add new models as one table row, never a new match arm in the wrapper files.
 - `parse.rs` keeps an order-sensitive hand-written preamble (opencode/evolink prefix routing, ZAI shadow guards, dated-haiku remap) before the table lookup — never move prefix rules into the table.
+- `core/automation.rs` holds the loop-engineering config surface: `LoopEngineConfig` (gated by `loop_engine_enabled()`, override with `VTCODE_DISABLE_LOOP_ENGINE`), and `verify_mutations` on `FullAutoConfig` — **default off** because the verifier sub-agent doubles mutating-call cost.
+- `AgentHarnessConfig` now has `context_reset_mode` (`off`/`on_stall`/`on_compaction`) and `context_reset_stall_threshold` — distinct from compaction config. Default: `off`.

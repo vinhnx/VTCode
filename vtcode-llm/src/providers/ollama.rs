@@ -28,8 +28,6 @@ pub use pull::{
 };
 pub use url::{base_url_to_host_root, is_openai_compatible_base_url};
 
-use semver::{Version, VersionReq};
-
 use super::common::{
     assistant_interleaved_history_text, collect_history_system_directives,
     extract_reasoning_text_from_detail_values, extract_reasoning_text_from_serialized_details,
@@ -37,79 +35,8 @@ use super::common::{
     parse_client_prompt_common, resolve_model, serialize_reasoning_detail_values,
 };
 use super::error_handling::{format_network_error, format_parse_error};
-
-// ============================================================================
-// Wire API Detection (adapted from OpenAI Codex's codex-ollama/src/lib.rs)
-// ============================================================================
-
-/// Wire protocol that the Ollama server supports.
-/// Based on OpenAI Codex's WireApi enum.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum OllamaWireApi {
-    /// The Responses API (OpenAI-compatible at `/v1/responses`).
-    Responses,
-    /// Regular Chat Completions compatible with `/v1/chat/completions`.
-    Chat,
-}
-
-/// Result of detecting which wire API the Ollama server supports.
-pub struct WireApiDetection {
-    pub wire_api: OllamaWireApi,
-    pub version: Option<Version>,
-}
-
-/// Version requirement for Ollama servers that support the Responses API.
-/// Release versions >= 0.13.3 support the Responses API.
-static RESPONSES_API_VERSION_REQ: std::sync::LazyLock<VersionReq> =
-    std::sync::LazyLock::new(|| {
-        VersionReq::parse(">=0.13.3").expect("valid version requirement literal")
-    });
-
-/// Determine which wire API to use based on the Ollama server version.
-///
-/// Version 0.0.0 is used for development builds, which typically support the
-/// latest features.
-fn wire_api_for_version(version: &Version) -> OllamaWireApi {
-    if *version == Version::new(0, 0, 0) || RESPONSES_API_VERSION_REQ.matches(version) {
-        OllamaWireApi::Responses
-    } else {
-        OllamaWireApi::Chat
-    }
-}
-
-/// Detect which wire API the running Ollama server supports based on its version.
-/// Returns `Ok(None)` when the version endpoint is missing or unparsable; callers
-/// should keep the configured default in that case.
-///
-/// Adapted from OpenAI Codex's codex-ollama/src/lib.rs
-pub async fn detect_wire_api(
-    base_url: Option<String>,
-) -> std::io::Result<Option<WireApiDetection>> {
-    let resolved_base_url = override_base_url(
-        urls::OLLAMA_API_BASE,
-        base_url,
-        Some(env_vars::OLLAMA_BASE_URL),
-    );
-
-    let client = match OllamaClient::try_from_base_url(&resolved_base_url).await {
-        Ok(c) => c,
-        Err(e) => {
-            tracing::debug!("Failed to connect to Ollama server for version detection: {e}");
-            return Ok(None);
-        }
-    };
-
-    let Some(version) = client.fetch_version().await? else {
-        return Ok(None);
-    };
-
-    let wire_api = wire_api_for_version(&version);
-
-    Ok(Some(WireApiDetection {
-        wire_api,
-        version: Some(version),
-    }))
-}
+use super::local_readiness::{invalidate_readiness_cache, resolve_local_model};
+use super::local_server::LocalProvider;
 
 /// Prepare the local OSS environment when using Ollama.
 ///
@@ -314,24 +241,6 @@ impl OllamaProvider {
         })
     }
 
-    fn is_local_base_url(base_url: &str) -> bool {
-        let lowered = base_url.trim().to_ascii_lowercase();
-        const LOCAL_PREFIXES: &[&str] = &[
-            "http://localhost",
-            "https://localhost",
-            "http://127.",
-            "https://127.",
-            "http://0.0.0.0",
-            "https://0.0.0.0",
-            "http://[::1]",
-            "https://[::1]",
-        ];
-
-        LOCAL_PREFIXES
-            .iter()
-            .any(|prefix| lowered.starts_with(prefix))
-    }
-
     fn with_model_internal(
         model: String,
         base_url: Option<String>,
@@ -349,7 +258,7 @@ impl OllamaProvider {
 
         let resolved_base =
             override_base_url(default_base, base_url, Some(env_vars::OLLAMA_BASE_URL));
-        let target_is_local = Self::is_local_base_url(&resolved_base);
+        let target_is_local = super::local_server::is_local_base_url(&resolved_base);
 
         // Never send API keys to local endpoints; keep keys for cloud/remote targets
         let effective_api_key = if target_is_local {
@@ -382,6 +291,36 @@ impl OllamaProvider {
 
     fn parse_client_prompt(&self, prompt: &str) -> LLMRequest {
         parse_client_prompt_common(prompt, &self.model, |value| self.parse_chat_request(value))
+    }
+
+    /// Verify the server is up and the model is available before generating.
+    /// Returns the (possibly substituted) model id or a structured error with a
+    /// recovery command (`ollama pull <model>` / `/local start ollama`).
+    async fn ensure_ready(&self, requested: &str) -> Result<String, LLMError> {
+        let autopull = std::env::var("VTCODE_LOCAL_AUTOPULL")
+            .ok()
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+
+        match resolve_local_model(LocalProvider::Ollama, requested, Some(&self.base_url)).await {
+            Ok(model) => Ok(model),
+            Err(err) if autopull => {
+                let model = match &err {
+                    super::local_readiness::LocalReadinessError::ModelMissing { model, .. } => {
+                        model.clone()
+                    }
+                    _ => return Err(err.to_llm_error("Ollama")),
+                };
+                match ensure_oss_ready(Some(&model), Some(self.base_url.clone())).await {
+                    Ok(()) => {
+                        invalidate_readiness_cache();
+                        Ok(model)
+                    }
+                    Err(_) => Err(err.to_llm_error("Ollama")),
+                }
+            }
+            Err(err) => Err(err.to_llm_error("Ollama")),
+        }
     }
 
     fn parse_chat_request(&self, value: &Value) -> Option<LLMRequest> {
@@ -1053,6 +992,8 @@ impl LLMProvider for OllamaProvider {
         if request.model.is_empty() {
             request.model = self.model.clone();
         }
+        let resolved = self.ensure_ready(&request.model).await?;
+        request.model = resolved;
         let model = request.model.clone();
         let payload = self.build_payload(&request, false)?;
         let url = self.chat_url();
@@ -1071,6 +1012,8 @@ impl LLMProvider for OllamaProvider {
         if request.model.is_empty() {
             request.model = self.model.clone();
         }
+        let resolved = self.ensure_ready(&request.model).await?;
+        request.model = resolved;
         let model = request.model.clone();
         let payload = self.build_payload(&request, true)?;
         let fallback_payload = self.build_payload(&request, false)?;
@@ -1697,49 +1640,5 @@ mod tests {
             .filter_map(|model| model.name.or(model.model))
             .collect();
         assert_eq!(names, vec!["qwen3:8b".to_string()]);
-    }
-
-    #[test]
-    fn wire_api_responses_for_dev_build() {
-        assert_eq!(
-            wire_api_for_version(&Version::new(0, 0, 0)),
-            OllamaWireApi::Responses,
-        );
-    }
-
-    #[test]
-    fn wire_api_responses_for_exact_threshold() {
-        assert_eq!(
-            wire_api_for_version(&Version::new(0, 13, 3)),
-            OllamaWireApi::Responses,
-        );
-    }
-
-    #[test]
-    fn wire_api_responses_for_above_threshold() {
-        assert_eq!(
-            wire_api_for_version(&Version::new(0, 14, 0)),
-            OllamaWireApi::Responses,
-        );
-        assert_eq!(
-            wire_api_for_version(&Version::new(1, 0, 0)),
-            OllamaWireApi::Responses,
-        );
-    }
-
-    #[test]
-    fn wire_api_chat_for_below_threshold() {
-        assert_eq!(
-            wire_api_for_version(&Version::new(0, 13, 2)),
-            OllamaWireApi::Chat,
-        );
-        assert_eq!(
-            wire_api_for_version(&Version::new(0, 12, 0)),
-            OllamaWireApi::Chat,
-        );
-        assert_eq!(
-            wire_api_for_version(&Version::new(0, 1, 0)),
-            OllamaWireApi::Chat,
-        );
     }
 }

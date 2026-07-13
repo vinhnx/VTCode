@@ -2,6 +2,140 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.135.5 - 2026-07-12
+
+### Highlights
+### Other Changes
+#### Other
+
+- Add evaluation suite command and context reset functionality (53beae8d) 
+- Add eval suite runner and context reset logic (5ecc0441) 
+## 0.135.4 - 2026-07-12
+
+### Highlights
+### Other Changes
+#### Other
+
+- Implement progress monitoring and reinforcement learning engine with persistence (233f9751) 
+- Refactor context engineering documentation and enhance planning recovery in turn loop (c895b2c7) 
+- Refactor post-tool recovery logic and enhance planning recovery handling (bd0aed15) 
+- Refactor read extent handling and improve recovery fallback logic (bbab7878) 
+- Implement tool result reducers, evaluation rendering, and tool rejection handling (c17728b3) 
+- Update TODO (9924d22d) 
+- Refactor assertions for floating-point comparisons and improve case-insensitive path checks (9152aae4) 
+## 0.135.3 - 2026-07-11
+
+### Highlights
+#### Bug Fixes
+
+- Namespace cache per target in CI to prevent collisions (014e8924) 
+#### Features
+
+- Add /checkup command and optimize diagnostics output (7d26d11a) 
+- Enable debug assertions and overflow checks in release builds (f8768d32) 
+- Implement mode switch guard to prevent cycling during active turns (7551e9bc) 
+### Other Changes
+#### Other
+
+- Implement guards for tool call validation including read, shell run, spool, and task tracker guards (e9e19936) 
+- Add Claude Advisor server-side tool configuration and integration (7612fb8a) 
+- Implement response chain handling, turn snapshot capture, tool shaping, request gap tracking, and usage cost estimation (73b1019f) 
+- Implement automatic compaction orchestration and memory envelope management (2743ca18) 
+- Add unified per-session state store with append-only event log and derived views (9d6901cd) 
+- Implement unified executors for cron, mcp, and agent actions; enhance tool descriptions and parameters; improve output processing for large results. (22276fb4) 
+- Consolidate agent and MCP tool registrations; update parameters and descriptions for clarity. Enhance action dispatching for wait and close actions in agents. Adjust risk scoring for MCP connect/disconnect actions. Remove unused parameter schemas and streamline collaboration specs. (69222268) 
+- Add tests for memory lock functionality and implement atomic file writes (f5055f80) 
+#### Refactors
+
+- Expose normalize_model_id function and simplify model normalization logic (6efca878) 
+## 0.135.2 - 2026-07-10
+
+### Highlights
+### Other Changes
+## 0.135.1 - 2026-07-10
+
+### Highlights
+#### Bug Fixes
+
+- Use u64 for assumed system memory constant to fix 32-bit builds (4db0d8d6) 
+#### Features
+
+- Implement read limits configuration and update related cache handling (0f47cb4b) 
+- Implement session mode resolution and persistence logic (be087eae) 
+### Other Changes
+## 0.135.0 - 2026-07-09
+
+### Highlights
+#### Bug Fixes
+
+- Comprehensive code review and debugging fixes (060baf81) 
+- Skip CARGO_INCREMENTAL with sccache wrapper in check-dev (b3009d4a) 
+- Address critical/high/medium bugs and DRY violations across codebase (099e7d60) 
+- Dedup recovery dispatch, fix error swallowing, clean DRY (e403b78a) 
+#### Features
+
+- Differentiate model-switch outcome variants, add harness opt-out config (b535d70f) 
+- Add immediate submit commands for slash palette (aa01bce9) 
+- Include enum options in preflight schema hint (74a9ca18) 
+- Add support for GPT-5.6 models and update related prompts and configurations (6775385c) 
+### Other Changes
+#### Other
+
+- Add planning intent detection and validation enhancements (8176201f) 
+- Update TODO (c7b353de) 
+#### Performance
+
+- Lowercase once per strip instead of per marker scan (83a33aaf) 
+- Pre-size summary prompt and retained-message vectors (b8de575b) 
+- Pre-size preflight validation failures vector (95ba7560) 
+- Pre-size system-prompt line vectors (4d583287) 
+- Pre-size render output lines and list stack (35a90e05) 
+- Pre-size render output strings (83407ee2) 
+#### Refactors
+
+- Name failure mode in recovery retry directive (593b4c67) 
+- Extract finalize_turn helper from run_turn_loop (85460ba6) 
+- Improve error handling and streamline post-tool recovery logic (bb3aeff2) 
+#### Tests
+
+- Cover tool-free recovery retry-then-salvage (00f6ad3f) 
+## 0.134.15 - 2026-07-09
+
+### Highlights
+#### Bug Fixes
+
+- Primary agent runtime config clobbers configured model with "inherit"  (fe45c4ec) (@ForrestThump)
+- Retry tool-free recovery on contract violation instead of bailing (ebc936ad) 
+- Raise recovery synthesis token cap 1024 -> 4096 (383c7151) 
+- Update contributor commit counts in README and add WIP note in TODO (891da9e0) 
+- Stop injecting contradictory resume directive during tool-free recovery (7acc042d) 
+#### Features
+
+- Implement absolute line cap for read_file calls with continuation support (a345212b) 
+- Add absolute line cap for line-based read_file operations (c2d7a50f) 
+- Implement WorktreeReconciler with DiffVerifier for safe merges (58c257c1) 
+- Salvage prose from rejected recovery synthesis in fallback (c30ac37d) 
+- Enhance local model management and readiness checks (f7271b25) 
+### Other Changes
+#### Build
+
+- Eliminate last 2 unsafe blocks in build.rs and process_hardening.rs (650781c6) 
+#### CI
+
+- Wire allocator-jemalloc feature into build-linux-windows.yml (e5f4b3d6) 
+#### Other
+
+- Remove sccache + rust-cache from Windows and macOS builds (ecd69fc1) (@vinhnx)
+- Update TODO.md (51f4dad0) (@vinhnx)
+- Delete PLAN-loop-engineering.md (40ae26f0) (@vinhnx)
+- Delete web-fetch-hilt-fix.md (05425cda) (@vinhnx)
+- Update TODO.md (e8266c24) (@vinhnx)
+- Update TODOs (66a93a98) 
+- Update TODO (ec8e24ee) 
+#### Performance
+
+- Shallow git checkouts in CI, enable sccache for local macOS release builds (d55f76ec) 
+- Default to jemalloc on Linux and add bench-allocator RSS diagnostic (998f101e) 
 ## 0.134.14 - 2026-07-07
 
 ### Highlights

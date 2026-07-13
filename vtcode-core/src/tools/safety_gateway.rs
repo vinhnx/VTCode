@@ -34,8 +34,8 @@ use crate::tools::registry::{
     RiskLevel, ToolRiskContext, ToolRiskScorer, ToolSource, WorkspaceTrust,
 };
 use crate::tools::tool_intent::{
-    classify_tool_intent, command_session_action_in, command_session_action_is,
-    file_operation_action_is, search_dispatch_action_is,
+    action_qualified_policy_name, classify_tool_intent, command_session_action_in,
+    command_session_action_is, file_operation_action_is,
 };
 use vtcode_config::core::DotfileProtectionConfig;
 
@@ -954,13 +954,8 @@ impl SafetyGateway {
             ToolSource::Internal
         };
 
-        let web_search =
-            tool_name == tools::UNIFIED_SEARCH && search_dispatch_action_is(args, "web");
-        let risk_tool_name = if web_search {
-            "search_dispatch:web"
-        } else {
-            tool_name
-        };
+        let risk_tool_name =
+            action_qualified_policy_name(tool_name, Some(args)).unwrap_or(tool_name);
 
         let mut ctx = ToolRiskContext::new(
             risk_tool_name.to_string(),
@@ -976,9 +971,7 @@ impl SafetyGateway {
             ctx = ctx.as_destructive();
         }
 
-        // Check for network access (web_search here is the action-qualified
-        // `search_dispatch:web` form computed above).
-        if ToolRiskScorer::is_network_tool(tool_name) || web_search {
+        if ToolRiskScorer::is_network_tool(risk_tool_name) {
             ctx = ctx.accesses_network();
         }
 

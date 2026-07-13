@@ -1,5 +1,12 @@
 # Local Inference Servers
 
+> **Experimental.** Local inference (Ollama, LM Studio, llama.cpp) is less
+> reliable than remote APIs and depends on your hardware and the model you
+> load. See [Local Models guide](../guides/local-models.md) for trade-offs,
+> hardware sizing, and a "getting reliable results" checklist. VT Code now
+> detects a stopped server or an unloaded model *before* generating and prints
+> the exact recovery command (e.g. `ollama pull <model>` or `/local start <provider>`).
+
 VT Code manages local LLM inference servers through the `/local` command. Control Ollama, LM Studio, and llama.cpp directly from the TUI.
 
 ## Quick Start
@@ -394,6 +401,7 @@ which llama-server
 
 ## See Also
 
+- [Local Models guide](../guides/local-models.md) — trade-offs, hardware, reliable-setup checklist
 - [Ollama Provider Guide](ollama.md)
 - [LM Studio Provider Guide](lmstudio.md)
 - [llama.cpp Provider Guide](llamacpp.md)

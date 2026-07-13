@@ -473,6 +473,41 @@ pub(super) fn try_handle_slash_navigation(
     handled
 }
 
+/// Slash commands that submit immediately when chosen from the palette, without
+/// requiring a follow-up confirmation or argument prompt.
+///
+/// Kept as a single source of truth so the matcher cannot drift from the set
+/// of commands that behave this way.
+const IMMEDIATE_SUBMIT_COMMANDS: &[&str] = &[
+    "/model",
+    "/files",
+    "/ide",
+    "/status",
+    "/stop",
+    "/pause",
+    "/checkup",
+    "/doctor",
+    "/mcp",
+    "/skills",
+    "/new",
+    "/review",
+    "/git",
+    "/docs",
+    "/copy",
+    "/help",
+    "/clear",
+    "/compact",
+    "/login",
+    "/logout",
+    "/auth",
+    "/refresh-oauth",
+    "/resume",
+    "/continue",
+    "/fork",
+    "/history",
+    "/exit",
+];
+
 pub(crate) fn should_submit_immediately_from_palette(session: &Session) -> bool {
     let Some(command) = session
         .core
@@ -484,35 +519,7 @@ pub(crate) fn should_submit_immediately_from_palette(session: &Session) -> bool 
         return false;
     };
 
-    command.strip_prefix('/') == Some("model")
-        || matches!(
-            command,
-            "/files"
-                | "/ide"
-                | "/status"
-                | "/stop"
-                | "/pause"
-                | "/doctor"
-                | "/mcp"
-                | "/skills"
-                | "/new"
-                | "/review"
-                | "/git"
-                | "/docs"
-                | "/copy"
-                | "/help"
-                | "/clear"
-                | "/compact"
-                | "/login"
-                | "/logout"
-                | "/auth"
-                | "/refresh-oauth"
-                | "/resume"
-                | "/continue"
-                | "/fork"
-                | "/history"
-                | "/exit"
-        )
+    IMMEDIATE_SUBMIT_COMMANDS.contains(&command)
 }
 
 #[derive(Clone)]

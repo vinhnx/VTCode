@@ -22,7 +22,7 @@ pub use crate::config::core::tools::ToolPolicy;
 use crate::config::loader::{ConfigManager, VTCodeConfig};
 use crate::config::mcp::{McpAllowListConfig, McpAllowListRules};
 use crate::utils::file_utils::{
-    ensure_dir_exists, read_file_with_context, write_file_with_context,
+    ensure_dir_exists, read_file_with_context, write_file_atomic_with_context,
 };
 use crate::utils::tool_name_parsing::{canonical_tool_name, parse_canonical_mcp_tool_name};
 
@@ -587,7 +587,7 @@ impl ToolPolicyManager {
         let serialized = serde_json::to_string_pretty(config)
             .context("Failed to serialize tool policy config")?;
 
-        write_file_with_context(path, &serialized, "tool policy config")
+        write_file_atomic_with_context(path, &serialized, "tool policy config")
             .await
             .with_context(|| format!("Failed to write tool policy config: {}", path.display()))
     }

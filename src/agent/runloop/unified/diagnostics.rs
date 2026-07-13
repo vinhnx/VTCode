@@ -1,5 +1,6 @@
 use anyhow::Result;
 
+use vtcode_core::config::LifecycleHooksConfig;
 use vtcode_core::config::ToolPolicy;
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
@@ -11,7 +12,7 @@ use super::async_mcp_manager::{AsyncMcpManager, McpInitStatus};
 use super::workspace_links::LinkedDirectory;
 
 #[derive(Clone, Copy, Debug, Default)]
-pub(crate) struct DoctorOptions {
+pub(crate) struct CheckupOptions {
     pub quick: bool,
 }
 
@@ -39,7 +40,7 @@ enum DoctorCheckOutcome {
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(crate) async fn run_doctor_diagnostics(
+pub(crate) async fn run_checkup_diagnostics(
     renderer: &mut AnsiRenderer,
     config: &CoreAgentConfig,
     vt_cfg: Option<&VTCodeConfig>,
@@ -51,7 +52,7 @@ pub(crate) async fn run_doctor_diagnostics(
             tokio::sync::RwLock<hashbrown::HashMap<String, vtcode_core::skills::types::Skill>>,
         >,
     >,
-    options: DoctorOptions,
+    options: CheckupOptions,
 ) -> Result<()> {
     let mut summary = DoctorSummary::default();
 
@@ -419,6 +420,8 @@ pub(crate) async fn run_doctor_diagnostics(
         "═══════════════════════════════════════════════════════════════",
     )?;
 
+    render_checkup_optimizations(renderer, vt_cfg, config)?;
+
     renderer.line(MessageStyle::Info, "")?;
     renderer.line(MessageStyle::Status, "[Summary]")?;
     renderer.line(
@@ -431,7 +434,7 @@ pub(crate) async fn run_doctor_diagnostics(
     if summary.failures > 0 {
         renderer.line(
             MessageStyle::Error,
-            "[FAIL] Resolve failures first, then rerun `/doctor`.",
+            "[FAIL] Resolve failures first, then rerun `/checkup` (alias `/doctor`).",
         )?;
     } else if summary.warnings > 0 {
         renderer.line(
@@ -450,7 +453,7 @@ pub(crate) async fn run_doctor_diagnostics(
     if summary.failures > 0 {
         renderer.line(
             MessageStyle::Info,
-            "[FAIL] Follow the remediation hints above and run `/doctor` again.",
+            "[FAIL] Follow the remediation hints above and run `/checkup` again (alias `/doctor`).",
         )?;
     }
     if summary.warnings > 0 {
@@ -462,7 +465,7 @@ pub(crate) async fn run_doctor_diagnostics(
     if options.quick {
         renderer.line(
             MessageStyle::Info,
-            "[TIP] Run `/doctor --full` to include dependencies, MCP, links, and skills checks.",
+            "[TIP] Run `/checkup --full` (alias `/doctor`) to include dependencies, MCP, links, and skills checks.",
         )?;
     }
     renderer.line(
@@ -481,6 +484,81 @@ pub(crate) async fn run_doctor_diagnostics(
     )?;
     renderer.line(MessageStyle::Info, "")?;
     Ok(())
+}
+
+/// Emit report-only optimization suggestions derived from the active config.
+///
+/// These mirror the `/checkup` spec (auto mode, slow hooks, pre-approved
+/// read-only commands, keeping skills/MCPs and CLAUDE.md lean). They are
+/// surfaced as tips rather than pass/fail checks because `/checkup` confirms
+/// with the user before making any change.
+fn render_checkup_optimizations(
+    renderer: &mut AnsiRenderer,
+    vt_cfg: Option<&VTCodeConfig>,
+    _config: &CoreAgentConfig,
+) -> Result<()> {
+    renderer.line(MessageStyle::Status, "[Optimization Suggestions]")?;
+
+    if let Some(cfg) = vt_cfg {
+        if !cfg.automation.full_auto.enabled {
+            renderer.line(
+                MessageStyle::Info,
+                "[TIP] Auto mode is disabled. Enable [automation.full_auto] in vtcode.toml (or run `vtcode --auto`) to let VT Code run unattended.",
+            )?;
+        }
+
+        let hook_count = count_configured_hooks(&cfg.hooks.lifecycle);
+        if hook_count > 0 {
+            renderer.line(
+                MessageStyle::Info,
+                &format!(
+                    "[TIP] {hook_count} lifecycle hook group(s) configured. Disable slow hooks (e.g. pre/post-tool-use) when not needed to speed up runs."
+                ),
+            )?;
+        }
+    }
+
+    match vt_cfg.map(|c| &c.tools.default_policy) {
+        Some(ToolPolicy::Prompt) => renderer.line(
+            MessageStyle::Info,
+            "[TIP] Tool policy is 'prompt': every tool use asks for confirmation. Pre-approve frequently-used read-only commands to reduce interruptions.",
+        )?,
+        Some(ToolPolicy::Deny) => renderer.line(
+            MessageStyle::Info,
+            "[TIP] Tool policy is 'deny': most tools are blocked. Allow the commands you trust to avoid manual overrides.",
+        )?,
+        Some(ToolPolicy::Allow) | None => {}
+    }
+
+    renderer.line(
+        MessageStyle::Info,
+        "[TIP] Run `/update` to ensure VT Code is on the latest version.",
+    )?;
+    renderer.line(
+        MessageStyle::Info,
+        "[TIP] Remove unused skills/MCPs and deduplicate or split your CLAUDE.md into nested files to save context.",
+    )?;
+    Ok(())
+}
+
+pub(crate) fn count_configured_hooks(hooks: &LifecycleHooksConfig) -> usize {
+    [
+        hooks.session_start.len(),
+        hooks.session_end.len(),
+        hooks.subagent_start.len(),
+        hooks.subagent_stop.len(),
+        hooks.user_prompt_submit.len(),
+        hooks.pre_tool_use.len(),
+        hooks.post_tool_use.len(),
+        hooks.permission_request.len(),
+        hooks.pre_compact.len(),
+        hooks.stop.len(),
+        hooks.task_completion.len(),
+        hooks.task_completed.len(),
+        hooks.notification.len(),
+    ]
+    .into_iter()
+    .sum()
 }
 
 fn render_doctor_check(
@@ -518,7 +596,7 @@ fn get_suggestion_for_issue(label: &str, detail: &str) -> Option<String> {
         Some("Ensure workspace directory is accessible and not deleted.".to_string())
     } else if label_lower.contains("api key") {
         Some(
-            "Set the provider API key in your environment or vtcode.toml, then rerun `/doctor`."
+            "Set the provider API key in your environment or vtcode.toml, then rerun `/checkup` (alias `/doctor`)."
                 .to_string(),
         )
     } else if label_lower.contains("config file") && detail_lower.contains("no vtcode.toml") {

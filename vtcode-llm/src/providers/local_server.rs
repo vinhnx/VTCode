@@ -729,6 +729,37 @@ fn resolve_base_url(default: &str, env_var: &str) -> String {
         .unwrap_or_else(|| default.to_string())
 }
 
+/// Returns true when `base_url` points at a loopback/local endpoint.
+///
+/// Shared by local providers so the "is this localhost?" check lives in one
+/// place. Accepts `localhost`, `127.0.0.1` (and the whole `127.0.0.0/8`
+/// subnet via prefix match), `::1`, and `0.0.0.0` over http/https.
+pub fn is_local_base_url(base_url: &str) -> bool {
+    let lowered = base_url.trim().to_ascii_lowercase();
+    const LOCAL_PREFIXES: &[&str] = &[
+        "http://localhost",
+        "https://localhost",
+        "http://127.",
+        "https://127.",
+        "http://0.0.0.0",
+        "https://0.0.0.0",
+        "http://[::1]",
+        "https://[::1]",
+    ];
+    if LOCAL_PREFIXES
+        .iter()
+        .any(|prefix| lowered.starts_with(*prefix))
+    {
+        return true;
+    }
+    if let Ok(parsed) = url::Url::parse(lowered.trim_end_matches('/'))
+        && let Some(host) = parsed.host_str()
+    {
+        return matches!(host, "localhost" | "127.0.0.1" | "::1" | "0.0.0.0");
+    }
+    false
+}
+
 fn strip_path_suffix(url: &str) -> String {
     // Strip /v1 or /api/v1 suffix to get the host root
     let trimmed = url.trim_end_matches('/');
@@ -898,5 +929,31 @@ mod tests {
             strip_path_suffix("http://localhost:8080"),
             "http://localhost:8080"
         );
+    }
+
+    #[test]
+    fn test_is_local_base_url_accepts_loopback() {
+        for url in [
+            "http://localhost:11434",
+            "https://localhost:1234/v1",
+            "http://127.0.0.1:8080/v1",
+            "http://127.1.2.3:9999",
+            "http://0.0.0.0:8080",
+            "http://[::1]:1234/v1",
+        ] {
+            assert!(is_local_base_url(url), "expected local: {url}");
+        }
+    }
+
+    #[test]
+    fn test_is_local_base_url_rejects_remote() {
+        for url in [
+            "http://192.168.1.10:11434",
+            "https://api.openai.com/v1",
+            "http://example.com:8080/v1",
+            "http://10.0.0.5:1234",
+        ] {
+            assert!(!is_local_base_url(url), "expected remote: {url}");
+        }
     }
 }

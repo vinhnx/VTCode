@@ -1,5 +1,5 @@
 use std::fs::{self, File};
-use std::io::Cursor;
+use std::io::{self, Cursor};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -7,7 +7,7 @@ use crate::tools::ast_grep_binary::{alias_ast_grep_binary_name, canonical_ast_gr
 use anyhow::{Context, Result, anyhow, bail};
 use flate2::read::GzDecoder;
 use tar::Archive;
-use tempfile::TempDir;
+use tempfile::{NamedTempFile, TempDir};
 use vtcode_commons::walk::build_walker_single_threaded;
 use zip::ZipArchive;
 
@@ -30,13 +30,7 @@ pub(super) fn install_archive(
     extract_archive(archive_name, archive_bytes, &extract_dir)?;
     let extracted_binary = find_extracted_binary(&extract_dir)?;
 
-    fs::copy(&extracted_binary, &paths.binary_path).with_context(|| {
-        format!(
-            "Failed to install ast-grep to {}",
-            paths.binary_path.display()
-        )
-    })?;
-    set_executable_permissions(&paths.binary_path)?;
+    install_binary_atomically(&extracted_binary, &paths.binary_path, &paths.bin_dir)?;
 
     if cfg!(target_os = "linux") {
         let stale_alias = paths.bin_dir.join("sg");
@@ -113,7 +107,7 @@ fn extract_archive(archive_name: &str, archive_bytes: &[u8], destination: &Path)
 
             let mut outfile = File::create(&outpath)
                 .with_context(|| format!("Failed to create {}", outpath.display()))?;
-            std::io::copy(&mut file, &mut outfile)
+            io::copy(&mut file, &mut outfile)
                 .with_context(|| format!("Failed to extract {}", outpath.display()))?;
         }
         return Ok(());
@@ -139,6 +133,49 @@ fn find_extracted_binary(root: &Path) -> Result<PathBuf> {
             }
         })
         .ok_or_else(|| anyhow!("ast-grep binary not found in release archive"))
+}
+
+/// Installs `source` at `destination` without ever exposing a partially
+/// written file at `destination`.
+///
+/// The extracted binary is first staged into a `NamedTempFile` created in
+/// `destination_dir` (the same directory as `destination`, and therefore the
+/// same filesystem), so the final `persist` is a single atomic rename rather
+/// than a byte-by-byte copy into the live path. This prevents two concurrent
+/// installers -- or a process killed mid-copy -- from leaving a corrupted or
+/// half-written binary at `destination`.
+fn install_binary_atomically(
+    source: &Path,
+    destination: &Path,
+    destination_dir: &Path,
+) -> Result<()> {
+    let mut source_file = File::open(source)
+        .with_context(|| format!("Failed to open extracted binary {}", source.display()))?;
+
+    let mut staged = NamedTempFile::new_in(destination_dir).with_context(|| {
+        format!(
+            "Failed to create staging file in {}",
+            destination_dir.display()
+        )
+    })?;
+
+    io::copy(&mut source_file, staged.as_file_mut()).with_context(|| {
+        format!(
+            "Failed to stage ast-grep binary at {}",
+            staged.path().display()
+        )
+    })?;
+
+    set_executable_permissions(staged.path())?;
+
+    staged.persist(destination).with_context(|| {
+        format!(
+            "Failed to publish ast-grep binary to {}",
+            destination.display()
+        )
+    })?;
+
+    Ok(())
 }
 
 fn set_executable_permissions(path: &Path) -> Result<()> {

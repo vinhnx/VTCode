@@ -18,7 +18,7 @@ publish = false
 anyhow = { workspace = true }
 dirs = { workspace = true }
 hashbrown = { workspace = true }
-libc = { workspace = true }
+nix = { version = "0.31", features = ["user", "signal", "process"] }
 once_cell = { workspace = true }
 rustc-hash = { workspace = true }
 serde = { workspace = true }
@@ -32,7 +32,7 @@ toml = { workspace = true }
 tree-sitter = "0.26"
 tree-sitter-bash = "0.25"
 tracing = { workspace = true }
-vtcode-commons = { path = "../vtcode-commons", version = "0.134.14" }
+vtcode-commons = { path = "../vtcode-commons", version = "0.135.5" }
 
 [dev-dependencies]
 serde_json = { workspace = true }

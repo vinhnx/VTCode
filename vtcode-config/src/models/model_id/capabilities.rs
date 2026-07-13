@@ -145,9 +145,12 @@ impl ModelId {
             ModelId::Gemini31ProPreview | ModelId::Gemini31ProPreviewCustomTools => {
                 Some(ModelId::Gemini35Flash)
             }
-            ModelId::GPT55 | ModelId::GPT54 | ModelId::GPT54Pro => Some(ModelId::GPT54Mini),
+            ModelId::GPT55 | ModelId::GPT54 | ModelId::GPT54Pro | ModelId::GPT53Codex => {
+                Some(ModelId::GPT54Mini)
+            }
+            ModelId::GPT56Sol => Some(ModelId::GPT56Terra),
+            ModelId::GPT56Terra => Some(ModelId::GPT56Luna),
             ModelId::OpenCodeZenGPT54 => Some(ModelId::OpenCodeZenGPT54Mini),
-            ModelId::GPT53Codex => Some(ModelId::GPT54Mini),
             ModelId::ClaudeSonnet5
             | ModelId::ClaudeFable5
             | ModelId::ClaudeMythos5
@@ -287,6 +290,7 @@ impl ModelId {
             ModelId::Gemini31ProPreview
                 | ModelId::Gemini31ProPreviewCustomTools
                 | ModelId::OpenRouterGoogleGemini31ProPreview
+                | ModelId::GPT56Sol
                 | ModelId::GPT55
                 | ModelId::GPT54
                 | ModelId::GPT54Pro
@@ -341,6 +345,7 @@ impl ModelId {
             self,
             ModelId::Gemini35Flash
                 | ModelId::GPT54Mini
+                | ModelId::GPT56Luna
                 | ModelId::CopilotGPT54Mini
                 | ModelId::ClaudeHaiku45
                 | ModelId::OpenCodeZenGPT54Mini
@@ -366,6 +371,8 @@ impl ModelId {
                 | ModelId::Gemini31ProPreviewCustomTools
                 | ModelId::OpenRouterGoogleGemini31ProPreview
                 | ModelId::Gemini35Flash
+                | ModelId::GPT56Sol
+                | ModelId::GPT56Terra
                 | ModelId::GPT55
                 | ModelId::GPT54
                 | ModelId::GPT54Pro
@@ -442,6 +449,7 @@ impl ModelId {
             // Gemini generations
             ModelId::Gemini31ProPreview | ModelId::Gemini31ProPreviewCustomTools => "3.1",
             // OpenAI generations
+            ModelId::GPT56Sol | ModelId::GPT56Terra | ModelId::GPT56Luna => "5.6",
             ModelId::GPT55 => "5.5",
             ModelId::GPT54 | ModelId::GPT54Pro | ModelId::GPT54Nano | ModelId::GPT54Mini => "5.4",
             ModelId::GPT53Codex => "5.3",
@@ -522,7 +530,13 @@ impl ModelId {
     pub fn supports_shell_tool(&self) -> bool {
         matches!(
             self,
-            ModelId::GPT55 | ModelId::GPT54 | ModelId::GPT54Pro | ModelId::GPT53Codex
+            ModelId::GPT56Sol
+                | ModelId::GPT56Terra
+                | ModelId::GPT56Luna
+                | ModelId::GPT55
+                | ModelId::GPT54
+                | ModelId::GPT54Pro
+                | ModelId::GPT53Codex
         )
     }
 

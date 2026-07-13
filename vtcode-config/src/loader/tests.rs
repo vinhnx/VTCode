@@ -616,7 +616,7 @@ fn save_config_writes_sparse_model_theme_and_permission_values() {
 
 #[test]
 #[serial]
-fn deprecated_permission_keys_are_rejected() {
+fn deprecated_permission_keys_are_migrated_on_save() {
     for deprecated_key in ["allowed_tools", "disallowed_tools"] {
         let temp_dir = tempfile::tempdir().unwrap();
         let workspace = temp_dir.path();
@@ -632,14 +632,19 @@ fn deprecated_permission_keys_are_rejected() {
         )
         .expect("failed to write config");
 
-        let error = match ConfigManager::load_from_workspace(workspace) {
-            Ok(_) => panic!("deprecated permission keys should be rejected"),
-            Err(error) => error,
-        };
-        let error = format!("{error:#}");
+        // Deprecated keys are accepted on load (they are not a hard error),
+        // so existing configs keep working until they are migrated on save.
+        let manager = ConfigManager::load_from_workspace(workspace)
+            .unwrap_or_else(|e| panic!("deprecated permission keys should load: {e:#}"));
+
+        // Saving strips the deprecated keys (the save path migrates them away).
+        ConfigManager::save_config_to_path(&config_path, manager.config())
+            .expect("failed to save config");
+
+        let written = fs::read_to_string(&config_path).unwrap();
         assert!(
-            error.contains(deprecated_key),
-            "error should mention deprecated key {deprecated_key}. Got:\n{error}"
+            !written.contains(deprecated_key),
+            "deprecated key {deprecated_key} should be stripped on save. Got:\n{written}"
         );
     }
 }

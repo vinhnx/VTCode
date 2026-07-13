@@ -316,6 +316,10 @@ pub(crate) struct HarnessTurnState {
     pub last_shell_command_signature: Option<String>,
     pub consecutive_same_file_read_family_calls: usize,
     last_file_read_family_signature: Option<String>,
+    /// Per-file-path read count, independent of slice (offset/limit/raw).
+    /// Catches paginated reads of the same file that the slice-aware family
+    /// key lets through. Reset every turn.
+    file_read_path_counts: HashMap<String, usize>,
     pub(crate) seen_successful_readonly_signatures: HashSet<String>,
     streamed_tool_call_item_ids: HashMap<String, String>,
     pub stop_hook_active: bool,
@@ -344,6 +348,11 @@ pub(crate) struct HarnessTurnState {
     /// Resets naturally per turn because each turn constructs a fresh
     /// `HarnessTurnState`.
     post_tool_recovery_cycles: u8,
+    /// Best-effort prose salvaged from a recovery synthesis response that was
+    /// rejected for containing tool-call markup. Used as the final answer when
+    /// all recovery retries are exhausted, instead of the canned fallback
+    /// string, so gathered context is not discarded entirely.
+    recovery_rejected_synthesis: Option<String>,
     pub max_tool_calls: usize,
     pub max_tool_wall_clock: Duration,
     pub max_tool_retries: u32,
@@ -377,6 +386,7 @@ impl HarnessTurnState {
             last_shell_command_signature: None,
             consecutive_same_file_read_family_calls: 0,
             last_file_read_family_signature: None,
+            file_read_path_counts: HashMap::new(),
             seen_successful_readonly_signatures: HashSet::new(),
             streamed_tool_call_item_ids: HashMap::new(),
             stop_hook_active: false,
@@ -392,6 +402,7 @@ impl HarnessTurnState {
             recovery_mode: None,
             recovery_retry_count: 0,
             post_tool_recovery_cycles: 0,
+            recovery_rejected_synthesis: None,
             max_tool_calls,
             max_tool_wall_clock: Duration::from_secs(max_tool_wall_clock_secs),
             max_tool_retries,
@@ -656,6 +667,19 @@ impl HarnessTurnState {
         self.recovery_retry_count
     }
 
+    /// Record best-effort prose salvaged from a rejected recovery synthesis
+    /// response. Later rejections overwrite earlier ones (the latest attempt
+    /// is the most complete).
+    pub(crate) fn record_recovery_rejected_synthesis(&mut self, text: String) {
+        if !text.trim().is_empty() {
+            self.recovery_rejected_synthesis = Some(text);
+        }
+    }
+
+    pub(crate) fn take_recovery_rejected_synthesis(&mut self) -> Option<String> {
+        self.recovery_rejected_synthesis.take()
+    }
+
     pub(crate) fn post_tool_recovery_cycles(&self) -> u8 {
         self.post_tool_recovery_cycles
     }
@@ -708,6 +732,21 @@ impl HarnessTurnState {
     pub(crate) fn reset_file_read_family_streak(&mut self) {
         self.last_file_read_family_signature = None;
         self.consecutive_same_file_read_family_calls = 0;
+    }
+
+    /// Record a read of `path` and return the total count of reads for that
+    /// path this turn. Independent of slice (offset/limit/raw) — catches
+    /// paginated reads of the same file that the slice-aware family key lets
+    /// through.
+    pub(crate) fn record_file_read_path_call(&mut self, path: String) -> usize {
+        let count = self.file_read_path_counts.entry(path).or_insert(0);
+        *count = count.saturating_add(1);
+        *count
+    }
+
+    #[cfg(test)]
+    pub(crate) fn reset_file_read_path_counts(&mut self) {
+        self.file_read_path_counts.clear();
     }
 
     pub(crate) fn record_written_file(&mut self, path: &str) {
@@ -1522,6 +1561,47 @@ mod tests {
 
         state.reset_file_read_family_streak();
         assert_eq!(state.consecutive_same_file_read_family_calls, 0);
+    }
+
+    #[test]
+    fn file_read_path_counts_track_per_path_regardless_of_slice() {
+        let mut state = HarnessTurnState::new(
+            TurnRunId("run-path".to_string()),
+            TurnId("turn-path".to_string()),
+            20,
+            600,
+            3,
+        );
+
+        // Same path, different offsets — each increments the path counter.
+        assert_eq!(
+            state.record_file_read_path_call("src/lib.rs".to_string()),
+            1
+        );
+        assert_eq!(
+            state.record_file_read_path_call("src/lib.rs".to_string()),
+            2
+        );
+        assert_eq!(
+            state.record_file_read_path_call("src/lib.rs".to_string()),
+            3
+        );
+        // Different path gets its own counter.
+        assert_eq!(
+            state.record_file_read_path_call("src/main.rs".to_string()),
+            1
+        );
+        // Original path continues counting.
+        assert_eq!(
+            state.record_file_read_path_call("src/lib.rs".to_string()),
+            4
+        );
+
+        state.reset_file_read_path_counts();
+        assert_eq!(
+            state.record_file_read_path_call("src/lib.rs".to_string()),
+            1
+        );
     }
 
     #[test]

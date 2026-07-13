@@ -1,6 +1,10 @@
 use super::AgentRunner;
 use super::continuation::{CompletionAssessment, VerificationResult};
 use super::escalation::{EscalationDecision, EscalationGate};
+use super::execute_helpers::{
+    emit_blocked_handoff_events, prepare_responses_request_messages, record_terminal_turn_event,
+    stop_reason_from_finish_reason, summarize_verification_output,
+};
 use super::helpers::detect_textual_exec_tool_call;
 use super::orchestration::EvaluatorGateOutcome;
 use super::prompt_alignment;
@@ -20,11 +24,8 @@ use crate::core::agent::runtime::{AgentRuntime, RuntimeControl};
 use crate::core::agent::session::AgentSessionState;
 use crate::core::agent::task::{ContextItem, Task, TaskOutcome, TaskResults};
 use crate::exec::events::HarnessEventKind;
-use crate::llm::model_resolver::ModelResolver;
 use crate::llm::provider::{
-    FinishReason, Message, ResponsesContinuationState, ToolCall, ToolChoice, ToolDefinition,
-    prepare_responses_continuation_request, responses_continuation_key,
-    supports_responses_chaining,
+    Message, ToolCall, ToolChoice, ToolDefinition, supports_responses_chaining,
 };
 use crate::llm::providers::gemini::wire::Part;
 use crate::prompts::{
@@ -37,136 +38,19 @@ use serde_json::json;
 use std::sync::Arc;
 use tracing::{debug, warn};
 
-fn record_terminal_turn_event(
-    event_recorder: &mut ExecEventRecorder,
-    outcome: &TaskOutcome,
-    usage: vtcode_exec_events::Usage,
-) {
-    if outcome.is_success() {
-        event_recorder.record_thread_event(vtcode_exec_events::ThreadEvent::TurnCompleted(
-            vtcode_exec_events::TurnCompletedEvent { usage },
-        ));
-    } else {
-        event_recorder.record_thread_event(vtcode_exec_events::ThreadEvent::TurnFailed(
-            vtcode_exec_events::TurnFailedEvent {
-                message: outcome.description(),
-                usage: Some(usage),
-            },
-        ));
-    }
-}
-
-fn emit_blocked_handoff_events(
-    event_recorder: &mut ExecEventRecorder,
-    current_path: &std::path::Path,
-    archive_path: &std::path::Path,
-) {
-    for path in [current_path, archive_path] {
-        event_recorder.harness_event(
-            HarnessEventKind::BlockedHandoffWritten,
-            Some("Blocked handoff written".to_string()),
-            None,
-            Some(path.display().to_string()),
-            None,
-            None,
-            None,
-        );
-    }
-}
-
-fn summarize_verification_output(result: &serde_json::Value) -> String {
-    result
-        .get("output")
-        .and_then(serde_json::Value::as_str)
-        .or_else(|| result.get("stderr").and_then(serde_json::Value::as_str))
-        .or_else(|| result.get("stdout").and_then(serde_json::Value::as_str))
-        .map(str::trim)
-        .filter(|text| !text.is_empty())
-        .map(|text| {
-            let truncated = text
-                .lines()
-                .take(20)
-                .collect::<Vec<_>>()
-                .join("\n")
-                .trim()
-                .to_string();
-            if truncated.len() < text.len() {
-                format!("{truncated}\n...")
-            } else {
-                truncated
-            }
-        })
-        .unwrap_or_default()
-}
-
-fn prepare_responses_request_messages<'a>(
-    previous_chains: &mut hashbrown::HashMap<(String, String), ResponsesContinuationState>,
-    provider_name: &str,
-    provider_supports_responses_compaction: bool,
-    model: &str,
-    messages: &'a [Message],
-) -> (std::borrow::Cow<'a, [Message]>, Option<String>) {
-    let key = responses_continuation_key(provider_name, model);
-    let continuation = key.as_ref().and_then(|k| previous_chains.get(k));
-    let prepared = prepare_responses_continuation_request(
-        provider_name,
-        provider_supports_responses_compaction,
-        messages,
-        continuation,
-    );
-    if prepared.clear_stale_chain
-        && let Some(key) = key
-    {
-        previous_chains.remove(&key);
-    }
-
-    (prepared.messages, prepared.previous_response_id)
-}
-
-fn stop_reason_from_finish_reason(finish_reason: &FinishReason) -> String {
-    match finish_reason {
-        FinishReason::Stop => "end_turn".to_string(),
-        FinishReason::Length => "max_tokens".to_string(),
-        FinishReason::ToolCalls => "tool_calls".to_string(),
-        FinishReason::ContentFilter => "content_filter".to_string(),
-        FinishReason::Pause => "pause_turn".to_string(),
-        FinishReason::Refusal => "refusal".to_string(),
-        FinishReason::Error(message) => message.clone(),
-    }
-}
-
-fn estimate_session_cost_usd(
-    provider: &str,
-    model: &str,
-    usage: &vtcode_exec_events::Usage,
-) -> Option<f64> {
-    // Map harness-level usage into the LLM pricing model.  Cache-aware fields
-    // (`cached_prompt_tokens`, `cache_read_tokens`) are intentionally left as
-    // `None` here because `vtcode_exec_events::Usage` conflates "total cached
-    // input" with "cache reads" into a single `cached_input_tokens` field.
-    // Setting both would double-count cached tokens in `estimate_cost` (once
-    // via `prompt_tokens * input_cost` and again via `cache_read_cost`).
-    // Budget enforcement only needs a conservative upper bound, which the base
-    // `prompt_tokens * input_cost` already provides.
-    let usage = crate::llm::provider::Usage {
-        prompt_tokens: u32::try_from(usage.input_tokens).unwrap_or(u32::MAX),
-        completion_tokens: u32::try_from(usage.output_tokens).unwrap_or(u32::MAX),
-        total_tokens: u32::try_from(usage.input_tokens.saturating_add(usage.output_tokens))
-            .unwrap_or(u32::MAX),
-        cached_prompt_tokens: None,
-        cache_creation_tokens: Some(u32::try_from(usage.cache_creation_tokens).unwrap_or(u32::MAX)),
-        cache_read_tokens: None,
-        iterations: None,
-    };
-    let resolved = ModelResolver::resolve(Some(provider), model, &[], None)?;
-    let pricing = resolved.pricing()?;
-    ModelResolver::estimate_cost(pricing, &usage)
-}
-
 pub(super) struct RuntimePromptBundle {
     system_instruction: Arc<String>,
     tool_snapshot: SessionToolCatalogSnapshot,
     request_tools: Option<Arc<Vec<ToolDefinition>>>,
+    /// Estimated token overhead of `request_tools`, computed once per
+    /// snapshot (see [`crate::llm::usage_cost::estimate_tool_definition_tokens`]).
+    tool_def_tokens: u64,
+    /// Token-budget report for the composed system instruction sections
+    /// (measured before the runtime-mode/tool-guideline/harness-limits
+    /// sections appended in `build_runtime_prompt_bundle`, which are runtime
+    /// scaffolding rather than trimmable prompt layers). Drives the
+    /// preflight token check and the over-budget user warning.
+    pub(super) system_prompt_report: crate::prompts::system::SystemPromptReport,
 }
 
 /// Outcome of [`AgentRunner::resolve_completion_assessment`].
@@ -188,9 +72,12 @@ impl AgentRunner {
         &self,
         prompt_tools: Arc<Vec<ToolDefinition>>,
         is_simple_task: bool,
-    ) -> Result<String> {
+    ) -> Result<(String, crate::prompts::system::SystemPromptReport)> {
         if !is_simple_task {
-            return Ok(self.system_prompt.clone());
+            return Ok((
+                self.system_prompt.clone(),
+                self.system_prompt_report.clone(),
+            ));
         }
 
         let mut config = self.config().clone();
@@ -203,14 +90,14 @@ impl AgentRunner {
         );
         prompt_context.load_available_skills();
 
-        let prompt = super::helpers::compose_system_prompt_with_appendix(
+        let (prompt, report) = super::helpers::compose_system_prompt_with_appendix(
             self._workspace.as_path(),
             &config,
             &prompt_context,
         )
         .await?;
 
-        Ok(prompt)
+        Ok((prompt, report))
     }
 
     async fn build_runtime_prompt_bundle(
@@ -222,7 +109,7 @@ impl AgentRunner {
         let prompt_tools = request_tools
             .clone()
             .unwrap_or_else(|| Arc::new(Vec::new()));
-        let mut system_prompt = self
+        let (mut system_prompt, system_prompt_report) = self
             .compose_task_system_prompt(prompt_tools, is_simple_task)
             .await?;
         self.append_active_primary_agent_context(&mut system_prompt);
@@ -263,10 +150,22 @@ impl AgentRunner {
             shell_profile,
         );
 
+        let tool_def_tokens = request_tools
+            .as_deref()
+            .map(|tools| crate::llm::usage_cost::estimate_tool_definition_tokens(tools))
+            .unwrap_or(0);
+        let tool_count = request_tools.as_deref().map_or(0, Vec::len);
+        self.tool_registry
+            .metrics_collector()
+            .record_sdk_tool_definition_tokens(tool_def_tokens);
+        debug!(tool_def_tokens, tool_count, "tool definition overhead");
+
         Ok(RuntimePromptBundle {
             system_instruction: Arc::new(system_prompt),
             tool_snapshot,
             request_tools,
+            tool_def_tokens,
+            system_prompt_report,
         })
     }
 
@@ -582,10 +481,12 @@ impl AgentRunner {
         let max_tool_loops = setup.max_tool_loops;
         let max_context_tokens = setup.max_context_tokens;
         let mut runtime = setup.runtime;
+        runtime.state.stats.provider_name = self.config().agent.provider.clone();
         let mut continuation_controller = setup.continuation_controller;
         let effective_task = setup.effective_task;
         let orchestration_enabled = setup.orchestration_enabled;
         let mut cost_warning_emitted = false;
+        let mut budget_warning_emitted = false;
         let max_budget_usd = setup.max_budget_usd;
         let max_revision_rounds = setup.max_revision_rounds;
         let mut revision_rounds_used = 0usize;
@@ -612,10 +513,11 @@ impl AgentRunner {
                 // utilization checks that fire after the call completes.
                 {
                     const RESERVED_OUTPUT_TOKENS: usize = 4096;
-                    let (fits, estimated, budget) =
-                        runtime
-                            .state
-                            .preflight_token_check(0, 0, RESERVED_OUTPUT_TOKENS);
+                    let (fits, estimated, budget) = runtime.state.preflight_token_check(
+                        prompt_bundle.system_prompt_report.token_estimate as usize,
+                        prompt_bundle.tool_def_tokens as usize,
+                        RESERVED_OUTPUT_TOKENS,
+                    );
                     if !fits {
                         warn!(
                             estimated,
@@ -685,11 +587,13 @@ impl AgentRunner {
                     Some(2000)
                 };
 
-                self.summarize_conversation_if_needed(
+                self.maybe_auto_compact(
                     &mut runtime.state,
+                    &mut event_recorder,
+                    &turn_model,
                     preserve_recent_turns,
-                    utilization,
-                );
+                )
+                .await;
 
                 let parallel_tool_config = if self.model.len() < 20 {
                     None
@@ -750,6 +654,20 @@ impl AgentRunner {
                     } else {
                         None
                     };
+
+                // Reasoning-effort-change advisory (Phase E4): a mid-task
+                // change to the reasoning effort alters the request prefix,
+                // which invalidates the provider prompt cache for the next
+                // request.
+                if runtime.state.note_reasoning_effort_change(reasoning_effort) {
+                    let message = "Reasoning effort changed mid-task; provider prompt cache \
+                                    will be invalidated and the next request re-pays full \
+                                    input cost."
+                        .to_string();
+                    tracing::warn!("{message}");
+                    runtime.state.warnings.push(message);
+                }
+
                 let temperature = if reasoning_effort.is_some()
                     && matches!(
                         provider_kind,
@@ -826,6 +744,29 @@ impl AgentRunner {
                     .timeouts
                     .ceiling_duration(self.config().timeouts.streaming_ceiling_seconds);
 
+                // Cache-gap advisory (Phase E1): warn once per gap when the
+                // provider prompt cache has likely expired since the last
+                // request, so this request may unexpectedly re-pay full
+                // input cost.
+                if let Some(threshold) = self
+                    .config()
+                    .prompt_cache
+                    .gap_threshold_secs(self.config().agent.provider.as_str())
+                {
+                    let threshold = std::time::Duration::from_secs(threshold);
+                    if runtime.state.stats.total_usage.cached_input_tokens > 0
+                        && let Some(elapsed) = runtime.state.cache_gap_exceeds(threshold)
+                    {
+                        let gap = crate::llm::request_gap::format_gap(elapsed);
+                        let message = format!(
+                            "~{gap} since the last request; the provider prompt cache has likely expired, so this request may re-pay full input cost."
+                        );
+                        tracing::warn!("{message}");
+                        runtime.state.warnings.push(message);
+                    }
+                }
+                runtime.state.note_request_sent();
+
                 let turn_output = runtime
                     .run_turn_once(&mut self.provider_client, request, streaming_timeout)
                     .await?;
@@ -866,19 +807,43 @@ impl AgentRunner {
                         sent_messages,
                     );
                 }
-                match estimate_session_cost_usd(
+                match crate::llm::usage_cost::estimate_session_costs(
                     self.config().agent.provider.as_str(),
                     &turn_model,
                     &runtime.state.stats.total_usage,
                 ) {
-                    Some(total_cost_usd) => {
-                        runtime.state.total_cost_usd = Some(total_cost_usd);
-                        if let Some(max_budget_usd) = max_budget_usd
-                            && total_cost_usd > max_budget_usd
-                        {
-                            runtime.state.outcome =
-                                TaskOutcome::budget_limit_reached(max_budget_usd, total_cost_usd);
-                            break;
+                    Some(estimate) => {
+                        runtime.state.total_cost_usd = Some(estimate.raw_usd);
+                        let threshold = self.config().agent.harness.budget_warning_threshold;
+                        match crate::llm::usage_cost::BudgetStatus::classify(
+                            estimate.raw_usd,
+                            max_budget_usd,
+                            threshold,
+                        ) {
+                            crate::llm::usage_cost::BudgetStatus::Exceeded { max, .. } => {
+                                runtime.state.outcome =
+                                    TaskOutcome::budget_limit_reached(max, estimate.raw_usd);
+                                break;
+                            }
+                            crate::llm::usage_cost::BudgetStatus::Warning { max, .. }
+                                if !budget_warning_emitted =>
+                            {
+                                budget_warning_emitted = true;
+                                warn!(
+                                    provider = %self.config().agent.provider,
+                                    model = %turn_model,
+                                    cost_usd = estimate.raw_usd,
+                                    max_budget_usd = max,
+                                    "Session cost approaching budget limit"
+                                );
+                                runtime.state.warnings.push(format!(
+                                    "Session cost ${:.4} has reached {:.0}% of the ${max:.2} budget. {}",
+                                    estimate.raw_usd,
+                                    threshold * 100.0,
+                                    runtime.state.stats.total_usage.cache_summary()
+                                ));
+                            }
+                            _ => {}
                         }
                     }
                     None => {
@@ -1332,6 +1297,7 @@ impl AgentRunner {
                 total_duration_ms,
                 average_turn_duration_ms,
                 max_turn_duration_ms,
+                &runtime.state.stats.total_usage,
             );
 
             if !summary.trim().is_empty() {

@@ -4,7 +4,9 @@ use std::fmt::Write as _;
 use crate::config::constants::tools;
 use crate::config::types::{CapabilityLevel, ResolvedShellPromptProfile, ShellPromptProfile};
 use crate::core::agent::harness_kernel::SessionToolCatalogSnapshot;
+use crate::llm::provider::ToolDefinition;
 use crate::prompts::sections::SectionBoundaryMode;
+use crate::tools::registry::tool_groups;
 
 const TOOL_EXEC_COMMAND: &str = tools::EXEC_COMMAND;
 const TOOL_WRITE_STDIN: &str = tools::WRITE_STDIN;
@@ -141,6 +143,44 @@ pub fn append_runtime_tool_prompt_sections_for_profile(
         );
         append_prompt_block(prompt, &catalog_metadata);
     }
+}
+
+/// Append a compact summary of tools omitted from a client-local wire payload.
+pub fn append_deferred_tools_prompt_section(prompt: &mut String, tools: &[ToolDefinition]) {
+    remove_prompt_section(prompt, "[Deferred Tools]");
+
+    let mut lines: Vec<String> = tool_groups(tools)
+        .into_iter()
+        .filter(|group| group.deferred_count > 0)
+        .map(|group| {
+            format!(
+                "- {} ({} tools): {}",
+                group.name,
+                group.deferred_count,
+                group.description.unwrap_or_default()
+            )
+        })
+        .collect();
+
+    let unnamespaced_deferred = tools
+        .iter()
+        .filter(|tool| tool.namespace.is_none() && tool.defer_loading == Some(true))
+        .count();
+    if unnamespaced_deferred > 0 {
+        lines.push(format!(
+            "- {unnamespaced_deferred} additional deferred tools"
+        ));
+    }
+
+    if lines.is_empty() {
+        return;
+    }
+
+    let section = format!(
+        "[Deferred Tools]\n{}\nUse the relevant discovery tool to load a deferred capability before calling it.",
+        lines.join("\n")
+    );
+    append_prompt_block(prompt, &section);
 }
 
 fn append_prompt_block(prompt: &mut String, block: &str) {
@@ -668,12 +708,12 @@ mod tests {
             false,
             false,
             Some(std::sync::Arc::new(vec![
-                crate::llm::provider::ToolDefinition::function(
+                ToolDefinition::function(
                     TOOL_EXEC_COMMAND.to_string(),
                     "Shell".to_string(),
                     serde_json::json!({"type": "object"}),
                 ),
-                crate::llm::provider::ToolDefinition::function(
+                ToolDefinition::function(
                     TOOL_CODE_SEARCH.to_string(),
                     "Semantic search".to_string(),
                     serde_json::json!({"type": "object"}),
@@ -715,12 +755,12 @@ mod tests {
             true,
             false,
             Some(std::sync::Arc::new(vec![
-                crate::llm::provider::ToolDefinition::function(
+                ToolDefinition::function(
                     TOOL_EXEC_COMMAND.to_string(),
                     "Search".to_string(),
                     serde_json::json!({"type": "object"}),
                 ),
-                crate::llm::provider::ToolDefinition::function(
+                ToolDefinition::function(
                     TOOL_APPLY_PATCH.to_string(),
                     "File".to_string(),
                     serde_json::json!({"type": "object"}),
@@ -746,13 +786,11 @@ mod tests {
             2,
             false,
             false,
-            Some(std::sync::Arc::new(vec![
-                crate::llm::provider::ToolDefinition::function(
-                    TOOL_EXEC_COMMAND.to_string(),
-                    "Search".to_string(),
-                    serde_json::json!({"type": "object"}),
-                ),
-            ])),
+            Some(std::sync::Arc::new(vec![ToolDefinition::function(
+                TOOL_EXEC_COMMAND.to_string(),
+                "Search".to_string(),
+                serde_json::json!({"type": "object"}),
+            )])),
             false,
         );
         let second = SessionToolCatalogSnapshot::new(
@@ -760,13 +798,11 @@ mod tests {
             9,
             true,
             true,
-            Some(std::sync::Arc::new(vec![
-                crate::llm::provider::ToolDefinition::function(
-                    TOOL_APPLY_PATCH.to_string(),
-                    "File".to_string(),
-                    serde_json::json!({"type": "object"}),
-                ),
-            ])),
+            Some(std::sync::Arc::new(vec![ToolDefinition::function(
+                TOOL_APPLY_PATCH.to_string(),
+                "File".to_string(),
+                serde_json::json!({"type": "object"}),
+            )])),
             false,
         );
 

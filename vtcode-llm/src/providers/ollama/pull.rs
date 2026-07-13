@@ -28,7 +28,10 @@ pub enum OllamaPullEvent {
 
 /// A progress reporter for pull operations. Implementations decide how to render progress
 /// (CLI, TUI, logs, etc.).
-pub trait OllamaPullProgressReporter {
+///
+/// `Send` is required so pull progress can run inside the `Send` provider futures
+/// (e.g. `ensure_oss_ready` invoked from `OllamaProvider::generate`).
+pub trait OllamaPullProgressReporter: Send {
     fn on_event(&mut self, event: &OllamaPullEvent) -> io::Result<()>;
 }
 

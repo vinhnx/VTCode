@@ -8,13 +8,18 @@
 //! - Constraints: Preserve retry semantics, previous-response-chain recovery, and prompt-cache telemetry behavior.
 //! - Verify: `cargo check -p vtcode && cargo test -p vtcode --bin vtcode llm_request`
 
+mod context_management;
 mod copilot_runtime;
 mod metrics;
+mod prompt_assembly;
 mod request_builder;
+mod response_chain;
 mod retry;
+mod snapshot;
 mod streaming;
 #[cfg(test)]
 mod tests;
+mod tool_shaping;
 
 use anyhow::Result;
 use std::time::{Duration, Instant};
@@ -43,12 +48,8 @@ use crate::agent::runloop::unified::wait_feedback::{
 };
 use copilot_runtime::{CopilotRuntimeHost, prompt_session_to_stream};
 use metrics::emit_llm_retry_metrics;
-use request_builder::{
-    build_turn_request, capture_turn_request_snapshot, interrupted_provider_error,
-    update_previous_response_chain_after_success,
-};
-#[cfg(test)]
-use request_builder::{is_openai_prompt_cache_enabled, resolve_prompt_cache_shaping_mode};
+use request_builder::{build_turn_request, interrupted_provider_error};
+use response_chain::update_previous_response_chain_after_success;
 #[cfg(test)]
 use retry::is_retryable_llm_error;
 #[cfg(test)]
@@ -60,6 +61,9 @@ use retry::{
     next_post_tool_retry_action, supports_streaming_timeout_fallback,
     switch_to_non_streaming_retry_mode,
 };
+use snapshot::capture_turn_request_snapshot;
+#[cfg(test)]
+use snapshot::{is_openai_prompt_cache_enabled, resolve_prompt_cache_shaping_mode};
 use streaming::HarnessStreamingBridge;
 #[cfg(test)]
 use vtcode_core::config::build_openai_prompt_cache_key;

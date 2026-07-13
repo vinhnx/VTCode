@@ -39,6 +39,7 @@ use std::env;
 
 const ANTHROPIC_COMPACT_BETA: &str = "compact-2026-01-12";
 const ANTHROPIC_CONTEXT_MANAGEMENT_BETA: &str = "context-management-2025-06-27";
+const ANTHROPIC_ADVISOR_BETA: &str = "advisor-tool-2026-03-01";
 
 pub struct AnthropicProvider {
     api_key: String,
@@ -302,6 +303,15 @@ impl AnthropicProvider {
             })
     }
 
+    /// Whether the advisor server-side tool should be sent for this request.
+    ///
+    /// Delegates to the request builder's `resolve_advisor_tool` so the beta
+    /// header and the injected tool are gated by the exact same logic.
+    fn advisor_enabled_for_request(&self, request: &LLMRequest) -> bool {
+        let executor = capabilities::resolve_model_name(&request.model, &self.model);
+        request_builder::resolve_advisor_tool(executor, &self.anthropic_config.advisor).is_some()
+    }
+
     pub fn with_leak_protection(
         &self,
         mut request: LLMRequest,
@@ -408,6 +418,12 @@ impl AnthropicProvider {
             && !betas.iter().any(|beta| beta == "files-api-2025-04-14")
         {
             betas.push("files-api-2025-04-14".to_string());
+        }
+
+        if self.advisor_enabled_for_request(request)
+            && !betas.iter().any(|beta| beta == ANTHROPIC_ADVISOR_BETA)
+        {
+            betas.push(ANTHROPIC_ADVISOR_BETA.to_string());
         }
 
         (!betas.is_empty()).then_some(betas)
@@ -821,6 +837,7 @@ mod tests {
                 strict: None,
                 defer_loading: None,
                 namespace: None,
+                advisor: None,
             }])),
             ..Default::default()
         };
@@ -851,6 +868,7 @@ mod tests {
                 strict: None,
                 defer_loading: None,
                 namespace: None,
+                advisor: None,
             }])),
             ..Default::default()
         };

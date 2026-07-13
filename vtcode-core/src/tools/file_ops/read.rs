@@ -470,10 +470,13 @@ impl FileOpsTool {
                     Ok(read_args) => {
                         let requested_path = self.workspace_relative_display(&canonical);
                         let handler = ReadFileHandler;
+                        let requested_offset = read_args.offset;
                         let ReadFileOutcome {
                             content,
                             lines_read: lines_returned,
                             has_more,
+                            capped_by_limit,
+                            applied_limit,
                         } = handler.handle_detailed(read_args).await?;
                         let full_text_read = is_full_text_read(&args, is_spool_output);
                         let response_content = if full_text_read {
@@ -519,6 +522,47 @@ impl FileOpsTool {
                                     ),
                                 );
                             }
+                        }
+                        // Absolute-cap continuation. Surface a structured way to
+                        // keep reading after the per-call ceiling was reached.
+                        //
+                        // The condition is `has_more && applied_limit == cap` rather
+                        // than `capped_by_limit && has_more`: on the first (clamped)
+                        // page `applied_limit` equals the cap and `capped_by_limit`
+                        // is true, but on every follow-up page the agent passes back
+                        // `applied_limit` as its `limit`, so `effective_limit` is no
+                        // longer *greater* than the cap and `capped_by_limit` becomes
+                        // false. Using `applied_limit == cap` keeps the pagination
+                        // chain alive on every page that actually hit the ceiling,
+                        // instead of dying after a single hop.
+                        // Byte-range reads set `applied_limit` to 0, so they are
+                        // correctly excluded and use their own `offset_bytes`/
+                        // `page_size_bytes` continuation path.
+                        else if has_more
+                            && applied_limit == crate::tools::read_limits::absolute_line_cap()
+                        {
+                            let next_offset = requested_offset.saturating_add(lines_returned);
+                            let next_action = if capped_by_limit {
+                                "Read clamped to max_read_lines. \
+                                 Use `next_read_args` to continue reading subsequent chunks; \
+                                 do not re-read the same range."
+                            } else {
+                                "Use `next_read_args` to continue reading subsequent chunks; \
+                                 do not re-read the same range."
+                            };
+                            builder = builder
+                                .field("has_more", json!(true))
+                                .field("capped_by_limit", json!(capped_by_limit))
+                                .field(
+                                    "next_read_args",
+                                    ReadChunkContinuationArgs::new(
+                                        requested_path.clone(),
+                                        next_offset,
+                                        applied_limit,
+                                    )
+                                    .to_value(),
+                                )
+                                .field("next_action", json!(next_action));
                         }
 
                         let response = builder.build_json();
@@ -685,6 +729,7 @@ impl FileOpsTool {
 mod read_tests {
     use super::*;
     use crate::tools::grep_file::GrepSearchManager;
+    use crate::tools::types::Input;
     use std::fs;
     use std::path::Path;
     use tempfile::TempDir;
@@ -1008,6 +1053,33 @@ mod read_tests {
     }
 
     #[tokio::test]
+    async fn test_legacy_full_read_respects_absolute_cap() {
+        let temp_dir = TempDir::new().unwrap();
+        let workspace_root = temp_dir.path().to_path_buf();
+        let test_file = workspace_root.join("big_legacy.txt");
+        let content = (1..=1000)
+            .map(|i| format!("line{i}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        fs::write(&test_file, content).unwrap();
+
+        let grep_manager = std::sync::Arc::new(GrepSearchManager::new(workspace_root.clone()));
+        let file_ops = FileOpsTool::new(workspace_root, grep_manager);
+
+        // Bare legacy request (no max_* keys) would otherwise dump the whole file.
+        let input: Input =
+            serde_json::from_value(json!({ "path": test_file.to_string_lossy() })).unwrap();
+        let (read_content, metadata, truncated) =
+            file_ops.read_file_legacy(&test_file, &input).await.unwrap();
+
+        let cap = crate::tools::read_limits::read_limit_lines();
+        assert_eq!(read_content.lines().count(), cap);
+        assert!(truncated);
+        assert_eq!(metadata["is_truncated"], true);
+        assert_eq!(metadata["applied_max_lines"], cap);
+    }
+
+    #[tokio::test]
     async fn test_read_file_legacy_functionality() {
         let temp_dir = TempDir::new().unwrap();
         let workspace_root = temp_dir.path().to_path_buf();
@@ -1279,6 +1351,99 @@ mod read_tests {
         assert_eq!(result["lines_returned"], SPOOL_CHUNK_DEFAULT_LIMIT_LINES);
         assert!(result.get("has_more").is_none());
         assert!(result.get("next_read_args").is_none());
+    }
+
+    #[tokio::test]
+    async fn test_read_file_absolute_cap_adds_continuation() {
+        let temp_dir = TempDir::new().unwrap();
+        let workspace_root = temp_dir.path().to_path_buf();
+        let test_file = workspace_root.join("big.txt");
+        let content = (1..=1000)
+            .map(|i| format!("line{i}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        fs::write(&test_file, content).unwrap();
+
+        let grep_manager = std::sync::Arc::new(GrepSearchManager::new(workspace_root.clone()));
+        let file_ops = FileOpsTool::new(workspace_root, grep_manager);
+
+        // Request far more than the cap without pagination.
+        let result = file_ops
+            .read_file(json!({
+                "path": "big.txt",
+                "limit": 2000
+            }))
+            .await
+            .unwrap();
+
+        assert_eq!(result["success"], true);
+        assert_eq!(result["capped_by_limit"], true);
+        assert_eq!(result["has_more"], true);
+        assert!(result["next_read_args"].is_object());
+        assert_eq!(result["next_read_args"]["path"], "big.txt");
+        // offset 1 + applied cap (default 400) lines read.
+        assert_eq!(result["next_read_args"]["offset"], 401);
+        assert_eq!(
+            result["next_read_args"]["limit"],
+            crate::tools::read_limits::read_limit_lines()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_read_file_cap_continuation_chains_across_pages() {
+        // Regresses the bug where the continuation chain died after the first
+        // clamped page: follow-up pages pass `applied_limit` back as `limit`,
+        // so `capped_by_limit` is false and no `next_read_args` was emitted.
+        let temp_dir = TempDir::new().unwrap();
+        let workspace_root = temp_dir.path().to_path_buf();
+        let test_file = workspace_root.join("big.txt");
+        let content = (1..=1000)
+            .map(|i| format!("line{i}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        fs::write(&test_file, content).unwrap();
+
+        let grep_manager = std::sync::Arc::new(GrepSearchManager::new(workspace_root.clone()));
+        let file_ops = FileOpsTool::new(workspace_root, grep_manager);
+
+        // Page 1: clamps the oversized request to the cap.
+        let page1 = file_ops
+            .read_file(json!({ "path": "big.txt", "limit": 2000 }))
+            .await
+            .unwrap();
+        assert_eq!(page1["capped_by_limit"], true);
+        assert_eq!(page1["has_more"], true);
+        assert_eq!(page1["next_read_args"]["offset"], 401);
+        let cap = crate::tools::read_limits::read_limit_lines();
+
+        // Page 2: follows the continuation. `capped_by_limit` is now false, but
+        // the chain must still surface `next_read_args` because the read hit
+        // the ceiling again.
+        let page2 = file_ops
+            .read_file(json!({
+                "path": "big.txt",
+                "offset": page1["next_read_args"]["offset"],
+                "limit": page1["next_read_args"]["limit"],
+            }))
+            .await
+            .unwrap();
+        assert_eq!(page2["capped_by_limit"], false);
+        assert_eq!(page2["has_more"], true);
+        assert!(page2["next_read_args"].is_object());
+        assert_eq!(page2["next_read_args"]["offset"], 401 + cap);
+        assert_eq!(page2["next_read_args"]["limit"], cap);
+
+        // Page 3: final partial chunk, no more continuation.
+        let page3 = file_ops
+            .read_file(json!({
+                "path": "big.txt",
+                "offset": page2["next_read_args"]["offset"],
+                "limit": page2["next_read_args"]["limit"],
+            }))
+            .await
+            .unwrap();
+        assert!(page3.get("has_more").is_none());
+        assert!(page3.get("next_read_args").is_none());
     }
 
     #[tokio::test]
