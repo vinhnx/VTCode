@@ -355,6 +355,7 @@ async fn render_tool_output_common(
     output: &serde_json::Value,
     command_success: bool,
     vt_config: Option<&VTCodeConfig>,
+    workspace_root: Option<&Path>,
 ) -> Result<()> {
     let inline_run_tool = renderer.supports_inline_ui() && is_run_pty_tool(name, args_val);
     let git_diff_payload = is_git_diff_payload(output);
@@ -393,11 +394,15 @@ async fn render_tool_output_common(
             output,
             command_success,
         );
+        let summary_ctx = crate::agent::runloop::unified::tool_summary::ToolSummaryRenderContext {
+            workspace_root,
+        };
         crate::agent::runloop::unified::tool_summary::render_tool_call_summary(
             renderer,
             name,
             args_val,
             stream_label,
+            &summary_ctx,
         )?;
     }
 
@@ -435,6 +440,7 @@ struct OutcomeContext<'a> {
     harness_state: &'a mut crate::agent::runloop::unified::run_loop_context::HarnessTurnState,
     mcp_panel_state: &'a mut McpPanelState,
     vt_config: Option<&'a VTCodeConfig>,
+    workspace_root: Option<&'a Path>,
 }
 
 struct SuccessPayload<'a> {
@@ -469,6 +475,7 @@ async fn handle_success_common(
             payload.output,
             payload.command_success,
             ctx.vt_config,
+            ctx.workspace_root,
         )
         .await?;
     }
@@ -553,6 +560,10 @@ pub(crate) async fn handle_pipeline_output(
     outcome: &ToolPipelineOutcome,
     vt_config: Option<&VTCodeConfig>,
 ) -> Result<(Vec<PathBuf>, Option<String>)> {
+    let workspace_root = ctx
+        .auto_permission
+        .as_ref()
+        .map(|a| a.config.workspace.as_path());
     let mut output_ctx = OutcomeContext {
         session_stats: ctx.session_stats,
         renderer: ctx.renderer,
@@ -560,6 +571,7 @@ pub(crate) async fn handle_pipeline_output(
         harness_state: ctx.harness_state,
         mcp_panel_state: ctx.mcp_panel_state,
         vt_config,
+        workspace_root,
     };
     let state = process_outcome_common(&mut output_ctx, name, args_val, outcome).await?;
     Ok(state.into_tuple())
@@ -655,6 +667,7 @@ mod tests {
         let handle = dummy_handle();
         let mut harness_state = build_harness_state();
         let mut output_ctx = OutcomeContext {
+            workspace_root: None,
             session_stats: &mut stats,
             renderer: &mut renderer,
             handle: &handle,
@@ -699,6 +712,7 @@ mod tests {
         let handle = dummy_handle();
         let mut harness_state = build_harness_state();
         let mut output_ctx = OutcomeContext {
+            workspace_root: None,
             session_stats: &mut stats,
             renderer: &mut renderer,
             handle: &handle,
@@ -743,6 +757,7 @@ mod tests {
         });
 
         let mut output_ctx = OutcomeContext {
+            workspace_root: None,
             session_stats: &mut stats,
             renderer: &mut renderer,
             handle: &handle,
@@ -949,6 +964,7 @@ mod tests {
 
         let args = serde_json::json!({"action": "update", "index": 2, "status": "in_progress"});
         let mut output_ctx = OutcomeContext {
+            workspace_root: None,
             session_stats: &mut stats,
             renderer: &mut renderer,
             handle: &handle,

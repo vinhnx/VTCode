@@ -14,8 +14,8 @@ use vtcode_ui::tui::app::{
     TransientRequest, TransientSubmission,
 };
 
-use super::overlay_prompt::{OverlayWaitOutcome, show_overlay_and_wait};
-use super::state::CtrlCState;
+use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_overlay_and_wait};
+use crate::agent::runloop::unified::state::CtrlCState;
 
 /// Decision returned by the "enter Planning workflow?" confirmation prompt.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -10,10 +10,6 @@ use vtcode_core::tools::handlers::planning_workflow::PlanLifecyclePhase;
 use vtcode_core::tools::registry::ExecSettlementMode;
 use vtcode_ui::tui::app::PlanContent;
 
-use crate::agent::runloop::unified::plan_confirmation::{
-    PlanConfirmationOutcome, StartPlanningDecision, execute_plan_confirmation,
-    plan_confirmation_outcome_to_json, present_start_planning_confirmation,
-};
 use crate::agent::runloop::unified::planning_workflow_state::{
     finish_planning_workflow, render_planning_workflow_next_step_hint,
     transition_to_planning_workflow,
@@ -22,8 +18,14 @@ use crate::agent::runloop::unified::run_loop_context::RunLoopContext;
 use crate::agent::runloop::unified::state::CtrlCState;
 use crate::agent::runloop::unified::turn::plan_content::parse_plan_content_from_json;
 
-use super::execution_attempts::execute_tool_with_timeout_ref_prevalidated;
-use super::status::{ToolExecutionStatus, ToolPipelineOutcome};
+use crate::agent::runloop::unified::planning_workflow::{
+    PlanConfirmationOutcome, StartPlanningDecision, execute_plan_confirmation,
+    plan_confirmation_outcome_to_json, present_start_planning_confirmation,
+};
+use crate::agent::runloop::unified::tool_pipeline::execution_attempts::execute_tool_with_timeout_ref_prevalidated;
+use crate::agent::runloop::unified::tool_pipeline::status::{
+    ToolExecutionStatus, ToolPipelineOutcome,
+};
 
 /// Canonical plan-lifecycle status strings returned by the `start_planning` /
 /// `finish_planning` tools. Centralized so the runloop's disposition logic and
@@ -56,7 +58,7 @@ fn finish_planning_disposition(
     }
 }
 
-pub(super) async fn handle_start_planning(
+pub(crate) async fn handle_start_planning(
     ctx: &mut RunLoopContext<'_>,
     name: &str,
     args_val: &Value,
@@ -150,7 +152,7 @@ async fn enter_planning_workflow_after_start(ctx: &mut RunLoopContext<'_>) {
     );
 }
 
-pub(super) async fn handle_finish_planning(
+pub(crate) async fn handle_finish_planning(
     ctx: &mut RunLoopContext<'_>,
     name: &str,
     args_val: &Value,

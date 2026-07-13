@@ -1,12 +1,12 @@
 use anyhow::Result;
 use serde_json::json;
 
-use crate::agent::runloop::unified::planning_workflow_state::short_confirmation_hint_with_fallback;
-use crate::agent::runloop::unified::turn::context::TurnLoopResult;
-use crate::agent::runloop::unified::turn::planning_intent::{
+use crate::agent::runloop::unified::planning_workflow::{
     PlanningIntent, assistant_recently_prompted_implementation, detect_enter_planning_intent,
     detect_planning_intent,
 };
+use crate::agent::runloop::unified::planning_workflow_state::short_confirmation_hint_with_fallback;
+use crate::agent::runloop::unified::turn::context::TurnLoopResult;
 use crate::agent::runloop::unified::turn::tool_outcomes::helpers::{
     push_tool_response, tool_output_from_outcome,
 };
@@ -642,10 +642,10 @@ mod tests {
         extract_turn_config, handle_steering_messages, resolve_safety_tool_call_limits,
         resolve_tool_loop_limit, tool_loop_hard_cap,
     };
-    use crate::agent::runloop::unified::turn::context::TurnLoopResult;
-    use crate::agent::runloop::unified::turn::planning_intent::{
+    use crate::agent::runloop::unified::planning_workflow::{
         PlanningIntent, detect_enter_planning_intent, detect_planning_intent,
     };
+    use crate::agent::runloop::unified::turn::context::TurnLoopResult;
     use crate::agent::runloop::unified::turn::turn_processing::test_support::TestTurnProcessingBacking;
     use std::time::Duration;
     use vtcode_core::config::loader::VTCodeConfig;

@@ -16,7 +16,7 @@ use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 /// Injected when a planning synthesis is truncated, asking the model to emit a
 /// single compact spec that fits the limit.
-pub(super) const PLANNING_SYNTHESIS_TRUNCATED_CONDENSE_DIRECTIVE: &str = "Your previous `<proposed_plan>` was cut off at the token limit. Re-emit ONE compact `<proposed_plan>` spec that fits within the limit: keep each step to a single line (`Action -> files/symbols -> verify:`), drop prose, and prefer file:symbol references. Do not repeat the truncated draft.";
+pub(crate) const PLANNING_SYNTHESIS_TRUNCATED_CONDENSE_DIRECTIVE: &str = "Your previous `<proposed_plan>` was cut off at the token limit. Re-emit ONE compact `<proposed_plan>` spec that fits within the limit: keep each step to a single line (`Action -> files/symbols -> verify:`), drop prose, and prefer file:symbol references. Do not repeat the truncated draft.";
 
 /// Maximum number of condense-and-retry passes when a planning synthesis is
 /// truncated. Bounded so a genuinely oversized plan cannot loop forever.
@@ -26,7 +26,7 @@ const MAX_PLAN_SYNTHESIS_CONDENSE_ATTEMPTS: u8 = 1;
 /// limit: the response ended with `finish_reason == Length`, carried no tool
 /// calls, and left a `<proposed_plan>` block unclosed. Such a partial plan is
 /// what previously re-triggered the recovery loop forever.
-pub(super) fn plan_synthesis_was_truncated(response: &uni::LLMResponse) -> bool {
+pub(crate) fn plan_synthesis_was_truncated(response: &uni::LLMResponse) -> bool {
     matches!(response.finish_reason, uni::FinishReason::Length)
         && response
             .tool_calls
@@ -44,7 +44,7 @@ pub(super) fn plan_synthesis_was_truncated(response: &uni::LLMResponse) -> bool 
 /// truncated synthesis falls into the post-tool recovery cycle cap instead).
 ///
 /// Returns `false` (no continue) when the conditions are not met.
-pub(super) fn maybe_condense_truncated_plan(
+pub(crate) fn maybe_condense_truncated_plan(
     working_history: &mut Vec<uni::Message>,
     renderer: &mut AnsiRenderer,
     planning_active: bool,

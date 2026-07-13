@@ -1,34 +1,3 @@
-check the file path showing in TUI, it showing absolute path, make it relative to the project root.
-
-• Search text Use Unified search
-└ Format: files_with_matches
-└ Path: /Users/vinhnguyenxuan/Develope…n-by-doing/vtcode/src/startup
-└ Pattern: command_skips_provider_auth|can_start_without_provider_auth
-• Read file /Users/vinhnguyenxuan…/src/startup/first_run.rs
-└ Limit: 120
-└ Offset: 81
-└ Read 199 lines
-• Read file /Users/vinhnguyenxuan…/vtcode/src/startup/mod.rs
-└ Limit: 80
-└ Offset: 440
-└ Read 200 lines
-• List files Use Unified search
-└ Path: /Users/vinhnguyenxuan/Develope…doing/vtcode/docs/development
-• Search text Use Unified search
-└ Path: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/docs
-└ Format: files_with_matches
-└ Pattern: launch.*time|startup.*time|lau…aunch latency|startup latency
-• List files Use Unified search
-└ Path: /Users/vinhnguyenxuan/Develope…y-doing/vtcode/.vtcode/memory
-• Read file /Users/vinhnguyenxuan…/development/performance.md
-└ Read 85 lines
-• Read file /Users/vinhnguyenxuan…up-optimization-2026-06-21.md
-└ Read 72 lines
-
-===
-
-update vtcode-eval's module with document and readme, follow project's module guideline.
-
 --
 
 Collapse agent's thinking block by default in TUI. Make it configurable (Extended/Collapsed) via a new config option, and add a test to ensure that the default behavior is to collapse thinking blocks, and that the config option can override this behavior.
@@ -40,10 +9,6 @@ Fix and improve Build/Auto/Plan/Duck mode color ansi. make it readable in dark a
 ===
 
 refactor and extract vtcode-core/src/core/agent/runner/tests.rs
-
-===
-
-check recent release and update docs, readme, and guideline with any new features or changes.
 
 ===
 

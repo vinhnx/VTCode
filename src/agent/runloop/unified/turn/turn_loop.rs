@@ -43,8 +43,6 @@ use vtcode_ui::tui::app::{InlineHandle, InlineSession};
 
 #[path = "turn_loop/notifications.rs"]
 mod notifications;
-#[path = "turn_loop/planning_workflow_recovery.rs"]
-mod planning_workflow_recovery;
 #[path = "turn_loop/post_tool_recovery.rs"]
 mod post_tool_recovery;
 #[path = "turn_loop/usage_accounting.rs"]
@@ -868,10 +866,10 @@ pub(crate) async fn run_turn_loop(
         // mid-flight"). Rather than accept a partial plan or re-enter the
         // recovery path (which previously looped forever), ask for a tighter
         // spec and retry once. Bounded so a genuinely oversized plan cannot
-        // loop. The policy lives in `planning_workflow_recovery` so this loop
+        // loop. The policy lives in the planning-workflow facade so this loop
         // stays free of plan-mode specifics.
         let planning_active = turn_processing_ctx.is_planning_active();
-        if planning_workflow_recovery::maybe_condense_truncated_plan(
+        if crate::agent::runloop::unified::planning_workflow::maybe_condense_truncated_plan(
             &mut *turn_processing_ctx.working_history,
             &mut *turn_processing_ctx.renderer,
             planning_active,

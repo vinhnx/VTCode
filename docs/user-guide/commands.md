@@ -141,6 +141,7 @@ Configure the behaviour under **Settings › Extensions › VT Code**:
 - `/agent` and `/agents` inspect agent definitions and delegated child runs. `@agent-name` remains a delegated child-agent control. Primary agents are switched from the TUI with `Tab` on an empty idle composer. The active primary agent is shown in the session header badge and influences the session's instructions, model, granular permission policy, and tool access.
 - `/agents list` shows all agent definitions with their availability (`mode: primary`, `mode: subagent`, or `mode: all`). `/agents create` scaffolds a new agent definition in `.vtcode/agents/`.
 - `/plan` starts or continues the planning workflow. It is a workflow command, not a state selector.
+- `/checkup` runs configuration diagnostics and suggests reversible optimizations. Use `/checkup [--quick|--full]` (defaults to a full pass); optimizations are confirmed via the selection modal before any config is mutated.
 
 ## Scheduled tasks
 

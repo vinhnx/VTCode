@@ -969,7 +969,7 @@ fn plan_synthesis_truncated_detects_unclosed_proposed_plan() {
         compaction: None,
     };
     assert!(
-        super::planning_workflow_recovery::plan_synthesis_was_truncated(&truncated),
+        crate::agent::runloop::unified::planning_workflow::plan_synthesis_was_truncated(&truncated),
         "unclosed <proposed_plan> with Length finish must be detected as truncated"
     );
 
@@ -988,7 +988,7 @@ fn plan_synthesis_truncated_detects_unclosed_proposed_plan() {
         compaction: None,
     };
     assert!(
-        !super::planning_workflow_recovery::plan_synthesis_was_truncated(&complete),
+        !crate::agent::runloop::unified::planning_workflow::plan_synthesis_was_truncated(&complete),
         "closed <proposed_plan> must not be flagged as truncated"
     );
 
@@ -1007,7 +1007,7 @@ fn plan_synthesis_truncated_detects_unclosed_proposed_plan() {
         compaction: None,
     };
     assert!(
-        !super::planning_workflow_recovery::plan_synthesis_was_truncated(&normal),
+        !crate::agent::runloop::unified::planning_workflow::plan_synthesis_was_truncated(&normal),
         "Stop-finished plan must not be flagged as truncated"
     );
 }
@@ -1106,7 +1106,7 @@ async fn planning_synthesis_truncated_retries_with_compact_spec() {
         history
             .iter()
             .any(|message| message.content.as_text().contains(
-                super::planning_workflow_recovery::PLANNING_SYNTHESIS_TRUNCATED_CONDENSE_DIRECTIVE
+                crate::agent::runloop::unified::planning_workflow::PLANNING_SYNTHESIS_TRUNCATED_CONDENSE_DIRECTIVE
             )),
         "condense directive must be injected after a truncated plan"
     );

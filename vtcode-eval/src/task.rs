@@ -49,11 +49,3 @@ pub struct EvalRunResult {
     pub cost_usd: Option<f64>,
     pub transcript_path: Option<String>,
 }
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EvalSuite {
-    pub id: String,
-    pub name: String,
-    pub tasks: Vec<EvalTask>,
-    pub attempts: u32,
-}

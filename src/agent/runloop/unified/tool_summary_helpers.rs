@@ -1,6 +1,7 @@
 use hashbrown::HashSet;
 
 use serde_json::Value;
+use std::borrow::Cow;
 use std::path::Path;
 
 pub(super) fn humanize_tool_name(name: &str) -> String {
@@ -11,76 +12,63 @@ pub(super) fn describe_fetch_action(_args: &Value) -> (String, HashSet<String>) 
     ("Use Fetch".into(), HashSet::new())
 }
 
-pub(super) fn describe_shell_command(args: &Value) -> Option<(String, HashSet<String>)> {
-    let mut used = HashSet::new();
-    if let Some(parts) = args
-        .get("command")
-        .and_then(|value| value.as_array())
-        .map(|array| {
-            array
-                .iter()
-                .filter_map(|value| value.as_str().map(str::to_string))
-                .collect::<Vec<_>>()
-        })
-        .filter(|parts| !parts.is_empty())
-    {
-        used.insert("command".to_string());
-        let joined = parts.join(" ");
-        let summary = truncate_middle(&joined, 70);
-        return Some((summary, used));
-    }
+/// Ordered argument keys that may carry a shell command string.
+const SHELL_COMMAND_KEYS: &[&str] = &["command", "raw_command", "bash_command", "cmd"];
 
-    if let Some(cmd) = args
-        .get("command")
-        .and_then(|value| value.as_str())
-        .filter(|s| !s.trim().is_empty())
-    {
-        used.insert("command".to_string());
-        let summary = truncate_middle(cmd.trim(), 70);
-        return Some((summary, used));
+/// Extract a shell command string from the common command argument keys.
+///
+/// Returns the (un-truncated) command text and the argument key it came from so
+/// callers can record which key was used. The `command` key may be a JSON array
+/// (joined with spaces) or a string; per-key emptiness/trim behavior is preserved
+/// for backwards compatibility.
+fn extract_command(args: &Value) -> Option<(String, &'static str)> {
+    if let Some(array) = args.get("command").and_then(Value::as_array) {
+        let joined: String = array
+            .iter()
+            .filter_map(|value| value.as_str())
+            .filter(|segment| !segment.is_empty())
+            .collect::<Vec<_>>()
+            .join(" ");
+        if !joined.is_empty() {
+            return Some((joined, "command"));
+        }
     }
-
-    if let Some(cmd) = args
-        .get("raw_command")
-        .and_then(|value| value.as_str())
-        .filter(|s| !s.is_empty())
-    {
-        used.insert("raw_command".to_string());
-        let summary = truncate_middle(cmd, 70);
-        return Some((summary, used));
+    for &key in SHELL_COMMAND_KEYS {
+        let Some(value) = args.get(key).and_then(Value::as_str) else { continue };
+        // The `command` key trims before the emptiness check; the others do not,
+        // matching historical per-key behavior.
+        let (text, ok) = if key == "command" {
+            let trimmed = value.trim();
+            (trimmed.to_string(), !trimmed.is_empty())
+        } else {
+            (value.to_string(), !value.is_empty())
+        };
+        if ok {
+            return Some((text, key));
+        }
     }
-
-    if let Some(cmd) = args
-        .get("cmd")
-        .and_then(|value| value.as_str())
-        .filter(|s| !s.is_empty())
-    {
-        used.insert("cmd".to_string());
-        let summary = truncate_middle(cmd, 70);
-        return Some((summary, used));
-    }
-
-    if let Some(cmd) = args
-        .get("bash_command")
-        .and_then(|value| value.as_str())
-        .filter(|s| !s.is_empty())
-    {
-        used.insert("bash_command".to_string());
-        let summary = truncate_middle(cmd, 70);
-        return Some((summary, used));
-    }
-
     None
 }
 
-pub(super) fn describe_list_files(args: &Value) -> Option<(String, HashSet<String>)> {
+pub(super) fn describe_shell_command(args: &Value) -> Option<(String, HashSet<String>)> {
+    let (command, key) = extract_command(args)?;
+    let mut used = HashSet::new();
+    used.insert(key.to_string());
+    Some((truncate_middle(&command, 70), used))
+}
+
+pub(super) fn describe_list_files(
+    args: &Value,
+    workspace_root: Option<&Path>,
+) -> Option<(String, HashSet<String>)> {
     if let Some(path) = lookup_string(args, "path") {
         let mut used = HashSet::new();
         used.insert("path".to_string());
         let location = if path == "." {
             "workspace root".to_string()
         } else {
-            truncate_path_middle(&path, 60)
+            let rel = relativize_to_workspace(&path, workspace_root);
+            truncate_path_middle(&rel, 60)
         };
         return Some((format!("List files in {location}"), used));
     }
@@ -103,7 +91,10 @@ pub(super) fn describe_list_files(args: &Value) -> Option<(String, HashSet<Strin
     None
 }
 
-pub(super) fn describe_grep_file(args: &Value) -> Option<(String, HashSet<String>)> {
+pub(super) fn describe_grep_file(
+    args: &Value,
+    workspace_root: Option<&Path>,
+) -> Option<(String, HashSet<String>)> {
     let pattern = lookup_string(args, "pattern");
     let path = lookup_string(args, "path");
     match (pattern, path) {
@@ -115,7 +106,7 @@ pub(super) fn describe_grep_file(args: &Value) -> Option<(String, HashSet<String
                 format!(
                     "Grep {} in {}",
                     truncate_middle(&pat, 40),
-                    truncate_path_middle(&path, 40)
+                    truncate_path_middle(&relativize_to_workspace(&path, workspace_root), 40)
                 ),
                 used,
             ))
@@ -133,13 +124,15 @@ pub(super) fn describe_path_action(
     args: &Value,
     verb: &str,
     keys: &[&str],
+    workspace_root: Option<&Path>,
 ) -> Option<(String, HashSet<String>)> {
     for key in keys {
         if let Some(value) = lookup_string(args, key) {
             let mut used = HashSet::new();
             used.insert((*key).to_string());
-            let summary = truncate_path_middle(&value, 60);
-            let annotated_summary = annotate_skill_doc_summary(&value, summary);
+            let rel = relativize_to_workspace(&value, workspace_root);
+            let summary = truncate_path_middle(&rel, 60);
+            let annotated_summary = annotate_skill_doc_summary(rel.as_ref(), summary);
             return Some((format!("{verb} {annotated_summary}"), used));
         }
     }
@@ -174,6 +167,39 @@ pub(super) fn lookup_string(args: &Value, key: &str) -> Option<String> {
         .and_then(|value| value.as_str())
         .map(|s| s.to_string())
         .filter(|s| !s.is_empty())
+}
+
+/// Keys whose values are file-system paths and should be displayed relative to
+/// the workspace root when possible.
+fn is_path_key(key: &str) -> bool {
+    matches!(
+        key,
+        "path" | "file_path" | "filename" | "destination" | "source"
+    )
+}
+
+/// Relativize an absolute `path` against the `workspace_root` for compact display.
+///
+/// Returns the path unchanged when `workspace_root` is `None`, the path is not
+/// absolute, or it does not lie within the workspace root.
+pub(super) fn relativize_to_workspace<'a>(
+    path: &'a str,
+    workspace_root: Option<&Path>,
+) -> Cow<'a, str> {
+    let Some(root) = workspace_root else {
+        return Cow::Borrowed(path);
+    };
+    let p = Path::new(path);
+    if p.is_absolute() {
+        if let Ok(rel) = p.strip_prefix(root) {
+            // `rel` is empty only when the path equals the root itself; keep the
+            // original form in that degenerate case for clarity.
+            if !rel.as_os_str().is_empty() {
+                return Cow::Owned(rel.to_string_lossy().into_owned());
+            }
+        }
+    }
+    Cow::Borrowed(path)
 }
 
 pub(super) fn humanize_key(key: &str) -> String {
@@ -269,7 +295,11 @@ pub(super) fn truncate_path_middle(path: &str, max_len: usize) -> String {
     format!("{head}…{tail}")
 }
 
-pub(super) fn collect_param_details(args: &Value, keys: &HashSet<String>) -> Vec<String> {
+pub(super) fn collect_param_details(
+    args: &Value,
+    keys: &HashSet<String>,
+    workspace_root: Option<&Path>,
+) -> Vec<String> {
     let mut details = Vec::new();
     let Some(map) = args.as_object() else {
         return details;
@@ -302,7 +332,17 @@ pub(super) fn collect_param_details(args: &Value, keys: &HashSet<String>) -> Vec
         }
         match value {
             Value::String(s) if !s.is_empty() => {
-                details.push(format!("{}: {}", humanize_key(key), truncate_middle(s, 60)))
+                // Render file-system path values relative to the workspace root.
+                let display: Cow<'_, str> = if is_path_key(key) {
+                    relativize_to_workspace(s, workspace_root)
+                } else {
+                    Cow::Borrowed(s.as_str())
+                };
+                details.push(format!(
+                    "{}: {}",
+                    humanize_key(key),
+                    truncate_middle(&display, 60)
+                ))
             }
             Value::Bool(true) => {
                 details.push(humanize_key(key));
@@ -380,35 +420,7 @@ pub(super) fn should_render_command_line(highlights: &HashSet<String>) -> bool {
 }
 
 pub(super) fn command_line_for_args(args: &Value) -> Option<String> {
-    let command = if let Some(array) = args.get("command").and_then(Value::as_array) {
-        let joined = array
-            .iter()
-            .filter_map(|value| value.as_str())
-            .filter(|segment| !segment.is_empty())
-            .collect::<Vec<_>>()
-            .join(" ");
-        if joined.is_empty() {
-            None
-        } else {
-            Some(joined)
-        }
-    } else {
-        args.get("command")
-            .and_then(Value::as_str)
-            .map(str::to_string)
-            .or_else(|| {
-                args.get("raw_command")
-                    .and_then(Value::as_str)
-                    .map(str::to_string)
-            })
-            .or_else(|| {
-                args.get("bash_command")
-                    .and_then(Value::as_str)
-                    .map(str::to_string)
-            })
-            .or_else(|| args.get("cmd").and_then(Value::as_str).map(str::to_string))
-    }?;
-
+    let (command, _) = extract_command(args)?;
     let trimmed = command.trim();
     if trimmed.is_empty() {
         return None;
@@ -419,6 +431,7 @@ pub(super) fn command_line_for_args(args: &Value) -> Option<String> {
 pub(super) fn highlight_texts_for_summary(
     args: &Value,
     highlights: &HashSet<String>,
+    workspace_root: Option<&Path>,
 ) -> Vec<String> {
     let mut values = Vec::new();
     for key in highlights {
@@ -428,7 +441,13 @@ pub(super) fn highlight_texts_for_summary(
                 "command" | "raw_command" | "bash_command" => 70,
                 _ => 60,
             };
-            values.push(truncate_middle(&value, limit));
+            // Render file-system path values relative to the workspace root.
+            let display: Cow<'_, str> = if is_path_key(key) {
+                relativize_to_workspace(&value, workspace_root)
+            } else {
+                Cow::Borrowed(&value)
+            };
+            values.push(truncate_middle(&display, limit));
         }
     }
     values
@@ -537,7 +556,7 @@ mod tests {
         });
         let mut keys = HashSet::new();
         keys.insert("pattern".to_string());
-        let details = collect_param_details(&args, &keys);
+        let details = collect_param_details(&args, &keys, None);
         // Only detail_level, max_results, and scope should remain;
         // pattern is in keys (highlighted), noise params (including action) are skipped.
         for detail in &details {
@@ -565,7 +584,7 @@ mod tests {
         });
         let mut keys = HashSet::new();
         keys.insert("path".to_string());
-        let details = collect_param_details(&args, &keys);
+        let details = collect_param_details(&args, &keys, None);
         for detail in &details {
             assert!(
                 !detail.contains("Offset") && !detail.contains("Limit"),

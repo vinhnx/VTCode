@@ -287,7 +287,7 @@ pub(super) fn persistent_approval_target(
 pub(super) fn tool_display_labels(tool_name: &str, tool_args: Option<&Value>) -> ToolDisplayLabels {
     let learning_label = humanize_tool_name(tool_name);
     let prompt_label = tool_args
-        .map(|args| describe_tool_action(tool_name, args).0)
+        .map(|args| describe_tool_action(tool_name, args, None).0)
         .filter(|headline| !headline.is_empty())
         .unwrap_or_else(|| learning_label.clone());
 
