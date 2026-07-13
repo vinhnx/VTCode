@@ -159,7 +159,9 @@ fn plan_mode_recovery_fallback(
     if let Some(text) = salvaged_text
         && text.trim().contains("<proposed_plan")
     {
-        text
+        // Trim only the outer whitespace so a plan salvaged with stray
+        // blank lines isn't injected with that garbage framing intact.
+        text.trim().to_string()
     } else {
         build_recovery_fallback(working_history, structured_message)
     }
@@ -192,11 +194,13 @@ pub(super) fn complete_turn_after_failed_tool_free_recovery(
     plan_session: Option<&mut PlanningWorkflowSessionState>,
 ) -> TurnLoopResult {
     // Plan mode: never dead-end. Preserve the planning session and re-force
-    // the interview on the next turn. Surface the model's salvaged prose if
-    // available; otherwise fall back to the plan-aware message. Either way,
-    // keep the research already gathered this turn (the files-read list) so
-    // nothing useful is lost — the generic dead-end message does this, and
-    // plan mode must be at least as informative.
+    // the interview on the next turn (unless budget/recovery is exhausted).
+    // A rejected synthesis usually leaves only a garbled recovery monologue
+    // with tool-call markup stripped out — not a plan. We therefore only
+    // surface the salvaged prose when it actually contains a `<proposed_plan>`
+    // (a real, if partial, plan); otherwise we fall back to the structured
+    // plan-aware message, which still lists the files read this turn, so we
+    // never inject garbage as the proposed plan. See `plan_mode_recovery_fallback`.
     //
     // EXCEPTION:
     // If the budget is exhausted, do NOT mark interview as pending because no
