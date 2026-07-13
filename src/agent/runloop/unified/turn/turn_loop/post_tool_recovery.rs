@@ -337,13 +337,25 @@ pub(super) fn dispatch_post_tool_failure(
         renderer,
         working_history,
         harness_state,
-        plan_session,
+        mut plan_session,
         err,
         step_count,
         turn_history_start_len,
         stage,
         tool_free_recovery,
     } = ctx;
+    // Plan-mode: if this turn's tool wall-clock budget was exhausted, the
+    // planning context is saturated — the model spent the entire budget on
+    // research and the synthesis still failed. Mark the session
+    // recovery-exhausted so the failure path below finalizes the plan from
+    // gathered evidence instead of re-forcing the interview, which would
+    // re-research the still-huge context for another full wall-clock budget
+    // and loop forever across turns (observed in checkpoint turn_647).
+    if harness_state.wall_clock_exhausted_emitted
+        && let Some(session) = plan_session.as_deref_mut()
+    {
+        session.mark_recovery_exhausted();
+    }
     let recovery = maybe_recover_after_post_tool_llm_failure(
         renderer,
         working_history,
@@ -512,6 +524,51 @@ mod tests {
             plan_session.interview_pending(),
             "any tool-free recovery failure must keep planning alive (not dead-end)"
         );
+    }
+
+    #[test]
+    fn dispatch_marks_recovery_exhausted_when_wall_clock_exhausted_in_plan_mode() {
+        use crate::agent::runloop::unified::run_loop_context::{
+            HarnessTurnState, TurnId, TurnRunId,
+        };
+        use vtcode_core::utils::ansi::AnsiRenderer;
+
+        let mut renderer = AnsiRenderer::stdout();
+        let mut working_history: Vec<uni::Message> = Vec::new();
+        let mut harness_state = HarnessTurnState::new(
+            TurnRunId("test-run".to_string()),
+            TurnId("test-turn".to_string()),
+            4,
+            600,
+            0,
+        );
+        harness_state.wall_clock_exhausted_emitted = true;
+        let mut plan_session = PlanningWorkflowSessionState::default();
+        let err = transient_err();
+
+        let action = dispatch_post_tool_failure(PostToolRecoveryContext {
+            renderer: &mut renderer,
+            working_history: &mut working_history,
+            harness_state: &mut harness_state,
+            plan_session: Some(&mut plan_session),
+            err: &err,
+            step_count: 1,
+            turn_history_start_len: 0,
+            stage: "stage",
+            tool_free_recovery: true,
+        })
+        .expect("dispatch must not error");
+
+        assert!(
+            plan_session.is_recovery_exhausted(),
+            "wall-clock exhaustion during planning must mark the session \
+             recovery-exhausted so the plan finalizes instead of looping"
+        );
+        assert!(
+            !plan_session.interview_pending(),
+            "must not re-force the interview after wall-clock exhaustion"
+        );
+        assert!(matches!(action, PostToolFailureAction::Break(_)));
     }
 
     #[test]

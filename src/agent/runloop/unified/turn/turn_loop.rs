@@ -1092,6 +1092,14 @@ pub(crate) async fn run_turn_loop(
                     ));
                     continue;
                 }
+                // Wall-clock-exhausted planning turns must finalize instead of
+                // re-forcing the interview (see `dispatch_post_tool_failure`).
+                if tool_free_recovery
+                    && ctx.harness_state.wall_clock_exhausted_emitted
+                    && ctx.is_planning_active()
+                {
+                    ctx.plan_session.mark_recovery_exhausted();
+                }
                 let salvaged = ctx.harness_state.take_recovery_rejected_synthesis();
                 result = normalize_tool_free_recovery_break_outcome(
                     working_history,
