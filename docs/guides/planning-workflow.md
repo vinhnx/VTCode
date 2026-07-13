@@ -37,6 +37,39 @@ While a turn is actively processing, `/plan` is dropped with a notice (mode swit
 /plan
 ```
 
+### Enter From an Agent Suggestion
+
+The agent can also propose entering the planning workflow on its own when it
+judges edits should be planned first. In that case a HITL confirmation prompt
+appears:
+
+```text
+Enter Planning workflow?
+
+- Enter Planning workflow (Recommended) — enter planning and persist the draft under .vtcode/plans
+- Continue without Planning workflow
+```
+
+- **Enter Planning workflow** — starts planning; the draft is persisted under
+  `.vtcode/plans/` and mutating tools stay disabled until you approve execution.
+- **Continue without Planning workflow** — the agent proceeds without planning
+  (mutating tools remain enabled).
+
+This gate prevents the agent from silently switching into plan mode; you decide
+whether to plan before any edits begin.
+
+### Intent Phrases
+
+You can steer the workflow with short phrases instead of the review-gate UI:
+
+- To **exit planning and present the plan** for approval, type `implement`,
+  `approve`, `lgtm`, `ship it`, `yes`/`continue`/`go`/`start`, or select
+  **Execute** / **Auto-accept** in the review gate. Approving triggers
+  `finish_planning` and the execution confirmation — the agent will not
+  self-approve by editing the plan file and staying in plan mode.
+- To **stay in planning**, type `stay in planning` (or revise the
+  `<proposed_plan>` block). This overrides any exit phrase.
+
 ### Typical Workflow
 
 1. Select the `plan` primary agent or run `/plan`.
@@ -105,6 +138,14 @@ Approval options:
 Handoff options perform a true primary-agent switch: the chosen agent becomes active and
 executes the approved plan. `finish_planning` is invoked either way, disabling planning
 mode and enabling mutating tools.
+
+## Budget Exhaustion
+
+If the session budget or wall-clock limit is reached while planning, the
+runloop does **not** force another interview or loop (no further LLM calls are
+possible). Instead it finalizes the current plan draft and presents it via the
+review gate, so you can approve or revise what was produced rather than the
+turn hanging.
 
 ## Best Practices
 

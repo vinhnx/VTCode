@@ -2,10 +2,6 @@
 
 Collapse agent's thinking block by default in TUI. Make it configurable (Extended/Collapsed) via a new config option, and add a test to ensure that the default behavior is to collapse thinking blocks, and that the config option can override this behavior.
 
-==
-
-Fix and improve Build/Auto/Plan/Duck mode color ansi. make it readable in dark and light terminals, and add a test for it. Not too bright, not too dark, and not too much contrast. Use a color palette that is accessible and works well in both light and dark modes. Add a test to ensure that the colors are applied correctly and that the output is readable in different terminal settings.
-
 ===
 
 refactor and extract vtcode-core/src/core/agent/runner/tests.rs

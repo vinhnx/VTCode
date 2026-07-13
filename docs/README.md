@@ -55,7 +55,7 @@ VT Code has undergone significant improvements:
 
 - **Loop Engineering** - Worktree isolation for parallel agents, propose/verify sub-agent separation, durable loop state persistence (`.vtcode/state/`), and token-cost guardrails. See [Loop Engineering Plan](./project/PLAN-loop-engineering.md).
 
-- **Planning Workflow** - Iterate on a build plan with `/plan` and the `plan` primary agent, then approve via a structured review gate and hand off to `build`/`auto`. See [Planning Workflow](./guides/planning-workflow.md).
+- **Planning Workflow** - Iterate on a build plan with `/plan` and the `plan` primary agent. The agent can propose planning itself via an "Enter Planning workflow?" confirmation prompt, and you steer it with intent phrases (`approve`/`implement` to exit, `stay in planning` to remain). Approve via a structured review gate and hand off to `build`/`auto`. See [Planning Workflow](./guides/planning-workflow.md).
 - **Primary Agent Switching & Mode Guard** - Switch main-session agents (`plan`/`build`/`auto`) with `Tab`; mode switches lock during a turn to keep tool-access and instructions consistent.
 - **Automatic Compaction & Memory Envelope** - Unified compaction orchestration with a shared memory envelope as the single source of truth for both runloops.
 - **`/checkup` Command** - Configuration diagnostics that surface reversible, confirm-before-apply optimizations (e.g. tool-result clearing, client tool search, token-efficiency warnings).

@@ -4,6 +4,7 @@ use tokio::sync::Notify;
 
 use tracing::warn;
 
+use vtcode_config::constants::ui;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::llm::provider::{self as uni};
@@ -794,12 +795,14 @@ fn update_header_for_plan_selection(
     handle: &InlineHandle,
 ) {
     let (name, color) = match selection {
-        InlineListSelection::PlanApprovalExecute | InlineListSelection::PlanApprovalAutoAccept => {
-            (Some("build".to_string()), Some("green".to_string()))
-        }
-        InlineListSelection::PlanApprovalEditPlan => {
-            (Some("plan".to_string()), Some("blue".to_string()))
-        }
+        InlineListSelection::PlanApprovalExecute | InlineListSelection::PlanApprovalAutoAccept => (
+            Some("build".to_string()),
+            Some(ui::AGENT_COLOR_BUILD.to_string()),
+        ),
+        InlineListSelection::PlanApprovalEditPlan => (
+            Some("plan".to_string()),
+            Some(ui::AGENT_COLOR_PLAN.to_string()),
+        ),
         _ => return,
     };
 
