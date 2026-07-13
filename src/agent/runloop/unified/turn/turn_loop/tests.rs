@@ -10,6 +10,9 @@ use super::{
     maybe_recover_after_post_tool_llm_failure, normalize_tool_free_recovery_break_outcome,
     run_turn_loop,
 };
+use crate::agent::runloop::unified::planning_workflow::recovery::{
+    PLANNING_SYNTHESIS_TRUNCATED_CONDENSE_DIRECTIVE, plan_synthesis_was_truncated,
+};
 use crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState;
 use crate::agent::runloop::unified::turn::context::TurnLoopResult;
 use crate::agent::runloop::unified::turn::turn_processing::test_support::TestTurnProcessingBacking;
@@ -969,7 +972,7 @@ fn plan_synthesis_truncated_detects_unclosed_proposed_plan() {
         compaction: None,
     };
     assert!(
-        crate::agent::runloop::unified::planning_workflow::plan_synthesis_was_truncated(&truncated),
+        plan_synthesis_was_truncated(&truncated),
         "unclosed <proposed_plan> with Length finish must be detected as truncated"
     );
 
@@ -988,7 +991,7 @@ fn plan_synthesis_truncated_detects_unclosed_proposed_plan() {
         compaction: None,
     };
     assert!(
-        !crate::agent::runloop::unified::planning_workflow::plan_synthesis_was_truncated(&complete),
+        !plan_synthesis_was_truncated(&complete),
         "closed <proposed_plan> must not be flagged as truncated"
     );
 
@@ -1007,7 +1010,7 @@ fn plan_synthesis_truncated_detects_unclosed_proposed_plan() {
         compaction: None,
     };
     assert!(
-        !crate::agent::runloop::unified::planning_workflow::plan_synthesis_was_truncated(&normal),
+        !plan_synthesis_was_truncated(&normal),
         "Stop-finished plan must not be flagged as truncated"
     );
 }
@@ -1103,11 +1106,10 @@ async fn planning_synthesis_truncated_retries_with_compact_spec() {
 
     // The condense directive must have been injected into the history.
     assert!(
-        history
-            .iter()
-            .any(|message| message.content.as_text().contains(
-                crate::agent::runloop::unified::planning_workflow::PLANNING_SYNTHESIS_TRUNCATED_CONDENSE_DIRECTIVE
-            )),
+        history.iter().any(|message| message
+            .content
+            .as_text()
+            .contains(PLANNING_SYNTHESIS_TRUNCATED_CONDENSE_DIRECTIVE)),
         "condense directive must be injected after a truncated plan"
     );
 

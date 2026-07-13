@@ -7374,6 +7374,7 @@ dependencies = [
  "tracing",
  "url",
  "uuid",
+ "vtcode-commons",
  "vtcode-config",
  "vtcode-core",
 ]

@@ -27,7 +27,4 @@ pub(crate) use intent::{
     PlanningIntent, assistant_recently_prompted_implementation, detect_enter_planning_intent,
     detect_planning_intent,
 };
-pub(crate) use recovery::{
-    PLANNING_SYNTHESIS_TRUNCATED_CONDENSE_DIRECTIVE, maybe_condense_truncated_plan,
-    plan_synthesis_was_truncated,
-};
+pub(crate) use recovery::maybe_condense_truncated_plan;

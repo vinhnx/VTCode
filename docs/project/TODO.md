@@ -1,20 +1,4 @@
---
-
-Collapse agent's thinking block by default in TUI. Make it configurable (Extended/Collapsed) via a new config option, and add a test to ensure that the default behavior is to collapse thinking blocks, and that the config option can override this behavior.
-
 ===
-
-refactor and extract vtcode-core/src/core/agent/runner/tests.rs
-
-===
-
-check if vtcode has same issue and make a plan to fix
-
-https://systima.ai/blog/claude-code-vs-opencode-token-overhead
-
-https://news.ycombinator.com/item?id=48883275
-
----
 
 Refined Plan: Eliminate token overhead in VTCode
 Goal
