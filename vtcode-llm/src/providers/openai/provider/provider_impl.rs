@@ -85,6 +85,10 @@ impl provider::LLMProvider for OpenAIProvider {
         )
     }
 
+    fn supports_native_allowed_tools(&self, model: &str) -> bool {
+        self.supports_responses_allowed_tools(model)
+    }
+
     fn supports_manual_openai_compaction(&self, model: &str) -> bool {
         let requested = if model.trim().is_empty() {
             self.model.as_ref()

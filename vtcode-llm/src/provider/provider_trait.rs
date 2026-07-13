@@ -208,6 +208,11 @@ pub trait LLMProvider: Send + Sync {
         false
     }
 
+    /// Whether the request path can enforce a provider-native `allowed_tools` subset.
+    fn supports_native_allowed_tools(&self, _model: &str) -> bool {
+        false
+    }
+
     /// Whether the provider supports provider-native context editing such as
     /// tool-result clearing.
     fn supports_context_edits(&self, _model: &str) -> bool {

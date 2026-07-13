@@ -75,6 +75,24 @@ fn assert_provider_hides_tool(snapshot: &SessionToolCatalogSnapshot, tool_name: 
     );
 }
 
+fn assert_provider_catalogues_inactive_tool(
+    snapshot: &SessionToolCatalogSnapshot,
+    tool_name: &str,
+) {
+    let names = provider_tool_names(snapshot);
+    assert!(
+        names.contains(&tool_name),
+        "stable provider catalogue should include {tool_name}; got {names:?}"
+    );
+    assert!(
+        !snapshot
+            .active_tool_names
+            .iter()
+            .any(|active_name| active_name == tool_name),
+        "active tool names should hide {tool_name}"
+    );
+}
+
 #[test]
 fn record_turn_duration_records_once() {
     let mut durations = Vec::with_capacity(5);
@@ -274,7 +292,7 @@ async fn runner_uses_public_tool_resolution_for_validation() {
 #[tokio::test]
 async fn build_universal_tools_matches_registry_agent_runner_snapshot() {
     let temp = TempDir::new().expect("tempdir");
-    let runner = Box::pin(AgentRunner::new_with_bootstrap(
+    let mut runner = Box::pin(AgentRunner::new_with_bootstrap(
         AgentType::Single,
         ModelId::default(),
         "test-key".to_string(),
@@ -291,6 +309,7 @@ async fn build_universal_tools_matches_registry_agent_runner_snapshot() {
     ))
     .await
     .expect("runner");
+    runner.provider_client = Box::new(RecordingQueuedProvider::new(Vec::new()));
 
     let registry_tools = runner
         .tool_registry
@@ -349,6 +368,11 @@ async fn build_universal_tools_matches_registry_agent_runner_snapshot() {
             expected.push(tool.function_name().to_string());
         }
     }
+    let snapshot = runner
+        .build_universal_tool_snapshot()
+        .await
+        .expect("universal tool snapshot");
+    assert_provider_catalogues_inactive_tool(&snapshot, tools::CODE_SEARCH);
     let actual = runner
         .build_universal_tools()
         .await
@@ -689,7 +713,7 @@ async fn webfetch_domain_deny_filters_representative_search_dispatch_tool() {
 #[tokio::test]
 async fn planning_mode_filters_provider_facing_mutating_tools() {
     let temp = TempDir::new().expect("tempdir");
-    let runner = Box::pin(AgentRunner::new_with_bootstrap(
+    let mut runner = Box::pin(AgentRunner::new_with_bootstrap(
         AgentType::Single,
         ModelId::default(),
         "test-key".to_string(),
@@ -706,6 +730,13 @@ async fn planning_mode_filters_provider_facing_mutating_tools() {
     ))
     .await
     .expect("runner");
+    runner.provider_client = Box::new(RecordingQueuedProvider::new(Vec::new()));
+
+    let before_planning = runner
+        .build_universal_tool_snapshot()
+        .await
+        .expect("snapshot before planning");
+    assert_provider_catalogues_inactive_tool(&before_planning, tools::CODE_SEARCH);
 
     runner.tool_registry.enable_planning();
 
@@ -713,8 +744,13 @@ async fn planning_mode_filters_provider_facing_mutating_tools() {
         .build_universal_tool_snapshot()
         .await
         .expect("snapshot");
-    assert_provider_hides_tool(&snapshot, tools::APPLY_PATCH);
+    assert_provider_catalogues_inactive_tool(&snapshot, tools::APPLY_PATCH);
     assert_provider_hides_tool(&snapshot, tools::READ_FILE);
+    assert_provider_exposes_tool(&snapshot, tools::CODE_SEARCH);
+    assert_eq!(
+        before_planning.tool_catalog_hash, snapshot.tool_catalog_hash,
+        "planning transitions should retain the stable provider catalogue"
+    );
 }
 
 #[tokio::test]
@@ -951,12 +987,21 @@ async fn review_tool_allowlist_expands_wildcard_read_only() {
     .await
     .expect("runner");
 
-    runner
-        .enable_full_auto(&[tools::UNIFIED_FILE.to_string()])
+    let allowlist = runner
+        .review_tool_allowlist(&[tools::WILDCARD_ALL.to_string()])
         .await;
+    assert!(allowlist.contains(&tools::CODE_SEARCH.to_string()));
+
+    runner.enable_full_auto(&allowlist).await;
 
     assert!(!runner.is_tool_exposed(tools::UNIFIED_FILE).await);
     assert!(!runner.is_tool_exposed(tools::UNIFIED_EXEC).await);
+    let snapshot = runner
+        .build_universal_tool_snapshot()
+        .await
+        .expect("review snapshot");
+    assert_provider_exposes_tool(&snapshot, tools::CODE_SEARCH);
+    assert_provider_hides_tool(&snapshot, tools::APPLY_PATCH);
 }
 
 #[derive(Clone)]
@@ -999,13 +1044,29 @@ impl LLMProvider for QueuedProvider {
 
 #[derive(Clone)]
 struct RecordingQueuedProvider {
+    name: &'static str,
+    supports_native_allowed_tools: bool,
     responses: Arc<Mutex<VecDeque<LLMResponse>>>,
     requests: Arc<Mutex<Vec<LLMRequest>>>,
 }
 
 impl RecordingQueuedProvider {
     fn new(responses: Vec<LLMResponse>) -> Self {
+        Self::with_native_allowed_tools("openai", true, responses)
+    }
+
+    fn with_name(name: &'static str, responses: Vec<LLMResponse>) -> Self {
+        Self::with_native_allowed_tools(name, false, responses)
+    }
+
+    fn with_native_allowed_tools(
+        name: &'static str,
+        supports_native_allowed_tools: bool,
+        responses: Vec<LLMResponse>,
+    ) -> Self {
         Self {
+            name,
+            supports_native_allowed_tools,
             responses: Arc::new(Mutex::new(responses.into())),
             requests: Arc::new(Mutex::new(Vec::new())),
         }
@@ -1019,7 +1080,7 @@ impl RecordingQueuedProvider {
 #[async_trait]
 impl LLMProvider for RecordingQueuedProvider {
     fn name(&self) -> &str {
-        "openai"
+        self.name
     }
 
     async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
@@ -1035,6 +1096,10 @@ impl LLMProvider for RecordingQueuedProvider {
 
     fn supported_models(&self) -> Vec<String> {
         vec!["gpt-5.3-codex".to_string()]
+    }
+
+    fn supports_native_allowed_tools(&self, _model: &str) -> bool {
+        self.supports_native_allowed_tools
     }
 
     fn validate_request(&self, _request: &LLMRequest) -> Result<(), LLMError> {
@@ -1151,9 +1216,18 @@ fn workspace_root(temp: &TempDir) -> PathBuf {
 }
 
 async fn make_runner(temp: &TempDir, vt_cfg: VTCodeConfig, session_id: &str) -> AgentRunner {
+    make_runner_for_model(temp, vt_cfg, session_id, ModelId::default()).await
+}
+
+async fn make_runner_for_model(
+    temp: &TempDir,
+    vt_cfg: VTCodeConfig,
+    session_id: &str,
+    model: ModelId,
+) -> AgentRunner {
     let mut runner = Box::pin(AgentRunner::new_with_bootstrap(
         AgentType::Single,
-        ModelId::default(),
+        model,
         "test-key".to_string(),
         workspace_root(temp),
         session_id.to_string(),
@@ -1449,6 +1523,102 @@ async fn review_runs_skip_continuation_and_finish_single_pass() {
     let events = harness_events(&result);
     assert!(events.contains(&HarnessEventKind::ContinuationSkipped));
     assert!(!events.contains(&HarnessEventKind::ContinuationStarted));
+}
+
+#[tokio::test]
+async fn review_non_openai_request_exposes_only_read_only_inspection_tools() {
+    let temp = TempDir::new().expect("tempdir");
+    let request = record_review_request(
+        &temp,
+        ModelId::default(),
+        "queued-test-provider",
+        "thread-review-non-openai-tools",
+    )
+    .await;
+    assert_review_request_exposes_only_code_search(&request);
+    assert!(request.tool_choice.is_none());
+}
+
+#[tokio::test]
+async fn review_openai_compatible_request_filters_inactive_tools() {
+    let temp = TempDir::new().expect("tempdir");
+    let request = record_review_request(
+        &temp,
+        ModelId::GPT53Codex,
+        "openai",
+        "thread-review-openai-compatible",
+    )
+    .await;
+    assert_review_request_exposes_only_code_search(&request);
+}
+
+#[tokio::test]
+async fn review_openai_non_responses_request_filters_inactive_tools() {
+    let temp = TempDir::new().expect("tempdir");
+    let model = ModelId::OpenAIGptOss20b;
+    let expected_model = model.as_str().into_owned();
+    let request =
+        record_review_request(&temp, model, "openai", "thread-review-openai-non-responses").await;
+    assert_eq!(request.model, expected_model);
+    assert_review_request_exposes_only_code_search(&request);
+}
+
+fn assert_review_request_exposes_only_code_search(request: &LLMRequest) {
+    let tool_names = request
+        .tools
+        .as_deref()
+        .map(|definitions| {
+            definitions
+                .iter()
+                .map(|tool| tool.function_name())
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    assert!(tool_names.contains(&tools::CODE_SEARCH));
+    for mutating_tool in [tools::EXEC_COMMAND, tools::APPLY_PATCH] {
+        assert!(
+            !tool_names.contains(&mutating_tool),
+            "non-OpenAI review request must hide {mutating_tool}; got {tool_names:?}"
+        );
+    }
+}
+
+async fn record_review_request(
+    temp: &TempDir,
+    model: ModelId,
+    provider_name: &'static str,
+    session_id: &str,
+) -> LLMRequest {
+    let mut runner = Box::pin(make_runner_for_model(
+        temp,
+        VTCodeConfig::default(),
+        session_id,
+        model,
+    ))
+    .await;
+    let allowlist = runner
+        .review_tool_allowlist(&[tools::WILDCARD_ALL.to_string()])
+        .await;
+    runner.enable_full_auto(&allowlist).await;
+
+    let provider = RecordingQueuedProvider::with_name(
+        provider_name,
+        vec![
+            text_response("The review is complete."),
+            text_response("The review is complete."),
+        ],
+    );
+    let recorded = provider.clone();
+    runner.provider_client = Box::new(provider);
+    let _result = Box::pin(runner.execute_task(&task("Review task", "review-task"), &[]))
+        .await
+        .expect("task result");
+
+    recorded
+        .recorded_requests()
+        .into_iter()
+        .next()
+        .expect("review provider request")
 }
 
 #[tokio::test]

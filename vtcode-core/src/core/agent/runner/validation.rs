@@ -44,16 +44,40 @@ impl AgentRunner {
     pub(super) async fn build_exposed_tool_snapshot(&self) -> Result<SessionToolCatalogSnapshot> {
         let planning_active = self.tool_registry.is_planning_active();
         let request_user_input_enabled = false;
-        // Build from the stable configuration, then strip any tool hidden by
-        // runtime policy before the snapshot reaches provider requests.
-        let stable_config = self.session_tools_config_for_snapshot(false, true);
+        // Keep definitions stable across runtime mode transitions. Active names
+        // still follow the current profile, mode, permissions, and allow-list.
+        let stable_config = self.session_tools_config_for_snapshot(true, true);
         let definitions = self.tool_registry.model_tools(stable_config).await;
+        let runtime_config = self.session_tools_config_for_snapshot(planning_active, false);
+        let mut runtime_tool_names: HashSet<String> = self
+            .tool_registry
+            .model_tools(runtime_config)
+            .await
+            .into_iter()
+            .map(|tool| tool.function_name().to_string())
+            .collect();
+        if let Some(full_auto_allowlist) = self.tool_registry.current_full_auto_allowlist().await {
+            runtime_tool_names.extend(full_auto_allowlist);
+        }
+        let supports_active_name_restriction = self
+            .provider_client
+            .supports_native_allowed_tools(&self.model);
         let mut active_tool_names = Vec::new();
         let mut exposed_definitions = Vec::new();
         for tool in definitions {
             let tool_name = tool.function_name().to_string();
-            if self.is_tool_exposed(tool_name.as_str()).await {
+            if !self
+                .is_tool_permitted_for_advertisement(tool_name.as_str())
+                .await
+            {
+                continue;
+            }
+            let active = runtime_tool_names.contains(&tool_name)
+                && self.is_tool_exposed(tool_name.as_str()).await;
+            if active {
                 active_tool_names.push(tool_name);
+            }
+            if supports_active_name_restriction || active {
                 exposed_definitions.push(tool);
             }
         }
@@ -71,10 +95,20 @@ impl AgentRunner {
 
     pub(super) async fn build_exposed_tool_definitions(&self) -> Result<Vec<ToolDefinition>> {
         let snapshot = self.build_exposed_tool_snapshot().await?;
+        let active_tool_names: HashSet<&str> = snapshot
+            .active_tool_names
+            .iter()
+            .map(String::as_str)
+            .collect();
         Ok(snapshot
             .snapshot
             .as_ref()
-            .map(|defs| defs.as_ref().clone())
+            .map(|defs| {
+                defs.iter()
+                    .filter(|tool| active_tool_names.contains(tool.function_name()))
+                    .cloned()
+                    .collect()
+            })
             .unwrap_or_default())
     }
 

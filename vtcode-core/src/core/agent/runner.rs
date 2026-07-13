@@ -493,11 +493,12 @@ impl AgentRunner {
 
     /// Enable full-auto execution with the provided allow-list.
     pub async fn enable_full_auto(&mut self, allowed_tools: &[String]) {
+        let mut permission_catalog_config = self.session_tools_config.clone();
+        permission_catalog_config.planning_active = allowed_tools.iter().any(|tool_name| {
+            crate::tools::names::canonical_tool_name(tool_name) == tools::CODE_SEARCH
+        });
         self.tool_registry
-            .enable_full_auto_permission_for_session(
-                allowed_tools,
-                self.session_tools_config.clone(),
-            )
+            .enable_full_auto_permission_for_session(allowed_tools, permission_catalog_config)
             .await;
     }
 
@@ -507,7 +508,11 @@ impl AgentRunner {
             .iter()
             .any(|tool| tool.trim() == tools::WILDCARD_ALL)
         {
-            self.tool_registry.available_tools().await
+            let mut candidates = self.tool_registry.available_tools().await;
+            if !candidates.iter().any(|tool| tool == tools::CODE_SEARCH) {
+                candidates.push(tools::CODE_SEARCH.to_string());
+            }
+            candidates
         } else {
             allowed_tools.to_vec()
         };
