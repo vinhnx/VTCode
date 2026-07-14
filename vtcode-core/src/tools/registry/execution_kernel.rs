@@ -521,6 +521,10 @@ pub(super) fn preflight_validate_resolved_call(
             ));
         }
     }
+    if validation_tool_name == tool_names::CODE_SEARCH {
+        crate::tools::code_search::validate_args(validation_args.as_ref())
+            .map_err(|error| anyhow!("Invalid arguments for tool '{routed_tool_name}': {error}"))?;
+    }
 
     let intent = crate::tools::tool_intent::classify_tool_intent(
         &validation_tool_name,

@@ -130,6 +130,7 @@ pub mod request_user_input;
 
 pub mod autonomous_executor;
 pub mod cache;
+pub(crate) mod code_search;
 pub mod command;
 pub mod command_args;
 pub mod command_cache;

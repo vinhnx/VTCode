@@ -16,10 +16,10 @@ async fn test_code_search_dual_output_integration() {
 
     // Test: Execute code_search with dual output
     let args = json!({
-        "action": "structural",
-        "pattern": "pub fn $NAME($$$ARGS) $$$BODY",
+        "query": "ToolRegistry",
         "path": "src/tools",
-        "lang": "rust",
+        "file_types": ["rust"],
+        "result_types": ["definition", "usage", "text"],
         "max_results": 10
     });
 

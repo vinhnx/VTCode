@@ -1862,7 +1862,12 @@ impl ToolRegistry {
                 let processed_value = self
                     .process_tool_output(&tool_name_owned, value, is_mcp_tool)
                     .await;
-                let normalized_value = normalize_tool_output(processed_value);
+                let mut normalized_value = normalize_tool_output(processed_value);
+                if tool_name_owned == tools::CODE_SEARCH
+                    && let Some(output) = normalized_value.as_object_mut()
+                {
+                    output.remove("success");
+                }
                 let structured_error = structured_tool_output_error(&normalized_value);
 
                 if !readonly_classification {

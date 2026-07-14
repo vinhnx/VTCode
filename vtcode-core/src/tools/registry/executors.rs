@@ -550,30 +550,9 @@ impl ToolRegistry {
     }
 
     async fn execute_code_search(&self, args: Value) -> Result<Value> {
-        let args = tool_intent::normalize_search_dispatch_args(&args);
-        let action_str = tool_intent::search_dispatch_action(&args).ok_or_else(|| {
-            anyhow!("code_search requires action='structural' or action='outline'")
-        })?;
-        let action: SearchDispatchAction = parse_action(action_str)?;
-
-        match action {
-            SearchDispatchAction::Outline => self.execute_search_dispatch(args).await,
-            SearchDispatchAction::Structural => {
-                let workflow = args
-                    .get("workflow")
-                    .and_then(Value::as_str)
-                    .unwrap_or("query");
-                if !matches!(workflow, "query" | "scan" | "test") {
-                    bail!(
-                        "code_search structural workflow supports only 'query', 'scan', or 'test'"
-                    );
-                }
-                self.execute_search_dispatch(args).await
-            }
-            _ => bail!(
-                "code_search supports only action='structural' or action='outline'; use exec_command.cmd with rg for text search"
-            ),
-        }
+        let request = serde_json::from_value(args).context("invalid code_search request")?;
+        let response = crate::tools::code_search::execute(request).await?;
+        serde_json::to_value(response).context("failed to serialise code_search response")
     }
 
     /// Attempt to fall back from a structural search to a grep search when

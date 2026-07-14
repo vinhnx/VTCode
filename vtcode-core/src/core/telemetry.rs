@@ -221,16 +221,17 @@ mod tests {
     }
 
     #[test]
-    fn tool_usage_normalises_removed_internal_labels() {
+    fn code_search_telemetry_label_remains_canonical() {
         let telemetry = TelemetryManager::new();
         telemetry.record_tool_usage(tools::UNIFIED_EXEC, true);
         telemetry.record_tool_usage(tools::UNIFIED_SEARCH, false);
+        telemetry.record_tool_usage(tools::CODE_SEARCH, true);
         telemetry.record_tool_usage(tools::UNIFIED_FILE, true);
 
         let snapshot = telemetry.get_snapshot().expect("snapshot");
-        assert_eq!(snapshot.total_tool_calls, 3);
+        assert_eq!(snapshot.total_tool_calls, 4);
         assert_eq!(snapshot.tool_counts.get("exec_command"), Some(&1));
-        assert_eq!(snapshot.tool_counts.get("code_search"), Some(&1));
+        assert_eq!(snapshot.tool_counts.get("code_search"), Some(&2));
         assert_eq!(snapshot.tool_counts.get("file_operation"), Some(&1));
         assert_eq!(snapshot.tool_errors.get("code_search"), Some(&1));
         assert!(

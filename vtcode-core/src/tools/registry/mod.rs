@@ -555,18 +555,20 @@ mod tests {
             .get_tool_schema(tools::CODE_SEARCH)
             .await
             .expect("code_search schema should be discoverable on request");
-        let code_search_actions = code_search_schema["parameters"]["properties"]["action"]["enum"]
-            .as_array()
-            .expect("code_search action enum");
-        assert!(
-            code_search_actions
-                .iter()
-                .any(|value| value == "structural")
+        let code_search_parameters = &code_search_schema["parameters"];
+        assert_eq!(code_search_parameters["required"], json!(["query"]));
+        assert_eq!(code_search_parameters["additionalProperties"], false);
+        let mut property_names = code_search_parameters["properties"]
+            .as_object()
+            .expect("code_search properties")
+            .keys()
+            .map(String::as_str)
+            .collect::<Vec<_>>();
+        property_names.sort_unstable();
+        assert_eq!(
+            property_names,
+            ["file_types", "max_results", "path", "query", "result_types"]
         );
-        assert!(code_search_actions.iter().any(|value| value == "outline"));
-        assert!(!code_search_actions.iter().any(|value| value == "grep"));
-        assert!(!code_search_actions.iter().any(|value| value == "list"));
-        assert!(!code_search_actions.iter().any(|value| value == "web"));
 
         Ok(())
     }
