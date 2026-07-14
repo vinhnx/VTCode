@@ -543,7 +543,7 @@ fn filter_child_tools_keeps_public_read_tools_and_removes_mutation_tools() {
         .iter()
         .map(ToolDefinition::function_name)
         .collect::<Vec<_>>();
-    assert_eq!(names, vec![tools::CODE_SEARCH, tools::EXEC_COMMAND]);
+    assert_eq!(names, vec![tools::CODE_SEARCH]);
 }
 
 #[test]

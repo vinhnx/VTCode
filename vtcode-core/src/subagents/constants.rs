@@ -41,7 +41,6 @@ pub(crate) const SUBAGENT_TOOL_NAMES: &[&str] = &[
 
 pub(crate) const NON_MUTATING_TOOL_PREFIXES: &[&str] = &[
     tools::CODE_SEARCH,
-    tools::EXEC_COMMAND,
     tools::LIST_SKILLS,
     tools::LOAD_SKILL,
     tools::LOAD_SKILL_RESOURCE,

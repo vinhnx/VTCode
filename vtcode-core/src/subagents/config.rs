@@ -430,9 +430,9 @@ const FINAL_RESPONSE_CONTRACT: &str = "Return your final response using this exa
 Use `- None` for empty sections. Keep it concise and grounded in the work you actually performed.";
 
 const READ_ONLY_TOOL_REMINDER: &str = "Tool reminder: stay inside the exposed read-only tool set for this child. \
-Use `exec_command` for workspace discovery and file reading. Use advanced `code_search` for structural or outline work. \
-When `exec_command` returns a live session, poll it with `write_stdin` and empty `chars`. If these tools are insufficient, \
-report the blocker instead of retrying denied calls.";
+Use `code_search` for workspace discovery, structural search, and outline work. Use `list_skills`, `load_skill`, and \
+`load_skill_resource` when the task requires repository skills. If these tools are insufficient, report the blocker \
+instead of retrying denied calls.";
 
 const READ_ONLY_PLANNING_WORKFLOW_REMINDER: &str = "This delegated agent already runs with a read-only tool surface. \
 Do not try to enter or exit planning workflow, do not call hidden mutating tools, and do not retry the same denied tool \
@@ -600,17 +600,31 @@ mod slice4_tests {
             .map(ToolDefinition::function_name)
             .collect::<Vec<_>>();
 
-        assert_eq!(names, vec![tools::CODE_SEARCH, tools::EXEC_COMMAND]);
+        assert_eq!(names, vec![tools::CODE_SEARCH]);
     }
 
     #[test]
-    fn child_tool_reminders_name_only_public_search_and_execution_tools() {
-        for reminder in [READ_ONLY_TOOL_REMINDER, WRITE_TOOL_REMINDER] {
-            assert!(reminder.contains("`exec_command`"));
-            assert!(reminder.contains("`write_stdin`"));
-            assert!(reminder.contains("`code_search`"));
-            assert!(!reminder.contains("search_dispatch"));
-            assert!(!reminder.contains("command_session"));
+    fn read_only_tool_reminder_names_only_exposed_read_only_tools() {
+        for tool in [
+            "code_search",
+            "list_skills",
+            "load_skill",
+            "load_skill_resource",
+        ] {
+            assert!(READ_ONLY_TOOL_REMINDER.contains(&format!("`{tool}`")));
         }
+        assert!(!READ_ONLY_TOOL_REMINDER.contains("`exec_command`"));
+        assert!(!READ_ONLY_TOOL_REMINDER.contains("`write_stdin`"));
+        assert!(!READ_ONLY_TOOL_REMINDER.contains("search_dispatch"));
+        assert!(!READ_ONLY_TOOL_REMINDER.contains("command_session"));
+    }
+
+    #[test]
+    fn writable_tool_reminder_names_public_search_and_execution_tools() {
+        assert!(WRITE_TOOL_REMINDER.contains("`exec_command`"));
+        assert!(WRITE_TOOL_REMINDER.contains("`write_stdin`"));
+        assert!(WRITE_TOOL_REMINDER.contains("`code_search`"));
+        assert!(!WRITE_TOOL_REMINDER.contains("search_dispatch"));
+        assert!(!WRITE_TOOL_REMINDER.contains("command_session"));
     }
 }

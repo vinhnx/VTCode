@@ -32,7 +32,7 @@ Text search:
 Interactive continuation:
 
 ```json
-{"session_id":7,"chars":"\u0003"}
+{"session_id":"7","chars":"\u0003"}
 ```
 
 Patch edit:
