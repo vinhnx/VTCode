@@ -20,7 +20,7 @@ mod model_selection;
 mod model_switch_compaction;
 pub(crate) mod palettes;
 pub(crate) mod plan_blocks;
-mod plan_confirmation;
+pub(crate) mod planning_workflow;
 mod planning_workflow_state;
 mod postamble;
 mod progress;

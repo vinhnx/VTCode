@@ -27,13 +27,14 @@ ignore = { workspace = true }
 indexmap = { workspace = true }
 nucleo-matcher = "0.3"
 parking_lot = "0.12.5"
+rayon = "1"
 regex = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 serde-saphyr = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
-vtcode-commons = { path = "../vtcode-commons", version = "0.135.5" }
+vtcode-commons = { path = "../vtcode-commons", version = "0.135.8" }
 
 [dev-dependencies]
 tempfile = { workspace = true }

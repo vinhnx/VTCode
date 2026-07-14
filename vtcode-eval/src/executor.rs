@@ -3,7 +3,7 @@
 //! The [`EvalExecutor`] trait isolates the harness orchestration from the
 //! concrete agent runner. This is the "interface guard rail": `run_suite`
 //! depends only on the trait, so it can be unit-tested with a fake executor
-//! and the production [`crate::AgentRunnerExecutor`]-style impl can be swapped
+//! and the production executor implementation can be swapped
 //! without touching the orchestration logic.
 
 use anyhow::Result;

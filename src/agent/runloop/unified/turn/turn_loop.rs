@@ -113,6 +113,23 @@ const RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER: &str = "Recovery synthesis faile
 /// `interview_pending`), so this message tells the user to continue planning
 /// rather than re-state a generic request.
 const PLANNING_RECOVERY_SYNTHESIS_FALLBACK: &str = "Planning research completed, but the final synthesis failed (transient provider error). Your gathered context is preserved and the planning interview will be presented on the next turn — re-state your request or press Enter to continue planning.";
+/// Plan-mode fallback when the session budget is exhausted. Unlike the
+/// transient-error variant, this tells the agent to finalize the plan NOW
+/// from the evidence already gathered — the budget is spent and no further
+/// LLM calls are possible this session.
+const PLANNING_BUDGET_EXHAUSTED_FINALIZE: &str = "Budget exhausted. Finalize the plan NOW from the evidence already gathered in this conversation. Do NOT attempt any more tool calls or LLM requests — synthesize your final answer immediately.";
+/// User-facing final answer for the budget-exhausted plan-mode dead end. The
+/// `*_FINALIZE` constant above is a directive addressed to the MODEL (injected
+/// as system messages before a synthesis pass); they must never be shown as the
+/// user-visible final answer — no LLM call follows them in the recovery path,
+/// so the user would see a bare instruction and the turn would silently stop
+/// (observed in checkpoint turn_655). These notices tell the USER how to
+/// continue: the plan draft and research live in the session plan file, and the
+/// planning session stays alive so `implement` / `keep planning` still work.
+const PLANNING_BUDGET_EXHAUSTED_USER_NOTICE: &str = "Budget exhausted before the plan synthesis could complete. The research gathered and the current plan draft are preserved in the session plan file (.vtcode/plans/).";
+/// User-facing final answer for the recovery-exhausted plan-mode dead end.
+/// See [`PLANNING_BUDGET_EXHAUSTED_USER_NOTICE`].
+const PLANNING_RECOVERY_EXHAUSTED_USER_NOTICE: &str = "Plan synthesis failed after repeated recovery attempts (provider errors or saturated context). The research gathered and the current plan draft are preserved in the session plan file (.vtcode/plans/).";
 /// Reason set on `TurnLoopResult::Blocked` when the model emits tool calls or
 /// textual tool-call markup during a tool-free recovery pass.  Shared between
 /// `result_handler` (producer) and `post_tool_recovery` (consumer).
@@ -126,6 +143,18 @@ const RECOVERY_TOOL_CALL_RETRY_DIRECTIVE: &str = "Recovery: tools are disabled, 
      attempt included tool-call or function-call markup; summarize the findings from \
      the tool outputs already in history as a final answer, without any <tool_call>, \
      <function=...>, or other tool-call syntax.";
+/// Plan-mode variant of [`POST_TOOL_RECOVERY_REASON`]. In plan mode the agent
+/// must emit the `<proposed_plan>` from the research already gathered, not start
+/// more research — so the recovery reason names the plan format explicitly.
+/// Without this, the model treats the tool-free recovery pass as another
+/// research step and emits `<invoke>`/`<tool_call>` markup instead of a plan
+/// (observed in checkpoints turn_648 and turn_650).
+const POST_TOOL_RECOVERY_REASON_PLAN_MODE: &str = "Planning research completed, but the final plan synthesis failed (transient provider error). Tools are disabled. Produce the `<proposed_plan>` NOW from the context and tool outputs already in this conversation: keep each step to a single line (`Action -> files/symbols -> verify:`), prefer file:symbol references, and do NOT emit any tool calls or tool-call markup.";
+/// Plan-mode variant of [`RECOVERY_TOOL_CALL_RETRY_DIRECTIVE`]. The generic
+/// directive only says \"respond with plain text\"; in plan mode the agent must
+/// instead finalize the `<proposed_plan>` from gathered research, otherwise it
+/// loops emitting `<invoke>` research calls during the tool-free recovery pass.
+const RECOVERY_TOOL_CALL_RETRY_DIRECTIVE_PLAN_MODE: &str = "Recovery: in plan mode, tools are disabled and you must finalize the plan. Emit ONLY the `<proposed_plan>` now from the research already gathered in this conversation — each step on a single line (`Action -> files/symbols -> verify:`), no prose, no tool calls, and no `<tool_call>`/`<invoke>`/`<function=...>` markup.";
 
 /// Count how many assistant text responses the model has emitted in this
 /// turn so far.  Used by the anti-runaway guard to short-circuit when the
@@ -168,6 +197,9 @@ fn count_assistant_text_responses_for_guard(
 pub(crate) struct TurnLoopOutcome {
     pub result: TurnLoopResult,
     pub turn_modified_files: BTreeSet<PathBuf>,
+    /// When set, the interaction loop should switch the active primary agent
+    /// to this name after the turn completes.
+    pub pending_primary_agent: Option<String>,
 }
 
 pub(crate) struct TurnLoopContext<'a> {
@@ -437,6 +469,7 @@ pub(crate) async fn run_turn_loop(
     // Initialize the outcome result
     let mut result = TurnLoopResult::Completed;
     let mut turn_modified_files = BTreeSet::new();
+    let mut pending_primary_agent: Option<String> = None;
     *ctx.auto_finish_planning_attempted = false;
 
     ctx.set_phase(TurnPhase::Preparing);
@@ -450,6 +483,10 @@ pub(crate) async fn run_turn_loop(
     let mut step_count = 0;
     let mut current_max_tool_loops = turn_config.max_tool_loops;
     let mut turn_history_start_len = working_history.len();
+    // Bounded condense-retry counter for truncated planning syntheses (see
+    // the re-prompt block after generation). Prevents an oversized plan from
+    // looping the turn.
+    let mut plan_condense_attempts: u8 = 0;
     let mut turn_usage = HarnessUsage::default();
     // Optimization: Interned signatures with exponential backoff for loop detection
     let mut repeated_tool_attempts = LoopTracker::new();
@@ -480,7 +517,14 @@ pub(crate) async fn run_turn_loop(
             break;
         }
 
-        if maybe_handle_planning_exit_trigger(&mut ctx, working_history, step_count).await? {
+        if maybe_handle_planning_exit_trigger(
+            &mut ctx,
+            working_history,
+            step_count,
+            &mut pending_primary_agent,
+        )
+        .await?
+        {
             break;
         }
 
@@ -738,12 +782,36 @@ pub(crate) async fn run_turn_loop(
                         turn_processing_ctx
                             .context_manager
                             .validate_token_tracking(&response_usage);
-                        result = TurnLoopResult::Blocked {
-                            reason: Some(format!(
-                                "Stopped after reaching budget limit (max: ${max:.4}, spent: ${:.4}, cache-adjusted: ${:.4}).",
-                                estimate.raw_usd, estimate.effective_usd
-                            )),
-                        };
+                        // In planning mode, finalize the plan from gathered evidence
+                        // rather than returning Blocked (which would re-enter planning
+                        // on the next turn and loop forever).
+                        if turn_processing_ctx.is_planning_active() {
+                            turn_processing_ctx.plan_session.mark_budget_exhausted();
+                            // Deactivate planning workflow so mutating tools are
+                            // available on the next turn if the user continues.
+                            turn_processing_ctx.tool_registry.disable_planning();
+                            turn_processing_ctx.plan_session.exit();
+                            let finalize_msg = format!(
+                                "{PLANNING_BUDGET_EXHAUSTED_FINALIZE}\n\n\
+                                 Budget: ${:.4}, spent: ${:.4}.",
+                                max, estimate.raw_usd
+                            );
+                            turn_processing_ctx
+                                .working_history
+                                .push(uni::Message::system(finalize_msg));
+                            let _ = turn_processing_ctx.renderer.line(
+                                MessageStyle::Warning,
+                                "Budget exhausted during planning workflow. Finalizing plan from gathered evidence.",
+                            );
+                            result = TurnLoopResult::Completed;
+                        } else {
+                            result = TurnLoopResult::Blocked {
+                                reason: Some(format!(
+                                    "Stopped after reaching budget limit (max: ${max:.4}, spent: ${:.4}, cache-adjusted: ${:.4}).",
+                                    estimate.raw_usd, estimate.effective_usd
+                                )),
+                            };
+                        }
                         break;
                     }
                     vtcode_core::llm::usage_cost::BudgetStatus::Warning { max, .. }
@@ -796,6 +864,25 @@ pub(crate) async fn run_turn_loop(
             if turn_processing_ctx.is_planning_active() {
                 turn_processing_ctx.plan_session.increment_turns();
             }
+        }
+
+        // Plan-mode robustness: if the planning synthesis was truncated at the
+        // model's output token limit, the emitted plan is incomplete ("cut off
+        // mid-flight"). Rather than accept a partial plan or re-enter the
+        // recovery path (which previously looped forever), ask for a tighter
+        // spec and retry once. Bounded so a genuinely oversized plan cannot
+        // loop. The policy lives in the planning-workflow facade so this loop
+        // stays free of plan-mode specifics.
+        let planning_active = turn_processing_ctx.is_planning_active();
+        if crate::agent::runloop::unified::planning_workflow::maybe_condense_truncated_plan(
+            &mut *turn_processing_ctx.working_history,
+            &mut *turn_processing_ctx.renderer,
+            planning_active,
+            tool_free_recovery,
+            &mut plan_condense_attempts,
+            &response,
+        ) {
+            continue;
         }
 
         // Process the LLM response
@@ -874,11 +961,14 @@ pub(crate) async fn run_turn_loop(
                 .is_some_and(|tc| !tc.is_empty())
             && turn_processing_ctx.recovery_retry_count() < MAX_RECOVERY_RETRIES
         {
+            let directive = if turn_processing_ctx.is_planning_active() {
+                RECOVERY_TOOL_CALL_RETRY_DIRECTIVE_PLAN_MODE
+            } else {
+                RECOVERY_TOOL_CALL_RETRY_DIRECTIVE
+            };
             turn_processing_ctx
                 .working_history
-                .push(uni::Message::system(
-                    RECOVERY_TOOL_CALL_RETRY_DIRECTIVE.to_string(),
-                ));
+                .push(uni::Message::system(directive.to_string()));
             turn_processing_ctx.retry_recovery_pass();
             continue;
         }
@@ -989,6 +1079,13 @@ pub(crate) async fn run_turn_loop(
 
         match turn_outcome {
             TurnHandlerOutcome::Continue => continue,
+            TurnHandlerOutcome::SwitchPrimaryAgent(agent) => {
+                // Plan-mode "switch to build/auto agent" decision: end the turn
+                // normally and let the interaction loop perform the handoff.
+                pending_primary_agent = Some(agent);
+                result = TurnLoopResult::Completed;
+                break;
+            }
             TurnHandlerOutcome::Break(outcome_result) => {
                 // When the model violates the tool-free recovery contract
                 // (emits tool calls or textual tool-call markup instead of a
@@ -1015,10 +1112,22 @@ pub(crate) async fn run_turn_loop(
                         max = MAX_RECOVERY_RETRIES,
                         "Recovery contract violation; retrying tool-free synthesis pass"
                     );
-                    working_history.push(uni::Message::system(
-                        RECOVERY_TOOL_CALL_RETRY_DIRECTIVE.to_string(),
-                    ));
+                    let directive = if ctx.is_planning_active() {
+                        RECOVERY_TOOL_CALL_RETRY_DIRECTIVE_PLAN_MODE
+                    } else {
+                        RECOVERY_TOOL_CALL_RETRY_DIRECTIVE
+                    };
+                    working_history.push(uni::Message::system(directive.to_string()));
                     continue;
+                }
+                // Wall-clock-exhausted planning turns must finalize instead of
+                // re-forcing the interview (see `dispatch_post_tool_failure`).
+                if tool_free_recovery
+                    && (ctx.harness_state.wall_clock_exhausted_emitted
+                        || ctx.harness_state.wall_clock_exhausted())
+                    && ctx.is_planning_active()
+                {
+                    ctx.plan_session.mark_recovery_exhausted();
                 }
                 let salvaged = ctx.harness_state.take_recovery_rejected_synthesis();
                 result = normalize_tool_free_recovery_break_outcome(
@@ -1041,6 +1150,7 @@ pub(crate) async fn run_turn_loop(
     Ok(TurnLoopOutcome {
         result,
         turn_modified_files,
+        pending_primary_agent,
     })
 }
 

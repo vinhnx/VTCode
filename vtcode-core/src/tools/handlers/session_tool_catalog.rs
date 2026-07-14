@@ -61,16 +61,23 @@ pub enum DeferredToolSearchKind {
     Anthropic(ToolSearchAlgorithm),
     /// OpenAI's hosted tool search.
     OpenAIHosted,
-    /// Client-local tool search (`unified_search action="tools"`) for
-    /// providers with no hosted tool search. Unlike the hosted variants,
-    /// this does not add a wire-level tool: `unified_search` is already a
-    /// core tool that is always present. Deferred tool definitions are
-    /// omitted from the request payload entirely (see request assembly)
-    /// rather than sent with `defer_loading: true`.
+    /// Client-local MCP tool search for providers with no hosted tool search.
+    /// `mcp_search_tools` remains available while matched MCP definitions are
+    /// expanded into the next request. Deferred definitions are omitted from
+    /// the current wire payload rather than sent with `defer_loading: true`.
     ClientLocal,
 }
 
-const DIRECT_TOOL_EXPOSURE_THRESHOLD: usize = 100;
+/// Above this many deferable (non-core, non-`always_available`) tools, a
+/// catalog is exposed via deferred loading rather than sent eagerly. Below it,
+/// eager exposure is cheaper and simpler. Ignored when the catalog contains any
+/// MCP tool (see `model_tools`), since MCP schemas are the dominant token cost.
+const DIRECT_TOOL_EXPOSURE_THRESHOLD: usize = 15;
+/// Token budget (~4 chars/token) for the combined schema of a deferable
+/// catalog. A catalog is deferred when its estimated schema size exceeds this,
+/// even if the tool count is below `DIRECT_TOOL_EXPOSURE_THRESHOLD`. This catches
+/// a single large server whose schema dwarfs the entire builtin set.
+const DIRECT_TOOL_EXPOSURE_TOKEN_BUDGET: usize = 4_000;
 
 /// Policy for deferred tool loading (tool search).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -206,15 +213,15 @@ pub fn deferred_tool_policy_for_runtime(
         }
         _ => {
             // No provider-hosted tool search is available (e.g. Gemini).
-            // Fall back to client-local deferral only when explicitly
-            // opted into via `client_tool_search`; otherwise keep today's
-            // eager catalog. The `DIRECT_TOOL_EXPOSURE_THRESHOLD` gating
-            // that decides whether deferral is actually worthwhile for a
-            // given catalog size lives downstream in
-            // `SessionToolCatalog::model_tools`, exactly as it does for
-            // the hosted arms above -- this function only decides whether
-            // deferral is *possible* for the runtime, not whether it is
-            // *used* for the current catalog.
+            // Client-local deferral is now the default so MCP schemas are not
+            // sent eagerly. Users can opt back to the eager catalog by setting
+            // `tools.client_tool_search = false`. The `DIRECT_TOOL_EXPOSURE_THRESHOLD`
+            // and `DIRECT_TOOL_EXPOSURE_TOKEN_BUDGET` gating that decides whether
+            // deferral is actually worthwhile for a given catalog lives downstream
+            // in `SessionToolCatalog::model_tools`, exactly as it does for the
+            // hosted arms above -- this function only decides whether deferral is
+            // *possible* for the runtime, not whether it is *used* for the
+            // current catalog.
             let client_tool_search_enabled =
                 vtcode_config.is_some_and(|cfg| cfg.tools.client_tool_search);
             if client_tool_search_enabled {
@@ -374,6 +381,35 @@ pub struct SessionToolCatalog {
     entries: Vec<ToolCatalogEntry>,
 }
 
+/// Estimate the visible tool-schema token count for deferral budgeting.
+///
+/// Uses a compacted representation matching what would be sent on the wire,
+/// then divides by a conservative 4 characters-per-token ratio. This keeps
+/// huge single-server MCP schemas from being sent eagerly even when their
+/// tool count is below the numeric threshold.
+fn estimate_schema_tokens(entries: &[&ToolCatalogEntry], config: &SessionToolsConfig) -> usize {
+    entries
+        .iter()
+        .map(|entry| {
+            let description = compact_tool_description(
+                entry.description.as_str(),
+                config.documentation_mode,
+                entry.max_description_length,
+            );
+            let parameters =
+                compact_parameters(entry.parameters.clone(), config.documentation_mode);
+            let entry = ToolSchemaEntry {
+                name: entry.public_name.clone(),
+                description,
+                parameters,
+            };
+            serde_json::to_string(&entry)
+                .map(|s| s.len() / 4)
+                .unwrap_or(0)
+        })
+        .sum()
+}
+
 impl SessionToolCatalog {
     /// Creates a new catalog from the given entries.
     pub fn new(entries: Vec<ToolCatalogEntry>) -> Self {
@@ -435,8 +471,14 @@ impl SessionToolCatalog {
             .iter()
             .filter(|entry| should_defer_tool_loading(entry, &config))
             .count();
+        let estimated_schema_tokens = estimate_schema_tokens(&filtered_entries, &config);
+        let has_mcp_tools = filtered_entries
+            .iter()
+            .any(|entry| matches!(entry.source, ToolCatalogSource::Mcp));
         let expose_tools_directly = !config.deferred_tool_policy.is_enabled()
-            || deferable_tool_count < DIRECT_TOOL_EXPOSURE_THRESHOLD;
+            || (deferable_tool_count < DIRECT_TOOL_EXPOSURE_THRESHOLD
+                && !has_mcp_tools
+                && estimated_schema_tokens <= DIRECT_TOOL_EXPOSURE_TOKEN_BUDGET);
         let mut tools = Vec::new();
         let mut has_deferred_tools = false;
 
@@ -725,6 +767,10 @@ fn should_defer_tool_loading(entry: &ToolCatalogEntry, config: &SessionToolsConf
         return false;
     }
 
+    if config.deferred_tool_policy.is_client_local() {
+        return matches!(entry.source, ToolCatalogSource::Mcp);
+    }
+
     matches!(
         entry.source,
         ToolCatalogSource::Builtin | ToolCatalogSource::Mcp
@@ -746,6 +792,9 @@ fn is_core_tool_entry(entry: &ToolCatalogEntry, config: &SessionToolsConfig) -> 
         | tools::LIST_SKILLS
         | tools::LOAD_SKILL
         | tools::LOAD_SKILL_RESOURCE => true,
+        tools::MCP_SEARCH_TOOLS | tools::MCP_GET_TOOL_DETAILS | tools::MCP_LIST_SERVERS => {
+            config.deferred_tool_policy.is_client_local()
+        }
         tools::MEMORY => config.anthropic_native_memory_enabled,
         tools::REQUEST_USER_INPUT => config.request_user_input_enabled,
         tools::APPLY_PATCH => config.model_capabilities.supports_apply_patch_tool,
@@ -1569,15 +1618,15 @@ mod tests {
 
     #[test]
     fn core_tool_registration_has_no_namespace() {
-        let unified_search = registration(tools::UNIFIED_SEARCH)
-            .with_description("Search")
+        let exec_command = registration(tools::EXEC_COMMAND)
+            .with_description("Run command")
             .with_parameter_schema(empty_object_schema());
 
-        let catalog = SessionToolCatalog::rebuild_from_registrations(vec![unified_search]);
+        let catalog = SessionToolCatalog::rebuild_from_registrations(vec![exec_command]);
         let entry = catalog
             .entries()
             .iter()
-            .find(|entry| entry.public_name == tools::UNIFIED_SEARCH)
+            .find(|entry| entry.public_name == tools::EXEC_COMMAND)
             .expect("core tool entry should be present");
 
         assert!(
@@ -1588,8 +1637,8 @@ mod tests {
 
     #[test]
     fn model_tools_attach_namespace_only_to_deferred_mcp_tools() {
-        let unified_search = registration(tools::UNIFIED_SEARCH)
-            .with_description("Search")
+        let exec_command = registration(tools::EXEC_COMMAND)
+            .with_description("Run command")
             .with_parameter_schema(empty_object_schema());
         let mcp_tool = registration("mcp::context7::search")
             .with_catalog_source(ToolCatalogSource::Mcp)
@@ -1598,7 +1647,7 @@ mod tests {
             .with_parameter_schema(empty_object_schema())
             .with_aliases(["mcp__context7__search"]);
 
-        let mut registrations = vec![unified_search, mcp_tool];
+        let mut registrations = vec![exec_command, mcp_tool];
         for index in 0..DIRECT_TOOL_EXPOSURE_THRESHOLD {
             let name: &'static str =
                 Box::leak(format!("mcp::context7::resolve_{index}").into_boxed_str());
@@ -1621,6 +1670,7 @@ mod tests {
                 ToolDocumentationMode::Full,
                 ToolModelCapabilities::default(),
             )
+            .with_tool_profile(ToolProfile::AdvancedVtCode)
             .with_deferred_tool_policy(DeferredToolPolicy::anthropic(
                 ToolSearchAlgorithm::Regex,
                 Vec::new(),
@@ -1629,8 +1679,8 @@ mod tests {
 
         let core_tool = definitions
             .iter()
-            .find(|tool| tool.function_name() == tools::UNIFIED_SEARCH)
-            .expect("unified_search should be present");
+            .find(|tool| tool.function_name() == tools::EXEC_COMMAND)
+            .expect("exec_command should be present");
         assert_eq!(core_tool.defer_loading, None);
         assert!(
             core_tool.namespace.is_none(),
@@ -1647,6 +1697,97 @@ mod tests {
             .as_ref()
             .expect("deferred mcp tool should carry namespace metadata");
         assert_eq!(namespace.name, "context7");
+    }
+
+    #[test]
+    fn small_mcp_catalog_is_deferred_despite_low_tool_count() {
+        let exec_command = registration(tools::EXEC_COMMAND)
+            .with_description("Run command")
+            .with_parameter_schema(empty_object_schema());
+        let mcp_tool = registration("mcp::context7::search")
+            .with_catalog_source(ToolCatalogSource::Mcp)
+            .with_llm_visibility(false)
+            .with_description("search docs")
+            .with_parameter_schema(empty_object_schema())
+            .with_aliases(["mcp__context7__search"]);
+
+        let catalog = SessionToolCatalog::rebuild_from_registrations(vec![exec_command, mcp_tool]);
+        let definitions = catalog.model_tools(
+            SessionToolsConfig::full_public(
+                SessionSurface::Interactive,
+                CapabilityLevel::CodeSearch,
+                ToolDocumentationMode::Full,
+                ToolModelCapabilities::default(),
+            )
+            .with_tool_profile(ToolProfile::AdvancedVtCode)
+            .with_deferred_tool_policy(DeferredToolPolicy::anthropic(
+                ToolSearchAlgorithm::Regex,
+                Vec::new(),
+            )),
+        );
+
+        let mcp_definition = definitions
+            .iter()
+            .find(|tool| tool.function_name() == "mcp__context7__search")
+            .expect("mcp tool should be present");
+        assert_eq!(
+            mcp_definition.defer_loading,
+            Some(true),
+            "even a single MCP tool should be deferred to avoid schema tax"
+        );
+    }
+
+    #[test]
+    fn client_local_policy_deferred_for_small_mcp_catalog() {
+        let exec_command = registration(tools::EXEC_COMMAND)
+            .with_description("Run command")
+            .with_parameter_schema(empty_object_schema());
+        let mcp_search_tools = registration(tools::MCP_SEARCH_TOOLS)
+            .with_description("Search MCP tools")
+            .with_parameter_schema(empty_object_schema());
+        let mcp_tool = registration("mcp::context7::search")
+            .with_catalog_source(ToolCatalogSource::Mcp)
+            .with_llm_visibility(false)
+            .with_description("search docs")
+            .with_parameter_schema(empty_object_schema())
+            .with_aliases(["mcp__context7__search"]);
+
+        let catalog = SessionToolCatalog::rebuild_from_registrations(vec![
+            exec_command,
+            mcp_search_tools,
+            mcp_tool,
+        ]);
+        let definitions = catalog.model_tools(
+            SessionToolsConfig::full_public(
+                SessionSurface::Interactive,
+                CapabilityLevel::CodeSearch,
+                ToolDocumentationMode::Full,
+                ToolModelCapabilities::default(),
+            )
+            .with_tool_profile(ToolProfile::AdvancedVtCode)
+            .with_deferred_tool_policy(DeferredToolPolicy::client_local(Vec::new())),
+        );
+
+        assert!(
+            definitions
+                .iter()
+                .any(|tool| tool.function_name() == "mcp__context7__search"),
+            "mcp tool should still be listed in the model-facing catalog for client-local search"
+        );
+        let mcp_definition = definitions
+            .iter()
+            .find(|tool| tool.function_name() == "mcp__context7__search")
+            .expect("mcp tool should be present");
+        assert_eq!(
+            mcp_definition.defer_loading,
+            Some(true),
+            "client-local deferral should also apply to small MCP catalogs"
+        );
+        let search_definition = definitions
+            .iter()
+            .find(|tool| tool.function_name() == tools::MCP_SEARCH_TOOLS)
+            .expect("client-local MCP search should remain available");
+        assert_eq!(search_definition.defer_loading, None);
     }
 
     #[test]
@@ -1712,7 +1853,7 @@ mod tests {
     }
 
     #[test]
-    fn openai_policy_bypasses_tool_search_for_small_catalogs() {
+    fn openai_policy_deferred_for_small_mcp_catalog() {
         let mcp_tool = registration("mcp::context7::search")
             .with_catalog_source(ToolCatalogSource::Mcp)
             .with_llm_visibility(false)
@@ -1742,21 +1883,29 @@ mod tests {
         );
 
         assert!(
-            !definitions
+            definitions
                 .iter()
-                .any(|tool| tool.tool_type == "tool_search")
+                .any(|tool| tool.tool_type == "tool_search"),
+            "MCP presence should trigger tool search even for a small catalog"
         );
         let mcp_tool = definitions
             .iter()
             .find(|tool| tool.function_name() == "mcp__context7__search")
             .expect("mcp tool should be present");
-        assert_eq!(mcp_tool.defer_loading, None);
+        assert_eq!(
+            mcp_tool.defer_loading, None,
+            "always-available tool stays eager"
+        );
 
         let direct_mcp_tool = definitions
             .iter()
             .find(|tool| tool.function_name() == "mcp__context7__resolve")
-            .expect("direct mcp tool should be present");
-        assert_eq!(direct_mcp_tool.defer_loading, None);
+            .expect("deferred mcp tool should be present");
+        assert_eq!(
+            direct_mcp_tool.defer_loading,
+            Some(true),
+            "non-always-available MCP tool should be deferred"
+        );
     }
 
     #[test]
@@ -1850,9 +1999,13 @@ mod tests {
             Some("tool_search".to_string())
         );
 
+        // OpenAI without Responses compaction, and no explicit provider-hosted
+        // tool search, falls through to client-local deferral now that
+        // `client_tool_search` defaults to `true`.
         let unsupported =
             deferred_tool_policy_for_runtime(Some(Provider::OpenAI), false, Some(&config));
-        assert!(!unsupported.is_enabled());
+        assert!(unsupported.is_enabled());
+        assert!(unsupported.is_client_local());
     }
 
     #[test]
@@ -1874,16 +2027,15 @@ mod tests {
 
     #[test]
     fn client_local_policy_not_selected_when_flag_disabled() {
-        // Default config has `client_tool_search` off, so unsupported
-        // providers keep today's eager fallthrough unchanged.
-        let config = VTCodeConfig::default();
+        let mut config = VTCodeConfig::default();
+        // Default is enabled; explicitly disable it to test the fallback path.
+        config.tools.client_tool_search = false;
         assert!(!config.tools.client_tool_search);
 
         let gemini = deferred_tool_policy_for_runtime(Some(Provider::Gemini), false, Some(&config));
         assert!(!gemini.is_enabled());
         assert!(!gemini.is_client_local());
 
-        // Absent config must also preserve default-off semantics.
         let no_config = deferred_tool_policy_for_runtime(Some(Provider::Gemini), false, None);
         assert!(!no_config.is_enabled());
         assert!(!no_config.is_client_local());

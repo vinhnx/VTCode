@@ -1,12 +1,12 @@
 use anyhow::Result;
 use serde_json::json;
 
-use crate::agent::runloop::unified::planning_workflow_state::short_confirmation_hint_with_fallback;
-use crate::agent::runloop::unified::turn::context::TurnLoopResult;
-use crate::agent::runloop::unified::turn::planning_intent::{
+use crate::agent::runloop::unified::planning_workflow::{
     PlanningIntent, assistant_recently_prompted_implementation, detect_enter_planning_intent,
     detect_planning_intent,
 };
+use crate::agent::runloop::unified::planning_workflow_state::short_confirmation_hint_with_fallback;
+use crate::agent::runloop::unified::turn::context::TurnLoopResult;
 use crate::agent::runloop::unified::turn::tool_outcomes::helpers::{
     push_tool_response, tool_output_from_outcome,
 };
@@ -343,6 +343,7 @@ pub(super) async fn maybe_handle_planning_exit_trigger(
     ctx: &mut TurnLoopContext<'_>,
     working_history: &mut Vec<uni::Message>,
     step_count: usize,
+    pending_primary_agent: &mut Option<String>,
 ) -> Result<bool> {
     if !ctx.is_planning_active() {
         return Ok(false);
@@ -440,6 +441,14 @@ pub(super) async fn maybe_handle_planning_exit_trigger(
                     Some(tool_names::FINISH_PLANNING),
                     serde_json::to_string(output).unwrap_or_else(|_| "{}".to_string()),
                 );
+            }
+
+            // Propagate a plan-mode agent handoff (SwitchBuild/SwitchAuto from the
+            // HITL confirmation) so the interaction loop actually switches the
+            // active agent instead of silently staying in plan mode. This field
+            // was previously discarded because the function only returned a bool.
+            if let Some(agent) = pipe_outcome.pending_primary_agent.clone() {
+                *pending_primary_agent = Some(agent);
             }
 
             if !planning_fully_disabled(ctx) {
@@ -633,10 +642,10 @@ mod tests {
         extract_turn_config, handle_steering_messages, resolve_safety_tool_call_limits,
         resolve_tool_loop_limit, tool_loop_hard_cap,
     };
-    use crate::agent::runloop::unified::turn::context::TurnLoopResult;
-    use crate::agent::runloop::unified::turn::planning_intent::{
+    use crate::agent::runloop::unified::planning_workflow::{
         PlanningIntent, detect_enter_planning_intent, detect_planning_intent,
     };
+    use crate::agent::runloop::unified::turn::context::TurnLoopResult;
     use crate::agent::runloop::unified::turn::turn_processing::test_support::TestTurnProcessingBacking;
     use std::time::Duration;
     use vtcode_core::config::loader::VTCodeConfig;

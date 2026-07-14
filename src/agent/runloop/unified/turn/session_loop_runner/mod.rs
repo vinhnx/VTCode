@@ -813,6 +813,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                         TurnLoopOutcome {
                             result: RunLoopTurnLoopResult::Aborted,
                             turn_modified_files: std::collections::BTreeSet::new(),
+                            pending_primary_agent: None,
                         }
                     }
                 };
@@ -840,6 +841,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 agent_touched_paths.extend(context_manager.tracked_instruction_activity_paths());
                 runtime.state.messages = working_history;
                 let outcome_result = outcome.result.clone();
+                let switch_primary_agent = outcome.pending_primary_agent.clone();
                 let turn_elapsed = turn_started_at.elapsed();
                 let show_turn_timer = vt_cfg
                     .as_ref()
@@ -875,6 +877,49 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                             &format!("Failed to finalize turn: {err}"),
                         )
                         .ok();
+                }
+                // Plan-mode "switch to build/auto agent" handoff: perform the
+                // primary-agent switch now so the chosen agent executes the plan.
+                // This mirrors the `PlanApproved` handoff in the interaction loop
+                // (session.rs): mutate `active_primary_agent` and refresh the TUI
+                // handle display. The full `handle_select_primary_agent` requires
+                // `InteractionLoopContext`, which is unavailable here because the
+                // plan-confirmation popup is rendered inside the turn loop rather
+                // than the inline interaction loop.
+                if let Some(agent) = switch_primary_agent {
+                    let specs = if let Some(controller) = tool_registry.subagent_controller() {
+                        controller
+                            .effective_specs()
+                            .await
+                            .into_iter()
+                            .filter(|s| s.is_primary())
+                            .collect::<Vec<_>>()
+                    } else {
+                        Vec::new()
+                    };
+                    match active_primary_agent.select_from_specs(&specs, &agent) {
+                        Ok(_) => {
+                            let display = active_primary_agent.active().display_name.clone();
+                            let color = active_primary_agent
+                                .active()
+                                .color
+                                .clone()
+                                .filter(|c| !c.trim().is_empty());
+                            handle.set_primary_agent(Some(display), color);
+                            tracing::info!(
+                                target: "vtcode.planning_workflow",
+                                agent = %agent,
+                                "Switched primary agent after plan approval"
+                            );
+                        }
+                        Err(err) => {
+                            tracing::warn!(
+                                agent = %agent,
+                                error = %err,
+                                "Primary agent handoff failed; keeping current agent"
+                            );
+                        }
+                    }
                 }
                 if let Err(err) =
                     crate::agent::runloop::unified::turn::compaction::refresh_session_memory_envelope(

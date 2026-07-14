@@ -206,7 +206,7 @@ impl Session {
             let line = &self.lines[index];
             if cache.needs_reflow(index, line.revision) {
                 // Use Session method from reflow.rs to avoid duplication
-                let new_lines = self.reflow_message_lines(index, width);
+                let new_lines = self.reflow_message_lines(index, width, true);
                 cache.update_message(index, line.revision, new_lines);
             }
         }

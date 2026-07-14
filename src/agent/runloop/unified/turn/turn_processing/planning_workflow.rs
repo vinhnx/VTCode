@@ -9,6 +9,7 @@
 use serde_json::Value;
 use vtcode_core::config::constants::tools;
 use vtcode_core::llm::provider as uni;
+use vtcode_core::retry::{RetryPolicy, RetryPolicyCoreExt};
 use vtcode_core::tools::handlers::planning_workflow::{
     PlanningWorkflowState, validate_plan_content,
 };
@@ -77,6 +78,13 @@ pub(crate) fn planning_workflow_interview_ready(
     session_stats: &crate::agent::runloop::unified::state::SessionStats,
     plan_session: &PlanningWorkflowSessionState,
 ) -> bool {
+    // Do NOT allow interview when budget is exhausted — no further LLM calls
+    // are possible and re-forcing would loop forever. The same applies when
+    // post-tool recovery is exhausted: the planning context is saturated and
+    // re-forcing the interview would re-research and loop forever.
+    if plan_session.is_budget_exhausted() || plan_session.is_recovery_exhausted() {
+        return false;
+    }
     has_discovery_tool(session_stats)
         && plan_session.turns() >= MIN_PLANNING_WORKFLOW_TURNS_BEFORE_INTERVIEW
 }
@@ -87,6 +95,12 @@ pub(crate) fn should_attempt_dynamic_interview_generation(
     session_stats: &crate::agent::runloop::unified::state::SessionStats,
     plan_session: &PlanningWorkflowSessionState,
 ) -> bool {
+    // Do NOT attempt interview generation when budget is exhausted — no further
+    // LLM calls are possible and the interview would loop forever. The same
+    // applies when post-tool recovery is exhausted (saturated planning context).
+    if plan_session.is_budget_exhausted() || plan_session.is_recovery_exhausted() {
+        return false;
+    }
     let response_has_plan = response_text
         .map(|text| text.contains("<proposed_plan>"))
         .unwrap_or(false);
@@ -127,6 +141,38 @@ fn interview_need_state(
     InterviewNeedState {
         response_has_plan,
         needs_interview: !has_completed_interview || interview_cancelled || has_open_decisions,
+    }
+}
+
+/// Synthesize the planning-workflow interview arguments, retrying transient
+/// (network / 5xx / timeout / rate-limit) provider errors before giving up.
+///
+/// The interview-argument synthesis LLM call previously had no retry of its
+/// own, so a single transient network blip could abort plan mode entirely. We
+/// now retry with the canonical [`RetryPolicy`] backoff. If every attempt
+/// fails we surface the error to the caller, which falls back to an adaptive
+/// interview rather than dead-ending the planning session.
+async fn synthesize_interview_args_with_retry(
+    provider_client: &mut Box<dyn uni::LLMProvider>,
+    request: uni::LLMRequest,
+) -> anyhow::Result<uni::LLMResponse> {
+    let policy = RetryPolicy::default();
+    let mut attempt: u32 = 0;
+    loop {
+        match provider_client.generate(request.clone()).await {
+            Ok(response) => return Ok(response),
+            Err(err) => {
+                let anyhow_err = anyhow::Error::new(err);
+                let decision = policy.decision_for_anyhow(&anyhow_err, attempt, None);
+                if !decision.retryable {
+                    return Err(anyhow_err);
+                }
+                if let Some(delay) = decision.delay {
+                    tokio::time::sleep(delay).await;
+                }
+                attempt = attempt.saturating_add(1);
+            }
+        }
     }
 }
 
@@ -189,13 +235,12 @@ Return JSON only.",
         ..Default::default()
     };
 
-    let generated = provider_client
-        .generate(request)
+    let generated = synthesize_interview_args_with_retry(provider_client, request)
         .await
         .inspect_err(|err| {
             tracing::warn!(
                 error = %err,
-                "Interview synthesis LLM call failed; falling back to adaptive interview"
+                "Interview-arg synthesis failed; falling back to adaptive interview"
             );
         })
         .ok()
@@ -235,6 +280,13 @@ pub(crate) fn maybe_force_planning_workflow_interview(
     conversation_len: usize,
     synthesized_interview_args: Option<Value>,
 ) -> TurnProcessingResult {
+    // Do NOT force the interview when budget is exhausted — no further LLM
+    // calls are possible and re-forcing would loop forever. The same applies
+    // when post-tool recovery is exhausted (saturated planning context):
+    // re-forcing the interview would re-research and loop forever.
+    if plan_session.is_budget_exhausted() || plan_session.is_recovery_exhausted() {
+        return processing_result;
+    }
     let allow_interview = planning_workflow_interview_ready(session_stats, plan_session);
     let need_state = interview_need_state(response_text, plan_session);
     let response_has_plan = need_state.response_has_plan;

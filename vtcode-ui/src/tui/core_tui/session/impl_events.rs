@@ -516,8 +516,13 @@ impl Session {
         let expanded = self.expand_collapsed_paste_at_row(self.transcript_width, clicked_row);
         if expanded {
             self.mark_dirty();
+            return expanded;
         }
-        expanded
+        let toggled = self.toggle_thinking_block_at_row(self.transcript_width, clicked_row);
+        if toggled {
+            self.mark_dirty();
+        }
+        toggled
     }
 
     pub(crate) fn transcript_word_selection_range(

@@ -28,11 +28,13 @@ use crate::agent::runloop::unified::tool_routing::{
 
 use super::execute_hitl_tool;
 use super::execution_events::{emit_tool_completion_for_status, emit_tool_completion_status};
-use super::execution_planning::{handle_finish_planning, handle_start_planning};
 use super::execution_runtime::execute_with_cache_and_streaming;
 use super::file_conflict_prompt::resolve_file_conflict_status;
 use super::status::{ToolExecutionStatus, ToolPipelineOutcome};
 use super::validation::{SafetyValidationFailure, validate_tool_call_with_limit_prompt};
+use crate::agent::runloop::unified::planning_workflow::{
+    handle_finish_planning, handle_start_planning,
+};
 
 fn resolve_harness_item_identity(tool_item_id: &str) -> (ToolInvocationId, String) {
     match ToolInvocationId::parse(tool_item_id) {

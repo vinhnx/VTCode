@@ -165,8 +165,8 @@ pub(super) async fn build_turn_request(
             None
         } else if turn_snapshot.client_local_tool_deferral {
             // No hosted tool search for this provider: deferred tools are
-            // not sent eagerly. The model discovers them via the local
-            // `unified_search action="tools"` (see `[Deferred Tools]` in
+            // not sent eagerly. The model discovers them through the relevant
+            // local discovery tool (see `[Deferred Tools]` in
             // the system prompt, appended in `build_prompt_output`).
             client_local_wire_tools(prompt_output.tool_snapshot.snapshot.clone())
         } else {
@@ -1276,6 +1276,13 @@ mod tests {
             .agent
             .harness
             .auto_compaction_threshold_tokens = Some(90_000);
+        // `tool_result_clearing` defaults to enabled; disable it here so this
+        // scenario exercises the "compaction only" path (clearing off).
+        compaction_only_cfg
+            .agent
+            .harness
+            .tool_result_clearing
+            .enabled = false;
         ctx.vt_cfg = Some(Box::leak(Box::new(compaction_only_cfg)));
         let built = build_turn_request(
             &mut ctx,
@@ -1302,6 +1309,9 @@ mod tests {
         // assert the "no context management payload" (disabled) path.
         let mut disabled_cfg = VTCodeConfig::default();
         disabled_cfg.agent.harness.auto_compaction_enabled = false;
+        // `tool_result_clearing` defaults to enabled; disable it here so the
+        // "no context management payload" (fully disabled) path is exercised.
+        disabled_cfg.agent.harness.tool_result_clearing.enabled = false;
         ctx.vt_cfg = Some(Box::leak(Box::new(disabled_cfg)));
         let built = build_turn_request(
             &mut ctx,

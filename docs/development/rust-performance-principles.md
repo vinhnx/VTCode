@@ -14,6 +14,7 @@ This document captures the nuance of what makes Rust fast (and where it isn't) i
 - [LLVM's C/C++ Legacy: Why Rust's Extra Information Does Not Always Translate](#llvms-cc-legacy-why-rusts-extra-information-does-not-always-translate)
 - [Safety Enables Aggressive Optimization](#safety-enables-aggressive-optimization)
 - [When Rust Can Be Slower Than C/C++](#when-rust-can-be-slower-than-cc)
+- [Breaking Inter-Iteration Dependencies (Value Speculation)](#breaking-inter-iteration-dependencies-value-speculation)
 - [Checklist for VT Code Hot Paths](#checklist-for-vt-code-hot-paths)
 
 ---
@@ -269,6 +270,55 @@ Guidelines for ongoing work:
 The Rust compiler's overflow checking is not yet at the level of the Midori compiler described above (rustc's MIR does not keep overflow-checked ops as single nodes through all optimization passes — LLVM sees the branch). However, the direction of travel is the same, and for vtcode's workload, the cost is already negligible.
 
 ---
+
+## Breaking Inter-Iteration Dependencies (Value Speculation)
+
+Modern CPUs run instructions out-of-order and rely on the *branch predictor* to
+speculate past conditional jumps. A tight loop that **threads a value through
+iterations** (e.g. `j = table[i][j]`) serializes: iteration *n+1* cannot
+start until iteration *n* finishes, so throughput is bounded by the **latency**
+of the dependent load (a cache hit or an indirect read), not by compute.
+
+The fix (from "value speculation" / the *"useless if"* trick): **speculate that
+the carried value is unchanged and only reload it on a rare, predictable
+branch.** The predictor then hides the dependency, turning a latency-bound loop
+into a throughput-bound one.
+
+```rust,ignore
+// latency-bound: every iteration waits on the reload
+for i in ..n { j = table[i][j]; }
+
+// throughput-bound: predictor assumes the branch is NOT taken
+for i in ..n {
+    if j != table[i][j] { j = table[i][j]; } // rarely taken
+}
+```
+
+### Transferring this to VT Code
+
+- **Literal pointer-speculation does *not* apply here.** VT Code has no
+  linked-list / `next`-pointer structures; hot paths use contiguous `Vec` /
+  `VecDeque` / `HashMap`, which the hardware stride prefetcher already covers.
+- **Rust has no stable `likely`/`unlikely`**, so the exact `[[unlikely]]` /
+  `volatile` trick from C/++ does not port. The portable equivalent is to
+  **carry the predicted state in a local and only touch the container on change.**
+- Applied changes:
+  - `vtcode-session-store` `event_log::memchr_newline` — replaced a scalar
+    `Iterator::position` byte scan with the SIMD `memchr` crate (a latency-bound
+    tight loop made data-parallel).
+  - `vtcode-indexer` `query` — scores `files`/`directories` in **parallel
+    rayon chunks**, reusing one matcher + haystack buffer per worker thread
+    (`map_init`); this realizes the same "more instructions in parallel" goal at
+    thread granularity for large indexes.
+  - `vtcode-ui` `coalesce_adjacent_spans` — hoists the carried `Style` into a
+    local, appending to the tail only on a style change (the common path no
+    longer re-reads `merged.last().style` per element).
+
+### Caveat
+
+The source articles warn L1-cache *hits* are almost never the real bottleneck.
+Only apply this family when a profile shows a dependency-bound tight loop.
+Measure before/after (`cargo bench`); revert if the change does not improve.
 
 ## Checklist for VT Code Hot Paths
 

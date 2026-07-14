@@ -29,3 +29,4 @@
 - `errors/` provides `MultiErrors<E>` — a reusable error collection type implementing the "error parameter" pattern for continuing work while collecting failures. Use it instead of ad-hoc `Vec<String>` or `Vec<ErrorEnum>` for batch/parallel operations where individual items can fail independently.
 - `env_lock/` is macOS-specific env mutex — used by `vtcode` binary, not by library crates.
 - `utils/` contains `calculate_sha256()` used by `vtcode-indexer`.
+- `formatting/` owns the canonical middle-truncation helpers `truncate_middle` (head+tail, control chars sanitized) and `truncate_path_middle` (separator-aware, for path display). Downstream crates delegate here — do not re-implement per crate.

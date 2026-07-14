@@ -69,6 +69,100 @@ pub fn truncate_within(text: &str, max_len: usize, ellipsis: &str) -> String {
     truncated
 }
 
+/// Truncate `text` to at most `max_len` chars, keeping a head and a tail joined by
+/// a single `…` so context from both ends is preserved.
+///
+/// Control characters are replaced with spaces before truncation so the result is
+/// safe to render in a terminal/TUI. When the text already fits it is returned
+/// unchanged (after sanitization).
+///
+/// This is the canonical middle-truncation helper, shared so the same logic is not
+/// re-implemented per crate.
+pub fn truncate_middle(text: &str, max_len: usize) -> String {
+    if max_len == 0 {
+        return String::new();
+    }
+    let sanitized: String = text
+        .chars()
+        .map(|c| {
+            if matches!(c, '\n' | '\r' | '\t') {
+                ' '
+            } else {
+                c
+            }
+        })
+        .collect();
+    let char_count = sanitized.chars().count();
+    if char_count <= max_len {
+        return sanitized;
+    }
+    if max_len <= 1 {
+        return "…".to_string();
+    }
+    let head_len = max_len / 2;
+    let tail_len = max_len.saturating_sub(head_len + 1);
+
+    let head: String = sanitized.chars().take(head_len).collect();
+    let mut result = String::with_capacity(head.len() + tail_len + 1);
+    result.push_str(&head);
+    result.push('…');
+    if tail_len > 0 {
+        let mut tail_rev: Vec<char> = sanitized.chars().rev().take(tail_len).collect();
+        tail_rev.reverse();
+        let tail: String = tail_rev.into_iter().collect();
+        result.push_str(&tail);
+    }
+    result
+}
+
+/// Truncate a file path in the middle, preferring to break at path separators.
+///
+/// Keeps a head and a tail joined by `…`, choosing break points at `/` so the most
+/// recognizable parts of the path (directories / file name) are preserved. This is
+/// the path-aware sibling of [`truncate_middle`], shared so the same display logic
+/// is not re-implemented per crate.
+pub fn truncate_path_middle(path: &str, max_len: usize) -> String {
+    if max_len == 0 {
+        return String::new();
+    }
+    let char_count = path.chars().count();
+    if char_count <= max_len {
+        return path.to_string();
+    }
+    if max_len <= 1 {
+        return "…".to_string();
+    }
+
+    // Try to find a good break point at a path separator
+    let head_budget = max_len / 2;
+    let tail_budget = max_len.saturating_sub(head_budget + 1);
+
+    // Find the last '/' in the head portion
+    let head_chars: Vec<char> = path.chars().take(head_budget).collect();
+    let head_str: String = head_chars.iter().collect();
+    let head_break = head_str.rfind('/').unwrap_or(head_budget);
+
+    // Find the first '/' in the tail portion (from the end)
+    let tail_chars: Vec<char> = path.chars().rev().take(tail_budget).collect();
+    let tail_str: String = tail_chars.iter().rev().collect();
+    let tail_break_from_end = tail_str
+        .find('/')
+        .map(|pos| tail_str.len() - pos)
+        .unwrap_or(tail_budget);
+
+    let head: String = path.chars().take(head_break).collect();
+    let tail: String = path
+        .chars()
+        .rev()
+        .take(tail_break_from_end)
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .collect();
+
+    format!("{head}…{tail}")
+}
+
 /// Truncate `value` to `max_chars` chars by keeping a head and a tail joined by
 /// `marker`, preserving context from both ends of the text.
 ///
@@ -436,5 +530,24 @@ mod tests {
         let jp = "あいうえお"; // 5 chars, 15 bytes
         assert_eq!(truncate_text(jp, 3, "…"), "あいう…");
         assert_eq!(truncate_text(jp, 5, "…"), "あいうえお");
+    }
+
+    #[test]
+    fn truncate_middle_keeps_both_ends() {
+        assert_eq!(truncate_middle("short", 80), "short");
+        assert_eq!(truncate_middle("abcdefghij", 5), "ab…ij");
+        assert_eq!(truncate_middle("a b c", 80), "a b c");
+        // Zero/one-char budgets.
+        assert_eq!(truncate_middle("abc", 0), "");
+        assert_eq!(truncate_middle("abc", 1), "…");
+        // Control characters are sanitized to spaces before truncating.
+        assert_eq!(truncate_middle("a\nb\tc", 80), "a b c");
+    }
+
+    #[test]
+    fn truncate_path_middle_breaks_at_separator() {
+        assert_eq!(truncate_path_middle("src/lib.rs", 80), "src/lib.rs");
+        assert_eq!(truncate_path_middle("foo/bar/baz/qux", 12), "foo…/qux");
+        assert_eq!(truncate_path_middle("abc", 0), "");
     }
 }

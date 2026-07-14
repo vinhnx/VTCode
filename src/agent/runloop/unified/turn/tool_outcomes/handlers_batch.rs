@@ -246,6 +246,11 @@ async fn execute_parallel_group<'a, 'b>(
                     TurnHandlerOutcome::Continue => {
                         anyhow::bail!("Unexpected Continue outcome in break-matched handler")
                     }
+                    TurnHandlerOutcome::SwitchPrimaryAgent(_) => {
+                        anyhow::bail!(
+                            "Unexpected SwitchPrimaryAgent outcome in break-matched handler"
+                        )
+                    }
                 };
                 return Ok(Some(
                     interrupt_parallel_group(
@@ -414,10 +419,14 @@ async fn execute_and_handle_tool_call_inner<'a>(
     // Show pre-execution indicator for file modification operations
     if crate::agent::runloop::unified::tool_summary::is_file_modification_tool(tool_name, &args_val)
     {
+        let summary_ctx = crate::agent::runloop::unified::tool_summary::ToolSummaryRenderContext {
+            workspace_root: Some(ctx.config.workspace.as_path()),
+        };
         crate::agent::runloop::unified::tool_summary::render_file_operation_indicator(
             ctx.renderer,
             tool_name,
             &args_val,
+            &summary_ctx,
         )?;
     }
     let tool_execution_start = std::time::Instant::now();

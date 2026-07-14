@@ -1,8 +1,17 @@
 [package]
 name = "vtcode-eval"
-version = "0.135.5"
-edition = "2024"
-license = "MIT"
+version.workspace = true
+edition.workspace = true
+rust-version = "1.88"
+authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
+description = "Agent evaluation framework for VT Code: pass@k / pass^k metrics, capability and regression evals, and environment-based outcome verification."
+license.workspace = true
+readme = "README.md"
+homepage = "https://github.com/vinhnx/vtcode"
+repository = "https://github.com/vinhnx/vtcode"
+documentation = "https://docs.rs/vtcode-eval"
+keywords = ["vtcode", "agent", "evaluation", "metrics", "testing"]
+categories = ["development-tools"]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -10,9 +19,8 @@ async-trait = { workspace = true }
 chrono = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-vtcode-commons = { path = "../vtcode-commons" }
-vtcode-core = { path = "../vtcode-core" }
-vtcode-exec-events = { path = "../vtcode-exec-events" }
+vtcode-commons = { path = "../vtcode-commons", version = "0.135.8" }
+vtcode-exec-events = { path = "../vtcode-exec-events", version = "0.135.8" }
 thiserror = { workspace = true }
 
 [dev-dependencies]

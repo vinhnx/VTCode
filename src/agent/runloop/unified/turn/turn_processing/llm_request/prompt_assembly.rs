@@ -178,7 +178,7 @@ async fn build_prompt_output(
     if input.turn.client_local_tool_deferral && !input.turn.tool_free_recovery {
         // Client-local deferral omits deferred tools from the wire payload
         // (see `build_turn_request`); tell the model what it can still
-        // reach via `unified_search action="tools"`. `tool_snapshot` still
+        // reach through the relevant discovery tool. `tool_snapshot` still
         // carries the full, un-filtered tool list at this point, so
         // `deferred_count`/namespace metadata reflect what is actually
         // being withheld this turn. Skip during tool-free recovery: that

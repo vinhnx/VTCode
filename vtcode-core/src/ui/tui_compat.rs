@@ -151,6 +151,7 @@ pub fn to_tui_appearance(config: &VTCodeConfig) -> SessionAppearanceConfig {
             crate::config::ReasoningDisplayMode::Hidden => ReasoningDisplayMode::Hidden,
         },
         reasoning_visible_default: config.ui.reasoning_visible_default,
+        thinking_display: config.ui.thinking_display,
         vim_mode: config.ui.vim_mode,
         readline_mode: false,
         screen_reader_mode: config.ui.screen_reader_mode,

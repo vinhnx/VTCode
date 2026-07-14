@@ -6,6 +6,7 @@ use crate::agent::runloop::unified::config_section_headings::{
 };
 
 use super::docs::FieldDoc;
+use vtcode_commons::formatting::truncate_middle;
 pub(super) fn display_title(label: &str, path: &str, value: &TomlValue) -> String {
     if label.starts_with('[') {
         return format!("Item {label}");
@@ -197,23 +198,4 @@ pub(super) fn summarize_value(value: &TomlValue) -> String {
         }
         _ => "<unsupported>".to_string(),
     }
-}
-
-fn truncate_middle(value: &str, max_len: usize) -> String {
-    let total_chars = value.chars().count();
-    if total_chars <= max_len {
-        return value.to_string();
-    }
-    if max_len <= 3 {
-        return "...".to_string();
-    }
-
-    let prefix_len = max_len / 2;
-    let suffix_len = max_len.saturating_sub(prefix_len + 3);
-    let prefix: String = value.chars().take(prefix_len).collect();
-    let suffix: String = value
-        .chars()
-        .skip(total_chars.saturating_sub(suffix_len))
-        .collect();
-    format!("{prefix}...{suffix}")
 }

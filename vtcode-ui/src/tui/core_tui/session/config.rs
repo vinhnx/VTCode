@@ -27,7 +27,9 @@ pub struct SessionConfig {
 }
 
 // Re-export shared enums from vtcode-commons.
-pub use vtcode_commons::ui_protocol::{LayoutModeOverride, ReasoningDisplayMode, UiMode};
+pub use vtcode_commons::ui_protocol::{
+    LayoutModeOverride, ReasoningDisplayMode, ThinkingBlockState, UiMode,
+};
 
 /// UI appearance configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -70,6 +72,10 @@ pub struct AppearanceConfig {
     /// Default reasoning visibility when mode is "toggle"
     #[serde(default)]
     pub reasoning_visible_default: bool,
+
+    /// Default collapse state of agent thinking/reasoning blocks
+    #[serde(default)]
+    pub thinking_display: ThinkingBlockState,
 
     /// Enable Vim-style input editing for the prompt.
     #[serde(default)]
@@ -116,6 +122,7 @@ impl Default for AppearanceConfig {
             layout_mode: LayoutModeOverride::Auto,
             reasoning_display_mode: ReasoningDisplayMode::Toggle,
             reasoning_visible_default: crate::tui::config::constants::ui::DEFAULT_REASONING_VISIBLE,
+            thinking_display: ThinkingBlockState::Collapsed,
             vim_mode: false,
             readline_mode: false,
             screen_reader_mode: false,
@@ -142,6 +149,11 @@ impl AppearanceConfig {
             ReasoningDisplayMode::Hidden => false,
             ReasoningDisplayMode::Toggle => self.reasoning_visible_default,
         }
+    }
+
+    /// Whether thinking/reasoning blocks should render collapsed by default.
+    pub fn thinking_collapsed_by_default(&self) -> bool {
+        self.thinking_display == ThinkingBlockState::Collapsed
     }
 
     pub fn motion_reduced(&self) -> bool {
@@ -373,6 +385,28 @@ mod tests {
         );
         assert!(config.appearance.reasoning_visible_default);
         assert!(config.appearance.reasoning_visible());
+        assert_eq!(
+            config.appearance.thinking_display,
+            ThinkingBlockState::Collapsed
+        );
+        assert!(config.appearance.thinking_collapsed_by_default());
+    }
+
+    #[test]
+    fn test_thinking_display_default_collapsed() {
+        let config = SessionConfig::new();
+        assert_eq!(
+            config.appearance.thinking_display,
+            ThinkingBlockState::Collapsed
+        );
+        assert!(config.appearance.thinking_collapsed_by_default());
+    }
+
+    #[test]
+    fn test_thinking_display_override_extended() {
+        let mut config = SessionConfig::new();
+        config.appearance.thinking_display = ThinkingBlockState::Extended;
+        assert!(!config.appearance.thinking_collapsed_by_default());
     }
 
     #[test]

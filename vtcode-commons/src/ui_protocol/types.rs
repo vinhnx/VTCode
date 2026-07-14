@@ -110,6 +110,18 @@ pub enum ReasoningDisplayMode {
     Hidden,
 }
 
+/// Default collapse state of agent thinking/reasoning blocks in the transcript.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+pub enum ThinkingBlockState {
+    /// Thinking blocks render collapsed (a single summary line) by default.
+    #[default]
+    Collapsed,
+    /// Thinking blocks render fully expanded by default.
+    Extended,
+}
+
 /// Wizard modal behavior variant.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WizardModalMode {

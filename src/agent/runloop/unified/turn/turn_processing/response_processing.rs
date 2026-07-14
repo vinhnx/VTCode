@@ -119,8 +119,9 @@ pub(crate) fn process_llm_response(
                 )?;
                 renderer.line(MessageStyle::Output, "")?;
             }
-            let (headline, _) =
-                crate::agent::runloop::unified::tool_summary::describe_tool_action(&name, &args);
+            let (headline, _) = crate::agent::runloop::unified::tool_summary::describe_tool_action(
+                &name, &args, None,
+            );
             let notice = if headline.is_empty() {
                 format!(
                     "Detected {} request",

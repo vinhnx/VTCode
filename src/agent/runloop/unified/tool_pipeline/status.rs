@@ -45,6 +45,10 @@ impl ToolExecutionStatus {
 pub(crate) struct ToolPipelineOutcome {
     pub status: ToolExecutionStatus,
     pub command_success: bool,
+    /// When set, the interaction loop should switch the active primary agent to
+    /// this name after the tool completes. Used by the plan-mode "switch to
+    /// build/auto agent" decision at the plan-ready gate.
+    pub pending_primary_agent: Option<String>,
 }
 
 impl ToolPipelineOutcome {
@@ -58,6 +62,7 @@ impl ToolPipelineOutcome {
         ToolPipelineOutcome {
             status,
             command_success,
+            pending_primary_agent: None,
         }
     }
 

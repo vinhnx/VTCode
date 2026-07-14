@@ -122,13 +122,63 @@ write_stdin = "ask"     # Prompt before live-session input
 code_search = "allow"   # Allow advanced semantic search
 ```
 
-Override command allow-list:
-```toml
-[commands]
-allow_list = [
-    "ls", "pwd", "date", "git", "cargo", "python"
-]
-allow_glob = [
-    "git *", "cargo *", "python *"
-]
+## Cache-Friendly Execution Guidance
+
+Token efficiency is a correctness concern, not just a cost concern: every token of
+harness payload is context the model cannot spend on the task. The defaults below
+are designed to keep the first-request overhead low and per-turn growth bounded.
+
+### Defaults that keep the prefix small
+
+- **MCP tools defer by default.** Any MCP tool in the catalog is flagged
+  `defer_loading` rather than sent eagerly, regardless of tool count. MCP schemas
+  are the dominant source of token inflation; the model discovers them on demand.
+- **Client-local deferral is the default.** Providers without a hosted tool search
+  (e.g. Gemini) omit deferred schemas from the wire payload and append a compact,
+  cache-stable discoverability summary to the system prompt. Set
+  `tools.client_tool_search = false` to opt back into the eager catalog.
+- **Subagents use a lightweight profile.** A delegated child agent defaults to
+  `system_prompt_mode = minimal` and `tool_documentation_mode = minimal`, and does
+  not inherit the parent's MCP servers unless explicitly requested. This prevents
+  replaying the full parent bootstrap on every child turn.
+- **Tool-result clearing is on by default.** Old tool results are stripped from
+  context once it grows past `trigger_tokens` (default 100k), keeping only the most
+  recent `keep_tool_uses` (default 3) results.
+- **Builtin tool count is capped.** The number of LLM-exposed builtin tools stays
+  within a small cap; new tools must consolidate, defer, or deliberately raise the
+  cap. Builtin tool schemas in `progressive` mode fit in a ~3k-token envelope.
+- **Startup token-overhead warnings.** At session start (unless `--quiet`),
+  VT Code logs non-fatal `tracing::warn!` messages when the config is likely to
+  inflate per-request cost: more than 8 configured MCP servers,
+  `system_prompt_mode = "specialized"`, `tool_documentation_mode = "full"`, or
+  `tool_result_clearing` disabled. These surface the "what am I actually sending"
+  question before you pay for it.
+
+### Authoring guidance
+
+- Keep instruction files (AGENTS.md / CLAUDE.md) focused; they ride on every request.
+- Prefer delegating large searches to subagents with a narrow, explicit tool set
+  rather than fanning out broad orchestration.
+- When adding a tool, keep its description between 40 and 1200 characters and include
+  a verb cue and any side-effect/constraint cue so the model selects it accurately
+  without padding the prompt.
+- Pin the cache breakpoint: keep the system prefix stable across turns. Dynamic
+  per-turn content (timestamps, volatile workspace state) belongs in trailing
+  sections, not the cached prefix.
+
+### Auditing token cost
+
+A first-request budget guard rail is enforced by tests:
+
+- `vtcode-core/src/tools/registry/builtins.rs::emitted_model_tool_schema_fits_within_first_request_budget`
+  asserts builtin tool schemas stay within the budget in `progressive` mode.
+- `vtcode-core/src/tools/handlers/session_tool_catalog.rs` tests assert MCP tools
+  defer (small or large catalog) and that the client-local policy defers small MCP
+  catalogs.
+
+Run them with:
+
+```bash
+cargo nextest run -p vtcode-core emitted_model_tool_schema_fits_within_first_request_budget
+cargo nextest run -p vtcode-core -E 'test(session_tool_catalog)'
 ```

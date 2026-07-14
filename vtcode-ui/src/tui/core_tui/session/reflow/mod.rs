@@ -24,6 +24,7 @@ use crate::tui::config::constants::ui;
 mod blocks;
 mod formatting;
 mod helpers;
+mod thinking;
 
 use helpers::{agent_code_continuation_prefix, is_info_box_line, is_tool_summary_line, rule_fill};
 
@@ -35,7 +36,7 @@ impl Session {
             let mut lines: Vec<Line<'static>> = Vec::new();
             for (index, _) in self.lines.iter().enumerate() {
                 lines.extend(
-                    self.reflow_message_lines(index, 0)
+                    self.reflow_message_lines(index, 0, false)
                         .into_iter()
                         .map(|line| line.line),
                 );
@@ -49,7 +50,7 @@ impl Session {
         let mut wrapped_lines = Vec::new();
         for (index, _) in self.lines.iter().enumerate() {
             wrapped_lines.extend(
-                self.reflow_message_lines(index, width)
+                self.reflow_message_lines(index, width, false)
                     .into_iter()
                     .map(|line| line.line),
             );
@@ -70,10 +71,24 @@ impl Session {
     /// - Consistent spacing between message blocks
     /// - Tool output grouped with headers
     #[expect(dead_code)]
-    pub(super) fn reflow_message_lines(&self, index: usize, width: u16) -> Vec<TranscriptLine> {
+    pub(super) fn reflow_message_lines(
+        &self,
+        index: usize,
+        width: u16,
+        collapse_thinking: bool,
+    ) -> Vec<TranscriptLine> {
         let Some(message) = self.lines.get(index) else {
             return vec![TranscriptLine::default()];
         };
+
+        // Thinking/reasoning blocks are rendered as contiguous `Policy` runs.
+        // Delegate the whole run (header + body) to the dedicated thinking
+        // module so collapsed and expanded states share one layout.
+        if collapse_thinking {
+            if let Some(lines) = self.reflow_thinking_lines(index, width) {
+                return lines;
+            }
+        }
 
         if message.kind == InlineMessageKind::Tool {
             return into_transcript_lines(
@@ -188,11 +203,15 @@ impl Session {
                     wrapped.push(TranscriptLine::default());
                 }
             }
-            // Check if next message is a different type (end of agent turn)
+            // Check if next message is a different type (end of agent turn).
+            // Always separate an agent response from the following turn with at
+            // least one blank line (even when message_block_spacing is 0), so
+            // the response reads as a distinct block.
             InlineMessageKind::Agent
                 if next_kind.is_some() && next_kind != Some(InlineMessageKind::Agent) =>
             {
-                for _ in 0..spacing {
+                let gap = spacing.max(1);
+                for _ in 0..gap {
                     wrapped.push(TranscriptLine::default());
                 }
             }
@@ -212,7 +231,7 @@ impl Session {
             .iter()
             .find(|paste| paste.line_index == index)
         else {
-            return self.reflow_message_lines(index, width);
+            return self.reflow_message_lines(index, width, false);
         };
 
         let Some(line) = self.lines.get(index) else {
@@ -510,7 +529,7 @@ impl Session {
     }
 }
 
-fn transcript_line_with_detected_links(
+pub(super) fn transcript_line_with_detected_links(
     line: Line<'static>,
     workspace_root: Option<&Path>,
 ) -> TranscriptLine {

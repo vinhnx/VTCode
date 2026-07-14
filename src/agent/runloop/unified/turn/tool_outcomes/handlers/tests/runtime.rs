@@ -342,6 +342,19 @@ async fn validate_tool_call_blocks_when_wall_clock_budget_exhausted() {
         "synthesis directive must be pushed once"
     );
 
+    // The flush must also arm the tool-free recovery pass so the next request
+    // strips tool definitions at the API level — the directive alone is
+    // advisory and models kept emitting (rejected) tool calls after it
+    // (checkpoints turn_637, turn_647).
+    assert!(
+        ctx.harness_state.recovery_is_tool_free(),
+        "wall-clock directive flush must arm tool-free recovery mode"
+    );
+    assert!(
+        ctx.harness_state.consume_recovery_pass(),
+        "recovery pass must be pending so the next loop iteration consumes it"
+    );
+
     // Flushing again is a no-op (the pending flag is consumed).
     flush_wall_clock_directive(&mut ctx);
     let directive_count_after = ctx

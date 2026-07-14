@@ -3,6 +3,7 @@
 //! Provides early-process hardening functions called from `main()` to lock
 //! down the process before untrusted code can run.
 
+#[cfg(unix)]
 use vtcode_commons::env_lock;
 
 #[cfg(unix)]

@@ -201,6 +201,7 @@ pub(crate) async fn handle_turn_processing_result<'a>(
                 outcome = match &balancer_outcome {
                     TurnHandlerOutcome::Continue => "continue",
                     TurnHandlerOutcome::Break(_) => "break",
+                    TurnHandlerOutcome::SwitchPrimaryAgent(_) => "switch_primary_agent",
                 },
                 "turn metric"
             );

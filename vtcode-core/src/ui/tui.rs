@@ -13,8 +13,8 @@ pub use vtcode_commons::ui_protocol::{
     InlineLinkRange, InlineLinkTarget, InlineListItem, InlineListSearchConfig, InlineListSelection,
     InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme, LayoutModeOverride,
     PlanContent, PlanPhase, PlanStep, ReasoningDisplayMode, RewindAction, SecurePromptConfig,
-    SessionSurface, SlashCommandItem, UiMode, WizardModalMode, WizardStep, convert_style,
-    theme_from_color_fields,
+    SessionSurface, SlashCommandItem, ThinkingBlockState, UiMode, WizardModalMode, WizardStep,
+    convert_style, theme_from_color_fields,
 };
 
 pub use vtcode_commons::ui_protocol::KeyboardProtocolSettings;
@@ -210,6 +210,7 @@ mod headless {
         pub layout_mode: super::LayoutModeOverride,
         pub reasoning_display_mode: super::ReasoningDisplayMode,
         pub reasoning_visible_default: bool,
+        pub thinking_display: super::ThinkingBlockState,
         pub vim_mode: bool,
         pub screen_reader_mode: bool,
         pub reduce_motion_mode: bool,

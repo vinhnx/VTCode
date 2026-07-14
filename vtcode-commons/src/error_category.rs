@@ -574,6 +574,10 @@ pub fn classify_error_message(msg: &str) -> ErrorCategory {
             "socket hang up",
             "econnreset",
             "etimedout",
+            // reqwest surfaces truncated/aborted response streams as a body
+            // decode failure; Ollama (cloud) emits this on transient drops.
+            // It is a transport error, not a payload problem — retryable.
+            "error decoding response body",
         ],
     ) {
         return ErrorCategory::Network;

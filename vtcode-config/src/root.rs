@@ -266,6 +266,10 @@ pub struct UiConfig {
     #[serde(default = "default_reasoning_visible_default")]
     pub reasoning_visible_default: bool,
 
+    /// Default collapse state of agent thinking/reasoning blocks ("collapsed" or "extended")
+    #[serde(default = "default_thinking_display")]
+    pub thinking_display: vtcode_commons::ui_protocol::ThinkingBlockState,
+
     /// Enable Vim-style prompt editing in the interactive terminal UI.
     #[serde(default = "default_vim_mode")]
     pub vim_mode: bool,
@@ -548,6 +552,7 @@ impl Default for UiConfig {
             inline_viewport_rows: default_inline_viewport_rows(),
             reasoning_display_mode: default_reasoning_display_mode(),
             reasoning_visible_default: default_reasoning_visible_default(),
+            thinking_display: default_thinking_display(),
             vim_mode: default_vim_mode(),
             status_line: StatusLineConfig::default(),
             terminal_title: TerminalTitleConfig::default(),
@@ -604,6 +609,7 @@ impl Default for AskQuestionsConfig {
 mod tests {
     use super::*;
     use serial_test::serial;
+    use vtcode_commons::ui_protocol::ThinkingBlockState;
 
     fn with_env_var<F>(key: &str, value: Option<&str>, f: F)
     where
@@ -623,6 +629,13 @@ mod tests {
         assert!(fullscreen.mouse_capture);
         assert!(fullscreen.copy_on_select);
         assert_eq!(fullscreen.scroll_speed, 3);
+    }
+
+    #[test]
+    #[serial]
+    fn thinking_display_defaults_to_collapsed() {
+        let ui = UiConfig::default();
+        assert_eq!(ui.thinking_display, ThinkingBlockState::Collapsed);
     }
 
     #[test]
@@ -846,6 +859,10 @@ fn default_reasoning_display_mode() -> ReasoningDisplayMode {
 
 fn default_reasoning_visible_default() -> bool {
     crate::constants::ui::DEFAULT_REASONING_VISIBLE
+}
+
+fn default_thinking_display() -> vtcode_commons::ui_protocol::ThinkingBlockState {
+    vtcode_commons::ui_protocol::ThinkingBlockState::Collapsed
 }
 
 /// Kitty keyboard protocol configuration

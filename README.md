@@ -28,6 +28,7 @@ VT Code is a Rust coding agent built for long-running autonomous workflows, with
 - **Safety** - Restricted shell sandbox, tool guardrails, subprocess isolation, full audit logging
 - **Protocols** - Open Responses, Agent2Agent (A2A), ATIF, Anthropic Messages API
 - **Loop engineering** - Worktree isolation for parallel agents, propose/verify sub-agent separation, durable loop state, cost guardrails
+- **Planning workflow** - Iterate on a build plan with `/plan` and the `plan` primary agent, then hand off to `build`/`auto` via a structured review gate
 
 ## Quick start
 
@@ -64,6 +65,7 @@ vtcode update                  # self-update
 - [**Safety**](./docs/security/SECURITY_MODEL.md) - Shell sandbox, security hardening, threat model
 - [**Protocols**](./docs/protocols/OPEN_RESPONSES.md) - Open Responses, ATIF, A2A, Anthropic Messages API
 - [**Loop engineering**](./docs/project/PLAN-loop-engineering.md) - Worktree isolation, propose/verify, loop state, cost guardrails
+- [**Planning workflow**](./docs/guides/planning-workflow.md) - `/plan`, review gate, plan handoff to build/auto agents
 
 ## Providers
 

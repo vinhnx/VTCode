@@ -7,10 +7,12 @@ use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::{
     MAX_POST_TOOL_RECOVERY_CYCLES, PLANNING_RECOVERY_SYNTHESIS_FALLBACK, POST_TOOL_RECOVERY_REASON,
-    POST_TOOL_RESUME_DIRECTIVE, RECOVERY_CONTRACT_VIOLATION_REASON,
-    RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER,
+    POST_TOOL_RECOVERY_REASON_PLAN_MODE, POST_TOOL_RESUME_DIRECTIVE,
+    RECOVERY_CONTRACT_VIOLATION_REASON, RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER,
 };
-use crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState;
+use crate::agent::runloop::unified::planning_workflow_state::{
+    PlanningWorkflowSessionState, short_confirmation_hint_with_fallback,
+};
 use crate::agent::runloop::unified::run_loop_context::HarnessTurnState;
 use crate::agent::runloop::unified::turn::context::TurnLoopResult;
 
@@ -63,6 +65,7 @@ pub(super) fn maybe_recover_after_post_tool_llm_failure(
     turn_history_start_len: usize,
     failure_stage: &'static str,
     allow_tool_free_retry: bool,
+    planning_active: bool,
 ) -> Result<PostToolFailureRecovery> {
     let has_partial_tool_progress =
         has_tool_response_since(working_history, turn_history_start_len);
@@ -95,8 +98,15 @@ pub(super) fn maybe_recover_after_post_tool_llm_failure(
     let action = if should_retry {
         // Tool-free recovery: inject only the tools-disabled recovery reason.
         // The resume directive would contradict it (see
-        // `prepare_post_tool_tool_free_recovery`).
-        prepare_post_tool_tool_free_recovery(working_history, POST_TOOL_RECOVERY_REASON);
+        // `prepare_post_tool_tool_free_recovery`). In plan mode use the
+        // plan-aware reason so the model finalizes the `<proposed_plan>` from
+        // gathered research instead of re-attempting tool calls.
+        let reason = if planning_active {
+            POST_TOOL_RECOVERY_REASON_PLAN_MODE
+        } else {
+            POST_TOOL_RECOVERY_REASON
+        };
+        prepare_post_tool_tool_free_recovery(working_history, reason);
         renderer.line(
             MessageStyle::Info,
             "[!] Follow-up failed after tool execution; scheduling a final tool-free recovery pass.",
@@ -144,6 +154,29 @@ fn gather_files_read_this_turn(working_history: &[uni::Message]) -> Vec<String> 
     files
 }
 
+/// Plan-mode recovery fallback. When the tool-free synthesis fails, the
+/// "salvaged" text is usually just a rambling recovery monologue with tool-call
+/// markup stripped out — not a plan. Injecting that as the plan the user sees is
+/// worse than the structured plan-mode message. We only keep the salvage when it
+/// actually contains a `<proposed_plan>` (a real, if partial, plan); otherwise we
+/// fall back to the informative plan-mode message so the turn ends cleanly
+/// instead of leaking garbage into the proposed plan.
+fn plan_mode_recovery_fallback(
+    salvaged_text: Option<String>,
+    structured_message: &str,
+    working_history: &[uni::Message],
+) -> String {
+    if let Some(text) = salvaged_text
+        && text.trim().contains("<proposed_plan")
+    {
+        // Trim only the outer whitespace so a plan salvaged with stray
+        // blank lines isn't injected with that garbage framing intact.
+        text.trim().to_string()
+    } else {
+        build_recovery_fallback(working_history, structured_message)
+    }
+}
+
 /// Build the deterministic recovery fallback, optionally appending the list of
 /// files already read this turn so the next turn can reuse them instead of
 /// re-exploring. `lead_in` is the provider-agnostic message shown first.
@@ -171,21 +204,64 @@ pub(super) fn complete_turn_after_failed_tool_free_recovery(
     plan_session: Option<&mut PlanningWorkflowSessionState>,
 ) -> TurnLoopResult {
     // Plan mode: never dead-end. Preserve the planning session and re-force
-    // the interview on the next turn. Surface the model's salvaged prose if
-    // available; otherwise fall back to the plan-aware message. Either way,
-    // keep the research already gathered this turn (the files-read list) so
-    // nothing useful is lost — the generic dead-end message does this, and
-    // plan mode must be at least as informative.
+    // the interview on the next turn (unless budget/recovery is exhausted).
+    // A rejected synthesis usually leaves only a garbled recovery monologue
+    // with tool-call markup stripped out — not a plan. We therefore only
+    // surface the salvaged prose when it actually contains a `<proposed_plan>`
+    // (a real, if partial, plan); otherwise we fall back to the structured
+    // plan-aware message, which still lists the files read this turn, so we
+    // never inject garbage as the proposed plan. See `plan_mode_recovery_fallback`.
+    //
+    // EXCEPTION:
+    // If the budget is exhausted, do NOT mark interview as pending because no
+    // further LLM calls are possible and re-forcing the interview would loop
+    // forever. Instead, finalize the plan from gathered evidence.
+    //
+    // Transient (retryable) errors are intentionally NOT finalized here. The
+    // interview-synthesis call now retries internally and falls back to an
+    // adaptive interview, so re-forcing the interview on the next turn makes
+    // forward progress instead of dead-ending. We keep the planning session
+    // alive and preserve the research gathered this turn.
+    let is_transient_error = err
+        .map(|e| vtcode_commons::classify_anyhow_error(e).is_retryable())
+        .unwrap_or(false);
     if let Some(plan_session) = plan_session {
+        if plan_session.is_budget_exhausted() || plan_session.is_recovery_exhausted() {
+            // NOTE: use the USER-facing notices here, not the `*_FINALIZE`
+            // model directives. No LLM call follows this path, so a model
+            // directive pushed as the final answer just shows the user a bare
+            // instruction and dead-ends the turn (checkpoint turn_655). The
+            // planning session stays alive, so append the confirmation hint —
+            // the user can type `implement` to execute the drafted plan or
+            // `keep planning` to revise it.
+            let finalize_message = if plan_session.is_budget_exhausted() {
+                super::PLANNING_BUDGET_EXHAUSTED_USER_NOTICE
+            } else {
+                super::PLANNING_RECOVERY_EXHAUSTED_USER_NOTICE
+            };
+            let mut planning_fallback =
+                plan_mode_recovery_fallback(salvaged_text, finalize_message, working_history);
+            planning_fallback.push_str("\n\n");
+            planning_fallback.push_str(&short_confirmation_hint_with_fallback());
+            push_final_answer_if_absent(working_history, &planning_fallback);
+            tracing::warn!(
+                stage = failure_stage,
+                budget_exhausted = plan_session.is_budget_exhausted(),
+                recovery_exhausted = plan_session.is_recovery_exhausted(),
+                "Plan-mode tool-free recovery failed; finalizing plan from gathered evidence."
+            );
+            return TurnLoopResult::Completed;
+        }
         plan_session.mark_interview_pending();
-        let planning_fallback = salvaged_text
-            .filter(|text| !text.trim().is_empty())
-            .unwrap_or_else(|| {
-                build_recovery_fallback(working_history, PLANNING_RECOVERY_SYNTHESIS_FALLBACK)
-            });
+        let planning_fallback = plan_mode_recovery_fallback(
+            salvaged_text,
+            PLANNING_RECOVERY_SYNTHESIS_FALLBACK,
+            working_history,
+        );
         push_final_answer_if_absent(working_history, &planning_fallback);
         tracing::warn!(
             stage = failure_stage,
+            transient_error = is_transient_error,
             "Plan-mode tool-free recovery failed; marking interview pending for next turn."
         );
         return TurnLoopResult::Completed;
@@ -304,13 +380,28 @@ pub(super) fn dispatch_post_tool_failure(
         renderer,
         working_history,
         harness_state,
-        plan_session,
+        mut plan_session,
         err,
         step_count,
         turn_history_start_len,
         stage,
         tool_free_recovery,
     } = ctx;
+    let planning_active = plan_session.is_some();
+    // Plan-mode: if this turn's tool wall-clock budget was exhausted, the
+    // planning context is saturated — the model spent the entire budget on
+    // research and the synthesis still failed. Mark the session
+    // recovery-exhausted so the failure path below finalizes the plan from
+    // gathered evidence instead of re-forcing the interview, which would
+    // re-research the still-huge context for another full wall-clock budget
+    // and loop forever across turns (observed in checkpoint turn_647).
+    // `wall_clock_exhausted()` (time-based) also covers exhaustion without a
+    // rejected tool call, e.g. a provider error right after a long tool batch.
+    if (harness_state.wall_clock_exhausted_emitted || harness_state.wall_clock_exhausted())
+        && let Some(session) = plan_session.as_deref_mut()
+    {
+        session.mark_recovery_exhausted();
+    }
     let recovery = maybe_recover_after_post_tool_llm_failure(
         renderer,
         working_history,
@@ -319,6 +410,7 @@ pub(super) fn dispatch_post_tool_failure(
         turn_history_start_len,
         stage,
         !tool_free_recovery,
+        planning_active,
     )?;
 
     match recovery {
@@ -397,7 +489,7 @@ fn check_recovery_cycle_cap(
     stage: &str,
     err: &anyhow::Error,
     salvaged_text: Option<String>,
-    plan_session: Option<&mut PlanningWorkflowSessionState>,
+    mut plan_session: Option<&mut PlanningWorkflowSessionState>,
 ) -> Option<TurnLoopResult> {
     if cycles >= MAX_POST_TOOL_RECOVERY_CYCLES {
         tracing::warn!(
@@ -405,6 +497,14 @@ fn check_recovery_cycle_cap(
             "Post-tool recovery cycle cap reached; concluding turn \
              with deterministic fallback answer"
         );
+        // In plan mode, repeated tool-free synthesis failures mean the
+        // planning context is saturated. Mark the session recovery-exhausted
+        // so the next turn does NOT re-force the interview (which would
+        // re-research the still-huge context and loop forever). The call
+        // below then finalizes the plan from gathered evidence.
+        if let Some(plan_session) = plan_session.as_deref_mut() {
+            plan_session.mark_recovery_exhausted();
+        }
         return Some(complete_turn_after_failed_tool_free_recovery(
             working_history,
             stage,
@@ -414,4 +514,203 @@ fn check_recovery_cycle_cap(
         ));
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState;
+    use vtcode_commons::llm::LLMError;
+
+    fn transient_err() -> anyhow::Error {
+        anyhow::Error::new(LLMError::Network {
+            message: "simulated network blip".to_string(),
+            metadata: None,
+        })
+    }
+
+    #[test]
+    fn tool_free_recovery_keeps_planning_alive_on_transient_error() {
+        let mut working_history: Vec<uni::Message> = Vec::new();
+        let mut plan_session = PlanningWorkflowSessionState::default();
+
+        let result = complete_turn_after_failed_tool_free_recovery(
+            &mut working_history,
+            "stage",
+            Some(&transient_err()),
+            None,
+            Some(&mut plan_session),
+        );
+
+        assert!(matches!(result, TurnLoopResult::Completed));
+        assert!(
+            plan_session.interview_pending(),
+            "transient error must keep planning alive by re-forcing the interview"
+        );
+    }
+
+    #[test]
+    fn tool_free_recovery_keeps_planning_alive_on_non_transient_error() {
+        let mut working_history: Vec<uni::Message> = Vec::new();
+        let mut plan_session = PlanningWorkflowSessionState::default();
+        let err = anyhow::Error::new(LLMError::InvalidRequest {
+            message: "bad request".to_string(),
+            metadata: None,
+        });
+
+        let result = complete_turn_after_failed_tool_free_recovery(
+            &mut working_history,
+            "stage",
+            Some(&err),
+            None,
+            Some(&mut plan_session),
+        );
+
+        assert!(matches!(result, TurnLoopResult::Completed));
+        assert!(
+            plan_session.interview_pending(),
+            "any tool-free recovery failure must keep planning alive (not dead-end)"
+        );
+    }
+
+    #[test]
+    fn dispatch_marks_recovery_exhausted_when_wall_clock_exhausted_in_plan_mode() {
+        use crate::agent::runloop::unified::run_loop_context::{
+            HarnessTurnState, TurnId, TurnRunId,
+        };
+        use vtcode_core::utils::ansi::AnsiRenderer;
+
+        let mut renderer = AnsiRenderer::stdout();
+        let mut working_history: Vec<uni::Message> = Vec::new();
+        let mut harness_state = HarnessTurnState::new(
+            TurnRunId("test-run".to_string()),
+            TurnId("test-turn".to_string()),
+            4,
+            600,
+            0,
+        );
+        harness_state.wall_clock_exhausted_emitted = true;
+        let mut plan_session = PlanningWorkflowSessionState::default();
+        let err = transient_err();
+
+        let action = dispatch_post_tool_failure(PostToolRecoveryContext {
+            renderer: &mut renderer,
+            working_history: &mut working_history,
+            harness_state: &mut harness_state,
+            plan_session: Some(&mut plan_session),
+            err: &err,
+            step_count: 1,
+            turn_history_start_len: 0,
+            stage: "stage",
+            tool_free_recovery: true,
+        })
+        .expect("dispatch must not error");
+
+        assert!(
+            plan_session.is_recovery_exhausted(),
+            "wall-clock exhaustion during planning must mark the session \
+             recovery-exhausted so the plan finalizes instead of looping"
+        );
+        assert!(
+            !plan_session.interview_pending(),
+            "must not re-force the interview after wall-clock exhaustion"
+        );
+        assert!(matches!(action, PostToolFailureAction::Break(_)));
+    }
+
+    #[test]
+    fn tool_free_recovery_finalizes_when_budget_exhausted() {
+        let mut working_history: Vec<uni::Message> = Vec::new();
+        let mut plan_session = PlanningWorkflowSessionState::default();
+        plan_session.mark_budget_exhausted();
+
+        let result = complete_turn_after_failed_tool_free_recovery(
+            &mut working_history,
+            "stage",
+            Some(&transient_err()),
+            None,
+            Some(&mut plan_session),
+        );
+
+        assert!(matches!(result, TurnLoopResult::Completed));
+        assert!(
+            !plan_session.interview_pending(),
+            "budget-exhausted must not re-force the interview (would loop forever)"
+        );
+        assert!(
+            working_history
+                .iter()
+                .any(|m| m.role == uni::MessageRole::Assistant),
+            "budget-exhausted must finalize the plan with a fallback answer"
+        );
+    }
+
+    #[test]
+    fn plan_mode_recovery_rejects_garbled_tool_call_salvage() {
+        // When the tool-free synthesis fails and the only "salvage" is a
+        // rambling monologue with tool-call markup stripped out (no real
+        // plan), plan mode must NOT inject that garbage as the proposed plan.
+        let mut working_history: Vec<uni::Message> = Vec::new();
+        let mut plan_session = PlanningWorkflowSessionState::default();
+        let garbled = "I have enough to plan. <invoke name=\"unified_search\"> \
+            read more files</invoke> Here is my half-baked plan.";
+
+        let result = complete_turn_after_failed_tool_free_recovery(
+            &mut working_history,
+            "stage",
+            None,
+            Some(garbled.to_string()),
+            Some(&mut plan_session),
+        );
+
+        assert!(matches!(result, TurnLoopResult::Completed));
+        assert!(
+            plan_session.interview_pending(),
+            "non-exhausted plan failure must re-force the interview"
+        );
+        let text = working_history
+            .iter()
+            .rev()
+            .find(|m| m.role == uni::MessageRole::Assistant)
+            .expect("a final answer must be pushed")
+            .content
+            .as_text();
+        assert!(
+            text.contains("final synthesis failed"),
+            "plan-mode fallback must be the structured message, not garbled salvage: {text}"
+        );
+        assert!(
+            !text.contains("unified_search"),
+            "garbled tool-call salvage must not leak into the plan: {text}"
+        );
+    }
+
+    #[test]
+    fn plan_mode_recovery_keeps_partial_proposed_plan_salvage() {
+        // A real (if partial) proposed plan in the salvage is worth keeping.
+        let mut working_history: Vec<uni::Message> = Vec::new();
+        let mut plan_session = PlanningWorkflowSessionState::default();
+        let partial_plan = "<proposed_plan>\n- Action: add caching -> src/cache.rs\n  verify: cargo test\n</proposed_plan>";
+
+        let result = complete_turn_after_failed_tool_free_recovery(
+            &mut working_history,
+            "stage",
+            None,
+            Some(partial_plan.to_string()),
+            Some(&mut plan_session),
+        );
+
+        assert!(matches!(result, TurnLoopResult::Completed));
+        let text = working_history
+            .iter()
+            .rev()
+            .find(|m| m.role == uni::MessageRole::Assistant)
+            .expect("a final answer must be pushed")
+            .content
+            .as_text();
+        assert!(
+            text.contains("<proposed_plan"),
+            "a real partial plan must be kept as the plan: {text}"
+        );
+    }
 }

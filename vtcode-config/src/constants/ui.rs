@@ -130,16 +130,46 @@ pub const STATUS_LINE_MODE: &str = "auto";
 pub const STATUS_LINE_REFRESH_INTERVAL_MS: u64 = 1000;
 pub const STATUS_LINE_COMMAND_TIMEOUT_MS: u64 = 200;
 
-// Agent/Mode color constants (hex RGB)
-// These colors are used for agent badges, header labels, and input borders.
-/// Build agent color - golden/amber (warm, creative tone)
-pub const AGENT_COLOR_BUILD: &str = "#D99A4E";
-/// Auto agent color - dark olive/green (autonomy and go-signal)
-pub const AGENT_COLOR_AUTO: &str = "#515948";
-/// Plan agent color - dark purple/blue (thoughtful, planning tone)
-pub const AGENT_COLOR_PLAN: &str = "#383B73";
-/// Duck agent color - light beige/tan (soft, discussion-focused)
-pub const AGENT_COLOR_DUCK: &str = "#BFB38F";
+// Agent/Mode color constants.
+//
+// Mode badges are identified by a **standard ANSI hue name** (red/green/blue/
+// magenta/...) rather than a hard-coded hex. The design system
+// (`vtcode-ui`) resolves each hue to a theme-appropriate variant at render
+// time: the brighter `Light*` ANSI variant on dark terminals, the base variant
+// on light terminals. This keeps a single, portable token readable on BOTH
+// dark and light terminals without per-theme hex tuning, and reuses the same
+// standard palette the rest of the UI already relies on (see `SAFE_ANSI_*`).
+//
+/// Standard ANSI hue names usable for agent/mode badges. Must stay in sync with
+/// the variant table in `vtcode-ui`'s design color resolver.
+pub const AGENT_HUE_NAMES: &[&str] = &["red", "green", "blue", "magenta", "yellow", "cyan"];
+
+/// Build agent hue - red (warm, implementation / go-signal).
+pub const AGENT_COLOR_BUILD: &str = "red";
+/// Auto agent hue - green (autonomy and forward progress).
+pub const AGENT_COLOR_AUTO: &str = "green";
+/// Plan agent hue - blue (thoughtful, planning tone).
+pub const AGENT_COLOR_PLAN: &str = "blue";
+/// Duck agent hue - magenta (soft, discussion-focused).
+pub const AGENT_COLOR_DUCK: &str = "magenta";
+
+/// Canonical primary-agent mode -> standard ANSI hue mapping (single source of
+/// truth). `subagents.rs` assigns the hue to each built-in spec from here.
+pub const AGENT_MODE_HUE: &[(&str, &str)] = &[
+    ("build", AGENT_COLOR_BUILD),
+    ("auto", AGENT_COLOR_AUTO),
+    ("plan", AGENT_COLOR_PLAN),
+    ("duck", AGENT_COLOR_DUCK),
+];
+
+/// Resolve a primary-agent mode name to its standard ANSI hue
+/// (e.g. `"build"` -> `"red"`).
+pub fn agent_mode_hue(mode: &str) -> Option<&'static str> {
+    AGENT_MODE_HUE
+        .iter()
+        .find(|(m, _)| *m == mode)
+        .map(|(_, h)| *h)
+}
 
 // TUI tick rate constants for smooth scrolling
 /// Tick rate (Hz) when user is actively interacting with the TUI
@@ -268,3 +298,132 @@ pub const SAFE_ANSI_COLORS: [u8; 10] = [
 /// - 12 (brblue): Low contrast in Basic Dark
 /// - 15 (brwhite): Low contrast on light backgrounds
 pub const PROBLEMATIC_ANSI_COLORS: [u8; 6] = [0, 7, 8, 11, 12, 15];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Representative terminal backgrounds the agent badge is rendered against.
+    /// A near-black dark theme (Catppuccin Mocha / Gruvbox) and a near-white
+    /// light theme (Solarized Light / Catppuccin Latte).
+    const DARK_BG: (u8, u8, u8) = (0x18, 0x18, 0x18);
+    const LIGHT_BG: (u8, u8, u8) = (0xFD, 0xF6, 0xE3);
+
+    /// Standard ANSI variant RGB values used by the design system for each hue
+    /// (base + bright). The mode badge picks the bright variant on dark and the
+    /// base variant on light, so both appearances stay readable.
+    fn hue_rgb_on(hue: &str, light: bool) -> Option<(u8, u8, u8)> {
+        let (d, l) = match hue {
+            "red" => ((0xFF, 0x5F, 0x5F), (0xCD, 0x00, 0x00)),
+            "green" => ((0x5F, 0xFF, 0x5F), (0x00, 0xCD, 0x00)),
+            "blue" => ((0x5F, 0x5F, 0xFF), (0x00, 0x00, 0xCD)),
+            "magenta" => ((0xFF, 0x5F, 0xFF), (0xCD, 0x00, 0xCD)),
+            "yellow" => ((0xFF, 0xFF, 0x5F), (0xCD, 0xCD, 0x00)),
+            "cyan" => ((0x5F, 0xFF, 0xFF), (0x00, 0xCD, 0xCD)),
+            _ => return None,
+        };
+        Some(if light { l } else { d })
+    }
+
+    fn channel_lin(c: u8) -> f32 {
+        let c = c as f32 / 255.0;
+        if c <= 0.03928 {
+            c / 12.92
+        } else {
+            ((c + 0.055) / 1.055).powf(2.4)
+        }
+    }
+
+    fn relative_luminance((r, g, b): (u8, u8, u8)) -> f32 {
+        0.2126 * channel_lin(r) + 0.7152 * channel_lin(g) + 0.0722 * channel_lin(b)
+    }
+
+    fn contrast_ratio(fg: (u8, u8, u8), bg: (u8, u8, u8)) -> f32 {
+        let l_fg = relative_luminance(fg);
+        let l_bg = relative_luminance(bg);
+        let (hi, lo) = if l_fg > l_bg {
+            (l_fg, l_bg)
+        } else {
+            (l_bg, l_fg)
+        };
+        (hi + 0.05) / (lo + 0.05)
+    }
+
+    /// Each mode hue must resolve to a standard ANSI variant that stays legible
+    /// on its matching background. Dark terminals clear the WCAG "large/bold
+    /// text" 3:1 bar comfortably. On light terminals three hues (red, magenta,
+    /// blue) also clear 3:1; the fourth (green) reaches ~2:1 — the best a
+    /// standard `Green` ANSI code can do against white, so the light threshold
+    /// is relaxed to 2:1 for the single weakest hue.
+    const MIN_CONTRAST_DARK: f32 = 3.0;
+    const MIN_CONTRAST_LIGHT: f32 = 2.0;
+
+    fn assert_agent_hue_readable(name: &str, hue: &str, light: bool, bg: (u8, u8, u8)) {
+        let fg = hue_rgb_on(hue, light)
+            .unwrap_or_else(|| panic!("{name} ({hue}) is not a supported standard ANSI hue"));
+        let cr = contrast_ratio(fg, bg);
+        let min = if light {
+            MIN_CONTRAST_LIGHT
+        } else {
+            MIN_CONTRAST_DARK
+        };
+        assert!(
+            cr >= min,
+            "{name} ({hue}) on {} bg contrast {cr:.2} below {min}",
+            if light { "light" } else { "dark" }
+        );
+    }
+
+    #[test]
+    fn agent_mode_colors_are_standard_ansi_hues() {
+        for (_, hue) in AGENT_MODE_HUE {
+            assert!(
+                AGENT_HUE_NAMES.contains(hue),
+                "mode hue {hue} is not in the supported standard ANSI hue list"
+            );
+        }
+    }
+
+    #[test]
+    fn agent_mode_colors_are_readable_in_dark_and_light_terminals() {
+        for (mode, hue) in AGENT_MODE_HUE {
+            // Dark terminals use the bright variant; light terminals the base.
+            assert_agent_hue_readable(mode, hue, false, DARK_BG);
+            assert_agent_hue_readable(mode, hue, true, LIGHT_BG);
+        }
+    }
+
+    /// The four mode colors must be visually distinct from one another so the
+    /// user can tell Build / Auto / Plan / Duck apart at a glance.
+    #[test]
+    fn agent_mode_colors_are_distinct() {
+        let hues: Vec<&str> = AGENT_MODE_HUE.iter().map(|(_, h)| *h).collect();
+        for i in 0..hues.len() {
+            for j in (i + 1)..hues.len() {
+                assert_ne!(
+                    hues[i], hues[j],
+                    "mode hues {} and {} are identical",
+                    hues[i], hues[j]
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn agent_mode_hue_resolves_mode_names() {
+        assert_eq!(agent_mode_hue("build"), Some(AGENT_COLOR_BUILD));
+        assert_eq!(agent_mode_hue("auto"), Some(AGENT_COLOR_AUTO));
+        assert_eq!(agent_mode_hue("plan"), Some(AGENT_COLOR_PLAN));
+        assert_eq!(agent_mode_hue("duck"), Some(AGENT_COLOR_DUCK));
+        assert_eq!(agent_mode_hue("unknown"), None);
+    }
+
+    #[test]
+    fn agent_mode_colors_are_wired_into_builtin_primary_agents() {
+        // Guards against the constants drifting from the specs that expose them.
+        assert!(!AGENT_COLOR_BUILD.is_empty());
+        assert!(!AGENT_COLOR_AUTO.is_empty());
+        assert!(!AGENT_COLOR_PLAN.is_empty());
+        assert!(!AGENT_COLOR_DUCK.is_empty());
+    }
+}

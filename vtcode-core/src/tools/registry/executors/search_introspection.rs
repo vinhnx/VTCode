@@ -1,5 +1,6 @@
 use super::ToolRegistry;
 use crate::mcp::{DetailLevel, ToolDiscovery};
+use crate::tools::mcp::model_visible_mcp_tool_name;
 use crate::tools::registry::tool_catalog_facade::tool_groups;
 use anyhow::{Result, anyhow, bail};
 use hashbrown::HashMap;
@@ -260,6 +261,16 @@ impl ToolRegistry {
         let mut mcp_results = discovery.search_tools(query, detail_level).await?;
         if mcp_results.len() > max_results {
             mcp_results.truncate(max_results);
+        }
+
+        if let Some(session_tools) = self.session_model_tools() {
+            let references = mcp_results
+                .iter()
+                .map(|result| model_visible_mcp_tool_name(&result.provider, &result.name))
+                .collect::<Vec<_>>();
+            self.tool_catalog_state()
+                .note_tool_references(&session_tools, &references)
+                .await;
         }
 
         let mut grouped: HashMap<String, Vec<Value>> = HashMap::new();

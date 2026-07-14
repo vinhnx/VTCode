@@ -60,7 +60,7 @@ python3 scripts/generate_config_field_reference.py
 | `agent.harness.orchestration_mode` | `string` | no | `"plan_build_evaluate"` | Select the exec/full-auto harness orchestration path. |
 | `agent.harness.tool_result_clearing.clear_at_least_tokens` | `integer` | no | `30000` | - |
 | `agent.harness.tool_result_clearing.clear_tool_inputs` | `boolean` | no | `false` | - |
-| `agent.harness.tool_result_clearing.enabled` | `boolean` | no | `false` | - |
+| `agent.harness.tool_result_clearing.enabled` | `boolean` | no | `true` | - |
 | `agent.harness.tool_result_clearing.keep_tool_uses` | `integer` | no | `3` | - |
 | `agent.harness.tool_result_clearing.trigger_tokens` | `integer` | no | `100000` | - |
 | `agent.idle_turn_limit` | `integer` | no | `3` | Maximum consecutive idle turns (no tool calls, no meaningful response) before the agent runner treats the session as stalled and aborts the loop. |
@@ -653,6 +653,7 @@ python3 scripts/generate_config_field_reference.py
 | `timeouts.pty_ceiling_seconds` | `integer` | no | `300` | Maximum duration (in seconds) for PTY-backed commands. |
 | `timeouts.streaming_ceiling_seconds` | `integer` | no | `600` | Maximum duration (in seconds) for streaming API responses. |
 | `timeouts.warning_threshold_percent` | `integer` | no | `80` | Percentage (0-100) of the ceiling after which the UI should warn. |
+| `tools.client_tool_search` | `boolean` | no | `true` | Enables client-local deferred MCP tool loading for providers without a hosted tool search (e.g. Gemini). Deferred MCP schemas are omitted from the current request payload, a compact discoverability summary is appended to the system prompt, and `mcp_search_tools` expands matched schemas into the next request. Enabled by default because eager MCP schemas are the dominant source of token inflation. Set to `false` to restore the eager catalog. |
 | `tools.default_policy` | `string` | no | `"prompt"` | Default policy for tools not explicitly listed |
 | `tools.editor.enabled` | `boolean` | no | `true` | Enable external editor support for `/edit` and keyboard shortcuts |
 | `tools.editor.preferred_editor` | `string` | no | `""` | Preferred editor command override (supports arguments, e.g. "code --wait") |
@@ -738,6 +739,7 @@ python3 scripts/generate_config_field_reference.py
 | `ui.notifications.tool_success` | `boolean` | no | `false` | Notify on successful tool calls. |
 | `ui.reasoning_display_mode` | `string` | no | `"toggle"` | Reasoning display mode for chat UI ("always", "toggle", or "hidden") |
 | `ui.reasoning_visible_default` | `boolean` | no | `true` | Default visibility for reasoning when display mode is "toggle" |
+| `ui.thinking_display` | `string` | no | `"collapsed"` | Default collapse state of agent thinking/reasoning blocks. Options: "collapsed", "extended". When collapsed, each reasoning run shows a single `→ Thinking (N lines)` summary with a live spinner while the model reasons; click (or the toggle action) to expand. Expanded blocks show a `↓ Thinking` header followed by the dimmed, indented reasoning body. The collapsed summary updates its line count live as reasoning streams in. |
 | `ui.reduce_motion_keep_progress_animation` | `boolean` | no | `false` | Keep animated progress indicators while reduce_motion_mode is enabled. |
 | `ui.reduce_motion_mode` | `boolean` | no | `false` | Reduce motion mode: minimizes shimmer/flashing animations. Can also be enabled via VTCODE_REDUCE_MOTION=1 environment variable. |
 | `ui.safe_colors_only` | `boolean` | no | `false` | Restrict color palette to the 11 "safe" ANSI colors portable across common themes. Safe colors: red, green, yellow, blue, magenta, cyan + brred, brgreen, brmagenta, brcyan Problematic colors avoided: brblack (invisible in Solarized Dark), bryellow (light themes), white/brwhite (light themes), brblue (Basic Dark). See: <https://blog.xoria.org/terminal-colors/> |

@@ -254,6 +254,12 @@ impl Session {
         let mut animation_updated = false;
         if !motion_reduced && self.thinking_spinner.is_active && self.thinking_spinner.update() {
             animation_updated = true;
+            // Refresh collapsed thinking summaries so the live spinner frame and
+            // line count stay current during streaming instead of freezing until
+            // a click. `mark_thinking_run_starts_dirty` bumps the run-start
+            // revision and drops the visible-window cache; the redraw is
+            // requested below via `animation_updated`.
+            self.mark_thinking_run_starts_dirty();
         }
         let shimmer_active = if self.appearance.should_animate_progress_status() {
             self.is_shimmer_active()
@@ -399,6 +405,7 @@ impl Session {
     pub(crate) fn clear_screen(&mut self) {
         self.lines.clear();
         self.collapsed_pastes.clear();
+        self.thinking_runs.clear();
         self.user_scrolled = false;
         self.scroll_manager.set_offset(0);
         self.invalidate_transcript_cache();

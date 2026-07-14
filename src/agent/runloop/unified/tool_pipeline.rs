@@ -16,17 +16,16 @@ pub(super) struct CancellationTokens {
 }
 
 mod execution;
-mod execution_attempts;
+pub(crate) mod execution_attempts;
 mod execution_events;
 mod execution_helpers;
-mod execution_planning;
 mod execution_run;
 mod execution_runtime;
 mod file_conflict_prompt;
 mod file_conflict_runtime;
 mod hitl;
 mod pty_stream;
-mod status;
+pub(crate) mod status;
 #[cfg(test)]
 mod tests;
 mod timeout;

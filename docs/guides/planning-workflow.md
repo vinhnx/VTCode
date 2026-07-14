@@ -37,6 +37,39 @@ While a turn is actively processing, `/plan` is dropped with a notice (mode swit
 /plan
 ```
 
+### Enter From an Agent Suggestion
+
+The agent can also propose entering the planning workflow on its own when it
+judges edits should be planned first. In that case a HITL confirmation prompt
+appears:
+
+```text
+Enter Planning workflow?
+
+- Enter Planning workflow (Recommended) — enter planning and persist the draft under .vtcode/plans
+- Continue without Planning workflow
+```
+
+- **Enter Planning workflow** — starts planning; the draft is persisted under
+  `.vtcode/plans/` and mutating tools stay disabled until you approve execution.
+- **Continue without Planning workflow** — the agent proceeds without planning
+  (mutating tools remain enabled).
+
+This gate prevents the agent from silently switching into plan mode; you decide
+whether to plan before any edits begin.
+
+### Intent Phrases
+
+You can steer the workflow with short phrases instead of the review-gate UI:
+
+- To **exit planning and present the plan** for approval, type `implement`,
+  `approve`, `lgtm`, `ship it`, `yes`/`continue`/`go`/`start`, or select
+  **Execute** / **Auto-accept** in the review gate. Approving triggers
+  `finish_planning` and the execution confirmation — the agent will not
+  self-approve by editing the plan file and staying in plan mode.
+- To **stay in planning**, type `stay in planning` (or revise the
+  `<proposed_plan>` block). This overrides any exit phrase.
+
 ### Typical Workflow
 
 1. Select the `plan` primary agent or run `/plan`.
@@ -47,12 +80,15 @@ While a turn is actively processing, `/plan` is dropped with a notice (mode swit
 
 ## Plan Output Format
 
-Planning output should stay decision-complete but sparse:
+Planning output should stay decision-complete but sparse — treat it like a
+compact spec, not prose. Keep the whole `<proposed_plan>` under ~1500 tokens;
+prefer `file:symbol` references over narrative. This bound exists because an
+overly verbose plan is truncated at the model's output-token limit (cut off
+mid-plan) and must then be condensed and re-emitted.
 
 ```markdown
 Repository facts checked:
-- [file, symbol, or behaviour confirmed from the repo]
-- [existing pattern or constraint verified before planning]
+- [file:symbol or behaviour confirmed from the repo]
 
 Next open decision: [if any], otherwise: No remaining scope decisions.
 
@@ -60,22 +96,20 @@ Next open decision: [if any], otherwise: No remaining scope decisions.
 # [Task Title]
 
 ## Summary
-[2-4 lines: goal, user impact, what will change, what will not]
+[1-3 lines: goal, user impact, what changes / what does not]
 
-## Implementation Steps
-1. [Step] -> files: [paths] -> verify: [check]
-2. [Step] -> files: [paths] -> verify: [check]
-3. [Step] -> files: [paths] -> verify: [check]
+## Steps
+1. [Action] -> files/symbols -> verify: [check]
+2. [Action] -> files/symbols -> verify: [check]
 
-## Test Cases and Validation
-1. Build and lint: [project build and lint command(s) based on detected toolchain]
-2. Tests: [project test command(s) based on detected toolchain]
-3. Targeted behaviour checks: [explicit commands/manual checks]
+## Validation
+- build/lint: [detected toolchain command]
+- tests: [detected toolchain command]
+- behaviour: [targeted check]
 
-## Assumptions and Defaults
-1. [Explicit assumption]
-2. [Default chosen when user did not specify]
-3. [Out-of-scope items intentionally not changed]
+## Assumptions
+- [assumption or default chosen]
+- [out-of-scope item intentionally not changed]
 </proposed_plan>
 ```
 
@@ -83,11 +117,35 @@ Only `Next open decision` is used as the explicit reopen marker for follow-up pl
 
 ## Review Gate
 
-After a plan is ready, the execution confirmation should use this 3-way gate:
+After a plan is ready, a confirmation popup presents a structured summary (phases/steps
+checklist, or the raw plan when the structured data is absent) and a decision gate. The
+default selection for a complete draft is **Auto-accept**; for a draft still missing
+required content it is **Edit plan**.
 
-1. Yes, auto-review permissions where configured
-2. Yes, manually approve permission prompts
-3. Type feedback to revise the plan
+Approval options:
+
+- **Execute** — approve and execute the plan on the current primary agent with per-step
+  HITL permission confirmations.
+- **Auto-accept** — approve and auto-execute the plan on the current primary agent
+  (skip per-step confirmations). This is the default for a complete draft.
+- **Switch to build agent** — hand the plan off to the `build` primary agent and execute
+  it with per-step HITL confirmations (manual edit approvals).
+- **Switch to auto agent** — hand the plan off to the `auto` primary agent and
+  auto-execute the plan (skip per-step confirmations).
+- **Edit plan** — return to the planning workflow to revise (type `/edit` or select it).
+- **Cancel** — discard the plan without executing.
+
+Handoff options perform a true primary-agent switch: the chosen agent becomes active and
+executes the approved plan. `finish_planning` is invoked either way, disabling planning
+mode and enabling mutating tools.
+
+## Budget Exhaustion
+
+If the session budget or wall-clock limit is reached while planning, the
+runloop does **not** force another interview or loop (no further LLM calls are
+possible). Instead it finalizes the current plan draft and presents it via the
+review gate, so you can approve or revise what was produced rather than the
+turn hanging.
 
 ## Best Practices
 

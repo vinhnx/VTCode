@@ -79,7 +79,42 @@ Current VT Code scope for OpenAI:
 - Supported in the Responses parser: OpenAI function-call namespaces and `tool_search_output` tool references
 - Not yet modeled in shared tool definitions: MCP-server search surfaces
 
-VT Code keeps small deferred catalogs eager and skips hosted tool search until the deferable tool set reaches 100 entries. This avoids paying the search-tool overhead when direct exposure is cheaper and simpler.
+VT Code defers any MCP catalogue. For non-MCP catalogues, hosted search starts when at least 15 tools are deferable or their combined schema estimate exceeds about 4,000 tokens.
+
+### When are tools deferred?
+
+Deferral is decided per-catalog by `SessionToolCatalog::model_tools`. A tool is flagged `defer_loading = true` when **all** of the following hold:
+
+1. The tool is not a core builtin (e.g. `exec_command`, `write_stdin`, or the active discovery tools) and is not listed in `always_available_tools`.
+2. The session is not running under the always-eager TUI surface.
+3. A deferral policy is active for the runtime (see below).
+
+The deferral policy is active when **any** of these is true:
+
+- **Anthropic** with `defer_by_default = true` (default): every non-core tool is deferred, including MCP tools.
+- **OpenAI** Responses (`model_supports_responses_compaction`): hosted `tool_search` is injected and non-core tools are deferred.
+- **Any provider** when `tools.client_tool_search = true` (default): client-local MCP deferral is enabled. Deferred MCP schemas are omitted from the request payload and replaced by a compact discoverability summary in the system prompt; `mcp_search_tools` expands matched schemas into the next request.
+
+Key changes from earlier behavior:
+
+- **MCP presence is the trigger.** Any MCP tool in the catalog is deferred regardless of tool count. MCP schemas are the dominant source of token inflation, so eager exposure is no longer attempted even for a single server.
+- **Token-budget backstop.** A catalog is also deferred when its combined schema size exceeds ~4k tokens (≈16k chars), even if the tool count is below the numeric threshold. This catches single large servers whose schema dwarfs the whole builtin set.
+- **Client-local is the default.** Providers without a hosted tool search (e.g. Gemini) now default to client-local deferral, so MCP schemas are not sent eagerly.
+
+### Client-local deferred loading
+
+When `tools.client_tool_search` is enabled and no provider-hosted search is available, VT Code:
+
+1. Omits `defer_loading: true` tools from the wire payload.
+2. Appends a compact, cache-stable summary of discoverable tools to the system prompt (names + one-line purpose).
+3. Keeps `mcp_search_tools` available so a search match expands the tool's full schema into the next request.
+
+Set `tools.client_tool_search = false` to restore the eager catalog for unsupported providers.
+
+```toml
+[tools]
+client_tool_search = true
+```
 
 ### Handling Tool References
 

@@ -1147,4 +1147,113 @@ mod tests {
             );
         }
     }
+    #[test]
+    fn default_config_exposed_tool_count_within_cap() {
+        // Regression guard for the tool-consolidation work: the number of
+        // LLM-exposed built-in tools must stay bounded so the model does not
+        // waste attention choosing between near-duplicates. Any new
+        // registration must either consolidate an existing tool, be deferred
+        // behind the deferred-loading path, or deliberately raise this cap in
+        // review.
+        let registrations = builtin_tool_registrations(None);
+        let exposed: usize = registrations
+            .iter()
+            .filter(|registration| registration.expose_in_llm())
+            .count();
+        assert!(
+            exposed <= 14,
+            "exposed built-in tool count is {exposed}; expected <= 14. \
+             Consolidate, defer, or raise the cap in review."
+        );
+    }
+
+    /// End-to-end regression for the tool-consolidation work: builds the real
+    /// `SessionToolCatalog` from the actual builtin registrations (not a
+    /// synthetic subset) and asserts the number of tool definitions/function
+    /// declarations the model actually sees, for a default non-native-memory
+    /// config, stays within the post-fold cap. This complements
+    /// `default_config_exposed_tool_count_within_cap` (which only counts
+    /// `expose_in_llm()` registrations) by exercising the full catalog
+    /// pipeline, including dedup-by-public-name and deferred-loading
+    /// collapsing.
+    #[test]
+    fn emitted_model_tool_count_stays_within_cap_for_default_config() {
+        use crate::config::ToolDocumentationMode;
+        use crate::tools::handlers::{
+            SessionSurface, SessionToolCatalog, SessionToolsConfig, ToolModelCapabilities,
+        };
+
+        let registrations = builtin_tool_registrations(None);
+        let catalog = SessionToolCatalog::rebuild_from_registrations(registrations);
+        let config = SessionToolsConfig::full_public(
+            SessionSurface::Interactive,
+            CapabilityLevel::CodeSearch,
+            ToolDocumentationMode::Full,
+            ToolModelCapabilities::default(),
+        );
+
+        let model_tools = catalog.model_tools(config.clone());
+        assert!(
+            model_tools.len() <= 14,
+            "emitted model_tools count is {}; expected <= 14. \
+             Consolidate, defer, or raise the cap in review.",
+            model_tools.len()
+        );
+
+        let function_declarations = catalog.function_declarations(config);
+        assert!(
+            function_declarations.len() <= 14,
+            "emitted function_declarations count is {}; expected <= 14. \
+             Consolidate, defer, or raise the cap in review.",
+            function_declarations.len()
+        );
+    }
+
+    /// End-to-end regression for the first-request token budget: the actual
+    /// builtin tool schemas sent in Progressive mode must fit in a small
+    /// token envelope, leaving room for the system prompt and conversation.
+    #[test]
+    fn emitted_model_tool_schema_fits_within_first_request_budget() {
+        use crate::config::ToolDocumentationMode;
+        use crate::tools::handlers::{
+            SessionSurface, SessionToolCatalog, SessionToolsConfig, ToolModelCapabilities,
+        };
+        use serde::Serialize;
+
+        #[derive(Serialize)]
+        struct ToolSchemaEstimate<'a> {
+            name: &'a str,
+            description: &'a str,
+            parameters: &'a serde_json::Value,
+        }
+
+        let registrations = builtin_tool_registrations(None);
+        let catalog = SessionToolCatalog::rebuild_from_registrations(registrations);
+        let config = SessionToolsConfig::full_public(
+            SessionSurface::Interactive,
+            CapabilityLevel::CodeSearch,
+            ToolDocumentationMode::Progressive,
+            ToolModelCapabilities::default(),
+        );
+
+        let schema_entries = catalog.schema_entries(config);
+        let total_tokens: usize = schema_entries
+            .iter()
+            .map(|entry| {
+                let estimate = ToolSchemaEstimate {
+                    name: &entry.name,
+                    description: &entry.description,
+                    parameters: &entry.parameters,
+                };
+                serde_json::to_string(&estimate)
+                    .map(|s| s.len() / 4)
+                    .unwrap_or(0)
+            })
+            .sum();
+
+        assert!(
+            total_tokens <= 3_000,
+            "emitted model tool schema tokens in Progressive mode is {total_tokens}; expected <= 3_000"
+        );
+    }
 }

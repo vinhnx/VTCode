@@ -5,6 +5,7 @@ use super::schemas::{
     TOOL_LIST_FILES_CONTENT_PATTERN_ARG, TOOL_LIST_FILES_NAME_PATTERN_ARG,
     TOOL_LIST_FILES_PATH_ARG, TOOL_READ_FILE_PATH_ARG, TOOL_READ_FILE_URI_ARG,
 };
+use vtcode_commons::formatting::truncate_middle;
 use vtcode_core::tools::registry::labels::tool_action_label;
 
 pub(super) fn render_title(
@@ -56,28 +57,4 @@ pub(super) fn render_title(
         },
         ToolDescriptor::Local => tool_action_label(function_name, args).to_string(),
     }
-}
-
-fn truncate_middle(input: &str, max_len: usize) -> String {
-    let total = input.chars().count();
-    if total <= max_len {
-        return input.to_string();
-    }
-
-    if max_len < 3 {
-        return input.chars().take(max_len).collect();
-    }
-
-    let front_len = max_len / 2;
-    let back_len = max_len.saturating_sub(front_len + 1);
-    let front: String = input.chars().take(front_len).collect();
-    let back: String = input
-        .chars()
-        .rev()
-        .take(back_len)
-        .collect::<String>()
-        .chars()
-        .rev()
-        .collect();
-    format!("{front}…{back}")
 }

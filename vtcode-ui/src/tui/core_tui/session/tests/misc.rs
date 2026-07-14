@@ -335,7 +335,7 @@ fn top_level_task_tree_tail_line_is_dimmed_in_tool_blocks() {
         .len()
         .checked_sub(1)
         .expect("tool detail line should exist");
-    let transcript_lines = session.reflow_message_lines(index, 100);
+    let transcript_lines = session.reflow_message_lines(index, 100, false);
     let task_span = transcript_lines
         .iter()
         .flat_map(|line| line.line.spans.iter())

@@ -95,8 +95,8 @@ pub struct ToolsConfig {
     /// `defer_loading: true` are omitted from the request payload instead
     /// of being sent eagerly, and a compact summary of what is discoverable
     /// is appended to the system prompt; the model loads them via the
-    /// local `unified_search action="tools"`. This changes model behavior,
-    /// so it defaults to `false`.
+    /// local MCP discovery tools. Enabled by default because
+    /// eager MCP schemas are the dominant source of token inflation.
     #[serde(default = "default_client_tool_search")]
     pub client_tool_search: bool,
 }
@@ -418,7 +418,7 @@ const fn default_editor_suspend_tui() -> bool {
 
 #[inline]
 const fn default_client_tool_search() -> bool {
-    false
+    true
 }
 
 const DEFAULT_TOOL_POLICIES: &[(&str, ToolPolicy)] = &[
@@ -570,22 +570,22 @@ mod tests {
     }
 
     #[test]
-    fn client_tool_search_defaults_to_disabled() {
+    fn client_tool_search_defaults_to_enabled() {
         let config = ToolsConfig::default();
-        assert!(!config.client_tool_search);
+        assert!(config.client_tool_search);
 
         let deserialized: ToolsConfig = toml::from_str("default_policy = \"prompt\"\n")
             .expect("tools config should parse without client_tool_search");
-        assert!(!deserialized.client_tool_search);
+        assert!(deserialized.client_tool_search);
 
-        let enabled: ToolsConfig = toml::from_str(
+        let disabled: ToolsConfig = toml::from_str(
             r#"
 default_policy = "prompt"
-client_tool_search = true
+client_tool_search = false
 "#,
         )
-        .expect("tools config should parse with client_tool_search");
-        assert!(enabled.client_tool_search);
+        .expect("tools config should parse with client_tool_search disabled");
+        assert!(!disabled.client_tool_search);
     }
 
     #[test]

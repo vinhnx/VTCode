@@ -362,7 +362,7 @@ fn wrapped_transcript_url_last_segment_is_underlined_and_clickable() {
     );
     session.push_line(InlineMessageKind::Agent, vec![make_segment(url.as_str())]);
 
-    let transcript_lines = session.reflow_message_lines(0, 60);
+    let transcript_lines = session.reflow_message_lines(0, 60, false);
     let decorated =
         session.decorate_visible_cached_transcript_links(transcript_lines, Rect::new(0, 0, 60, 8));
     let targets = session
@@ -412,7 +412,7 @@ fn reflowed_tool_lines_include_detected_raw_links() {
         vec![make_segment(&format!("open {url}"))],
     );
 
-    let transcript_lines = session.reflow_message_lines(0, 80);
+    let transcript_lines = session.reflow_message_lines(0, 80, false);
 
     assert!(transcript_lines.iter().any(|line| {
         line.explicit_links

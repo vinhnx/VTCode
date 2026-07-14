@@ -21,6 +21,7 @@ Last reviewed: 2026-06-28
 - [Web Search Tool](tools/web_search.md) - Web search configuration and guard rails.
 - [Defuddle Fetch](tools/defuddle_fetch.md) - Markdown extraction fallback for complex pages.
 - [Scheduled Tasks](user-guide/scheduled-tasks.md) - Reminder and durable scheduler flows.
+- [Planning Workflow](guides/planning-workflow.md) - `/plan`, review gate, plan handoff to build/auto agents.
 - [Permissions Guide](guides/permissions.md) - Granular agent permissions and rule grammar.
 - [Provider Guides](providers/PROVIDER_GUIDES.md) - LLM provider setup and behavior.
 - [Security Model](security/SECURITY_MODEL.md) - Security architecture.

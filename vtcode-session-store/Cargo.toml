@@ -14,12 +14,13 @@ keywords = ["vtcode", "agent", "session", "state", "event-log"]
 categories = ["development-tools", "data-structures"]
 
 [dependencies]
-vtcode-exec-events = { path = "../vtcode-exec-events", version = "0.135.5" }
+vtcode-exec-events = { path = "../vtcode-exec-events", version = "0.135.8" }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 chrono = { workspace = true }
 walkdir = "2.5"
 thiserror = { workspace = true }
+memchr = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
