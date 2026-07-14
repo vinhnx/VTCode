@@ -103,6 +103,44 @@ async fn advanced_profile_exposes_code_search_outside_default_catalog() {
 }
 
 #[tokio::test]
+async fn explicit_full_auto_retains_tool_exposed_by_planning_transition() {
+    let temp = TempDir::new().expect("tempdir");
+    let registry = ToolRegistry::new(temp.path().to_path_buf()).await;
+
+    assert!(
+        !registry
+            .available_tools()
+            .await
+            .contains(&tools::CODE_SEARCH.to_string())
+    );
+
+    registry
+        .enable_full_auto_permission(&[tools::CODE_SEARCH.to_string()])
+        .await;
+
+    assert_eq!(
+        registry.current_full_auto_allowlist().await,
+        Some(vec![tools::CODE_SEARCH.to_string()])
+    );
+    assert!(registry.is_allowed_in_full_auto(tools::CODE_SEARCH).await);
+
+    registry.enable_planning();
+
+    assert!(
+        registry
+            .available_tools()
+            .await
+            .contains(&tools::CODE_SEARCH.to_string())
+    );
+    assert!(
+        registry
+            .preflight_tool_permission(tools::CODE_SEARCH)
+            .await
+            .expect("code_search permission after planning transition")
+    );
+}
+
+#[tokio::test]
 async fn wildcard_full_auto_tracks_late_tools_visible_to_the_effective_profile() {
     let temp = TempDir::new().expect("tempdir");
     let registry = ToolRegistry::new(temp.path().to_path_buf()).await;

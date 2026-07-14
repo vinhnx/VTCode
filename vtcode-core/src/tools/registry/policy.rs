@@ -337,10 +337,6 @@ impl ToolPolicyGateway {
         session_tools_config: SessionToolsConfig,
     ) {
         let mut normalized: FxHashSet<String> = FxHashSet::default();
-        let visible_tools: FxHashSet<&str> = available_tools
-            .iter()
-            .map(|tool| canonical_tool_name(tool))
-            .collect();
         let wildcard = allowed_tools
             .iter()
             .any(|tool| tool.trim() == tools::WILDCARD_ALL);
@@ -354,9 +350,7 @@ impl ToolPolicyGateway {
                 let trimmed = tool.trim();
                 if !trimmed.is_empty() {
                     let canonical = canonical_tool_name(trimmed);
-                    if visible_tools.contains(canonical) {
-                        normalized.insert(canonical.to_owned());
-                    }
+                    normalized.insert(canonical.to_owned());
                 }
             }
         }
