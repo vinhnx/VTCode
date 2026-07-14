@@ -2,6 +2,13 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.135.7 - 2026-07-14
+
+### Highlights
+#### Bug Fixes
+
+- Add version specifications for dependencies in Cargo.toml (b2f00d1e) 
+### Other Changes
 ## 0.135.6 - 2026-07-14
 
 ### Highlights
