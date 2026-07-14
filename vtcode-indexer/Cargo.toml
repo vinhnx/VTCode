@@ -27,6 +27,7 @@ ignore = { workspace = true }
 indexmap = { workspace = true }
 nucleo-matcher = "0.3"
 parking_lot = "0.12.5"
+rayon = "1"
 regex = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }

@@ -39,6 +39,8 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use tokio::sync::RwLock;
 
+use rayon::prelude::*;
+
 /// Pre-computed file index for instant queries.
 ///
 /// This index is built in the background and cached to avoid
@@ -165,72 +167,95 @@ impl FileIndex {
         limit: usize,
         match_type_filter: Option<MatchType>,
     ) -> Vec<(u32, String, MatchType)> {
-        let mut results = BinaryHeap::with_capacity(limit);
+        // `query` stays serial and declarative: the parallel scoring strategy
+        // is isolated behind `score_paths_top_k`, and the per-chunk top-K heaps
+        // are merged by the shared `merge_top_k` helper. This keeps the index
+        // query logic testable without a rayon runtime in the loop.
+        let mut heaps = Vec::new();
 
-        // Normalize pattern to lowercase to work around a nucleo-matcher bug:
-        // its prefilter only does case-insensitive search for lowercase needle
-        // chars, not uppercase. See https://github.com/openai/codex/pull/15772.
-        let pattern_storage = if pattern_text.is_ascii() {
-            PatternStorage::Ascii(pattern_text.to_ascii_lowercase().into_bytes())
-        } else {
-            PatternStorage::Unicode(pattern_text.to_lowercase().chars().collect())
-        };
-
-        // Reuse single matcher across all queries (mem-reuse-collections)
-        let mut matcher = nucleo_matcher::Matcher::new(nucleo_matcher::Config::DEFAULT);
-        let mut haystack_buf = Vec::with_capacity(256);
-
-        // Iterate over files
         if match_type_filter.is_none_or(|t| t == MatchType::File) {
-            for path in &self.files {
-                if let Some(score) =
-                    self.score_path(path, &pattern_storage, &mut matcher, &mut haystack_buf)
-                {
-                    push_top_match(&mut results, limit, score, path.clone(), MatchType::File);
-                }
-            }
+            heaps.push(score_paths_top_k(
+                &self.files,
+                limit,
+                pattern_text,
+                MatchType::File,
+            ));
         }
 
-        // Iterate over directories
         if match_type_filter.is_none_or(|t| t == MatchType::Directory) {
-            for path in &self.directories {
-                if let Some(score) =
-                    self.score_path(path, &pattern_storage, &mut matcher, &mut haystack_buf)
-                {
-                    push_top_match(
-                        &mut results,
-                        limit,
-                        score,
-                        path.clone(),
-                        MatchType::Directory,
-                    );
-                }
-            }
+            heaps.push(score_paths_top_k(
+                &self.directories,
+                limit,
+                pattern_text,
+                MatchType::Directory,
+            ));
         }
 
-        results
+        merge_top_k(heaps, limit)
             .into_sorted_vec()
             .into_iter()
             .map(|Reverse(item)| item)
             .collect()
     }
+}
 
-    fn score_path(
-        &self,
-        path: &str,
-        pattern: &PatternStorage,
-        matcher: &mut nucleo_matcher::Matcher,
-        haystack_buf: &mut Vec<char>,
-    ) -> Option<u32> {
-        let haystack = nucleo_matcher::Utf32Str::new(path, haystack_buf);
+/// Score `paths` in parallel rayon chunks, returning the worker-merged top-K
+/// heap for `match_type`.
+///
+/// This is the single boundary for the parallel scoring strategy: each worker
+/// thread gets its own `BestMatchesList` (matcher + haystack buffer reused via
+/// `map_init`), keeps its own top-K heap, and the partial heaps are merged by
+/// `merge_top_k`. Callers must not depend on equal-score ordering.
+fn score_paths_top_k(
+    paths: &[String],
+    limit: usize,
+    pattern_text: &str,
+    match_type: MatchType,
+) -> BinaryHeap<Reverse<(u32, String, MatchType)>> {
+    const CHUNK: usize = 1024;
 
-        let needle = match pattern {
-            PatternStorage::Ascii(bytes) => nucleo_matcher::Utf32Str::Ascii(bytes),
-            PatternStorage::Unicode(chars) => nucleo_matcher::Utf32Str::Unicode(chars),
-        };
-
-        matcher.fuzzy_match(haystack, needle).map(|s| s as u32)
+    // Serial fast path for small inputs: avoids the rayon thread-pool spawn
+    // overhead and keeps equal-score ordering deterministic.
+    if paths.len() <= CHUNK {
+        let mut list = BestMatchesList::new(limit, pattern_text);
+        for path in paths {
+            list.record_match(path, match_type);
+        }
+        return list.matches;
     }
+
+    let heaps: Vec<_> = paths
+        .par_chunks(CHUNK)
+        .map_init(
+            || BestMatchesList::new(limit, pattern_text),
+            |list, chunk| {
+                for path in chunk {
+                    list.record_match(path, match_type);
+                }
+                std::mem::take(&mut list.matches)
+            },
+        )
+        .collect();
+
+    merge_top_k(heaps, limit)
+}
+
+/// Merge worker-local top-K heaps into a single top-K heap.
+///
+/// Because each input heap already holds only its own highest-scoring `limit`
+/// entries, the global top-K is a subset of their union; merging and re-keeping
+/// the top-K yields the correct global result.
+fn merge_top_k(
+    heaps: Vec<BinaryHeap<Reverse<(u32, String, MatchType)>>>,
+    limit: usize,
+) -> BinaryHeap<Reverse<(u32, String, MatchType)>> {
+    let mut merged = BinaryHeap::with_capacity(limit);
+    for heap in heaps {
+        for Reverse(item) in heap.into_vec() {
+            push_top_match(&mut merged, limit, item.0, item.1, item.2);
+        }
+    }
+    merged
 }
 
 /// A cached file index that can be shared across searches.
@@ -636,13 +661,11 @@ pub fn run(config: FileSearchConfig) -> anyhow::Result<FileSearchResults> {
     });
 
     // Merge worker-local top-K heaps into one final top-K heap.
-    let mut merged_matches = BinaryHeap::with_capacity(limit);
-    for arc in best_matchers_per_worker {
-        let mut list = arc.lock();
-        for Reverse((score, path, match_type)) in std::mem::take(&mut list.matches).into_vec() {
-            push_top_match(&mut merged_matches, limit, score, path, match_type);
-        }
-    }
+    let worker_heaps: Vec<BinaryHeap<Reverse<(u32, String, MatchType)>>> = best_matchers_per_worker
+        .into_iter()
+        .map(|arc| std::mem::take(&mut arc.lock().matches))
+        .collect();
+    let merged_matches = merge_top_k(worker_heaps, limit);
 
     // Build final results
     let matches = merged_matches

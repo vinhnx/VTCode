@@ -20,6 +20,7 @@ serde_json = { workspace = true }
 chrono = { workspace = true }
 walkdir = "2.5"
 thiserror = { workspace = true }
+memchr = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

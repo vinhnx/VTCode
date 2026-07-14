@@ -374,13 +374,22 @@ fn wrap_line_internal(
 
 fn coalesce_adjacent_spans(spans: Vec<Span<'static>>) -> Vec<Span<'static>> {
     let mut merged: Vec<Span<'static>> = Vec::with_capacity(spans.len());
+    let mut last_style: Option<Style> = None;
     for span in spans {
         if span.content.is_empty() {
             continue;
         }
-        if let Some(last) = merged.last_mut().filter(|last| last.style == span.style) {
-            last.content.to_mut().push_str(span.content.as_ref());
+        // Carry the predicted style in a local: on the common path (same
+        // style as the previous span) we append to the tail without
+        // re-reading `merged.last().style` per element.
+        if let Some(style) = last_style
+            && style == span.style
+        {
+            if let Some(last) = merged.last_mut() {
+                last.content.to_mut().push_str(span.content.as_ref());
+            }
         } else {
+            last_style = Some(span.style);
             merged.push(span);
         }
     }
@@ -677,6 +686,25 @@ mod tests {
         assert!(is_list_item("  - Indented"));
         assert!(!is_list_item("Regular text"));
         assert!(!is_list_item(""));
+    }
+
+    #[test]
+    fn test_coalesce_adjacent_spans_merges_same_style() {
+        use ratatui::style::Style;
+        use ratatui::text::Span;
+
+        let spans = vec![
+            Span::styled("a", Style::default()),
+            Span::styled("b", Style::default()),
+            Span::styled("c", Style::new().bold()),
+            Span::styled("d", Style::new().bold()),
+            Span::styled("e", Style::default()),
+        ];
+        let merged = coalesce_adjacent_spans(spans);
+        assert_eq!(merged.len(), 3);
+        assert_eq!(merged[0].content.as_ref(), "ab");
+        assert_eq!(merged[1].content.as_ref(), "cd");
+        assert_eq!(merged[2].content.as_ref(), "e");
     }
 
     #[test]

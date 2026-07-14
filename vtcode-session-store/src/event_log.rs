@@ -12,6 +12,8 @@ use vtcode_exec_events::{ThreadEvent, VersionedThreadEvent};
 use crate::error::SessionStoreError;
 use crate::session_dir;
 
+use memchr::memchr;
+
 /// In-memory state protected by a mutex (cheap; appends are infrequent relative
 /// to model inference).
 struct LogState {
@@ -323,9 +325,12 @@ impl SessionEventLog {
 }
 
 /// Locate the next newline at or after `from`, returning a past-the-end index.
+///
+/// Uses the `memchr` crate's SIMD byte scan instead of a scalar
+/// `Iterator::position` loop.
 fn memchr_newline(bytes: &[u8], from: usize) -> usize {
     let slice = &bytes[from..];
-    match slice.iter().position(|&b| b == b'\n') {
+    match memchr(b'\n', slice) {
         Some(p) => from + p + 1,
         None => bytes.len(),
     }

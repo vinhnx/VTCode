@@ -7650,6 +7650,7 @@ dependencies = [
  "indexmap 2.14.0",
  "nucleo-matcher",
  "parking_lot",
+ "rayon",
  "regex",
  "serde",
  "serde-saphyr",
@@ -7781,6 +7782,7 @@ name = "vtcode-session-store"
 version = "0.135.7"
 dependencies = [
  "chrono",
+ "memchr",
  "serde",
  "serde_json",
  "tempfile",

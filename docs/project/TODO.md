@@ -1,3 +1,7 @@
+keep the plan crisp and not over-engineer,
+
+==
+
 Refined Plan: Eliminate token overhead in VTCode
 Goal
 Drive the default, out-of-the-box first-request token overhead (system prompt + tool schemas + instructions) below 12k tokens, and keep per-turn overhead growth bounded, while preserving capability. Fix the same mechanisms the article blames: oversized tool schemas, unstable cache prefixes, heavy subagent bootstraps, and redundant history.
