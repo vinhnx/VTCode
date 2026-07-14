@@ -2,6 +2,34 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.135.6 - 2026-07-14
+
+### Highlights
+#### Bug Fixes
+
+- Finalize plan on wall-clock exhaustion instead of interview loop (2493ecd7) 
+- Strip tools at API level after wall-clock exhaustion (1a935c8d) 
+- Enhance plan-mode fallback to reject non-plan salvage (a329fe38) 
+- Trim whitespace in plan-mode recovery fallback to prevent garbage injection (f9e4d32e) 
+#### Features
+
+- Implement budget exhaustion handling in planning workflow (789845e9) 
+- Implement user approval for entering planning workflow and enhance recovery directives (1eefd21b) 
+- Enhance planning workflow with agent prompts and intent phrases (19e60844) 
+- Add thinking block collapse functionality and default state (76d30f9a) 
+- Improve thinking block toggle and reflow cache handling (0434e31b) 
+- Enhance thinking block rendering and state management (930ca639) 
+### Other Changes
+#### Other
+
+- Implement primary agent switching in planning workflow and enhance error handling with retries (53bfcfe3) 
+- Add recovery handling for planning synthesis truncation and enhance session state (623e88db) 
+- Update default configurations for tool result clearing and client tool search; enhance token efficiency warnings and documentation. (3b66f9f7) 
+- Implement planning workflow execution and intent detection modules (6ffa4db8) 
+- Add tests for agent runner configuration and tool exposure (23d2fedf) 
+#### Refactors
+
+- Streamline plan mode recovery and enhance user-facing messages (dd48dc0a) 
 ## 0.135.5 - 2026-07-12
 
 ### Highlights
