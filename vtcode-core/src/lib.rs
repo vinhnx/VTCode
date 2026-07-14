@@ -187,6 +187,7 @@ pub mod open_responses {
 pub mod orchestrator;
 pub mod permissions;
 pub mod persistent_memory;
+pub mod planning; // Plan-mode enter/exit phrase sets (single source of truth)
 pub mod plugins;
 pub mod pods;
 pub mod primary_agent;

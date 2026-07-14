@@ -1,13 +1,10 @@
 //! Agent Legibility:
-//! - Entrypoint: `maybe_force_planning_workflow_interview` is the sole orchestrator; it decides via `super::gating` whether an interview is ready/needed and, if so, injects it via `interview_forcing` (using args from `super::synthesis` when available).
+//! - Entrypoint: `maybe_force_planning_workflow_interview` is the sole orchestrator; it decides via `gating` whether an interview is ready/needed and, if so, injects a static clarifying-question interview via `interview_forcing`.
 //! - Common changes:
 //!   - Pure readiness/need-state predicates (no I/O) live in `gating.rs` — extend those for new interview-skip conditions.
-//!   - LLM-backed question generation lives in `synthesis.rs` — extend that for new prompt/context inputs.
-//!   - Plan draft extraction, tracker snippets, and payload parsing/validation flow through `interview_context.rs` / `interview_payload.rs`.
-//! - Constraints: This file remains an active TD-005 hotspot; it is intentionally kept to orchestration + shared constants only. Put new logic in `gating.rs` (pure predicates), `synthesis.rs` (LLM calls), or a new `planning_workflow/` support module — do not grow this root file's function bodies.
+//!   - Static fallback question shaping lives in `interview_payload.rs` (`build_fallback_question`); plan draft / open-decision detection helpers live in `interview_context.rs`.
+//! - Constraints: This file is intentionally kept to orchestration + shared constants only. Put new logic in `gating.rs` (pure predicates) or `interview_payload.rs` (question shaping) — do not grow this root file's function bodies.
 //! - Verify: `cargo check -p vtcode && cargo test -p vtcode --bin vtcode inline_events::tests`
-
-use serde_json::Value;
 
 use crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState;
 
@@ -19,35 +16,18 @@ mod interview_context;
 mod interview_forcing;
 #[path = "planning_workflow/interview_payload.rs"]
 mod interview_payload;
-#[path = "planning_workflow/synthesis.rs"]
-mod synthesis;
 
 use crate::agent::runloop::unified::turn::context::TurnProcessingResult;
 use crate::agent::runloop::unified::turn::turn_processing::extract_interview_questions;
 use gating::interview_need_state;
-pub(crate) use gating::{
-    planning_workflow_interview_ready, should_attempt_dynamic_interview_generation,
-};
+pub(crate) use gating::planning_workflow_interview_ready;
 use interview_forcing::{
     filter_interview_tool_calls, inject_planning_workflow_interview,
     maybe_append_planning_workflow_reminder, strip_assistant_text,
 };
-pub(crate) use synthesis::synthesize_planning_workflow_interview_args;
-
-#[cfg(test)]
-use interview_context::InterviewResearchContext;
-
-#[cfg(test)]
-use interview_context::{collect_interview_research_context, select_best_plan_validation};
-
-#[cfg(test)]
-use interview_payload::build_adaptive_fallback_interview_args;
 
 #[cfg(test)]
 use super::response_processing::prepare_tool_calls;
-
-#[cfg(test)]
-use synthesis::synthesize_interview_args_with_retry;
 
 #[cfg(test)]
 use vtcode_core::llm::provider as uni;
@@ -55,13 +35,6 @@ use vtcode_core::llm::provider as uni;
 const MIN_PLANNING_WORKFLOW_TURNS_BEFORE_INTERVIEW: usize = 1;
 const PLANNING_WORKFLOW_REMINDER: &str =
     vtcode_core::prompts::system::PLANNING_WORKFLOW_IMPLEMENT_REMINDER;
-const MAX_RESEARCH_SNIPPETS_PER_BUCKET: usize = 6;
-const CUSTOM_NOTE_POLICY: &str =
-    "Users can always type custom notes/free-form responses for every question.";
-const MAX_PLAN_DRAFT_CHARS: usize = 2400;
-const MAX_TASK_TRACKER_CHARS: usize = 1400;
-const PLAN_TRACKER_START: &str = "<!-- vtcode:plan-tracker:start -->";
-const PLAN_TRACKER_END: &str = "<!-- vtcode:plan-tracker:end -->";
 
 pub(crate) fn maybe_force_planning_workflow_interview(
     processing_result: TurnProcessingResult,
@@ -69,7 +42,6 @@ pub(crate) fn maybe_force_planning_workflow_interview(
     session_stats: &mut crate::agent::runloop::unified::state::SessionStats,
     plan_session: &mut PlanningWorkflowSessionState,
     conversation_len: usize,
-    synthesized_interview_args: Option<Value>,
 ) -> TurnProcessingResult {
     // Do NOT force the interview when budget is exhausted — no further LLM
     // calls are possible and re-forcing would loop forever. The same applies
@@ -99,12 +71,7 @@ pub(crate) fn maybe_force_planning_workflow_interview(
 
         if allow_interview && need_state.needs_interview {
             let stripped = strip_assistant_text(processing_result);
-            return inject_planning_workflow_interview(
-                stripped,
-                plan_session,
-                conversation_len,
-                synthesized_interview_args,
-            );
+            return inject_planning_workflow_interview(stripped, plan_session, conversation_len);
         }
 
         return maybe_append_planning_workflow_reminder(processing_result);
@@ -144,7 +111,6 @@ pub(crate) fn maybe_force_planning_workflow_interview(
             processing_result,
             plan_session,
             conversation_len,
-            synthesized_interview_args,
         );
     }
 
@@ -178,12 +144,7 @@ pub(crate) fn maybe_force_planning_workflow_interview(
         return processing_result;
     }
 
-    inject_planning_workflow_interview(
-        processing_result,
-        plan_session,
-        conversation_len,
-        synthesized_interview_args,
-    )
+    inject_planning_workflow_interview(processing_result, plan_session, conversation_len)
 }
 
 #[cfg(test)]

@@ -1,7 +1,6 @@
 use crate::agent::runloop::unified::state::SessionStats;
 use anyhow::Result;
 use vtcode_core::core::interfaces::session::PlanningEntrySource;
-use vtcode_core::tools::handlers::planning_workflow::PlanLifecyclePhase;
 use vtcode_core::tools::registry::ToolRegistry;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_ui::tui::app::InlineHandle;
@@ -175,7 +174,6 @@ pub(crate) async fn transition_to_planning_workflow(
     // `enable_planning()` above already sets the active flag on
     // `PlanningWorkflowState` (the single source of truth), so we do not call
     // `plan_state.enable()` again here.
-    tool_registry.set_planning_phase(PlanLifecyclePhase::ActiveDrafting);
     if reset_plan_file {
         plan_state.set_plan_file(None).await;
     }

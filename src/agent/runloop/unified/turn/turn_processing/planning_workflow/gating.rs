@@ -5,17 +5,14 @@
 //! [`SessionStats`] / [`PlanningWorkflowSessionState`] / response text — no
 //! LLM calls, no tool execution, no mutation of `plan_session`. This keeps
 //! the readiness/need decision independently testable and decoupled from
-//! synthesis (`super::synthesis`) and orchestration (`super::
-//! maybe_force_planning_workflow_interview`), which are the only callers
-//! outside this module.
+//! orchestration (`super::maybe_force_planning_workflow_interview`), which is
+//! the only caller outside this module.
 use vtcode_core::config::constants::tools;
 
 use super::MIN_PLANNING_WORKFLOW_TURNS_BEFORE_INTERVIEW;
 use super::interview_context::has_open_decision_markers;
-use super::interview_forcing::turn_result_has_interview_tool_call;
 use crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState;
 use crate::agent::runloop::unified::state::SessionStats;
-use crate::agent::runloop::unified::turn::context::TurnProcessingResult;
 
 #[derive(Debug, Clone, Copy)]
 pub(super) struct InterviewNeedState {
@@ -57,46 +54,6 @@ pub(crate) fn planning_workflow_interview_ready(
     }
     has_discovery_tool(session_stats)
         && plan_session.turns() >= MIN_PLANNING_WORKFLOW_TURNS_BEFORE_INTERVIEW
-}
-
-pub(crate) fn should_attempt_dynamic_interview_generation(
-    processing_result: &TurnProcessingResult,
-    response_text: Option<&str>,
-    session_stats: &SessionStats,
-    plan_session: &PlanningWorkflowSessionState,
-) -> bool {
-    // Do NOT attempt interview generation when budget is exhausted — no further
-    // LLM calls are possible and the interview would loop forever. The same
-    // applies when post-tool recovery is exhausted (saturated planning context)
-    // or the interview has been permanently denied by policy.
-    if plan_session.is_budget_exhausted()
-        || plan_session.is_recovery_exhausted()
-        || plan_session.is_interview_denied()
-    {
-        return false;
-    }
-    let response_has_plan = response_text
-        .map(|text| text.contains("<proposed_plan>"))
-        .unwrap_or(false);
-    if !planning_workflow_interview_ready(session_stats, plan_session) && !response_has_plan {
-        return false;
-    }
-
-    if turn_result_has_interview_tool_call(processing_result) {
-        return false;
-    }
-
-    let need_state = interview_need_state(response_text, plan_session);
-
-    if need_state.response_has_plan {
-        return need_state.needs_interview;
-    }
-
-    if plan_session.interview_pending() {
-        return need_state.needs_interview;
-    }
-
-    need_state.needs_interview
 }
 
 /// Whether the planning session still needs an interview cycle, and whether

@@ -115,7 +115,7 @@ remove local models via LM Studio / Ollama / llama.ccp support. Please note that
 
 ===
 
-keep the plan crisp and not over-engineer,
+keep the vtcode plan crisp and not over-engineer
 
 ==
 

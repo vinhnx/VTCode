@@ -1,10 +1,8 @@
-use super::interview_context::TaskTrackerSummary;
 use super::interview_context::line_has_open_decision_marker;
 use super::*;
 use crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState;
 use crate::agent::runloop::unified::state::SessionStats;
 use vtcode_core::config::constants::tools;
-use vtcode_core::tools::handlers::planning_workflow::PlanValidationReport;
 
 fn tool_calls_result(
     tool_calls: Vec<uni::ToolCall>,
@@ -38,9 +36,7 @@ fn maybe_force_planning_workflow_interview_inserts_tool_call() {
         &mut stats,
         &mut plan_session,
         1,
-        None,
     );
-
     match result {
         TurnProcessingResult::ToolCalls {
             tool_calls,
@@ -91,9 +87,7 @@ fn maybe_force_planning_workflow_interview_includes_distinct_question_options() 
         &mut stats,
         &mut plan_session,
         1,
-        None,
     );
-
     let tool_calls = match result {
         TurnProcessingResult::ToolCalls { tool_calls, .. } => tool_calls,
         _ => panic!("Expected tool calls with forced interview"),
@@ -151,9 +145,7 @@ fn maybe_force_planning_workflow_interview_skips_when_questions_present() {
         &mut stats,
         &mut plan_session,
         2,
-        None,
     );
-
     match result {
         TurnProcessingResult::TextResponse { text, .. } => {
             assert_eq!(text, "What should I do next?");
@@ -184,9 +176,7 @@ fn maybe_force_planning_workflow_interview_marks_shown_when_plan_present() {
         &mut stats,
         &mut plan_session,
         1,
-        None,
     );
-
     match result {
         TurnProcessingResult::ToolCalls { tool_calls, .. } => {
             let name = tool_calls.last().map(|call| call.tool_name()).unwrap_or("");
@@ -219,9 +209,7 @@ fn maybe_force_planning_workflow_interview_does_not_duplicate_existing_interview
         &mut stats,
         &mut plan_session,
         7,
-        None,
     );
-
     match result {
         TurnProcessingResult::ToolCalls { tool_calls, .. } => {
             let interview_calls = tool_calls
@@ -255,9 +243,7 @@ fn maybe_force_planning_workflow_interview_appends_reminder_when_plan_ready() {
         &mut stats,
         &mut plan_session,
         2,
-        None,
     );
-
     match result {
         TurnProcessingResult::TextResponse { text, .. } => {
             assert!(text.contains(PLANNING_WORKFLOW_REMINDER));
@@ -271,20 +257,6 @@ fn planning_workflow_reminder_includes_manual_switch_fallback() {
     assert!(PLANNING_WORKFLOW_REMINDER.contains("finish_planning"));
     assert!(!PLANNING_WORKFLOW_REMINDER.contains(&format!("/{}", "mode")));
     assert!(PLANNING_WORKFLOW_REMINDER.contains("implement"));
-}
-
-#[test]
-fn collect_interview_research_context_extracts_path_from_json() {
-    let stats = SessionStats::default();
-    let line = r#"{"type":"context","data":{"path":{"text":"./docs/modules/vtcode_docs_map.md"},"lines":{"text":"- **Content**: CORE AGENT LOOP OVERVIEW\n"}}}"#;
-    let history = vec![uni::Message::assistant(line.to_string())];
-
-    let context = collect_interview_research_context(&history, None, &stats, None);
-
-    assert_eq!(
-        context.recent_targets,
-        vec!["./docs/modules/vtcode_docs_map.md".to_string()]
-    );
 }
 
 #[test]
@@ -310,9 +282,7 @@ fn maybe_force_planning_workflow_interview_does_not_duplicate_reminder() {
         &mut stats,
         &mut plan_session,
         3,
-        None,
     );
-
     match result {
         TurnProcessingResult::TextResponse { text, .. } => {
             assert_eq!(text.matches(PLANNING_WORKFLOW_REMINDER).count(), 1);
@@ -343,9 +313,7 @@ fn maybe_force_planning_workflow_interview_defers_when_tool_calls_present() {
         &mut stats,
         &mut plan_session,
         3,
-        None,
     );
-
     match result {
         TurnProcessingResult::ToolCalls { tool_calls, .. } => {
             assert_eq!(tool_calls.len(), 1);
@@ -367,7 +335,7 @@ fn inject_planning_workflow_interview_preserves_existing_tool_call_when_appendin
         "Reading first.",
     );
 
-    let result = inject_planning_workflow_interview(processing_result, &mut plan_session, 2, None);
+    let result = inject_planning_workflow_interview(processing_result, &mut plan_session, 2);
 
     match result {
         TurnProcessingResult::ToolCalls { tool_calls, .. } => {
@@ -411,9 +379,7 @@ fn maybe_force_planning_workflow_interview_strips_interview_from_mixed_tool_call
         &mut stats,
         &mut plan_session,
         3,
-        None,
     );
-
     match result {
         TurnProcessingResult::ToolCalls { tool_calls, .. } => {
             assert_eq!(tool_calls.len(), 1);
@@ -449,9 +415,7 @@ fn maybe_force_planning_workflow_interview_reopens_when_open_decision_markers_ex
         &mut stats,
         &mut plan_session,
         4,
-        None,
     );
-
     match result {
         TurnProcessingResult::ToolCalls { tool_calls, .. } => {
             let name = tool_calls.last().map(|call| call.tool_name()).unwrap_or("");
@@ -483,9 +447,7 @@ fn maybe_force_planning_workflow_interview_clears_stale_pending_when_decisions_c
         &mut stats,
         &mut plan_session,
         5,
-        None,
     );
-
     match result {
         TurnProcessingResult::TextResponse { text, .. } => {
             assert_eq!(text, "Decisions are closed and we can proceed.");
@@ -493,56 +455,6 @@ fn maybe_force_planning_workflow_interview_clears_stale_pending_when_decisions_c
         }
         _ => panic!("Expected text response without extra interview"),
     }
-}
-
-#[test]
-fn should_attempt_dynamic_interview_generation_skips_when_interview_already_called() {
-    let mut stats = SessionStats::default();
-    let mut plan_session = PlanningWorkflowSessionState::default();
-    stats.record_tool(tools::READ_FILE);
-    plan_session.increment_turns();
-
-    let processing_result = tool_calls_result(
-        vec![uni::ToolCall::function(
-            "call_interview".to_string(),
-            tools::REQUEST_USER_INPUT.to_string(),
-            "{}".to_string(),
-        )],
-        String::new(),
-    );
-
-    assert!(!should_attempt_dynamic_interview_generation(
-        &processing_result,
-        Some("Need clarification."),
-        &stats,
-        &plan_session,
-    ));
-}
-
-#[test]
-fn collect_interview_research_context_includes_custom_note_policy() {
-    let stats = SessionStats::default();
-    let context = collect_interview_research_context(
-        &[uni::Message::assistant(
-            "Decision needed: choose validation scope".to_string(),
-        )],
-        Some("- Next open decision: TBD"),
-        &stats,
-        None,
-    );
-
-    assert!(
-        context
-            .custom_note_policy
-            .to_ascii_lowercase()
-            .contains("custom")
-    );
-    assert!(
-        context
-            .custom_note_policy
-            .to_ascii_lowercase()
-            .contains("free-form")
-    );
 }
 
 #[test]
@@ -557,32 +469,6 @@ fn line_has_open_decision_marker_only_tracks_next_open_decision() {
     assert!(!line_has_open_decision_marker(
         "Next open decision: No remaining scope decisions."
     ));
-}
-
-#[test]
-fn collect_interview_research_context_extracts_recent_paths_and_symbols() {
-    let stats = SessionStats::default();
-    let context = collect_interview_research_context(
-        &[uni::Message::assistant(
-            "Focus files:\n- src/agent/runloop/unified/turn/turn_loop.rs\n- SessionStats::record_planning_interview_result".to_string(),
-        )],
-        None,
-        &stats,
-        None,
-    );
-
-    assert!(
-        context
-            .recent_targets
-            .iter()
-            .any(|line| line.contains("turn_loop.rs"))
-    );
-    assert!(
-        context
-            .recent_targets
-            .iter()
-            .any(|line| line.contains("SessionStats::record_planning_interview_result"))
-    );
 }
 
 #[test]
@@ -606,9 +492,7 @@ fn maybe_force_planning_workflow_interview_reprompts_after_cancelled_cycle() {
         &mut stats,
         &mut plan_session,
         6,
-        None,
     );
-
     match result {
         TurnProcessingResult::ToolCalls { tool_calls, .. } => {
             let name = tool_calls.last().map(|call| call.tool_name()).unwrap_or("");
@@ -649,280 +533,11 @@ fn maybe_force_planning_workflow_interview_never_reinjects_after_denial() {
         &mut stats,
         &mut plan_session,
         6,
-        None,
     );
-
     match result {
         TurnProcessingResult::TextResponse { text, .. } => {
             assert_eq!(text, "Continuing planning.");
         }
         _ => panic!("Expected no interview tool call after denial"),
     }
-}
-
-#[test]
-fn adaptive_fallback_interview_targets_only_missing_sections() {
-    let context = InterviewResearchContext {
-        discovery_tools_used: vec![tools::READ_FILE.to_string()],
-        recent_targets: vec![
-            "src/agent/runloop/unified/tool_pipeline/execution_planning.rs".to_string(),
-        ],
-        risk_hints: Vec::new(),
-        open_decision_hints: Vec::new(),
-        goal_hints: Vec::new(),
-        verification_hints: Vec::new(),
-        custom_note_policy: CUSTOM_NOTE_POLICY.to_string(),
-        plan_draft_excerpt: None,
-        plan_draft_path: None,
-        plan_validation: None,
-        task_tracker_excerpt: None,
-        task_tracker_path: None,
-        task_tracker_summary: None,
-    };
-
-    let payload = build_adaptive_fallback_interview_args(
-        &context,
-        Some(
-            "<proposed_plan>\n# Fix Planning workflow\n\n## Implementation Steps\n1. Add entry gating\n\n## Assumptions and Defaults\n1. Reuse overlays.\n</proposed_plan>",
-        ),
-        None,
-        None,
-    )
-    .expect("expected adaptive fallback");
-
-    let questions = payload["questions"].as_array().expect("questions array");
-    assert_eq!(questions.len(), 2);
-    assert_eq!(questions[0]["id"], "scope");
-    assert_eq!(questions[1]["id"], "verification");
-}
-
-#[test]
-fn adaptive_fallback_interview_skips_when_draft_is_complete() {
-    let context = InterviewResearchContext {
-        discovery_tools_used: vec![tools::READ_FILE.to_string()],
-        recent_targets: vec![
-            "src/agent/runloop/unified/tool_pipeline/execution_planning.rs".to_string(),
-        ],
-        risk_hints: Vec::new(),
-        open_decision_hints: Vec::new(),
-        goal_hints: Vec::new(),
-        verification_hints: vec![
-            "cargo test -p vtcode-core test_start_planning -- --nocapture".to_string(),
-        ],
-        custom_note_policy: CUSTOM_NOTE_POLICY.to_string(),
-        plan_draft_excerpt: None,
-        plan_draft_path: None,
-        plan_validation: None,
-        task_tracker_excerpt: None,
-        task_tracker_path: None,
-        task_tracker_summary: None,
-    };
-
-    let payload = build_adaptive_fallback_interview_args(
-        &context,
-        Some(
-            "<proposed_plan>\n# Fix Planning workflow\n\n## Summary\nPersist the reviewed plan and gate execution through approval.\n\n## Implementation Steps\n1. Add lifecycle state -> files: [vtcode-core/src/tools/handlers/planning_workflow.rs] -> verify: [cargo test]\n\n## Test Cases and Validation\n1. Build and lint: cargo check\n2. Tests: cargo test\n\n## Assumptions and Defaults\n1. Reuse overlays.\n</proposed_plan>",
-        ),
-        None,
-        None,
-    );
-
-    assert!(payload.is_none());
-}
-
-#[test]
-fn adaptive_fallback_interview_requests_task_metadata_when_missing() {
-    let context = InterviewResearchContext {
-        discovery_tools_used: vec![tools::READ_FILE.to_string()],
-        recent_targets: Vec::new(),
-        risk_hints: Vec::new(),
-        open_decision_hints: Vec::new(),
-        goal_hints: Vec::new(),
-        verification_hints: Vec::new(),
-        custom_note_policy: CUSTOM_NOTE_POLICY.to_string(),
-        plan_draft_excerpt: None,
-        plan_draft_path: None,
-        plan_validation: None,
-        task_tracker_excerpt: None,
-        task_tracker_path: None,
-        task_tracker_summary: None,
-    };
-
-    let tracker_summary = TaskTrackerSummary {
-        item_count: 2,
-        has_outcome: false,
-        has_verify: false,
-    };
-
-    let payload =
-        build_adaptive_fallback_interview_args(&context, None, None, Some(tracker_summary))
-            .expect("expected adaptive fallback");
-
-    let questions = payload["questions"].as_array().expect("questions array");
-    assert_eq!(questions.len(), 1);
-    assert_eq!(questions[0]["id"], "verification");
-    let question_text = questions[0]["question"].as_str().unwrap_or("");
-    assert!(question_text.to_ascii_lowercase().contains("task tracker"));
-}
-
-#[test]
-fn select_best_plan_validation_prefers_more_complete_candidate() {
-    let mut current = PlanValidationReport::default();
-    current.missing_sections.push("Summary".to_string());
-    current.placeholder_tokens.push("[step]".to_string());
-
-    let candidate = PlanValidationReport {
-        summary_present: true,
-        implementation_step_count: 2,
-        validation_item_count: 1,
-        assumption_count: 1,
-        ..Default::default()
-    };
-
-    let selected = select_best_plan_validation(Some(&current), Some(&candidate))
-        .expect("expected selected validation");
-    assert_eq!(selected, candidate);
-}
-
-// ---------------------------------------------------------------------------
-// A1: `synthesize_interview_args_with_retry` resilience to transient errors.
-// ---------------------------------------------------------------------------
-
-use std::sync::Arc;
-use std::sync::Mutex;
-use std::sync::atomic::{AtomicUsize, Ordering};
-
-use vtcode_core::llm::provider::{LLMError, LLMRequest, LLMResponse};
-
-/// Mock provider that replays a fixed queue of outcomes per `generate` call,
-/// then falls back to a transient `Network` error once the queue is drained.
-struct MockRetryProvider {
-    queued: Mutex<Vec<Result<LLMResponse, LLMError>>>,
-    calls: Arc<AtomicUsize>,
-}
-
-impl MockRetryProvider {
-    fn new(queued: Vec<Result<LLMResponse, LLMError>>) -> (Self, Arc<AtomicUsize>) {
-        let calls = Arc::new(AtomicUsize::new(0));
-        (
-            Self {
-                queued: Mutex::new(queued),
-                calls: calls.clone(),
-            },
-            calls,
-        )
-    }
-}
-
-#[async_trait::async_trait]
-impl uni::LLMProvider for MockRetryProvider {
-    fn name(&self) -> &str {
-        "mock"
-    }
-
-    fn supported_models(&self) -> Vec<String> {
-        Vec::new()
-    }
-
-    fn validate_request(&self, _request: &LLMRequest) -> Result<(), LLMError> {
-        Ok(())
-    }
-
-    async fn generate(&self, _request: LLMRequest) -> Result<LLMResponse, LLMError> {
-        self.calls.fetch_add(1, Ordering::SeqCst);
-        let mut queue = self.queued.lock().unwrap();
-        if let Some(next) = queue.first().cloned() {
-            let _ = queue.remove(0);
-            next
-        } else {
-            Err(LLMError::Network {
-                message: "simulated network blip".to_string(),
-                metadata: None,
-            })
-        }
-    }
-}
-
-#[tokio::test]
-async fn synthesize_interview_args_retries_transient_network_then_succeeds() {
-    let ok = LLMResponse {
-        content: Some("{\"questions\":[]}".to_string()),
-        ..Default::default()
-    };
-    let (provider, calls) = MockRetryProvider::new(vec![
-        Err(LLMError::Network {
-            message: "blip 1".to_string(),
-            metadata: None,
-        }),
-        Err(LLMError::Network {
-            message: "blip 2".to_string(),
-            metadata: None,
-        }),
-        Ok(ok),
-    ]);
-    let mut provider: Box<dyn uni::LLMProvider> = Box::new(provider);
-
-    let result = synthesize_interview_args_with_retry(&mut provider, LLMRequest::default()).await;
-
-    assert!(
-        result.is_ok(),
-        "transient network errors must be retried until success"
-    );
-    assert_eq!(
-        calls.load(Ordering::SeqCst),
-        3,
-        "should retry twice then succeed on the third attempt"
-    );
-}
-
-#[tokio::test]
-async fn synthesize_interview_args_surfaces_non_retryable_without_retry() {
-    let (provider, calls) = MockRetryProvider::new(vec![Err(LLMError::Authentication {
-        message: "bad key".to_string(),
-        metadata: None,
-    })]);
-    let mut provider: Box<dyn uni::LLMProvider> = Box::new(provider);
-
-    let result = synthesize_interview_args_with_retry(&mut provider, LLMRequest::default()).await;
-
-    assert!(
-        result.is_err(),
-        "non-retryable (auth) errors must propagate immediately"
-    );
-    assert_eq!(
-        calls.load(Ordering::SeqCst),
-        1,
-        "should not retry a non-retryable error"
-    );
-}
-
-#[tokio::test]
-async fn synthesize_interview_args_gives_up_after_policy_exhaustion() {
-    let (provider, calls) = MockRetryProvider::new(vec![
-        Err(LLMError::Network {
-            message: "n1".to_string(),
-            metadata: None,
-        }),
-        Err(LLMError::Network {
-            message: "n2".to_string(),
-            metadata: None,
-        }),
-        Err(LLMError::Network {
-            message: "n3".to_string(),
-            metadata: None,
-        }),
-    ]);
-    let mut provider: Box<dyn uni::LLMProvider> = Box::new(provider);
-
-    let result = synthesize_interview_args_with_retry(&mut provider, LLMRequest::default()).await;
-
-    assert!(
-        result.is_err(),
-        "should give up after the retry budget is exhausted"
-    );
-    assert_eq!(
-        calls.load(Ordering::SeqCst),
-        3,
-        "default RetryPolicy allows 3 attempts (2 retries)"
-    );
 }
