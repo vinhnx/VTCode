@@ -825,8 +825,13 @@ impl Session {
         let expanded = self.expand_collapsed_paste_at_row(transcript_width, clicked_row);
         if expanded {
             self.mark_dirty();
+            return expanded;
         }
-        expanded
+        let toggled = self.toggle_thinking_block_at_row(transcript_width, clicked_row);
+        if toggled {
+            self.mark_dirty();
+        }
+        toggled
     }
 
     pub(crate) fn handle_input_click(&mut self, mouse_event: MouseEvent) -> bool {

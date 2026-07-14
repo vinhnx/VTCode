@@ -551,7 +551,7 @@ impl Session {
     }
 
     /// Number of contiguous `Policy` lines starting at `start`.
-    fn thinking_run_len(&self, start: usize) -> usize {
+    pub(crate) fn thinking_run_len(&self, start: usize) -> usize {
         let mut len = 0;
         for line in self.lines.iter().skip(start) {
             if line.kind == InlineMessageKind::Policy {

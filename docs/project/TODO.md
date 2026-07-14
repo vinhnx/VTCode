@@ -1,3 +1,7 @@
+plan mode still broken /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/checkpoints/turn_655.json
+
+it still can handle plan mode properly and then it will error at plan mode summarization proposal and then it stop and exhausted. It should ask user to confirm the plan and then continue to execute the plan. The agent should not stop and exhaust the tool budget at this point. It should be able to handle plan mode properly and ask for user confirmation before proceeding with execution.
+
 ===
 
 Refined Plan: Eliminate token overhead in VTCode

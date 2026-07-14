@@ -1,6 +1,8 @@
 #![allow(missing_docs)]
 use super::super::*;
 use crate::tui::prelude::InlineSegment;
+use crossterm::event::{KeyModifiers, MouseEvent, MouseEventKind};
+use ratatui::layout::Rect;
 use std::sync::Arc;
 use vtcode_commons::ui_protocol::ThinkingBlockState;
 
@@ -106,4 +108,92 @@ fn toggle_flips_collapse_state() {
     assert!(toggled_again);
     let collapsed_again = session.reflow_message_lines(start, 100, true);
     assert!(all_text(&collapsed_again).contains("Thinking"));
+}
+
+#[test]
+fn toggle_updates_reflow_cache() {
+    let mut session = Session::new(InlineTheme::default(), None, 24);
+    session.transcript_width = 100;
+    push_policy_lines(&mut session, &["reasoning step one", "reasoning step two"]);
+    let start = session.lines.len() - 2;
+
+    // Prime the reflow cache (collapsed by default).
+    let pre = session.ensure_reflow_cache(100);
+    let pre_text = all_text(&pre.messages[start].lines);
+    assert!(
+        pre_text.contains("Thinking"),
+        "cache should hold the collapsed summary, got: {pre_text:?}"
+    );
+
+    // Resolve the summary row and toggle.
+    let summary_row = pre.row_offsets[start];
+    assert!(session.toggle_thinking_block_at_row(100, summary_row));
+
+    // The cache must reflect the expanded body after the toggle.
+    let post = session.ensure_reflow_cache(100);
+    let post_text = all_text(&post.messages[start].lines);
+    assert!(
+        post_text.contains("reasoning step one"),
+        "cache should reflect expanded body after toggle, got: {post_text:?}"
+    );
+
+    // The visible-window cache (keyed only by offset/width/height) must also be
+    // invalidated, otherwise the post-toggle render keeps the stale lines.
+    let window = session.collect_transcript_window_cached(100, 0, 200);
+    let window_text = window
+        .iter()
+        .map(|line| {
+            line.line
+                .spans
+                .iter()
+                .map(|span| span.content.to_string())
+                .collect::<String>()
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(
+        window_text.contains("reasoning step one"),
+        "visible window should reflect expanded body after toggle, got: {window_text:?}"
+    );
+}
+
+#[test]
+fn click_on_summary_expands_via_event_handler() {
+    use crossterm::event::MouseButton::Left;
+    let mut session = Session::new(InlineTheme::default(), None, 24);
+    session.transcript_area = Some(Rect::new(0, 0, 100, 24));
+    session.transcript_width = 100;
+    session.transcript_rows = 24;
+    push_policy_lines(&mut session, &["reasoning step one", "reasoning step two"]);
+
+    // Prime caches (collapsed by default). Thinking is the only block, so its
+    // summary sits at global row 0.
+    let pre = session.ensure_reflow_cache(100);
+    let summary_row = pre.row_offsets[0];
+
+    let mouse = MouseEvent {
+        kind: MouseEventKind::Down(Left),
+        column: 1,
+        row: summary_row as u16,
+        modifiers: KeyModifiers::empty(),
+    };
+    let handled = session.handle_transcript_click(mouse);
+    assert!(handled, "click on the summary should be handled");
+
+    let window = session.collect_transcript_window_cached(100, 0, 200);
+    let window_text = window
+        .iter()
+        .map(|line| {
+            line.line
+                .spans
+                .iter()
+                .map(|span| span.content.to_string())
+                .collect::<String>()
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(
+        window_text.contains("reasoning step one"),
+        "clicking the summary should expand the block, got: {window_text:?}"
+    );
 }

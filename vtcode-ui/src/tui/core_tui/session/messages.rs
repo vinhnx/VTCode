@@ -425,8 +425,25 @@ impl Session {
             .copied()
             .unwrap_or_else(|| self.appearance.thinking_collapsed_by_default());
         self.thinking_block_collapsed.insert(start, !collapsed);
+
+        // Bump the revision of every line in the run so the reflow cache
+        // recomputes both the run-start summary and the (now hidden or shown)
+        // continuation lines. Without this the cache sees no change and the
+        // transcript keeps rendering the previous state.
+        let run_len = self.thinking_run_len(start);
+        let revision = self.next_revision();
+        for line in self.lines.iter_mut().skip(start).take(run_len) {
+            if line.kind == InlineMessageKind::Policy {
+                line.revision = revision;
+            }
+        }
         self.mark_line_dirty(start);
         self.invalidate_scroll_metrics();
+        // Drop the cached visible-window: it is keyed only by viewport
+        // offset/width/height, so without this the post-toggle render would
+        // keep returning the stale (pre-toggle) lines even though the reflow
+        // cache itself was updated.
+        self.invalidate_transcript_viewport();
         true
     }
 
