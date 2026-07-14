@@ -81,12 +81,15 @@ impl ZedAgent {
             warn!(%error, "Failed to apply tools configuration to ACP tool registry");
         }
         let local_definitions = core_tool_registry
-            .model_tools(SessionToolsConfig::full_public(
-                SessionSurface::Acp,
-                CapabilityLevel::CodeSearch,
-                ToolDocumentationMode::default(),
-                ToolModelCapabilities::default(),
-            ))
+            .model_tools(
+                SessionToolsConfig::full_public(
+                    SessionSurface::Acp,
+                    CapabilityLevel::CodeSearch,
+                    ToolDocumentationMode::default(),
+                    ToolModelCapabilities::default(),
+                )
+                .with_tool_profile(tools_config.profile),
+            )
             .await;
         let acp_tool_registry = Arc::new(AcpToolRegistry::new(
             workspace_root.as_path(),

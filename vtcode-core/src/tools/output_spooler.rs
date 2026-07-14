@@ -446,13 +446,10 @@ impl ToolOutputSpooler {
 
             obj.insert("spool_path".to_string(), json!(spool_path));
 
-            // Explicit, self-contained guidance so the model knows the spooled
-            // file is post-processable in code (unified_file / unified_search /
-            // unified_exec) instead of being re-inlined into context. This is the
-            // "leave deterministic computation to code" loop from the tool-system
-            // review: large data stays on disk; the model pulls only what it needs.
+            // Keep the recovery guidance aligned with the model-facing command tools.
+            // Large data stays on disk and the model pulls only the sections it needs.
             let spool_note = format!(
-                "Large output ({} bytes) spooled to `spool_path`. Do NOT re-inline the full file. Explore it with unified_file (offset/limit) or unified_search action=grep, or process it with unified_exec.",
+                "Large output ({} bytes) spooled to `spool_path`. Do not re-inline the full file. Use `exec_command` with tools such as `sed -n` or `rg` to inspect only the sections you need.",
                 spool_result.original_bytes
             );
             obj.insert("spool_note".to_string(), json!(spool_note));
@@ -925,6 +922,11 @@ mod tests {
         let spooled_content = std::fs::read_to_string(temp.path().join(spooled_path)).unwrap();
         assert_eq!(spooled_content, raw_output);
         assert_ne!(spooled_content, preview_output);
+        let spool_note = result.get("spool_note").and_then(Value::as_str).unwrap();
+        assert!(spool_note.contains("exec_command"));
+        assert!(!spool_note.contains("unified_file"));
+        assert!(!spool_note.contains("unified_search"));
+        assert!(!spool_note.contains("unified_exec"));
     }
 
     #[tokio::test]

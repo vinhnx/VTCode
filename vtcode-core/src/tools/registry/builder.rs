@@ -182,6 +182,7 @@ impl ToolRegistry {
             )),
             agent_type: Arc::new(RwLock::new("unknown".to_owned())),
             cached_available_tools: Arc::new(parking_lot::RwLock::new(None)),
+            active_tool_profile: Arc::new(RwLock::new(crate::config::ToolProfile::default())),
             progress_callback: Arc::new(RwLock::new(None)),
             active_pty_sessions: Arc::new(RwLock::new(None)),
 

@@ -273,7 +273,7 @@ async fn read_only_primary_agents_hide_local_tools() {
 }
 
 #[tokio::test]
-async fn advanced_global_profile_does_not_expand_acp_local_baseline() {
+async fn advanced_global_profile_expands_acp_local_catalogue() {
     let temp = TempDir::new().unwrap();
     let tools_config = ToolsConfig {
         profile: ToolProfile::AdvancedVtCode,
@@ -282,14 +282,10 @@ async fn advanced_global_profile_does_not_expand_acp_local_baseline() {
     let agent = build_agent_with_tools_config(temp.path(), tools_config).await;
     let local_names = definition_names(agent.acp_tool_registry.definitions_for(&[], true));
 
-    assert_eq!(
-        local_names,
-        vec![
-            tools::EXEC_COMMAND.to_string(),
-            tools::WRITE_STDIN.to_string(),
-            tools::APPLY_PATCH.to_string(),
-        ]
-    );
+    assert!(local_names.contains(&tools::EXEC_COMMAND.to_string()));
+    assert!(local_names.contains(&tools::WRITE_STDIN.to_string()));
+    assert!(local_names.contains(&tools::APPLY_PATCH.to_string()));
+    assert!(local_names.contains(&tools::CODE_SEARCH.to_string()));
 }
 
 #[tokio::test]

@@ -268,6 +268,16 @@ impl ToolRegistry {
 
     pub async fn apply_config_policies(&self, tools_config: &ToolsConfig) -> Result<()> {
         let normalized_tools_config = self.normalize_tools_config_policies(tools_config);
+        {
+            let mut active_tool_profile = self
+                .active_tool_profile
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            *active_tool_profile = normalized_tools_config.profile;
+        }
+        *self.cached_available_tools.write() = None;
+        self.sync_policy_catalog().await;
+
         let mut manager = self
             .policy_gateway
             .lock()

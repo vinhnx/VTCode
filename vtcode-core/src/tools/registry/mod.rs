@@ -166,6 +166,8 @@ pub struct ToolRegistry {
 
     // Caching
     cached_available_tools: Arc<parking_lot::RwLock<Option<Vec<String>>>>,
+    /// Active model-facing profile used by catalogue and policy projections.
+    active_tool_profile: Arc<RwLock<crate::config::ToolProfile>>,
     /// Callback for streaming tool output and progress
     progress_callback: Arc<RwLock<Option<ToolProgressCallback>>>,
     // Performance Observability
@@ -1611,6 +1613,34 @@ mod tests {
         assert_eq!(
             registry.get_tool_policy(tools::READ_FILE).await,
             ToolPolicy::Allow
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn apply_config_policies_includes_advanced_profile_tools() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let policy_path = temp_dir.path().join("tool-policy.json");
+        let policy_manager =
+            crate::tool_policy::ToolPolicyManager::new_with_config_path(&policy_path).await?;
+        let registry =
+            ToolRegistry::new_with_custom_policy(temp_dir.path().to_path_buf(), policy_manager)
+                .await;
+
+        let mut config = ToolsConfig {
+            profile: ToolProfile::AdvancedVtCode,
+            ..ToolsConfig::default()
+        };
+        config
+            .policies
+            .insert(tools::CODE_SEARCH.to_string(), ToolPolicy::Deny);
+
+        registry.apply_config_policies(&config).await?;
+
+        assert_eq!(
+            registry.get_tool_policy(tools::CODE_SEARCH).await,
+            ToolPolicy::Deny
         );
 
         Ok(())

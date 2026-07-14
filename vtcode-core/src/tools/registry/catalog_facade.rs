@@ -37,6 +37,12 @@ impl ToolRegistry {
                 ToolDocumentationMode::Full,
                 ToolModelCapabilities::default(),
             )
+            .with_tool_profile(
+                *self
+                    .active_tool_profile
+                    .read()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner),
+            )
             .with_planning_active(self.is_planning_active()),
         );
         if !self.has_subagent_controller() {
