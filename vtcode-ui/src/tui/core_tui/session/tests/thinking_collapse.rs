@@ -252,8 +252,7 @@ fn agent_message_has_trailing_blank_line() {
     let lines: Vec<String> = transcript.iter().map(line_text).collect();
     assert!(
         lines.last().unwrap().trim().is_empty(),
-        "agent message should be followed by a blank line, got: {:?}",
-        lines
+        "agent message should be followed by a blank line, got: {lines:?}"
     );
 }
 
