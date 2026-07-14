@@ -171,6 +171,30 @@ impl Session {
         if kind == InlineMessageKind::User {
             self.thinking_spinner.start();
         }
+
+        // Keep the collapsed thinking summary's live line count current as a
+        // reasoning block grows (otherwise it stays frozen until a click).
+        if kind == InlineMessageKind::Policy {
+            // Track the run currently being streamed so live updates stay O(1).
+            let is_new_run = self.prev_pushed_line_kind() != Some(InlineMessageKind::Policy);
+            if is_new_run {
+                self.thinking_runs.begin_run(self.lines.len() - 1);
+            }
+            self.mark_thinking_run_starts_dirty();
+        } else if self.prev_pushed_line_kind() == Some(InlineMessageKind::Policy) {
+            // A non-reasoning line ends the active reasoning run.
+            self.thinking_runs.end_run();
+        }
+    }
+
+    /// Kind of the line immediately preceding the most recently pushed line, if
+    /// any. Used to decide whether a `Policy` line opens a new reasoning run.
+    fn prev_pushed_line_kind(&self) -> Option<InlineMessageKind> {
+        self.lines
+            .len()
+            .checked_sub(2)
+            .and_then(|i| self.lines.get(i))
+            .map(|line| line.kind)
     }
 
     /// Append a large pasted message as a collapsible placeholder.
@@ -419,12 +443,8 @@ impl Session {
             return false;
         }
 
-        let collapsed = self
-            .thinking_block_collapsed
-            .get(&start)
-            .copied()
-            .unwrap_or_else(|| self.appearance.thinking_collapsed_by_default());
-        self.thinking_block_collapsed.insert(start, !collapsed);
+        let collapsed = self.thinking_is_collapsed(start);
+        self.thinking_runs.set_collapsed(start, !collapsed);
 
         // Bump the revision of every line in the run so the reflow cache
         // recomputes both the run-start summary and the (now hidden or shown)
@@ -445,6 +465,30 @@ impl Session {
         // cache itself was updated.
         self.invalidate_transcript_viewport();
         true
+    }
+
+    /// Bump the revision of the actively-streaming thinking run's start line and
+    /// drop the visible-window cache, so its collapsed summary recomputes its
+    /// live line count (and spinner frame) instead of staying frozen until a
+    /// click.
+    ///
+    /// O(1): only the single active run-start is touched. Call this
+    /// while reasoning streams (on each new reasoning line and on each spinner
+    /// animation tick). It deliberately does not call `mark_dirty`/`mark_line_dirty`
+    /// — the caller is responsible for requesting a redraw — to avoid clearing
+    /// unrelated header/sidebar caches on every animation frame.
+    pub(crate) fn mark_thinking_run_starts_dirty(&mut self) {
+        if let Some(start) = self.thinking_runs.active_start() {
+            let revision = self.next_revision();
+            if let Some(line) = self.lines.get_mut(start) {
+                line.revision = revision;
+            }
+            // Keep the dirty hint in sync so `ensure_reflow_cache` actually
+            // rescans the bumped run-start line (it only scans from
+            // `first_dirty_line`).
+            self.first_dirty_line = Some(self.first_dirty_line.map_or(start, |d| d.min(start)));
+        }
+        self.invalidate_transcript_viewport();
     }
 
     /// Append text to the current or new message line

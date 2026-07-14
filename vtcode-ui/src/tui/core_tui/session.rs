@@ -208,10 +208,10 @@ pub struct Session {
     // --- Message Management ---
     pub(crate) lines: Vec<MessageLine>,
     collapsed_pastes: Vec<CollapsedPaste>,
-    /// Per-run collapse override for thinking/reasoning blocks, keyed by the
-    /// start line index of each contiguous `Policy` run. Absence means "use the
-    /// config default" (`appearance.thinking_collapsed_by_default()`).
-    thinking_block_collapsed: std::collections::HashMap<usize, bool>,
+    /// Thinking/reasoning run bookkeeping (collapse overrides + the run
+    /// currently streaming), isolated behind a narrow interface so the policy
+    /// can evolve and be tested independently of transcript storage.
+    pub(crate) thinking_runs: ThinkingRunIndex,
     pub(crate) theme: InlineTheme,
     pub(crate) styles: SessionStyles,
     pub(crate) appearance: AppearanceConfig,
@@ -350,4 +350,55 @@ pub struct Session {
     // --- Double-Esc Detection ---
     /// Timestamp of the last Escape key press for double-Esc detection.
     pub(crate) last_esc_press: Option<Instant>,
+}
+
+/// Per-session index of thinking/reasoning (`Policy`) runs.
+///
+/// Owns the collapse overrides and the start of the run currently streaming,
+/// exposing them through a narrow interface. Keeping this state behind guard
+/// rails isolates thinking-run bookkeeping from transcript storage so the
+/// policy can be tested and evolved without coupling to `Session`.
+#[derive(Debug, Default, Clone)]
+pub(crate) struct ThinkingRunIndex {
+    /// Explicit collapse overrides keyed by run-start line index. Absence means
+    /// "use the config default" (`appearance.thinking_collapsed_by_default()`).
+    collapsed: std::collections::HashMap<usize, bool>,
+    /// Start line index of the reasoning run currently being streamed, if any.
+    /// `None` when no reasoning is actively streaming. Because the transcript
+    /// only ever appends lines, this index stays valid until `clear_screen`.
+    active_start: Option<usize>,
+}
+
+impl ThinkingRunIndex {
+    /// Whether the run starting at `start` should render collapsed, falling
+    /// back to `default` when no explicit override exists.
+    pub(crate) fn is_collapsed(&self, start: usize, default: bool) -> bool {
+        self.collapsed.get(&start).copied().unwrap_or(default)
+    }
+
+    /// Set the explicit collapse state for the run starting at `start`.
+    pub(crate) fn set_collapsed(&mut self, start: usize, collapsed: bool) {
+        self.collapsed.insert(start, collapsed);
+    }
+
+    /// Record the start of a newly begun reasoning run.
+    pub(crate) fn begin_run(&mut self, start: usize) {
+        self.active_start = Some(start);
+    }
+
+    /// End the active reasoning run (a non-reasoning line was appended).
+    pub(crate) fn end_run(&mut self) {
+        self.active_start = None;
+    }
+
+    /// Start line index of the reasoning run currently streaming, if any.
+    pub(crate) fn active_start(&self) -> Option<usize> {
+        self.active_start
+    }
+
+    /// Reset all tracked runs (e.g. on `clear_screen`).
+    pub(crate) fn clear(&mut self) {
+        self.collapsed.clear();
+        self.active_start = None;
+    }
 }

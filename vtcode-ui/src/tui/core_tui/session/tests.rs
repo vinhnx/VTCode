@@ -12,6 +12,7 @@ mod overlay_list;
 mod queue_inputs;
 mod slash_palette;
 mod thinking_collapse;
+mod thinking_run_index;
 mod transcript_links;
 mod transcript_rendering;
 mod vim;

@@ -106,7 +106,7 @@ impl Session {
             // --- Message Management ---
             lines: Vec::with_capacity(64),
             collapsed_pastes: Vec::new(),
-            thinking_block_collapsed: std::collections::HashMap::new(),
+            thinking_runs: ThinkingRunIndex::default(),
             styles: SessionStyles::new(theme.clone()),
             theme,
             appearance,

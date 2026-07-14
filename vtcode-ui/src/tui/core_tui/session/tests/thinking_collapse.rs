@@ -71,6 +71,10 @@ fn extended_config_renders_full_body() {
         "extended render should include the body, got: {joined:?}"
     );
     assert!(
+        joined.contains("↓ Thinking"),
+        "expanded render must keep the arrow header, got: {joined:?}"
+    );
+    assert!(
         !joined.contains("Thinking ("),
         "extended render must not show the collapsed summary, got: {joined:?}"
     );
@@ -195,5 +199,136 @@ fn click_on_summary_expands_via_event_handler() {
     assert!(
         window_text.contains("reasoning step one"),
         "clicking the summary should expand the block, got: {window_text:?}"
+    );
+}
+
+#[test]
+fn collapsed_thinking_separated_from_agent_message() {
+    let mut session = Session::new(InlineTheme::default(), None, 24);
+    push_policy_lines(&mut session, &["a", "b", "c"]);
+    let start = session.lines.len() - 3;
+
+    // Append an agent response immediately after the reasoning run.
+    session.push_line(
+        InlineMessageKind::Agent,
+        vec![InlineSegment {
+            text: "answer".to_string(),
+            style: Arc::new(InlineTextStyle::default()),
+        }],
+    );
+
+    let transcript = session.reflow_message_lines(start, 100, true);
+    let lines: Vec<String> = transcript.iter().map(line_text).collect();
+
+    assert_eq!(lines[0], "→ Thinking (3 lines)");
+    assert!(
+        lines[1].trim().is_empty(),
+        "expected a blank line between the thinking block and the agent message, got: {:?}",
+        lines[1]
+    );
+}
+
+#[test]
+fn agent_message_has_trailing_blank_line() {
+    let mut session = Session::new(InlineTheme::default(), None, 24);
+    session.push_line(
+        InlineMessageKind::Agent,
+        vec![InlineSegment {
+            text: "answer".to_string(),
+            style: Arc::new(InlineTextStyle::default()),
+        }],
+    );
+    let start = session.lines.len() - 1;
+    // A different-kind line follows (the next turn).
+    session.push_line(
+        InlineMessageKind::User,
+        vec![InlineSegment {
+            text: "next".to_string(),
+            style: Arc::new(InlineTextStyle::default()),
+        }],
+    );
+
+    let transcript = session.reflow_message_lines(start, 100, true);
+    let lines: Vec<String> = transcript.iter().map(line_text).collect();
+    assert!(
+        lines.last().unwrap().trim().is_empty(),
+        "agent message should be followed by a blank line, got: {:?}",
+        lines
+    );
+}
+
+#[test]
+fn thinking_block_layout_snapshot() {
+    // Collapsed: a single arrow-prefixed summary line, no body.
+    let mut session = Session::new(InlineTheme::default(), None, 24);
+    push_policy_lines(&mut session, &["reasoning step one", "reasoning step two"]);
+    let start = session.lines.len() - 2;
+    let collapsed = session.reflow_message_lines(start, 100, true);
+    let collapsed_lines: Vec<String> = collapsed.iter().map(line_text).collect();
+    assert_eq!(collapsed_lines[0], "→ Thinking (2 lines)");
+
+    // Expanded: arrow header followed by the dimmed, indented body lines.
+    let mut session = Session::new(InlineTheme::default(), None, 24);
+    session.appearance.thinking_display = ThinkingBlockState::Extended;
+    push_policy_lines(&mut session, &["reasoning step one", "reasoning step two"]);
+    let start = session.lines.len() - 2;
+    let expanded = session.reflow_message_lines(start, 100, true);
+    let expanded_lines: Vec<String> = expanded.iter().map(line_text).collect();
+    assert_eq!(expanded_lines[0], "↓ Thinking");
+    assert_eq!(expanded_lines[1], "  reasoning step one");
+    assert_eq!(expanded_lines[2], "  reasoning step two");
+}
+
+#[test]
+fn expanded_thinking_wraps_within_width() {
+    let long = "the quick brown fox jumps over the lazy dog near the river bank";
+    let mut session = Session::new(InlineTheme::default(), None, 24);
+    session.appearance.thinking_display = ThinkingBlockState::Extended;
+    push_policy_lines(&mut session, &[long]);
+    let start = session.lines.len() - 1;
+
+    let narrow = session.reflow_message_lines(start, 30, true);
+    let narrow_text: Vec<String> = narrow.iter().map(line_text).collect();
+    // Body must be indented and wrapped onto multiple lines (no overflow past width).
+    assert!(narrow_text[1].starts_with("  "));
+    let max_cols = narrow_text
+        .iter()
+        .map(|line| display_width(line))
+        .max()
+        .unwrap();
+    assert!(
+        max_cols <= 30,
+        "wrapped thinking body overflowed width: {max_cols} > 30"
+    );
+}
+
+/// Visible column width of a rendered line (sum of unicode widths of its spans).
+fn display_width(line: &str) -> usize {
+    use unicode_width::UnicodeWidthStr;
+    line.width()
+}
+
+#[test]
+fn collapsed_count_updates_as_reasoning_streams() {
+    let mut session = Session::new(InlineTheme::default(), None, 24);
+    session.transcript_width = 100;
+    push_policy_lines(&mut session, &["first reasoning line"]);
+    let start = session.lines.len() - 1;
+
+    let pre = session.ensure_reflow_cache(100);
+    let pre_text = all_text(&pre.messages[start].lines);
+    assert!(
+        pre_text.contains("Thinking (1 line)"),
+        "expected 1 line, got: {pre_text:?}"
+    );
+
+    // Stream a second reasoning line without clicking.
+    push_policy_lines(&mut session, &["second reasoning line"]);
+
+    let post = session.ensure_reflow_cache(100);
+    let post_text = all_text(&post.messages[start].lines);
+    assert!(
+        post_text.contains("Thinking (2 lines)"),
+        "count should update live as reasoning streams, got: {post_text:?}"
     );
 }

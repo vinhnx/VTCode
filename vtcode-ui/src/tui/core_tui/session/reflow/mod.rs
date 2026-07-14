@@ -24,6 +24,7 @@ use crate::tui::config::constants::ui;
 mod blocks;
 mod formatting;
 mod helpers;
+mod thinking;
 
 use helpers::{agent_code_continuation_prefix, is_info_box_line, is_tool_summary_line, rule_fill};
 
@@ -81,22 +82,11 @@ impl Session {
         };
 
         // Thinking/reasoning blocks are rendered as contiguous `Policy` runs.
-        // When collapsed, emit a single summary line and skip the body.
-        if collapse_thinking && message.kind == InlineMessageKind::Policy {
-            let run_start = self.thinking_run_start(index);
-            let is_run_start = run_start == index;
-            let collapsed = self.thinking_collapsed(run_start);
-            if !is_run_start && collapsed {
-                return Vec::new();
-            }
-            if is_run_start && collapsed {
-                let mut result = self.render_collapsed_thinking_line(run_start, width);
-                let run_len = self.thinking_run_len(run_start);
-                let next_kind = self.lines.get(run_start + run_len).map(|line| line.kind);
-                if next_kind != Some(InlineMessageKind::Agent) {
-                    result.push(TranscriptLine::default());
-                }
-                return result;
+        // Delegate the whole run (header + body) to the dedicated thinking
+        // module so collapsed and expanded states share one layout.
+        if collapse_thinking {
+            if let Some(lines) = self.reflow_thinking_lines(index, width) {
+                return lines;
             }
         }
 
@@ -213,11 +203,15 @@ impl Session {
                     wrapped.push(TranscriptLine::default());
                 }
             }
-            // Check if next message is a different type (end of agent turn)
+            // Check if next message is a different type (end of agent turn).
+            // Always separate an agent response from the following turn with at
+            // least one blank line (even when message_block_spacing is 0), so
+            // the response reads as a distinct block.
             InlineMessageKind::Agent
                 if next_kind.is_some() && next_kind != Some(InlineMessageKind::Agent) =>
             {
-                for _ in 0..spacing {
+                let gap = spacing.max(1);
+                for _ in 0..gap {
                     wrapped.push(TranscriptLine::default());
                 }
             }
@@ -533,72 +527,9 @@ impl Session {
 
         lines
     }
-
-    /// Start line index of the contiguous `Policy` (thinking/reasoning) run that
-    /// contains `index`.
-    fn thinking_run_start(&self, index: usize) -> usize {
-        let mut start = index;
-        while start > 0 {
-            let Some(prev) = self.lines.get(start - 1) else {
-                break;
-            };
-            if prev.kind != InlineMessageKind::Policy {
-                break;
-            }
-            start -= 1;
-        }
-        start
-    }
-
-    /// Number of contiguous `Policy` lines starting at `start`.
-    pub(crate) fn thinking_run_len(&self, start: usize) -> usize {
-        let mut len = 0;
-        for line in self.lines.iter().skip(start) {
-            if line.kind == InlineMessageKind::Policy {
-                len += 1;
-            } else {
-                break;
-            }
-        }
-        len
-    }
-
-    /// Whether the thinking run starting at `start` should render collapsed.
-    fn thinking_collapsed(&self, start: usize) -> bool {
-        self.thinking_block_collapsed
-            .get(&start)
-            .copied()
-            .unwrap_or_else(|| self.appearance.thinking_collapsed_by_default())
-    }
-
-    /// Render a collapsed thinking/reasoning block as a single summary line,
-    /// showing a live loading indicator while the model is still reasoning.
-    /// Trailing block spacing is added by the caller.
-    fn render_collapsed_thinking_line(&self, start: usize, _width: u16) -> Vec<TranscriptLine> {
-        let line_count = self.thinking_run_len(start);
-        let streaming = self.thinking_spinner.is_active && !self.appearance.motion_reduced();
-        let chevron = ui::INLINE_THINKING_COLLAPSED_CHEVRON;
-        let label = if streaming {
-            format!(
-                "{chevron} {} Thinking…",
-                self.thinking_spinner.current_frame()
-            )
-        } else {
-            format!("{chevron} Thinking ({line_count} lines)")
-        };
-
-        let style =
-            ratatui_style_from_inline(&self.styles.accent_inline_style(), self.theme.foreground);
-        let summary = Line::from(Span::styled(label, style));
-
-        vec![transcript_line_with_detected_links(
-            summary,
-            self.workspace_root.as_deref(),
-        )]
-    }
 }
 
-fn transcript_line_with_detected_links(
+pub(super) fn transcript_line_with_detected_links(
     line: Line<'static>,
     workspace_root: Option<&Path>,
 ) -> TranscriptLine {
