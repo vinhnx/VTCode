@@ -719,58 +719,52 @@ mod tests {
 
         assert!(primary_agent_allows_tool(
             active.active(),
-            "search_dispatch"
+            tools::CODE_SEARCH
         ));
-        assert!(primary_agent_allows_tool(active.active(), "file_operation"));
         assert!(primary_agent_allows_tool(
             active.active(),
-            "command_session"
+            tools::EXEC_COMMAND
         ));
-        assert!(primary_agent_allows_tool(active.active(), "run_pty_cmd"));
+        assert!(primary_agent_allows_tool(
+            active.active(),
+            tools::APPLY_PATCH
+        ));
+        assert!(primary_agent_allows_tool(
+            active.active(),
+            tools::RUN_PTY_CMD
+        ));
         assert_eq!(active.active().permissions.default, PermissionDefault::Ask);
     }
 
     #[test]
-    fn readonly_primaries_hard_block_mutating_tools_via_allow_list() {
-        // The `tools` allow-list (filtered by `primary_agent_allows_tool` /
-        // `apply_primary_agent_tool_policy`) hard-blocks mutating tools before
-        // any global `[tools.policies]` entry can reach them. This is why the
-        // `plan` and `duck` read-only primaries do not need explicit
-        // `tool_policy_overrides` Deny entries for `apply_patch`, `command_session`,
-        // etc.: those tools are never exposed to the agent in the first place.
-        // `file_operation` is allow-listed for reads; its write actions are gated
-        // per-action by the planning workflow + the Deny permission default, so a
-        // per-tool Deny (which cannot distinguish read vs write) would break reads.
+    fn readonly_primaries_expose_public_read_tools_and_block_apply_patch() {
         for spec in [builtin_primary_duck_agent(), builtin_plan_agent()] {
             let name = spec.name.clone();
             let active = ActivePrimaryAgent::from_spec(&spec);
 
-            // Read-only primaries expose only their read allow-list.
             assert!(
-                primary_agent_allows_tool(&active, "search_dispatch"),
-                "{name} should expose search_dispatch"
+                primary_agent_allows_tool(&active, tools::CODE_SEARCH),
+                "{name} should expose code_search"
             );
             assert!(
-                primary_agent_allows_tool(&active, "file_operation"),
-                "{name} should expose file_operation for reads"
+                primary_agent_allows_tool(&active, tools::EXEC_COMMAND),
+                "{name} should expose exec_command"
             );
+            assert!(primary_agent_allows_tool(
+                &active,
+                tools::REQUEST_USER_INPUT
+            ));
 
-            // Mutating tools outside the allow-list are hard-blocked regardless
-            // of global policy.
             assert!(
-                !primary_agent_allows_tool(&active, "command_session"),
-                "{name} must not expose command_session"
-            );
-            assert!(
-                !primary_agent_allows_tool(&active, "apply_patch"),
+                !primary_agent_allows_tool(&active, tools::APPLY_PATCH),
                 "{name} must not expose apply_patch"
             );
             assert!(
-                !primary_agent_allows_tool(&active, "run_pty_cmd"),
+                !primary_agent_allows_tool(&active, tools::RUN_PTY_CMD),
                 "{name} must not expose run_pty_cmd"
             );
             assert!(
-                !primary_agent_allows_tool(&active, "write_file"),
+                !primary_agent_allows_tool(&active, tools::WRITE_FILE),
                 "{name} must not expose write_file"
             );
         }
@@ -780,15 +774,15 @@ mod tests {
     fn tool_policy_intersects_allow_list_then_applies_deny_list() {
         let mut spec = test_spec("worker");
         spec.tools = Some(vec![
-            "search_dispatch".to_string(),
-            "file_operation".to_string(),
+            tools::CODE_SEARCH.to_string(),
+            tools::EXEC_COMMAND.to_string(),
         ]);
-        spec.disallowed_tools = vec!["UNIFIED_SEARCH".to_string()];
+        spec.disallowed_tools = vec![tools::CODE_SEARCH.to_ascii_uppercase()];
         let active = ActivePrimaryAgent::from_spec(&spec);
 
-        assert!(!primary_agent_allows_tool(&active, "command_session"));
-        assert!(!primary_agent_allows_tool(&active, "search_dispatch"));
-        assert!(primary_agent_allows_tool(&active, "file_operation"));
+        assert!(primary_agent_allows_tool(&active, tools::EXEC_COMMAND));
+        assert!(!primary_agent_allows_tool(&active, tools::CODE_SEARCH));
+        assert!(!primary_agent_allows_tool(&active, tools::APPLY_PATCH));
     }
 
     #[test]
@@ -798,7 +792,7 @@ mod tests {
         spec.disallowed_tools = Vec::new();
         let active = ActivePrimaryAgent::from_spec(&spec);
 
-        assert!(!primary_agent_allows_tool(&active, "search_dispatch"));
+        assert!(!primary_agent_allows_tool(&active, tools::CODE_SEARCH));
     }
 
     // NOTE: `spawn_agent`/`wait_agent`/`close_agent`/etc. are legacy granular

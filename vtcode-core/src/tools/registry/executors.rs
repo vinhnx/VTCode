@@ -66,7 +66,7 @@ fn set_payload_default(payload: &mut serde_json::Map<String, Value>, key: &str, 
     payload.entry(key.to_string()).or_insert(value);
 }
 
-fn normalize_command_session_run_alias_args(args: &Value, tty: bool) -> Result<Value> {
+pub(super) fn normalize_command_session_run_alias_args(args: &Value, tty: bool) -> Result<Value> {
     let mut args =
         crate::tools::command_args::normalize_shell_args(args).map_err(|error| anyhow!(error))?;
     if let Some(payload) = args.as_object_mut() {
@@ -83,6 +83,26 @@ fn with_command_session_action_default(mut args: Value, action: &'static str) ->
         set_payload_default(payload, "action", json!(action));
     }
     args
+}
+
+pub(super) fn normalize_write_stdin_args(
+    args: &Value,
+) -> Result<(Value, crate::tools::command_args::WriteStdinDispatch)> {
+    let dispatch =
+        crate::tools::command_args::write_stdin_dispatch(args).map_err(|error| anyhow!(error))?;
+    let mut args =
+        crate::tools::command_args::normalize_shell_args(args).map_err(|error| anyhow!(error))?;
+    let payload = args
+        .as_object_mut()
+        .ok_or_else(|| anyhow!("write_stdin requires a JSON object"))?;
+    payload.insert(
+        "action".to_string(),
+        json!(dispatch.command_session_action()),
+    );
+    if dispatch == crate::tools::command_args::WriteStdinDispatch::Poll {
+        payload.remove("input");
+    }
+    Ok((args, dispatch))
 }
 
 fn annotate_exec_run_response(response: &mut Value, is_git_diff: bool) {
@@ -884,20 +904,7 @@ impl ToolRegistry {
 
     pub(super) fn write_stdin_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move {
-            let dispatch = crate::tools::command_args::write_stdin_dispatch(&args)
-                .map_err(|error| anyhow!(error))?;
-            let mut args = crate::tools::command_args::normalize_shell_args(&args)
-                .map_err(|error| anyhow!(error))?;
-            let payload = args
-                .as_object_mut()
-                .ok_or_else(|| anyhow!("write_stdin requires a JSON object"))?;
-            payload.insert(
-                "action".to_string(),
-                json!(dispatch.command_session_action()),
-            );
-            if dispatch == crate::tools::command_args::WriteStdinDispatch::Poll {
-                payload.remove("input");
-            }
+            let (args, dispatch) = normalize_write_stdin_args(&args)?;
 
             let response = match dispatch {
                 crate::tools::command_args::WriteStdinDispatch::Write => {

@@ -268,9 +268,10 @@ async fn removed_public_tool_names_are_rejected() {
         .iter()
         .find_map(|(id, output)| (*id == "call-search").then_some(output))
         .expect("search_dispatch rejection output");
+    let expected_search_denial = format!("Tool execution denied: {}", tools::UNIFIED_SEARCH);
     assert_eq!(
         search_output.as_str(),
-        Some("Tool execution denied: search_dispatch")
+        Some(expected_search_denial.as_str())
     );
 
     let events = recorder.into_events();

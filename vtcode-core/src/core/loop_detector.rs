@@ -1663,7 +1663,7 @@ mod tests {
         let msg = r.unwrap();
         assert!(msg.contains("HARD STOP"), "Expected HARD STOP, got: {msg}");
         assert!(msg.contains("Cargo.lock"));
-        assert!(msg.contains("offset/limit"));
+        assert!(msg.contains("exact continuation range"));
         assert!(detector.is_hard_limit_exceeded(&read_tool));
     }
 
@@ -1672,21 +1672,22 @@ mod tests {
     #[test]
     fn read_target_extracted_for_file_operation_read_action() {
         let args = json!({"action": "read", "path": "src/lib.rs"});
-        let target = read_target_for_tool_call("file_operation", &args);
+        let target = read_target_for_tool_call(tools::UNIFIED_FILE, &args);
         assert_eq!(target.as_deref(), Some("src/lib.rs"));
     }
 
     #[test]
     fn read_target_none_for_file_operation_write_action() {
         let args = json!({"action": "write", "path": "src/lib.rs", "content": "fn main() {}"});
-        let target = read_target_for_tool_call("file_operation", &args);
+        let target = read_target_for_tool_call(tools::UNIFIED_FILE, &args);
         assert!(target.is_none());
     }
 
     #[test]
     fn read_target_extracted_for_file_operation_with_read_suffix() {
         let args = json!({"path": "src/main.rs"});
-        let target = read_target_for_tool_call("file_operation::read", &args);
+        let read_tool = format!("{}::read", tools::UNIFIED_FILE);
+        let target = read_target_for_tool_call(&read_tool, &args);
         assert_eq!(target.as_deref(), Some("src/main.rs"));
     }
 
@@ -1700,7 +1701,7 @@ mod tests {
         let offsets = [0, 100, 0, 100];
         for (i, offset) in offsets.iter().enumerate() {
             let result = detector.record_call(
-                "file_operation",
+                tools::UNIFIED_FILE,
                 &json!({"action": "read", "path": "src/lib.rs", "offset": offset}),
             );
             if i < offsets.len() - 1 {

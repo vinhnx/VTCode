@@ -3,6 +3,44 @@
 use serde_json::{Value, json};
 
 #[must_use]
+pub fn agent_parameters() -> Value {
+    json!({
+        "type": "object",
+        "required": ["action"],
+        "properties": {
+            "action": {
+                "type": "string",
+                "enum": ["spawn", "spawn_subprocess", "send_input", "resume", "wait", "close"],
+                "description": "spawn: delegate a scoped task to a child agent (requires message). spawn_subprocess: launch a managed background subprocess for long-running daemons (requires message). send_input: send follow-up input to a running child (requires id + message or items). resume: reopen a completed or closed child from saved context (requires id). wait: block the current foreground turn until one or more children reach a terminal state (requires ids). close: cancel and free a child's tool budget (requires id)."
+            },
+            "agent_type": {"type": "string", "description": "spawn or spawn_subprocess: subagent type or name to run."},
+            "message": {"type": "string", "description": "spawn or spawn_subprocess: task prompt. send_input: follow-up prompt for the child."},
+            "items": {
+                "type": "array",
+                "description": "Structured context items for the child.",
+                "items": collaboration_input_item_schema()
+            },
+            "fork_context": {"type": "boolean", "description": "spawn: seed the child with the current thread history.", "default": false},
+            "model": {"type": "string", "description": "spawn or spawn_subprocess: model override. Omit to use parent model."},
+            "reasoning_effort": {"type": "string", "description": "spawn or spawn_subprocess: reasoning effort override."},
+            "background": {"type": "boolean", "description": "spawn: run the child agent in background and return immediately.", "default": false},
+            "max_turns": {"type": "integer", "description": "spawn or spawn_subprocess: optional turn limit for the child."},
+            "id": {"type": "string", "description": "send_input, resume, or close: child agent id."},
+            "interrupt": {"type": "boolean", "description": "send_input: abort current child work and restart with this input; false queues it.", "default": false},
+            "ids": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "wait: child agent ids to wait for. Blocks the current foreground turn until one target reaches a terminal state or the wait times out."
+            },
+            "timeout_ms": {
+                "type": "integer",
+                "description": "wait: optional wait timeout in milliseconds. Uses the session default timeout when omitted."
+            }
+        }
+    })
+}
+
+#[must_use]
 pub fn spawn_agent_parameters() -> Value {
     json!({
         "type": "object",

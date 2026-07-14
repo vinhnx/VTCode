@@ -907,7 +907,7 @@ mod tests {
         let request = build_permission_request(
             &workspace,
             &cwd,
-            "file_operation",
+            tools::UNIFIED_FILE,
             Some(&json!({
                 "action": "write",
                 "path": "../.vtcode/skills/example.md"
@@ -918,7 +918,7 @@ mod tests {
         let request = build_permission_request(
             &workspace,
             &cwd,
-            "file_operation",
+            tools::UNIFIED_FILE,
             Some(&json!({
                 "action": "write",
                 "path": "../.vtcode/settings.toml"

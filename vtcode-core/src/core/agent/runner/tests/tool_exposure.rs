@@ -3,7 +3,7 @@
 use super::*;
 
 #[tokio::test]
-async fn full_auto_allowlist_drops_hidden_legacy_tools() {
+async fn full_auto_allowlist_retains_explicit_internal_tool_without_advertising_it() {
     let temp = TempDir::new().expect("tempdir");
     let mut runner = Box::pin(AgentRunner::new_with_bootstrap(
         AgentType::Single,
@@ -27,7 +27,7 @@ async fn full_auto_allowlist_drops_hidden_legacy_tools() {
         .enable_full_auto(&[tools::UNIFIED_FILE.to_string()])
         .await;
 
-    assert!(!runner.is_tool_exposed(tools::UNIFIED_FILE).await);
+    assert!(runner.is_tool_exposed(tools::UNIFIED_FILE).await);
     assert!(!runner.is_tool_exposed(tools::UNIFIED_EXEC).await);
 
     let snapshot = runner
@@ -448,7 +448,7 @@ async fn category_edit_deny_filters_advertised_file_tool_conservatively() {
 }
 
 #[tokio::test]
-async fn category_write_deny_filters_advertised_file_tool_conservatively() {
+async fn category_write_deny_keeps_edit_only_apply_patch_exposed() {
     let temp = TempDir::new().expect("tempdir");
     let mut config = VTCodeConfig::default();
     config.permissions.deny = vec!["write".to_string()];
@@ -474,7 +474,7 @@ async fn category_write_deny_filters_advertised_file_tool_conservatively() {
         .build_universal_tool_snapshot()
         .await
         .expect("snapshot");
-    assert_provider_hides_tool(&snapshot, tools::APPLY_PATCH);
+    assert_provider_exposes_tool(&snapshot, tools::APPLY_PATCH);
     assert_provider_exposes_tool(&snapshot, tools::EXEC_COMMAND);
 }
 

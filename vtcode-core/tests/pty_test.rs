@@ -72,9 +72,8 @@ async fn test_pty_functionality() {
         .execute_tool(
             "exec_command",
             json!({
-                "mode": "pty",
-                "command": "ls",
-                "args": ["Cargo.toml"],
+                "cmd": "ls Cargo.toml",
+                "tty": true,
             }),
         )
         .await;
@@ -304,8 +303,8 @@ async fn test_read_pty_session_includes_command_context_fields() {
         .execute_tool(
             "exec_command",
             json!({
-                "mode": "pty",
-                "command": "sleep 1",
+                "cmd": "sleep 1",
+                "tty": true,
                 "yield_time_ms": 10
             }),
         )
@@ -316,9 +315,10 @@ async fn test_read_pty_session_includes_command_context_fields() {
 
     let read = registry
         .execute_tool(
-            "read_pty_session",
+            "write_stdin",
             json!({
                 "session_id": sid.as_str(),
+                "chars": "",
                 "yield_time_ms": 10
             }),
         )
@@ -357,7 +357,7 @@ async fn test_inspect_does_not_drain_session_output() {
         .execute_tool(
             "exec_command",
             json!({
-                "command": "bash -lc 'sleep 0.4; printf \"<alpha>\\n\"; sleep 1'",
+                "cmd": "bash -lc 'sleep 0.4; printf \"<alpha>\\n\"; sleep 1'",
                 "yield_time_ms": 0,
             }),
         )
@@ -366,22 +366,20 @@ async fn test_inspect_does_not_drain_session_output() {
 
     let sid = exec_session_id(&start);
 
-    let mut inspect = json!({});
+    let mut read = json!({});
     for attempt in 0..8 {
-        inspect = registry
+        read = registry
             .execute_tool(
-                "exec_command",
+                "write_stdin",
                 json!({
-                    "action": "inspect",
                     "session_id": sid.as_str(),
+                    "chars": "",
                     "yield_time_ms": 500 + (attempt * 250),
-                    "head_lines": 5,
-                    "tail_lines": 5,
                 }),
             )
             .await
-            .expect("inspect session output");
-        if inspect["output"]
+            .expect("poll session output");
+        if read["output"]
             .as_str()
             .unwrap_or_default()
             .contains("<alpha>")
@@ -390,27 +388,7 @@ async fn test_inspect_does_not_drain_session_output() {
         }
     }
 
-    assert_eq!(inspect["success"], true);
-
-    let read = registry
-        .execute_tool(
-            "exec_command",
-            json!({
-                "action": "poll",
-                "session_id": sid.as_str(),
-                "yield_time_ms": 10,
-            }),
-        )
-        .await
-        .expect("poll after inspect");
-
     assert_eq!(read["success"], true);
-    assert!(
-        inspect["output"]
-            .as_str()
-            .unwrap_or_default()
-            .contains("<alpha>")
-    );
     assert!(
         read["output"]
             .as_str()

@@ -1,6 +1,7 @@
 #![allow(missing_docs)]
 use serde_json::json;
 use tempfile::TempDir;
+use vtcode_config::constants::tools;
 use vtcode_core::tools::ToolRegistry;
 
 #[tokio::test]
@@ -10,11 +11,10 @@ async fn create_file_succeeds_for_new_path() {
     registry.initialize_async().await.unwrap();
 
     let args = json!({
-        "path": "src/lib.rs",
-        "content": "fn main() {}\n"
+        "input": "*** Begin Patch\n*** Add File: src/lib.rs\n+fn main() {}\n*** End Patch"
     });
     let result = registry
-        .execute_tool("create_file", args)
+        .execute_tool(tools::APPLY_PATCH, args)
         .await
         .expect("tool execution should succeed");
 
@@ -44,11 +44,10 @@ async fn create_file_fails_when_file_exists() {
     registry.initialize_async().await.unwrap();
 
     let args = json!({
-        "path": "main.rs",
-        "content": "replaced"
+        "input": "*** Begin Patch\n*** Add File: main.rs\n+replaced\n*** End Patch"
     });
     let value = registry
-        .execute_tool("create_file", args)
+        .execute_tool(tools::APPLY_PATCH, args)
         .await
         .expect("tool execution should return error payload");
 

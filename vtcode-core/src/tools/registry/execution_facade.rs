@@ -746,7 +746,10 @@ impl ToolRegistry {
             name,
             routed_name.as_str(),
             args,
-        );
+        )
+        .or_else(|| {
+            execution_kernel::remap_consolidated_action_alias_args(name, routed_name.as_str(), args)
+        });
         self.execute_tool_ref_internal(
             routed_name.as_str(),
             effective_args.as_ref().unwrap_or(args),
@@ -1595,17 +1598,43 @@ impl ToolRegistry {
                     .context("MCP tool routing inconsistency: resolved MCP tool name missing")?;
                 self.execute_mcp_tool(mcp_name, args).await
             } else if exec_settlement_mode.settle_noninteractive()
-                && tool_name == tools::UNIFIED_EXEC
+                && matches!(
+                    tool_name.as_str(),
+                    tools::UNIFIED_EXEC | tools::EXEC_COMMAND
+                )
             {
+                let exec_args = if tool_name == tools::EXEC_COMMAND {
+                    super::executors::normalize_command_session_run_alias_args(&args, false)?
+                } else {
+                    args.clone()
+                };
                 if self.optimization_config.memory_pool.enabled {
                     let _execution_guard = self.memory_pool.get_value();
                     let _string_guard = self.memory_pool.get_string();
                     let _vec_guard = self.memory_pool.get_vec();
-                    self.execute_command_session_internal(args, exec_settlement_mode)
+                    self.execute_command_session_internal(exec_args, exec_settlement_mode)
                         .await
                 } else {
-                    self.execute_command_session_internal(args, exec_settlement_mode)
+                    self.execute_command_session_internal(exec_args, exec_settlement_mode)
                         .await
+                }
+            } else if exec_settlement_mode.settle_noninteractive()
+                && tool_name == tools::WRITE_STDIN
+            {
+                let (exec_args, dispatch) = super::executors::normalize_write_stdin_args(&args)?;
+                match dispatch {
+                    crate::tools::command_args::WriteStdinDispatch::Write => {
+                        self.execute_command_session_write_for_tool(exec_args, tools::WRITE_STDIN)
+                            .await
+                    }
+                    crate::tools::command_args::WriteStdinDispatch::Poll => {
+                        self.execute_command_session_poll_for_tool(
+                            exec_args,
+                            exec_settlement_mode,
+                            tools::WRITE_STDIN,
+                        )
+                        .await
+                    }
                 }
             } else if let Some(registration) = self.inventory.registration_for(&tool_name) {
                 // Log deprecation warning if tool is deprecated

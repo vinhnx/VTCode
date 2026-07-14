@@ -311,6 +311,8 @@ pub enum SectionKind {
     /// "## Active Tools" dynamic tool guidance derived from the active tool
     /// catalog.
     ToolGuidelines,
+    /// "## Shell Profile" guidance for the current command environment.
+    ShellProfile,
 }
 
 impl SectionKind {
@@ -322,6 +324,7 @@ impl SectionKind {
             Self::Skills => "skills",
             Self::EnvironmentAddenda => "environment_addenda",
             Self::ToolGuidelines => "tool_guidelines",
+            Self::ShellProfile => "shell_profile",
         }
     }
 
@@ -332,7 +335,8 @@ impl SectionKind {
             Self::StructuredReasoning => Some(0),
             Self::Skills => Some(1),
             Self::EnvironmentAddenda => Some(2),
-            Self::ToolGuidelines => Some(3),
+            Self::ShellProfile => Some(3),
+            Self::ToolGuidelines => Some(4),
             Self::BaseContract => None,
         }
     }
@@ -464,7 +468,7 @@ async fn build_prompt_sections(
         .unwrap_or(ShellPromptProfile::Auto)
         .resolve_for_current_platform();
     sections.push(PromptSection {
-        kind: SectionKind::ToolGuidelines,
+        kind: SectionKind::ShellProfile,
         text: render_shell_profile_guidance(shell_profile),
     });
 
@@ -989,8 +993,8 @@ mod tests {
             compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
 
         assert!(
-            result.len() <= 2500,
-            "Default mode should stay sparse (<=2.5K chars, was {} chars)",
+            result.len() <= 2800,
+            "Default mode should stay sparse (<=2.8K chars, was {} chars)",
             result.len()
         );
         assert!(result.contains("`exec_command`, `write_stdin`, and `apply_patch`"));
@@ -1019,7 +1023,7 @@ mod tests {
             result.len()
         );
         assert!(result.contains("task_tracker"));
-        assert!(result.contains("@file"));
+        assert!(!result.contains("@file"));
         assert!(result.contains("Act and verify in one thread"));
     }
 
@@ -1090,8 +1094,8 @@ mod tests {
             compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
 
         assert!(
-            result.len() <= 2800,
-            "Specialized should stay sparse (<=2.8K chars, was {} chars)",
+            result.len() <= 2900,
+            "Specialized should stay sparse (<=2.9K chars, was {} chars)",
             result.len()
         );
         assert!(result.contains("task_tracker"));
@@ -1134,7 +1138,7 @@ mod tests {
     fn test_default_prompt_token_count() {
         let approx_tokens = default_system_prompt().len() / 4;
         assert!(
-            approx_tokens < 430,
+            approx_tokens < 550,
             "Default prompt should stay compact, got ~{approx_tokens}"
         );
     }
@@ -1987,7 +1991,7 @@ mod tests {
 
         // Verify specific guideline for this tool set
         assert!(
-            result.contains("Inspect before edit"),
+            result.contains("after inspection"),
             "Should have read-before-edit guideline"
         );
         assert_no_removed_model_facing_tool_names(&result);
@@ -2224,9 +2228,9 @@ VT Code (Build mode). Be concise and safe.
 - Use retrieved evidence when citation-sensitive.
 - Preserve task goal, tracker state, touched files, verification status, and decisions across compaction.
 - Keep outputs concise; keep agent loops simple and let the model choose the next useful step.
-- Prefer `ast-grep` for code-shape queries; keep text grep for prose and config.
-- `spool_path` holds full tool output — read once with `unified_search action=grep` + specific pattern, not multiple `read_file` calls. Past-turn errors are already in history.
-- Start with existing `AGENTS.md` and `CLAUDE.md`; inspect code first, match local patterns, use `@file`.
+- Prefer `code_search` for ast-grep structural queries and Tree-sitter outlines; use `exec_command.cmd` with commands from the active shell profile for text search.
+- `spool_path` holds full tool output. Inspect it once with a targeted shell command through `exec_command.cmd` instead of repeatedly dumping the whole file. Past-turn errors are already in history.
+- Start with existing `AGENTS.md` and `CLAUDE.md`; inspect code first and match local patterns.
 - Take safe, reversible steps; recover from tool errors with corrected parameters, smaller scope, or one focused clarification.
 - Ask only for material behavior, API, UX, or credential changes.
 - Keep control on the main thread. Delegate bounded, independent work only.
@@ -2237,10 +2241,17 @@ VT Code (Build mode). Be concise and safe.
 
 ## Operating Profile
 
-- Use `task_tracker` for non-trivial work.
-- Treat completion language as a checkpoint, not proof; only stop when the tracker is current and verification is resolved.
+- Available tools in the default profile are `exec_command`, `write_stdin`, and `apply_patch`.
+- Put normal shell commands in `exec_command.cmd`; they are not separate function tools. Follow the active shell profile's syntax.
+- Treat completion language as a checkpoint, not proof; only stop when verification is resolved.
 - When tools are available, read files and search the codebase before answering; use tools to implement directly rather than describing what should be done.
-- Use Planning workflow for research/spec work; stay read-only until implementation intent is explicit."#;
+- Use Planning workflow for research/spec work; stay read-only until implementation intent is explicit.
+
+## Shell Profile
+- Active shell profile: `unix_like`. Use Unix-like command syntax in `exec_command.cmd`, for example `ls`, `rg`, `find`, `cat`, `sed`, and `awk`.
+- On macOS, write BSD-compatible flags for BSD tools. VT Code does not rewrite GNU flags for macOS BSD tools.
+- The shell profile controls prompt examples and expected command syntax only; command policy, sandboxing, and approvals remain separate runtime checks.
+- VT Code does not translate GNU-to-BSD, BSD-to-GNU, Unix-to-PowerShell, or PowerShell-to-Unix command flags."#;
         assert_eq!(
             result, expected,
             "single-section base-contract output must stay byte-identical"
@@ -2260,8 +2271,8 @@ VT Code (Build mode). Be concise and safe.
         config.agent.include_structured_reasoning_tags = Some(true);
 
         let mut ctx = PromptContext::default();
-        ctx.add_tool("unified_search".to_string());
-        ctx.add_tool("unified_exec".to_string());
+        ctx.add_tool(tools::CODE_SEARCH.to_string());
+        ctx.add_tool(tools::EXEC_COMMAND.to_string());
         ctx.add_skill_metadata(SkillMetadata {
             name: "skill-creator".to_string(),
             description: "Create skills".to_string(),
@@ -2286,9 +2297,9 @@ VT Code (Build mode). Be concise and safe.
 - Use retrieved evidence when citation-sensitive.
 - Preserve task goal, tracker state, touched files, verification status, and decisions across compaction.
 - Keep outputs concise; keep agent loops simple and let the model choose the next useful step.
-- Prefer `ast-grep` for code-shape queries; keep text grep for prose and config.
-- `spool_path` holds full tool output — read once with `unified_search action=grep` + specific pattern, not multiple `read_file` calls. Past-turn errors are already in history.
-- Start with existing `AGENTS.md` and `CLAUDE.md`; inspect code first, match local patterns, use `@file`.
+- Prefer `code_search` for ast-grep structural queries and Tree-sitter outlines; use `exec_command.cmd` with commands from the active shell profile for text search.
+- `spool_path` holds full tool output. Inspect it once with a targeted shell command through `exec_command.cmd` instead of repeatedly dumping the whole file. Past-turn errors are already in history.
+- Start with existing `AGENTS.md` and `CLAUDE.md`; inspect code first and match local patterns.
 - Take safe, reversible steps; recover from tool errors with corrected parameters, smaller scope, or one focused clarification.
 - Ask only for material behavior, API, UX, or credential changes.
 - Keep control on the main thread. Delegate bounded, independent work only.
@@ -2309,14 +2320,19 @@ VT Code (Build mode). Be concise and safe.
 Use tags when helpful: `<analysis>` facts/options, `<plan>` steps, `<uncertainty>` blockers, `<verification>` checks. When a decision must be consumed by code or tools, prefer JSON or function-call shaped output over prose.
 
 
+## Shell Profile
+- Active shell profile: `unix_like`. Use Unix-like command syntax in `exec_command.cmd`, for example `ls`, `rg`, `find`, `cat`, `sed`, and `awk`.
+- On macOS, write BSD-compatible flags for BSD tools. VT Code does not rewrite GNU flags for macOS BSD tools.
+- The shell profile controls prompt examples and expected command syntax only; command policy, sandboxing, and approvals remain separate runtime checks.
+- VT Code does not translate GNU-to-BSD, BSD-to-GNU, Unix-to-PowerShell, or PowerShell-to-Unix command flags.
+
 ## Active Tools
-- Prefer `unified_search` over shell browsing.
-- Use `unified_exec` for verification, `git diff -- <path>`, and shell-only tasks.
-- Completion is a checkpoint: keep `task_tracker` current; verification resolved.
-- Prefer search over shell for exploration.
-- `action=outline` for "what's here?" (symbol map, no pattern needed); `action=structural` for code shape; `action=grep` for text. Set `lang` for structural/outline.
+- Use `exec_command.cmd` with `ls`, `rg`, `find`, `cat`, `sed`, and `awk` for repository browsing.
+- Use `exec_command.cmd` for build tools, test tools, `git diff -- <path>`, and shell-only tasks.
+- Completion is a checkpoint: keep verification resolved.
+- Use `code_search` only for semantic structural searches or outlines; use `exec_command.cmd` with `rg` for text search.
 - If calls repeat, re-plan instead of retrying.
-- Run independent tools in parallel (read files or commands at once).
+- Run independent tools in parallel when their inputs do not depend on each other.
 
 ## Skills
 Use a skill only when the user names it or the task clearly matches. Load details on demand.
@@ -2346,8 +2362,8 @@ Use a skill only when the user names it or the task clearly matches. Load detail
         config.agent.system_prompt_budget_warning = true;
 
         let mut ctx = PromptContext::default();
-        ctx.add_tool("unified_search".to_string());
-        ctx.add_tool("unified_exec".to_string());
+        ctx.add_tool(tools::CODE_SEARCH.to_string());
+        ctx.add_tool(tools::EXEC_COMMAND.to_string());
         ctx.add_skill_metadata(SkillMetadata {
             name: "skill-creator".to_string(),
             description: "Create skills".to_string(),
@@ -2433,6 +2449,7 @@ Use a skill only when the user names it or the task clearly matches. Load detail
                 "structured_reasoning",
                 "skills",
                 "environment_addenda",
+                "shell_profile",
                 "tool_guidelines",
             ],
             "sections must drop in lowest-trim-priority-first order"

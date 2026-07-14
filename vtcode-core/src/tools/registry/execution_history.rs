@@ -1317,8 +1317,8 @@ mod tests {
         });
 
         history.add_record(ToolExecutionRecord::success(
-            "file_operation".to_string(),
-            "file_operation".to_string(),
+            tools::UNIFIED_FILE.to_string(),
+            tools::UNIFIED_FILE.to_string(),
             false,
             None,
             args,
@@ -1457,7 +1457,7 @@ mod tests {
 
         // The effective limit is max(base_limit, MIN_READONLY_IDENTICAL_LIMIT).
         // With MIN_READONLY_IDENTICAL_LIMIT=2, the limit matches the base.
-        assert_eq!(history.loop_limit_for("file_operation", &args), 2);
+        assert_eq!(history.loop_limit_for(tools::UNIFIED_FILE, &args), 2);
     }
 
     #[test]
@@ -1524,8 +1524,8 @@ mod tests {
 
         // Record 1: read src/lib.rs with offset=0
         history.add_record(ToolExecutionRecord::success(
-            "file_operation".to_string(),
-            "file_operation".to_string(),
+            tools::UNIFIED_FILE.to_string(),
+            tools::UNIFIED_FILE.to_string(),
             false,
             None,
             json!({"action":"read","path":"src/lib.rs","offset":0,"limit":100}),
@@ -1540,8 +1540,8 @@ mod tests {
 
         // Record 2: read src/main.rs (different file)
         history.add_record(ToolExecutionRecord::success(
-            "file_operation".to_string(),
-            "file_operation".to_string(),
+            tools::UNIFIED_FILE.to_string(),
+            tools::UNIFIED_FILE.to_string(),
             false,
             None,
             json!({"action":"read","path":"src/main.rs","offset":0,"limit":100}),
@@ -1558,7 +1558,7 @@ mod tests {
         // a different offset means the model is asking for a different slice
         // of the file, so it needs fresh content, not a cached stub).
         let result = history.find_recent_successful_by_read_target(
-            "file_operation",
+            tools::UNIFIED_FILE,
             &json!({"action":"read","path":"src/lib.rs","offset":500,"limit":200}),
             Duration::from_secs(600),
         );
@@ -1569,7 +1569,7 @@ mod tests {
 
         // Query: different path, same pagination — should match record 2
         let result2 = history.find_recent_successful_by_read_target(
-            "file_operation",
+            tools::UNIFIED_FILE,
             &json!({"action":"read","path":"src/main.rs","offset":0,"limit":100}),
             Duration::from_secs(600),
         );
@@ -1578,7 +1578,7 @@ mod tests {
 
         // Query: non-existent path — should return None
         let result3 = history.find_recent_successful_by_read_target(
-            "file_operation",
+            tools::UNIFIED_FILE,
             &json!({"action":"read","path":"src/missing.rs"}),
             Duration::from_secs(600),
         );
@@ -1586,7 +1586,7 @@ mod tests {
 
         // Query: write action — should return None (not read-only)
         let result4 = history.find_recent_successful_by_read_target(
-            "file_operation",
+            tools::UNIFIED_FILE,
             &json!({"action":"write","path":"src/lib.rs","content":"new"}),
             Duration::from_secs(600),
         );
@@ -1602,8 +1602,8 @@ mod tests {
 
         // Record: read AGENTS.md, offset=0, limit=200
         history.add_record(ToolExecutionRecord::success(
-            "file_operation".to_string(),
-            "file_operation".to_string(),
+            tools::UNIFIED_FILE.to_string(),
+            tools::UNIFIED_FILE.to_string(),
             false,
             None,
             json!({"action":"read","path":"AGENTS.md","offset":0,"limit":200}),
@@ -1619,7 +1619,7 @@ mod tests {
         // Query: same path, same offset, larger limit → should NOT match
         // (issue #680: the model asked for more lines than the cache has)
         let result = history.find_recent_successful_by_read_target(
-            "file_operation",
+            tools::UNIFIED_FILE,
             &json!({"action":"read","path":"AGENTS.md","offset":0,"limit":220}),
             Duration::from_secs(600),
         );
@@ -1627,7 +1627,7 @@ mod tests {
 
         // Query: same path, same offset, same limit → should match (genuine repeat)
         let result = history.find_recent_successful_by_read_target(
-            "file_operation",
+            tools::UNIFIED_FILE,
             &json!({"action":"read","path":"AGENTS.md","offset":0,"limit":200}),
             Duration::from_secs(600),
         );
@@ -1635,7 +1635,7 @@ mod tests {
 
         // Query: same path, same offset, smaller limit → should match (subset)
         let result = history.find_recent_successful_by_read_target(
-            "file_operation",
+            tools::UNIFIED_FILE,
             &json!({"action":"read","path":"AGENTS.md","offset":0,"limit":100}),
             Duration::from_secs(600),
         );
@@ -1651,8 +1651,8 @@ mod tests {
 
         // Record: read AGENTS.md with no explicit limit or offset (defaults)
         history.add_record(ToolExecutionRecord::success(
-            "file_operation".to_string(),
-            "file_operation".to_string(),
+            tools::UNIFIED_FILE.to_string(),
+            tools::UNIFIED_FILE.to_string(),
             false,
             None,
             json!({"action":"read","path":"AGENTS.md"}),
@@ -1667,7 +1667,7 @@ mod tests {
 
         // Query: same path, also no explicit limit/offset → should match (both use defaults)
         let result = history.find_recent_successful_by_read_target(
-            "file_operation",
+            tools::UNIFIED_FILE,
             &json!({"action":"read","path":"AGENTS.md"}),
             Duration::from_secs(600),
         );
@@ -1679,7 +1679,7 @@ mod tests {
         // Query: same path, default offset but explicit limit → should NOT match
         // (one has explicit pagination, other doesn't — can't compare)
         let result = history.find_recent_successful_by_read_target(
-            "file_operation",
+            tools::UNIFIED_FILE,
             &json!({"action":"read","path":"AGENTS.md","limit":200}),
             Duration::from_secs(600),
         );
@@ -1696,8 +1696,8 @@ mod tests {
         // Record: non-raw read can be summarized for the model, so it must not
         // satisfy a later raw=true query that asks for exact content.
         history.add_record(ToolExecutionRecord::success(
-            "file_operation".to_string(),
-            "file_operation".to_string(),
+            tools::UNIFIED_FILE.to_string(),
+            tools::UNIFIED_FILE.to_string(),
             false,
             None,
             json!({"action":"read","path":"AGENTS.md","offset":0,"limit":200}),
@@ -1711,7 +1711,7 @@ mod tests {
         ));
 
         let result = history.find_recent_successful_by_read_target(
-            "file_operation",
+            tools::UNIFIED_FILE,
             &json!({"action":"read","path":"AGENTS.md","offset":0,"limit":200,"raw":true}),
             Duration::from_secs(600),
         );
@@ -1722,8 +1722,8 @@ mod tests {
 
         // Record: raw=true read can satisfy the same raw=true shape.
         history.add_record(ToolExecutionRecord::success(
-            "file_operation".to_string(),
-            "file_operation".to_string(),
+            tools::UNIFIED_FILE.to_string(),
+            tools::UNIFIED_FILE.to_string(),
             false,
             None,
             json!({"action":"read","path":"AGENTS.md","offset":0,"limit":200,"raw":true}),
@@ -1737,7 +1737,7 @@ mod tests {
         ));
 
         let result = history.find_recent_successful_by_read_target(
-            "file_operation",
+            tools::UNIFIED_FILE,
             &json!({"action":"read","path":"AGENTS.md","offset":0,"limit":200,"raw":true}),
             Duration::from_secs(600),
         );

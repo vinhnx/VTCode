@@ -72,7 +72,8 @@ pub fn generate_tool_guidelines_for_profile(
     if has_search && has_exec {
         lines.push(semantic_search_guidance(shell_profile).to_string());
     } else if has_search {
-        lines.push("- Use semantic code search for structural searches and outlines.".to_string());
+        lines
+            .push("- Use `code_search` for semantic structural searches and outlines.".to_string());
     }
     if has_apply_patch || has_exec {
         lines.push("- If calls repeat, re-plan instead of retrying.".to_string());
@@ -436,7 +437,6 @@ mod tests {
             ResolvedShellPromptProfile::UnixLike,
         );
 
-        assert!(guidelines.contains("`exec_command`"));
         assert!(guidelines.contains("exec_command.cmd"));
         for command in ["ls", "rg", "find", "cat", "sed", "awk"] {
             assert!(
@@ -507,7 +507,7 @@ mod tests {
         ];
         let guidelines = generate_tool_guidelines(&tools, None);
         assert!(guidelines.contains("available read-only repository tools"));
-        assert!(!guidelines.contains("code_search"));
+        assert!(guidelines.contains("code_search"));
         assert!(!guidelines.contains("read_file"));
     }
 
@@ -613,7 +613,7 @@ mod tests {
         );
         assert!(!guidelines.contains("read_file"));
         assert!(!guidelines.contains("list_files"));
-        assert!(!guidelines.contains("code_search"));
+        assert!(guidelines.contains("code_search"));
         let approx_tokens = guidelines.len() / 4;
         assert!(approx_tokens < 160, "got ~{approx_tokens} tokens");
     }
@@ -774,7 +774,7 @@ mod tests {
         assert!(prompt.contains("## Active Tools"));
         assert!(prompt.contains("[Runtime Tool Catalog]"));
         assert!(prompt.contains("catalog_tools: 2"));
-        assert!(prompt.contains("currently_available_tools: apply_patch, exec_command"));
+        assert!(prompt.contains("currently_available_tools: exec_command, apply_patch"));
         assert!(prompt.contains("request_user_input_enabled: false"));
     }
 

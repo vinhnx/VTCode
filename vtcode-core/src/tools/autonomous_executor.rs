@@ -960,14 +960,11 @@ mod tests {
         assert!(preview.contains("WARNING"));
         assert!(preview.contains("destructive"));
 
-        let preview = executor.generate_preview(
-            tools::UNIFIED_EXEC,
-            &json!({"command.0": "git", "command.1": "status"}),
-        );
+        let preview = executor.generate_preview(tools::EXEC_COMMAND, &json!({"cmd": "git status"}));
         assert!(preview.contains("git status"));
 
         let preview = executor.generate_preview(
-            tools::UNIFIED_FILE,
+            tools::APPLY_PATCH,
             &json!({
                 "input": "*** Begin Patch\n*** Add File: note.txt\n+hello\n*** End Patch"
             }),

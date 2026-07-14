@@ -21,10 +21,8 @@ use crate::tools::web_fetch::{WEB_FETCH_DESCRIPTION, WebFetchTool};
 use crate::tools::web_search::{WEB_SEARCH_DESCRIPTION, WebSearchTool};
 use serde_json::json;
 use vtcode_utility_tool_specs::{
-    apply_patch_parameters, close_agent_parameters, code_search_parameters, cron_create_parameters,
-    cron_delete_parameters, cron_list_parameters, exec_command_parameters, list_files_parameters,
-    resume_agent_parameters, send_input_parameters, spawn_agent_parameters,
-    spawn_background_subprocess_parameters, wait_agent_parameters, write_stdin_parameters,
+    agent_parameters, apply_patch_parameters, code_search_parameters, cron_parameters,
+    exec_command_parameters, list_files_parameters, mcp_parameters, write_stdin_parameters,
 };
 
 use super::distributed::{BUILTIN_TOOLS, tool_config};
@@ -117,44 +115,26 @@ fn register_memory(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistrat
 }
 
 #[distributed_slice(BUILTIN_TOOLS)]
-fn register_cron_create(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
+fn register_cron(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
     ToolRegistration::new(
-        tools::CRON_CREATE,
+        tools::CRON,
         CapabilityLevel::Basic,
         false,
-        ToolRegistry::cron_create_executor,
+        ToolRegistry::cron_executor,
     )
     .with_description(
-        "Create a session-scoped scheduled prompt using a cron expression, fixed interval, or one-shot fire time. Use cron_create to defer work, schedule recurring checks, or fire a one-shot reminder. Do NOT schedule per-minute jobs — they exhaust the per-turn tool budget and will be rate-limited. Scheduled prompts are session-scoped; jobs die when the vtcode process exits. Returns the created scheduled prompt id.",
+        "Create, list, or delete session-scoped scheduled prompts. Use action=create to schedule a prompt, action=list to show scheduled prompts, or action=delete to remove one by id. Do not schedule per-minute jobs because they exhaust the per-turn tool budget. Scheduled prompts end when the vtcode process exits.",
     )
-    .with_parameter_schema(cron_create_parameters())
-    .with_aliases(["schedule_task", "loop_create"])
-}
-
-#[distributed_slice(BUILTIN_TOOLS)]
-fn register_cron_list(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
-    ToolRegistration::new(
+    .with_parameter_schema(cron_parameters())
+    .with_aliases([
+        tools::CRON_CREATE,
         tools::CRON_LIST,
-        CapabilityLevel::Basic,
-        false,
-        ToolRegistry::cron_list_executor,
-    )
-    .with_description("List session-scoped scheduled prompts for the current VT Code process. Returns scheduled prompts with their ids, expressions, and status.")
-    .with_parameter_schema(cron_list_parameters())
-    .with_aliases(["scheduled_tasks"])
-}
-
-#[distributed_slice(BUILTIN_TOOLS)]
-fn register_cron_delete(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
-    ToolRegistration::new(
         tools::CRON_DELETE,
-        CapabilityLevel::Basic,
-        false,
-        ToolRegistry::cron_delete_executor,
-    )
-    .with_description("Delete a session-scoped scheduled prompt by id. Use cron_list to find the id of the prompt to delete.")
-    .with_parameter_schema(cron_delete_parameters())
-    .with_aliases(["cancel_scheduled_task"])
+        "schedule_task",
+        "loop_create",
+        "scheduled_tasks",
+        "cancel_scheduled_task",
+    ])
 }
 
 // ---------------------------------------------------------------------------
@@ -228,95 +208,34 @@ fn register_task_tracker(plan_state: Option<&PlanningWorkflowState>) -> ToolRegi
 // ---------------------------------------------------------------------------
 
 #[distributed_slice(BUILTIN_TOOLS)]
-fn register_spawn_agent(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
+fn register_agent(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
     ToolRegistration::new(
+        tools::AGENT,
+        CapabilityLevel::Basic,
+        false,
+        ToolRegistry::agent_executor,
+    )
+    .with_description(
+        "Spawn and steer delegated child agents. Use action=spawn to delegate a scoped task, action=spawn_subprocess for a managed background process, action=send_input to continue a child, action=resume to reopen a completed child, action=wait for results, or action=close to cancel a child. Use exec_command for one-shot shell commands.",
+    )
+    .with_parameter_schema(agent_parameters())
+    .with_aliases([
         tools::SPAWN_AGENT,
-        CapabilityLevel::Basic,
-        false,
-        ToolRegistry::spawn_agent_executor,
-    )
-    .with_description(
-        "Spawn a delegated child agent for a scoped task. The child inherits the current toolset, can spawn its own child agents, and returns its agent id plus current status.",
-    )
-    .with_parameter_schema(spawn_agent_parameters())
-    .with_aliases(["agent", "delegate", "subagent"])
-}
-
-#[distributed_slice(BUILTIN_TOOLS)]
-fn register_spawn_background_subprocess(
-    _plan_state: Option<&PlanningWorkflowState>,
-) -> ToolRegistration {
-    ToolRegistration::new(
         tools::SPAWN_BACKGROUND_SUBPROCESS,
-        CapabilityLevel::Basic,
-        false,
-        ToolRegistry::spawn_background_subprocess_executor,
-    )
-    .with_description(
-        "Launch a managed background subprocess that outlives the current turn. Use this for long-running daemons (file watchers, dev servers, indexers) where you need to return control to the model immediately. Do NOT use this for one-shot shell commands: use exec_command instead. Background subprocesses are session-scoped; they die with the vtcode process.",
-    )
-    .with_parameter_schema(spawn_background_subprocess_parameters())
-    .with_aliases(["background_subagent", "launch_background_helper"])
-}
-
-#[distributed_slice(BUILTIN_TOOLS)]
-fn register_send_input(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
-    ToolRegistration::new(
         tools::SEND_INPUT,
-        CapabilityLevel::Basic,
-        false,
-        ToolRegistry::send_input_executor,
-    )
-    .with_description(
-        "Send follow-up input to an existing child agent. Use to continue a delegated task with new context or direction. Do NOT use this to ask the model a one-off question — answer inline instead. Requires an existing agent_id from a prior spawn_agent call.",
-    )
-    .with_parameter_schema(send_input_parameters())
-    .with_aliases(["message_agent", "continue_agent"])
-}
-
-#[distributed_slice(BUILTIN_TOOLS)]
-fn register_wait_agent(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
-    ToolRegistration::new(
-        tools::WAIT_AGENT,
-        CapabilityLevel::Basic,
-        false,
-        ToolRegistry::wait_agent_executor,
-    )
-    .with_description(
-        "Wait for child agents to reach a terminal state. Use this when you spawned an agent and need its result before continuing. Do NOT call wait_agent with an empty ids array — provide at least one agent id from a prior spawn_agent call. Default timeout 300s; pass timeout_ms to extend for long-running delegated tasks.",
-    )
-    .with_parameter_schema(wait_agent_parameters())
-    .with_aliases(["wait_subagent"])
-}
-
-#[distributed_slice(BUILTIN_TOOLS)]
-fn register_resume_agent(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
-    ToolRegistration::new(
         tools::RESUME_AGENT,
-        CapabilityLevel::Basic,
-        false,
-        ToolRegistry::resume_agent_executor,
-    )
-    .with_description(
-        "Resume a previously completed or closed child agent subtree from its saved context. Use this to continue work in a delegated agent after it has closed. Do NOT call resume_agent on a still-running child — use send_input instead. Resume is session-scoped: agents cannot be resumed across separate vtcode sessions.",
-    )
-    .with_parameter_schema(resume_agent_parameters())
-    .with_aliases(["resume_subagent"])
-}
-
-#[distributed_slice(BUILTIN_TOOLS)]
-fn register_close_agent(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
-    ToolRegistration::new(
+        tools::WAIT_AGENT,
         tools::CLOSE_AGENT,
-        CapabilityLevel::Basic,
-        false,
-        ToolRegistry::close_agent_executor,
-    )
-    .with_description(
-        "Close a child agent subtree, cancelling any active work and marking the thread closed. Use this when you are done with a delegated agent and want to free its tool budget. Do NOT close an agent you still need results from — call wait_agent first. Closed subtrees cannot be queried; resume_agent is required to bring one back.",
-    )
-    .with_parameter_schema(close_agent_parameters())
-    .with_aliases(["close_subagent"])
+        "delegate",
+        "subagent",
+        "background_subagent",
+        "launch_background_helper",
+        "message_agent",
+        "continue_agent",
+        "resume_subagent",
+        "wait_subagent",
+        "close_subagent",
+    ])
 }
 
 // ---------------------------------------------------------------------------
@@ -457,81 +376,31 @@ fn register_defuddle_fetch(_plan_state: Option<&PlanningWorkflowState>) -> ToolR
     }))
     .with_permission(ToolPolicy::Prompt)
     .with_aliases(["defuddle", "extract_markdown"])
+    .with_llm_visibility(false)
 }
 
 #[distributed_slice(BUILTIN_TOOLS)]
-fn register_mcp_search_tools(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
+fn register_mcp(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
     ToolRegistration::new(
+        tools::MCP,
+        CapabilityLevel::CodeSearch,
+        false,
+        ToolRegistry::mcp_executor,
+    )
+    .with_description(
+        "Discover and manage Model Context Protocol capabilities. Use action=search_tools to find tools, action=get_tool_details to fetch one schema, action=list_servers to inspect configured servers, or action=connect and action=disconnect to manage a named server. Do not disconnect a server while one of its tool calls is active.",
+    )
+    .with_parameter_schema(mcp_parameters())
+    .with_permission(ToolPolicy::Allow)
+    .with_aliases([
         tools::MCP_SEARCH_TOOLS,
-        CapabilityLevel::CodeSearch,
-        false,
-        ToolRegistry::mcp_search_tools_executor,
-    )
-    .with_description(
-        "Search only MCP tool catalogs with progressive detail levels (name, name_description, full). Use this to discover MCP capabilities without loading full schemas for every tool. Pass detail_level=full to get complete input schema excerpts.",
-    )
-    .with_parameter_schema(mcp_search_tools_parameters())
-    .with_permission(ToolPolicy::Allow)
-    .with_aliases(["mcp_tool_search"])
-}
-
-#[distributed_slice(BUILTIN_TOOLS)]
-fn register_mcp_get_tool_details(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
-    ToolRegistration::new(
         tools::MCP_GET_TOOL_DETAILS,
-        CapabilityLevel::CodeSearch,
-        false,
-        ToolRegistry::mcp_get_tool_details_executor,
-    )
-    .with_description(
-        "Fetch full MCP tool details for one specific MCP tool name, including its input schema.",
-    )
-    .with_parameter_schema(mcp_get_tool_details_parameters())
-    .with_permission(ToolPolicy::Allow)
-    .with_aliases(["mcp_tool_details"])
-}
-
-#[distributed_slice(BUILTIN_TOOLS)]
-fn register_mcp_list_servers(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
-    ToolRegistration::new(
         tools::MCP_LIST_SERVERS,
-        CapabilityLevel::CodeSearch,
-        false,
-        ToolRegistry::mcp_list_servers_executor,
-    )
-    .with_description("List configured MCP servers and their current connection state. Returns server names, protocols, and connection status.")
-    .with_parameter_schema(mcp_list_servers_parameters())
-    .with_permission(ToolPolicy::Allow)
-}
-
-#[distributed_slice(BUILTIN_TOOLS)]
-fn register_mcp_connect_server(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
-    ToolRegistration::new(
         tools::MCP_CONNECT_SERVER,
-        CapabilityLevel::CodeSearch,
-        false,
-        ToolRegistry::mcp_connect_server_executor,
-    )
-    .with_description(
-        "Connect one configured MCP server by name. Use this when an MCP tool is referenced but the server has not been initialized yet. Do NOT call connect_server unless the server's tools are needed — the connection has overhead. Requires user confirmation via the permissions system (ToolPolicy::Prompt).",
-    )
-    .with_parameter_schema(mcp_server_name_parameters())
-    .with_permission(ToolPolicy::Prompt)
-}
-
-#[distributed_slice(BUILTIN_TOOLS)]
-fn register_mcp_disconnect_server(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
-    ToolRegistration::new(
         tools::MCP_DISCONNECT_SERVER,
-        CapabilityLevel::CodeSearch,
-        false,
-        ToolRegistry::mcp_disconnect_server_executor,
-    )
-    .with_description(
-        "Disconnect one active MCP server by name. Use this to free resources or reset a misbehaving MCP connection. Do NOT disconnect servers mid-task — any in-flight tool calls from that server will fail. Requires user confirmation via the permissions system (ToolPolicy::Prompt).",
-    )
-    .with_parameter_schema(mcp_server_name_parameters())
-    .with_permission(ToolPolicy::Prompt)
+        "mcp_tool_search",
+        "mcp_tool_details",
+    ])
 }
 
 // ---------------------------------------------------------------------------
@@ -547,9 +416,10 @@ fn register_exec_command(_plan_state: Option<&PlanningWorkflowState>) -> ToolReg
         ToolRegistry::exec_command_executor,
     )
     .with_description(
-        "Execute a shell command through the active sandbox policy. Put normal shell tools such as ls, rg, find, cat, sed, awk, build tools, and test tools in cmd. Returns output, exit status, and a reusable session id when the command is still running.",
+        "Use this to execute a shell command through the active sandbox policy and permission checks. Put normal shell tools such as ls, rg, find, cat, sed, awk, build tools, and test tools in cmd. Returns output, exit status, and a reusable session id when the command is still running.",
     )
     .with_parameter_schema(exec_command_parameters())
+    .with_permission(ToolPolicy::Allow)
 }
 
 #[distributed_slice(BUILTIN_TOOLS)]
@@ -564,6 +434,7 @@ fn register_write_stdin(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegi
         "Write characters to an active exec_command session stdin, then poll for fresh output.",
     )
     .with_parameter_schema(write_stdin_parameters())
+    .with_permission(ToolPolicy::Allow)
 }
 
 // ---------------------------------------------------------------------------
@@ -718,11 +589,10 @@ fn register_apply_patch(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegi
         ToolRegistry::apply_patch_executor,
     )
     .with_description(crate::tools::apply_patch::with_semantic_anchor_guidance(
-        "Apply patches to files. IMPORTANT: Use VT Code patch format (*** Begin Patch, *** Update File: path, @@ hunks with -/+ lines, *** End Patch), NOT standard unified diff (---/+++ format)."
+        "Apply patches to files after permission checks. IMPORTANT: Use VT Code patch format (*** Begin Patch, *** Update File: path, @@ hunks with -/+ lines, *** End Patch), NOT standard unified diff (---/+++ format)."
     ))
     .with_parameter_schema(apply_patch_parameters())
     .with_permission(ToolPolicy::Prompt)
-    .with_llm_visibility(false)
 }
 
 // ---------------------------------------------------------------------------
@@ -737,67 +607,6 @@ fn register_apply_patch(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegi
 // - list_skills
 // - load_skill
 // - load_skill_resource
-
-fn mcp_search_tools_parameters() -> serde_json::Value {
-    json!({
-        "type": "object",
-        "properties": {
-            "query": {
-                "type": "string",
-                "description": "Natural language query describing MCP capability to find."
-            },
-            "detail_level": {
-                "type": "string",
-                "enum": ["name", "name_description", "full"],
-                "description": "Response detail level: names only, names with descriptions, or full schema excerpts."
-            },
-            "limit": {
-                "type": "integer",
-                "minimum": 1,
-                "maximum": 25,
-                "description": "Maximum number of results to return."
-            }
-        },
-        "required": ["query"],
-        "additionalProperties": false
-    })
-}
-
-fn mcp_get_tool_details_parameters() -> serde_json::Value {
-    json!({
-        "type": "object",
-        "properties": {
-            "name": {
-                "type": "string",
-                "description": "Exact MCP tool name to inspect."
-            }
-        },
-        "required": ["name"],
-        "additionalProperties": false
-    })
-}
-
-fn mcp_list_servers_parameters() -> serde_json::Value {
-    json!({
-        "type": "object",
-        "properties": {},
-        "additionalProperties": false
-    })
-}
-
-fn mcp_server_name_parameters() -> serde_json::Value {
-    json!({
-        "type": "object",
-        "properties": {
-            "name": {
-                "type": "string",
-                "description": "Configured MCP server name."
-            }
-        },
-        "required": ["name"],
-        "additionalProperties": false
-    })
-}
 
 fn with_builtin_behavior(registration: ToolRegistration) -> ToolRegistration {
     if let Some(behavior) = builtin_tool_behavior(registration.name()) {
@@ -814,11 +623,11 @@ mod tests {
     #[test]
     fn distributed_slice_contains_all_builtin_tools() {
         use crate::tools::registry::distributed::BUILTIN_TOOLS;
-        // The distributed slice should contain at least 30 tool factories.
+        // Consolidated action tools keep the factory count bounded.
         // This catches accidentally missing #[distributed_slice] annotations.
         assert!(
-            BUILTIN_TOOLS.len() >= 30,
-            "expected at least 30 distributed tool factories, found {}",
+            BUILTIN_TOOLS.len() >= 24,
+            "expected at least 24 distributed tool factories, found {}",
             BUILTIN_TOOLS.len()
         );
     }
@@ -920,53 +729,33 @@ mod tests {
         let plan_state = PlanningWorkflowState::new(PathBuf::from("/workspace"));
         let registrations = builtin_tool_registrations(Some(&plan_state));
 
-        let spawn_agent = registrations
+        let agent = registrations
             .iter()
-            .find(|registration| registration.name() == tools::SPAWN_AGENT)
-            .expect("spawn_agent registration should exist");
+            .find(|registration| registration.name() == tools::AGENT)
+            .expect("agent registration should exist");
         assert!(
-            spawn_agent
+            agent
                 .metadata()
                 .description()
-                .expect("spawn_agent description")
-                .contains("inherits the current toolset")
+                .expect("agent description")
+                .contains("delegated child agents")
         );
-
-        let send_input = registrations
-            .iter()
-            .find(|registration| registration.name() == tools::SEND_INPUT)
-            .expect("send_input registration should exist");
-        assert!(
-            send_input
-                .metadata()
-                .description()
-                .expect("send_input description")
-                .contains("follow-up input")
-        );
-
-        let wait_agent = registrations
-            .iter()
-            .find(|registration| registration.name() == tools::WAIT_AGENT)
-            .expect("wait_agent registration should exist");
-        assert!(
-            wait_agent
-                .metadata()
-                .description()
-                .expect("wait_agent description")
-                .contains("terminal state")
-        );
-
-        let spawn_background = registrations
-            .iter()
-            .find(|registration| registration.name() == tools::SPAWN_BACKGROUND_SUBPROCESS)
-            .expect("spawn_background_subprocess registration should exist");
-        assert!(
-            spawn_background
-                .metadata()
-                .description()
-                .expect("spawn_background_subprocess description")
-                .contains("outlives the current turn")
-        );
+        for alias in [
+            tools::SPAWN_AGENT,
+            tools::SPAWN_BACKGROUND_SUBPROCESS,
+            tools::SEND_INPUT,
+            tools::RESUME_AGENT,
+            tools::WAIT_AGENT,
+            tools::CLOSE_AGENT,
+        ] {
+            assert!(
+                agent
+                    .metadata()
+                    .aliases()
+                    .iter()
+                    .any(|candidate| candidate == alias)
+            );
+        }
     }
 
     #[test]
@@ -1107,6 +896,7 @@ mod tests {
             tools::TASK_TRACKER,
             tools::FINISH_PLANNING,
             tools::START_PLANNING,
+            tools::CODE_SEARCH,
         ];
 
         for registration in &registrations {

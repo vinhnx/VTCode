@@ -12,9 +12,9 @@ mod mcp_tool;
 mod responses_api;
 
 pub use collaboration::{
-    close_agent_parameters, request_user_input_description, request_user_input_parameters,
-    resume_agent_parameters, send_input_parameters, spawn_agent_parameters,
-    spawn_background_subprocess_parameters, wait_agent_parameters,
+    agent_parameters, close_agent_parameters, request_user_input_description,
+    request_user_input_parameters, resume_agent_parameters, send_input_parameters,
+    spawn_agent_parameters, spawn_background_subprocess_parameters, wait_agent_parameters,
 };
 pub use json_schema::{AdditionalProperties, JsonSchema, parse_tool_input_schema};
 #[cfg(feature = "mcp")]
@@ -69,6 +69,48 @@ pub fn apply_patch_parameter_schema(input_description: &str) -> Value {
 #[must_use]
 pub fn apply_patch_parameters() -> Value {
     apply_patch_parameter_schema(DEFAULT_APPLY_PATCH_INPUT_DESCRIPTION)
+}
+
+#[must_use]
+pub fn cron_parameters() -> Value {
+    json!({
+        "type": "object",
+        "required": ["action"],
+        "additionalProperties": false,
+        "properties": {
+            "action": {
+                "type": "string",
+                "enum": ["create", "list", "delete"],
+                "description": "create: schedule a prompt (requires prompt and exactly one of cron, delay_minutes, or run_at). list: show scheduled prompts. delete: remove one by id."
+            },
+            "prompt": {"type": "string", "description": "create: prompt to run when the task fires."},
+            "name": {"type": "string", "description": "create: optional short label for the task."},
+            "cron": {"type": "string", "description": "create: five-field cron expression for recurring tasks."},
+            "delay_minutes": {"type": "integer", "description": "create: fixed recurring interval in minutes."},
+            "run_at": {"type": "string", "description": "create: one-shot fire time in RFC3339 or local datetime form."},
+            "id": {"type": "string", "description": "delete: session scheduled task id to delete."}
+        }
+    })
+}
+
+#[must_use]
+pub fn mcp_parameters() -> Value {
+    json!({
+        "type": "object",
+        "required": ["action"],
+        "properties": {
+            "action": {
+                "type": "string",
+                "enum": ["search_tools", "get_tool_details", "list_servers", "connect", "disconnect"],
+                "description": "search_tools: find MCP tools by natural-language query. get_tool_details: fetch the full input schema for one MCP tool name. list_servers: list configured servers and their connection state. connect or disconnect: manage one configured MCP server by name."
+            },
+            "query": {"type": "string", "description": "search_tools: natural language query describing the MCP capability to find."},
+            "detail_level": {"type": "string", "enum": ["name", "name_description", "full"], "description": "search_tools: response detail level."},
+            "limit": {"type": "integer", "minimum": 1, "maximum": 25, "description": "search_tools: maximum number of results to return."},
+            "name": {"type": "string", "description": "get_tool_details: exact MCP tool name. connect or disconnect: configured MCP server name."}
+        },
+        "additionalProperties": false
+    })
 }
 
 #[must_use]

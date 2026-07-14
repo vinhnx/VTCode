@@ -659,7 +659,7 @@ mod tests {
             .map(|tool| tool.function_name())
             .collect();
 
-        assert_eq!(names, vec![tools::UNIFIED_FILE, "a_tool", "z_tool"]);
+        assert_eq!(names, vec!["a_tool", tools::UNIFIED_FILE, "z_tool"]);
     }
 
     #[test]
@@ -689,7 +689,7 @@ mod tests {
             .map(|tool| tool.function_name())
             .collect();
 
-        assert_eq!(names, vec![tools::UNIFIED_EXEC, "a_tool", "z_tool"]);
+        assert_eq!(names, vec!["a_tool", tools::UNIFIED_EXEC, "z_tool"]);
         assert_eq!(
             snapshot.active_tool_names.as_ref(),
             &vec!["a_tool".to_string(), "z_tool".to_string()]

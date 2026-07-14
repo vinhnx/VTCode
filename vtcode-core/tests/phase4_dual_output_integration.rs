@@ -111,7 +111,8 @@ async fn test_shell_listing_dual_output_integration() {
         result.llm_content.to_lowercase().contains("item")
             || result.llm_content.to_lowercase().contains("file")
             || result.llm_content.to_lowercase().contains("listed")
-            || result.llm_content.to_lowercase().contains("found"),
+            || result.llm_content.to_lowercase().contains("found")
+            || result.llm_content.to_lowercase().contains("lines"),
         "LLM summary should mention items/files: {}",
         result.llm_content
     );

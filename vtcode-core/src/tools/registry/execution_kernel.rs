@@ -205,6 +205,45 @@ pub(super) fn remap_public_file_operation_alias_args(
     Some(Value::Object(mapped))
 }
 
+pub(super) fn remap_consolidated_action_alias_args(
+    requested_name: &str,
+    normalized_tool_name: &str,
+    args: &Value,
+) -> Option<Value> {
+    let obj = args.as_object()?;
+    if obj.contains_key("action") {
+        return None;
+    }
+
+    let action = super::assembly::public_tool_name_candidates(requested_name)
+        .into_iter()
+        .find_map(
+            |candidate| match (normalized_tool_name, candidate.as_str()) {
+                (tool_names::MCP, tool_names::MCP_SEARCH_TOOLS) => Some("search_tools"),
+                (tool_names::MCP, tool_names::MCP_GET_TOOL_DETAILS) => Some("get_tool_details"),
+                (tool_names::MCP, tool_names::MCP_LIST_SERVERS) => Some("list_servers"),
+                (tool_names::MCP, tool_names::MCP_CONNECT_SERVER) => Some("connect"),
+                (tool_names::MCP, tool_names::MCP_DISCONNECT_SERVER) => Some("disconnect"),
+                (tool_names::CRON, tool_names::CRON_CREATE) => Some("create"),
+                (tool_names::CRON, tool_names::CRON_LIST) => Some("list"),
+                (tool_names::CRON, tool_names::CRON_DELETE) => Some("delete"),
+                (tool_names::AGENT, tool_names::SPAWN_AGENT) => Some("spawn"),
+                (tool_names::AGENT, tool_names::SPAWN_BACKGROUND_SUBPROCESS) => {
+                    Some("spawn_subprocess")
+                }
+                (tool_names::AGENT, tool_names::SEND_INPUT) => Some("send_input"),
+                (tool_names::AGENT, tool_names::RESUME_AGENT) => Some("resume"),
+                (tool_names::AGENT, tool_names::WAIT_AGENT) => Some("wait"),
+                (tool_names::AGENT, tool_names::CLOSE_AGENT) => Some("close"),
+                _ => None,
+            },
+        )?;
+
+    let mut mapped = obj.clone();
+    mapped.insert("action".to_string(), Value::String(action.to_string()));
+    Some(Value::Object(mapped))
+}
+
 fn enforce_file_operation_payload_limit(
     normalized_tool_name: &str,
     args: &Value,
@@ -318,6 +357,7 @@ pub(super) fn preflight_validate_call(
 
     if let Some(remapped_args) =
         remap_public_file_operation_alias_args(name, &normalized_tool_name, args)
+            .or_else(|| remap_consolidated_action_alias_args(name, &normalized_tool_name, args))
     {
         preflight_validate_resolved_call(registry, &normalized_tool_name, &remapped_args)
     } else {
@@ -1014,9 +1054,10 @@ mod tests {
             .expect_err("missing action should fail preflight");
 
         assert!(
-            err.to_string().contains(
-                "Invalid arguments for tool 'command_session': missing action; provide `action` or inferable exec arguments"
-            )
+            err.to_string().contains(&format!(
+                "Invalid arguments for tool '{}': missing action; provide `action` or inferable exec arguments",
+                tool_names::UNIFIED_EXEC
+            ))
         );
     }
 

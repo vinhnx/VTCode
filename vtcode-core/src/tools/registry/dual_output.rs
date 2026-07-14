@@ -56,9 +56,9 @@ impl ToolRegistry {
 
         // Check if we have a summarizer for this tool
         match tool_name.as_str() {
-            tools::UNIFIED_SEARCH => {
+            tools::UNIFIED_SEARCH | tools::CODE_SEARCH => {
                 match tool_intent::search_dispatch_action(&args).unwrap_or("grep") {
-                    "grep" => {
+                    "grep" | "structural" => {
                         let summarizer = GrepSummarizer::default();
                         match summarizer.summarize(&ui_content, None) {
                             Ok(llm_content) => {
@@ -89,7 +89,7 @@ impl ToolRegistry {
                             }
                         }
                     }
-                    "list" => {
+                    "list" | "outline" => {
                         let summarizer = ListSummarizer::default();
                         match summarizer.summarize(&ui_content, None) {
                             Ok(llm_content) => {
@@ -206,7 +206,7 @@ impl ToolRegistry {
                     _ => Ok(SplitToolResult::simple(tool_name.as_str(), ui_content)),
                 }
             }
-            tools::UNIFIED_EXEC => {
+            tools::UNIFIED_EXEC | tools::EXEC_COMMAND => {
                 match tool_intent::command_session_action(&args).unwrap_or("run") {
                     "run" | "code" => {
                         let summarizer = BashSummarizer::default();

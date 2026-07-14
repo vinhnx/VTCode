@@ -1248,8 +1248,9 @@ mod read_tests {
         let err = file_ops.read_file(args).await.unwrap_err().to_string();
 
         assert!(err.contains("is a directory, not a file"));
-        assert!(err.contains("action=\"list\""));
-        assert!(err.contains("path=\"src\""));
+        assert!(err.contains("exec_command.cmd"));
+        assert!(err.contains("find"));
+        assert!(err.contains("ls"));
     }
 
     #[tokio::test]

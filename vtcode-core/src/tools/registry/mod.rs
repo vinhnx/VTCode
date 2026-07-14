@@ -722,7 +722,7 @@ mod tests {
         registry.allow_all_tools().await?;
 
         let available = registry.available_tools().await;
-        assert!(available.contains(&CUSTOM_TOOL_NAME.to_string()));
+        assert!(!available.contains(&CUSTOM_TOOL_NAME.to_string()));
 
         let response = registry
             .execute_tool(CUSTOM_TOOL_NAME, json!({"input": "value"}))
@@ -906,9 +906,7 @@ mod tests {
 
     fn delayed_exec_args(tty: bool, yield_time_ms: u64) -> Value {
         json!({
-            "action": "run",
-            "command": ["/bin/sh", "-lc", "printf first && sleep 0.2 && printf second"],
-            "shell": "/bin/sh",
+            "cmd": "printf first && sleep 0.2 && printf second",
             "tty": tty,
             "yield_time_ms": yield_time_ms,
         })
@@ -916,13 +914,7 @@ mod tests {
 
     fn long_running_exec_args(tty: bool, yield_time_ms: u64) -> Value {
         json!({
-            "action": "run",
-            "command": [
-                "/bin/sh",
-                "-lc",
-                "sleep 0.4 && printf second && sleep 0.4 && printf third && sleep 0.4 && printf done"
-            ],
-            "shell": "/bin/sh",
+            "cmd": "sleep 0.4 && printf second && sleep 0.4 && printf third && sleep 0.4 && printf done",
             "tty": tty,
             "yield_time_ms": yield_time_ms,
         })
@@ -936,7 +928,7 @@ mod tests {
 
         let response = registry
             .execute_public_tool_ref_prevalidated_with_mode(
-                tools::UNIFIED_EXEC,
+                tools::EXEC_COMMAND,
                 &delayed_exec_args(false, 50),
                 ExecSettlementMode::SettleNonInteractive,
             )
@@ -977,10 +969,10 @@ mod tests {
 
         let response = registry
             .execute_public_tool_ref_prevalidated_with_mode(
-                tools::UNIFIED_EXEC,
+                tools::WRITE_STDIN,
                 &json!({
-                    "action": "poll",
                     "session_id": session_id,
+                    "chars": "",
                     "yield_time_ms": 50,
                 }),
                 ExecSettlementMode::SettleNonInteractive,
@@ -1005,7 +997,7 @@ mod tests {
 
         let response = registry
             .execute_public_tool_ref_prevalidated_with_mode(
-                tools::UNIFIED_EXEC,
+                tools::EXEC_COMMAND,
                 &long_running_exec_args(true, 50),
                 ExecSettlementMode::SettleNonInteractive,
             )
@@ -1088,23 +1080,23 @@ mod tests {
             .expect("partial run should expose session_id")
             .to_string();
         let continue_args = json!({
-            "action": "continue",
             "session_id": session_id,
+            "chars": "",
             "yield_time_ms": 10,
         });
 
         let first = registry
-            .execute_public_tool_ref_prevalidated(tools::UNIFIED_EXEC, &continue_args)
+            .execute_public_tool_ref_prevalidated(tools::WRITE_STDIN, &continue_args)
             .await?;
         assert_ne!(first.get("loop_detected"), Some(&json!(true)));
 
         let second = registry
-            .execute_public_tool_ref_prevalidated(tools::UNIFIED_EXEC, &continue_args)
+            .execute_public_tool_ref_prevalidated(tools::WRITE_STDIN, &continue_args)
             .await?;
         assert_ne!(second.get("loop_detected"), Some(&json!(true)));
 
         let third = registry
-            .execute_public_tool_ref_prevalidated(tools::UNIFIED_EXEC, &continue_args)
+            .execute_public_tool_ref_prevalidated(tools::WRITE_STDIN, &continue_args)
             .await?;
         assert_ne!(third.get("loop_detected"), Some(&json!(true)));
         assert!(
@@ -1225,12 +1217,11 @@ mod tests {
         fs::write(&test_file, "hello")?;
 
         let cat_args = json!({
-            "action": "run",
-            "command": format!("cat {}", test_file.to_string_lossy()),
+            "cmd": format!("cat {}", test_file.to_string_lossy()),
         });
 
         let first = registry
-            .execute_tool_ref(tools::UNIFIED_EXEC, &cat_args)
+            .execute_tool_ref(tools::EXEC_COMMAND, &cat_args)
             .await?;
         assert!(
             first.get("reused_recent_result").is_none(),
@@ -1238,7 +1229,7 @@ mod tests {
         );
 
         let second = registry
-            .execute_tool_ref(tools::UNIFIED_EXEC, &cat_args)
+            .execute_tool_ref(tools::EXEC_COMMAND, &cat_args)
             .await?;
         assert_eq!(
             second.get("reused_recent_result"),
@@ -1586,7 +1577,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn apply_config_policies_prefers_explicit_canonical_public_names() -> Result<()> {
+    async fn apply_config_policies_applies_current_public_names() -> Result<()> {
         let temp_dir = TempDir::new()?;
         let policy_path = temp_dir.path().join("tool-policy.json");
         let policy_manager =
@@ -1599,20 +1590,20 @@ mod tests {
         config.policies.clear();
         config
             .policies
-            .insert(tools::UNIFIED_FILE.to_string(), ToolPolicy::Allow);
+            .insert(tools::EXEC_COMMAND.to_string(), ToolPolicy::Allow);
         config
             .policies
-            .insert(tools::READ_FILE.to_string(), ToolPolicy::Deny);
+            .insert(tools::APPLY_PATCH.to_string(), ToolPolicy::Deny);
 
         registry.apply_config_policies(&config).await?;
 
         assert_eq!(
-            registry.get_tool_policy(tools::UNIFIED_FILE).await,
+            registry.get_tool_policy(tools::EXEC_COMMAND).await,
             ToolPolicy::Allow
         );
         assert_eq!(
-            registry.get_tool_policy(tools::READ_FILE).await,
-            ToolPolicy::Allow
+            registry.get_tool_policy(tools::APPLY_PATCH).await,
+            ToolPolicy::Deny
         );
 
         Ok(())
@@ -1717,11 +1708,11 @@ mod tests {
         registry.set_enforce_safe_mode_prompts(true).await;
 
         assert_eq!(
-            registry.evaluate_tool_policy(tools::UNIFIED_SEARCH).await?,
+            registry.evaluate_tool_policy(tools::CODE_SEARCH).await?,
             ToolPermissionDecision::Allow
         );
         assert_eq!(
-            registry.evaluate_tool_policy(tools::UNIFIED_EXEC).await?,
+            registry.evaluate_tool_policy(tools::EXEC_COMMAND).await?,
             ToolPermissionDecision::Prompt
         );
         assert_eq!(

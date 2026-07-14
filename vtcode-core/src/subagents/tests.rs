@@ -134,7 +134,7 @@ fn write_test_read_only_subagent(workspace_root: &std::path::Path) {
 name: readonly-demo
 description: Read-only test child agent.
 tools:
-  - read_file
+  - code_search
 permissions:
   default: ask
 ---

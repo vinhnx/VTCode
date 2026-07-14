@@ -146,7 +146,7 @@ impl ToolRegistry {
             .await
     }
 
-    pub(super) async fn execute_command_session_write_for_tool(
+    pub(crate) async fn execute_command_session_write_for_tool(
         &self,
         args: Value,
         progress_tool_name: &'static str,
@@ -193,7 +193,7 @@ impl ToolRegistry {
             .await
     }
 
-    pub(super) async fn execute_command_session_poll_for_tool(
+    pub(crate) async fn execute_command_session_poll_for_tool(
         &self,
         args: Value,
         exec_settlement_mode: ExecSettlementMode,

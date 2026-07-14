@@ -19,7 +19,19 @@ impl ToolRegistry {
 
     async fn sync_policy_catalog_serialized(&self) {
         // Include aliases so policy prompts stay in sync with exposed names
-        let available = self.available_tools().await;
+        let mut available = self.available_tools().await;
+        available.extend(
+            self.inventory
+                .registrations_snapshot()
+                .into_iter()
+                .filter(|registration| {
+                    matches!(
+                        registration.catalog_source(),
+                        super::registration::ToolCatalogSource::Dynamic
+                    )
+                })
+                .map(|registration| registration.name().to_string()),
+        );
         let mcp_keys = self.mcp_policy_keys().await;
         let full_auto_catalogue_config = self
             .policy_gateway
