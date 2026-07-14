@@ -759,7 +759,7 @@ fn surface_allows_tool(surface: SessionSurface, tool_name: &str) -> bool {
         SessionSurface::AgentRunner => true,
         SessionSurface::Acp => matches!(
             tool_name,
-            tools::EXEC_COMMAND | tools::WRITE_STDIN | tools::APPLY_PATCH
+            tools::EXEC_COMMAND | tools::WRITE_STDIN | tools::APPLY_PATCH | tools::CODE_SEARCH
         ),
     }
 }
@@ -1156,7 +1156,7 @@ mod tests {
     }
 
     #[test]
-    fn acp_surface_stays_on_codex_baseline_with_advanced_profile() {
+    fn acp_surface_exposes_code_search_with_advanced_profile() {
         let registrations = vec![
             registration(tools::EXEC_COMMAND)
                 .with_description("Run command")
@@ -1198,6 +1198,7 @@ mod tests {
                 tools::EXEC_COMMAND.to_string(),
                 tools::WRITE_STDIN.to_string(),
                 tools::APPLY_PATCH.to_string(),
+                tools::CODE_SEARCH.to_string(),
             ]
         );
     }
