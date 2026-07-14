@@ -14,7 +14,7 @@ keywords = ["vtcode", "agent", "session", "state", "event-log"]
 categories = ["development-tools", "data-structures"]
 
 [dependencies]
-vtcode-exec-events = { path = "../vtcode-exec-events", version = "0.135.8" }
+vtcode-exec-events = { path = "../vtcode-exec-events", version = "0.135.9" }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 chrono = { workspace = true }
