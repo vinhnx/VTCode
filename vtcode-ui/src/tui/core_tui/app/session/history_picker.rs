@@ -1,6 +1,6 @@
 use super::super::types::ContentPart;
 use crate::tui::core_tui::session::list_navigator::ListNavigator;
-use crate::tui::ui::search::fuzzy_score;
+use crate::tui::ui::search::FuzzyQuery;
 /// History Picker - Fuzzy search for command history (Ctrl+R)
 ///
 /// Provides a visual palette for searching and selecting from command history
@@ -146,15 +146,17 @@ impl HistoryPickerState {
 
         // Score and collect in-memory history entries
         let query = self.search_query.to_lowercase();
+        let query_empty = query.is_empty();
+        let mut fuzzy = FuzzyQuery::new(&query);
         for (idx, (content, attachments, created_at)) in history.iter().enumerate().rev() {
             if content.trim().is_empty() {
                 continue;
             }
 
-            let score = if query.is_empty() {
+            let score = if query_empty {
                 Some(history.len().saturating_sub(idx) as u32)
             } else {
-                fuzzy_score(&query, content)
+                fuzzy.score(content)
             };
 
             if let Some(score) = score {
@@ -176,13 +178,13 @@ impl HistoryPickerState {
                 continue;
             }
 
-            let score = if query.is_empty() {
+            let score = if query_empty {
                 // Recency-based score: archived prompts get lower base score
                 // than current-session entries so they sort below them.
                 let age_hours = (now - archived.created_at).num_hours().max(0) as u32;
                 1000u32.saturating_sub(age_hours)
             } else {
-                match fuzzy_score(&query, &archived.content) {
+                match fuzzy.score(&archived.content) {
                     Some(s) => s,
                     None => continue,
                 }

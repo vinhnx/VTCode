@@ -84,16 +84,35 @@ impl FilePalette {
             return;
         }
 
+        /// A matched file plus the values needed to rank it. Carrying
+        /// `path_lower` here means it is computed once during scoring and
+        /// reused by the comparator instead of re-lowercasing both operands on
+        /// every comparison (O(n log n) allocations per keystroke).
+        struct ScoredPath {
+            score: usize,
+            index: usize,
+            is_dir: bool,
+            path_lower: String,
+        }
+
         let query_lower = self.filter_query.to_lowercase();
-        let mut scored_indices: Vec<(usize, usize)> = Vec::with_capacity(self.all_files.len() / 2);
+        let mut scored: Vec<ScoredPath> = Vec::with_capacity(self.all_files.len() / 2);
         let mut buffer = Vec::new();
+        // Parse the pattern and allocate the matcher once, then reuse them for
+        // every candidate. Rebuilding these per file was pure repeated work.
+        let mut matcher = Matcher::new(Config::DEFAULT.match_paths());
+        let pattern = Pattern::parse(&query_lower, CaseMatching::Ignore, Normalization::Smart);
 
         for (idx, entry) in self.all_files.iter().enumerate() {
             let path_lower = entry.relative_path.to_lowercase();
 
-            if let Some(fuzzy_score) =
-                Self::simple_fuzzy_match_with_buffer(&path_lower, &query_lower, &mut buffer)
-            {
+            let score = if let Some(fuzzy_score) = Self::simple_fuzzy_match_with_buffer(
+                &path_lower,
+                &mut matcher,
+                &pattern,
+                &query_lower,
+                &mut buffer,
+            ) {
                 let mut score = fuzzy_score;
                 if !path_lower.contains('/') {
                     score += 1000;
@@ -107,34 +126,37 @@ impl FilePalette {
                         score += 2000;
                     }
                 }
-                scored_indices.push((score, idx));
+                score
             } else if path_lower.contains(&query_lower) {
                 let mut score = Self::calculate_match_score(&path_lower, &query_lower);
                 if !path_lower.contains('/') {
                     score += 1000;
                 }
-                scored_indices.push((score, idx));
-            }
+                score
+            } else {
+                continue;
+            };
+
+            scored.push(ScoredPath {
+                score,
+                index: idx,
+                is_dir: entry.is_dir,
+                path_lower,
+            });
         }
 
-        scored_indices.sort_unstable_by(|a, b| {
-            let entry_a = &self.all_files[a.1];
-            let entry_b = &self.all_files[b.1];
-            match (entry_a.is_dir, entry_b.is_dir) {
-                (true, false) => std::cmp::Ordering::Less,
-                (false, true) => std::cmp::Ordering::Greater,
-                _ => b.0.cmp(&a.0).then_with(|| {
-                    entry_a
-                        .relative_path
-                        .to_lowercase()
-                        .cmp(&entry_b.relative_path.to_lowercase())
-                }),
-            }
+        scored.sort_unstable_by(|a, b| match (a.is_dir, b.is_dir) {
+            (true, false) => std::cmp::Ordering::Less,
+            (false, true) => std::cmp::Ordering::Greater,
+            _ => b
+                .score
+                .cmp(&a.score)
+                .then_with(|| a.path_lower.cmp(&b.path_lower)),
         });
 
-        self.filtered_files = scored_indices
+        self.filtered_files = scored
             .into_iter()
-            .map(|(_, idx)| self.all_files[idx].clone())
+            .map(|scored_path| self.all_files[scored_path.index].clone())
             .collect();
         self.rebuild_tree();
     }
@@ -185,14 +207,12 @@ impl FilePalette {
         let mut group_entries = Vec::new();
 
         let mut dir_iter: Vec<_> = dir_children.into_iter().collect();
-        dir_iter.sort_by_key(|entry| entry.0.to_lowercase());
+        // `sort_by_cached_key` computes each lowercased key once instead of
+        // re-lowercasing operands O(n log n) times inside a comparator.
+        dir_iter.sort_by_cached_key(|entry| entry.0.to_lowercase());
 
         for (dir_name, mut children) in dir_iter {
-            children.sort_by(|a, b| {
-                a.relative_path
-                    .to_lowercase()
-                    .cmp(&b.relative_path.to_lowercase())
-            });
+            children.sort_by_cached_key(|entry| entry.relative_path.to_lowercase());
 
             let prefix = format!("{dir_name}/");
             let child_items: Vec<TreeItem> = children
@@ -217,11 +237,7 @@ impl FilePalette {
             group_entries.push(child_entries);
         }
 
-        top_level_dirs.sort_by(|a, b| {
-            a.relative_path
-                .to_lowercase()
-                .cmp(&b.relative_path.to_lowercase())
-        });
+        top_level_dirs.sort_by_cached_key(|entry| entry.relative_path.to_lowercase());
         for entry in top_level_dirs {
             groups.push(TreeGroup::new(TreeItem::new(format!(
                 "{}/",
@@ -230,11 +246,7 @@ impl FilePalette {
             group_entries.push(vec![(*entry).clone()]);
         }
 
-        top_level_files.sort_by(|a, b| {
-            a.relative_path
-                .to_lowercase()
-                .cmp(&b.relative_path.to_lowercase())
-        });
+        top_level_files.sort_by_cached_key(|entry| entry.relative_path.to_lowercase());
         for entry in top_level_files {
             groups.push(TreeGroup::new(TreeItem::new(entry.display_name.clone())));
             group_entries.push(vec![(*entry).clone()]);
@@ -245,29 +257,44 @@ impl FilePalette {
 
     #[expect(dead_code)]
     pub(super) fn simple_fuzzy_match(path: &str, query: &str) -> Option<usize> {
-        let mut buffer = Vec::new();
-        Self::simple_fuzzy_match_with_buffer(path, query, &mut buffer)
-    }
-
-    fn simple_fuzzy_match_with_buffer(
-        path: &str,
-        query: &str,
-        buffer: &mut Vec<char>,
-    ) -> Option<usize> {
         if query.is_empty() {
             return Some(1000);
         }
-
+        let mut buffer = Vec::new();
         let mut matcher = Matcher::new(Config::DEFAULT.match_paths());
         let pattern = Pattern::parse(query, CaseMatching::Ignore, Normalization::Smart);
+        let query_lower = query.to_lowercase();
+        Self::simple_fuzzy_match_with_buffer(
+            path,
+            &mut matcher,
+            &pattern,
+            &query_lower,
+            &mut buffer,
+        )
+    }
+
+    /// Scores `path` against a pre-parsed `pattern`/`matcher` pair. Callers own
+    /// the matcher, pattern, and lowercased query so they can be built once and
+    /// reused across an entire candidate list. `query_lower` must already be
+    /// lowercased and non-empty.
+    fn simple_fuzzy_match_with_buffer(
+        path: &str,
+        matcher: &mut Matcher,
+        pattern: &Pattern,
+        query_lower: &str,
+        buffer: &mut Vec<char>,
+    ) -> Option<usize> {
+        if query_lower.is_empty() {
+            return Some(1000);
+        }
+
         let utf32_path = Utf32Str::new(path, buffer);
-        let score = pattern.score(utf32_path, &mut matcher)?;
+        let score = pattern.score(utf32_path, matcher)?;
 
         let mut adjusted_score = score as usize;
-        let query_lower = query.to_lowercase();
 
         if let Some(filename) = path.rsplit('/').next()
-            && filename.to_lowercase().contains(&query_lower)
+            && filename.to_lowercase().contains(query_lower)
         {
             adjusted_score += 500;
         }

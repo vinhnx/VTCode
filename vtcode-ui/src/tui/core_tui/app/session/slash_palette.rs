@@ -2,7 +2,7 @@ use unicode_segmentation::UnicodeSegmentation;
 
 use crate::tui::core_tui::app::types::SlashCommandItem;
 use crate::tui::core_tui::session::list_navigator::ListNavigator;
-use crate::tui::ui::search::{fuzzy_score, normalize_query};
+use crate::tui::ui::search::{FuzzyQuery, normalize_query};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SlashCommandRange {
@@ -315,12 +315,13 @@ impl SlashPalette {
             return prefix_matches.into_iter().cloned().collect();
         }
 
+        let mut query = FuzzyQuery::new(&normalized_query);
         let mut scored: Vec<ScoredCommand<'_>> = self
             .commands
             .iter()
             .filter_map(|info| {
-                let name_score = fuzzy_score(&normalized_query, info.name.as_str());
-                let description_score = fuzzy_score(&normalized_query, info.description.as_str());
+                let name_score = query.score(info.name.as_str());
+                let description_score = query.score(info.description.as_str());
                 if name_score.is_none() && description_score.is_none() {
                     return None;
                 }

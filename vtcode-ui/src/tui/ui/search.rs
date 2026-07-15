@@ -26,18 +26,58 @@ pub fn normalize_query(query: &str) -> String {
     normalized.trim_end().to_owned()
 }
 
+/// A reusable fuzzy query that parses the search pattern and allocates its
+/// `Matcher` and scratch buffer exactly once, then scores many candidates.
+///
+/// The one-shot helpers [`fuzzy_score`] and [`fuzzy_match`] rebuild all of
+/// this state on every call. When scoring a collection (command palettes,
+/// history pickers, file lists) prefer building a single `FuzzyQuery` before
+/// the loop and reusing it per candidate to avoid the per-item pattern parse
+/// and matcher allocation.
+pub struct FuzzyQuery {
+    pattern: Pattern,
+    matcher: Matcher,
+    buffer: Vec<char>,
+    empty: bool,
+}
+
+impl FuzzyQuery {
+    /// Compile a query once for repeated scoring.
+    #[must_use]
+    pub fn new(query: &str) -> Self {
+        Self {
+            pattern: Pattern::parse(query, CaseMatching::Ignore, Normalization::Smart),
+            matcher: Matcher::new(Config::DEFAULT),
+            buffer: Vec::new(),
+            empty: query.is_empty(),
+        }
+    }
+
+    /// Score a candidate against the compiled query.
+    ///
+    /// Returns `Some(0)` for an empty query (matches everything), `Some(score)`
+    /// on a fuzzy match, and `None` when the candidate does not match.
+    pub fn score(&mut self, candidate: &str) -> Option<u32> {
+        if self.empty {
+            return Some(0);
+        }
+        let utf32_candidate = Utf32Str::new(candidate, &mut self.buffer);
+        self.pattern.score(utf32_candidate, &mut self.matcher)
+    }
+
+    /// Returns true when the candidate fuzzy-matches the compiled query.
+    pub fn matches(&mut self, candidate: &str) -> bool {
+        if self.empty {
+            return true;
+        }
+        self.score(candidate).is_some()
+    }
+}
+
 /// Returns true when every term in the query appears as a fuzzy match
 /// within the candidate text using nucleo-matcher.
 pub fn fuzzy_match(query: &str, candidate: &str) -> bool {
-    if query.is_empty() {
-        return true;
-    }
-
-    let mut matcher = Matcher::new(Config::DEFAULT);
-    let mut buffer = Vec::new();
-    let pattern = Pattern::parse(query, CaseMatching::Ignore, Normalization::Smart);
-    let utf32_candidate = Utf32Str::new(candidate, &mut buffer);
-    pattern.score(utf32_candidate, &mut matcher).is_some()
+    FuzzyQuery::new(query).matches(candidate)
 }
 
 /// Returns true when every whitespace-separated term in `query` appears as a
@@ -82,15 +122,7 @@ pub fn fuzzy_subsequence(needle: &str, haystack: &str) -> bool {
 /// Returns a score for the fuzzy match between query and candidate using nucleo-matcher.
 /// Returns None if no match is found, Some(score) if a match exists.
 pub fn fuzzy_score(query: &str, candidate: &str) -> Option<u32> {
-    if query.is_empty() {
-        return Some(0); // Default score for empty query
-    }
-
-    let mut matcher = Matcher::new(Config::DEFAULT);
-    let mut buffer = Vec::new();
-    let pattern = Pattern::parse(query, CaseMatching::Ignore, Normalization::Smart);
-    let utf32_candidate = Utf32Str::new(candidate, &mut buffer);
-    pattern.score(utf32_candidate, &mut matcher)
+    FuzzyQuery::new(query).score(candidate)
 }
 
 #[cfg(test)]
@@ -140,6 +172,15 @@ mod tests {
     fn fuzzy_score_returns_none_for_non_matches() {
         // Test that fuzzy scoring returns None for non-matches
         assert!(fuzzy_score("xyz", "src/main.rs").is_none());
+    }
+
+    #[test]
+    fn fuzzy_query_reuse_matches_one_shot() {
+        let candidates = ["src/main.rs", "src/lib.rs", "docs/readme.md", "xyz"];
+        let mut query = FuzzyQuery::new("main");
+        for candidate in candidates {
+            assert_eq!(query.score(candidate), fuzzy_score("main", candidate));
+        }
     }
 
     #[test]

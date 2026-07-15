@@ -12,6 +12,7 @@ pub mod markdown_store;
 use anyhow::Result;
 use hashbrown::HashMap;
 use ignore::{DirEntry, Walk};
+use rayon::prelude::*;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::fmt::Write as FmtWrite;
@@ -464,13 +465,19 @@ impl SimpleIndexer {
         path_filter: Option<&str>,
         extract_matches: bool,
     ) -> Vec<SearchResult> {
-        let mut results = Vec::with_capacity(self.index_cache.len());
+        // Reading every file from disk is the dominant cost; parallelize it
+        // across the rayon pool. Small candidate sets stay serial to avoid
+        // thread-pool spawn overhead and keep ordering deterministic.
+        const PARALLEL_THRESHOLD: usize = 64;
 
-        for file_path in self.index_cache.keys() {
-            if path_filter.is_some_and(|filter| !file_path.contains(filter)) {
-                continue;
-            }
+        let candidate_paths: Vec<&String> = self
+            .index_cache
+            .keys()
+            .filter(|file_path| path_filter.is_none_or(|filter| file_path.contains(filter)))
+            .collect();
 
+        let map_file = |file_path: &&String| -> Vec<SearchResult> {
+            let mut local = Vec::new();
             if let Ok(content) = fs::read_to_string(file_path) {
                 for (line_num, line) in content.lines().enumerate() {
                     if regex.is_match(line) {
@@ -483,8 +490,8 @@ impl SimpleIndexer {
                             vec![line.to_string()]
                         };
 
-                        results.push(SearchResult {
-                            file_path: file_path.clone(),
+                        local.push(SearchResult {
+                            file_path: (*file_path).clone(),
                             line_number: line_num + 1,
                             line_content: line.to_string(),
                             matches,
@@ -492,7 +499,14 @@ impl SimpleIndexer {
                     }
                 }
             }
-        }
+            local
+        };
+
+        let mut results: Vec<SearchResult> = if candidate_paths.len() <= PARALLEL_THRESHOLD {
+            candidate_paths.iter().flat_map(map_file).collect()
+        } else {
+            candidate_paths.par_iter().flat_map(map_file).collect()
+        };
 
         results.sort_unstable_by(|left, right| {
             left.file_path

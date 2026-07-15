@@ -63,6 +63,7 @@ mod timeout_category;
 mod timeout_facade;
 mod tool_catalog_facade;
 mod tool_executor_impl;
+mod tool_search_index;
 mod trait_impls;
 mod unified_actions;
 mod utils;
