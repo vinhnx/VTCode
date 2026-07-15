@@ -143,7 +143,7 @@ pub(super) async fn compute_replacements(
 
         let mut found = if context_found {
             seek_segment(
-                original_lines,
+                &matcher,
                 &mut old_segment,
                 &mut new_segment,
                 line_index,
@@ -180,7 +180,7 @@ pub(super) async fn compute_replacements(
                     // Language not supported by ast-grep (e.g. markdown, yaml).
                     // Fall back to exact text search from the beginning of the file.
                     found = seek_segment(
-                        original_lines,
+                        &matcher,
                         &mut old_segment,
                         &mut new_segment,
                         0,

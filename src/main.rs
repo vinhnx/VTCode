@@ -252,14 +252,18 @@ async fn run(prepared: PreparedRun) -> Result<()> {
     // The result is consumed later (after dispatch) via get_preflight_notice().
     tokio::spawn(updater::run_preflight_check());
 
-    // Clean up old spooled large output temp files (>24h) at startup to prevent unbounded growth
+    // Clean up old spooled large output temp files (>24h) at startup to prevent
+    // unbounded growth. Deferred to a blocking task so a cold ~/.vtcode/tmp never
+    // blocks first user I/O on the critical startup path.
     if let Ok(home) = std::env::var("HOME") {
         let tmp_dir = std::path::Path::new(&home).join(".vtcode").join("tmp");
-        if let Err(err) = agent::runloop::tool_output::large_output::cleanup_old_temp_spools(
-            &tmp_dir, 86400, // 24 hours
-        ) {
-            tracing::debug!(error = %err, "Failed to clean old temp spool dirs");
-        }
+        tokio::task::spawn_blocking(move || {
+            if let Err(err) = agent::runloop::tool_output::large_output::cleanup_old_temp_spools(
+                &tmp_dir, 86400, // 24 hours
+            ) {
+                tracing::debug!(error = %err, "Failed to clean old temp spool dirs");
+            }
+        });
     }
 
     let dispatch_result = cli::dispatch(&args, &startup, print_mode).await;

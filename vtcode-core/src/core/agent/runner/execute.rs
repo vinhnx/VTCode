@@ -20,6 +20,7 @@ use crate::core::agent::harness_artifacts::existing_harness_artifact_paths;
 use crate::core::agent::harness_kernel::{
     HarnessRequestPlanInput, SessionToolCatalogSnapshot, build_harness_request_plan,
 };
+use crate::core::agent::hash_utils::stable_system_prefix_hash;
 use crate::core::agent::runtime::{AgentRuntime, RuntimeControl};
 use crate::core::agent::session::AgentSessionState;
 use crate::core::agent::task::{ContextItem, Task, TaskOutcome, TaskResults};
@@ -40,6 +41,10 @@ use tracing::{debug, warn};
 
 pub(super) struct RuntimePromptBundle {
     system_instruction: Arc<String>,
+    /// Stable prefix hash of `system_instruction`, computed once per bundle
+    /// build (the bundle is memoized) so each turn can reuse it instead of
+    /// re-hashing the full system prompt.
+    system_instruction_prefix_hash: u64,
     tool_snapshot: SessionToolCatalogSnapshot,
     request_tools: Option<Arc<Vec<ToolDefinition>>>,
     /// Estimated token overhead of `request_tools`, computed once per
@@ -160,8 +165,10 @@ impl AgentRunner {
             .record_sdk_tool_definition_tokens(tool_def_tokens);
         debug!(tool_def_tokens, tool_count, "tool definition overhead");
 
+        let system_instruction_prefix_hash = stable_system_prefix_hash(&system_prompt);
         Ok(RuntimePromptBundle {
             system_instruction: Arc::new(system_prompt),
+            system_instruction_prefix_hash,
             tool_snapshot,
             request_tools,
             tool_def_tokens,
@@ -726,6 +733,7 @@ impl AgentRunner {
                     ),
                     prompt_cache_profile: None,
                     tool_catalog_hash: prompt_bundle.tool_snapshot.tool_catalog_hash,
+                    system_prompt_prefix_hash: Some(prompt_bundle.system_instruction_prefix_hash),
                 })
                 .request;
                 // Cheap pre-flight: catch malformed requests (empty system

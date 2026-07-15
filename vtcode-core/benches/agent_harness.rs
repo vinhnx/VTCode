@@ -65,6 +65,7 @@ fn request_plan_benchmark(c: &mut Criterion) {
                 prompt_cache_key: Some("session:test".to_string()),
                 prompt_cache_profile: None,
                 tool_catalog_hash: None,
+                system_prompt_prefix_hash: None,
             }))
         })
     });

@@ -13,6 +13,7 @@
 
 use super::file_search_bridge::{self, FileSearchConfig};
 use super::grep_cache::GrepSearchCache;
+use crate::cache::estimate_json_size;
 use anyhow::{Context, Result};
 use serde_json::{self, Value};
 use std::num::NonZeroUsize;
@@ -757,7 +758,7 @@ impl GrepSearchManager {
             let mut total = 0usize;
             let mut kept_count = 0;
             for entry in &matches {
-                let entry_bytes = entry.to_string().len();
+                let entry_bytes = estimate_json_size(entry) as usize;
                 if total + entry_bytes > limit {
                     truncated = true;
                     break;

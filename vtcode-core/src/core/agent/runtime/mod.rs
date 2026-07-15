@@ -314,6 +314,8 @@ pub struct TurnExecution {
 
 const MIN_REASONING_UPDATE_BYTES: usize = 256;
 const MAX_REASONING_UPDATE_EVENTS: usize = 2;
+const MIN_OUTPUT_UPDATE_BYTES: usize = 1024;
+const MAX_OUTPUT_UPDATE_EVENTS: usize = 64;
 
 /// Bridges streaming model progress events to the lifecycle event sink for real-time UI updates.
 #[doc(hidden)]
@@ -326,6 +328,8 @@ pub struct StreamingLifecycleBridge {
     reasoning_stage: Option<String>,
     reasoning_update_events: usize,
     last_reasoning_emit_len: usize,
+    output_update_events: usize,
+    last_output_emit_len: usize,
 }
 
 impl StreamingLifecycleBridge {
@@ -341,6 +345,8 @@ impl StreamingLifecycleBridge {
             reasoning_stage: None,
             reasoning_update_events: 0,
             last_reasoning_emit_len: 0,
+            output_update_events: 0,
+            last_output_emit_len: 0,
         }
     }
 
@@ -384,10 +390,18 @@ impl StreamingLifecycleBridge {
             return;
         }
 
-        let _ = self
+        if !self.should_emit_output_update() {
+            return;
+        }
+
+        if self
             .lifecycle
-            .emit_assistant_snapshot(Some(self.assistant_item_id.clone()));
-        self.emit_pending_events();
+            .emit_assistant_snapshot(Some(self.assistant_item_id.clone()))
+        {
+            self.output_update_events += 1;
+            self.last_output_emit_len = self.lifecycle.assistant_len();
+            self.emit_pending_events();
+        }
     }
 
     fn push_reasoning_delta(&mut self, delta: &str) {
@@ -458,6 +472,19 @@ impl StreamingLifecycleBridge {
         self.last_reasoning_emit_len = self.lifecycle.reasoning_len();
     }
 
+    fn should_emit_output_update(&self) -> bool {
+        if self.output_update_events >= MAX_OUTPUT_UPDATE_EVENTS {
+            return false;
+        }
+
+        self.output_update_events == 0
+            || self
+                .lifecycle
+                .assistant_len()
+                .saturating_sub(self.last_output_emit_len)
+                >= MIN_OUTPUT_UPDATE_BYTES
+    }
+
     fn start_tool_call(&mut self, call_id: String, name: Option<String>) {
         let item_id = format!("{}-tool-call-{call_id}", self.assistant_item_id);
         self.tool_call_item_ids
@@ -501,6 +528,10 @@ pub struct AgentRuntime {
     event_sink: Option<EventSink>,
     lifecycle: SharedLifecycleEmitter,
     emitted_events: Vec<ThreadEvent>,
+    output_update_events: usize,
+    last_output_emit_len: usize,
+    reasoning_update_events: usize,
+    last_reasoning_emit_len: usize,
 }
 
 impl AgentRuntime {
@@ -516,6 +547,10 @@ impl AgentRuntime {
             event_sink,
             lifecycle: SharedLifecycleEmitter::default(),
             emitted_events: Vec::new(),
+            output_update_events: 0,
+            last_output_emit_len: 0,
+            reasoning_update_events: 0,
+            last_reasoning_emit_len: 0,
         }
     }
 
@@ -595,6 +630,32 @@ impl AgentRuntime {
         }
     }
 
+    fn should_emit_output_update(&self) -> bool {
+        if self.output_update_events >= MAX_OUTPUT_UPDATE_EVENTS {
+            return false;
+        }
+
+        self.output_update_events == 0
+            || self
+                .lifecycle
+                .assistant_len()
+                .saturating_sub(self.last_output_emit_len)
+                >= MIN_OUTPUT_UPDATE_BYTES
+    }
+
+    fn should_emit_reasoning_update(&self) -> bool {
+        if self.reasoning_update_events >= MAX_REASONING_UPDATE_EVENTS {
+            return false;
+        }
+
+        self.reasoning_update_events == 0
+            || self
+                .lifecycle
+                .reasoning_len()
+                .saturating_sub(self.last_reasoning_emit_len)
+                >= MIN_REASONING_UPDATE_BYTES
+    }
+
     fn emit_pending_lifecycle_events(&mut self) {
         for event in self.lifecycle.drain_events() {
             self.emit_event(event);
@@ -663,15 +724,22 @@ impl AgentRuntime {
         match event {
             RuntimeModelProgress::OutputDelta(delta) => {
                 full_text.push_str(&delta);
-                if self.lifecycle.append_assistant_delta(&delta) {
+                if self.lifecycle.append_assistant_delta(&delta) && self.should_emit_output_update()
+                {
                     let _ = self.lifecycle.emit_assistant_snapshot(None);
+                    self.output_update_events += 1;
+                    self.last_output_emit_len = self.lifecycle.assistant_len();
                     self.emit_pending_lifecycle_events();
                 }
             }
             RuntimeModelProgress::ReasoningDelta(delta) => {
                 full_reasoning.push_str(&delta);
-                if self.lifecycle.append_reasoning_delta(&delta) {
+                if self.lifecycle.append_reasoning_delta(&delta)
+                    && self.should_emit_reasoning_update()
+                {
                     let _ = self.lifecycle.emit_reasoning_snapshot(None);
+                    self.reasoning_update_events += 1;
+                    self.last_reasoning_emit_len = self.lifecycle.reasoning_len();
                     self.emit_pending_lifecycle_events();
                 }
             }
@@ -704,6 +772,10 @@ impl AgentRuntime {
     ) -> Result<TurnExecution> {
         let request_model = request.model.clone();
         let start_time = std::time::Instant::now();
+        self.output_update_events = 0;
+        self.last_output_emit_len = 0;
+        self.reasoning_update_events = 0;
+        self.last_reasoning_emit_len = 0;
         let mut full_text = String::new();
         let mut full_reasoning = String::new();
         let mut on_progress =

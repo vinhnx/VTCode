@@ -41,12 +41,18 @@ pub struct HarnessRequestPlanInput {
     pub prompt_cache_key: Option<String>,
     pub prompt_cache_profile: Option<crate::llm::provider::PromptCacheProfile>,
     pub tool_catalog_hash: Option<u64>,
+    /// Precomputed stable prefix hash of `system_prompt`. When supplied (the
+    /// normal path, from the memoized prompt bundle) the per-turn
+    /// `build_harness_request_plan` skips re-hashing the full system prompt.
+    pub system_prompt_prefix_hash: Option<u64>,
 }
 
 /// Build a harness request plan from the given input parameters.
 pub fn build_harness_request_plan(input: HarnessRequestPlanInput) -> HarnessRequestPlan {
     let tools = input.tools.filter(|tools| !tools.is_empty());
-    let stable_prefix_hash = stable_system_prefix_hash(&input.system_prompt);
+    let stable_prefix_hash = input
+        .system_prompt_prefix_hash
+        .unwrap_or_else(|| stable_system_prefix_hash(&input.system_prompt));
     let tool_catalog_hash = input
         .tool_catalog_hash
         .or_else(|| hash_tool_definitions(tools.as_deref().map(Vec::as_slice)));

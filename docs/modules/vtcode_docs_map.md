@@ -134,7 +134,7 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 - **File**: `docs/development/performance.md`
   - **Content**: Performance Optimization
-  - **Topics**: Goals, Performance & Simplicity Rules, Local Workflow, Profiling Build, Local Native Tuning
+  - **Topics**: Goals, Performance & Simplicity Rules, Local Workflow, Startup budget, Profiling Build
   - **User Questions**: "What can you tell me about Performance Optimization?", "How does Goals work?", "How does Performance & Simplicity Rules work?"
 
 - **File**: `docs/development/PROCESS_HARDENING.md`

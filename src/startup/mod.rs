@@ -110,36 +110,59 @@ impl StartupContext {
             .await?
         };
 
-        initialize_dot_folder().await.ok();
+        // --- Parallelized / gated startup fan-out -------------------------------
+        // Everything below depends only on `config`/`args`/`selection` (already
+        // resolved above) and is mutually independent. Join the futures so the
+        // disk I/O (dotfolder creation, guardian audit-log read, theme/config
+        // load, provider auth probe) overlaps instead of running serially.
+        // Inits irrelevant to auth-skipping commands (Login, Logout, Auth,
+        // ToolPolicy, AppServer, Notify, Pods, Schedule) are gated behind
+        // `!skip_auth` to skip their work entirely on short-lived commands.
+        let skip_auth = command_skips_provider_auth(args.command.as_ref());
+        // The tool-runtime initializers (gatekeeper, file/command caches, file
+        // opener, session-archive, perf telemetry) may only be skipped for
+        // auth-skipping commands that never execute tools. `AppServer` (the
+        // codex app-server proxy) is auth-skipping but DOES run tools on the
+        // user's behalf via `pty/manager.rs` / `exec/async_command.rs`, which
+        // call `check_quarantine_for_program`. If the gatekeeper is left
+        // uninitialized, that check silently no-ops (gatekeeper.rs), so app
+        // server tool execution would bypass quarantine checks. Keep the
+        // runtime inits for AppServer even though it skips provider auth.
+        let skip_runtime_init = command_skips_runtime_init(args.command.as_ref());
 
-        // Initialize dotfile protection with configuration
-        if let Err(e) = init_global_guardian(config.dotfile_protection.clone()).await {
-            tracing::warn!("Failed to initialize dotfile protection: {}", e);
-        }
-
-        let theme_resolution = determine_theme(args, &config).await?;
-        let theme_selection = theme_resolution.theme;
-
-        // Only persist the theme preference when it actually changed.  The
-        // previous implementation read + wrote ~/.vtcode/config.toml on every
-        // startup (~10-20ms) even when the theme was already correct.
-        // The loaded dot-config from determine_theme() is reused to avoid a
-        // second load_user_config() call.
-        let theme_changed = theme_resolution
-            .loaded_dot_config
-            .as_ref()
-            .map(|dot| dot.preferences.theme.trim() != theme_selection.as_str())
-            .unwrap_or(true);
-        if theme_changed {
-            update_theme_preference(&theme_selection).await.ok();
-        }
-        vtcode_core::utils::session_archive::apply_session_history_config_from_vtcode(&config);
-        vtcode_core::utils::ansi::apply_file_opener_config(config.file_opener);
-
-        // Validate API key AFTER first-run setup so new users can complete setup first
-        let (api_key, openai_chatgpt_auth) = if command_skips_provider_auth(args.command.as_ref()) {
-            (String::new(), None)
-        } else {
+        let theme_fut = determine_theme(args, &config);
+        let dot_folder_fut = initialize_dot_folder();
+        let guardian_fut = async {
+            if skip_runtime_init {
+                return;
+            }
+            if let Err(e) = init_global_guardian(config.dotfile_protection.clone()).await {
+                tracing::warn!("Failed to initialize dotfile protection: {}", e);
+            }
+        };
+        let appliers_fut = async {
+            if skip_runtime_init {
+                return;
+            }
+            vtcode_core::utils::session_archive::apply_session_history_config_from_vtcode(&config);
+            vtcode_core::utils::ansi::apply_file_opener_config(config.file_opener);
+            vtcode_core::telemetry::perf::initialize_perf_telemetry(&config.telemetry);
+            vtcode_core::tools::cache::configure_file_cache(&config.optimization.file_read_cache);
+            vtcode_core::tools::read_limits::configure_read_limits(
+                &config.optimization.file_read_cache,
+            );
+            vtcode_core::tools::command_cache::configure_command_cache(
+                &config.optimization.command_cache,
+            );
+            vtcode_core::utils::gatekeeper::initialize_gatekeeper(
+                &config.security.gatekeeper,
+                Some(&loaded.workspace),
+            );
+        };
+        let auth_fut = async {
+            if skip_auth {
+                return Ok::<_, anyhow::Error>((String::new(), None));
+            }
             match resolve_runtime_provider_auth(
                 &config,
                 &loaded.workspace,
@@ -148,14 +171,39 @@ impl StartupContext {
             )
             .await
             {
-                Ok(auth) => auth,
+                Ok(auth) => Ok(auth),
                 Err(err) if can_start_without_provider_auth(args.command.as_ref()) => {
                     tracing::warn!("starting VT Code without provider auth: {err}");
-                    (String::new(), None)
+                    Ok((String::new(), None))
                 }
-                Err(err) => return Err(err),
+                Err(err) => Err(err),
             }
         };
+
+        let (theme_res, _dot_folder_res, _guardian_done, _appliers_done, auth_res) = tokio::join!(
+            theme_fut,
+            dot_folder_fut,
+            guardian_fut,
+            appliers_fut,
+            auth_fut
+        );
+
+        let theme_resolution = theme_res?;
+        let theme_selection = theme_resolution.theme;
+
+        // Only persist the theme preference when it actually changed. The loaded
+        // dot-config from determine_theme() is reused to avoid a second
+        // load_user_config() call.
+        let theme_changed = theme_resolution
+            .loaded_dot_config
+            .as_ref()
+            .map(|dot| dot.preferences.theme.trim() != theme_selection.as_str())
+            .unwrap_or(true);
+        if theme_changed {
+            update_theme_preference(&theme_selection).await.ok();
+        }
+
+        let (api_key, openai_chatgpt_auth) = auth_res?;
 
         let mut agent_config = build_runtime_agent_config(
             args,
@@ -193,19 +241,6 @@ impl StartupContext {
         {
             tracing::warn!("{}", msg);
         }
-
-        vtcode_core::telemetry::perf::initialize_perf_telemetry(&config.telemetry);
-        vtcode_core::tools::cache::configure_file_cache(&config.optimization.file_read_cache);
-        vtcode_core::tools::read_limits::configure_read_limits(
-            &config.optimization.file_read_cache,
-        );
-        vtcode_core::tools::command_cache::configure_command_cache(
-            &config.optimization.command_cache,
-        );
-        vtcode_core::utils::gatekeeper::initialize_gatekeeper(
-            &config.security.gatekeeper,
-            Some(&loaded.workspace),
-        );
 
         if let Some(notice) = codex_fallback_notice
             && !args.quiet
@@ -473,6 +508,16 @@ fn command_skips_provider_auth(command: Option<&Commands>) -> bool {
     )
 }
 
+/// Whether the tool-runtime initializers (gatekeeper, file/command caches, file
+/// opener, session-archive, perf telemetry) may be skipped. This is a subset of
+/// `command_skips_provider_auth`: every auth-skipping command qualifies except
+/// `AppServer`, because the codex app-server proxy executes tools on the user's
+/// behalf and therefore still needs the gatekeeper quarantine checks and the
+/// file/command caches initialized.
+fn command_skips_runtime_init(command: Option<&Commands>) -> bool {
+    command_skips_provider_auth(command) && !matches!(command, Some(Commands::AppServer { .. }))
+}
+
 fn can_start_without_provider_auth(command: Option<&Commands>) -> bool {
     matches!(
         command,
@@ -559,6 +604,48 @@ mod validation_tests {
                 listen: "stdio://".to_string(),
             }
         )));
+    }
+
+    #[test]
+    fn app_server_keeps_runtime_init_despite_skipping_provider_auth() {
+        // AppServer skips provider auth but must NOT skip the tool-runtime
+        // inits (gatekeeper/caches) — its codex proxy executes tools through
+        // check_quarantine_for_program, which is a silent no-op when the
+        // gatekeeper is uninitialized.
+        assert!(command_skips_provider_auth(Some(&Commands::AppServer {
+            listen: "stdio://".to_string(),
+        })));
+        assert!(!command_skips_runtime_init(Some(&Commands::AppServer {
+            listen: "stdio://".to_string(),
+        })));
+    }
+
+    #[test]
+    fn non_tool_auth_skip_commands_skip_runtime_init() {
+        for command in [
+            Commands::Login {
+                provider: "openai".to_string(),
+                device_code: false,
+            },
+            Commands::Logout {
+                provider: "openai".to_string(),
+            },
+            Commands::Auth {
+                provider: Some("openai".to_string()),
+            },
+            Commands::ToolPolicy {
+                command: vtcode_core::cli::tool_policy_commands::ToolPolicyCommands::Status,
+            },
+            Commands::Notify {
+                title: None,
+                message: "x".to_string(),
+            },
+            Commands::Pods {
+                command: vtcode_core::cli::args::PodsCommands::List,
+            },
+        ] {
+            assert!(command_skips_runtime_init(Some(&command)));
+        }
     }
 
     #[test]

@@ -22,8 +22,10 @@ baseline = json.loads(baseline_path.read_text())
 current = json.loads(current_path.read_text())
 baseline_startup_source = baseline.get("startup_source", "unknown")
 current_startup_source = current.get("startup_source", "unknown")
+baseline_io_source = baseline.get("first_user_io_source", "unknown")
+current_io_source = current.get("first_user_io_source", "unknown")
 
-keys = ["cargo_check_ms", "core_bench_ms", "tools_bench_ms", "startup_ms"]
+keys = ["cargo_check_ms", "core_bench_ms", "tools_bench_ms", "startup_ms", "first_user_io_ms"]
 rows = []
 for key in keys:
     b = baseline["metrics"].get(key)
@@ -44,6 +46,8 @@ lines = [
     f"Current: `{current_path}`",
     f"Baseline startup source: `{baseline_startup_source}`",
     f"Current startup source: `{current_startup_source}`",
+    f"Baseline first_user_io source: `{baseline_io_source}`",
+    f"Current first_user_io source: `{current_io_source}`",
     "",
     "| Metric | Baseline | Current | Delta | Interpretation |",
     "|---|---:|---:|---:|---|",
@@ -56,6 +60,14 @@ if baseline_startup_source != current_startup_source:
         [
             "",
             "> Warning: startup sources differ, so `startup_ms` is not directly comparable.",
+        ]
+    )
+
+if baseline_io_source != current_io_source:
+    lines.extend(
+        [
+            "",
+            "> Warning: first_user_io sources differ, so `first_user_io_ms` is not directly comparable.",
         ]
     )
 

@@ -209,6 +209,7 @@ mod tests {
             prompt_cache_key: None,
             prompt_cache_profile: None,
             tool_catalog_hash: None,
+            system_prompt_prefix_hash: None,
         });
 
         assert!(plan.has_tools);
@@ -239,6 +240,7 @@ mod tests {
             prompt_cache_key: None,
             prompt_cache_profile: None,
             tool_catalog_hash: None,
+            system_prompt_prefix_hash: None,
         });
 
         assert!(!plan.has_tools);

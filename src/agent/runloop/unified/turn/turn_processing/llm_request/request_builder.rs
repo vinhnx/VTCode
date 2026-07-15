@@ -186,6 +186,7 @@ pub(super) async fn build_turn_request(
         prompt_cache_key,
         prompt_cache_profile: ctx.session_stats.prompt_cache_profile(),
         tool_catalog_hash,
+        system_prompt_prefix_hash: Some(stable_prefix_hash),
     });
 
     Ok(TurnRequestBuildResult {

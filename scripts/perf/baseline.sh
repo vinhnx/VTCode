@@ -46,27 +46,33 @@ check_ms="$(run_cargo_timed cargo_check check --workspace --quiet)"
 core_bench_ms="$(run_cargo_timed bench_core bench -p vtcode-core --bench tool_pipeline -- --sample-size 20 --warm-up-time 0.5 --measurement-time 1)"
 tools_bench_ms="$(run_cargo_timed bench_tools bench -p vtcode-tools --bench cache_bench -- --sample-size 20 --warm-up-time 0.5 --measurement-time 1)"
 
-startup_ms=""
-startup_src=""
-ensure_vtcode_binary
-if command -v hyperfine >/dev/null 2>&1; then
-  startup_src="hyperfine"
-  (cd "${ROOT_DIR}" && hyperfine --warmup 2 --runs 8 --export-json "${OUT_DIR}/${LABEL}-startup.json" "./target/debug/vtcode --version" >/dev/null)
-  startup_ms="$(python3 - <<PY
-import json
+# Measure a command's mean startup latency (warm: 2 warmups + 8 measured runs).
+# Usage: measure_command <metric_name> <command> [args...]
+# Sets <metric_name>_ms (float) and <metric_name>_src ("hyperfine"|"binary-mean").
+measure_command() {
+  local name="$1"; shift
+  local json_path="${OUT_DIR}/${LABEL}-${name}.json"
+  local log_path="${OUT_DIR}/${LABEL}-${name}.log"
+  local time_path="${OUT_DIR}/${LABEL}-${name}.time"
+  local src ms
+  ensure_vtcode_binary
+  if command -v hyperfine >/dev/null 2>&1; then
+    src="hyperfine"
+    ( cd "${ROOT_DIR}" && hyperfine --warmup 2 --runs 8 --export-json "${json_path}" "$@" >/dev/null )
+    ms="$(python3 - "$json_path" <<'PY'
+import json, sys
 from pathlib import Path
-p = Path(r"${OUT_DIR}/${LABEL}-startup.json")
-data = json.loads(p.read_text())
-print(round(data["results"][0]["mean"] * 1000.0, 3))
+print(round(json.loads(Path(sys.argv[1]).read_text())["results"][0]["mean"] * 1000.0, 3))
 PY
 )"
-else
-  startup_src="binary-mean"
-  startup_ms="$(
-    STARTUP_BIN="${ROOT_DIR}/target/debug/vtcode" \
-    STARTUP_LOG="${OUT_DIR}/${LABEL}-startup.log" \
-    STARTUP_TIME="${OUT_DIR}/${LABEL}-startup.time" \
-    python3 - <<'PY'
+  else
+    src="binary-mean"
+    ms="$(
+      MCMD_CMD="$*" \
+      MCMD_JSON="${json_path}" \
+      MCMD_LOG="${log_path}" \
+      MCMD_TIME="${time_path}" \
+      python3 - <<'PY'
 import json
 import os
 import statistics
@@ -74,15 +80,15 @@ import subprocess
 import time
 from pathlib import Path
 
-bin_path = Path(os.environ["STARTUP_BIN"])
-log_path = Path(os.environ["STARTUP_LOG"])
-time_path = Path(os.environ["STARTUP_TIME"])
+cmd = os.environ.get("MCMD_CMD", "").split()
+log_path = Path(os.environ["MCMD_LOG"])
+time_path = Path(os.environ["MCMD_TIME"])
 warmup_runs = []
 measured_runs = []
 for _ in range(2):
     started = time.perf_counter()
     subprocess.run(
-        [str(bin_path), "--version"],
+        cmd,
         check=True,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
@@ -92,7 +98,7 @@ for _ in range(2):
 for _ in range(8):
     started = time.perf_counter()
     subprocess.run(
-        [str(bin_path), "--version"],
+        cmd,
         check=True,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
@@ -123,7 +129,23 @@ time_path.write_text(
 print(summary["mean_ms"])
 PY
 )"
-fi
+  fi
+  printf -v "${name}_ms" '%s' "$ms"
+  printf -v "${name}_src" '%s' "$src"
+}
+
+# startup_ms: clap-only path — bypasses from_cli_args (binary load + parse only).
+# Stable signal for binary/loader cost, NOT a proxy for the optimization plan.
+measure_command startup "${ROOT_DIR}/target/debug/vtcode" --version
+# first_user_io_ms: real from_cli_args path (local, no network). Exercises config
+# load, dotfolder init, guardian init, theme resolution, and auth resolution —
+# i.e. the startup work the optimization plan actually targets.
+measure_command first_user_io "${ROOT_DIR}/target/debug/vtcode" auth openai
+
+startup_ms="${startup_ms}"
+startup_src="${startup_src}"
+first_user_io_ms="${first_user_io_ms}"
+first_user_io_src="${first_user_io_src}"
 
 python3 - <<PY
 import json
@@ -138,8 +160,10 @@ out = {
         "core_bench_ms": int(r"${core_bench_ms}"),
         "tools_bench_ms": int(r"${tools_bench_ms}"),
         "startup_ms": float(r"${startup_ms}"),
+        "first_user_io_ms": float(r"${first_user_io_ms}"),
     },
     "startup_source": r"${startup_src}",
+    "first_user_io_source": r"${first_user_io_src}",
 }
 with open(r"${OUT_JSON}", "w", encoding="utf-8") as f:
     json.dump(out, f, indent=2, sort_keys=True)

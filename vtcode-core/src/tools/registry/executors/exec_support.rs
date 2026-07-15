@@ -13,6 +13,7 @@ use serde_json::{Value, json};
 use std::{
     fmt::Write,
     path::{Path, PathBuf},
+    sync::Mutex,
     time::Duration,
 };
 use vtcode_commons::preview::excerpt_text_lines;
@@ -469,6 +470,10 @@ pub(super) fn build_head_tail_preview(
     (lines.join("\n"), true)
 }
 
+/// Single-slot memo for the `filter_lines` regex: the same filter query is
+/// reused across many renders, so we avoid recompiling `Regex::new` per call.
+static FILTER_LINES_REGEX: Mutex<Option<(String, Regex)>> = Mutex::new(None);
+
 pub(super) fn filter_lines(
     content: &str,
     query: &str,
@@ -478,7 +483,21 @@ pub(super) fn filter_lines(
     let matcher = if literal {
         None
     } else {
-        Some(Regex::new(query).with_context(|| format!("Invalid regex query: {query}"))?)
+        // Reuse the previously compiled regex when the query is unchanged.
+        let compiled = {
+            let guard = FILTER_LINES_REGEX.lock().unwrap();
+            match &*guard {
+                Some((q, re)) if q == query => re.clone(),
+                _ => {
+                    drop(guard);
+                    let re = Regex::new(query)
+                        .with_context(|| format!("Invalid regex query: {query}"))?;
+                    *FILTER_LINES_REGEX.lock().unwrap() = Some((query.to_string(), re.clone()));
+                    re
+                }
+            }
+        };
+        Some(compiled)
     };
 
     let mut matches = Vec::new();

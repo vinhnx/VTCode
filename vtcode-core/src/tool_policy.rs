@@ -26,6 +26,11 @@ use crate::utils::file_utils::{
 };
 use crate::utils::tool_name_parsing::{canonical_tool_name, parse_canonical_mcp_tool_name};
 
+/// Memoized compiled approval regexes, keyed by the exact pattern list, so we
+/// don't recompile `Regex::new` on every approval-policy check.
+static APPROVAL_REGEX_CACHE: std::sync::Mutex<Option<(IndexSet<String>, Vec<Regex>)>> =
+    std::sync::Mutex::new(None);
+
 const AUTO_ALLOW_TOOLS: &[&str] = &[
     tools::START_PLANNING,
     tools::TASK_TRACKER,
@@ -1066,13 +1071,28 @@ impl ToolPolicyManager {
             }
         }
 
-        // Regex match against persisted regex patterns
-        self.config
-            .approval_cache
-            .regexes
-            .iter()
-            .filter_map(|pattern| Regex::new(pattern).ok())
-            .any(|regex| regex.is_match(approval_key))
+        // Regex match against persisted regex patterns. Compiled regexes are
+        // memoized per unique pattern list so we don't recompile on every check.
+        let compiled = {
+            let mut cache = APPROVAL_REGEX_CACHE.lock().unwrap();
+            match &*cache {
+                Some((patterns, regexes)) if *patterns == self.config.approval_cache.regexes => {
+                    regexes.clone()
+                }
+                _ => {
+                    let regexes: Vec<Regex> = self
+                        .config
+                        .approval_cache
+                        .regexes
+                        .iter()
+                        .filter_map(|pattern| Regex::new(pattern).ok())
+                        .collect();
+                    *cache = Some((self.config.approval_cache.regexes.clone(), regexes.clone()));
+                    regexes
+                }
+            }
+        };
+        compiled.iter().any(|regex| regex.is_match(approval_key))
     }
 
     /// Find the best matching cache key for a given approval key using fuzzy prefix matching.

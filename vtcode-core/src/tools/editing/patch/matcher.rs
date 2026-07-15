@@ -1,10 +1,15 @@
 pub(crate) struct PatchContextMatcher<'a> {
     lines: &'a [String],
+    /// Normalised form of every file line, computed once at construction so
+    /// repeated `seek` calls (and thus repeated patch hunks) don't re-normalise
+    /// the whole file on every lookup.
+    norm_lines: Vec<String>,
 }
 
 impl<'a> PatchContextMatcher<'a> {
     pub(crate) fn new(lines: &'a [String]) -> Self {
-        Self { lines }
+        let norm_lines = lines.iter().map(|l| normalise_text(l)).collect();
+        Self { lines, norm_lines }
     }
 
     pub(crate) fn seek(&self, pattern: &[String], start: usize, eof: bool) -> Option<usize> {
@@ -56,12 +61,10 @@ impl<'a> PatchContextMatcher<'a> {
             }
         }
 
-        // Pre-compute normalised pattern lines once, then compare against
-        // normalised file lines — avoids repeated String allocations in the
-        // inner loop (the previous version called normalise_text on every
-        // comparison).
+        // Compare against the pre-computed normalised file lines (built once in
+        // `new`), avoiding re-normalising the whole file on every `seek` call.
         let norm_pattern: Vec<String> = pattern.iter().map(|p| normalise_text(p)).collect();
-        let norm_lines: Vec<String> = self.lines.iter().map(|l| normalise_text(l)).collect();
+        let norm_lines = &self.norm_lines;
         for idx in search_start..=max_start {
             let mut ok = true;
             for (offset, norm_pat) in norm_pattern.iter().enumerate() {
@@ -80,13 +83,12 @@ impl<'a> PatchContextMatcher<'a> {
 }
 
 pub(crate) fn seek_segment(
-    lines: &[String],
+    matcher: &PatchContextMatcher,
     old_segment: &mut Vec<String>,
     new_segment: &mut Vec<String>,
     start: usize,
     eof: bool,
 ) -> Option<usize> {
-    let matcher = PatchContextMatcher::new(lines);
     let mut found = matcher.seek(old_segment, start, eof);
 
     if found.is_none() && old_segment.last().is_some_and(|line| line.is_empty()) {

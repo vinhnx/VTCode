@@ -325,6 +325,12 @@ impl SharedLifecycleEmitter {
         self.assistant.started
     }
 
+    /// Length of the accumulated assistant text in bytes.
+    #[must_use]
+    pub fn assistant_len(&self) -> usize {
+        self.assistant.text.len()
+    }
+
     /// Append a delta to the assistant text stream. Returns `true` if content was added.
     pub fn append_assistant_delta(&mut self, delta: &str) -> bool {
         append_stream_delta(&mut self.assistant, delta)

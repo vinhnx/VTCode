@@ -418,7 +418,10 @@ return Err(anyhow!(
                     .join()
                     .map_err(|panic| anyhow!("PTY command reader thread panicked: {panic:?}"))?
                     .context("failed to read PTY command output")?;
-                let mut output = String::from_utf8_lossy(&output_bytes).into_owned();
+                // Fast zero-copy path for valid UTF-8 (the common case); only
+                // allocate a lossy copy when the bytes are actually invalid.
+                let mut output = String::from_utf8(output_bytes)
+                    .unwrap_or_else(|e| String::from_utf8_lossy(e.as_bytes()).into_owned());
                 let exit_code = exit_status_code(status);
 
                 // Apply max_tokens truncation if specified

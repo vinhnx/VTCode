@@ -8,7 +8,7 @@ use regex::Regex;
 use serde::Deserialize;
 use tokio::process::Command;
 
-use super::matcher::{normalise_text, seek_segment};
+use super::matcher::{PatchContextMatcher, normalise_text, seek_segment};
 use super::{PatchChunk, PatchError};
 use crate::tools::ast_grep_binary::{
     AST_GREP_INSTALL_COMMAND, missing_ast_grep_message, resolve_ast_grep_binary_from_env_and_fs,
@@ -198,8 +198,9 @@ pub(crate) async fn resolve_semantic_match(
         let mut candidate_new = new_segment.clone();
         let candidate_lines = &original_lines[candidate.start_line..end_exclusive];
 
+        let candidate_matcher = PatchContextMatcher::new(candidate_lines);
         if let Some(local_start) = seek_segment(
-            candidate_lines,
+            &candidate_matcher,
             &mut candidate_old,
             &mut candidate_new,
             0,

@@ -8,7 +8,6 @@ use std::future::Future;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::time::Duration;
-use tokio::sync::Mutex;
 
 use parking_lot::RwLock;
 
@@ -23,13 +22,15 @@ static FILE_READ_CACHE_CONFIG: Lazy<RwLock<FileReadCacheConfig>> =
 
 /// Enhanced file cache with quick-cache for high-performance caching
 ///
-/// Uses `tokio::sync::Mutex` for async-safe stats access across `.await` boundaries.
+/// Uses a `parking_lot::Mutex` for stats access — the critical sections contain
+/// no `.await`, so the cheaper sync mutex avoids async-mutex overhead on the
+/// hot get/put path.
 /// Stores `Arc<Value>` internally for zero-copy cache hits.
 /// See: <https://ratatui.rs/faq/>
 pub struct FileCache {
     file_cache: Arc<Cache<String, EnhancedCacheEntry<Arc<Value>>>>,
     directory_cache: Arc<Cache<String, EnhancedCacheEntry<Arc<Value>>>>,
-    stats: Arc<Mutex<EnhancedCacheStats>>,
+    stats: Arc<parking_lot::Mutex<EnhancedCacheStats>>,
     max_size_bytes: AtomicUsize,
     ttl_millis: AtomicU64,
 }
@@ -39,7 +40,7 @@ impl FileCache {
         Self {
             file_cache: Arc::new(Cache::new(capacity)),
             directory_cache: Arc::new(Cache::new(capacity / 2)),
-            stats: Arc::new(Mutex::new(EnhancedCacheStats::default())),
+            stats: Arc::new(parking_lot::Mutex::new(EnhancedCacheStats::default())),
             max_size_bytes: AtomicUsize::new(50 * 1024 * 1024), // 50MB default
             ttl_millis: AtomicU64::new(300_000),                // 5 minutes default
         }
@@ -62,7 +63,7 @@ impl FileCache {
 
     /// Get cached file content as Arc for zero-copy access
     pub async fn get_file_arc(&self, key: &str) -> Option<Arc<Value>> {
-        let mut stats = self.stats.lock().await;
+        let mut stats = self.stats.lock();
 
         if let Some(entry) = self.file_cache.get(key) {
             // Check if entry is still valid
@@ -104,7 +105,7 @@ impl FileCache {
 
         self.file_cache.insert(key, entry);
 
-        let mut stats = self.stats.lock().await;
+        let mut stats = self.stats.lock();
         stats.file_entries = self.file_cache.len();
         stats.entries = stats.file_entries + stats.directory_entries;
         stats.file_size_bytes += size_bytes;
@@ -118,7 +119,7 @@ impl FileCache {
 
     /// Get cached directory listing as Arc for zero-copy access
     pub async fn get_directory_arc(&self, key: &str) -> Option<Arc<Value>> {
-        let mut stats = self.stats.lock().await;
+        let mut stats = self.stats.lock();
 
         if let Some(entry) = self.directory_cache.get(key) {
             if entry.timestamp.elapsed() < self.ttl() {
@@ -149,7 +150,7 @@ impl FileCache {
 
         self.directory_cache.insert(key, entry);
 
-        let mut stats = self.stats.lock().await;
+        let mut stats = self.stats.lock();
         stats.directory_entries = self.directory_cache.len();
         stats.entries = stats.file_entries + stats.directory_entries;
         stats.directory_size_bytes += size_bytes;
@@ -158,14 +159,14 @@ impl FileCache {
 
     /// Get cache statistics
     pub async fn stats(&self) -> EnhancedCacheStats {
-        self.stats.lock().await.clone()
+        self.stats.lock().clone()
     }
 
     /// Clear all caches
     pub async fn clear(&self) {
         self.file_cache.clear();
         self.directory_cache.clear();
-        *self.stats.lock().await = EnhancedCacheStats::default();
+        *self.stats.lock() = EnhancedCacheStats::default();
     }
 
     /// Get cache capacity information
@@ -183,7 +184,7 @@ impl FileCache {
 
     /// Check memory pressure and enforce limits with tiered eviction
     pub async fn check_pressure_and_evict(&self) {
-        let mut stats = self.stats.lock().await;
+        let mut stats = self.stats.lock();
 
         let current_size = stats.total_size_bytes;
         let max_size = self.max_size_bytes();

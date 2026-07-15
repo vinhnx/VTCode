@@ -226,24 +226,39 @@ impl AuditLog {
     }
 
     /// Read the last entry's hash from the log file.
+    ///
+    /// Only the tail of the file is scanned (bounded window) so startup cost is
+    /// `O(window)` rather than `O(file size)` — the audit log grows unbounded
+    /// over the tool's lifetime, and the prior full-file scan made launch time
+    /// scale with historical audit volume.
     fn read_last_hash(log_path: &Path) -> Result<String> {
-        let file = File::open(log_path).with_context(|| "Failed to open audit log")?;
-        let mut reader = BufReader::new(file);
+        use std::io::{Read, Seek, SeekFrom};
 
-        let mut last_hash =
-            "0000000000000000000000000000000000000000000000000000000000000000".to_string();
-        let mut line = String::new();
+        const DEFAULT_HASH: &str =
+            "0000000000000000000000000000000000000000000000000000000000000000";
 
-        loop {
-            line.clear();
-            if reader
-                .read_line(&mut line)
-                .with_context(|| "Failed to read audit log line")?
-                == 0
-            {
-                break;
-            }
-            let raw = line.trim_end_matches(['\n', '\r']);
+        let mut file = File::open(log_path).with_context(|| "Failed to open audit log")?;
+        let len = file
+            .metadata()
+            .with_context(|| "Failed to read audit log metadata")?
+            .len();
+        if len == 0 {
+            return Ok(DEFAULT_HASH.to_string());
+        }
+
+        // Window large enough to contain the final (and longest plausible)
+        // entry; capped so the scan cost is bounded regardless of log size.
+        let window: u64 = (1 << 18).min(len); // 256 KiB cap
+        file.seek(SeekFrom::End(-(window as i64)))
+            .with_context(|| "Failed to seek audit log")?;
+        let mut buf = Vec::with_capacity(window as usize);
+        file.read_to_end(&mut buf)
+            .with_context(|| "Failed to read audit log tail")?;
+
+        let text = String::from_utf8_lossy(&buf);
+        let mut last_hash = DEFAULT_HASH.to_string();
+        for raw in text.lines().rev() {
+            let raw = raw.trim_end_matches(['\n', '\r']);
             if raw.trim().is_empty() {
                 continue;
             }
@@ -251,9 +266,9 @@ impl AuditLog {
                 && let Some(hash) = entry.entry_hash
             {
                 last_hash = hash;
+                break;
             }
         }
-
         Ok(last_hash)
     }
 

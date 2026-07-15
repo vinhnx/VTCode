@@ -13,6 +13,7 @@ use crate::tools::handlers::read_file::{ReadFileArgs, ReadFileHandler, ReadFileO
 use crate::tools::traits::FileTool;
 use crate::tools::types::{Input, PathArgs};
 use anyhow::{Context, Result, anyhow};
+use serde::Deserialize;
 use serde_json::{Value, json};
 use std::path::Path;
 use std::time::UNIX_EPOCH;
@@ -373,7 +374,7 @@ impl FileOpsTool {
     pub async fn read_file(&self, args: Value) -> Result<Value> {
         let mut perf = PerfSpan::new("vtcode.perf.read_file_ms");
 
-        let path_args: PathArgs = serde_json::from_value(args.clone()).map_err(|_e| {
+        let path_args: PathArgs = PathArgs::deserialize(&args).map_err(|_e| {
             if looks_like_patch_payload(&args) {
                 return anyhow!(
                     "Error: Patch content was sent to read_file.\n\

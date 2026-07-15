@@ -27,9 +27,23 @@ struct SearchCacheKey {
 
 impl CacheKey for SearchCacheKey {
     fn to_cache_key(&self) -> String {
+        // Encode every discriminating field so `remove_where` prefix/suffix/
+        // contains invalidation buckets entries correctly. The previous key
+        // omitted 7 fields, so invalidation could drop or retain the wrong
+        // entries for queries that differed only in those fields.
         format!(
-            "grep:{}:{}:{}:{}",
-            self.pattern, self.path, self.case_sensitive, self.max_results
+            "grep\u{1f}{}\u{1f}{}\u{1f}{}\u{1f}{}\u{1f}{:?}\u{1f}{:?}\u{1f}{:?}\u{1f}{}\u{1f}{}\u{1f}{}\u{1f}{}",
+            self.pattern,
+            self.path,
+            self.case_sensitive,
+            self.max_results,
+            self.glob_pattern,
+            self.type_pattern,
+            self.max_result_bytes,
+            self.respect_ignore_files,
+            self.search_hidden,
+            self.search_binary,
+            self.literal,
         )
     }
 }
