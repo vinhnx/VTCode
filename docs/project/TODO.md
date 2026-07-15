@@ -376,13 +376,27 @@ expect 50-150 ms shaved on Copilot hosts.
 
 --
 
-Add visual TUI feedback info on any /config changes
-
-example:
-Disabled copy on select
-Disabled ← opens agents
-Disabled open agents view by default
-
 ---
 
 check and improve file picker, currently it is only showing top level folders and not showing files in subfolders. remove the TUI that handles the file picker and replace it with a more robust solution that can navigate through subdirectories and display files properly. Ensure that the new file picker is intuitive and user-friendly, allowing users to easily select files from any directory level.
+
+---
+
+check Vtcode plan mode
+
+"The plans dir is empty. Let me present the plan inline (since I can't write files in planning mode)
+The plans dir is empty. Let me present the plan inline (since I can't write files in planning mode).
+
+------------------------------------------------------- Info -------------------------------------------------------
+Tool execution completed, but the model follow-up failed (transient — may resolve on retry). Output above is valid
+.
+
+---
+
+• Plans dir exists but empty. I need to write the plan file via apply_patch, but apply_patch is disabled in
+recovery mode. The recovery directive says: "do NOT emit any tool calls or tool-call markup". I need to output
+the plan in-line using the `apply_patch` tool.
+
+it seem this is the reason plan mode is not working, because it cannot write to the plans dir. Need to check if this is a permission issue or if the plans dir is not being created properly. If it's a permission issue, we may need to adjust the file system permissions or change the location of the plans dir to a writable location. If it's a creation issue, we need to ensure that the plans dir is created at startup if it doesn't exist.
+
+/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/checkpoints/turn_663.json
