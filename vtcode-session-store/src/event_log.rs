@@ -23,6 +23,10 @@ struct LogState {
     /// TurnCompleted/TurnFailed). Used to update the last index entry's
     /// offsets as intermediate events arrive.
     in_turn: bool,
+    /// Running byte offset of the next append. Avoids a `stat` syscall per
+    /// event (the previous implementation re-statted the file twice on every
+    /// `append`); initialized from the file length on `open`.
+    next_offset: u64,
 }
 
 impl LogState {
@@ -31,6 +35,7 @@ impl LogState {
             manifest: SessionManifest::new(session_id),
             index: TurnIndex::default(),
             in_turn: false,
+            next_offset: 0,
         }
     }
 }
@@ -76,28 +81,39 @@ impl SessionEventLog {
             state: Mutex::new(LogState::new(session_id)),
         };
         log.scan()?;
+        // Seed the running offset from the current file length so appends
+        // continue seamlessly after a reopen (one stat at open, not per event).
+        {
+            let mut st = log.state.lock().map_err(poison)?;
+            let len = log
+                .file
+                .lock()
+                .map_err(poison)?
+                .metadata()
+                .map_err(|e| SessionStoreError::io(&log.events_path, e))?
+                .len();
+            st.next_offset = len;
+        }
         Ok(log)
     }
 
     /// Append an event to the log and update the in-memory index/manifest.
     pub fn append(&self, event: &ThreadEvent) -> Result<(), SessionStoreError> {
         let line = serde_json::to_string(&VersionedThreadEvent::new(event.clone()))?;
-        let start = {
-            let mut file = self.file.lock().map_err(poison)?;
-            let start = file
-                .metadata()
-                .map_err(|e| SessionStoreError::io(&self.events_path, e))?
-                .len();
-            writeln!(file, "{line}").map_err(|e| SessionStoreError::io(&self.events_path, e))?;
-            let end = file
-                .metadata()
-                .map_err(|e| SessionStoreError::io(&self.events_path, e))?
-                .len();
-            (start, end)
-        };
-        let (start, end) = start;
-
+        // `writeln!` appends a trailing `\n`, so the bytes written are the
+        // serialized length plus one. We derive the offsets from the running
+        // `next_offset` instead of stat-ing the file, eliminating two blocking
+        // `stat` syscalls per event on the agent runloop's hot path.
+        let written = line.len() + 1;
         let mut st = self.state.lock().map_err(poison)?;
+        let start = st.next_offset;
+        {
+            let mut file = self.file.lock().map_err(poison)?;
+            writeln!(file, "{line}").map_err(|e| SessionStoreError::io(&self.events_path, e))?;
+        }
+        let end = start + written as u64;
+        st.next_offset = end;
+
         st.manifest.event_count += 1;
         st.manifest.updated_at = now_rfc3339();
         match event {

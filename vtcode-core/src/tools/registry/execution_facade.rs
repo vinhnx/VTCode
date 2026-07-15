@@ -926,6 +926,10 @@ impl ToolRegistry {
             }
         };
 
+        // Classify the tool intent once and reuse it for the read-only
+        // classification and the planning-workflow enforcement below, instead
+        // of recomputing it on every tool call.
+        let intent = crate::tools::tool_intent::classify_tool_intent(&tool_name, args);
         let readonly_classification = if prevalidated {
             #[cfg(debug_assertions)]
             {
@@ -939,7 +943,7 @@ impl ToolRegistry {
                     );
                 }
             }
-            !crate::tools::tool_intent::classify_tool_intent(&tool_name, args).mutating
+            !intent.mutating
         } else {
             match execution_kernel::preflight_validate_resolved_call(self, &tool_name, args) {
                 Ok(outcome) => outcome.readonly_classification,
@@ -967,8 +971,11 @@ impl ToolRegistry {
         }
 
         // Defense-in-depth: prevalidated fast path skips full preflight, but planning workflow
-        // mutating-tool enforcement remains a hard safety invariant.
-        if self.is_planning_active() && !self.is_planning_active_allowed(&tool_name, args) {
+        // mutating-tool enforcement remains a hard safety invariant. Reuse the already-computed
+        // `intent` so we don't reclassify on the hot path.
+        if self.is_planning_active()
+            && !self.is_planning_active_allowed_with_intent(&tool_name, args, &intent)
+        {
             let error_msg = agent_execution::planning_workflow_denial_message(&display_name);
             record_failure(
                 tool_name_owned.clone(),
@@ -1143,7 +1150,7 @@ impl ToolRegistry {
                         requested_name.clone(),
                         false,
                         None,
-                        args.clone(),
+                        args_for_recording.clone(),
                         reused_value.clone(),
                         context_snapshot.clone(),
                         timeout_category_label.clone(),

@@ -197,8 +197,26 @@ impl McpCircuitBreaker {
             };
 
             if let Ok(data) = serde_json::to_string(&persisted) {
-                // Best effort write
-                let _ = fs::write(path, data);
+                // Best-effort write. Offload the blocking disk I/O to the
+                // blocking thread pool so it never stalls the async runtime
+                // that drives tool execution / streaming. The caller has
+                // already finalized `state` and invokes this outside the lock.
+                //
+                // `spawn_blocking` panics if there is no Tokio runtime on the
+                // current thread (e.g. a future sync caller, or persistence
+                // enabled from a non-async context), so fall back to a direct
+                // write in that case rather than crashing the breaker.
+                let path = path.clone();
+                match tokio::runtime::Handle::try_current() {
+                    Ok(handle) => {
+                        let _persist_task = handle.spawn_blocking(move || {
+                            let _ = fs::write(&path, data);
+                        });
+                    }
+                    Err(_) => {
+                        let _ = fs::write(&path, data);
+                    }
+                }
             }
         }
     }

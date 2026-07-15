@@ -3,6 +3,18 @@
 use serde_json::Value;
 
 use super::ToolRegistry;
+use crate::tools::tool_intent::{ToolIntent, classify_tool_intent};
+
+/// Tools that can write a plan file. Hoisted to a `const` so
+/// [`ToolRegistry::is_plan_file_operation`] does not allocate a fresh array on
+/// every tool call on the agent runloop's hot path.
+const FILE_WRITING_TOOLS: &[&str] = &[
+    crate::config::constants::tools::WRITE_FILE,
+    crate::config::constants::tools::UNIFIED_FILE,
+    crate::config::constants::tools::CREATE_FILE,
+    crate::config::constants::tools::EDIT_FILE,
+    crate::config::constants::tools::SEARCH_REPLACE,
+];
 
 impl ToolRegistry {
     /// Check if a tool is mutating (modifies files or environment).
@@ -42,6 +54,21 @@ impl ToolRegistry {
     /// Returns true for non-mutating tools and plan-safe exceptions like
     /// writing to active plan storage (`/tmp/vtcode-plans/` by default) or read-only unified tool actions.
     pub fn is_planning_active_allowed(&self, tool_name: &str, args: &Value) -> bool {
+        let intent = classify_tool_intent(tool_name, args);
+        self.is_planning_active_allowed_with_intent(tool_name, args, &intent)
+    }
+
+    /// Variant of [`Self::is_planning_active_allowed`] that reuses an already
+    /// computed [`ToolIntent`], avoiding a redundant `classify_tool_intent` on
+    /// the per-tool-call hot path. Callers typically classify the same
+    /// `(tool_name, args)` once for `readonly_classification` / parallel-safety
+    /// and should pass that intent in rather than recomputing it.
+    pub(super) fn is_planning_active_allowed_with_intent(
+        &self,
+        tool_name: &str,
+        args: &Value,
+        intent: &ToolIntent,
+    ) -> bool {
         use crate::config::constants::tools;
         use crate::tools::names::canonical_tool_name;
 
@@ -51,7 +78,6 @@ impl ToolRegistry {
             return true;
         }
 
-        let intent = crate::tools::tool_intent::classify_tool_intent(tool_name, args);
         if !intent.mutating {
             return true;
         }
@@ -67,28 +93,19 @@ impl ToolRegistry {
     /// Retries are allowed for read-only operations and for unified tools when
     /// their specific action is read-only (`file_operation:read`, `command_session:poll|list`).
     pub fn is_retry_safe_call(&self, tool_name: &str, args: &Value) -> bool {
-        crate::tools::tool_intent::classify_tool_intent(tool_name, args).retry_safe
+        classify_tool_intent(tool_name, args).retry_safe
     }
 
     /// Check if a tool operation is targeting the plans directory.
     /// In planning workflow, writes to active plan storage are allowed for the agent to write its plan.
     pub(super) fn is_plan_file_operation(&self, tool_name: &str, args: &Value) -> bool {
-        use crate::config::constants::tools as tool_names;
         use crate::tools::names::canonical_tool_name;
 
         let canonical = canonical_tool_name(tool_name);
         let normalized = canonical;
 
         // Only check file-writing tools
-        let file_writing_tools = [
-            tool_names::WRITE_FILE,
-            tool_names::UNIFIED_FILE,
-            tool_names::CREATE_FILE,
-            tool_names::EDIT_FILE,
-            tool_names::SEARCH_REPLACE,
-        ];
-
-        if !file_writing_tools.contains(&normalized) {
+        if !FILE_WRITING_TOOLS.contains(&normalized) {
             return false;
         }
 
@@ -143,7 +160,7 @@ impl ToolRegistry {
     /// (poll/list/inspect/continue without input) plus allowlisted run commands or `--dry-run`.
     #[expect(dead_code)]
     pub(super) fn is_readonly_unified_action(&self, tool_name: &str, args: &Value) -> bool {
-        crate::tools::tool_intent::classify_tool_intent(tool_name, args).readonly_unified_action
+        classify_tool_intent(tool_name, args).readonly_unified_action
     }
 }
 

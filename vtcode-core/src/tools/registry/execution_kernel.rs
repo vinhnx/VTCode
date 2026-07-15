@@ -517,7 +517,11 @@ pub(super) fn preflight_validate_resolved_call(
     );
     let readonly_classification = !intent.mutating;
     if registry.is_planning_active()
-        && !registry.is_planning_active_allowed(&validation_tool_name, validation_args.as_ref())
+        && !registry.is_planning_active_allowed_with_intent(
+            &validation_tool_name,
+            validation_args.as_ref(),
+            &intent,
+        )
     {
         let msg = agent_execution::planning_workflow_denial_message(&routed_tool_name);
         return Err(anyhow!(msg).context(agent_execution::PLANNING_DENIED_CONTEXT));
