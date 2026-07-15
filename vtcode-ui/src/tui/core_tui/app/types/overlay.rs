@@ -45,7 +45,7 @@ pub struct DiffOverlayRequest {
 
 #[derive(Clone, Debug)]
 pub struct FilePaletteTransientRequest {
-    pub files: Vec<String>,
+    pub dir_lister: crate::tui::core_tui::app::session::file_palette::DirLister,
     pub workspace: PathBuf,
     pub visible: Option<bool>,
 }

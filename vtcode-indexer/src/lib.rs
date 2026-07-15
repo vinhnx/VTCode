@@ -457,6 +457,46 @@ impl SimpleIndexer {
         files
     }
 
+    /// List the immediate children of `dir_path` (one level deep) without
+    /// recursing into subdirectories.
+    ///
+    /// Uses the same ignore/hidden/excluded-directory rules as [`Self::discover_files`]
+    /// (via the shared traversal filter), so expensive subtrees such as
+    /// `node_modules`, `.git`, and build directories are never listed. This lets
+    /// callers build a directory navigator that only touches the directories the
+    /// user actually opens, instead of walking the entire workspace up front.
+    ///
+    /// Returns `(path, is_dir)` pairs with directories sorted before files.
+    pub fn discover_dir_entries(&self, dir_path: &Path) -> Vec<(PathBuf, bool)> {
+        let walker = self.build_shallow_walker(dir_path);
+
+        let mut entries: Vec<(PathBuf, bool)> = walker
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path() != dir_path)
+            .map(|e| {
+                let path = e.path().to_path_buf();
+                let is_dir = e.file_type().is_some_and(|ft| ft.is_dir());
+                (path, is_dir)
+            })
+            .filter(|(path, is_dir)| {
+                if *is_dir {
+                    !should_skip_dir(path, &self.config)
+                } else {
+                    self.should_process_file_path(path)
+                }
+            })
+            .collect();
+
+        entries.sort_by(|a, b| {
+            b.1.cmp(&a.1).then_with(|| {
+                a.0.to_string_lossy()
+                    .to_lowercase()
+                    .cmp(&b.0.to_string_lossy().to_lowercase())
+            })
+        });
+        entries
+    }
+
     /// Internal helper for regex-based file content search.
     /// Used by both `search()` and `grep()` to avoid code duplication.
     fn search_files_internal(
@@ -683,6 +723,20 @@ impl SimpleIndexer {
         let filter = Arc::clone(&self.filter);
 
         let mut builder = vtcode_commons::walk::build_default_walker(dir_path);
+        builder.filter_entry(move |entry| {
+            should_visit_entry(entry, walk_root.as_path(), &config, filter.as_ref())
+        });
+        builder.build()
+    }
+
+    fn build_shallow_walker(&self, dir_path: &Path) -> Walk {
+        let walk_root = dir_path.to_path_buf();
+        let config = self.config.clone();
+        let filter = Arc::clone(&self.filter);
+
+        let mut builder = vtcode_commons::walk::build_default_walker(dir_path);
+        // Only immediate children — directory navigation lists one level at a time.
+        builder.max_depth(Some(1));
         builder.filter_entry(move |entry| {
             should_visit_entry(entry, walk_root.as_path(), &config, filter.as_ref())
         });
@@ -1202,6 +1256,41 @@ mod tests {
 
         assert!(!files.iter().any(|file| file.ends_with("skip.txt")));
         assert!(files.iter().any(|file| file.ends_with("README.md")));
+
+        Ok(())
+    }
+
+    #[test]
+    fn discover_dir_entries_is_shallow_and_ignore_aware() -> Result<()> {
+        let temp = tempdir()?;
+        let workspace = temp.path();
+        fs::create_dir_all(workspace.join("src"))?;
+        fs::create_dir_all(workspace.join("node_modules"))?;
+        fs::create_dir_all(workspace.join(".git"))?;
+        fs::write(workspace.join("README.md"), "# Notes")?;
+        fs::write(workspace.join("src").join("lib.rs"), "fn main() {}")?;
+        fs::write(workspace.join("node_modules").join("dep.js"), "x")?;
+        fs::write(workspace.join(".git").join("config"), "x")?;
+
+        let config = SimpleIndexerConfig::new(workspace.to_path_buf());
+        let indexer = SimpleIndexer::with_config(config);
+        let entries = indexer.discover_dir_entries(workspace);
+
+        let names: Vec<String> = entries
+            .iter()
+            .map(|(p, _)| p.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+
+        assert_eq!(
+            entries.len(),
+            2,
+            "expected exactly README.md and src, got {names:?}"
+        );
+        assert!(names.contains(&"README.md".to_string()));
+        assert!(names.contains(&"src".to_string()));
+
+        let (_, src_is_dir) = entries.iter().find(|(p, _)| p.ends_with("src")).unwrap();
+        assert!(*src_is_dir);
 
         Ok(())
     }

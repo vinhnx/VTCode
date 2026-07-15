@@ -18,15 +18,6 @@ where
         .map_err(|err| anyhow!("failed to join {label} task: {err}"))?
 }
 
-pub(crate) async fn load_workspace_files(workspace: PathBuf) -> Result<Vec<String>> {
-    task::spawn_blocking(move || {
-        let indexer = SimpleIndexer::new(workspace.clone());
-        indexer.discover_files(&workspace)
-    })
-    .await
-    .map_err(|err| anyhow!("failed to join file loading task: {err}"))
-}
-
 pub(crate) async fn bootstrap_config_files(workspace: PathBuf, force: bool) -> Result<Vec<String>> {
     blocking_task("configuration bootstrap", move || {
         VTCodeConfig::bootstrap_project(&workspace, force)

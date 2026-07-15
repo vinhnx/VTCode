@@ -142,9 +142,13 @@ impl AppSession {
     }
 
     /// Load the file palette with files from the workspace
-    pub(super) fn load_file_palette(&mut self, files: Vec<String>, workspace: PathBuf) {
-        let mut palette = FilePalette::new(workspace);
-        palette.load_files(files);
+    pub(super) fn load_file_palette(
+        &mut self,
+        dir_lister: super::file_palette::DirLister,
+        workspace: PathBuf,
+    ) {
+        let mut palette = FilePalette::new(workspace.clone());
+        palette.configure(workspace, dir_lister);
         self.file_palette = Some(palette);
         self.file_palette_active = false;
         self.check_file_reference_trigger();
@@ -212,38 +216,39 @@ impl AppSession {
                 true
             }
             KeyCode::Left => {
-                palette.collapse_selected();
-                self.mark_visual_dirty();
-                true
+                // Only ascend while browsing; in search mode let the input handle
+                // the cursor so the filter query remains editable.
+                if palette.is_search_mode() {
+                    false
+                } else {
+                    palette.go_up();
+                    self.mark_visual_dirty();
+                    true
+                }
             }
-            KeyCode::Right => {
-                palette.expand_selected();
-                self.mark_visual_dirty();
-                true
+            KeyCode::Right | KeyCode::Enter => {
+                let action = palette
+                    .get_selected()
+                    .map(|e| (e.is_dir, e.relative_path.clone()));
+                match action {
+                    Some((true, _)) => {
+                        palette.enter_selected_dir();
+                        self.mark_dirty();
+                        true
+                    }
+                    Some((false, path)) => {
+                        self.insert_file_reference(&path);
+                        self.close_file_palette();
+                        self.mark_dirty();
+                        true
+                    }
+                    None => false,
+                }
             }
             KeyCode::Tab => {
                 palette.select_best_match();
                 self.mark_visual_dirty();
                 true
-            }
-            KeyCode::Enter => {
-                if palette.selected_is_expandable_group() {
-                    palette.toggle_selected();
-                    self.mark_dirty();
-                    true
-                } else {
-                    let selected_path = palette.get_selected().map(|e| e.relative_path.clone());
-                    if let Some(path) = selected_path {
-                        self.insert_file_reference(&path);
-                        self.close_file_palette();
-                        self.mark_dirty();
-                        true
-                    } else {
-                        self.close_file_palette();
-                        self.mark_dirty();
-                        false
-                    }
-                }
             }
             KeyCode::Esc => {
                 self.close_file_palette();

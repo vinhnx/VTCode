@@ -115,6 +115,11 @@ pub enum InlineCommand {
     ShowTransient {
         request: Box<TransientRequest>,
     },
+    /// Deliver the full recursive workspace file list (discovered in the
+    /// background) so the file palette's Search mode can match against it.
+    UpdateFilePaletteSearch {
+        files: Vec<String>,
+    },
     CloseTransient,
     ClearScreen,
     SuspendEventLoop,
@@ -460,12 +465,22 @@ impl InlineHandle {
         }));
     }
 
-    pub fn configure_file_palette(&self, files: Vec<String>, workspace: std::path::PathBuf) {
+    pub fn configure_file_palette(
+        &self,
+        workspace: std::path::PathBuf,
+        dir_lister: crate::tui::core_tui::app::session::file_palette::DirLister,
+    ) {
         self.show_transient(TransientRequest::FilePalette(FilePaletteTransientRequest {
-            files,
+            dir_lister,
             workspace,
             visible: None,
         }));
+    }
+
+    /// Push the full recursive file list discovered in the background so Search
+    /// mode has a corpus to match against. Browse mode does not require it.
+    pub fn set_file_palette_search_index(&self, files: Vec<String>) {
+        self.send_command(InlineCommand::UpdateFilePaletteSearch { files });
     }
 
     pub fn configure_agent_palette(&self, agents: Vec<AgentPaletteItem>) {

@@ -401,19 +401,19 @@ impl Session {
                 return true;
             }
 
-            let page_items = palette.current_page_items();
-            if let Some(local_index) = local_index
-                && let Some((global_index, entry, selected)) = page_items.get(local_index)
-            {
-                if *selected {
-                    if palette.selected_is_expandable_group() {
-                        palette.toggle_selected();
+            if let Some(local_index) = local_index {
+                let is_selected = palette.selected_index() == Some(local_index);
+                if let Some(entry) = palette.list_entries().get(local_index).cloned() {
+                    if is_selected {
+                        if entry.is_dir {
+                            palette.enter_selected_dir();
+                            should_mark_dirty = true;
+                        } else {
+                            apply_path = Some(entry.relative_path.clone());
+                        }
+                    } else if palette.select_index(local_index) {
                         should_mark_dirty = true;
-                    } else {
-                        apply_path = Some(entry.relative_path.clone());
                     }
-                } else if palette.select_index(*global_index) {
-                    should_mark_dirty = true;
                 }
             }
 

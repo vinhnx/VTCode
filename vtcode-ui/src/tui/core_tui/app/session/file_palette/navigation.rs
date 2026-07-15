@@ -1,152 +1,108 @@
+use std::path::PathBuf;
+
 use super::{FileEntry, FilePalette};
 
 const PAGE_JUMP: usize = 10;
 
 impl FilePalette {
     pub fn move_selection_up(&mut self) {
-        self.tree_state.select_prev(&self.tree_groups);
+        match self.selected {
+            Some(sel) => self.selected = Some(sel.saturating_sub(1)),
+            None if !self.filtered_files.is_empty() => self.selected = Some(0),
+            None => {}
+        }
     }
 
     pub fn move_selection_down(&mut self) {
-        self.tree_state.select_next(&self.tree_groups);
+        if self.filtered_files.is_empty() {
+            self.selected = None;
+            return;
+        }
+        let max = self.filtered_files.len() - 1;
+        self.selected = Some(match self.selected {
+            Some(sel) => sel.min(max).saturating_add(1).min(max),
+            None => 0,
+        });
     }
 
     pub fn move_to_first(&mut self) {
-        self.tree_state.select(0, None);
+        self.select_first();
     }
 
     pub fn move_to_last(&mut self) {
-        if !self.tree_groups.is_empty() {
-            let last = self.tree_groups.len() - 1;
-            self.tree_state.select(last, None);
-        }
+        self.selected = if self.filtered_files.is_empty() {
+            None
+        } else {
+            Some(self.filtered_files.len() - 1)
+        };
     }
 
     pub fn page_up(&mut self) {
         for _ in 0..PAGE_JUMP {
-            self.tree_state.select_prev(&self.tree_groups);
+            self.move_selection_up();
         }
     }
 
     pub fn page_down(&mut self) {
         for _ in 0..PAGE_JUMP {
-            self.tree_state.select_next(&self.tree_groups);
+            self.move_selection_down();
         }
     }
 
     pub fn get_selected(&self) -> Option<&FileEntry> {
-        let (group_idx, child_idx) = self.tree_state.selected();
-        self.group_entries.get(group_idx).and_then(|entries| {
-            if let Some(ci) = child_idx {
-                entries.get(ci)
-            } else {
-                entries.first()
-            }
-        })
-    }
-
-    pub fn selected_is_expandable_group(&self) -> bool {
-        let (group_idx, child_idx) = self.tree_state.selected();
-        if child_idx.is_some() {
-            return false;
-        }
-        self.group_entries
-            .get(group_idx)
-            .is_some_and(|entries| entries.len() > 1 || entries.first().is_some_and(|e| e.is_dir))
-    }
-
-    pub fn selected_index(&self) -> Option<usize> {
-        let (group_idx, child_idx) = self.tree_state.selected();
-        let mut flat = 0;
-        for (gi, group) in self.tree_groups.iter().enumerate() {
-            if gi == group_idx {
-                // Group header is at `flat`; first child (if any) is at `flat + 1`.
-                return Some(flat + child_idx.map_or(0, |ci| ci + 1));
-            }
-            flat += 1;
-            if self.tree_state.is_expanded(gi) {
-                flat += group.children_slice().len();
-            }
-        }
-        None
+        self.selected.and_then(|i| self.filtered_files.get(i))
     }
 
     pub fn select_index(&mut self, index: usize) -> bool {
-        let mut flat = 0;
-        for (gi, group) in self.tree_groups.iter().enumerate() {
-            if flat == index {
-                self.tree_state.select(gi, None);
-                return true;
-            }
-            flat += 1;
-            if self.tree_state.is_expanded(gi) {
-                let num_children = group.children_slice().len();
-                if flat + num_children > index {
-                    self.tree_state.select(gi, Some(index - flat));
-                    return true;
-                }
-                flat += num_children;
-            }
+        if index < self.filtered_files.len() {
+            self.selected = Some(index);
+            true
+        } else {
+            false
         }
-        false
-    }
-
-    pub fn toggle_selected(&mut self) {
-        self.tree_state.toggle_selected();
-    }
-
-    pub fn expand_selected(&mut self) {
-        let (group_idx, _) = self.tree_state.selected();
-        self.tree_state.expand(group_idx);
-    }
-
-    pub fn collapse_selected(&mut self) {
-        let (group_idx, _) = self.tree_state.selected();
-        self.tree_state.collapse(group_idx);
-    }
-
-    pub fn get_best_match(&self) -> Option<&FileEntry> {
-        self.filtered_files.first()
     }
 
     pub fn select_best_match(&mut self) {
-        self.tree_state.select(0, None);
+        self.select_first();
     }
 
-    pub fn current_page_items(&self) -> Vec<(usize, &FileEntry, bool)> {
-        let (sel_group, sel_child) = self.tree_state.selected();
-        let mut result = Vec::new();
-        let mut flat_idx = 0;
+    /// Descend into the selected directory, or ascend when the `..` entry is
+    /// selected. No-op on a file or when nothing is selected.
+    pub fn enter_selected_dir(&mut self) {
+        let Some(entry) = self.get_selected().cloned() else {
+            return;
+        };
+        if !entry.is_dir {
+            return;
+        }
+        if entry.is_parent {
+            self.go_up();
+            return;
+        }
+        self.last_entered = Some(entry.display_name.trim_end_matches('/').to_string());
+        self.current_dir = PathBuf::from(entry.path);
+        self.rebuild_dir_listing();
+    }
 
-        for (gi, _group) in self.tree_groups.iter().enumerate() {
-            let entries = &self.group_entries[gi];
-
-            // Group header row (always present).
-            if let Some(first_entry) = entries.first() {
-                let is_selected = gi == sel_group && sel_child.is_none();
-                result.push((flat_idx, first_entry, is_selected));
-                flat_idx += 1;
-            }
-
-            // Expanded children.
-            if self.tree_state.is_expanded(gi) {
-                for (ci, entry) in entries.iter().enumerate() {
-                    let is_selected = gi == sel_group && sel_child == Some(ci);
-                    result.push((flat_idx, entry, is_selected));
-                    flat_idx += 1;
-                }
+    /// Ascend one directory level, reselecting the directory just left.
+    pub fn go_up(&mut self) {
+        if self.current_dir == self.workspace_root {
+            return;
+        }
+        let child = self.last_entered.clone();
+        if let Some(parent) = self.current_dir.parent() {
+            self.current_dir = parent.to_path_buf();
+        }
+        self.rebuild_dir_listing();
+        if let Some(name) = child {
+            if let Some(pos) = self
+                .filtered_files
+                .iter()
+                .position(|e| e.is_dir && !e.is_parent && e.display_name == format!("{name}/"))
+            {
+                self.selected = Some(pos);
             }
         }
-
-        result
-    }
-
-    pub fn total_pages(&self) -> usize {
-        1
-    }
-
-    pub fn current_page_number(&self) -> usize {
-        1
     }
 
     pub fn total_items(&self) -> usize {
@@ -161,8 +117,15 @@ impl FilePalette {
         &self.filter_query
     }
 
+    /// Whether the palette has anything to show. True when there are visible
+    /// entries (`filtered_files`, populated immediately by Browse mode via the
+    /// directory lister) *or* a search corpus (`all_files`, populated lazily by
+    /// the background discovery task). Basing this solely on `all_files` would
+    /// collapse the panel layout and swallow mouse input during Browse mode
+    /// before the index finishes; basing it solely on `filtered_files` would
+    /// make an empty search-listing with a loaded corpus report `false`.
     pub fn has_files(&self) -> bool {
-        !self.all_files.is_empty()
+        !self.filtered_files.is_empty() || !self.all_files.is_empty()
     }
 
     pub fn has_more_items(&self) -> bool {

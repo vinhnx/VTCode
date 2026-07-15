@@ -1342,28 +1342,19 @@ fn clicking_selected_file_palette_row_inserts_reference() {
     let workspace = vtcode_tui_workspace_root();
     load_app_file_palette(
         &mut session,
-        vec![
-            workspace
-                .join("src/core_tui/session.rs")
-                .display()
-                .to_string(),
-        ],
+        vec![workspace.join("Cargo.toml").display().to_string()],
         workspace.clone(),
     );
     session.handle_command(app_types::InlineCommand::SetInput("@".to_string()));
 
-    // Tree starts collapsed — expand the group first via Right arrow.
-    let _ = session.process_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
-
     let lines = rendered_app_session_lines(&mut session, 20);
     let panel_area = session.core.bottom_panel_area().expect("panel area");
 
-    // Find the child row (session.rs) in the rendered tree.
-    // child_row is the absolute line index in the rendered output.
+    // Find the row for the top-level file in the rendered list.
     let child_row = lines
         .iter()
-        .position(|line| line.contains("session.rs"))
-        .expect("child file should render");
+        .position(|line| line.contains("Cargo.toml"))
+        .expect("file should render");
 
     let (event_tx, _event_rx) = mpsc::unbounded_channel();
 
@@ -1391,10 +1382,7 @@ fn clicking_selected_file_palette_row_inserts_reference() {
         None,
     );
 
-    assert_eq!(
-        session.core.input_manager.content(),
-        "@src/core_tui/session.rs "
-    );
+    assert_eq!(session.core.input_manager.content(), "@Cargo.toml ");
     assert!(!session.file_palette_active);
 }
 

@@ -465,7 +465,7 @@ impl AppSession {
                 self.show_diff_overlay(request);
             }
             TransientRequest::FilePalette(request) => {
-                self.load_file_palette(request.files, request.workspace);
+                self.load_file_palette(request.dir_lister, request.workspace);
                 match request.visible {
                     Some(true) => {
                         self.ensure_inline_lists_visible_for_trigger();
@@ -696,6 +696,11 @@ impl AppSession {
             }
             InlineCommand::CloseTransient => self.close_transient(),
             InlineCommand::ShowTransient { request } => self.show_transient(*request),
+            InlineCommand::UpdateFilePaletteSearch { files } => {
+                if let Some(palette) = &mut self.file_palette {
+                    palette.set_search_index(files);
+                }
+            }
             _ => {
                 if let Some(core_cmd) = to_core_command(&command) {
                     self.core.handle_command(core_cmd);
@@ -801,6 +806,7 @@ fn to_core_command(command: &InlineCommand) -> Option<crate::tui::core_tui::type
         }
         InlineCommand::SetLocalAgents { .. } => return None,
         InlineCommand::SetArchivedHistory { .. } => return None,
+        InlineCommand::UpdateFilePaletteSearch { .. } => return None,
         InlineCommand::SetPrimaryAgent { name, color } => CoreCommand::SetPrimaryAgent {
             name: name.clone(),
             color: color.clone(),

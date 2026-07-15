@@ -1205,5 +1205,6 @@ fn other_name(command: &InlineCommand) -> &'static str {
         InlineCommand::SetReasoningStage(_) => "SetReasoningStage",
         InlineCommand::StopEventStream => "StopEventStream",
         InlineCommand::StartEventStream => "StartEventStream",
+        InlineCommand::UpdateFilePaletteSearch { .. } => "UpdateFilePaletteSearch",
     }
 }

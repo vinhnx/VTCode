@@ -4,10 +4,9 @@ use crate::tui::core_tui::session::inline_list::{InlineListRow, selection_paddin
 use crate::tui::core_tui::session::list_panel::{
     ListPanelLayout, SharedListPanelSections, SharedListPanelStyles, SharedSearchField,
     StaticRowsListPanelModel, fixed_section_rows, fixed_section_rows_with_divider,
-    input_styles_from_theme, render_shared_list_panel, render_shared_search_field, rows_to_u16,
+    input_styles_from_theme, render_shared_list_panel, rows_to_u16,
 };
-use ratatui::widgets::{Clear, Fill, Paragraph, StatefulWidget, Wrap};
-use ratatui_cheese::tree::{Mode, Tree, TreeStyles};
+use ratatui::widgets::{Clear, Paragraph, Wrap};
 
 #[derive(Clone)]
 struct AgentPaletteRenderRow {
@@ -186,9 +185,13 @@ pub(crate) fn file_palette_panel_layout(session: &Session) -> Option<ListPanelLa
     };
     let has_files = palette.has_files();
     let fixed_rows = fixed_section_rows_with_divider(1, info_rows, has_files, true);
-    let tree_rows: u16 = if has_files { 15 } else { 1 };
+    let list_rows: u16 = if has_files {
+        palette.total_items().min(ui::INLINE_LIST_MAX_ROWS) as u16
+    } else {
+        1
+    };
 
-    Some(ListPanelLayout::new(fixed_rows, tree_rows))
+    Some(ListPanelLayout::new(fixed_rows, list_rows))
 }
 
 pub fn split_inline_file_palette_area(session: &mut Session, area: Rect) -> (Rect, Option<Rect>) {
@@ -228,105 +231,95 @@ pub fn render_file_palette(session: &mut Session, frame: &mut Frame<'_>, area: R
         return;
     }
 
-    let dim_style = default_style(session).add_modifier(Modifier::DIM);
-    let border_style = session.core.styles.border_style();
+    let default_style = default_style(session);
+    let dim_style = default_style.add_modifier(Modifier::DIM);
+    let highlight_style = modal_list_highlight_style(session);
+    let accent = accent_style(session);
+    let blank_gutter = selection_padding();
 
-    let instructions = file_palette_instructions(session, palette);
-    let filter_query = palette.filter_query().to_owned();
-    let tree_groups = palette.tree_groups().to_vec();
+    let selected = palette.selected_index();
+    let rendered_rows: Vec<(InlineListRow, u16)> = palette
+        .list_entries()
+        .iter()
+        .enumerate()
+        .map(|(idx, entry)| {
+            let is_selected = selected == Some(idx);
+            let cursor = if is_selected {
+                format!("{} ", ui::MODAL_LIST_HIGHLIGHT_SYMBOL)
+            } else {
+                blank_gutter.clone()
+            };
+            let cursor_style = if is_selected {
+                highlight_style
+            } else {
+                dim_style
+            };
+            let name_style = if entry.is_dir {
+                if is_selected { highlight_style } else { accent }
+            } else if is_selected {
+                highlight_style
+            } else {
+                palette
+                    .style_for_entry(entry)
+                    .map(crate::tui::core_tui::style::ratatui_style_from_ansi)
+                    .unwrap_or(dim_style)
+            };
 
-    let header_line = Line::from(Span::styled("Files".to_owned(), dim_style));
-    let show_search = true;
-    let show_divider = true;
+            let spans = vec![
+                Span::styled(cursor, cursor_style),
+                Span::styled(entry.display_name.clone(), name_style),
+            ];
+            (InlineListRow::single(Line::from(spans), dim_style), 1_u16)
+        })
+        .collect();
 
-    let mut constraints = Vec::new();
-    constraints.push(Constraint::Length(1)); // header
-    constraints.push(Constraint::Length(instructions.len() as u16)); // info
-    if show_search {
-        constraints.push(Constraint::Length(2)); // search
-    }
-    if show_divider {
-        constraints.push(Constraint::Length(1)); // divider
-    }
-    constraints.push(Constraint::Min(1)); // tree
+    let header = if palette.is_search_mode() {
+        vec![Line::from(Span::styled(
+            format!("Files  (search: '{}')", palette.filter_query()),
+            highlight_style,
+        ))]
+    } else {
+        vec![Line::from(vec![
+            Span::styled("Files", highlight_style),
+            Span::styled(format!("  {}", palette.breadcrumb()), dim_style),
+        ])]
+    };
 
-    let layout = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints(constraints)
-        .split(area);
-
-    let mut idx = 0;
-
-    // Header
-    frame.render_widget(Paragraph::new(header_line).style(dim_style), layout[idx]);
-    idx += 1;
-
-    // Info instructions
-    frame.render_widget(
-        Paragraph::new(Text::from(instructions)).style(dim_style),
-        layout[idx],
-    );
-    idx += 1;
-
-    // Search field
-    if show_search {
-        let search = SharedSearchField {
+    let sections = SharedListPanelSections {
+        header,
+        info: file_palette_instructions(session, palette),
+        search: Some(SharedSearchField {
             label: "Search files".to_owned(),
             placeholder: Some("filename or path".to_owned()),
-            query: filter_query,
-        };
-        let input_styles = input_styles_from_theme(&session.core.theme);
-        render_shared_search_field(frame, layout[idx], &search, &input_styles);
-        idx += 1;
-    }
+            query: palette.filter_query().to_owned(),
+        }),
+    };
 
-    // Divider
-    if show_divider {
-        frame.render_widget(
-            Fill::new(ui::INLINE_BLOCK_HORIZONTAL).style(border_style),
-            layout[idx],
-        );
-        idx += 1;
-    }
+    let mut model = StaticRowsListPanelModel {
+        rows: rendered_rows,
+        selected,
+        offset: 0,
+        visible_rows: 0,
+    };
 
-    // Tree
-    let tree_area = layout[idx];
-    if tree_area.height == 0 {
-        return;
-    }
+    render_shared_list_panel(
+        frame,
+        area,
+        sections,
+        SharedListPanelStyles {
+            base_style: dim_style,
+            selected_style: Some(highlight_style),
+            text_style: dim_style,
+            divider_style: Some(session.core.styles.border_style()),
+            input_styles: input_styles_from_theme(&session.core.theme),
+        },
+        &mut model,
+    );
 
-    let tree_styles = file_tree_styles(session);
-    let state = session
-        .file_palette
-        .as_mut()
-        .expect("palette checked above")
-        .tree_state_mut();
-    let tree = Tree::default()
-        .groups(tree_groups)
-        .mode(Mode::None)
-        .styles(tree_styles)
-        .chevron_collapsed("▸")
-        .chevron_expanded("▾")
-        .highlight_full_row(true);
-
-    StatefulWidget::render(&tree, tree_area, frame.buffer_mut(), state);
-}
-
-fn file_tree_styles(session: &Session) -> TreeStyles {
-    let default_style = default_style(session).bg(Color::Reset);
-    let dim_style = default_style.add_modifier(Modifier::DIM);
-    let highlight = modal_list_highlight_style(session).bg(Color::Reset);
-    let accent = accent_style(session).bg(Color::Reset);
-
-    TreeStyles {
-        parent: default_style,
-        child: dim_style,
-        selected: highlight,
-        chevron: dim_style,
-        chevron_active: accent,
-        chevron_dim: dim_style.add_modifier(Modifier::DIM),
-        count: dim_style,
-        icon: Style::default(),
+    // The shared panel may clamp the selection (e.g. after filtering); keep the
+    // palette's selection state authoritative across frames.
+    if let Some(palette) = session.file_palette.as_mut() {
+        palette.set_selected(model.selected);
     }
 }
 
@@ -430,7 +423,7 @@ fn file_palette_instructions(session: &Session, palette: &FilePalette) -> Vec<Li
         };
 
         lines.push(Line::from(vec![Span::styled(
-            "↑↓ Navigate · ← → Expand/Collapse · Enter Select · Esc Close".to_owned(),
+            "↑↓ Navigate · →/Enter Open · ← Up · Type to filter · Esc Close".to_owned(),
             default_style(session),
         )]));
 

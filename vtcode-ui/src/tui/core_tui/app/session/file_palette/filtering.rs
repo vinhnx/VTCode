@@ -1,11 +1,10 @@
 use std::collections::BTreeMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
 use nucleo_matcher::{Config, Matcher, Utf32Str};
-use ratatui_cheese::tree::{TreeGroup, TreeItem, TreeState};
 
-use super::{FileEntry, FilePalette};
+use super::{FileEntry, FilePalette, PickerMode};
 
 impl FilePalette {
     pub(super) fn should_exclude_file(path: &Path) -> bool {
@@ -27,12 +26,31 @@ impl FilePalette {
     }
 
     pub fn load_files(&mut self, files: Vec<String>) {
+        self.populate_all_files(files);
+        self.current_dir = self.workspace_root.clone();
+        self.set_filter(String::new());
+    }
+
+    /// Build `all_files` and the full `dir_index` from a complete recursive file
+    /// list. Used by [`Self::load_files`] (tests); the runtime path calls
+    /// [`Self::set_search_index`] and lets `dir_index` build lazily via
+    /// `ensure_dir_listing` so Browse mode never walks the whole workspace.
+    pub(super) fn populate_all_files(&mut self, files: Vec<String>) {
+        self.build_entries(files, true);
+        self.build_dir_index();
+    }
+
+    /// Convert a raw recursive file list into [`FileEntry`] values. When
+    /// `detect_dirs` is false (the runtime Search path, whose input comes from
+    /// `discover_files` which already filters to regular files), the per-file
+    /// `is_dir()` stat is skipped since every entry is known to be a file.
+    pub(super) fn build_entries(&mut self, files: Vec<String>, detect_dirs: bool) {
         self.all_files = files
             .into_iter()
             .filter(|path| !Self::should_exclude_file(Path::new(path)))
             .map(|path| {
                 let relative_path = Self::make_relative(&self.workspace_root, &path);
-                let is_dir = Path::new(&path).is_dir();
+                let is_dir = detect_dirs && Path::new(&path).is_dir();
                 let display_name = if is_dir {
                     format!("{relative_path}/")
                 } else {
@@ -43,6 +61,7 @@ impl FilePalette {
                     display_name,
                     relative_path,
                     is_dir,
+                    is_parent: false,
                 }
             })
             .collect();
@@ -52,7 +71,88 @@ impl FilePalette {
                 .to_lowercase()
                 .cmp(&b.relative_path.to_lowercase())
         });
-        self.apply_filter();
+    }
+
+    /// Build `dir_index`: for every directory, the list of its *direct* children
+    /// (subdirectories and files). Derived once from `all_files` so that
+    /// navigating the tree never re-scans the whole workspace. Hidden directories
+    /// (names starting with `.`) are pruned, matching the browse exclusion rules.
+    fn build_dir_index(&mut self) {
+        let root = self.workspace_root.clone();
+        let mut index: BTreeMap<PathBuf, Vec<FileEntry>> = BTreeMap::new();
+
+        for entry in &self.all_files {
+            let path = Path::new(&entry.path);
+            if let Some(parent) = path.parent() {
+                Self::insert_child(&mut index, parent, &root, entry.path.clone(), false);
+            }
+
+            // Register every ancestor directory as a child of its own parent so
+            // chains of nested directories are all navigable.
+            let mut ancestor = path.parent();
+            while let Some(dir) = ancestor {
+                if dir == root {
+                    break;
+                }
+                if let Some(grandparent) = dir.parent() {
+                    Self::insert_child(
+                        &mut index,
+                        grandparent,
+                        &root,
+                        dir.display().to_string(),
+                        true,
+                    );
+                }
+                ancestor = dir.parent();
+            }
+        }
+
+        self.dir_index = index;
+    }
+
+    /// Insert a child entry under `parent` in `index`, de-duplicating directories
+    /// (a directory is reached via multiple descendant files) and skipping hidden
+    /// directories.
+    fn insert_child(
+        index: &mut BTreeMap<PathBuf, Vec<FileEntry>>,
+        parent: &Path,
+        root: &Path,
+        child_path: String,
+        is_dir: bool,
+    ) {
+        let path = Path::new(&child_path);
+        let child_name = match path.file_name().and_then(|n| n.to_str()) {
+            Some(name) => name.to_string(),
+            None => return,
+        };
+        if is_dir && child_name.starts_with('.') {
+            return;
+        }
+
+        let display_name = if is_dir {
+            format!("{child_name}/")
+        } else {
+            child_name
+        };
+        let relative_path = Self::make_relative(root, &child_path);
+
+        let entry = FileEntry {
+            path: child_path,
+            display_name,
+            relative_path,
+            is_dir,
+            is_parent: false,
+        };
+
+        let children = index.entry(parent.to_path_buf()).or_default();
+        if is_dir
+            && children
+                .iter()
+                .any(|c| c.display_name == entry.display_name)
+        {
+            return;
+        }
+        children.push(entry);
     }
 
     fn make_relative(workspace: &Path, file_path: &str) -> String {
@@ -64,30 +164,98 @@ impl FilePalette {
     }
 
     pub fn set_filter(&mut self, query: String) {
-        self.filter_query.clone_from(&query);
-
-        if let Some(cached) = self.filter_cache.get(&query) {
-            self.filtered_files.clone_from(cached);
-            self.rebuild_tree();
+        self.filter_query = query;
+        if self.filter_query.is_empty() {
+            self.mode = PickerMode::Browse;
+            self.rebuild_dir_listing();
         } else {
-            self.apply_filter();
-            if !query.is_empty() && self.filter_cache.len() < 50 {
-                self.filter_cache.insert(query, self.filtered_files.clone());
-            }
+            self.mode = PickerMode::Search;
+            self.rebuild_search();
         }
     }
 
-    pub(super) fn apply_filter(&mut self) {
-        if self.filter_query.is_empty() {
-            self.filtered_files.clone_from(&self.all_files);
-            self.rebuild_tree();
-            return;
+    /// Build the current directory's contents. The listing is fetched lazily from
+    /// `dir_lister` (cached per directory), so navigating never walks the whole
+    /// workspace — only the directory the user is currently viewing.
+    pub(super) fn rebuild_dir_listing(&mut self) {
+        let cur = self.current_dir.clone();
+        let root = self.workspace_root.clone();
+
+        let mut children = self.ensure_dir_listing(&cur);
+        children.sort_by(|a, b| {
+            b.is_dir.cmp(&a.is_dir).then_with(|| {
+                a.display_name
+                    .to_lowercase()
+                    .cmp(&b.display_name.to_lowercase())
+            })
+        });
+
+        let mut listing: Vec<FileEntry> = Vec::with_capacity(children.len() + 1);
+        if cur != root {
+            let parent_path = cur
+                .parent()
+                .map(|p| p.to_path_buf())
+                .unwrap_or_else(|| root.clone());
+            let relative_path = Self::make_relative(&root, &parent_path.display().to_string());
+            listing.push(FileEntry {
+                path: parent_path.display().to_string(),
+                display_name: "..".to_string(),
+                relative_path,
+                is_dir: true,
+                is_parent: true,
+            });
+        }
+        listing.extend(children);
+
+        self.filtered_files = listing;
+        self.select_first();
+    }
+
+    /// Return the immediate children of `dir`, loading and caching them via
+    /// `dir_lister` on first access. The lister is supplied by the runloop and
+    /// performs a shallow, ignore-aware directory read.
+    fn ensure_dir_listing(&mut self, dir: &Path) -> Vec<FileEntry> {
+        if let Some(cached) = self.dir_index.get(dir) {
+            return cached.clone();
         }
 
-        /// A matched file plus the values needed to rank it. Carrying
-        /// `path_lower` here means it is computed once during scoring and
-        /// reused by the comparator instead of re-lowercasing both operands on
-        /// every comparison (O(n log n) allocations per keystroke).
+        let raw = self.dir_lister.list(dir);
+        let entries: Vec<FileEntry> = raw
+            .into_iter()
+            .map(|(path, is_dir)| {
+                let display_name = if is_dir {
+                    format!(
+                        "{}/",
+                        path.file_name()
+                            .and_then(|n| n.to_str())
+                            .unwrap_or_default()
+                    )
+                } else {
+                    path.file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or_default()
+                        .to_string()
+                };
+                let relative_path =
+                    Self::make_relative(&self.workspace_root, &path.display().to_string());
+                FileEntry {
+                    path: path.display().to_string(),
+                    display_name,
+                    relative_path,
+                    is_dir,
+                    is_parent: false,
+                }
+            })
+            .collect();
+
+        self.dir_index.insert(dir.to_path_buf(), entries.clone());
+        entries
+    }
+
+    pub(super) fn rebuild_search(&mut self) {
+        let query = self.filter_query.clone();
+        let query_lower = query.to_lowercase();
+
         struct ScoredPath {
             score: usize,
             index: usize,
@@ -95,11 +263,16 @@ impl FilePalette {
             path_lower: String,
         }
 
-        let query_lower = self.filter_query.to_lowercase();
+        // The recursive index is filled in asynchronously; until then Search mode
+        // has no corpus to match against.
+        if self.all_files.is_empty() {
+            self.filtered_files.clear();
+            self.select_first();
+            return;
+        }
+
         let mut scored: Vec<ScoredPath> = Vec::with_capacity(self.all_files.len() / 2);
         let mut buffer = Vec::new();
-        // Parse the pattern and allocate the matcher once, then reuse them for
-        // every candidate. Rebuilding these per file was pure repeated work.
         let mut matcher = Matcher::new(Config::DEFAULT.match_paths());
         let pattern = Pattern::parse(&query_lower, CaseMatching::Ignore, Normalization::Smart);
 
@@ -158,101 +331,21 @@ impl FilePalette {
             .into_iter()
             .map(|scored_path| self.all_files[scored_path.index].clone())
             .collect();
-        self.rebuild_tree();
+        self.select_first();
     }
 
-    fn rebuild_tree(&mut self) {
-        // Save expanded state before rebuilding.
-        let old_expanded: Vec<bool> = (0..self.tree_groups.len())
-            .map(|i| self.tree_state.is_expanded(i))
-            .collect();
-
-        let (groups, group_entries) = Self::build_tree_groups(&self.filtered_files);
-        let num_groups = groups.len();
-        self.tree_groups = groups;
-        self.group_entries = group_entries;
-        self.tree_state = TreeState::new(num_groups);
-
-        // Restore expanded state for groups that still exist.
-        for (i, &was_expanded) in old_expanded.iter().enumerate() {
-            if i < num_groups && was_expanded {
-                self.tree_state.expand(i);
-            }
+    pub(super) fn select_first(&mut self) {
+        if self.filtered_files.is_empty() {
+            self.selected = None;
+            return;
         }
-    }
-
-    pub(super) fn build_tree_groups(files: &[FileEntry]) -> (Vec<TreeGroup>, Vec<Vec<FileEntry>>) {
-        let mut top_level_dirs: Vec<&FileEntry> = Vec::new();
-        let mut top_level_files: Vec<&FileEntry> = Vec::new();
-        let mut dir_children: BTreeMap<String, Vec<&FileEntry>> = BTreeMap::new();
-
-        for entry in files {
-            let relative = &entry.relative_path;
-            if let Some(slash_pos) = relative.find('/') {
-                let top_dir = &relative[..slash_pos];
-                dir_children
-                    .entry(top_dir.to_owned())
-                    .or_default()
-                    .push(entry);
-            } else if entry.is_dir {
-                top_level_dirs.push(entry);
-            } else {
-                top_level_files.push(entry);
-            }
-        }
-
-        top_level_dirs.retain(|entry| !dir_children.contains_key(entry.relative_path.as_str()));
-
-        let mut groups = Vec::new();
-        let mut group_entries = Vec::new();
-
-        let mut dir_iter: Vec<_> = dir_children.into_iter().collect();
-        // `sort_by_cached_key` computes each lowercased key once instead of
-        // re-lowercasing operands O(n log n) times inside a comparator.
-        dir_iter.sort_by_cached_key(|entry| entry.0.to_lowercase());
-
-        for (dir_name, mut children) in dir_iter {
-            children.sort_by_cached_key(|entry| entry.relative_path.to_lowercase());
-
-            let prefix = format!("{dir_name}/");
-            let child_items: Vec<TreeItem> = children
-                .iter()
-                .map(|entry| {
-                    let name = entry
-                        .relative_path
-                        .strip_prefix(&prefix)
-                        .unwrap_or(&entry.relative_path)
-                        .to_owned();
-                    TreeItem::new(if entry.is_dir {
-                        format!("{name}/")
-                    } else {
-                        name
-                    })
-                })
-                .collect();
-            let child_entries: Vec<FileEntry> = children.iter().map(|e| (*e).clone()).collect();
-
-            groups
-                .push(TreeGroup::new(TreeItem::new(format!("{dir_name}/"))).children(child_items));
-            group_entries.push(child_entries);
-        }
-
-        top_level_dirs.sort_by_cached_key(|entry| entry.relative_path.to_lowercase());
-        for entry in top_level_dirs {
-            groups.push(TreeGroup::new(TreeItem::new(format!(
-                "{}/",
-                entry.relative_path
-            ))));
-            group_entries.push(vec![(*entry).clone()]);
-        }
-
-        top_level_files.sort_by_cached_key(|entry| entry.relative_path.to_lowercase());
-        for entry in top_level_files {
-            groups.push(TreeGroup::new(TreeItem::new(entry.display_name.clone())));
-            group_entries.push(vec![(*entry).clone()]);
-        }
-
-        (groups, group_entries)
+        // Skip the synthetic `..` parent entry so the first real item is selected.
+        let start = if self.filtered_files.first().is_some_and(|e| e.is_parent) {
+            1
+        } else {
+            0
+        };
+        self.selected = Some(start.min(self.filtered_files.len() - 1));
     }
 
     #[expect(dead_code)]
@@ -337,11 +430,5 @@ impl FilePalette {
         score += matches * 10;
 
         score
-    }
-
-    #[expect(dead_code)]
-    pub fn style_for_entry(&self, entry: &FileEntry) -> Option<anstyle::Style> {
-        let path = Path::new(&entry.path);
-        self.file_colorizer.style_for_path(path)
     }
 }

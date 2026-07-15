@@ -191,15 +191,52 @@ pub fn sample_local_agent_entry_with_id(
 }
 
 pub fn load_app_file_palette(session: &mut AppSession, files: Vec<String>, workspace: PathBuf) {
+    use crate::tui::core_tui::app::session::file_palette::DirLister;
+    use std::path::Path;
+
+    // Synthesize a directory lister from the flat file list so navigation works
+    // in tests (the paths do not exist on disk). A child is a directory when some
+    // other entry is nested beneath it.
+    let dir_lister = DirLister::new({
+        let files = files.clone();
+        move |dir: &Path| {
+            let dir_str = dir.display().to_string();
+            let mut out: Vec<(PathBuf, bool)> = Vec::new();
+            for f in &files {
+                let p = Path::new(f);
+                let Some(parent) = p.parent() else {
+                    continue;
+                };
+                if parent.display().to_string() != dir_str {
+                    continue;
+                }
+                let is_dir = files
+                    .iter()
+                    .any(|other| other != f && other.starts_with(&format!("{f}/")));
+                out.push((PathBuf::from(f), is_dir));
+            }
+            out.sort_by(|a, b| {
+                b.1.cmp(&a.1).then_with(|| {
+                    a.0.to_string_lossy()
+                        .to_lowercase()
+                        .cmp(&b.0.to_string_lossy().to_lowercase())
+                })
+            });
+            out
+        }
+    });
+
     session.handle_command(app_types::InlineCommand::ShowTransient {
         request: Box::new(app_types::TransientRequest::FilePalette(
             app_types::FilePaletteTransientRequest {
-                files,
+                dir_lister,
                 workspace,
                 visible: None,
             },
         )),
     });
+    // Mirror the runtime: the recursive index is delivered after configuration.
+    session.handle_command(app_types::InlineCommand::UpdateFilePaletteSearch { files });
 }
 
 pub fn session_with_slash_palette_commands() -> AppSession {

@@ -23,7 +23,6 @@ use crate::agent::runloop::unified::stop_requests::request_local_stop;
 use crate::agent::runloop::unified::turn::utils::{
     append_additional_context, render_hook_messages,
 };
-use crate::agent::runloop::unified::turn::workspace::load_workspace_files;
 use crate::agent::runloop::unified::{context_manager, state};
 use anyhow::{Context, Result};
 use hashbrown::HashMap;
@@ -295,14 +294,30 @@ pub(crate) async fn initialize_session_ui(
         renderer.set_screen_reader_mode(cfg.ui.screen_reader_mode);
         renderer.set_show_diagnostics_in_transcript(cfg.ui.show_diagnostics_in_transcript);
     }
-    let workspace_for_indexer = config.workspace.clone();
     let workspace_for_palette = config.workspace.clone();
-    let handle_for_indexer = handle.clone();
+    let handle_for_palette = handle.clone();
+    // Configure immediately with a shallow directory lister so the root is
+    // usable at once; the full recursive walk for Search mode is deferred to a
+    // background task below.
+    handle_for_palette.configure_file_palette(
+        workspace_for_palette.clone(),
+        vtcode_ui::tui::core_tui::app::session::file_palette::DirLister::new({
+            let ws = workspace_for_palette.clone();
+            move |dir| vtcode_core::SimpleIndexer::new(ws.clone()).discover_dir_entries(dir)
+        }),
+    );
+    let workspace_for_search = config.workspace.clone();
+    let handle_for_search = handle.clone();
     let file_palette_task_guard = BackgroundTaskGuard::new(tokio::spawn(async move {
-        match load_workspace_files(workspace_for_indexer).await {
+        match tokio::task::spawn_blocking(move || {
+            vtcode_core::SimpleIndexer::new(workspace_for_search.clone())
+                .discover_files(&workspace_for_search)
+        })
+        .await
+        {
             Ok(files) => {
                 if !files.is_empty() {
-                    handle_for_indexer.configure_file_palette(files, workspace_for_palette);
+                    handle_for_search.set_file_palette_search_index(files);
                 } else {
                     tracing::debug!("No files found in workspace for file palette");
                 }

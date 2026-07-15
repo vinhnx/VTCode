@@ -690,7 +690,7 @@ pub(super) fn process_key_with_clipboard_image_reader(
 
             if session.file_palette_visible() {
                 if let Some(palette) = session.file_palette.as_ref()
-                    && !palette.selected_is_expandable_group()
+                    && !palette.get_selected().is_some_and(|e| e.is_dir)
                     && let Some(entry) = palette.get_selected()
                 {
                     let file_path = entry.relative_path.clone();

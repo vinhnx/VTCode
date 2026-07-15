@@ -58,6 +58,7 @@ fn inline_command_variant_name(command: &InlineCommand) -> &'static str {
         InlineCommand::SetReasoningStage(_) => "SetReasoningStage",
         InlineCommand::SetImageInputEnabled(_) => "SetImageInputEnabled",
         InlineCommand::RestoreInputDraft(_) => "RestoreInputDraft",
+        InlineCommand::UpdateFilePaletteSearch { .. } => "UpdateFilePaletteSearch",
     }
 }
 
