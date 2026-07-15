@@ -144,6 +144,7 @@ pub(crate) async fn search_literal_bounded(
         .arg("--json")
         .arg("--fixed-strings")
         .arg("--smart-case")
+        .arg("--sort=path")
         .arg("--hidden")
         .arg("--no-messages")
         .stdout(Stdio::piped())
@@ -1024,6 +1025,31 @@ mod tests {
 
         assert_eq!(outcome.candidates.len(), 2);
         assert!(outcome.truncated);
+    }
+
+    #[tokio::test]
+    async fn code_search_literal_candidate_cap_selects_stable_path_prefix() {
+        let workspace = TempDir::new().expect("workspace");
+        for name in ["z.txt", "a.txt", "m.txt"] {
+            std::fs::write(workspace.path().join(name), "Widget\nWidget\n").expect("fixture");
+        }
+
+        let first = search_literal_bounded("Widget", workspace.path(), &[], 2)
+            .await
+            .expect("first bounded search");
+        let second = search_literal_bounded("Widget", workspace.path(), &[], 2)
+            .await
+            .expect("second bounded search");
+
+        assert_eq!(first, second);
+        assert!(first.truncated);
+        assert!(
+            first
+                .candidates
+                .iter()
+                .all(|candidate| candidate.path.ends_with("a.txt")),
+            "sorted cap prefix should come from a.txt: {first:?}"
+        );
     }
 
     #[tokio::test]

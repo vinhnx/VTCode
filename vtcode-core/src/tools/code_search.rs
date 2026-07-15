@@ -7,6 +7,7 @@ use anyhow::{Context, Result, anyhow, bail};
 use serde::{Deserialize, Serialize};
 
 use crate::tools::ast_grep_language::AstGrepLanguage;
+use crate::tools::file_search_bridge::BoundedPathSearch;
 use crate::tools::grep_file::{LiteralSearchCandidate, search_literal_bounded};
 use crate::tools::outline_search::{DeclarationFileRecord, search_declarations_bounded};
 use crate::tools::tree_sitter_runtime::{
@@ -306,9 +307,25 @@ fn resolve_scope(workspace_root: &Path, requested: &str) -> Result<ResolvedSearc
         bail!("code_search path is sensitive");
     }
 
-    let mut builder = build_default_walker(&workspace_root);
-    builder.filter_entry(|entry| !is_excluded_dir(entry));
-    let mut allowed_entries = HashSet::new();
+    let requested_is_file = requested_path.is_file();
+    let walk_root = if requested_is_file {
+        requested_path
+            .parent()
+            .unwrap_or(&workspace_root)
+            .to_path_buf()
+    } else {
+        requested_path.clone()
+    };
+    let mut builder = build_default_walker(&walk_root);
+    let filter_walk_root = walk_root.clone();
+    let filter_requested_path = requested_path.clone();
+    builder.filter_entry(move |entry| {
+        !is_excluded_dir(entry)
+            && (!requested_is_file
+                || entry.path() == filter_walk_root
+                || entry.path() == filter_requested_path)
+    });
+    let mut requested_available = requested_path == workspace_root;
     let mut allowed_files = HashSet::new();
     for entry in builder.build().filter_map(std::result::Result::ok) {
         if entry
@@ -331,7 +348,9 @@ fn resolve_scope(workspace_root: &Path, requested: &str) -> Result<ResolvedSearc
         if !canonical.starts_with(&workspace_root) {
             continue;
         }
-        allowed_entries.insert(canonical.clone());
+        if canonical == requested_path {
+            requested_available = true;
+        }
         if entry
             .file_type()
             .is_some_and(|file_type| file_type.is_file())
@@ -339,17 +358,9 @@ fn resolve_scope(workspace_root: &Path, requested: &str) -> Result<ResolvedSearc
             allowed_files.insert(canonical);
         }
     }
-    if requested_path != workspace_root && !allowed_entries.contains(&requested_path) {
+    if !requested_available {
         bail!("code_search path is ignored or unavailable");
     }
-    let requested_is_file = requested_path.is_file();
-    allowed_files.retain(|path| {
-        if requested_is_file {
-            path == &requested_path
-        } else {
-            path.starts_with(&requested_path)
-        }
-    });
 
     Ok(ResolvedSearchScope {
         workspace_root,
@@ -578,25 +589,30 @@ pub(crate) async fn execute(
     };
     let path_outcome = if path_enabled {
         let query = request.query.to_string();
-        let search_root = if scope.requested_is_file {
-            scope
-                .requested_path
-                .parent()
-                .unwrap_or(&scope.workspace_root)
-                .to_path_buf()
+        if scope.requested_is_file {
+            let relative = workspace_relative(&scope, &scope.requested_path)
+                .unwrap_or_else(|| CompactStr::from("."));
+            let matches = relative.to_lowercase().contains(&query.to_lowercase());
+            Ok(Some(BoundedPathSearch {
+                paths: matches
+                    .then(|| scope.requested_path.clone())
+                    .into_iter()
+                    .collect(),
+                truncated: false,
+            }))
         } else {
-            scope.requested_path.clone()
-        };
-        tokio::task::spawn_blocking(move || {
-            crate::tools::file_search_bridge::search_paths_bounded_no_follow(
-                &query,
-                search_root,
-                candidate_cap,
-            )
-        })
-        .await
-        .context("path search task failed")?
-        .map(Some)
+            let search_root = scope.requested_path.clone();
+            tokio::task::spawn_blocking(move || {
+                crate::tools::file_search_bridge::search_paths_bounded_no_follow(
+                    &query,
+                    search_root,
+                    candidate_cap,
+                )
+            })
+            .await
+            .context("path search task failed")?
+            .map(Some)
+        }
     } else {
         Ok(None)
     };
@@ -798,8 +814,7 @@ fn process_declaration_file(
         } else {
             inventory.complete = false;
         }
-        if definition_enabled {
-            let position_range = exact_range.unwrap_or(full_range);
+        if definition_enabled && let Some(position_range) = exact_range {
             let (line, column) = byte_position(&source, position_range.start);
             candidates.push(RankedCandidate {
                 result: CodeSearchResult {
@@ -1358,6 +1373,30 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn code_search_direct_file_path_search_never_returns_siblings() {
+        let fixture = code_search_fixture();
+        let response = execute(
+            fixture.workspace.path(),
+            request(json!({
+                "query": "widget",
+                "path": "src/widget.rs",
+                "result_types": ["path"]
+            })),
+        )
+        .await
+        .expect("direct file path search");
+
+        assert_eq!(response.returned, 1);
+        assert_eq!(response.results[0].path, "src/widget.rs");
+        assert!(
+            response
+                .results
+                .iter()
+                .all(|result| result.path == "src/widget.rs")
+        );
+    }
+
+    #[tokio::test]
     async fn code_search_bash_usage_is_successfully_unsupported() {
         let fixture = code_search_fixture();
         let response = execute(
@@ -1544,6 +1583,132 @@ mod tests {
 
         assert_eq!(candidates.len(), 1);
         assert_eq!(candidates[0].result.result_type, CodeSearchResultType::Text);
+    }
+
+    #[test]
+    fn code_search_definitions_require_exact_name_ranges() {
+        let fixture = code_search_fixture();
+        let scope = resolve_scope(fixture.workspace.path(), "src/widget.rs").expect("scope");
+        let canonical = fs::canonicalize(fixture.workspace.path().join("src/widget.rs"))
+            .expect("canonical fixture path");
+        let source = fs::read_to_string(&canonical).expect("fixture source");
+        let exact_end = source.find("}\n").expect("exact declaration end") + 1;
+        let missing_name_start = source.find("Widget();").expect("body call");
+        let file = DeclarationFileRecord {
+            path: PathBuf::from("src/widget.rs"),
+            language: AstGrepLanguage::Rust,
+            complete: true,
+            declarations: vec![
+                crate::tools::outline_search::DeclarationRecord {
+                    name: "Widget".to_string(),
+                    range: crate::tools::outline_search::DeclarationRange {
+                        byte_start: 0,
+                        byte_end: exact_end,
+                    },
+                },
+                crate::tools::outline_search::DeclarationRecord {
+                    name: "Different".to_string(),
+                    range: crate::tools::outline_search::DeclarationRange {
+                        byte_start: 0,
+                        byte_end: exact_end,
+                    },
+                },
+                crate::tools::outline_search::DeclarationRecord {
+                    name: "Widget".to_string(),
+                    range: crate::tools::outline_search::DeclarationRange {
+                        byte_start: missing_name_start,
+                        byte_end: missing_name_start + "Widget()".len(),
+                    },
+                },
+            ],
+        };
+        let mut inventories = HashMap::new();
+        let mut candidates = Vec::new();
+        process_declaration_file(
+            &scope,
+            &[AstGrepLanguage::Rust],
+            "Widget",
+            &file,
+            true,
+            &mut HashMap::new(),
+            &mut inventories,
+            &mut candidates,
+        );
+
+        assert_eq!(candidates.len(), 1, "only the exact definition is emitted");
+        assert_eq!(candidates[0].result.line, Some(1));
+        assert_eq!(candidates[0].result.column, Some(4));
+        let inventory = inventories.get(&canonical).expect("inventory");
+        assert!(
+            !inventory.complete,
+            "any failed exact range suppresses usage"
+        );
+        assert_eq!(inventory.exact_name_ranges.len(), 1);
+
+        let mut mixed = candidates;
+        classify_literal_candidates(
+            &scope,
+            &[AstGrepLanguage::Rust],
+            vec![
+                LiteralSearchCandidate {
+                    path: canonical.clone(),
+                    line: 1,
+                    column: 4,
+                    byte_start: 3,
+                    byte_end: 9,
+                    matched_text: "Widget".to_string(),
+                    snippet: "fn Widget() {".to_string(),
+                },
+                LiteralSearchCandidate {
+                    path: canonical,
+                    line: 2,
+                    column: 5,
+                    byte_start: missing_name_start,
+                    byte_end: missing_name_start + 6,
+                    matched_text: "Widget".to_string(),
+                    snippet: "Widget();".to_string(),
+                },
+            ],
+            true,
+            true,
+            false,
+            &mut HashMap::new(),
+            &inventories,
+            &mut mixed,
+        );
+        let results = deduplicate_and_order(mixed);
+        assert_eq!(
+            results
+                .iter()
+                .filter(|result| result.result_type == CodeSearchResultType::Definition)
+                .count(),
+            1
+        );
+        assert!(results.iter().any(|result| {
+            result.result_type == CodeSearchResultType::Text && result.line == Some(2)
+        }));
+    }
+
+    #[test]
+    fn code_search_scope_inventory_is_limited_to_requested_path() {
+        let fixture = code_search_fixture();
+        let direct = resolve_scope(fixture.workspace.path(), "src/widget.rs").expect("file scope");
+        assert_eq!(direct.allowed_files.len(), 1);
+        assert!(direct.allowed_files.contains(&direct.requested_path));
+
+        let subtree = resolve_scope(fixture.workspace.path(), "src").expect("directory scope");
+        assert!(
+            subtree
+                .allowed_files
+                .iter()
+                .all(|path| path.starts_with(&subtree.requested_path))
+        );
+        assert!(
+            !subtree.allowed_files.contains(
+                &fs::canonicalize(fixture.workspace.path().join("ignored.rs"))
+                    .expect("ignored fixture canonical path")
+            )
+        );
     }
 
     #[test]

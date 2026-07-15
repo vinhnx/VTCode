@@ -9,7 +9,7 @@
 //! Instead of truncating large tool responses (which loses data), we:
 //! 1. Write the full output to `.vtcode/context/tool_outputs/{tool}_{timestamp}.txt`
 //! 2. Return a file reference to the agent
-//! 3. Agent can inspect the file with `exec_command` or use `code_search` for code structure
+//! 3. The agent can inspect the file with bounded `exec_command` reads
 //!
 //! This is more token-efficient as only necessary data is pulled into context.
 

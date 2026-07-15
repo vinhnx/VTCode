@@ -15,8 +15,13 @@ use super::super::types::{RunTerminalMode, ToolRuntime};
 
 impl ZedAgent {
     pub(super) fn local_tools_available(&self, primary_agent: &str) -> bool {
-        self.primary_agents.allows_local_tools(primary_agent)
-            && self.acp_tool_registry.has_local_tools()
+        self.acp_tool_registry
+            .definitions_for(&[], true)
+            .iter()
+            .any(|definition| {
+                self.primary_agents
+                    .allows_local_tool(primary_agent, definition.function_name())
+            })
     }
 
     pub(super) fn tool_definitions(
@@ -33,10 +38,19 @@ impl ZedAgent {
         if enabled_tools.is_empty() && !include_local {
             None
         } else {
-            Some(
-                self.acp_tool_registry
-                    .definitions_for(enabled_tools, include_local),
-            )
+            let mut definitions = self.acp_tool_registry.definitions_for(enabled_tools, false);
+            if include_local {
+                definitions.extend(
+                    self.acp_tool_registry
+                        .definitions_for(&[], true)
+                        .into_iter()
+                        .filter(|definition| {
+                            self.primary_agents
+                                .allows_local_tool(primary_agent, definition.function_name())
+                        }),
+                );
+            }
+            Some(definitions)
         }
     }
 

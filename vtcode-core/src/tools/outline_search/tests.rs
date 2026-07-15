@@ -41,6 +41,31 @@ fn workspace_with_source() -> TempDir {
     temp
 }
 
+fn write_arg_order_fake_sg() -> (TempDir, PathBuf) {
+    let script_dir = TempDir::new().expect("script tempdir");
+    let script_path = script_dir.path().join("sg");
+    let script = r#"#!/bin/sh
+if [ "$1" = "--version" ]; then
+    printf 'ast-grep 0.44.0\n'
+    exit 0
+fi
+for path in "$@"; do
+    case "$path" in
+        *.rs) printf '{"path":"%s","language":"Rust","items":[{"name":"alpha","isImport":false,"range":{"byteOffset":{"start":0,"end":17}}}]}\n' "$path" ;;
+    esac
+done
+"#;
+    fs::write(&script_path, script).expect("write fake sg");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&script_path).expect("metadata").permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&script_path, perms).expect("chmod");
+    }
+    (script_dir, script_path)
+}
+
 #[tokio::test]
 #[serial]
 async fn code_search_declaration_stream_reaps_at_candidate_cap() {
@@ -63,6 +88,33 @@ async fn code_search_declaration_stream_reaps_at_candidate_cap() {
     assert!(outcome.files[0].complete);
     assert!(!outcome.stream_complete);
     assert!(outcome.truncated);
+}
+
+#[tokio::test]
+#[serial]
+async fn code_search_declaration_candidate_cap_selects_stable_path_prefix() {
+    let (_script_dir, script_path) = write_arg_order_fake_sg();
+    let _override = set_read_only_ast_grep_override_for_tests(Some(script_path));
+    let temp = TempDir::new().expect("workspace tempdir");
+    let src = temp.path().join("src");
+    fs::create_dir_all(&src).expect("src directory");
+    for name in ["z.rs", "a.rs", "m.rs"] {
+        fs::write(src.join(name), "pub fn alpha() {}\n").expect("source fixture");
+    }
+
+    let first =
+        search_declarations_bounded(temp.path(), &src, "alpha", &[AstGrepLanguage::Rust], 1)
+            .await
+            .expect("first bounded declaration search");
+    let second =
+        search_declarations_bounded(temp.path(), &src, "alpha", &[AstGrepLanguage::Rust], 1)
+            .await
+            .expect("second bounded declaration search");
+
+    assert_eq!(first, second);
+    assert!(first.truncated);
+    assert_eq!(first.files.len(), 1);
+    assert!(first.files[0].path.ends_with("a.rs"), "{first:?}");
 }
 
 #[tokio::test]

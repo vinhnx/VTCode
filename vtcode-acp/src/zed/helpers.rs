@@ -20,7 +20,8 @@ pub(crate) struct PrimaryAgentSessionOption {
     pub label: String,
     pub prompt: String,
     pub aliases: Vec<String>,
-    pub allows_local_tools: bool,
+    pub allowed_local_tools: Option<HashSet<String>>,
+    pub denied_local_tools: HashSet<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -105,13 +106,27 @@ impl PrimaryAgentCatalog {
     }
 
     #[must_use]
-    pub(crate) fn allows_local_tools(&self, primary_agent: &str) -> bool {
+    pub(crate) fn allows_local_tool(&self, primary_agent: &str, tool_name: &str) -> bool {
         let Some(primary_agent) = self.resolve_id(primary_agent) else {
             return false;
         };
         self.options
             .iter()
-            .any(|option| option.id == primary_agent && option.allows_local_tools)
+            .find(|option| option.id == primary_agent)
+            .is_some_and(|option| {
+                let tool_name = tool_name.trim().to_ascii_lowercase();
+                let semantic_name = local_tool_semantic_name(&tool_name);
+                if option.denied_local_tools.contains(&tool_name)
+                    || semantic_name
+                        .is_some_and(|semantic| option.denied_local_tools.contains(semantic))
+                {
+                    return false;
+                }
+                option.allowed_local_tools.as_ref().is_none_or(|allowed| {
+                    allowed.contains(&tool_name)
+                        || semantic_name.is_some_and(|semantic| allowed.contains(semantic))
+                })
+            })
     }
 
     #[must_use]
@@ -126,12 +141,59 @@ impl PrimaryAgentCatalog {
 }
 
 fn primary_agent_option_from_spec(spec: &SubagentSpec) -> PrimaryAgentSessionOption {
+    let (allowed_local_tools, denied_local_tools) = local_tool_rules(spec);
     PrimaryAgentSessionOption {
         id: spec.name.clone(),
         label: primary_agent_label(spec),
         prompt: spec.prompt.clone(),
         aliases: spec.aliases.clone(),
-        allows_local_tools: spec.permissions_allows_mutation(),
+        allowed_local_tools,
+        denied_local_tools,
+    }
+}
+
+fn local_tool_rules(spec: &SubagentSpec) -> (Option<HashSet<String>>, HashSet<String>) {
+    use vtcode_config::core::permissions::PermissionDefault;
+
+    let mut allowed = if spec.permissions.default == PermissionDefault::Deny {
+        Some(
+            spec.permissions
+                .allow
+                .iter()
+                .chain(&spec.permissions.ask)
+                .chain(&spec.permissions.auto)
+                .map(|tool| tool.trim().to_ascii_lowercase())
+                .collect::<HashSet<_>>(),
+        )
+    } else {
+        None
+    };
+    if let Some(tools) = &spec.tools {
+        let tools = tools
+            .iter()
+            .map(|tool| tool.trim().to_ascii_lowercase())
+            .collect::<HashSet<_>>();
+        allowed = Some(match allowed {
+            Some(current) => current.intersection(&tools).cloned().collect(),
+            None => tools,
+        });
+    }
+    let denied = spec
+        .permissions
+        .deny
+        .iter()
+        .chain(&spec.disallowed_tools)
+        .map(|tool| tool.trim().to_ascii_lowercase())
+        .collect();
+    (allowed, denied)
+}
+
+fn local_tool_semantic_name(tool_name: &str) -> Option<&'static str> {
+    match tool_name {
+        "exec_command" | "write_stdin" => Some("bash"),
+        "apply_patch" => Some("edit"),
+        "code_search" => Some("read"),
+        _ => None,
     }
 }
 

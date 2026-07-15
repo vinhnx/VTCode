@@ -9,6 +9,8 @@ use tokio::process::Command;
 
 use crate::tools::ast_grep_installer::AstGrepStatus;
 use crate::tools::ast_grep_language::AstGrepLanguage;
+use vtcode_commons::exclusions::is_sensitive_file;
+use vtcode_commons::walk::{build_walker_single_threaded, is_excluded_dir};
 const CODE_SEARCH_OUTLINE_BYTE_CAP: usize = 1024 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -143,15 +145,16 @@ pub(crate) async fn search_declarations_bounded(
         AstGrepStatus::NotFound => bail!("definition search is unavailable"),
         AstGrepStatus::Error { .. } => bail!("definition search is unavailable"),
     };
-    let command_arg = command_path_arg(workspace_root, resolved_path);
+    let command_args = sorted_outline_paths(workspace_root, resolved_path, languages);
     let mut command = Command::new(binary);
     command
         .current_dir(workspace_root)
+        .env("RAYON_NUM_THREADS", "1")
         .arg("outline")
         .arg("--json=stream")
         .arg("--items")
         .arg("all")
-        .arg(command_arg)
+        .args(command_args)
         .stdout(Stdio::piped())
         .stderr(Stdio::null());
 
@@ -241,6 +244,39 @@ pub(crate) async fn search_declarations_bounded(
         stream_complete: !truncated,
         truncated,
     })
+}
+
+fn sorted_outline_paths(
+    workspace_root: &Path,
+    resolved_path: &Path,
+    languages: &[AstGrepLanguage],
+) -> Vec<String> {
+    if resolved_path.is_file() {
+        return vec![command_path_arg(workspace_root, resolved_path)];
+    }
+    let mut builder = build_walker_single_threaded(resolved_path);
+    builder.filter_entry(|entry| !is_excluded_dir(entry));
+    let mut paths = builder
+        .build()
+        .filter_map(std::result::Result::ok)
+        .filter(|entry| entry.file_type().is_some_and(|kind| kind.is_file()))
+        .map(|entry| entry.into_path())
+        .filter(|path| {
+            !path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(is_sensitive_file)
+                && (languages.is_empty()
+                    || AstGrepLanguage::from_path(path)
+                        .is_some_and(|language| languages.contains(&language)))
+        })
+        .map(|path| command_path_arg(workspace_root, &path))
+        .collect::<Vec<_>>();
+    paths.sort_unstable();
+    if paths.is_empty() {
+        paths.push(command_path_arg(workspace_root, resolved_path));
+    }
+    paths
 }
 
 /// Build the path argument passed to ast-grep. Use the workspace-relative form

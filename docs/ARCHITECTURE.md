@@ -140,7 +140,7 @@ tools/
  grep_file.rs        # Ripgrep-backed search manager (internal)
  file_ops.rs         # File operations (internal)
  command.rs          # Command execution (internal)
- structural_search/  # AST-grep structural search (mod.rs dispatcher + submodules)
+ outline_search.rs   # Internal bounded declaration discovery used by code_search
  registry/
    builtins.rs       # Tool registration and declarations
    executors.rs      # Built-in executors for exec_command, write_stdin, apply_patch, and code_search
