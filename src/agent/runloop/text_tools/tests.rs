@@ -415,16 +415,16 @@ fn test_detect_minimax_child_element_parameters() {
 #[test]
 fn test_detect_minimax_noisy_format() {
     let message = r#"]<]minimax[>[<tool_call>
-]<]minimax[>[<invoke name="code_search">]<]minimax[>[<action>structural]<]minimax[>[</action>]<]minimax[>[<path>.vtcode/context/tool_outputs/code_search_1782625284532136.txt</path>]<]minimax[>[<pattern>^(pub |fn |struct |impl |pub struct |pub fn |pub trait )</pattern>]<]minimax[>[</invoke>
+]<]minimax[>[<invoke name="code_search">]<]minimax[>[<query>Widget</query>]<]minimax[>[<path>src</path>]<]minimax[>[<result_types>["definition"]</result_types>]<]minimax[>[</invoke>
 ]<]minimax[>[</tool_call>"#;
     let (name, args) = detect_textual_tool_call(message).expect("should parse noisy format");
     assert_eq!(name, tools::CODE_SEARCH);
     assert_eq!(
         args,
         serde_json::json!({
-            "action": "structural",
-            "path": ".vtcode/context/tool_outputs/code_search_1782625284532136.txt",
-            "pattern": "^(pub |fn |struct |impl |pub struct |pub fn |pub trait )"
+            "query": "Widget",
+            "path": "src",
+            "result_types": ["definition"]
         })
     );
 }
@@ -659,20 +659,22 @@ fn test_parse_harmony_channel_tool_call_with_string_cmd() {
 
 #[test]
 fn test_parse_harmony_channel_tool_call_with_recipient_before_channel() {
-    let message = "<|start|>assistant to=functions.code_search<|channel|>commentary <|constrain|>json<|message|>{\"action\":\"outline\",\"path\":\"src\"}<|call|>";
+    let message = "<|start|>assistant to=functions.code_search<|channel|>commentary <|constrain|>json<|message|>{\"query\":\"Widget\",\"path\":\"src\",\"result_types\":[\"definition\"]}<|call|>";
     let (name, args) = detect_textual_tool_call(message).expect("should parse harmony format");
     assert_eq!(name, tools::CODE_SEARCH);
-    assert_eq!(args["action"], serde_json::json!("outline"));
+    assert_eq!(args["query"], serde_json::json!("Widget"));
     assert_eq!(args["path"], serde_json::json!("src"));
+    assert_eq!(args["result_types"], serde_json::json!(["definition"]));
 }
 
 #[test]
 fn test_parse_harmony_channel_tool_call_tolerates_single_quoted_payload() {
-    let message = "<|start|>assistant to=functions.code_search<|channel|>commentary <|constrain|>json<|message|>{'action':'outline','path':'src'}<|call|>";
+    let message = "<|start|>assistant to=functions.code_search<|channel|>commentary <|constrain|>json<|message|>{'query':'Widget','path':'src','result_types':['definition']}<|call|>";
     let (name, args) = detect_textual_tool_call(message).expect("should parse harmony format");
     assert_eq!(name, tools::CODE_SEARCH);
-    assert_eq!(args["action"], serde_json::json!("outline"));
+    assert_eq!(args["query"], serde_json::json!("Widget"));
     assert_eq!(args["path"], serde_json::json!("src"));
+    assert_eq!(args["result_types"], serde_json::json!(["definition"]));
 }
 
 #[test]

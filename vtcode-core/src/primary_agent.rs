@@ -493,7 +493,7 @@ mod tests {
         assert_eq!(active.description, "planner description");
         assert_eq!(active.color.as_deref(), Some("blue"));
         assert_eq!(active.instructions, "planner instructions");
-        assert_eq!(active.tools, Some(vec!["search_dispatch".to_string()]));
+        assert_eq!(active.tools, Some(vec!["code_search".to_string()]));
         assert_eq!(active.disallowed_tools, vec!["file_operation".to_string()]);
         assert_eq!(active.permissions.default, PermissionDefault::Deny);
         assert_eq!(active.model.as_deref(), Some("gpt-5.1"));
@@ -567,7 +567,7 @@ mod tests {
         assert_eq!(active.color.as_deref(), Some("blue"));
         assert_eq!(active.aliases, vec!["builder".to_string()]);
         assert_eq!(active.instructions, "worker instructions");
-        assert_eq!(active.tools, Some(vec!["search_dispatch".to_string()]));
+        assert_eq!(active.tools, Some(vec!["code_search".to_string()]));
         assert_eq!(active.disallowed_tools, vec!["file_operation".to_string()]);
         assert_eq!(active.permissions.default, PermissionDefault::Deny);
         assert_eq!(active.model.as_deref(), Some("gpt-5.1"));
@@ -813,7 +813,7 @@ mod tests {
     #[test]
     fn subagent_cleanup_tools_bypass_policy_but_new_work_obeys_policy() {
         let mut spec = test_spec("restricted");
-        spec.tools = Some(vec!["search_dispatch".to_string()]);
+        spec.tools = Some(vec!["code_search".to_string()]);
         spec.disallowed_tools = vec![
             tools::SPAWN_AGENT.to_string(),
             tools::WAIT_AGENT.to_string(),
@@ -1163,7 +1163,7 @@ mod tests {
             name: name.to_string(),
             description: format!("{name} description"),
             prompt: format!("{name} instructions"),
-            tools: Some(vec!["search_dispatch".to_string()]),
+            tools: Some(vec!["code_search".to_string()]),
             disallowed_tools: vec!["file_operation".to_string()],
             model: Some("gpt-5.1".to_string()),
             color: Some("blue".to_string()),

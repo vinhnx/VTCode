@@ -675,7 +675,7 @@ mod tests {
             name: "explorer".to_string(),
             description: "Project explorer".to_string(),
             prompt: "Use project-specific search guidance.".to_string(),
-            tools: Some(vec!["search_dispatch".to_string()]),
+            tools: Some(vec!["code_search".to_string()]),
             disallowed_tools: vec!["file_operation".to_string()],
             model: Some("inherit".to_string()),
             color: Some("green".to_string()),

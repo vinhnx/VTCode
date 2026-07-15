@@ -182,11 +182,11 @@ pub(crate) fn find_duplicate_in_history(
     None
 }
 
-fn output_has_empty_search_matches(output: &serde_json::Value) -> bool {
+fn output_has_empty_search_results(output: &serde_json::Value) -> bool {
     output
-        .get("matches")
+        .get("results")
         .and_then(serde_json::Value::as_array)
-        .is_some_and(|matches| matches.is_empty())
+        .is_some_and(|results| results.is_empty())
         && !output_has_actionable_recovery_guidance(output)
 }
 
@@ -260,7 +260,7 @@ fn is_low_signal_outcome(outcome: &ToolPipelineOutcome, canonical_tool_name: &st
             command_success,
             ..
         } => {
-            output_has_empty_search_matches(output)
+            output_has_empty_search_results(output)
                 || output_reuses_recent_result(output)
                 || (canonical_tool_name == vtcode_core::config::constants::tools::UNIFIED_EXEC
                     && output_is_grep_style_miss(output, *command_success))
@@ -374,7 +374,7 @@ pub(crate) fn signature_key_for(name: &str, args: &serde_json::Value) -> String 
 
 /// Generate a read-normalized signature key for cross-turn dedup.
 ///
-/// For read-only tools (`file_operation` with `read` action, `search_dispatch`,
+/// For read-only tools (`file_operation` with `read` action, `code_search`,
 /// `read_file`, `grep_file`, `list_files`), pagination and read-offset fields
 /// are stripped before hashing. This ensures that re-reading the same file with
 /// a different `offset`/`limit` (a common model behavior) is recognized as the
@@ -382,6 +382,12 @@ pub(crate) fn signature_key_for(name: &str, args: &serde_json::Value) -> String 
 ///
 /// For mutating tools the original `signature_key_for` is returned unchanged.
 pub(crate) fn read_normalized_signature_key(name: &str, args: &serde_json::Value) -> String {
+    if name == vtcode_core::config::constants::tools::CODE_SEARCH
+        && let Some(identity) = vtcode_core::tools::normalised_code_search_identity(args)
+    {
+        return format!("{name}:ro:{identity}");
+    }
+
     if !is_read_only_tool_args(name, args) {
         return signature_key_for(name, args);
     }
@@ -404,7 +410,7 @@ fn is_read_only_tool_args(name: &str, args: &serde_json::Value) -> bool {
     use vtcode_core::config::constants::tools;
     match name {
         tools::READ_FILE | tools::GREP_FILE | tools::LIST_FILES => true,
-        tools::UNIFIED_SEARCH => true,
+        tools::CODE_SEARCH => true,
         tools::UNIFIED_FILE => {
             matches!(args.get("action").and_then(|v| v.as_str()), Some("read"))
         }
@@ -666,7 +672,7 @@ mod tests {
                 "second".into(),
                 vec![uni::ToolCall::function(
                     "call_1".into(),
-                    "search_dispatch".into(),
+                    tools::CODE_SEARCH.into(),
                     "{}".into(),
                 )],
             ),
@@ -675,7 +681,7 @@ mod tests {
         push_tool_response(
             &mut history,
             "call_1".to_string(),
-            Some("search_dispatch"),
+            Some(tools::CODE_SEARCH),
             "{\"output\":\"second\"}".to_string(),
         );
 
@@ -792,11 +798,11 @@ mod tests {
     #[test]
     fn reset_after_balancer_recovery_clears_attempts_and_counters() {
         let mut tracker = LoopTracker::new();
-        tracker.record("search_dispatch:{\"action\":\"grep\"}".to_string());
-        tracker.record("search_dispatch:{\"action\":\"grep\"}".to_string());
+        tracker.record("code_search:{\"query\":\"Widget\"}".to_string());
+        tracker.record("code_search:{\"query\":\"Widget\"}".to_string());
         tracker.consecutive_mutations = 2;
         tracker.consecutive_navigations = 4;
-        tracker.record_low_signal("search_dispatch::grep::src".to_string());
+        tracker.record_low_signal("code_search::Widget::src".to_string());
         tracker.navigation_loop_recoveries = 3;
 
         tracker.reset_after_balancer_recovery();
@@ -1024,35 +1030,33 @@ mod tests {
     fn low_signal_tracker_groups_empty_search_results_by_family() {
         let mut tracker = LoopTracker::new();
         let miss = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
-            output: serde_json::json!({"matches":[]}),
+            output: serde_json::json!({"results":[]}),
             stdout: None,
             modified_files: vec![],
             command_success: true,
         });
 
-        // Different actions/patterns produce separate family keys, so each counts
-        // as its own family (max count == 1). This prevents false-positive family
-        // cap violations when the agent explores different searches on the same path.
+        // Different queries produce separate family keys, so each counts as its
+        // own family while the agent explores one path.
         update_repetition_tracker(
             &mut tracker,
             &miss,
-            tools::UNIFIED_SEARCH,
-            &json!({"action":"structural","pattern":"fn $name(...)", "lang":"rust", "globs":["vtcode-tui/**/*.rs"]}),
+            tools::CODE_SEARCH,
+            &json!({"query":"Widget", "path":"src", "result_types":["definition"]}),
         );
         update_repetition_tracker(
             &mut tracker,
             &miss,
-            tools::UNIFIED_SEARCH,
-            &json!({"action":"grep","pattern":"-> Result","path":"vtcode-tui","globs":["vtcode-tui/**/*.rs"]}),
+            tools::CODE_SEARCH,
+            &json!({"query":"Result", "path":"src", "result_types":["usage"]}),
         );
         update_repetition_tracker(
             &mut tracker,
             &miss,
-            tools::UNIFIED_SEARCH,
-            &json!({"action":"grep","pattern":"Result<","path":"vtcode-tui","globs":["vtcode-tui/**/*.rs"]}),
+            tools::CODE_SEARCH,
+            &json!({"query":"Result<", "path":"src", "result_types":["text"]}),
         );
 
-        // Each call is a different family (action+pattern differ), so max is 1.
         assert_eq!(tracker.max_low_signal_count(), 1);
     }
 
@@ -1060,17 +1064,16 @@ mod tests {
     fn low_signal_tracker_groups_identical_searches_in_same_family() {
         let mut tracker = LoopTracker::new();
         let miss = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
-            output: serde_json::json!({"matches":[]}),
+            output: serde_json::json!({"results":[]}),
             stdout: None,
             modified_files: vec![],
             command_success: true,
         });
 
-        // Same action + same pattern + same path => same family key
-        let args = json!({"action":"grep","pattern":"TODO","path":"src","globs":["src/**/*.rs"]});
-        update_repetition_tracker(&mut tracker, &miss, tools::UNIFIED_SEARCH, &args);
-        update_repetition_tracker(&mut tracker, &miss, tools::UNIFIED_SEARCH, &args);
-        update_repetition_tracker(&mut tracker, &miss, tools::UNIFIED_SEARCH, &args);
+        let args = json!({"query":"TODO","path":"src","file_types":["rust"]});
+        update_repetition_tracker(&mut tracker, &miss, tools::CODE_SEARCH, &args);
+        update_repetition_tracker(&mut tracker, &miss, tools::CODE_SEARCH, &args);
+        update_repetition_tracker(&mut tracker, &miss, tools::CODE_SEARCH, &args);
 
         assert_eq!(tracker.max_low_signal_count(), 3);
     }
@@ -1080,10 +1083,10 @@ mod tests {
         let mut tracker = LoopTracker::new();
         let guided = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
             output: serde_json::json!({
-                "matches": [],
-                "hint": "Pattern looks like a code fragment.",
+                "results": [],
+                "hint": "Try narrowing the path.",
                 "is_recoverable": true,
-                "next_action": "Retry with a larger parseable pattern."
+                "next_action": "Retry with narrower filters."
             }),
             stdout: None,
             modified_files: vec![],
@@ -1093,8 +1096,8 @@ mod tests {
         update_repetition_tracker(
             &mut tracker,
             &guided,
-            tools::UNIFIED_SEARCH,
-            &json!({"action":"structural","pattern":"async fn $NAME($$$ARGS)", "lang":"rust", "path":"src/agent"}),
+            tools::CODE_SEARCH,
+            &json!({"query":"run", "path":"src/agent", "result_types":["definition"]}),
         );
 
         assert_eq!(tracker.max_low_signal_count(), 0);
@@ -1215,14 +1218,26 @@ mod tests {
     }
 
     #[test]
-    fn read_normalized_signature_key_unifies_search_pagination() {
-        let args_a = json!({"action": "grep", "pattern": "fn main", "path": "src", "page": 1});
-        let args_b = json!({"action": "grep", "pattern": "fn main", "path": "src", "page": 2});
-        let key_a = read_normalized_signature_key("search_dispatch", &args_a);
-        let key_b = read_normalized_signature_key("search_dispatch", &args_b);
+    fn read_normalized_signature_key_unifies_code_search_limits_and_filter_order() {
+        let args_a = json!({
+            "query": "Widget",
+            "path": "src",
+            "file_types": ["rust", "typescript"],
+            "result_types": ["text", "definition"],
+            "max_results": 10
+        });
+        let args_b = json!({
+            "query": "Widget",
+            "path": "src",
+            "file_types": ["typescript", "rs"],
+            "result_types": ["definition", "text"],
+            "max_results": 100
+        });
+        let key_a = read_normalized_signature_key(tools::CODE_SEARCH, &args_a);
+        let key_b = read_normalized_signature_key(tools::CODE_SEARCH, &args_b);
         assert_eq!(
             key_a, key_b,
-            "same search with different page should produce the same normalized key"
+            "limit and filter ordering must not split one code-search identity"
         );
     }
 
@@ -1284,18 +1299,18 @@ mod tests {
             "different files must produce different normalized keys"
         );
 
-        // Verify: search pagination normalized away
+        // Verify: code-search result limits and filter ordering normalize away.
         let s_key_a = read_normalized_signature_key(
-            "search_dispatch",
-            &json!({"action":"grep","pattern":"fn main","path":"src","page":1}),
+            tools::CODE_SEARCH,
+            &json!({"query":"Widget","path":"src","file_types":["rust","typescript"],"result_types":["text","definition"],"max_results":10}),
         );
         let s_key_b = read_normalized_signature_key(
-            "search_dispatch",
-            &json!({"action":"grep","pattern":"fn main","path":"src","page":2}),
+            tools::CODE_SEARCH,
+            &json!({"query":"Widget","path":"src","file_types":["typescript","rs"],"result_types":["definition","text"],"max_results":100}),
         );
         assert_eq!(
             s_key_a, s_key_b,
-            "same search with different page should normalize to the same key"
+            "same code search should normalize to the same key"
         );
 
         // Verify: write NOT normalized
@@ -1363,6 +1378,47 @@ mod tests {
             result.is_none(),
             "cross-turn dedup returns None by design; TTL cache (B3) handles it"
         );
+    }
+
+    #[test]
+    fn find_duplicate_in_history_reuses_normalised_code_search_result() {
+        let original_args = json!({
+            "query": "Widget",
+            "path": "src",
+            "file_types": ["rust", "typescript"],
+            "result_types": ["text", "definition"],
+            "max_results": 10
+        });
+        let history = vec![
+            uni::Message::assistant_with_tools(
+                "search".into(),
+                vec![uni::ToolCall::function(
+                    "tc_search".into(),
+                    tools::CODE_SEARCH.into(),
+                    serde_json::to_string(&original_args).unwrap(),
+                )],
+            ),
+            uni::Message {
+                role: uni::MessageRole::Tool,
+                content: uni::MessageContent::text("{\"results\":[]}".into()),
+                tool_call_id: Some("tc_search".into()),
+                ..Default::default()
+            },
+        ];
+
+        let reused = find_duplicate_in_history(
+            &history,
+            tools::CODE_SEARCH,
+            &json!({
+                "query": "Widget",
+                "path": "src",
+                "file_types": ["typescript", "rs"],
+                "result_types": ["definition", "text"],
+                "max_results": 100
+            }),
+        );
+
+        assert_eq!(reused.as_deref(), Some("{\"results\":[]}"));
     }
 
     #[test]

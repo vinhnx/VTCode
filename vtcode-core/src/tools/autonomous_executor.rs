@@ -13,13 +13,13 @@ use crate::tools::apply_patch::decode_apply_patch_input;
 use crate::tools::command_args::{command_text, interactive_input_text};
 use crate::tools::tool_intent::{
     self, classify_tool_intent, command_session_action, command_session_action_in,
-    file_operation_action_in, file_operation_action_is, search_dispatch_action_is,
+    file_operation_action_in, file_operation_action_is,
 };
 use anyhow::{Context, Result};
 use hashbrown::{HashMap, HashSet};
 use serde_json::Value;
 use std::collections::VecDeque;
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 use tracing::warn;
@@ -62,7 +62,7 @@ impl ToolStats {
 }
 
 use crate::tools::circuit_breaker::CircuitBreaker;
-use crate::tools::validation::paths::{validate_non_root_listing_path, validate_path_safety};
+use crate::tools::validation::paths::validate_path_safety;
 use crate::utils::path::{normalize_path, resolve_workspace_path};
 
 /// Autonomous tool executor with safety checks.
@@ -328,9 +328,6 @@ impl AutonomousExecutor {
                 self.validate_file_path(args.get("path"))?;
                 self.validate_file_path(args.get("destination"))?;
             }
-            tools::UNIFIED_SEARCH if search_dispatch_action_is(args, "list") => {
-                self.validate_list_files_args(args)?;
-            }
             _ => {}
         }
         Ok(())
@@ -409,27 +406,6 @@ impl AutonomousExecutor {
         }
 
         Ok(())
-    }
-
-    /// Validate list_files arguments to prevent root listing loops
-    fn validate_list_files_args(&self, args: &Value) -> Result<()> {
-        let raw_path = args
-            .get("path")
-            .and_then(|v| v.as_str())
-            .unwrap_or_default()
-            .trim();
-
-        let targets_root_directory = !Path::new(raw_path)
-            .components()
-            .any(|component| !matches!(component, Component::CurDir | Component::RootDir));
-
-        if targets_root_directory {
-            anyhow::bail!(
-                "Error: autonomous directory listing must not target the root directory. Please specify a subdirectory like 'src/', 'vtcode-core/src/', or 'tests/'."
-            );
-        }
-
-        validate_non_root_listing_path(Some(raw_path))
     }
 
     /// Generate dry-run preview for verification
@@ -648,8 +624,8 @@ mod tests {
 
         assert_eq!(
             executor.get_policy(
-                tools::UNIFIED_SEARCH,
-                &json!({"action": "list", "path": "src"})
+                tools::CODE_SEARCH,
+                &json!({"query": "Widget", "path": "src"})
             ),
             AutonomousPolicy::AutoExecute
         );
@@ -697,33 +673,6 @@ mod tests {
                 "unexpected policy for command: {cmd}"
             );
         }
-    }
-
-    #[test]
-    fn test_list_files_root_blocked() {
-        let executor = AutonomousExecutor::new();
-
-        let root_variations = vec![
-            json!({"action": "list", "path": "."}),
-            json!({"action": "list", "path": ""}),
-            json!({"action": "list", "path": "./"}),
-            json!({"action": "list"}),
-        ];
-
-        for args in root_variations {
-            let result = executor.validate_args(tools::UNIFIED_SEARCH, &args);
-            assert!(result.is_err());
-            assert!(result.unwrap_err().to_string().contains("root directory"));
-        }
-    }
-
-    #[test]
-    fn test_list_files_specific_path_allowed() {
-        let executor = AutonomousExecutor::new();
-
-        let args = json!({"action": "list", "path": "src/core/"});
-        let result = executor.validate_args(tools::UNIFIED_SEARCH, &args);
-        result.unwrap();
     }
 
     #[test]
@@ -784,26 +733,18 @@ mod tests {
     #[test]
     fn test_loop_detection_integration() {
         let executor = AutonomousExecutor::new();
-        let args = json!({"path": "src/"});
+        let args = json!({"query": "Widget", "path": "src/"});
 
         // First two calls should not block
-        assert!(
-            executor
-                .should_block(tools::UNIFIED_SEARCH, &args)
-                .is_none()
-        );
-        executor.record_tool_call(tools::UNIFIED_SEARCH, &args);
+        assert!(executor.should_block(tools::CODE_SEARCH, &args).is_none());
+        executor.record_tool_call(tools::CODE_SEARCH, &args);
 
-        assert!(
-            executor
-                .should_block(tools::UNIFIED_SEARCH, &args)
-                .is_none()
-        );
-        executor.record_tool_call(tools::UNIFIED_SEARCH, &args);
+        assert!(executor.should_block(tools::CODE_SEARCH, &args).is_none());
+        executor.record_tool_call(tools::CODE_SEARCH, &args);
 
         // Third call should trigger warning
-        executor.record_tool_call(tools::UNIFIED_SEARCH, &args);
-        let block_msg = executor.should_block(tools::UNIFIED_SEARCH, &args);
+        executor.record_tool_call(tools::CODE_SEARCH, &args);
+        let block_msg = executor.should_block(tools::CODE_SEARCH, &args);
         assert!(block_msg.is_some());
         let message = block_msg.unwrap();
         assert!(
@@ -815,23 +756,15 @@ mod tests {
     #[test]
     fn test_turn_reset_clears_loop_detection_state() {
         let executor = AutonomousExecutor::new();
-        let args = json!({"path": "src/"});
+        let args = json!({"query": "Widget", "path": "src/"});
 
-        executor.record_tool_call(tools::UNIFIED_SEARCH, &args);
-        executor.record_tool_call(tools::UNIFIED_SEARCH, &args);
-        executor.record_tool_call(tools::UNIFIED_SEARCH, &args);
-        assert!(
-            executor
-                .should_block(tools::UNIFIED_SEARCH, &args)
-                .is_some()
-        );
+        executor.record_tool_call(tools::CODE_SEARCH, &args);
+        executor.record_tool_call(tools::CODE_SEARCH, &args);
+        executor.record_tool_call(tools::CODE_SEARCH, &args);
+        assert!(executor.should_block(tools::CODE_SEARCH, &args).is_some());
 
         executor.reset_turn_loop_detection();
-        assert!(
-            executor
-                .should_block(tools::UNIFIED_SEARCH, &args)
-                .is_none()
-        );
+        assert!(executor.should_block(tools::CODE_SEARCH, &args).is_none());
     }
 
     #[test]
@@ -839,18 +772,18 @@ mod tests {
         let executor = AutonomousExecutor::new();
 
         // Record some executions
-        executor.record_execution(tools::UNIFIED_SEARCH, true);
-        executor.record_execution(tools::UNIFIED_SEARCH, true);
-        executor.record_execution(tools::UNIFIED_SEARCH, false);
+        executor.record_execution(tools::CODE_SEARCH, true);
+        executor.record_execution(tools::CODE_SEARCH, true);
+        executor.record_execution(tools::CODE_SEARCH, false);
 
         // Check stats
-        let (total, success, failed) = executor.get_tool_stats(tools::UNIFIED_SEARCH).unwrap();
+        let (total, success, failed) = executor.get_tool_stats(tools::CODE_SEARCH).unwrap();
         assert_eq!(total, 3);
         assert_eq!(success, 2);
         assert_eq!(failed, 1);
 
         // Check success rate
-        let rate = executor.get_success_rate(tools::UNIFIED_SEARCH);
+        let rate = executor.get_success_rate(tools::CODE_SEARCH);
         assert!((rate - 0.666).abs() < 0.01);
     }
 

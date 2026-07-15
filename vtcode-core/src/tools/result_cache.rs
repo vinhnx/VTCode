@@ -14,7 +14,7 @@ use std::sync::Arc;
 /// Identifies a cached tool result
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct ToolCacheKey {
-    /// Tool name (e.g., tools::UNIFIED_SEARCH, tools::GREP_FILE)
+    /// Tool name (for example, tools::CODE_SEARCH or tools::GREP_FILE)
     pub tool: String,
     /// Normalized parameters (serialized, hashed for speed)
     pub params_hash: u64,
@@ -174,8 +174,8 @@ mod tests {
 
     #[test]
     fn creates_cache_key() {
-        let key = ToolCacheKey::new(tools::UNIFIED_SEARCH, "pattern=test", "/workspace");
-        assert_eq!(key.tool, tools::UNIFIED_SEARCH);
+        let key = ToolCacheKey::new(tools::CODE_SEARCH, "query=test", "/workspace");
+        assert_eq!(key.tool, tools::CODE_SEARCH);
         assert_eq!(key.target_path, "/workspace");
     }
 
@@ -194,7 +194,7 @@ mod tests {
     #[test]
     fn caches_and_retrieves_result() {
         let mut cache = ToolResultCache::new(10);
-        let key = ToolCacheKey::new(tools::UNIFIED_SEARCH, "pattern=test", "/workspace");
+        let key = ToolCacheKey::new(tools::CODE_SEARCH, "query=test", "/workspace");
         let output = "line 1\nline 2".to_string();
 
         cache.insert_arc(key.clone(), Arc::new(output.clone()));
@@ -204,7 +204,7 @@ mod tests {
     #[test]
     fn returns_none_for_missing_key() {
         let cache = ToolResultCache::new(10);
-        let key = ToolCacheKey::new(tools::UNIFIED_SEARCH, "pattern=test", "/workspace");
+        let key = ToolCacheKey::new(tools::CODE_SEARCH, "query=test", "/workspace");
         assert!(cache.get(&key).is_none());
     }
 

@@ -28,52 +28,43 @@ async fn test_code_search_dual_output_integration() {
         .await
         .expect("code_search execution should succeed");
 
-    // Verify: Dual output structure
-    assert!(
-        !result.llm_content.is_empty(),
-        "LLM content should not be empty"
-    );
-    assert!(
-        !result.ui_content.is_empty(),
-        "UI content should not be empty"
-    );
-    // Tool name may vary based on implementation
-    assert!(!result.tool_name.is_empty());
+    assert_eq!(result.tool_name, tools::CODE_SEARCH);
     assert!(result.success, "Tool should succeed");
+    assert_eq!(result.llm_content, result.ui_content);
 
-    // Verify: Token counting
-    let counts = &result.metadata.token_counts;
-    assert!(counts.llm_tokens > 0, "Should count LLM tokens");
-    assert!(counts.ui_tokens > 0, "Should count UI tokens");
-
-    // Verify: If UI has significant content, LLM should be summarized
-    if counts.ui_tokens > 100 {
-        assert!(
-            counts.llm_tokens < counts.ui_tokens,
-            "LLM content should be more concise than UI content for large outputs"
-        );
-        assert!(
-            counts.savings_percent > 0.0,
-            "Should show token savings for large outputs"
-        );
-
-        println!("v Token Savings Achieved:");
-        println!("   UI tokens: {}", counts.ui_tokens);
-        println!("   LLM tokens: {}", counts.llm_tokens);
-        println!(
-            "   Saved: {} tokens ({:.1}%)",
-            counts.savings_tokens, counts.savings_percent
-        );
-    }
-
-    // Verify: Summary structure for search results
-    // Should contain match or search information
-    assert!(
-        result.llm_content.to_lowercase().contains("match")
-            || result.llm_content.to_lowercase().contains("found")
-            || result.llm_content.to_lowercase().contains("search"),
-        "LLM summary should mention matches: {}",
-        result.llm_content
+    let response: serde_json::Value =
+        serde_json::from_str(&result.llm_content).expect("compact code_search response");
+    let mut fields = response
+        .as_object()
+        .expect("response object")
+        .keys()
+        .map(String::as_str)
+        .collect::<Vec<_>>();
+    fields.sort_unstable();
+    assert_eq!(
+        fields,
+        [
+            "filters",
+            "hints",
+            "query",
+            "results",
+            "returned",
+            "truncated"
+        ]
+    );
+    assert_eq!(response["query"], "ToolRegistry");
+    assert_eq!(response["filters"]["path"], "src/tools");
+    assert_eq!(response["filters"]["file_types"], json!(["rust"]));
+    assert_eq!(
+        response["filters"]["result_types"],
+        json!(["definition", "usage", "text"])
+    );
+    assert_eq!(response["filters"]["max_results"], 10);
+    assert_eq!(
+        response["returned"].as_u64(),
+        response["results"]
+            .as_array()
+            .map(|results| results.len() as u64)
     );
 }
 

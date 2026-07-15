@@ -325,10 +325,6 @@ fn register_web_search(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegis
                     "type": "string",
                     "description": "The search query (a topic, question, or keywords)."
                 },
-                "pattern": {
-                    "type": "string",
-                    "description": "Alias for 'query'."
-                },
                 "max_results": {
                     "type": "integer",
                     "description": "Maximum number of results to return (default: 8, max: 20)."
@@ -718,6 +714,30 @@ mod tests {
                 "{tool_name} must not have a builtin registration"
             );
         }
+    }
+
+    #[test]
+    fn web_search_schema_requires_canonical_query() {
+        let registrations = builtin_tool_registrations(None);
+        let web_search = registrations
+            .iter()
+            .find(|registration| registration.name() == tools::WEB_SEARCH)
+            .expect("web_search registration should exist");
+        let schema = web_search
+            .metadata()
+            .parameter_schema()
+            .expect("web_search schema");
+
+        assert_eq!(schema["required"], json!(["query"]));
+        assert_eq!(schema["additionalProperties"], json!(false));
+        let mut property_names = schema["properties"]
+            .as_object()
+            .expect("properties")
+            .keys()
+            .map(String::as_str)
+            .collect::<Vec<_>>();
+        property_names.sort_unstable();
+        assert_eq!(property_names, ["max_results", "query"]);
     }
 
     #[test]

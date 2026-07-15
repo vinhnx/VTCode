@@ -193,7 +193,7 @@ mod tests {
 
         assert!(
             registry
-                .has_tool(crate::config::constants::tools::UNIFIED_SEARCH)
+                .has_tool(crate::config::constants::tools::CODE_SEARCH)
                 .await
         );
 

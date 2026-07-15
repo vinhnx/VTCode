@@ -18,50 +18,40 @@ use crate::tools::tool_intent;
 use hashbrown::HashMap;
 use serde_json::Value;
 
-/// Scorer for grep results
-pub struct GrepScorer;
+/// Scorer for bounded code search results.
+pub struct CodeSearchScorer;
 
-impl ResultScorer for GrepScorer {
+impl ResultScorer for CodeSearchScorer {
     fn score(&self, result: &Value) -> ResultMetadata {
         let mut metadata = ResultMetadata::default();
         metadata.content_types.push("code".to_string());
 
         match result {
             Value::Object(map) => {
-                // Count matches
-                if let Some(matches) = map.get("matches")
-                    && let Some(count) = matches.as_array()
+                if let Some(results) = map.get("results")
+                    && let Some(entries) = results.as_array()
                 {
-                    metadata.result_count = count.len();
+                    metadata.result_count = entries.len();
 
-                    // High confidence if specific matches
-                    metadata.confidence = if count.len() > 5 {
+                    metadata.confidence = if entries.len() > 5 {
                         0.85
-                    } else if !count.is_empty() {
+                    } else if !entries.is_empty() {
                         0.80
                     } else {
-                        1.0 // High confidence in "no matches"
+                        1.0
                     };
 
-                    metadata.relevance = 0.75; // Grep results are usually relevant
-
-                    metadata.completeness = if count.len() < 1000 {
-                        ResultCompleteness::Complete
-                    } else {
+                    metadata.relevance = 0.75;
+                    metadata.completeness = if map
+                        .get("truncated")
+                        .and_then(Value::as_bool)
+                        .unwrap_or(false)
+                    {
                         ResultCompleteness::Partial
+                    } else {
+                        ResultCompleteness::Complete
                     };
-
-                    // Lower false positive chance for specific patterns
                     metadata.false_positive_likelihood = 0.05;
-                }
-
-                // Track line count
-                if let Some(lines) = map.get("line_count")
-                    && let Some(n) = lines.as_u64()
-                {
-                    metadata
-                        .tool_metrics
-                        .insert("line_count".to_string(), Value::Number(n.into()));
                 }
             }
             Value::Array(arr) => {
@@ -78,7 +68,7 @@ impl ResultScorer for GrepScorer {
     }
 
     fn tool_name(&self) -> &str {
-        tools::UNIFIED_SEARCH
+        tools::CODE_SEARCH
     }
 }
 
@@ -172,8 +162,8 @@ impl ScorerRegistry {
     pub fn new() -> Self {
         let mut scorers: HashMap<CompactStr, Box<dyn ResultScorer>> = HashMap::new();
         scorers.insert(
-            CompactStr::from(tools::UNIFIED_SEARCH),
-            Box::new(GrepScorer) as Box<dyn ResultScorer>,
+            CompactStr::from(tools::CODE_SEARCH),
+            Box::new(CodeSearchScorer) as Box<dyn ResultScorer>,
         );
         scorers.insert(
             CompactStr::from("find"),
@@ -249,9 +239,9 @@ mod tests {
     #[test]
     fn test_enhanced_result_is_useful() {
         let result = EnhancedToolResult::new(
-            json!({"matches": []}),
+            json!({"results": [], "returned": 0, "truncated": false}),
             ResultMetadata::success(0.8, 0.8),
-            tools::UNIFIED_SEARCH.to_string(),
+            tools::CODE_SEARCH.to_string(),
         );
 
         assert!(result.is_useful());
@@ -259,16 +249,18 @@ mod tests {
     }
 
     #[test]
-    fn test_grep_scorer() {
-        let scorer = GrepScorer;
+    fn test_code_search_scorer() {
+        let scorer = CodeSearchScorer;
         let result = json!({
-            "matches": ["line1", "line2", "line3"],
-            "line_count": 100
+            "results": ["line1", "line2", "line3"],
+            "returned": 3,
+            "truncated": false
         });
 
         let meta = scorer.score(&result);
         assert_eq!(meta.result_count, 3);
         assert!(meta.confidence > 0.7);
+        assert_eq!(meta.completeness, ResultCompleteness::Complete);
     }
 
     #[test]

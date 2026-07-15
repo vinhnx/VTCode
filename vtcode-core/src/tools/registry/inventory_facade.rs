@@ -1,6 +1,5 @@
 //! Inventory-related accessors for ToolRegistry.
 
-use std::borrow::Cow;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -58,11 +57,6 @@ impl ToolRegistry {
     /// Get the workspace root as an owned PathBuf.
     pub fn workspace_root_owned(&self) -> PathBuf {
         self.inventory.workspace_root().clone()
-    }
-
-    /// Get workspace root as `Cow<str>` to avoid allocations when possible.
-    pub(crate) fn workspace_root_str(&self) -> Cow<'_, str> {
-        self.workspace_root().to_string_lossy()
     }
 
     pub fn file_ops_tool(&self) -> &FileOpsTool {

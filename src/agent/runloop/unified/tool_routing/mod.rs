@@ -150,9 +150,7 @@ fn session_approval_cache_keys<'a>(
     approval_learning_target: &'a shell_approval::ApprovalLearningTarget,
     exact_shell_approval_target: Option<&'a shell_approval::ApprovalLearningTarget>,
 ) -> impl Iterator<Item = &'a str> {
-    // The bare tool_name is only included when it differs from cache_key to
-    // avoid cross-action contamination (e.g. `search_dispatch` grep approval
-    // should not satisfy a `search_dispatch:web` call).
+    // Include the bare tool name only when it differs from the cache key.
     let bare_if_different = if cache_key != tool_name {
         Some(tool_name)
     } else {
@@ -1072,11 +1070,8 @@ pub(crate) async fn ensure_tool_permission_with_call_id<S: UiSession + ?Sized>(
         })
         .unwrap_or_else(|| tool_name.to_string());
 
-    // Evaluate the tool policy against an action-qualified name so that
-    // network-accessing actions (e.g. `search_dispatch` with `action: "web"`)
-    // are not auto-approved as if they were the low-risk read-only tool. The
-    // risk scorer already models `search_dispatch:web` as a network operation;
-    // routing the policy check through this name keeps web fetches HITL-gated.
+    // Evaluate the tool policy against the intent-qualified name where the
+    // tool has distinct permission classes.
     let policy_eval_name = policy_evaluation_name(tool_name, tool_args);
     let policy_decision = tool_registry
         .evaluate_tool_policy(policy_eval_name.as_ref())

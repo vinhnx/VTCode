@@ -17,85 +17,51 @@ async fn build_tool_permissions_context_propagates_skip_confirmations() {
 }
 
 #[test]
-fn low_signal_family_for_search_dispatch_normalizes_missing_default_path() {
-    // Same pattern + globs, different path forms => same key after normalization
+fn low_signal_family_for_code_search_uses_normalised_identity() {
     let first = low_signal_family_key(
-        tool_names::UNIFIED_SEARCH,
-        &json!({"action":"grep","pattern":"Result","globs":["**/*.rs"]}),
+        tool_names::CODE_SEARCH,
+        &json!({
+            "query": " Widget ",
+            "file_types": [".rs", "python", "rust"],
+            "result_types": ["path", "definition", "path"],
+            "max_results": 5
+        }),
     );
     let second = low_signal_family_key(
-        tool_names::UNIFIED_SEARCH,
-        &json!({"action":"grep","path":".","pattern":"Result","globs":["**/*.rs"]}),
+        tool_names::CODE_SEARCH,
+        &json!({
+            "query": "Widget",
+            "path": ".",
+            "file_types": ["rust", ".py"],
+            "result_types": ["definition", "path"],
+            "max_results": 100
+        }),
     );
 
     assert_eq!(first, second);
 }
 
 #[test]
-fn low_signal_family_for_search_dispatch_includes_action_in_key() {
-    let grep = low_signal_family_key(
-        tool_names::UNIFIED_SEARCH,
-        &json!({"action":"grep","pattern":"Result","path":"src"}),
-    );
-    let list = low_signal_family_key(
-        tool_names::UNIFIED_SEARCH,
-        &json!({"action":"list","pattern":"**/*.rs","path":"src"}),
-    );
-    let structural = low_signal_family_key(
-        tool_names::UNIFIED_SEARCH,
-        &json!({"action":"structural","pattern":"fn $NAME() {}","lang":"rust","path":"src"}),
-    );
+fn low_signal_family_for_code_search_distinguishes_query_and_filters() {
+    let base = json!({
+        "query": "Widget",
+        "path": "src",
+        "file_types": ["rust"],
+        "result_types": ["definition"]
+    });
+    let base_key = low_signal_family_key(tool_names::CODE_SEARCH, &base);
 
-    // Different actions on the same path must produce different keys
-    assert_ne!(grep, list, "grep and list must not share a family key");
-    assert_ne!(
-        grep, structural,
-        "grep and structural must not share a family key"
-    );
-    assert_ne!(
-        list, structural,
-        "list and structural must not share a family key"
-    );
-
-    // Each key must contain its action
-    assert!(grep.unwrap().contains("::grep::"));
-    assert!(list.unwrap().contains("::list::"));
-    assert!(structural.unwrap().contains("::structural::"));
-}
-
-#[test]
-fn low_signal_family_for_search_dispatch_includes_pattern_in_grep_key() {
-    // Different patterns on the same path must produce different keys
-    let todo = low_signal_family_key(
-        tool_names::UNIFIED_SEARCH,
-        &json!({"action":"grep","pattern":"TODO","path":"src"}),
-    );
-    let fixme = low_signal_family_key(
-        tool_names::UNIFIED_SEARCH,
-        &json!({"action":"grep","pattern":"FIXME","path":"src"}),
-    );
-    assert_ne!(
-        todo, fixme,
-        "different grep patterns must produce different keys"
-    );
-    assert!(todo.unwrap().contains("pat=TODO"));
-    assert!(fixme.unwrap().contains("pat=FIXME"));
-}
-
-#[test]
-fn low_signal_family_for_search_dispatch_includes_pattern_in_structural_key() {
-    let unwrap = low_signal_family_key(
-        tool_names::UNIFIED_SEARCH,
-        &json!({"action":"structural","pattern":"$X.unwrap()","lang":"rust","path":"src"}),
-    );
-    let expect = low_signal_family_key(
-        tool_names::UNIFIED_SEARCH,
-        &json!({"action":"structural","pattern":"$X.expect($MSG)","lang":"rust","path":"src"}),
-    );
-    assert_ne!(
-        unwrap, expect,
-        "different structural patterns must produce different keys"
-    );
+    for changed in [
+        json!({"query": "Other", "path": "src", "file_types": ["rust"], "result_types": ["definition"]}),
+        json!({"query": "Widget", "path": "tests", "file_types": ["rust"], "result_types": ["definition"]}),
+        json!({"query": "Widget", "path": "src", "file_types": ["python"], "result_types": ["definition"]}),
+        json!({"query": "Widget", "path": "src", "file_types": ["rust"], "result_types": ["usage"]}),
+    ] {
+        assert_ne!(
+            base_key,
+            low_signal_family_key(tool_names::CODE_SEARCH, &changed)
+        );
+    }
 }
 
 #[test]

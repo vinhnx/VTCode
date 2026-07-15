@@ -292,7 +292,6 @@ fn tool_supports_read_permission(tool: &str) -> bool {
             | tools::READ_FILE
             | tools::GREP_FILE
             | tools::LIST_FILES
-            | tools::UNIFIED_SEARCH
             | tools::UNIFIED_FILE
     )
 }
@@ -344,10 +343,7 @@ fn tool_supports_bash_permission(tool: &str) -> bool {
 
 #[must_use]
 fn tool_supports_web_fetch_permission(tool: &str) -> bool {
-    matches!(
-        tool.trim(),
-        tools::WEB_FETCH | tools::FETCH_URL | tools::UNIFIED_SEARCH
-    )
+    matches!(tool.trim(), tools::WEB_FETCH | tools::FETCH_URL)
 }
 
 #[must_use]

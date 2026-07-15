@@ -414,7 +414,7 @@ mod tests {
         let tool_calls = vec![PreparedAssistantToolCall::new(uni::ToolCall::function(
             "call_1".to_string(),
             "code_search".to_string(),
-            r#"{"action":"grep","pattern":"foo"}"#.to_string(),
+            r#"{"query":"foo"}"#.to_string(),
         ))];
 
         let len_before_assistant = history.len();
@@ -441,7 +441,7 @@ mod tests {
         let tool_calls = vec![PreparedAssistantToolCall::new(uni::ToolCall::function(
             "call_1".to_string(),
             "code_search".to_string(),
-            r#"{"action":"grep","pattern":"foo"}"#.to_string(),
+            r#"{"query":"foo"}"#.to_string(),
         ))];
 
         let len_before_assistant = history.len();
@@ -473,7 +473,7 @@ mod tests {
         let tool_calls = vec![PreparedAssistantToolCall::new(uni::ToolCall::function(
             "call_1".to_string(),
             "code_search".to_string(),
-            r#"{"action":"grep","pattern":"loop"}"#.to_string(),
+            r#"{"query":"loop"}"#.to_string(),
         ))];
         let mut repeated_tool_attempts = LoopTracker::new();
         let mut turn_modified_files = BTreeSet::new();

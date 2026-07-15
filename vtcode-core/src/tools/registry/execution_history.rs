@@ -377,7 +377,6 @@ fn is_read_file_style_record(record: &ToolExecutionRecord) -> bool {
 fn public_tool_telemetry_label(tool_name: &str) -> String {
     match tool_name {
         tools::UNIFIED_EXEC => tools::EXEC_COMMAND.to_string(),
-        tools::UNIFIED_SEARCH => tools::CODE_SEARCH.to_string(),
         tools::UNIFIED_FILE => "file_operation".to_string(),
         _ => tool_name.to_string(),
     }
@@ -777,14 +776,12 @@ impl ToolExecutionHistory {
     /// Extract the read target from tool args for path-based matching.
     /// Returns `None` for non-read-only tools or when no path is found.
     ///
-    /// For `search_dispatch` and `grep_file`, the key includes action+pattern
-    /// so that two greps with different patterns on the same directory are NOT
-    /// treated as duplicates.
+    /// For search tools, the key includes the normalised query identity so
+    /// different searches on the same directory are not treated as duplicates.
     fn extract_read_target(tool_name: &str, args: &Value) -> Option<String> {
         let obj = args.as_object()?;
         let is_read = match tool_name {
-            tools::READ_FILE | tools::GREP_FILE | tools::LIST_FILES => true,
-            tools::UNIFIED_SEARCH => true,
+            tools::READ_FILE | tools::GREP_FILE | tools::LIST_FILES | tools::CODE_SEARCH => true,
             tools::UNIFIED_FILE => {
                 matches!(obj.get("action").and_then(Value::as_str), Some("read"))
             }
@@ -794,12 +791,12 @@ impl ToolExecutionHistory {
             return None;
         }
         let path = Self::extract_path_from_args(obj)?;
-        // For search tools, include action+pattern so different queries on the
-        // same directory are not treated as duplicates.
-        if tool_name == tools::UNIFIED_SEARCH || tool_name == tools::GREP_FILE {
-            let action = obj.get("action").and_then(Value::as_str).unwrap_or("");
+        if tool_name == tools::CODE_SEARCH {
+            return crate::tools::normalised_code_search_identity(args);
+        }
+        if tool_name == tools::GREP_FILE {
             let pattern = obj.get("pattern").and_then(Value::as_str).unwrap_or("");
-            return Some(format!("{path}::{action}::{pattern}"));
+            return Some(format!("{path}::{pattern}"));
         }
         Some(path)
     }
@@ -912,7 +909,7 @@ impl ToolExecutionHistory {
             .identical_limit
             .load(std::sync::atomic::Ordering::Relaxed);
         if is_read_style_tool_call(tool_name, args)
-            || tool_name_matches(tool_name, tools::UNIFIED_SEARCH)
+            || tool_name_matches(tool_name, tools::CODE_SEARCH)
         {
             base_limit.max(MIN_READONLY_IDENTICAL_LIMIT)
         } else {
@@ -971,11 +968,17 @@ impl ToolExecutionHistory {
             };
         }
 
-        // Count how many of the recent calls match this exact tool + args combo
+        // Count how many recent calls match this tool's loop identity.
         // CRITICAL FIX: Only count SUCCESSFUL calls to avoid cascade blocking
         let mut identical_count = 0;
         for record in &recent {
-            if record.tool_name == tool_name && record.args == *args && record.success {
+            let same_args = if tool_name_matches(tool_name, tools::CODE_SEARCH) {
+                crate::tools::normalised_code_search_identity(&record.args)
+                    == crate::tools::normalised_code_search_identity(args)
+            } else {
+                record.args == *args
+            };
+            if record.tool_name == tool_name && same_args && record.success {
                 identical_count += 1;
             }
         }
@@ -1094,12 +1097,12 @@ mod tests {
             false,
         ));
         history.add_record(ToolExecutionRecord::success(
-            tools::UNIFIED_SEARCH.to_string(),
+            tools::CODE_SEARCH.to_string(),
             tools::CODE_SEARCH.to_string(),
             false,
             None,
-            json!({"action": "structural", "pattern": "fn $NAME($$$)"}),
-            json!({"fallback_from": "structural", "matches": []}),
+            json!({"query": "ToolRegistry", "result_types": ["definition"]}),
+            json!({"query": "ToolRegistry", "filters": {"path": ".", "file_types": [], "result_types": ["definition"], "max_results": 20}, "results": [], "returned": 0, "truncated": false, "hints": []}),
             make_task_snapshot(task),
             None,
             None,
@@ -1127,7 +1130,7 @@ mod tests {
         assert_eq!(snapshot.repeated_equivalent_calls, 1);
         assert_eq!(snapshot.failed_tool_calls, 1);
         assert_eq!(snapshot.spooled_outputs, 1);
-        assert_eq!(snapshot.fallback_calls, 1);
+        assert_eq!(snapshot.fallback_calls, 0);
         assert_eq!(snapshot.read_after_spool_calls, 1);
         assert_eq!(snapshot.command_approval_prompts, 2);
         assert_eq!(snapshot.task_completed_successfully, Some(false));
@@ -1461,26 +1464,28 @@ mod tests {
     }
 
     #[test]
-    fn search_dispatch_exact_repeat_is_detected_after_two_successes() {
+    fn code_search_exact_repeat_uses_normalised_query_and_filters() {
         let history = ToolExecutionHistory::new(10);
         history.set_loop_detection_limits(5, 2);
 
         let args = json!({
-            "action": "grep",
-            "pattern": "exec_only_policy",
-            "path": "vtcode-core/src/core/agent/runner/tests.rs"
+            "query": "exec_only_policy",
+            "path": "vtcode-core/src/core/agent/runner/tests.rs",
+            "file_types": ["rust"],
+            "result_types": ["definition", "usage"],
+            "max_results": 5
         });
 
         // With MIN_READONLY_IDENTICAL_LIMIT=2, two identical successful calls
         // are enough to trigger loop detection.
         for _ in 0..2 {
             history.add_record(ToolExecutionRecord::success(
-                "search_dispatch".to_string(),
-                "search_dispatch".to_string(),
+                tools::CODE_SEARCH.to_string(),
+                tools::CODE_SEARCH.to_string(),
                 false,
                 None,
                 args.clone(),
-                json!({"matches": []}),
+                json!({"query": "exec_only_policy", "filters": {}, "results": [], "returned": 0, "truncated": false, "hints": []}),
                 make_snapshot(),
                 None,
                 None,
@@ -1490,7 +1495,9 @@ mod tests {
             ));
         }
 
-        let loop_result = history.detect_loop("search_dispatch", &args);
+        let mut equivalent_args = args.clone();
+        equivalent_args["max_results"] = json!(100);
+        let loop_result = history.detect_loop(tools::CODE_SEARCH, &equivalent_args);
         assert!(
             loop_result.detected,
             "two identical calls should trigger loop detection with MIN_READONLY_IDENTICAL_LIMIT=2"
@@ -1498,12 +1505,12 @@ mod tests {
 
         // A third identical call crosses the threshold.
         history.add_record(ToolExecutionRecord::success(
-            "search_dispatch".to_string(),
-            "search_dispatch".to_string(),
+            tools::CODE_SEARCH.to_string(),
+            tools::CODE_SEARCH.to_string(),
             false,
             None,
             args.clone(),
-            json!({"matches": []}),
+            json!({"query": "exec_only_policy", "filters": {}, "results": [], "returned": 0, "truncated": false, "hints": []}),
             make_snapshot(),
             None,
             None,
@@ -1512,10 +1519,26 @@ mod tests {
             false,
         ));
 
-        let loop_result = history.detect_loop("search_dispatch", &args);
+        let loop_result = history.detect_loop(tools::CODE_SEARCH, &args);
         assert!(loop_result.detected);
         assert_eq!(loop_result.repeat_count, 3);
-        assert_eq!(loop_result.tool_name, "search_dispatch");
+        assert_eq!(loop_result.tool_name, tools::CODE_SEARCH);
+
+        for changed in ["query", "path", "file_types", "result_types"] {
+            let mut changed_args = args.clone();
+            changed_args[changed] = match changed {
+                "query" => json!("different"),
+                "path" => json!("vtcode-core/tests"),
+                "file_types" => json!(["python"]),
+                "result_types" => json!(["text"]),
+                _ => unreachable!(),
+            };
+            assert!(
+                !history
+                    .detect_loop(tools::CODE_SEARCH, &changed_args)
+                    .detected
+            );
+        }
     }
 
     #[test]

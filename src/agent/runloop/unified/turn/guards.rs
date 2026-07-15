@@ -258,9 +258,9 @@ fn is_readonly_signature(signature: &str) -> bool {
         tool_names::READ_FILE
             | tool_names::GREP_FILE
             | tool_names::LIST_FILES
+            | tool_names::CODE_SEARCH
             | "search_tools"
             | "agent_info"
-            | tool_names::UNIFIED_SEARCH
     ) {
         return true;
     }
@@ -290,8 +290,7 @@ fn normalize_turn_balancer_tool_name(name: &str) -> Cow<'_, str> {
         "read file" | "repo_browser.read_file" => Cow::Borrowed(tool_names::READ_FILE),
         "write file" | "repo_browser.write_file" => Cow::Borrowed(tool_names::WRITE_FILE),
         "edit file" => Cow::Borrowed(tool_names::EDIT_FILE),
-        "search text" | "list files" | "structural search" | "code intelligence" | "list tools"
-        | "list errors" | "show agent info" | "fetch" => Cow::Borrowed(tool_names::UNIFIED_SEARCH),
+        "code search" | "search code" => Cow::Borrowed(tool_names::CODE_SEARCH),
         "run command (pty)" | "run command" | "run code" | "exec code" | "bash"
         | "container.exec" => Cow::Borrowed(tool_names::UNIFIED_EXEC),
         "apply patch" | "delete file" | "move file" | "copy file" | "file operation" => {
@@ -484,13 +483,10 @@ mod tests {
     use vtcode_core::config::constants::tools as tool_names;
 
     #[test]
-    fn readonly_signature_handles_alias_and_search_signatures() {
+    fn readonly_signature_handles_file_and_code_search_signatures() {
         assert!(is_readonly_signature(r#"read file:{"path":"README.md"}"#));
         assert!(is_readonly_signature(
-            r#"search text:{"pattern":"match provider_event","path":"vtcode-core/src/llm/providers/anthropic/api.rs"}"#
-        ));
-        assert!(is_readonly_signature(
-            r#"search_dispatch:{"pattern":"LLMStreamEvent::","path":"vtcode-core/src/llm/providers/anthropic/api.rs"}"#
+            r#"code_search:{"query":"LLMStreamEvent","path":"vtcode-core/src/llm/providers/anthropic/api.rs"}"#
         ));
     }
 
@@ -504,7 +500,7 @@ mod tests {
     #[test]
     fn readonly_signature_fast_path_accepts_ro_tag() {
         assert!(is_readonly_signature(
-            "search_dispatch:ro:len42-fnv1234abcd"
+            "code_search:ro:{\"query\":\"Widget\"}"
         ));
     }
 
@@ -649,39 +645,30 @@ mod tests {
     async fn low_signal_search_churn_schedules_recovery_and_progress_only_recovery_text_completes()
     {
         let mut backing = TestTurnProcessingBacking::new(8).await;
-        backing.set_loop_limit(tool_names::UNIFIED_SEARCH, 2);
-        let seeded_args = json!({"action":"grep","path":"vtcode-tui","pattern":"-> Result"});
+        backing.set_loop_limit(tool_names::CODE_SEARCH, 2);
+        let seeded_args = json!({"query":"Result","path":"src"});
         assert!(
             backing
-                .record_tool_call(tool_names::UNIFIED_SEARCH, &seeded_args)
+                .record_tool_call(tool_names::CODE_SEARCH, &seeded_args)
                 .is_none()
         );
-        let _ = backing.record_tool_call(tool_names::UNIFIED_SEARCH, &seeded_args);
-        let warning = backing.record_tool_call(tool_names::UNIFIED_SEARCH, &seeded_args);
+        let _ = backing.record_tool_call(tool_names::CODE_SEARCH, &seeded_args);
+        let warning = backing.record_tool_call(tool_names::CODE_SEARCH, &seeded_args);
         assert!(warning.is_some());
-        assert!(backing.is_hard_limit_exceeded(tool_names::UNIFIED_SEARCH));
+        assert!(backing.is_hard_limit_exceeded(tool_names::CODE_SEARCH));
         let mut ctx = backing.turn_processing_context();
         let mut tracker = LoopTracker::new();
         let miss = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
-            output: json!({"matches": []}),
+            output: json!({"results": []}),
             stdout: None,
             modified_files: vec![],
             command_success: true,
         });
 
-        // Use the same pattern for all 3 calls so they group into the same
-        // low-signal family.  Different patterns produce different family keys
-        // (action+pattern differentiation), so each would only have count 1
-        // and the balancer threshold would never be reached.
-        let same_args = json!({
-            "action": "grep",
-            "pattern": "-> Result",
-            "path": "vtcode-tui",
-            "globs": ["vtcode-tui/**/*.rs"]
-        });
-        update_repetition_tracker(&mut tracker, &miss, tool_names::UNIFIED_SEARCH, &same_args);
-        update_repetition_tracker(&mut tracker, &miss, tool_names::UNIFIED_SEARCH, &same_args);
-        update_repetition_tracker(&mut tracker, &miss, tool_names::UNIFIED_SEARCH, &same_args);
+        let same_args = json!({"query":"Result","path":"src"});
+        update_repetition_tracker(&mut tracker, &miss, tool_names::CODE_SEARCH, &same_args);
+        update_repetition_tracker(&mut tracker, &miss, tool_names::CODE_SEARCH, &same_args);
+        update_repetition_tracker(&mut tracker, &miss, tool_names::CODE_SEARCH, &same_args);
 
         let balancer_outcome = super::handle_turn_balancer(&mut ctx, 4, &mut tracker, 4, 3).await;
         assert!(matches!(balancer_outcome, TurnHandlerOutcome::Continue));
@@ -704,7 +691,7 @@ mod tests {
             TurnHandlerOutcome::Break(TurnLoopResult::Completed)
         ));
         assert!(!ctx.is_recovery_active());
-        assert!(backing.is_hard_limit_exceeded(tool_names::UNIFIED_SEARCH));
+        assert!(backing.is_hard_limit_exceeded(tool_names::CODE_SEARCH));
     }
 
     #[tokio::test]
@@ -713,24 +700,16 @@ mod tests {
         let mut ctx = backing.turn_processing_context();
         let mut tracker = LoopTracker::new();
         let miss = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
-            output: json!({"matches": []}),
+            output: json!({"results": []}),
             stdout: None,
             modified_files: vec![],
             command_success: true,
         });
 
-        // Use the same pattern for all 3 calls so they group into the same
-        // low-signal family (action+pattern differentiation means different
-        // patterns each have count 1, which would never reach the threshold).
-        let same_args = json!({
-            "action": "grep",
-            "pattern": "-> Result",
-            "path": "vtcode-tui",
-            "globs": ["vtcode-tui/**/*.rs"]
-        });
-        update_repetition_tracker(&mut tracker, &miss, tool_names::UNIFIED_SEARCH, &same_args);
-        update_repetition_tracker(&mut tracker, &miss, tool_names::UNIFIED_SEARCH, &same_args);
-        update_repetition_tracker(&mut tracker, &miss, tool_names::UNIFIED_SEARCH, &same_args);
+        let same_args = json!({"query":"Result","path":"src"});
+        update_repetition_tracker(&mut tracker, &miss, tool_names::CODE_SEARCH, &same_args);
+        update_repetition_tracker(&mut tracker, &miss, tool_names::CODE_SEARCH, &same_args);
+        update_repetition_tracker(&mut tracker, &miss, tool_names::CODE_SEARCH, &same_args);
 
         let balancer_outcome = super::handle_turn_balancer(&mut ctx, 3, &mut tracker, 20, 3).await;
         assert!(matches!(balancer_outcome, TurnHandlerOutcome::Continue));

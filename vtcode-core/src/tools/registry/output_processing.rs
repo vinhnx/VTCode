@@ -282,9 +282,9 @@ mod tests {
 
         // Representative tool types: search, file read, web fetch, exec, and an MCP tool.
         // Every one must land on disk as a `spool_path` the model can post-process
-        // (unified_file / unified_search / unified_exec) instead of being inlined.
+        // (unified_file, code_search, or unified_exec) instead of being inlined.
         let tool_names = [
-            tools::UNIFIED_SEARCH,
+            tools::CODE_SEARCH,
             tools::UNIFIED_FILE,
             tools::WEB_FETCH,
             tools::UNIFIED_EXEC,

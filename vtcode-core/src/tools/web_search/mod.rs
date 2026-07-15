@@ -38,14 +38,13 @@ const MAX_SNIPPET_CHARS: usize = 400;
 /// realistic UA reduces (but does not eliminate) the chance of being challenged.
 const BROWSER_USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
 
-pub(crate) const WEB_SEARCH_DESCRIPTION: &str = "Searches the web for a query and returns a ranked list of results (title, url, snippet) inline. Accepts: { query: string, max_results?: number, pattern?: string }. Uses the keyless DuckDuckGo HTML endpoint (best-effort, may be rate-limited). Results are cached for a few minutes to avoid repeat hits. Use web_fetch on the most promising result URL to read full content. Returns { query, provider: \"duckduckgo\", count, cached, results: [{ title, url, snippet }] }.";
+pub(crate) const WEB_SEARCH_DESCRIPTION: &str = "Searches the web for a query and returns a ranked list of results (title, url, snippet) inline. Accepts: { query: string, max_results?: number }. Uses the keyless DuckDuckGo HTML endpoint (best-effort, may be rate-limited). Results are cached for a few minutes to avoid repeat hits. Use web_fetch on the most promising result URL to read full content. Returns { query, provider: \"duckduckgo\", count, cached, results: [{ title, url, snippet }] }.";
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct WebSearchArgs {
-    /// Search query. `pattern` is accepted as an alias so the
-    /// `search_dispatch` action can use a single field name.
-    #[serde(default, alias = "pattern")]
-    query: Option<String>,
+    /// Search query.
+    query: String,
     #[serde(default)]
     max_results: Option<usize>,
 }
@@ -153,11 +152,10 @@ impl WebSearchTool {
         let args: WebSearchArgs = serde_json::from_value(raw_args)
             .context("Invalid arguments for web_search. Provide a 'query' string.")?;
 
-        let query = args
-            .query
-            .map(|q| q.trim().to_string())
-            .filter(|q| !q.is_empty())
-            .ok_or_else(|| anyhow!("web_search requires a non-empty 'query'"))?;
+        let query = args.query.trim().to_string();
+        if query.is_empty() {
+            return Err(anyhow!("web_search requires a non-empty 'query'"));
+        }
 
         let snapshot = self.snapshot_config();
         let default_max = snapshot.max_results.clamp(1, MAX_RESULTS_CAP);
@@ -546,11 +544,23 @@ mod tests {
     }
 
     #[test]
-    fn pattern_is_accepted_as_query_alias() {
-        // Parsing only: ensure pattern deserializes into the `query` field
-        // (the network call is not exercised here).
-        let args: WebSearchArgs = serde_json::from_value(json!({ "pattern": "vinhnx" })).unwrap();
-        assert_eq!(args.query.as_deref(), Some("vinhnx"));
+    fn pattern_is_rejected_as_an_unknown_field() {
+        let result = serde_json::from_value::<WebSearchArgs>(json!({
+            "query": "vinhnx",
+            "pattern": "legacy"
+        }));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn canonical_query_and_max_results_are_accepted() {
+        let args = serde_json::from_value::<WebSearchArgs>(json!({
+            "query": "vinhnx",
+            "max_results": 5
+        }))
+        .expect("canonical web_search arguments");
+        assert_eq!(args.query, "vinhnx");
+        assert_eq!(args.max_results, Some(5));
     }
 
     #[test]

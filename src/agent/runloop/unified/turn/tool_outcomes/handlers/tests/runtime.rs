@@ -766,21 +766,21 @@ async fn multiple_prepared_tool_calls_respect_unlimited_budget_when_cap_disabled
     let tool_calls = vec![
         PreparedAssistantToolCall::new(uni::ToolCall::function(
             "prepared_search_1".to_string(),
-            tool_names::UNIFIED_SEARCH.to_string(),
+            tool_names::CODE_SEARCH.to_string(),
             serde_json::to_string(&json!({
-                "action": "grep",
                 "path": ".",
-                "pattern": "hello"
+                "query": "hello",
+                "result_types": ["text"]
             }))
             .expect("serialize tool args"),
         )),
         PreparedAssistantToolCall::new(uni::ToolCall::function(
             "prepared_search_2".to_string(),
-            tool_names::UNIFIED_SEARCH.to_string(),
+            tool_names::CODE_SEARCH.to_string(),
             serde_json::to_string(&json!({
-                "action": "grep",
                 "path": ".",
-                "pattern": "world"
+                "query": "world",
+                "result_types": ["text"]
             }))
             .expect("serialize tool args"),
         )),

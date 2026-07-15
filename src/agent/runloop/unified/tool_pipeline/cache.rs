@@ -27,15 +27,13 @@ fn is_readonly_repo_browsing_tool(tool_name: &str, args: &Value) -> bool {
     matches!(
         tool_name,
         tools::READ_FILE | tools::LIST_FILES | "grep_search" | "find_files"
-    ) || (tool_name == tools::UNIFIED_FILE && tool_intent::file_operation_action_is(args, "read"))
-        || (tool_name == tools::UNIFIED_SEARCH
-            && tool_intent::search_dispatch_action_in(args, &["grep", "list"]))
+    ) || tool_name == tools::CODE_SEARCH
+        || (tool_name == tools::UNIFIED_FILE && tool_intent::file_operation_action_is(args, "read"))
 }
 
 fn is_stable_tool_catalog_lookup(tool_name: &str, args: &Value) -> bool {
+    let _ = args;
     matches!(tool_name, "search_tools" | "get_errors" | "agent_info")
-        || (tool_name == tools::UNIFIED_SEARCH
-            && tool_intent::search_dispatch_action_in(args, &["tools", "errors", "agent"]))
 }
 
 /// Enhanced cache key creation that includes workspace context in the target path
@@ -56,10 +54,25 @@ pub(super) fn create_enhanced_cache_key(
         format!("{workspace}/{cache_target}")
     };
 
+    if tool_name == tools::CODE_SEARCH
+        && let Some(identity) = vtcode_core::tools::normalised_code_search_identity(args)
+    {
+        return ToolCacheKey::new(tool_name, &identity, &enhanced_target);
+    }
+
     ToolCacheKey::from_json(tool_name, args, &enhanced_target)
 }
 
 pub(super) fn cache_target_path(tool_name: &str, args: &Value) -> String {
+    if tool_name == tools::CODE_SEARCH {
+        return args
+            .get("path")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|path| !path.is_empty())
+            .unwrap_or(".")
+            .to_string();
+    }
     if let Some(path) = args.get("path").and_then(|v| v.as_str()) {
         return path.to_string();
     }
@@ -232,7 +245,9 @@ mod tests {
     use serde_json::json;
     use vtcode_core::config::constants::tools;
 
-    use super::{cache_target_path, is_tool_cacheable, stream_command_parts};
+    use super::{
+        cache_target_path, create_enhanced_cache_key, is_tool_cacheable, stream_command_parts,
+    };
 
     #[test]
     fn caches_path_scoped_git_diff_run_pty() {
@@ -340,23 +355,39 @@ mod tests {
     }
 
     #[test]
-    fn caches_search_dispatch_list_calls() {
+    fn caches_code_search_with_normalised_target() {
         let args = json!({
-            "action": "list",
-            "path": "src"
+            "query": "Widget",
+            "path": " src ",
+            "file_types": [".rs"],
+            "result_types": ["path", "definition"],
+            "max_results": 5
         });
 
-        assert!(is_tool_cacheable(tools::UNIFIED_SEARCH, &args));
-        assert_eq!(cache_target_path(tools::UNIFIED_SEARCH, &args), "src");
+        assert!(is_tool_cacheable(tools::CODE_SEARCH, &args));
+        assert_eq!(cache_target_path(tools::CODE_SEARCH, &args), "src");
     }
 
     #[test]
-    fn caches_search_dispatch_tools_metadata_calls() {
-        let args = json!({
-            "action": "tools",
-            "keyword": "patch"
+    fn code_search_cache_identity_ignores_limit_and_canonicalises_filters() {
+        let first = json!({
+            "query": " Widget ",
+            "path": "src",
+            "file_types": [".rs", "python", "rust"],
+            "result_types": ["path", "definition", "path"],
+            "max_results": 5
+        });
+        let second = json!({
+            "query": "Widget",
+            "path": "src",
+            "file_types": ["rust", ".py"],
+            "result_types": ["definition", "path"],
+            "max_results": 100
         });
 
-        assert!(is_tool_cacheable(tools::UNIFIED_SEARCH, &args));
+        assert_eq!(
+            create_enhanced_cache_key(tools::CODE_SEARCH, &first, "src", "/workspace"),
+            create_enhanced_cache_key(tools::CODE_SEARCH, &second, "src", "/workspace")
+        );
     }
 }

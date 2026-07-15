@@ -155,7 +155,6 @@ impl TelemetryManager {
 fn public_tool_telemetry_label(tool: &str) -> String {
     match tool {
         tools::UNIFIED_EXEC => tools::EXEC_COMMAND.to_string(),
-        tools::UNIFIED_SEARCH => tools::CODE_SEARCH.to_string(),
         tools::UNIFIED_FILE => "file_operation".to_string(),
         _ => tool.to_owned(),
     }
@@ -224,16 +223,15 @@ mod tests {
     fn code_search_telemetry_label_remains_canonical() {
         let telemetry = TelemetryManager::new();
         telemetry.record_tool_usage(tools::UNIFIED_EXEC, true);
-        telemetry.record_tool_usage(tools::UNIFIED_SEARCH, false);
         telemetry.record_tool_usage(tools::CODE_SEARCH, true);
         telemetry.record_tool_usage(tools::UNIFIED_FILE, true);
 
         let snapshot = telemetry.get_snapshot().expect("snapshot");
-        assert_eq!(snapshot.total_tool_calls, 4);
+        assert_eq!(snapshot.total_tool_calls, 3);
         assert_eq!(snapshot.tool_counts.get("exec_command"), Some(&1));
-        assert_eq!(snapshot.tool_counts.get("code_search"), Some(&2));
+        assert_eq!(snapshot.tool_counts.get("code_search"), Some(&1));
         assert_eq!(snapshot.tool_counts.get("file_operation"), Some(&1));
-        assert_eq!(snapshot.tool_errors.get("code_search"), Some(&1));
+        assert!(snapshot.tool_errors.get("code_search").is_none());
         assert!(
             !snapshot
                 .tool_counts

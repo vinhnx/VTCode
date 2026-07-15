@@ -208,9 +208,9 @@ mod tests {
         let obs = Arc::new(ObservabilityContext::noop());
         let ext = ToolRegistryImprovement::new(obs);
 
-        ext.record_execution(tools::UNIFIED_SEARCH, "pattern", true, 0.8, 100);
+        ext.record_execution(tools::CODE_SEARCH, "query", true, 0.8, 100);
 
-        let metrics = ext.get_tool_metrics(tools::UNIFIED_SEARCH);
+        let metrics = ext.get_tool_metrics(tools::CODE_SEARCH);
         assert!(metrics.is_some());
         assert!((metrics.unwrap().success_rate() - 1.0).abs() < f32::EPSILON);
     }
@@ -220,9 +220,9 @@ mod tests {
         let obs = Arc::new(ObservabilityContext::noop());
         let ext = ToolRegistryImprovement::new(obs);
 
-        ext.cache_result(tools::UNIFIED_SEARCH, "pattern", "result");
+        ext.cache_result(tools::CODE_SEARCH, "query", "result");
         assert_eq!(
-            ext.get_cached_result(tools::UNIFIED_SEARCH, "pattern"),
+            ext.get_cached_result(tools::CODE_SEARCH, "query"),
             Some("result".to_owned())
         );
     }

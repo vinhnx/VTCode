@@ -131,6 +131,7 @@ pub mod request_user_input;
 pub mod autonomous_executor;
 pub mod cache;
 pub(crate) mod code_search;
+pub use code_search::normalised_identity as normalised_code_search_identity;
 pub mod command;
 pub mod command_args;
 pub mod command_cache;
@@ -177,7 +178,6 @@ pub(crate) mod search_runtime;
 pub mod shell;
 pub mod shell_snapshot;
 pub mod skills;
-pub mod structural_search;
 pub mod summarizers;
 #[cfg(feature = "tui")]
 pub mod terminal_app;

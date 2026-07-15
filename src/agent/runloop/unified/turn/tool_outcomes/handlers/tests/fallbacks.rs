@@ -2,95 +2,24 @@
 use super::*;
 
 #[test]
-fn preflight_fallback_normalizes_search_dispatch_args() {
-    let error =
-        anyhow!("Invalid arguments for tool 'search_dispatch': \"action\" is a required property");
-    let args = json!({
-        "Pattern": "LLMStreamEvent::",
-        "Path": "."
-    });
-    let fallback = preflight_validation_fallback(tool_names::UNIFIED_SEARCH, &args, &error)
-        .expect("fallback expected for recoverable search_dispatch preflight");
-    assert_eq!(fallback.0, tool_names::EXEC_COMMAND);
-    assert!(
-        fallback.1["cmd"]
-            .as_str()
-            .is_some_and(|cmd| cmd.contains("LLMStreamEvent::"))
-    );
-}
-
-#[test]
-fn preflight_fallback_maps_keyword_to_pattern_for_grep() {
-    let error = anyhow!("Invalid arguments for tool 'search_dispatch': missing field `pattern`");
-    let args = json!({
-        "action": "grep",
-        "keyword": "system prompt",
-        "path": "src"
-    });
-    let fallback = preflight_validation_fallback(tool_names::UNIFIED_SEARCH, &args, &error)
-        .expect("fallback expected for grep missing pattern");
-    assert_eq!(fallback.0, tool_names::EXEC_COMMAND);
-    assert!(
-        fallback.1["cmd"]
-            .as_str()
-            .is_some_and(|cmd| cmd.contains("system prompt"))
-    );
-}
-
-#[test]
-fn preflight_fallback_remaps_search_dispatch_read_action() {
-    let error = anyhow!("Tool execution failed: Invalid action: read");
-    let args = json!({
-        "action": "read",
-        "query": "retry",
-        "path": "src"
-    });
-    let fallback = preflight_validation_fallback(tool_names::UNIFIED_SEARCH, &args, &error)
-        .expect("fallback expected for invalid read action");
-    assert_eq!(fallback.0, tool_names::EXEC_COMMAND);
-    assert!(
-        fallback.1["cmd"]
-            .as_str()
-            .is_some_and(|cmd| cmd.contains("retry"))
-    );
-}
-
-#[test]
-fn recovery_fallback_skips_list_degradation_for_text_search_refinement() {
-    let grep = recovery_fallback_for_tool(
-        tool_names::UNIFIED_SEARCH,
-        &json!({"action":"grep","path":"src","pattern":"Result<"}),
-    );
-
-    assert!(grep.is_none());
-}
-
-#[test]
-fn recovery_fallback_maps_structural_search_to_code_search() {
-    let structural = recovery_fallback_for_tool(
-        tool_names::UNIFIED_SEARCH,
-        &json!({"action":"structural","path":"src","pattern":"fn $NAME() {}","lang":"rust"}),
-    )
-    .expect("structural fallback should use public code_search");
-
-    assert_eq!(structural.0, tool_names::CODE_SEARCH);
-    assert_eq!(structural.1["action"], "structural");
-    assert_eq!(structural.1["lang"], "rust");
-}
-
-#[test]
-fn recovery_fallback_preserves_list_for_file_discovery_calls() {
+fn recovery_fallback_for_code_search_uses_query_and_path() {
     let fallback = recovery_fallback_for_tool(
-        tool_names::UNIFIED_SEARCH,
-        &json!({"action":"list","path":"src","mode":"tree"}),
+        tool_names::CODE_SEARCH,
+        &json!({
+            "query": "Widget",
+            "path": "src",
+            "file_types": ["rust"],
+            "result_types": ["definition", "usage"],
+            "max_results": 10
+        }),
     )
-    .expect("list fallback expected");
+    .expect("code_search should fall back to literal command search");
 
     assert_eq!(fallback.0, tool_names::EXEC_COMMAND);
     assert!(
         fallback.1["cmd"]
             .as_str()
-            .is_some_and(|cmd| cmd.contains("'src'"))
+            .is_some_and(|cmd| cmd.contains("'Widget'") && cmd.contains("'src'"))
     );
 }
 
@@ -109,7 +38,7 @@ fn preflight_fallback_remaps_file_operation_command_payload_to_command_session()
 }
 
 #[test]
-fn preflight_fallback_remaps_file_operation_list_to_search_dispatch_list() {
+fn preflight_fallback_remaps_file_operation_list_to_exec_command() {
     let error = anyhow!("Invalid arguments for tool 'file_operation': unknown variant `list`");
     let args = json!({
         "action": "list",

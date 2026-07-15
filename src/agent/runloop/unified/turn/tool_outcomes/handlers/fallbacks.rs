@@ -39,53 +39,18 @@ fn public_list_fallback(path: &str) -> (String, Value) {
 }
 
 fn public_grep_fallback(args: &Value) -> Option<(String, Value)> {
-    let pattern = trimmed_non_empty_string_field(args, "pattern")
-        .or_else(|| trimmed_non_empty_string_field(args, "keyword"))
-        .or_else(|| trimmed_non_empty_string_field(args, "query"))?;
+    let query = trimmed_non_empty_string_field(args, "query")?;
     let path = trimmed_non_empty_string_field(args, "path").unwrap_or_else(|| ".".to_string());
     Some(public_exec_fallback(format!(
         "rg --line-number --column --color=never {} {}",
-        shell_single_quote(&pattern),
+        shell_single_quote(&query),
         shell_single_quote(&path)
     )))
 }
 
-fn public_search_fallback_for_args(args: Value) -> Option<(String, Value)> {
-    match tool_intent::search_dispatch_action(&args).unwrap_or("grep") {
-        action if action.eq_ignore_ascii_case("list") => {
-            let path = args.get("path").and_then(Value::as_str).unwrap_or(".");
-            Some(public_list_fallback(path))
-        }
-        action if action.eq_ignore_ascii_case("grep") => public_grep_fallback(&args),
-        action
-            if action.eq_ignore_ascii_case("structural")
-                || action.eq_ignore_ascii_case("outline") =>
-        {
-            Some((tool_names::CODE_SEARCH.to_string(), args))
-        }
-        _ => None,
-    }
-}
-
 pub(super) fn recovery_fallback_for_tool(tool_name: &str, args: &Value) -> Option<(String, Value)> {
     match tool_name {
-        tool_names::UNIFIED_SEARCH => {
-            let normalized = tool_intent::normalize_search_dispatch_args(args);
-            let action = tool_intent::search_dispatch_action(&normalized).unwrap_or("grep");
-            if action.eq_ignore_ascii_case("list") {
-                let path = normalized
-                    .get("path")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or(".");
-                Some(public_list_fallback(path))
-            } else if action.eq_ignore_ascii_case("structural")
-                || action.eq_ignore_ascii_case("outline")
-            {
-                Some((tool_names::CODE_SEARCH.to_string(), normalized))
-            } else {
-                None
-            }
-        }
+        tool_names::CODE_SEARCH => public_grep_fallback(args),
         "list files" => {
             let path = args.get("path").and_then(|v| v.as_str()).unwrap_or(".");
             Some(public_list_fallback(path))
@@ -232,41 +197,6 @@ pub(super) fn preflight_validation_fallback(
         return Some((tool_names::REQUEST_USER_INPUT.to_string(), normalized));
     }
 
-    let is_search_dispatch = tool_name == tool_names::UNIFIED_SEARCH
-        || error_text.contains("tool 'search_dispatch'")
-        || error_text.contains("for 'search_dispatch'");
-    if is_search_dispatch {
-        let mut normalized = tool_intent::normalize_search_dispatch_args(args_val);
-        let inferred_pattern = trimmed_non_empty_string_field(&normalized, "pattern")
-            .or_else(|| trimmed_non_empty_string_field(&normalized, "keyword"))
-            .or_else(|| trimmed_non_empty_string_field(&normalized, "query"));
-
-        if let Some(obj) = normalized.as_object_mut() {
-            let action = obj
-                .get("action")
-                .and_then(Value::as_str)
-                .unwrap_or_default();
-            if action.eq_ignore_ascii_case("read") {
-                if inferred_pattern.is_some() {
-                    obj.insert("action".to_string(), Value::String("grep".to_string()));
-                } else {
-                    obj.insert("action".to_string(), Value::String("list".to_string()));
-                }
-            }
-
-            if obj.get("action").and_then(Value::as_str) == Some("grep")
-                && obj.get("pattern").is_none()
-                && let Some(pattern) = inferred_pattern
-            {
-                obj.insert("pattern".to_string(), Value::String(pattern));
-            }
-        }
-
-        if normalized != *args_val && normalized.get("action").is_some() {
-            return public_search_fallback_for_args(normalized);
-        }
-    }
-
     let is_file_operation = tool_name == tool_names::UNIFIED_FILE
         || error_text.contains("tool 'file_operation'")
         || error_text.contains("for 'file_operation'");
@@ -324,7 +254,6 @@ pub(super) fn try_recover_preflight_with_fallback(
 #[cfg(test)]
 mod tests {
     use super::{preflight_validation_fallback, trimmed_non_empty_string_field};
-    use anyhow::anyhow;
     use serde_json::json;
     use vtcode_core::config::constants::tools as tool_names;
 
@@ -341,27 +270,6 @@ mod tests {
         );
         assert_eq!(trimmed_non_empty_string_field(&value, "blank"), None);
         assert_eq!(trimmed_non_empty_string_field(&value, "missing"), None);
-    }
-
-    #[test]
-    fn preflight_validation_fallback_promotes_search_dispatch_keyword_to_pattern() {
-        let args = json!({
-            "action": "read",
-            "path": "src",
-            "keyword": "  todo  "
-        });
-        let error = anyhow!("tool 'search_dispatch' validation failed");
-
-        let (tool_name, recovered_args) =
-            preflight_validation_fallback(tool_names::UNIFIED_SEARCH, &args, &error)
-                .expect("search_dispatch fallback should recover");
-
-        assert_eq!(tool_name, tool_names::EXEC_COMMAND);
-        assert!(
-            recovered_args["cmd"]
-                .as_str()
-                .is_some_and(|cmd| cmd.contains("todo"))
-        );
     }
 
     #[test]

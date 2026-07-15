@@ -11,13 +11,10 @@ use tracing::info;
 
 use super::registration::ToolRegistration;
 use crate::config::CommandsConfig;
-use crate::exec::skill_manager::SkillManager;
 use crate::tools::command::CommandTool;
 use crate::tools::edited_file_monitor::EditedFileMonitor;
 use crate::tools::file_ops::FileOpsTool;
 use crate::tools::grep_file::GrepSearchManager;
-use crate::tools::web_fetch::WebFetchTool;
-use crate::tools::web_search::WebSearchTool;
 use crate::utils::path::canonicalize_workspace;
 
 /// Metrics for alias usage tracking
@@ -97,18 +94,6 @@ pub(super) struct ToolInventory {
     file_ops_tool: FileOpsTool,
     command_tool: Arc<RwLock<CommandTool>>,
     grep_search: Arc<GrepSearchManager>,
-    skill_manager: SkillManager,
-    /// Configured `web_fetch` instance (built from `[web_fetch]` user config).
-    /// The same instance is registered with the LLM-facing tool map and is
-    /// used directly by the search_dispatch dispatcher so the user's
-    /// allow/block lists apply.
-    web_fetch_tool: WebFetchTool,
-    /// Configured `web_search` instance (built from `[web_search]` user
-    /// config). Sharing the instance with the registered tool ensures
-    /// per-instance cooldown, cache, and session cap are observed across
-    /// both the standalone `web_search` and `search_dispatch action="web"`
-    /// entry points.
-    web_search_tool: WebSearchTool,
 }
 
 impl ToolInventory {
@@ -122,17 +107,6 @@ impl ToolInventory {
             Arc::clone(&grep_search),
             edited_file_monitor,
         );
-        let skill_manager = SkillManager::new(&workspace_root);
-        // Build the network tools from the user config snapshot installed by
-        // the registry. Falling back to defaults keeps tests that construct
-        // an inventory without first calling `install_tool_config` working.
-        let web_fetch_tool = super::distributed::tool_config()
-            .map(|snapshot| WebFetchTool::from_config(&snapshot.web_fetch))
-            .unwrap_or_default();
-        let web_search_tool = super::distributed::tool_config()
-            .map(|snapshot| WebSearchTool::with_config(snapshot.web_search.clone()))
-            .unwrap_or_default();
-
         Self {
             workspace_root,
             tools: Arc::new(RwLock::new(FxHashMap::default())),
@@ -146,25 +120,7 @@ impl ToolInventory {
             file_ops_tool,
             command_tool: Arc::new(RwLock::new(command_tool)),
             grep_search,
-            skill_manager,
-            web_fetch_tool,
-            web_search_tool,
         }
-    }
-
-    /// Direct accessor for the configured `WebFetchTool`. The search_dispatch
-    /// dispatcher uses this so user-configured allow/block lists apply to
-    /// `search_dispatch action="web" url=...` invocations.
-    pub fn web_fetch_tool(&self) -> &WebFetchTool {
-        &self.web_fetch_tool
-    }
-
-    /// Direct accessor for the configured `WebSearchTool`. Sharing this with
-    /// the registered tool keeps the per-instance cooldown, cache, and
-    /// session cap observed across both standalone `web_search` and the
-    /// search_dispatch action="web" entry point.
-    pub fn web_search_tool(&self) -> &WebSearchTool {
-        &self.web_search_tool
     }
 
     /// Get alias usage metrics for debugging and analytics
@@ -195,10 +151,6 @@ impl ToolInventory {
 
     pub fn grep_file_manager(&self) -> Arc<GrepSearchManager> {
         self.grep_search.clone()
-    }
-
-    pub fn skill_manager(&self) -> &SkillManager {
-        &self.skill_manager
     }
 
     pub fn register_tool(&self, registration: ToolRegistration) -> anyhow::Result<()> {

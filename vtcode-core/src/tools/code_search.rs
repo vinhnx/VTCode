@@ -136,6 +136,19 @@ impl CodeSearchRequest {
     }
 }
 
+pub fn normalised_identity(args: &serde_json::Value) -> Option<String> {
+    let request = serde_json::from_value::<CodeSearchRequest>(args.clone()).ok()?;
+    let mut normalised = request.normalise().ok()?;
+    normalised.filters.file_types.sort_unstable();
+    serde_json::to_string(&serde_json::json!({
+        "query": normalised.query,
+        "path": normalised.filters.path,
+        "file_types": normalised.filters.file_types,
+        "result_types": normalised.filters.result_types,
+    }))
+    .ok()
+}
+
 fn normalise_file_types(file_types: Option<Vec<CompactStr>>) -> Result<Vec<CompactStr>> {
     let Some(file_types) = file_types else {
         return Ok(Vec::new());

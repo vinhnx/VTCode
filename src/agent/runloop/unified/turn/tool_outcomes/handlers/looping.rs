@@ -50,35 +50,6 @@ fn normalized_shell_command_arg(args: &Value, max_chars: usize) -> Option<String
         .filter(|command| !command.is_empty())
 }
 
-fn search_dispatch_globs_arg(args: &Value) -> Option<String> {
-    let globs = args.get("globs")?;
-    match globs {
-        Value::String(value) => {
-            let trimmed = value.trim();
-            if trimmed.is_empty() {
-                None
-            } else {
-                Some(compact_loop_text(trimmed, 120))
-            }
-        }
-        Value::Array(items) => {
-            let joined = items
-                .iter()
-                .filter_map(Value::as_str)
-                .map(str::trim)
-                .filter(|value| !value.is_empty())
-                .collect::<Vec<_>>()
-                .join(",");
-            if joined.is_empty() {
-                None
-            } else {
-                Some(compact_loop_text(&joined, 120))
-            }
-        }
-        _ => None,
-    }
-}
-
 fn first_arg_value_by_keys<'a>(args: &'a Value, keys: &[&str]) -> Option<&'a Value> {
     keys.iter().find_map(|key| args.get(*key))
 }
@@ -269,37 +240,8 @@ pub(crate) fn low_signal_family_key(canonical_tool_name: &str, args: &Value) -> 
         }
         tool_names::UNIFIED_EXEC => normalized_shell_command_arg(args, 160)
             .map(|command| format!("{canonical_tool_name}::run::{command}")),
-        tool_names::UNIFIED_SEARCH => {
-            let normalized = tool_intent::normalize_search_dispatch_args(args);
-            let action = tool_intent::search_dispatch_action(&normalized).unwrap_or("grep");
-            let mut key = format!("{canonical_tool_name}::{action}");
-            // Include pattern for grep/structural so different searches on the same
-            // path are tracked separately (avoids false-positive family cap violations).
-            if matches!(action, "grep" | "structural") {
-                if let Some(pattern) = normalized
-                    .get("pattern")
-                    .and_then(Value::as_str)
-                    .map(|p| compact_loop_text(p, 80))
-                    .filter(|p| !p.is_empty())
-                {
-                    key.push_str("::pat=");
-                    key.push_str(&pattern);
-                }
-            }
-            if let Some(globs) = search_dispatch_globs_arg(&normalized) {
-                key.push_str("::globs=");
-                key.push_str(&globs);
-            } else {
-                let path = normalized
-                    .get("path")
-                    .and_then(Value::as_str)
-                    .map(|value| compact_loop_key_part(value, 120))
-                    .unwrap_or_else(|| ".".to_string());
-                key.push_str("::");
-                key.push_str(&path);
-            }
-            Some(key)
-        }
+        tool_names::CODE_SEARCH => vtcode_core::tools::normalised_code_search_identity(args)
+            .map(|identity| format!("{canonical_tool_name}::{identity}")),
         _ => None,
     }
 }

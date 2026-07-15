@@ -529,10 +529,10 @@ mod tests {
             &[
                 validated_call(
                     "call_1",
-                    tools::UNIFIED_SEARCH,
+                    tools::CODE_SEARCH,
                     true,
                     true,
-                    serde_json::json!({"action":"grep","pattern":"turn loop"}),
+                    serde_json::json!({"query":"turn loop"}),
                 ),
                 validated_call(
                     "call_2",
@@ -554,10 +554,10 @@ mod tests {
             &[
                 validated_call(
                     "call_1",
-                    tools::UNIFIED_SEARCH,
+                    tools::CODE_SEARCH,
                     true,
                     true,
-                    serde_json::json!({"action":"grep","pattern":"alpha"}),
+                    serde_json::json!({"query":"alpha"}),
                 ),
                 validated_call(
                     "call_2",
@@ -568,10 +568,10 @@ mod tests {
                 ),
                 validated_call(
                     "call_3",
-                    tools::UNIFIED_SEARCH,
+                    tools::CODE_SEARCH,
                     true,
                     true,
-                    serde_json::json!({"action":"grep","pattern":"omega"}),
+                    serde_json::json!({"query":"omega"}),
                 ),
             ],
             true,
@@ -586,17 +586,17 @@ mod tests {
             &[
                 validated_call(
                     "call_1",
-                    tools::UNIFIED_SEARCH,
+                    tools::CODE_SEARCH,
                     true,
                     true,
-                    serde_json::json!({"action":"grep","pattern":"alpha"}),
+                    serde_json::json!({"query":"alpha"}),
                 ),
                 validated_call(
                     "call_2",
-                    tools::UNIFIED_SEARCH,
+                    tools::CODE_SEARCH,
                     true,
                     true,
-                    serde_json::json!({"action":"grep","pattern":"beta"}),
+                    serde_json::json!({"query":"beta"}),
                 ),
             ],
             true,
@@ -611,17 +611,17 @@ mod tests {
             &[
                 validated_call(
                     "call_1",
-                    tools::UNIFIED_SEARCH,
+                    tools::CODE_SEARCH,
                     true,
                     true,
-                    serde_json::json!({"action":"grep","pattern":"alpha"}),
+                    serde_json::json!({"query":"alpha"}),
                 ),
                 validated_call(
                     "call_2",
-                    tools::UNIFIED_SEARCH,
+                    tools::CODE_SEARCH,
                     true,
                     true,
-                    serde_json::json!({"action":"grep","pattern":"beta"}),
+                    serde_json::json!({"query":"beta"}),
                 ),
             ],
             false,
@@ -643,10 +643,10 @@ mod tests {
                 ),
                 validated_call(
                     "call_2",
-                    tools::UNIFIED_SEARCH,
+                    tools::CODE_SEARCH,
                     true,
                     true,
-                    serde_json::json!({"action":"grep","pattern":"beta"}),
+                    serde_json::json!({"query":"beta"}),
                 ),
             ],
             true,
@@ -679,10 +679,10 @@ mod tests {
                 remapped,
                 validated_call(
                     "call_read",
-                    tools::UNIFIED_SEARCH,
+                    tools::CODE_SEARCH,
                     true,
                     true,
-                    serde_json::json!({"action":"grep","pattern":"beta"}),
+                    serde_json::json!({"query":"beta"}),
                 ),
             ],
             true,

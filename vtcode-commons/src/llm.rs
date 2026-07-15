@@ -701,7 +701,7 @@ mod tests {
         let call = ToolCall::function(
             "call_search".to_string(),
             "code_search".to_string(),
-            r#"{"action": "structural", "pattern": "context", "path": ".", "lang": "rust""#
+            r#"{"query":"context","path":".","file_types":["rust"],"result_types":["definition"],"max_results":20"#
                 .to_string(),
         );
 
@@ -711,10 +711,11 @@ mod tests {
         assert_eq!(
             parsed,
             json!({
-                "action": "structural",
-                "pattern": "context",
+                "query": "context",
                 "path": ".",
-                "lang": "rust"
+                "file_types": ["rust"],
+                "result_types": ["definition"],
+                "max_results": 20
             })
         );
     }
@@ -735,7 +736,7 @@ mod tests {
         let call = ToolCall::function(
             "call_search".to_string(),
             "code_search".to_string(),
-            "{\"action\": \"grep\", \"pattern\": \"persistent_memory\", \"path\": \"vtcode-core/src</parameter>\n<</invoke>\n</minimax:tool_call>".to_string(),
+            "{\"query\":\"persistent_memory\",\"file_types\":[\"rust\"],\"result_types\":[\"text\"],\"max_results\":20,\"path\":\"vtcode-core/src</parameter>\n<</invoke>\n</minimax:tool_call>".to_string(),
         );
 
         let parsed = call
@@ -744,9 +745,11 @@ mod tests {
         assert_eq!(
             parsed,
             json!({
-                "action": "grep",
-                "pattern": "persistent_memory",
-                "path": "vtcode-core/src"
+                "query": "persistent_memory",
+                "path": "vtcode-core/src",
+                "file_types": ["rust"],
+                "result_types": ["text"],
+                "max_results": 20
             })
         );
     }

@@ -469,20 +469,6 @@ pub(super) fn fallback_from_error(
     error_msg: &str,
     args_val: Option<&serde_json::Value>,
 ) -> Option<(String, serde_json::Value)> {
-    if tool_name == tool_names::UNIFIED_SEARCH
-        && error_msg
-            .to_ascii_lowercase()
-            .contains("invalid action: read")
-    {
-        return Some((
-            tool_names::UNIFIED_SEARCH.to_string(),
-            serde_json::json!({
-                "action": "list",
-                "path": "."
-            }),
-        ));
-    }
-
     if matches!(
         tool_name,
         tool_names::UNIFIED_FILE | tool_names::READ_FILE | "read file" | "repo_browser.read_file"

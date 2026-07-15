@@ -83,7 +83,7 @@ pub(super) fn collect_interview_research_context(
         .filter(|tool| {
             matches!(
                 tool.as_str(),
-                tools::READ_FILE | tools::LIST_FILES | tools::GREP_FILE | tools::UNIFIED_SEARCH
+                tools::READ_FILE | tools::LIST_FILES | tools::GREP_FILE | tools::CODE_SEARCH
             )
         })
         .collect::<Vec<_>>();

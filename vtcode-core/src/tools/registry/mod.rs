@@ -213,7 +213,7 @@ pub struct ToolRegistry {
 
 const BUILTIN_CODE_TOOLS: &[&str] = &[
     crate::config::constants::tools::UNIFIED_FILE,
-    crate::config::constants::tools::UNIFIED_SEARCH,
+    crate::config::constants::tools::CODE_SEARCH,
     crate::config::constants::tools::WEB_FETCH,
     crate::config::constants::tools::WEB_SEARCH,
     crate::config::constants::tools::CRON,
@@ -226,8 +226,8 @@ fn builtin_code_tool_description(name: &str) -> String {
         n if n == crate::config::constants::tools::UNIFIED_FILE => {
             "Read, write, edit, move, copy, or delete files."
         }
-        n if n == crate::config::constants::tools::UNIFIED_SEARCH => {
-            "Search text, list files, run structural queries, or list errors."
+        n if n == crate::config::constants::tools::CODE_SEARCH => {
+            "Search code by query, with optional path, file_types, result_types, and max_results."
         }
         n if n == crate::config::constants::tools::WEB_FETCH => {
             "Fetch a URL and return an analysed summary or markdown."
@@ -300,8 +300,7 @@ mod tests {
     use crate::config::ToolDocumentationMode as ConfigToolDocumentationMode;
     use crate::config::ToolsConfig;
     use crate::constants::tools;
-    use crate::tool_policy::ToolPolicy;
-    use crate::tool_policy::ToolPolicyConfig;
+    use crate::tool_policy::{ToolConstraints, ToolPolicy, ToolPolicyConfig};
     use crate::tools::handlers::{
         SessionSurface, SessionToolsConfig, ToolModelCapabilities, ToolProfile,
     };
@@ -2265,6 +2264,47 @@ mod tests {
             .unwrap_or(0);
         assert_eq!(consecutive_failures, 5);
 
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn code_search_executes_with_policy_capped_max_results() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        fs::write(temp_dir.path().join("Widget.rs"), "struct Widget;\n")?;
+        let policy_path = temp_dir.path().join("tool-policy.json");
+        let mut config = ToolPolicyConfig::default();
+        config
+            .policies
+            .insert(tools::CODE_SEARCH.to_string(), ToolPolicy::Allow);
+        config.constraints.insert(
+            tools::CODE_SEARCH.to_string(),
+            ToolConstraints {
+                max_results_per_call: Some(1),
+                ..ToolConstraints::default()
+            },
+        );
+        fs::write(&policy_path, serde_json::to_vec_pretty(&config)?)?;
+        let policy_manager =
+            crate::tool_policy::ToolPolicyManager::new_with_config_path(policy_path).await?;
+        let registry =
+            ToolRegistry::new_with_custom_policy(temp_dir.path().to_path_buf(), policy_manager)
+                .await;
+
+        let response = registry
+            .execute_tool(
+                tools::CODE_SEARCH,
+                json!({
+                    "query": "Widget",
+                    "path": ".",
+                    "result_types": ["path"],
+                    "max_results": 50
+                }),
+            )
+            .await?;
+
+        assert_eq!(response["filters"]["max_results"], json!(1));
+        assert_eq!(response["returned"], json!(1));
+        assert_eq!(response["results"].as_array().map(Vec::len), Some(1));
         Ok(())
     }
 }

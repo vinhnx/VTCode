@@ -555,7 +555,7 @@ fn filter_child_tools_keeps_command_session_for_shell_capable_agents() {
             serde_json::json!({"type": "object"}),
         ),
         ToolDefinition::function(
-            tools::UNIFIED_SEARCH.to_string(),
+            tools::CODE_SEARCH.to_string(),
             "Search".to_string(),
             serde_json::json!({"type": "object"}),
         ),
@@ -566,7 +566,7 @@ fn filter_child_tools_keeps_command_session_for_shell_capable_agents() {
         prompt: String::new(),
         tools: Some(vec![
             tools::UNIFIED_EXEC.to_string(),
-            tools::UNIFIED_SEARCH.to_string(),
+            tools::CODE_SEARCH.to_string(),
         ]),
         disallowed_tools: Vec::new(),
         model: None,
@@ -593,16 +593,13 @@ fn filter_child_tools_keeps_command_session_for_shell_capable_agents() {
     let filtered = filter_child_tools(&spec, defs, spec.is_read_only());
     assert_eq!(filtered.len(), 2);
     assert_eq!(filtered[0].function_name(), tools::UNIFIED_EXEC);
-    assert_eq!(filtered[1].function_name(), tools::UNIFIED_SEARCH);
+    assert_eq!(filtered[1].function_name(), tools::CODE_SEARCH);
 }
 
 #[test]
 fn build_child_config_intersects_allowed_tools_and_preserves_global_denies() {
     let mut parent = VTCodeConfig::default();
-    parent.permissions.allow = vec![
-        tools::READ_FILE.to_string(),
-        tools::UNIFIED_SEARCH.to_string(),
-    ];
+    parent.permissions.allow = vec![tools::READ_FILE.to_string(), tools::CODE_SEARCH.to_string()];
     parent.permissions.deny = vec![tools::UNIFIED_EXEC.to_string()];
 
     let mut spec = vtcode_config::builtin_subagents()
@@ -615,7 +612,7 @@ fn build_child_config_intersects_allowed_tools_and_preserves_global_denies() {
     };
     spec.tools = Some(vec![
         tools::SPAWN_AGENT.to_string(),
-        tools::UNIFIED_SEARCH.to_string(),
+        tools::CODE_SEARCH.to_string(),
         tools::READ_FILE.to_string(),
     ]);
 
@@ -626,10 +623,7 @@ fn build_child_config_intersects_allowed_tools_and_preserves_global_denies() {
     );
     assert_eq!(
         child.permissions.allow,
-        vec![
-            tools::READ_FILE.to_string(),
-            tools::UNIFIED_SEARCH.to_string()
-        ]
+        vec![tools::READ_FILE.to_string(), tools::CODE_SEARCH.to_string()]
     );
     assert!(
         child
@@ -650,7 +644,7 @@ fn build_child_config_preserves_subagent_lifecycle_stripping_and_hook_merging() 
     let mut parent = VTCodeConfig::default();
     parent.permissions.allow = vec![
         tools::SPAWN_AGENT.to_string(),
-        tools::UNIFIED_SEARCH.to_string(),
+        tools::CODE_SEARCH.to_string(),
         tools::UNIFIED_EXEC.to_string(),
     ];
 
@@ -674,7 +668,7 @@ fn build_child_config_preserves_subagent_lifecycle_stripping_and_hook_merging() 
     assert_eq!(
         child.permissions.allow,
         vec![
-            tools::UNIFIED_SEARCH.to_string(),
+            tools::CODE_SEARCH.to_string(),
             tools::UNIFIED_EXEC.to_string()
         ]
     );
@@ -788,7 +782,7 @@ fn build_child_config_preserves_parent_rule_shaped_allowlist() {
         .expect("worker");
     spec.tools = Some(vec![
         tools::READ_FILE.to_string(),
-        tools::UNIFIED_SEARCH.to_string(),
+        tools::CODE_SEARCH.to_string(),
         tools::UNIFIED_EXEC.to_string(),
     ]);
 

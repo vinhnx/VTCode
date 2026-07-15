@@ -307,7 +307,7 @@ async fn stream_normalized_emits_tool_call_start_and_delta_events() {
             ResponseTemplate::new(200)
                 .insert_header("content-type", "text/event-stream")
                 .set_body_string(
-                    "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_1\",\"function\":{\"name\":\"code_search\",\"arguments\":\"{\\\"pattern\\\":\\\"ph\"}}]}}]}\n\n\
+                    "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_1\",\"function\":{\"name\":\"code_search\",\"arguments\":\"{\\\"query\\\":\\\"ph\"}}]}}]}\n\n\
 data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_1\",\"function\":{\"arguments\":\"ase\\\"}\"}}]}}]}\n\n\
 data: {\"choices\":[{\"delta\":{\"content\":\"done\"}}]}\n\n\
 data: [DONE]\n\n",
@@ -343,7 +343,7 @@ data: [DONE]\n\n",
         if call_id == "call_1"
             && name.as_deref() == Some("code_search")
             && first_delta_id == "call_1"
-            && first_delta == "{\"pattern\":\"ph"
+            && first_delta == "{\"query\":\"ph"
             && second_delta_id == "call_1"
             && second_delta == "ase\"}"
             && delta == "done"
@@ -363,7 +363,7 @@ async fn stream_normalized_fabricates_and_reuses_id_when_provider_omits_it() {
             ResponseTemplate::new(200)
                 .insert_header("content-type", "text/event-stream")
                 .set_body_string(
-                    "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"name\":\"code_search\",\"arguments\":\"{\\\"pattern\\\":\\\"ph\"}}]}}]}\n\n\
+                    "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"name\":\"code_search\",\"arguments\":\"{\\\"query\\\":\\\"ph\"}}]}}]}\n\n\
 data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"ase\\\"}\"}}]}}]}\n\n\
 data: [DONE]\n\n",
                 ),
@@ -440,7 +440,7 @@ async fn stream_normalized_fabricates_distinct_ids_across_streams() {
                 ResponseTemplate::new(200)
                     .insert_header("content-type", "text/event-stream")
                     .set_body_string(
-                        "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"name\":\"code_search\",\"arguments\":\"{}\"}}]}}]}\n\n\
+                        "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"name\":\"code_search\",\"arguments\":\"{\\\"query\\\":\\\"phase\\\"}\"}}]}}]}\n\n\
 data: [DONE]\n\n",
                     ),
             )
