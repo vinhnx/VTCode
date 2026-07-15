@@ -595,11 +595,94 @@ pub fn run(config: FileSearchConfig) -> anyhow::Result<FileSearchResults> {
 /// Run a bounded fuzzy path search without following symbolic links.
 ///
 /// This focused route is intended for request-scoped code search. It traverses
-/// all eligible files while retaining only an ordered top-K heap, so the cap
-/// is deterministic without unbounded memory. It deliberately avoids the
-/// persistent [`FileIndexCache`].
+/// eligible paths in deterministic order and stops at the candidate cap. It
+/// deliberately avoids the persistent [`FileIndexCache`].
 pub fn run_bounded_no_follow(config: FileSearchConfig) -> anyhow::Result<FileSearchResults> {
-    run_with_policy(config, false, true)
+    run_bounded_no_follow_with_visit(config, |_| {})
+}
+
+fn run_bounded_no_follow_with_visit(
+    config: FileSearchConfig,
+    mut visit: impl FnMut(&Path),
+) -> anyhow::Result<FileSearchResults> {
+    let limit = config.limit.get();
+    let search_directory = &config.search_directory;
+    let mut walk_builder = ignore::WalkBuilder::new(search_directory);
+    vtcode_commons::walk::apply_defaults(&mut walk_builder);
+    walk_builder
+        .follow_links(false)
+        .require_git(false)
+        .sort_by_file_path(|left, right| left.cmp(right));
+
+    if !config.respect_gitignore {
+        walk_builder
+            .git_ignore(false)
+            .git_global(false)
+            .git_exclude(false)
+            .ignore(false)
+            .parents(false);
+    }
+
+    if !config.exclude.is_empty() {
+        let mut override_builder = ignore::overrides::OverrideBuilder::new(search_directory);
+        for exclude_pattern in &config.exclude {
+            override_builder.add(&format!("!{exclude_pattern}"))?;
+        }
+        walk_builder.overrides(override_builder.build()?);
+    }
+
+    let mut matches = BestMatchesList::new(limit, &config.pattern_text);
+    let mut matching_count = 0usize;
+    for result in walk_builder.build() {
+        if config.cancel_flag.load(Ordering::Relaxed) {
+            break;
+        }
+        let entry = match result {
+            Ok(entry) => entry,
+            Err(_) => continue,
+        };
+        visit(entry.path());
+        if !entry
+            .file_type()
+            .is_some_and(|file_type| file_type.is_file())
+        {
+            continue;
+        }
+        let Some(relative_path) = entry
+            .path()
+            .strip_prefix(search_directory)
+            .ok()
+            .and_then(|path| path.to_str())
+            .filter(|path| !path.is_empty())
+        else {
+            continue;
+        };
+        if matches.record_match(relative_path, MatchType::File) {
+            matching_count += 1;
+            if matching_count >= limit {
+                break;
+            }
+        }
+    }
+
+    let matches = matches
+        .matches
+        .into_sorted_vec()
+        .into_iter()
+        .map(|Reverse((score, path, match_type))| FileMatch {
+            score,
+            path,
+            match_type,
+            indices: config.compute_indices.then(Vec::new),
+        })
+        .collect();
+
+    Ok(FileSearchResults {
+        matches,
+        // Reaching the cap terminates traversal, so report conservative
+        // truncation without scanning the rest of the tree for an exact total.
+        total_match_count: matching_count + usize::from(matching_count >= limit),
+    })
 }
 
 fn run_with_policy(
@@ -722,7 +805,7 @@ fn run_with_policy(
 
 #[cfg(test)]
 mod tests {
-    use super::{FileSearchConfig, run_bounded_no_follow};
+    use super::{FileSearchConfig, run_bounded_no_follow, run_bounded_no_follow_with_visit};
     use std::num::NonZero;
     use std::sync::Arc;
     use std::sync::atomic::AtomicBool;
@@ -747,7 +830,7 @@ mod tests {
     }
 
     #[test]
-    fn bounded_path_selection_is_stable_across_repeated_parallel_walks() {
+    fn bounded_path_selection_is_stable_across_repeated_walks() {
         let workspace = TempDir::new().expect("workspace");
         for directory in ["z", "a", "m", "b", "y"] {
             let directory = workspace.path().join(directory);
@@ -761,5 +844,45 @@ mod tests {
         for _ in 0..20 {
             assert_eq!(bounded_paths(workspace.path()), expected);
         }
+    }
+
+    #[test]
+    fn bounded_path_selection_is_the_sorted_prefix_and_stops_early() {
+        let workspace = TempDir::new().expect("workspace");
+        for directory in ["z", "a", "m", "b", "y"] {
+            let directory = workspace.path().join(directory);
+            std::fs::create_dir(&directory).expect("fixture directory");
+            std::fs::write(directory.join("widget.rs"), "fn widget() {}\n")
+                .expect("fixture source");
+        }
+        let mut visited = Vec::new();
+
+        let results = run_bounded_no_follow_with_visit(
+            FileSearchConfig {
+                pattern_text: "widget".to_string(),
+                limit: NonZero::new(2).expect("non-zero limit"),
+                search_directory: workspace.path().to_path_buf(),
+                exclude: Vec::new(),
+                threads: NonZero::new(4).expect("non-zero threads"),
+                cancel_flag: Arc::new(AtomicBool::new(false)),
+                compute_indices: false,
+                respect_gitignore: true,
+            },
+            |path| visited.push(path.to_path_buf()),
+        )
+        .expect("bounded path search");
+        let mut paths = results
+            .matches
+            .into_iter()
+            .map(|candidate| candidate.path)
+            .collect::<Vec<_>>();
+        paths.sort();
+
+        assert_eq!(paths, vec!["a/widget.rs", "b/widget.rs"]);
+        assert!(
+            visited.len() < 11,
+            "the bounded route must stop before traversing the complete fixture tree"
+        );
+        assert_eq!(results.total_match_count, 3);
     }
 }

@@ -210,7 +210,7 @@ pub fn code_search_parameters() -> Value {
                 "type": "string",
                 "minLength": 1,
                 "pattern": "\\S",
-                "description": "Literal code or path query. A wholly lower-case query matches without case sensitivity; an upper-case character makes the query case-sensitive."
+                "description": "Literal code or path query. Smart-case applies to content and exact symbol-name matching: a wholly lower-case query matches case-insensitively, while an upper-case character makes matching case-sensitive. Path matching remains fuzzy and case-insensitive."
             },
             "path": {
                 "type": "string",

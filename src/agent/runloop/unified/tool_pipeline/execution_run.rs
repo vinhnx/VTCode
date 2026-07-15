@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::anyhow;
@@ -635,8 +636,12 @@ async fn apply_post_execution_side_effects(
                 ctx.is_subagent,
             );
             if pipeline_outcome.command_success {
+                let invalidation_paths = cache_invalidation_paths(
+                    ctx.tool_registry.workspace_root(),
+                    pipeline_outcome.modified_files(),
+                );
                 let mut cache = ctx.tool_result_cache.write().await;
-                cache.invalidate_for_paths(pipeline_outcome.modified_files().iter());
+                cache.invalidate_for_paths(&invalidation_paths);
             }
         } else {
             if let Some(files) = pipeline_outcome.modified_files_mut() {
@@ -658,12 +663,54 @@ async fn apply_post_execution_side_effects(
     Ok(())
 }
 
+fn cache_invalidation_paths(workspace_root: &Path, changed_paths: &[String]) -> Vec<String> {
+    let workspace_root = workspace_root
+        .canonicalize()
+        .unwrap_or_else(|_| workspace_root.to_path_buf());
+    changed_paths
+        .iter()
+        .map(Path::new)
+        .map(|path| {
+            let absolute = if path.is_absolute() {
+                path.to_path_buf()
+            } else {
+                workspace_root.join(path)
+            };
+            absolute.canonicalize().unwrap_or(absolute)
+        })
+        .map(|path| path.to_string_lossy().into_owned())
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{exec_settlement_mode_for_tool_call, resolve_harness_item_identity};
+    use super::{
+        cache_invalidation_paths, exec_settlement_mode_for_tool_call, resolve_harness_item_identity,
+    };
     use serde_json::json;
     use vtcode_core::tools::registry::ExecSettlementMode;
     use vtcode_core::{config::constants::tools, tools::ToolInvocationId};
+
+    #[test]
+    fn cache_invalidation_paths_resolve_relative_edits_against_workspace() {
+        let workspace = tempfile::TempDir::new().expect("workspace");
+        let source = workspace.path().join("src");
+        std::fs::create_dir(&source).expect("source directory");
+        let changed = source.join("widget.rs");
+        std::fs::write(&changed, "struct Widget;\n").expect("fixture source");
+
+        let paths = cache_invalidation_paths(workspace.path(), &["src/widget.rs".to_string()]);
+
+        assert_eq!(
+            paths,
+            vec![
+                changed
+                    .canonicalize()
+                    .expect("canonical source")
+                    .to_string_lossy()
+            ]
+        );
+    }
 
     #[test]
     fn settles_prevalidated_noninteractive_run() {

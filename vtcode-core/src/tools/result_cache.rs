@@ -9,6 +9,7 @@ use crate::cache::{CacheKey as UnifiedCacheKey, DEFAULT_CACHE_TTL, EvictionPolic
 use serde_json::Value;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
+use std::path::Path;
 use std::sync::Arc;
 
 /// Identifies a cached tool result
@@ -112,8 +113,12 @@ impl ToolResultCache {
     /// - Before: Full cache clear on any file change → 90% hit rate drop
     /// - After: Selective removal → 10-15% hit rate impact only
     pub fn invalidate_for_path(&mut self, path: &str) {
+        let changed_path = path.trim();
+        if changed_path.is_empty() {
+            return;
+        }
         self.inner
-            .remove_where(|key| key.target_path.starts_with(path));
+            .remove_where(|key| cache_key_overlaps_changed_path(key, changed_path));
     }
 
     /// Invalidate a single cache entry by exact key.
@@ -142,7 +147,7 @@ impl ToolResultCache {
         self.inner.remove_where(|key| {
             path_prefixes
                 .iter()
-                .any(|prefix| key.target_path.starts_with(prefix))
+                .any(|changed_path| cache_key_overlaps_changed_path(key, changed_path))
         });
     }
 
@@ -165,6 +170,15 @@ impl ToolResultCache {
     pub fn stats(&self) -> crate::cache::CacheStats {
         self.inner.stats()
     }
+}
+
+fn cache_key_overlaps_changed_path(key: &ToolCacheKey, changed_path: &str) -> bool {
+    let cache_target = Path::new(&key.target_path);
+    let changed_path = Path::new(changed_path);
+    cache_target == changed_path
+        || cache_target.starts_with(changed_path)
+        || (key.tool == crate::config::constants::tools::CODE_SEARCH
+            && changed_path.starts_with(cache_target))
 }
 
 #[cfg(test)]
@@ -254,6 +268,27 @@ mod tests {
         assert!(cache.get(&key1).is_none());
         assert_eq!(cache.get(&key2).unwrap().as_ref(), "out2");
         assert_eq!(cache.get(&key3).unwrap().as_ref(), "out3");
+    }
+
+    #[test]
+    fn invalidates_cached_directory_scope_after_descendant_edit() {
+        let mut cache = ToolResultCache::new(10);
+        let scoped_search = ToolCacheKey::new("code_search", "query=Widget", "/workspace/src");
+        let unrelated_search = ToolCacheKey::new("code_search", "query=Widget", "/workspace/tests");
+        let sibling_prefix = ToolCacheKey::new("code_search", "query=Widget", "/workspace/src-old");
+
+        cache.insert(scoped_search.clone(), "stale Widget result".to_string());
+        cache.insert(unrelated_search.clone(), "tests result".to_string());
+        cache.insert(sibling_prefix.clone(), "src-old result".to_string());
+
+        cache.invalidate_for_path("/workspace/src/widget.rs");
+
+        assert!(
+            cache.get(&scoped_search).is_none(),
+            "a descendant edit must prevent stale directory-scope reuse"
+        );
+        assert!(cache.get(&unrelated_search).is_some());
+        assert!(cache.get(&sibling_prefix).is_some());
     }
 
     #[test]

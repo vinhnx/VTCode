@@ -105,10 +105,11 @@ declarations. Usages are exact syntactic identifiers, not resolved references.
 Text covers prose, configuration, comments, strings, and unclassified literal
 matches. Path results match filenames or paths.
 
-Literal smart-case applies: wholly lower-case queries are case-insensitive;
-queries containing an upper-case character are case-sensitive. If a response
-is truncated, narrow a filter in another call. No exact repository-wide total
-is implied.
+Literal smart-case applies to content and exact symbol-name matching: wholly
+lower-case queries are case-insensitive, while queries containing an upper-case
+character are case-sensitive. Path matching is fuzzy and case-insensitive. If a
+response is truncated, narrow a filter in another call. No exact repository-wide
+total is implied.
 
 ```json
 {"query":"Widget","path":"src","file_types":["rust"],"result_types":["definition","usage"],"max_results":20}
