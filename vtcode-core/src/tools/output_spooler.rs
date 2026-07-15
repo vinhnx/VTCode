@@ -2,7 +2,7 @@
 //!
 //! Implements Cursor-style dynamic context discovery by writing large tool outputs
 //! to files instead of truncating them. This allows agents to retrieve the full
-//! output with shell inspection or semantic search when needed.
+//! output with bounded shell inspection or a focused source query when needed.
 //!
 //! ## Design Philosophy
 //!

@@ -148,7 +148,7 @@ fn finalize_refined_prompt(text: String) -> String {
     ];
     if debug_triggers.iter().any(|token| lower.contains(token)) {
         format!(
-            "{text}\n\nNote: For diagnostics, inspect files with shell commands through `exec_command`, use `code_search` for semantic code search, and run verification commands with `exec_command`."
+            "{text}\n\nNote: For diagnostics, inspect files and run verification commands through `exec_command`. When advanced `code_search` is available, call it with `query` and optional `path`, `file_types`, `result_types`, or `max_results`."
         )
     } else {
         text

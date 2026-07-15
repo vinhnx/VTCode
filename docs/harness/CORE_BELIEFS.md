@@ -131,5 +131,5 @@ An agent that acts without orienting is likely to repeat work, miss context, or 
 Every harness component encodes assumptions about model weaknesses. As models improve, these assumptions may become invalid.
 
 - **Start Simple**: Begin with the simplest workable system. Use evals to identify real failure modes, then add structure for those specific failures.
-- **Periodically Prune**: Components that were once necessary may become overhead. Remove them when they no longer carry load. See [HARNESS_EVALUATION.md](HARNESS_EVALUATION.md) for the component load-bearing audit process.
+- **Periodically Prune**: Components that were once necessary may become overhead. Remove them when they no longer carry load.
 - **Stable Abstractions**: Separate Session (append-only log), Harness (control layer), and Sandbox (execution environment) so implementations can change without breaking the product.

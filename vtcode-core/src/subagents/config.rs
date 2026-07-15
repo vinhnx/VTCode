@@ -488,7 +488,7 @@ const FINAL_RESPONSE_CONTRACT: &str = "Return your final response using this exa
 Use `- None` for empty sections. Keep it concise and grounded in the work you actually performed.";
 
 const READ_ONLY_TOOL_REMINDER: &str = "Tool reminder: stay inside the exposed read-only tool set for this child. \
-Use `code_search` for workspace discovery, structural search, and outline work. Use `list_skills`, `load_skill`, and \
+Use advanced `code_search` for a focused literal query with bounded filters. Use `list_skills`, `load_skill`, and \
 `load_skill_resource` when the task requires repository skills. If these tools are insufficient, report the blocker \
 instead of retrying denied calls.";
 
@@ -497,7 +497,7 @@ Do not try to enter or exit planning workflow, do not call hidden mutating tools
 call; adjust strategy or report the blocker instead.";
 
 const WRITE_TOOL_REMINDER: &str = "Tool reminder: use `exec_command` with targeted commands for workspace discovery \
-and file reading. Use advanced `code_search` for structural or outline work. When `exec_command` returns a live session, \
+and file reading. Use advanced `code_search` for definitions, syntactic usages, text, or matching paths. When `exec_command` returns a live session, \
 continue or poll it with `write_stdin`. Use `exec_command` with `git diff --name-only` or `git diff --stat` when reviewing \
 current changes.";
 

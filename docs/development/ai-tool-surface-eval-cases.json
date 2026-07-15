@@ -4,48 +4,45 @@
     "category": "tool_surface",
     "profile": "codex_default",
     "capability": "ordinary_file_discovery",
-    "task": "In this repository, list the crates that define an AGENTS.md file and mention the command you used.",
-    "metric": "contains_match",
-    "expected": "AGENTS.md",
-    "telemetry_required": [
-      "total_tool_calls",
-      "repeated_equivalent_calls",
-      "failed_tool_calls",
-      "spooled_outputs",
-      "task_completed_successfully"
-    ]
+    "task": "Inspect this repository and list every crate-level AGENTS.md path. Report the total count and the exact shell command used to discover them.",
+    "metric": "llm_grader",
+    "rubric": "Mark correct only when the output contains repository-derived evidence from an executed file-discovery command. It must report exactly 20 crate-level AGENTS.md paths, including src/AGENTS.md, vtcode-core/AGENTS.md, vtcode-skills/AGENTS.md, vtcode-utility-tool-specs/AGENTS.md, and xtask/AGENTS.md, and show the exact shell command used. Every listed item must be a concrete path ending in AGENTS.md. Mark incorrect if the output merely repeats the task, mentions AGENTS.md without enumerating paths, omits the count or command, or reports a count other than 20."
   },
   {
     "id": "tool_surface_text_search_default",
     "category": "tool_surface",
     "profile": "codex_default",
     "capability": "text_search",
-    "task": "Find the Rust source file that defines ToolTaskTelemetrySnapshot and report the file path plus the shell search command.",
-    "metric": "contains_match",
-    "expected": "ToolTaskTelemetrySnapshot",
-    "telemetry_required": [
-      "total_tool_calls",
-      "repeated_equivalent_calls",
-      "failed_tool_calls",
-      "spooled_outputs",
-      "task_completed_successfully"
-    ]
+    "task": "Find the Rust declaration of ToolTaskTelemetrySnapshot. Report its repository-relative file path and declaration line, quote the names of its first two public fields, and show the exact shell search command used.",
+    "metric": "llm_grader",
+    "rubric": "Mark correct only when the output gives repository-derived search evidence locating ToolTaskTelemetrySnapshot at vtcode-core/src/tools/registry/execution_history.rs line 82, identifies task_id and total_tool_calls as the first two public fields, and shows the exact shell search command used. Mark incorrect if it merely repeats ToolTaskTelemetrySnapshot or the task, omits the line or path, invents fields, or provides no executed command evidence."
   },
   {
-    "id": "tool_surface_semantic_search_advanced",
+    "id": "tool_surface_code_search_types_advanced",
     "category": "tool_surface",
     "profile": "advanced_vtcode",
-    "capability": "semantic_search",
-    "task": "Use semantic code search to find Rust functions that take a ToolExecutionRecord parameter or reference and summarise the most relevant match.",
-    "metric": "contains_match",
-    "expected": "ToolExecutionRecord",
-    "telemetry_required": [
-      "total_tool_calls",
-      "repeated_equivalent_calls",
-      "failed_tool_calls",
-      "fallback_calls",
-      "task_completed_successfully"
-    ]
+    "capability": "code_search_result_types",
+    "task": "Use advanced code_search once with query ToolExecutionRecord, file_types [rust], result_types [definition, usage, text, path], and max_results 20. Report the response's query, complete filters object, returned, truncated, and hints. For every returned result, report its result_type and path, plus line, column, name, and snippet whenever those fields are present. Group the evidence by definition, usage, text, and path, explicitly stating when a requested category returned no result. Explain that usage matches are exact syntactic identifiers rather than resolved references.",
+    "metric": "llm_grader",
+    "rubric": "Mark correct only when the output gives concrete evidence from an actual code_search response for ToolExecutionRecord. It must show query ToolExecutionRecord; filters with Rust, all four requested result types, and max_results 20; numeric returned; truncated; hints; and an accounting of definition, usage, text, and path classifications. Every cited source result must include its returned path and snippet, and the output must include returned line, column, and name fields when present. Path-only results need a path and no invented source fields. Requested categories with zero results must be identified explicitly. The number of enumerated results must agree with returned, and usages must be described as syntactic identifiers rather than resolved references. Mark incorrect if the output merely echoes the task or ToolExecutionRecord, invents response evidence, omits filters or returned fields, fails to classify the results, or gives no paths and snippets for returned source results."
+  },
+  {
+    "id": "tool_surface_code_search_smart_case_advanced",
+    "category": "tool_surface",
+    "profile": "advanced_vtcode",
+    "capability": "code_search_smart_case",
+    "task": "Run two advanced code_search calls against the existing repository file vtcode-core/src/tools/code_search.rs. For both calls set path to vtcode-core/src/tools/code_search.rs, result_types to [text], and max_results to 100. Query widget in the first call and Widget in the second. Report each response's query, filters.path, returned, and truncated fields, then cite one result path and snippet from each response. State whether the lower-case query returned strictly more results than the mixed-case query.",
+    "metric": "llm_grader",
+    "rubric": "Mark correct only when the output reports evidence from both required code_search responses against vtcode-core/src/tools/code_search.rs: query values widget and Widget, the normalised path, numeric returned values, truncated values, and at least one result path and snippet for each call. The reported lower-case returned value must be strictly greater than the mixed-case returned value, demonstrating literal smart-case behaviour. Mark incorrect if the output merely explains or repeats the term smart-case, omits either response, gives no numeric comparison, or does not cite returned result evidence."
+  },
+  {
+    "id": "tool_surface_code_search_bounds_advanced",
+    "category": "tool_surface",
+    "profile": "advanced_vtcode",
+    "capability": "code_search_bounded_refinement",
+    "task": "Use advanced code_search for the required literal query truncated. First search path vtcode-core/src/tools with file_types [rust], result_types [text, path], and max_results 1. Report the response's returned, truncated, hints, filters, and sole result. Then make an independent refinement call for the same query with path narrowed to vtcode-core/src/tools/code_search.rs, file_types [rust], result_types narrowed to [text], and max_results 1. Report the second response's returned, truncated, filters, and sole result. Explain what the narrower filters changed without claiming an exact repository-wide match total.",
+    "metric": "llm_grader",
+    "rubric": "Mark correct only when the output demonstrates two code_search responses for the literal query truncated. The first must show returned equal to 1, truncated true, a refinement hint, filters for vtcode-core/src/tools with rust and text plus path, and one concrete result. The second must show an independent call narrowed to vtcode-core/src/tools/code_search.rs and text results, returned equal to 1, truncated true, and one concrete result. The output must describe the filter refinement and must not claim an exact repository-wide total. Mark incorrect if it merely repeats the word truncated, omits response fields or concrete results, or does not make and evidence the narrower second call."
   },
   {
     "id": "tool_surface_patch_default",
@@ -54,12 +51,7 @@
     "capability": "patch_editing",
     "task": "Make a minimal patch to a temporary fixture file that changes one line, then explain the patch result without touching repository source files.",
     "metric": "contains_match",
-    "expected": "apply_patch",
-    "telemetry_required": [
-      "total_tool_calls",
-      "failed_tool_calls",
-      "task_completed_successfully"
-    ]
+    "expected": "apply_patch"
   },
   {
     "id": "tool_surface_interactive_default",
@@ -68,24 +60,6 @@
     "capability": "interactive_command_continuation",
     "task": "Start an interactive shell command that waits for input, send one input line, and report the final output.",
     "metric": "contains_match",
-    "expected": "write_stdin",
-    "telemetry_required": [
-      "total_tool_calls",
-      "failed_tool_calls",
-      "spooled_outputs",
-      "read_after_spool_calls",
-      "command_approval_prompts",
-      "task_completed_successfully"
-    ]
-  },
-  {
-    "id": "tool_surface_archived_baseline_unavailable",
-    "category": "tool_surface",
-    "profile": "archived_baseline",
-    "capability": "archival_comparison",
-    "task": "Placeholder for old unified tool surface results. No checked-in archived baseline report was found before dead-code cleanup.",
-    "metric": "contains_match",
-    "expected": "baseline unavailable",
-    "baseline_status": "unavailable"
+    "expected": "write_stdin"
   }
 ]

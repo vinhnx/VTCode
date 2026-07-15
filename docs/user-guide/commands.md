@@ -4,12 +4,19 @@ This guide summarizes common actions and how to invoke them with vtcode. The age
 
 ## Search
 
-Use `exec_command.cmd` with `rg` or `grep` for high-speed text search. Use
-advanced `code_search` only for Tree-sitter outlines or ast-grep structural
-queries.
+Use `exec_command.cmd` with `rg` or `grep` for flexible shell text search.
 
 The default model-visible tools are `exec_command`, `write_stdin`, and
 `apply_patch`. `code_search` is available through the advanced VT Code profile.
+It accepts a required literal `query` plus optional `path`, `file_types`,
+`result_types`, and `max_results`. Its four result categories are recognised
+definitions, exact syntactic usages, literal text, and matching paths. A usage
+is a same-spelling syntax occurrence, not a resolved reference. Queries use
+literal smart-case. When `truncated` is true, narrow a filter in another call;
+the response does not claim an exact repository-wide total.
+
+Use `exec_command` or the specialised ast-grep skill for arbitrary structural
+patterns.
 
 ### Examples
 

@@ -8,7 +8,7 @@ the Codex-style tool migration.
 | Profile | Tools | Use |
 |---|---|---|
 | Default | `exec_command`, `write_stdin`, `apply_patch` | Normal repository work: shell inspection, validation, interactive sessions, and patch edits. |
-| Advanced VT Code | Default tools plus `code_search` | Syntax-aware search through ast-grep structural queries and Tree-sitter outlines. |
+| Advanced VT Code | Default tools plus `code_search` | Bounded workspace search for definitions, syntactic usages, literal text, and matching paths. |
 
 No `unified_*` schema, alias, hidden public tool, or compatibility profile is
 available after this migration. Those names are legacy external schema names
@@ -76,30 +76,39 @@ Example:
 *** End Patch
 ```
 
-## Advanced Semantic Search
+## Advanced Code Search
 
 `code_search` is available only when the advanced VT Code profile is enabled.
-It preserves VT Code's semantic search features without making text search a
-separate default function tool.
+It accepts exactly five inputs:
 
-Actions:
+- `query` is required and searched literally. A wholly lower-case query is
+  case-insensitive; a query containing an upper-case character is
+  case-sensitive.
+- `path` optionally limits the search to one workspace file or directory.
+- `file_types` optionally limits results by language name or common extension.
+- `result_types` optionally selects `definition`, `usage`, `text`, or `path`.
+- `max_results` optionally sets the returned limit from 1 to 100. It defaults
+  to 20.
 
-- `outline`: Tree-sitter symbol maps for a file or path set.
-- `structural`: ast-grep pattern search over syntax trees.
+Definitions are recognised declarations with an exact matching name. Usages
+are exact syntactic identifiers outside recognised declaration names. They are
+not resolved references, so an unrelated identifier with the same spelling may
+appear. Text results cover comments, strings, prose, configuration, and other
+unclassified content. Path results match existing filenames or paths.
 
-Examples:
+Omit `result_types` to search all four categories. Results are ordered by
+category, then source location. `truncated: true` means the bounded search may
+have more candidates; it does not report an exact repository-wide total.
+Narrow `path`, `file_types`, or `result_types` in another call.
+
+Example:
 
 ```json
-{"action":"outline","path":"vtcode-core/src/tools/registry","lang":"rust","view":"names"}
+{"query":"ToolProfile","path":"vtcode-core","file_types":["rust"],"result_types":["definition","usage"],"max_results":20}
 ```
 
-```json
-{"action":"structural","path":"vtcode-core","lang":"rust","pattern":"ToolProfile::$NAME"}
-```
-
-Use shell `rg` or `grep` through `exec_command.cmd` for plain text, filenames,
-and prose search. Use `code_search` when the query depends on syntax, nesting,
-or symbol structure.
+Use `exec_command` or the specialised ast-grep skill for arbitrary structural
+patterns.
 
 ## File Inspection
 
@@ -146,7 +155,7 @@ External users of the removed legacy schemas must update their calls directly:
 | `unified_file` patch or edit | `apply_patch` |
 | `unified_file` read or write | Shell commands through `exec_command.cmd` by default, or separately named non-default tools if added later. |
 | `unified_search` text search | `rg` or `grep` through `exec_command.cmd` |
-| `unified_search` semantic search | `code_search` in the advanced profile |
+| `unified_search` search | `code_search` in the advanced profile, using its five query-led inputs |
 | `unified_search` web, skills, errors, discovery | Separate tools only where those affordances are retained. |
 
 Short replacements:
@@ -156,7 +165,7 @@ Short replacements:
 ```
 
 ```json
-{"action":"outline","path":"vtcode-core/src/tools","lang":"rust","view":"names"}
+{"query":"ToolRegistration","path":"vtcode-core/src/tools","file_types":["rust"],"result_types":["definition"]}
 ```
 
 ## Related Docs

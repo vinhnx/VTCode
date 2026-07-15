@@ -13,7 +13,7 @@ and spool metadata when the full output is too large for the response.
 
 - `exec_command`: caps stdout and stderr returned from a command.
 - `write_stdin`: caps output returned after sending input to a live session.
-- `code_search`: returns bounded semantic search results when available in the
+- `code_search`: returns bounded code-search results when available in the
   advanced profile.
 
 File inspection in the default profile uses shell commands through
@@ -84,7 +84,7 @@ command rather than repeatedly dumping the whole file.
 - Start with targeted shell commands that naturally return small output.
 - Use `rg --files`, `rg -n`, `sed -n`, `head`, and `tail` before reading broad
   file content.
-- Use `code_search` for semantic outline or structural results when the advanced
-  profile is enabled.
+- Use `code_search` for bounded definitions, syntactic usages, text, or path
+  results when the advanced profile is enabled.
 - If complete output matters, write it to a file and inspect precise slices with
   follow-up shell commands.

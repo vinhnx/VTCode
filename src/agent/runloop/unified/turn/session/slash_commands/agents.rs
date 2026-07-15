@@ -40,7 +40,7 @@ const SUBPROCESS_STOP_PREFIX: &str = "subprocesses:stop:";
 const SUBPROCESS_CANCEL_PREFIX: &str = "subprocesses:cancel:";
 const ACTIVE_AGENT_INSPECTOR_REFRESH_MS: u64 = 750;
 const DEFAULT_AGENT_DESCRIPTION_TEXT: &str = "Describe when VT Code should delegate to this agent.";
-const DEFAULT_AGENT_BODY_TEXT: &str = "\nYou are a focused VT Code subagent.\n\nScope:\n- Describe the tasks this agent should handle.\n- Keep behaviour narrow and task-specific.\n\nConstraints:\n- Use `exec_command` for shell inspection and text search, `apply_patch` for edits, and `code_search` for semantic or structural code search.\n- Prefer the narrowest tool set that fits the job.\n- Return concise, actionable results.\n\nOutput:\n- State what you checked.\n- Summarise findings or changes.\n- Call out verification or remaining risks when relevant.\n";
+const DEFAULT_AGENT_BODY_TEXT: &str = "\nYou are a focused VT Code subagent.\n\nScope:\n- Describe the tasks this agent should handle.\n- Keep behaviour narrow and task-specific.\n\nConstraints:\n- Use `exec_command` for shell inspection, `apply_patch` for edits, and advanced `code_search` for focused literal queries.\n- Prefer the narrowest tool set that fits the job.\n- Return concise, actionable results.\n\nOutput:\n- State what you checked.\n- Summarise findings or changes.\n- Call out verification or remaining risks when relevant.\n";
 const DEFAULT_AGENT_TOOL_IDS: [&str; 3] =
     [tools::EXEC_COMMAND, tools::APPLY_PATCH, tools::CODE_SEARCH];
 const SUBAGENT_CONTROLLER_INACTIVE_MESSAGE: &str =

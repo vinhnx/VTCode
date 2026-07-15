@@ -200,8 +200,8 @@ Our tools are designed with context efficiency in mind:
 
 -   **exec_command**: Shell file inspection and fast text matching through
     `rg`, with `grep` as a fallback when `rg` is unavailable
--   **code_search**: Advanced semantic search for ast-grep structural queries
-    and Tree-sitter outlines
+-   **code_search**: Advanced bounded search for recognised definitions, exact
+    syntactic usages, literal text, and matching paths
 -   Return metadata first (file paths, line numbers) before content
 
 #### File Operations

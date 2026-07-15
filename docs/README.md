@@ -71,7 +71,7 @@ VT Code has undergone significant improvements:
 - **Provider Stream Refactoring** - Simplified stream handling across DeepSeek, StepFun, and ZAI providers
 - **Decision Transparency System** - Complete audit trail with reasoning and confidence scores
 - **Error Recovery & Resilience** - Intelligent error handling with pattern detection and multiple recovery strategies
-- **Advanced Code Search** - Token-efficient Tree-sitter outlines and ast-grep structural queries through `code_search` in the advanced VT Code profile
+- **Advanced Code Search** - Bounded definitions, syntactic usages, literal text, and matching paths through `code_search` in the advanced VT Code profile
 - **Web Search & Fetch** — `web_search` and `defuddle_fetch` tools with TOML-driven network allowlist and domain-scoped approval caching
 - **Post-Tool Recovery Cycles** — Automatic detection and cap enforcement for post-tool recovery loops with temporary file cleanup
 - **CLI `did you mean?`** — Fuzzy suggestions for unrecognized commands with colorized output
@@ -134,7 +134,7 @@ Deploying VT Code in production? Focus on enterprise features:
 
 - **Semantic Analysis** - Deep code understanding across Rust, Python, JavaScript, TypeScript, Go, Java, and more
 - **Bash Safety Parsing** - Tree-sitter-bash for critical shell command validation
-- **Intelligent Search** - Ripgrep text search through `exec_command.cmd` and semantic `code_search` for ast-grep structural queries and Tree-sitter outlines
+- **Intelligent Search** - Ripgrep shell search through `exec_command.cmd` and focused literal `code_search` in the advanced profile
 - **Fuzzy File Discovery** - Git-aware traversal using `ignore` with `nucleo-matcher` scoring
 - **Symbol Analysis** - LLM-native function, class, and variable extraction
 - **Dependency Mapping** - Import relationship analysis
@@ -144,7 +144,7 @@ Deploying VT Code in production? Focus on enterprise features:
 
 - **File Operations** - Safe, validated file system operations
 - **Terminal Integration** - Enhanced PTY support with color-coded tool/MCP status banners and interactive commands
-- **Search & Analysis** - Fast text search through shell `rg`, plus advanced structural and outline code search through `code_search`
+- **Search & Analysis** - Fast shell search through `rg`, plus advanced bounded code search through `code_search`
 - **Batch Processing** - Efficient multi-file operations
 - **Configuration Management** - Dynamic TOML-based settings
 - **GPU Pod Manager** - Remote model pod lifecycle management over SSH ([feature guide](./features/GPU_POD_MANAGER.md))
@@ -368,7 +368,7 @@ This documentation reflects version 0.133.21 of VT Code, which includes signific
 - Conversation summarization for long-running sessions
 - Enhanced Terminal User Interface (TUI) with improved mouse support and text selection
 - `web_search` and `defuddle_fetch` tools with TOML-driven network allowlist
-- `code_search` outline mode for token-efficient symbol maps in the advanced VT Code profile (auto-installs ast-grep)
+- query-led `code_search` for definitions, syntactic usages, literal text, and matching paths in the advanced VT Code profile
 - Post-tool recovery cycle tracking with cap checks and temporary file cleanup
 - CLI `did you mean?` suggestions for unrecognized commands
 - `/continue` command to resume the most recent session

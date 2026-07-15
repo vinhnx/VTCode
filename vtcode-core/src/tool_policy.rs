@@ -1487,15 +1487,15 @@ mod tests {
 
         assert_eq!(
             ToolPolicyManager::resolve_config_policy(&tools_config, tools::CODE_SEARCH),
-            ToolPolicy::Prompt
+            ToolPolicy::Allow
         );
 
         tools_config
             .policies
-            .insert(tools::CODE_SEARCH.to_string(), ToolPolicy::Allow);
+            .insert(tools::CODE_SEARCH.to_string(), ToolPolicy::Deny);
         assert_eq!(
             ToolPolicyManager::resolve_config_policy(&tools_config, tools::CODE_SEARCH),
-            ToolPolicy::Allow
+            ToolPolicy::Deny
         );
     }
 

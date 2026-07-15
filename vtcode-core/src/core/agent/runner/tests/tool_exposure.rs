@@ -483,6 +483,7 @@ async fn webfetch_domain_deny_does_not_filter_code_search() {
     let temp = TempDir::new().expect("tempdir");
     let mut config = VTCodeConfig::default();
     config.permissions.deny = vec!["webfetch(domain:example.com)".to_string()];
+    config.tools.profile = ToolProfile::AdvancedVtCode;
     let runner = Box::pin(AgentRunner::new_with_bootstrap(
         AgentType::Single,
         ModelId::default(),

@@ -69,11 +69,8 @@ pub fn generate_tool_guidelines_for_profile(
     if has_exec || has_apply_patch {
         lines.push("- Completion is a checkpoint: keep verification resolved.".to_string());
     }
-    if has_search && has_exec {
-        lines.push(semantic_search_guidance(shell_profile).to_string());
-    } else if has_search {
-        lines
-            .push("- Use `code_search` for semantic structural searches and outlines.".to_string());
+    if has_search {
+        lines.push(code_search_guidance(has_exec, shell_profile).to_string());
     }
     if has_apply_patch || has_exec {
         lines.push("- If calls repeat, re-plan instead of retrying.".to_string());
@@ -334,13 +331,16 @@ fn shell_task_guidance(shell_profile: ResolvedShellPromptProfile) -> &'static st
     }
 }
 
-fn semantic_search_guidance(shell_profile: ResolvedShellPromptProfile) -> &'static str {
-    match shell_profile {
-        ResolvedShellPromptProfile::UnixLike => {
-            "- Use `code_search` only for semantic structural searches or outlines; use `exec_command.cmd` with `rg` for text search."
+fn code_search_guidance(has_exec: bool, shell_profile: ResolvedShellPromptProfile) -> &'static str {
+    match (has_exec, shell_profile) {
+        (true, ResolvedShellPromptProfile::UnixLike) => {
+            "- Advanced `code_search` takes `query` plus optional `path`, `file_types`, `result_types`, and `max_results`; results are recognised definitions, exact syntactic usages that are not resolved references, literal text, and matching paths. Queries use literal smart-case. If results are truncated, narrow a filter in another call. Use `exec_command` or a specialised skill for arbitrary syntax-pattern work."
         }
-        ResolvedShellPromptProfile::PowerShell => {
-            "- Use `code_search` only for semantic structural searches or outlines; use `exec_command.cmd` with `rg` if installed, or `Select-String` for native PowerShell text search."
+        (true, ResolvedShellPromptProfile::PowerShell) => {
+            "- Advanced `code_search` takes `query` plus optional `path`, `file_types`, `result_types`, and `max_results`; results are recognised definitions, exact syntactic usages that are not resolved references, literal text, and matching paths. Queries use literal smart-case. If results are truncated, narrow a filter in another call. Use `exec_command` or a specialised skill for arbitrary syntax-pattern work."
+        }
+        (false, _) => {
+            "- Advanced `code_search` takes `query` plus optional `path`, `file_types`, `result_types`, and `max_results`; results are recognised definitions, exact syntactic usages that are not resolved references, literal text, and matching paths. Queries use literal smart-case. If results are truncated, narrow a filter in another call."
         }
     }
 }
@@ -407,8 +407,9 @@ mod tests {
             None,
             ResolvedShellPromptProfile::UnixLike,
         );
-        assert!(guidelines.contains("semantic structural searches or outlines"));
-        assert!(guidelines.contains("`exec_command.cmd` with `rg`"));
+        assert!(guidelines.contains("Advanced `code_search` takes `query`"));
+        assert!(guidelines.contains("literal smart-case"));
+        assert!(guidelines.contains("exact syntactic usages"));
         assert!(guidelines.contains("git diff -- <path>"));
         assert!(guidelines.contains("build tools"));
         assert!(guidelines.contains("test tools"));
@@ -468,7 +469,8 @@ mod tests {
         assert!(guidelines.contains("`Get-ChildItem`"));
         assert!(guidelines.contains("`Select-String`"));
         assert!(guidelines.contains("native PowerShell syntax"));
-        assert!(guidelines.contains("`code_search` only for semantic"));
+        assert!(guidelines.contains("Advanced `code_search` takes `query`"));
+        assert!(guidelines.contains("literal smart-case"));
         assert!(!guidelines.contains("`ls`, `rg`, `find`, `cat`, `sed`, and `awk`"));
     }
 
@@ -615,7 +617,7 @@ mod tests {
         assert!(!guidelines.contains("list_files"));
         assert!(guidelines.contains("code_search"));
         let approx_tokens = guidelines.len() / 4;
-        assert!(approx_tokens < 160, "got ~{approx_tokens} tokens");
+        assert!(approx_tokens < 240, "got ~{approx_tokens} tokens");
     }
 
     #[test]
@@ -692,7 +694,8 @@ mod tests {
         );
 
         assert!(guidelines.contains("`ls`, `rg`, `find`, `cat`, `sed`, and `awk`"));
-        assert!(guidelines.contains("`exec_command.cmd` with `rg`"));
+        assert!(guidelines.contains("Advanced `code_search` takes `query`"));
+        assert!(guidelines.contains("literal smart-case"));
         assert!(guidelines.contains("shell-only tasks"));
         assert!(!guidelines.contains("native PowerShell commands"));
         assert!(!guidelines.contains("`Get-ChildItem`"));
@@ -715,7 +718,7 @@ mod tests {
                 ),
                 ToolDefinition::function(
                     TOOL_CODE_SEARCH.to_string(),
-                    "Semantic search".to_string(),
+                    "Bounded source search".to_string(),
                     serde_json::json!({"type": "object"}),
                 ),
             ])),
@@ -742,7 +745,8 @@ mod tests {
 
         assert!(unix_prompt.contains("## Active Tools"));
         assert!(unix_prompt.contains("`ls`, `rg`, `find`, `cat`, `sed`, and `awk`"));
-        assert!(unix_prompt.contains("`exec_command.cmd` with `rg`"));
+        assert!(unix_prompt.contains("Advanced `code_search` takes `query`"));
+        assert!(unix_prompt.contains("literal smart-case"));
         assert!(!unix_prompt.contains("`Get-ChildItem`"));
     }
 

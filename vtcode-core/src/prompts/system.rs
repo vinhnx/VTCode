@@ -103,7 +103,6 @@ const SHARED_CONTRACT_LINES: &[&str] = &[
     "Use retrieved evidence when citation-sensitive.",
     "Preserve task goal, tracker state, touched files, verification status, and decisions across compaction.",
     "Keep outputs concise; keep agent loops simple and let the model choose the next useful step.",
-    "Prefer `code_search` for ast-grep structural queries and Tree-sitter outlines; use `exec_command.cmd` with commands from the active shell profile for text search.",
     "`spool_path` holds full tool output. Inspect it once with a targeted shell command through `exec_command.cmd` instead of repeatedly dumping the whole file. Past-turn errors are already in history.",
 ];
 
@@ -2228,7 +2227,6 @@ VT Code (Build mode). Be concise and safe.
 - Use retrieved evidence when citation-sensitive.
 - Preserve task goal, tracker state, touched files, verification status, and decisions across compaction.
 - Keep outputs concise; keep agent loops simple and let the model choose the next useful step.
-- Prefer `code_search` for ast-grep structural queries and Tree-sitter outlines; use `exec_command.cmd` with commands from the active shell profile for text search.
 - `spool_path` holds full tool output. Inspect it once with a targeted shell command through `exec_command.cmd` instead of repeatedly dumping the whole file. Past-turn errors are already in history.
 - Start with existing `AGENTS.md` and `CLAUDE.md`; inspect code first and match local patterns.
 - Take safe, reversible steps; recover from tool errors with corrected parameters, smaller scope, or one focused clarification.
@@ -2297,7 +2295,6 @@ VT Code (Build mode). Be concise and safe.
 - Use retrieved evidence when citation-sensitive.
 - Preserve task goal, tracker state, touched files, verification status, and decisions across compaction.
 - Keep outputs concise; keep agent loops simple and let the model choose the next useful step.
-- Prefer `code_search` for ast-grep structural queries and Tree-sitter outlines; use `exec_command.cmd` with commands from the active shell profile for text search.
 - `spool_path` holds full tool output. Inspect it once with a targeted shell command through `exec_command.cmd` instead of repeatedly dumping the whole file. Past-turn errors are already in history.
 - Start with existing `AGENTS.md` and `CLAUDE.md`; inspect code first and match local patterns.
 - Take safe, reversible steps; recover from tool errors with corrected parameters, smaller scope, or one focused clarification.
@@ -2330,7 +2327,7 @@ Use tags when helpful: `<analysis>` facts/options, `<plan>` steps, `<uncertainty
 - Use `exec_command.cmd` with `ls`, `rg`, `find`, `cat`, `sed`, and `awk` for repository browsing.
 - Use `exec_command.cmd` for build tools, test tools, `git diff -- <path>`, and shell-only tasks.
 - Completion is a checkpoint: keep verification resolved.
-- Use `code_search` only for semantic structural searches or outlines; use `exec_command.cmd` with `rg` for text search.
+- Advanced `code_search` takes `query` plus optional `path`, `file_types`, `result_types`, and `max_results`; results are recognised definitions, exact syntactic usages that are not resolved references, literal text, and matching paths. Queries use literal smart-case. If results are truncated, narrow a filter in another call. Use `exec_command` or a specialised skill for arbitrary syntax-pattern work.
 - If calls repeat, re-plan instead of retrying.
 - Run independent tools in parallel when their inputs do not depend on each other.
 
@@ -2416,8 +2413,8 @@ Use a skill only when the user names it or the task clearly matches. Load detail
         config.agent.system_prompt_budget_warning = true;
 
         let mut ctx = PromptContext::default();
-        ctx.add_tool("unified_search".to_string());
-        ctx.add_tool("unified_exec".to_string());
+        ctx.add_tool(tools::CODE_SEARCH.to_string());
+        ctx.add_tool(tools::EXEC_COMMAND.to_string());
         ctx.add_skill_metadata(SkillMetadata {
             name: "skill-creator".to_string(),
             description: "Create skills".to_string(),

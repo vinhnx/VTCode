@@ -166,7 +166,7 @@ These files implement **dynamic context discovery** - a pattern where large outp
 are written to files instead of being truncated. This allows the agent to:
 
 1. Inspect full tool-output files on demand with `exec_command.cmd` using `sed`, `cat`, or `rg`
-2. Search code semantically with `code_search`, and search spooled text with `exec_command.cmd` plus `rg`
+2. Search code with advanced `code_search`, and search spooled text with `exec_command.cmd` plus `rg`
 3. Recover conversation details lost during summarization
 4. Discover available skills and MCP tools efficiently
 

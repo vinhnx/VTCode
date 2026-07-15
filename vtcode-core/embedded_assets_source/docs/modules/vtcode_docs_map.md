@@ -163,9 +163,9 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **User Questions**: "What can you tell me about grep_file Tool Guide?", "How does Overview work?", "How does Architecture work?"
 
 - **File**: `docs/development/grep-quick-reference.md`
-  - **Content**: unified_search (grep action) Quick Reference Card
-  - **Topics**: Essential Parameters, Common Search Patterns, Smart Patterns by Language, Performance Tips, Output Example
-  - **User Questions**: "What can you tell me about unified_search (grep action) Quick Reference Card?", "How does Essential Parameters work?", "How does Common Search Patterns work?"
+  - **Content**: rg Text Search Quick Reference Card
+  - **Topics**: Essential Commands, Common Search Patterns, Advanced Code Search, Performance Tips, Output Example
+  - **User Questions**: "What can you tell me about the rg Text Search Quick Reference Card?", "How does Advanced Code Search work?", "How does Common Search Patterns work?"
 
 - **File**: `docs/development/vtcode-crate-audit.md`
   - **Content**: vtcode-* Crate Audit Report
@@ -996,8 +996,8 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 - **File**: `docs/tools/TOOL_SPECS.md`
   - **Content**: VT Code Tool Specifications
-  - **Topics**: Canonical Public Tools, `unified_file`, `unified_search`, Guidance, Common Recovery Patterns
-  - **User Questions**: "What can you tell me about VT Code Tool Specifications?", "How does Canonical Public Tools work?", "How does `unified_file` work?"
+  - **Topics**: Public Profiles, Default Tools, Advanced Code Search, Platform Profiles, Migration
+  - **User Questions**: "What can you tell me about VT Code Tool Specifications?", "How does Advanced Code Search work?", "Which tools are in the default profile?"
 
 - **File**: `docs/tools/web_fetch_security.md`
   - **Content**: Web Fetch Tool Security Configuration
@@ -1013,8 +1013,8 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 - **File**: `docs/user-guide/commands.md`
   - **Content**: Command Reference
-  - **Topics**: unified_search (ripgrep-like), File operations, Session resume and forks, Quick Actions in Chat Input, Scheduled tasks
-  - **User Questions**: "What can you tell me about Command Reference?", "How does unified_search (ripgrep-like) work?", "How does File operations work?"
+  - **Topics**: Search, File operations, Session resume and forks, Quick Actions in Chat Input, Scheduled tasks
+  - **User Questions**: "What can you tell me about Command Reference?", "How does advanced code search work?", "How do file operations work?"
 
 - **File**: `docs/user-guide/interactive-mode.md`
   - **Content**: Interactive Mode Reference
