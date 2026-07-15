@@ -353,9 +353,12 @@ pub(crate) fn enforce_repeated_read_only_call_guard(
     }
 
     // Cross-turn duplicate: scan working history.
-    if let Some(raw_output) =
-        find_duplicate_in_history(ctx.working_history, canonical_tool_name, effective_args)
-    {
+    if let Some(raw_output) = find_duplicate_in_history(
+        ctx.working_history,
+        canonical_tool_name,
+        effective_args,
+        ctx.tool_registry.workspace_root(),
+    ) {
         if let Ok(mut parsed) = serde_json::from_str::<Value>(&raw_output) {
             if let Some(obj) = parsed.as_object_mut() {
                 super::super::apply_reused_read_only_loop_metadata(obj);

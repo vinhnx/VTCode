@@ -172,6 +172,67 @@ pub fn normalised_loop_identity(args: &serde_json::Value) -> Option<String> {
     serde_json::to_string(&normalised_identity_value(args, false)?).ok()
 }
 
+/// Return whether a mutated path lies within the file or directory scope of a
+/// valid `code_search` request.
+///
+/// Both paths are resolved against a canonical workspace root so relative and
+/// absolute tool arguments share one component-aware comparison. Existing
+/// prefixes are canonicalised while missing suffixes remain lexical, which
+/// keeps deleted and newly-created targets comparable.
+pub fn scope_contains_mutated_path(
+    args: &serde_json::Value,
+    mutated_path: &Path,
+    workspace_root: &Path,
+) -> bool {
+    let Ok(request) = serde_json::from_value::<CodeSearchRequest>(args.clone()) else {
+        return false;
+    };
+    let Ok(request) = request.normalise() else {
+        return false;
+    };
+    let workspace_root = canonicalize_existing_prefix(workspace_root);
+    let resolve = |path: &Path| {
+        let absolute = if path.is_absolute() {
+            path.to_path_buf()
+        } else {
+            workspace_root.join(path)
+        };
+        canonicalize_existing_prefix(&absolute)
+    };
+    let scope = resolve(Path::new(request.filters.path.as_str()));
+    let mutated_path = resolve(mutated_path);
+    mutated_path.starts_with(&scope) || scope.starts_with(&mutated_path)
+}
+
+/// Canonicalise the longest existing prefix, then append any missing suffix.
+/// This resolves symlinked workspace roots and existing directory aliases while
+/// retaining deleted or newly-created mutation targets for replay checks.
+fn canonicalize_existing_prefix(path: &Path) -> PathBuf {
+    let normalised = crate::utils::path::normalize_path(path);
+    let mut existing_prefix = normalised.as_path();
+    let mut missing_components = Vec::new();
+
+    loop {
+        if let Ok(canonical) = std::fs::canonicalize(existing_prefix) {
+            return missing_components
+                .iter()
+                .rev()
+                .fold(canonical, |mut resolved, component| {
+                    resolved.push(component);
+                    resolved
+                });
+        }
+        let Some(component) = existing_prefix.file_name() else {
+            return normalised;
+        };
+        missing_components.push(component.to_os_string());
+        let Some(parent) = existing_prefix.parent() else {
+            return normalised;
+        };
+        existing_prefix = parent;
+    }
+}
+
 fn normalise_file_types(file_types: Option<Vec<CompactStr>>) -> Result<Vec<CompactStr>> {
     let Some(file_types) = file_types else {
         return Ok(Vec::new());
@@ -1121,6 +1182,64 @@ mod tests {
             [CodeSearchResultType::Definition, CodeSearchResultType::Path]
         );
         assert_eq!(request.filters.max_results, 7);
+    }
+
+    #[test]
+    fn replay_scope_overlap_is_symmetric_and_component_aware() {
+        let workspace = TempDir::new().expect("workspace");
+        fs::create_dir_all(workspace.path().join("src/module")).expect("source fixture");
+        let args = json!({"query": "Widget", "path": "src/module"});
+        let absolute_child = workspace.path().join("src/module/widget.rs");
+        let canonical_child = fs::canonicalize(workspace.path())
+            .expect("canonical workspace")
+            .join("src/module/widget.rs");
+
+        for mutation in [
+            PathBuf::from("src/module/widget.rs"),
+            absolute_child,
+            canonical_child,
+            PathBuf::from("src"),
+        ] {
+            assert!(
+                scope_contains_mutated_path(&args, &mutation, workspace.path()),
+                "expected overlap for {}",
+                mutation.display()
+            );
+        }
+        assert!(!scope_contains_mutated_path(
+            &args,
+            Path::new("src/module_two/widget.rs"),
+            workspace.path(),
+        ));
+        assert!(!scope_contains_mutated_path(
+            &args,
+            Path::new("tests/widget.rs"),
+            workspace.path(),
+        ));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn replay_scope_overlap_resolves_symlinked_workspace_roots() {
+        use std::os::unix::fs::symlink;
+
+        let real_workspace = TempDir::new().expect("real workspace");
+        fs::create_dir_all(real_workspace.path().join("src")).expect("source fixture");
+        let link_parent = TempDir::new().expect("link parent");
+        let linked_workspace = link_parent.path().join("workspace-link");
+        symlink(real_workspace.path(), &linked_workspace).expect("workspace symlink");
+        let args = json!({"query": "Widget", "path": "src"});
+
+        assert!(scope_contains_mutated_path(
+            &args,
+            &linked_workspace.join("src/widget.rs"),
+            &linked_workspace,
+        ));
+        assert!(scope_contains_mutated_path(
+            &args,
+            &real_workspace.path().join("src/widget.rs"),
+            &linked_workspace,
+        ));
     }
 
     #[test]

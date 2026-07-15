@@ -201,18 +201,22 @@ impl ToolPolicyGateway {
 
             match normalized {
                 n if n == tools::CODE_SEARCH => {
-                    if let Some(cap) = constraints.max_results_per_call {
-                        match obj.get("max_results") {
-                            None => {
-                                obj.insert("max_results".to_string(), json!(cap));
-                            }
-                            Some(value)
-                                if value.as_u64().is_some_and(|value| value > cap as u64) =>
-                            {
-                                obj.insert("max_results".to_string(), json!(cap));
-                            }
-                            Some(_) => {}
+                    let valid_cap = constraints
+                        .max_results_per_call
+                        .filter(|cap| (1..=100).contains(cap));
+                    match (obj.get("max_results"), valid_cap) {
+                        (None, cap) => {
+                            obj.insert(
+                                "max_results".to_string(),
+                                json!(cap.map_or(20, |cap| 20.min(cap))),
+                            );
                         }
+                        (Some(value), Some(cap))
+                            if value.as_u64().is_some_and(|value| value > cap as u64) =>
+                        {
+                            obj.insert("max_results".to_string(), json!(cap));
+                        }
+                        (Some(_), _) => {}
                     }
                 }
                 n if n == tools::READ_FILE || file_operation_read => {
@@ -637,23 +641,48 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn apply_policy_constraints_writes_code_search_cap_when_limit_is_omitted() {
+    async fn omitted_code_search_limit_uses_public_default_bounded_by_valid_policy_cap() {
+        for (configured_cap, expected_limit) in [(15, 15), (50, 20), (0, 20), (101, 20)] {
+            let gateway = gateway_with_constraints(
+                tools::CODE_SEARCH,
+                ToolConstraints {
+                    max_results_per_call: Some(configured_cap),
+                    ..ToolConstraints::default()
+                },
+            )
+            .await;
+
+            let constrained = gateway
+                .apply_policy_constraints(
+                    tools::CODE_SEARCH,
+                    &json!({"query": "ToolRegistry", "path": "."}),
+                )
+                .expect("valid omitted max_results must remain valid under policy");
+
+            assert_eq!(
+                constrained["max_results"],
+                json!(expected_limit),
+                "configured cap {configured_cap}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn explicit_code_search_limit_retains_valid_cap_clamping() {
         let gateway = gateway_with_constraints(
             tools::CODE_SEARCH,
             ToolConstraints {
-                max_results_per_call: Some(7),
+                max_results_per_call: Some(50),
                 ..ToolConstraints::default()
             },
         )
         .await;
-
         let constrained = gateway
             .apply_policy_constraints(
                 tools::CODE_SEARCH,
-                &json!({"query": "ToolRegistry", "path": "."}),
+                &json!({"query": "ToolRegistry", "max_results": 80}),
             )
             .expect("constrained args");
-
-        assert_eq!(constrained["max_results"], json!(7));
+        assert_eq!(constrained["max_results"], json!(50));
     }
 }

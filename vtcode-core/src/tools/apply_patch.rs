@@ -8,6 +8,7 @@ use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::path::PathBuf;
 
 pub use crate::tools::editing::{Patch, PatchError, PatchHunk, PatchLine, PatchOperation};
 pub use vtcode_utility_tool_specs::{
@@ -79,6 +80,73 @@ pub fn decode_apply_patch_input(args: &Value) -> anyhow::Result<Option<DecodedAp
     }))
 }
 
+/// Extract filesystem paths affected by a mutating tool call.
+///
+/// Public `apply_patch` payloads are decoded and parsed through the same patch
+/// grammar used for execution. Generic path-bearing mutation tools retain the
+/// established singular and batch argument conventions. Tools whose payloads
+/// do not expose paths return an empty vector and cannot invalidate a scoped
+/// replay.
+pub fn mutation_target_paths(tool_name: &str, args: &Value) -> Vec<PathBuf> {
+    if crate::tools::names::canonical_tool_name(tool_name)
+        == crate::config::constants::tools::APPLY_PATCH
+    {
+        return decode_apply_patch_input(args)
+            .ok()
+            .flatten()
+            .and_then(|decoded| Patch::parse(&decoded.text).ok())
+            .map(|patch| {
+                patch
+                    .operations()
+                    .iter()
+                    .flat_map(|operation| match operation {
+                        PatchOperation::AddFile { path, .. }
+                        | PatchOperation::DeleteFile { path } => {
+                            vec![PathBuf::from(path)]
+                        }
+                        PatchOperation::UpdateFile { path, new_path, .. } => {
+                            let mut paths = vec![PathBuf::from(path)];
+                            paths.extend(new_path.as_deref().map(PathBuf::from));
+                            paths
+                        }
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+    }
+
+    const SINGULAR_KEYS: [&str; 5] = ["path", "file_path", "filepath", "target_path", "file"];
+    let Some(obj) = args.as_object() else {
+        return Vec::new();
+    };
+    let mut paths = SINGULAR_KEYS
+        .iter()
+        .filter_map(|key| obj.get(*key).and_then(Value::as_str))
+        .map(str::trim)
+        .filter(|path| !path.is_empty())
+        .map(PathBuf::from)
+        .collect::<Vec<_>>();
+    for key in ["items", "paths", "files"] {
+        let Some(items) = obj.get(key).and_then(Value::as_array) else {
+            continue;
+        };
+        for item in items {
+            if let Some(path) = item.as_str().map(str::trim).filter(|path| !path.is_empty()) {
+                paths.push(PathBuf::from(path));
+            } else if let Some(item) = item.as_object() {
+                paths.extend(SINGULAR_KEYS.iter().filter_map(|key| {
+                    item.get(*key)
+                        .and_then(Value::as_str)
+                        .map(str::trim)
+                        .filter(|path| !path.is_empty())
+                        .map(PathBuf::from)
+                }));
+            }
+        }
+    }
+    paths
+}
+
 fn enforce_decoded_size_limit(
     decoded_bytes: usize,
     source_bytes: usize,
@@ -129,9 +197,11 @@ pub fn parameter_schema(input_description: &str) -> Value {
 mod tests {
     use super::{
         APPLY_PATCH_ALIAS_DESCRIPTION, SEMANTIC_ANCHOR_GUIDANCE, decode_apply_patch_input,
-        parameter_schema, patch_source_from_args, with_semantic_anchor_guidance,
+        mutation_target_paths, parameter_schema, patch_source_from_args,
+        with_semantic_anchor_guidance,
     };
     use serde_json::json;
+    use std::path::PathBuf;
 
     #[test]
     fn patch_source_accepts_raw_string_and_object_fields() {
@@ -177,6 +247,36 @@ mod tests {
         assert_eq!(decoded.text, "*** Begin Patch\n*** End Patch\n");
         assert_eq!(decoded.source_bytes, 47);
         assert!(decoded.was_base64);
+    }
+
+    #[test]
+    fn mutation_paths_cover_all_public_patch_operations_and_alias_shapes() {
+        use base64::Engine;
+        use base64::engine::general_purpose::STANDARD as BASE64;
+
+        let patch = "*** Begin Patch\n*** Add File: src/add.rs\n+new\n*** Delete File: src/delete.rs\n*** Update File: src/old.rs\n*** Move to: src/new.rs\n@@\n-old\n+new\n*** End Patch\n";
+        let expected = vec![
+            PathBuf::from("src/add.rs"),
+            PathBuf::from("src/delete.rs"),
+            PathBuf::from("src/old.rs"),
+            PathBuf::from("src/new.rs"),
+        ];
+
+        assert_eq!(
+            mutation_target_paths("apply_patch", &json!(patch)),
+            expected
+        );
+        assert_eq!(
+            mutation_target_paths("apply_patch", &json!({"input": patch})),
+            expected
+        );
+        assert_eq!(
+            mutation_target_paths(
+                "apply_patch",
+                &json!({"patch": format!("base64:{}", BASE64.encode(patch))}),
+            ),
+            expected
+        );
     }
 
     #[test]

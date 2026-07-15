@@ -253,7 +253,7 @@ pub(super) fn try_recover_preflight_with_fallback(
 
 #[cfg(test)]
 mod tests {
-    use super::{preflight_validation_fallback, trimmed_non_empty_string_field};
+    use super::trimmed_non_empty_string_field;
     use serde_json::json;
     use vtcode_core::config::constants::tools as tool_names;
 

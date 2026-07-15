@@ -1,6 +1,7 @@
 use crate::agent::runloop::unified::tool_pipeline::{ToolExecutionStatus, ToolPipelineOutcome};
 use crate::agent::runloop::unified::turn::tool_outcomes::read_extent;
 use rustc_hash::{FxHashMap, FxHashSet};
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::names::canonical_tool_name;
@@ -121,66 +122,160 @@ impl LoopTracker {
 /// `code_search` uses a separate replay identity that retains the effective
 /// `max_results`; its loop identity is separate.
 ///
-/// Uses a two-pass approach: first builds a map of call_id → normalized_signature
-/// from Assistant messages, then scans Tool responses backward to find the most
-/// recent match. This correctly handles cross-turn duplicates where the Tool
-/// response appears before its matching Assistant message in backward scan order.
+/// Tool-call IDs are scoped to the nearest preceding Assistant batch. A later
+/// batch may reuse an ID for another tool, so both the batch and tool name must
+/// match before its Tool response can satisfy this replay lookup.
 pub(crate) fn find_duplicate_in_history(
     history: &[uni::Message],
     tool_name: &str,
     args: &serde_json::Value,
+    workspace_root: &Path,
 ) -> Option<String> {
     const MAX_HISTORY_SCAN: usize = 120;
     let target_signature = read_normalized_signature_key(tool_name, args);
 
-    // Pass 1: Build call_id → (args, assistant_msg_index) map from Assistant
-    // messages in the scan window.  Storing the assistant message index is
-    // critical because call IDs (tool_call_0, tool_call_1, …) restart per
-    // assistant message — they are NOT globally unique.  Without the index a
-    // Tool response from an *earlier* assistant message can be mis-matched to a
-    // *later* assistant message that reused the same call ID for a completely
-    // different tool, producing a stale or wrong cached result.
     let scan_start = history.len().saturating_sub(MAX_HISTORY_SCAN);
-    let mut call_id_map: FxHashMap<String, (serde_json::Value, usize)> = FxHashMap::default();
+    let target_tool_name = canonical_tool_name(tool_name);
+    let mut current_batch: FxHashMap<String, (String, serde_json::Value)> = FxHashMap::default();
+    let mut matching_responses = Vec::new();
+
     for (offset, msg) in history[scan_start..].iter().enumerate() {
         let abs_idx = scan_start + offset;
-        if let uni::MessageRole::Assistant = msg.role {
-            if let Some(ref tool_calls) = msg.tool_calls {
-                for tc in tool_calls {
-                    if let Some(ref func) = tc.function {
-                        let tc_args: serde_json::Value = serde_json::from_str(&func.arguments)
-                            .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
-                        let tc_signature = read_normalized_signature_key(&func.name, &tc_args);
-                        if tc_signature == target_signature {
-                            call_id_map.insert(tc.id.clone(), (tc_args, abs_idx));
+        match msg.role {
+            uni::MessageRole::Assistant => {
+                current_batch.clear();
+                if let Some(ref tool_calls) = msg.tool_calls {
+                    for tc in tool_calls {
+                        if let Some(ref func) = tc.function {
+                            let tc_args: serde_json::Value = serde_json::from_str(&func.arguments)
+                                .unwrap_or_else(|_| {
+                                    serde_json::Value::Object(serde_json::Map::new())
+                                });
+                            current_batch.insert(
+                                tc.id.clone(),
+                                (canonical_tool_name(&func.name).to_string(), tc_args),
+                            );
                         }
                     }
                 }
             }
+            uni::MessageRole::Tool => {
+                let Some(call_id) = msg.tool_call_id.as_deref() else {
+                    continue;
+                };
+                let Some((batch_tool_name, tc_args)) = current_batch.get(call_id) else {
+                    continue;
+                };
+                if batch_tool_name == target_tool_name
+                    && read_normalized_signature_key(batch_tool_name, tc_args) == target_signature
+                    && read_extent::extent_covers(tc_args, args)
+                {
+                    matching_responses.push((abs_idx, tc_args.clone(), msg));
+                }
+            }
+            _ => {}
         }
     }
 
-    if call_id_map.is_empty() {
-        return None;
-    }
-
-    // Pass 2: Scan Tool responses backward to find the most recent match.
-    // Only match a Tool response when its absolute index is *after* the
-    // assistant message that registered the call ID — this prevents
-    // cross-message call-ID collisions from returning the wrong response.
-    for (offset, msg) in history[scan_start..].iter().rev().enumerate() {
-        let abs_idx = history.len().saturating_sub(1).saturating_sub(offset);
-        if let uni::MessageRole::Tool = msg.role {
-            if let Some(ref call_id) = msg.tool_call_id {
-                if let Some((tc_args, assistant_idx)) = call_id_map.get(call_id.as_str()) {
-                    if abs_idx > *assistant_idx && read_extent::extent_covers(tc_args, args) {
-                        return Some(msg.content.as_text().to_string());
-                    }
-                }
-            }
+    for (response_index, tc_args, msg) in matching_responses.into_iter().rev() {
+        let invalidated = tool_name == vtcode_core::config::constants::tools::CODE_SEARCH
+            && history_has_scoped_mutation_after(history, response_index, &tc_args, workspace_root);
+        if !invalidated {
+            return Some(msg.content.as_text().to_string());
         }
     }
     None
+}
+
+fn history_has_scoped_mutation_after(
+    history: &[uni::Message],
+    response_index: usize,
+    search_args: &serde_json::Value,
+    workspace_root: &Path,
+) -> bool {
+    let mut pending_mutations: FxHashMap<String, Vec<PathBuf>> = FxHashMap::default();
+    for message in history.iter().skip(response_index.saturating_add(1)) {
+        match message.role {
+            uni::MessageRole::Assistant => {
+                // Tool-call IDs are scoped to one Assistant batch and may be
+                // reused later. Unanswered calls from an earlier batch were
+                // never executed, so they must not survive this boundary.
+                pending_mutations.clear();
+                let Some(tool_calls) = message.tool_calls.as_ref() else {
+                    continue;
+                };
+                for tool_call in tool_calls {
+                    let Some(function) = tool_call.function.as_ref() else {
+                        continue;
+                    };
+                    let Ok(args) = serde_json::from_str::<serde_json::Value>(&function.arguments)
+                    else {
+                        continue;
+                    };
+                    if !vtcode_core::tools::tool_intent::classify_tool_intent(&function.name, &args)
+                        .mutating
+                    {
+                        continue;
+                    }
+                    let paths = vtcode_core::tools::mutation_target_paths(&function.name, &args);
+                    if !paths.is_empty() {
+                        pending_mutations.insert(tool_call.id.clone(), paths);
+                    }
+                }
+            }
+            uni::MessageRole::Tool => {
+                let Some(call_id) = message.tool_call_id.as_deref() else {
+                    continue;
+                };
+                let Some(paths) = pending_mutations.remove(call_id) else {
+                    continue;
+                };
+                if tool_response_is_success(message)
+                    && paths.iter().any(|path| {
+                        vtcode_core::tools::code_search_scope_contains_mutated_path(
+                            search_args,
+                            path,
+                            workspace_root,
+                        )
+                    })
+                {
+                    return true;
+                }
+            }
+            _ => {}
+        }
+    }
+    false
+}
+
+fn tool_response_is_success(message: &uni::Message) -> bool {
+    let Ok(output) = serde_json::from_str::<serde_json::Value>(&message.content.as_text()) else {
+        return false;
+    };
+    let Some(output) = output.as_object() else {
+        return false;
+    };
+    if output.contains_key("error")
+        || output.contains_key("error_type")
+        || output.contains_key("failure_kind")
+    {
+        return false;
+    }
+    if output
+        .get("status")
+        .is_some_and(|status| status.as_str() != Some("success"))
+    {
+        return false;
+    }
+
+    match output.get("success") {
+        Some(serde_json::Value::Bool(success)) => *success,
+        Some(_) => false,
+        None => output
+            .get("status")
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|status| status == "success"),
+    }
 }
 
 fn output_has_empty_search_results(output: &serde_json::Value) -> bool {
@@ -1275,33 +1370,16 @@ mod tests {
         use vtcode_core::llm::provider as uni;
 
         // find_duplicate_in_history uses read_normalized_signature_key, which
-        // strips offset/limit for file reads. Test that the normalised signature
-        // matching works by constructing a history with two pairs
-        // where the SECOND pair's assistant message has different pagination
-        // but the same normalized key, and verifying the function returns the
-        // first pair's tool output (since the second pair's Tool is scanned
-        // before its Assistant in the backward walk).
-        //
-        // History: [A₀(lib.rs,limit=100), T₀, A₁(main.rs), T₁]
-        // Query:   lib.rs, limit=500 (normalized matches A₀)
-        // Backward: T₁ → A₁(main.rs, diff path) → T₀ → A₀(lib.rs, match!)
-        //   T₁: pending=None → skip
-        //   A₁: normalized sig ≠ (different path) → skip
-        //   T₀: pending=None → skip
-        //   A₀: normalized sig matches → pending="tc_0"
-        //   Loop ends → None.
-        //
-        // This shows the function's structural limitation. The real cross-turn
-        // dedup is handled by the TTL cache (B3 fix in guards.rs). We verify
-        // the normalization still works correctly for the guards path.
+        // strips offset/limit for file reads. A later unrelated Assistant batch
+        // must not obscure the earlier matching call and result pair.
 
         // Verify normalization: same file + different offset/limit → same key
         let key_a = read_normalized_signature_key(
-            "file_operation",
+            tools::UNIFIED_FILE,
             &json!({"action":"read","path":"src/lib.rs","offset":0,"limit":100}),
         );
         let key_b = read_normalized_signature_key(
-            "file_operation",
+            tools::UNIFIED_FILE,
             &json!({"action":"read","path":"src/lib.rs","offset":50,"limit":500}),
         );
         assert_eq!(
@@ -1311,7 +1389,7 @@ mod tests {
 
         // Verify: different file → different key
         let key_c = read_normalized_signature_key(
-            "file_operation",
+            tools::UNIFIED_FILE,
             &json!({"action":"read","path":"src/main.rs","offset":0,"limit":100}),
         );
         assert_ne!(
@@ -1335,11 +1413,11 @@ mod tests {
 
         // Verify: write NOT normalized
         let w_key_a = read_normalized_signature_key(
-            "file_operation",
+            tools::UNIFIED_FILE,
             &json!({"action":"write","path":"src/lib.rs","content":"old"}),
         );
         let w_key_b = read_normalized_signature_key(
-            "file_operation",
+            tools::UNIFIED_FILE,
             &json!({"action":"write","path":"src/lib.rs","content":"new"}),
         );
         assert_ne!(w_key_a, w_key_b, "writes must not be normalized away");
@@ -1350,7 +1428,7 @@ mod tests {
             "read".into(),
             vec![uni::ToolCall::function(
                 "tc_exact".into(),
-                "file_operation".into(),
+                tools::UNIFIED_FILE.into(),
                 serde_json::to_string(
                     &json!({"action":"read","path":"src/lib.rs","offset":0,"limit":100}),
                 )
@@ -1368,7 +1446,7 @@ mod tests {
             "read other".into(),
             vec![uni::ToolCall::function(
                 "tc_other".into(),
-                "file_operation".into(),
+                tools::UNIFIED_FILE.into(),
                 serde_json::to_string(&json!({"action":"read","path":"src/main.rs"})).unwrap(),
             )],
         ));
@@ -1379,25 +1457,13 @@ mod tests {
             ..Default::default()
         });
 
-        // Query with same normalized key (different limit). Backward:
-        //   T_other: pending=None → skip
-        //   A_other(main.rs): sig ≠ → skip
-        //   T_exact: pending=None → skip
-        //   A_exact(lib.rs): sig matches → pending="tc_exact"
-        //   Loop ends → None.
-        // As analyzed, the function returns None due to scan ordering.
-        // The guards.rs TTL cache (B3) handles this case.
         let result = find_duplicate_in_history(
             &history,
-            "file_operation",
-            &json!({"action":"read","path":"src/lib.rs","offset":0,"limit":500}),
+            tools::UNIFIED_FILE,
+            &json!({"action":"read","path":"src/lib.rs","offset":0,"limit":50}),
+            Path::new("."),
         );
-        // This is expected None — the function only returns when the Tool is
-        // scanned AFTER its matching Assistant (same-turn retry case).
-        assert!(
-            result.is_none(),
-            "cross-turn dedup returns None by design; TTL cache (B3) handles it"
-        );
+        assert_eq!(result.as_deref(), Some("exact content"));
     }
 
     #[test]
@@ -1436,6 +1502,7 @@ mod tests {
                 "result_types": ["definition", "text"],
                 "max_results": 100
             }),
+            Path::new("."),
         );
 
         assert_eq!(different_limit, None);
@@ -1465,8 +1532,217 @@ mod tests {
             &equivalent_default_history,
             tools::CODE_SEARCH,
             &json!({"query": " Widget ", "path": "src"}),
+            Path::new("."),
         );
         assert_eq!(reused.as_deref(), Some("{\"results\":[1]}"));
+    }
+
+    #[test]
+    fn working_history_code_search_replay_stops_at_in_scope_mutation() {
+        let search_args = json!({"query": "Widget", "path": "src"});
+        let search_call = uni::Message::assistant_with_tools(
+            "search".into(),
+            vec![uni::ToolCall::function(
+                "search_call".into(),
+                tools::CODE_SEARCH.into(),
+                serde_json::to_string(&search_args).unwrap(),
+            )],
+        );
+        let search_result = uni::Message {
+            role: uni::MessageRole::Tool,
+            content: uni::MessageContent::text("{\"results\":[\"cached\"]}".into()),
+            tool_call_id: Some("search_call".into()),
+            ..Default::default()
+        };
+        let mutation = |path: &str, result: serde_json::Value| {
+            let patch = format!(
+                "*** Begin Patch\n*** Update File: {path}\n@@\n-Widget\n+Gadget\n*** End Patch\n"
+            );
+            vec![
+                uni::Message::assistant_with_tools(
+                    "edit".into(),
+                    vec![uni::ToolCall::function(
+                        "edit_call".into(),
+                        tools::APPLY_PATCH.into(),
+                        serde_json::to_string(&json!({"patch": patch})).unwrap(),
+                    )],
+                ),
+                uni::Message::tool_response("edit_call".into(), result.to_string()),
+            ]
+        };
+
+        let mut in_scope_history = vec![search_call.clone(), search_result.clone()];
+        in_scope_history.extend(mutation("src/widget.rs", json!({"success": true})));
+        assert!(
+            find_duplicate_in_history(
+                &in_scope_history,
+                tools::CODE_SEARCH,
+                &search_args,
+                Path::new("."),
+            )
+            .is_none(),
+            "editing src/widget.rs after searching src must force a fresh search"
+        );
+
+        let mut status_success_history = vec![search_call.clone(), search_result.clone()];
+        status_success_history.extend(mutation(
+            "src/widget.rs",
+            json!({"status": "success", "output": "patch applied"}),
+        ));
+        assert!(
+            find_duplicate_in_history(
+                &status_success_history,
+                tools::CODE_SEARCH,
+                &search_args,
+                Path::new("."),
+            )
+            .is_none(),
+            "the established successful status shape must invalidate replay"
+        );
+
+        let mut unrelated_history = vec![search_call.clone(), search_result.clone()];
+        unrelated_history.extend(mutation("tests/widget.rs", json!({"success": true})));
+        assert_eq!(
+            find_duplicate_in_history(
+                &unrelated_history,
+                tools::CODE_SEARCH,
+                &search_args,
+                Path::new("."),
+            )
+            .as_deref(),
+            Some("{\"results\":[\"cached\"]}"),
+            "an unrelated edit may reuse the prior scoped search"
+        );
+
+        for failure in [
+            json!({"success": false, "error": "patch rejected"}),
+            json!({"error": {"message": "execution denied by policy"}}),
+            json!({"failure_kind": "timeout"}),
+            json!({"status": "failed"}),
+            json!({"status": "denied"}),
+            json!({"success": null}),
+            json!({"output": "patch output without an outcome"}),
+            json!(["non-object mutation output"]),
+        ] {
+            let mut failed_history = vec![search_call.clone(), search_result.clone()];
+            failed_history.extend(mutation("src/widget.rs", failure));
+            assert_eq!(
+                find_duplicate_in_history(
+                    &failed_history,
+                    tools::CODE_SEARCH,
+                    &search_args,
+                    Path::new("."),
+                )
+                .as_deref(),
+                Some("{\"results\":[\"cached\"]}"),
+                "a mutation without explicit positive success evidence must preserve reuse"
+            );
+        }
+
+        let mut unexecuted_history = vec![search_call, search_result];
+        let unexecuted_mutation = mutation("src/widget.rs", json!({"success": true}));
+        unexecuted_history.push(unexecuted_mutation[0].clone());
+        assert_eq!(
+            find_duplicate_in_history(
+                &unexecuted_history,
+                tools::CODE_SEARCH,
+                &search_args,
+                Path::new("."),
+            )
+            .as_deref(),
+            Some("{\"results\":[\"cached\"]}"),
+            "an unexecuted mutation call must preserve reuse"
+        );
+    }
+
+    #[test]
+    fn mutation_tool_response_success_rejects_malformed_and_conflicting_shapes() {
+        let response =
+            |content: &str| uni::Message::tool_response("edit_call".into(), content.into());
+
+        assert!(tool_response_is_success(&response(r#"{"success":true}"#)));
+        assert!(tool_response_is_success(&response(
+            r#"{"status":"success","output":"patch applied"}"#,
+        )));
+
+        for content in [
+            "not json",
+            "null",
+            r#"{"success":null,"status":"success"}"#,
+            r#"{"success":true,"status":"failed"}"#,
+            r#"{"success":true,"failure_kind":"timeout"}"#,
+            r#"{"success":true,"error":"execution denied"}"#,
+        ] {
+            assert!(
+                !tool_response_is_success(&response(content)),
+                "mutation outcome must not count as successful: {content}"
+            );
+        }
+    }
+
+    #[test]
+    fn working_history_code_search_replay_rejects_reused_patch_call_id() {
+        let search_args = json!({"query": "Widget", "path": "src"});
+        let shared_call_id = "call_0";
+        let search_call = uni::Message::assistant_with_tools(
+            "search".into(),
+            vec![uni::ToolCall::function(
+                shared_call_id.into(),
+                tools::CODE_SEARCH.into(),
+                serde_json::to_string(&search_args).unwrap(),
+            )],
+        );
+        let search_result = uni::Message::tool_response(
+            shared_call_id.into(),
+            "{\"results\":[\"genuine search output\"]}".into(),
+        );
+        let patch = "*** Begin Patch\n*** Update File: src/widget.rs\n@@\n-Widget\n+Gadget\n*** End Patch\n";
+        let patch_call = uni::Message::assistant_with_tools(
+            "edit".into(),
+            vec![uni::ToolCall::function(
+                shared_call_id.into(),
+                tools::APPLY_PATCH.into(),
+                serde_json::to_string(&json!({"patch": patch})).unwrap(),
+            )],
+        );
+
+        let mut successful_history = vec![
+            search_call.clone(),
+            search_result.clone(),
+            patch_call.clone(),
+            uni::Message::tool_response(
+                shared_call_id.into(),
+                json!({"success": true, "output": "patch output"}).to_string(),
+            ),
+        ];
+        assert!(
+            find_duplicate_in_history(
+                &successful_history,
+                tools::CODE_SEARCH,
+                &search_args,
+                Path::new("."),
+            )
+            .is_none(),
+            "a successful in-scope patch must invalidate the genuine earlier search result"
+        );
+
+        successful_history.pop();
+        successful_history.push(uni::Message::tool_response(
+            shared_call_id.into(),
+            json!({"success": false, "error": "patch rejected", "output": "patch output"})
+                .to_string(),
+        ));
+        assert_eq!(
+            find_duplicate_in_history(
+                &successful_history,
+                tools::CODE_SEARCH,
+                &search_args,
+                Path::new("."),
+            )
+            .as_deref(),
+            Some("{\"results\":[\"genuine search output\"]}"),
+            "a failed patch must preserve the earlier search without returning patch output"
+        );
     }
 
     #[test]
