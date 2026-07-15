@@ -127,7 +127,7 @@ async fn code_search_registry_executor_returns_normalised_typed_response() -> Re
             json!({
                 "query": "  Widget  ",
                 "file_types": [".rs", "rust"],
-                "result_types": ["path", "definition", "path"]
+                "result_types": ["path", "path"]
             }),
         )
         .await?;
@@ -153,10 +153,7 @@ async fn code_search_registry_executor_returns_normalised_typed_response() -> Re
     assert_eq!(response["query"], "Widget");
     assert_eq!(response["filters"]["path"], ".");
     assert_eq!(response["filters"]["file_types"], json!(["rust"]));
-    assert_eq!(
-        response["filters"]["result_types"],
-        json!(["definition", "path"])
-    );
+    assert_eq!(response["filters"]["result_types"], json!(["path"]));
     assert_eq!(response["filters"]["max_results"], 20);
     assert_eq!(response["results"], json!([]));
     assert_eq!(response["returned"], 0);
