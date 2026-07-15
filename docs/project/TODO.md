@@ -373,3 +373,16 @@ expect 50-150 ms shaved on Copilot hosts.
     • cargo nextest run -p vtcode -E 'binary(/dispatch/)'
     and -p vtcode-core -E 'binary(/dotfile_guardian/)' —
     targeted regressions.
+
+--
+
+Add visual TUI feedback info on any /config changes
+
+example:
+Disabled copy on select
+Disabled ← opens agents
+Disabled open agents view by default
+
+---
+
+check and improve file picker, currently it is only showing top level folders and not showing files in subfolders. remove the TUI that handles the file picker and replace it with a more robust solution that can navigate through subdirectories and display files properly. Ensure that the new file picker is intuitive and user-friendly, allowing users to easily select files from any directory level.
