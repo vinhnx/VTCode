@@ -12,6 +12,9 @@ use crate::tools::ast_grep_language::AstGrepLanguage;
 use vtcode_commons::exclusions::is_sensitive_file;
 use vtcode_commons::walk::{build_walker_single_threaded, is_excluded_dir};
 const CODE_SEARCH_OUTLINE_BYTE_CAP: usize = 1024 * 1024;
+const CODE_SEARCH_OUTLINE_PATH_BATCH_SIZE: usize = 64;
+const CODE_SEARCH_OUTLINE_ARG_BATCH_BYTE_CAP: usize = 16 * 1024;
+const CODE_SEARCH_OUTLINE_FIXED_ARGS: [&str; 4] = ["outline", "--json=stream", "--items", "all"];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct DeclarationRange {
@@ -145,98 +148,98 @@ pub(crate) async fn search_declarations_bounded(
         AstGrepStatus::NotFound => bail!("definition search is unavailable"),
         AstGrepStatus::Error { .. } => bail!("definition search is unavailable"),
     };
-    let command_args = sorted_outline_paths(workspace_root, resolved_path, languages);
-    let mut command = Command::new(binary);
-    command
-        .current_dir(workspace_root)
-        .env("RAYON_NUM_THREADS", "1")
-        .arg("outline")
-        .arg("--json=stream")
-        .arg("--items")
-        .arg("all")
-        .args(command_args)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null());
-
-    let mut child = command.spawn().context("failed to run definition search")?;
-    let Some(stdout) = child.stdout.take() else {
-        kill_and_reap_declaration_child(&mut child).await;
-        bail!("failed to capture definition search output");
-    };
-    let mut reader = BufReader::new(stdout);
+    let mut command_paths = outline_paths(workspace_root, resolved_path, languages).peekable();
     let mut bytes_read = 0usize;
     let mut retained = 0usize;
     let mut files = Vec::new();
     let mut truncated = false;
-    let mut line_buf = Vec::with_capacity(CODE_SEARCH_OUTLINE_BYTE_CAP);
+    while command_paths.peek().is_some() && !truncated {
+        let command_args = next_outline_path_batch(&mut command_paths)?;
+        let mut command = Command::new(&binary);
+        command
+            .current_dir(workspace_root)
+            .env("RAYON_NUM_THREADS", "1")
+            .args(CODE_SEARCH_OUTLINE_FIXED_ARGS)
+            .args(command_args)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null());
 
-    loop {
-        line_buf.clear();
-        let read = match read_bounded_record(
-            &mut reader,
-            &mut line_buf,
-            &mut bytes_read,
-            CODE_SEARCH_OUTLINE_BYTE_CAP,
-        )
-        .await
-        {
-            Ok(read) => read,
-            Err(error) => {
-                drop(reader);
-                kill_and_reap_declaration_child(&mut child).await;
-                return Err(error).context("failed to read definition stream");
-            }
+        let mut child = command.spawn().context("failed to run definition search")?;
+        let Some(stdout) = child.stdout.take() else {
+            kill_and_reap_declaration_child(&mut child).await;
+            bail!("failed to capture definition search output");
         };
-        match read {
-            BoundedRecordRead::Record => {}
-            BoundedRecordRead::Eof => break,
-            BoundedRecordRead::Exhausted => {
+        let mut reader = BufReader::new(stdout);
+        let mut line_buf = Vec::new();
+
+        loop {
+            line_buf.clear();
+            let read = match read_bounded_record(
+                &mut reader,
+                &mut line_buf,
+                &mut bytes_read,
+                CODE_SEARCH_OUTLINE_BYTE_CAP,
+            )
+            .await
+            {
+                Ok(read) => read,
+                Err(error) => {
+                    drop(reader);
+                    kill_and_reap_declaration_child(&mut child).await;
+                    return Err(error).context("failed to read definition stream");
+                }
+            };
+            match read {
+                BoundedRecordRead::Record => {}
+                BoundedRecordRead::Eof => break,
+                BoundedRecordRead::Exhausted => {
+                    truncated = true;
+                    break;
+                }
+            }
+            let file = match serde_json::from_slice::<OutlineFile>(&line_buf) {
+                Ok(file) => file,
+                Err(error) => {
+                    drop(reader);
+                    kill_and_reap_declaration_child(&mut child).await;
+                    return Err(error).context("failed to parse definition stream record");
+                }
+            };
+            let path = PathBuf::from(&file.path);
+            let Some(language) = AstGrepLanguage::from_path(&path)
+                .or_else(|| AstGrepLanguage::from_user_value(&file.lang))
+            else {
+                continue;
+            };
+            if !languages.is_empty() && !languages.contains(&language) {
+                continue;
+            }
+            let remaining = candidate_cap.saturating_sub(retained);
+            let (declarations, complete) = matching_declarations(&file, query, remaining);
+            retained = retained.saturating_add(declarations.len());
+            files.push(DeclarationFileRecord {
+                path,
+                language,
+                declarations,
+                complete,
+            });
+            if !complete || retained >= candidate_cap {
                 truncated = true;
                 break;
             }
         }
-        let file: OutlineFile = match serde_json::from_slice(&line_buf) {
-            Ok(file) => file,
-            Err(error) => {
-                drop(reader);
-                kill_and_reap_declaration_child(&mut child).await;
-                return Err(error).context("failed to parse definition stream record");
-            }
-        };
-        let path = PathBuf::from(&file.path);
-        let Some(language) = AstGrepLanguage::from_path(&path)
-            .or_else(|| AstGrepLanguage::from_user_value(&file.lang))
-        else {
-            continue;
-        };
-        if !languages.is_empty() && !languages.contains(&language) {
-            continue;
-        }
-        let remaining = candidate_cap.saturating_sub(retained);
-        let (declarations, complete) = matching_declarations(&file, query, remaining);
-        retained = retained.saturating_add(declarations.len());
-        files.push(DeclarationFileRecord {
-            path,
-            language,
-            declarations,
-            complete,
-        });
-        if !complete || retained >= candidate_cap {
-            truncated = true;
-            break;
-        }
-    }
 
-    drop(reader);
-    if truncated {
-        let _ = child.start_kill();
-    }
-    let status = child
-        .wait()
-        .await
-        .context("failed to reap definition search process")?;
-    if !truncated && !status.success() {
-        bail!("definition search failed");
+        drop(reader);
+        if truncated {
+            let _ = child.start_kill();
+        }
+        let status = child
+            .wait()
+            .await
+            .context("failed to reap definition search process")?;
+        if !truncated && !status.success() {
+            bail!("definition search failed");
+        }
     }
 
     Ok(DeclarationSearchOutcome {
@@ -246,17 +249,21 @@ pub(crate) async fn search_declarations_bounded(
     })
 }
 
-fn sorted_outline_paths(
-    workspace_root: &Path,
-    resolved_path: &Path,
-    languages: &[AstGrepLanguage],
-) -> Vec<String> {
+fn outline_paths<'a>(
+    workspace_root: &'a Path,
+    resolved_path: &'a Path,
+    languages: &'a [AstGrepLanguage],
+) -> Box<dyn Iterator<Item = String> + Send + 'a> {
     if resolved_path.is_file() {
-        return vec![command_path_arg(workspace_root, resolved_path)];
+        return Box::new(std::iter::once(command_path_arg(
+            workspace_root,
+            resolved_path,
+        )));
     }
     let mut builder = build_walker_single_threaded(resolved_path);
     builder.filter_entry(|entry| !is_excluded_dir(entry));
-    let mut paths = builder
+    builder.sort_by_file_path(|left, right| left.cmp(right));
+    let paths = builder
         .build()
         .filter_map(std::result::Result::ok)
         .filter(|entry| entry.file_type().is_some_and(|kind| kind.is_file()))
@@ -270,13 +277,46 @@ fn sorted_outline_paths(
                     || AstGrepLanguage::from_path(path)
                         .is_some_and(|language| languages.contains(&language)))
         })
-        .map(|path| command_path_arg(workspace_root, &path))
-        .collect::<Vec<_>>();
-    paths.sort_unstable();
-    if paths.is_empty() {
-        paths.push(command_path_arg(workspace_root, resolved_path));
+        .map(|path| command_path_arg(workspace_root, &path));
+    Box::new(paths)
+}
+
+fn next_outline_path_batch(
+    paths: &mut std::iter::Peekable<impl Iterator<Item = String>>,
+) -> Result<Vec<String>> {
+    next_outline_path_batch_with_cap(paths, CODE_SEARCH_OUTLINE_ARG_BATCH_BYTE_CAP)
+}
+
+fn next_outline_path_batch_with_cap(
+    paths: &mut std::iter::Peekable<impl Iterator<Item = String>>,
+    arg_byte_cap: usize,
+) -> Result<Vec<String>> {
+    let mut batch = Vec::with_capacity(CODE_SEARCH_OUTLINE_PATH_BATCH_SIZE);
+    let mut total_arg_bytes = CODE_SEARCH_OUTLINE_FIXED_ARGS
+        .iter()
+        .fold(0usize, |total, arg| total.saturating_add(arg_bytes(arg)));
+    while batch.len() < CODE_SEARCH_OUTLINE_PATH_BATCH_SIZE {
+        let Some(next) = paths.peek() else {
+            break;
+        };
+        let next_bytes = arg_bytes(next);
+        if total_arg_bytes.saturating_add(next_bytes) > arg_byte_cap {
+            if batch.is_empty() {
+                bail!("definition search path exceeds the command argument byte limit");
+            }
+            break;
+        }
+        let Some(next) = paths.next() else {
+            break;
+        };
+        total_arg_bytes = total_arg_bytes.saturating_add(next_bytes);
+        batch.push(next);
     }
-    paths
+    Ok(batch)
+}
+
+fn arg_bytes(arg: &str) -> usize {
+    arg.as_bytes().len().saturating_add(1)
 }
 
 /// Build the path argument passed to ast-grep. Use the workspace-relative form

@@ -1,6 +1,7 @@
 use super::{
-    BoundedRecordRead, CODE_SEARCH_OUTLINE_BYTE_CAP, read_bounded_record,
-    search_declarations_bounded, smart_case_eq,
+    BoundedRecordRead, CODE_SEARCH_OUTLINE_BYTE_CAP, CODE_SEARCH_OUTLINE_FIXED_ARGS,
+    CODE_SEARCH_OUTLINE_PATH_BATCH_SIZE, arg_bytes, next_outline_path_batch_with_cap,
+    read_bounded_record, search_declarations_bounded, smart_case_eq,
 };
 use crate::tools::ast_grep_binary::set_ast_grep_binary_override_for_tests as set_read_only_ast_grep_override_for_tests;
 use crate::tools::ast_grep_language::AstGrepLanguage;
@@ -66,6 +67,46 @@ done
     (script_dir, script_path)
 }
 
+fn write_failing_second_batch_fake_sg() -> (TempDir, PathBuf) {
+    let script_dir = TempDir::new().expect("script tempdir");
+    let script_path = script_dir.path().join("sg");
+    let failure_name = format!("{:03}.rs", CODE_SEARCH_OUTLINE_PATH_BATCH_SIZE);
+    let script = format!(
+        r#"#!/bin/sh
+if [ "$1" = "--version" ]; then
+    printf 'ast-grep 0.44.0\n'
+    exit 0
+fi
+for path in "$@"; do
+    case "$path" in
+        *{failure_name}) exit 1 ;;
+        *.rs) printf '{{"path":"%s","language":"Rust","items":[]}}\n' "$path" ;;
+    esac
+done
+"#
+    );
+    fs::write(&script_path, script).expect("write fake sg");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&script_path).expect("metadata").permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&script_path, perms).expect("chmod");
+    }
+    (script_dir, script_path)
+}
+
+fn workspace_with_numbered_sources(count: usize) -> (TempDir, PathBuf) {
+    let temp = TempDir::new().expect("workspace tempdir");
+    let src = temp.path().join("src");
+    fs::create_dir_all(&src).expect("src directory");
+    for index in 0..count {
+        fs::write(src.join(format!("{index:03}.rs")), "pub fn alpha() {}\n")
+            .expect("source fixture");
+    }
+    (temp, src)
+}
+
 #[tokio::test]
 #[serial]
 async fn code_search_declaration_stream_reaps_at_candidate_cap() {
@@ -115,6 +156,136 @@ async fn code_search_declaration_candidate_cap_selects_stable_path_prefix() {
     assert!(first.truncated);
     assert_eq!(first.files.len(), 1);
     assert!(first.files[0].path.ends_with("a.rs"), "{first:?}");
+}
+
+#[tokio::test]
+#[serial]
+async fn code_search_declaration_batches_preserve_stable_global_prefix() {
+    let (_script_dir, script_path) = write_arg_order_fake_sg();
+    let _override = set_read_only_ast_grep_override_for_tests(Some(script_path));
+    let file_count = CODE_SEARCH_OUTLINE_PATH_BATCH_SIZE + 2;
+    let candidate_cap = CODE_SEARCH_OUTLINE_PATH_BATCH_SIZE + 1;
+    let (temp, src) = workspace_with_numbered_sources(file_count);
+
+    let outcome = search_declarations_bounded(
+        temp.path(),
+        &src,
+        "alpha",
+        &[AstGrepLanguage::Rust],
+        candidate_cap,
+    )
+    .await
+    .expect("multi-batch declaration search");
+
+    assert_eq!(outcome.files.len(), candidate_cap);
+    assert!(outcome.truncated);
+    assert!(!outcome.stream_complete);
+    for (index, file) in outcome.files.iter().enumerate() {
+        assert!(
+            file.path.ends_with(format!("{index:03}.rs")),
+            "unexpected global prefix at {index}: {file:?}"
+        );
+    }
+}
+
+#[tokio::test]
+#[serial]
+async fn code_search_declaration_batches_keep_complete_file_inventory() {
+    let (_script_dir, script_path) = write_arg_order_fake_sg();
+    let _override = set_read_only_ast_grep_override_for_tests(Some(script_path));
+    let file_count = CODE_SEARCH_OUTLINE_PATH_BATCH_SIZE + 2;
+    let (temp, src) = workspace_with_numbered_sources(file_count);
+
+    let outcome =
+        search_declarations_bounded(temp.path(), &src, "missing", &[AstGrepLanguage::Rust], 1)
+            .await
+            .expect("complete multi-batch declaration search");
+
+    assert_eq!(outcome.files.len(), file_count);
+    assert!(outcome.files.iter().all(|file| file.complete));
+    assert!(outcome.stream_complete);
+    assert!(!outcome.truncated);
+}
+
+#[tokio::test]
+#[serial]
+async fn code_search_declaration_batch_failure_fails_the_component() {
+    let (_script_dir, script_path) = write_failing_second_batch_fake_sg();
+    let _override = set_read_only_ast_grep_override_for_tests(Some(script_path));
+    let (temp, src) = workspace_with_numbered_sources(CODE_SEARCH_OUTLINE_PATH_BATCH_SIZE + 1);
+
+    let error =
+        search_declarations_bounded(temp.path(), &src, "missing", &[AstGrepLanguage::Rust], 1)
+            .await
+            .expect_err("failed batch must fail declaration discovery");
+
+    assert!(error.to_string().contains("definition search failed"));
+}
+
+fn fixed_outline_arg_bytes() -> usize {
+    CODE_SEARCH_OUTLINE_FIXED_ARGS
+        .iter()
+        .map(|arg| arg_bytes(arg))
+        .sum()
+}
+
+#[test]
+fn code_search_outline_path_batches_roll_over_at_byte_cap() {
+    let first = "a.rs".to_owned();
+    let second = "longer.rs".to_owned();
+    let cap = fixed_outline_arg_bytes() + arg_bytes(&first) + arg_bytes(&second) - 1;
+    let mut paths = vec![first.clone(), second.clone()].into_iter().peekable();
+
+    assert_eq!(
+        next_outline_path_batch_with_cap(&mut paths, cap).expect("first batch"),
+        vec![first]
+    );
+    assert_eq!(
+        next_outline_path_batch_with_cap(&mut paths, cap).expect("second batch"),
+        vec![second]
+    );
+}
+
+#[test]
+fn code_search_outline_path_batch_preserves_input_order() {
+    let expected = vec!["c.rs".to_owned(), "a.rs".to_owned(), "b.rs".to_owned()];
+    let cap =
+        fixed_outline_arg_bytes() + expected.iter().map(|path| arg_bytes(path)).sum::<usize>();
+    let mut paths = expected.clone().into_iter().peekable();
+
+    let actual = next_outline_path_batch_with_cap(&mut paths, cap).expect("ordered path batch");
+
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn code_search_outline_path_batches_do_not_drop_paths() {
+    let expected = (0..(CODE_SEARCH_OUTLINE_PATH_BATCH_SIZE + 3))
+        .map(|index| format!("{index:03}.rs"))
+        .collect::<Vec<_>>();
+    let cap = fixed_outline_arg_bytes() + arg_bytes(&expected[0]) * 3;
+    let mut paths = expected.clone().into_iter().peekable();
+    let mut actual = Vec::new();
+
+    while paths.peek().is_some() {
+        actual
+            .extend(next_outline_path_batch_with_cap(&mut paths, cap).expect("bounded path batch"));
+    }
+
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn code_search_outline_oversized_single_path_fails_without_consuming_it() {
+    let oversized = "oversized.rs".to_owned();
+    let cap = fixed_outline_arg_bytes() + arg_bytes(&oversized) - 1;
+    let mut paths = vec![oversized.clone()].into_iter().peekable();
+
+    let error = next_outline_path_batch_with_cap(&mut paths, cap)
+        .expect_err("oversized path must fail the definition component");
+
+    assert!(error.to_string().contains("command argument byte limit"));
+    assert_eq!(paths.next(), Some(oversized));
 }
 
 #[tokio::test]
