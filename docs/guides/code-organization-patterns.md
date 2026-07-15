@@ -47,6 +47,29 @@ mutable access is required; keep the mutable surface area small and explicit.
 For back-references or background tasks that should not keep parent state alive
 forever, prefer `Weak<T>` / `Arc::downgrade()` and exit when upgrade fails.
 
+## FFI and Process-Handle Field Lifetimes
+
+Foreign-function and OS-handle fields need their ownership made explicit in the
+type system and in field comments, because the compiler cannot check them:
+
+- Every `#[repr(C)]` field that holds a raw pointer (`*const`/`*mut`) must name,
+  in a doc comment, which party owns and frees the pointee. A raw-pointer field
+  with no named free owner is a latent leak — treat it as dead code and remove it.
+- When a struct borrows validity from another resource (for example a raw
+  function pointer copied out of a loaded `Library`), the field comment must
+  state the lifetime invariant: the resource outlives `self`, and the struct has
+  no `Drop` of its own when cleanup is delegated to that resource's `Drop`.
+- Prefer delegating cleanup to an existing `Drop` (RAII) over manual free calls.
+  A guard/handle type that drops its OS resource on scope exit is correct even
+  across `?` early returns and panics.
+- Centralize each `unsafe` FFI passage (symbol lookup, pointer decode) into one
+  small safe wrapper with a single `// SAFETY:` note, so the audit surface is
+  one place rather than scattered call sites.
+
+`vtcode-skills/src/native_plugin.rs` (`NativePlugin`, `get_plugin_symbol`) and
+`vtcode-bash-runner/src/process.rs` (`ProcessHandle`, `PtyHandles`) are the
+reference implementations of these rules.
+
 ## Background Task Lifecycle
 
 Every long-lived spawned task must have explicit lifecycle ownership:

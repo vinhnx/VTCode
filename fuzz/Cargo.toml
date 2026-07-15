@@ -36,3 +36,10 @@ path = "fuzz_targets/unified_path_validation.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "dangerous_commands"
+path = "fuzz_targets/dangerous_commands.rs"
+test = false
+doc = false
+bench = false

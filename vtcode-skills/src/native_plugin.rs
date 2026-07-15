@@ -24,8 +24,9 @@
 // - Loading dynamic libraries (Library::new)
 // - Calling FFI functions (version_fn, metadata_fn, execute_fn, free_string_fn)
 // - Converting C strings (CStr::from_ptr)
-// These operations are inherently unsafe and cannot be wrapped in safe abstractions
-// without losing the ability to load arbitrary plugin code.
+// Symbol resolution is centralized in the safe `get_plugin_symbol` wrapper; the
+// remaining raw calls cannot be made safe without losing the ability to load
+// arbitrary plugin code.
 #![allow(unsafe_code)]
 //! - Optional: `README.md`, `scripts/`, `templates/`
 //!
@@ -116,21 +117,6 @@ pub struct PluginMetadata {
     pub thread_safe: bool,
 }
 
-/// C-compatible plugin metadata for FFI
-#[repr(C)]
-#[derive(Debug, Clone)]
-pub struct PluginMetadataFFI {
-    /// Pointer to JSON metadata string
-    pub json_ptr: *const c_char,
-}
-
-/// C-compatible plugin result for FFI
-#[repr(C)]
-pub struct PluginResultFFI {
-    /// Pointer to JSON result string
-    pub json_ptr: *const c_char,
-}
-
 /// Native plugin trait for type-erased plugin operations
 pub trait NativePluginTrait: Send + Sync + std::fmt::Debug {
     /// Get plugin metadata
@@ -145,7 +131,15 @@ pub trait NativePluginTrait: Send + Sync + std::fmt::Debug {
 
 /// A loaded native plugin
 pub struct NativePlugin {
-    /// Plugin library handle (kept alive to prevent unloading)
+    /// Loaded plugin library handle.
+    ///
+    /// # Lifetime invariant
+    ///
+    /// `_library` outlives `self`. `execute_fn` is a raw function pointer copied
+    /// out of this library and is only valid while `_library` remains loaded.
+    /// `NativePlugin` intentionally has no `Drop`: cleanup is delegated to
+    /// `Library`'s own `Drop` (`dlclose`), which runs after `self` is dropped,
+    /// guaranteeing the function pointer is never used after the library unloads.
     _library: Library,
     /// Plugin metadata
     metadata: PluginMetadata,
@@ -208,6 +202,23 @@ fn canonicalize_existing_path(path: &Path, label: &str) -> Result<PathBuf> {
         .with_context(|| format!("Failed to resolve {label} '{}'", path.display()))
 }
 
+/// Resolve a C-ABI symbol from a trusted, already-validated plugin library.
+///
+/// Single wrapper around libloading's symbol lookup; every plugin symbol
+/// passage goes through here. `T` must be a `Copy` function-pointer type. The
+/// returned value is valid only while `library` (`NativePlugin._library`) is loaded.
+fn get_plugin_symbol<T: Copy>(library: &Library, name: &[u8]) -> Result<T> {
+    // SAFETY: symbol name and signature are defined by the plugin ABI; we trust
+    // the library (canonicalized/trusted location). `T: Copy` makes the deref safe.
+    let symbol: Symbol<T> = unsafe { library.get(name) }.with_context(|| {
+        format!(
+            "Failed to load plugin symbol: {:?}",
+            String::from_utf8_lossy(name.strip_suffix(b"\0").unwrap_or(name))
+        )
+    })?;
+    Ok(*symbol)
+}
+
 fn normalize_trusted_dir(path: PathBuf) -> PathBuf {
     canonicalize_existing_path(&path, "trusted plugin directory").unwrap_or_else(|_| {
         if path.is_absolute() {
@@ -224,15 +235,10 @@ impl NativePlugin {
     /// Create a new native plugin from a loaded library
     pub fn new(library: Library, path: PathBuf) -> Result<Self> {
         // Verify ABI version
-        // SAFETY: The symbol name and signature are defined by the plugin ABI.
-        // We trust the library at `lib_path` (already validated as trusted).
-        let version_fn: Symbol<PluginVersionFn> = unsafe {
-            library
-                .get(b"vtcode_plugin_version\0")
-                .context("Failed to load vtcode_plugin_version symbol")?
-        };
+        let version_fn =
+            get_plugin_symbol::<PluginVersionFn>(&library, b"vtcode_plugin_version\0")?;
 
-        // SAFETY: The function pointer was loaded from a validated ABI symbol.
+        // SAFETY: function pointer was loaded from a validated ABI symbol.
         let abi_version = unsafe { version_fn() };
         if abi_version != PLUGIN_ABI_VERSION {
             return Err(anyhow!(
@@ -241,23 +247,14 @@ impl NativePlugin {
         }
 
         // Optional cleanup function for plugin-owned strings.
-        // SAFETY: Symbol name and signature follow the plugin ABI.
-        let free_string_fn = unsafe {
-            library
-                .get::<PluginFreeStringFn>(b"vtcode_plugin_free_string\0")
-                .map(|symbol| *symbol)
-                .ok()
-        };
+        let free_string_fn =
+            get_plugin_symbol::<PluginFreeStringFn>(&library, b"vtcode_plugin_free_string\0").ok();
 
         // Load metadata
-        // SAFETY: Symbol name and signature are defined by the plugin ABI.
-        let metadata_fn: Symbol<PluginMetadataFn> = unsafe {
-            library
-                .get(b"vtcode_plugin_metadata\0")
-                .context("Failed to load vtcode_plugin_metadata symbol")?
-        };
+        let metadata_fn =
+            get_plugin_symbol::<PluginMetadataFn>(&library, b"vtcode_plugin_metadata\0")?;
 
-        // SAFETY: Function pointer loaded from the validated ABI symbol.
+        // SAFETY: function pointer loaded from the validated ABI symbol.
         let metadata_ptr =
             ensure_non_null_c_string_ptr(unsafe { metadata_fn() }, "Plugin metadata function")?;
         let metadata_json = decode_plugin_c_string(
@@ -270,20 +267,14 @@ impl NativePlugin {
             serde_json::from_str(&metadata_json).context("Failed to parse plugin metadata JSON")?;
 
         // Load execute function
-        // SAFETY: Symbol name and signature are defined by the plugin ABI.
-        let execute_fn: Symbol<PluginExecuteFn> = unsafe {
-            library
-                .get(b"vtcode_plugin_execute\0")
-                .context("Failed to load vtcode_plugin_execute symbol")?
-        };
-
-        let execute_fn_ptr = *execute_fn;
+        let execute_fn =
+            get_plugin_symbol::<PluginExecuteFn>(&library, b"vtcode_plugin_execute\0")?;
 
         Ok(Self {
             _library: library,
             metadata: metadata.clone(), // Clone metadata to store it
             path,
-            execute_fn: execute_fn_ptr,
+            execute_fn,
             free_string_fn,
             execution_lock: Mutex::new(()),
             thread_safe: metadata.thread_safe, // Store the thread_safe flag

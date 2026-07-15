@@ -390,7 +390,7 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 - **File**: `docs/guides/code-organization-patterns.md`
   - **Content**: VT Code Code Organization Patterns
-  - **Topics**: Scope Rules, Shared Ownership Rules, Background Task Lifecycle, Channel Boundaries, Error Boundary Conventions
+  - **Topics**: Scope Rules, Shared Ownership Rules, FFI and Process-Handle Field Lifetimes, Background Task Lifecycle, Channel Boundaries
   - **User Questions**: "What can you tell me about VT Code Code Organization Patterns?", "How does Scope Rules work?", "How does Shared Ownership Rules work?"
 
 - **File**: `docs/guides/hooks-guide.md`
