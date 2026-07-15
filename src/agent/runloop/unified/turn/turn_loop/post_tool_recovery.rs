@@ -6,7 +6,8 @@ use vtcode_core::llm::provider as uni;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::{
-    MAX_POST_TOOL_RECOVERY_CYCLES, PLANNING_RECOVERY_SYNTHESIS_FALLBACK, POST_TOOL_RECOVERY_REASON,
+    MAX_POST_TOOL_RECOVERY_CYCLES, PLANNING_RECOVERY_SYNTHESIS_FALLBACK,
+    PLANNING_RECOVERY_SYNTHESIS_FALLBACK_NO_INTERVIEW, POST_TOOL_RECOVERY_REASON,
     POST_TOOL_RECOVERY_REASON_PLAN_MODE, POST_TOOL_RESUME_DIRECTIVE,
     RECOVERY_CONTRACT_VIOLATION_REASON, RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER,
 };
@@ -226,7 +227,10 @@ pub(super) fn complete_turn_after_failed_tool_free_recovery(
         .map(|e| vtcode_commons::classify_anyhow_error(e).is_retryable())
         .unwrap_or(false);
     if let Some(plan_session) = plan_session {
-        if plan_session.is_budget_exhausted() || plan_session.is_recovery_exhausted() {
+        if plan_session.is_budget_exhausted()
+            || plan_session.is_recovery_exhausted()
+            || plan_session.is_interview_denied()
+        {
             // NOTE: use the USER-facing notices here, not the `*_FINALIZE`
             // model directives. No LLM call follows this path, so a model
             // directive pushed as the final answer just shows the user a bare
@@ -236,8 +240,10 @@ pub(super) fn complete_turn_after_failed_tool_free_recovery(
             // `keep planning` to revise it.
             let finalize_message = if plan_session.is_budget_exhausted() {
                 super::PLANNING_BUDGET_EXHAUSTED_USER_NOTICE
-            } else {
+            } else if plan_session.is_recovery_exhausted() {
                 super::PLANNING_RECOVERY_EXHAUSTED_USER_NOTICE
+            } else {
+                PLANNING_RECOVERY_SYNTHESIS_FALLBACK_NO_INTERVIEW
             };
             let mut planning_fallback =
                 plan_mode_recovery_fallback(salvaged_text, finalize_message, working_history);
@@ -248,6 +254,7 @@ pub(super) fn complete_turn_after_failed_tool_free_recovery(
                 stage = failure_stage,
                 budget_exhausted = plan_session.is_budget_exhausted(),
                 recovery_exhausted = plan_session.is_recovery_exhausted(),
+                interview_denied = plan_session.is_interview_denied(),
                 "Plan-mode tool-free recovery failed; finalizing plan from gathered evidence."
             );
             return TurnLoopResult::Completed;

@@ -113,6 +113,14 @@ const RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER: &str = "Recovery synthesis faile
 /// `interview_pending`), so this message tells the user to continue planning
 /// rather than re-state a generic request.
 const PLANNING_RECOVERY_SYNTHESIS_FALLBACK: &str = "Planning research completed, but the final synthesis failed (transient provider error). Your gathered context is preserved and the planning interview will be presented on the next turn — re-state your request or press Enter to continue planning.";
+/// Variant of [`PLANNING_RECOVERY_SYNTHESIS_FALLBACK`] used once
+/// `request_user_input` has been permanently denied by policy this session
+/// (`PlanningWorkflowSessionState::is_interview_denied`). The transient-error
+/// variant above falsely promises "the planning interview will be presented
+/// on the next turn" — a denial recurs on every attempt, so no interview will
+/// ever be shown again. This tells the user the plan will be finalized from
+/// gathered research instead (checkpoint turn_655/turn_660).
+const PLANNING_RECOVERY_SYNTHESIS_FALLBACK_NO_INTERVIEW: &str = "Planning research completed, but the final synthesis failed (transient provider error). Interactive questions are unavailable in this runtime, so the plan will be finalized from the research already gathered — re-state your request or type `implement` / `keep planning` to continue.";
 /// Plan-mode fallback when the session budget is exhausted. Unlike the
 /// transient-error variant, this tells the agent to finalize the plan NOW
 /// from the evidence already gathered — the budget is spent and no further
@@ -463,7 +471,6 @@ pub(crate) async fn run_turn_loop(
     use crate::agent::runloop::unified::turn::turn_processing::{
         HandleTurnProcessingResultParams, execute_llm_request, handle_turn_processing_result,
         maybe_force_planning_workflow_interview, process_llm_response,
-        should_attempt_dynamic_interview_generation, synthesize_planning_workflow_interview_args,
     };
 
     // Initialize the outcome result
@@ -478,7 +485,11 @@ pub(crate) async fn run_turn_loop(
     }
 
     // Optimization: Extract all frequently accessed config values once
-    let turn_config = extract_turn_config(ctx.vt_cfg, ctx.is_planning_active());
+    let turn_config = extract_turn_config(
+        ctx.vt_cfg,
+        ctx.is_planning_active(),
+        ctx.renderer.supports_inline_ui(),
+    );
 
     let mut step_count = 0;
     let mut current_max_tool_loops = turn_config.max_tool_loops;
@@ -977,41 +988,17 @@ pub(crate) async fn run_turn_loop(
         // be executed — it only trips the recovery contract guard and collapses
         // the turn to a dead-end fallback. Skip interview synthesis/forcing
         // here; the recovery synthesis can still produce a valid text answer.
-        if turn_config.request_user_input_enabled && !tool_free_recovery {
-            let should_attempt_synthesis = {
-                turn_processing_ctx.is_planning_active()
-                    && should_attempt_dynamic_interview_generation(
-                        &processing_result,
-                        response.content.as_deref(),
-                        turn_processing_ctx.session_stats,
-                        turn_processing_ctx.plan_session,
-                    )
-            };
-            let synthesized_interview_args = if should_attempt_synthesis {
-                synthesize_planning_workflow_interview_args(
-                    turn_processing_ctx.provider_client,
-                    &active_model,
-                    turn_processing_ctx.working_history,
-                    response.content.as_deref(),
-                    turn_processing_ctx.session_stats,
-                    turn_processing_ctx.plan_session,
-                    Some(turn_processing_ctx.tool_registry.planning_workflow_state()),
-                )
-                .await
-            } else {
-                None
-            };
-
-            if turn_processing_ctx.is_planning_active() {
-                processing_result = maybe_force_planning_workflow_interview(
-                    processing_result,
-                    response.content.as_deref(),
-                    turn_processing_ctx.session_stats,
-                    turn_processing_ctx.plan_session,
-                    turn_processing_ctx.working_history.len(),
-                    synthesized_interview_args,
-                );
-            }
+        if turn_config.request_user_input_enabled
+            && !tool_free_recovery
+            && turn_processing_ctx.is_planning_active()
+        {
+            processing_result = maybe_force_planning_workflow_interview(
+                processing_result,
+                response.content.as_deref(),
+                turn_processing_ctx.session_stats,
+                turn_processing_ctx.plan_session,
+                turn_processing_ctx.working_history.len(),
+            );
         }
 
         // Restore input status if there are no tool calls (turn is completing)

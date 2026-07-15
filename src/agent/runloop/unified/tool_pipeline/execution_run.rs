@@ -11,7 +11,6 @@ use vtcode_core::exec::events::ToolCallStatus;
 use vtcode_core::hooks::LifecycleHookEngine;
 use vtcode_core::tools::ToolInvocationId;
 use vtcode_core::tools::command_args;
-use vtcode_core::tools::handlers::planning_workflow::PlanLifecyclePhase;
 use vtcode_core::tools::registry::{ExecSettlementMode, ToolExecutionError};
 use vtcode_core::tools::tool_intent;
 
@@ -258,12 +257,10 @@ pub(crate) async fn run_tool_call_with_args(
         }
     }
 
-    let request_user_input_enabled = FeatureSet::from_config(vt_cfg)
-        .request_user_input_enabled(ctx.tool_registry.is_planning_active(), true);
-    if ctx.tool_registry.is_planning_active() && name == tools::REQUEST_USER_INPUT {
-        ctx.tool_registry
-            .set_planning_phase(PlanLifecyclePhase::InterviewPending);
-    }
+    let request_user_input_enabled = FeatureSet::from_config(vt_cfg).request_user_input_enabled(
+        ctx.tool_registry.is_planning_active(),
+        ctx.renderer.supports_inline_ui(),
+    );
     if let Some(hitl_result) = execute_hitl_tool(
         name,
         ctx.handle,
@@ -275,10 +272,6 @@ pub(crate) async fn run_tool_call_with_args(
     )
     .await
     {
-        if ctx.tool_registry.is_planning_active() && name == tools::REQUEST_USER_INPUT {
-            ctx.tool_registry
-                .set_planning_phase(PlanLifecyclePhase::ActiveDrafting);
-        }
         let status = match hitl_result {
             Ok(value) => ToolExecutionStatus::Success {
                 output: value,

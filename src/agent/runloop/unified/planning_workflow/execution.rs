@@ -6,7 +6,6 @@ use vtcode_config::{builtin_primary_auto_agent, builtin_primary_build_agent};
 use vtcode_core::config::constants::tools;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::core::interfaces::session::PlanningEntrySource;
-use vtcode_core::tools::handlers::planning_workflow::PlanLifecyclePhase;
 use vtcode_core::tools::registry::ExecSettlementMode;
 use vtcode_ui::tui::app::PlanContent;
 
@@ -195,8 +194,6 @@ pub(crate) async fn handle_finish_planning(
             require_confirmation,
         ) {
             FinishPlanningDisposition::ConfirmReview => {
-                ctx.tool_registry
-                    .set_planning_phase(PlanLifecyclePhase::ReviewPending);
                 return Some(
                     handle_pending_confirmation(ctx, output, ctrl_c_state, ctrl_c_notify).await,
                 );
@@ -323,33 +320,23 @@ async fn handle_pending_confirmation(
                     plan_confirmation_outcome_to_pending_agent(&outcome)
                 }
                 PlanConfirmationOutcome::EditPlan => {
-                    ctx.tool_registry
-                        .set_planning_phase(PlanLifecyclePhase::DraftReady);
                     tracing::info!(
                         target: "vtcode.planning_workflow",
                         "User requested plan edit, remaining in Planning workflow"
                     );
                     None
                 }
-                PlanConfirmationOutcome::Cancel => {
-                    ctx.tool_registry
-                        .set_planning_phase(PlanLifecyclePhase::DraftReady);
-                    None
-                }
+                PlanConfirmationOutcome::Cancel => None,
             };
             (plan_confirmation_outcome_to_json(&outcome), switch)
         }
-        Err(e) => {
-            ctx.tool_registry
-                .set_planning_phase(PlanLifecyclePhase::DraftReady);
-            (
-                serde_json::json!({
-                    "status": "error",
-                    "error": format!("Plan confirmation failed: {}", e)
-                }),
-                None,
-            )
-        }
+        Err(e) => (
+            serde_json::json!({
+                "status": "error",
+                "error": format!("Plan confirmation failed: {}", e)
+            }),
+            None,
+        ),
     };
 
     let mut final_outcome = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
@@ -389,9 +376,6 @@ async fn handle_enter_pending_confirmation(
     ctrl_c_notify: &Arc<Notify>,
     max_tool_retries: usize,
 ) -> ToolPipelineOutcome {
-    ctx.tool_registry
-        .set_planning_phase(PlanLifecyclePhase::EnterPendingApproval);
-
     let description = output
         .get("description")
         .and_then(Value::as_str)
@@ -416,8 +400,6 @@ async fn handle_enter_pending_confirmation(
     };
 
     if decision == StartPlanningDecision::Stay {
-        ctx.tool_registry
-            .set_planning_phase(PlanLifecyclePhase::Off);
         return ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
             output: json!({
                 "status": "cancelled",

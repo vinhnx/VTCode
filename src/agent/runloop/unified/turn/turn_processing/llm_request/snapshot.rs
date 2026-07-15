@@ -99,8 +99,8 @@ pub(super) fn capture_turn_request_snapshot(
     );
     let prompt_cache_shaping_mode =
         resolve_prompt_cache_shaping_mode(&provider_name, prompt_cache_config);
-    let request_user_input_enabled =
-        FeatureSet::from_config(ctx.vt_cfg).request_user_input_enabled(planning_active, true);
+    let request_user_input_enabled = FeatureSet::from_config(ctx.vt_cfg)
+        .request_user_input_enabled(planning_active, ctx.renderer.supports_inline_ui());
     let active_primary_agent = ctx.active_primary_agent.active().clone();
     let active_model = resolve_effective_request_model(active_model, &active_primary_agent);
     let context_window_size = ctx.provider_client.effective_context_size(&active_model);

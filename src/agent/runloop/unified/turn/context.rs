@@ -36,7 +36,7 @@ use vtcode_core::exec::events::{
 use vtcode_core::hooks::{LifecycleHookEngine, SessionEndReason};
 use vtcode_core::llm::provider as uni;
 use vtcode_core::llm::providers::ReasoningSegment;
-use vtcode_core::tools::handlers::planning_workflow::{PlanLifecyclePhase, persist_plan_draft};
+use vtcode_core::tools::handlers::planning_workflow::persist_plan_draft;
 use vtcode_core::tools::registry::ToolExecutionError;
 use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_ui::tui::app::InlineHandle;

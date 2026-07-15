@@ -4,7 +4,8 @@ use super::system::{
     PLANNING_WORKFLOW_EXIT_INSTRUCTION_LINE, PLANNING_WORKFLOW_INTERVIEW_POLICY_LINE,
     PLANNING_WORKFLOW_NO_AUTO_EXIT_LINE, PLANNING_WORKFLOW_NO_REQUEST_USER_INPUT_POLICY_LINE,
     PLANNING_WORKFLOW_PLAN_QUALITY_LINE, PLANNING_WORKFLOW_READ_ONLY_HEADER,
-    PLANNING_WORKFLOW_READ_ONLY_NOTICE_LINE, PLANNING_WORKFLOW_TASK_TRACKER_LINE,
+    PLANNING_WORKFLOW_READ_ONLY_NOTICE_LINE, PLANNING_WORKFLOW_RESEARCH_SCOPE_LINE,
+    PLANNING_WORKFLOW_TASK_TRACKER_LINE,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -64,6 +65,8 @@ fn append_planning_workflow_notice(prompt: &mut String, request_user_input_enabl
     prompt.push('\n');
     prompt.push_str(PLANNING_WORKFLOW_PLAN_QUALITY_LINE);
     prompt.push('\n');
+    prompt.push_str(PLANNING_WORKFLOW_RESEARCH_SCOPE_LINE);
+    prompt.push('\n');
     prompt.push_str(if request_user_input_enabled {
         PLANNING_WORKFLOW_INTERVIEW_POLICY_LINE
     } else {
@@ -82,6 +85,7 @@ mod tests {
     use crate::prompts::system::{
         PLANNING_WORKFLOW_INTERVIEW_POLICY_LINE,
         PLANNING_WORKFLOW_NO_REQUEST_USER_INPUT_POLICY_LINE, PLANNING_WORKFLOW_READ_ONLY_HEADER,
+        PLANNING_WORKFLOW_RESEARCH_SCOPE_LINE,
     };
 
     #[test]
@@ -135,5 +139,27 @@ mod tests {
 
         assert!(prompt.contains("# FULL-AUTO: Complete task autonomously until done or blocked."));
         assert!(prompt.contains("`request_user_input` is unavailable in this runtime"));
+    }
+
+    /// Regression guard for checkpoint turn_647: a simple planning request
+    /// burned 70+ tool calls until the wall-clock budget was exhausted with
+    /// no plan delivered. The research-scope line must always be present
+    /// while planning is active, regardless of `request_user_input`
+    /// availability, so the model has a concrete signal to stop researching
+    /// and draft.
+    #[test]
+    fn planning_workflow_always_includes_research_scope_guidance() {
+        for request_user_input_enabled in [true, false] {
+            let mut prompt = "Base prompt".to_string();
+            append_runtime_mode_sections(
+                &mut prompt,
+                RuntimePromptContract {
+                    planning_active: true,
+                    request_user_input_enabled,
+                    ..RuntimePromptContract::default()
+                },
+            );
+            assert!(prompt.contains(PLANNING_WORKFLOW_RESEARCH_SCOPE_LINE));
+        }
     }
 }

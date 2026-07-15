@@ -35,6 +35,7 @@ const UNLIMITED_TOOL_LOOPS: usize = usize::MAX;
 pub(super) fn extract_turn_config(
     vt_cfg: Option<&VTCodeConfig>,
     planning_active: bool,
+    interactive_session: bool,
 ) -> PrecomputedTurnConfig {
     let features = FeatureSet::from_config(vt_cfg);
     vt_cfg
@@ -46,13 +47,15 @@ pub(super) fn extract_turn_config(
                 DEFAULT_MAX_REPEATED_TOOL_CALLS
             },
             max_session_turns: cfg.agent.max_conversation_turns,
-            request_user_input_enabled: features.request_user_input_enabled(planning_active, true),
+            request_user_input_enabled: features
+                .request_user_input_enabled(planning_active, interactive_session),
         })
         .unwrap_or(PrecomputedTurnConfig {
             max_tool_loops: resolve_tool_loop_limit(DEFAULT_MAX_TOOL_LOOPS, planning_active),
             tool_repeat_limit: DEFAULT_MAX_REPEATED_TOOL_CALLS,
             max_session_turns: DEFAULT_MAX_CONVERSATION_TURNS,
-            request_user_input_enabled: features.request_user_input_enabled(planning_active, true),
+            request_user_input_enabled: features
+                .request_user_input_enabled(planning_active, interactive_session),
         })
 }
 
@@ -869,7 +872,7 @@ mod tests {
     fn extract_turn_config_applies_planning_workflow_loop_floor() {
         let mut cfg = VTCodeConfig::default();
         cfg.tools.max_tool_loops = 20;
-        let turn_cfg = extract_turn_config(Some(&cfg), true);
+        let turn_cfg = extract_turn_config(Some(&cfg), true, true);
         assert_eq!(turn_cfg.max_tool_loops, PLANNING_WORKFLOW_MIN_TOOL_LOOPS);
     }
 
@@ -877,7 +880,7 @@ mod tests {
     fn extract_turn_config_keeps_non_planning_workflow_loop_limit() {
         let mut cfg = VTCodeConfig::default();
         cfg.tools.max_tool_loops = 20;
-        let turn_cfg = extract_turn_config(Some(&cfg), false);
+        let turn_cfg = extract_turn_config(Some(&cfg), false, true);
         assert_eq!(turn_cfg.max_tool_loops, 20);
     }
 
@@ -913,7 +916,7 @@ mod tests {
         let mut cfg = VTCodeConfig::default();
         cfg.chat.ask_questions.enabled = false;
 
-        let turn_cfg = extract_turn_config(Some(&cfg), true);
+        let turn_cfg = extract_turn_config(Some(&cfg), true, true);
         assert!(!turn_cfg.request_user_input_enabled);
     }
 

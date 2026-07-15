@@ -304,6 +304,28 @@ async fn handle_failure<'a>(
     ) || is_blocked_or_denied_failure(error_str);
     log_structured_failure(tool_name, error, hint.as_deref(), "Tool execution failed");
 
+    // `request_user_input` failures caused by a permanent capability/policy
+    // denial (e.g. the tool is unavailable in this runtime) must never be
+    // retried — unlike a user cancelling the modal, the denial recurs on
+    // every attempt. Record it so the planning workflow stops re-forcing the
+    // interview instead of looping (checkpoint turn_655/turn_660).
+    //
+    // IMPORTANT: only fire for genuine policy/permission denials — NOT for
+    // `InvalidParameters` (the model passed bad args, a transient issue it
+    // can fix on retry). Using the broader `blocked_or_denied_failure` here
+    // would permanently disable interviews due to a single malformed call.
+    let is_permanent_request_user_input_denial = matches!(
+        error.category,
+        ErrorCategory::PermissionDenied
+            | ErrorCategory::PolicyViolation
+            | ErrorCategory::PlanningPolicyViolation
+    );
+    if tool_name == vtcode_core::config::constants::tools::REQUEST_USER_INPUT
+        && is_permanent_request_user_input_denial
+    {
+        t_ctx.ctx.plan_session.mark_interview_denied();
+    }
+
     if is_planning_active_denial {
         let consecutive_blocked_tool_calls = t_ctx.ctx.harness_state.consecutive_blocked_tool_calls;
         emit_turn_metric_log(

@@ -1,7 +1,6 @@
 use crate::agent::runloop::unified::state::SessionStats;
 use anyhow::Result;
 use vtcode_core::core::interfaces::session::PlanningEntrySource;
-use vtcode_core::tools::handlers::planning_workflow::PlanLifecyclePhase;
 use vtcode_core::tools::registry::ToolRegistry;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_ui::tui::app::InlineHandle;
@@ -24,6 +23,14 @@ pub(crate) struct PlanningWorkflowSessionState {
     /// turn, which would re-research the still-huge context and fail again —
     /// looping forever across turns.
     recovery_exhausted: bool,
+    /// Set when a `request_user_input` tool call is denied by a permanent
+    /// capability/policy failure (e.g. the tool is not available in the
+    /// current runtime) rather than the user cancelling the modal. Unlike
+    /// cancellation, a policy denial will recur on every retry — this flag
+    /// permanently stops the interview from being re-forced for the rest of
+    /// the planning session, falling back to autonomous plan synthesis
+    /// instead of looping (see checkpoint turn_655/turn_660).
+    interview_denied: bool,
 }
 
 impl PlanningWorkflowSessionState {
@@ -36,12 +43,14 @@ impl PlanningWorkflowSessionState {
         self.entry_source = Some(entry_source);
         self.budget_exhausted = false;
         self.recovery_exhausted = false;
+        self.interview_denied = false;
     }
 
     pub(crate) fn exit(&mut self) {
         self.entry_source = None;
         self.budget_exhausted = false;
         self.recovery_exhausted = false;
+        self.interview_denied = false;
     }
 
     #[cfg(test)]
@@ -110,6 +119,19 @@ impl PlanningWorkflowSessionState {
     pub(crate) fn is_recovery_exhausted(&self) -> bool {
         self.recovery_exhausted
     }
+
+    /// Record that `request_user_input` was denied by a permanent
+    /// capability/policy failure this session. Once set, the interview must
+    /// never be re-forced — see the field doc comment for why this differs
+    /// from `record_interview_result(0, cancelled=true)`.
+    pub(crate) fn mark_interview_denied(&mut self) {
+        self.interview_denied = true;
+        self.interview_pending = false;
+    }
+
+    pub(crate) fn is_interview_denied(&self) -> bool {
+        self.interview_denied
+    }
 }
 
 pub(crate) const PLANNING_WORKFLOW_REVIEW_AND_EXECUTE_HINT: &str = "Planning workflow: review the plan, then type `implement` (or `yes`/`continue`/`go`/`start`) to execute.";
@@ -152,7 +174,6 @@ pub(crate) async fn transition_to_planning_workflow(
     // `enable_planning()` above already sets the active flag on
     // `PlanningWorkflowState` (the single source of truth), so we do not call
     // `plan_state.enable()` again here.
-    tool_registry.set_planning_phase(PlanLifecyclePhase::ActiveDrafting);
     if reset_plan_file {
         plan_state.set_plan_file(None).await;
     }
@@ -211,6 +232,69 @@ mod tests {
         state.exit();
         state.enter(PlanningEntrySource::UserRequest);
         assert_eq!(state.interview_cycles_completed(), 0);
+        assert!(!state.last_interview_cancelled());
+    }
+
+    #[test]
+    fn mark_interview_denied_is_permanent_until_reset() {
+        let mut state = PlanningWorkflowSessionState::default();
+        state.enter(PlanningEntrySource::UserRequest);
+        assert!(!state.is_interview_denied());
+
+        state.mark_interview_pending();
+        state.mark_interview_denied();
+        assert!(state.is_interview_denied());
+        // A denial also clears any pending interview request — re-forcing it
+        // would just repeat the same policy failure.
+        assert!(!state.interview_pending());
+
+        // Re-entering the planning workflow (a fresh session) clears the flag.
+        state.exit();
+        state.enter(PlanningEntrySource::UserRequest);
+        assert!(!state.is_interview_denied());
+    }
+
+    #[test]
+    fn budget_and_recovery_exhaustion_cleared_by_enter_and_exit() {
+        let mut state = PlanningWorkflowSessionState::default();
+        state.enter(PlanningEntrySource::UserRequest);
+
+        state.mark_budget_exhausted();
+        state.mark_recovery_exhausted();
+        assert!(state.is_budget_exhausted());
+        assert!(state.is_recovery_exhausted());
+
+        // exit() clears both exhaustion flags.
+        state.exit();
+        assert!(!state.is_budget_exhausted());
+        assert!(!state.is_recovery_exhausted());
+
+        // Re-apply and verify enter() also clears them.
+        state.mark_budget_exhausted();
+        state.mark_recovery_exhausted();
+        state.enter(PlanningEntrySource::UserRequest);
+        assert!(!state.is_budget_exhausted());
+        assert!(!state.is_recovery_exhausted());
+    }
+
+    #[test]
+    fn record_interview_result_treats_zero_answered_as_cancelled() {
+        let mut state = PlanningWorkflowSessionState::default();
+        state.enter(PlanningEntrySource::UserRequest);
+
+        // answered_questions=0 with cancelled=false should still count as cancelled.
+        state.record_interview_result(0, false);
+        assert!(state.last_interview_cancelled());
+        assert_eq!(state.interview_cycles_completed(), 0);
+    }
+
+    #[test]
+    fn record_interview_result_clamps_answered_questions_to_three() {
+        let mut state = PlanningWorkflowSessionState::default();
+        state.enter(PlanningEntrySource::UserRequest);
+
+        state.record_interview_result(10, false);
+        assert_eq!(state.interview_cycles_completed(), 1);
         assert!(!state.last_interview_cancelled());
     }
 }

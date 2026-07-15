@@ -322,7 +322,7 @@ async fn test_run_tool_call_prevalidated_blocks_mutation_in_planning_workflow() 
     let permission_cache_arc = Arc::new(tokio::sync::RwLock::new(ToolPermissionCache::new()));
     {
         let mut cache = permission_cache_arc.write().await;
-        cache.cache_grant(tools::WRITE_FILE.to_string(), PermissionGrant::Permanent);
+        cache.cache_grant(tools::APPLY_PATCH.to_string(), PermissionGrant::Permanent);
     }
 
     let result_cache = Arc::new(tokio::sync::RwLock::new(ToolResultCache::new(10)));
@@ -361,13 +361,12 @@ async fn test_run_tool_call_prevalidated_blocks_mutation_in_planning_workflow() 
     );
 
     let payload = serde_json::to_string(&json!({
-        "path": "notes.txt",
-        "content": "hello planning workflow"
+        "input": "*** Begin Patch\n*** Add File: notes.txt\n+hello planning workflow\n*** End Patch\n"
     }))
     .expect("serialize tool args");
     let call = vtcode_core::llm::provider::ToolCall::function(
-        "call_plan_write".to_string(),
-        tools::WRITE_FILE.to_string(),
+        "call_plan_patch".to_string(),
+        tools::APPLY_PATCH.to_string(),
         payload,
     );
     let ctrl_c_state = Arc::new(CtrlCState::new());
@@ -399,6 +398,7 @@ async fn test_run_tool_call_prevalidated_blocks_mutation_in_planning_workflow() 
         }
         other => panic!("Expected planning workflow failure, got: {other:?}"),
     }
+    assert!(!test_ctx.workspace.join("notes.txt").exists());
     assert!(registry.is_planning_active());
     assert!(registry.planning_workflow_state().is_active());
 }

@@ -115,7 +115,7 @@ remove local models via LM Studio / Ollama / llama.ccp support. Please note that
 
 ===
 
-keep the plan crisp and not over-engineer,
+keep the vtcode plan crisp and not over-engineer
 
 ==
 
@@ -486,21 +486,3 @@ expect 50-150 ms shaved on Copilot hosts.
     targeted regressions.
 
 ===
-
-check and fix vtcode plan mode
-
-"Now I have a clear plan format precedent. Let me write the proposed plan
-to a new file.
-Tool budget exhausted. I'll synthesize and present the final plan inline
-per the Planning workflow contract.
-Tool budget exhausted. I have enough information to finalize the plan in
-the response. Here is the proposed plan based on my research.
-――――――――――――――――――――――――――――――――
-The tool budget is exhausted. I'll synthesize the final plan from the
-evidence already collected. Below is the proposed plan.
-――――――――――――――――――――――――――――――――
-""
-
-the agent always error at plan mode summarization proposal and then it stop and exhaused.
-
-/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/checkpoints/turn_647.json

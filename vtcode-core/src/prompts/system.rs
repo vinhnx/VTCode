@@ -29,14 +29,24 @@ pub const PLANNING_WORKFLOW_READ_ONLY_NOTICE_LINE: &str = "Mutating file edits a
 /// Shared Planning workflow instruction line for transitioning to implementation.
 pub const PLANNING_WORKFLOW_EXIT_INSTRUCTION_LINE: &str =
     "Call `finish_planning` to present the plan. Mutating tools stay disabled until user approves.";
-/// Shared Planning workflow instruction line for decision-complete planning output.
 /// Compact, spec-like plan quality line. The previous wording ("summary,
 /// steps, test cases, assumptions") let the model emit verbosely large plans
 /// that blew the generation token budget and were cut off mid-`<proposed_plan>`
 /// — which previously re-triggered the recovery loop forever. This mandates a
 /// tight spec that fits a small token budget and prefers file:symbol
-/// references over prose.
-pub const PLANNING_WORKFLOW_PLAN_QUALITY_LINE: &str = "Keep plans compact and spec-like. Emit ONE `<proposed_plan>` that fits ~1500 tokens: a 1-3 line Summary; a tight numbered step list where each step is `Action -> files/symbols -> verify:`; one Validation line (build/lint + test commands); Assumptions as short bullets. Prefer file:symbol references over prose. Ask only material blocking questions; unresolved: `Next open decision: ...`.";
+/// references over prose. It also forbids wrapping those references in
+/// markdown link syntax or editor/IDE URI schemes (e.g. `vscode-file://`,
+/// `file://`) — plans are read in terminals and other non-hyperlink
+/// surfaces, and a bare `path/to/file.rs:42` reference is portable while a
+/// broken pseudo-link pointing at the editor binary itself is not.
+pub const PLANNING_WORKFLOW_PLAN_QUALITY_LINE: &str = "Keep plans compact and spec-like. Emit ONE `<proposed_plan>` that fits ~1500 tokens: a 1-3 line Summary; a tight numbered step list where each step is `Action -> files/symbols -> verify:`; one Validation line (build/lint + test commands); Assumptions as short bullets. Prefer file:symbol references over prose, written as plain text or inline code (e.g. `src/main.rs:42`) — never as markdown links or editor/IDE URIs (no `[label](url)`, no `vscode-file://`/`file://` schemes). Ask only material blocking questions; unresolved: `Next open decision: ...`.";
+/// Scale research effort to the request instead of always exhaustively
+/// enumerating the repository. Checkpoint turn_647 showed a "make a simple
+/// plan to improve launch time" request burn 70+ tool calls across dozens of
+/// files until the turn's tool wall-clock budget was exhausted with no plan
+/// delivered — the model had no signal to stop researching and draft. This
+/// line gives it a concrete budget to self-regulate against.
+pub const PLANNING_WORKFLOW_RESEARCH_SCOPE_LINE: &str = "Scale research to the request: for a narrow or simple ask, ~5-10 targeted reads/searches is usually enough before drafting `<proposed_plan>` — do not exhaustively enumerate the whole repository. For a broad or ambiguous ask, research proportionally more, but stop and draft as soon as scope/decomposition/verification decisions are closed.";
 /// Shared Planning workflow policy line requiring context-aware interview closure before final plans.
 pub const PLANNING_WORKFLOW_INTERVIEW_POLICY_LINE: &str = "Use `request_user_input` for interview questions informed by repo context. Continue until scope/decomposition/verification decisions are closed before finalizing `<proposed_plan>`.";
 /// Shared Planning workflow policy line for runtimes where `request_user_input` is unavailable.
@@ -1121,6 +1131,19 @@ mod tests {
             Some(SystemPromptMode::Specialized)
         );
         assert_eq!(SystemPromptMode::parse("invalid"), None);
+    }
+
+    /// Regression guard: `PLANNING_WORKFLOW_PLAN_QUALITY_LINE` must keep
+    /// instructing the model to write file:symbol references as plain text
+    /// / inline code, not as markdown links or editor/IDE URI schemes (a
+    /// model was observed emitting `vscode-file://` pseudo-links pointing at
+    /// the editor binary instead of the referenced repo file).
+    #[test]
+    fn plan_quality_line_forbids_markdown_link_file_references() {
+        let line = PLANNING_WORKFLOW_PLAN_QUALITY_LINE;
+        assert!(line.contains("never as markdown links or editor/IDE URIs"));
+        assert!(line.contains("vscode-file://"));
+        assert!(line.contains("plain text or inline code"));
     }
 
     #[test]

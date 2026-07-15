@@ -2,6 +2,20 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.135.9 - 2026-07-14
+
+### Highlights
+#### Bug Fixes
+
+- Add missing cfg(unix) attribute for env_lock import (ff652e62) (@vinhnx)
+### Other Changes
+#### Other
+
+- Refactor/tools  (b5e2b34f) (@kernitus)
+- Fix plan mode (4ceb862d)
+#### Refactors
+
+- Unify plan-mode phrases and decompose workflow monolith (a505dd77)
 ## 0.135.8 - 2026-07-14
 
 ### Highlights

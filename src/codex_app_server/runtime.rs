@@ -20,6 +20,7 @@ use vtcode_core::core::interfaces::session::{
 };
 use vtcode_core::core::threads::build_thread_archive_metadata;
 use vtcode_core::llm::provider::{FinishReason, LLMResponse, MessageRole};
+use vtcode_core::planning;
 use vtcode_core::ui::terminal;
 use vtcode_core::utils::session_archive::{
     SessionArchive, SessionArchiveMetadata, SessionMessage, SessionProgressArgs,
@@ -1024,36 +1025,20 @@ fn normalize_planning_input(input: &str, planning_active: &mut bool) -> (String,
     (user_input, turn_input)
 }
 
-/// Canonical alias set that clears the planning-active flag and switches the
-/// session to execution mode.
+/// Whether the input is an alias that clears the planning-active flag and
+/// switches the session to execution mode.
 ///
-/// Both branches of the handoff (`should_switch_to_execution_mode` and
-/// `is_planning_active_implementation_alias`) consult this one set so they can
-/// never drift apart. `exit planning workflow` is an alias that clears the flag
-/// without rewriting the turn input (it is not an "implement" intent), so it is
-/// a flag-clearing alias only — see [`implementation_alias_matches`].
-const EXECUTION_MODE_ALIASES: &[&str] = &["implement", "continue", "go", "start", "yes"];
-
-/// Additional aliases that clear the planning-active flag but are *not*
-/// implementation intents — they should pass through verbatim as the turn input
-/// rather than being rewritten to the implementation prompt.
-const FLAG_CLEARING_ONLY_ALIASES: &[&str] = &["exit planning workflow"];
-
-fn execution_alias_match(input: &str) -> Option<&'static str> {
-    let normalized = input.trim().to_ascii_lowercase();
-    EXECUTION_MODE_ALIASES
-        .iter()
-        .chain(FLAG_CLEARING_ONLY_ALIASES.iter())
-        .copied()
-        .find(|alias| *alias == normalized)
-}
-
+/// The alias literals live in `vtcode_core::planning` so they stay in lockstep
+/// with the runloop's `detect_planning_intent` (previously the bridge silently
+/// missed `approve`/`lgtm`/`ship it`/`implement now`).
 fn should_switch_to_execution_mode(input: &str) -> bool {
-    execution_alias_match(input).is_some()
+    planning::is_execution_mode_alias(input)
 }
 
+/// Whether the input is an *implementation* alias (rewritten to the execution
+/// prompt) vs. a flag-clearing-only alias (passed through verbatim).
 fn is_planning_active_implementation_alias(input: &str) -> bool {
-    execution_alias_match(input).is_some_and(|alias| EXECUTION_MODE_ALIASES.contains(&alias))
+    planning::is_implementation_alias(input)
 }
 
 #[cfg(test)]
@@ -1213,13 +1198,40 @@ mod tests {
     }
 
     #[test]
+    fn normalize_planning_input_recognizes_approval_aliases() {
+        // Regression: the bridge previously only knew `implement|continue|go|
+        // start|yes`, so a Codex server user typing `approve`/`lgtm`/`ship it`/
+        // `implement now` stayed stuck in plan mode. These now derive from
+        // `vtcode_core::planning` and must clear the flag + rewrite to the
+        // implementation prompt.
+        for alias in [
+            "approve",
+            "approved",
+            "lgtm",
+            "accepted",
+            "ship it",
+            "implement now",
+            "start implementing",
+            "execute the plan",
+        ] {
+            let mut planning_active = true;
+            let (user_input, turn_input) = normalize_planning_input(alias, &mut planning_active);
+            assert_eq!(user_input, alias, "user_input for {alias}");
+            assert_eq!(
+                turn_input, PLANNING_WORKFLOW_IMPLEMENTATION_PROMPT,
+                "turn_input rewrite for {alias}"
+            );
+            assert!(!planning_active, "flag cleared for {alias}");
+        }
+    }
+
+    #[test]
     fn normalize_planning_input_exit_planning_workflow_clears_flag_without_rewrite() {
         // "exit planning workflow" clears the planning-active flag (it is a
         // flag-clearing alias) but is *not* an implementation intent, so it must
         // pass through verbatim rather than being rewritten to the
-        // implementation prompt. This is the one case where the two alias sets
-        // previously disagreed; both now derive from `EXECUTION_MODE_ALIASES` +
-        // `FLAG_CLEARING_ONLY_ALIASES`.
+        // implementation prompt. Both alias sets now derive from
+        // `vtcode_core::planning`.
         let mut planning_active = true;
         let (user_input, turn_input) =
             normalize_planning_input("exit planning workflow", &mut planning_active);

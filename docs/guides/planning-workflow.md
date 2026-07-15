@@ -86,34 +86,60 @@ prefer `file:symbol` references over narrative. This bound exists because an
 overly verbose plan is truncated at the model's output-token limit (cut off
 mid-plan) and must then be condensed and re-emitted.
 
+File references must be plain text or inline code, never markdown links or
+editor/IDE URIs — plans are read in terminals and other non-hyperlink
+surfaces:
+
+```markdown
+Correct: `src/main.rs:42` or src/main.rs:42
+Incorrect: [main.rs:42](vscode-file://vscode-app/.../workbench.html)
+Incorrect: [main.rs](file:///Users/you/repo/src/main.rs#L42)
+```
+
 ```markdown
 Repository facts checked:
+
 - [file:symbol or behaviour confirmed from the repo]
 
 Next open decision: [if any], otherwise: No remaining scope decisions.
 
 <proposed_plan>
+
 # [Task Title]
 
 ## Summary
+
 [1-3 lines: goal, user impact, what changes / what does not]
 
 ## Steps
+
 1. [Action] -> files/symbols -> verify: [check]
 2. [Action] -> files/symbols -> verify: [check]
 
 ## Validation
+
 - build/lint: [detected toolchain command]
 - tests: [detected toolchain command]
 - behaviour: [targeted check]
 
 ## Assumptions
+
 - [assumption or default chosen]
 - [out-of-scope item intentionally not changed]
-</proposed_plan>
+  </proposed_plan>
 ```
 
 Only `Next open decision` is used as the explicit reopen marker for follow-up planning.
+
+### Research Scope
+
+Research effort should scale with the request. For a narrow or simple ask,
+a handful of targeted reads/searches (roughly 5-10) is usually enough before
+drafting `<proposed_plan>` — exhaustively enumerating the whole repository
+for a simple request wastes the turn's tool-call and wall-clock budget and
+can exhaust it before a plan is produced. For a broad or ambiguous ask,
+research proportionally more, but stop and draft as soon as the
+scope/decomposition/verification decisions are closed.
 
 ## Review Gate
 

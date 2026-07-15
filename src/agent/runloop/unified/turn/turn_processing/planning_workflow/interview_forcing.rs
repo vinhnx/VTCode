@@ -1,10 +1,9 @@
-use serde_json::{Value, json};
+use serde_json::json;
 use vtcode_core::llm::provider as uni;
 
 use super::super::response_processing::prepare_tool_calls;
-use super::interview_context::InterviewResearchContext;
+use super::PLANNING_WORKFLOW_REMINDER;
 use super::interview_payload::build_fallback_question;
-use super::{CUSTOM_NOTE_POLICY, PLANNING_WORKFLOW_REMINDER};
 use crate::agent::runloop::unified::turn::context::TurnProcessingResult;
 
 pub(super) fn strip_assistant_text(
@@ -77,37 +76,10 @@ pub(super) fn inject_planning_workflow_interview(
     processing_result: TurnProcessingResult,
     plan_session: &mut crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState,
     conversation_len: usize,
-    _response_text: Option<&str>,
-    synthesized_interview_args: Option<Value>,
 ) -> TurnProcessingResult {
     use vtcode_core::config::constants::tools;
 
-    let args = synthesized_interview_args.unwrap_or_else(|| {
-        json!({
-            "questions": [
-                build_fallback_question(
-                    "scope",
-                    "Scope",
-                    "What is the highest-impact planning decision still missing before implementation can start?",
-                    &InterviewResearchContext {
-                        discovery_tools_used: Vec::new(),
-                        recent_targets: Vec::new(),
-                        risk_hints: Vec::new(),
-                        open_decision_hints: Vec::new(),
-                        goal_hints: Vec::new(),
-                        verification_hints: Vec::new(),
-                        custom_note_policy: CUSTOM_NOTE_POLICY.to_string(),
-                        plan_draft_excerpt: None,
-                        plan_draft_path: None,
-                        plan_validation: None,
-                        task_tracker_excerpt: None,
-                        task_tracker_path: None,
-                        task_tracker_summary: None,
-                    },
-                )
-            ]
-        })
-    });
+    let args = json!({ "questions": [ build_fallback_question() ] });
     let args_json = serde_json::to_string(&args).unwrap_or_else(|_| "{}".to_string());
     let call_id = format!("call_plan_interview_{conversation_len}");
     let call = uni::ToolCall::function(call_id, tools::REQUEST_USER_INPUT.to_string(), args_json);
@@ -151,19 +123,6 @@ pub(super) fn inject_planning_workflow_interview(
             reasoning_details: None,
         },
     }
-}
-
-pub(super) fn turn_result_has_interview_tool_call(
-    processing_result: &TurnProcessingResult,
-) -> bool {
-    use vtcode_core::config::constants::tools;
-
-    let TurnProcessingResult::ToolCalls { tool_calls, .. } = processing_result else {
-        return false;
-    };
-    tool_calls
-        .iter()
-        .any(|call| call.tool_name() == tools::REQUEST_USER_INPUT)
 }
 
 pub(super) struct InterviewToolCallFilter {
@@ -215,13 +174,15 @@ pub(super) fn filter_interview_tool_calls(
 
     // Do NOT mark interview as pending when budget is exhausted — no further
     // LLM calls are possible and re-forcing would loop forever. The same
-    // applies when post-tool recovery is exhausted (saturated planning context).
+    // applies when post-tool recovery is exhausted (saturated planning context)
+    // or when the interview is permanently denied (policy/capability failure).
     if needs_interview
         && had_interview
         && (had_non_interview || !allow_interview)
         && !response_has_plan
         && !plan_session.is_budget_exhausted()
         && !plan_session.is_recovery_exhausted()
+        && !plan_session.is_interview_denied()
     {
         plan_session.mark_interview_pending();
     }
