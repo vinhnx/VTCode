@@ -7,8 +7,10 @@ mod render;
 use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 
-use super::config_section_headings::heading_for_path;
+use super::config_section_headings::{heading_for_path, humanize_identifier};
 use anyhow::{Context, Result, anyhow, bail};
+use path::get_node;
+use render::summarize_value;
 use toml::Value as TomlValue;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::utils::ansi::AnsiRenderer;
@@ -191,12 +193,14 @@ pub(crate) fn apply_settings_action(
     if let Some(path) = action.strip_prefix(ACTION_PREFIX_ARRAY_ADD) {
         mutate_draft_and_persist(state, |draft| add_array_item(draft, path))?;
         outcome.saved = true;
+        outcome.message = Some(describe_array_change(path, true));
         return Ok(outcome);
     }
 
     if let Some(path) = action.strip_prefix(ACTION_PREFIX_ARRAY_POP) {
         mutate_draft_and_persist(state, |draft| pop_array_item(draft, path))?;
         outcome.saved = true;
+        outcome.message = Some(describe_array_change(path, false));
         return Ok(outcome);
     }
 
@@ -218,6 +222,7 @@ pub(crate) fn apply_settings_action(
             apply_scalar_operation(draft, path, operation)
         })?;
         outcome.saved = true;
+        outcome.message = Some(describe_scalar_change(state, path, operation));
         return Ok(outcome);
     }
 
@@ -242,6 +247,68 @@ pub(crate) fn display_settings_view_path(path: &str) -> Cow<'_, str> {
         SETTINGS_MODEL_CONFIG_MAIN_PATH => Cow::Borrowed("model.main"),
         SETTINGS_MODEL_CONFIG_LIGHTWEIGHT_PATH => Cow::Borrowed("model.lightweight"),
         other => Cow::Borrowed(other),
+    }
+}
+
+/// Human-readable label for a settings path, used in change feedback messages.
+///
+/// For generic boolean leaf names (`enabled`, `show`, ...) the parent section is
+/// used instead so feedback reads naturally (e.g. "Disabled IDE Context" rather
+/// than "Disabled Enabled").
+fn change_title(path: &str) -> String {
+    let last_segment = path
+        .rsplit('.')
+        .next()
+        .unwrap_or(path)
+        .trim_end_matches(|c: char| c.is_numeric() || c == ']' || c == '[');
+    let leaf = humanize_identifier(last_segment);
+
+    const GENERIC_BOOL_LEAVES: &[&str] = &["Enabled", "Disabled", "Show", "Hide", "On", "Off"];
+    if GENERIC_BOOL_LEAVES.contains(&leaf.as_str()) {
+        if let Some(parent) = path.rsplit_once('.') {
+            let parent_leaf = parent
+                .0
+                .rsplit('.')
+                .next()
+                .unwrap_or(parent.0)
+                .trim_end_matches(|c: char| c.is_numeric() || c == ']' || c == '[');
+            return humanize_identifier(parent_leaf);
+        }
+    }
+
+    leaf
+}
+
+/// Builds a status-line message describing a scalar config change.
+fn describe_scalar_change(
+    state: &SettingsPaletteState,
+    path: &str,
+    operation: ScalarOperation,
+) -> String {
+    let title = change_title(path);
+    let draft_value = TomlValue::try_from(state.draft.clone()).ok();
+    let value = draft_value.as_ref().and_then(|value| get_node(value, path));
+
+    match (operation, value) {
+        (ScalarOperation::Toggle, Some(TomlValue::Boolean(enabled))) => {
+            format!(
+                "{} {}",
+                if *enabled { "Enabled" } else { "Disabled" },
+                title
+            )
+        }
+        (_, Some(value)) => format!("{} → {}", title, summarize_value(value)),
+        _ => format!("Updated {}", title),
+    }
+}
+
+/// Builds a status-line message describing an array add/remove change.
+fn describe_array_change(path: &str, added: bool) -> String {
+    let title = change_title(path);
+    if added {
+        format!("Added item to {}", title)
+    } else {
+        format!("Removed last item from {}", title)
     }
 }
 
@@ -837,8 +904,14 @@ mod tests {
             view_path: Some("custom_providers".to_string()),
         };
 
-        apply_settings_action(&mut state, "settings:array_add:custom_providers")
+        let outcome = apply_settings_action(&mut state, "settings:array_add:custom_providers")
             .expect("add custom provider template");
+
+        assert_eq!(
+            outcome.message.as_deref(),
+            Some("Added item to Custom Providers")
+        );
+        assert!(outcome.saved);
 
         assert_eq!(state.draft.custom_providers.len(), 1);
         let provider = &state.draft.custom_providers[0];
@@ -850,6 +923,26 @@ mod tests {
 
         let persisted = std::fs::read_to_string(&source_path).expect("persisted config");
         assert!(persisted.contains("custom_providers"));
+    }
+
+    #[test]
+    fn toggle_action_produces_change_feedback_message() {
+        let temp = tempfile::tempdir().expect("temp dir");
+        let source_path = temp.path().join("vtcode.toml");
+        let mut state = SettingsPaletteState {
+            workspace: temp.path().to_path_buf(),
+            source_path: source_path.clone(),
+            source_label: "test".to_string(),
+            draft: VTCodeConfig::default(),
+            view_path: Some("ide_context".to_string()),
+        };
+
+        let outcome = apply_settings_action(&mut state, "settings:set:ide_context.enabled:toggle")
+            .expect("toggle ide context");
+
+        assert_eq!(outcome.message.as_deref(), Some("Disabled Ide Context"));
+        assert!(outcome.saved);
+        assert!(!state.draft.ide_context.enabled);
     }
 
     #[test]
