@@ -186,6 +186,27 @@ fn test_process_tool_output() {
 }
 
 #[test]
+fn test_process_apply_patch_output_collects_internal_modified_files() {
+    let output = json!({
+        "success": true,
+        "applied": [{"path": "src/widget.rs", "operation": "update"}],
+        "modified_files": ["/workspace/src/widget.rs"]
+    });
+
+    match process_llm_tool_output(output) {
+        ToolExecutionStatus::Success {
+            modified_files,
+            command_success,
+            ..
+        } => {
+            assert_eq!(modified_files, vec!["/workspace/src/widget.rs"]);
+            assert!(command_success);
+        }
+        other => panic!("expected apply_patch success, got: {other:?}"),
+    }
+}
+
+#[test]
 fn test_process_tool_output_loop_detection() {
     // Test loop detection output - should return Failure with clear message
     let output = json!({

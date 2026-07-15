@@ -95,23 +95,7 @@ pub fn mutation_target_paths(tool_name: &str, args: &Value) -> Vec<PathBuf> {
             .ok()
             .flatten()
             .and_then(|decoded| Patch::parse(&decoded.text).ok())
-            .map(|patch| {
-                patch
-                    .operations()
-                    .iter()
-                    .flat_map(|operation| match operation {
-                        PatchOperation::AddFile { path, .. }
-                        | PatchOperation::DeleteFile { path } => {
-                            vec![PathBuf::from(path)]
-                        }
-                        PatchOperation::UpdateFile { path, new_path, .. } => {
-                            let mut paths = vec![PathBuf::from(path)];
-                            paths.extend(new_path.as_deref().map(PathBuf::from));
-                            paths
-                        }
-                    })
-                    .collect()
-            })
+            .map(|patch| patch_mutation_target_paths(&patch))
             .unwrap_or_default();
     }
 
@@ -144,6 +128,31 @@ pub fn mutation_target_paths(tool_name: &str, args: &Value) -> Vec<PathBuf> {
             }
         }
     }
+    paths
+}
+
+/// Return every path mutated by an already-parsed patch.
+///
+/// Move operations include both their source and destination. The result is
+/// sorted and deduplicated so execution metadata and replay invalidation share
+/// one stable path set without parsing the patch payload a second time.
+pub fn patch_mutation_target_paths(patch: &Patch) -> Vec<PathBuf> {
+    let mut paths = patch
+        .operations()
+        .iter()
+        .flat_map(|operation| match operation {
+            PatchOperation::AddFile { path, .. } | PatchOperation::DeleteFile { path } => {
+                vec![PathBuf::from(path)]
+            }
+            PatchOperation::UpdateFile { path, new_path, .. } => {
+                let mut paths = vec![PathBuf::from(path)];
+                paths.extend(new_path.as_deref().map(PathBuf::from));
+                paths
+            }
+        })
+        .collect::<Vec<_>>();
+    paths.sort();
+    paths.dedup();
     paths
 }
 
@@ -197,8 +206,8 @@ pub fn parameter_schema(input_description: &str) -> Value {
 mod tests {
     use super::{
         APPLY_PATCH_ALIAS_DESCRIPTION, SEMANTIC_ANCHOR_GUIDANCE, decode_apply_patch_input,
-        mutation_target_paths, parameter_schema, patch_source_from_args,
-        with_semantic_anchor_guidance,
+        mutation_target_paths, parameter_schema, patch_mutation_target_paths,
+        patch_source_from_args, with_semantic_anchor_guidance,
     };
     use serde_json::json;
     use std::path::PathBuf;
@@ -258,8 +267,8 @@ mod tests {
         let expected = vec![
             PathBuf::from("src/add.rs"),
             PathBuf::from("src/delete.rs"),
-            PathBuf::from("src/old.rs"),
             PathBuf::from("src/new.rs"),
+            PathBuf::from("src/old.rs"),
         ];
 
         assert_eq!(
@@ -276,6 +285,15 @@ mod tests {
                 &json!({"patch": format!("base64:{}", BASE64.encode(patch))}),
             ),
             expected
+        );
+
+        let duplicate_patch = super::Patch::parse(
+            "*** Begin Patch\n*** Update File: src/same.rs\n*** Move to: src/same.rs\n@@\n-old\n+new\n*** End Patch\n",
+        )
+        .expect("duplicate-path patch should parse");
+        assert_eq!(
+            patch_mutation_target_paths(&duplicate_patch),
+            vec![PathBuf::from("src/same.rs")]
         );
     }
 

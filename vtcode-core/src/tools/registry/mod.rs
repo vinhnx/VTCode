@@ -1807,10 +1807,81 @@ mod tests {
             .await?;
 
         assert_eq!(response.get("success").and_then(Value::as_bool), Some(true));
+        assert_eq!(
+            response.get("modified_files"),
+            Some(&json!([temp_dir
+                .path()
+                .join("patched_via_alias.txt")
+                .to_string_lossy()]))
+        );
 
         let file_contents = fs::read_to_string(temp_dir.path().join("patched_via_alias.txt"))?;
         assert_eq!(file_contents, "patched\n");
 
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn apply_patch_reports_deduplicated_paths_for_every_successful_operation() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        fs::create_dir(temp_dir.path().join("src"))?;
+        fs::write(temp_dir.path().join("src/delete.rs"), "delete me\n")?;
+        fs::write(temp_dir.path().join("src/old.rs"), "old\n")?;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        registry.allow_all_tools().await?;
+
+        let patch = "*** Begin Patch\n*** Add File: src/add.rs\n+new\n*** Delete File: src/delete.rs\n*** Update File: src/old.rs\n*** Move to: src/new.rs\n@@\n-old\n+new\n*** End Patch\n";
+        let response = registry
+            .execute_tool(tools::APPLY_PATCH, json!({ "input": patch }))
+            .await?;
+
+        let mut expected = ["add.rs", "delete.rs", "new.rs", "old.rs"]
+            .into_iter()
+            .map(|name| {
+                temp_dir
+                    .path()
+                    .join("src")
+                    .join(name)
+                    .to_string_lossy()
+                    .into_owned()
+            })
+            .collect::<Vec<_>>();
+        expected.sort();
+        assert_eq!(response["modified_files"], json!(expected));
+        assert!(temp_dir.path().join("src/add.rs").exists());
+        assert!(!temp_dir.path().join("src/delete.rs").exists());
+        assert!(!temp_dir.path().join("src/old.rs").exists());
+        assert_eq!(
+            fs::read_to_string(temp_dir.path().join("src/new.rs"))?,
+            "new\n"
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn failed_apply_patch_does_not_report_modified_files() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        registry.allow_all_tools().await?;
+
+        let outcome = registry
+            .execute_public_tool_request(ToolExecutionRequest::new(
+                tools::APPLY_PATCH,
+                json!({ "input": "*** Begin Patch\n*** Not An Operation\n*** End Patch\n" }),
+            ))
+            .await;
+
+        assert!(!outcome.is_success());
+        assert!(outcome.output.is_none());
+        assert!(
+            outcome
+                .error
+                .expect("failed patch should expose an error")
+                .to_json_value()
+                .get("modified_files")
+                .is_none()
+        );
         Ok(())
     }
 

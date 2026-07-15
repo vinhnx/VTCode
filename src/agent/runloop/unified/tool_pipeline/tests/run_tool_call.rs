@@ -813,6 +813,198 @@ async fn test_run_tool_call_command_session_git_diff_uses_cache_on_repeat() {
 }
 
 #[tokio::test]
+async fn successful_apply_patch_invalidates_cached_code_search() {
+    let mut test_ctx = TestContext::new().await;
+    let source_dir = test_ctx.workspace.join("src");
+    std::fs::create_dir_all(&source_dir).expect("create source directory");
+    std::fs::write(source_dir.join("widget.rs"), "pub struct Widget;\n")
+        .expect("write search fixture");
+
+    let mut registry = test_ctx.registry;
+    registry.allow_all_tools().await.expect("allow test tools");
+    let permission_cache_arc = Arc::new(tokio::sync::RwLock::new(ToolPermissionCache::new()));
+    {
+        let mut cache = permission_cache_arc.write().await;
+        cache.cache_grant(tools::CODE_SEARCH.to_string(), PermissionGrant::Permanent);
+        cache.cache_grant(tools::APPLY_PATCH.to_string(), PermissionGrant::Permanent);
+    }
+
+    let result_cache = Arc::new(tokio::sync::RwLock::new(ToolResultCache::new(10)));
+    let decision_ledger = Arc::new(tokio::sync::RwLock::new(DecisionTracker::new()));
+    let mut session_stats = crate::agent::runloop::unified::state::SessionStats::default();
+    let mut plan_session =
+        crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState::default();
+    let mut mcp_panel = crate::agent::runloop::mcp_events::McpPanelState::new(10, true);
+    let approval_recorder = test_ctx.approval_recorder;
+    let traj = TrajectoryLogger::new(&test_ctx.workspace);
+    let tools = Arc::new(tokio::sync::RwLock::new(Vec::new()));
+    let mut harness_state = build_harness_state_with(8);
+    let mut ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext::new(
+        &mut test_ctx.renderer,
+        &test_ctx.handle,
+        &mut registry,
+        &tools,
+        &result_cache,
+        &permission_cache_arc,
+        &test_ctx.permissions_state,
+        &decision_ledger,
+        &mut session_stats,
+        &mut plan_session,
+        &mut mcp_panel,
+        &approval_recorder,
+        &mut test_ctx.session,
+        None,
+        &traj,
+        &mut harness_state,
+        None,
+    );
+    let ctrl_c_state = Arc::new(CtrlCState::new());
+    let ctrl_c_notify = Arc::new(Notify::new());
+    let search_args = json!({
+        "query": "Widget",
+        "path": "src",
+        "file_types": ["rust"],
+        "result_types": ["text"]
+    });
+    let search_call = |id: &str| {
+        vtcode_core::llm::provider::ToolCall::function(
+            id.to_string(),
+            tools::CODE_SEARCH.to_string(),
+            search_args.to_string(),
+        )
+    };
+
+    let first = run_tool_call(
+        &mut ctx,
+        &search_call("search_before_patch"),
+        &ctrl_c_state,
+        &ctrl_c_notify,
+        None,
+        None,
+        true,
+        None,
+        0,
+        false,
+    )
+    .await
+    .expect("initial code_search should run");
+    match first.status {
+        ToolExecutionStatus::Success { output, .. } => {
+            assert_eq!(output["returned"], json!(1));
+        }
+        other => panic!("expected initial search success, got: {other:?}"),
+    }
+    assert_eq!(result_cache.read().await.stats().current_size, 1);
+
+    let failed_patch = vtcode_core::llm::provider::ToolCall::function(
+        "failed_patch".to_string(),
+        tools::APPLY_PATCH.to_string(),
+        json!({"input": "*** Begin Patch\n*** Not An Operation\n*** End Patch\n"}).to_string(),
+    );
+    let failed = run_tool_call(
+        &mut ctx,
+        &failed_patch,
+        &ctrl_c_state,
+        &ctrl_c_notify,
+        None,
+        None,
+        true,
+        None,
+        0,
+        false,
+    )
+    .await
+    .expect("failed apply_patch should produce a pipeline outcome");
+    assert!(matches!(failed.status, ToolExecutionStatus::Failure { .. }));
+    assert_eq!(
+        result_cache.read().await.stats().current_size,
+        1,
+        "a failed patch must preserve cached reads"
+    );
+
+    let cached = run_tool_call(
+        &mut ctx,
+        &search_call("search_after_failed_patch"),
+        &ctrl_c_state,
+        &ctrl_c_notify,
+        None,
+        None,
+        true,
+        None,
+        0,
+        false,
+    )
+    .await
+    .expect("search after failed patch should run");
+    assert!(matches!(
+        cached.status,
+        ToolExecutionStatus::Success { ref output, .. } if output["returned"] == json!(1)
+    ));
+    assert_eq!(result_cache.read().await.stats().hits, 1);
+
+    let patch = "*** Begin Patch\n*** Update File: src/widget.rs\n@@\n-pub struct Widget;\n+pub struct Gadget;\n*** End Patch\n";
+    let successful_patch = vtcode_core::llm::provider::ToolCall::function(
+        "successful_patch".to_string(),
+        tools::APPLY_PATCH.to_string(),
+        json!({"input": patch}).to_string(),
+    );
+    let patched = run_tool_call(
+        &mut ctx,
+        &successful_patch,
+        &ctrl_c_state,
+        &ctrl_c_notify,
+        None,
+        None,
+        true,
+        None,
+        0,
+        false,
+    )
+    .await
+    .expect("successful apply_patch should run");
+    match patched.status {
+        ToolExecutionStatus::Success { modified_files, .. } => {
+            assert_eq!(
+                modified_files,
+                vec![source_dir.join("widget.rs").to_string_lossy()]
+            );
+        }
+        other => panic!("expected patch success, got: {other:?}"),
+    }
+    assert_eq!(
+        result_cache.read().await.stats().current_size,
+        0,
+        "successful patch metadata must invalidate the scoped search cache"
+    );
+
+    let fresh = run_tool_call(
+        &mut ctx,
+        &search_call("search_after_successful_patch"),
+        &ctrl_c_state,
+        &ctrl_c_notify,
+        None,
+        None,
+        true,
+        None,
+        0,
+        false,
+    )
+    .await
+    .expect("search after successful patch should run");
+    match fresh.status {
+        ToolExecutionStatus::Success { output, .. } => {
+            assert_eq!(output["returned"], json!(0));
+        }
+        other => panic!("expected fresh search success, got: {other:?}"),
+    }
+    assert_eq!(
+        result_cache.read().await.stats().hits,
+        1,
+        "the post-success search must execute freshly instead of hitting stale cache"
+    );
+}
+
+#[tokio::test]
 async fn test_run_tool_call_rejects_escalated_shell_when_hitl_disabled() {
     let mut test_ctx = TestContext::new().await;
     let mut registry = test_ctx.registry;
