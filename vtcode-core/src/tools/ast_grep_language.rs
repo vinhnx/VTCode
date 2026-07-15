@@ -207,6 +207,48 @@ impl AstGrepLanguage {
         }
     }
 
+    /// Canonical positive globs for backend prefiltering. Candidates must still
+    /// be checked with [`Self::from_path`], which remains authoritative.
+    pub(crate) fn path_globs(self) -> &'static [&'static str] {
+        match self {
+            Self::Rust => &["*.rs"],
+            Self::Python => &["*.py", "*.py3", "*.pyi", "*.bzl"],
+            Self::JavaScript => &["*.js", "*.jsx", "*.cjs", "*.mjs"],
+            Self::TypeScript => &["*.ts", "*.cts", "*.mts"],
+            Self::Tsx => &["*.tsx"],
+            Self::Go => &["*.go"],
+            Self::Java => &["*.java"],
+            Self::Markdown => &["*.md", "*.mdx"],
+            Self::C => &["*.c", "*.h"],
+            Self::Cpp => &[
+                "*.cpp", "*.cc", "*.cxx", "*.hpp", "*.hxx", "*.hh", "*.cu", "*.ino", "*.c++",
+            ],
+            Self::Csharp => &["*.cs"],
+            Self::Css => &["*.css"],
+            Self::Html => &["*.html", "*.htm", "*.xhtml"],
+            Self::Json => &["*.json", "*.jsonc"],
+            Self::Yaml => &["*.yml", "*.yaml"],
+            Self::Ruby => &["*.rb", "*.erb", "*.rbw", "*.gemspec"],
+            Self::Php => &["*.php"],
+            Self::Kotlin => &["*.kt", "*.kts", "*.ktm"],
+            Self::Swift => &["*.swift"],
+            Self::Lua => &["*.lua"],
+            Self::Bash => &["*.sh", "*.bash", "*.zsh", "*.bats", "*.ksh", "*.sh.in"],
+            Self::Sql => &["*.sql"],
+            Self::Scala => &["*.scala", "*.sc", "*.sbt"],
+            Self::Elixir => &["*.ex", "*.exs"],
+            Self::Dockerfile => &["Dockerfile", "dockerfile"],
+            Self::Toml => &["*.toml"],
+            Self::Hcl => &["*.hcl", "*.tf", "*.tfvars"],
+            Self::Dart => &["*.dart"],
+            Self::Zig => &["*.zig"],
+            Self::Protobuf => &["*.proto"],
+            Self::Haskell => &["*.hs"],
+            Self::Nix => &["*.nix"],
+            Self::Solidity => &["*.sol"],
+        }
+    }
+
     pub(crate) fn display_name(self) -> &'static str {
         match self {
             Self::Rust => "Rust",

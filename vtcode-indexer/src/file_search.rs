@@ -60,13 +60,14 @@ fn build_parallel_walker(
     exclude: &[String],
     threads: usize,
     respect_gitignore: bool,
+    follow_links: bool,
 ) -> anyhow::Result<ignore::WalkParallel> {
     let mut walk_builder = ignore::WalkBuilder::new(search_directory);
     vtcode_commons::walk::apply_defaults(&mut walk_builder);
 
     // File-search-specific overrides
     walk_builder.threads(threads);
-    walk_builder.follow_links(true); // Search follows symlinks
+    walk_builder.follow_links(follow_links);
     walk_builder.require_git(false); // Search works outside git repos
 
     if !respect_gitignore {
@@ -99,7 +100,8 @@ impl FileIndex {
         respect_gitignore: bool,
         threads: usize,
     ) -> anyhow::Result<Self> {
-        let walker = build_parallel_walker(search_directory, exclude, threads, respect_gitignore)?;
+        let walker =
+            build_parallel_walker(search_directory, exclude, threads, respect_gitignore, true)?;
 
         // Collect all files and directories
         let files_arc = Arc::new(Mutex::new(Vec::new()));
@@ -586,6 +588,23 @@ pub async fn run_with_index(
 ///
 /// FileSearchResults containing matched files and total match count.
 pub fn run(config: FileSearchConfig) -> anyhow::Result<FileSearchResults> {
+    run_with_policy(config, true, false)
+}
+
+/// Run a bounded fuzzy path search without following symbolic links.
+///
+/// This focused route is intended for request-scoped code search. It stops
+/// traversal once the candidate limit is reached and deliberately avoids the
+/// persistent [`FileIndexCache`].
+pub fn run_bounded_no_follow(config: FileSearchConfig) -> anyhow::Result<FileSearchResults> {
+    run_with_policy(config, false, true)
+}
+
+fn run_with_policy(
+    config: FileSearchConfig,
+    follow_links: bool,
+    stop_at_limit: bool,
+) -> anyhow::Result<FileSearchResults> {
     let limit = config.limit.get();
     let search_directory = &config.search_directory;
     let exclude = &config.exclude;
@@ -594,7 +613,13 @@ pub fn run(config: FileSearchConfig) -> anyhow::Result<FileSearchResults> {
     let compute_indices = config.compute_indices;
     let respect_gitignore = config.respect_gitignore;
 
-    let walker = build_parallel_walker(search_directory, exclude, threads, respect_gitignore)?;
+    let walker = build_parallel_walker(
+        search_directory,
+        exclude,
+        threads,
+        respect_gitignore,
+        follow_links,
+    )?;
 
     // Create per-worker result collection using Arc + Mutex for thread safety.
     // Each worker gets exactly one instance - no sharing between workers.
@@ -625,6 +650,10 @@ pub fn run(config: FileSearchConfig) -> anyhow::Result<FileSearchResults> {
                 return ignore::WalkState::Quit;
             }
 
+            if stop_at_limit && total_match_count_clone.load(Ordering::Relaxed) >= limit {
+                return ignore::WalkState::Quit;
+            }
+
             let entry = match result {
                 Ok(e) => e,
                 Err(_) => return ignore::WalkState::Continue,
@@ -648,11 +677,18 @@ pub fn run(config: FileSearchConfig) -> anyhow::Result<FileSearchResults> {
                 MatchType::File
             };
 
+            if stop_at_limit && match_type == MatchType::Directory {
+                return ignore::WalkState::Continue;
+            }
+
             // Try to add to results - no contention with other workers
             {
                 let mut list = best_list.lock();
                 if list.record_match(path_to_match, match_type) {
-                    total_match_count_clone.fetch_add(1, Ordering::Relaxed);
+                    let previous = total_match_count_clone.fetch_add(1, Ordering::Relaxed);
+                    if stop_at_limit && previous.saturating_add(1) >= limit {
+                        return ignore::WalkState::Quit;
+                    }
                 }
             }
 

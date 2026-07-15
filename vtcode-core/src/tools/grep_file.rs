@@ -16,7 +16,8 @@ use super::grep_cache::GrepSearchCache;
 use anyhow::{Context, Result};
 use serde_json::{self, Value};
 use std::num::NonZeroUsize;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::process::Stdio;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::OnceLock;
@@ -24,6 +25,8 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::thread;
 use std::time::Duration;
+use tokio::io::{AsyncBufRead, AsyncBufReadExt, BufReader};
+use tokio::process::Command as TokioCommand;
 use tokio::task::spawn_blocking;
 use tracing::warn;
 
@@ -60,6 +63,238 @@ const SEARCH_DEBOUNCE: Duration = Duration::from_millis(150);
 const ACTIVE_SEARCH_COMPLETE_POLL_INTERVAL: Duration = Duration::from_millis(20);
 
 use serde::{Deserialize, Serialize};
+
+use crate::tools::ast_grep_language::AstGrepLanguage;
+
+pub(crate) const CODE_SEARCH_STREAM_BYTE_CAP: usize = 1024 * 1024;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct LiteralSearchCandidate {
+    pub path: PathBuf,
+    pub line: usize,
+    pub column: usize,
+    pub byte_start: usize,
+    pub byte_end: usize,
+    pub matched_text: String,
+    pub snippet: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct LiteralSearchOutcome {
+    pub candidates: Vec<LiteralSearchCandidate>,
+    pub truncated: bool,
+}
+
+async fn kill_and_reap_literal_child(child: &mut tokio::process::Child) {
+    let _ = child.start_kill();
+    let _ = child.wait().await;
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BoundedRecordRead {
+    Record,
+    Eof,
+    Exhausted,
+}
+
+async fn read_bounded_record<R: AsyncBufRead + Unpin>(
+    reader: &mut R,
+    record: &mut Vec<u8>,
+    bytes_read: &mut usize,
+    byte_cap: usize,
+) -> std::io::Result<BoundedRecordRead> {
+    loop {
+        let available = reader.fill_buf().await?;
+        if available.is_empty() {
+            return Ok(if record.is_empty() {
+                BoundedRecordRead::Eof
+            } else {
+                BoundedRecordRead::Record
+            });
+        }
+        if *bytes_read >= byte_cap {
+            return Ok(BoundedRecordRead::Exhausted);
+        }
+
+        let remaining = byte_cap - *bytes_read;
+        let bounded = &available[..available.len().min(remaining)];
+        let consumed = bounded
+            .iter()
+            .position(|byte| *byte == b'\n')
+            .map_or(bounded.len(), |index| index + 1);
+        let record_complete = bounded.get(consumed.saturating_sub(1)) == Some(&b'\n');
+        record.extend_from_slice(&bounded[..consumed]);
+        reader.consume(consumed);
+        *bytes_read += consumed;
+        if record_complete {
+            return Ok(BoundedRecordRead::Record);
+        }
+    }
+}
+
+/// Run a fixed-string smart-case ripgrep stream with request-scoped bounds.
+pub(crate) async fn search_literal_bounded(
+    query: &str,
+    search_path: &Path,
+    languages: &[AstGrepLanguage],
+    candidate_cap: usize,
+) -> Result<LiteralSearchOutcome> {
+    let mut command = TokioCommand::new("rg");
+    command
+        .arg("--json")
+        .arg("--fixed-strings")
+        .arg("--smart-case")
+        .arg("--hidden")
+        .arg("--no-messages")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+    for pattern in DEFAULT_IGNORE_GLOBS {
+        command.arg("--glob").arg(format!("!{pattern}"));
+    }
+    for language in languages {
+        for glob in language.path_globs() {
+            command.arg("--iglob").arg(glob);
+        }
+    }
+    command.arg(query).arg(search_path);
+
+    let mut child = command
+        .spawn()
+        .with_context(|| format!("failed to execute ripgrep for literal query '{query}'"))?;
+    let Some(stdout) = child.stdout.take() else {
+        kill_and_reap_literal_child(&mut child).await;
+        anyhow::bail!("failed to capture ripgrep output");
+    };
+    let mut reader = BufReader::new(stdout);
+    let mut candidates = Vec::with_capacity(candidate_cap);
+    let mut bytes_read = 0usize;
+    let mut truncated = false;
+    let mut line_buf = Vec::with_capacity(CODE_SEARCH_STREAM_BYTE_CAP);
+
+    loop {
+        line_buf.clear();
+        let read = match read_bounded_record(
+            &mut reader,
+            &mut line_buf,
+            &mut bytes_read,
+            CODE_SEARCH_STREAM_BYTE_CAP,
+        )
+        .await
+        {
+            Ok(read) => read,
+            Err(error) => {
+                drop(reader);
+                kill_and_reap_literal_child(&mut child).await;
+                return Err(error).context("failed to read ripgrep JSON stream");
+            }
+        };
+        match read {
+            BoundedRecordRead::Record => {}
+            BoundedRecordRead::Eof => break,
+            BoundedRecordRead::Exhausted => {
+                truncated = true;
+                break;
+            }
+        }
+        let event = match serde_json::from_slice::<Value>(&line_buf) {
+            Ok(event) => event,
+            Err(error) => {
+                drop(reader);
+                kill_and_reap_literal_child(&mut child).await;
+                return Err(error).context("failed to parse ripgrep JSON stream record");
+            }
+        };
+        if event.get("type").and_then(Value::as_str) != Some("match") {
+            continue;
+        }
+        let Some(data) = event.get("data") else {
+            continue;
+        };
+        let Some(path) = data
+            .get("path")
+            .and_then(|path| path.get("text"))
+            .and_then(Value::as_str)
+        else {
+            continue;
+        };
+        let Some(snippet) = data
+            .get("lines")
+            .and_then(|lines| lines.get("text"))
+            .and_then(Value::as_str)
+        else {
+            continue;
+        };
+        let line = data
+            .get("line_number")
+            .and_then(Value::as_u64)
+            .and_then(|line| usize::try_from(line).ok())
+            .unwrap_or(1);
+        let absolute_offset = data
+            .get("absolute_offset")
+            .and_then(Value::as_u64)
+            .and_then(|offset| usize::try_from(offset).ok())
+            .unwrap_or(0);
+        let Some(submatches) = data.get("submatches").and_then(Value::as_array) else {
+            continue;
+        };
+        for submatch in submatches {
+            let Some(start) = submatch
+                .get("start")
+                .and_then(Value::as_u64)
+                .and_then(|offset| usize::try_from(offset).ok())
+            else {
+                continue;
+            };
+            let Some(end) = submatch
+                .get("end")
+                .and_then(Value::as_u64)
+                .and_then(|offset| usize::try_from(offset).ok())
+            else {
+                continue;
+            };
+            let Some(matched_text) = submatch
+                .get("match")
+                .and_then(|value| value.get("text"))
+                .and_then(Value::as_str)
+            else {
+                continue;
+            };
+            candidates.push(LiteralSearchCandidate {
+                path: PathBuf::from(path),
+                line,
+                column: start.saturating_add(1),
+                byte_start: absolute_offset.saturating_add(start),
+                byte_end: absolute_offset.saturating_add(end),
+                matched_text: matched_text.to_string(),
+                snippet: snippet.to_string(),
+            });
+            if candidates.len() >= candidate_cap {
+                truncated = true;
+                break;
+            }
+        }
+        if truncated {
+            break;
+        }
+    }
+
+    drop(reader);
+    if truncated {
+        let _ = child.start_kill();
+    }
+    let status = child
+        .wait()
+        .await
+        .context("failed to reap ripgrep process")?;
+    if !truncated && !matches!(status.code(), Some(0) | Some(1)) {
+        anyhow::bail!("ripgrep literal search failed");
+    }
+
+    Ok(LiteralSearchOutcome {
+        candidates,
+        truncated,
+    })
+}
 
 /// Input parameters for ripgrep search
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -772,6 +1007,116 @@ impl GrepSearchManager {
 mod tests {
     use super::*;
     use serde_json::json;
+    use tempfile::TempDir;
+
+    #[tokio::test]
+    async fn code_search_literal_stream_reaps_at_candidate_cap() {
+        let workspace = TempDir::new().expect("workspace");
+        std::fs::write(
+            workspace.path().join("matches.txt"),
+            "Widget\nWidget\nWidget\n",
+        )
+        .expect("fixture");
+
+        let outcome = search_literal_bounded("Widget", workspace.path(), &[], 2)
+            .await
+            .expect("bounded literal search");
+
+        assert_eq!(outcome.candidates.len(), 2);
+        assert!(outcome.truncated);
+    }
+
+    #[tokio::test]
+    async fn code_search_literal_stream_reaps_at_byte_cap() {
+        let workspace = TempDir::new().expect("workspace");
+        std::fs::write(
+            workspace.path().join("large.txt"),
+            format!("Widget{}\n", "x".repeat(CODE_SEARCH_STREAM_BYTE_CAP)),
+        )
+        .expect("fixture");
+
+        let outcome = search_literal_bounded("Widget", workspace.path(), &[], 20)
+            .await
+            .expect("byte-bounded literal search");
+
+        assert!(outcome.candidates.is_empty());
+        assert!(outcome.truncated);
+    }
+
+    #[tokio::test]
+    async fn code_search_bounded_record_distinguishes_exact_eof_from_exhaustion() {
+        let mut exact_reader = BufReader::new(&b"{}\n"[..]);
+        let mut exact_record = Vec::with_capacity(3);
+        let mut exact_bytes_read = 0;
+        assert_eq!(
+            read_bounded_record(
+                &mut exact_reader,
+                &mut exact_record,
+                &mut exact_bytes_read,
+                3,
+            )
+            .await
+            .expect("exact record"),
+            BoundedRecordRead::Record
+        );
+        exact_record.clear();
+        assert_eq!(
+            read_bounded_record(
+                &mut exact_reader,
+                &mut exact_record,
+                &mut exact_bytes_read,
+                3,
+            )
+            .await
+            .expect("exact EOF probe"),
+            BoundedRecordRead::Eof
+        );
+
+        let mut oversized_reader = BufReader::new(&b"xxxx"[..]);
+        let mut oversized_record = Vec::with_capacity(3);
+        let mut oversized_bytes_read = 0;
+        assert_eq!(
+            read_bounded_record(
+                &mut oversized_reader,
+                &mut oversized_record,
+                &mut oversized_bytes_read,
+                3,
+            )
+            .await
+            .expect("oversized record"),
+            BoundedRecordRead::Exhausted
+        );
+        assert_eq!(oversized_record.len(), 3);
+    }
+
+    #[tokio::test]
+    async fn code_search_literal_language_prefilters_are_case_insensitive() {
+        let workspace = TempDir::new().expect("workspace");
+        std::fs::write(workspace.path().join("UPPER.RS"), "Widget\n").expect("Rust fixture");
+        std::fs::write(workspace.path().join("DOCKERFILE"), "Widget\n")
+            .expect("Dockerfile fixture");
+
+        let rust = search_literal_bounded("Widget", workspace.path(), &[AstGrepLanguage::Rust], 20)
+            .await
+            .expect("uppercase Rust extension");
+        assert!(rust.candidates.iter().any(|candidate| {
+            candidate.path.ends_with("UPPER.RS")
+                && AstGrepLanguage::from_path(&candidate.path) == Some(AstGrepLanguage::Rust)
+        }));
+
+        let dockerfile = search_literal_bounded(
+            "Widget",
+            workspace.path(),
+            &[AstGrepLanguage::Dockerfile],
+            20,
+        )
+        .await
+        .expect("uppercase Dockerfile name");
+        assert!(dockerfile.candidates.iter().any(|candidate| {
+            candidate.path.ends_with("DOCKERFILE")
+                && AstGrepLanguage::from_path(&candidate.path) == Some(AstGrepLanguage::Dockerfile)
+        }));
+    }
 
     #[test]
     fn finalize_matches_respects_max_bytes() {

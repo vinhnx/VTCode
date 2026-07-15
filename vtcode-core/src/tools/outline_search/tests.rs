@@ -1,8 +1,13 @@
 use super::{
-    OutlineItems, OutlineRequest, OutlineView, execute_outline_search, has_source_extension,
-    strip_extension,
+    BoundedRecordRead, CODE_SEARCH_OUTLINE_BYTE_CAP, OutlineItems, OutlineRequest, OutlineView,
+    execute_outline_search, has_source_extension, read_bounded_record, search_declarations_bounded,
+    smart_case_eq, strip_extension,
 };
-use crate::tools::ast_grep_binary::AST_GREP_INSTALL_COMMAND;
+use crate::tools::ast_grep_binary::{
+    AST_GREP_INSTALL_COMMAND,
+    set_ast_grep_binary_override_for_tests as set_read_only_ast_grep_override_for_tests,
+};
+use crate::tools::ast_grep_language::AstGrepLanguage;
 use crate::tools::editing::patch::set_ast_grep_binary_override_for_tests;
 use serde_json::json;
 use serial_test::serial;
@@ -278,6 +283,107 @@ async fn outline_handles_empty_stream_gracefully() {
 
     assert_eq!(result["view"], "digest");
     assert_eq!(result["files"].as_array().expect("files array").len(), 0);
+}
+
+#[tokio::test]
+#[serial]
+async fn code_search_declaration_stream_reaps_at_candidate_cap() {
+    let (_script_dir, script_path) = write_fake_sg(TWO_FILE_STREAM);
+    let _override = set_read_only_ast_grep_override_for_tests(Some(script_path));
+    let temp = workspace_with_source();
+
+    let outcome = search_declarations_bounded(
+        temp.path(),
+        &temp.path().join("src"),
+        "alpha",
+        &[AstGrepLanguage::Rust],
+        1,
+    )
+    .await
+    .expect("candidate-bounded declaration stream");
+
+    assert_eq!(outcome.files.len(), 1);
+    assert_eq!(outcome.files[0].declarations.len(), 1);
+    assert!(outcome.files[0].complete);
+    assert!(!outcome.stream_complete);
+    assert!(outcome.truncated);
+}
+
+#[tokio::test]
+#[serial]
+async fn code_search_declaration_stream_reaps_at_byte_cap() {
+    let oversized_record = format!("{}\n", "x".repeat(CODE_SEARCH_OUTLINE_BYTE_CAP + 1));
+    let (_script_dir, script_path) = write_fake_sg(&oversized_record);
+    let _override = set_read_only_ast_grep_override_for_tests(Some(script_path));
+    let temp = workspace_with_source();
+
+    let outcome = search_declarations_bounded(
+        temp.path(),
+        &temp.path().join("src"),
+        "alpha",
+        &[AstGrepLanguage::Rust],
+        20,
+    )
+    .await
+    .expect("byte-bounded declaration stream");
+
+    assert!(outcome.files.is_empty(), "{outcome:?}");
+    assert!(!outcome.stream_complete);
+    assert!(outcome.truncated);
+}
+
+#[tokio::test]
+async fn code_search_outline_bounded_record_distinguishes_exact_eof_from_exhaustion() {
+    use tokio::io::BufReader;
+
+    let mut exact_reader = BufReader::new(&b"{}\n"[..]);
+    let mut exact_record = Vec::with_capacity(3);
+    let mut exact_bytes_read = 0;
+    assert_eq!(
+        read_bounded_record(
+            &mut exact_reader,
+            &mut exact_record,
+            &mut exact_bytes_read,
+            3,
+        )
+        .await
+        .expect("exact record"),
+        BoundedRecordRead::Record
+    );
+    exact_record.clear();
+    assert_eq!(
+        read_bounded_record(
+            &mut exact_reader,
+            &mut exact_record,
+            &mut exact_bytes_read,
+            3,
+        )
+        .await
+        .expect("exact EOF probe"),
+        BoundedRecordRead::Eof
+    );
+
+    let mut oversized_reader = BufReader::new(&b"xxxx"[..]);
+    let mut oversized_record = Vec::with_capacity(3);
+    let mut oversized_bytes_read = 0;
+    assert_eq!(
+        read_bounded_record(
+            &mut oversized_reader,
+            &mut oversized_record,
+            &mut oversized_bytes_read,
+            3,
+        )
+        .await
+        .expect("oversized record"),
+        BoundedRecordRead::Exhausted
+    );
+    assert_eq!(oversized_record.len(), 3);
+}
+
+#[test]
+fn code_search_definition_smart_case_supports_unicode_lowercase_queries() {
+    assert!(smart_case_eq("Éclair", "éclair"));
+    assert!(!smart_case_eq("éclair", "Éclair"));
 }
 
 #[tokio::test]

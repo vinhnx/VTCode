@@ -15,15 +15,251 @@ use anyhow::{Context, Result, anyhow, bail};
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 use std::collections::BTreeMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::process::Stdio;
+use tokio::io::{AsyncBufRead, AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 
 use crate::tools::ast_grep_installer::AstGrepStatus;
+use crate::tools::ast_grep_language::AstGrepLanguage;
 use crate::tools::structural_search::stderr_or_stdout;
 use crate::utils::path::resolve_workspace_path;
 
 const SUPPORTED_ITEMS: &[&str] = &["auto", "structure", "exports", "imports", "all"];
 const SUPPORTED_VIEWS: &[&str] = &["digest", "names", "full"];
+const CODE_SEARCH_OUTLINE_BYTE_CAP: usize = 1024 * 1024;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct DeclarationRange {
+    pub byte_start: usize,
+    pub byte_end: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct DeclarationRecord {
+    pub name: String,
+    pub range: DeclarationRange,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct DeclarationFileRecord {
+    pub path: PathBuf,
+    pub language: AstGrepLanguage,
+    pub declarations: Vec<DeclarationRecord>,
+    pub complete: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct DeclarationSearchOutcome {
+    pub files: Vec<DeclarationFileRecord>,
+    pub stream_complete: bool,
+    pub truncated: bool,
+}
+
+async fn kill_and_reap_declaration_child(child: &mut tokio::process::Child) {
+    let _ = child.start_kill();
+    let _ = child.wait().await;
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BoundedRecordRead {
+    Record,
+    Eof,
+    Exhausted,
+}
+
+async fn read_bounded_record<R: AsyncBufRead + Unpin>(
+    reader: &mut R,
+    record: &mut Vec<u8>,
+    bytes_read: &mut usize,
+    byte_cap: usize,
+) -> std::io::Result<BoundedRecordRead> {
+    loop {
+        let available = reader.fill_buf().await?;
+        if available.is_empty() {
+            return Ok(if record.is_empty() {
+                BoundedRecordRead::Eof
+            } else {
+                BoundedRecordRead::Record
+            });
+        }
+        if *bytes_read >= byte_cap {
+            return Ok(BoundedRecordRead::Exhausted);
+        }
+
+        let remaining = byte_cap - *bytes_read;
+        let bounded = &available[..available.len().min(remaining)];
+        let consumed = bounded
+            .iter()
+            .position(|byte| *byte == b'\n')
+            .map_or(bounded.len(), |index| index + 1);
+        let record_complete = bounded.get(consumed.saturating_sub(1)) == Some(&b'\n');
+        record.extend_from_slice(&bounded[..consumed]);
+        reader.consume(consumed);
+        *bytes_read += consumed;
+        if record_complete {
+            return Ok(BoundedRecordRead::Record);
+        }
+    }
+}
+
+fn smart_case_eq(left: &str, query: &str) -> bool {
+    if query.chars().any(char::is_uppercase) {
+        left == query
+    } else {
+        left.to_lowercase() == query.to_lowercase()
+    }
+}
+
+fn matching_declarations(
+    file: &OutlineFile,
+    query: &str,
+    candidate_cap: usize,
+) -> (Vec<DeclarationRecord>, bool) {
+    let matching = file
+        .items
+        .iter()
+        .filter(|item| !item.is_import)
+        .flat_map(|item| {
+            std::iter::once((&item.name, &item.range)).chain(
+                item.members
+                    .iter()
+                    .map(|member| (&member.name, &member.range)),
+            )
+        })
+        .filter(|(name, _)| smart_case_eq(name, query))
+        .collect::<Vec<_>>();
+    let matching_count = matching.len();
+    let records = matching
+        .into_iter()
+        .filter_map(|(name, range)| {
+            let range = range.as_ref()?;
+            Some(DeclarationRecord {
+                name: name.clone(),
+                range: DeclarationRange {
+                    byte_start: usize::try_from(range.byte_offset.start).ok()?,
+                    byte_end: usize::try_from(range.byte_offset.end).ok()?,
+                },
+            })
+        })
+        .collect::<Vec<_>>();
+    let complete = records.len() == matching_count && records.len() <= candidate_cap;
+    (records.into_iter().take(candidate_cap).collect(), complete)
+}
+
+/// Stream recognised declarations using only an already installed outline
+/// executable. No installation or cache mutation is attempted.
+pub(crate) async fn search_declarations_bounded(
+    workspace_root: &Path,
+    resolved_path: &Path,
+    query: &str,
+    languages: &[AstGrepLanguage],
+    candidate_cap: usize,
+) -> Result<DeclarationSearchOutcome> {
+    let binary = match AstGrepStatus::check() {
+        AstGrepStatus::Available { binary, .. } => binary,
+        AstGrepStatus::NotFound => bail!("definition search is unavailable"),
+        AstGrepStatus::Error { .. } => bail!("definition search is unavailable"),
+    };
+    let command_arg = command_path_arg(workspace_root, resolved_path);
+    let mut command = Command::new(binary);
+    command
+        .current_dir(workspace_root)
+        .arg("outline")
+        .arg("--json=stream")
+        .arg("--items")
+        .arg("all")
+        .arg(command_arg)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+
+    let mut child = command.spawn().context("failed to run definition search")?;
+    let Some(stdout) = child.stdout.take() else {
+        kill_and_reap_declaration_child(&mut child).await;
+        bail!("failed to capture definition search output");
+    };
+    let mut reader = BufReader::new(stdout);
+    let mut bytes_read = 0usize;
+    let mut retained = 0usize;
+    let mut files = Vec::new();
+    let mut truncated = false;
+    let mut line_buf = Vec::with_capacity(CODE_SEARCH_OUTLINE_BYTE_CAP);
+
+    loop {
+        line_buf.clear();
+        let read = match read_bounded_record(
+            &mut reader,
+            &mut line_buf,
+            &mut bytes_read,
+            CODE_SEARCH_OUTLINE_BYTE_CAP,
+        )
+        .await
+        {
+            Ok(read) => read,
+            Err(error) => {
+                drop(reader);
+                kill_and_reap_declaration_child(&mut child).await;
+                return Err(error).context("failed to read definition stream");
+            }
+        };
+        match read {
+            BoundedRecordRead::Record => {}
+            BoundedRecordRead::Eof => break,
+            BoundedRecordRead::Exhausted => {
+                truncated = true;
+                break;
+            }
+        }
+        let file: OutlineFile = match serde_json::from_slice(&line_buf) {
+            Ok(file) => file,
+            Err(error) => {
+                drop(reader);
+                kill_and_reap_declaration_child(&mut child).await;
+                return Err(error).context("failed to parse definition stream record");
+            }
+        };
+        let path = PathBuf::from(&file.path);
+        let Some(language) = AstGrepLanguage::from_path(&path)
+            .or_else(|| AstGrepLanguage::from_user_value(&file.lang))
+        else {
+            continue;
+        };
+        if !languages.is_empty() && !languages.contains(&language) {
+            continue;
+        }
+        let remaining = candidate_cap.saturating_sub(retained);
+        let (declarations, complete) = matching_declarations(&file, query, remaining);
+        retained = retained.saturating_add(declarations.len());
+        files.push(DeclarationFileRecord {
+            path,
+            language,
+            declarations,
+            complete,
+        });
+        if !complete || retained >= candidate_cap {
+            truncated = true;
+            break;
+        }
+    }
+
+    drop(reader);
+    if truncated {
+        let _ = child.start_kill();
+    }
+    let status = child
+        .wait()
+        .await
+        .context("failed to reap definition search process")?;
+    if !truncated && !status.success() {
+        bail!("definition search failed");
+    }
+
+    Ok(DeclarationSearchOutcome {
+        files,
+        stream_complete: !truncated,
+        truncated,
+    })
+}
 
 /// Threshold for auto-downgrading `view: "full"` to `view: "names"` on
 /// directory queries.  `full` view emits per-symbol records with
@@ -223,7 +459,7 @@ fn view_is_explicit(args: &Value) -> bool {
 /// but doesn't exist as a file, retry without the extension — the agent often
 /// passes `path: "foo/bar.rs"` when `foo/bar` is actually a directory
 /// (checkpoint turn_595/turn_597).
-fn resolve_outline_path(workspace_root: &Path, request_path: &str) -> Result<std::path::PathBuf> {
+fn resolve_outline_path(workspace_root: &Path, request_path: &str) -> Result<PathBuf> {
     resolve_workspace_path(workspace_root, Path::new(request_path))
         .or_else(|_| {
             if has_source_extension(request_path) {
