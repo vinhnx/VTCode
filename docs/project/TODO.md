@@ -254,3 +254,7 @@ the plan in-line using the `apply_patch` tool.
 it seem this is the reason plan mode is not working, because it cannot write to the plans dir. Need to check if this is a permission issue or if the plans dir is not being created properly. If it's a permission issue, we may need to adjust the file system permissions or change the location of the plans dir to a writable location. If it's a creation issue, we need to ensure that the plans dir is created at startup if it doesn't exist.
 
 /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/checkpoints/turn_663.json
+
+===
+
+/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/memory/llm-perf-2026-07-15.md
