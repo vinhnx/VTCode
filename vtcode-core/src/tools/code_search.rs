@@ -268,10 +268,9 @@ fn has_complete_supported_inventory(
         {
             return false;
         }
-        stream_complete
-            || inventories
-                .get(path)
-                .is_some_and(|inventory| inventory.complete)
+        inventories
+            .get(path)
+            .map_or(stream_complete, |inventory| inventory.complete)
     })
 }
 
@@ -963,7 +962,8 @@ mod tests {
             "class Widget:\n    pass\nprint(Widget)\n",
         )
         .expect("Python fixture");
-        fs::write(workspace.path().join("src/widget.sh"), "echo Widget\n").expect("Bash fixture");
+        let bash_source = "function Widget() { echo Widget; }\n";
+        fs::write(workspace.path().join("src/widget.sh"), bash_source).expect("Bash fixture");
         fs::write(workspace.path().join("src/readme.mdx"), "Widget prose\n")
             .expect("unsupported parser fixture");
         fs::write(workspace.path().join("ignored.rs"), "fn Widget() {}\n")
@@ -987,11 +987,27 @@ mod tests {
                 }
             }]
         });
+        let bash_outline_record = json!({
+            "path": "src/widget.sh",
+            "language": "Bash",
+            "items": [{
+                "name": "Widget",
+                "symbolType": "function",
+                "astKind": "function_definition",
+                "isImport": false,
+                "range": {
+                    "byteOffset": {"start": 0, "end": bash_source.len()},
+                    "start": {"line": 0, "column": 0},
+                    "end": {"line": 0, "column": bash_source.len()}
+                }
+            }]
+        });
         let fake_outline = TempDir::new().expect("fake outline directory");
         let fake_outline_path = fake_outline.path().join("ast-grep");
         let script = format!(
-            "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then printf 'ast-grep 0.44.0\\n'; exit 0; fi\nprintf '%s\\n' '{}'\n",
-            outline_record.to_string().replace('\'', "'\\''")
+            "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then printf 'ast-grep 0.44.0\\n'; exit 0; fi\nprintf '%s\\n' '{}' '{}'\n",
+            outline_record.to_string().replace('\'', "'\\''"),
+            bash_outline_record.to_string().replace('\'', "'\\''")
         );
         fs::write(&fake_outline_path, script).expect("fake outline executable");
         #[cfg(unix)]
@@ -1047,6 +1063,35 @@ mod tests {
             [CodeSearchResultType::Definition, CodeSearchResultType::Path]
         );
         assert_eq!(request.filters.max_results, 7);
+    }
+
+    #[test]
+    fn complete_stream_does_not_override_explicitly_incomplete_inventory() {
+        let workspace = TempDir::new().expect("workspace");
+        let source = workspace.path().join("widget.rs");
+        fs::write(&source, "fn Widget() {}\n").expect("source fixture");
+        let canonical_root = fs::canonicalize(workspace.path()).expect("canonical workspace");
+        let canonical_source = fs::canonicalize(&source).expect("canonical source");
+        let scope = ResolvedSearchScope {
+            workspace_root: canonical_root.clone(),
+            requested_path: canonical_root,
+            requested_is_file: false,
+            allowed_files: HashSet::from([canonical_source.clone()]),
+        };
+        let inventories = HashMap::from([(
+            canonical_source,
+            DeclarationInventory {
+                complete: false,
+                exact_name_ranges: Vec::new(),
+            },
+        )]);
+
+        assert!(!has_complete_supported_inventory(
+            &scope,
+            &[AstGrepLanguage::Rust],
+            true,
+            &inventories,
+        ));
     }
 
     #[test]
@@ -1414,6 +1459,32 @@ mod tests {
         assert!(!response.truncated);
         assert_eq!(response.hints.len(), 1);
         assert!(response.hints[0].contains("file types"));
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn code_search_bash_definition_remains_available() {
+        let fixture = code_search_fixture();
+        let _fake_outline_dir = &fixture.fake_outline;
+        let _override =
+            set_ast_grep_binary_override_for_tests(Some(fixture.fake_outline_path.clone()));
+        let response = execute(
+            fixture.workspace.path(),
+            request(json!({
+                "query": "Widget",
+                "path": "src/widget.sh",
+                "result_types": ["definition"]
+            })),
+        )
+        .await
+        .expect("Bash definition search");
+
+        assert_eq!(response.returned, 1);
+        assert_eq!(
+            response.results[0].result_type,
+            CodeSearchResultType::Definition
+        );
+        assert_eq!(response.results[0].name.as_deref(), Some("Widget"));
     }
 
     #[tokio::test]

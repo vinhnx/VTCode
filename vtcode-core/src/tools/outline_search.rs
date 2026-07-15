@@ -154,7 +154,7 @@ pub(crate) async fn search_declarations_bounded(
     let mut files = Vec::new();
     let mut truncated = false;
     while command_paths.peek().is_some() && !truncated {
-        let command_args = next_outline_path_batch(&mut command_paths)?;
+        let command_args = next_outline_path_batch(&binary, &mut command_paths)?;
         let mut command = Command::new(&binary);
         command
             .current_dir(workspace_root)
@@ -282,19 +282,24 @@ fn outline_paths<'a>(
 }
 
 fn next_outline_path_batch(
+    executable: &Path,
     paths: &mut std::iter::Peekable<impl Iterator<Item = String>>,
 ) -> Result<Vec<String>> {
-    next_outline_path_batch_with_cap(paths, CODE_SEARCH_OUTLINE_ARG_BATCH_BYTE_CAP)
+    next_outline_path_batch_with_cap(executable, paths, CODE_SEARCH_OUTLINE_ARG_BATCH_BYTE_CAP)
 }
 
 fn next_outline_path_batch_with_cap(
+    executable: &Path,
     paths: &mut std::iter::Peekable<impl Iterator<Item = String>>,
     arg_byte_cap: usize,
 ) -> Result<Vec<String>> {
     let mut batch = Vec::with_capacity(CODE_SEARCH_OUTLINE_PATH_BATCH_SIZE);
-    let mut total_arg_bytes = CODE_SEARCH_OUTLINE_FIXED_ARGS
+    let mut total_arg_bytes = arg_os_bytes(executable.as_os_str());
+    total_arg_bytes = CODE_SEARCH_OUTLINE_FIXED_ARGS
         .iter()
-        .fold(0usize, |total, arg| total.saturating_add(arg_bytes(arg)));
+        .fold(total_arg_bytes, |total, arg| {
+            total.saturating_add(arg_bytes(arg))
+        });
     while batch.len() < CODE_SEARCH_OUTLINE_PATH_BATCH_SIZE {
         let Some(next) = paths.peek() else {
             break;
@@ -317,6 +322,10 @@ fn next_outline_path_batch_with_cap(
 
 fn arg_bytes(arg: &str) -> usize {
     arg.as_bytes().len().saturating_add(1)
+}
+
+fn arg_os_bytes(arg: &std::ffi::OsStr) -> usize {
+    arg.as_encoded_bytes().len().saturating_add(1)
 }
 
 /// Build the path argument passed to ast-grep. Use the workspace-relative form

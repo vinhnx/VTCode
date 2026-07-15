@@ -89,6 +89,15 @@ pub(crate) fn is_exact_usage_identifier(
     exact_named_node_for_range(tree, range).is_some_and(|node| allowlist.contains(&node.kind()))
 }
 
+fn declaration_name_node_kind_allowlist(
+    language: AstGrepLanguage,
+) -> Option<&'static [&'static str]> {
+    match language {
+        AstGrepLanguage::Bash => Some(&["word"]),
+        _ => usage_node_kind_allowlist(language),
+    }
+}
+
 pub(crate) fn exact_declaration_name_range(
     tree: &tree_sitter::Tree,
     source: &str,
@@ -105,7 +114,7 @@ pub(crate) fn exact_declaration_name_range(
         declaration_range.end.saturating_sub(1),
     )?;
     let name = declaration.child_by_field_name("name")?;
-    let allowlist = usage_node_kind_allowlist(language)?;
+    let allowlist = declaration_name_node_kind_allowlist(language)?;
     if !allowlist.contains(&name.kind()) {
         return None;
     }
@@ -416,5 +425,30 @@ mod tests {
             )
             .is_none()
         );
+    }
+
+    #[test]
+    fn bash_declaration_names_are_valid_without_enabling_bash_usages() {
+        let source = "function Widget() { echo Widget; }\n";
+        let tree = parse_source(AstGrepLanguage::Bash, source).expect("Bash parses");
+        let name = exact_declaration_name_range(
+            &tree,
+            source,
+            AstGrepLanguage::Bash,
+            SourceByteRange {
+                start: 0,
+                end: source.len(),
+            },
+            "Widget",
+            "Widget",
+        )
+        .expect("Bash function name");
+
+        assert_eq!(&source[name.start..name.end], "Widget");
+        assert!(!is_exact_usage_identifier(
+            &tree,
+            AstGrepLanguage::Bash,
+            SourceByteRange { start: 25, end: 31 },
+        ));
     }
 }

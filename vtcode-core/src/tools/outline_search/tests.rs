@@ -222,54 +222,79 @@ async fn code_search_declaration_batch_failure_fails_the_component() {
     assert!(error.to_string().contains("definition search failed"));
 }
 
-fn fixed_outline_arg_bytes() -> usize {
-    CODE_SEARCH_OUTLINE_FIXED_ARGS
-        .iter()
-        .map(|arg| arg_bytes(arg))
-        .sum()
+fn fixed_outline_arg_bytes(executable: &std::path::Path) -> usize {
+    super::arg_os_bytes(executable.as_os_str())
+        + CODE_SEARCH_OUTLINE_FIXED_ARGS
+            .iter()
+            .map(|arg| arg_bytes(arg))
+            .sum::<usize>()
 }
 
 #[test]
 fn code_search_outline_path_batches_roll_over_at_byte_cap() {
+    let executable = std::path::Path::new("ast-grep");
     let first = "a.rs".to_owned();
     let second = "longer.rs".to_owned();
-    let cap = fixed_outline_arg_bytes() + arg_bytes(&first) + arg_bytes(&second) - 1;
+    let cap = fixed_outline_arg_bytes(executable) + arg_bytes(&first) + arg_bytes(&second) - 1;
     let mut paths = vec![first.clone(), second.clone()].into_iter().peekable();
 
     assert_eq!(
-        next_outline_path_batch_with_cap(&mut paths, cap).expect("first batch"),
+        next_outline_path_batch_with_cap(executable, &mut paths, cap).expect("first batch"),
         vec![first]
     );
     assert_eq!(
-        next_outline_path_batch_with_cap(&mut paths, cap).expect("second batch"),
+        next_outline_path_batch_with_cap(executable, &mut paths, cap).expect("second batch"),
         vec![second]
     );
 }
 
 #[test]
+fn code_search_outline_path_batch_counts_executable_and_nul() {
+    let executable = std::path::Path::new("/long/path/to/ast-grep");
+    let path = "a.rs".to_owned();
+    let cap_without_executable = CODE_SEARCH_OUTLINE_FIXED_ARGS
+        .iter()
+        .map(|arg| arg_bytes(arg))
+        .sum::<usize>()
+        + arg_bytes(&path);
+    let mut paths = vec![path.clone()].into_iter().peekable();
+
+    let error = next_outline_path_batch_with_cap(executable, &mut paths, cap_without_executable)
+        .expect_err("executable bytes must count towards the argv cap");
+
+    assert!(error.to_string().contains("command argument byte limit"));
+    assert_eq!(paths.next(), Some(path));
+}
+
+#[test]
 fn code_search_outline_path_batch_preserves_input_order() {
+    let executable = std::path::Path::new("ast-grep");
     let expected = vec!["c.rs".to_owned(), "a.rs".to_owned(), "b.rs".to_owned()];
-    let cap =
-        fixed_outline_arg_bytes() + expected.iter().map(|path| arg_bytes(path)).sum::<usize>();
+    let cap = fixed_outline_arg_bytes(executable)
+        + expected.iter().map(|path| arg_bytes(path)).sum::<usize>();
     let mut paths = expected.clone().into_iter().peekable();
 
-    let actual = next_outline_path_batch_with_cap(&mut paths, cap).expect("ordered path batch");
+    let actual =
+        next_outline_path_batch_with_cap(executable, &mut paths, cap).expect("ordered path batch");
 
     assert_eq!(actual, expected);
 }
 
 #[test]
 fn code_search_outline_path_batches_do_not_drop_paths() {
+    let executable = std::path::Path::new("ast-grep");
     let expected = (0..(CODE_SEARCH_OUTLINE_PATH_BATCH_SIZE + 3))
         .map(|index| format!("{index:03}.rs"))
         .collect::<Vec<_>>();
-    let cap = fixed_outline_arg_bytes() + arg_bytes(&expected[0]) * 3;
+    let cap = fixed_outline_arg_bytes(executable) + arg_bytes(&expected[0]) * 3;
     let mut paths = expected.clone().into_iter().peekable();
     let mut actual = Vec::new();
 
     while paths.peek().is_some() {
-        actual
-            .extend(next_outline_path_batch_with_cap(&mut paths, cap).expect("bounded path batch"));
+        actual.extend(
+            next_outline_path_batch_with_cap(executable, &mut paths, cap)
+                .expect("bounded path batch"),
+        );
     }
 
     assert_eq!(actual, expected);
@@ -277,11 +302,12 @@ fn code_search_outline_path_batches_do_not_drop_paths() {
 
 #[test]
 fn code_search_outline_oversized_single_path_fails_without_consuming_it() {
+    let executable = std::path::Path::new("ast-grep");
     let oversized = "oversized.rs".to_owned();
-    let cap = fixed_outline_arg_bytes() + arg_bytes(&oversized) - 1;
+    let cap = fixed_outline_arg_bytes(executable) + arg_bytes(&oversized) - 1;
     let mut paths = vec![oversized.clone()].into_iter().peekable();
 
-    let error = next_outline_path_batch_with_cap(&mut paths, cap)
+    let error = next_outline_path_batch_with_cap(executable, &mut paths, cap)
         .expect_err("oversized path must fail the definition component");
 
     assert!(error.to_string().contains("command argument byte limit"));

@@ -139,7 +139,7 @@ pub(crate) fn search_paths_bounded_no_follow(
         compute_indices: false,
         respect_gitignore: true,
     })?;
-    let truncated = results.total_match_count >= candidate_cap;
+    let truncated = results.total_match_count > candidate_cap;
     let paths = results
         .matches
         .into_iter()

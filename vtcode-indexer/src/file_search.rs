@@ -503,21 +503,22 @@ fn push_top_match(
     path: String,
     match_type: MatchType,
 ) -> bool {
+    let candidate = (score, path, match_type);
     if matches.len() < limit {
-        matches.push(Reverse((score, path, match_type)));
+        matches.push(Reverse(candidate));
         return true;
     }
 
-    let Some(min_score) = matches.peek().map(|entry| entry.0.0) else {
+    let Some(minimum) = matches.peek().map(|entry| &entry.0) else {
         return false;
     };
 
-    if score <= min_score {
+    if &candidate <= minimum {
         return false;
     }
 
     matches.pop();
-    matches.push(Reverse((score, path, match_type)));
+    matches.push(Reverse(candidate));
     true
 }
 
@@ -593,8 +594,9 @@ pub fn run(config: FileSearchConfig) -> anyhow::Result<FileSearchResults> {
 
 /// Run a bounded fuzzy path search without following symbolic links.
 ///
-/// This focused route is intended for request-scoped code search. It stops
-/// traversal once the candidate limit is reached and deliberately avoids the
+/// This focused route is intended for request-scoped code search. It traverses
+/// all eligible files while retaining only an ordered top-K heap, so the cap
+/// is deterministic without unbounded memory. It deliberately avoids the
 /// persistent [`FileIndexCache`].
 pub fn run_bounded_no_follow(config: FileSearchConfig) -> anyhow::Result<FileSearchResults> {
     run_with_policy(config, false, true)
@@ -603,7 +605,7 @@ pub fn run_bounded_no_follow(config: FileSearchConfig) -> anyhow::Result<FileSea
 fn run_with_policy(
     config: FileSearchConfig,
     follow_links: bool,
-    stop_at_limit: bool,
+    files_only: bool,
 ) -> anyhow::Result<FileSearchResults> {
     let limit = config.limit.get();
     let search_directory = &config.search_directory;
@@ -650,10 +652,6 @@ fn run_with_policy(
                 return ignore::WalkState::Quit;
             }
 
-            if stop_at_limit && total_match_count_clone.load(Ordering::Relaxed) >= limit {
-                return ignore::WalkState::Quit;
-            }
-
             let entry = match result {
                 Ok(e) => e,
                 Err(_) => return ignore::WalkState::Continue,
@@ -677,7 +675,7 @@ fn run_with_policy(
                 MatchType::File
             };
 
-            if stop_at_limit && match_type == MatchType::Directory {
+            if files_only && match_type == MatchType::Directory {
                 return ignore::WalkState::Continue;
             }
 
@@ -685,10 +683,7 @@ fn run_with_policy(
             {
                 let mut list = best_list.lock();
                 if list.record_match(path_to_match, match_type) {
-                    let previous = total_match_count_clone.fetch_add(1, Ordering::Relaxed);
-                    if stop_at_limit && previous.saturating_add(1) >= limit {
-                        return ignore::WalkState::Quit;
-                    }
+                    total_match_count_clone.fetch_add(1, Ordering::Relaxed);
                 }
             }
 
@@ -723,4 +718,48 @@ fn run_with_policy(
         matches,
         total_match_count: total_match_count.load(Ordering::Relaxed),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{FileSearchConfig, run_bounded_no_follow};
+    use std::num::NonZero;
+    use std::sync::Arc;
+    use std::sync::atomic::AtomicBool;
+    use tempfile::TempDir;
+
+    fn bounded_paths(workspace: &std::path::Path) -> Vec<String> {
+        run_bounded_no_follow(FileSearchConfig {
+            pattern_text: "widget".to_string(),
+            limit: NonZero::new(2).expect("non-zero limit"),
+            search_directory: workspace.to_path_buf(),
+            exclude: Vec::new(),
+            threads: NonZero::new(4).expect("non-zero threads"),
+            cancel_flag: Arc::new(AtomicBool::new(false)),
+            compute_indices: false,
+            respect_gitignore: true,
+        })
+        .expect("bounded path search")
+        .matches
+        .into_iter()
+        .map(|candidate| candidate.path)
+        .collect()
+    }
+
+    #[test]
+    fn bounded_path_selection_is_stable_across_repeated_parallel_walks() {
+        let workspace = TempDir::new().expect("workspace");
+        for directory in ["z", "a", "m", "b", "y"] {
+            let directory = workspace.path().join(directory);
+            std::fs::create_dir(&directory).expect("fixture directory");
+            std::fs::write(directory.join("widget.rs"), "fn widget() {}\n")
+                .expect("fixture source");
+        }
+
+        let expected = bounded_paths(workspace.path());
+        assert_eq!(expected.len(), 2);
+        for _ in 0..20 {
+            assert_eq!(bounded_paths(workspace.path()), expected);
+        }
+    }
 }
