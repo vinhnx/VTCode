@@ -15,11 +15,12 @@ exact identifier occurrence outside a known declaration name as a syntactic
 usage. A usage can belong to a different symbol with the same spelling, so it
 is not a semantically resolved reference.
 
-VT Code bundles local parsers for Rust, Python, JavaScript, TypeScript, TSX,
-Go, Java, C, C++, and Bash. `code_search` uses the supported programming
-language parsers for syntax-aware usage classification. Other languages can
-still produce text, path, and available definition results, while the model can
-reason about their source text directly.
+`code_search` can classify syntax-aware usages for Rust, Python, JavaScript,
+TypeScript, TSX, Go, Java, C, and C++ when it has complete declaration
+information for the searched file. Bash usage classification is unsupported.
+Languages without supported usage classification can still produce text, path,
+and available definition results, while the model can reason about their source
+text directly.
 
 ## Tree-sitter Security Parsing (Bash)
 

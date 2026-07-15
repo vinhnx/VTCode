@@ -132,6 +132,7 @@ pub mod autonomous_executor;
 pub mod cache;
 pub(crate) mod code_search;
 pub use code_search::normalised_identity as normalised_code_search_identity;
+pub use code_search::normalised_loop_identity as normalised_code_search_loop_identity;
 pub mod command;
 pub mod command_args;
 pub mod command_cache;

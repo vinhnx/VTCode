@@ -17,7 +17,7 @@ async fn build_tool_permissions_context_propagates_skip_confirmations() {
 }
 
 #[test]
-fn low_signal_family_for_code_search_uses_normalised_identity() {
+fn low_signal_family_for_code_search_uses_limit_insensitive_loop_identity() {
     let first = low_signal_family_key(
         tool_names::CODE_SEARCH,
         &json!({

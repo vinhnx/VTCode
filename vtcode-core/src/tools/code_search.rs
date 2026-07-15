@@ -137,17 +137,39 @@ impl CodeSearchRequest {
     }
 }
 
-pub fn normalised_identity(args: &serde_json::Value) -> Option<String> {
+fn normalised_identity_value(
+    args: &serde_json::Value,
+    include_max_results: bool,
+) -> Option<serde_json::Value> {
     let request = serde_json::from_value::<CodeSearchRequest>(args.clone()).ok()?;
     let mut normalised = request.normalise().ok()?;
     normalised.filters.file_types.sort_unstable();
-    serde_json::to_string(&serde_json::json!({
+    let mut identity = serde_json::json!({
         "query": normalised.query,
         "path": normalised.filters.path,
         "file_types": normalised.filters.file_types,
         "result_types": normalised.filters.result_types,
-    }))
-    .ok()
+    });
+    if include_max_results {
+        identity["max_results"] = normalised.filters.max_results.into();
+    }
+    Some(identity)
+}
+
+/// Normalised identity for result caching and replay.
+///
+/// The effective result limit affects both the returned results and echoed
+/// filters, so it is part of this identity.
+pub fn normalised_identity(args: &serde_json::Value) -> Option<String> {
+    serde_json::to_string(&normalised_identity_value(args, true)?).ok()
+}
+
+/// Normalised identity for detecting repeated search behaviour.
+///
+/// Loop detection deliberately ignores the result limit: changing only the
+/// requested extent does not make an otherwise repeated search distinct.
+pub fn normalised_loop_identity(args: &serde_json::Value) -> Option<String> {
+    serde_json::to_string(&normalised_identity_value(args, false)?).ok()
 }
 
 fn normalise_file_types(file_types: Option<Vec<CompactStr>>) -> Result<Vec<CompactStr>> {
@@ -918,6 +940,42 @@ mod tests {
     use serial_test::serial;
     use std::fs;
     use tempfile::TempDir;
+
+    #[test]
+    fn result_identity_includes_effective_max_results() {
+        let one = normalised_identity(&serde_json::json!({
+            "query": "Widget",
+            "max_results": 1
+        }));
+        let hundred = normalised_identity(&serde_json::json!({
+            "query": "Widget",
+            "max_results": 100
+        }));
+        assert_ne!(one, hundred);
+    }
+
+    #[test]
+    fn result_identity_normalises_omitted_max_results_to_default() {
+        let omitted = normalised_identity(&serde_json::json!({"query": " Widget "}));
+        let explicit = normalised_identity(&serde_json::json!({
+            "query": "Widget",
+            "max_results": DEFAULT_MAX_RESULTS
+        }));
+        assert_eq!(omitted, explicit);
+    }
+
+    #[test]
+    fn loop_identity_deliberately_ignores_max_results() {
+        let one = normalised_loop_identity(&serde_json::json!({
+            "query": "Widget",
+            "max_results": 1
+        }));
+        let hundred = normalised_loop_identity(&serde_json::json!({
+            "query": "Widget",
+            "max_results": 100
+        }));
+        assert_eq!(one, hundred);
+    }
 
     fn request(value: serde_json::Value) -> CodeSearchRequest {
         serde_json::from_value(value).expect("valid request shape")

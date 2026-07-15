@@ -116,9 +116,10 @@ impl LoopTracker {
 /// because it is reset at the start of each turn. Scans the last
 /// `MAX_HISTORY_SCAN` messages to keep the check bounded.
 ///
-/// For read-only tools, signatures are normalized so that re-reading the same
-/// file with a different `offset`/`limit` is recognized as the same logical
-/// read — avoiding wasted tokens on duplicate output.
+/// File-read pagination is normalised so that re-reading the same file with a
+/// different `offset` or `limit` is recognised as the same logical read.
+/// `code_search` uses a separate replay identity that retains the effective
+/// `max_results`; its loop identity is separate.
 ///
 /// Uses a two-pass approach: first builds a map of call_id → normalized_signature
 /// from Assistant messages, then scans Tool responses backward to find the most
@@ -374,11 +375,11 @@ pub(crate) fn signature_key_for(name: &str, args: &serde_json::Value) -> String 
 
 /// Generate a read-normalized signature key for cross-turn dedup.
 ///
-/// For read-only tools (`file_operation` with `read` action, `code_search`,
-/// `read_file`, `grep_file`, `list_files`), pagination and read-offset fields
-/// are stripped before hashing. This ensures that re-reading the same file with
-/// a different `offset`/`limit` (a common model behavior) is recognized as the
-/// same logical read.
+/// File-read tools (`file_operation` with `read` action, `read_file`,
+/// `grep_file`, `list_files`) omit pagination and read-offset fields so that
+/// re-reading the same target groups under one logical read. `code_search`
+/// uses its normalised result-replay identity, which preserves the effective
+/// `max_results`; its separate loop identity may group searches across limits.
 ///
 /// For mutating tools the original `signature_key_for` is returned unchanged.
 pub(crate) fn read_normalized_signature_key(name: &str, args: &serde_json::Value) -> String {
@@ -1218,7 +1219,7 @@ mod tests {
     }
 
     #[test]
-    fn read_normalized_signature_key_unifies_code_search_limits_and_filter_order() {
+    fn read_normalized_signature_key_includes_code_search_limit_and_normalises_filter_order() {
         let args_a = json!({
             "query": "Widget",
             "path": "src",
@@ -1235,9 +1236,28 @@ mod tests {
         });
         let key_a = read_normalized_signature_key(tools::CODE_SEARCH, &args_a);
         let key_b = read_normalized_signature_key(tools::CODE_SEARCH, &args_b);
-        assert_eq!(
+        assert_ne!(
             key_a, key_b,
-            "limit and filter ordering must not split one code-search identity"
+            "different effective limits must not share one code-search replay identity"
+        );
+
+        let args_default = json!({
+            "query": " Widget ",
+            "path": "src",
+            "file_types": ["rs", "typescript"],
+            "result_types": ["definition", "text"]
+        });
+        let args_explicit_default = json!({
+            "query": "Widget",
+            "path": "src",
+            "file_types": ["typescript", "rust"],
+            "result_types": ["text", "definition"],
+            "max_results": 20
+        });
+        assert_eq!(
+            read_normalized_signature_key(tools::CODE_SEARCH, &args_default),
+            read_normalized_signature_key(tools::CODE_SEARCH, &args_explicit_default),
+            "omitted and explicit default limits must share replay identity"
         );
     }
 
@@ -1254,9 +1274,9 @@ mod tests {
     fn find_duplicate_in_history_matches_normalized_read() {
         use vtcode_core::llm::provider as uni;
 
-        // find_duplicate_in_history uses read_normalized_signature_key which
-        // strips offset/limit for read-only tools.  Test that the normalized
-        // signature matching works by constructing a history with two pairs
+        // find_duplicate_in_history uses read_normalized_signature_key, which
+        // strips offset/limit for file reads. Test that the normalised signature
+        // matching works by constructing a history with two pairs
         // where the SECOND pair's assistant message has different pagination
         // but the same normalized key, and verifying the function returns the
         // first pair's tool output (since the second pair's Tool is scanned
@@ -1299,7 +1319,7 @@ mod tests {
             "different files must produce different normalized keys"
         );
 
-        // Verify: code-search result limits and filter ordering normalize away.
+        // Verify: code-search result limits remain distinct while filter ordering normalises away.
         let s_key_a = read_normalized_signature_key(
             tools::CODE_SEARCH,
             &json!({"query":"Widget","path":"src","file_types":["rust","typescript"],"result_types":["text","definition"],"max_results":10}),
@@ -1308,9 +1328,9 @@ mod tests {
             tools::CODE_SEARCH,
             &json!({"query":"Widget","path":"src","file_types":["typescript","rs"],"result_types":["definition","text"],"max_results":100}),
         );
-        assert_eq!(
+        assert_ne!(
             s_key_a, s_key_b,
-            "same code search should normalize to the same key"
+            "different effective limits must not share one code-search replay identity"
         );
 
         // Verify: write NOT normalized
@@ -1381,7 +1401,7 @@ mod tests {
     }
 
     #[test]
-    fn find_duplicate_in_history_reuses_normalised_code_search_result() {
+    fn find_duplicate_in_history_respects_normalised_code_search_limit() {
         let original_args = json!({
             "query": "Widget",
             "path": "src",
@@ -1406,7 +1426,7 @@ mod tests {
             },
         ];
 
-        let reused = find_duplicate_in_history(
+        let different_limit = find_duplicate_in_history(
             &history,
             tools::CODE_SEARCH,
             &json!({
@@ -1418,7 +1438,35 @@ mod tests {
             }),
         );
 
-        assert_eq!(reused.as_deref(), Some("{\"results\":[]}"));
+        assert_eq!(different_limit, None);
+
+        let equivalent_default_history = vec![
+            uni::Message::assistant_with_tools(
+                "search".into(),
+                vec![uni::ToolCall::function(
+                    "tc_default".into(),
+                    tools::CODE_SEARCH.into(),
+                    serde_json::to_string(&json!({
+                        "query": "Widget",
+                        "path": "src",
+                        "max_results": 20
+                    }))
+                    .unwrap(),
+                )],
+            ),
+            uni::Message {
+                role: uni::MessageRole::Tool,
+                content: uni::MessageContent::text("{\"results\":[1]}".into()),
+                tool_call_id: Some("tc_default".into()),
+                ..Default::default()
+            },
+        ];
+        let reused = find_duplicate_in_history(
+            &equivalent_default_history,
+            tools::CODE_SEARCH,
+            &json!({"query": " Widget ", "path": "src"}),
+        );
+        assert_eq!(reused.as_deref(), Some("{\"results\":[1]}"));
     }
 
     #[test]

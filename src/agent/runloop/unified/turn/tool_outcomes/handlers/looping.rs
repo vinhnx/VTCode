@@ -240,7 +240,7 @@ pub(crate) fn low_signal_family_key(canonical_tool_name: &str, args: &Value) -> 
         }
         tool_names::UNIFIED_EXEC => normalized_shell_command_arg(args, 160)
             .map(|command| format!("{canonical_tool_name}::run::{command}")),
-        tool_names::CODE_SEARCH => vtcode_core::tools::normalised_code_search_identity(args)
+        tool_names::CODE_SEARCH => vtcode_core::tools::normalised_code_search_loop_identity(args)
             .map(|identity| format!("{canonical_tool_name}::{identity}")),
         _ => None,
     }

@@ -369,7 +369,7 @@ mod tests {
     }
 
     #[test]
-    fn code_search_cache_identity_ignores_limit_and_canonicalises_filters() {
+    fn code_search_cache_identity_includes_effective_limit_and_canonicalises_filters() {
         let first = json!({
             "query": " Widget ",
             "path": "src",
@@ -385,9 +385,29 @@ mod tests {
             "max_results": 100
         });
 
-        assert_eq!(
+        assert_ne!(
             create_enhanced_cache_key(tools::CODE_SEARCH, &first, "src", "/workspace"),
-            create_enhanced_cache_key(tools::CODE_SEARCH, &second, "src", "/workspace")
+            create_enhanced_cache_key(tools::CODE_SEARCH, &second, "src", "/workspace"),
+            "different effective limits must not share cached results"
+        );
+
+        let explicit_default = json!({
+            "query": "Widget",
+            "path": "src",
+            "file_types": ["rust", ".py"],
+            "result_types": ["definition", "path"],
+            "max_results": 20
+        });
+        let omitted_default = json!({
+            "query": " Widget ",
+            "path": "src",
+            "file_types": [".rs", "python"],
+            "result_types": ["path", "definition"]
+        });
+        assert_eq!(
+            create_enhanced_cache_key(tools::CODE_SEARCH, &explicit_default, "src", "/workspace"),
+            create_enhanced_cache_key(tools::CODE_SEARCH, &omitted_default, "src", "/workspace"),
+            "omitted and explicit default limits must share cached results"
         );
     }
 }

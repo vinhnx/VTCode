@@ -790,10 +790,10 @@ impl ToolExecutionHistory {
         if !is_read {
             return None;
         }
-        let path = Self::extract_path_from_args(obj)?;
         if tool_name == tools::CODE_SEARCH {
             return crate::tools::normalised_code_search_identity(args);
         }
+        let path = Self::extract_path_from_args(obj)?;
         if tool_name == tools::GREP_FILE {
             let pattern = obj.get("pattern").and_then(Value::as_str).unwrap_or("");
             return Some(format!("{path}::{pattern}"));
@@ -973,8 +973,8 @@ impl ToolExecutionHistory {
         let mut identical_count = 0;
         for record in &recent {
             let same_args = if tool_name_matches(tool_name, tools::CODE_SEARCH) {
-                crate::tools::normalised_code_search_identity(&record.args)
-                    == crate::tools::normalised_code_search_identity(args)
+                crate::tools::normalised_code_search_loop_identity(&record.args)
+                    == crate::tools::normalised_code_search_loop_identity(args)
             } else {
                 record.args == *args
             };
@@ -1464,7 +1464,7 @@ mod tests {
     }
 
     #[test]
-    fn code_search_exact_repeat_uses_normalised_query_and_filters() {
+    fn code_search_loop_identity_normalises_query_filters_and_limit() {
         let history = ToolExecutionHistory::new(10);
         history.set_loop_detection_limits(5, 2);
 
@@ -1476,8 +1476,8 @@ mod tests {
             "max_results": 5
         });
 
-        // With MIN_READONLY_IDENTICAL_LIMIT=2, two identical successful calls
-        // are enough to trigger loop detection.
+        // With MIN_READONLY_IDENTICAL_LIMIT=2, two successful calls with the
+        // same limit-insensitive loop identity are enough to trigger detection.
         for _ in 0..2 {
             history.add_record(ToolExecutionRecord::success(
                 tools::CODE_SEARCH.to_string(),
@@ -1500,10 +1500,10 @@ mod tests {
         let loop_result = history.detect_loop(tools::CODE_SEARCH, &equivalent_args);
         assert!(
             loop_result.detected,
-            "two identical calls should trigger loop detection with MIN_READONLY_IDENTICAL_LIMIT=2"
+            "two loop-equivalent calls should trigger detection despite differing max_results"
         );
 
-        // A third identical call crosses the threshold.
+        // A third loop-equivalent call increases the repeat count.
         history.add_record(ToolExecutionRecord::success(
             tools::CODE_SEARCH.to_string(),
             tools::CODE_SEARCH.to_string(),
@@ -1539,6 +1539,64 @@ mod tests {
                     .detected
             );
         }
+    }
+
+    #[test]
+    fn code_search_replay_matches_omitted_path_and_default_limit() {
+        let history = ToolExecutionHistory::new(10);
+        let cached_args = json!({"query": "ToolRegistry"});
+        let cached_result = json!({"results": ["cached default search"]});
+
+        history.add_record(ToolExecutionRecord::success(
+            tools::CODE_SEARCH.to_string(),
+            tools::CODE_SEARCH.to_string(),
+            false,
+            None,
+            cached_args,
+            cached_result.clone(),
+            make_snapshot(),
+            None,
+            None,
+            None,
+            None,
+            false,
+        ));
+
+        let replayed = history.find_recent_successful_by_read_target(
+            tools::CODE_SEARCH,
+            &json!({"query": "ToolRegistry", "max_results": 20}),
+            Duration::from_secs(60),
+        );
+
+        assert_eq!(replayed, Some(cached_result));
+    }
+
+    #[test]
+    fn code_search_replay_separates_different_effective_limits() {
+        let history = ToolExecutionHistory::new(10);
+
+        history.add_record(ToolExecutionRecord::success(
+            tools::CODE_SEARCH.to_string(),
+            tools::CODE_SEARCH.to_string(),
+            false,
+            None,
+            json!({"query": "ToolRegistry", "max_results": 1}),
+            json!({"results": ["limited search"]}),
+            make_snapshot(),
+            None,
+            None,
+            None,
+            None,
+            false,
+        ));
+
+        let replayed = history.find_recent_successful_by_read_target(
+            tools::CODE_SEARCH,
+            &json!({"query": "ToolRegistry", "max_results": 100}),
+            Duration::from_secs(60),
+        );
+
+        assert!(replayed.is_none());
     }
 
     #[test]
