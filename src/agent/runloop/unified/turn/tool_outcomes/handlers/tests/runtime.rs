@@ -325,7 +325,7 @@ async fn validate_tool_call_blocks_when_wall_clock_budget_exhausted() {
 
     // Flushing after the batch pushes exactly one "synthesize now" directive so
     // the model produces a final answer from gathered context instead of stalling.
-    flush_wall_clock_directive(&mut ctx);
+    flush_budget_synthesis_directives(&mut ctx);
     let directive_count = ctx
         .working_history
         .iter()
@@ -356,7 +356,7 @@ async fn validate_tool_call_blocks_when_wall_clock_budget_exhausted() {
     );
 
     // Flushing again is a no-op (the pending flag is consumed).
-    flush_wall_clock_directive(&mut ctx);
+    flush_budget_synthesis_directives(&mut ctx);
     let directive_count_after = ctx
         .working_history
         .iter()

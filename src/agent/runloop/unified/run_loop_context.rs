@@ -119,13 +119,23 @@ impl ToolBudgetExhaustion {
         )
     }
 
-    pub(crate) fn blocked_turn_reason(self) -> String {
+    /// Compact stub returned for the 2nd+ rejected calls in the same batch so
+    /// the full policy message isn't repeated N times and context stays clean.
+    pub(crate) fn skipped_call_message(self) -> String {
+        "Tool-call budget exhausted for this turn; call skipped.".to_string()
+    }
+
+    /// System directive pushed once (after all tool responses in the batch)
+    /// telling the model that tools are disabled for the rest of the turn and
+    /// it must synthesize a final answer from already-gathered outputs.
+    /// Mirrors `ToolWallClockExhaustion::synthesis_directive_message`.
+    pub(crate) fn synthesis_directive_message(self) -> String {
         debug_assert!(
             self.max > 0,
             "disabled tool-call caps must not emit exhaustion"
         );
         format!(
-            "Tool-call budget exhausted for this turn ({}/{}). Start a new turn with \"continue\" or provide a new instruction to proceed.",
+            "Tool-call budget exhausted for this turn ({}/{}). Tools are disabled for the rest of this turn. Do NOT emit more tool calls. Synthesize your final answer now from the tool outputs already gathered in this conversation.",
             self.used, self.max
         )
     }
@@ -337,6 +347,12 @@ pub(crate) struct HarnessTurnState {
     /// batch by the handler to push a single "synthesize now" system directive
     /// *after* all tool responses (never interleaved between them).
     pub wall_clock_directive_pending: bool,
+    /// Set when the first tool-call-budget rejection fires; consumed after the
+    /// tool batch to push a single "synthesize now" system directive, mirroring
+    /// `wall_clock_directive_pending`. Without this, tool-call budget
+    /// exhaustion hard-broke the turn as `Blocked` with no synthesis pass, so
+    /// plan mode never produced a plan (checkpoint turn_647 follow-up).
+    pub tool_budget_directive_pending: bool,
     pub recovery_reason: Option<String>,
     recovery_phase: RecoveryPhase,
     recovery_mode: Option<RecoveryMode>,
@@ -397,6 +413,7 @@ impl HarnessTurnState {
             tool_budget_exhausted_emitted: false,
             wall_clock_exhausted_emitted: false,
             wall_clock_directive_pending: false,
+            tool_budget_directive_pending: false,
             recovery_reason: None,
             recovery_phase: RecoveryPhase::Inactive,
             recovery_mode: None,
@@ -482,11 +499,19 @@ impl HarnessTurnState {
         let first_notice = !self.tool_budget_exhausted_emitted;
         if first_notice {
             self.mark_tool_budget_exhausted_emitted();
+            self.tool_budget_directive_pending = true;
         }
         Some(ToolBudgetExhaustionNotice {
             exhaustion,
             first_notice,
         })
+    }
+
+    /// Consume the pending tool-call-budget synthesis-directive flag. Returns
+    /// `true` exactly once per turn (after the batch where exhaustion first
+    /// fired). Mirrors `take_wall_clock_directive_pending`.
+    pub(crate) fn take_tool_budget_directive_pending(&mut self) -> bool {
+        std::mem::take(&mut self.tool_budget_directive_pending)
     }
 
     /// Record a wall-clock-budget rejection for the current tool call.
@@ -1078,16 +1103,33 @@ mod tests {
     }
 
     #[test]
-    fn tool_budget_exhaustion_blocked_turn_reason_matches_contract() {
+    fn tool_budget_exhaustion_synthesis_directive_matches_contract() {
         assert_eq!(
             ToolBudgetExhaustion {
                 used: 4,
                 max: 4,
                 remaining: 0,
             }
-            .blocked_turn_reason(),
-            "Tool-call budget exhausted for this turn (4/4). Start a new turn with \"continue\" or provide a new instruction to proceed."
+            .synthesis_directive_message(),
+            "Tool-call budget exhausted for this turn (4/4). Tools are disabled for the rest of this turn. Do NOT emit more tool calls. Synthesize your final answer now from the tool outputs already gathered in this conversation."
         );
+    }
+
+    #[test]
+    fn tool_budget_exhaustion_notice_arms_synthesis_directive_once() {
+        let mut state = HarnessTurnState::new(
+            TurnRunId("run-1".to_string()),
+            TurnId("turn-1".to_string()),
+            1,
+            600,
+            3,
+        );
+        state.record_tool_call();
+        assert!(state.record_tool_budget_exhaustion_notice().is_some());
+        assert!(state.take_tool_budget_directive_pending());
+        // Second rejected call in the same turn must not re-arm the directive.
+        assert!(state.record_tool_budget_exhaustion_notice().is_some());
+        assert!(!state.take_tool_budget_directive_pending());
     }
 
     #[test]

@@ -32,7 +32,7 @@ mod recovery;
 #[cfg(test)]
 mod tests;
 mod types;
-use budget::{build_tool_budget_exhausted_reason, record_tool_call_budget_usage};
+use budget::record_tool_call_budget_usage;
 use fallbacks::{
     build_validation_error_content_with_fallback, preflight_validation_fallback,
     recovery_fallback_for_tool, try_recover_preflight_with_fallback,
@@ -54,12 +54,13 @@ fn build_failure_error_content(error: String, failure_kind: &'static str) -> Str
     super::execution_result::build_error_content(error, None, None, failure_kind).to_string()
 }
 
-/// Push the one-time wall-clock synthesis directive if a wall-clock rejection
-/// armed it during validation. Called after the tool batch (single or grouped)
-/// completes so the system message lands *after* all tool responses of the
-/// current assistant message, never interleaved between them (which some
-/// provider adapters reject). No-op unless the budget tripped this turn.
-pub(super) fn flush_wall_clock_directive(ctx: &mut TurnProcessingContext<'_>) {
+/// Push the one-time budget-exhaustion synthesis directive (wall-clock or
+/// tool-call budget) if a rejection armed it during validation. Called after
+/// the tool batch (single or grouped) completes so the system message lands
+/// *after* all tool responses of the current assistant message, never
+/// interleaved between them (which some provider adapters reject). No-op
+/// unless a budget tripped this turn.
+pub(super) fn flush_budget_synthesis_directives(ctx: &mut TurnProcessingContext<'_>) {
     if ctx.harness_state.take_wall_clock_directive_pending()
         && let Some(exhaustion) = ctx.harness_state.wall_clock_budget_exhaustion()
     {
@@ -72,6 +73,15 @@ pub(super) fn flush_wall_clock_directive(ctx: &mut TurnProcessingContext<'_>) {
         if ctx.harness_state.recovery_reason.is_none() {
             ctx.harness_state.recovery_reason =
                 Some("tool wall-clock budget exhausted".to_string());
+        }
+        ctx.harness_state.switch_to_tool_free_recovery();
+    }
+    if ctx.harness_state.take_tool_budget_directive_pending()
+        && let Some(exhaustion) = ctx.harness_state.tool_budget_exhaustion()
+    {
+        ctx.push_system_message(exhaustion.synthesis_directive_message());
+        if ctx.harness_state.recovery_reason.is_none() {
+            ctx.harness_state.recovery_reason = Some("tool-call budget exhausted".to_string());
         }
         ctx.harness_state.switch_to_tool_free_recovery();
     }
@@ -328,7 +338,7 @@ async fn handle_tool_call_inner<'a, 'b, 'tool>(
     ) {
         ValidationTransition::Proceed(prepared) => prepared,
         ValidationTransition::Return(outcome) => {
-            flush_wall_clock_directive(t_ctx.ctx);
+            flush_budget_synthesis_directives(t_ctx.ctx);
             return Ok(outcome);
         }
     };
@@ -377,22 +387,24 @@ pub(crate) async fn validate_tool_call<'a>(
     }
 
     if let Some(notice) = ctx.harness_state.record_tool_budget_exhaustion_notice() {
-        let exhaustion = notice.exhaustion;
-        let error_msg = exhaustion.policy_violation_message();
-        let block_reason = build_tool_budget_exhausted_reason(exhaustion.used, exhaustion.max);
+        // Mirror the wall-clock exhaustion contract: reject the call with a
+        // policy error (full message once, compact stub for later calls in
+        // the batch) and let `flush_budget_synthesis_directives` push a single
+        // "synthesize now" directive after the batch and arm the tool-free
+        // recovery pass. The old behavior broke the turn as `Blocked` with no
+        // synthesis pass, so plan mode ended with research but no plan and the
+        // model looped on "I'll synthesize the plan" across continue-turns.
+        let error_msg = if notice.first_notice {
+            notice.exhaustion.policy_violation_message()
+        } else {
+            notice.exhaustion.skipped_call_message()
+        };
         ctx.push_tool_response(
             tool_call_id,
             Some(tool_name),
             build_failure_error_content(error_msg, "policy"),
         );
-        if notice.first_notice {
-            ctx.push_system_message(block_reason.clone());
-        }
-        return Ok(ValidationResult::Outcome(TurnHandlerOutcome::Break(
-            TurnLoopResult::Blocked {
-                reason: Some(block_reason),
-            },
-        )));
+        return Ok(ValidationResult::Blocked);
     }
 
     if let Some(notice) = ctx.harness_state.record_wall_clock_exhaustion_notice() {

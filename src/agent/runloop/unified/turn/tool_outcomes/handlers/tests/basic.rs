@@ -233,7 +233,14 @@ fn shell_run_signature_ignores_non_run_command_session_action() {
 }
 
 #[test]
-fn tool_budget_exhausted_reason_mentions_new_instruction_option() {
-    let reason = build_tool_budget_exhausted_reason(32, 32);
-    assert!(reason.contains("\"continue\" or provide a new instruction"));
+fn tool_budget_exhausted_directive_demands_synthesis() {
+    let exhaustion = ToolBudgetExhaustion {
+        used: 32,
+        max: 32,
+        remaining: 0,
+    };
+    let directive = exhaustion.synthesis_directive_message();
+    assert!(directive.contains("32/32"));
+    assert!(directive.contains("Synthesize your final answer now"));
+    assert!(exhaustion.skipped_call_message().contains("call skipped"));
 }

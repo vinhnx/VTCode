@@ -3,6 +3,7 @@ look into removing some of the internal surfaces now that Rig 0.40 was released 
 https://github.com/0xPlaygrounds/rig/releases/tag/v0.40.0
 
 --
+
 keep the plan crisp and not over-engineer,
 
 ==
@@ -372,23 +373,3 @@ expect 50-150 ms shaved on Copilot hosts.
     • cargo nextest run -p vtcode -E 'binary(/dispatch/)'
     and -p vtcode-core -E 'binary(/dotfile_guardian/)' —
     targeted regressions.
-
-===
-
-check and fix vtcode plan mode
-
-"Now I have a clear plan format precedent. Let me write the proposed plan
-to a new file.
-Tool budget exhausted. I'll synthesize and present the final plan inline
-per the Planning workflow contract.
-Tool budget exhausted. I have enough information to finalize the plan in
-the response. Here is the proposed plan based on my research.
-――――――――――――――――――――――――――――――――
-The tool budget is exhausted. I'll synthesize the final plan from the
-evidence already collected. Below is the proposed plan.
-――――――――――――――――――――――――――――――――
-""
-
-the agent always error at plan mode summarization proposal and then it stop and exhaused.
-
-/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/checkpoints/turn_647.json
