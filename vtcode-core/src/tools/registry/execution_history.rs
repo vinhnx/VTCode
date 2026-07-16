@@ -680,15 +680,16 @@ impl ToolExecutionHistory {
         let records = self.records.read().ok()?;
         let now = SystemTime::now();
         let mut later_mutated_paths = Vec::new();
+        let mut later_pathless_mutation = false;
 
         for record in records.iter().rev() {
             if record.success
                 && tool_intent::classify_tool_intent(&record.tool_name, &record.args).mutating
             {
-                later_mutated_paths.extend(crate::tools::mutation_target_paths(
-                    &record.tool_name,
-                    &record.args,
-                ));
+                let mutation_paths =
+                    crate::tools::mutation_target_paths(&record.tool_name, &record.args);
+                later_pathless_mutation |= mutation_paths.is_empty();
+                later_mutated_paths.extend(mutation_paths);
             }
             if record.tool_name != tool_name || !record.success {
                 continue;
@@ -706,13 +707,14 @@ impl ToolExecutionHistory {
             }
 
             if record.tool_name == tools::CODE_SEARCH
-                && later_mutated_paths.iter().any(|mutated_path| {
-                    crate::tools::code_search::scope_contains_mutated_path(
-                        &record.args,
-                        mutated_path,
-                        self.workspace_root.as_ref(),
-                    )
-                })
+                && (later_pathless_mutation
+                    || later_mutated_paths.iter().any(|mutated_path| {
+                        crate::tools::code_search::scope_contains_mutated_path(
+                            &record.args,
+                            mutated_path,
+                            self.workspace_root.as_ref(),
+                        )
+                    }))
             {
                 continue;
             }
@@ -1689,6 +1691,96 @@ mod tests {
             ),
             Some(cached_result),
             "an unrelated edit may reuse the prior scoped search"
+        );
+    }
+
+    #[test]
+    fn code_search_replay_stops_after_successful_pathless_command_mutation() {
+        let history = ToolExecutionHistory::new(10);
+        let search_args = json!({"query": "Widget", "path": "src"});
+        history.add_record(ToolExecutionRecord::success(
+            tools::CODE_SEARCH.to_string(),
+            tools::CODE_SEARCH.to_string(),
+            false,
+            None,
+            search_args.clone(),
+            json!({"results": ["cached Widget"]}),
+            make_snapshot(),
+            None,
+            None,
+            None,
+            None,
+            false,
+        ));
+        history.add_record(ToolExecutionRecord::success(
+            tools::EXEC_COMMAND.to_string(),
+            tools::EXEC_COMMAND.to_string(),
+            false,
+            None,
+            json!({"cmd": "sed -i 's/Widget/Gadget/' src/widget.rs"}),
+            json!({"exit_code": 0}),
+            make_snapshot(),
+            None,
+            None,
+            None,
+            None,
+            false,
+        ));
+
+        assert!(
+            history
+                .find_recent_successful_by_read_target(
+                    tools::CODE_SEARCH,
+                    &search_args,
+                    Duration::from_secs(60),
+                )
+                .is_none(),
+            "a successful command mutation without explicit target metadata must invalidate search replay"
+        );
+    }
+
+    #[test]
+    fn code_search_replay_stops_after_move_into_searched_scope() {
+        let history = ToolExecutionHistory::new(10);
+        let search_args = json!({"query": "Widget", "path": "src"});
+        history.add_record(ToolExecutionRecord::success(
+            tools::CODE_SEARCH.to_string(),
+            tools::CODE_SEARCH.to_string(),
+            false,
+            None,
+            search_args.clone(),
+            json!({"results": []}),
+            make_snapshot(),
+            None,
+            None,
+            None,
+            None,
+            false,
+        ));
+        history.add_record(ToolExecutionRecord::success(
+            tools::MOVE_FILE.to_string(),
+            tools::MOVE_FILE.to_string(),
+            false,
+            None,
+            json!({"path": "staging/widget.rs", "destination": "src/widget.rs"}),
+            json!({"success": true}),
+            make_snapshot(),
+            None,
+            None,
+            None,
+            None,
+            false,
+        ));
+
+        assert!(
+            history
+                .find_recent_successful_by_read_target(
+                    tools::CODE_SEARCH,
+                    &search_args,
+                    Duration::from_secs(60),
+                )
+                .is_none(),
+            "moving a file into the searched scope must invalidate search replay"
         );
     }
 

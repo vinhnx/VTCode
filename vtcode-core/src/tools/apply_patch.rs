@@ -99,7 +99,15 @@ pub fn mutation_target_paths(tool_name: &str, args: &Value) -> Vec<PathBuf> {
             .unwrap_or_default();
     }
 
-    const SINGULAR_KEYS: [&str; 5] = ["path", "file_path", "filepath", "target_path", "file"];
+    const SINGULAR_KEYS: [&str; 7] = [
+        "path",
+        "file_path",
+        "filepath",
+        "target_path",
+        "destination",
+        "destination_path",
+        "file",
+    ];
     let Some(obj) = args.as_object() else {
         return Vec::new();
     };
@@ -294,6 +302,30 @@ mod tests {
         assert_eq!(
             patch_mutation_target_paths(&duplicate_patch),
             vec![PathBuf::from("src/same.rs")]
+        );
+    }
+
+    #[test]
+    fn mutation_paths_include_move_and_copy_destinations() {
+        assert_eq!(
+            mutation_target_paths(
+                "move_file",
+                &json!({"path": "src/old.rs", "destination": "src/new.rs"}),
+            ),
+            vec![PathBuf::from("src/old.rs"), PathBuf::from("src/new.rs")]
+        );
+        assert_eq!(
+            mutation_target_paths(
+                "copy_file",
+                &json!({
+                    "file_path": "src/original.rs",
+                    "destination_path": "src/copy.rs"
+                }),
+            ),
+            vec![
+                PathBuf::from("src/original.rs"),
+                PathBuf::from("src/copy.rs")
+            ]
         );
     }
 

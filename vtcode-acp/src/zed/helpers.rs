@@ -162,7 +162,7 @@ fn local_tool_rules(spec: &SubagentSpec) -> (Option<HashSet<String>>, HashSet<St
                 .iter()
                 .chain(&spec.permissions.ask)
                 .chain(&spec.permissions.auto)
-                .map(|tool| tool.trim().to_ascii_lowercase())
+                .map(|rule| local_tool_rule_name(rule))
                 .collect::<HashSet<_>>(),
         )
     } else {
@@ -174,7 +174,10 @@ fn local_tool_rules(spec: &SubagentSpec) -> (Option<HashSet<String>>, HashSet<St
             .map(|tool| tool.trim().to_ascii_lowercase())
             .collect::<HashSet<_>>();
         allowed = Some(match allowed {
-            Some(current) => current.intersection(&tools).cloned().collect(),
+            Some(current) => tools
+                .into_iter()
+                .filter(|tool| local_tool_rules_match(&current, tool))
+                .collect(),
             None => tools,
         });
     }
@@ -183,9 +186,28 @@ fn local_tool_rules(spec: &SubagentSpec) -> (Option<HashSet<String>>, HashSet<St
         .deny
         .iter()
         .chain(&spec.disallowed_tools)
-        .map(|tool| tool.trim().to_ascii_lowercase())
+        .map(|rule| local_tool_rule_name(rule))
         .collect();
     (allowed, denied)
+}
+
+fn local_tool_rule_name(rule: &str) -> String {
+    let normalized = vtcode_config::core::permissions::normalize_permission_rule(rule);
+    let normalized = normalized.trim().to_ascii_lowercase();
+    let tool_name = normalized
+        .strip_suffix(')')
+        .and_then(|rule| rule.split_once('(').map(|(tool_name, _)| tool_name))
+        .filter(|tool_name| matches!(*tool_name, "bash" | "read" | "edit" | "write" | "webfetch"))
+        .unwrap_or(&normalized);
+    local_tool_semantic_name(tool_name)
+        .unwrap_or(tool_name)
+        .to_string()
+}
+
+fn local_tool_rules_match(rules: &HashSet<String>, tool_name: &str) -> bool {
+    rules.contains(tool_name)
+        || local_tool_semantic_name(tool_name).is_some_and(|semantic| rules.contains(semantic))
+        || rules.contains(&local_tool_rule_name(tool_name))
 }
 
 fn local_tool_semantic_name(tool_name: &str) -> Option<&'static str> {
@@ -368,6 +390,7 @@ pub(crate) fn build_available_commands(
 mod tests {
     use super::*;
     use std::path::PathBuf;
+    use vtcode_config::core::permissions::PermissionDefault;
     use vtcode_config::{SubagentSource, builtin_primary_build_agent};
 
     #[test]
@@ -385,6 +408,24 @@ mod tests {
         assert_eq!(catalog.resolve_id("build"), Some("build"));
         assert_eq!(catalog.resolve_id("builder"), Some("builder"));
         assert_eq!(catalog.resolve_id("project-builder"), Some("builder"));
+    }
+
+    #[test]
+    fn local_tool_rules_intersect_semantic_and_path_qualified_permissions() {
+        for permission_rule in ["read", "code_search(/src/**)"] {
+            let mut spec = builtin_primary_build_agent();
+            spec.permissions.default = PermissionDefault::Deny;
+            spec.permissions.allow = vec![permission_rule.to_string()];
+            spec.tools = Some(vec!["code_search".to_string()]);
+
+            let catalog = PrimaryAgentCatalog::from_specs_with_default(&[spec], "build");
+
+            assert!(
+                catalog.allows_local_tool("build", "code_search"),
+                "permission rule {permission_rule} should advertise code_search"
+            );
+            assert!(!catalog.allows_local_tool("build", "exec_command"));
+        }
     }
 
     #[test]
