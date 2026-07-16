@@ -37,6 +37,255 @@ pub struct ThemePalette {
     pub logo_accent: RgbColor,
 }
 
+/// Shared computation context for theme color derivation.
+///
+/// Holds invariant parameters (background, min_contrast) that every color
+/// computation needs, eliminating repetitive argument passing across the
+/// 14+ color derivations in the theme pipeline.
+#[derive(Clone, Debug)]
+pub(crate) struct ColorContext {
+    pub background: RgbColor,
+    pub min_contrast: f32,
+    pub fallback_light: RgbColor,
+}
+
+impl ColorContext {
+    pub(crate) fn new(background: RgbColor, min_contrast: f32) -> Self {
+        Self {
+            background,
+            min_contrast,
+            fallback_light: RgbColor(
+                ui::THEME_COLOR_WHITE_RED,
+                ui::THEME_COLOR_WHITE_GREEN,
+                ui::THEME_COLOR_WHITE_BLUE,
+            ),
+        }
+    }
+
+    /// Ensure minimum contrast against background, then balance luminance
+    /// into the comfortable reading range. Used for text-content colors.
+    pub(crate) fn guaranteed_text_color(
+        &self,
+        candidate: RgbColor,
+        fallbacks: &[RgbColor],
+    ) -> RgbColor {
+        let color = ensure_contrast(candidate, self.background, self.min_contrast, fallbacks);
+        balance_text_luminance(color, self.background, self.min_contrast)
+    }
+
+    /// Ensure minimum contrast against background only. Used for accent/UI
+    /// colors where luminance balancing would override the intended tint.
+    pub(crate) fn guaranteed_accent_color(
+        &self,
+        candidate: RgbColor,
+        fallbacks: &[RgbColor],
+    ) -> RgbColor {
+        ensure_contrast(candidate, self.background, self.min_contrast, fallbacks)
+    }
+
+    /// 1. Main foreground text color.
+    pub(crate) fn compute_text_color(&self, foreground: RgbColor, secondary: RgbColor) -> RgbColor {
+        self.guaranteed_text_color(
+            foreground,
+            &[
+                lighten(foreground, ui::THEME_FOREGROUND_LIGHTEN_RATIO),
+                lighten(secondary, ui::THEME_SECONDARY_LIGHTEN_RATIO),
+                self.fallback_light,
+            ],
+        )
+    }
+
+    /// 2. Info/muted text color (secondary accent adapted for readability).
+    pub(crate) fn compute_info_color(&self, secondary: RgbColor, text_color: RgbColor) -> RgbColor {
+        self.guaranteed_text_color(
+            secondary,
+            &[
+                lighten(secondary, ui::THEME_SECONDARY_LIGHTEN_RATIO),
+                text_color,
+                self.fallback_light,
+            ],
+        )
+    }
+
+    /// 3. Tool accent color (text_color lightened and contrast-ensured).
+    pub(crate) fn compute_tool_color(&self, text_color: RgbColor) -> RgbColor {
+        self.guaranteed_accent_color(
+            lighten(text_color, ui::THEME_MIX_RATIO),
+            &[
+                lighten(
+                    lighten(text_color, ui::THEME_MIX_RATIO),
+                    ui::THEME_TOOL_BODY_LIGHTEN_RATIO,
+                ),
+                text_color,
+                self.fallback_light,
+            ],
+        )
+    }
+
+    /// 4. Tool body text color (subdued variant of tool accent).
+    pub(crate) fn compute_tool_body_color(&self, text_color: RgbColor) -> RgbColor {
+        let candidate = mix(
+            lighten(text_color, ui::THEME_MIX_RATIO),
+            text_color,
+            ui::THEME_TOOL_BODY_MIX_RATIO,
+        );
+        self.guaranteed_accent_color(
+            candidate,
+            &[
+                lighten(
+                    lighten(text_color, ui::THEME_MIX_RATIO),
+                    ui::THEME_TOOL_BODY_LIGHTEN_RATIO,
+                ),
+                text_color,
+                self.fallback_light,
+            ],
+        )
+    }
+
+    /// 5. PTY/shell output color — dimmed by blending tool_body toward the
+    ///    background, then balanced for readability.
+    pub(crate) fn compute_pty_output_color(
+        &self,
+        tool_body_color: RgbColor,
+        text_color: RgbColor,
+    ) -> RgbColor {
+        let candidate = mix(
+            tool_body_color,
+            self.background,
+            ui::THEME_PTY_OUTPUT_MIX_RATIO,
+        );
+        self.guaranteed_text_color(candidate, &[tool_body_color, text_color])
+    }
+
+    /// 6. Response/assistant text color.
+    pub(crate) fn compute_response_color(&self, text_color: RgbColor) -> RgbColor {
+        self.guaranteed_text_color(
+            text_color,
+            &[
+                lighten(text_color, ui::THEME_RESPONSE_COLOR_LIGHTEN_RATIO),
+                self.fallback_light,
+            ],
+        )
+    }
+
+    /// 7. Reasoning text color (lightened text, DIMMED+ITALIC applied separately).
+    pub(crate) fn compute_reasoning_color(&self, text_color: RgbColor) -> RgbColor {
+        self.guaranteed_text_color(
+            lighten(text_color, 0.25),
+            &[lighten(text_color, 0.15), text_color, self.fallback_light],
+        )
+    }
+
+    /// 8. User input text color.
+    pub(crate) fn compute_user_color(
+        &self,
+        secondary: RgbColor,
+        info_color: RgbColor,
+        text_color: RgbColor,
+    ) -> RgbColor {
+        self.guaranteed_text_color(
+            lighten(secondary, ui::THEME_USER_COLOR_LIGHTEN_RATIO),
+            &[
+                lighten(secondary, ui::THEME_SECONDARY_USER_COLOR_LIGHTEN_RATIO),
+                info_color,
+                text_color,
+            ],
+        )
+    }
+
+    /// 9. Alert/error color.
+    pub(crate) fn compute_alert_color(&self, alert: RgbColor, text_color: RgbColor) -> RgbColor {
+        self.guaranteed_text_color(
+            alert,
+            &[
+                lighten(alert, ui::THEME_LUMINANCE_LIGHTEN_RATIO),
+                self.fallback_light,
+                text_color,
+            ],
+        )
+    }
+
+    /// 10. Primary accent (for UI chrome, not body text).
+    pub(crate) fn compute_primary_color(
+        &self,
+        primary: RgbColor,
+        text_color: RgbColor,
+    ) -> RgbColor {
+        self.guaranteed_text_color(
+            ensure_contrast(primary, self.background, self.min_contrast, &[text_color]),
+            &[text_color],
+        )
+    }
+
+    /// 11. Secondary accent (for UI chrome).
+    pub(crate) fn compute_secondary_color(
+        &self,
+        secondary: RgbColor,
+        info_color: RgbColor,
+        text_color: RgbColor,
+    ) -> RgbColor {
+        self.guaranteed_text_color(
+            ensure_contrast(
+                secondary,
+                self.background,
+                self.min_contrast,
+                &[info_color, text_color],
+            ),
+            &[info_color, text_color],
+        )
+    }
+
+    /// 12. Logo accent color.
+    pub(crate) fn compute_logo_color(
+        &self,
+        logo_accent: RgbColor,
+        secondary_color: RgbColor,
+        text_color: RgbColor,
+    ) -> RgbColor {
+        self.guaranteed_text_color(
+            ensure_contrast(
+                logo_accent,
+                self.background,
+                self.min_contrast,
+                &[secondary_color, text_color],
+            ),
+            &[secondary_color, text_color],
+        )
+    }
+
+    /// 13. Status banner color (lightened primary).
+    pub(crate) fn compute_status_color(
+        &self,
+        primary_color: RgbColor,
+        info_color: RgbColor,
+        text_color: RgbColor,
+    ) -> RgbColor {
+        self.guaranteed_accent_color(
+            lighten(primary_color, ui::THEME_PRIMARY_STATUS_LIGHTEN_RATIO),
+            &[
+                lighten(
+                    primary_color,
+                    ui::THEME_PRIMARY_STATUS_SECONDARY_LIGHTEN_RATIO,
+                ),
+                info_color,
+                text_color,
+            ],
+        )
+    }
+
+    /// 14. MCP badge color (lightened logo accent).
+    pub(crate) fn compute_mcp_color(&self, logo_color: RgbColor, info_color: RgbColor) -> RgbColor {
+        self.guaranteed_accent_color(
+            lighten(logo_color, ui::THEME_SECONDARY_LIGHTEN_RATIO),
+            &[
+                lighten(logo_color, ui::THEME_LOGO_ACCENT_BANNER_LIGHTEN_RATIO),
+                info_color,
+                self.fallback_light,
+            ],
+        )
+    }
+}
+
 impl ThemePalette {
     fn style_from(color: RgbColor, bold: bool, bold_is_bright: bool) -> Style {
         let mut style = Style::new().fg_color(Some(Color::Rgb(color)));
@@ -50,200 +299,47 @@ impl ThemePalette {
         &self,
         accessibility: &ColorAccessibilityConfig,
     ) -> ThemeStyles {
-        let min_contrast = accessibility.minimum_contrast;
-        let primary = self.primary_accent;
-        let background = self.background;
-        let secondary = self.secondary_accent;
-        let logo_accent = self.logo_accent;
+        let ctx = ColorContext::new(self.background, accessibility.minimum_contrast);
         let bold_is_bright = accessibility.bold_is_bright;
 
-        let fallback_light = RgbColor(
-            ui::THEME_COLOR_WHITE_RED,
-            ui::THEME_COLOR_WHITE_GREEN,
-            ui::THEME_COLOR_WHITE_BLUE,
-        );
-
-        let text_color = ensure_contrast(
-            self.foreground,
-            background,
-            min_contrast,
-            &[
-                lighten(self.foreground, ui::THEME_FOREGROUND_LIGHTEN_RATIO),
-                lighten(secondary, ui::THEME_SECONDARY_LIGHTEN_RATIO),
-                fallback_light,
-            ],
-        );
-        let text_color = balance_text_luminance(text_color, background, min_contrast);
-
-        let info_color = ensure_contrast(
-            secondary,
-            background,
-            min_contrast,
-            &[
-                lighten(secondary, ui::THEME_SECONDARY_LIGHTEN_RATIO),
-                text_color,
-                fallback_light,
-            ],
-        );
-        let info_color = balance_text_luminance(info_color, background, min_contrast);
-
-        let light_tool_color = lighten(text_color, ui::THEME_MIX_RATIO);
-        let tool_color = ensure_contrast(
-            light_tool_color,
-            background,
-            min_contrast,
-            &[
-                lighten(light_tool_color, ui::THEME_TOOL_BODY_LIGHTEN_RATIO),
-                info_color,
-                text_color,
-            ],
-        );
-        let tool_body_candidate = mix(light_tool_color, text_color, ui::THEME_TOOL_BODY_MIX_RATIO);
-        let tool_body_color = ensure_contrast(
-            tool_body_candidate,
-            background,
-            min_contrast,
-            &[
-                lighten(light_tool_color, ui::THEME_TOOL_BODY_LIGHTEN_RATIO),
-                text_color,
-                fallback_light,
-            ],
-        );
-        let tool_style = Style::new().fg_color(Some(Color::Rgb(tool_color)));
-        let tool_detail_style = Style::new().fg_color(Some(Color::Rgb(tool_body_color)));
-
-        let response_color = ensure_contrast(
-            text_color,
-            background,
-            min_contrast,
-            &[
-                lighten(text_color, ui::THEME_RESPONSE_COLOR_LIGHTEN_RATIO),
-                fallback_light,
-            ],
-        );
-        let response_color = balance_text_luminance(response_color, background, min_contrast);
-
-        let reasoning_color = ensure_contrast(
-            lighten(text_color, 0.25),
-            background,
-            min_contrast,
-            &[lighten(text_color, 0.15), text_color, fallback_light],
-        );
-        let reasoning_color = balance_text_luminance(reasoning_color, background, min_contrast);
-        let reasoning_style = Self::style_from(reasoning_color, false, bold_is_bright)
-            .effects(Effects::DIMMED | Effects::ITALIC);
-
-        let user_color = ensure_contrast(
-            lighten(secondary, ui::THEME_USER_COLOR_LIGHTEN_RATIO),
-            background,
-            min_contrast,
-            &[
-                lighten(secondary, ui::THEME_SECONDARY_USER_COLOR_LIGHTEN_RATIO),
-                info_color,
-                text_color,
-            ],
-        );
-        let user_color = balance_text_luminance(user_color, background, min_contrast);
-
-        let alert_color = ensure_contrast(
-            self.alert,
-            background,
-            min_contrast,
-            &[
-                lighten(self.alert, ui::THEME_LUMINANCE_LIGHTEN_RATIO),
-                fallback_light,
-                text_color,
-            ],
-        );
-        let alert_color = balance_text_luminance(alert_color, background, min_contrast);
-
-        let tool_output_style = Style::new();
-
-        let pty_output_candidate = lighten(tool_body_color, ui::THEME_PTY_OUTPUT_LIGHTEN_RATIO);
-        let pty_output_color = ensure_contrast(
-            pty_output_candidate,
-            background,
-            min_contrast,
-            &[
-                lighten(text_color, ui::THEME_PTY_OUTPUT_LIGHTEN_RATIO),
-                tool_body_color,
-                text_color,
-            ],
-        );
-        let pty_output_style = Style::new().fg_color(Some(Color::Rgb(pty_output_color)));
-
-        let primary_style_color = balance_text_luminance(
-            ensure_contrast(primary, background, min_contrast, &[text_color]),
-            background,
-            min_contrast,
-        );
-        let secondary_style_color = balance_text_luminance(
-            ensure_contrast(
-                secondary,
-                background,
-                min_contrast,
-                &[info_color, text_color],
-            ),
-            background,
-            min_contrast,
-        );
-        let logo_style_color = balance_text_luminance(
-            ensure_contrast(
-                logo_accent,
-                background,
-                min_contrast,
-                &[secondary_style_color, text_color],
-            ),
-            background,
-            min_contrast,
-        );
+        let text = ctx.compute_text_color(self.foreground, self.secondary_accent);
+        let info = ctx.compute_info_color(self.secondary_accent, text);
+        let tool_body = ctx.compute_tool_body_color(text);
+        let pty = ctx.compute_pty_output_color(tool_body, text);
+        let primary = ctx.compute_primary_color(self.primary_accent, text);
+        let secondary = ctx.compute_secondary_color(self.secondary_accent, info, text);
+        let logo = ctx.compute_logo_color(self.logo_accent, secondary, text);
 
         ThemeStyles {
-            info: Self::style_from(info_color, true, bold_is_bright),
-            error: Self::style_from(alert_color, true, bold_is_bright),
-            output: Self::style_from(text_color, false, bold_is_bright),
-            response: Self::style_from(response_color, false, bold_is_bright),
-            reasoning: reasoning_style,
-            tool: tool_style,
-            tool_detail: tool_detail_style,
-            tool_output: tool_output_style,
-            pty_output: pty_output_style,
+            info: Self::style_from(info, true, bold_is_bright),
+            error: Self::style_from(
+                ctx.compute_alert_color(self.alert, text),
+                true,
+                bold_is_bright,
+            ),
+            output: Self::style_from(text, false, bold_is_bright),
+            response: Self::style_from(ctx.compute_response_color(text), false, bold_is_bright),
+            reasoning: Self::style_from(ctx.compute_reasoning_color(text), false, bold_is_bright)
+                .effects(Effects::DIMMED | Effects::ITALIC),
+            tool: Style::new().fg_color(Some(Color::Rgb(ctx.compute_tool_color(text)))),
+            tool_detail: Style::new().fg_color(Some(Color::Rgb(tool_body))),
+            tool_output: Style::new(),
+            pty_output: Style::new().fg_color(Some(Color::Rgb(pty))),
             status: Self::style_from(
-                ensure_contrast(
-                    lighten(primary_style_color, ui::THEME_PRIMARY_STATUS_LIGHTEN_RATIO),
-                    background,
-                    min_contrast,
-                    &[
-                        lighten(
-                            primary_style_color,
-                            ui::THEME_PRIMARY_STATUS_SECONDARY_LIGHTEN_RATIO,
-                        ),
-                        info_color,
-                        text_color,
-                    ],
-                ),
+                ctx.compute_status_color(primary, info, text),
                 true,
                 bold_is_bright,
             ),
-            mcp: Self::style_from(
-                ensure_contrast(
-                    lighten(logo_style_color, ui::THEME_SECONDARY_LIGHTEN_RATIO),
-                    background,
-                    min_contrast,
-                    &[
-                        lighten(logo_style_color, ui::THEME_LOGO_ACCENT_BANNER_LIGHTEN_RATIO),
-                        info_color,
-                        fallback_light,
-                    ],
-                ),
-                true,
+            mcp: Self::style_from(ctx.compute_mcp_color(logo, info), true, bold_is_bright),
+            user: Self::style_from(
+                ctx.compute_user_color(self.secondary_accent, info, text),
+                false,
                 bold_is_bright,
             ),
-            user: Self::style_from(user_color, false, bold_is_bright),
-            primary: Self::style_from(primary_style_color, false, bold_is_bright),
-            secondary: Self::style_from(secondary_style_color, false, bold_is_bright),
-            background: Color::Rgb(background),
-            foreground: Color::Rgb(text_color),
+            primary: Self::style_from(primary, false, bold_is_bright),
+            secondary: Self::style_from(secondary, false, bold_is_bright),
+            background: Color::Rgb(self.background),
+            foreground: Color::Rgb(text),
         }
     }
 }

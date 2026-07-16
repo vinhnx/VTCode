@@ -74,49 +74,21 @@ impl Session {
         start
     }
 
-    fn thinking_collapsed(&self, start: usize) -> bool {
+    pub(crate) fn thinking_collapsed(&self, start: usize) -> bool {
         self.thinking_runs
             .is_collapsed(start, self.appearance.thinking_collapsed_by_default())
     }
 
-    /// Whether the thinking run starting at `start` should render collapsed,
-    /// resolving the config default. Shared with the toggle handler in
-    /// `messages.rs` so the default is resolved in exactly one place.
-    pub(crate) fn thinking_is_collapsed(&self, start: usize) -> bool {
-        self.thinking_collapsed(start)
-    }
-
     /// Render a thinking/reasoning block (a contiguous `Policy` run) as a single
-    /// coherent section: an arrow-prefixed header (`→ Thinking (N lines)` when
-    /// collapsed, `↓ Thinking` when expanded) followed by the wrapped, dimmed
-    /// body when expanded. Both states share the same left alignment so toggling
-    /// preserves the block position.
+    /// coherent section: a header (`Thinking`) followed by the wrapped, dimmed
+    /// body when expanded.
     fn render_thinking_block(&self, start: usize, width: u16) -> Vec<TranscriptLine> {
         let collapsed = self.thinking_collapsed(start);
         let run_len = self.thinking_run_len(start);
         let accent =
             ratatui_style_from_inline(&self.styles.accent_inline_style(), self.theme.foreground);
 
-        let chevron = if collapsed {
-            ui::INLINE_THINKING_COLLAPSED_CHEVRON
-        } else {
-            ui::INLINE_THINKING_EXPANDED_CHEVRON
-        };
-
-        let streaming =
-            collapsed && self.thinking_spinner.is_active && !self.appearance.motion_reduced();
-        let header_text = if streaming {
-            format!(
-                "{chevron} {} Thinking…",
-                self.thinking_spinner.current_frame()
-            )
-        } else if collapsed {
-            let noun = if run_len == 1 { "line" } else { "lines" };
-            format!("{chevron} Thinking ({run_len} {noun})")
-        } else {
-            format!("{chevron} Thinking")
-        };
-        let header = Line::from(Span::styled(header_text, accent));
+        let header = Line::from(Span::styled("Thinking", accent));
         let mut result = vec![transcript_line_with_detected_links(
             header,
             self.workspace_root.as_deref(),
@@ -124,16 +96,9 @@ impl Session {
 
         if !collapsed {
             let indent = ui::INLINE_THINKING_BODY_INDENT;
-            let indent_width = indent.chars().count();
-            let max_width = if width == 0 {
-                usize::MAX
-            } else {
-                width as usize
-            };
-            let content_width = if max_width == usize::MAX {
-                usize::MAX
-            } else {
-                max_width.saturating_sub(indent_width)
+            let content_width = match width {
+                0 => None,
+                w => Some((w as usize).saturating_sub(indent.chars().count())),
             };
 
             for idx in start..start + run_len {
@@ -148,14 +113,12 @@ impl Session {
                         span
                     })
                     .collect();
-                let content_line = Line::from(dimmed);
-                let mut wrapped = if content_width == usize::MAX {
-                    vec![content_line]
-                } else {
-                    text_utils::wrap_line_with_hanging_prefix(content_line, content_width, indent)
+                let mut wrapped = match content_width {
+                    None => vec![Line::from(dimmed)],
+                    Some(cw) => {
+                        text_utils::wrap_line_with_hanging_prefix(Line::from(dimmed), cw, indent)
+                    }
                 };
-                // `wrap_line_with_hanging_prefix` only indents continuation rows, so
-                // prepend the indent to the first row to keep the whole body aligned.
                 if let Some(first) = wrapped.first_mut() {
                     let mut new_spans = vec![Span::raw(indent.to_owned())];
                     new_spans.append(&mut first.spans);

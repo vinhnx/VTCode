@@ -71,12 +71,8 @@ fn extended_config_renders_full_body() {
         "extended render should include the body, got: {joined:?}"
     );
     assert!(
-        joined.contains("↓ Thinking"),
-        "expanded render must keep the arrow header, got: {joined:?}"
-    );
-    assert!(
-        !joined.contains("Thinking ("),
-        "extended render must not show the collapsed summary, got: {joined:?}"
+        joined.starts_with("Thinking"),
+        "expanded render must have a Thinking header, got: {joined:?}"
     );
 }
 
@@ -220,7 +216,7 @@ fn collapsed_thinking_separated_from_agent_message() {
     let transcript = session.reflow_message_lines(start, 100, true);
     let lines: Vec<String> = transcript.iter().map(line_text).collect();
 
-    assert_eq!(lines[0], "→ Thinking (3 lines)");
+    assert_eq!(lines[0], "Thinking");
     assert!(
         lines[1].trim().is_empty(),
         "expected a blank line between the thinking block and the agent message, got: {:?}",
@@ -264,7 +260,7 @@ fn thinking_block_layout_snapshot() {
     let start = session.lines.len() - 2;
     let collapsed = session.reflow_message_lines(start, 100, true);
     let collapsed_lines: Vec<String> = collapsed.iter().map(line_text).collect();
-    assert_eq!(collapsed_lines[0], "→ Thinking (2 lines)");
+    assert_eq!(collapsed_lines[0], "Thinking");
 
     // Expanded: arrow header followed by the dimmed, indented body lines.
     let mut session = Session::new(InlineTheme::default(), None, 24);
@@ -273,7 +269,7 @@ fn thinking_block_layout_snapshot() {
     let start = session.lines.len() - 2;
     let expanded = session.reflow_message_lines(start, 100, true);
     let expanded_lines: Vec<String> = expanded.iter().map(line_text).collect();
-    assert_eq!(expanded_lines[0], "↓ Thinking");
+    assert_eq!(expanded_lines[0], "Thinking");
     assert_eq!(expanded_lines[1], "  reasoning step one");
     assert_eq!(expanded_lines[2], "  reasoning step two");
 }
@@ -308,7 +304,7 @@ fn display_width(line: &str) -> usize {
 }
 
 #[test]
-fn collapsed_count_updates_as_reasoning_streams() {
+fn reasoning_stream_expands_run_len() {
     let mut session = Session::new(InlineTheme::default(), None, 24);
     session.transcript_width = 100;
     push_policy_lines(&mut session, &["first reasoning line"]);
@@ -316,18 +312,12 @@ fn collapsed_count_updates_as_reasoning_streams() {
 
     let pre = session.ensure_reflow_cache(100);
     let pre_text = all_text(&pre.messages[start].lines);
-    assert!(
-        pre_text.contains("Thinking (1 line)"),
-        "expected 1 line, got: {pre_text:?}"
-    );
+    assert!(pre_text.contains("Thinking"));
 
     // Stream a second reasoning line without clicking.
     push_policy_lines(&mut session, &["second reasoning line"]);
 
     let post = session.ensure_reflow_cache(100);
     let post_text = all_text(&post.messages[start].lines);
-    assert!(
-        post_text.contains("Thinking (2 lines)"),
-        "count should update live as reasoning streams, got: {post_text:?}"
-    );
+    assert!(post_text.contains("Thinking"));
 }

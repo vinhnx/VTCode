@@ -70,7 +70,6 @@ impl Session {
     /// - Subtle dividers between conversation turns
     /// - Consistent spacing between message blocks
     /// - Tool output grouped with headers
-    #[expect(dead_code)]
     pub(super) fn reflow_message_lines(
         &self,
         index: usize,

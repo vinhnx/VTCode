@@ -229,8 +229,8 @@ pub const THEME_RED_LUMINANCE_COEFFICIENT: f32 = 0.2126;
 pub const THEME_GREEN_LUMINANCE_COEFFICIENT: f32 = 0.7152;
 pub const THEME_BLUE_LUMINANCE_COEFFICIENT: f32 = 0.0722;
 pub const THEME_LUMINANCE_LIGHTEN_RATIO: f32 = 0.2;
-/// Lighten ratio for PTY output text — subdued but readable (higher = brighter)
-pub const THEME_PTY_OUTPUT_LIGHTEN_RATIO: f32 = 0.15;
+/// Mix ratio for PTY output text toward background — dim but readable (higher = dimmer)
+pub const THEME_PTY_OUTPUT_MIX_RATIO: f32 = 0.50;
 
 /// Subdued gray for diff line numbers
 pub const DIFF_LINE_NUMBER_R: u8 = 0x4a;

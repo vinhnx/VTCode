@@ -375,12 +375,11 @@ async fn render_tool_output_common(
             return Ok(());
         }
 
-        // Send completion via pty_continuation_line so it joins the Pty block
-        // as a continuation (2-space block prefix + 4-space indent = 6 spaces,
-        // matching PTY output continuation lines).
+        // Send completion as a status line in the theme's accent color so it
+        // stands out from the subdued PTY output body.
         if let Some(completion) = compact_run_completion_line(output, command_success) {
-            renderer.pty_continuation_line(&completion)?;
-            // Pty kind skips transcript recording in TUI mode; append manually.
+            let indented = format!("    {}", completion);
+            renderer.line(MessageStyle::Status, &indented)?;
             transcript::append(&completion);
         }
         return Ok(());

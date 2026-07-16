@@ -326,6 +326,15 @@ impl Session {
         self.mark_line_dirty(first_dirty);
         self.invalidate_scroll_metrics();
         self.adjust_scroll_after_change(previous_max_offset);
+
+        // Keep thinking-run tracking in sync: a `ReplaceLast` that creates
+        // the first `Policy` line must register a new run so downstream
+        // `mark_thinking_run_starts_dirty` can find an active start.
+        if kind == InlineMessageKind::Policy && self.thinking_runs.active_start().is_none() {
+            self.thinking_runs.begin_run(first_dirty);
+        } else if kind != InlineMessageKind::Policy {
+            self.thinking_runs.end_run();
+        }
     }
 
     pub(crate) fn expand_collapsed_paste_at_line_index(&mut self, line_index: usize) -> bool {
@@ -443,7 +452,7 @@ impl Session {
             return false;
         }
 
-        let collapsed = self.thinking_is_collapsed(start);
+        let collapsed = self.thinking_collapsed(start);
         self.thinking_runs.set_collapsed(start, !collapsed);
 
         // Bump the revision of every line in the run so the reflow cache
@@ -579,6 +588,14 @@ impl Session {
             link_ranges: Vec::new(),
             revision,
         });
+
+        // Start tracking a new reasoning run when the first `Policy` line
+        // is created through `append_text` (bypasses `push_line`'s run
+        // tracking). Without this, `mark_thinking_run_starts_dirty` never
+        // fires and the reflow cache keeps the stale pre-append output.
+        if kind == InlineMessageKind::Policy && self.thinking_runs.active_start().is_none() {
+            self.thinking_runs.begin_run(index);
+        }
 
         self.mark_line_dirty(index);
         self.invalidate_scroll_metrics();

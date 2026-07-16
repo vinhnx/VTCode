@@ -678,10 +678,6 @@ impl AnsiRenderer {
         self.inline_with_style(MessageStyle::Response, delta)
     }
 
-    pub fn render_reasoning_delta(&mut self, delta: &str) -> Result<()> {
-        self.inline_with_style(MessageStyle::Reasoning, delta)
-    }
-
     pub fn stream_markdown_response(
         &mut self,
         text: &str,
@@ -730,114 +726,6 @@ impl AnsiRenderer {
         }
 
         Err(anyhow!("stream_markdown_response requires an inline sink"))
-    }
-
-    pub fn render_reasoning_stream(
-        &mut self,
-        lines: &[String],
-        previous_line_count: &mut usize,
-    ) -> Result<()> {
-        if !self.reasoning_visible {
-            *previous_line_count = 0;
-            return Ok(());
-        }
-        if lines.is_empty() {
-            return Ok(());
-        }
-
-        let style = MessageStyle::Reasoning;
-        let indent = self.indent_for_style(style);
-        let kind = Self::message_kind(style);
-        let base_style = style.style();
-
-        if let Some(sink) = &mut self.sink {
-            let fallback = sink.resolve_fallback_style(base_style);
-            let fallback_arc = Arc::new(fallback.clone());
-            let mut prepared: Vec<Vec<InlineSegment>> = Vec::with_capacity(lines.len());
-            let mut plain_lines: Vec<String> = Vec::with_capacity(lines.len());
-
-            for (line_idx, line) in lines.iter().enumerate() {
-                let (converted, plain) = sink.convert_plain_lines(line, &fallback);
-                for (segment_idx, (mut segments, mut plain_line)) in
-                    converted.into_iter().zip(plain.into_iter()).enumerate()
-                {
-                    // Add "Thinking:" prefix to the very first line only
-                    if *previous_line_count == 0
-                        && line_idx == 0
-                        && segment_idx == 0
-                        && !plain_line.trim().is_empty()
-                    {
-                        segments.insert(
-                            0,
-                            InlineSegment {
-                                text: "Thinking: ".to_owned(),
-                                style: Arc::clone(&fallback_arc),
-                            },
-                        );
-                        plain_line.insert_str(0, "Thinking: ");
-                    }
-
-                    if !indent.is_empty() && !plain_line.is_empty() {
-                        segments.insert(
-                            0,
-                            InlineSegment {
-                                text: indent.to_owned(),
-                                style: Arc::clone(&fallback_arc),
-                            },
-                        );
-                        plain_line.insert_str(0, indent);
-                    }
-                    prepared.push(segments);
-                    plain_lines.push(plain_line);
-                }
-            }
-
-            if *previous_line_count == 0 {
-                for (segments, plain_line) in prepared.iter().zip(plain_lines.iter()) {
-                    if segments.is_empty() {
-                        sink.handle.append_line(kind, Vec::new());
-                    } else {
-                        sink.handle.append_line(kind, segments.clone());
-                    }
-                    transcript::append(plain_line);
-                }
-            } else {
-                sink.replace_inline_lines(
-                    *previous_line_count,
-                    prepared.clone(),
-                    &plain_lines,
-                    kind,
-                );
-            }
-
-            *previous_line_count = plain_lines.len();
-            self.last_line_was_empty = plain_lines
-                .last()
-                .map(|line| line.trim().is_empty())
-                .unwrap_or(true);
-
-            return Ok(());
-        }
-
-        if *previous_line_count == 0 {
-            for (idx, line) in lines.iter().enumerate() {
-                if idx == 0 && !line.trim().is_empty() {
-                    // Prepend "Thinking:" to first line
-                    self.buffer.clear();
-                    self.buffer.push_str("Thinking: ");
-                    self.buffer.push_str(line);
-                    let prefixed = std::mem::take(&mut self.buffer);
-                    self.line(style, &prefixed)?;
-                } else {
-                    self.line(style, line)?;
-                }
-            }
-        } else if let Some(last) = lines.last() {
-            self.line(style, last)?;
-        }
-
-        *previous_line_count = lines.len();
-        Ok(())
     }
 
     fn write_markdown_line(
