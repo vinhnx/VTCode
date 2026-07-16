@@ -251,7 +251,7 @@ fn register_code_search(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegi
         ToolRegistry::code_search_executor,
     )
     .with_description(
-        "Search code semantically with ast-grep structural patterns or Tree-sitter outlines. Use action=structural for AST-shaped queries and action=outline for symbol maps. Use exec_command.cmd with rg for plain text search. This tool does not perform web, skill, error, tool discovery, or file-listing actions.",
+        "Search workspace code with one literal query. Use optional path, file_types, result_types, and max_results filters to find definitions, syntactic usages, text matches, and matching paths.",
     )
     .with_parameter_schema(code_search_parameters())
     .with_permission(ToolPolicy::Allow)
@@ -324,10 +324,6 @@ fn register_web_search(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegis
                 "query": {
                     "type": "string",
                     "description": "The search query (a topic, question, or keywords)."
-                },
-                "pattern": {
-                    "type": "string",
-                    "description": "Alias for 'query'."
                 },
                 "max_results": {
                     "type": "integer",
@@ -689,25 +685,21 @@ mod tests {
             code_search.metadata().aliases().is_empty(),
             "code_search should not rely on aliases"
         );
-        assert!(
-            code_search
-                .metadata()
-                .parameter_schema()
-                .expect("code_search schema")["properties"]["action"]["enum"]
-                .as_array()
-                .expect("action enum")
-                .iter()
-                .any(|value| value == "structural")
-        );
-        assert!(
-            !code_search
-                .metadata()
-                .parameter_schema()
-                .expect("code_search schema")["properties"]["action"]["enum"]
-                .as_array()
-                .expect("action enum")
-                .iter()
-                .any(|value| value == "grep")
+        let schema = code_search
+            .metadata()
+            .parameter_schema()
+            .expect("code_search schema");
+        assert_eq!(schema["required"], json!(["query"]));
+        let mut property_names = schema["properties"]
+            .as_object()
+            .expect("properties")
+            .keys()
+            .map(String::as_str)
+            .collect::<Vec<_>>();
+        property_names.sort_unstable();
+        assert_eq!(
+            property_names,
+            ["file_types", "max_results", "path", "query", "result_types"]
         );
 
         for tool_name in [
@@ -722,6 +714,30 @@ mod tests {
                 "{tool_name} must not have a builtin registration"
             );
         }
+    }
+
+    #[test]
+    fn web_search_schema_requires_canonical_query() {
+        let registrations = builtin_tool_registrations(None);
+        let web_search = registrations
+            .iter()
+            .find(|registration| registration.name() == tools::WEB_SEARCH)
+            .expect("web_search registration should exist");
+        let schema = web_search
+            .metadata()
+            .parameter_schema()
+            .expect("web_search schema");
+
+        assert_eq!(schema["required"], json!(["query"]));
+        assert_eq!(schema["additionalProperties"], json!(false));
+        let mut property_names = schema["properties"]
+            .as_object()
+            .expect("properties")
+            .keys()
+            .map(String::as_str)
+            .collect::<Vec<_>>();
+        property_names.sort_unstable();
+        assert_eq!(property_names, ["max_results", "query"]);
     }
 
     #[test]

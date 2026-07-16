@@ -119,6 +119,7 @@
 //! the monolithic implementation into focused, reusable components.
 
 pub mod apply_patch;
+pub use apply_patch::mutation_target_paths;
 pub mod ast_grep_binary;
 pub mod ast_grep_installer;
 pub(crate) mod ast_grep_language;
@@ -130,6 +131,10 @@ pub mod request_user_input;
 
 pub mod autonomous_executor;
 pub mod cache;
+pub(crate) mod code_search;
+pub use code_search::normalised_identity as normalised_code_search_identity;
+pub use code_search::normalised_loop_identity as normalised_code_search_loop_identity;
+pub use code_search::scope_contains_mutated_path as code_search_scope_contains_mutated_path;
 pub mod command;
 pub mod command_args;
 pub mod command_cache;
@@ -176,7 +181,6 @@ pub(crate) mod search_runtime;
 pub mod shell;
 pub mod shell_snapshot;
 pub mod skills;
-pub mod structural_search;
 pub mod summarizers;
 #[cfg(feature = "tui")]
 pub mod terminal_app;

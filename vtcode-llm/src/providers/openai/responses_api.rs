@@ -975,7 +975,7 @@ mod tests {
                     "call_id": "call_456",
                     "namespace": "repo_browser",
                     "name": "code_search",
-                    "arguments": "{\"path\":\".\"}"
+                    "arguments": "{\"query\":\"Widget\",\"path\":\".\"}"
                 }
             ]
         });

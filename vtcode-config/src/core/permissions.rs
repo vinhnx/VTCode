@@ -82,7 +82,7 @@ fn normalize_tool_name_to_semantic(tool_name: &str) -> String {
     match tool_name.to_ascii_lowercase().as_str() {
         // Read operations
         "read_file" | "read" | "grep_file" | "grep" | "list_files" | "list" | "glob"
-        | "listfiles" | "grepfile" => "read".to_string(),
+        | "listfiles" | "grepfile" | "code_search" | "codesearch" => "read".to_string(),
 
         // Write operations
         "write_file" | "write" | "create_file" | "createfile" | "delete_file" | "deletefile"
@@ -454,6 +454,15 @@ mod tests {
     }
 
     #[test]
+    fn normalizes_code_search_rules_to_read_semantics() {
+        assert_eq!(super::normalize_permission_rule("code_search"), "read");
+        assert_eq!(
+            super::normalize_permission_rule("code_search(/src/**)"),
+            "read(/src/**)"
+        );
+    }
+
+    #[test]
     fn ignores_unknown_fields_for_forward_compatibility() {
         // Unknown fields are silently ignored so that a config written by a newer
         // vtcode version does not break older binaries.
@@ -567,10 +576,7 @@ mod tests {
     fn public_permission_tool_names_use_semantic_rules_when_known() {
         assert_eq!(super::normalize_permission_rule("exec_command"), "bash");
         assert_eq!(super::normalize_permission_rule("apply_patch"), "edit");
-        assert_eq!(
-            super::normalize_permission_rule("code_search"),
-            "code_search"
-        );
+        assert_eq!(super::normalize_permission_rule("code_search"), "read");
     }
 
     #[test]

@@ -90,7 +90,7 @@ pub struct JustificationExtractor;
 -   `exec_command` - Execute shell operations or build/test
 -   `write_stdin` - Continue a live command session
 -   `apply_patch` - Implement code changes
--   `code_search` - Search code structure in the advanced profile
+-   `code_search` - Search recognised definitions, syntactic usages, literal text, and matching paths in the advanced profile
 
 ## Data Flow
 

@@ -13,8 +13,9 @@ commands to PowerShell. Use WSL when you want Unix-like workflows on Windows.
 
 Use **ripgrep** (`rg`) through `exec_command.cmd` for fast text and regex
 search across codebases. Use shell `grep` only when `rg` is unavailable or when
-you need a host-specific grep feature. Use `code_search` for semantic code
-search, such as ast-grep structural queries and Tree-sitter outlines.
+you need a host-specific grep feature. The advanced profile also provides
+`code_search` for one bounded literal query across definitions, syntactic
+usages, text, and paths.
 
 ## Architecture
 
@@ -274,52 +275,31 @@ rg -n -i -C 1 "hardcoded.*password|api.*key.*=|token.*=" .
 | **Learning curve** | Regex knowledge | AST query knowledge |
 | **Use cases** | General code search, prose, config | Syntax-aware code queries |
 
-## Semantic Outline
+## Advanced `code_search`
 
-`code_search` exposes `action=outline`, which wraps the Tree-sitter outline
-runtime to produce a cheap, token-efficient symbol map of a file or directory
-without requiring a structural query. Use it for the "what is in this file or
-directory?" question before reading full source.
+`code_search` is visible only in the advanced profile. It accepts required
+`query` and optional `path`, `file_types`, `result_types`, and `max_results`.
+Omitting `result_types` enables all four categories:
 
-**When to use which search action:**
-
-| Action | Question it answers |
+| Result type | Meaning |
 | --- | --- |
-| `rg` through `exec_command.cmd` | "Which lines match this text or regex?" |
-| `code_search` outline | "What symbols are defined in this file or directory?" |
-| `code_search` structural | "Which nodes match this AST query?" |
+| `definition` | A recognised declaration whose name exactly matches the query. |
+| `usage` | An exact syntactic identifier outside recognised declaration names. It is not a resolved reference. |
+| `text` | A literal match in prose, configuration, comments, strings, or otherwise unclassified content. |
+| `path` | A matching existing filename or path. |
+
+A wholly lower-case query matches without case sensitivity. A query containing
+an upper-case character is case-sensitive. Query punctuation is literal.
 
 ```json
-{"action":"outline","path":"vtcode-core/src/tools/registry/builder.rs","lang":"rust","view":"digest"}
-{"action":"outline","path":"vtcode-core/src/tools/registry","lang":"rust","type":"function","view":"names","items":"exports"}
+{"query":"ToolRegistration","path":"vtcode-core/src/tools","file_types":["rust"],"result_types":["definition","usage"],"max_results":20}
 ```
 
-Sub-fields: `path` (default `.`), `lang`, `type` (string or array of symbol
-types), `match` (name regex), `items` (`auto` | `structure` | `exports` |
-`imports` | `all`; default `auto`), `pub_members` (bool), `follow` (bool), and
-`view` (`digest` | `names` | `full`; default `digest`).
-
--   `digest` (default): symbols grouped by kind per file, with flat member
-    names. About 100-300 bytes for a typical file.
--   `names`: grouped names only, no members.
--   `full`: per-symbol records with the raw zero-based `range`, a derived
-    1-based inclusive `lineRange` (`{start, end}`), signatures, `astKind`, and
-    nested members. Members also carry `astKind`, `range`, and `lineRange`.
-
-Directory results also include a top-level `summary` with `total_symbols`,
-`by_kind` (per-kind symbol counts summing to `total_symbols`), and
-`all_symbols` (flat symbol list capped at 200 entries). When the cap is hit,
-`summary.truncated` is `true` and `summary.visible_symbols` reports the
-visible count. Narrow with `type` or `match`, or outline a specific file.
-
-Outline and structural search shell out to the same resolved `ast-grep` binary.
-On a missing binary, both actions auto-install ast-grep on first use by
-downloading the matching platform release from GitHub into `~/.vtcode/bin`
-with checksum verification and a 24-hour failure cooldown. Set
-`VTCODE_AST_GREP_NO_INSTALL=1` to opt out of auto-install; the error then
-surfaces immediately with the manual install command
-(`vtcode dependencies install ast-grep`). Unlike structural search, outline has
-no text equivalent.
+Each search component is bounded. `truncated: true` means further candidates
+may exist, without claiming an exact repository-wide total. Narrow `path`,
+`file_types`, or `result_types` in another independent call. Use
+`exec_command` or the specialised ast-grep skill for arbitrary structural
+patterns.
 
 ## Troubleshooting
 

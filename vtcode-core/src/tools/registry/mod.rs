@@ -213,7 +213,7 @@ pub struct ToolRegistry {
 
 const BUILTIN_CODE_TOOLS: &[&str] = &[
     crate::config::constants::tools::UNIFIED_FILE,
-    crate::config::constants::tools::UNIFIED_SEARCH,
+    crate::config::constants::tools::CODE_SEARCH,
     crate::config::constants::tools::WEB_FETCH,
     crate::config::constants::tools::WEB_SEARCH,
     crate::config::constants::tools::CRON,
@@ -226,8 +226,8 @@ fn builtin_code_tool_description(name: &str) -> String {
         n if n == crate::config::constants::tools::UNIFIED_FILE => {
             "Read, write, edit, move, copy, or delete files."
         }
-        n if n == crate::config::constants::tools::UNIFIED_SEARCH => {
-            "Search text, list files, run structural queries, or list errors."
+        n if n == crate::config::constants::tools::CODE_SEARCH => {
+            "Search code by query, with optional path, file_types, result_types, and max_results."
         }
         n if n == crate::config::constants::tools::WEB_FETCH => {
             "Fetch a URL and return an analysed summary or markdown."
@@ -300,8 +300,7 @@ mod tests {
     use crate::config::ToolDocumentationMode as ConfigToolDocumentationMode;
     use crate::config::ToolsConfig;
     use crate::constants::tools;
-    use crate::tool_policy::ToolPolicy;
-    use crate::tool_policy::ToolPolicyConfig;
+    use crate::tool_policy::{ToolConstraints, ToolPolicy, ToolPolicyConfig};
     use crate::tools::handlers::{
         SessionSurface, SessionToolsConfig, ToolModelCapabilities, ToolProfile,
     };
@@ -555,18 +554,20 @@ mod tests {
             .get_tool_schema(tools::CODE_SEARCH)
             .await
             .expect("code_search schema should be discoverable on request");
-        let code_search_actions = code_search_schema["parameters"]["properties"]["action"]["enum"]
-            .as_array()
-            .expect("code_search action enum");
-        assert!(
-            code_search_actions
-                .iter()
-                .any(|value| value == "structural")
+        let code_search_parameters = &code_search_schema["parameters"];
+        assert_eq!(code_search_parameters["required"], json!(["query"]));
+        assert_eq!(code_search_parameters["additionalProperties"], false);
+        let mut property_names = code_search_parameters["properties"]
+            .as_object()
+            .expect("code_search properties")
+            .keys()
+            .map(String::as_str)
+            .collect::<Vec<_>>();
+        property_names.sort_unstable();
+        assert_eq!(
+            property_names,
+            ["file_types", "max_results", "path", "query", "result_types"]
         );
-        assert!(code_search_actions.iter().any(|value| value == "outline"));
-        assert!(!code_search_actions.iter().any(|value| value == "grep"));
-        assert!(!code_search_actions.iter().any(|value| value == "list"));
-        assert!(!code_search_actions.iter().any(|value| value == "web"));
 
         Ok(())
     }
@@ -1806,10 +1807,81 @@ mod tests {
             .await?;
 
         assert_eq!(response.get("success").and_then(Value::as_bool), Some(true));
+        assert_eq!(
+            response.get("modified_files"),
+            Some(&json!([temp_dir
+                .path()
+                .join("patched_via_alias.txt")
+                .to_string_lossy()]))
+        );
 
         let file_contents = fs::read_to_string(temp_dir.path().join("patched_via_alias.txt"))?;
         assert_eq!(file_contents, "patched\n");
 
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn apply_patch_reports_deduplicated_paths_for_every_successful_operation() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        fs::create_dir(temp_dir.path().join("src"))?;
+        fs::write(temp_dir.path().join("src/delete.rs"), "delete me\n")?;
+        fs::write(temp_dir.path().join("src/old.rs"), "old\n")?;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        registry.allow_all_tools().await?;
+
+        let patch = "*** Begin Patch\n*** Add File: src/add.rs\n+new\n*** Delete File: src/delete.rs\n*** Update File: src/old.rs\n*** Move to: src/new.rs\n@@\n-old\n+new\n*** End Patch\n";
+        let response = registry
+            .execute_tool(tools::APPLY_PATCH, json!({ "input": patch }))
+            .await?;
+
+        let mut expected = ["add.rs", "delete.rs", "new.rs", "old.rs"]
+            .into_iter()
+            .map(|name| {
+                temp_dir
+                    .path()
+                    .join("src")
+                    .join(name)
+                    .to_string_lossy()
+                    .into_owned()
+            })
+            .collect::<Vec<_>>();
+        expected.sort();
+        assert_eq!(response["modified_files"], json!(expected));
+        assert!(temp_dir.path().join("src/add.rs").exists());
+        assert!(!temp_dir.path().join("src/delete.rs").exists());
+        assert!(!temp_dir.path().join("src/old.rs").exists());
+        assert_eq!(
+            fs::read_to_string(temp_dir.path().join("src/new.rs"))?,
+            "new\n"
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn failed_apply_patch_does_not_report_modified_files() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        registry.allow_all_tools().await?;
+
+        let outcome = registry
+            .execute_public_tool_request(ToolExecutionRequest::new(
+                tools::APPLY_PATCH,
+                json!({ "input": "*** Begin Patch\n*** Not An Operation\n*** End Patch\n" }),
+            ))
+            .await;
+
+        assert!(!outcome.is_success());
+        assert!(outcome.output.is_none());
+        assert!(
+            outcome
+                .error
+                .expect("failed patch should expose an error")
+                .to_json_value()
+                .get("modified_files")
+                .is_none()
+        );
         Ok(())
     }
 
@@ -2263,6 +2335,47 @@ mod tests {
             .unwrap_or(0);
         assert_eq!(consecutive_failures, 5);
 
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn code_search_executes_with_policy_capped_max_results() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        fs::write(temp_dir.path().join("Widget.rs"), "struct Widget;\n")?;
+        let policy_path = temp_dir.path().join("tool-policy.json");
+        let mut config = ToolPolicyConfig::default();
+        config
+            .policies
+            .insert(tools::CODE_SEARCH.to_string(), ToolPolicy::Allow);
+        config.constraints.insert(
+            tools::CODE_SEARCH.to_string(),
+            ToolConstraints {
+                max_results_per_call: Some(1),
+                ..ToolConstraints::default()
+            },
+        );
+        fs::write(&policy_path, serde_json::to_vec_pretty(&config)?)?;
+        let policy_manager =
+            crate::tool_policy::ToolPolicyManager::new_with_config_path(policy_path).await?;
+        let registry =
+            ToolRegistry::new_with_custom_policy(temp_dir.path().to_path_buf(), policy_manager)
+                .await;
+
+        let response = registry
+            .execute_tool(
+                tools::CODE_SEARCH,
+                json!({
+                    "query": "Widget",
+                    "path": ".",
+                    "result_types": ["path"],
+                    "max_results": 50
+                }),
+            )
+            .await?;
+
+        assert_eq!(response["filters"]["max_results"], json!(1));
+        assert_eq!(response["returned"], json!(1));
+        assert_eq!(response["results"].as_array().map(Vec::len), Some(1));
         Ok(())
     }
 }

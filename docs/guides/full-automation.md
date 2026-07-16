@@ -129,8 +129,7 @@ executes each task through the agent, verifies outcomes with environment probes
 (command exit codes), computes pass@k and pass^k metrics, and outputs a
 markdown report.
 
-See [docs/harness/HARNESS_EVALUATION.md](../harness/HARNESS_EVALUATION.md) for
-the methodology and [vtcode-eval](../../vtcode-eval/) for the framework.
+See [vtcode-eval](../../vtcode-eval/) for the framework and metric definitions.
 
 ## Profile File Recommendations
 

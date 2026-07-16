@@ -263,7 +263,7 @@ fn format_tool_arguments_for_resume(arguments: &str) -> String {
             summary_parts.push(format!("status: {status}"));
         }
     }
-    // For search_dispatch: show query
+    // For code_search: show query.
     if let Some(query) = obj.get("query").and_then(|v| v.as_str()) {
         summary_parts.push(format!("query: {query}"));
     }

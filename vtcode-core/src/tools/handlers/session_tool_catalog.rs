@@ -153,7 +153,7 @@ impl DeferredToolPolicy {
             Some(DeferredToolSearchKind::OpenAIHosted) => {
                 Some(ToolDefinition::hosted_tool_search())
             }
-            // `unified_search` is a core tool and always present; there is
+            // Client-local discovery is a core capability; there is
             // no separate wire-level tool to inject for client-local
             // deferral.
             Some(DeferredToolSearchKind::ClientLocal) | None => None,

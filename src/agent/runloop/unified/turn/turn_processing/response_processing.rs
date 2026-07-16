@@ -557,8 +557,8 @@ mod tests {
         let tool_calls = vec![
             vtcode_core::llm::provider::ToolCall::function(
                 "call_search".to_string(),
-                tools::UNIFIED_SEARCH.to_string(),
-                r#"{"action":"grep","pattern":"TurnProcessingResult"}"#.to_string(),
+                tools::CODE_SEARCH.to_string(),
+                r#"{"query":"TurnProcessingResult"}"#.to_string(),
             ),
             vtcode_core::llm::provider::ToolCall::function(
                 "call_exec".to_string(),
@@ -571,10 +571,10 @@ mod tests {
 
         assert_eq!(prepared.len(), 2);
         assert_eq!(prepared[0].call_id(), "call_search");
-        assert_eq!(prepared[0].tool_name(), tools::UNIFIED_SEARCH);
+        assert_eq!(prepared[0].tool_name(), tools::CODE_SEARCH);
         assert_eq!(
             prepared[0].args(),
-            Some(&serde_json::json!({"action":"grep","pattern":"TurnProcessingResult"}))
+            Some(&serde_json::json!({"query":"TurnProcessingResult"}))
         );
         assert!(prepared[0].is_parallel_safe());
         assert!(!prepared[0].is_command_execution());
@@ -593,7 +593,7 @@ mod tests {
     fn prepare_tool_calls_records_invalid_json_without_reparsing() {
         let tool_calls = vec![vtcode_core::llm::provider::ToolCall::function(
             "call_invalid".to_string(),
-            tools::UNIFIED_SEARCH.to_string(),
+            tools::CODE_SEARCH.to_string(),
             "{not-json}".to_string(),
         )];
 
@@ -601,7 +601,7 @@ mod tests {
 
         assert_eq!(prepared.len(), 1);
         assert_eq!(prepared[0].call_id(), "call_invalid");
-        assert_eq!(prepared[0].tool_name(), tools::UNIFIED_SEARCH);
+        assert_eq!(prepared[0].tool_name(), tools::CODE_SEARCH);
         assert!(prepared[0].args().is_none());
         assert!(prepared[0].args_error().is_some());
         assert!(!prepared[0].is_parallel_safe());
@@ -1032,7 +1032,7 @@ Open questions for alignment:
             tool_calls: Some(vec![vtcode_core::llm::provider::ToolCall::function(
                 "call_1".to_string(),
                 "code_search".to_string(),
-                r#"{"action":"grep","pattern":"x"}"#.to_string(),
+                r#"{"query":"x"}"#.to_string(),
             )]),
             model: "test".to_string(),
             usage: None,
@@ -1085,7 +1085,7 @@ Open questions for alignment:
     #[test]
     fn process_llm_response_keeps_textual_tool_request_as_text_when_tool_calls_disabled() {
         let response = LLMResponse {
-            content: Some("code_search({\"action\":\"outline\",\"path\":\"src\"})".to_string()),
+            content: Some("code_search({\"query\":\"Widget\",\"path\":\"src\"})".to_string()),
             tool_calls: None,
             model: "test".to_string(),
             usage: None,
@@ -1114,10 +1114,7 @@ Open questions for alignment:
 
         match result {
             TurnProcessingResult::TextResponse { text, .. } => {
-                assert_eq!(
-                    text,
-                    "code_search({\"action\":\"outline\",\"path\":\"src\"})"
-                );
+                assert_eq!(text, "code_search({\"query\":\"Widget\",\"path\":\"src\"})");
             }
             _ => panic!("Expected text response when tool calls are disabled"),
         }
@@ -1130,7 +1127,7 @@ Open questions for alignment:
             tool_calls: Some(vec![vtcode_core::llm::provider::ToolCall::function(
                 "call_1".to_string(),
                 "code_search".to_string(),
-                r#"{"action":"list","path":"src"}"#.to_string(),
+                r#"{"query":"Widget","path":"src","result_types":["path"]}"#.to_string(),
             )]),
             model: "test".to_string(),
             usage: None,

@@ -164,17 +164,17 @@ mod tests {
     fn parses_single_dsml_invoke_with_string_params() {
         let text = concat!(
             "<\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}invoke name=\"code_search\">\n",
-            "<\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}parameter name=\"action\" string=\"true\">list</\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}parameter>\n",
+            "<\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}parameter name=\"query\" string=\"true\">Widget</\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}parameter>\n",
             "<\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}parameter name=\"path\" string=\"true\">/src</\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}parameter>\n",
-            "<\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}parameter name=\"scope\" string=\"true\">full</\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}parameter>\n",
+            "<\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}parameter name=\"result_types\">[\"definition\"]</\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}parameter>\n",
             "</\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}invoke>",
         );
 
         let (name, args) = parse_dsml_tool_call(text).expect("should parse");
         assert_eq!(name, "code_search");
-        assert_eq!(args["action"], Value::String("list".to_string()));
+        assert_eq!(args["query"], Value::String("Widget".to_string()));
         assert_eq!(args["path"], Value::String("/src".to_string()));
-        assert_eq!(args["scope"], Value::String("full".to_string()));
+        assert_eq!(args["result_types"], serde_json::json!(["definition"]));
     }
 
     #[test]

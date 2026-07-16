@@ -39,7 +39,7 @@ The execution policy is designed to allow engineers typical software development
 
 Canonical public tool names in the default profile are `exec_command`,
 `write_stdin`, and `apply_patch`. The advanced VT Code profile may also expose
-`code_search` for semantic code search. Plain text search and file inspection
+`code_search` for bounded code search. Plain text search and file inspection
 use shell commands inside `exec_command.cmd`.
 
 | Tool | Policy | Notes |
@@ -47,7 +47,7 @@ use shell commands inside `exec_command.cmd`.
 | `exec_command` | **Prompt** | Public shell command surface |
 | `write_stdin` | **Prompt** | Live-session continuation surface |
 | `apply_patch` | **Prompt** | Patch edits |
-| `code_search` | Allow | Advanced-profile semantic search |
+| `code_search` | Allow | Advanced-profile bounded code search |
 | `request_user_input` | Allow | Interactive clarification surface |
 
 ### Recovery After Policy Denial
@@ -62,7 +62,7 @@ retryable transient:
 Example pivot:
 
 - Denied: `exec_command` running `rg -n "foo" README.md`
-- Recovery for semantic code structure: `code_search` outline or structural search
+- Recovery for a focused code query: advanced `code_search` with `query` and narrower filters
 - Final fallback when shell access remains necessary: `Not applied; exec was denied by policy; next action: switch to /mode auto or approve the command.`
 
 ## Key Safety Features
@@ -119,7 +119,7 @@ Override examples in `vtcode.toml`:
 apply_patch = "allow"  # Allow patches without prompt
 exec_command = "ask"    # Prompt before shell commands
 write_stdin = "ask"     # Prompt before live-session input
-code_search = "allow"   # Allow advanced semantic search
+code_search = "allow"   # Allow advanced bounded literal search
 ```
 
 ## Cache-Friendly Execution Guidance

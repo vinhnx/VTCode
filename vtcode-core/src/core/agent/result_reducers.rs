@@ -5,8 +5,6 @@
 //! engineering principle: "return only summaries or a small number of results
 //! to the model."
 
-use std::collections::HashSet;
-
 use serde_json::Value;
 
 use crate::config::constants::tools;
@@ -19,81 +17,10 @@ pub fn reduce_tool_result(tool_name: &str, result: Value) -> Value {
     let canonical_tool_name =
         tool_intent::canonical_command_session_tool_name(tool_name).unwrap_or(tool_name);
     match canonical_tool_name {
-        tools::UNIFIED_SEARCH => reduce_search_result(result),
         tools::READ_FILE => reduce_read_file_result(result),
         tools::UNIFIED_EXEC => reduce_command_result(result),
         _ => result,
     }
-}
-
-fn reduce_search_result(result: Value) -> Value {
-    const MAX_GREP_RESULTS: usize = 5;
-    const MAX_LIST_FILES: usize = 50;
-
-    let Some(obj) = result.as_object() else {
-        return result;
-    };
-
-    if let Some(matches) = obj.get("matches").and_then(Value::as_array) {
-        let mut deduped = Vec::with_capacity(matches.len());
-        let mut seen = HashSet::new();
-        for entry in matches {
-            let path = entry
-                .get("path")
-                .or_else(|| entry.get("file"))
-                .and_then(Value::as_str)
-                .map(str::to_owned);
-            let line = entry
-                .get("line")
-                .or_else(|| entry.get("line_number"))
-                .and_then(Value::as_i64);
-            if path.is_none() && line.is_none() {
-                deduped.push(entry.clone());
-                continue;
-            }
-            if seen.insert((path, line)) {
-                deduped.push(entry.clone());
-            }
-        }
-        let total = deduped.len();
-        if total > MAX_GREP_RESULTS {
-            return serde_json::json!({
-                "matches": deduped.into_iter().take(MAX_GREP_RESULTS).collect::<Vec<_>>(),
-                "overflow": format!("[+{} more matches]", total - MAX_GREP_RESULTS),
-                "total": total,
-                "note": "Showing top 5 unique matches (by path/line)"
-            });
-        }
-        if total != matches.len() {
-            return serde_json::json!({
-                "matches": deduped,
-                "total": total,
-                "note": "unique grep matches (collapsed by path/line)"
-            });
-        }
-        return serde_json::json!({
-            "matches": deduped,
-            "total": total,
-            "note": "grep results normalized"
-        });
-    }
-
-    let Some(files) = obj
-        .get("files")
-        .or_else(|| obj.get("items"))
-        .and_then(Value::as_array)
-    else {
-        return result;
-    };
-    if files.len() <= MAX_LIST_FILES {
-        return result;
-    }
-
-    serde_json::json!({
-        "total_files": files.len(),
-        "sample": files.iter().take(5).cloned().collect::<Vec<_>>(),
-        "note": format!("Showing 5 of {} files. Use exec_command or code_search for specific patterns.", files.len())
-    })
 }
 
 fn reduce_read_file_result(result: Value) -> Value {

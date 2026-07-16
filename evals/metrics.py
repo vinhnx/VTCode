@@ -1,7 +1,5 @@
 import re
-import json
 import subprocess
-import os
 
 class Metric:
     def evaluate(self, output, target, **kwargs):

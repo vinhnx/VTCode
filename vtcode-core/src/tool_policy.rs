@@ -29,7 +29,6 @@ use crate::utils::tool_name_parsing::{canonical_tool_name, parse_canonical_mcp_t
 const AUTO_ALLOW_TOOLS: &[&str] = &[
     tools::START_PLANNING,
     tools::TASK_TRACKER,
-    tools::UNIFIED_SEARCH,
     tools::READ_FILE,
     // Whitelist the core execution tool itself; individual shell commands remain
     // gated by command/sandbox approval policy.
@@ -630,15 +629,7 @@ impl ToolPolicyManager {
             return policy.clone();
         }
 
-        match tool_name {
-            tools::UNIFIED_SEARCH => tools_config
-                .policies
-                .get("list_dir")
-                .or_else(|| tools_config.policies.get("list_directory"))
-                .cloned(),
-            _ => None,
-        }
-        .unwrap_or(tools_config.default_policy.clone())
+        tools_config.default_policy.clone()
     }
 
     /// Apply policies defined in vtcode.toml to the runtime policy manager.
@@ -1485,6 +1476,27 @@ mod tests {
         assert_eq!(config.available_tools, deserialized.available_tools);
         assert_eq!(config.policies, deserialized.policies);
         assert_eq!(config.approval_cache, deserialized.approval_cache);
+    }
+
+    #[test]
+    fn code_search_policy_uses_default_and_explicit_override() {
+        let mut tools_config = ToolsConfig {
+            default_policy: ToolPolicy::Prompt,
+            ..Default::default()
+        };
+
+        assert_eq!(
+            ToolPolicyManager::resolve_config_policy(&tools_config, tools::CODE_SEARCH),
+            ToolPolicy::Allow
+        );
+
+        tools_config
+            .policies
+            .insert(tools::CODE_SEARCH.to_string(), ToolPolicy::Deny);
+        assert_eq!(
+            ToolPolicyManager::resolve_config_policy(&tools_config, tools::CODE_SEARCH),
+            ToolPolicy::Deny
+        );
     }
 
     #[tokio::test]

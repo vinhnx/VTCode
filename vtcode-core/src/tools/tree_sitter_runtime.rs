@@ -3,6 +3,133 @@ use std::sync::{Mutex, OnceLock};
 
 use crate::tools::ast_grep_language::AstGrepLanguage;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct SourceByteRange {
+    pub start: usize,
+    pub end: usize,
+}
+
+pub(crate) fn usage_node_kind_allowlist(
+    language: AstGrepLanguage,
+) -> Option<&'static [&'static str]> {
+    match language {
+        AstGrepLanguage::Rust => Some(&["identifier", "type_identifier", "field_identifier"]),
+        AstGrepLanguage::Python => Some(&["identifier"]),
+        AstGrepLanguage::JavaScript | AstGrepLanguage::TypeScript | AstGrepLanguage::Tsx => {
+            Some(&[
+                "identifier",
+                "property_identifier",
+                "shorthand_property_identifier",
+                "shorthand_property_identifier_pattern",
+                "type_identifier",
+            ])
+        }
+        AstGrepLanguage::Go => Some(&["identifier", "field_identifier", "type_identifier"]),
+        AstGrepLanguage::Java => Some(&["identifier", "type_identifier"]),
+        AstGrepLanguage::C => Some(&["identifier", "type_identifier", "field_identifier"]),
+        AstGrepLanguage::Cpp => Some(&[
+            "identifier",
+            "type_identifier",
+            "field_identifier",
+            "namespace_identifier",
+        ]),
+        AstGrepLanguage::Bash
+        | AstGrepLanguage::Markdown
+        | AstGrepLanguage::Csharp
+        | AstGrepLanguage::Css
+        | AstGrepLanguage::Html
+        | AstGrepLanguage::Json
+        | AstGrepLanguage::Yaml
+        | AstGrepLanguage::Ruby
+        | AstGrepLanguage::Php
+        | AstGrepLanguage::Kotlin
+        | AstGrepLanguage::Swift
+        | AstGrepLanguage::Lua
+        | AstGrepLanguage::Sql
+        | AstGrepLanguage::Scala
+        | AstGrepLanguage::Elixir
+        | AstGrepLanguage::Dockerfile
+        | AstGrepLanguage::Toml
+        | AstGrepLanguage::Hcl
+        | AstGrepLanguage::Dart
+        | AstGrepLanguage::Zig
+        | AstGrepLanguage::Protobuf
+        | AstGrepLanguage::Haskell
+        | AstGrepLanguage::Nix
+        | AstGrepLanguage::Solidity => None,
+    }
+}
+
+fn exact_named_node_for_range(
+    tree: &tree_sitter::Tree,
+    range: SourceByteRange,
+) -> Option<tree_sitter::Node<'_>> {
+    if range.start >= range.end {
+        return None;
+    }
+    let mut node = tree
+        .root_node()
+        .descendant_for_byte_range(range.start, range.end.saturating_sub(1))?;
+    loop {
+        if node.is_named() && node.start_byte() == range.start && node.end_byte() == range.end {
+            return Some(node);
+        }
+        node = node.parent()?;
+    }
+}
+
+pub(crate) fn is_exact_usage_identifier(
+    tree: &tree_sitter::Tree,
+    language: AstGrepLanguage,
+    range: SourceByteRange,
+) -> bool {
+    let Some(allowlist) = usage_node_kind_allowlist(language) else {
+        return false;
+    };
+    exact_named_node_for_range(tree, range).is_some_and(|node| allowlist.contains(&node.kind()))
+}
+
+fn declaration_name_node_kind_allowlist(
+    language: AstGrepLanguage,
+) -> Option<&'static [&'static str]> {
+    match language {
+        AstGrepLanguage::Bash => Some(&["word"]),
+        _ => usage_node_kind_allowlist(language),
+    }
+}
+
+pub(crate) fn exact_declaration_name_range(
+    tree: &tree_sitter::Tree,
+    source: &str,
+    language: AstGrepLanguage,
+    declaration_range: SourceByteRange,
+    outline_name: &str,
+    query: &str,
+) -> Option<SourceByteRange> {
+    if declaration_range.start >= declaration_range.end {
+        return None;
+    }
+    let declaration = tree.root_node().descendant_for_byte_range(
+        declaration_range.start,
+        declaration_range.end.saturating_sub(1),
+    )?;
+    let name = declaration.child_by_field_name("name")?;
+    let allowlist = declaration_name_node_kind_allowlist(language)?;
+    if !allowlist.contains(&name.kind()) {
+        return None;
+    }
+    let name_text = name.utf8_text(source.as_bytes()).ok()?;
+    let matches = if query.chars().any(char::is_uppercase) {
+        name_text == outline_name
+    } else {
+        name_text.to_lowercase() == outline_name.to_lowercase()
+    };
+    matches.then_some(SourceByteRange {
+        start: name.start_byte(),
+        end: name.end_byte(),
+    })
+}
+
 static TREE_SITTER_PARSERS: OnceLock<
     Mutex<HashMap<AstGrepLanguage, Result<tree_sitter::Parser, String>>>,
 > = OnceLock::new();
@@ -117,7 +244,10 @@ fn grammar_for(language: AstGrepLanguage) -> Option<tree_sitter::Language> {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_source, prewarm_language, prewarm_workspace_languages};
+    use super::{
+        SourceByteRange, exact_declaration_name_range, is_exact_usage_identifier, parse_source,
+        prewarm_language, prewarm_workspace_languages, usage_node_kind_allowlist,
+    };
     use crate::tools::ast_grep_language::AstGrepLanguage;
 
     #[test]
@@ -148,5 +278,177 @@ mod tests {
             .expect("rust source should parse");
 
         assert!(!tree.root_node().has_error());
+    }
+
+    #[test]
+    fn tree_sitter_usage_allowlist_is_frozen() {
+        let expected = [
+            (
+                AstGrepLanguage::Rust,
+                &["identifier", "type_identifier", "field_identifier"][..],
+            ),
+            (AstGrepLanguage::Python, &["identifier"][..]),
+            (
+                AstGrepLanguage::JavaScript,
+                &[
+                    "identifier",
+                    "property_identifier",
+                    "shorthand_property_identifier",
+                    "shorthand_property_identifier_pattern",
+                    "type_identifier",
+                ][..],
+            ),
+            (
+                AstGrepLanguage::TypeScript,
+                &[
+                    "identifier",
+                    "property_identifier",
+                    "shorthand_property_identifier",
+                    "shorthand_property_identifier_pattern",
+                    "type_identifier",
+                ][..],
+            ),
+            (
+                AstGrepLanguage::Tsx,
+                &[
+                    "identifier",
+                    "property_identifier",
+                    "shorthand_property_identifier",
+                    "shorthand_property_identifier_pattern",
+                    "type_identifier",
+                ][..],
+            ),
+            (
+                AstGrepLanguage::Go,
+                &["identifier", "field_identifier", "type_identifier"][..],
+            ),
+            (
+                AstGrepLanguage::Java,
+                &["identifier", "type_identifier"][..],
+            ),
+            (
+                AstGrepLanguage::C,
+                &["identifier", "type_identifier", "field_identifier"][..],
+            ),
+            (
+                AstGrepLanguage::Cpp,
+                &[
+                    "identifier",
+                    "type_identifier",
+                    "field_identifier",
+                    "namespace_identifier",
+                ][..],
+            ),
+        ];
+        for (language, kinds) in expected {
+            assert_eq!(usage_node_kind_allowlist(language), Some(kinds));
+            assert!(!kinds.contains(&"string_literal"));
+        }
+        assert_eq!(usage_node_kind_allowlist(AstGrepLanguage::Bash), None);
+    }
+
+    #[test]
+    fn tree_sitter_excludes_only_exact_declaration_name() {
+        let source = "fn Widget() { Widget(); }\n";
+        let tree = parse_source(AstGrepLanguage::Rust, source).expect("Rust parses");
+        let declaration = SourceByteRange { start: 0, end: 25 };
+        let name = exact_declaration_name_range(
+            &tree,
+            source,
+            AstGrepLanguage::Rust,
+            declaration,
+            "Widget",
+            "Widget",
+        )
+        .expect("name field should resolve");
+        assert_eq!(name, SourceByteRange { start: 3, end: 9 });
+        assert!(is_exact_usage_identifier(
+            &tree,
+            AstGrepLanguage::Rust,
+            SourceByteRange { start: 14, end: 20 },
+        ));
+        assert!(!is_exact_usage_identifier(
+            &tree,
+            AstGrepLanguage::Rust,
+            SourceByteRange { start: 3, end: 8 },
+        ));
+        assert!(
+            exact_declaration_name_range(
+                &tree,
+                source,
+                AstGrepLanguage::Rust,
+                declaration,
+                "Different",
+                "Widget",
+            )
+            .is_none()
+        );
+        assert!(
+            exact_declaration_name_range(
+                &tree,
+                source,
+                AstGrepLanguage::Rust,
+                SourceByteRange { start: 12, end: 23 },
+                "Widget",
+                "Widget",
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn tree_sitter_definition_name_smart_case_supports_unicode_lowercase_queries() {
+        let source = "fn Éclair() { Éclair(); }\n";
+        let tree = parse_source(AstGrepLanguage::Rust, source).expect("Rust parses");
+        let declaration = SourceByteRange {
+            start: 0,
+            end: source.len() - 1,
+        };
+        let name = exact_declaration_name_range(
+            &tree,
+            source,
+            AstGrepLanguage::Rust,
+            declaration,
+            "Éclair",
+            "éclair",
+        )
+        .expect("Unicode lower-case smart-case name");
+        assert_eq!(&source[name.start..name.end], "Éclair");
+        assert!(
+            exact_declaration_name_range(
+                &tree,
+                source,
+                AstGrepLanguage::Rust,
+                declaration,
+                "éclair",
+                "Éclair",
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn bash_declaration_names_are_valid_without_enabling_bash_usages() {
+        let source = "function Widget() { echo Widget; }\n";
+        let tree = parse_source(AstGrepLanguage::Bash, source).expect("Bash parses");
+        let name = exact_declaration_name_range(
+            &tree,
+            source,
+            AstGrepLanguage::Bash,
+            SourceByteRange {
+                start: 0,
+                end: source.len(),
+            },
+            "Widget",
+            "Widget",
+        )
+        .expect("Bash function name");
+
+        assert_eq!(&source[name.start..name.end], "Widget");
+        assert!(!is_exact_usage_identifier(
+            &tree,
+            AstGrepLanguage::Bash,
+            SourceByteRange { start: 25, end: 31 },
+        ));
     }
 }

@@ -194,7 +194,7 @@ mod tests {
         let plan = build_harness_request_plan(HarnessRequestPlanInput {
             messages: vec![Message::user("hello".to_string())],
             system_prompt: "base\n[Runtime Context]\n- turns: 1".to_string(),
-            tools: Some(Arc::new(vec![function_tool(tools::UNIFIED_SEARCH)])),
+            tools: Some(Arc::new(vec![function_tool(tools::CODE_SEARCH)])),
             model: "gpt-5".to_string(),
             max_tokens: Some(128),
             temperature: Some(0.7),
@@ -324,7 +324,7 @@ mod tests {
     #[test]
     fn filter_tool_definitions_respects_request_user_input_toggle() {
         let tools = Arc::new(vec![
-            function_tool(tools::UNIFIED_SEARCH),
+            function_tool(tools::CODE_SEARCH),
             function_tool(tools::REQUEST_USER_INPUT),
         ]);
 
@@ -332,14 +332,14 @@ mod tests {
             filter_tool_definitions_for_mode(Some(tools), true, false).expect("filtered tools");
         let names: Vec<&str> = filtered.iter().map(|tool| tool.function_name()).collect();
 
-        assert!(names.contains(&tools::UNIFIED_SEARCH));
+        assert!(names.contains(&tools::CODE_SEARCH));
         assert!(!names.contains(&tools::REQUEST_USER_INPUT));
     }
 
     #[test]
     fn filter_tool_definitions_hides_mutating_only_tools_in_planning_workflow() {
         let tools = Arc::new(vec![
-            function_tool(tools::UNIFIED_SEARCH),
+            function_tool(tools::CODE_SEARCH),
             function_tool(tools::UNIFIED_FILE),
             function_tool(tools::APPLY_PATCH),
             function_tool(tools::WRITE_FILE),
@@ -349,7 +349,7 @@ mod tests {
             filter_tool_definitions_for_mode(Some(tools), true, false).expect("filtered tools");
         let names: Vec<&str> = filtered.iter().map(|tool| tool.function_name()).collect();
 
-        assert!(names.contains(&tools::UNIFIED_SEARCH));
+        assert!(names.contains(&tools::CODE_SEARCH));
         assert!(names.contains(&tools::UNIFIED_FILE));
         assert!(!names.contains(&tools::APPLY_PATCH));
         assert!(!names.contains(&tools::WRITE_FILE));
@@ -371,7 +371,7 @@ mod tests {
     #[test]
     fn tool_catalog_hash_matches_legacy_json_string_hash() {
         let tools = vec![
-            function_tool(tools::UNIFIED_SEARCH),
+            function_tool(tools::CODE_SEARCH),
             ToolDefinition::function(
                 "custom_tool".to_string(),
                 "Custom".to_string(),
@@ -511,13 +511,13 @@ mod tests {
 
     #[test]
     fn filter_tool_definitions_skips_masking_for_non_multi_action_tools() {
-        let tools = Arc::new(vec![function_tool(tools::UNIFIED_SEARCH)]);
+        let tools = Arc::new(vec![function_tool(tools::CODE_SEARCH)]);
 
         let filtered =
             filter_tool_definitions_for_mode(Some(tools), true, false).expect("filtered tools");
         assert_eq!(filtered.len(), 1);
         // No action property to mask — just verify the tool is still present.
-        assert_eq!(filtered[0].function_name(), tools::UNIFIED_SEARCH);
+        assert_eq!(filtered[0].function_name(), tools::CODE_SEARCH);
     }
 
     #[test]
@@ -525,7 +525,7 @@ mod tests {
         // All tools pass the whole-tool filter (none are Mutating-only),
         // but action masking should still apply.
         let tools = Arc::new(vec![
-            function_tool(tools::UNIFIED_SEARCH),
+            function_tool(tools::CODE_SEARCH),
             tool_with_action_enum(tools::UNIFIED_FILE, &["read", "write", "edit"]),
         ]);
 

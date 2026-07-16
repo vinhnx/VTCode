@@ -1912,7 +1912,7 @@ mod tests {
             },
             NormalizedStreamEvent::ToolCallDelta {
                 call_id: "call_1".to_string(),
-                delta: "{\"pattern\":\"phase\"}".to_string(),
+                delta: "{\"query\":\"phase\"}".to_string(),
             },
             NormalizedStreamEvent::Usage {
                 usage: crate::provider::Usage {
@@ -1932,7 +1932,7 @@ mod tests {
                     tool_calls: Some(vec![ToolCall::function(
                         "call_1".to_string(),
                         "code_search".to_string(),
-                        "{\"pattern\":\"phase\"}".to_string(),
+                        "{\"query\":\"phase\"}".to_string(),
                     )]),
                     usage: None,
                     finish_reason: FinishReason::ToolCalls,
@@ -1975,7 +1975,7 @@ mod tests {
         )));
         assert!(events.iter().any(|event| matches!(
             event,
-            ResponseStreamEvent::FunctionCallArgumentsDelta { delta, .. } if delta == "{\"pattern\":\"phase\"}"
+            ResponseStreamEvent::FunctionCallArgumentsDelta { delta, .. } if delta == "{\"query\":\"phase\"}"
         )));
         assert!(
             events

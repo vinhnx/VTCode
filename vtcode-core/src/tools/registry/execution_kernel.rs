@@ -303,14 +303,6 @@ pub(super) fn normalize_tool_args<'a>(
         }
     }
 
-    if normalized_tool_name == tool_names::UNIFIED_SEARCH {
-        let search_args =
-            crate::tools::tool_intent::normalize_search_dispatch_args(normalized.as_ref());
-        if search_args != *normalized.as_ref() {
-            normalized = std::borrow::Cow::Owned(search_args);
-        }
-    }
-
     if let Some(alias_args) = normalize_details_aliases(normalized.as_ref(), parameter_schema) {
         normalized = std::borrow::Cow::Owned(alias_args);
     }
@@ -492,13 +484,6 @@ pub(super) fn preflight_validate_resolved_call(
             "Invalid arguments for tool '{routed_tool_name}': missing action; provide `action` or inferable exec arguments"
         ));
     }
-    if validation_tool_name == tool_names::UNIFIED_SEARCH
-        && crate::tools::tool_intent::search_dispatch_action(validation_args.as_ref()).is_none()
-    {
-        return Err(anyhow!(
-            "Invalid arguments for tool '{routed_tool_name}': missing action; provide `action` or inferable search arguments"
-        ));
-    }
     let effective_parameter_schema = registry
         .inventory
         .registration_for(&validation_tool_name)
@@ -520,6 +505,10 @@ pub(super) fn preflight_validate_resolved_call(
                 "Invalid arguments for tool '{routed_tool_name}': {error_msg}{hint_msg}"
             ));
         }
+    }
+    if validation_tool_name == tool_names::CODE_SEARCH {
+        crate::tools::code_search::validate_args(validation_args.as_ref())
+            .map_err(|error| anyhow!("Invalid arguments for tool '{routed_tool_name}': {error}"))?;
     }
 
     let intent = crate::tools::tool_intent::classify_tool_intent(
@@ -566,7 +555,6 @@ mod tests {
         let registry = ToolRegistry::new(temp.path().to_path_buf()).await;
         (temp, registry)
     }
-
     #[test]
     fn patch_action_within_limit_is_allowed() {
         let mut failures = Vec::new();
@@ -578,7 +566,6 @@ mod tests {
         enforce_file_operation_payload_limit(tool_names::UNIFIED_FILE, &args, 1024, &mut failures);
         assert!(failures.is_empty());
     }
-
     #[test]
     fn patch_action_over_limit_is_rejected() {
         let mut failures = Vec::new();
@@ -592,7 +579,6 @@ mod tests {
         assert!(failures[0].contains("payload too large"));
         assert!(failures[0].contains("Split the change"));
     }
-
     #[test]
     fn edit_tool_over_limit_is_rejected() {
         let mut failures = Vec::new();
@@ -769,67 +755,6 @@ mod tests {
     fn tool_name_candidates_normalize_humanized_name() {
         let candidates = public_tool_name_candidates("Read file");
         assert!(candidates.iter().any(|c| c == "read_file"));
-    }
-
-    #[test]
-    fn search_dispatch_schema_args_infers_action_from_pattern() -> Result<()> {
-        let args = json!({
-            "pattern": "LLMStreamEvent::",
-            "path": "."
-        });
-
-        let normalized = normalize_tool_args(tool_names::UNIFIED_SEARCH, &args, None)?;
-        assert_eq!(
-            normalized.get("action").and_then(|v| v.as_str()),
-            Some("grep")
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn search_dispatch_schema_args_infers_list_action_from_glob_pattern() -> Result<()> {
-        let args = json!({
-            "pattern": "**/*.rs",
-            "path": "src"
-        });
-
-        let normalized = normalize_tool_args(tool_names::UNIFIED_SEARCH, &args, None)?;
-        assert_eq!(
-            normalized.get("action").and_then(|v| v.as_str()),
-            Some("list")
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn search_dispatch_schema_args_preserves_non_inferable_payload() -> Result<()> {
-        let args = json!({
-            "max_results": 10
-        });
-
-        let normalized = normalize_tool_args(tool_names::UNIFIED_SEARCH, &args, None)?;
-        assert!(normalized.get("action").is_none());
-        Ok(())
-    }
-
-    #[test]
-    fn search_dispatch_schema_args_normalizes_case_variants() -> Result<()> {
-        let args = json!({
-            "Pattern": "ReasoningStage",
-            "Path": "."
-        });
-
-        let normalized = normalize_tool_args(tool_names::UNIFIED_SEARCH, &args, None)?;
-        assert_eq!(
-            normalized.get("pattern").and_then(|v| v.as_str()),
-            Some("ReasoningStage")
-        );
-        assert_eq!(normalized.get("path").and_then(|v| v.as_str()), Some("."));
-        assert_eq!(
-            normalized.get("action").and_then(|v| v.as_str()),
-            Some("grep")
-        );
-        Ok(())
     }
 
     #[test]

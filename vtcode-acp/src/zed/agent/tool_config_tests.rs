@@ -383,14 +383,14 @@ async fn local_tool_execution_reports_registry_failure() {
 }
 
 #[tokio::test]
-async fn local_tool_metadata_uses_core_action_labels_and_kinds() {
+async fn local_tool_metadata_uses_core_labels_and_kinds() {
     let temp = TempDir::new().unwrap();
     let agent = build_agent(temp.path()).await;
     let exec_args = json!({
         "cmd": "cargo check",
     });
     let search_args = json!({
-        "action": "outline",
+        "query": "Widget",
         "path": "src/lib.rs",
     });
     let patch_args = json!({});
@@ -415,7 +415,7 @@ async fn local_tool_metadata_uses_core_action_labels_and_kinds() {
             tools::CODE_SEARCH,
             &search_args
         ),
-        "Outline symbols"
+        "Search code"
     );
     assert_eq!(
         agent

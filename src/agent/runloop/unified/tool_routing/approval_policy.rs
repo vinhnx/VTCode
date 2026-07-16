@@ -31,7 +31,7 @@ fn shell_command_accesses_network(command_words: &[String]) -> bool {
 fn tool_accesses_network(tool_name: &str, tool_args: Option<&Value>) -> bool {
     let canonical = vtcode_core::tools::names::canonical_tool_name(tool_name);
     match canonical {
-        "web_search" | "fetch_url" | "search_dispatch:web" => true,
+        "web_search" | "fetch_url" => true,
         tools::EXEC_COMMAND => {
             vtcode_core::tools::command_args::command_words(tool_args.unwrap_or(&Value::Null))
                 .ok()

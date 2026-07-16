@@ -40,7 +40,6 @@ pub(super) fn parse_harmony_tool_name(recipient: &str) -> String {
         "functions.exec_command" => tools::EXEC_COMMAND.to_string(),
         "functions.apply_patch" => tools::APPLY_PATCH.to_string(),
         "container.exec" | "bash" => tools::EXEC_COMMAND.to_string(),
-        "grep" => tools::CODE_SEARCH.to_string(),
         _ => {
             // Try to extract the function name after the last dot
             if let Some(dot_pos) = recipient.rfind('.') {

@@ -17,22 +17,6 @@ fn fallback_from_error_extracts_command_session_poll() {
 }
 
 #[test]
-fn fallback_from_error_recovers_search_dispatch_invalid_read_action() {
-    let error = "Tool execution failed: Invalid action: read";
-    let fallback = fallback_from_error(tool_names::UNIFIED_SEARCH, error, None);
-    assert_eq!(
-        fallback,
-        Some((
-            tool_names::UNIFIED_SEARCH.to_string(),
-            serde_json::json!({
-                "action": "list",
-                "path": "."
-            }),
-        ))
-    );
-}
-
-#[test]
 fn fallback_from_error_extracts_read_file_for_patch_context_mismatch() {
     let error = "Tool 'apply_patch' execution failed: failed to locate expected lines in 'vtcode-exec-events/src/trace.rs': context mismatch";
     let fallback = fallback_from_error(tool_names::APPLY_PATCH, error, None);
@@ -182,18 +166,18 @@ fn build_error_content_compacts_large_fallback_args() {
 fn build_error_content_keeps_structured_fallback_fields_only() {
     let payload = build_error_content(
         "boom".to_string(),
-        Some(tool_names::UNIFIED_SEARCH.to_string()),
-        Some(serde_json::json!({"action":"list","path":"."})),
+        Some(tool_names::CODE_SEARCH.to_string()),
+        Some(serde_json::json!({"query":"Widget","path":"."})),
         "execution",
     );
 
     assert_eq!(
         payload.get("fallback_tool"),
-        Some(&serde_json::json!(tool_names::UNIFIED_SEARCH))
+        Some(&serde_json::json!(tool_names::CODE_SEARCH))
     );
     assert_eq!(
         payload.get("fallback_tool_args"),
-        Some(&serde_json::json!({"action":"list","path":"."}))
+        Some(&serde_json::json!({"query":"Widget","path":"."}))
     );
     assert_eq!(
         payload.get("is_recoverable").and_then(|v| v.as_bool()),
@@ -513,36 +497,25 @@ fn maybe_inline_spooled_uses_reference_only_for_spooled_exec_output() {
 }
 
 #[test]
-fn maybe_inline_spooled_uses_reference_only_for_spooled_search_output() {
-    let large_match_payload = "match\n".repeat(10_000);
+fn maybe_inline_spooled_uses_reference_only_for_spooled_code_search_output() {
+    let large_result_payload = "result\n".repeat(10_000);
     let serialized = maybe_inline_spooled(
-        tool_names::UNIFIED_SEARCH,
+        tool_names::CODE_SEARCH,
         &serde_json::json!({
-            "query": "",
-            "matches": [
-                {
-                    "type": "match",
-                    "data": {
-                        "lines": {
-                            "text": large_match_payload
-                        }
-                    }
-                }
-            ],
-            "content": large_match_payload,
-            "spool_path": ".vtcode/context/tool_outputs/search_dispatch_1.txt",
+            "query": "Widget",
+            "results": [{"result_type":"text","path":"src/lib.rs","line":1,"column":1,"snippet":large_result_payload}],
+            "spool_path": ".vtcode/context/tool_outputs/code_search_1.txt",
             "truncated": true
         }),
     );
 
     let parsed: serde_json::Value =
         serde_json::from_str(&serialized).expect("serialized JSON payload");
-    assert!(parsed.get("matches").is_none());
-    assert!(parsed.get("content").is_none());
+    assert!(parsed.get("results").is_none());
     assert_eq!(
         parsed.get("spool_path"),
         Some(&serde_json::json!(
-            ".vtcode/context/tool_outputs/search_dispatch_1.txt"
+            ".vtcode/context/tool_outputs/code_search_1.txt"
         ))
     );
     assert_eq!(
@@ -708,8 +681,8 @@ fn maybe_inline_spooled_keeps_recoverable_failure_next_action() {
             "error": "Tool preflight validation failed: x",
             "is_recoverable": true,
             "next_action": "Retry with fallback_tool_args.",
-            "fallback_tool": tool_names::UNIFIED_SEARCH,
-            "fallback_tool_args": {"action":"list","path":"."}
+            "fallback_tool": tool_names::CODE_SEARCH,
+            "fallback_tool_args": {"query":"Widget","path":"."}
         }),
     );
 
@@ -721,20 +694,19 @@ fn maybe_inline_spooled_keeps_recoverable_failure_next_action() {
     );
     assert_eq!(
         parsed.get("fallback_tool"),
-        Some(&serde_json::json!(tool_names::UNIFIED_SEARCH))
+        Some(&serde_json::json!(tool_names::CODE_SEARCH))
     );
 }
 
 #[test]
-fn maybe_inline_spooled_keeps_structural_recovery_success_next_action() {
+fn maybe_inline_spooled_keeps_code_search_refinement_guidance() {
     let serialized = maybe_inline_spooled(
-        tool_names::UNIFIED_SEARCH,
+        tool_names::CODE_SEARCH,
         &serde_json::json!({
-            "backend": "ast-grep",
-            "matches": [],
+            "results": [],
             "is_recoverable": true,
-            "hint": "Pattern looks like a code fragment.",
-            "next_action": "Retry with a larger parseable pattern."
+            "hint": "Try narrowing the path.",
+            "next_action": "Retry with narrower filters."
         }),
     );
 
@@ -742,11 +714,11 @@ fn maybe_inline_spooled_keeps_structural_recovery_success_next_action() {
         serde_json::from_str(&serialized).expect("serialized JSON payload");
     assert_eq!(
         parsed.get("next_action"),
-        Some(&serde_json::json!("Retry with a larger parseable pattern."))
+        Some(&serde_json::json!("Retry with narrower filters."))
     );
     assert_eq!(
         parsed.get("hint"),
-        Some(&serde_json::json!("Pattern looks like a code fragment."))
+        Some(&serde_json::json!("Try narrowing the path."))
     );
 }
 

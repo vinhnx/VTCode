@@ -137,38 +137,6 @@ impl AstGrepLanguage {
         }
     }
 
-    pub(crate) fn infer_from_path_str(path: &str) -> Option<Self> {
-        let trimmed = path.trim();
-        if trimmed.is_empty() || looks_like_glob(trimmed) {
-            return None;
-        }
-        Self::from_path(Path::new(trimmed))
-    }
-
-    pub(crate) fn infer_from_positive_globs<'a>(
-        globs: impl IntoIterator<Item = &'a str>,
-    ) -> Option<Self> {
-        let mut candidate = None;
-        let mut saw_inferable = false;
-
-        for glob in globs {
-            let trimmed = glob.trim();
-            if trimmed.is_empty() || trimmed.starts_with('!') {
-                continue;
-            }
-
-            let inferred = infer_from_glob(trimmed)?;
-            saw_inferable = true;
-            match candidate {
-                Some(current) if current != inferred => return None,
-                Some(_) => {}
-                None => candidate = Some(inferred),
-            }
-        }
-
-        if saw_inferable { candidate } else { None }
-    }
-
     pub(crate) fn as_str(self) -> &'static str {
         match self {
             Self::Rust => "rust",
@@ -204,6 +172,48 @@ impl AstGrepLanguage {
             Self::Haskell => "haskell",
             Self::Nix => "nix",
             Self::Solidity => "solidity",
+        }
+    }
+
+    /// Canonical positive globs for backend prefiltering. Candidates must still
+    /// be checked with [`Self::from_path`], which remains authoritative.
+    pub(crate) fn path_globs(self) -> &'static [&'static str] {
+        match self {
+            Self::Rust => &["*.rs"],
+            Self::Python => &["*.py", "*.py3", "*.pyi", "*.bzl"],
+            Self::JavaScript => &["*.js", "*.jsx", "*.cjs", "*.mjs"],
+            Self::TypeScript => &["*.ts", "*.cts", "*.mts"],
+            Self::Tsx => &["*.tsx"],
+            Self::Go => &["*.go"],
+            Self::Java => &["*.java"],
+            Self::Markdown => &["*.md", "*.mdx"],
+            Self::C => &["*.c", "*.h"],
+            Self::Cpp => &[
+                "*.cpp", "*.cc", "*.cxx", "*.hpp", "*.hxx", "*.hh", "*.cu", "*.ino", "*.c++",
+            ],
+            Self::Csharp => &["*.cs"],
+            Self::Css => &["*.css"],
+            Self::Html => &["*.html", "*.htm", "*.xhtml"],
+            Self::Json => &["*.json", "*.jsonc"],
+            Self::Yaml => &["*.yml", "*.yaml"],
+            Self::Ruby => &["*.rb", "*.erb", "*.rbw", "*.gemspec"],
+            Self::Php => &["*.php"],
+            Self::Kotlin => &["*.kt", "*.kts", "*.ktm"],
+            Self::Swift => &["*.swift"],
+            Self::Lua => &["*.lua"],
+            Self::Bash => &["*.sh", "*.bash", "*.zsh", "*.bats", "*.ksh", "*.sh.in"],
+            Self::Sql => &["*.sql"],
+            Self::Scala => &["*.scala", "*.sc", "*.sbt"],
+            Self::Elixir => &["*.ex", "*.exs"],
+            Self::Dockerfile => &["Dockerfile", "dockerfile"],
+            Self::Toml => &["*.toml"],
+            Self::Hcl => &["*.hcl", "*.tf", "*.tfvars"],
+            Self::Dart => &["*.dart"],
+            Self::Zig => &["*.zig"],
+            Self::Protobuf => &["*.proto"],
+            Self::Haskell => &["*.hs"],
+            Self::Nix => &["*.nix"],
+            Self::Solidity => &["*.sol"],
         }
     }
 
@@ -244,25 +254,6 @@ impl AstGrepLanguage {
         }
     }
 
-    /// Returns `true` when a local tree-sitter parser is available for preflight.
-    /// Languages without a local parser delegate directly to the ast-grep binary,
-    /// which has its own built-in tree-sitter parsers for all supported languages.
-    pub(crate) fn has_local_parser(self) -> bool {
-        matches!(
-            self,
-            Self::Rust
-                | Self::Python
-                | Self::JavaScript
-                | Self::TypeScript
-                | Self::Tsx
-                | Self::Go
-                | Self::Java
-                | Self::Bash
-                | Self::C
-                | Self::Cpp
-        )
-    }
-
     pub(crate) fn from_workspace_language(value: &str) -> Option<Self> {
         match value.trim().to_ascii_lowercase().as_str() {
             "rust" => Some(Self::Rust),
@@ -300,23 +291,6 @@ impl AstGrepLanguage {
             _ => None,
         }
     }
-}
-
-fn infer_from_glob(glob: &str) -> Option<AstGrepLanguage> {
-    if glob.contains('{')
-        || glob.contains('}')
-        || glob.contains('[')
-        || glob.contains(']')
-        || glob.contains('?')
-    {
-        return None;
-    }
-
-    AstGrepLanguage::from_path(Path::new(glob))
-}
-
-fn looks_like_glob(value: &str) -> bool {
-    value.contains('*') || value.contains('{') || value.contains('[') || value.contains('?')
 }
 
 #[cfg(test)]
@@ -425,43 +399,7 @@ mod tests {
     }
 
     #[test]
-    fn infers_language_from_positive_globs_when_unambiguous() {
-        assert_eq!(
-            AstGrepLanguage::infer_from_positive_globs(["*.rs"]),
-            Some(AstGrepLanguage::Rust)
-        );
-        assert_eq!(
-            AstGrepLanguage::infer_from_positive_globs(["**/*.ts"]),
-            Some(AstGrepLanguage::TypeScript)
-        );
-        assert_eq!(
-            AstGrepLanguage::infer_from_positive_globs(["src/**/*.mjs"]),
-            Some(AstGrepLanguage::JavaScript)
-        );
-        assert_eq!(
-            AstGrepLanguage::infer_from_positive_globs(["src/**/*.go"]),
-            Some(AstGrepLanguage::Go)
-        );
-    }
-
-    #[test]
-    fn does_not_infer_language_from_mixed_or_weak_globs() {
-        assert_eq!(
-            AstGrepLanguage::infer_from_positive_globs(["**/*.rs", "**/*.ts"]),
-            None
-        );
-        assert_eq!(AstGrepLanguage::infer_from_positive_globs(["src/**"]), None);
-        assert_eq!(
-            AstGrepLanguage::infer_from_positive_globs(["!dist/**", "**/*.rs"]),
-            Some(AstGrepLanguage::Rust)
-        );
-    }
-
-    #[test]
-    fn does_not_infer_language_from_directories_or_unknown_extensions() {
-        assert_eq!(AstGrepLanguage::infer_from_path_str("."), None);
-        assert_eq!(AstGrepLanguage::infer_from_path_str("src/"), None);
-        assert_eq!(AstGrepLanguage::infer_from_path_str("notes.txt"), None);
+    fn rejects_unknown_language_values() {
         assert_eq!(AstGrepLanguage::from_user_value("mojo"), None);
     }
 
@@ -725,38 +663,6 @@ mod tests {
     }
 
     #[test]
-    fn new_languages_have_no_local_parser() {
-        assert!(!AstGrepLanguage::Csharp.has_local_parser());
-        assert!(!AstGrepLanguage::Css.has_local_parser());
-        assert!(!AstGrepLanguage::Html.has_local_parser());
-        assert!(!AstGrepLanguage::Json.has_local_parser());
-        assert!(!AstGrepLanguage::Yaml.has_local_parser());
-        assert!(!AstGrepLanguage::Ruby.has_local_parser());
-        assert!(!AstGrepLanguage::Php.has_local_parser());
-        assert!(!AstGrepLanguage::Kotlin.has_local_parser());
-        assert!(!AstGrepLanguage::Swift.has_local_parser());
-        assert!(!AstGrepLanguage::Lua.has_local_parser());
-        assert!(!AstGrepLanguage::Sql.has_local_parser());
-        assert!(!AstGrepLanguage::Scala.has_local_parser());
-        assert!(!AstGrepLanguage::Elixir.has_local_parser());
-    }
-
-    #[test]
-    fn original_languages_still_have_local_parser() {
-        assert!(AstGrepLanguage::Rust.has_local_parser());
-        assert!(AstGrepLanguage::Python.has_local_parser());
-        assert!(AstGrepLanguage::JavaScript.has_local_parser());
-        assert!(AstGrepLanguage::TypeScript.has_local_parser());
-        assert!(AstGrepLanguage::Tsx.has_local_parser());
-        assert!(AstGrepLanguage::Go.has_local_parser());
-        assert!(AstGrepLanguage::Java.has_local_parser());
-        assert!(AstGrepLanguage::Bash.has_local_parser());
-        assert!(AstGrepLanguage::C.has_local_parser());
-        assert!(AstGrepLanguage::Cpp.has_local_parser());
-        assert!(!AstGrepLanguage::Markdown.has_local_parser());
-    }
-
-    #[test]
     fn maps_new_workspace_language_names() {
         assert_eq!(
             AstGrepLanguage::from_workspace_language("C"),
@@ -941,16 +847,6 @@ mod tests {
     }
 
     #[test]
-    fn extended_languages_have_no_local_parser() {
-        assert!(!AstGrepLanguage::Dockerfile.has_local_parser());
-        assert!(!AstGrepLanguage::Toml.has_local_parser());
-        assert!(!AstGrepLanguage::Hcl.has_local_parser());
-        assert!(!AstGrepLanguage::Dart.has_local_parser());
-        assert!(!AstGrepLanguage::Zig.has_local_parser());
-        assert!(!AstGrepLanguage::Protobuf.has_local_parser());
-    }
-
-    #[test]
     fn maps_dockerfile_toml_hcl_workspace_names() {
         assert_eq!(
             AstGrepLanguage::from_workspace_language("Dockerfile"),
@@ -1042,13 +938,6 @@ mod tests {
         assert_eq!(AstGrepLanguage::Nix.as_str(), "nix");
         assert_eq!(AstGrepLanguage::Solidity.display_name(), "Solidity");
         assert_eq!(AstGrepLanguage::Solidity.as_str(), "solidity");
-    }
-
-    #[test]
-    fn haskell_nix_solidity_have_no_local_parser() {
-        assert!(!AstGrepLanguage::Haskell.has_local_parser());
-        assert!(!AstGrepLanguage::Nix.has_local_parser());
-        assert!(!AstGrepLanguage::Solidity.has_local_parser());
     }
 
     #[test]

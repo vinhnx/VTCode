@@ -71,23 +71,21 @@ pub(super) fn web_fetch_domain(tool_args: Option<&Value>) -> Option<String> {
 }
 
 pub(super) fn cache_key(tool_name: &str, tool_args: Option<&Value>) -> String {
-    // For non-shell tools, the shell suffix is None, so the key degrades to the
-    // bare tool name. Qualify `search_dispatch` with its action to prevent
-    // cross-action cache contamination (e.g. a grep approval auto-approving a
-    // web fetch).
+    // For non-shell tools, the shell suffix is None, so the key normally
+    // degrades to the bare tool name.
     if let Some(suffix) =
         super::permission_prompt::shell_permission_cache_suffix(tool_name, tool_args)
     {
         return format!("{tool_name}:{suffix}");
     }
 
-    use vtcode_core::config::constants::tools::{FETCH_URL, UNIFIED_SEARCH, WEB_FETCH};
+    use vtcode_core::config::constants::tools::{CODE_SEARCH, FETCH_URL, WEB_FETCH};
 
-    if tool_name == UNIFIED_SEARCH
+    if tool_name == CODE_SEARCH
         && let Some(args) = tool_args
-        && vtcode_core::tools::tool_intent::search_dispatch_action_is(args, "web")
+        && let Some(identity) = vtcode_core::tools::normalised_code_search_identity(args)
     {
-        return "search_dispatch:web".to_string();
+        return format!("{tool_name}:{identity}");
     }
 
     // For web_fetch / fetch_url, key by domain so that approving

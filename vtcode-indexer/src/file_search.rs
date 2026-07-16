@@ -60,13 +60,14 @@ fn build_parallel_walker(
     exclude: &[String],
     threads: usize,
     respect_gitignore: bool,
+    follow_links: bool,
 ) -> anyhow::Result<ignore::WalkParallel> {
     let mut walk_builder = ignore::WalkBuilder::new(search_directory);
     vtcode_commons::walk::apply_defaults(&mut walk_builder);
 
     // File-search-specific overrides
     walk_builder.threads(threads);
-    walk_builder.follow_links(true); // Search follows symlinks
+    walk_builder.follow_links(follow_links);
     walk_builder.require_git(false); // Search works outside git repos
 
     if !respect_gitignore {
@@ -99,7 +100,8 @@ impl FileIndex {
         respect_gitignore: bool,
         threads: usize,
     ) -> anyhow::Result<Self> {
-        let walker = build_parallel_walker(search_directory, exclude, threads, respect_gitignore)?;
+        let walker =
+            build_parallel_walker(search_directory, exclude, threads, respect_gitignore, true)?;
 
         // Collect all files and directories
         let files_arc = Arc::new(Mutex::new(Vec::new()));
@@ -501,21 +503,22 @@ fn push_top_match(
     path: String,
     match_type: MatchType,
 ) -> bool {
+    let candidate = (score, path, match_type);
     if matches.len() < limit {
-        matches.push(Reverse((score, path, match_type)));
+        matches.push(Reverse(candidate));
         return true;
     }
 
-    let Some(min_score) = matches.peek().map(|entry| entry.0.0) else {
+    let Some(minimum) = matches.peek().map(|entry| &entry.0) else {
         return false;
     };
 
-    if score <= min_score {
+    if &candidate <= minimum {
         return false;
     }
 
     matches.pop();
-    matches.push(Reverse((score, path, match_type)));
+    matches.push(Reverse(candidate));
     true
 }
 
@@ -586,6 +589,107 @@ pub async fn run_with_index(
 ///
 /// FileSearchResults containing matched files and total match count.
 pub fn run(config: FileSearchConfig) -> anyhow::Result<FileSearchResults> {
+    run_with_policy(config, true, false)
+}
+
+/// Run a bounded fuzzy path search without following symbolic links.
+///
+/// This focused route is intended for request-scoped code search. It traverses
+/// eligible paths in deterministic order and stops at the candidate cap. It
+/// deliberately avoids the persistent [`FileIndexCache`].
+pub fn run_bounded_no_follow(config: FileSearchConfig) -> anyhow::Result<FileSearchResults> {
+    run_bounded_no_follow_with_visit(config, |_| {})
+}
+
+fn run_bounded_no_follow_with_visit(
+    config: FileSearchConfig,
+    mut visit: impl FnMut(&Path),
+) -> anyhow::Result<FileSearchResults> {
+    let limit = config.limit.get();
+    let search_directory = &config.search_directory;
+    let mut walk_builder = ignore::WalkBuilder::new(search_directory);
+    vtcode_commons::walk::apply_defaults(&mut walk_builder);
+    walk_builder
+        .follow_links(false)
+        .require_git(false)
+        .sort_by_file_path(|left, right| left.cmp(right));
+
+    if !config.respect_gitignore {
+        walk_builder
+            .git_ignore(false)
+            .git_global(false)
+            .git_exclude(false)
+            .ignore(false)
+            .parents(false);
+    }
+
+    if !config.exclude.is_empty() {
+        let mut override_builder = ignore::overrides::OverrideBuilder::new(search_directory);
+        for exclude_pattern in &config.exclude {
+            override_builder.add(&format!("!{exclude_pattern}"))?;
+        }
+        walk_builder.overrides(override_builder.build()?);
+    }
+
+    let mut matches = BestMatchesList::new(limit, &config.pattern_text);
+    let mut matching_count = 0usize;
+    for result in walk_builder.build() {
+        if config.cancel_flag.load(Ordering::Relaxed) {
+            break;
+        }
+        let entry = match result {
+            Ok(entry) => entry,
+            Err(_) => continue,
+        };
+        visit(entry.path());
+        if !entry
+            .file_type()
+            .is_some_and(|file_type| file_type.is_file())
+        {
+            continue;
+        }
+        let Some(relative_path) = entry
+            .path()
+            .strip_prefix(search_directory)
+            .ok()
+            .and_then(|path| path.to_str())
+            .filter(|path| !path.is_empty())
+        else {
+            continue;
+        };
+        if matches.record_match(relative_path, MatchType::File) {
+            matching_count += 1;
+            if matching_count >= limit {
+                break;
+            }
+        }
+    }
+
+    let matches = matches
+        .matches
+        .into_sorted_vec()
+        .into_iter()
+        .map(|Reverse((score, path, match_type))| FileMatch {
+            score,
+            path,
+            match_type,
+            indices: config.compute_indices.then(Vec::new),
+        })
+        .collect();
+
+    Ok(FileSearchResults {
+        matches,
+        // Reaching the cap terminates traversal, so report conservative
+        // truncation without scanning the rest of the tree for an exact total.
+        total_match_count: matching_count + usize::from(matching_count >= limit),
+    })
+}
+
+fn run_with_policy(
+    config: FileSearchConfig,
+    follow_links: bool,
+    files_only: bool,
+) -> anyhow::Result<FileSearchResults> {
     let limit = config.limit.get();
     let search_directory = &config.search_directory;
     let exclude = &config.exclude;
@@ -594,7 +698,13 @@ pub fn run(config: FileSearchConfig) -> anyhow::Result<FileSearchResults> {
     let compute_indices = config.compute_indices;
     let respect_gitignore = config.respect_gitignore;
 
-    let walker = build_parallel_walker(search_directory, exclude, threads, respect_gitignore)?;
+    let walker = build_parallel_walker(
+        search_directory,
+        exclude,
+        threads,
+        respect_gitignore,
+        follow_links,
+    )?;
 
     // Create per-worker result collection using Arc + Mutex for thread safety.
     // Each worker gets exactly one instance - no sharing between workers.
@@ -648,6 +758,10 @@ pub fn run(config: FileSearchConfig) -> anyhow::Result<FileSearchResults> {
                 MatchType::File
             };
 
+            if files_only && match_type == MatchType::Directory {
+                return ignore::WalkState::Continue;
+            }
+
             // Try to add to results - no contention with other workers
             {
                 let mut list = best_list.lock();
@@ -687,4 +801,88 @@ pub fn run(config: FileSearchConfig) -> anyhow::Result<FileSearchResults> {
         matches,
         total_match_count: total_match_count.load(Ordering::Relaxed),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{FileSearchConfig, run_bounded_no_follow, run_bounded_no_follow_with_visit};
+    use std::num::NonZero;
+    use std::sync::Arc;
+    use std::sync::atomic::AtomicBool;
+    use tempfile::TempDir;
+
+    fn bounded_paths(workspace: &std::path::Path) -> Vec<String> {
+        run_bounded_no_follow(FileSearchConfig {
+            pattern_text: "widget".to_string(),
+            limit: NonZero::new(2).expect("non-zero limit"),
+            search_directory: workspace.to_path_buf(),
+            exclude: Vec::new(),
+            threads: NonZero::new(4).expect("non-zero threads"),
+            cancel_flag: Arc::new(AtomicBool::new(false)),
+            compute_indices: false,
+            respect_gitignore: true,
+        })
+        .expect("bounded path search")
+        .matches
+        .into_iter()
+        .map(|candidate| candidate.path)
+        .collect()
+    }
+
+    #[test]
+    fn bounded_path_selection_is_stable_across_repeated_walks() {
+        let workspace = TempDir::new().expect("workspace");
+        for directory in ["z", "a", "m", "b", "y"] {
+            let directory = workspace.path().join(directory);
+            std::fs::create_dir(&directory).expect("fixture directory");
+            std::fs::write(directory.join("widget.rs"), "fn widget() {}\n")
+                .expect("fixture source");
+        }
+
+        let expected = bounded_paths(workspace.path());
+        assert_eq!(expected.len(), 2);
+        for _ in 0..20 {
+            assert_eq!(bounded_paths(workspace.path()), expected);
+        }
+    }
+
+    #[test]
+    fn bounded_path_selection_is_the_sorted_prefix_and_stops_early() {
+        let workspace = TempDir::new().expect("workspace");
+        for directory in ["z", "a", "m", "b", "y"] {
+            let directory = workspace.path().join(directory);
+            std::fs::create_dir(&directory).expect("fixture directory");
+            std::fs::write(directory.join("widget.rs"), "fn widget() {}\n")
+                .expect("fixture source");
+        }
+        let mut visited = Vec::new();
+
+        let results = run_bounded_no_follow_with_visit(
+            FileSearchConfig {
+                pattern_text: "widget".to_string(),
+                limit: NonZero::new(2).expect("non-zero limit"),
+                search_directory: workspace.path().to_path_buf(),
+                exclude: Vec::new(),
+                threads: NonZero::new(4).expect("non-zero threads"),
+                cancel_flag: Arc::new(AtomicBool::new(false)),
+                compute_indices: false,
+                respect_gitignore: true,
+            },
+            |path| visited.push(path.to_path_buf()),
+        )
+        .expect("bounded path search");
+        let mut paths = results
+            .matches
+            .into_iter()
+            .map(|candidate| candidate.path)
+            .collect::<Vec<_>>();
+        paths.sort();
+
+        assert_eq!(paths, vec!["a/widget.rs", "b/widget.rs"]);
+        assert!(
+            visited.len() < 11,
+            "the bounded route must stop before traversing the complete fixture tree"
+        );
+        assert_eq!(results.total_match_count, 3);
+    }
 }

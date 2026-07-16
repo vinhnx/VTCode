@@ -22,7 +22,8 @@ impl ToolRegistry {
         let override_snapshot = conflict_override_snapshot(&args);
 
         let patch = crate::tools::editing::Patch::parse(&patch_input.text)?;
-        let _mutation_leases = self.acquire_patch_mutations(&patch).await?;
+        let mutation_paths = self.patch_mutation_paths(&patch).await?;
+        let _mutation_leases = self.acquire_patch_mutations(&mutation_paths).await;
         let planned_writes = self.planned_patch_writes(&patch).await?;
         for operation in patch.operations() {
             if let Some(conflict) = self
@@ -60,6 +61,10 @@ impl ToolRegistry {
         Ok(json!({
             "success": true,
             "applied": results,
+            "modified_files": mutation_paths
+                .iter()
+                .map(|path| path.to_string_lossy().into_owned())
+                .collect::<Vec<_>>(),
         }))
     }
 
@@ -68,26 +73,11 @@ impl ToolRegistry {
         patch: &crate::tools::editing::Patch,
     ) -> Result<Vec<PathBuf>> {
         let mut paths = Vec::new();
-        for operation in patch.operations() {
-            match operation {
-                crate::tools::editing::PatchOperation::AddFile { path, .. }
-                | crate::tools::editing::PatchOperation::DeleteFile { path } => {
-                    paths.push(self.file_ops_tool().normalize_user_path(path).await?);
-                }
-                crate::tools::editing::PatchOperation::UpdateFile { path, new_path, .. } => {
-                    paths.push(self.file_ops_tool().normalize_user_path(path).await?);
-                    if let Some(destination) = new_path
-                        .as_ref()
-                        .filter(|candidate| candidate.as_str() != path.as_str())
-                    {
-                        paths.push(
-                            self.file_ops_tool()
-                                .normalize_user_path(destination)
-                                .await?,
-                        );
-                    }
-                }
-            }
+        for path in crate::tools::apply_patch::patch_mutation_target_paths(patch) {
+            let path = path
+                .to_str()
+                .ok_or_else(|| anyhow!("apply_patch path is not valid UTF-8"))?;
+            paths.push(self.file_ops_tool().normalize_user_path(path).await?);
         }
         paths.sort();
         paths.dedup();
@@ -105,15 +95,12 @@ impl ToolRegistry {
         Ok(writes)
     }
 
-    async fn acquire_patch_mutations(
-        &self,
-        patch: &crate::tools::editing::Patch,
-    ) -> Result<Vec<MutationLease>> {
+    async fn acquire_patch_mutations(&self, mutation_paths: &[PathBuf]) -> Vec<MutationLease> {
         let mut leases = Vec::new();
-        for path in self.patch_mutation_paths(patch).await? {
-            leases.push(self.edited_file_monitor_ref().acquire_mutation(&path).await);
+        for path in mutation_paths {
+            leases.push(self.edited_file_monitor_ref().acquire_mutation(path).await);
         }
-        Ok(leases)
+        leases
     }
 
     async fn detect_patch_operation_conflict(

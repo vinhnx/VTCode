@@ -15,6 +15,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use vtcode_indexer::file_search::{
     FileMatch, FileSearchResults, MatchType, file_name_from_path, run as file_search_run,
+    run_bounded_no_follow,
 };
 
 pub use vtcode_indexer::file_search::MatchType as FileMatchType;
@@ -114,6 +115,41 @@ pub fn search_files(
     })
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct BoundedPathSearch {
+    pub paths: Vec<PathBuf>,
+    pub truncated: bool,
+}
+
+/// Retrieve bounded fuzzy path candidates without exposing scores or following
+/// symbolic links.
+pub(crate) fn search_paths_bounded_no_follow(
+    pattern: &str,
+    search_dir: PathBuf,
+    candidate_cap: usize,
+) -> Result<BoundedPathSearch> {
+    let limit = NonZero::new(candidate_cap).unwrap_or(NonZero::<usize>::MIN);
+    let results = run_bounded_no_follow(vtcode_indexer::file_search::FileSearchConfig {
+        pattern_text: pattern.to_string(),
+        limit,
+        search_directory: search_dir,
+        exclude: Vec::new(),
+        threads: NonZero::<usize>::MIN,
+        cancel_flag: Arc::new(AtomicBool::new(false)),
+        compute_indices: false,
+        respect_gitignore: true,
+    })?;
+    let truncated = results.total_match_count > candidate_cap;
+    let paths = results
+        .matches
+        .into_iter()
+        .filter(|candidate| candidate.match_type == MatchType::File)
+        .map(|candidate| PathBuf::from(candidate.path))
+        .collect();
+
+    Ok(BoundedPathSearch { paths, truncated })
+}
+
 /// Get filename from a file match
 ///
 /// Convenience wrapper around `file_name_from_path`
@@ -166,6 +202,61 @@ pub fn filter_by_pattern(matches: Vec<FileMatch>, path_pattern: &str) -> Vec<Fil
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn bounded_path_search_does_not_follow_directory_symlinks() {
+        use std::fs;
+        use std::os::unix::fs::symlink;
+        use tempfile::TempDir;
+
+        let workspace = TempDir::new().expect("workspace");
+        let outside = TempDir::new().expect("outside directory");
+        fs::write(workspace.path().join("WidgetLocal.rs"), "").expect("local file");
+        fs::write(outside.path().join("WidgetOutside.rs"), "").expect("outside file");
+        symlink(outside.path(), workspace.path().join("linked"))
+            .expect("directory symlink fixture");
+
+        let outcome = search_paths_bounded_no_follow("Widget", workspace.path().to_path_buf(), 20)
+            .expect("bounded path search");
+
+        assert!(outcome.paths.contains(&PathBuf::from("WidgetLocal.rs")));
+        assert!(
+            outcome
+                .paths
+                .iter()
+                .all(|path| !path.ends_with("WidgetOutside.rs"))
+        );
+    }
+
+    #[test]
+    fn bounded_path_search_stops_at_candidate_cap() {
+        let workspace = tempfile::TempDir::new().expect("workspace");
+        for index in 0..5 {
+            std::fs::write(workspace.path().join(format!("Widget{index}.rs")), "")
+                .expect("fixture file");
+        }
+
+        let outcome = search_paths_bounded_no_follow("Widget", workspace.path().to_path_buf(), 2)
+            .expect("bounded path search");
+
+        assert_eq!(outcome.paths.len(), 2);
+        assert!(outcome.truncated);
+    }
+
+    #[test]
+    fn bounded_path_search_does_not_spend_file_capacity_on_directories() {
+        let workspace = tempfile::TempDir::new().expect("workspace");
+        let nested = workspace.path().join("WidgetParent").join("WidgetChild");
+        std::fs::create_dir_all(&nested).expect("matching directories");
+        std::fs::write(nested.join("TargetWidget.rs"), "").expect("matching file");
+
+        let outcome = search_paths_bounded_no_follow("Widget", workspace.path().to_path_buf(), 1)
+            .expect("bounded path search");
+
+        assert_eq!(outcome.paths.len(), 1);
+        assert!(outcome.paths[0].ends_with("TargetWidget.rs"));
+    }
 
     #[test]
     fn test_file_search_config_builder() {

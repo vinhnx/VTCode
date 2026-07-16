@@ -279,7 +279,7 @@ impl FileOpsTool {
             ))
         } else if has_more || capped_total < all_items.len() || all_items.len() > 20 {
             Some(format!(
-                "Showing {} of {} items (page {}, per_page {}). Use 'page' and 'per_page' (or 'max_results' via search_dispatch) to page through results. For a code-structure overview, use search_dispatch action=outline.",
+                "Showing {} of {} items (page {}, per_page {}). Use 'page' and 'per_page' to page through results. To search code, use code_search with query and optional path, file_types, or result_types filters.",
                 page_items.len(),
                 capped_total,
                 page,

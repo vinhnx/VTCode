@@ -210,8 +210,7 @@ impl ToolRiskScorer {
     /// Whether a tool name performs outbound network access.
     ///
     /// Centralizes the network-tool set so policy auto-approval, risk scoring,
-    /// and the safety gateway stay in agreement. Action-qualified names cover
-    /// network-bearing actions on otherwise low-risk dispatch tools.
+    /// and the safety gateway stay in agreement.
     pub fn is_network_tool(tool_name: &str) -> bool {
         matches!(
             tool_name,
@@ -221,10 +220,7 @@ impl ToolRiskScorer {
                 | tools::DEFUDDLE_FETCH
                 | tools::MCP_CONNECT_SERVER
                 | tools::MCP_DISCONNECT_SERVER
-        ) || matches!(
-            tool_name,
-            "search_dispatch:web" | "mcp:connect" | "mcp:disconnect"
-        )
+        ) || matches!(tool_name, "mcp:connect" | "mcp:disconnect")
     }
 
     /// Determine if justification is required
@@ -237,7 +233,7 @@ impl ToolRiskScorer {
         match tool_name {
             // Read-only tools (base: 0)
             tools::READ_FILE
-            | tools::UNIFIED_SEARCH
+            | tools::CODE_SEARCH
             | tools::MCP_SEARCH_TOOLS
             | tools::MCP_GET_TOOL_DETAILS
             | tools::MCP_LIST_SERVERS => 0,
@@ -264,7 +260,6 @@ impl ToolRiskScorer {
             | tools::DEFUDDLE_FETCH
             | tools::MCP_CONNECT_SERVER
             | tools::MCP_DISCONNECT_SERVER
-            | "search_dispatch:web"
             | "mcp:connect"
             | "mcp:disconnect" => 40,
 
@@ -316,10 +311,9 @@ mod tests {
         assert!(ToolRiskScorer::is_network_tool(tools::WEB_SEARCH));
         assert!(ToolRiskScorer::is_network_tool(tools::FETCH_URL));
         assert!(ToolRiskScorer::is_network_tool(tools::DEFUDDLE_FETCH));
-        assert!(ToolRiskScorer::is_network_tool("search_dispatch:web"));
         assert!(ToolRiskScorer::is_network_tool("mcp:connect"));
         assert!(ToolRiskScorer::is_network_tool("mcp:disconnect"));
-        assert!(!ToolRiskScorer::is_network_tool(tools::UNIFIED_SEARCH));
+        assert!(!ToolRiskScorer::is_network_tool(tools::CODE_SEARCH));
         assert!(!ToolRiskScorer::is_network_tool(tools::READ_FILE));
     }
 
@@ -327,12 +321,7 @@ mod tests {
     fn test_network_fetch_not_low_risk_even_when_trusted() {
         // Mirrors the policy auto-approval path: trusted workspace + network
         // flag. Must stay above Low so HITL approval is required.
-        for tool in [
-            tools::WEB_FETCH,
-            "search_dispatch:web",
-            "mcp:connect",
-            "mcp:disconnect",
-        ] {
+        for tool in [tools::WEB_FETCH, "mcp:connect", "mcp:disconnect"] {
             let ctx = ToolRiskContext::new(
                 tool.to_string(),
                 ToolSource::Internal,

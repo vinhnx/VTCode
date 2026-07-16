@@ -377,7 +377,6 @@ fn is_read_file_style_record(record: &ToolExecutionRecord) -> bool {
 fn public_tool_telemetry_label(tool_name: &str) -> String {
     match tool_name {
         tools::UNIFIED_EXEC => tools::EXEC_COMMAND.to_string(),
-        tools::UNIFIED_SEARCH => tools::CODE_SEARCH.to_string(),
         tools::UNIFIED_FILE => "file_operation".to_string(),
         _ => tool_name.to_string(),
     }
@@ -452,6 +451,7 @@ fn equivalent_call_key(record: &ToolExecutionRecord) -> String {
 #[derive(Clone)]
 pub struct ToolExecutionHistory {
     records: Arc<RwLock<VecDeque<ToolExecutionRecord>>>,
+    workspace_root: Arc<PathBuf>,
     max_records: usize,
     detect_window: Arc<std::sync::atomic::AtomicUsize>,
     identical_limit: Arc<std::sync::atomic::AtomicUsize>,
@@ -461,8 +461,16 @@ pub struct ToolExecutionHistory {
 impl ToolExecutionHistory {
     /// Create a new execution history with a maximum record count.
     pub fn new(max_records: usize) -> Self {
+        Self::with_workspace_root(
+            max_records,
+            env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
+        )
+    }
+
+    pub(crate) fn with_workspace_root(max_records: usize, workspace_root: PathBuf) -> Self {
         Self {
             records: Arc::new(RwLock::new(VecDeque::with_capacity(max_records))),
+            workspace_root: Arc::new(workspace_root),
             max_records,
             detect_window: Arc::new(std::sync::atomic::AtomicUsize::new(
                 DEFAULT_LOOP_DETECT_WINDOW,
@@ -671,8 +679,18 @@ impl ToolExecutionHistory {
     ) -> Option<Value> {
         let records = self.records.read().ok()?;
         let now = SystemTime::now();
+        let mut later_mutated_paths = Vec::new();
+        let mut later_pathless_mutation = false;
 
         for record in records.iter().rev() {
+            if record.success
+                && tool_intent::classify_tool_intent(&record.tool_name, &record.args).mutating
+            {
+                let mutation_paths =
+                    crate::tools::mutation_target_paths(&record.tool_name, &record.args);
+                later_pathless_mutation |= mutation_paths.is_empty();
+                later_mutated_paths.extend(mutation_paths);
+            }
             if record.tool_name != tool_name || !record.success {
                 continue;
             }
@@ -685,6 +703,19 @@ impl ToolExecutionHistory {
                 Err(_) => false,
             };
             if !age_ok {
+                continue;
+            }
+
+            if record.tool_name == tools::CODE_SEARCH
+                && (later_pathless_mutation
+                    || later_mutated_paths.iter().any(|mutated_path| {
+                        crate::tools::code_search::scope_contains_mutated_path(
+                            &record.args,
+                            mutated_path,
+                            self.workspace_root.as_ref(),
+                        )
+                    }))
+            {
                 continue;
             }
 
@@ -777,14 +808,12 @@ impl ToolExecutionHistory {
     /// Extract the read target from tool args for path-based matching.
     /// Returns `None` for non-read-only tools or when no path is found.
     ///
-    /// For `search_dispatch` and `grep_file`, the key includes action+pattern
-    /// so that two greps with different patterns on the same directory are NOT
-    /// treated as duplicates.
+    /// For search tools, the key includes the normalised query identity so
+    /// different searches on the same directory are not treated as duplicates.
     fn extract_read_target(tool_name: &str, args: &Value) -> Option<String> {
         let obj = args.as_object()?;
         let is_read = match tool_name {
-            tools::READ_FILE | tools::GREP_FILE | tools::LIST_FILES => true,
-            tools::UNIFIED_SEARCH => true,
+            tools::READ_FILE | tools::GREP_FILE | tools::LIST_FILES | tools::CODE_SEARCH => true,
             tools::UNIFIED_FILE => {
                 matches!(obj.get("action").and_then(Value::as_str), Some("read"))
             }
@@ -793,13 +822,13 @@ impl ToolExecutionHistory {
         if !is_read {
             return None;
         }
+        if tool_name == tools::CODE_SEARCH {
+            return crate::tools::normalised_code_search_identity(args);
+        }
         let path = Self::extract_path_from_args(obj)?;
-        // For search tools, include action+pattern so different queries on the
-        // same directory are not treated as duplicates.
-        if tool_name == tools::UNIFIED_SEARCH || tool_name == tools::GREP_FILE {
-            let action = obj.get("action").and_then(Value::as_str).unwrap_or("");
+        if tool_name == tools::GREP_FILE {
             let pattern = obj.get("pattern").and_then(Value::as_str).unwrap_or("");
-            return Some(format!("{path}::{action}::{pattern}"));
+            return Some(format!("{path}::{pattern}"));
         }
         Some(path)
     }
@@ -912,7 +941,7 @@ impl ToolExecutionHistory {
             .identical_limit
             .load(std::sync::atomic::Ordering::Relaxed);
         if is_read_style_tool_call(tool_name, args)
-            || tool_name_matches(tool_name, tools::UNIFIED_SEARCH)
+            || tool_name_matches(tool_name, tools::CODE_SEARCH)
         {
             base_limit.max(MIN_READONLY_IDENTICAL_LIMIT)
         } else {
@@ -971,11 +1000,17 @@ impl ToolExecutionHistory {
             };
         }
 
-        // Count how many of the recent calls match this exact tool + args combo
+        // Count how many recent calls match this tool's loop identity.
         // CRITICAL FIX: Only count SUCCESSFUL calls to avoid cascade blocking
         let mut identical_count = 0;
         for record in &recent {
-            if record.tool_name == tool_name && record.args == *args && record.success {
+            let same_args = if tool_name_matches(tool_name, tools::CODE_SEARCH) {
+                crate::tools::normalised_code_search_loop_identity(&record.args)
+                    == crate::tools::normalised_code_search_loop_identity(args)
+            } else {
+                record.args == *args
+            };
+            if record.tool_name == tool_name && same_args && record.success {
                 identical_count += 1;
             }
         }
@@ -1094,12 +1129,12 @@ mod tests {
             false,
         ));
         history.add_record(ToolExecutionRecord::success(
-            tools::UNIFIED_SEARCH.to_string(),
+            tools::CODE_SEARCH.to_string(),
             tools::CODE_SEARCH.to_string(),
             false,
             None,
-            json!({"action": "structural", "pattern": "fn $NAME($$$)"}),
-            json!({"fallback_from": "structural", "matches": []}),
+            json!({"query": "ToolRegistry", "result_types": ["definition"]}),
+            json!({"query": "ToolRegistry", "filters": {"path": ".", "file_types": [], "result_types": ["definition"], "max_results": 20}, "results": [], "returned": 0, "truncated": false, "hints": []}),
             make_task_snapshot(task),
             None,
             None,
@@ -1127,7 +1162,7 @@ mod tests {
         assert_eq!(snapshot.repeated_equivalent_calls, 1);
         assert_eq!(snapshot.failed_tool_calls, 1);
         assert_eq!(snapshot.spooled_outputs, 1);
-        assert_eq!(snapshot.fallback_calls, 1);
+        assert_eq!(snapshot.fallback_calls, 0);
         assert_eq!(snapshot.read_after_spool_calls, 1);
         assert_eq!(snapshot.command_approval_prompts, 2);
         assert_eq!(snapshot.task_completed_successfully, Some(false));
@@ -1461,26 +1496,28 @@ mod tests {
     }
 
     #[test]
-    fn search_dispatch_exact_repeat_is_detected_after_two_successes() {
+    fn code_search_loop_identity_normalises_query_filters_and_limit() {
         let history = ToolExecutionHistory::new(10);
         history.set_loop_detection_limits(5, 2);
 
         let args = json!({
-            "action": "grep",
-            "pattern": "exec_only_policy",
-            "path": "vtcode-core/src/core/agent/runner/tests.rs"
+            "query": "exec_only_policy",
+            "path": "vtcode-core/src/core/agent/runner/tests.rs",
+            "file_types": ["rust"],
+            "result_types": ["definition", "usage"],
+            "max_results": 5
         });
 
-        // With MIN_READONLY_IDENTICAL_LIMIT=2, two identical successful calls
-        // are enough to trigger loop detection.
+        // With MIN_READONLY_IDENTICAL_LIMIT=2, two successful calls with the
+        // same limit-insensitive loop identity are enough to trigger detection.
         for _ in 0..2 {
             history.add_record(ToolExecutionRecord::success(
-                "search_dispatch".to_string(),
-                "search_dispatch".to_string(),
+                tools::CODE_SEARCH.to_string(),
+                tools::CODE_SEARCH.to_string(),
                 false,
                 None,
                 args.clone(),
-                json!({"matches": []}),
+                json!({"query": "exec_only_policy", "filters": {}, "results": [], "returned": 0, "truncated": false, "hints": []}),
                 make_snapshot(),
                 None,
                 None,
@@ -1490,20 +1527,22 @@ mod tests {
             ));
         }
 
-        let loop_result = history.detect_loop("search_dispatch", &args);
+        let mut equivalent_args = args.clone();
+        equivalent_args["max_results"] = json!(100);
+        let loop_result = history.detect_loop(tools::CODE_SEARCH, &equivalent_args);
         assert!(
             loop_result.detected,
-            "two identical calls should trigger loop detection with MIN_READONLY_IDENTICAL_LIMIT=2"
+            "two loop-equivalent calls should trigger detection despite differing max_results"
         );
 
-        // A third identical call crosses the threshold.
+        // A third loop-equivalent call increases the repeat count.
         history.add_record(ToolExecutionRecord::success(
-            "search_dispatch".to_string(),
-            "search_dispatch".to_string(),
+            tools::CODE_SEARCH.to_string(),
+            tools::CODE_SEARCH.to_string(),
             false,
             None,
             args.clone(),
-            json!({"matches": []}),
+            json!({"query": "exec_only_policy", "filters": {}, "results": [], "returned": 0, "truncated": false, "hints": []}),
             make_snapshot(),
             None,
             None,
@@ -1512,10 +1551,291 @@ mod tests {
             false,
         ));
 
-        let loop_result = history.detect_loop("search_dispatch", &args);
+        let loop_result = history.detect_loop(tools::CODE_SEARCH, &args);
         assert!(loop_result.detected);
         assert_eq!(loop_result.repeat_count, 3);
-        assert_eq!(loop_result.tool_name, "search_dispatch");
+        assert_eq!(loop_result.tool_name, tools::CODE_SEARCH);
+
+        for changed in ["query", "path", "file_types", "result_types"] {
+            let mut changed_args = args.clone();
+            changed_args[changed] = match changed {
+                "query" => json!("different"),
+                "path" => json!("vtcode-core/tests"),
+                "file_types" => json!(["python"]),
+                "result_types" => json!(["text"]),
+                _ => unreachable!(),
+            };
+            assert!(
+                !history
+                    .detect_loop(tools::CODE_SEARCH, &changed_args)
+                    .detected
+            );
+        }
+    }
+
+    #[test]
+    fn code_search_replay_matches_omitted_path_and_default_limit() {
+        let history = ToolExecutionHistory::new(10);
+        let cached_args = json!({"query": "ToolRegistry"});
+        let cached_result = json!({"results": ["cached default search"]});
+
+        history.add_record(ToolExecutionRecord::success(
+            tools::CODE_SEARCH.to_string(),
+            tools::CODE_SEARCH.to_string(),
+            false,
+            None,
+            cached_args,
+            cached_result.clone(),
+            make_snapshot(),
+            None,
+            None,
+            None,
+            None,
+            false,
+        ));
+
+        let replayed = history.find_recent_successful_by_read_target(
+            tools::CODE_SEARCH,
+            &json!({"query": "ToolRegistry", "max_results": 20}),
+            Duration::from_secs(60),
+        );
+
+        assert_eq!(replayed, Some(cached_result));
+    }
+
+    #[test]
+    fn code_search_replay_separates_different_effective_limits() {
+        let history = ToolExecutionHistory::new(10);
+
+        history.add_record(ToolExecutionRecord::success(
+            tools::CODE_SEARCH.to_string(),
+            tools::CODE_SEARCH.to_string(),
+            false,
+            None,
+            json!({"query": "ToolRegistry", "max_results": 1}),
+            json!({"results": ["limited search"]}),
+            make_snapshot(),
+            None,
+            None,
+            None,
+            None,
+            false,
+        ));
+
+        let replayed = history.find_recent_successful_by_read_target(
+            tools::CODE_SEARCH,
+            &json!({"query": "ToolRegistry", "max_results": 100}),
+            Duration::from_secs(60),
+        );
+
+        assert!(replayed.is_none());
+    }
+
+    #[test]
+    fn code_search_replay_stops_after_in_scope_mutation_but_survives_unrelated_edit() {
+        let search_args = json!({"query": "Widget", "path": "src"});
+        let cached_result = json!({"results": ["cached Widget"]});
+        let history_with_mutation = |mutation_path: &str| {
+            let history = ToolExecutionHistory::new(10);
+            history.add_record(ToolExecutionRecord::success(
+                tools::CODE_SEARCH.to_string(),
+                tools::CODE_SEARCH.to_string(),
+                false,
+                None,
+                search_args.clone(),
+                cached_result.clone(),
+                make_snapshot(),
+                None,
+                None,
+                None,
+                None,
+                false,
+            ));
+            history.add_record(ToolExecutionRecord::success(
+                tools::APPLY_PATCH.to_string(),
+                tools::APPLY_PATCH.to_string(),
+                false,
+                None,
+                json!({"input": format!(
+                    "*** Begin Patch\n*** Update File: {mutation_path}\n@@\n-Widget\n+Gadget\n*** End Patch\n"
+                )}),
+                json!({"success": true}),
+                make_snapshot(),
+                None,
+                None,
+                None,
+                None,
+                false,
+            ));
+            history
+        };
+
+        let in_scope = history_with_mutation("src/widget.rs");
+        assert!(
+            in_scope
+                .find_recent_successful_by_read_target(
+                    tools::CODE_SEARCH,
+                    &search_args,
+                    Duration::from_secs(60),
+                )
+                .is_none(),
+            "searching src, then editing src/widget.rs, must execute fresh"
+        );
+
+        let unrelated = history_with_mutation("tests/widget.rs");
+        assert_eq!(
+            unrelated.find_recent_successful_by_read_target(
+                tools::CODE_SEARCH,
+                &search_args,
+                Duration::from_secs(60),
+            ),
+            Some(cached_result),
+            "an unrelated edit may reuse the prior scoped search"
+        );
+    }
+
+    #[test]
+    fn code_search_replay_stops_after_successful_pathless_command_mutation() {
+        let history = ToolExecutionHistory::new(10);
+        let search_args = json!({"query": "Widget", "path": "src"});
+        history.add_record(ToolExecutionRecord::success(
+            tools::CODE_SEARCH.to_string(),
+            tools::CODE_SEARCH.to_string(),
+            false,
+            None,
+            search_args.clone(),
+            json!({"results": ["cached Widget"]}),
+            make_snapshot(),
+            None,
+            None,
+            None,
+            None,
+            false,
+        ));
+        history.add_record(ToolExecutionRecord::success(
+            tools::EXEC_COMMAND.to_string(),
+            tools::EXEC_COMMAND.to_string(),
+            false,
+            None,
+            json!({"cmd": "sed -i 's/Widget/Gadget/' src/widget.rs"}),
+            json!({"exit_code": 0}),
+            make_snapshot(),
+            None,
+            None,
+            None,
+            None,
+            false,
+        ));
+
+        assert!(
+            history
+                .find_recent_successful_by_read_target(
+                    tools::CODE_SEARCH,
+                    &search_args,
+                    Duration::from_secs(60),
+                )
+                .is_none(),
+            "a successful command mutation without explicit target metadata must invalidate search replay"
+        );
+    }
+
+    #[test]
+    fn code_search_replay_stops_after_move_into_searched_scope() {
+        let history = ToolExecutionHistory::new(10);
+        let search_args = json!({"query": "Widget", "path": "src"});
+        history.add_record(ToolExecutionRecord::success(
+            tools::CODE_SEARCH.to_string(),
+            tools::CODE_SEARCH.to_string(),
+            false,
+            None,
+            search_args.clone(),
+            json!({"results": []}),
+            make_snapshot(),
+            None,
+            None,
+            None,
+            None,
+            false,
+        ));
+        history.add_record(ToolExecutionRecord::success(
+            tools::MOVE_FILE.to_string(),
+            tools::MOVE_FILE.to_string(),
+            false,
+            None,
+            json!({"path": "staging/widget.rs", "destination": "src/widget.rs"}),
+            json!({"success": true}),
+            make_snapshot(),
+            None,
+            None,
+            None,
+            None,
+            false,
+        ));
+
+        assert!(
+            history
+                .find_recent_successful_by_read_target(
+                    tools::CODE_SEARCH,
+                    &search_args,
+                    Duration::from_secs(60),
+                )
+                .is_none(),
+            "moving a file into the searched scope must invalidate search replay"
+        );
+    }
+
+    #[test]
+    fn code_search_replay_recovers_both_paths_from_base64_public_move_patch() {
+        use base64::Engine;
+        use base64::engine::general_purpose::STANDARD as BASE64;
+
+        let history = ToolExecutionHistory::new(10);
+        let old_search = json!({"query": "Widget", "path": "src/old.rs"});
+        let new_search = json!({"query": "Widget", "path": "src/new.rs"});
+        for args in [&old_search, &new_search] {
+            history.add_record(ToolExecutionRecord::success(
+                tools::CODE_SEARCH.to_string(),
+                tools::CODE_SEARCH.to_string(),
+                false,
+                None,
+                args.clone(),
+                json!({"results": ["cached"]}),
+                make_snapshot(),
+                None,
+                None,
+                None,
+                None,
+                false,
+            ));
+        }
+        let patch = "*** Begin Patch\n*** Update File: src/old.rs\n*** Move to: src/new.rs\n@@\n-Widget\n+Gadget\n*** End Patch\n";
+        history.add_record(ToolExecutionRecord::success(
+            tools::APPLY_PATCH.to_string(),
+            tools::APPLY_PATCH.to_string(),
+            false,
+            None,
+            json!({"patch": format!("base64:{}", BASE64.encode(patch))}),
+            json!({"success": true}),
+            make_snapshot(),
+            None,
+            None,
+            None,
+            None,
+            false,
+        ));
+
+        for args in [&old_search, &new_search] {
+            assert!(
+                history
+                    .find_recent_successful_by_read_target(
+                        tools::CODE_SEARCH,
+                        args,
+                        Duration::from_secs(60),
+                    )
+                    .is_none(),
+                "both old and new move paths must invalidate replay: {args}"
+            );
+        }
     }
 
     #[test]

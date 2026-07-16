@@ -9,10 +9,18 @@ VT Code relies on the inherent ability of Large Language Models (LLMs) to unders
 - **Rust**, **Python**, **JavaScript**, **TypeScript**, **Go**, **Java**, **C/C++**, **Swift**, **Ruby**, **PHP**, and many others.
 
 The agent uses shell inspection through `exec_command.cmd`, patch edits through
-`apply_patch`, and advanced `code_search` when syntax-aware search is useful.
-Its internal reasoning provides "LSP-like" capabilities (goto-definition,
-find-references) without requiring local AST-level parsing or grammar libraries
-for each language.
+`apply_patch`, and advanced `code_search` when focused source search is useful.
+`code_search` reports recognised declarations as definitions. It classifies an
+exact identifier occurrence outside a known declaration name as a syntactic
+usage. A usage can belong to a different symbol with the same spelling, so it
+is not a semantically resolved reference.
+
+`code_search` can classify syntax-aware usages for Rust, Python, JavaScript,
+TypeScript, TSX, Go, Java, C, and C++ when it has complete declaration
+information for the searched file. Bash usage classification is unsupported.
+Languages without supported usage classification can still produce text, path,
+and available definition results, while the model can reason about their source
+text directly.
 
 ## Tree-sitter Security Parsing (Bash)
 
@@ -21,7 +29,7 @@ While general code analysis is text-based, **Bash/Shell scripts** are explicitly
 | Language | Extensions | Analysis Method | Safety Level |
 |----------|------------|-----------------|--------------|
 | Bash/Shell | `.sh`, `.bash` | Tree-sitter AST | **High** (Parsed for command validation) |
-| All Others | Any | LLM Semantic | **Standard** |
+| Other source languages | Any | Focused search, bundled parsers where supported, and LLM reasoning | **Standard** |
 
 ### Why use Tree-sitter for Bash?
 
@@ -30,7 +38,3 @@ Shell commands can be notoriously difficult to validate with simple text matchin
 ## Syntax Highlighting
 
 Syntax highlighting in the terminal UI and previews is handled by the `syntect` crate, which uses Sublime Text-compatible grammars for a wide variety of languages. This provides a rich visual experience without the overhead of heavy tree-sitter grammars for every language.
-
----
-
-*Note: Previous versions of VT Code used tree-sitter for multiple programming languages. These were removed to reduce binary size and complexity, as LLM-native analysis proved to be more flexible and equally accurate for coding tasks.*

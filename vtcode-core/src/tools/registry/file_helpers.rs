@@ -338,7 +338,7 @@ impl ToolRegistry {
 
     pub async fn list_files(&self, args: Value) -> Result<Value> {
         // Dispatch directly to the underlying list implementation so a top-level
-        // `list_files` call can safely run alongside `search_dispatch` in the same batch.
+        // `list_files` call can safely run alongside `code_search` in the same batch.
         let tool = self.inventory.file_ops_tool().clone();
         tool.execute(args).await
     }

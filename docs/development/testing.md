@@ -83,15 +83,15 @@ If a user asks for ast-grep installation or first-use help, route them to the bu
 
 For ast-grep rule authoring guidance, use the bundled `ast-grep` skill. It now covers the atomic / relational / composite / utility rule cheat sheet, the YAML config cheat sheet, and CLI iteration with `scan --rule` and `scan --inline-rules`.
 That skill also covers project bootstrapping with `ast-grep new` / `ast-grep new rule`, though this repository already includes the required scaffold.
-Rewrite workflows such as `ast-grep run --rewrite`, YAML string `fix`, `FixConfig`, and `expandStart` / `expandEnd` are also intentionally routed through that skill instead of the public structural tool surface, including comma/list-item cleanup cases where the rewritten range must grow beyond the matched node.
+Rewrite workflows such as `ast-grep run --rewrite`, YAML string `fix`, `FixConfig`, and `expandStart` or `expandEnd` are intentionally routed through that skill, including comma and list-item cleanup cases where the rewritten range must grow beyond the matched node.
 CLI-only topics such as `--stdin`, raw `--json`, `scan -r`, `lsp`, shell completions, and GitHub Action setup are also documented there.
 When ast-grep rule syntax is not expressive enough, that skill now also documents when to switch to ast-grep’s JavaScript/Python/Rust API instead of piling more complexity into YAML.
 It also covers ast-grep pattern syntax itself, including `$VAR`, `$$$ARGS`, `$_`, `$$VAR`, object-style patterns when fragments are ambiguous, rule-object features such as positive root-rule requirements, limited `kind` ESQuery syntax, `nthChild` formulas / `reverse` / `ofRule`, `range`, relational `field`, `stopBy`, and local/global utility rules, plus config keys and semantics such as `url`, `metadata`, `constraints`, `severity`, `message`, `note`, `labels`, `files`, `ignores`, `transform`, `fix`, `rewriters`, `caseInsensitive` glob objects, YAML `---` rule separators, `severity: off`, `--include-metadata`, `./` glob pitfalls, and `files` / `ignores` precedence.
-It also covers FAQ-style troubleshooting such as Playground vs CLI differences, using `debug_query`, incomplete fragments that need `context` plus `selector`, `kind` + `pattern` pitfalls, rule-order sensitivity, multi-language guidance, naming-convention matching via `constraints.regex`, and ast-grep’s static-analysis limits.
+It also covers FAQ-style troubleshooting such as Playground and CLI differences, using `ast-grep run --debug-query`, incomplete fragments that need `context` plus `selector`, `kind` plus `pattern` pitfalls, rule-order sensitivity, multi-language guidance, naming-convention matching via `constraints.regex`, and ast-grep’s static-analysis limits.
 It also covers the high-level ast-grep workflow: pattern / YAML / API inputs, Tree-Sitter parsing, Rust tree matching, search/rewrite/lint/analyze scenarios, and why ast-grep scales well across CPU cores.
 It also covers pattern core concepts such as textual vs structural matching, CST vs AST, named vs unnamed nodes, `kind` vs `field`, and significant vs trivial syntax.
 It also covers pattern parsing details such as invalid / incomplete / ambiguous snippets, effective-node selection via `selector`, meta-variable detection rules, unnamed-node capture, lazy `$$$ARGS`, and when `expandoChar` matters.
-It also covers the match algorithm and strictness levels, while VT Code’s public structural query surface already exposes read-only `strictness` for `cst`, `smart`, `ast`, `relaxed`, and `signature`.
+It also covers the match algorithm and strictness levels used by ast-grep commands.
 It also covers Find & Patch style rewrites such as `rewriters`, `transform.rewrite`, `joinBy`, and one-to-many rewrites like splitting barrel imports.
 It also covers transformation-object details such as `replace`, `substring`, `convert`, `toCase`, `separatedBy`, `CaseChange`, string-form transforms, and the experimental matching-order behavior of `transform.rewrite`.
 It also covers rewriter-specific rules such as required `id` / `rule` / `fix`, rewriter-local capture scope, rewriter-local `utils` / `transform`, and using sibling rewriters from the same list.
@@ -297,8 +297,9 @@ async fn test_exec_command_rg() {
 }
 ```
 
-Use `code_search` only for semantic checks, such as ast-grep structural queries
-or Tree-sitter outlines.
+Use advanced `code_search` for focused literal queries across definitions,
+syntactic usages, text, and paths. Use `exec_command` or the ast-grep skill for
+arbitrary structural patterns.
 
 ## **Mock Data and Testing Utilities**
 

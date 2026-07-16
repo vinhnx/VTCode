@@ -130,16 +130,6 @@ pub(super) fn missing_command_session_action_error(args: &Value) -> anyhow::Erro
     )
 }
 
-#[cold]
-pub(super) fn missing_search_dispatch_action_error(args: &Value) -> anyhow::Error {
-    anyhow!(
-        "Missing search action. Use `action` or fields: \
-         `pattern|query` (grep), `action:\"structural\"` with `pattern` (structural search), `path` (list), `keyword` (tools), \
-         `scope` (errors), `url` (web), `sub_action|name` (skill). Keys: {}",
-        summarized_arg_keys(args)
-    )
-}
-
 pub(super) fn is_valid_pty_session_id(session_id: &str) -> bool {
     !session_id.trim().is_empty()
         && session_id.len() <= 128

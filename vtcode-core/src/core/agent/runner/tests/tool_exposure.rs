@@ -479,10 +479,11 @@ async fn category_write_deny_keeps_edit_only_apply_patch_exposed() {
 }
 
 #[tokio::test]
-async fn webfetch_domain_deny_filters_representative_search_dispatch_tool() {
+async fn webfetch_domain_deny_does_not_filter_code_search() {
     let temp = TempDir::new().expect("tempdir");
     let mut config = VTCodeConfig::default();
     config.permissions.deny = vec!["webfetch(domain:example.com)".to_string()];
+    config.tools.profile = ToolProfile::AdvancedVtCode;
     let runner = Box::pin(AgentRunner::new_with_bootstrap(
         AgentType::Single,
         ModelId::default(),
@@ -505,7 +506,7 @@ async fn webfetch_domain_deny_filters_representative_search_dispatch_tool() {
         .build_universal_tool_snapshot()
         .await
         .expect("snapshot");
-    assert_provider_hides_tool(&snapshot, tools::UNIFIED_SEARCH);
+    assert_provider_exposes_tool(&snapshot, tools::CODE_SEARCH);
     assert_provider_exposes_tool(&snapshot, tools::EXEC_COMMAND);
 }
 
@@ -625,10 +626,9 @@ async fn normalize_tool_args_applies_transform_after_defaults() {
 
     let mut state = AgentSessionState::new("session".to_string(), 5, 5, 10_000);
     state.last_dir_path = Some(temp.path().display().to_string());
-    let normalized =
-        runner.normalize_tool_args(tools::UNIFIED_SEARCH, json!({"action": "list"}), &mut state);
+    let normalized = runner.normalize_tool_args(tools::LIST_FILES, json!({}), &mut state);
 
-    assert_eq!(normalized["tool_name"], tools::UNIFIED_SEARCH);
+    assert_eq!(normalized["tool_name"], tools::LIST_FILES);
     assert_eq!(normalized["path"], json!(temp.path().display().to_string()));
 }
 

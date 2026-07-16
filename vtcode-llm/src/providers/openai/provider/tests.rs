@@ -1279,6 +1279,42 @@ fn serialize_tools_dedupes_duplicate_names() {
 }
 
 #[test]
+fn code_search_tool_serialization_preserves_simple_constraints() {
+    let tool = provider::ToolDefinition::function(
+        vtcode_config::constants::tools::CODE_SEARCH.to_owned(),
+        "Search code".to_owned(),
+        vtcode_utility_tool_specs::code_search_parameters(),
+    );
+    let serialized =
+        tool_serialization::serialize_tools(&[tool.clone()], models::openai::DEFAULT_MODEL)
+            .expect("chat tools should serialise");
+    let chat_parameters = &serialized.as_array().expect("chat tool array")[0]["parameters"];
+
+    assert_eq!(chat_parameters["required"], json!(["query"]));
+    assert_eq!(chat_parameters["additionalProperties"], false);
+    let mut property_names = chat_parameters["properties"]
+        .as_object()
+        .expect("chat properties")
+        .keys()
+        .map(String::as_str)
+        .collect::<Vec<_>>();
+    property_names.sort_unstable();
+    assert_eq!(
+        property_names,
+        ["file_types", "max_results", "path", "query", "result_types"]
+    );
+    assert_eq!(chat_parameters["properties"]["max_results"]["minimum"], 1);
+    assert_eq!(chat_parameters["properties"]["max_results"]["maximum"], 100);
+    assert!(chat_parameters.get("anyOf").is_none());
+
+    let responses = tool_serialization::serialize_tools_for_responses(&[tool], None)
+        .expect("responses tools should serialise");
+    let responses_parameters =
+        &responses.as_array().expect("responses tool array")[0]["parameters"];
+    assert_eq!(responses_parameters, chat_parameters);
+}
+
+#[test]
 fn responses_tools_dedupes_apply_patch_and_function() {
     let tools = vec![
         provider::ToolDefinition::apply_patch("Apply patches".to_owned()),
@@ -3279,6 +3315,7 @@ fn parse_harmony_tool_names_and_calls() {
         OpenAIProvider::parse_harmony_tool_name("functions.code_search"),
         vtcode_config::constants::tools::CODE_SEARCH
     );
+    assert_eq!(OpenAIProvider::parse_harmony_tool_name("grep"), "grep");
     assert_eq!(
         OpenAIProvider::parse_harmony_tool_name("container.exec"),
         "exec_command"
@@ -3290,10 +3327,11 @@ fn parse_harmony_tool_names_and_calls() {
     assert!(!OpenAIProvider::uses_harmony("gpt-oss:20b"));
 
     let (name, args) = OpenAIProvider::parse_harmony_tool_call_from_text(
-        r#"to=functions.code_search {"action":"outline", "path":"src"}"#,
+        r#"to=functions.code_search {"query":"Widget", "path":"src"}"#,
     )
     .expect("should parse");
     assert_eq!(name, vtcode_config::constants::tools::CODE_SEARCH);
+    assert_eq!(args["query"], json!("Widget"));
     assert_eq!(args["path"], json!("src"));
 
     let (name2, args2) = OpenAIProvider::parse_harmony_tool_call_from_text(

@@ -784,7 +784,7 @@ request_user_input = "allow"      # Ask focused user questions when the task req
 task_tracker = "prompt"           # Create or update explicit task plans
 exec_command = "prompt"           # Run commands; pipe-first by default, set tty=true for PTY/interactive sessions
 write_stdin = "prompt"            # Send input to active command sessions
-code_search = "allow"             # Advanced semantic structural search and outline surface
+code_search = "allow"             # Advanced bounded literal search with query-led filters
 
 # Command security - Define safe and dangerous command patterns
 [commands]

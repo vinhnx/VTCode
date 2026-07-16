@@ -66,13 +66,12 @@ Use this skill for ast-grep project setup, rule authoring, rule debugging, and C
 
 ## Routing
 
-- Prefer `code_search` with `action="structural"` and `workflow="scan"` for read-only project scans. Use `severities: ["error", "warning"]` to filter findings by severity level and focus on actionable issues.
-- Prefer `code_search` with `action="structural"` and `workflow="test"` for read-only ast-grep rule tests.
-- Prefer `code_search` with `action="structural"` and `workflow="rewrite"` for dry-run rewrite previews. This runs `ast-grep run --pattern=... --rewrite=... --json=compact --color=never` and returns proposed replacements without applying them. Required fields: `pattern`, `rewrite`. Optional: `lang`, `selector`, `strictness`, `globs`, `context_lines`, `max_results`.
-- Prefer structural `debug_query` on the public tool surface before falling back to raw `ast-grep run --debug-query`.
-- Use `kind` on the public structural surface to match nodes by tree-sitter node kind (e.g. `function_item`, `call_expression`). `kind` supports ESQuery-style compound selectors like `A > B`, `A + B`, `A ~ B`, `A, B`, and pseudo-selectors like `:has()`, `:not()`, `:is()`, `:nth-child()`. `kind` can be used alone or combined with `pattern`.
-- Stay on the public structural surface first when the task is only running project checks, reporting findings, or previewing rewrites.
-- Use `exec_command` only when the public structural surface cannot express the requested ast-grep flow.
+- Use `exec_command` for ast-grep queries, project scans, rule tests, debug output, and rewrite previews.
+- Use `ast-grep scan` for project rules and `ast-grep test` for rule tests.
+- Use `ast-grep run --pattern=... --rewrite=... --json=compact --color=never` for dry-run rewrite previews. Review every replacement before applying changes.
+- Use `ast-grep run --debug-query` when a query matches an unexpected syntax node.
+- Use `--kind` to match node kinds. Ast-grep supports ESQuery-style compound selectors and pseudo-selectors in supported releases.
+- Keep this skill read-only unless the user explicitly authorises applying a rewrite.
 
 ## Quick Start
 
@@ -95,8 +94,7 @@ Use this skill for ast-grep project setup, rule authoring, rule debugging, and C
 
 - ast-grep ships many built-in languages. Common aliases include `bash`, `c`, `cc` / `cpp`, `cs`, `css`, `ex`, `go` / `golang`, `html`, `java`, `js` / `javascript` / `jsx`, `json`, `kt`, `lua`, `md` / `markdown`, `php`, `py` / `python`, `rb`, `rs` / `rust`, `swift`, `ts` / `typescript`, `tsx`, and `yml`.
 - `--lang <alias>` and YAML `language: <alias>` use those built-in aliases. File-system scans infer language from built-in extensions unless the project overrides them.
-- In VT Code, public structural `lang` is passed through to ast-grep. VT Code also normalizes and infers a local subset it can pre-parse itself: Rust, Python, JavaScript, TypeScript, TSX, Go, Java, and Markdown.
-- That local subset includes common ast-grep aliases and extensions such as `golang`, `jsx`, `cjs`, `mjs`, `cts`, `mts`, `py3`, `pyi`, and `mdx`.
+- Pass `--lang <alias>` to the CLI when extension inference is insufficient.
 - Use `languageGlobs` when the repository needs a different extension mapping than ast-grep’s built-in defaults.
 
 ## How Ast-Grep Works
@@ -105,7 +103,7 @@ Use this skill for ast-grep project setup, rule authoring, rule debugging, and C
 - The core pipeline is parse first, match second. Tree-Sitter builds the syntax tree, then ast-grep’s Rust matcher finds the target nodes.
 - The main usage scenarios are search, rewrite, lint, and analyze.
 - ast-grep processes many files in parallel and is built to use multiple CPU cores on larger codebases.
-- In VT Code, the public structural surface is the read-only entry point for query, scan, and test. Use the bundled skill when the task is about YAML authoring, rewrite/apply flows, or API-level ast-grep work.
+- In VT Code, run ast-grep through `exec_command` and use this skill for YAML authoring, rule tests, rewrites, and API-level work.
 
 ## Project Scaffolding
 
@@ -129,7 +127,7 @@ Use this skill for ast-grep project setup, rule authoring, rule debugging, and C
 - `ast-grep scan` requires project config and will error if no `sgconfig.yml` is found. `ast-grep run` can still search without project config, though it also benefits from discovered config for things like `customLanguages` and `languageGlobs`.
 - `ast-grep scan --inspect summary` is the quickest way to confirm which project directory and config file ast-grep actually selected during discovery.
 - ast-grep also recognizes a home-directory `sgconfig.yml` as a global fallback config. XDG config directories are not part of this behavior.
-- Keep `sgconfig.yml` authoring on the skill path. VT Code’s public structural tool can consume an existing config through `config_path`, but it does not expose these top-level schema fields directly.
+- Keep `sgconfig.yml` authoring on the skill path and pass the project config to ast-grep commands where needed.
 
 ## Rule Catalog
 
@@ -144,7 +142,7 @@ Use this skill for ast-grep project setup, rule authoring, rule debugging, and C
 
 ## VT Code Bundled Rules
 
-VT Code ships a set of curated ast-grep rules under `rules/` with matching tests under `rule-tests/`. Run them with `vtcode check ast-grep`. The bundled rules are organized by language:
+VT Code ships a set of curated ast-grep rules under `rules/` with matching tests under `rule-tests/`. Run them with `vtcode check ast-grep`. The bundled rules are organised by language:
 
 ### Python (`rules/python/`)
 - `no-print`: flags `print()` calls in production code
@@ -346,7 +344,9 @@ rule:
 ## Ruby Catalog Highlights
 
 - Key Ruby tree-sitter node kinds for pattern authoring: `call` for method calls (e.g. `$OBJ.method`), `method_call` for keyword-style calls (e.g. `puts "hello"`), `block` for `{{ }}` blocks, `do_block` for `do...end` blocks, `symbol` for `:name` literals, `assignment` for variable assignments, `method` for method definitions, `class` for class definitions, `if` for conditionals, `unless` for negative conditionals, `case` for case/when, `while` and `until` for loops, `return` for return statements, `yield` for yield calls, `super` for super calls, `self` for self references.
-- Ruby has no local tree-sitter parser in VT Code, so preflight pattern validation is skipped; patterns go directly to `sg` for parsing. Use `debug_query` to inspect parse output when matching is surprising.
+- Ast-grep parses Ruby patterns with its bundled Ruby parser. Use
+  `ast-grep run --lang ruby --debug-query` through `exec_command` to inspect
+  surprising matches.
 - Ruby’s `$VAR` meta-variable syntax works directly because `$` is a valid Ruby global variable prefix. No `expandoChar` override is needed.
 - Rails `*_filter` to `*_action`: useful migration rewrite for older Rails controllers. The catalog rule uses a `transform` with `replace` to swap `_filter` for `_action` on the captured `$FILTER` meta-variable. The pattern uses `$$$ACTION` to capture all arguments after the filter name. Keep it on the CLI skill path because framework version, controller style, and review expectations vary by repository:
 
@@ -379,7 +379,9 @@ fix:
 ## Python Catalog Highlights
 
 - Key Python tree-sitter node kinds for pattern authoring: `function_definition` for functions, `call` for function calls, `import_statement` and `import_from_statement` for imports, `assignment` for assignments, `decorated_definition` for decorated functions/classes, `with_statement` for context managers, `try_statement` for try/except, `if_statement` for conditionals, `for_statement` for loops, `return_statement` for returns, `async_function_definition` for async functions, `await` for await expressions, `type` for type annotations, `subscript` for generic types like `Optional[T]`, `list_comprehension` for list comprehensions, `argument_list` for function arguments, `keyword_argument` for keyword arguments, `conditional_expression` for ternary expressions, `assert_statement` for assertions.
-- Python has a local tree-sitter parser in VT Code, so preflight pattern validation works for Python patterns. Meta-variable patterns are sanitized and parsed locally before being sent to `sg`.
+- Ast-grep parses Python patterns before matching them. Use
+  `ast-grep run --lang python --debug-query` to inspect the parsed query when
+  metavariables or incomplete fragments behave unexpectedly.
 - Python’s `$VAR` meta-variable syntax works directly because `$` is not a valid Python identifier prefix in expression context. No `expandoChar` override is needed.
 - OpenAI SDK migration: useful multi-rule migration example for legacy `openai` Python client code, but keep it on the CLI skill path because imports, client lifetime, response shapes, and surrounding application logic often need repository-specific review. The migration uses three rules separated by `---`: import rewrite (`import openai` to `from openai import Client`), client initialization (`openai.api_key = $KEY` to `client = Client($KEY)`), and completion method (`openai.Completion.create($$$ARGS)` to `client.completions.create($$$ARGS)`).
 - Prefer generator expressions: good example of narrowing a rewrite to contexts like `any(...)`, `all(...)`, or `sum(...)` where generator expressions are clearly valid. Do not generalize it to every list comprehension. The constraint-based variant uses `constraints` to restrict `$FUNC` to `any|all|sum` and `$LIST` to `list_comprehension` kind, then strips brackets with a `substring` transform:
@@ -480,7 +482,9 @@ The recursive variant handles nested `Union` and `Optional` types using multiple
 - Clean-architecture import checks: good scan-rule example for enforcing architectural boundaries with `files` plus import-path constraints. Treat it as repository-policy enforcement rather than a universal Kotlin rule.
 - The Kotlin catalog example is diagnostic-oriented, not rewrite-oriented. Keep it on the scan path because import-boundary violations usually need design review instead of blind mutation.
 - File-scoped package constraints are the point of the example: adapt the `files` glob and package regexes to the repository’s actual module layout before relying on the result.
-- Kotlin has no local tree-sitter parser in VT Code, so preflight pattern validation is skipped; patterns go directly to `sg` for parsing. Use `debug_query` to inspect parse output when matching is surprising. This is the same situation as C, C++, Ruby, and other extended languages.
+- Ast-grep parses Kotlin patterns with its bundled Kotlin parser. Use
+  `ast-grep run --lang kotlin --debug-query` through `exec_command` to inspect
+  surprising matches.
 - Unsafe cast detection (`$EXPR as $TYPE`): good warning-level scan rule for catching runtime ClassCastException risks. The safe cast `as?` is a different AST node, so this pattern does not false-positive on safe casts. Treat as review material; some casts are intentionally unsafe after exhaustive `when` or `is` checks.
 - `var` vs `val` preference: use `kind: property_declaration` with `has: { field: property_delegate, pattern: var }` to match mutable property declarations. A naive `var $NAME: $TYPE` pattern may over-match in contexts where the parser attaches different node structure. The `kind` plus `has` plus `field` approach is more robust.
 - `println` detection: use an `any` composite to cover Kotlin’s top-level `println($$$ARGS)`, Java’s `System.out.println($$$ARGS)`, and `System.err.println($$$ARGS)`. Scope with `files` to exclude test directories where console output is acceptable.
@@ -581,7 +585,7 @@ rule:
 
 Useful for test discovery, migration targeting, or repository audits where meta-variable patterns are too limited.
 
-- Contextual matching for function calls: Go’s tree-sitter grammar parses `fmt.Println($A)` as a type conversion, not a call expression, because Go syntax allows both. Use a contextual pattern with `selector: call_expression` to disambiguate. Note: contextual patterns are pattern objects (`context` + `selector` inside `pattern`), which require the CLI skill path via `exec_command`. The public structural surface’s `selector` field works with simple string patterns but does not support the `context` field:
+- Contextual matching for function calls: Go’s tree-sitter grammar parses `fmt.Println($A)` as a type conversion, not a call expression, because Go syntax allows both. Use a contextual pattern with `selector: call_expression` through the CLI skill path via `exec_command`:
 
 ```yaml
 id: match-function-call
@@ -628,7 +632,9 @@ Treat matches as actionable security review items. The fix is using just `-` wit
 ## Cpp Catalog Highlights
 
 - Reuse Cpp rules for C only when the repository intentionally parses C sources as Cpp via `languageGlobs`; do not assume mixed C/C++ projects want that parser tradeoff by default.
-- C++ has no local tree-sitter parser in VT Code, so preflight pattern validation is skipped; patterns go directly to `sg` for parsing. Use `debug_query` to inspect parse output when matching is surprising.
+- Ast-grep bundles C++ parser support. Use `--lang cpp` for ad-hoc CLI patterns
+  and `language: Cpp` in YAML rules. Run `ast-grep run --lang cpp
+  --debug-query` through `exec_command` to inspect surprising matches.
 - Format-string vulnerability rewrite: strong security-oriented example for `fprintf`/`sprintf`-style calls missing an explicit format string. Uses `constraints` with regex on `$PRINTF` and kind on `$VAR` to distinguish vulnerable calls from safe ones. The fix inserts `"%s"` as the format argument:
 
 ```yaml
@@ -663,7 +669,7 @@ This matches structs that use inheritance via base class clauses. The full `stru
 ## C Catalog Highlights
 
 - Parsing C as Cpp can reduce duplicated rule authoring, but only use that route when the repository intentionally opts into the parser tradeoff with `languageGlobs`; do not blur C and C++ semantics by default.
-- Match function calls in C with contextual patterns: tree-sitter-c parses code fragments differently depending on surrounding syntax. A bare `test($A)` becomes `macro_type_specifier`, while `test($A);` becomes `expression_statement -> call_expression`. Use `context` plus `selector: call_expression` to disambiguate. Note: contextual patterns are pattern objects (`context` + `selector` inside `pattern`), which require the CLI skill path via `exec_command`. The public structural surface's `selector` field works with simple string patterns but does not support the `context` field:
+- Match function calls in C with contextual patterns: tree-sitter-c parses code fragments differently depending on surrounding syntax. A bare `test($A)` becomes `macro_type_specifier`, while `test($A);` becomes `expression_statement -> call_expression`. Use `context` plus `selector: call_expression` through the CLI skill path via `exec_command`:
 
 ```yaml
 id: match-function-call
@@ -718,26 +724,29 @@ Treat it as optional rewrite material only where the project explicitly prefers 
 - Queryable node kinds include `atx_heading` for ATX-style headings, `fenced_code_block` for fenced code blocks, and `list_item` for list items.
 - Combine node kinds with compound selectors for broader sweeps, for example `atx_heading, fenced_code_block` matches both headings and code blocks.
 - Markdown parsing is powered by `tree-sitter-md` and still has known parsing bugs and edge cases. Use it for inspection, indexing, outline extraction, and lightweight automation rather than critical rewrites.
-- VT Code infers `lang=md` from `.md` and `.mdx` file paths and globs, so structural queries over Markdown files do not always require an explicit `lang` argument.
+- Ast-grep infers a language from recognised file extensions during path scans.
+  Pass `--lang md` for stdin or whenever extension inference is unavailable.
 - Adapt Markdown catalog rules to the repository’s documentation conventions, heading hierarchy, and content structure before using them directly.
 
 ## JavaScript API Highlights
 
-- Use `@ast-grep/napi` only when rule YAML or VT Code’s public structural tool is not enough. The programmatic API is the right escalation path for computed replacements, ordered-match logic, cross-node inspection, or edit orchestration that would be awkward in pure rule syntax.
+- Use `@ast-grep/napi` only when rule YAML and CLI commands are insufficient. The programmatic API suits computed replacements, ordered-match logic, cross-node inspection, or edit orchestration that would be awkward in pure rule syntax.
 - Core objects are `SgRoot` and `SgNode`: `parse(Lang.<X>, source)` creates the tree, `root()` returns the root node, and `find` / `findAll` / traversal / refinement / edit APIs live on `SgNode`.
 - `Matcher` inputs can be pattern strings, numeric kind ids, or `NapiConfig` objects. Prefer patterns or `NapiConfig` unless there is a concrete reason to drop to raw kind ids.
 - `getMatch` and `getMultipleMatches` expose captured metavariables, but `replace` does not interpolate metavariables for you. Build replacement strings explicitly in JavaScript from matched nodes before calling `commitEdits`.
-- Keep VT Code’s boundary clear: prefer the public structural tool or CLI path for ordinary query/scan/test/rewrite flows, and only drop to NAPI when the task is genuinely programmatic.
+- Prefer the CLI path for ordinary query, scan, test, and rewrite flows. Use NAPI only when the task is genuinely programmatic.
 - `registerDynamicLanguage` and extra language packages exist, but that path is still experimental. Prefer established parsers and repo-native tooling unless dynamic-language support is actually needed.
 
 ## Python API Highlights
 
-- Use `ast-grep-py` when the task needs programmatic AST traversal or computed edits but a Python host environment is a better fit than JavaScript or Rust. As with NAPI, prefer it only after rule YAML or VT Code’s structural/CLI path stops being a good fit.
+- Use `ast-grep-py` when the task needs programmatic AST traversal or computed
+  edits but a Python host environment is a better fit than JavaScript or Rust.
+  Prefer it only after rule YAML and direct CLI commands stop being a good fit.
 - Core objects are again `SgRoot` and `SgNode`: `SgRoot(source, language)` parses the source, `root()` returns the root node, and search, refinement, traversal, and edit APIs live on `SgNode`.
 - `find` and `find_all` support either direct rule keyword arguments or a config object. Prefer keyword-rule searches for simple cases and config objects when constraints or utility rules make the query more expressive.
 - `get_match`, `get_multiple_matches`, and `__getitem__` expose captured metavariables. `__getitem__` is useful when you want a stricter access pattern and are willing to let missing captures raise instead of returning `None`.
 - `replace` and `commit_edits` generate source edits, but they do not interpolate metavariables for you. Build replacement text explicitly from matched nodes before applying edits.
-- Keep VT Code’s boundary clear here too: use Python API only for genuinely programmatic transformations, not as a default substitute for public structural queries or ordinary CLI rewrites.
+- Use the Python API only for genuinely programmatic transformations, rather than ordinary CLI queries or rewrites.
 
 ## NAPI Performance Highlights
 
@@ -755,7 +764,7 @@ Treat it as optional rewrite material only where the project explicitly prefers 
 - A rule object still needs a positive anchor. In practice, start with `pattern` or `kind`; `regex` is a filter, not a sufficient root rule by itself.
 - Atomic rules are `pattern`, `kind`, `regex`, `nthChild`, and `range`.
 - Use atomic fields such as `pattern`, `kind`, `regex`, `nthChild`, and `range` for direct node checks.
-- In VT Code's public structural surface, `kind` is available as a first-class field alongside `pattern`. Use `kind` alone to match by node type without a pattern, or combine both to filter pattern matches by node kind.
+- On the CLI, use `--kind` alone to match by node type or combine it with a pattern to filter matches by node kind.
 - Use relational fields such as `inside`, `has`, `follows`, and `precedes` when the match depends on surrounding nodes.
 - Use composite fields such as `all`, `any`, `not`, and `matches` to combine sub-rules or reuse utility rules.
 - `kind` values support ESQuery-style pseudo-selectors (`:has()`, `:not()`, `:is()`, `:nth-child()`) for matching nodes by descendant structure, exclusion, alternatives, or sibling position without writing separate relational rules.
@@ -768,7 +777,7 @@ Treat it as optional rewrite material only where the project explicitly prefers 
 - `pattern`, `kind`, and `regex` are the common atomic fields. `pattern` can also be an object with `context`, `selector`, and optional `strictness`.
 - Pattern objects are for invalid, incomplete, or ambiguous snippets. `context` is required; `selector` picks the real target node inside that context; `strictness` tunes how literally the pattern matches.
 - Use pattern objects when the bare snippet would parse as the wrong node kind, such as JavaScript class fields or Go/C call expressions inside ambiguous fragments.
-- `kind` is usually a plain node kind name, but ast-grep 0.42+ supports ESQuery-style pseudo-selectors in `kind` strings. Use `:has(selector)` or `:has(> selector)` to match nodes containing descendants (or direct children) matching a selector, `:not(selector)` to exclude nodes, `:is(selector, ...)` for or-logic in compound selectors, and `:nth-child(An+B)` or `:nth-child(An+B of selector)` for positional matching. These pseudo-selectors also work in `selector` values on the CLI and in VT Code's public structural surface.
+- `kind` is usually a plain node kind name, but ast-grep 0.42+ supports ESQuery-style pseudo-selectors in `kind` strings. Use `:has(selector)` or `:has(> selector)` to match nodes containing descendants or direct children, `:not(selector)` to exclude nodes, `:is(selector, ...)` for or-logic in compound selectors, and `:nth-child(An+B)` or `:nth-child(An+B of selector)` for positional matching. These pseudo-selectors also work in CLI selector values.
 - ast-grep 0.43+ further expands `kind` with compound selector operators: `A > B` (direct child), `A B` (descendant), `A + B` (immediate sibling), `A ~ B` (general sibling), and `A, B` (either). This syntax works in YAML rule `kind` fields and the CLI `--kind` / `-k` flag. It is ESQuery-style, not full ESQuery: class selectors, attribute selectors, and wildcard selectors are not supported.
 - Separate `kind` and `pattern` checks do not change how the pattern is parsed. If parse shape is the problem, switch to one pattern object with `context` and `selector`.
 - `regex` matches the whole node text. Reach for `nthChild` when position among named siblings matters and `range` when the match must be limited to a known source span.
@@ -798,7 +807,7 @@ Treat it as optional rewrite material only where the project explicitly prefers 
 
 ## ESQuery-Style Kind Selectors
 
-ast-grep supports ESQuery-style selectors in the `kind` field. This syntax works in YAML rule `kind` fields, the CLI `--kind` / `-k` flag, and VT Code's public structural `kind` parameter. The selector is written in the `kind` field and ast-grep parses it internally.
+Ast-grep supports ESQuery-style selectors in YAML rule `kind` fields and the CLI `--kind` or `-k` flag. Ast-grep parses the selector internally.
 
 ### Relationship Selectors
 
@@ -875,7 +884,10 @@ kind: decorated_definition > function_definition
 
 ## Config Cheat Sheet
 
-- Basic info keys define the rule itself. Use `id` for the unique rule name, `language` for the parser target, `url` for rule documentation, and `metadata` for custom project data that VT Code should preserve with the rule.
+- Basic info keys define the rule itself. Use `id` for the unique rule name,
+  `language` for the parser target, `url` for rule documentation, and
+  `metadata` for custom project data. Native JSON includes `metadata` only when
+  the scan uses `--include-metadata`.
 - One YAML file can hold multiple rules when you separate documents with `---`.
 - Finding keys define what gets matched. `rule` is the core matcher, `constraints` narrows meta-variable captures, and `utils` holds reusable helper rules that you call through `matches`.
 - `utils` can be purely local to the current file or can supplement global utility-rule files loaded through `utilDirs`. Keep shared building blocks global only when multiple rule files genuinely need them.
@@ -883,9 +895,13 @@ kind: decorated_definition > function_definition
 - Patching keys define reusable fixes. Use `transform` to derive new meta-variables before replacement, `fix` for either a string replacement or a `template` object with `expandStart` / `expandEnd`, and `rewriters` when the transformation is too complex for one inline `fix`.
 - Linting keys define what scan results report. Use `severity`, `message`, `note`, and `labels` for diagnostics, then `files` and `ignores` to scope where the rule applies.
 - Severity levels are `error`, `warning`, `info`, `hint`, and `off`. `hint` is the default severity in ast-grep project scans.
-- `error` findings make raw `ast-grep scan` exit non-zero; VT Code normalizes that CLI behavior into structured findings on the public scan path instead of surfacing a tool error. The scan summary includes a `has_error_findings` flag that is `true` when any error-severity rule matched.
+- An `error`-severity match makes `ast-grep scan` exit with status 1. Inspect
+  the native human-readable or JSON findings before treating that status as an
+  execution failure.
 - `severity: off` disables the rule during scanning. `note` supports Markdown but cannot interpolate meta variables.
-- VT Code's public scan surface accepts an optional `severities` filter (a list of severity levels like `["error", "warning"]`). When present, only findings matching one of the listed severities are returned. This filters the output after ast-grep runs; it does not override rule severities at the CLI level. Use this to focus on actionable findings in CI or to reduce noise from hint-level rules.
+- Use scan flags such as `--error`, `--warning`, `--info`, `--hint`, and `--off`
+  to override named rule severities for one CLI run. Use `--filter` to select
+  configured rule identifiers.
 - Choosing severity for custom rules:
   - `error`: correctness bugs, security vulnerabilities, or patterns that should always fail CI. Examples: `no-debugger`, `no-array-delete`, `no-return-in-foreach`, `no-await-in-promise-all`.
   - `warning`: code smells, style violations, or patterns that are usually wrong but may have valid exceptions. Examples: `no-iterator-for-each`, `no-console-except-error`, `avoid-duplicate-export`, `no-chars-enumerate`.
@@ -908,7 +924,7 @@ kind: decorated_definition > function_definition
 - Rule-level `ignores` is different from CLI `--no-ignore`: the CLI flag changes global ignore-file behavior, while YAML `ignores` only filters files for that rule.
 - JSON output only includes rule `metadata` when the ast-grep run enabled metadata output, for example via `--include-metadata`.
 - Parameterized utility rules (experimental, ast-grep 0.42+) let global utility files declare `arguments` so callers pass rule objects into a reusable template via `matches`. Arguments are mandatory, are full rule objects (not strings), and meta-variables captured inside the utility stay private unless explicitly exported by the argument rules. This feature is experimental and its API may change.
-- Keep config authoring on the ast-grep skill path. VT Code’s public structural tool runs read-only query/scan/test workflows; it does not expose rule-YAML authoring fields directly.
+- Keep config authoring on the ast-grep skill path. Run query, scan, and test commands through `exec_command`.
 
 ## Transformation Objects
 
@@ -1078,8 +1094,8 @@ fix: "bar($MAYBE_COMMA$newArg)"
 - A rewriter can call other rewriters from the same `rewriters` list inside its own `transform` section, enabling multi-pass rewrite pipelines.
 - Meta variables captured inside one rewriter do not leak to sibling rewriters or the outer rule. Rewriter-local `transform` variables and `utils` are also scoped to that one rewriter.
 - String-form shorthand `rewrite(rewriters, source, joinBy?)` is valid in newer ast-grep versions, but prefer object form when compatibility or debugging clarity matters.
-- For simple pattern-to-pattern rewrites, use `workflow="rewrite"` on the public structural surface to preview replacements without applying them. This runs `ast-grep run --pattern=... --rewrite=... --json=compact --color=never` and returns each match with its proposed `replacement` and `replacementOffsets`. The surface remains read-only; no files are modified.
-- For advanced rewrite operations using `rewriters`, `transform.rewrite`, `joinBy`, or `FixConfig` with `expandStart`/`expandEnd`, use the CLI skill path via `exec_command`. VT Code’s public structural surface does not expose multi-rewriter or transform-pipeline behavior.
+- For simple pattern-to-pattern rewrites, use `ast-grep run --pattern=... --rewrite=... --json=compact --color=never` through `exec_command` to preview replacements. Do not apply them without explicit authorisation.
+- For advanced rewrite operations using `rewriters`, `transform.rewrite`, `joinBy`, or `FixConfig` with `expandStart` or `expandEnd`, use a YAML rule through the CLI skill path.
 
 ## Pattern Syntax
 
@@ -1100,7 +1116,7 @@ fix: "bar($MAYBE_COMMA$newArg)"
 - The default effective node is the leaf node or the innermost node with more than one child. Override it with `selector` when the real match should be a statement instead of the inner expression, especially for `follows` and `precedes`.
 - Meta variables are detected only when the whole AST node text matches meta-variable syntax. Mixed text like `obj.on$EVENT`, lowercase names like `$jq`, or string-content fragments do not become meta variables.
 - `$$VAR` captures unnamed nodes such as operators when the grammar exposes them only as anonymous tokens. `$$$ARGS` is lazy: it stops before the next node that satisfies the rest of the pattern.
-- When pattern behavior is surprising, inspect the parsed tree and effective node first. In VT Code, start with public structural `debug_query`; in the Playground, use the pattern view for the same questions.
+- When pattern behaviour is surprising, inspect the parsed tree and effective node with `ast-grep run --debug-query`; in the Playground, use the pattern view for the same questions.
 
 ## Pattern Core Concepts
 
@@ -1122,7 +1138,9 @@ fix: "bar($MAYBE_COMMA$newArg)"
   - `relaxed`: also skip comments
   - `signature`: ignore text and compare mostly named-node kinds
 - This explains why quote differences can disappear under `ast`, comments can disappear under `relaxed`, and even different callee text can match under `signature`.
-- In VT Code, read-only structural queries already expose `strictness`. Use the bundled skill when the task is choosing between levels, or when the user needs raw CLI `--strictness` or YAML pattern-object `strictness`.
+- Set strictness with the ast-grep CLI `--strictness` flag or a YAML
+  pattern-object `strictness` field. Check `ast-grep run --help` for the flags
+  supported by the installed release.
 
 ## Custom Languages
 
@@ -1135,7 +1153,7 @@ fix: "bar($MAYBE_COMMA$newArg)"
 - Reusing a parser library built by Neovim is valid when it already matches the grammar/version you need.
 - Register `libraryPath`, `extensions`, and optional `expandoChar` in `sgconfig.yml`. `expandoChar` matters when `$VAR` is not valid syntax in the target language and must be rewritten to a parser-friendly prefix.
 - Use `tree-sitter parse <file>` to inspect parser output when the custom grammar or file association is unclear.
-- VT Code’s public structural queries can use a custom language only after the local ast-grep project config is in place. The setup, compilation, and debugging work stays on the bundled ast-grep skill path.
+- Ast-grep CLI queries can use a custom language after the local project config is in place. Keep setup, compilation, and debugging on this skill path.
 
 ## Language Injection
 
@@ -1146,8 +1164,7 @@ fix: "bar($MAYBE_COMMA$newArg)"
 - Typical patterns are `styled.$TAG\`$CONTENT\`` for CSS-in-JS and `graphql\`$CONTENT\`` for GraphQL template literals.
 - ast-grep parses the extracted subregion with the injected language, not the parent document language. That is why CSS patterns can match inside JavaScript once injection is configured.
 - Use `languageGlobs` when the whole file should be parsed as a different or superset language. Use `languageInjections` when only a nested region inside the file changes language.
-- In VT Code, use `workflow='inspect'` on the public structural surface to see configured `languageInjections`, `customLanguages`, and `languageGlobs` from the project's `sgconfig.yml`.
-- In VT Code, read-only structural query / scan / test can consume existing injection config. Designing or debugging `languageInjections` itself stays on the bundled ast-grep skill path.
+- Use `ast-grep scan --inspect=summary` through `exec_command` to inspect project configuration. Designing or debugging `languageInjections` stays on this skill path.
 
 ### Injection Config Examples
 
@@ -1182,13 +1199,13 @@ languageInjections:
 - `languageGlobs` remaps entire files to a different parser. Use it when the file extension does not match ast-grep's built-in mapping (e.g., parsing `.ts` files as TSX).
 - `languageInjections` extracts a sub-region of a file and parses it as a different language. Use it for embedded languages like CSS in JS or SQL in template literals.
 - `customLanguages` registers a new tree-sitter parser for a language ast-grep does not ship. Use it when the target language has a tree-sitter grammar but is not built in.
-- All three are configured in `sgconfig.yml` and consumed automatically by `ast-grep scan` and VT Code's structural workflows.
+- All three are configured in `sgconfig.yml` and consumed automatically by `ast-grep scan`.
 
 ## FAQ Highlights
 
 - If a pattern fragment fails, the usual fix is to provide more valid `context` and then narrow the real target with `selector`. This is the standard workaround for subnodes like JSON pairs or class fields that are not standalone code.
 - If a rule behaves strangely, reduce it to the smallest repro, confirm whether it is matching an expression or a statement, and use `all` to make rule order explicit when later checks depend on earlier meta-variable captures.
-- CLI and Playground can disagree because parser versions and text encodings differ. In VT Code, prefer the public structural `debug_query` flow first, then compare the parsed AST or CST before assuming the rule is wrong.
+- CLI and Playground can disagree because parser versions and text encodings differ. Run `ast-grep run --debug-query`, then compare the parsed AST or CST before assuming the rule is wrong.
 - Meta variables must occupy one whole AST node. `use$HOOK` and similar prefix/suffix patterns will not work; capture the full node and narrow it with `constraints.regex` instead. Use `$$VAR` for unnamed nodes, and remember that `$$$MULTI` is lazy.
 - Do not combine separate `kind` and `pattern` rules to force a different parse shape. Use one pattern object with `context` and `selector` so the parser sees the intended node kind.
 - ast-grep rules are single-language. Share coverage across related languages by parsing both with the superset via `languageGlobs`, or keep separate rules when the AST differences matter.
@@ -1203,8 +1220,8 @@ languageInjections:
 - This is the right model for list-style rewrites such as exploding a barrel import into multiple single imports, converting `dict(a=1, b=2)` to `{‘a’: 1, ‘b’: 2}`, or transforming heterogeneous lists where each element type needs a different rewrite rule.
 - `transform.rewrite` has three important behavioral properties: (1) it rewrites descendants of the captured source metavariable, not the source itself; (2) overlapping rewriter matches are prevented so each sub-node is rewritten at most once; (3) higher-level AST matches are preferred before nested ones, and for one node only the first matching rewriter in declaration order is applied.
 - Use `joinBy` when the rewritten sub-nodes must be stitched with a different separator than the original source text. For example, `joinBy: "\n"` converts comma-separated imports into newline-separated direct imports.
-- For simple pattern-to-pattern rewrites, use `workflow="rewrite"` on the public structural surface to preview replacements without applying them. Each result includes the original `text`, proposed `replacement`, `replacementOffsets`, and `metaVariables`. The surface remains read-only; no files are modified.
-- For FixConfig rewrites with range expansion (expandStart/expandEnd), use `workflow="rewrite"` with `fix_config` on the public structural surface. The tool generates a temporary YAML rule and runs `sg scan` internally.
+- For simple pattern-to-pattern rewrites, run `ast-grep run --pattern ... --rewrite ... --json=compact` through `exec_command` to preview replacements without applying them.
+- For FixConfig rewrites with range expansion, write a YAML rule and run `ast-grep scan` through `exec_command`.
 - For advanced `transform.rewrite`, `rewriters`, `joinBy`, and multi-pass transform operations, use the CLI skill path via `exec_command`.
 
 ## Rewrite Essentials
@@ -1222,8 +1239,7 @@ languageInjections:
 - Use `joinBy` to control how rewritten list items are stitched together, for example newline-joined imports in a barrel-import rewrite.
 - Use `FixConfig` when replacing only the matched node is not enough, especially for deleting list items or key-value pairs that also need a surrounding comma removed.
 - In `FixConfig`, `template` is the replacement text and `expandStart` / `expandEnd` widen the rewritten range to consume commas, brackets, or other surrounding trivia outside the target node.
-- On the public structural surface, `workflow="rewrite"` supports FixConfig via the `fix_config` parameter. This is the preferred path for rewrites that need range expansion. The tool generates a temporary YAML rule and runs `sg scan` internally.
-- When `fix_config` is used, each result includes `replacement` (the template), `file`, `line_number`, `range`, and `message` from the matched rule. The `fix_config` object is echoed back so callers can confirm the expansion config that was applied.
+- Use YAML `FixConfig` for rewrites that need range expansion, then preview the rule with `ast-grep scan` before applying changes.
 
 ### FixConfig Examples
 
@@ -1241,22 +1257,7 @@ fix:
     regex: ','
 ```
 
-In the public structural tool, this becomes:
-
-```json
-{
-  "action": "structural",
-  "workflow": "rewrite",
-  "lang": "javascript",
-  "pattern": "$KEY: $VAL",
-  "fix_config": {
-    "template": "",
-    "expand_end": {
-      "regex": ","
-    }
-  }
-}
-```
+Preview this rule with `ast-grep scan --rule <rule-file> --json=compact`.
 
 Delete an array element and its surrounding comma, expanding both start and end:
 
@@ -1283,21 +1284,7 @@ fix:
     kind: ')'
 ```
 
-In the public structural tool:
-
-```json
-{
-  "action": "structural",
-  "workflow": "rewrite",
-  "lang": "javascript",
-  "pattern": "foo($ARG)",
-  "fix_config": {
-    "template": "bar($ARG)",
-    "expand_start": { "kind": "(" },
-    "expand_end": { "kind": ")" }
-  }
-}
-```
+Preview this rule with `ast-grep scan --rule <rule-file> --json=compact`.
 
 - Keep advanced `transform` and `rewriters` in the skill-driven CLI workflow.
 
@@ -1312,11 +1299,11 @@ In the public structural tool:
 ## Scan Command Basics
 
 - `ast-grep scan` defaults to searching `.` when no path is provided and can search multiple paths in one invocation.
-- `--config <file>` points scan at a project `sgconfig.yml` root. It is the default scan mode in VT Code’s public `workflow="scan"` surface.
+- `--config <file>` points scan at a project `sgconfig.yml` root.
 - `--rule <file>` runs one YAML rule file without project setup and conflicts with `--config`.
 - `--inline-rules '...'` runs one or more inline YAML rules without creating a file on disk. Separate multiple rules with YAML `---`. It conflicts with `--rule`.
 - `--filter <regex>` narrows project-config scan to matching rule ids and conflicts with `--rule`.
-- `--include-metadata` only affects JSON output and is already enabled on VT Code’s public scan path so normalized findings can carry rule metadata.
+- `--include-metadata` includes rule metadata in JSON output.
 
 ## Test Command Basics
 
@@ -1331,7 +1318,7 @@ In the public structural tool:
 - `--test-dir <dir>` narrows where test YAML files are discovered.
 - `--snapshot-dir <dir>` changes the snapshot directory name from the default `__snapshots__`.
 - `--filter <glob>` narrows which rule test cases run.
-- `--skip-snapshot-tests` checks test validity without snapshot-output assertions. VT Code exposes this one on the public `workflow="test"` path.
+- `--skip-snapshot-tests` checks test validity without snapshot-output assertions.
 - `--include-off` includes `severity: off` rules during test runs.
 - `--update-all` generates or refreshes snapshot baselines, usually under `__snapshots__/`.
 - `--interactive` is for selective snapshot updates after rule or test changes.
@@ -1347,7 +1334,7 @@ In the public structural tool:
 ## CLI Modes
 
 - `--interactive` is for reviewing rewrite hunks one-by-one; ast-grep’s interactive controls are `y`, `n`, `e`, and `q`.
-- `--json=pretty|stream|compact` is for raw ast-grep JSON output when the user needs native ast-grep payloads or shell pipelines. `pretty` is the default if a style is not specified. Prefer VT Code’s normalized structural results when those are sufficient.
+- `--json=pretty|stream|compact` selects ast-grep JSON output for inspection or shell pipelines. `pretty` is the default if a style is not specified.
 - Raw ast-grep JSON match objects include fields such as `text`, `range`, `file`, `lines`, optional `replacement`, optional `replacementOffsets`, and optional `metaVariables`. Scan-mode rule matches add fields like `ruleId`, `severity`, `message`, and optional `note`.
 - ast-grep JSON positions are zero-based for line, column, and byte offsets. Keep that convention in mind when translating payloads into editor-facing or user-facing locations.
 - `--json=stream` emits one JSON object per line and is the better fit for large pipelines; `pretty` and `compact` emit one JSON array and are easier to inspect but less streaming-friendly.
@@ -1356,18 +1343,19 @@ In the public structural tool:
 - `ast-grep run --stdin` requires an explicit `--lang` because stdin has no file extension for language inference.
 - `ast-grep scan --stdin` only works with one single rule via `--rule` / `-r`.
 - `--stdin` only activates when the flag is present and ast-grep is not running in a TTY.
-- `--heading=auto|always|never` only changes the human-readable text layout. It does not matter when VT Code is already consuming structured JSON.
-- `--color=auto|always|ansi|never` only controls terminal coloring. VT Code’s public structural query forces plain output with `--color=never`.
-- `--format=github|sarif` is for CI/reporting pipelines, not VT Code’s normalized public scan result shape.
+- `--heading=auto|always|never` only changes the human-readable text layout. It
+  does not affect native JSON output.
+- `--color=auto|always|ansi|never` controls terminal colouring. Prefer `--color=never` for machine-readable output.
+- `--format=github|sarif` is for CI reporting pipelines.
 - `--report-style=rich|medium|short` only changes ast-grep’s human-readable diagnostics.
-- `--error`, `--warning`, `--info`, `--hint`, and `--off` override rule severities for one scan run. These flags belong on the CLI skill path, not VT Code’s public structural surface. Use the `severities` filter on the public scan surface to filter findings by severity without overriding rule severities.
+- `--error`, `--warning`, `--info`, `--hint`, and `--off` override rule severities for one scan run.
 - `--inspect entity` is the direct CLI way to inspect each rule’s final enabled severity, including overrides and project-config effects.
-- `unused-suppression` can also have its severity overridden on the CLI, but that is still CLI-only behavior outside VT Code’s public structural surface.
+- `unused-suppression` can also have its severity overridden on the CLI.
 - `--inspect=summary|entity` emits file and rule discovery diagnostics to stderr without changing the actual match results.
 - `--threads <NUM>` controls approximate parallelism. `0` keeps ast-grep’s default heuristics.
 - `-C/--context` shows symmetric surrounding lines. `-A/--after` and `-B/--before` are asymmetric alternatives and conflict with `--context`.
-- `ast-grep run` exits `0` when at least one match is found and `1` when no matches are found. VT Code normalizes that no-match case to an empty `matches` array on the public structural query path.
-- `ast-grep scan` exits `1` when at least one error-severity rule matches and `0` when no rules match. VT Code normalizes that error-finding case to structured `findings` instead of surfacing a tool error. The scan summary includes `has_error_findings: true` when error-severity findings are present.
+- `ast-grep run` exits `0` when at least one match is found and `1` when no matches are found.
+- `ast-grep scan` exits `1` when at least one error-severity rule matches and `0` when no rules match.
 
 ## API Escalation
 
@@ -1416,8 +1404,8 @@ In the public structural tool:
 - Raw ast-grep color control such as `--color never`
 - `transform`, `rewrite`, `joinBy`, or `rewriters`
 - Non-trivial `sgconfig.yml` authoring or debugging
-- Rule authoring tasks that need direct ast-grep CLI iteration beyond public scan/test
+- Rule authoring tasks that need direct ast-grep CLI iteration
 
 ## Read More
 
-- Read [references/project-workflows.md](references/project-workflows.md) when you need the boundary between public scan/test support and skill-driven CLI work, or when you need a quick reminder of ast-grep pattern and rule essentials.
+- Read [references/project-workflows.md](references/project-workflows.md) for concise `exec_command` examples covering ast-grep search, scan, test, debugging, configuration inspection, and rewrite previews.

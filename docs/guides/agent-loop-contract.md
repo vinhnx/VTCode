@@ -194,8 +194,7 @@ All durable artifacts persist across a reset:
 - Git log and working tree state
 - Compaction summary
 
-See [docs/harness/HARNESS_EVALUATION.md](../harness/HARNESS_EVALUATION.md) for
-the compaction-vs-reset comparison table.
+The comparison with compaction is summarised in [Context Reset](#context-reset).
 
 ## Loop Engineering Additions
 

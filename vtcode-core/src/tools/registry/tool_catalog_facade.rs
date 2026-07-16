@@ -621,7 +621,7 @@ mod tests {
     async fn filtered_snapshot_reuses_cached_projection_until_refresh() {
         let state = SessionToolCatalogState::new();
         let tools = Arc::new(RwLock::new(vec![
-            function_tool(tools::UNIFIED_SEARCH),
+            function_tool(tools::CODE_SEARCH),
             function_tool(tools::REQUEST_USER_INPUT),
         ]));
 

@@ -210,7 +210,7 @@ deny_regex = [
 [tools.policies]
 exec_command = "allow"     # Execute without confirmation
 apply_patch = "prompt"     # Ask before applying patches
-code_search = "allow"      # Allow advanced semantic search without confirmation
+code_search = "allow"      # Allow advanced bounded literal search without confirmation
 ```
 
 ## Troubleshooting

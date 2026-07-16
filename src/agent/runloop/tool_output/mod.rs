@@ -945,12 +945,12 @@ mod tests {
             AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
         let payload = json!({
             "loop_detected": true,
-            "fallback_tool": vtcode_core::config::constants::tools::UNIFIED_SEARCH
+            "fallback_tool": vtcode_core::config::constants::tools::CODE_SEARCH
         });
 
         render_tool_output(
             &mut renderer,
-            Some(vtcode_core::config::constants::tools::UNIFIED_SEARCH),
+            Some(vtcode_core::config::constants::tools::CODE_SEARCH),
             &payload,
             None,
         )
@@ -996,7 +996,7 @@ mod tests {
             AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
         let payload = json!({
             "loop_detected": true,
-            "fallback_tool": vtcode_core::config::constants::tools::UNIFIED_SEARCH,
+            "fallback_tool": vtcode_core::config::constants::tools::CODE_SEARCH,
             "output": "Loop detected; fallback is available."
         });
 

@@ -47,32 +47,7 @@ pub fn tool_action_label(tool_name: &str, args: &Value) -> Cow<'static, str> {
                 _ => Cow::Borrowed("Exec action"),
             }
         }
-        name if name == tool_names::CODE_SEARCH || name == tool_names::UNIFIED_SEARCH => {
-            let normalized = tool_intent::normalize_search_dispatch_args(args);
-            let workflow = normalized
-                .get("workflow")
-                .and_then(Value::as_str)
-                .unwrap_or("query");
-
-            match tool_intent::search_dispatch_action(&normalized).unwrap_or("grep") {
-                "grep" => Cow::Borrowed("Search text"),
-                "list" => Cow::Borrowed("List files"),
-                "structural" => match workflow {
-                    "scan" => Cow::Borrowed("Structural scan"),
-                    "test" => Cow::Borrowed("Structural test"),
-                    "new" => Cow::Borrowed("Structural new"),
-                    "apply" => Cow::Borrowed("Structural apply"),
-                    _ => Cow::Borrowed("Structural search"),
-                },
-                "outline" => Cow::Borrowed("Outline symbols"),
-                "tools" => Cow::Borrowed("List tools"),
-                "errors" => Cow::Borrowed("List errors"),
-                "agent" => Cow::Borrowed("Show agent info"),
-                "web" => Cow::Borrowed("Fetch"),
-                "skill" => Cow::Borrowed("Load skill"),
-                _ => Cow::Borrowed("Search"),
-            }
-        }
+        name if name == tool_names::CODE_SEARCH => Cow::Borrowed("Search code"),
         name if name == tool_names::UNIFIED_FILE => {
             match tool_intent::file_operation_action(args).unwrap_or("read") {
                 "read" => Cow::Borrowed("Read file"),
@@ -124,32 +99,10 @@ mod tests {
     use serde_json::json;
 
     #[test]
-    fn code_search_structural_query_uses_default_label() {
-        let label = tool_action_label(
-            tools::CODE_SEARCH,
-            &json!({"action": "structural", "pattern": "fn $NAME() {}"}),
+    fn code_search_uses_stable_label() {
+        assert_eq!(
+            tool_action_label(tools::CODE_SEARCH, &json!({"query": "Widget"})),
+            "Search code"
         );
-
-        assert_eq!(label, "Structural search");
-    }
-
-    #[test]
-    fn code_search_structural_scan_uses_distinct_label() {
-        let label = tool_action_label(
-            tools::CODE_SEARCH,
-            &json!({"action": "structural", "workflow": "scan"}),
-        );
-
-        assert_eq!(label, "Structural scan");
-    }
-
-    #[test]
-    fn code_search_structural_test_uses_distinct_label() {
-        let label = tool_action_label(
-            tools::CODE_SEARCH,
-            &json!({"workflow": "test", "config_path": "sgconfig.yml"}),
-        );
-
-        assert_eq!(label, "Structural test");
     }
 }

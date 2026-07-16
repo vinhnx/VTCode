@@ -2,10 +2,16 @@ import argparse
 import json
 import os
 import subprocess
+import tempfile
 import time
 from datetime import datetime
 
-from metrics import CodeValidity, ExactMatch, LLMGrader
+from metrics import CodeValidity, ContainsMatch, ExactMatch, LLMGrader
+
+TOOL_PROFILE_CONFIG = {
+    "codex_default": "codex_default",
+    "advanced_vtcode": "advanced_vtcode",
+}
 
 
 def load_env():
@@ -27,40 +33,61 @@ class EvaluationEngine:
         self.model = model
         self.metrics = {
             "exact_match": ExactMatch(),
+            "contains_match": ContainsMatch(),
             "llm_grader": LLMGrader(),
             "code_validity": CodeValidity()
         }
 
-    def run_command(self, prompt):
-        """Runs vtcode ask to get the agent's response in JSON format."""
-        args = [
+    def build_command(self, prompt, profile, last_message_path):
+        """Build a vtcode command with an explicit model-facing tool profile."""
+        try:
+            tool_profile = TOOL_PROFILE_CONFIG[profile]
+        except KeyError as error:
+            raise ValueError(f"Unsupported eval profile: {profile}") from error
+
+        return [
             "./target/release/vtcode",
             "--provider", self.provider,
             "--model", self.model,
-            "ask", prompt,
-            "--output-format", "json"
+            "-c", f"tools.profile={tool_profile}",
+            "exec", "--json",
+            "--last-message-file", last_message_path,
+            prompt,
         ]
-        try:
-            result = subprocess.run(args, capture_output=True, text=True, timeout=120)
-            if result.returncode != 0:
-                print(f"Error running vtcode: {result.stderr}")
-                return {"error": result.stderr}
 
+    def run_command(self, prompt, profile):
+        """Run a tool-capable vtcode exec session and capture its final response."""
+        with tempfile.TemporaryDirectory(prefix="vtcode-eval-") as temp_dir:
+            last_message_path = os.path.join(temp_dir, "last-message.txt")
             try:
-                return json.loads(result.stdout)
-            except json.JSONDecodeError:
-                print(f"Failed to parse JSON output: {result.stdout}")
-                return {"error": "Invalid JSON", "raw": result.stdout}
-        except subprocess.TimeoutExpired:
-            return {"error": "Timeout"}
-        except Exception as e:
-            return {"error": str(e)}
+                args = self.build_command(prompt, profile, last_message_path)
+            except ValueError as error:
+                return {"error": str(error)}
+            try:
+                result = subprocess.run(args, capture_output=True, text=True, timeout=120)
+                if result.returncode != 0:
+                    print(f"Error running vtcode: {result.stderr}")
+                    return {"error": result.stderr}
+                if not os.path.exists(last_message_path):
+                    return {"error": "vtcode exec did not write a final message"}
+
+                with open(last_message_path, encoding="utf-8") as final_message:
+                    output = final_message.read()
+                return {
+                    "response": {"content": output, "usage": {}},
+                    "raw_events": result.stdout,
+                }
+            except subprocess.TimeoutExpired:
+                return {"error": "Timeout"}
+            except Exception as error:
+                return {"error": str(error)}
 
     def evaluate_test_case(self, test_case):
         print(f"Running test case: {test_case['id']} - {test_case['task']}")
 
         start_time = time.time()
-        response_json = self.run_command(test_case['task'])
+        profile = test_case.get("profile", "codex_default")
+        response_json = self.run_command(test_case['task'], profile)
         latency = time.time() - start_time
 
         if "error" in response_json:
@@ -90,7 +117,7 @@ class EvaluationEngine:
                 scale=test_case.get('scale', 'binary')
             )
             res_val = result['result'].lower()
-            passed = "correct" in res_val or "grade>correct" in res_val or res_val == "5"
+            passed = res_val in {"correct", "5"}
         elif metric_name == "code_validity":
             passed = metric.evaluate(output, language=test_case.get('language', 'python'))
             result = {"result": "valid" if passed else "invalid"}

@@ -31,7 +31,8 @@ python3 evals/eval_engine.py --cases evals/test_cases.json --provider gemini --m
 
 ## Directory Structure
 
-- `eval_engine.py`: The main orchestrator that runs test cases and generates reports.
+- `eval_engine.py`: The main orchestrator that runs tool-capable `vtcode exec`
+  cases with an explicit tool profile and generates reports.
 - `metrics.py`: Contains grading logic and metric implementations.
 - `test_cases.json`: The primary benchmark suite.
 - `test_cases_mini.json`: A smaller suite for quick validation of the framework.
@@ -51,6 +52,15 @@ Test cases are defined in JSON format:
 }
 ```
 
+An optional `profile` selects `codex_default` or `advanced_vtcode`. Cases that
+omit it run with an explicit `codex_default` override.
+
+The focused advanced-profile code-search cases live in
+[`docs/development/ai-tool-surface-eval-cases.json`](../docs/development/ai-tool-surface-eval-cases.json).
+They cover result-type filtering, literal smart-case, the syntactic limitation
+of usage results, bounded truncation, and refinement through another call.
+These cases must not assert exact repository-wide match totals.
+
 ### Supported Metrics
 
 - `exact_match`: Checks if the output exactly matches the `expected` string.
@@ -69,7 +79,8 @@ Reports are saved in the `reports/` directory with a timestamp. They include:
     - `latency`: Response time in seconds.
     - `grade`: The score or result from the metric.
     - `reasoning`: The agent's thinking process (if supported by the model).
-    - `raw_response`: The complete JSON response from `vtcode ask`.
+    - `raw_response`: The final response and raw JSON event stream from
+      `vtcode exec --json`.
 
 ## Grading with LLMs
 

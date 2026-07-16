@@ -297,7 +297,7 @@ The eval and sandbox environment must not contain shortcuts the agent can exploi
 
 **Violation**: Eval environment contains hidden tests in the filesystem, future commits in `.git/objects`, or production secrets (API keys, OAuth tokens, SSH keys) exposed directly to the agent.
 
-**Remediation**: Store hidden tests outside the container. Use controlled tool capabilities for secrets — the tool internally checks permissions, limits parameters, and logs audit trails. Verify environment state (files, tests, git clean) not agent output text. See [HARNESS_EVALUATION.md](HARNESS_EVALUATION.md) for the full checklist.
+**Remediation**: Store hidden tests outside the container. Use controlled tool capabilities for secrets. The tool internally checks permissions, limits parameters, and logs audit trails. Verify environment state (files, tests, git clean), rather than agent output text.
 
 ---
 

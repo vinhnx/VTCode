@@ -32,7 +32,7 @@ exec/full-auto runtime is built around that split rather than around a separate 
 Harness primitives in VT Code map to the runtime like this:
 
 - **Instruction memory**: AGENTS.md loading, project docs, prompt assembly, onboarding guidance, and session bootstrap live in `vtcode-core/src/prompts/`, `vtcode-core/src/core/agent/`, and the workspace instruction loaders.
-- **Tools**: `vtcode-core/src/tools/`, MCP integration, slash commands, and the tool registry expose shell execution, stdin continuation, patch editing, advanced semantic search, and protocol-backed capabilities to the model.
+- **Tools**: `vtcode-core/src/tools/`, MCP integration, slash commands, and the tool registry expose shell execution, stdin continuation, patch editing, bounded syntactic code search, and protocol-backed capabilities to the model.
 - **Sandbox / execution environment**: `vtcode-bash-runner/`, `vtcode-safety/` (command safety, exec policy, sandboxing), workspace trust, command policies, and tool allow-lists define where generated code runs and what it can touch.
 - **Dynamic context**: context assembly, instruction merging, task tracker state, history, plan sidecars, and spooled tool outputs let VT Code rehydrate long-running work without keeping every token in the live window. The persisted `SessionMemoryEnvelope` is the harness working-memory artifact: it summarizes objective, constraints, touched files, grounded facts, verification status, verification TODOs, and delegated findings for resume and summarized-fork handoff.
 - **Compaction / offloading**: split tool results, spool files, archive transcripts, and provider-aware auto-compaction reduce context rot while preserving recoverable state on disk. On VT Code's local compaction path, older repeated single-file reads are deduplicated before summarization so the summary prompt keeps the newest copy and avoids re-injecting stale file payloads.
@@ -140,7 +140,7 @@ tools/
  grep_file.rs        # Ripgrep-backed search manager (internal)
  file_ops.rs         # File operations (internal)
  command.rs          # Command execution (internal)
- structural_search/  # AST-grep structural search (mod.rs dispatcher + submodules)
+ outline_search.rs   # Internal bounded declaration discovery used by code_search
  registry/
    builtins.rs       # Tool registration and declarations
    executors.rs      # Built-in executors for exec_command, write_stdin, apply_patch, and code_search
@@ -180,10 +180,15 @@ pub trait CacheableTool: Tool {
 
 ### Advanced Code Search (`code_search`)
 
-- Advanced-profile public tool for semantic code search.
-- `outline` returns Tree-sitter symbol maps for files or path sets.
-- `structural` runs ast-grep pattern search for syntax-aware queries.
-- Plain text search remains a shell command, usually `rg` through `exec_command.cmd`.
+- Advanced-profile public tool with one required literal `query` and optional
+  `path`, `file_types`, `result_types`, and `max_results`.
+- Combines recognised definitions, exact syntactic usages, literal text, and
+  matching paths behind typed internal components.
+- Usage classification is syntactic and does not resolve references.
+- Each component is bounded. Results merge deterministically, truncate once,
+  and never claim an exact repository-wide total.
+- Independent structural-pattern commands and skills remain separate from the
+  public tool contract.
 
 ## Design Principles
 

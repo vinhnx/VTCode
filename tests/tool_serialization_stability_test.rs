@@ -177,16 +177,34 @@ fn snapshot_current_tool_schemas() -> Result<BTreeMap<String, Value>> {
                 "code_search".to_string(),
                 json!({
                     "name": "code_search",
-                    "description": "Semantic structural search and outline",
+                    "description": "Search workspace code with one literal query",
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "action": {
+                            "query": {
                                 "type": "string",
-                                "description": "Search action"
+                                "description": "Literal search query"
                             },
+                            "path": { "type": "string" },
+                            "file_types": {
+                                "type": "array",
+                                "items": { "type": "string" }
+                            },
+                            "result_types": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string",
+                                    "enum": ["definition", "usage", "text", "path"]
+                                }
+                            },
+                            "max_results": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 100
+                            }
                         },
-                        "required": ["action"]
+                        "required": ["query"],
+                        "additionalProperties": false
                     }
                 }),
             );

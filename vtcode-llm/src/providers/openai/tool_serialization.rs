@@ -59,8 +59,7 @@ fn serialize_responses_function_tool(
 fn should_strip_any_of_for_builtin_tool(tool_name: &str) -> bool {
     matches!(
         tool_name,
-        tools::CODE_SEARCH
-            | tools::EXEC_COMMAND
+        tools::EXEC_COMMAND
             | tools::APPLY_PATCH
             | tools::THINK
             | tools::SEARCH_TOOLS

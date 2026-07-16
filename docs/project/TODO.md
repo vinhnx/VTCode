@@ -196,7 +196,7 @@ Phase 4 — Subagent bootstrap cost
 Create a default “subagent” runtime profile that:
 
 - Uses SystemPromptMode::Minimal and ToolDocumentationMode::Minimal
-- Carries only core tools: unified_search, unified_file, unified_exec, plus the agent’s declared tools
+- Carries only the default core tools plus the agent’s declared tools
 - Excludes MCP tools unless explicitly requested
 - Uses a smaller default model unless the spec overrides
   4.2 Apply the profile automatically
@@ -324,7 +324,7 @@ Phase 1 — Establish baseline and observability
   Phase 4 — Reduce subagent bootstrap cost
 - Add a lightweight default subagent profile that:
     - Uses a smaller default model (Haiku/GPT-4-mini) unless explicitly overridden.
-    - Carries only the core tools (unified_search, unified_file, unified_exec) plus whatever the agent spec explicitly requests.
+    - Carries only the default core tools plus whatever the agent spec explicitly requests.
     - Uses a shorter system prompt (e.g. Minimal mode) by default.
 - Update compose_subagent_instructions and build_child_config to apply this lightweight profile when the agent spec does not explicitly request full parent tooling.
 - Add a test that verifies subagent bootstrap token count is materially lower than parent bootstrap.
@@ -341,7 +341,7 @@ Phase 1 — Establish baseline and observability
 
 Tradeoffs
 
-- Lower deferral threshold: saves tokens but may add one extra round trip the first time a deferred tool is needed. The net cost is usually positive because the schema is paid once via unified_search rather than on every request.
+- Lower deferral threshold: saves tokens but may add one extra round trip the first time a deferred tool is needed. The net cost is usually positive because deferred schemas are loaded only when needed rather than on every request.
 - Lightweight subagent profile: may reduce capability for agents that truly need the full catalog. Mitigation: explicit opt-in in the agent spec keeps the full catalog.
 - Default client_tool_search = true: changes model behavior for Gemini/etc. users; should be rolled out with clear config docs and a fallback.
 

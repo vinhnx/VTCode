@@ -7,8 +7,8 @@ VT Code now exposes a small Codex-style default tool surface to models:
 
 The legacy external schemas `unified_exec`, `unified_file`, and
 `unified_search` have been removed from the model-facing surface. No
-`unified_*` schema, alias, compatibility profile, hidden public tool, or
-advanced profile remains available after migration.
+`unified_*` schema or alias remains available after migration. The advanced
+profile adds the query-led `code_search` tool.
 
 ## Replacement Map
 
@@ -18,7 +18,7 @@ advanced profile remains available after migration.
 | `unified_file` patch or edit | `apply_patch`. |
 | `unified_file` read or write | Shell commands through `exec_command.cmd` by default. Separately named non-default file tools may be added later only with a concrete justification. |
 | `unified_search` text search | `rg` or `grep` through `exec_command.cmd`. |
-| `unified_search` semantic search | `code_search` in the advanced VT Code profile. |
+| `unified_search` search | `code_search` in the advanced VT Code profile. |
 | `unified_search` web, skills, errors, discovery | Separate tools only where retained. |
 
 ## Short Examples
@@ -46,20 +46,23 @@ Patch edit:
 *** End Patch
 ```
 
-Semantic search with the advanced profile:
+Code search with the advanced profile:
 
 ```json
-{"action":"outline","path":"vtcode-core/src/tools","lang":"rust","view":"names"}
+{"query":"ToolRegistration","path":"vtcode-core/src/tools","file_types":["rust"],"result_types":["definition","usage"]}
 ```
 
 ## Advanced Profile
 
-Enable the advanced VT Code profile when a task needs syntax-aware search.
-The advanced profile keeps the default tools and adds `code_search` for
-Tree-sitter outlines and ast-grep structural queries.
-
-Use shell `rg` first for text, filenames, and prose. Use `code_search` when the
-shape of the code matters.
+Enable the advanced VT Code profile when a task needs bounded code search. The
+advanced profile keeps the default tools and adds `code_search`, with required
+`query` and optional `path`, `file_types`, `result_types`, and `max_results`.
+It returns recognised definitions, exact syntactic usages, literal text, and
+matching paths. Usage results are same-spelling syntax occurrences, not
+resolved references. Literal smart-case applies. A truncated result is refined
+by narrowing filters in another call and never claims an exact repository-wide
+total. Use `exec_command` or the specialised ast-grep skill for arbitrary
+structural patterns.
 
 ## File Tool Finding
 

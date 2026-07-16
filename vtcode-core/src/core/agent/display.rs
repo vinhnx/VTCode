@@ -10,10 +10,6 @@ pub fn format_tool_result_for_display(tool_name: &str, result: &Value) -> String
         tool_intent::canonical_command_session_tool_name(tool_name).unwrap_or(tool_name);
     let is_command_session_tool = display_tool_name == tools::UNIFIED_EXEC;
 
-    if display_tool_name == tools::UNIFIED_SEARCH {
-        return format_search_dispatch_result_for_display(display_tool_name, result);
-    }
-
     if is_command_session_tool {
         // Extract errors + 2 context lines for build output
         if let Some(obj) = result.as_object()
@@ -47,58 +43,4 @@ pub fn format_tool_result_for_display(tool_name: &str, result: &Value) -> String
     }
 
     format!("Tool {display_tool_name} result: {result}")
-}
-
-fn format_search_dispatch_result_for_display(tool_name: &str, result: &Value) -> String {
-    if let Some(obj) = result.as_object()
-        && obj.get("url").is_some()
-        && obj.get("content").is_some()
-    {
-        if obj.contains_key("error") {
-            return format!(
-                "Tool {} result: {{\"error\": {}}}",
-                tool_name,
-                obj.get("error")
-                    .map(|v| v.to_string())
-                    .unwrap_or_else(|| "unknown error".into())
-            );
-        }
-
-        let status = serde_json::json!({
-            "status": "fetched",
-            "content_length": obj.get("content_length"),
-            "truncated": obj.get("truncated"),
-            "url": obj.get("url")
-        });
-        return format!("Tool {tool_name} result: {status}");
-    }
-
-    if let Some(obj) = result.as_object()
-        && let Some(matches) = obj.get("matches").and_then(|v| v.as_array())
-        && matches.len() > 5
-    {
-        let truncated: Vec<_> = matches.iter().take(5).cloned().collect();
-        let overflow = matches.len().saturating_sub(5);
-        let summary = serde_json::json!({
-            "matches": truncated,
-            "overflow": format!("[+{} more matches]", overflow),
-            "total": matches.len()
-        });
-        return format!("Tool {tool_name} result: {summary}");
-    }
-
-    if let Some(obj) = result.as_object()
-        && let Some(files) = obj.get("files").and_then(|v| v.as_array())
-        && files.len() > 50
-    {
-        let sample: Vec<_> = files.iter().take(5).cloned().collect();
-        let summary = serde_json::json!({
-            "total_files": files.len(),
-            "sample": sample,
-            "note": format!("Showing 5 of {} files", files.len())
-        });
-        return format!("Tool {tool_name} result: {summary}");
-    }
-
-    format!("Tool {tool_name} result: {result}")
 }

@@ -76,7 +76,7 @@ pub(crate) fn compact_model_tool_payload(output: serde_json::Value) -> serde_jso
     for (key, value) in obj {
         let skip = match key.as_str() {
             "message" | "metadata" | "no_spool" | "follow_up_prompt" | "next_poll_args"
-            | "rows" | "cols" | "wall_time" => true,
+            | "rows" | "cols" | "wall_time" | "modified_files" => true,
             "success" => value.as_bool().unwrap_or(false),
             "status" => value.as_str().is_some_and(|status| status == "success"),
             "spool_hint" | "spooled_bytes" | "spooled_to_file" => true,
@@ -827,5 +827,19 @@ mod tests {
         let feature =
             tool_output_summary_feature(tool_names::UNIFIED_FILE, &args, &big_read_output(), 500);
         assert!(feature.is_none());
+    }
+
+    #[test]
+    fn apply_patch_modified_files_remain_internal() {
+        let compacted = compact_model_tool_payload(json!({
+            "success": true,
+            "applied": [{"path": "src/widget.rs", "operation": "update"}],
+            "modified_files": ["/workspace/src/widget.rs"]
+        }));
+
+        assert_eq!(
+            compacted,
+            json!({"applied": [{"path": "src/widget.rs", "operation": "update"}]})
+        );
     }
 }

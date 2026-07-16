@@ -12,10 +12,10 @@ All notable changes to vtcode will be documented in this file.
 #### Other
 
 - Refactor/tools  (b5e2b34f) (@kernitus)
-- Fix plan mode (4ceb862d) 
+- Fix plan mode (4ceb862d)
 #### Refactors
 
-- Unify plan-mode phrases and decompose workflow monolith (a505dd77) 
+- Unify plan-mode phrases and decompose workflow monolith (a505dd77)
 ## 0.135.8 - 2026-07-14
 
 ### Highlights

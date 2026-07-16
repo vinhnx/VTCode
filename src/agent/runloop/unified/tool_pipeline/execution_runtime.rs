@@ -620,9 +620,7 @@ mod tests {
 
     #[test]
     fn caches_non_command_success_outputs() {
-        let output = json!({
-            "matches": []
-        });
+        let output = json!({"results": []});
 
         assert!(should_cache_success_output("read_file", &output, true));
     }

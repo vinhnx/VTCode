@@ -41,12 +41,7 @@ impl ToolRegistry {
             return resolved.registration_name().to_string();
         }
 
-        match name {
-            "list_dir" | "list_directory" => {
-                crate::config::constants::tools::UNIFIED_SEARCH.to_string()
-            }
-            _ => canonical_tool_name(name).to_owned(),
-        }
+        canonical_tool_name(name).to_owned()
     }
 
     fn normalize_tools_config_policies(&self, tools_config: &ToolsConfig) -> ToolsConfig {

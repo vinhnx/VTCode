@@ -948,18 +948,17 @@ fn recovery_context_previews_fall_back_to_latest_assistant_text_when_needed() {
 #[test]
 fn recovery_context_previews_extract_structured_tool_guidance() {
     let history = vec![
-        Message::user("use structured search".to_string()),
+        Message::user("search for Widget".to_string()),
         Message::tool_response(
             "call-1".to_string(),
             json!({
-                "backend": "ast-grep",
-                "matches": [],
+                "results": [],
                 "path": "src/agent",
                 "is_recoverable": true,
-                "hint": "Pattern looks like a code fragment.",
-                "next_action": "Retry with a larger parseable pattern.",
-                "fallback_tool": "search_dispatch",
-                "fallback_tool_args": {"action": "structural", "path": "src/agent"}
+                "hint": "Try narrowing the path.",
+                "next_action": "Retry with narrower filters.",
+                "fallback_tool": "code_search",
+                "fallback_tool_args": {"query": "Widget", "path": "src/agent"}
             })
             .to_string(),
         ),
@@ -967,11 +966,11 @@ fn recovery_context_previews_extract_structured_tool_guidance() {
 
     let previews = super::build_recovery_context_previews_with_workspace(&history, None);
 
-    assert_eq!(previews[0], "Latest user request: use structured search");
+    assert_eq!(previews[0], "Latest user request: search for Widget");
     assert!(previews[1].contains("No matches found in src/agent"));
-    assert!(previews[1].contains("Pattern looks like a code fragment."));
-    assert!(previews[1].contains("Next action: Retry with a larger parseable pattern."));
-    assert!(previews[1].contains("Fallback tool: search_dispatch"));
+    assert!(previews[1].contains("Try narrowing the path."));
+    assert!(previews[1].contains("Next action: Retry with narrower filters."));
+    assert!(previews[1].contains("Fallback tool: code_search"));
 }
 
 #[test]

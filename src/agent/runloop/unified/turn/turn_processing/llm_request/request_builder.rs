@@ -292,8 +292,27 @@ mod tests {
                 json!({
                     "type": "object",
                     "properties": {
-                        "pattern": { "type": "string" }
-                    }
+                        "query": { "type": "string" },
+                        "path": { "type": "string" },
+                        "file_types": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                        },
+                        "result_types": {
+                            "type": "array",
+                            "items": {
+                                "type": "string",
+                                "enum": ["definition", "usage", "text", "path"]
+                            }
+                        },
+                        "max_results": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 100
+                        }
+                    },
+                    "required": ["query"],
+                    "additionalProperties": false
                 }),
             ))
             .await;
@@ -360,8 +379,27 @@ mod tests {
                 json!({
                     "type": "object",
                     "properties": {
-                        "pattern": { "type": "string" }
-                    }
+                        "query": { "type": "string" },
+                        "path": { "type": "string" },
+                        "file_types": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                        },
+                        "result_types": {
+                            "type": "array",
+                            "items": {
+                                "type": "string",
+                                "enum": ["definition", "usage", "text", "path"]
+                            }
+                        },
+                        "max_results": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 100
+                        }
+                    },
+                    "required": ["query"],
+                    "additionalProperties": false
                 }),
             ))
             .await;
@@ -398,8 +436,27 @@ mod tests {
                 json!({
                     "type": "object",
                     "properties": {
-                        "pattern": { "type": "string" }
-                    }
+                        "query": { "type": "string" },
+                        "path": { "type": "string" },
+                        "file_types": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                        },
+                        "result_types": {
+                            "type": "array",
+                            "items": {
+                                "type": "string",
+                                "enum": ["definition", "usage", "text", "path"]
+                            }
+                        },
+                        "max_results": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 100
+                        }
+                    },
+                    "required": ["query"],
+                    "additionalProperties": false
                 }),
             ))
             .await;
@@ -706,8 +763,27 @@ mod tests {
                 json!({
                     "type": "object",
                     "properties": {
-                        "pattern": { "type": "string" }
-                    }
+                        "query": { "type": "string" },
+                        "path": { "type": "string" },
+                        "file_types": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                        },
+                        "result_types": {
+                            "type": "array",
+                            "items": {
+                                "type": "string",
+                                "enum": ["definition", "usage", "text", "path"]
+                            }
+                        },
+                        "max_results": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 100
+                        }
+                    },
+                    "required": ["query"],
+                    "additionalProperties": false
                 }),
             ))
             .await;

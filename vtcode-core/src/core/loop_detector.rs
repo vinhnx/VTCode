@@ -141,6 +141,11 @@ fn hash_normalized_args(tool_name: &str, args: &serde_json::Value) -> u64 {
     let base_name = base_tool_name(tool_name);
     let mut hasher = DefaultHasher::new();
 
+    if base_name == tools::CODE_SEARCH {
+        hash_normalized_code_search_args(args, &mut hasher);
+        return hasher.finish();
+    }
+
     if let Some(obj) = args.as_object() {
         let is_read_tool = base_name == tools::READ_FILE
             || (base_name == tools::UNIFIED_FILE && tool_name.ends_with("::read"));
@@ -282,6 +287,14 @@ fn hash_normalized_args(tool_name: &str, args: &serde_json::Value) -> u64 {
     }
 
     hasher.finish()
+}
+
+fn hash_normalized_code_search_args(args: &serde_json::Value, hasher: &mut impl std::hash::Hasher) {
+    use std::hash::Hash;
+
+    crate::tools::normalised_code_search_loop_identity(args)
+        .unwrap_or_else(|| args.to_string())
+        .hash(hasher);
 }
 
 /// Normalize tool arguments for consistent loop detection (kept for backward
@@ -576,7 +589,7 @@ impl LoopDetector {
         let base_name = base_tool_name(tool_name);
         let is_readonly = matches!(
             base_name,
-            tools::READ_FILE | LEGACY_GREP_FILE | LEGACY_LIST_FILES | tools::UNIFIED_SEARCH
+            tools::READ_FILE | LEGACY_GREP_FILE | LEGACY_LIST_FILES | tools::CODE_SEARCH
         ) || (base_name == tools::UNIFIED_FILE
             && self
                 .recent_calls
@@ -601,7 +614,7 @@ impl LoopDetector {
 
         // --- Global read-only budget ---
         // Prevents the agent from alternating between different read-only tools
-        // (e.g., search_dispatch and file_operation) to evade per-tool limits.
+        // (e.g., code_search and file_operation) to evade per-tool limits.
         let readonly_budget = self.effective_readonly_budget();
         if self.total_readonly_calls >= readonly_budget {
             let hard_limit = self.get_limit_for_tool(tool_name) * HARD_LIMIT_MULTIPLIER;
@@ -846,7 +859,7 @@ impl LoopDetector {
         match tool_name {
             LEGACY_LIST_FILES => Some(
                 "Instead of listing files repeatedly:\n\
-                 • Use code_search with action='structural' plus lang for code patterns\n\
+                 • Use code_search with a specific query and narrow file_types for code patterns\n\
                  • Use exec_command.cmd with rg for raw text, docs, or logs\n\
                  • Target specific subdirectories (e.g., 'src/', 'tests/')\n\
                  • Use exec_command.cmd with sed or cat if you know the exact file path"
@@ -854,7 +867,7 @@ impl LoopDetector {
             ),
             LEGACY_GREP_FILE => Some(
                 "Instead of grepping repeatedly:\n\
-                 • If syntax matters, switch to code_search with action='structural' and set lang\n\
+                 • If syntax matters, switch to code_search and request definition or usage results\n\
                  • Refine your text pattern or narrow the path when grep is the right tool\n\
                  • Use exec_command.cmd with sed or cat to examine specific files\n\
                  • Consider a small script through exec_command.cmd for complex filtering"
@@ -862,7 +875,7 @@ impl LoopDetector {
             ),
             tools::READ_FILE => Some(
                 "Instead of reading files repeatedly:\n\
-                 • Use code_search with action='structural' plus lang for code lookups\n\
+                 • Use code_search with a specific query, path, and result_types for code lookups\n\
                  • Use exec_command.cmd with rg to find specific content first\n\
                  • Read specific line ranges with sed through exec_command.cmd\n\
                  • Consider if you already have the information needed"
@@ -933,7 +946,7 @@ impl LoopDetector {
         }
 
         match base_name {
-            tools::READ_FILE | LEGACY_GREP_FILE | LEGACY_LIST_FILES | tools::UNIFIED_SEARCH => {
+            tools::READ_FILE | LEGACY_GREP_FILE | LEGACY_LIST_FILES | tools::CODE_SEARCH => {
                 MAX_READONLY_TOOL_CALLS
             }
             tools::WRITE_FILE | tools::EDIT_FILE | tools::APPLY_PATCH => MAX_WRITE_TOOL_CALLS,
@@ -974,19 +987,19 @@ impl LoopDetector {
     fn suggest_alternative_for_tool(tool_name: &str) -> String {
         match base_tool_name(tool_name) {
             LEGACY_LIST_FILES => "Instead of listing repeatedly:\n\
-                 • Use code_search with action='structural' plus lang for code patterns\n\
+                 • Use code_search with a specific query and narrow file_types for code patterns\n\
                  • Use exec_command.cmd with rg for raw text, docs, or logs\n\
                  • Target specific subdirectories (e.g., 'src/', 'tests/')\n\
                  • Use exec_command.cmd with sed or cat if you know the exact file path"
                 .to_string(),
             LEGACY_GREP_FILE => "Instead of grepping repeatedly:\n\
-                 • If syntax matters, switch to code_search with action='structural' and set lang\n\
+                 • If syntax matters, switch to code_search and request definition or usage results\n\
                  • Refine your text pattern or narrow the path when grep is the right tool\n\
                  • Use exec_command.cmd with sed or cat to examine specific files\n\
                  • Consider a small script through exec_command.cmd for complex filtering"
                 .to_string(),
             tools::READ_FILE => "Instead of reading files repeatedly:\n\
-                 • Use code_search with action='structural' plus lang for code lookups\n\
+                 • Use code_search with a specific query, path, and result_types for code lookups\n\
                  • Use exec_command.cmd with rg to find specific content first\n\
                  • Read specific line ranges with sed through exec_command.cmd\n\
                  • Consider if you already have the information needed"
@@ -1089,20 +1102,14 @@ fn read_target_for_tool_call(tool_name: &str, args: &serde_json::Value) -> Optio
     }
 
     let read_tool = base_name == tools::READ_FILE
-        || (base_name == tools::UNIFIED_FILE && is_file_operation_read(tool_name, args))
-        || (base_name == tools::UNIFIED_SEARCH && is_search_dispatch_outline(args));
+        || base_name == tools::CODE_SEARCH
+        || (base_name == tools::UNIFIED_FILE && is_file_operation_read(tool_name, args));
     if !read_tool {
         return None;
     }
 
     let obj = args.as_object()?;
-    // Outline uses `path` (and we normalize `pattern`→`path` for it in
-    // tool_intent), so check both keys.
-    let keys: &[&str] = if base_name == tools::UNIFIED_SEARCH {
-        &["path", "pattern"]
-    } else {
-        &["path", "file_path", "filepath", "target_path", "file"]
-    };
+    let keys: &[&str] = &["path", "file_path", "filepath", "target_path", "file"];
     for key in keys {
         if let Some(path) = obj.get(*key).and_then(|v| v.as_str()) {
             let trimmed = path.trim();
@@ -1112,17 +1119,6 @@ fn read_target_for_tool_call(tool_name: &str, args: &serde_json::Value) -> Optio
         }
     }
     None
-}
-
-/// Returns `true` when `args` represent a `search_dispatch` outline
-/// invocation — `action: "outline"`.  Outline is a read-only symbol-map
-/// query; treating it as a read target lets the loop detector catch
-/// duplicate outline calls on the same path (checkpoint turn_597:
-/// 6 outline calls on the same directory).
-fn is_search_dispatch_outline(args: &serde_json::Value) -> bool {
-    args.get("action")
-        .and_then(|v| v.as_str())
-        .is_some_and(|a| a.eq_ignore_ascii_case("outline"))
 }
 
 /// Returns `true` when `(tool_name, args)` represent a `file_operation` read
@@ -1324,7 +1320,7 @@ mod tests {
         assert!(suggestion.is_some());
         let msg = suggestion.unwrap();
         assert!(msg.contains("code_search"));
-        assert!(msg.contains("action='structural'"));
+        assert!(msg.contains("file_types"));
         assert!(msg.contains("subdirectories"));
     }
 
@@ -1336,8 +1332,43 @@ mod tests {
         assert!(suggestion.is_some());
         let msg = suggestion.unwrap();
         assert!(msg.contains("exec_command.cmd"));
-        assert!(msg.contains("set lang"));
+        assert!(msg.contains("definition or usage"));
         assert!(msg.contains("pattern"));
+    }
+
+    #[test]
+    fn code_search_loop_fingerprint_uses_only_normalised_search_identity() {
+        let first = json!({
+            "query": " Widget ",
+            "path": " src ",
+            "file_types": [".rs", "python", "rust"],
+            "result_types": ["path", "definition", "path"],
+            "max_results": 5
+        });
+        let second = json!({
+            "query": "Widget",
+            "path": "src",
+            "file_types": ["rust", ".py"],
+            "result_types": ["definition", "path"],
+            "max_results": 100
+        });
+
+        assert_eq!(
+            hash_normalized_args(tools::CODE_SEARCH, &first),
+            hash_normalized_args(tools::CODE_SEARCH, &second)
+        );
+
+        for changed in [
+            json!({"query": "Other", "path": "src", "file_types": ["rust", "python"], "result_types": ["definition", "path"]}),
+            json!({"query": "Widget", "path": "tests", "file_types": ["rust", "python"], "result_types": ["definition", "path"]}),
+            json!({"query": "Widget", "path": "src", "file_types": ["rust"], "result_types": ["definition", "path"]}),
+            json!({"query": "Widget", "path": "src", "file_types": ["rust", "python"], "result_types": ["usage", "path"]}),
+        ] {
+            assert_ne!(
+                hash_normalized_args(tools::CODE_SEARCH, &first),
+                hash_normalized_args(tools::CODE_SEARCH, &changed)
+            );
+        }
     }
 
     #[test]
@@ -1724,8 +1755,8 @@ mod tests {
 
         // Make MAX_TOTAL_READONLY_CALLS calls with different args to avoid per-tool detection
         for i in 0..MAX_TOTAL_READONLY_CALLS {
-            let args = json!({"pattern": format!("pattern_{i}"), "path": "src/"});
-            if let Some(msg) = detector.record_call(tools::UNIFIED_SEARCH, &args)
+            let args = json!({"query": format!("pattern_{i}"), "path": "src/"});
+            if let Some(msg) = detector.record_call(tools::CODE_SEARCH, &args)
                 && msg.contains("Global read-only budget")
             {
                 saw_hard_stop = true;
@@ -1737,7 +1768,7 @@ mod tests {
             saw_hard_stop,
             "Global readonly budget should fire at {MAX_TOTAL_READONLY_CALLS}"
         );
-        assert!(detector.is_hard_limit_exceeded(tools::UNIFIED_SEARCH));
+        assert!(detector.is_hard_limit_exceeded(tools::CODE_SEARCH));
     }
 
     #[test]
@@ -1745,11 +1776,11 @@ mod tests {
         let mut detector = LoopDetector::with_max_repeated_calls(100);
         let mut hard_stop_count = 0;
 
-        // Alternate between search_dispatch and file_operation to evade per-tool limits
+        // Alternate between code_search and file_operation to evade per-tool limits.
         for i in 0..MAX_TOTAL_READONLY_CALLS + 5 {
             if i % 2 == 0 {
-                let args = json!({"pattern": format!("p_{i}"), "path": "src/"});
-                if let Some(msg) = detector.record_call(tools::UNIFIED_SEARCH, &args)
+                let args = json!({"query": format!("p_{i}"), "path": "src/"});
+                if let Some(msg) = detector.record_call(tools::CODE_SEARCH, &args)
                     && msg.contains("Global read-only budget")
                 {
                     hard_stop_count += 1;
@@ -1780,8 +1811,8 @@ mod tests {
 
         // Make some readonly calls
         for i in 0..10 {
-            let args = json!({"pattern": format!("p_{i}"), "path": "src/"});
-            detector.record_call(tools::UNIFIED_SEARCH, &args);
+            let args = json!({"query": format!("p_{i}"), "path": "src/"});
+            detector.record_call(tools::CODE_SEARCH, &args);
         }
         assert_eq!(detector.total_readonly_calls(), 10);
 
@@ -1808,16 +1839,16 @@ mod tests {
 
         // Make 3 read-only calls (below threshold)
         for i in 0..3 {
-            let args = json!({"pattern": format!("p_{i}"), "path": "src/"});
+            let args = json!({"query": format!("p_{i}"), "path": "src/"});
             assert!(
-                detector.record_call(tools::UNIFIED_SEARCH, &args).is_none(),
+                detector.record_call(tools::CODE_SEARCH, &args).is_none(),
                 "Call {i} should not trigger warning"
             );
         }
 
         // 4th call should trigger navigation loop warning (streak hits 4)
-        let args = json!({"pattern": "p_4", "path": "src/"});
-        let warning = detector.record_call(tools::UNIFIED_SEARCH, &args);
+        let args = json!({"query": "p_4", "path": "src/"});
+        let warning = detector.record_call(tools::CODE_SEARCH, &args);
         assert!(
             warning.is_some(),
             "Navigation loop warning should fire at streak 4"
@@ -1831,20 +1862,20 @@ mod tests {
 
         // Make 7 read-only calls (new hard stop threshold)
         for i in 0..6 {
-            let args = json!({"pattern": format!("p_{i}"), "path": "src/"});
-            detector.record_call(tools::UNIFIED_SEARCH, &args);
+            let args = json!({"query": format!("p_{i}"), "path": "src/"});
+            detector.record_call(tools::CODE_SEARCH, &args);
         }
 
         // 7th call should trigger HARD STOP
-        let args = json!({"pattern": "p_7", "path": "src/"});
-        let warning = detector.record_call(tools::UNIFIED_SEARCH, &args);
+        let args = json!({"query": "p_7", "path": "src/"});
+        let warning = detector.record_call(tools::CODE_SEARCH, &args);
         assert!(
             warning.is_some(),
             "Navigation hard stop should fire at streak 7"
         );
         let msg = warning.unwrap();
         assert!(msg.contains("HARD STOP"), "Expected HARD STOP: {msg}");
-        assert!(detector.is_hard_limit_exceeded(tools::UNIFIED_SEARCH));
+        assert!(detector.is_hard_limit_exceeded(tools::CODE_SEARCH));
     }
 
     #[test]
@@ -1854,13 +1885,13 @@ mod tests {
 
         // Make 4 read-only calls (subagent warning at 3, but no hard stop yet)
         for i in 0..4 {
-            let args = json!({"pattern": format!("p_{i}"), "path": "src/"});
-            detector.record_call(tools::UNIFIED_SEARCH, &args);
+            let args = json!({"query": format!("p_{i}"), "path": "src/"});
+            detector.record_call(tools::CODE_SEARCH, &args);
         }
 
         // 5th call should trigger HARD STOP for subagent
-        let args = json!({"pattern": "p_5", "path": "src/"});
-        let warning = detector.record_call(tools::UNIFIED_SEARCH, &args);
+        let args = json!({"query": "p_5", "path": "src/"});
+        let warning = detector.record_call(tools::CODE_SEARCH, &args);
         assert!(
             warning.is_some(),
             "Subagent navigation hard stop should fire at streak 5"
@@ -1876,13 +1907,13 @@ mod tests {
 
         // Make 20 read-only calls with different args to avoid per-tool detection
         for i in 0..20 {
-            let args = json!({"pattern": format!("unique_{i}"), "path": "src/"});
-            detector.record_call(tools::UNIFIED_SEARCH, &args);
+            let args = json!({"query": format!("unique_{i}"), "path": "src/"});
+            detector.record_call(tools::CODE_SEARCH, &args);
         }
 
         // 21st call should trigger global budget HARD STOP
-        let args = json!({"pattern": "final", "path": "src/"});
-        let warning = detector.record_call(tools::UNIFIED_SEARCH, &args);
+        let args = json!({"query": "final", "path": "src/"});
+        let warning = detector.record_call(tools::CODE_SEARCH, &args);
         assert!(
             warning.is_some(),
             "Subagent global read-only budget should fire at 20"
@@ -1905,13 +1936,13 @@ mod tests {
 
         // Make 30 read-only calls
         for i in 0..30 {
-            let args = json!({"pattern": format!("unique_{i}"), "path": "src/"});
-            detector.record_call(tools::UNIFIED_SEARCH, &args);
+            let args = json!({"query": format!("unique_{i}"), "path": "src/"});
+            detector.record_call(tools::CODE_SEARCH, &args);
         }
 
         // 31st call should trigger global budget HARD STOP
-        let args = json!({"pattern": "final", "path": "src/"});
-        let warning = detector.record_call(tools::UNIFIED_SEARCH, &args);
+        let args = json!({"query": "final", "path": "src/"});
+        let warning = detector.record_call(tools::CODE_SEARCH, &args);
         assert!(
             warning.is_some(),
             "Main agent global read-only budget should fire at 30"

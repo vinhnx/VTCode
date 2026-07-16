@@ -1,8 +1,9 @@
 # rg Text Search Quick Reference Card
 
 > **Note:** legacy text-search dispatcher names are internal implementation
-> details. Use `exec_command.cmd` with `rg` for AI-facing text search. Use
-> `code_search` for ast-grep structural queries and Tree-sitter outlines.
+> details. Use `exec_command.cmd` with `rg` for flexible shell text search.
+> Advanced `code_search` provides bounded literal search across definitions,
+> syntactic usages, text, and paths.
 
 Shell examples follow the active shell prompt profile. Linux, macOS, and WSL
 use the Unix-like profile by default; native Windows uses PowerShell. VT Code
@@ -94,6 +95,28 @@ Use `rg -l` when you only need filenames:
 src/main.rs
 src/lib.rs
 ```
+
+## Advanced `code_search`
+
+The advanced profile exposes `code_search` with required `query` and optional
+`path`, `file_types`, `result_types`, and `max_results`. The four result types
+are `definition`, `usage`, `text`, and `path`. Definitions are recognised
+declarations. Usages are exact syntactic identifiers, not resolved references.
+Text covers prose, configuration, comments, strings, and unclassified literal
+matches. Path results match filenames or paths.
+
+Literal smart-case applies to content and exact symbol-name matching: wholly
+lower-case queries are case-insensitive, while queries containing an upper-case
+character are case-sensitive. Path matching is fuzzy and case-insensitive. If a
+response is truncated, narrow a filter in another call. No exact repository-wide
+total is implied.
+
+```json
+{"query":"Widget","path":"src","file_types":["rust"],"result_types":["definition","usage"],"max_results":20}
+```
+
+Use `exec_command` or the specialised ast-grep skill for arbitrary structural
+patterns.
 
 ## Real-World Examples
 
@@ -187,7 +210,7 @@ What do you want to find?
 ## See Also
 
 - Full guide: `docs/development/grep-tool-guide.md`
-- Semantic outline: use `code_search` with `action=outline`; see the
-  grep-tool-guide "Semantic Outline" section.
+- Advanced code search: see the grep-tool-guide "Advanced `code_search`"
+  section.
 - System prompt: agent instructions for grep usage
 - ripgrep docs: https://github.com/BurntSushi/ripgrep

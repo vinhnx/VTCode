@@ -31,11 +31,11 @@ internal index as well as the policy manager. Built-in registrations live in
 state from a single source of truth.
 
 The canonical default public surface is `exec_command`, `write_stdin`, and
-`apply_patch`. Advanced VT Code profiles may also expose `code_search` for
-semantic code search. Plain text search belongs in `exec_command.cmd` with
-`rg`; `code_search` is reserved for ast-grep structural queries and
-Tree-sitter outlines. Legacy internal dispatcher and file helper names must not
-gain a second public declaration path.
+`apply_patch`. Advanced VT Code profiles may also expose `code_search` for one
+literal query with optional path, file-type, result-type, and result-limit
+filters. It returns recognised definitions, syntactic usages, literal text, and
+matching paths. Legacy internal dispatcher and file helper names must not gain
+a second public declaration path.
 
 ## Shell prompt profiles
 

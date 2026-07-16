@@ -72,17 +72,6 @@ impl AgentRunner {
             .clone()
             .unwrap_or_else(|| workspace_path.clone());
 
-        if name == tools::UNIFIED_SEARCH
-            && matches!(
-                normalized.get("action").and_then(Value::as_str),
-                Some("grep" | "list")
-            )
-        {
-            normalized
-                .entry("path".to_string())
-                .or_insert_with(|| Value::String(fallback_dir.clone()));
-        }
-
         if name == tools::LIST_FILES {
             normalized
                 .entry("path".to_string())

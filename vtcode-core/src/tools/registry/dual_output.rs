@@ -10,7 +10,6 @@ use crate::tools::summarizers::{
     Summarizer,
     execution::BashSummarizer,
     file_ops::{EditSummarizer, ReadSummarizer},
-    search::{GrepSummarizer, ListSummarizer},
 };
 use crate::tools::tool_intent;
 
@@ -56,73 +55,7 @@ impl ToolRegistry {
 
         // Check if we have a summarizer for this tool
         match tool_name.as_str() {
-            tools::UNIFIED_SEARCH | tools::CODE_SEARCH => {
-                match tool_intent::search_dispatch_action(&args).unwrap_or("grep") {
-                    "grep" | "structural" => {
-                        let summarizer = GrepSummarizer::default();
-                        match summarizer.summarize(&ui_content, None) {
-                            Ok(llm_content) => {
-                                let savings =
-                                    summarizer.estimate_savings(&ui_content, &llm_content);
-                                debug!(
-                                    tool = tools::UNIFIED_SEARCH,
-                                    action = "grep",
-                                    ui_tokens = %savings.ui_tokens,
-                                    llm_tokens = %savings.llm_tokens,
-                                    savings_pct = %savings.savings_percent,
-                                    "Applied grep summarization"
-                                );
-                                Ok(SplitToolResult::new(
-                                    tool_name.as_str(),
-                                    llm_content,
-                                    ui_content,
-                                ))
-                            }
-                            Err(e) => {
-                                warn!(
-                                    tool = tools::UNIFIED_SEARCH,
-                                    action = "grep",
-                                    error = %e,
-                                    "Failed to summarize grep output, using simple result"
-                                );
-                                Ok(SplitToolResult::simple(tool_name.as_str(), ui_content))
-                            }
-                        }
-                    }
-                    "list" | "outline" => {
-                        let summarizer = ListSummarizer::default();
-                        match summarizer.summarize(&ui_content, None) {
-                            Ok(llm_content) => {
-                                let savings =
-                                    summarizer.estimate_savings(&ui_content, &llm_content);
-                                debug!(
-                                    tool = tools::UNIFIED_SEARCH,
-                                    action = "list",
-                                    ui_tokens = %savings.ui_tokens,
-                                    llm_tokens = %savings.llm_tokens,
-                                    savings_pct = %savings.savings_percent,
-                                    "Applied list summarization"
-                                );
-                                Ok(SplitToolResult::new(
-                                    tool_name.as_str(),
-                                    llm_content,
-                                    ui_content,
-                                ))
-                            }
-                            Err(e) => {
-                                warn!(
-                                    tool = tools::UNIFIED_SEARCH,
-                                    action = "list",
-                                    error = %e,
-                                    "Failed to summarize list output, using simple result"
-                                );
-                                Ok(SplitToolResult::simple(tool_name.as_str(), ui_content))
-                            }
-                        }
-                    }
-                    _ => Ok(SplitToolResult::simple(tool_name.as_str(), ui_content)),
-                }
-            }
+            tools::CODE_SEARCH => Ok(SplitToolResult::simple(tool_name.as_str(), ui_content)),
             tools::UNIFIED_FILE => {
                 match tool_intent::file_operation_action(&args).unwrap_or("read") {
                     "read" => {

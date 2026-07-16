@@ -542,6 +542,7 @@ fn advertised_permission_args(normalized_tool_name: &str) -> Vec<Value> {
         tools::READ_FILE | tools::GREP_FILE | tools::LIST_FILES => {
             vec![json!({ "path": "." })]
         }
+        tools::CODE_SEARCH => vec![json!({ "query": "probe", "path": "." })],
         tools::WRITE_FILE | tools::CREATE_FILE | tools::DELETE_FILE => {
             vec![json!({ "path": "advertised-permission-probe.txt" })]
         }
@@ -556,10 +557,6 @@ fn advertised_permission_args(normalized_tool_name: &str) -> Vec<Value> {
             "patch": "*** Begin Patch\n*** Update File: advertised-permission-probe.txt\n@@\n-old\n+new\n*** End Patch\n"
         })],
         tools::FILE_OP => vec![json!({ "path": "advertised-permission-probe.txt" })],
-        tools::UNIFIED_SEARCH => vec![
-            json!({ "action": "list", "path": "." }),
-            json!({ "action": "web", "url": "https://example.com/" }),
-        ],
         tools::UNIFIED_FILE => vec![
             json!({ "action": "read", "path": "." }),
             json!({ "action": "edit", "path": "advertised-permission-probe.txt" }),
@@ -583,11 +580,8 @@ fn parse_mcp_request(normalized_tool_name: &str) -> Option<(String, String)> {
     Some((server.to_string(), tool.to_string()))
 }
 
-fn is_web_fetch_request(normalized_tool_name: &str, args: &Value) -> bool {
-    normalized_tool_name == tools::WEB_FETCH
-        || normalized_tool_name == tools::FETCH_URL
-        || (normalized_tool_name == tools::UNIFIED_SEARCH
-            && tool_intent::search_dispatch_action(args).is_some_and(|action| action == "web"))
+fn is_web_fetch_request(normalized_tool_name: &str, _args: &Value) -> bool {
+    normalized_tool_name == tools::WEB_FETCH || normalized_tool_name == tools::FETCH_URL
 }
 
 fn file_request_kind(
@@ -599,7 +593,7 @@ fn file_request_kind(
     let paths = extract_candidate_paths(workspace_root, current_dir, normalized_tool_name, args);
 
     match normalized_tool_name {
-        tools::READ_FILE | tools::GREP_FILE | tools::LIST_FILES => {
+        tools::READ_FILE | tools::GREP_FILE | tools::LIST_FILES | tools::CODE_SEARCH => {
             Some(PermissionRequestKind::Read { paths })
         }
         tools::WRITE_FILE
@@ -609,13 +603,6 @@ fn file_request_kind(
         | tools::COPY_FILE => Some(PermissionRequestKind::Write { paths }),
         tools::EDIT_FILE | tools::APPLY_PATCH | tools::SEARCH_REPLACE | tools::FILE_OP => {
             Some(PermissionRequestKind::Edit { paths })
-        }
-        tools::UNIFIED_SEARCH => {
-            if tool_intent::search_dispatch_action(args).is_some_and(|action| action == "web") {
-                None
-            } else {
-                Some(PermissionRequestKind::Read { paths })
-            }
         }
         tools::UNIFIED_FILE => match tool_intent::file_operation_action(args) {
             Some("read") => Some(PermissionRequestKind::Read { paths }),
