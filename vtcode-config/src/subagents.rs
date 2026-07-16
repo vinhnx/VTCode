@@ -1203,9 +1203,36 @@ fn permission_rule_allows_mutation(rule: &str) -> bool {
         return true;
     }
 
+    // Read-only aliases (read/grep/glob/list/code_search) collapse onto
+    // `exec_command` for routing, but they never mutate. Guard them before the
+    // normalized lookup so plugin restrictions retain read-only permissions.
+    if is_read_only_tool_alias(normalized.as_str()) {
+        return false;
+    }
+
     normalize_subagent_tool_name(tool_name)
         .iter()
         .any(|tool| is_mutating_tool_name(tool))
+}
+
+fn is_read_only_tool_alias(tool: &str) -> bool {
+    matches!(
+        tool,
+        "read"
+            | "read_file"
+            | "readfile"
+            | "grep"
+            | "grep_file"
+            | "grepfile"
+            | "glob"
+            | "list"
+            | "list_file"
+            | "list_files"
+            | "listfile"
+            | "listfiles"
+            | "list-files"
+            | "code_search"
+    )
 }
 
 fn permission_rule_tool_name(rule: &str) -> &str {

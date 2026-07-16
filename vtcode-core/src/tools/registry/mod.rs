@@ -1440,6 +1440,66 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn harness_preflight_admits_hidden_file_helpers() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+
+        let read = registry
+            .preflight_validate_harness_call(
+                tools::READ_FILE,
+                &json!({"path": "vtcode-core/src/lib.rs"}),
+            )
+            .expect("harness path should admit read_file");
+        assert_eq!(read.normalized_tool_name, tools::READ_FILE);
+
+        let list = registry
+            .preflight_validate_harness_call(tools::LIST_FILES, &json!({"path": "vtcode-core/src"}))
+            .expect("harness path should admit list_files");
+        assert_eq!(list.normalized_tool_name, tools::LIST_FILES);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn harness_preflight_rejects_non_allowlisted_hidden_tool() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+
+        // `get_errors` is a registered, model-hidden builtin that is NOT in the
+        // harness-dispatchable allowlist. Even the harness path must reject it,
+        // so registering a new `with_llm_visibility(false)` tool cannot silently
+        // widen the dispatchable surface.
+        let err = registry
+            .preflight_validate_harness_call(tools::GET_ERRORS, &json!({}))
+            .expect_err("non-allowlisted hidden tool must not be harness-dispatchable");
+        assert!(err.to_string().contains("Unknown tool"));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn public_execution_rejects_hidden_file_helper_even_when_prevalidated() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        registry.allow_all_tools().await?;
+
+        // The prevalidated flag is a performance hint (skip re-preflight) and is
+        // independent of dispatch authority. The direct model-public entry must
+        // still refuse model-hidden file helpers even with prevalidated=true, so
+        // a stray prevalidated flag can never widen the public surface.
+        let err = registry
+            .execute_public_tool_ref_prevalidated(
+                tools::READ_FILE,
+                &json!({"path": "vtcode-core/src/lib.rs"}),
+            )
+            .await
+            .expect_err("model-public entry must reject read_file even when prevalidated");
+        assert!(err.to_string().contains("Unknown tool"));
+
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn preflight_rejects_removed_planning_start_aliases() -> Result<()> {
         let temp_dir = TempDir::new()?;
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;

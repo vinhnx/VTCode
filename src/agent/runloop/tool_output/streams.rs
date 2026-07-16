@@ -255,20 +255,21 @@ fn format_diff_line_with_gutter_and_syntax(
     let reset = Reset;
     let raw_line = line.numbered_text(line_number_width);
     let mut out = String::with_capacity(raw_line.len() + 32);
-    out.push_str(&marker_style.render().to_string());
+    // Use write! to render ANSI escape codes directly without intermediate String allocations
+    let _ = write!(out, "{}", marker_style.render());
     out.push_str(marker_text);
     out.push(' ');
-    out.push_str(&gutter_style.render().to_string());
+    let _ = write!(out, "{}", gutter_style.render());
     let _ = write!(out, "{line_no:>line_number_width$} ");
     if let Some(highlighted) = highlight_diff_content(content, language_hint, bg) {
         out.push_str(&highlighted);
     } else if let Some(style) = base_style {
-        out.push_str(&style.render().to_string());
+        let _ = write!(out, "{}", style.render());
         out.push_str(content);
     } else {
         out.push_str(content);
     }
-    out.push_str(&reset.to_string());
+    let _ = write!(out, "{reset}");
     out
 }
 
@@ -314,24 +315,20 @@ async fn render_run_command_preview(
         return Ok(());
     }
 
-    for (idx, line) in preview_lines.iter().enumerate() {
-        if hidden > 0 && idx == RUN_COMMAND_HEAD_PREVIEW_LINES {
-            renderer.line(
-                MessageStyle::ToolDetail,
-                &hidden_lines_notice(hidden, HiddenLinesNoticeKind::CommandPreview),
-            )?;
-        }
-
-        render_preview_line(
-            renderer,
-            line,
-            None,
-            Some("  "),
-            true,
-            fallback_style,
-            Some(fallback_style.style()),
+    // Show hidden lines notice if needed
+    if hidden > 0 {
+        renderer.line(
+            MessageStyle::ToolDetail,
+            &hidden_lines_notice(hidden, HiddenLinesNoticeKind::CommandPreview),
         )?;
     }
+
+    // Render command output with bash syntax highlighting.
+    // Wrap the preview lines in markdown code fences with "bash" language hint
+    // to get proper syntax highlighting for command output.
+    let lines_vec: SmallVec<[&str; 32]> = preview_lines.iter().copied().collect();
+    let markdown = build_markdown_code_block(&lines_vec, Some("bash"), true);
+    renderer.render_markdown_output(fallback_style, &markdown)?;
 
     Ok(())
 }
@@ -410,20 +407,24 @@ pub(crate) fn render_diff_content_block(
         }
 
         let line_style = select_line_style(tool_name, &display_buffer, git_styles, ls_styles);
+        // Only allocate a new String when we actually need to render with syntax highlighting.
+        // Avoid the unconditional clone when color is disabled or line was truncated.
         let rendered = if color_enabled && !was_truncated {
-            format_diff_line_with_gutter_and_syntax(
+            Some(format_diff_line_with_gutter_and_syntax(
                 line,
                 line_style,
                 current_language_hint.as_deref(),
                 line_number_width,
-            )
+            ))
         } else {
-            display_buffer.clone()
+            None
         };
         render_preview_line(
             renderer,
             &display_buffer,
-            (rendered != display_buffer).then_some(rendered.as_str()),
+            rendered
+                .as_deref()
+                .filter(|r| *r != display_buffer.as_str()),
             None,
             false,
             fallback_style,
@@ -465,12 +466,18 @@ pub(crate) async fn render_stream_section(
     );
     let allow_ansi_for_tool = allow_ansi && !is_run_command;
     let apply_line_styles = !is_run_command;
+
+    // Strip ANSI codes once and reuse for both diff detection and normalization.
+    // This avoids scanning the same content twice when ANSI is not allowed.
     let stripped_for_diff = strip_ansi_codes(content);
     let is_diff_content = apply_line_styles && looks_like_diff_content(stripped_for_diff.as_ref());
     let normalized_content = if allow_ansi_for_tool {
         Cow::Borrowed(content)
     } else {
-        strip_ansi_codes(content)
+        // Reuse the already-stripped result instead of scanning again.
+        // Note: stripped_for_diff is consumed here, but we've already computed
+        // is_diff_content above, so we use normalized_content for diff rendering below.
+        stripped_for_diff
     };
 
     if is_run_command {
@@ -485,22 +492,22 @@ pub(crate) async fn render_stream_section(
         .await;
     }
 
-    // Token budget logic removed - use normalized content as-is
-    let effective_normalized_content = normalized_content.clone();
+    // Use normalized content directly (token budget logic removed).
+    // No clone needed since we own the Cow and don't use it after this point.
     let was_truncated_by_tokens = false;
 
     if !disable_spool
         && let Some(tool) = tool_name
         && let Ok(Some(log_path)) =
-            spool_output_if_needed(effective_normalized_content.as_ref(), tool, config).await
+            spool_output_if_needed(normalized_content.as_ref(), tool, config).await
     {
         // Skip preview entirely for extremely large output
-        if effective_normalized_content.len() > EXTREME_OUTPUT_THRESHOLD_MB {
+        if normalized_content.len() > EXTREME_OUTPUT_THRESHOLD_MB {
             let mut msg_buffer = String::with_capacity(256);
             let _ = write!(
                 &mut msg_buffer,
                 "Output too large ({} bytes), spooled to: {}",
-                effective_normalized_content.len(),
+                normalized_content.len(),
                 log_path.display()
             );
             renderer.line(MessageStyle::ToolDetail, &msg_buffer)?;
@@ -511,11 +518,7 @@ pub(crate) async fn render_stream_section(
         // Use compact head+tail preview (like diff view) instead of dumping tail lines
         let head_lines = RUN_COMMAND_HEAD_PREVIEW_LINES;
         let tail_lines_count = RUN_COMMAND_TAIL_PREVIEW_LINES;
-        let preview = excerpt_text_lines(
-            effective_normalized_content.as_ref(),
-            head_lines,
-            tail_lines_count,
-        );
+        let preview = excerpt_text_lines(normalized_content.as_ref(), head_lines, tail_lines_count);
         let total = preview.total;
 
         let mut msg_buffer = String::with_capacity(256);
@@ -529,7 +532,7 @@ pub(crate) async fn render_stream_section(
                 &mut msg_buffer,
                 "[{}] {} bytes, {} lines — spooled to: {}",
                 uppercase_title.as_ref(),
-                effective_normalized_content.len(),
+                normalized_content.len(),
                 total,
                 log_path.display()
             );
@@ -537,7 +540,7 @@ pub(crate) async fn render_stream_section(
             let _ = write!(
                 &mut msg_buffer,
                 "{} bytes, {} lines — spooled to: {}",
-                effective_normalized_content.len(),
+                normalized_content.len(),
                 total,
                 log_path.display()
             );
@@ -566,9 +569,10 @@ pub(crate) async fn render_stream_section(
     }
 
     if is_diff_content {
+        // Use normalized_content for diff rendering - it's already stripped when ANSI is not allowed
         render_diff_content_block(
             renderer,
-            stripped_for_diff.as_ref(),
+            normalized_content.as_ref(),
             tool_name,
             git_styles,
             ls_styles,
@@ -579,30 +583,17 @@ pub(crate) async fn render_stream_section(
         return Ok(());
     }
 
-    // If content was already token-truncated, use that content; otherwise use the original normalized content
-    let (lines_vec, total, truncated_flag) = if was_truncated_by_tokens {
-        // Content was already truncated by tokens, so we need to process it differently
-        // Split the truncated content by lines and use that
-        let lines: SmallVec<[&str; 32]> = effective_normalized_content.lines().collect();
-        let total_lines = lines.len();
-        (lines, total_lines, true) // Always mark as truncated if token-based truncation was applied
-    } else {
-        let prefer_full = renderer.prefers_untruncated_output();
-        let (mut lines, total, mut truncated) = select_stream_lines_streaming(
-            normalized_content.as_ref(),
-            mode,
-            tail_limit,
-            prefer_full,
-        );
-        if prefer_full && lines.len() > INLINE_STREAM_MAX_LINES {
-            let drop = lines.len() - INLINE_STREAM_MAX_LINES;
-            lines.drain(..drop);
-            truncated = true;
-        }
-        (lines, total, truncated)
-    };
+    // Token budget logic removed - use normalized content directly
+    let prefer_full = renderer.prefers_untruncated_output();
+    let (mut lines_vec, total, mut truncated) =
+        select_stream_lines_streaming(normalized_content.as_ref(), mode, tail_limit, prefer_full);
+    if prefer_full && lines_vec.len() > INLINE_STREAM_MAX_LINES {
+        let drop = lines_vec.len() - INLINE_STREAM_MAX_LINES;
+        lines_vec.drain(..drop);
+        truncated = true;
+    }
 
-    let truncated = truncated_flag || was_truncated_by_tokens;
+    let truncated = truncated || was_truncated_by_tokens;
 
     if lines_vec.is_empty() {
         return Ok(());

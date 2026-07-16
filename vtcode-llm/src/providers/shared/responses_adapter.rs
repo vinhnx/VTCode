@@ -179,6 +179,9 @@ impl ResponsesStreamAdapter {
                     RigResponsesItemChunkKind::ReasoningSummaryTextDelta(delta) => {
                         Ok(ResponsesStreamEvent::ReasoningDelta { delta: delta.delta })
                     }
+                    RigResponsesItemChunkKind::ReasoningTextDelta(delta) => {
+                        Ok(ResponsesStreamEvent::ReasoningDelta { delta: delta.delta })
+                    }
                     RigResponsesItemChunkKind::OutputItemAdded(output) => adapt_output_item(
                         provider_name,
                         output.item,
@@ -259,7 +262,7 @@ fn adapt_output_item(
                 })
             }
         }
-        RigResponsesOutput::Unknown => adapt_rig_gap_output_item_envelope(raw_payload)
+        RigResponsesOutput::Unknown(_) => adapt_rig_gap_output_item_envelope(raw_payload)
             .ok_or_else(|| {
                 StreamAssemblyError::InvalidPayload(
                     "Rig returned an unknown Responses output item without eligible raw fallback evidence"
@@ -383,13 +386,12 @@ fn adapt_rig_gap_output_item_envelope(payload: &Value) -> Option<ResponsesStream
         return None;
     }
 
-    // TODO: Rig 0.39 cannot preserve valid Responses envelopes with newly added
-    // nested output item types when it rejects them or reduces them to a lossy
-    // unknown item. When https://github.com/0xPlaygrounds/rig/pull/1855 lands
-    // and VTCode updates to an `Output::Unknown(Value)`-capable Rig, reduce or
-    // remove this constrained raw fallback. When
-    // https://github.com/0xPlaygrounds/rig/pull/1830 lands, remove local
-    // `prompt_cache_key` and `prompt_cache_retention` overlays if still present.
+    // Rig 0.40 preserves unmodeled nested output items as `Output::Unknown(Value)`,
+    // so the item body itself round-trips. This fallback still reconciles the
+    // SSE envelope fields (item_id/call_id/output_index/sequence_number) that
+    // live on the stream wrapper rather than the item, keeping downstream
+    // correlation intact for provider-hosted tool/MCP/code-interpreter events
+    // VTCode does not otherwise surface.
     Some(ResponsesStreamEvent::ProviderValueBearingRigGap {
         event_type: event_type.to_string(),
         item_id: payload
@@ -428,8 +430,10 @@ fn adapt_overlay_conversion(
     payload: &Value,
 ) -> Result<ResponsesStreamEvent, LLMError> {
     match payload.get("type").and_then(Value::as_str) {
-        // VTCode overlay: Rig 0.39 models reasoning summary deltas, while some
-        // OpenAI-compatible endpoints still emit reasoning_text deltas.
+        // VTCode overlay: Rig 0.40 models `reasoning_summary_text.delta` and
+        // `reasoning_text.delta` natively (routed through the typed path), but
+        // some OpenAI-compatible endpoints emit `reasoning_content.delta`, which
+        // Rig does not model. `reasoning_text.delta` is retained defensively.
         Some("response.reasoning_text.delta") | Some("response.reasoning_content.delta") => {
             Ok(ResponsesStreamEvent::ReasoningDelta {
                 delta: required_string_field(provider_name, payload, "delta")?,
@@ -480,10 +484,11 @@ fn response_stream_event_policy_for_type(event_type: &str) -> ResponsesStreamEve
         | "response.output_text.delta"
         | "response.refusal.delta"
         | "response.function_call_arguments.delta"
-        | "response.reasoning_summary_text.delta" => ResponsesStreamEventPolicy::RigSupportedTyped,
-        "response.reasoning_text.delta"
-        | "response.reasoning_text.done"
-        | "response.reasoning_content.delta" => ResponsesStreamEventPolicy::VtcodeOverlayConversion,
+        | "response.reasoning_summary_text.delta"
+        | "response.reasoning_text.delta" => ResponsesStreamEventPolicy::RigSupportedTyped,
+        "response.reasoning_text.done" | "response.reasoning_content.delta" => {
+            ResponsesStreamEventPolicy::VtcodeOverlayConversion
+        }
         "response.queued"
         | "keepalive"
         | "response.content_part.added"
@@ -631,6 +636,10 @@ mod tests {
         );
         assert_eq!(
             super::response_stream_event_policy_for_type("response.reasoning_text.delta"),
+            Policy::RigSupportedTyped
+        );
+        assert_eq!(
+            super::response_stream_event_policy_for_type("response.reasoning_content.delta"),
             Policy::VtcodeOverlayConversion
         );
         assert_eq!(

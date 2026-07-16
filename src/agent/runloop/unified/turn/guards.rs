@@ -276,9 +276,11 @@ fn is_readonly_signature(signature: &str) -> bool {
         return lower_json.contains(r#""action":"poll""#)
             || lower_json.contains(r#""action":"list""#)
             || lower_json.contains(r#""action":"inspect""#)
+            || lower_json.contains(r#""action":"run""#)
             || lower_json.contains(r#""action": "poll""#)
             || lower_json.contains(r#""action": "list""#)
-            || lower_json.contains(r#""action": "inspect""#);
+            || lower_json.contains(r#""action": "inspect""#)
+            || lower_json.contains(r#""action": "run""#);
     }
 
     false
@@ -291,11 +293,31 @@ fn normalize_turn_balancer_tool_name(name: &str) -> Cow<'_, str> {
         "write file" | "repo_browser.write_file" => Cow::Borrowed(tool_names::WRITE_FILE),
         "edit file" => Cow::Borrowed(tool_names::EDIT_FILE),
         "code search" | "search code" => Cow::Borrowed(tool_names::CODE_SEARCH),
-        "run command (pty)" | "run command" | "run code" | "exec code" | "bash"
-        | "container.exec" => Cow::Borrowed(tool_names::UNIFIED_EXEC),
-        "apply patch" | "delete file" | "move file" | "copy file" | "file operation" => {
-            Cow::Borrowed(tool_names::UNIFIED_FILE)
-        }
+        "search text"
+        | "list files"
+        | "structural search"
+        | "code intelligence"
+        | "list tools"
+        | "list errors"
+        | "show agent info"
+        | "fetch"
+        | "search_dispatch"
+        | "search_dispatch_internal" => Cow::Borrowed(tool_names::UNIFIED_SEARCH),
+        "run command (pty)"
+        | "run command"
+        | "run code"
+        | "exec code"
+        | "bash"
+        | "command_session"
+        | "container.exec"
+        | "command_session_internal" => Cow::Borrowed(tool_names::UNIFIED_EXEC),
+        "apply patch"
+        | "delete file"
+        | "move file"
+        | "copy file"
+        | "file operation"
+        | "file_operation"
+        | "file_operation_internal" => Cow::Borrowed(tool_names::UNIFIED_FILE),
         _ => Cow::Owned(lowered),
     }
 }

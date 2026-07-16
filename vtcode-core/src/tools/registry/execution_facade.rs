@@ -433,10 +433,11 @@ impl ToolRegistry {
             }
 
             let result = self
-                .execute_public_tool_ref_internal_with_mode(
+                .execute_public_tool_ref_dispatch(
                     request.tool_name.as_str(),
                     &request.args,
                     policy.prevalidated,
+                    execution_kernel::DispatchMode::Harness,
                     policy.exec_settlement_mode,
                 )
                 .await;
@@ -645,8 +646,24 @@ impl ToolRegistry {
         execution_kernel::preflight_validate_call(self, name, args)
     }
 
+    /// Preflight a tool call from the harness path, allowing dispatch to
+    /// internal (model-hidden) tool registrations such as read_file/write_file.
+    /// Direct model-originated entry should use `preflight_validate_call`.
+    pub fn preflight_validate_harness_call(
+        &self,
+        name: &str,
+        args: &Value,
+    ) -> Result<super::ToolPreflightOutcome> {
+        execution_kernel::preflight_validate_call_with_mode(
+            self,
+            name,
+            args,
+            execution_kernel::DispatchMode::Harness,
+        )
+    }
+
     pub fn admit_public_tool_call(&self, name: &str, args: &Value) -> Result<PreparedToolCall> {
-        let preflight = self.preflight_validate_call(name, args)?;
+        let preflight = self.preflight_validate_harness_call(name, args)?;
         Ok(PreparedToolCall::new(
             preflight.normalized_tool_name,
             preflight.readonly_classification,
@@ -707,10 +724,14 @@ impl ToolRegistry {
         prepared: &PreparedToolCall,
         exec_settlement_mode: ExecSettlementMode,
     ) -> Result<Value> {
-        self.execute_public_tool_ref_internal_with_mode(
+        // Prepared calls come from the harness admission gate
+        // (`admit_public_tool_call`), which is the only producer of
+        // `PreparedToolCall`, so internal (model-hidden) dispatch is authorized.
+        self.execute_public_tool_ref_dispatch(
             prepared.canonical_name.as_str(),
             &prepared.effective_args,
             prepared.already_preflighted,
+            execution_kernel::DispatchMode::Harness,
             exec_settlement_mode,
         )
         .await
@@ -722,10 +743,11 @@ impl ToolRegistry {
         args: &Value,
         prevalidated: bool,
     ) -> Result<Value> {
-        self.execute_public_tool_ref_internal_with_mode(
+        self.execute_public_tool_ref_dispatch(
             name,
             args,
             prevalidated,
+            execution_kernel::DispatchMode::ModelPublic,
             ExecSettlementMode::Manual,
         )
         .await
@@ -738,10 +760,35 @@ impl ToolRegistry {
         prevalidated: bool,
         exec_settlement_mode: ExecSettlementMode,
     ) -> Result<Value> {
-        let routed_name = self
-            .resolve_public_tool(name)
-            .map(|resolution| resolution.registration_name().to_string())
-            .map_err(|error| anyhow!(error.to_string()))?;
+        self.execute_public_tool_ref_dispatch(
+            name,
+            args,
+            prevalidated,
+            execution_kernel::DispatchMode::ModelPublic,
+            exec_settlement_mode,
+        )
+        .await
+    }
+
+    /// Core public-routing execution entrypoint.
+    ///
+    /// `dispatch_mode` is the authority to fall back to internal (model-hidden)
+    /// tool registrations and is fully independent of `prevalidated` (a pure
+    /// performance flag that skips re-running preflight). Only callers that went
+    /// through the harness admission gate (`admit_public_tool_call`) pass
+    /// [`DispatchMode::Harness`]; direct model-originated entry always passes
+    /// [`DispatchMode::ModelPublic`], so a stray `prevalidated=true` can never by
+    /// itself widen the dispatchable surface.
+    async fn execute_public_tool_ref_dispatch(
+        &self,
+        name: &str,
+        args: &Value,
+        prevalidated: bool,
+        dispatch_mode: execution_kernel::DispatchMode,
+        exec_settlement_mode: ExecSettlementMode,
+    ) -> Result<Value> {
+        let routed_name = execution_kernel::resolve_dispatch_target(self, name, dispatch_mode)
+            .map_err(|err| anyhow!(err.to_string()))?;
         let effective_args = execution_kernel::remap_public_file_operation_alias_args(
             name,
             routed_name.as_str(),

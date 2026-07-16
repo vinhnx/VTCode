@@ -19,7 +19,7 @@ use futures::StreamExt;
 use serde_json::{Value, json};
 
 // Retained custom streaming boundary.
-// Rig 0.38.2 exposes Responses SSE support, but this provider still needs the
+// Rig 0.40 exposes Responses SSE support, but this provider still needs the
 // VTCode request retry/fallback path, client request id and turn metadata
 // headers, ChatGPT backend defaults, prompt-cache usage parsing, and both
 // LLMStreamEvent and NormalizedStreamEvent shapes. Protected by

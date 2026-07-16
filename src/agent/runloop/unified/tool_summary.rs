@@ -143,7 +143,7 @@ pub(crate) fn is_file_modification_tool(tool_name: &str, args: &Value) -> bool {
         {
             true
         }
-        name if name == tool_names::UNIFIED_FILE => {
+        name if name == tool_names::UNIFIED_FILE || name == "file_operation" => {
             let action = file_operation_action(args);
 
             matches!(

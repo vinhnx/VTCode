@@ -19,7 +19,7 @@ const PREVIOUS_RESPONSE_NOT_FOUND_CODE: &str = "previous_response_not_found";
 const WEBSOCKET_AUTH_RETRY_STATUSES: [&str; 2] = ["401", "403"];
 
 // Retained custom WebSocket transport while VTCode migrates the optional path
-// to Rig. Local Rig 0.39 exposes `client.responses_websocket()` behind its
+// to Rig. Rig 0.40 exposes `client.responses_websocket()` behind its
 // `websocket` feature, including warm-up requests, but it does not yet cover
 // VTCode's custom auth refresh and retry policy. Keep this path separate from
 // normal HTTP/SSE request shaping: it may use `previous_response_id` only as

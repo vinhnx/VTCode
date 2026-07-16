@@ -507,7 +507,8 @@ fn is_read_only_tool_args(name: &str, args: &serde_json::Value) -> bool {
     match name {
         tools::READ_FILE | tools::GREP_FILE | tools::LIST_FILES => true,
         tools::CODE_SEARCH => true,
-        tools::UNIFIED_FILE => {
+        tools::UNIFIED_SEARCH | "search_dispatch" => true,
+        tools::UNIFIED_FILE | "file_operation" => {
             matches!(args.get("action").and_then(|v| v.as_str()), Some("read"))
         }
         _ => false,

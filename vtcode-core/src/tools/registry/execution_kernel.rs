@@ -14,6 +14,51 @@ use super::ToolRegistry;
 const DESCRIPTION_FIELD: &str = "description";
 const DETAILS_ALIAS_FIELD: &str = "details";
 
+/// The explicit set of model-hidden tools the harness path is allowed to
+/// dispatch when the public route lookup misses.
+///
+/// These are registered as real builtins (`with_llm_visibility(false)`) but
+/// deliberately excluded from the public route table
+/// (`assembly::is_removed_public_tool_name`). Only names in this allowlist may
+/// fall back to the inventory registration on the harness path; every other
+/// `with_llm_visibility(false)` helper stays inaccessible through the public
+/// execution entrypoint. This turns internal dispatch into an explicit,
+/// reviewed surface instead of "any inventory registration not in the public
+/// routes".
+const HARNESS_DISPATCHABLE_INTERNAL_TOOLS: [&str; 4] = [
+    tool_names::READ_FILE,
+    tool_names::WRITE_FILE,
+    tool_names::EDIT_FILE,
+    tool_names::LIST_FILES,
+];
+
+/// Entry point classification for a tool dispatch.
+///
+/// The public model surface exposes only the Codex baseline (apply_patch,
+/// exec_command, write_stdin, code_search). File helpers
+/// (read_file/write_file/list_files/edit_file) are registered builtins hidden
+/// from the model and excluded from the public route table, but remain
+/// dispatchable for the harness path. `DispatchMode` encodes that distinction in
+/// the type system so the "public is strict, harness is the only fallback"
+/// invariant lives in exactly one place and cannot be re-derived incorrectly by
+/// a future caller.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum DispatchMode {
+    /// Direct model-originated entry (e.g. `execute_public_tool_ref`,
+    /// integration tests). Rejects anything not in the public route table.
+    ModelPublic,
+    /// Harness entry (via `admit_public_tool_call`). Falls back to the internal
+    /// builtin registration for the harness-dispatchable allowlist when the
+    /// public route lookup misses.
+    Harness,
+}
+
+impl DispatchMode {
+    fn allows_internal_dispatch(self) -> bool {
+        matches!(self, DispatchMode::Harness)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ToolPreflightOutcome {
     pub normalized_tool_name: String,
@@ -342,10 +387,20 @@ pub(super) fn preflight_validate_call(
     name: &str,
     args: &Value,
 ) -> Result<ToolPreflightOutcome> {
-    let normalized_tool_name = registry
-        .resolve_public_tool(name)
-        .map(|resolution| resolution.registration_name().to_string())
-        .map_err(|e| anyhow!("Unknown tool: {}: {e}", canonical_tool_name(name)))?;
+    preflight_validate_call_with_mode(registry, name, args, DispatchMode::ModelPublic)
+}
+
+/// Preflight-validate a tool call under the given [`DispatchMode`].
+///
+/// Resolution is delegated to [`resolve_dispatch_target`] so the preflight and
+/// execution paths agree on exactly which names are dispatchable in each mode.
+pub(super) fn preflight_validate_call_with_mode(
+    registry: &ToolRegistry,
+    name: &str,
+    args: &Value,
+    mode: DispatchMode,
+) -> Result<ToolPreflightOutcome> {
+    let normalized_tool_name = resolve_dispatch_target(registry, name, mode)?;
 
     if let Some(remapped_args) =
         remap_public_file_operation_alias_args(name, &normalized_tool_name, args)
@@ -355,6 +410,62 @@ pub(super) fn preflight_validate_call(
     } else {
         preflight_validate_resolved_call(registry, &normalized_tool_name, args)
     }
+}
+
+/// Resolve a requested tool name to its registration name for the given
+/// [`DispatchMode`].
+///
+/// This is the single source of truth shared by both the preflight
+/// ([`preflight_validate_call_with_mode`]) and execution
+/// (`execute_public_tool_ref_internal_with_mode`) paths, so they can never
+/// disagree on whether a tool is dispatchable.
+///
+/// - [`DispatchMode::ModelPublic`]: only the public route table resolves; any
+///   miss returns "Unknown tool".
+/// - [`DispatchMode::Harness`]: on a public-route miss, fall back to the
+///   internal builtin registration, but only for names in
+///   [`HARNESS_DISPATCHABLE_INTERNAL_TOOLS`].
+pub(super) fn resolve_dispatch_target(
+    registry: &ToolRegistry,
+    name: &str,
+    mode: DispatchMode,
+) -> Result<String> {
+    match registry.resolve_public_tool(name) {
+        Ok(resolution) => Ok(resolution.registration_name().to_string()),
+        Err(public_err) => mode
+            .allows_internal_dispatch()
+            .then(|| resolve_internal_dispatch_tool(registry, name))
+            .flatten()
+            .ok_or_else(|| anyhow!("Unknown tool: {}: {public_err}", canonical_tool_name(name))),
+    }
+}
+
+/// Resolve a requested name to a registered harness-dispatchable internal
+/// (model-hidden) tool.
+///
+/// Returns the registration name only when the canonicalized name is in
+/// [`HARNESS_DISPATCHABLE_INTERNAL_TOOLS`] AND actually registered in the
+/// inventory. This never exposes the tool publicly; it merely lets the harness
+/// dispatch the intentionally model-hidden file helpers. Any other
+/// `with_llm_visibility(false)` helper (e.g. diagnostics-only tools) is NOT
+/// reachable through this path, so registering a new hidden tool cannot silently
+/// widen the harness-dispatchable surface.
+fn resolve_internal_dispatch_tool(registry: &ToolRegistry, name: &str) -> Option<String> {
+    super::assembly::public_tool_name_candidates(name)
+        .into_iter()
+        .map(|candidate| candidate.trim().to_ascii_lowercase())
+        .filter(|candidate| !candidate.is_empty())
+        .find(|candidate| {
+            HARNESS_DISPATCHABLE_INTERNAL_TOOLS
+                .iter()
+                .any(|allowed| allowed.eq_ignore_ascii_case(candidate))
+        })
+        .and_then(|candidate| {
+            registry
+                .inventory
+                .registration_for(&candidate)
+                .map(|registration| registration.name().to_string())
+        })
 }
 
 pub(super) fn preflight_validate_resolved_call(

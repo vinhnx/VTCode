@@ -287,6 +287,10 @@ mod tests {
         let env_guard = env_lock::lock();
         let temp = TempDir::new().expect("temp dir");
         env_guard.set_var("OPENAI_API_KEY", "test");
+        // The default provider resolved from the built-in config is OpenRouter,
+        // so the startup context needs its key to initialize even though this
+        // test only exercises the offline schema dispatch path.
+        env_guard.set_var("OPENROUTER_API_KEY", "test");
         let args = Cli::parse_from([
             "vtcode",
             "--workspace",

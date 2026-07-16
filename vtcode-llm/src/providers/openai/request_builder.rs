@@ -217,27 +217,6 @@ fn merge_typed_responses_parameters(
     request.extend(fields);
 }
 
-fn apply_prompt_cache_overlay(openai_request: &mut Value, ctx: &ResponsesRequestContext<'_>) {
-    let Some(request) = openai_request.as_object_mut() else {
-        return;
-    };
-
-    if let Some(prompt_cache_key) = trimmed_non_empty(ctx.prompt_cache_key) {
-        request
-            .entry("prompt_cache_key".to_string())
-            .or_insert_with(|| json!(prompt_cache_key));
-    }
-
-    if ctx.include_prompt_cache_retention
-        && ctx.is_responses_api_model
-        && let Some(retention) = trimmed_non_empty(ctx.prompt_cache_retention)
-    {
-        request
-            .entry("prompt_cache_retention".to_string())
-            .or_insert_with(|| json!(retention));
-    }
-}
-
 fn openai_responses_allowed_tools_choice(
     tool_choice: &provider::ToolChoice,
     stable_tools: &[provider::ToolDefinition],
@@ -487,7 +466,7 @@ pub(crate) fn build_responses_request(
 
 /// Retained custom Responses item/history boundary.
 ///
-/// Rig 0.38.2 has typed Responses input items, but does not preserve VTCode's
+/// Rig 0.40 has typed Responses input items, but does not preserve VTCode's
 /// assistant `phase` replay field, open-ended include strings such as
 /// `output_text.annotations`, synthetic missing tool outputs, or the exact
 /// instruction fallback used for ChatGPT replay parity. Protective tests:
@@ -528,11 +507,11 @@ fn build_responses_item_history(
 
 /// Shared normal HTTP/SSE Responses JSON boundary.
 ///
-/// Rig 0.39 typed request fields are used here for compatible state such as
-/// `store` and known `include` enum values. The final JSON remains custom
-/// because Rig lacks typed coverage for VTCode's `output_types`, nested
-/// `sampling_parameters`, prompt-cache overlay fields, `context_management`,
-/// text verbosity, and provider-specific tool payloads.
+/// Rig 0.40 typed request fields are used here for compatible state such as
+/// `store`, `prompt_cache_key`, `prompt_cache_retention`, and known `include`
+/// enum values. The final JSON remains custom because Rig lacks typed coverage
+/// for VTCode's `output_types`, nested `sampling_parameters`,
+/// `context_management`, text verbosity, and provider-specific tool payloads.
 /// Protective tests: `openai_request_builder_serialises_rig_typed_state_fields`,
 /// `chatgpt_backend_forces_store_false_and_omits_output_sampling_cache`, and
 /// `responses_payload_includes_prompt_cache_retention_for_native_openai`.
@@ -600,6 +579,18 @@ fn build_responses_request_from_history(
     } else if let Some(store) = request.response_store.or(ctx.default_response_store) {
         typed_parameters.store = Some(store);
     }
+
+    if let Some(prompt_cache_key) = trimmed_non_empty(ctx.prompt_cache_key) {
+        typed_parameters.prompt_cache_key = Some(prompt_cache_key.to_string());
+    }
+
+    if ctx.include_prompt_cache_retention
+        && ctx.is_responses_api_model
+        && let Some(retention) = trimmed_non_empty(ctx.prompt_cache_retention)
+    {
+        typed_parameters.prompt_cache_retention = Some(retention.to_string());
+    }
+
     merge_typed_responses_parameters(&mut openai_request, typed_parameters);
 
     let mut include_values = Vec::new();
@@ -791,19 +782,12 @@ fn build_responses_request_from_history(
             .or_insert_with(|| json!(safety_id));
     }
 
-    // Rig 0.39 lacks typed `prompt_cache_key` and `prompt_cache_retention`
-    // fields, so VT Code injects them after typed request construction at the
-    // final JSON boundary. `or_insert` preserves future Rig output; remove
-    // this overlay once https://github.com/0xPlaygrounds/rig/pull/1830 lands
-    // and the prompt-cache JSON-boundary tests assert Rig-owned serialisation.
-    apply_prompt_cache_overlay(&mut openai_request, ctx);
-
     Ok(openai_request)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{ResponsesRequestContext, apply_prompt_cache_overlay, build_responses_request};
+    use super::{ResponsesRequestContext, build_responses_request};
     use crate::provider;
     use serde_json::{Value, json};
     use vtcode_config::constants::models;
@@ -883,7 +867,7 @@ mod tests {
     }
 
     #[test]
-    fn prompt_cache_overlay_inserts_fields_at_final_json_boundary() {
+    fn prompt_cache_fields_serialize_through_rig_typed_parameters() {
         let mut ctx = base_context(None);
         ctx.prompt_cache_key = Some("vtcode:openai:session-123");
         ctx.include_prompt_cache_retention = true;
@@ -901,31 +885,6 @@ mod tests {
                 .get("prompt_cache_retention")
                 .and_then(Value::as_str),
             Some("24h")
-        );
-    }
-
-    #[test]
-    fn prompt_cache_overlay_does_not_overwrite_existing_fields() {
-        let mut ctx = base_context(None);
-        ctx.prompt_cache_key = Some("vtcode:openai:session-123");
-        ctx.include_prompt_cache_retention = true;
-        ctx.prompt_cache_retention = Some("24h");
-        let mut payload = json!({
-            "prompt_cache_key": "typed-key",
-            "prompt_cache_retention": "in_memory"
-        });
-
-        apply_prompt_cache_overlay(&mut payload, &ctx);
-
-        assert_eq!(
-            payload.get("prompt_cache_key").and_then(Value::as_str),
-            Some("typed-key")
-        );
-        assert_eq!(
-            payload
-                .get("prompt_cache_retention")
-                .and_then(Value::as_str),
-            Some("in_memory")
         );
     }
 

@@ -16,6 +16,16 @@ fn default_public_tool_names() -> Vec<String> {
     ]
 }
 
+/// The public catalog order derives from rig's `ToolSet` (HashMap-backed), so
+/// it is not a stable contract. Compare the tool set order-insensitively.
+fn assert_same_tool_set(actual: &[String], expected: &[String]) {
+    let mut actual_sorted = actual.to_vec();
+    actual_sorted.sort();
+    let mut expected_sorted = expected.to_vec();
+    expected_sorted.sort();
+    assert_eq!(actual_sorted, expected_sorted);
+}
+
 #[tokio::test]
 async fn audit_public_catalog_is_runtime_driven() {
     let temp = TempDir::new().expect("tempdir");
@@ -35,7 +45,7 @@ async fn audit_public_catalog_is_runtime_driven() {
         .collect();
 
     assert_eq!(public_names, schema_names);
-    assert_eq!(public_names, default_public_tool_names());
+    assert_same_tool_set(&public_names, &default_public_tool_names());
     assert!(!public_names.contains(&tools::CODE_SEARCH.to_string()));
     assert!(!public_names.contains(&tools::UNIFIED_SEARCH.to_string()));
     assert!(!public_names.contains(&tools::UNIFIED_FILE.to_string()));
@@ -100,6 +110,6 @@ async fn audit_acp_subset_comes_from_same_catalog() {
         .public_tool_names(SessionSurface::Acp, CapabilityLevel::CodeSearch)
         .await;
 
-    assert_eq!(acp_names, default_public_tool_names());
+    assert_same_tool_set(&acp_names, &default_public_tool_names());
     assert!(!acp_names.contains(&tools::CODE_SEARCH.to_string()));
 }

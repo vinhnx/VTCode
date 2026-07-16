@@ -262,10 +262,9 @@ fn action_label_defaults_to_tool_name_for_no_args() {
 
 #[test]
 fn named_permission_uses_custom_action_label() {
-    let action_label = "Run command cargo check";
+    let action_label = "Read file src/main.rs";
     let arguments = serde_json::json!({
-        "action": "run",
-        "command": "cargo check",
+        TOOL_READ_FILE_PATH_ARG: "src/main.rs",
     });
 
     let options = prompter().permission_options(SupportedTool::ReadFile, Some(&arguments));

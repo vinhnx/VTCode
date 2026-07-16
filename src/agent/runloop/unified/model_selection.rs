@@ -74,19 +74,6 @@ pub(crate) async fn finalize_model_selection(
         .is_some();
     let client_installed = selection.provider_enum.is_some() || custom_provider_enabled;
 
-    if let Some(provider_enum) = selection.provider_enum
-        && let Err(err) =
-            RigProviderCapabilities::new(provider_enum, &selection.model).validate_model(&api_key)
-    {
-        renderer.line(
-            MessageStyle::Error,
-            &format!(
-                "Rig validation warning: unable to initialise {} via rig-core ({err}).",
-                selection.model_display
-            ),
-        )?;
-    }
-
     if client_installed {
         let provider_name = selection.provider.clone();
         let new_client = create_provider_with_config(

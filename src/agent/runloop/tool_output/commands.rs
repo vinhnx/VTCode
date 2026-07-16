@@ -34,33 +34,38 @@ pub(crate) async fn render_terminal_command_panel(
     vt_config: Option<&VTCodeConfig>,
     allow_ansi: bool,
 ) -> Result<()> {
-    // Check if stdout is JSON containing command output (from execute_code tool)
-    let mut stdout_raw = payload.get("stdout").and_then(Value::as_str).unwrap_or("");
-    let mut stderr_raw = payload.get("stderr").and_then(Value::as_str).unwrap_or("");
-    let mut unwrapped_payload = payload.clone();
+    // Check if stdout is JSON containing command output (from execute_code tool).
+    // Avoid cloning the entire payload upfront - only parse inner JSON if needed.
+    let stdout_raw = payload.get("stdout").and_then(Value::as_str).unwrap_or("");
+    let stderr_raw = payload.get("stderr").and_then(Value::as_str).unwrap_or("");
 
     // If stdout looks like JSON with stdout/stderr/returncode, unwrap it
-    if let Ok(inner_json) = serde_json::from_str::<Value>(stdout_raw)
+    let owned_inner;
+    let (stdout_raw, stderr_raw, unwrapped_payload) = if let Ok(inner_json) =
+        serde_json::from_str::<Value>(stdout_raw)
         && (inner_json.get("stdout").is_some()
             || inner_json.get("stderr").is_some()
             || inner_json.get("returncode").is_some())
     {
-        unwrapped_payload = inner_json;
-        stdout_raw = unwrapped_payload
+        owned_inner = inner_json;
+        let s = owned_inner
             .get("stdout")
             .and_then(Value::as_str)
             .unwrap_or("");
-        stderr_raw = unwrapped_payload
+        let e = owned_inner
             .get("stderr")
             .and_then(Value::as_str)
             .unwrap_or("");
-    }
+        (s, e, &owned_inner)
+    } else {
+        (stdout_raw, stderr_raw, payload)
+    };
 
     let output_raw = unwrapped_payload
         .get("output")
         .and_then(Value::as_str)
         .unwrap_or("");
-    let command_tokens = parse_command_tokens(&unwrapped_payload);
+    let command_tokens = parse_command_tokens(unwrapped_payload);
     let disable_spool = unwrapped_payload
         .get("no_spool")
         .and_then(Value::as_bool)
@@ -68,8 +73,8 @@ pub(crate) async fn render_terminal_command_panel(
 
     // Check for session completion status (is_exited indicates if process is still running)
     let exit_code = unwrapped_payload.get("exit_code").and_then(Value::as_i64);
-    let session_id = resolve_pty_session_id(&unwrapped_payload);
-    let is_completed = infer_pty_completion(&unwrapped_payload, session_id, exit_code);
+    let session_id = resolve_pty_session_id(unwrapped_payload);
+    let is_completed = infer_pty_completion(unwrapped_payload, session_id, exit_code);
     let command = if let Some(tokens) = &command_tokens {
         tokens.join(" ")
     } else {

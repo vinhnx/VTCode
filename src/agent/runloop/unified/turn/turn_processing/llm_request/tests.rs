@@ -507,11 +507,16 @@ fn harness_streaming_bridge_emits_incremental_agent_and_reasoning_items() {
         crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter::new(path)
             .expect("harness emitter");
 
+    // The second output delta must cross MIN_OUTPUT_UPDATE_BYTES (1024) for the
+    // throttled incremental `item.updated` event to fire.
+    let tail = " world".repeat(200);
+    let full_output = format!("hello{tail}");
+
     let mut bridge = HarnessStreamingBridge::new(Some(&emitter), "turn_123", 1, 1);
     bridge.on_progress(StreamProgressEvent::ReasoningStage("analysis".to_string()));
     bridge.on_progress(StreamProgressEvent::ReasoningDelta("think".to_string()));
     bridge.on_progress(StreamProgressEvent::OutputDelta("hello".to_string()));
-    bridge.on_progress(StreamProgressEvent::OutputDelta(" world".to_string()));
+    bridge.on_progress(StreamProgressEvent::OutputDelta(tail.clone()));
     bridge.complete_open_items();
 
     let payload = std::fs::read_to_string(tmp.path().join("harness.jsonl")).expect("log");
@@ -543,10 +548,10 @@ fn harness_streaming_bridge_emits_incremental_agent_and_reasoning_items() {
             saw_assistant_started = item_text == "hello";
         }
         if event_type == "item.updated" && item_type == "agent_message" {
-            saw_assistant_updated = item_text == "hello world";
+            saw_assistant_updated = item_text == full_output;
         }
         if event_type == "item.completed" && item_type == "agent_message" {
-            saw_assistant_completed = item_text == "hello world";
+            saw_assistant_completed = item_text == full_output;
         }
         if event_type == "item.started" && item_type == "reasoning" {
             saw_reasoning_started = item_text == "think";

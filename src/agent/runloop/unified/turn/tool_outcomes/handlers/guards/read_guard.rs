@@ -121,7 +121,7 @@ fn repeated_file_read_family_key(canonical_tool_name: &str, args: &Value) -> Opt
         tool_names::READ_FILE | tool_names::UNIFIED_FILE => {
             low_signal_family_key(canonical_tool_name, args)
         }
-        tool_names::UNIFIED_EXEC => {
+        tool_names::UNIFIED_EXEC | "command_session" => {
             // Track file-reading shell commands in the family guard to prevent
             // bypass via unified_exec. Only commands on the is_readonly_unified_exec_command
             // allowlist (tool_intent.rs) reach this point — cat, head, tail, bat.
@@ -132,7 +132,7 @@ fn repeated_file_read_family_key(canonical_tool_name: &str, args: &Value) -> Opt
             }
             // Use the full command as the family key so different files are tracked separately
             let command_str = parts.join(" ");
-            Some(format!("{canonical_tool_name}::run::{command_str}"))
+            Some(format!("unified_exec::run::{command_str}"))
         }
         _ => None,
     }

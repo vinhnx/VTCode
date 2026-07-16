@@ -1635,8 +1635,10 @@ mod tests {
         let mut config = VTCodeConfig::default();
         config.agent.system_prompt_mode = SystemPromptMode::Default;
 
-        let mut ctx = PromptContext::default();
-        ctx.capability_level = Some(CapabilityLevel::FileReading);
+        let ctx = PromptContext {
+            capability_level: Some(CapabilityLevel::FileReading),
+            ..PromptContext::default()
+        };
 
         let result =
             compose_system_instruction_text(&PathBuf::from("."), Some(&config), Some(&ctx)).await;

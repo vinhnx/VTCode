@@ -821,6 +821,7 @@ mod tests {
     };
     use crate::agent::runloop::unified::tool_routing::shell_approval::PersistentApprovalTarget;
     use serde_json::json;
+    use vtcode_core::config::constants::tools;
 
     #[test]
     fn command_session_extracts_command_when_action_is_run() {
@@ -828,7 +829,7 @@ mod tests {
             "action": "run",
             "command": "cargo check"
         });
-        let command = extract_shell_command_text("command_session", Some(&args));
+        let command = extract_shell_command_text(tools::UNIFIED_EXEC, Some(&args));
         assert_eq!(command.as_deref(), Some("cargo check"));
     }
 
@@ -837,7 +838,7 @@ mod tests {
         let args = json!({
             "cmd": "cargo check"
         });
-        let command = extract_shell_command_text("command_session", Some(&args));
+        let command = extract_shell_command_text(tools::UNIFIED_EXEC, Some(&args));
         assert_eq!(command.as_deref(), Some("cargo check"));
     }
 
@@ -847,7 +848,7 @@ mod tests {
             "command.0": "cargo",
             "command.1": "check"
         });
-        let command = extract_shell_command_text("command_session", Some(&args));
+        let command = extract_shell_command_text(tools::UNIFIED_EXEC, Some(&args));
         assert_eq!(command.as_deref(), Some("cargo check"));
     }
 
@@ -857,7 +858,7 @@ mod tests {
             "action": "poll",
             "session_id": "run-123"
         });
-        let command = extract_shell_command_text("command_session", Some(&args));
+        let command = extract_shell_command_text(tools::UNIFIED_EXEC, Some(&args));
         assert_eq!(command, None);
     }
 
@@ -877,7 +878,7 @@ mod tests {
             "sandbox_permissions": "with_additional_permissions"
         });
         assert!(!shell_allows_persistent_decisions(
-            "command_session",
+            tools::UNIFIED_EXEC,
             Some(&args)
         ));
     }
@@ -890,7 +891,7 @@ mod tests {
             "sandbox_permissions": "with_additional_permissions"
         });
         assert!(shell_allows_persistent_decisions(
-            "command_session",
+            tools::UNIFIED_EXEC,
             Some(&args)
         ));
     }
@@ -928,7 +929,7 @@ mod tests {
             "justification": "Do you want to build the project outside the sandbox?"
         });
 
-        let justification = extract_shell_approval_justification("command_session", Some(&args));
+        let justification = extract_shell_approval_justification(tools::UNIFIED_EXEC, Some(&args));
         assert_eq!(
             justification.as_deref(),
             Some("Do you want to build the project outside the sandbox?")
@@ -943,7 +944,7 @@ mod tests {
             "justification": "ignored"
         });
 
-        let justification = extract_shell_approval_justification("command_session", Some(&args));
+        let justification = extract_shell_approval_justification(tools::UNIFIED_EXEC, Some(&args));
         assert_eq!(justification, None);
     }
 
@@ -956,7 +957,7 @@ mod tests {
         });
 
         let prefix_rule =
-            extract_shell_persistent_approval_prefix_rule("command_session", Some(&args));
+            extract_shell_persistent_approval_prefix_rule(tools::UNIFIED_EXEC, Some(&args));
         assert_eq!(prefix_rule, None);
     }
 
@@ -969,7 +970,7 @@ mod tests {
         });
 
         let prefix_rule =
-            extract_shell_persistent_approval_prefix_rule("command_session", Some(&args));
+            extract_shell_persistent_approval_prefix_rule(tools::UNIFIED_EXEC, Some(&args));
         assert_eq!(prefix_rule, None);
     }
 
@@ -980,7 +981,7 @@ mod tests {
             "command": ["cargo", "test", "-p", "vtcode"]
         });
 
-        let command = extract_shell_approval_command_prefix_words("command_session", Some(&args));
+        let command = extract_shell_approval_command_prefix_words(tools::UNIFIED_EXEC, Some(&args));
         assert_eq!(
             command,
             Some(vec![
@@ -1000,7 +1001,7 @@ mod tests {
             "sandbox_permissions": "require_escalated"
         });
 
-        let scope = extract_shell_approval_scope_signature("command_session", Some(&args));
+        let scope = extract_shell_approval_scope_signature(tools::UNIFIED_EXEC, Some(&args));
         assert_eq!(
             scope.as_deref(),
             Some("sandbox_permissions=\"require_escalated\"|additional_permissions=null")
@@ -1017,7 +1018,7 @@ mod tests {
         });
 
         let entry = render_shell_persistent_approval_prefix_entry(
-            "command_session",
+            tools::UNIFIED_EXEC,
             Some(&args),
             &["cargo".to_string(), "test".to_string()],
         );
@@ -1048,7 +1049,7 @@ mod tests {
     #[test]
     fn non_mcp_tools_keep_standard_prompt_kind() {
         assert_eq!(
-            tool_permission_prompt_kind("command_session"),
+            tool_permission_prompt_kind(tools::UNIFIED_EXEC),
             ToolPermissionPromptKind::Standard
         );
     }

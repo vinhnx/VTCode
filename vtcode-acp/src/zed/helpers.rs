@@ -1,10 +1,16 @@
 use crate::acp;
 use std::collections::HashSet;
+use std::path::Path;
+use vtcode_config::core::permissions::AgentPermissionsConfig;
 use vtcode_config::{SubagentSource, SubagentSpec, builtin_primary_duck_agent};
 use vtcode_core::ActivePrimaryAgentState;
 use vtcode_core::config::types::ReasoningEffortLevel;
+use vtcode_core::permissions::{
+    ResolvedPermissionDecision, build_advertised_permission_requests, evaluate_agent_permissions,
+};
 use vtcode_core::prompts::PromptTemplate;
 use vtcode_core::skills::find_command_skill_by_slash_name;
+use vtcode_core::tools::names::canonical_tool_name;
 use vtcode_core::ui::slash::SlashCommandInfo;
 
 pub(crate) const SESSION_CONFIG_PRIMARY_AGENT_ID: &str = "primary_agent";
@@ -22,6 +28,7 @@ pub(crate) struct PrimaryAgentSessionOption {
     pub aliases: Vec<String>,
     pub allowed_local_tools: Option<HashSet<String>>,
     pub denied_local_tools: HashSet<String>,
+    pub permissions: AgentPermissionsConfig,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -130,6 +137,62 @@ impl PrimaryAgentCatalog {
     }
 
     #[must_use]
+    fn option_for(&self, primary_agent: &str) -> Option<&PrimaryAgentSessionOption> {
+        let resolved = self.resolve_id(primary_agent)?;
+        self.options.iter().find(|option| option.id == resolved)
+    }
+
+    /// Returns `true` if the resolved primary agent's permission policy permits
+    /// (allow/ask/auto) the given local tool. Unknown agents deny by default.
+    ///
+    /// This gates individual local tools by the agent's declared permissions so
+    /// a `default: deny` agent that only allows `exec_command` does not silently
+    /// expose every other local tool (e.g. `apply_patch`).
+    ///
+    /// This is an **advertising** gate only: it controls which local tool
+    /// definitions are offered to the model, not whether a call is allowed to
+    /// execute. The authoritative enforcement boundary remains the runtime
+    /// permission/safety check (`evaluate_effective_permissions` +
+    /// `check_safety_for_request`) evaluated against the concrete call arguments
+    /// at dispatch time. A tool that slips past this gate is still subject to
+    /// that runtime check.
+    #[must_use]
+    pub(crate) fn allows_tool(
+        &self,
+        primary_agent: &str,
+        tool_name: &str,
+        workspace_root: &Path,
+    ) -> bool {
+        let Some(option) = self.option_for(primary_agent) else {
+            return false;
+        };
+        // Normalize to the canonical tool name so the lookup in
+        // `advertised_permission_args` matches a known `tools::*` constant.
+        // Otherwise an unrecognized name falls through to a `PermissionRequestKind::Other`
+        // representative request, which would over-permit for any non-deny default.
+        let canonical = canonical_tool_name(tool_name).to_ascii_lowercase();
+        // Advertising cannot know future call arguments, so evaluate each
+        // representative request the tool can produce and permit the tool if any
+        // categorized operation is not denied (mirrors provider-native
+        // availability gating in the main runtime). `workspace_root` is passed as
+        // both the workspace root and the current dir because advertising has no
+        // per-call working directory.
+        build_advertised_permission_requests(workspace_root, workspace_root, &canonical)
+            .iter()
+            .any(|request| {
+                !matches!(
+                    evaluate_agent_permissions(
+                        &option.permissions,
+                        workspace_root,
+                        workspace_root,
+                        request,
+                    ),
+                    ResolvedPermissionDecision::Deny
+                )
+            })
+    }
+
+    #[must_use]
     fn select_options(&self) -> Vec<acp::SessionConfigSelectOption> {
         self.options
             .iter()
@@ -149,6 +212,7 @@ fn primary_agent_option_from_spec(spec: &SubagentSpec) -> PrimaryAgentSessionOpt
         aliases: spec.aliases.clone(),
         allowed_local_tools,
         denied_local_tools,
+        permissions: spec.permissions.clone(),
     }
 }
 

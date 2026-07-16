@@ -284,7 +284,7 @@ async fn test_run_tool_call_forwards_runtime_agent_permissions_to_routing() {
     .expect("serialize file_operation args");
     let call = vtcode_core::llm::provider::ToolCall::function(
         "call_active_agent_deny".to_string(),
-        tools::UNIFIED_FILE.to_string(),
+        tools::WRITE_FILE.to_string(),
         args,
     );
     let ctrl_c_state = Arc::new(CtrlCState::new());
@@ -675,7 +675,7 @@ async fn test_run_tool_call_command_session_git_diff_uses_cache_on_repeat() {
     let permission_cache_arc = Arc::new(tokio::sync::RwLock::new(ToolPermissionCache::new()));
     {
         let mut cache = permission_cache_arc.write().await;
-        cache.cache_grant(tools::UNIFIED_EXEC.to_string(), PermissionGrant::Permanent);
+        cache.cache_grant(tools::EXEC_COMMAND.to_string(), PermissionGrant::Permanent);
     }
 
     let result_cache = Arc::new(tokio::sync::RwLock::new(ToolResultCache::new(32)));
@@ -717,12 +717,12 @@ async fn test_run_tool_call_command_session_git_diff_uses_cache_on_repeat() {
 
     let first_call = vtcode_core::llm::provider::ToolCall::function(
         "call_command_session_1".to_string(),
-        tools::UNIFIED_EXEC.to_string(),
+        tools::EXEC_COMMAND.to_string(),
         args.clone(),
     );
     let second_call = vtcode_core::llm::provider::ToolCall::function(
         "call_command_session_2".to_string(),
-        tools::UNIFIED_EXEC.to_string(),
+        tools::EXEC_COMMAND.to_string(),
         args,
     );
 
@@ -1054,7 +1054,7 @@ async fn test_run_tool_call_rejects_escalated_shell_when_hitl_disabled() {
 
     let call = vtcode_core::llm::provider::ToolCall::function(
         "call_command_session_escalated".to_string(),
-        tools::UNIFIED_EXEC.to_string(),
+        tools::EXEC_COMMAND.to_string(),
         args,
     );
     let ctrl_c_state = Arc::new(CtrlCState::new());
@@ -1139,7 +1139,7 @@ async fn test_run_tool_call_allows_escalated_shell_with_saved_prefix_rule() {
 
     let call = vtcode_core::llm::provider::ToolCall::function(
         "call_command_session_escalated_saved_prefix".to_string(),
-        tools::UNIFIED_EXEC.to_string(),
+        tools::EXEC_COMMAND.to_string(),
         args,
     );
     let ctrl_c_state = Arc::new(CtrlCState::new());

@@ -1,5 +1,4 @@
 use parking_lot::{Mutex, RwLock};
-use rig::completion::ToolDefinition as RigToolDefinition;
 use rig::tool::{ToolDyn as RigToolDyn, ToolError as RigToolError, ToolSet as RigToolSet};
 use rig::wasm_compat::WasmBoxedFuture;
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -40,22 +39,24 @@ struct ToolInventoryState {
 
 struct RigRegistrationTool {
     name: String,
-    definition: RigToolDefinition,
+    description: String,
+    parameters: serde_json::Value,
 }
 
 impl RigRegistrationTool {
     fn from_registration(name: String, registration: &ToolRegistration) -> Self {
         let metadata = registration.metadata();
-        let definition = RigToolDefinition {
-            name: name.clone(),
-            description: metadata.description().unwrap_or_default().to_owned(),
-            parameters: metadata
-                .parameter_schema()
-                .cloned()
-                .unwrap_or_else(|| json!({"type": "object"})),
-        };
+        let description = metadata.description().unwrap_or_default().to_owned();
+        let parameters = metadata
+            .parameter_schema()
+            .cloned()
+            .unwrap_or_else(|| json!({"type": "object"}));
 
-        Self { name, definition }
+        Self {
+            name,
+            description,
+            parameters,
+        }
     }
 }
 
@@ -64,8 +65,12 @@ impl RigToolDyn for RigRegistrationTool {
         self.name.clone()
     }
 
-    fn definition<'a>(&'a self, _prompt: String) -> WasmBoxedFuture<'a, RigToolDefinition> {
-        Box::pin(async move { self.definition.clone() })
+    fn description(&self) -> String {
+        self.description.clone()
+    }
+
+    fn parameters(&self) -> serde_json::Value {
+        self.parameters.clone()
     }
 
     fn call<'a>(&'a self, _args: String) -> WasmBoxedFuture<'a, Result<String, RigToolError>> {
@@ -327,7 +332,8 @@ impl ToolInventory {
     pub fn registrations_snapshot(&self) -> Vec<ToolRegistration> {
         let ordered_names = {
             let tool_set = self.rig_tool_set.read();
-            futures::executor::block_on(tool_set.get_tool_definitions())
+            tool_set
+                .get_tool_definitions()
                 .unwrap_or_default()
                 .into_iter()
                 .map(|definition| definition.name.to_ascii_lowercase())
@@ -481,7 +487,8 @@ mod tests {
 
     fn rig_definition_names(inventory: &ToolInventory) -> Vec<String> {
         let tool_set = inventory.rig_tool_set.read();
-        futures::executor::block_on(tool_set.get_tool_definitions())
+        tool_set
+            .get_tool_definitions()
             .unwrap()
             .into_iter()
             .map(|definition| definition.name)
@@ -660,7 +667,7 @@ mod tests {
         );
         let rig_defs = {
             let tool_set = inventory.rig_tool_set.read();
-            futures::executor::block_on(tool_set.get_tool_definitions()).unwrap()
+            tool_set.get_tool_definitions().unwrap()
         };
         assert_eq!(rig_defs[0].description, "second");
         assert_eq!(

@@ -1,19 +1,10 @@
-use anyhow::{Context, Result};
-use rig::client::CompletionClient;
 use rig::providers::gemini::completion::gemini_api_types::ThinkingConfig;
-use rig::providers::{anthropic, deepseek, gemini, openai, openrouter};
+use rig::providers::openai;
 use serde_json::{Value, json};
 use vtcode_config::models::Provider;
 use vtcode_config::types::ReasoningEffortLevel;
 
-/// Result of validating a provider/model combination through rig-core.
-#[derive(Debug, Clone)]
-pub struct RigValidationSummary {
-    pub provider: Provider,
-    pub model: String,
-}
-
-/// Internal bridge for Rig-backed provider/model capability checks.
+/// Internal bridge for Rig-backed provider reasoning-parameter construction.
 #[derive(Debug, Clone)]
 pub struct RigProviderCapabilities {
     provider: Provider,
@@ -27,91 +18,6 @@ impl RigProviderCapabilities {
             provider,
             model: model.into(),
         }
-    }
-
-    /// Attempt to construct a rig-core client for the given provider and
-    /// instantiate the requested model. This performs a lightweight validation
-    /// without issuing a network request, ensuring that downstream calls can
-    /// reuse the rig client configuration paths.
-    pub fn validate_model(&self, api_key: &str) -> Result<RigValidationSummary> {
-        match self.provider {
-            Provider::Gemini => {
-                let client = gemini::Client::new(api_key)
-                    .context("failed to initialise Rig Gemini client")?;
-                let _ = client.completion_model(&self.model);
-            }
-            Provider::OpenAI => {
-                let client = openai::Client::new(api_key)
-                    .context("failed to initialise Rig OpenAI client")?;
-                let _ = client.completion_model(&self.model);
-            }
-            Provider::Anthropic => {
-                let client = anthropic::Client::new(api_key)
-                    .context("failed to initialise Rig Anthropic client")?;
-                let _ = client.completion_model(&self.model);
-            }
-            Provider::Copilot => {
-                // Copilot is authenticated through the official CLI, not rig.
-            }
-            Provider::Minimax => {
-                // MiniMax uses an Anthropic-compatible API; rig has no direct client.
-            }
-            Provider::DeepSeek => {
-                let client = deepseek::Client::new(api_key)
-                    .context("failed to initialise Rig DeepSeek client")?;
-                let _ = client.completion_model(&self.model);
-            }
-            Provider::HuggingFace => {
-                // Hugging Face exposes an OpenAI-compatible router; rig does not ship a dedicated client.
-            }
-            Provider::OpenRouter => {
-                let client = openrouter::Client::new(api_key)
-                    .context("failed to initialise Rig OpenRouter client")?;
-                let _ = client.completion_model(&self.model);
-            }
-            Provider::Ollama => {
-                // Rig does not provide an Ollama integration; validation is skipped.
-            }
-            Provider::LlamaCpp => {
-                // llama.cpp provides an OpenAI-compatible API; rig has no direct client.
-            }
-            Provider::LmStudio => {
-                // LM Studio provides an OpenAI-compatible API; rig has no direct client.
-            }
-            Provider::Moonshot => {
-                // Moonshot does not have a rig client integration yet.
-            }
-            Provider::Mistral => {
-                // Mistral exposes an OpenAI-compatible API; rig has no dedicated client.
-            }
-            Provider::ZAI => {
-                // The rig crate does not yet expose a dedicated Z.AI client.
-                // Skip instantiation while still marking the provider as verified.
-            }
-            Provider::OpenCodeZen | Provider::OpenCodeGo => {
-                // OpenCode Zen/Go are API gateways; rig has no direct client.
-            }
-            Provider::MiMo => {
-                // Xiaomi MiMo is an OpenAI-compatible API; rig has no dedicated client.
-            }
-            Provider::Qwen => {
-                // Alibaba Cloud Qwen uses an OpenAI-compatible API; rig has no dedicated client.
-            }
-            Provider::StepFun => {
-                // StepFun uses an OpenAI-compatible API; rig has no dedicated client.
-            }
-            Provider::Evolink => {
-                // Evolink is an OpenAI-compatible gateway; rig has no dedicated client.
-            }
-            Provider::Poolside => {
-                // Poolside uses an OpenAI-compatible API; rig has no dedicated client.
-            }
-        }
-
-        Ok(RigValidationSummary {
-            provider: self.provider,
-            model: self.model.clone(),
-        })
     }
 
     /// Convert a VT Code reasoning effort level to provider-specific parameters
@@ -247,21 +153,6 @@ mod tests {
     use super::RigProviderCapabilities;
     use vtcode_config::models::Provider;
     use vtcode_config::types::ReasoningEffortLevel;
-
-    #[test]
-    fn rig_capabilities_validate_rig_backed_and_noop_providers() {
-        let openai = RigProviderCapabilities::new(Provider::OpenAI, "gpt-5")
-            .validate_model("test-key")
-            .expect("openai validation");
-        assert_eq!(openai.provider, Provider::OpenAI);
-        assert_eq!(openai.model, "gpt-5");
-
-        let deepseek = RigProviderCapabilities::new(Provider::DeepSeek, "deepseek-chat")
-            .validate_model("test-key")
-            .expect("no-op validation");
-        assert_eq!(deepseek.provider, Provider::DeepSeek);
-        assert_eq!(deepseek.model, "deepseek-chat");
-    }
 
     #[test]
     fn rig_capabilities_generate_reasoning_payload_for_supported_provider() {

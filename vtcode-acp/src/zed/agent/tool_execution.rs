@@ -374,9 +374,5 @@ impl ZedAgent {
 }
 
 fn should_route_terminal_via_client(tool_name: &str, _args: &Value) -> bool {
-    match tool_name {
-        tools::RUN_PTY_CMD => true,
-        tools::EXEC_COMMAND => true,
-        _ => false,
-    }
+    matches!(tool_name, tools::RUN_PTY_CMD | tools::EXEC_COMMAND)
 }

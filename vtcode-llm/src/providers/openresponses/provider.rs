@@ -12,7 +12,6 @@ use crate::providers::shared::{
     collect_tool_references_from_tool_search_output, create_responses_normalized_stream,
     function_output_value_from_message_content, parse_compacted_output_messages,
 };
-use crate::rig_adapter::RigProviderCapabilities;
 use anyhow::Result;
 use async_stream::try_stream;
 use async_trait::async_trait;
@@ -22,7 +21,6 @@ use serde_json::{Value, json};
 use vtcode_config::TimeoutsConfig;
 use vtcode_config::constants::{env_vars, models, urls};
 use vtcode_config::core::{AnthropicConfig, ModelConfig, PromptCachingConfig};
-use vtcode_config::models::Provider as ModelProvider;
 
 use super::super::common::{override_base_url, resolve_model};
 use super::super::error_handling::{format_network_error, format_parse_error};
@@ -804,13 +802,6 @@ impl LLMProvider for OpenResponsesProvider {
                 metadata: None,
             });
         }
-
-        RigProviderCapabilities::new(ModelProvider::OpenAI, &request.model)
-            .validate_model(&self.api_key)
-            .map_err(|err| LLMError::Provider {
-                message: format!("OpenResponses rig validation failed: {err}"),
-                metadata: None,
-            })?;
 
         Ok(())
     }

@@ -321,7 +321,7 @@ fn next_outline_path_batch_with_cap(
 }
 
 fn arg_bytes(arg: &str) -> usize {
-    arg.as_bytes().len().saturating_add(1)
+    arg.len().saturating_add(1)
 }
 
 fn arg_os_bytes(arg: &std::ffi::OsStr) -> usize {

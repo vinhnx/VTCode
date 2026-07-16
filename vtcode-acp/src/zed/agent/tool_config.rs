@@ -38,19 +38,18 @@ impl ZedAgent {
         if enabled_tools.is_empty() && !include_local {
             None
         } else {
-            let mut definitions = self.acp_tool_registry.definitions_for(enabled_tools, false);
-            if include_local {
-                definitions.extend(
-                    self.acp_tool_registry
-                        .definitions_for(&[], true)
-                        .into_iter()
-                        .filter(|definition| {
-                            self.primary_agents
-                                .allows_local_tool(primary_agent, definition.function_name())
-                        }),
-                );
-            }
-            Some(definitions)
+            let workspace_root = self.config.workspace.clone();
+            Some(self.acp_tool_registry.definitions_for_filtered(
+                enabled_tools,
+                include_local,
+                |tool_name| {
+                    self.primary_agents.allows_tool(
+                        primary_agent,
+                        tool_name,
+                        workspace_root.as_path(),
+                    )
+                },
+            ))
         }
     }
 

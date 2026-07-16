@@ -18,6 +18,16 @@ fn default_public_tool_names() -> Vec<String> {
     ]
 }
 
+/// The public catalog order derives from rig's `ToolSet` (HashMap-backed), so
+/// it is not a stable contract. Compare the tool set order-insensitively.
+fn assert_same_tool_set(actual: &[String], expected: &[String]) {
+    let mut actual_sorted = actual.to_vec();
+    actual_sorted.sort();
+    let mut expected_sorted = expected.to_vec();
+    expected_sorted.sort();
+    assert_eq!(actual_sorted, expected_sorted);
+}
+
 fn dynamic_tool_executor<'a>(
     _registry: &'a ToolRegistry,
     _args: Value,
@@ -32,7 +42,7 @@ async fn public_catalog_uses_canonical_names_only() {
 
     let public_tools = registry.available_tools().await;
 
-    assert_eq!(public_tools, default_public_tool_names());
+    assert_same_tool_set(&public_tools, &default_public_tool_names());
     assert!(!public_tools.contains(&tools::CODE_SEARCH.to_string()));
     assert!(!public_tools.contains(&tools::UNIFIED_SEARCH.to_string()));
     assert!(!public_tools.contains(&tools::UNIFIED_FILE.to_string()));
@@ -52,7 +62,7 @@ async fn acp_surface_matches_canonical_local_subset() {
         .public_tool_names(SessionSurface::Acp, CapabilityLevel::CodeSearch)
         .await;
 
-    assert_eq!(acp_tools, default_public_tool_names());
+    assert_same_tool_set(&acp_tools, &default_public_tool_names());
     assert!(!acp_tools.contains(&tools::CODE_SEARCH.to_string()));
 }
 
@@ -71,7 +81,7 @@ async fn schema_entries_follow_public_catalog() {
         .await;
     let names: Vec<_> = schema_entries.into_iter().map(|entry| entry.name).collect();
 
-    assert_eq!(names, default_public_tool_names());
+    assert_same_tool_set(&names, &default_public_tool_names());
     assert!(!names.contains(&tools::CODE_SEARCH.to_string()));
     assert!(!names.contains(&tools::UNIFIED_SEARCH.to_string()));
     assert!(!names.contains(&tools::UNIFIED_FILE.to_string()));

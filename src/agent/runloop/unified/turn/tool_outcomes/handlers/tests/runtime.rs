@@ -443,7 +443,6 @@ async fn repeated_identical_readonly_call_in_same_turn_reuses_recent_result() {
     let mut backing = TestContextBacking::new(4).await;
     backing.select_build_primary_agent();
     let args = json!({
-        "action": "read",
         "path": backing.sample_file.to_string_lossy()
     });
 
@@ -459,7 +458,7 @@ async fn repeated_identical_readonly_call_in_same_turn_reuses_recent_result() {
     let first = handle_single_tool_call(
         &mut outcome_ctx,
         "read_once",
-        tool_names::UNIFIED_FILE,
+        tool_names::READ_FILE,
         args.clone(),
     )
     .await
@@ -469,14 +468,10 @@ async fn repeated_identical_readonly_call_in_same_turn_reuses_recent_result() {
     assert_eq!(outcome_ctx.ctx.harness_state.tool_calls, 1);
     assert_eq!(outcome_ctx.ctx.tool_registry.execution_history_len(), 1);
 
-    let second = handle_single_tool_call(
-        &mut outcome_ctx,
-        "read_twice",
-        tool_names::UNIFIED_FILE,
-        args,
-    )
-    .await
-    .expect("duplicate readonly call should be reused");
+    let second =
+        handle_single_tool_call(&mut outcome_ctx, "read_twice", tool_names::READ_FILE, args)
+            .await
+            .expect("duplicate readonly call should be reused");
 
     assert!(second.is_none());
     assert_eq!(outcome_ctx.ctx.harness_state.tool_calls, 1);
@@ -526,7 +521,6 @@ async fn repeated_same_file_paginated_reads_do_not_trip_read_family_cap() {
 
     let build_paginated_read_args = |line: usize| {
         json!({
-            "action": "read",
             "path": sample_path.clone(),
             "line_start": line,
             "line_end": line
@@ -539,7 +533,7 @@ async fn repeated_same_file_paginated_reads_do_not_trip_read_family_cap() {
         let outcome = handle_single_tool_call(
             &mut outcome_ctx,
             &format!("read_variant_{idx}"),
-            tool_names::UNIFIED_FILE,
+            tool_names::READ_FILE,
             build_paginated_read_args(idx),
         )
         .await
@@ -603,7 +597,6 @@ async fn repeated_identical_slice_read_trips_read_family_cap() {
 
     // Identical slice every time -> same family key -> streak accumulates.
     let identical_args = json!({
-        "action": "read",
         "path": sample_path.clone(),
         "offset": 0,
         "limit": 4
@@ -613,7 +606,7 @@ async fn repeated_identical_slice_read_trips_read_family_cap() {
         let outcome = handle_single_tool_call(
             &mut outcome_ctx,
             &format!("read_repeat_{idx}"),
-            tool_names::UNIFIED_FILE,
+            tool_names::READ_FILE,
             identical_args.clone(),
         )
         .await
@@ -634,7 +627,7 @@ async fn repeated_identical_slice_read_trips_read_family_cap() {
     let blocked = handle_single_tool_call(
         &mut outcome_ctx,
         "read_repeat_blocked",
-        tool_names::UNIFIED_FILE,
+        tool_names::READ_FILE,
         identical_args.clone(),
     )
     .await
@@ -765,22 +758,18 @@ async fn multiple_prepared_tool_calls_respect_unlimited_budget_when_cap_disabled
 
     let tool_calls = vec![
         PreparedAssistantToolCall::new(uni::ToolCall::function(
-            "prepared_search_1".to_string(),
-            tool_names::CODE_SEARCH.to_string(),
+            "prepared_read_1".to_string(),
+            tool_names::READ_FILE.to_string(),
             serde_json::to_string(&json!({
-                "path": ".",
-                "query": "hello",
-                "result_types": ["text"]
+                "path": backing.sample_file.to_string_lossy()
             }))
             .expect("serialize tool args"),
         )),
         PreparedAssistantToolCall::new(uni::ToolCall::function(
-            "prepared_search_2".to_string(),
-            tool_names::CODE_SEARCH.to_string(),
+            "prepared_read_2".to_string(),
+            tool_names::READ_FILE.to_string(),
             serde_json::to_string(&json!({
-                "path": ".",
-                "query": "world",
-                "result_types": ["text"]
+                "path": second_file.to_string_lossy()
             }))
             .expect("serialize tool args"),
         )),
@@ -877,16 +866,18 @@ async fn end_to_end_blocked_calls_do_not_burn_budget_before_valid_call() {
     )
     .await
     .expect("exhausted-budget call should return structured outcome");
-    assert!(matches!(
-        exhausted,
-        Some(TurnHandlerOutcome::Break(TurnLoopResult::Blocked { .. }))
-    ));
+    // Tool-call budget exhaustion must NOT break the turn as `Blocked` — that
+    // skips the synthesis pass. It rejects the call with a policy-violation
+    // tool response and lets the post-batch flush push a single synthesis
+    // directive (see `flush_budget_synthesis_directives`). A single rejected
+    // call is below the blocked-streak cap, so the guard returns no outcome.
+    assert!(exhausted.is_none());
     assert!(outcome_ctx.ctx.working_history.iter().any(|message| {
-        message.role == uni::MessageRole::System
+        message.role == uni::MessageRole::Tool
             && message
                 .content
                 .as_text()
-                .contains("\"continue\" or provide a new instruction")
+                .contains("exceeded max tool calls per turn")
     }));
 }
 
@@ -907,7 +898,6 @@ async fn repeated_read_only_guard_dedups_plan_file_in_planning_mode() {
     ctx.tool_registry.enable_planning();
 
     let args = json!({
-        "action": "read",
         "path": plan_path.to_string_lossy()
     });
 
@@ -922,21 +912,17 @@ async fn repeated_read_only_guard_dedups_plan_file_in_planning_mode() {
     let first = handle_single_tool_call(
         &mut outcome_ctx,
         "read_plan_1",
-        tool_names::UNIFIED_FILE,
+        tool_names::READ_FILE,
         args.clone(),
     )
     .await
     .expect("first plan-file read should succeed");
     assert!(first.is_none(), "first read should execute normally");
 
-    let second = handle_single_tool_call(
-        &mut outcome_ctx,
-        "read_plan_2",
-        tool_names::UNIFIED_FILE,
-        args,
-    )
-    .await
-    .expect("second plan-file read should be deduplicated");
+    let second =
+        handle_single_tool_call(&mut outcome_ctx, "read_plan_2", tool_names::READ_FILE, args)
+            .await
+            .expect("second plan-file read should be deduplicated");
     assert!(
         second.is_none(),
         "duplicate read should be handled by guard"

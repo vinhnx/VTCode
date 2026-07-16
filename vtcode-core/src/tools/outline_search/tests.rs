@@ -70,7 +70,7 @@ done
 fn write_failing_second_batch_fake_sg() -> (TempDir, PathBuf) {
     let script_dir = TempDir::new().expect("script tempdir");
     let script_path = script_dir.path().join("sg");
-    let failure_name = format!("{:03}.rs", CODE_SEARCH_OUTLINE_PATH_BATCH_SIZE);
+    let failure_name = format!("{CODE_SEARCH_OUTLINE_PATH_BATCH_SIZE:03}.rs");
     let script = format!(
         r#"#!/bin/sh
 if [ "$1" = "--version" ]; then

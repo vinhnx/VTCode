@@ -70,6 +70,11 @@ static SHARED_THEME_SET: Lazy<ThemeSet> = Lazy::new(|| match ThemeSet::load_defa
     }
 });
 
+/// Cache for loaded themes to avoid repeated cloning from the ThemeSet.
+/// Key is theme name, value is the cloned theme.
+static THEME_CACHE: Lazy<std::sync::RwLock<std::collections::HashMap<String, Theme>>> =
+    Lazy::new(|| std::sync::RwLock::new(std::collections::HashMap::new()));
+
 /// Get the global SyntaxSet reference
 #[inline]
 pub fn syntax_set() -> &'static SyntaxSet {
@@ -130,16 +135,26 @@ fn plain_text_line_segments(code: &str) -> Vec<Vec<(syntect::highlighting::Style
     result
 }
 
-/// Load a theme from the process-global theme set.
+/// Load a theme from the process-global theme set with caching.
 ///
 /// # Arguments
 /// * `theme_name` - Theme identifier (TextMate theme name)
-/// * `cache` - Ignored. Kept for API compatibility.
+/// * `cache` - If true, cache the loaded theme for reuse. If false, always clone from ThemeSet.
 ///
 /// # Returns
 /// Cloned theme instance (safe for multi-threaded use)
-pub fn load_theme(theme_name: &str, _cache: bool) -> Theme {
-    if let Some(theme) = SHARED_THEME_SET.themes.get(theme_name) {
+pub fn load_theme(theme_name: &str, cache: bool) -> Theme {
+    // Try cache first if caching is enabled
+    if cache {
+        if let Ok(cache) = THEME_CACHE.read() {
+            if let Some(theme) = cache.get(theme_name) {
+                return theme.clone();
+            }
+        }
+    }
+
+    // Load from ThemeSet
+    let theme = if let Some(theme) = SHARED_THEME_SET.themes.get(theme_name) {
         theme.clone()
     } else {
         warn!(
@@ -147,7 +162,18 @@ pub fn load_theme(theme_name: &str, _cache: bool) -> Theme {
             "Unknown syntax highlighting theme, falling back to default"
         );
         fallback_theme()
+    };
+
+    // Cache the theme if caching is enabled
+    if cache {
+        if let Ok(mut cache) = THEME_CACHE.write() {
+            cache
+                .entry(theme_name.to_string())
+                .or_insert_with(|| theme.clone());
+        }
     }
+
+    theme
 }
 
 /// Get the default syntax theme name

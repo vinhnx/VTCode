@@ -10,7 +10,7 @@ use serde_json::{Value, json};
 use super::{StreamAggregator, generate_tool_call_id, parse_cached_prompt_tokens_from_usage};
 
 // Retained shared Responses stream processor.
-// Rig 0.39 can consume SSE, but VTCode needs a provider-agnostic
+// Rig 0.40 can consume SSE, but VTCode needs a provider-agnostic
 // NormalizedStreamEvent contract: text/refusal/reasoning deltas, tool-call
 // start and argument deltas, tolerant empty-final-response recovery, and
 // backend error text. Protected by this module's `responses_stream` tests.

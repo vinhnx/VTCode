@@ -807,7 +807,13 @@ mod tests {
             .filtered_snapshot_with_stats(&base_tools, registry.is_planning_active(), false)
             .await;
         let inactive_names = inactive.active_tool_names.as_ref();
-        assert!(!inactive_names.iter().any(|name| name == tools::CODE_SEARCH));
+        // `request_user_input` is gated by the interactive/planning capability
+        // signal (passed as `request_user_input_enabled = false` here), so it is
+        // absent until planning enables it. `code_search` is a read-only tool and
+        // is intentionally exposed in both modes (planning-inactive exposes every
+        // non-gated tool; planning keeps read-only tools) — see
+        // `FeatureSet::tool_enabled_for_mode`.
+        assert!(inactive_names.iter().any(|name| name == tools::CODE_SEARCH));
         assert!(
             !inactive_names
                 .iter()

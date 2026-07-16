@@ -377,7 +377,7 @@ async fn cache_tool_permission(
 ) {
     let normalized_tool_name = backing
         .tool_registry
-        .preflight_validate_call(tool_name, args)
+        .preflight_validate_harness_call(tool_name, args)
         .expect("preflight should succeed")
         .normalized_tool_name;
     let mut cache = backing.tool_permission_cache.write().await;

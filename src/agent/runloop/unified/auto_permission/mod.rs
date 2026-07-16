@@ -849,7 +849,7 @@ mod tests {
             String::new(),
             vec![uni::ToolCall::function(
                 "call_1".to_string(),
-                "file_operation".to_string(),
+                tool_names::UNIFIED_FILE.to_string(),
                 json!({
                     "action": "write",
                     "path": "scripts/cleanup.sh",
@@ -865,7 +865,7 @@ mod tests {
         let permission_request = build_permission_request(
             workspace_root,
             workspace_root,
-            "command_session",
+            tool_names::UNIFIED_EXEC,
             Some(&args),
         );
 

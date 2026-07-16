@@ -1,4 +1,5 @@
 use serde_json::{Value, json};
+use std::borrow::Cow;
 use std::time::Duration;
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::tools::registry::ToolRegistry;
@@ -130,12 +131,15 @@ fn read_file_slice_suffix(args: &Value) -> String {
 }
 
 pub(super) fn shell_run_signature(canonical_tool_name: &str, args: &Value) -> Option<String> {
+    // The family-key prefix must stay stable across internal tool renames
+    // (e.g. `command_session_internal` -> `command_session`) so loop detection
+    // keeps working. Use the stable label.
     if !tool_intent::is_command_run_tool_call(canonical_tool_name, args) {
         return None;
     }
 
     let command = normalized_shell_command_arg(args, 200)?;
-    Some(format!("{}::{}", tool_names::UNIFIED_EXEC, command))
+    Some(format!("command_session::{}", command))
 }
 
 pub(super) fn maybe_apply_spool_read_offset_hint(
@@ -216,11 +220,27 @@ pub(super) fn task_tracker_create_signature(tool_name: &str, args: &Value) -> Op
 
     Some(signature)
 }
+/// Map an incoming tool name to the stable family-label prefix used by
+/// loop/duplicate detection. Internal dispatcher names (e.g.
+/// `command_session_internal`) are renamed to their stable public-facing
+/// labels so the family contract survives internal renames. Legacy short
+/// aliases (`file_operation`, `search_dispatch`, `command_session`) are also
+/// accepted so callers/tests that predate the rename keep working.
+fn stable_family_label(name: &str) -> Cow<'_, str> {
+    match name {
+        tool_names::UNIFIED_EXEC | "command_session" => Cow::Borrowed("unified_exec"),
+        tool_names::UNIFIED_FILE | "file_operation" => Cow::Borrowed("unified_file"),
+        tool_names::UNIFIED_SEARCH | "search_dispatch" => Cow::Borrowed("search_dispatch"),
+        _ => Cow::Borrowed(name),
+    }
+}
+
 pub(crate) fn low_signal_family_key(canonical_tool_name: &str, args: &Value) -> Option<String> {
+    let label = stable_family_label(canonical_tool_name);
     match canonical_tool_name {
         tool_names::READ_FILE => read_file_path_arg(args).map(|path| {
             format!(
-                "{canonical_tool_name}::{}{}",
+                "{label}::{}{}",
                 compact_loop_key_part(path, 120),
                 read_file_slice_suffix(args),
             )
@@ -232,16 +252,39 @@ pub(crate) fn low_signal_family_key(canonical_tool_name: &str, args: &Value) -> 
             }
             read_file_path_arg(args).map(|path| {
                 format!(
-                    "{canonical_tool_name}::read::{}{}",
+                    "{label}::read::{}{}",
                     compact_loop_key_part(path, 120),
                     read_file_slice_suffix(args),
                 )
             })
         }
         tool_names::UNIFIED_EXEC => normalized_shell_command_arg(args, 160)
-            .map(|command| format!("{canonical_tool_name}::run::{command}")),
+            .map(|command| format!("{label}::run::{command}")),
         tool_names::CODE_SEARCH => vtcode_core::tools::normalised_code_search_loop_identity(args)
             .map(|identity| format!("{canonical_tool_name}::{identity}")),
+        tool_names::UNIFIED_SEARCH => {
+            let action = args.get("action").and_then(Value::as_str).unwrap_or("grep");
+            let mut key = format!("{label}::{action}");
+            if matches!(action, "grep" | "structural") {
+                if let Some(pattern) = args
+                    .get("pattern")
+                    .and_then(Value::as_str)
+                    .map(|p| compact_loop_text(p, 80))
+                    .filter(|p| !p.is_empty())
+                {
+                    key.push_str("::pat=");
+                    key.push_str(&pattern);
+                }
+            }
+            let path = args
+                .get("path")
+                .and_then(Value::as_str)
+                .map(|value| compact_loop_key_part(value, 120))
+                .unwrap_or_else(|| ".".to_string());
+            key.push_str("::");
+            key.push_str(&path);
+            Some(key)
+        }
         _ => None,
     }
 }

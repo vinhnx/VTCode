@@ -230,7 +230,7 @@ pub const THEME_GREEN_LUMINANCE_COEFFICIENT: f32 = 0.7152;
 pub const THEME_BLUE_LUMINANCE_COEFFICIENT: f32 = 0.0722;
 pub const THEME_LUMINANCE_LIGHTEN_RATIO: f32 = 0.2;
 /// Lighten ratio for PTY output text — subdued but readable (higher = brighter)
-pub const THEME_PTY_OUTPUT_LIGHTEN_RATIO: f32 = 0.28;
+pub const THEME_PTY_OUTPUT_LIGHTEN_RATIO: f32 = 0.15;
 
 /// Subdued gray for diff line numbers
 pub const DIFF_LINE_NUMBER_R: u8 = 0x4a;
@@ -421,9 +421,9 @@ mod tests {
     #[test]
     fn agent_mode_colors_are_wired_into_builtin_primary_agents() {
         // Guards against the constants drifting from the specs that expose them.
-        assert!(!AGENT_COLOR_BUILD.is_empty());
-        assert!(!AGENT_COLOR_AUTO.is_empty());
-        assert!(!AGENT_COLOR_PLAN.is_empty());
-        assert!(!AGENT_COLOR_DUCK.is_empty());
+        assert_eq!(AGENT_COLOR_BUILD, "red");
+        assert_eq!(AGENT_COLOR_AUTO, "green");
+        assert_eq!(AGENT_COLOR_PLAN, "blue");
+        assert_eq!(AGENT_COLOR_DUCK, "magenta");
     }
 }

@@ -115,6 +115,19 @@ impl AcpToolRegistry {
         enabled_tools: &[SupportedTool],
         include_local: bool,
     ) -> Vec<ToolDefinition> {
+        self.definitions_for_filtered(enabled_tools, include_local, |_| true)
+    }
+
+    /// Like [`Self::definitions_for`], but filters the local tool definitions
+    /// through `local_tool_allowed`. This lets callers apply per-agent
+    /// permission gating to local tools while keeping the ACP-advertised tools
+    /// (already gated via `enabled_tools`) unchanged.
+    pub fn definitions_for_filtered(
+        &self,
+        enabled_tools: &[SupportedTool],
+        include_local: bool,
+        local_tool_allowed: impl Fn(&str) -> bool,
+    ) -> Vec<ToolDefinition> {
         let mut definitions = Vec::with_capacity(self.entries.len());
         for entry in &self.entries {
             if enabled_tools.contains(&entry.tool) {
@@ -123,7 +136,12 @@ impl AcpToolRegistry {
         }
 
         if include_local {
-            definitions.extend(self.local_definitions.iter().cloned());
+            definitions.extend(
+                self.local_definitions
+                    .iter()
+                    .filter(|definition| local_tool_allowed(definition.function_name()))
+                    .cloned(),
+            );
         }
 
         definitions

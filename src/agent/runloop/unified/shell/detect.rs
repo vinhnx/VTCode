@@ -13,7 +13,7 @@ pub(crate) fn detect_explicit_run_command(input: &str) -> Option<(String, serde_
 
     if let Some(command) = detect_show_diff_command(trimmed) {
         return Some((
-            tools::UNIFIED_EXEC.to_string(),
+            tools::EXEC_COMMAND.to_string(),
             json!({
                 "command": command
             }),
@@ -40,7 +40,7 @@ pub(crate) fn detect_explicit_run_command(input: &str) -> Option<(String, serde_
     }
 
     Some((
-        tools::UNIFIED_EXEC.to_string(),
+        tools::EXEC_COMMAND.to_string(),
         json!({
             "command": normalized_command
         }),

@@ -236,7 +236,7 @@ pub(crate) async fn execute_direct_tool_call(
 }
 
 fn direct_tool_skips_confirmations(tool_name: &str) -> bool {
-    matches!(tool_name, tools::UNIFIED_EXEC)
+    matches!(tool_name, tools::EXEC_COMMAND | tools::UNIFIED_EXEC)
 }
 
 async fn detect_direct_subagent_spawn_input(
@@ -272,7 +272,7 @@ fn parse_direct_tool_input(input: &str) -> Option<DirectToolInput> {
         }
         return match validate_bang_shell_command(shell_command) {
             Ok(()) => Some(DirectToolInput::Execute {
-                tool_name: tools::UNIFIED_EXEC.to_string(),
+                tool_name: tools::EXEC_COMMAND.to_string(),
                 args: serde_json::json!({ "action": "run", "command": shell_command }),
                 is_bang_prefix: true,
             }),
@@ -699,7 +699,7 @@ mod tests {
                 args,
                 is_bang_prefix,
             } => {
-                assert_eq!(tool_name, tools::UNIFIED_EXEC);
+                assert_eq!(tool_name, tools::EXEC_COMMAND);
                 assert_eq!(args["action"], "run");
                 assert_eq!(args["command"], "echo hello");
                 assert!(is_bang_prefix);
@@ -744,7 +744,7 @@ mod tests {
                 args,
                 is_bang_prefix,
             } => {
-                assert_eq!(tool_name, tools::UNIFIED_EXEC);
+                assert_eq!(tool_name, tools::EXEC_COMMAND);
                 assert_eq!(args["command"], "cargo check");
                 assert!(!is_bang_prefix);
             }

@@ -34,7 +34,7 @@ impl MessageStyle {
             Self::Response => styles.response,
             Self::Tool => styles.tool,
             Self::ToolDetail => styles.tool_detail,
-            Self::ToolOutput => styles.tool_output,
+            Self::ToolOutput => styles.pty_output, // Use pty_output style for command output
             Self::ToolError => styles.error,
             Self::Status => styles.status,
             Self::McpStatus => styles.mcp,
