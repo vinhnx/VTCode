@@ -573,7 +573,7 @@ pub(crate) async fn execute_llm_request(
                                 )
                             };
                             let compacted = compact_tool_messages_for_retry(&request.messages);
-                            request.messages = compacted;
+                            request.messages = std::sync::Arc::new(compacted);
                             // Strip reasoning_effort on retry — DeepSeek's
                             // `thinking` parameter causes ExecutionError on
                             // post-tool follow-ups where tool messages are

@@ -525,7 +525,7 @@ pub fn build_standard_responses_payload(
         }
     }
 
-    for msg in &request.messages {
+    for msg in request.messages.iter() {
         match msg.role {
             MessageRole::System => {
                 let content_text = msg.content.as_text();
@@ -735,7 +735,8 @@ mod tests {
                     json!(r#"{"type":"compaction","id":"cmp_1","encrypted_content":"opaque"}"#),
                     json!("plain-text"),
                 ])),
-            ],
+            ]
+            .into(),
             ..Default::default()
         };
 
@@ -763,7 +764,7 @@ mod tests {
                     r#"[{"type":"input_text","text":"inline image note"},{"type":"input_image","image_url":"data:image/png;base64,abc"}]"#
                         .to_string(),
                 ),
-            ],
+            ].into(),
             ..Default::default()
         };
 
@@ -791,7 +792,8 @@ mod tests {
                     "{\"output\":\"\",\"exit_code\":0,\"backend\":\"pipe\"}".to_string(),
                 ),
                 Message::assistant("cargo fmt completed successfully.".to_string()),
-            ],
+            ]
+            .into(),
             ..Default::default()
         };
 
@@ -827,7 +829,8 @@ mod tests {
                     )],
                 ),
                 Message::user("continue".to_string()),
-            ],
+            ]
+            .into(),
             ..Default::default()
         };
 
@@ -860,7 +863,8 @@ mod tests {
                         "{\"command\":\"echo late\"}".to_string(),
                     )],
                 ),
-            ],
+            ]
+            .into(),
             ..Default::default()
         };
 
@@ -914,7 +918,7 @@ mod tests {
                     "Previous turn already completed tool execution. Reuse the latest tool outputs in history instead of rerunning the same exploration.".to_string(),
                 ),
                 Message::user("ok".to_string()),
-            ],
+            ].into(),
             ..Default::default()
         };
 
@@ -1061,7 +1065,8 @@ mod tests {
                 messages: vec![
                     Message::assistant(parsed.content.unwrap_or_default())
                         .with_reasoning_details(Some(reasoning_details)),
-                ],
+                ]
+                .into(),
                 ..Default::default()
             },
             true,
@@ -1106,7 +1111,8 @@ mod tests {
                 messages: vec![
                     Message::assistant(parsed.content.unwrap_or_default())
                         .with_reasoning_details(Some(preserved_items)),
-                ],
+                ]
+                .into(),
                 ..Default::default()
             },
             true,
@@ -1147,7 +1153,8 @@ mod tests {
                 messages: vec![
                     Message::assistant_with_tools(String::new(), tool_calls),
                     Message::tool_response("call_789".to_string(), "{\"exit_code\":0}".to_string()),
-                ],
+                ]
+                .into(),
                 ..Default::default()
             },
             true,
@@ -1180,7 +1187,8 @@ mod tests {
                     )],
                 ),
                 Message::tool_response("call_patch_1".to_string(), "patched".to_string()),
-            ],
+            ]
+            .into(),
             ..Default::default()
         };
 
@@ -1244,7 +1252,8 @@ mod tests {
                 Message::user("What is this project?".to_string()),
                 Message::assistant("VT Code is a Rust Cargo workspace.".to_string()),
                 Message::user("Tell me more.".to_string()),
-            ],
+            ]
+            .into(),
             ..Default::default()
         };
 
@@ -1273,7 +1282,8 @@ mod tests {
                     }),
                 ])),
                 Message::user("next".to_string()),
-            ],
+            ]
+            .into(),
             ..Default::default()
         };
 
@@ -1304,7 +1314,8 @@ mod tests {
                 ),
                 Message::assistant("cargo check completed successfully.".to_string()),
                 Message::user("tell me more".to_string()),
-            ],
+            ]
+            .into(),
             ..Default::default()
         };
 

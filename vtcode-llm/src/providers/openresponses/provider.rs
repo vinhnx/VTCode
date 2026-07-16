@@ -241,7 +241,7 @@ impl OpenResponsesProvider {
         };
         let request = LLMRequest {
             model: resolved_model.clone(),
-            messages: history.to_vec(),
+            messages: std::sync::Arc::new(history.to_vec()),
             ..Default::default()
         };
         let native_payload = self.build_native_payload(&request, false)?;
@@ -467,7 +467,7 @@ impl OpenResponsesProvider {
             }));
         }
 
-        for message in &request.messages {
+        for message in request.messages.iter() {
             let role = message.role.as_generic_str();
             let mut message_obj = json!({
                 "role": role,
@@ -1068,7 +1068,7 @@ mod tests {
         let provider = test_provider("https://api.openresponses.com/v1");
         let mut request = LLMRequest {
             model: "gpt-5".to_string(),
-            messages: vec![Message::user("hello".to_string())],
+            messages: vec![Message::user("hello".to_string())].into(),
             ..Default::default()
         };
         request.previous_response_id = Some("resp_prev_1".to_string());
@@ -1099,7 +1099,7 @@ mod tests {
         let provider = test_provider("https://api.openresponses.com/v1");
         let mut request = LLMRequest {
             model: "gpt-5".to_string(),
-            messages: vec![Message::user("hello".to_string())],
+            messages: vec![Message::user("hello".to_string())].into(),
             ..Default::default()
         };
         request.context_management = Some(serde_json::json!([{
@@ -1140,7 +1140,7 @@ mod tests {
         })]));
         let request = LLMRequest {
             model: "gpt-5".to_string(),
-            messages: vec![message],
+            messages: vec![message].into(),
             ..Default::default()
         };
 
@@ -1172,7 +1172,7 @@ mod tests {
         ]));
         let request = LLMRequest {
             model: "gpt-5".to_string(),
-            messages: vec![message],
+            messages: vec![message].into(),
             ..Default::default()
         };
 
@@ -1206,7 +1206,8 @@ mod tests {
                     )],
                 ),
                 Message::tool_response("call_1".to_string(), "/tmp/work".to_string()),
-            ],
+            ]
+            .into(),
             ..Default::default()
         };
 
@@ -1253,7 +1254,7 @@ mod tests {
                     r#"[{"type":"input_text","text":"inline image note"},{"type":"input_image","image_url":"data:image/png;base64,abc"}]"#
                         .to_string(),
                 ),
-            ],
+            ].into(),
             ..Default::default()
         };
 
@@ -1316,7 +1317,7 @@ mod tests {
         let response = provider
             .generate(LLMRequest {
                 model: "gpt-5".to_string(),
-                messages: vec![Message::user("hello".to_string())],
+                messages: vec![Message::user("hello".to_string())].into(),
                 ..Default::default()
             })
             .await
@@ -1356,7 +1357,7 @@ data: [DONE]\n\n",
         let mut stream = provider
             .stream(LLMRequest {
                 model: "gpt-5".to_string(),
-                messages: vec![Message::user("hello".to_string())],
+                messages: vec![Message::user("hello".to_string())].into(),
                 ..Default::default()
             })
             .await
@@ -1404,7 +1405,7 @@ data: [DONE]\n\n",
         let mut stream = provider
             .stream_normalized(LLMRequest {
                 model: "gpt-5".to_string(),
-                messages: vec![Message::user("hello".to_string())],
+                messages: vec![Message::user("hello".to_string())].into(),
                 ..Default::default()
             })
             .await

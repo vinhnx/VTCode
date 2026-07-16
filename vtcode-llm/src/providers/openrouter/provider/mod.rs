@@ -166,7 +166,7 @@ impl OpenRouterProvider {
 
         let mut normalized_messages: Vec<Message> = Vec::with_capacity(original.messages.len());
 
-        for message in &original.messages {
+        for message in original.messages.iter() {
             match message.role {
                 MessageRole::Assistant => {
                     let mut cleaned = message.clone();
@@ -195,7 +195,7 @@ impl OpenRouterProvider {
             }
         }
 
-        sanitized.messages = normalized_messages;
+        sanitized.messages = std::sync::Arc::new(normalized_messages);
         sanitized
     }
 
@@ -205,7 +205,7 @@ impl OpenRouterProvider {
 
     fn image_free_request(original: &LLMRequest) -> LLMRequest {
         let mut sanitized = original.clone();
-        for message in &mut sanitized.messages {
+        for message in std::sync::Arc::make_mut(&mut sanitized.messages) {
             if let Some(text_only) = message.content.without_images() {
                 message.content = text_only;
             }

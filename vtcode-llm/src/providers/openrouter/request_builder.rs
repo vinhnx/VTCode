@@ -26,7 +26,7 @@ impl OpenRouterProvider {
             }));
         }
 
-        for msg in &request.messages {
+        for msg in request.messages.iter() {
             let role = msg.role.as_openai_str();
             let content_value = assistant_interleaved_history_text(msg, resolved_model)
                 .map(Value::String)
@@ -197,7 +197,8 @@ mod tests {
             model: "z-ai/glm-5".to_string(),
             messages: vec![
                 Message::assistant("done".to_string()).with_reasoning(Some("trace".to_string())),
-            ],
+            ]
+            .into(),
             ..Default::default()
         };
 

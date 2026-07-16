@@ -652,7 +652,7 @@ impl OpenAIProvider {
     ) -> Result<(), provider::LLMError> {
         let mut total_inline_file_bytes = 0u64;
 
-        for message in &request.messages {
+        for message in request.messages.iter() {
             let provider::MessageContent::Parts(parts) = &message.content else {
                 continue;
             };

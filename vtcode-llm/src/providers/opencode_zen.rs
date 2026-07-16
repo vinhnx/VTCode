@@ -280,7 +280,7 @@ impl LLMProvider for OpenCodeZenProvider {
 impl LLMClient for OpenCodeZenProvider {
     async fn generate(&mut self, prompt: &str) -> Result<LLMResponse, LLMError> {
         let request = LLMRequest {
-            messages: vec![crate::provider::Message::user(prompt.to_string())],
+            messages: std::sync::Arc::new(vec![crate::provider::Message::user(prompt.to_string())]),
             model: self.model.clone(),
             ..Default::default()
         };

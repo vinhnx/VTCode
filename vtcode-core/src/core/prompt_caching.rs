@@ -436,7 +436,7 @@ impl PromptOptimizer {
         );
 
         let request = crate::llm::provider::LLMRequest {
-            messages: vec![
+            messages: std::sync::Arc::new(vec![
                 Message {
                     role: MessageRole::System,
                     content: MessageContent::Text(system_prompt),
@@ -447,7 +447,7 @@ impl PromptOptimizer {
                     content: MessageContent::Text(user_prompt),
                     ..Default::default()
                 },
-            ],
+            ]),
             model: target_model.to_string(),
             max_tokens: Some(2000),
             temperature: Some(0.3),

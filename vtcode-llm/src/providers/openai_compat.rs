@@ -11,13 +11,15 @@
 //! (preserving its type name and the 7-argument `from_config` constructor the
 //! registration layer depends on).
 
+use std::collections::HashMap;
 use std::marker::PhantomData;
+use std::sync::{Arc, Mutex};
 
 use reqwest::{Client as HttpClient, RequestBuilder};
 use serde_json::{Map, Value};
 use vtcode_config::core::{ModelConfig, PromptCachingConfig};
 
-use crate::provider::{LLMError, LLMRequest, LLMResponse, LLMStream};
+use crate::provider::{LLMError, LLMRequest, LLMResponse, LLMStream, ToolDefinition};
 
 use super::common::{
     chat_completions_url, ensure_model, extract_prompt_cache_settings_default,
@@ -197,7 +199,21 @@ pub(crate) struct OpenAiCompatCore<S: OpenAiCompatSpec> {
     pub(crate) prompt_cache_enabled: bool,
     pub(crate) model_behavior: Option<ModelConfig>,
     spec: PhantomData<S>,
+    /// Memoizes the serialized `tools` wire payload per stable tool catalog.
+    ///
+    /// The `tools` array in `convert_request` depends only on the tool
+    /// definitions and the provider spec `S` (both fixed for the lifetime of
+    /// this core). Re-serializing a large catalog every turn is wasted work,
+    /// so we key the cached `Value` array by the `Arc` identity of the catalog
+    /// (plus its length for collision tolerance). The `Arc` itself is retained
+    /// in the entry, guaranteeing the pointer key stays valid while cached.
+    tools_cache: Mutex<ToolsCache>,
 }
+
+/// Maps a stable tool catalog (by `Arc` identity) to its serialized wire
+/// payload. The retained `Arc` keeps the catalog alive so the raw-pointer key
+/// cannot be reused for an unrelated catalog while the entry is live.
+type ToolsCache = HashMap<usize, (Arc<Vec<ToolDefinition>>, Arc<Vec<Value>>)>;
 
 impl<S: OpenAiCompatSpec> OpenAiCompatCore<S> {
     /// Constructor backing the provider's `with_model`/`new` shorthands.
@@ -240,6 +256,7 @@ impl<S: OpenAiCompatSpec> OpenAiCompatCore<S> {
             prompt_cache_enabled: false,
             model_behavior,
             spec: PhantomData,
+            tools_cache: Mutex::new(HashMap::new()),
         }
     }
 
@@ -258,6 +275,7 @@ impl<S: OpenAiCompatSpec> OpenAiCompatCore<S> {
             prompt_cache_enabled: false,
             model_behavior: None,
             spec: PhantomData,
+            tools_cache: Mutex::new(HashMap::new()),
         }
     }
 
@@ -326,10 +344,30 @@ impl<S: OpenAiCompatSpec> OpenAiCompatCore<S> {
             }
         }
 
-        if let Some(tools) = &request.tools
-            && let Some(serialized_tools) = serialize_tools_openai_format(tools)
-        {
-            payload.insert("tools".to_owned(), Value::Array(serialized_tools));
+        if let Some(tools) = &request.tools {
+            let key = Arc::as_ptr(tools) as usize;
+            let serialized_tools = {
+                let mut cache = self
+                    .tools_cache
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                match cache.get(&key) {
+                    Some((arc, serialized)) if Arc::ptr_eq(arc, tools) => Arc::clone(serialized),
+                    _ => {
+                        let serialized = serialize_tools_openai_format(tools)
+                            .map(Arc::new)
+                            .unwrap_or_else(|| Arc::new(Vec::new()));
+                        cache.insert(key, (Arc::clone(tools), Arc::clone(&serialized)));
+                        serialized
+                    }
+                }
+            };
+            if !serialized_tools.is_empty() {
+                payload.insert(
+                    "tools".to_owned(),
+                    Value::Array(serialized_tools.as_ref().clone()),
+                );
+            }
         }
 
         S::insert_tool_choice(self, request, &mut payload);

@@ -192,7 +192,7 @@ mod tests {
     #[test]
     fn request_plan_keeps_stable_prefix_hash() {
         let plan = build_harness_request_plan(HarnessRequestPlanInput {
-            messages: vec![Message::user("hello".to_string())],
+            messages: Arc::new(vec![Message::user("hello".to_string())]),
             system_prompt: "base\n[Runtime Context]\n- turns: 1".to_string(),
             tools: Some(Arc::new(vec![function_tool(tools::CODE_SEARCH)])),
             model: "gpt-5".to_string(),
@@ -223,7 +223,7 @@ mod tests {
     #[test]
     fn request_plan_drops_empty_tool_catalog() {
         let plan = build_harness_request_plan(HarnessRequestPlanInput {
-            messages: vec![Message::user("hello".to_string())],
+            messages: Arc::new(vec![Message::user("hello".to_string())]),
             system_prompt: "base".to_string(),
             tools: Some(Arc::new(Vec::new())),
             model: "gpt-5".to_string(),

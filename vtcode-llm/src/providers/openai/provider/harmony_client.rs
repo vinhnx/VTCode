@@ -563,7 +563,7 @@ mod tests {
     fn convert_to_harmony_conversation_omits_dynamic_conversation_start_date() {
         let provider = test_provider();
         let request = LLMRequest {
-            messages: vec![Message::user("hello".to_string())],
+            messages: vec![Message::user("hello".to_string())].into(),
             model: "gpt-oss-20b".to_string(),
             ..Default::default()
         };
@@ -597,7 +597,8 @@ mod tests {
             messages: vec![
                 Message::system("Reuse prior tool outputs.".to_string()),
                 Message::user("hello".to_string()),
-            ],
+            ]
+            .into(),
             model: "gpt-oss-20b".to_string(),
             ..Default::default()
         };

@@ -97,7 +97,7 @@ pub async fn compact_history(
 
     let summary_prompt = build_summary_prompt(history, &config.summary_prompt);
     let request = LLMRequest {
-        messages: vec![Message::user(summary_prompt)],
+        messages: std::sync::Arc::new(vec![Message::user(summary_prompt)]),
         model: model.to_string(),
         ..Default::default()
     };
@@ -277,7 +277,7 @@ async fn compact_history_native_inline(
     }
 
     let request = LLMRequest {
-        messages: history.to_vec(),
+        messages: std::sync::Arc::new(history.to_vec()),
         model: model.to_string(),
         context_management: Some(json!({ "edits": [Value::Object(compact_edit)] })),
         max_tokens: options.max_output_tokens,
@@ -353,7 +353,7 @@ async fn summarize_locally(
     let effective_config = config.clone().with_manual_overrides(options);
     let summary_prompt = build_summary_prompt(history, &effective_config.summary_prompt);
     let request = LLMRequest {
-        messages: vec![Message::user(summary_prompt)],
+        messages: std::sync::Arc::new(vec![Message::user(summary_prompt)]),
         model: model.to_string(),
         max_tokens: options.max_output_tokens,
         reasoning_effort: options.reasoning_effort,
@@ -411,7 +411,7 @@ async fn summarize_locally_hierarchical(
         build_summary_prompt(abstract_band, ""),
     );
     let abstract_request = LLMRequest {
-        messages: vec![Message::user(abstract_prompt)],
+        messages: std::sync::Arc::new(vec![Message::user(abstract_prompt)]),
         model: model.to_string(),
         max_tokens: Some(150),
         reasoning_effort: options.reasoning_effort,
@@ -432,7 +432,7 @@ async fn summarize_locally_hierarchical(
     let detail_band = &history[abstract_end..detail_end];
     let detail_prompt = build_summary_prompt(detail_band, &effective_config.summary_prompt);
     let detail_request = LLMRequest {
-        messages: vec![Message::user(detail_prompt)],
+        messages: std::sync::Arc::new(vec![Message::user(detail_prompt)]),
         model: model.to_string(),
         max_tokens: options.max_output_tokens,
         reasoning_effort: options.reasoning_effort,

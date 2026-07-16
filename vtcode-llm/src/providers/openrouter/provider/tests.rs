@@ -51,7 +51,7 @@ fn sample_tool() -> ToolDefinition {
 
 fn request_with_tools(model: &str) -> LLMRequest {
     LLMRequest {
-        messages: vec![Message::user("hi".to_string())],
+        messages: vec![Message::user("hi".to_string())].into(),
         tools: Some(std::sync::Arc::new(vec![sample_tool()])),
         model: model.to_string(),
         tool_choice: Some(ToolChoice::Any),
@@ -119,7 +119,7 @@ fn enforce_tool_capabilities_keeps_apply_patch_for_supported_models() {
         models::openrouter::OPENAI_GPT_5.to_string(),
     );
     let request = LLMRequest {
-        messages: vec![Message::user("hi".to_string())],
+        messages: vec![Message::user("hi".to_string())].into(),
         tools: Some(std::sync::Arc::new(vec![ToolDefinition::apply_patch(
             "Apply VT Code patches".to_string(),
         )])),
@@ -320,7 +320,7 @@ data: [DONE]\n\n",
     let mut stream = provider
         .stream_normalized(LLMRequest {
             model: models::openrouter::OPENAI_GPT_5.to_string(),
-            messages: vec![Message::user("hello".to_string())],
+            messages: vec![Message::user("hello".to_string())].into(),
             ..Default::default()
         })
         .await
@@ -375,7 +375,7 @@ data: [DONE]\n\n",
     let mut stream = provider
         .stream_normalized(LLMRequest {
             model: models::openrouter::OPENAI_GPT_5.to_string(),
-            messages: vec![Message::user("hello".to_string())],
+            messages: vec![Message::user("hello".to_string())].into(),
             ..Default::default()
         })
         .await
@@ -451,7 +451,7 @@ data: [DONE]\n\n",
         let mut stream = provider
             .stream_normalized(LLMRequest {
                 model: models::openrouter::OPENAI_GPT_5.to_string(),
-                messages: vec![Message::user("hello".to_string())],
+                messages: vec![Message::user("hello".to_string())].into(),
                 ..Default::default()
             })
             .await

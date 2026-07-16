@@ -651,7 +651,7 @@ impl AgentRunner {
                     let batch_tokens: usize =
                         new_messages.iter().map(|m| m.estimate_tokens()).sum();
                     runtime.state.adjust_token_count(batch_tokens as isize);
-                    runtime.state.messages.extend(new_messages);
+                    runtime.state.messages_mut().extend(new_messages);
                     runtime.state.last_processed_message_idx = runtime.state.conversation.len();
                 }
 
@@ -694,8 +694,14 @@ impl AgentRunner {
                     &runtime.state.messages,
                 );
 
+                // O(1) in the common Cow::Borrowed case: share the session
+                // history Arc instead of deep-copying it into the request.
+                let request_messages = match request_messages {
+                    std::borrow::Cow::Borrowed(_) => Arc::clone(&runtime.state.messages),
+                    std::borrow::Cow::Owned(messages) => Arc::new(messages),
+                };
                 let request = build_harness_request_plan(HarnessRequestPlanInput {
-                    messages: request_messages.into_owned(),
+                    messages: request_messages,
                     system_prompt: prompt_bundle.system_instruction.as_ref().clone(),
                     tools: prompt_bundle.request_tools.clone(),
                     model: turn_model.clone(),
@@ -741,10 +747,11 @@ impl AgentRunner {
                 // properties) before paying for an API round-trip.
                 self.validate_llm_request(&request)?;
                 let previous_response_chain_present = request.previous_response_id.is_some();
-                // Clone messages for set_previous_response_chain while keeping
-                // the original in the request so providers that validate messages
-                // (e.g. MiMo) see a non-empty list during stream().
-                let sent_messages = request.messages.clone();
+                // O(1) Arc bump: keeps the sent history available for
+                // set_previous_response_chain while the request still holds it
+                // for providers that validate messages (e.g. MiMo) during
+                // stream().
+                let sent_messages = Arc::clone(&request.messages);
                 // Compute timeout before the call to avoid simultaneous mutable/immutable
                 // borrows of `self` (provider_client vs config).
                 let streaming_timeout = self
@@ -1291,7 +1298,7 @@ impl AgentRunner {
 
             let outcome = runtime.state.outcome.clone();
             self.thread_handle
-                .replace_messages(runtime.state.messages.clone());
+                .replace_messages(runtime.state.messages.as_ref().clone());
             let summary = self.generate_task_summary(
                 &effective_task,
                 &runtime.state.modified_files,
@@ -1423,6 +1430,7 @@ mod tests {
     use crate::core::agent::task::TaskOutcome;
     use crate::exec::events::ThreadEvent;
     use crate::llm::provider::{Message, records_responses_continuation_state};
+    use std::sync::Arc;
 
     #[test]
     fn failed_outcome_emits_only_turn_failed() {
@@ -1490,7 +1498,12 @@ mod tests {
             Message::user("hello".to_string()),
             Message::user("continue".to_string()),
         ];
-        state.set_previous_response_chain("openai", "gpt-5.4", Some("resp_123"), prior_messages);
+        state.set_previous_response_chain(
+            "openai",
+            "gpt-5.4",
+            Some("resp_123"),
+            Arc::new(prior_messages),
+        );
 
         let (request_messages, previous_response_id) = prepare_responses_request_messages(
             &mut state.previous_response_chains,
@@ -1510,7 +1523,12 @@ mod tests {
         let messages = vec![Message::user("hello".to_string())];
 
         if records_responses_continuation_state("openai", true) {
-            state.set_previous_response_chain("openai", "gpt-5.4", Some("resp_123"), messages);
+            state.set_previous_response_chain(
+                "openai",
+                "gpt-5.4",
+                Some("resp_123"),
+                Arc::new(messages),
+            );
         }
 
         assert_eq!(state.previous_response_chain_for("openai", "gpt-5.4"), None);
@@ -1522,7 +1540,12 @@ mod tests {
         let messages = vec![Message::user("hello".to_string())];
 
         if records_responses_continuation_state("mycorp", true) {
-            state.set_previous_response_chain("mycorp", "gpt-5.4", Some("resp_123"), messages);
+            state.set_previous_response_chain(
+                "mycorp",
+                "gpt-5.4",
+                Some("resp_123"),
+                Arc::new(messages),
+            );
         }
 
         assert_eq!(state.previous_response_chain_for("mycorp", "gpt-5.4"), None);
@@ -1540,7 +1563,7 @@ mod tests {
             "gemini",
             "gemini-2.5-pro",
             Some("resp_123"),
-            prior_messages,
+            Arc::new(prior_messages),
         );
 
         let (request_messages, previous_response_id) = prepare_responses_request_messages(
@@ -1563,7 +1586,12 @@ mod tests {
             Message::user("hello".to_string()),
             Message::user("continue".to_string()),
         ];
-        state.set_previous_response_chain("mycorp", "gpt-5.4", Some("resp_123"), prior_messages);
+        state.set_previous_response_chain(
+            "mycorp",
+            "gpt-5.4",
+            Some("resp_123"),
+            Arc::new(prior_messages),
+        );
 
         let (request_messages, previous_response_id) = prepare_responses_request_messages(
             &mut state.previous_response_chains,

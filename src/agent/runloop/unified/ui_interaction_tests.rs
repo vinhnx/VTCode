@@ -315,7 +315,7 @@ impl uni::LLMProvider for NormalizedToolCallProvider {
 
 fn build_request() -> uni::LLMRequest {
     uni::LLMRequest {
-        messages: Vec::new(),
+        messages: Arc::new(Vec::new()),
         model: "test-model".to_string(),
         stream: true,
         ..Default::default()

@@ -616,7 +616,7 @@ pub async fn execute_skill_with_sub_llm(
 
     // Create LLM request with skill instructions as system prompt
     let mut request = LLMRequest {
-        messages: messages.clone(),
+        messages: Arc::new(messages.clone()),
         system_prompt: Some(Arc::new(skill.instructions.clone())),
         tools: tool_definitions.clone(),
         model: model.clone(),
@@ -640,7 +640,7 @@ pub async fn execute_skill_with_sub_llm(
 
         if let Some(reason) = tool_free_synthesis_reason {
             messages.push(Message::user(reason));
-            request.messages = messages.clone();
+            request.messages = Arc::new(messages.clone());
             request.tools = None;
         } else {
             request.tools = tool_definitions.clone();
@@ -799,7 +799,7 @@ pub async fn execute_skill_with_sub_llm(
                 }
 
                 // Update request for next iteration
-                request.messages = messages.clone();
+                request.messages = Arc::new(messages.clone());
                 if let Some(reason) = force_tool_free_synthesis_reason {
                     force_tool_free_synthesis = Some(reason);
                     continue;

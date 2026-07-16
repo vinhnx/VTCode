@@ -1,10 +1,13 @@
 use super::Message;
 use std::borrow::Cow;
+use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ResponsesContinuationState<M = Message> {
     pub response_id: String,
-    pub messages: Vec<M>,
+    /// Full request history at the time the chain was recorded. Shared via
+    /// `Arc` so recording a chain after each turn is O(1), not O(history).
+    pub messages: Arc<Vec<M>>,
 }
 
 pub struct PreparedResponsesRequest<'a, M: Clone = Message> {
@@ -144,7 +147,7 @@ mod tests {
             &messages,
             Some(&ResponsesContinuationState {
                 response_id: "resp_123".to_string(),
-                messages: vec![Message::user("hello".to_string())],
+                messages: vec![Message::user("hello".to_string())].into(),
             }),
         );
 
@@ -161,7 +164,7 @@ mod tests {
             &messages,
             Some(&ResponsesContinuationState {
                 response_id: "resp_123".to_string(),
-                messages: vec![Message::user("hello".to_string())],
+                messages: vec![Message::user("hello".to_string())].into(),
             }),
         );
 
@@ -183,7 +186,7 @@ mod tests {
             &messages,
             Some(&ResponsesContinuationState {
                 response_id: "resp_123".to_string(),
-                messages: vec![Message::user("hello".to_string())],
+                messages: vec![Message::user("hello".to_string())].into(),
             }),
         );
 
@@ -205,7 +208,7 @@ mod tests {
             &messages,
             Some(&ResponsesContinuationState {
                 response_id: "resp_123".to_string(),
-                messages: vec![Message::user("hello".to_string())],
+                messages: vec![Message::user("hello".to_string())].into(),
             }),
         );
 
@@ -227,7 +230,7 @@ mod tests {
             &messages,
             Some(&ResponsesContinuationState {
                 response_id: "resp_123".to_string(),
-                messages: vec![Message::user("hello".to_string())],
+                messages: vec![Message::user("hello".to_string())].into(),
             }),
         );
 
@@ -246,7 +249,7 @@ mod tests {
             &messages,
             Some(&ResponsesContinuationState {
                 response_id: "resp_123".to_string(),
-                messages: messages.clone(),
+                messages: messages.clone().into(),
             }),
         );
 
@@ -265,7 +268,7 @@ mod tests {
             &messages,
             Some(&ResponsesContinuationState {
                 response_id: "resp_123".to_string(),
-                messages: vec![Message::user("hello".to_string())],
+                messages: vec![Message::user("hello".to_string())].into(),
             }),
         );
 

@@ -578,7 +578,7 @@ async fn raw_completion(
     max_tokens: Option<u32>,
 ) -> Result<String> {
     let request = uni::LLMRequest {
-        messages: vec![uni::Message::user(user_prompt)],
+        messages: Arc::new(vec![uni::Message::user(user_prompt)]),
         system_prompt: Some(Arc::new(system_prompt.to_string())),
         model: model.to_string(),
         max_tokens,

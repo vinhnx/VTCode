@@ -440,7 +440,7 @@ pub fn convert_anthropic_to_llm_request(request: AnthropicMessagesRequest) -> LL
     };
 
     LLMRequest {
-        messages,
+        messages: Arc::new(messages),
         system_prompt,
         tools,
         model: request.model,

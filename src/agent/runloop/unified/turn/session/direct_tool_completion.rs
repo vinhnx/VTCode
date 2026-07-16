@@ -134,7 +134,7 @@ async fn generate_suggestions_via_llm(
     }
 
     let request = uni::LLMRequest {
-        messages: vec![uni::Message::user(user_msg)],
+        messages: Arc::new(vec![uni::Message::user(user_msg)]),
         system_prompt: Some(Arc::clone(&SUGGESTION_SYSTEM_PROMPT)),
         model: model.to_string(),
         max_tokens: Some(256),

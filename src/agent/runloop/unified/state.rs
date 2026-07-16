@@ -387,7 +387,7 @@ impl SessionStats {
             key,
             ResponsesContinuationState {
                 response_id: response_id.to_string(),
-                messages: messages.to_vec(),
+                messages: Arc::new(messages.to_vec()),
             },
         );
     }

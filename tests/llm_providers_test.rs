@@ -2,6 +2,7 @@
 //! Comprehensive tests for LLM providers refactor
 
 use serde_json::json;
+use std::sync::Arc;
 use vtcode_core::config::constants::models;
 use vtcode_core::config::models::Provider;
 use vtcode_core::config::types::VerbosityLevel;
@@ -335,7 +336,7 @@ fn test_request_validation() {
 
     // Test valid requests
     let valid_gemini_request = LLMRequest {
-        messages: vec![Message::user("test".to_string())],
+        messages: Arc::new(vec![Message::user("test".to_string())]),
         model: "gemini-3-flash-preview".to_string(),
         verbosity: Some(VerbosityLevel::default()),
         ..Default::default()
@@ -343,7 +344,7 @@ fn test_request_validation() {
     gemini.validate_request(&valid_gemini_request).unwrap();
 
     let valid_openai_request = LLMRequest {
-        messages: vec![Message::user("test".to_string())],
+        messages: Arc::new(vec![Message::user("test".to_string())]),
         model: "gpt-oss-20b".to_string(),
         verbosity: Some(VerbosityLevel::default()),
         ..Default::default()
@@ -351,7 +352,7 @@ fn test_request_validation() {
     openai.validate_request(&valid_openai_request).unwrap();
 
     let valid_anthropic_request = LLMRequest {
-        messages: vec![Message::user("test".to_string())],
+        messages: Arc::new(vec![Message::user("test".to_string())]),
         model: models::CLAUDE_SONNET_4_6.to_string(),
         verbosity: Some(VerbosityLevel::default()),
         ..Default::default()
@@ -361,7 +362,7 @@ fn test_request_validation() {
         .unwrap();
 
     let legacy_anthropic_request = LLMRequest {
-        messages: vec![Message::user("test".to_string())],
+        messages: Arc::new(vec![Message::user("test".to_string())]),
         model: "claude-sonnet-4-20250514".to_string(),
         verbosity: Some(VerbosityLevel::default()),
         ..Default::default()
@@ -372,7 +373,7 @@ fn test_request_validation() {
 
     // Test invalid requests (wrong model for provider)
     let invalid_request = LLMRequest {
-        messages: vec![Message::user("test".to_string())],
+        messages: Arc::new(vec![Message::user("test".to_string())]),
         model: "invalid-model".to_string(),
         verbosity: Some(VerbosityLevel::default()),
         ..Default::default()
@@ -391,7 +392,7 @@ fn test_anthropic_tool_message_handling() {
         Message::tool_response("tool_123".to_string(), "Tool result content".to_string());
 
     let request = LLMRequest {
-        messages: vec![tool_message],
+        messages: Arc::new(vec![tool_message]),
         model: models::CLAUDE_SONNET_4_6.to_string(),
         verbosity: Some(VerbosityLevel::default()),
         ..Default::default()

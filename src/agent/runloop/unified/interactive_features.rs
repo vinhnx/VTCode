@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::{LazyLock, Mutex};
+use std::sync::{Arc, LazyLock, Mutex};
 
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
@@ -419,10 +419,10 @@ async fn llm_prompt_suggestions_from_provider(
     }
 
     let request = uni::LLMRequest {
-        messages: vec![uni::Message::user(format!(
+        messages: Arc::new(vec![uni::Message::user(format!(
             "Generate 3 short follow-up prompts for this VT Code session. Return one prompt per line.\n\nRecent session context:\n{context}"
-        ))],
-        system_prompt: Some(std::sync::Arc::new(
+        ))]),
+        system_prompt: Some(Arc::new(
             "You write concise follow-up prompts for a coding assistant UI. Return plain text only, one prompt per line, no bullets or numbering.".to_string(),
         )),
         model: model.to_string(),
@@ -500,8 +500,8 @@ fn build_inline_prompt_suggestion_request(
     };
 
     uni::LLMRequest {
-        messages: vec![uni::Message::user(user_prompt)],
-        system_prompt: Some(std::sync::Arc::new(
+        messages: Arc::new(vec![uni::Message::user(user_prompt)]),
+        system_prompt: Some(Arc::new(
             "Predict the user's next chat prompt for VT Code. Match the user's phrasing, keep it concise, and return plain text only. Do not add bullets, numbering, quotes, explanations, or assistant voice. If a draft is provided, the response must begin with the exact draft text."
                 .to_string(),
         )),

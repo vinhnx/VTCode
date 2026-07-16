@@ -14,6 +14,7 @@ use crate::agent::runloop::unified::postamble::{ExitData, print_exit_summary};
 use crate::agent::runloop::unified::turn::turn_loop::TurnLoopOutcome;
 use crate::updater::{InlineUpdateOutcome, display_update_notice, run_inline_update_prompt};
 use hashbrown::HashSet;
+use std::sync::Arc;
 use vtcode_config::loader::SimpleConfigWatcher;
 use vtcode_core::core::agent::features::FeatureSet;
 use vtcode_core::core::agent::runtime::AgentRuntime;
@@ -382,10 +383,10 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             None,
             steering_receiver.take(),
         );
-        runtime.state.messages = conversation_history;
+        runtime.state.messages = Arc::new(conversation_history);
         if resume_ref.is_some()
             && let Some(pending_prompt) =
-                take_pending_resumed_user_prompt(&mut runtime.state.messages)
+                take_pending_resumed_user_prompt(runtime.state.messages_mut())
         {
             let (_, runtime_steering) = runtime.split_mut();
             runtime_steering.queue_follow_up_input(pending_prompt);
@@ -571,7 +572,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     tool_registry: &mut tool_registry,
                     tools: &tools,
                     tool_catalog: &tool_catalog,
-                    conversation_history: &mut session_state.messages,
+                    conversation_history: Arc::make_mut(&mut session_state.messages),
                     agent_touched_paths: &mut agent_touched_paths,
                     decision_ledger: &decision_ledger,
                     context_manager: &mut context_manager,
@@ -699,7 +700,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                                 execution_directive.push_str("\n\nApproved plan context:\n");
                                 execution_directive.push_str(&seed);
                             }
-                            runtime.state.messages.push(
+                            runtime.state.messages_mut().push(
                                 vtcode_core::llm::provider::Message::system(execution_directive),
                             );
                             (PLAN_APPROVED_EXECUTION_INPUT.to_string(), None)
@@ -709,7 +710,9 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     continue;
                 }
                 let (session_state, runtime_steering) = runtime.split_mut();
-                let mut working_history = std::mem::take(&mut session_state.messages);
+                let mut working_history =
+                    Arc::try_unwrap(std::mem::take(&mut session_state.messages))
+                        .unwrap_or_else(|arc| arc.as_ref().clone());
                 let transient_system_notes = append_transient_turn_notes(
                     &mut working_history,
                     config.workspace.as_path(),
@@ -839,7 +842,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                         .map(|path| normalize_workspace_path(config.workspace.as_path(), path)),
                 );
                 agent_touched_paths.extend(context_manager.tracked_instruction_activity_paths());
-                runtime.state.messages = working_history;
+                runtime.state.messages = Arc::new(working_history);
                 let outcome_result = outcome.result.clone();
                 let switch_primary_agent = outcome.pending_primary_agent.clone();
                 let turn_elapsed = turn_started_at.elapsed();
@@ -851,7 +854,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 if let Err(err) = crate::agent::runloop::unified::turn::apply_turn_outcome(
                     outcome,
                     crate::agent::runloop::unified::turn::TurnOutcomeContext {
-                        conversation_history: &mut runtime.state.messages,
+                        conversation_history: Arc::make_mut(&mut runtime.state.messages),
                         completed_turn_prompt: Some(next_turn_input.as_str()),
                         completed_turn_prompt_message_index,
                         renderer: &mut renderer,

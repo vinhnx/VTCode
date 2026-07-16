@@ -144,7 +144,7 @@ impl CopilotProvider {
             append_block(&mut transcript, "System", system_prompt);
         }
 
-        for message in &request.messages {
+        for message in request.messages.iter() {
             let label = match message.role {
                 MessageRole::System => "System",
                 MessageRole::User => "User",
@@ -613,10 +613,10 @@ mod tests {
         let provider = provider();
         let request = LLMRequest {
             system_prompt: Some(Arc::new("Follow repository conventions.".to_string())),
-            messages: vec![
+            messages: Arc::new(vec![
                 Message::user("Inspect the diff.".to_string()),
                 Message::assistant("The diff looks safe.".to_string()),
-            ],
+            ]),
             ..Default::default()
         };
 
@@ -652,10 +652,10 @@ mod tests {
     fn validate_request_allows_tool_history_followups() {
         let provider = provider();
         let request = LLMRequest {
-            messages: vec![Message::tool_response(
+            messages: Arc::new(vec![Message::tool_response(
                 "call-1".to_string(),
                 "tool output".to_string(),
-            )],
+            )]),
             ..Default::default()
         };
 
@@ -668,7 +668,7 @@ mod tests {
     fn transcript_flattens_tool_history_and_image_inputs() {
         let provider = provider();
         let request = LLMRequest {
-            messages: vec![
+            messages: Arc::new(vec![
                 Message::assistant_with_tools(
                     "Running checks.".to_string(),
                     vec![ToolCall::function(
@@ -686,7 +686,7 @@ mod tests {
                     ContentPart::text("Tell me more.".to_string()),
                     ContentPart::image("AAAA".to_string(), "image/png".to_string()),
                 ]),
-            ],
+            ]),
             ..Default::default()
         };
 

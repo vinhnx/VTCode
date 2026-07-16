@@ -28,7 +28,13 @@ pub struct AgentSessionState {
     pub conversation: Vec<Content>,
 
     /// Standardized conversation messages (OpenAI/Anthropic style).
-    pub messages: Vec<Message>,
+    ///
+    /// Shared via `Arc` so building an `LLMRequest` each turn is an O(1)
+    /// refcount bump instead of an O(history) deep copy. Mutation goes
+    /// through [`Self::messages_mut`] (`Arc::make_mut`): O(1) while uniquely
+    /// owned, cloning only when the history is still shared (e.g. with a
+    /// recorded responses-continuation chain).
+    pub messages: Arc<Vec<Message>>,
 
     /// Schema version for durable state persistence.
     pub schema_version: SchemaVersion,
@@ -148,7 +154,7 @@ impl AgentSessionState {
             session_id,
             schema_version: SchemaVersion::CURRENT,
             conversation: Vec::new(),
-            messages: Vec::new(),
+            messages: Arc::new(Vec::new()),
             stats: SessionStats::default(),
             constraints: SessionConstraints {
                 max_turns,
@@ -287,7 +293,7 @@ impl AgentSessionState {
         provider: &str,
         model: &str,
         response_id: Option<&str>,
-        messages: Vec<Message>,
+        messages: Arc<Vec<Message>>,
     ) {
         let Some(key) = responses_continuation_key(provider, model) else {
             return;
@@ -327,6 +333,16 @@ impl AgentSessionState {
         );
     }
 
+    /// Mutable access to the conversation history.
+    ///
+    /// `Arc::make_mut`: O(1) while the history is uniquely owned (the common
+    /// case), deep-clones only when still shared with an in-flight request or
+    /// a recorded continuation chain.
+    #[inline]
+    pub fn messages_mut(&mut self) -> &mut Vec<Message> {
+        Arc::make_mut(&mut self.messages)
+    }
+
     /// Add a user message to the history with metadata.
     pub fn add_user_message(&mut self, text: String) {
         let now = SystemTime::now()
@@ -340,7 +356,7 @@ impl AgentSessionState {
         // Role overhead (~4 tokens) + content tokens
         let msg_tokens = msg.estimate_tokens();
         self.cached_total_tokens = self.cached_total_tokens.saturating_add(msg_tokens);
-        self.messages.push(msg);
+        self.messages_mut().push(msg);
     }
 
     /// Threshold for consecutive identical progress hashes before stagnation is declared.
@@ -390,7 +406,7 @@ impl AgentSessionState {
     /// Attach metadata to the most recent message. Used by the execution loop
     /// to annotate LLM responses and tool results after they are pushed.
     pub fn attach_metadata_to_last(&mut self, source: &str, estimated_tokens: usize) {
-        if let Some(last) = self.messages.last_mut() {
+        if let Some(last) = self.messages_mut().last_mut() {
             let now = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .map(|d| d.as_secs())
@@ -493,7 +509,7 @@ impl AgentSessionState {
 
     /// Normalize history to enforce call/output pairing invariants.
     pub fn normalize(&mut self) {
-        crate::core::agent::state::normalize_history(&mut self.messages);
+        crate::core::agent::state::normalize_history(self.messages_mut());
         self.reconcile_token_count();
     }
 
@@ -509,7 +525,7 @@ impl AgentSessionState {
     /// to reorient from. Response continuation chains are also cleared since
     /// they reference the discarded history.
     pub fn clear_conversation_history(&mut self) {
-        self.messages.clear();
+        self.messages_mut().clear();
         self.conversation.clear();
         self.cached_total_tokens = 0;
         self.last_processed_message_idx = 0;
@@ -581,7 +597,7 @@ impl AgentSessionState {
         let msg = Message::tool_response(call_id, serialized);
         let tokens = msg.estimate_tokens();
         self.cached_total_tokens = self.cached_total_tokens.saturating_add(tokens);
-        self.messages.push(msg);
+        self.messages_mut().push(msg);
     }
 
     /// Push a successful tool result to both conversation (for Gemini) and messages.
@@ -614,6 +630,7 @@ mod tests {
     use crate::config::types::ReasoningEffortLevel;
     use crate::llm::provider::Message;
     use crate::llm::providers::gemini::wire::Part;
+    use std::sync::Arc;
     use std::thread;
     use std::time::Duration;
 
@@ -663,13 +680,13 @@ mod tests {
             "openai",
             "gpt-5.2",
             Some("resp_123"),
-            messages_52.clone(),
+            Arc::new(messages_52.clone()),
         );
         state.set_previous_response_chain(
             "openai",
             "gpt-5.4",
             Some("resp_456"),
-            messages_54.clone(),
+            Arc::new(messages_54.clone()),
         );
 
         assert_eq!(
@@ -784,7 +801,7 @@ mod tests {
 
         // Simulate external mutation (bypassing push methods)
         state
-            .messages
+            .messages_mut()
             .push(Message::assistant("extra response".to_string()));
         assert_ne!(
             state.total_tokens(),
@@ -804,8 +821,12 @@ mod tests {
     #[test]
     fn clear_conversation_history_resets_all_state() {
         let mut state = AgentSessionState::new("session".to_string(), 4, 4, 16_000);
-        state.messages.push(Message::user("hello".to_string()));
-        state.messages.push(Message::assistant("hi".to_string()));
+        state
+            .messages_mut()
+            .push(Message::user("hello".to_string()));
+        state
+            .messages_mut()
+            .push(Message::assistant("hi".to_string()));
         state
             .conversation
             .push(crate::llm::providers::gemini::wire::Content {
@@ -819,7 +840,7 @@ mod tests {
         state.last_processed_message_idx = 2;
         state.progress_hashes.push(123);
         state.stagnant_turns = 3;
-        state.set_previous_response_chain("openai", "gpt-5", Some("resp_1"), vec![]);
+        state.set_previous_response_chain("openai", "gpt-5", Some("resp_1"), Arc::new(vec![]));
 
         assert!(!state.messages.is_empty());
         assert!(!state.conversation.is_empty());

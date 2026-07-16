@@ -187,7 +187,7 @@ impl OpenAIProvider {
 
         let request = provider::LLMRequest {
             model: resolved_model.clone(),
-            messages: history.to_vec(),
+            messages: std::sync::Arc::new(history.to_vec()),
             max_tokens: options.max_output_tokens,
             reasoning_effort: options.reasoning_effort,
             verbosity: options.verbosity,

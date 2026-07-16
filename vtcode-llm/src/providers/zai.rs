@@ -200,7 +200,7 @@ mod tests {
         let provider = ZAIProvider::new("test-key".to_string());
         let request = LLMRequest {
             model: models::zai::GLM_5_1.to_string(),
-            messages: vec![Message::user("hello".to_string())],
+            messages: vec![Message::user("hello".to_string())].into(),
             top_p: Some(0.95),
             ..Default::default()
         };
@@ -221,7 +221,7 @@ mod tests {
         let provider = ZAIProvider::new("test-key".to_string());
         let request = LLMRequest {
             model: models::zai::GLM_5_1.to_string(),
-            messages: vec![Message::user("hello".to_string())],
+            messages: vec![Message::user("hello".to_string())].into(),
             stream: true,
             tools: Some(Arc::new(vec![ToolDefinition::function(
                 "get_weather".to_string(),
@@ -253,7 +253,7 @@ mod tests {
         let provider = ZAIProvider::new("test-key".to_string());
         let request = LLMRequest {
             model: models::zai::GLM_5_1.to_string(),
-            messages: vec![Message::user("hello".to_string())],
+            messages: vec![Message::user("hello".to_string())].into(),
             stream: true,
             ..Default::default()
         };
@@ -278,7 +278,7 @@ mod tests {
         let provider = ZAIProvider::new("test-key".to_string());
         let request = LLMRequest {
             model: models::zai::GLM_5_1.to_string(),
-            messages: vec![Message::user("hello".to_string())],
+            messages: vec![Message::user("hello".to_string())].into(),
             do_sample: Some(false),
             ..Default::default()
         };
@@ -298,7 +298,7 @@ mod tests {
         let provider = ZAIProvider::new("test-key".to_string());
         let request = LLMRequest {
             model: models::zai::GLM_5_1.to_string(),
-            messages: vec![Message::user("hello".to_string())],
+            messages: vec![Message::user("hello".to_string())].into(),
             reasoning_effort: Some(ReasoningEffortLevel::None),
             ..Default::default()
         };
@@ -321,7 +321,7 @@ mod tests {
         let provider = ZAIProvider::new("test-key".to_string());
         let request = LLMRequest {
             model: models::zai::GLM_5_1.to_string(),
-            messages: vec![Message::user("hello".to_string())],
+            messages: vec![Message::user("hello".to_string())].into(),
             reasoning_effort: Some(ReasoningEffortLevel::Low),
             ..Default::default()
         };
@@ -351,7 +351,7 @@ mod tests {
 
         let request = LLMRequest {
             model: models::zai::GLM_5_1.to_string(),
-            messages: vec![assistant],
+            messages: vec![assistant].into(),
             ..Default::default()
         };
 
@@ -383,7 +383,7 @@ mod tests {
 
         let request = LLMRequest {
             model: models::zai::GLM_5_1.to_string(),
-            messages: vec![assistant],
+            messages: vec![assistant].into(),
             ..Default::default()
         };
 
@@ -407,7 +407,7 @@ mod tests {
         let provider = ZAIProvider::new("test-key".to_string());
         let request = LLMRequest {
             model: models::zai::GLM_5_1.to_string(),
-            messages: vec![Message::user("latest economic events".to_string())],
+            messages: vec![Message::user("latest economic events".to_string())].into(),
             tools: Some(Arc::new(vec![ToolDefinition::web_search(
                 serde_json::json!({
                     "enable": true,
@@ -445,7 +445,7 @@ mod tests {
         let provider = ZAIProvider::new("test-key".to_string());
         let request = LLMRequest {
             model: models::zai::GLM_5_1.to_string(),
-            messages: vec![Message::user("hello".to_string())],
+            messages: vec![Message::user("hello".to_string())].into(),
             tool_choice: Some(ToolChoice::auto()),
             ..Default::default()
         };
@@ -465,7 +465,7 @@ mod tests {
         let provider = ZAIProvider::new("test-key".to_string());
         let request = LLMRequest {
             model: models::zai::GLM_5_1.to_string(),
-            messages: vec![Message::user("hello".to_string())],
+            messages: vec![Message::user("hello".to_string())].into(),
             tool_choice: Some(ToolChoice::none()),
             ..Default::default()
         };
@@ -485,7 +485,7 @@ mod tests {
         let provider = ZAIProvider::new("test-key".to_string());
         let request = LLMRequest {
             model: models::zai::GLM_5_1.to_string(),
-            messages: vec![Message::user("hello".to_string())],
+            messages: vec![Message::user("hello".to_string())].into(),
             tools: Some(Arc::new(vec![ToolDefinition::function(
                 "get_weather".to_string(),
                 "Get weather".to_string(),
@@ -515,7 +515,7 @@ mod tests {
         let provider = ZAIProvider::new("test-key".to_string());
         let request = LLMRequest {
             model: models::zai::GLM_5_1.to_string(),
-            messages: vec![Message::user("return json".to_string())],
+            messages: vec![Message::user("return json".to_string())].into(),
             output_format: Some(serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -543,7 +543,7 @@ mod tests {
         let provider = ZAIProvider::new("test-key".to_string());
         let request = LLMRequest {
             model: models::zai::GLM_5_1.to_string(),
-            messages: vec![Message::user("return json".to_string())],
+            messages: vec![Message::user("return json".to_string())].into(),
             output_format: Some(serde_json::json!({
                 "type": "object",
                 "properties": {

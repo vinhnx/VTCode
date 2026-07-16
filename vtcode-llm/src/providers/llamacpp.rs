@@ -729,7 +729,7 @@ impl LLMProvider for LlamaCppProvider {
             });
         }
 
-        for message in &request.messages {
+        for message in request.messages.iter() {
             if let Err(err) = message.validate_for_provider("openai") {
                 let formatted = error_display::format_llm_error("llama.cpp", &err);
                 return Err(LLMError::InvalidRequest {
@@ -749,7 +749,7 @@ impl LLMClient for LlamaCppProvider {
         LLMProvider::generate(
             self,
             LLMRequest {
-                messages: vec![Message::user(prompt.to_string())],
+                messages: Arc::new(vec![Message::user(prompt.to_string())]),
                 model: self
                     .configured_model
                     .clone()

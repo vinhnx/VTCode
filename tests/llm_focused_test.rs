@@ -1,6 +1,8 @@
 #![allow(missing_docs)]
 //! Focused test for LLM provider functionality
 
+use std::sync::Arc;
+
 use vtcode_core::config::constants::models;
 use vtcode_core::config::types::VerbosityLevel;
 use vtcode_core::llm::{
@@ -153,7 +155,7 @@ fn test_anthropic_tool_message_handling() {
     let tool_message = Message::tool_response("call_1".to_string(), "Tool result".to_string());
 
     let request = LLMRequest {
-        messages: vec![tool_message],
+        messages: Arc::new(vec![tool_message]),
         model: models::CLAUDE_SONNET_4_6.to_string(),
         verbosity: Some(VerbosityLevel::default()),
         ..Default::default()

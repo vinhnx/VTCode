@@ -47,11 +47,11 @@ fn test_openai_tool_call_format() {
     let tool_msg = Message::tool_response("call_123".to_string(), "Sunny, 72°F".to_string());
 
     let request = LLMRequest {
-        messages: vec![
+        messages: Arc::new(vec![
             Message::user("What's the weather in New York?".to_string()),
             assistant_msg,
             tool_msg,
-        ],
+        ]),
         system_prompt: Some(Arc::new("You are a helpful assistant.".to_string())),
         tools: Some(Arc::new(vec![tool])),
         model: models::GPT_OSS_20B.to_string(),
@@ -125,11 +125,11 @@ fn test_anthropic_tool_call_format() {
     let tool_msg = Message::tool_response("toolu_123".to_string(), "Sunny, 72°F".to_string());
 
     let request = LLMRequest {
-        messages: vec![
+        messages: Arc::new(vec![
             Message::user("What's the weather in New York?".to_string()),
             assistant_msg,
             tool_msg,
-        ],
+        ]),
         system_prompt: Some(Arc::new("You are a helpful assistant.".to_string())),
         tools: Some(Arc::new(vec![tool])),
         model: models::CLAUDE_SONNET_4_6.to_string(),
@@ -203,11 +203,11 @@ fn test_gemini_tool_call_format() {
     let tool_msg = Message::tool_response("func_123".to_string(), "Sunny, 72°F".to_string());
 
     let request = LLMRequest {
-        messages: vec![
+        messages: Arc::new(vec![
             Message::user("What's the weather in New York?".to_string()),
             assistant_msg,
             tool_msg,
-        ],
+        ]),
         system_prompt: Some(Arc::new("You are a helpful assistant.".to_string())),
         tools: Some(Arc::new(vec![tool])),
         model: "gemini-3-flash-preview".to_string(),
@@ -267,7 +267,7 @@ fn test_all_providers_tool_validation() {
     );
 
     let gemini_request = LLMRequest {
-        messages: vec![Message::user("test".to_string())],
+        messages: Arc::new(vec![Message::user("test".to_string())]),
         system_prompt: None,
         tools: Some(Arc::new(vec![tool.clone()])),
         model: "gemini-3-flash-preview".to_string(),
@@ -307,7 +307,7 @@ fn test_all_providers_tool_validation() {
     };
 
     let openai_request = LLMRequest {
-        messages: vec![Message::user("test".to_string())],
+        messages: Arc::new(vec![Message::user("test".to_string())]),
         system_prompt: None,
         tools: Some(Arc::new(vec![tool.clone()])),
         model: models::GPT_OSS_20B.to_string(),
@@ -347,7 +347,7 @@ fn test_all_providers_tool_validation() {
     };
 
     let anthropic_request = LLMRequest {
-        messages: vec![Message::user("test".to_string())],
+        messages: Arc::new(vec![Message::user("test".to_string())]),
         system_prompt: None,
         tools: Some(Arc::new(vec![tool.clone()])),
         model: models::CLAUDE_SONNET_4_6.to_string(),
@@ -387,7 +387,7 @@ fn test_all_providers_tool_validation() {
     };
 
     let openrouter_request = LLMRequest {
-        messages: vec![Message::user("test".to_string())],
+        messages: Arc::new(vec![Message::user("test".to_string())]),
         system_prompt: None,
         tools: Some(Arc::new(vec![tool.clone()])),
         model: models::openrouter::DEEPSEEK_V4_PRO.to_string(),
@@ -432,7 +432,7 @@ fn test_all_providers_tool_validation() {
     openrouter.validate_request(&openrouter_request).unwrap();
 
     let lmstudio_request = LLMRequest {
-        messages: vec![Message::user("test".to_string())],
+        messages: Arc::new(vec![Message::user("test".to_string())]),
         system_prompt: None,
         tools: Some(Arc::new(vec![tool.clone()])),
         model: models::lmstudio::DEFAULT_MODEL.to_string(),
@@ -474,7 +474,7 @@ fn test_all_providers_tool_validation() {
     lmstudio.validate_request(&lmstudio_request).unwrap();
 
     let ollama_request = LLMRequest {
-        messages: vec![Message::user("test".to_string())],
+        messages: Arc::new(vec![Message::user("test".to_string())]),
         system_prompt: None,
         tools: Some(Arc::new(vec![tool])),
         model: models::ollama::DEFAULT_MODEL.to_string(),
@@ -547,11 +547,11 @@ fn test_openrouter_tool_call_format() {
     let tool_msg = Message::tool_response("call_456".to_string(), "Cloudy, 68°F".to_string());
 
     let request = LLMRequest {
-        messages: vec![
+        messages: Arc::new(vec![
             Message::user("What's the weather in Paris?".to_string()),
             assistant_msg,
             tool_msg,
-        ],
+        ]),
         system_prompt: Some(Arc::new("You are a helpful assistant.".to_string())),
         tools: Some(Arc::new(vec![tool])),
         model: models::openrouter::DEEPSEEK_V4_PRO.to_string(),

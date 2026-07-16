@@ -237,7 +237,7 @@ pub fn validate_request(
 
     validate_tool_definitions(request)?;
 
-    for message in &request.messages {
+    for message in request.messages.iter() {
         if let Err(err) = message.validate_for_provider("anthropic") {
             let formatted = error_display::format_llm_error("Anthropic", &err);
             return Err(LLMError::InvalidRequest {

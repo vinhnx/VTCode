@@ -307,7 +307,7 @@ impl LLMProvider for LmStudioProvider {
         }
 
         // Validate messages against provider's requirements
-        for message in &request.messages {
+        for message in request.messages.iter() {
             if let Err(err) = message.validate_for_provider("openai") {
                 let formatted = error_display::format_llm_error("LM Studio", &err);
                 return Err(LLMError::InvalidRequest {
@@ -327,7 +327,7 @@ impl LLMClient for LmStudioProvider {
         LLMProvider::generate(
             self,
             LLMRequest {
-                messages: vec![Message::user(prompt.to_string())],
+                messages: std::sync::Arc::new(vec![Message::user(prompt.to_string())]),
                 model: self.model_id.clone(),
                 ..Default::default()
             },

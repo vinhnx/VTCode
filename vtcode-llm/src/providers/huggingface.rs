@@ -166,7 +166,7 @@ impl HuggingFaceProvider {
 
         let mut messages = Vec::with_capacity(request.messages.len());
 
-        for message in &request.messages {
+        for message in request.messages.iter() {
             message
                 .validate_for_provider(PROVIDER_KEY)
                 .map_err(|e| LLMError::InvalidRequest {
@@ -405,7 +405,7 @@ impl HuggingFaceProvider {
     fn format_for_responses_api(&self, request: &LLMRequest) -> Result<Value, LLMError> {
         let mut input = Vec::new();
 
-        for msg in &request.messages {
+        for msg in request.messages.iter() {
             let convert_parts = |parts: &[crate::provider::ContentPart]| -> Value {
                 let parts_json: Vec<Value> = parts
                     .iter()
@@ -1173,7 +1173,8 @@ mod tests {
                 Message::assistant("answer".to_string()).with_reasoning_details(Some(vec![json!(
                     "{\"type\":\"reasoning.text\",\"text\":\"chain\"}"
                 )])),
-            ],
+            ]
+            .into(),
             ..Default::default()
         };
 
@@ -1194,7 +1195,8 @@ mod tests {
             model: "zai-org/GLM-5.1:novita".to_string(),
             messages: vec![
                 Message::assistant("done".to_string()).with_reasoning(Some("trace".to_string())),
-            ],
+            ]
+            .into(),
             ..Default::default()
         };
 
@@ -1237,7 +1239,7 @@ mod tests {
         );
         let request = LLMRequest {
             model: "Qwen/Qwen3-Coder-480B-A35B-Instruct".to_string(),
-            messages: vec![Message::user("apply a patch".to_string())],
+            messages: vec![Message::user("apply a patch".to_string())].into(),
             tools: Some(Arc::new(vec![ToolDefinition::apply_patch(
                 "Apply patches".to_string(),
             )])),

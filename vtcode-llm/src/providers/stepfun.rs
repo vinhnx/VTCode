@@ -130,7 +130,7 @@ mod tests {
             .core
             .convert_request(&LLMRequest {
                 model: models::stepfun::STEP_3_7_FLASH.to_string(),
-                messages: vec![Message::user("hello".to_string())],
+                messages: vec![Message::user("hello".to_string())].into(),
                 reasoning_effort: Some(ReasoningEffortLevel::XHigh),
                 ..Default::default()
             })
@@ -156,7 +156,7 @@ mod tests {
             .core
             .convert_request(&LLMRequest {
                 model: models::stepfun::STEP_3_7_FLASH.to_string(),
-                messages: vec![Message::user("hello".to_string())],
+                messages: vec![Message::user("hello".to_string())].into(),
                 system_prompt: Some(Arc::new("system guidance".to_string())),
                 max_tokens: Some(512),
                 temperature: Some(0.5),
@@ -191,7 +191,7 @@ mod tests {
             .core
             .convert_request(&LLMRequest {
                 model: models::stepfun::STEP_3_7_FLASH.to_string(),
-                messages: vec![Message::user("hello".to_string())],
+                messages: vec![Message::user("hello".to_string())].into(),
                 temperature: Some(0.5),
                 reasoning_effort: Some(ReasoningEffortLevel::Unknown),
                 ..Default::default()
@@ -205,7 +205,7 @@ mod tests {
             .core
             .convert_request(&LLMRequest {
                 model: models::stepfun::STEP_3_7_FLASH.to_string(),
-                messages: vec![Message::user("hello".to_string())],
+                messages: vec![Message::user("hello".to_string())].into(),
                 temperature: Some(0.5),
                 reasoning_effort: Some(ReasoningEffortLevel::Low),
                 ..Default::default()

@@ -95,7 +95,10 @@ pub struct AnthropicRequestOverrides {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 
 pub struct LLMRequest {
-    pub messages: Vec<Message>,
+    /// Conversation history shared via `Arc` so per-turn request construction
+    /// and continuation bookkeeping are O(1) instead of deep-copying the
+    /// entire history (which grows unbounded over a session).
+    pub messages: Arc<Vec<Message>>,
     pub system_prompt: Option<Arc<String>>,
     pub tools: Option<Arc<Vec<ToolDefinition>>>,
     pub model: String,

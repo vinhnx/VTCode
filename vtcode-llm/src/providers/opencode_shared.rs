@@ -235,7 +235,7 @@ mod tests {
 
     fn base_request() -> LLMRequest {
         LLMRequest {
-            messages: vec![Message::user("hello".to_string())],
+            messages: vec![Message::user("hello".to_string())].into(),
             system_prompt: Some(Arc::new("system guidance".to_string())),
             model: "some-model".to_string(),
             max_tokens: Some(512),
@@ -280,5 +280,37 @@ mod tests {
         assert!(payload.get("reasoning_effort").is_none());
 
         assert_eq!(payload["tool_choice"], "auto");
+    }
+
+    #[test]
+    fn tool_catalog_serialization_is_stable_across_cached_calls() {
+        use crate::provider::ToolDefinition;
+
+        let provider = OpenCodeCompatibleProvider::<OpenCodeGoInnerSpec>::new(
+            "test-key".to_string(),
+            reqwest::Client::new(),
+            "https://example.test/v1".to_string(),
+            "some-model".to_string(),
+        );
+
+        // Stable catalog shared across requests (mirrors the session-stable
+        // `prompt_bundle.request_tools` Arc).
+        let tools = Arc::new(vec![ToolDefinition::function(
+            "read_file".to_string(),
+            "Read a file".to_string(),
+            serde_json::json!({"type": "object", "properties": {}}),
+        )]);
+
+        let mut req_a = base_request();
+        req_a.tools = Some(Arc::clone(&tools));
+        let mut req_b = base_request();
+        req_b.tools = Some(Arc::clone(&tools));
+
+        let payload_a = provider.core.convert_request(&req_a).unwrap();
+        let payload_b = provider.core.convert_request(&req_b).unwrap();
+
+        // The cached serialize path must produce a byte-identical `tools` array.
+        assert_eq!(payload_a.get("tools"), payload_b.get("tools"));
+        assert!(payload_a.get("tools").is_some());
     }
 }

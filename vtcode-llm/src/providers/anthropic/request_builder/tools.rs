@@ -187,7 +187,7 @@ mod tests {
     #[test]
     fn build_tools_keeps_apply_patch_as_function_tool() {
         let request = LLMRequest {
-            messages: vec![Message::user("patch this file".to_string())],
+            messages: vec![Message::user("patch this file".to_string())].into(),
             tools: Some(Arc::new(vec![ToolDefinition::apply_patch(
                 "Apply VT Code patches".to_string(),
             )])),
@@ -208,7 +208,7 @@ mod tests {
     #[test]
     fn build_tools_preserves_anthropic_web_search_options() {
         let request = LLMRequest {
-            messages: vec![Message::user("search docs".to_string())],
+            messages: vec![Message::user("search docs".to_string())].into(),
             tools: Some(Arc::new(vec![ToolDefinition {
                 tool_type: "web_search_20250305".to_string(),
                 function: None,
@@ -253,7 +253,7 @@ mod tests {
     #[test]
     fn build_tools_rejects_non_object_anthropic_web_search_options() {
         let request = LLMRequest {
-            messages: vec![Message::user("search docs".to_string())],
+            messages: vec![Message::user("search docs".to_string())].into(),
             tools: Some(Arc::new(vec![ToolDefinition {
                 tool_type: "web_search_20260209".to_string(),
                 function: None,
@@ -278,7 +278,7 @@ mod tests {
     #[test]
     fn build_tools_includes_native_code_execution_tool() {
         let request = LLMRequest {
-            messages: vec![Message::user("run code".to_string())],
+            messages: vec![Message::user("run code".to_string())].into(),
             tools: Some(Arc::new(vec![ToolDefinition {
                 tool_type: "code_execution_20250825".to_string(),
                 function: None,
@@ -311,7 +311,7 @@ mod tests {
     #[test]
     fn build_tools_includes_native_memory_tool() {
         let request = LLMRequest {
-            messages: vec![Message::user("remember this preference".to_string())],
+            messages: vec![Message::user("remember this preference".to_string())].into(),
             tools: Some(Arc::new(vec![ToolDefinition {
                 tool_type: "memory_20250818".to_string(),
                 function: None,
@@ -356,7 +356,7 @@ mod tests {
         tool.allowed_callers = Some(vec!["code_execution_20250825".to_string()]);
 
         let request = LLMRequest {
-            messages: vec![Message::user("find warmest city".to_string())],
+            messages: vec![Message::user("find warmest city".to_string())].into(),
             tools: Some(Arc::new(vec![tool])),
             model: models::anthropic::DEFAULT_MODEL.to_string(),
             ..Default::default()
@@ -395,7 +395,7 @@ mod tests {
         })]);
 
         let request = LLMRequest {
-            messages: vec![Message::user("find warmest city".to_string())],
+            messages: vec![Message::user("find warmest city".to_string())].into(),
             tools: Some(Arc::new(vec![tool])),
             model: models::anthropic::DEFAULT_MODEL.to_string(),
             ..Default::default()
@@ -421,7 +421,7 @@ mod tests {
     #[test]
     fn build_tool_choice_disables_parallel_tool_use_when_requested() {
         let request = LLMRequest {
-            messages: vec![Message::user("hi".to_string())],
+            messages: vec![Message::user("hi".to_string())].into(),
             model: models::anthropic::DEFAULT_MODEL.to_string(),
             tool_choice: Some(ToolChoice::auto()),
             parallel_tool_config: Some(Box::new(ParallelToolConfig::sequential_only())),

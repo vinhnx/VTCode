@@ -153,7 +153,7 @@ impl GeminiProvider {
         }
 
         let mut call_map: HashMap<String, String> = HashMap::with_capacity(request.messages.len());
-        for message in &request.messages {
+        for message in request.messages.iter() {
             if message.role == MessageRole::Assistant
                 && let Some(tool_calls) = &message.tool_calls
             {
@@ -167,7 +167,7 @@ impl GeminiProvider {
 
         let mut contents: Vec<Content> = Vec::with_capacity(request.messages.len());
         let history_system_directives = collect_history_system_directives(request);
-        for message in &request.messages {
+        for message in request.messages.iter() {
             if message.role == MessageRole::System {
                 continue;
             }
@@ -1229,7 +1229,7 @@ fn build_interaction_input(request: &LLMRequest) -> Result<InteractionInput, LLM
     let relevant_messages = if request.previous_response_id.is_some() {
         interaction_delta_messages(&request.messages)
     } else {
-        request.messages.clone()
+        request.messages.as_ref().clone()
     };
     let turns = build_interaction_turns(&relevant_messages, &request.messages)?;
 

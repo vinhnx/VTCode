@@ -449,7 +449,7 @@ mod tests {
         let provider = EvolinkProvider::new("test-key".to_string());
         let mut request = LLMRequest {
             model: "evolink/deepseek-v4-pro".to_string(),
-            messages: vec![Message::user("hello".to_string())],
+            messages: vec![Message::user("hello".to_string())].into(),
             reasoning_effort: Some(ReasoningEffortLevel::High),
             ..Default::default()
         };
@@ -477,7 +477,7 @@ mod tests {
         let provider = EvolinkProvider::new("test-key".to_string());
         let mut request = LLMRequest {
             model: "evolink/gpt-5.2".to_string(),
-            messages: vec![Message::user("hello".to_string())],
+            messages: vec![Message::user("hello".to_string())].into(),
             system_prompt: Some(Arc::new("system guidance".to_string())),
             max_tokens: Some(512),
             temperature: Some(0.5),
@@ -517,7 +517,7 @@ mod tests {
         let payload = provider
             .convert_to_anthropic_format(&LLMRequest {
                 model: "evolink/claude-x".to_string(),
-                messages: vec![Message::user("hello".to_string())],
+                messages: vec![Message::user("hello".to_string())].into(),
                 system_prompt: Some(Arc::new("system guidance".to_string())),
                 temperature: Some(0.5),
                 stream: false,

@@ -73,7 +73,7 @@ fn build_memory_json_request(
                 }
             })
         }),
-        messages: vec![Message::user(prompt)],
+        messages: std::sync::Arc::new(vec![Message::user(prompt)]),
         ..Default::default()
     })
 }

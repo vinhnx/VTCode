@@ -42,7 +42,8 @@ fn convert_to_gemini_request_maps_history_and_system_prompt() {
             Message::user("hello".to_string()),
             assistant_message,
             tool_response,
-        ],
+        ]
+        .into(),
         system_prompt: Some(Arc::new("System prompt".to_string())),
         tools: Some(Arc::new(vec![tool_def])),
         model: models::google::GEMINI_3_FLASH_PREVIEW.to_string(),
@@ -100,7 +101,8 @@ fn convert_to_gemini_request_hoists_history_system_directives_into_system_instru
         messages: vec![
             Message::system("Reuse the latest tool outputs before reading again.".to_string()),
             Message::user("explore architecture".to_string()),
-        ],
+        ]
+        .into(),
         system_prompt: Some(Arc::new("Stable system instructions".to_string())),
         model: models::google::GEMINI_3_FLASH_PREVIEW.to_string(),
         ..Default::default()
@@ -137,7 +139,8 @@ fn convert_to_gemini_request_promotes_history_system_directives_without_base_sys
         messages: vec![
             Message::system("Summarize the latest tool outputs instead of rereading.".to_string()),
             Message::user("explore architecture".to_string()),
-        ],
+        ]
+        .into(),
         model: models::google::GEMINI_3_FLASH_PREVIEW.to_string(),
         ..Default::default()
     };
@@ -219,7 +222,7 @@ fn convert_from_gemini_response_extracts_tool_calls() {
 fn convert_to_gemini_request_keeps_apply_patch_as_function_tool() {
     let provider = GeminiProvider::new("test-key".to_string());
     let request = LLMRequest {
-        messages: vec![Message::user("patch this file".to_string())],
+        messages: vec![Message::user("patch this file".to_string())].into(),
         tools: Some(Arc::new(vec![ToolDefinition::apply_patch(
             "Apply VT Code patches".to_string(),
         )])),
@@ -256,7 +259,8 @@ fn convert_to_interaction_request_serializes_built_in_and_function_tools() {
     let request = LLMRequest {
         messages: vec![Message::user(
             "What is the northernmost city in the United States?".to_string(),
-        )],
+        )]
+        .into(),
         tools: Some(Arc::new(vec![
             ToolDefinition::web_search(json!({})),
             ToolDefinition::function(
@@ -300,7 +304,7 @@ fn convert_to_interaction_request_serializes_built_in_and_function_tools() {
 fn convert_to_interaction_request_preserves_built_in_tool_config() {
     let provider = GeminiProvider::new("test-key".to_string());
     let request = LLMRequest {
-        messages: vec![Message::user("Search for an image".to_string())],
+        messages: vec![Message::user("Search for an image".to_string())].into(),
         tools: Some(Arc::new(vec![
             ToolDefinition::web_search(json!({
                 "search_types": ["web_search", "image_search"]
@@ -355,7 +359,8 @@ fn convert_to_interaction_request_uses_function_result_for_chained_turns() {
                 "call_weather_1".to_string(),
                 json!({ "response": "Very cold. 22 degrees Fahrenheit." }).to_string(),
             ),
-        ],
+        ]
+        .into(),
         tools: Some(Arc::new(vec![ToolDefinition::function(
             "get_weather".to_string(),
             "Gets the weather".to_string(),
@@ -434,7 +439,8 @@ fn convert_to_interaction_request_supports_multimodal_function_results() {
                 tool_call_id: Some("call_screenshot_1".to_string()),
                 ..Default::default()
             },
-        ],
+        ]
+        .into(),
         tools: Some(Arc::new(vec![ToolDefinition::function(
             "take_screenshot".to_string(),
             "Takes a screenshot".to_string(),
@@ -755,7 +761,7 @@ fn interaction_stream_payload_reconstructs_text_reasoning_and_tool_calls() {
 fn validate_request_rejects_store_false_with_previous_interaction_id() {
     let provider = GeminiProvider::new("test-key".to_string());
     let request = LLMRequest {
-        messages: vec![Message::user("hello".to_string())],
+        messages: vec![Message::user("hello".to_string())].into(),
         model: models::google::GEMINI_3_FLASH_PREVIEW.to_string(),
         previous_response_id: Some("interaction_123".to_string()),
         response_store: Some(false),
@@ -931,7 +937,7 @@ fn convert_to_gemini_request_includes_reasoning_config() {
 
     // Test High effort level for Gemini 3 Pro
     let request = LLMRequest {
-        messages: vec![Message::user("test".to_string())],
+        messages: vec![Message::user("test".to_string())].into(),
         model: models::google::GEMINI_3_1_PRO_PREVIEW.to_string(),
         reasoning_effort: Some(ReasoningEffortLevel::High),
         ..Default::default()
@@ -953,7 +959,7 @@ fn convert_to_gemini_request_includes_reasoning_config() {
 
     // Test Low effort level for Gemini 3 Pro
     let request_low = LLMRequest {
-        messages: vec![Message::user("test".to_string())],
+        messages: vec![Message::user("test".to_string())].into(),
         model: models::google::GEMINI_3_1_PRO_PREVIEW.to_string(),
         reasoning_effort: Some(ReasoningEffortLevel::Low),
         ..Default::default()
@@ -978,7 +984,7 @@ fn convert_to_gemini_request_includes_reasoning_config() {
 
     // Test that None effort results in low reasoning_config for Gemini (none is treated as low)
     let request_none = LLMRequest {
-        messages: vec![Message::user("test".to_string())],
+        messages: vec![Message::user("test".to_string())].into(),
         model: models::google::GEMINI_3_1_PRO_PREVIEW.to_string(),
         reasoning_effort: Some(ReasoningEffortLevel::None),
         ..Default::default()
@@ -1011,7 +1017,7 @@ fn gemini31_pro_reasoning_mapping() {
 
     // Test High effort level for Gemini 3.1 Pro
     let request = LLMRequest {
-        messages: vec![Message::user("test".to_string())],
+        messages: vec![Message::user("test".to_string())].into(),
         model: models::google::GEMINI_3_1_PRO_PREVIEW.to_string(),
         reasoning_effort: Some(ReasoningEffortLevel::High),
         ..Default::default()
@@ -1098,7 +1104,8 @@ fn thought_signature_roundtrip_in_request() {
                 origin_tool: None,
                 metadata: None,
             },
-        ],
+        ]
+        .into(),
         model: models::google::GEMINI_3_1_PRO_PREVIEW.to_string(),
         ..Default::default()
     };
@@ -1297,7 +1304,7 @@ fn gemini3_flash_minimal_thinking_mapping() {
 
     // Test Minimal thinking level for Gemini 3 Flash
     let request = LLMRequest {
-        messages: vec![Message::user("test".to_string())],
+        messages: vec![Message::user("test".to_string())].into(),
         model: models::google::GEMINI_3_FLASH_PREVIEW.to_string(),
         reasoning_effort: Some(ReasoningEffortLevel::Minimal),
         ..Default::default()
@@ -1330,7 +1337,7 @@ fn gemini3_flash_medium_thinking_mapping() {
 
     // Test Medium thinking level for Gemini 3 Flash
     let request = LLMRequest {
-        messages: vec![Message::user("test".to_string())],
+        messages: vec![Message::user("test".to_string())].into(),
         model: models::google::GEMINI_3_FLASH_PREVIEW.to_string(),
         reasoning_effort: Some(ReasoningEffortLevel::Medium),
         ..Default::default()
@@ -1363,7 +1370,7 @@ fn gemini3_pro_medium_thinking_fallback() {
 
     // Test Medium thinking level for Gemini 3 Pro (should fallback to high)
     let request = LLMRequest {
-        messages: vec![Message::user("test".to_string())],
+        messages: vec![Message::user("test".to_string())].into(),
         model: models::google::GEMINI_3_1_PRO_PREVIEW.to_string(),
         reasoning_effort: Some(ReasoningEffortLevel::Medium),
         ..Default::default()
@@ -1394,7 +1401,7 @@ fn convert_to_gemini_request_includes_advanced_parameters() {
     let provider = GeminiProvider::new("test-key".to_string());
 
     let request = LLMRequest {
-        messages: vec![Message::user("test".to_string())],
+        messages: vec![Message::user("test".to_string())].into(),
         model: models::google::GEMINI_3_FLASH_PREVIEW.to_string(),
         top_p: Some(0.9),
         top_k: Some(40),
@@ -1432,7 +1439,7 @@ fn convert_to_gemini_request_includes_json_mode() {
     let provider = GeminiProvider::new("test-key".to_string());
 
     let request = LLMRequest {
-        messages: vec![Message::user("test".to_string())],
+        messages: vec![Message::user("test".to_string())].into(),
         model: models::google::GEMINI_3_FLASH_PREVIEW.to_string(),
         output_format: Some(json!("json")),
         ..Default::default()
@@ -1456,7 +1463,7 @@ fn convert_to_gemini_request_includes_json_mode() {
 fn convert_to_gemini_request_combines_google_search_with_function_tools() {
     let provider = GeminiProvider::new("test-key".to_string());
     let request = LLMRequest {
-        messages: vec![Message::user("Search and then inspect weather".to_string())],
+        messages: vec![Message::user("Search and then inspect weather".to_string())].into(),
         tools: Some(Arc::new(vec![
             ToolDefinition::web_search(json!({})),
             ToolDefinition::function(
@@ -1628,7 +1635,8 @@ fn convert_to_gemini_request_replays_preserved_raw_parts() {
                 "call_weather".to_string(),
                 json!({ "response": "Very cold. 22 degrees Fahrenheit." }).to_string(),
             ),
-        ],
+        ]
+        .into(),
         tools: Some(Arc::new(vec![
             ToolDefinition::web_search(json!({})),
             ToolDefinition::function(
@@ -1700,7 +1708,7 @@ mod caching_tests {
         // Verification: we can't easily inspect private fields without a helper or reflection.
         // We can check if `convert_to_gemini_request` works.
         let request = LLMRequest {
-            messages: vec![Message::user("Hello".to_string())],
+            messages: vec![Message::user("Hello".to_string())].into(),
             model: "gemini-1.5-pro".to_string(),
             ..Default::default()
         };
@@ -1730,7 +1738,7 @@ mod caching_tests {
 
         // Trigger request creation. It shouldn't panic or fail, even if explicit logic is placeholder.
         let request = LLMRequest {
-            messages: vec![Message::user("Hello".to_string())],
+            messages: vec![Message::user("Hello".to_string())].into(),
             model: "gemini-1.5-pro".to_string(),
             ..Default::default()
         };

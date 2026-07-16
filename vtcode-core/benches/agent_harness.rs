@@ -48,7 +48,7 @@ fn request_plan_benchmark(c: &mut Criterion) {
     c.bench_function("agent_harness_request_plan_with_tools", |b| {
         b.iter(|| {
             black_box(build_harness_request_plan(HarnessRequestPlanInput {
-                messages: messages.clone(),
+                messages: Arc::new(messages.clone()),
                 system_prompt: "System prompt\n[Runtime Context]\nturn=12".to_string(),
                 tools: Some(Arc::clone(&tools)),
                 model: "gpt-5".to_string(),

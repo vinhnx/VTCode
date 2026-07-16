@@ -370,7 +370,7 @@ impl OllamaProvider {
             .and_then(|entry| serde_json::from_value::<Vec<ToolDefinition>>(entry.clone()).ok());
 
         Some(LLMRequest {
-            messages,
+            messages: std::sync::Arc::new(messages),
             system_prompt: system_prompt.map(std::sync::Arc::new),
             tools: tools.map(std::sync::Arc::new),
             model: value
@@ -416,7 +416,7 @@ impl OllamaProvider {
             });
         }
 
-        for message in &request.messages {
+        for message in request.messages.iter() {
             let interleaved_content = assistant_interleaved_history_text(message, &request.model);
             let used_interleaved_content = interleaved_content.is_some();
             let (content_text, images) = if let Some(interleaved_content) = interleaved_content {
@@ -1217,7 +1217,7 @@ impl LLMProvider for OllamaProvider {
             });
         }
 
-        for message in &request.messages {
+        for message in request.messages.iter() {
             if matches!(message.role, MessageRole::Tool) && message.tool_call_id.is_none() {
                 return Err(LLMError::InvalidRequest {
                     message: "Ollama tool responses must include tool_call_id".to_string(),
@@ -1308,7 +1308,7 @@ mod tests {
         ];
         let request = LLMRequest {
             model: "test-model".to_string(),
-            messages: vec![Message::user_with_parts(parts)],
+            messages: vec![Message::user_with_parts(parts)].into(),
             ..Default::default()
         };
 
@@ -1328,7 +1328,7 @@ mod tests {
         let content = MessageContent::text("no images".to_string());
         let request = LLMRequest {
             model: "test-model".to_string(),
-            messages: vec![Message::user(content.as_text().into_owned())],
+            messages: vec![Message::user(content.as_text().into_owned())].into(),
             ..Default::default()
         };
 
@@ -1358,7 +1358,8 @@ mod tests {
                     tool_call_id,
                     "{\"output\":\"\",\"exit_code\":0}".to_string(),
                 ),
-            ],
+            ]
+            .into(),
             reasoning_effort: Some(ReasoningEffortLevel::Low),
             ..Default::default()
         };
@@ -1393,7 +1394,8 @@ mod tests {
                     tool_call_id.clone(),
                     "{\"output\":\"\",\"exit_code\":0}".to_string(),
                 ),
-            ],
+            ]
+            .into(),
             reasoning_effort: Some(ReasoningEffortLevel::Low),
             ..Default::default()
         };
@@ -1425,7 +1427,7 @@ mod tests {
                 Message::system(
                     "Previous turn already completed tool execution. Reuse the latest tool outputs in history instead of rerunning the same exploration.".to_string(),
                 ),
-            ],
+            ].into(),
             ..Default::default()
         };
 
@@ -1470,7 +1472,7 @@ mod tests {
                     "Repeated read-only exploration hit the per-turn family cap. Scheduling a final recovery pass without more tools.".to_string(),
                 ),
                 Message::user("summarize the architecture".to_string()),
-            ],
+            ].into(),
             ..Default::default()
         };
 
@@ -1507,7 +1509,7 @@ mod tests {
                     "{\"action\":\"read\",\"path\":\"docs/ARCHITECTURE.md\",\"offset\":1,\"limit\":100}{\"action\":\"read\",\"path\":\"README.md\"}"
                         .to_string(),
                 )],
-            )],
+            )].into(),
             ..Default::default()
         };
 
@@ -1538,7 +1540,8 @@ mod tests {
             model: models::ollama::GLM_5_1_CLOUD.to_string(),
             messages: vec![
                 Message::assistant("done".to_string()).with_reasoning(Some("trace".to_string())),
-            ],
+            ]
+            .into(),
             ..Default::default()
         };
 
@@ -1559,7 +1562,8 @@ mod tests {
             messages: vec![
                 Message::assistant("need a tool".to_string())
                     .with_reasoning(Some("reasoning trace".to_string())),
-            ],
+            ]
+            .into(),
             ..Default::default()
         };
 
@@ -1577,7 +1581,7 @@ mod tests {
         let provider = test_provider();
         let request = LLMRequest {
             model: "test-model".to_string(),
-            messages: vec![Message::user("patch this file".to_string())],
+            messages: vec![Message::user("patch this file".to_string())].into(),
             tools: Some(std::sync::Arc::new(vec![ToolDefinition::apply_patch(
                 "Apply VT Code patches".to_string(),
             )])),

@@ -24,7 +24,9 @@ pub struct HarnessRequestPlan {
 /// Input parameters for building a harness request plan.
 #[derive(Debug, Clone)]
 pub struct HarnessRequestPlanInput {
-    pub messages: Vec<Message>,
+    /// Shared conversation history; `Arc` so plan construction is O(1) in
+    /// history size (no deep copy per turn).
+    pub messages: Arc<Vec<Message>>,
     pub system_prompt: String,
     pub tools: Option<Arc<Vec<ToolDefinition>>>,
     pub model: String,

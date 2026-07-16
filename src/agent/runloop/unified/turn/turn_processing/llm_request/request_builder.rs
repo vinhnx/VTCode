@@ -155,7 +155,7 @@ pub(super) async fn build_turn_request(
         ctx.context_manager.request_editor_context_message(),
     );
     let request_plan = build_harness_request_plan(HarnessRequestPlanInput {
-        messages: request_messages,
+        messages: Arc::new(request_messages),
         system_prompt: prompt_output.system_prompt,
         tools: if use_out_of_band_copilot_tools || turn_snapshot.tool_free_recovery {
             // Strip tool definitions during tool-free recovery (including
@@ -268,7 +268,7 @@ mod tests {
     }
 
     fn non_runtime_request_messages(request: &uni::LLMRequest) -> Vec<uni::Message> {
-        request.messages.clone()
+        request.messages.as_ref().clone()
     }
 
     fn system_prompt_text(request: &uni::LLMRequest) -> &str {

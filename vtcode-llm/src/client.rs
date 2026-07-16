@@ -36,7 +36,7 @@ impl LLMClient for ProviderClientAdapter {
     async fn generate(&mut self, prompt: &str) -> Result<LLMResponse, LLMError> {
         use super::provider::{LLMRequest, Message};
         let request = LLMRequest {
-            messages: vec![Message::user(prompt.to_string())],
+            messages: std::sync::Arc::new(vec![Message::user(prompt.to_string())]),
             model: self.model_id.clone(),
             ..Default::default()
         };

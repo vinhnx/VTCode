@@ -117,7 +117,7 @@ async fn try_refine_prompt_with_route(
         Some(vt_cfg.agent.refine_temperature)
     };
     let req = uni::LLMRequest {
-        messages: vec![uni::Message::user(raw.to_string())],
+        messages: Arc::new(vec![uni::Message::user(raw.to_string())]),
         model: route.model.clone(),
         temperature,
         tool_choice: Some(uni::ToolChoice::none()),

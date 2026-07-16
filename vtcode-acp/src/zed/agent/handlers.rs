@@ -418,7 +418,7 @@ async fn run_prompt(agent: Arc<ZedAgent>, args: PromptRequest) -> Result<PromptR
 
     if allow_streaming {
         let request = LLMRequest {
-            messages: messages.clone(),
+            messages: Arc::new(messages.clone()),
             model: session_model.clone(),
             stream: true,
             tools: tool_definitions,
@@ -518,7 +518,7 @@ async fn run_prompt(agent: Arc<ZedAgent>, args: PromptRequest) -> Result<PromptR
             }
 
             let request = LLMRequest {
-                messages: messages.clone(),
+                messages: Arc::new(messages.clone()),
                 model: session_model.clone(),
                 tools: tool_definitions.clone(),
                 tool_choice: agent.tool_choice(tools_allowed),

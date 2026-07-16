@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use std::path::Path;
+use std::sync::Arc;
 use vtcode_commons::preview::{condense_text_bytes, tail_preview_text};
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::llm::provider::{LLMRequest, Message as LlmMessage};
@@ -447,10 +448,8 @@ async fn summarize_tool_output_with_provider(
         truncate_text_for_model(serialized_output, TOOL_OUTPUT_SUMMARY_MAX_INPUT_CHARS).0
     );
     let request = LLMRequest {
-        messages: vec![LlmMessage::user(prompt)],
-        system_prompt: Some(std::sync::Arc::new(
-            TOOL_OUTPUT_SUMMARY_SYSTEM_PROMPT.to_string(),
-        )),
+        messages: Arc::new(vec![LlmMessage::user(prompt)]),
+        system_prompt: Some(Arc::new(TOOL_OUTPUT_SUMMARY_SYSTEM_PROMPT.to_string())),
         model: model.to_string(),
         max_tokens: Some(TOOL_OUTPUT_SUMMARY_MAX_OUTPUT_TOKENS),
         temperature: Some(0.0),

@@ -923,7 +923,7 @@ mod tests {
     fn websocket_test_request() -> LLMRequest {
         LLMRequest {
             model: "gpt-5.2".to_string(),
-            messages: vec![ProviderMessage::user("hello".to_string())],
+            messages: vec![ProviderMessage::user("hello".to_string())].into(),
             ..Default::default()
         }
     }

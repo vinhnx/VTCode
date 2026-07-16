@@ -288,7 +288,7 @@ mod tests {
         let repeated_response = "The task is complete";
         let mut state = AgentSessionState::new("session".to_string(), 8, 4, 128_000);
         state
-            .messages
+            .messages_mut()
             .push(Message::assistant(repeated_response.to_string()));
 
         assert!(!check_for_response_loop(repeated_response, &mut state));
@@ -299,10 +299,10 @@ mod tests {
         let repeated_response = "The task is complete";
         let mut state = AgentSessionState::new("session".to_string(), 8, 4, 128_000);
         state
-            .messages
+            .messages_mut()
             .push(Message::assistant(repeated_response.to_string()));
         state
-            .messages
+            .messages_mut()
             .push(Message::assistant(repeated_response.to_string()));
 
         assert!(check_for_response_loop(repeated_response, &mut state));

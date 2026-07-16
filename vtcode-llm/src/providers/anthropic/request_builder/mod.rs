@@ -162,7 +162,7 @@ pub fn convert_to_anthropic_format(
             None
         };
 
-    let mut messages_to_process = request.messages.clone();
+    let mut messages_to_process = request.messages.as_ref().clone();
 
     if let Some(settings) = &request.coding_agent_settings
         && settings.long_context_optimization

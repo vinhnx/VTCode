@@ -8,7 +8,7 @@ pub async fn summarize_text(
     prompt: &str,
 ) -> Result<String> {
     let request = LLMRequest {
-        messages: vec![Message::user(prompt.to_string())],
+        messages: std::sync::Arc::new(vec![Message::user(prompt.to_string())]),
         model: model.to_string(),
         ..Default::default()
     };

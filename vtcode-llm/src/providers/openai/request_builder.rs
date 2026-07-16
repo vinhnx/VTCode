@@ -298,7 +298,7 @@ pub(crate) fn build_chat_request(
     request: &provider::LLMRequest,
     ctx: &ChatRequestContext<'_>,
 ) -> Result<Value, provider::LLMError> {
-    for message in &request.messages {
+    for message in request.messages.iter() {
         if let provider::MessageContent::Parts(parts) = &message.content {
             for part in parts {
                 if let provider::ContentPart::File {
@@ -329,7 +329,7 @@ pub(crate) fn build_chat_request(
         }));
     }
 
-    for msg in &request.messages {
+    for msg in request.messages.iter() {
         let role = msg.role.as_openai_str();
         let mut message = json!({
             "role": role,
@@ -826,7 +826,7 @@ mod tests {
 
     fn request() -> provider::LLMRequest {
         provider::LLMRequest {
-            messages: vec![provider::Message::user("Hello".to_owned())],
+            messages: vec![provider::Message::user("Hello".to_owned())].into(),
             model: models::openai::GPT_5.to_string(),
             stream: true,
             ..Default::default()

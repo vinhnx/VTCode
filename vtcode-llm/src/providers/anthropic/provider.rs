@@ -372,7 +372,7 @@ impl AnthropicProvider {
 
         let request = LLMRequest {
             model: haiku_model.to_string(),
-            messages: vec![Message::user(screen_prompt)],
+            messages: std::sync::Arc::new(vec![Message::user(screen_prompt)]),
             max_tokens: Some(10),
             temperature: Some(0.0),
             ..Default::default()
@@ -786,7 +786,7 @@ mod tests {
         );
         let request = LLMRequest {
             model: models::CLAUDE_SONNET_4_6.to_string(),
-            messages: vec![Message::user("hello".to_string())],
+            messages: vec![Message::user("hello".to_string())].into(),
             output_format: Some(json!({
                 "type": "object",
                 "properties": {
@@ -824,7 +824,8 @@ mod tests {
                     ContentPart::file_from_id("file_abc123".to_string()),
                 ]),
                 ..Default::default()
-            }],
+            }]
+            .into(),
             tools: Some(std::sync::Arc::new(vec![ToolDefinition {
                 tool_type: "code_execution_20250825".to_string(),
                 function: None,
@@ -855,7 +856,7 @@ mod tests {
         );
         let request = LLMRequest {
             model: models::CLAUDE_SONNET_4_6.to_string(),
-            messages: vec![Message::user("remember this preference".to_string())],
+            messages: vec![Message::user("remember this preference".to_string())].into(),
             tools: Some(std::sync::Arc::new(vec![ToolDefinition {
                 tool_type: "memory_20250818".to_string(),
                 function: None,
@@ -889,7 +890,7 @@ mod tests {
         );
         let request = LLMRequest {
             model: models::CLAUDE_SONNET_4_6.to_string(),
-            messages: vec![Message::user("continue".to_string())],
+            messages: vec![Message::user("continue".to_string())].into(),
             context_management: Some(json!({
                 "edits": [
                     {"type": "clear_tool_uses_20250919"}
@@ -915,7 +916,7 @@ mod tests {
         );
         let request = LLMRequest {
             model: models::CLAUDE_SONNET_4_6.to_string(),
-            messages: vec![Message::user("continue".to_string())],
+            messages: vec![Message::user("continue".to_string())].into(),
             context_management: Some(json!([
                 {
                     "type": "compaction",
@@ -937,7 +938,7 @@ mod tests {
         );
         let request = LLMRequest {
             model: models::CLAUDE_SONNET_4_6.to_string(),
-            messages: vec![Message::user("continue".to_string())],
+            messages: vec![Message::user("continue".to_string())].into(),
             context_management: Some(json!({
                 "edits": [
                     {
@@ -969,7 +970,7 @@ mod tests {
         );
         let request = LLMRequest {
             model: models::CLAUDE_SONNET_4_6.to_string(),
-            messages: vec![Message::user("continue".to_string())],
+            messages: vec![Message::user("continue".to_string())].into(),
             context_management: Some(json!({
                 "edits": [
                     {"type": "clear_tool_uses_20250919"},
@@ -1002,7 +1003,7 @@ mod tests {
         );
         let request = LLMRequest {
             model: models::CLAUDE_SONNET_4_6.to_string(),
-            messages: vec![Message::user("find warmest city".to_string())],
+            messages: vec![Message::user("find warmest city".to_string())].into(),
             tools: Some(std::sync::Arc::new(vec![
                 ToolDefinition::function(
                     "get_weather".to_string(),
@@ -1036,7 +1037,7 @@ mod tests {
         let provider = AnthropicProvider::with_model("test-key".to_string(), model.to_string());
         let request = LLMRequest {
             model: model.to_string(),
-            messages: vec![Message::user("hello".to_string())],
+            messages: vec![Message::user("hello".to_string())].into(),
             ..Default::default()
         };
 
@@ -1058,7 +1059,7 @@ mod tests {
         );
         let request = LLMRequest {
             model: models::CLAUDE_SONNET_4_6.to_string(),
-            messages: vec![Message::user("hello".to_string())],
+            messages: vec![Message::user("hello".to_string())].into(),
             ..Default::default()
         };
 
@@ -1081,7 +1082,7 @@ mod tests {
         );
         let request = LLMRequest {
             model: models::CLAUDE_SONNET_4_6.to_string(),
-            messages: vec![Message::user("hello".to_string())],
+            messages: vec![Message::user("hello".to_string())].into(),
             thinking_budget: Some(4096),
             max_tokens: Some(8192),
             ..Default::default()
@@ -1105,7 +1106,7 @@ mod tests {
             models::CLAUDE_SONNET_4_6.to_string(),
         );
         let request = LLMRequest {
-            messages: vec![Message::user("hello".to_string())],
+            messages: vec![Message::user("hello".to_string())].into(),
             ..Default::default()
         };
 
@@ -1124,7 +1125,7 @@ mod tests {
         );
         let request = LLMRequest {
             model: models::CLAUDE_SONNET_4_6.to_string(),
-            messages: vec![Message::user("find the deployment tool".to_string())],
+            messages: vec![Message::user("find the deployment tool".to_string())].into(),
             tools: Some(std::sync::Arc::new(vec![ToolDefinition::tool_search(
                 crate::provider::ToolSearchAlgorithm::Regex,
             )])),

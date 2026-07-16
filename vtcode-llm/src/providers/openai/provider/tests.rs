@@ -156,7 +156,7 @@ fn shell_tool() -> provider::ToolDefinition {
 
 fn sample_request(model: &str) -> provider::LLMRequest {
     provider::LLMRequest {
-        messages: vec![provider::Message::user("Hello".to_owned())],
+        messages: vec![provider::Message::user("Hello".to_owned())].into(),
         tools: Some(Arc::new(vec![sample_tool()])),
         model: model.to_string(),
         ..Default::default()
@@ -165,7 +165,7 @@ fn sample_request(model: &str) -> provider::LLMRequest {
 
 fn shell_request(model: &str) -> provider::LLMRequest {
     provider::LLMRequest {
-        messages: vec![provider::Message::user("Run pwd".to_owned())],
+        messages: vec![provider::Message::user("Run pwd".to_owned())].into(),
         tools: Some(Arc::new(vec![shell_tool()])),
         model: model.to_string(),
         ..Default::default()
@@ -371,7 +371,7 @@ fn responses_payload_for(model: &str, provider: &OpenAIProvider) -> Value {
 
 fn responses_allowed_tools_request(model: &str) -> provider::LLMRequest {
     provider::LLMRequest {
-        messages: vec![provider::Message::user("Hello".to_owned())],
+        messages: vec![provider::Message::user("Hello".to_owned())].into(),
         tools: Some(Arc::new(vec![
             sample_tool(),
             provider::ToolDefinition::web_search(json!({})),
@@ -619,7 +619,8 @@ fn api_key_and_chatgpt_subscription_share_responses_item_history_builder() {
             provider::Message::user("Summarise the repository state.".to_owned()),
             provider::Message::assistant("There is one modified file.".to_owned()),
             provider::Message::user("Continue.".to_owned()),
-        ],
+        ]
+        .into(),
         model: models::openai::GPT_5_2.to_string(),
         stream: true,
         tools: Some(Arc::new(vec![sample_tool()])),
@@ -701,7 +702,8 @@ fn openai_and_chatgpt_share_responses_payload_builder_except_backend() {
             provider::Message::user("Summarise the repository state.".to_owned()),
             provider::Message::assistant("There is one modified file.".to_owned()),
             provider::Message::user("Continue.".to_owned()),
-        ],
+        ]
+        .into(),
         model: models::openai::GPT_5_2.to_string(),
         stream: true,
         ..Default::default()
@@ -780,7 +782,8 @@ fn openai_and_chatgpt_replay_structured_history_on_continuation_turns() {
             provider::Message::assistant("The check completed successfully.".to_owned())
                 .with_phase(Some(provider::AssistantPhase::FinalAnswer)),
             provider::Message::user("Continue with the next step.".to_owned()),
-        ],
+        ]
+        .into(),
         model: models::openai::GPT_5_2_CODEX.to_string(),
         stream: true,
         ..Default::default()
@@ -927,7 +930,7 @@ async fn api_key_responses_stream_sends_metadata_and_preserves_usage() {
 
     let mut stream = provider
         .stream(provider::LLMRequest {
-            messages: vec![provider::Message::user("Hello".to_string())],
+            messages: vec![provider::Message::user("Hello".to_string())].into(),
             model: models::openai::GPT_5.to_string(),
             response_store: Some(true),
             metadata: Some(json!({"commit": "abc123"})),
@@ -1042,7 +1045,7 @@ async fn chatgpt_responses_stream_accepts_empty_final_output_after_text_delta() 
 
     let mut stream = provider
         .stream(provider::LLMRequest {
-            messages: vec![provider::Message::user("Hello".to_string())],
+            messages: vec![provider::Message::user("Hello".to_string())].into(),
             model: models::openai::GPT_5_5.to_string(),
             ..Default::default()
         })
@@ -1647,7 +1650,8 @@ fn chat_payload_omits_assistant_phase_metadata() {
             provider::Message::user("Start".to_owned()),
             provider::Message::assistant("Working".to_owned())
                 .with_phase(Some(provider::AssistantPhase::Commentary)),
-        ],
+        ]
+        .into(),
         model: models::openai::DEFAULT_MODEL.to_string(),
         ..Default::default()
     };
@@ -1667,7 +1671,8 @@ fn chat_payload_rejects_file_url_content_parts() {
     let request = provider::LLMRequest {
         messages: vec![provider::Message::user_with_parts(vec![
             provider::ContentPart::file_from_url("https://example.com/doc.pdf".to_string()),
-        ])],
+        ])]
+        .into(),
         model: models::openai::DEFAULT_MODEL.to_string(),
         ..Default::default()
     };
@@ -1993,7 +1998,8 @@ fn responses_payload_serializes_user_input_file_by_id() {
         messages: vec![provider::Message::user_with_parts(vec![
             provider::ContentPart::text("Summarize this file".to_string()),
             provider::ContentPart::file_from_id("file-abc123".to_string()),
-        ])],
+        ])]
+        .into(),
         model: models::openai::GPT_5.to_string(),
         ..Default::default()
     };
@@ -2018,7 +2024,8 @@ fn responses_payload_serializes_user_input_file_data() {
         messages: vec![provider::Message::user_with_parts(vec![
             provider::ContentPart::text("Summarize this file".to_string()),
             provider::ContentPart::file_from_data("report.pdf".to_string(), "aGVsbG8=".to_string()),
-        ])],
+        ])]
+        .into(),
         model: models::openai::GPT_5.to_string(),
         ..Default::default()
     };
@@ -2331,7 +2338,8 @@ fn responses_validation_rejects_single_inline_file_over_limit() {
     let request = provider::LLMRequest {
         messages: vec![provider::Message::user_with_parts(vec![
             provider::ContentPart::file_from_data("report.pdf".to_string(), "aGVsbG8=".to_string()),
-        ])],
+        ])]
+        .into(),
         model: models::openai::GPT_5.to_string(),
         ..Default::default()
     };
@@ -2352,7 +2360,8 @@ fn responses_validation_rejects_combined_inline_files_over_limit() {
         messages: vec![provider::Message::user_with_parts(vec![
             provider::ContentPart::file_from_data("a.txt".to_string(), "YWJj".to_string()),
             provider::ContentPart::file_from_data("b.txt".to_string(), "ZGVm".to_string()),
-        ])],
+        ])]
+        .into(),
         model: models::openai::GPT_5.to_string(),
         ..Default::default()
     };
@@ -2376,7 +2385,7 @@ fn responses_validation_rejects_combined_inline_files_over_limit() {
 fn responses_function_tools_add_empty_properties_for_bare_object_schema() {
     let provider = native_openai_provider(models::openai::GPT_5_2_CODEX);
     let request = provider::LLMRequest {
-        messages: vec![provider::Message::user("Hello".to_owned())],
+        messages: vec![provider::Message::user("Hello".to_owned())].into(),
         tools: Some(Arc::new(vec![provider::ToolDefinition::function(
             "vtcode-clippy".to_owned(),
             "Run clippy on the workspace".to_owned(),
@@ -2407,7 +2416,8 @@ fn responses_payload_serializes_hosted_web_search_tool() {
     let request = provider::LLMRequest {
         messages: vec![provider::Message::user(
             "Find the latest VT Code news".to_owned(),
-        )],
+        )]
+        .into(),
         tools: Some(Arc::new(vec![provider::ToolDefinition::web_search(
             json!({"search_context_size": "medium"}),
         )])),
@@ -2438,7 +2448,8 @@ fn responses_payload_serializes_file_search_tool() {
     let request = provider::LLMRequest {
         messages: vec![provider::Message::user(
             "Search the docs vector store".to_owned(),
-        )],
+        )]
+        .into(),
         tools: Some(Arc::new(vec![provider::ToolDefinition::file_search(
             json!({"vector_store_ids": ["vs_docs"]}),
         )])),
@@ -2471,7 +2482,7 @@ fn responses_payload_serializes_file_search_tool() {
 fn responses_payload_keeps_distinct_remote_mcp_tools() {
     let provider = native_openai_provider(models::openai::GPT_5);
     let request = provider::LLMRequest {
-        messages: vec![provider::Message::user("Use both MCP servers".to_owned())],
+        messages: vec![provider::Message::user("Use both MCP servers".to_owned())].into(),
         tools: Some(Arc::new(vec![
             provider::ToolDefinition::mcp(json!({
                 "server_label": "dmcp",
@@ -2524,7 +2535,7 @@ fn chatgpt_backend_omits_previous_response_id_from_responses_payload() {
 fn chatgpt_codex_payload(messages: Vec<provider::Message>, model: &str) -> Value {
     let provider = chatgpt_backend_provider(model);
     let request = provider::LLMRequest {
-        messages,
+        messages: messages.into(),
         model: model.to_string(),
         ..Default::default()
     };
@@ -2780,7 +2791,8 @@ fn responses_payload_phase_behavior() {
             .with_phase(Some(provider::AssistantPhase::Commentary)),
             provider::Message::tool_response("call_1".to_string(), "{\"ok\":true}".to_string())
                 .with_phase(Some(provider::AssistantPhase::FinalAnswer)),
-        ],
+        ]
+        .into(),
         model: models::openai::GPT_5_4.to_string(),
         ..Default::default()
     };
@@ -2807,7 +2819,8 @@ fn responses_payload_phase_behavior() {
             provider::Message::user("Start".to_owned()),
             provider::Message::assistant("Checking.".to_owned())
                 .with_phase(Some(provider::AssistantPhase::Commentary)),
-        ],
+        ]
+        .into(),
         model: models::openai::GPT_5_4.to_string(),
         ..Default::default()
     };
@@ -3381,7 +3394,7 @@ async fn responses_request_retries_with_fallback_model_after_not_found() {
 
     let response = provider
         .generate(provider::LLMRequest {
-            messages: vec![provider::Message::user("Hello".to_string())],
+            messages: vec![provider::Message::user("Hello".to_string())].into(),
             model: models::openai::GPT_5_NANO.to_string(),
             ..Default::default()
         })
@@ -3424,7 +3437,7 @@ async fn responses_request_retries_without_flex_service_tier() {
 
     let response = provider
         .generate(provider::LLMRequest {
-            messages: vec![provider::Message::user("Hello".to_string())],
+            messages: vec![provider::Message::user("Hello".to_string())].into(),
             model: models::openai::GPT_5_CODEX.to_string(),
             ..Default::default()
         })
@@ -3460,7 +3473,7 @@ async fn responses_requests_include_client_request_id_and_debug_metadata() {
         }).expect(1).mount(&server).await;
     let err = provider
         .generate(provider::LLMRequest {
-            messages: vec![provider::Message::user("Hello".to_string())],
+            messages: vec![provider::Message::user("Hello".to_string())].into(),
             model: models::openai::GPT_5.to_string(),
             ..Default::default()
         })

@@ -564,7 +564,7 @@ pub(crate) use impl_llm_client;
 #[inline]
 pub fn make_default_request(prompt: &str, model: &str) -> LLMRequest {
     LLMRequest {
-        messages: vec![Message::user(prompt.to_owned())],
+        messages: std::sync::Arc::new(vec![Message::user(prompt.to_owned())]),
         model: model.to_owned(),
         ..Default::default()
     }
@@ -864,7 +864,7 @@ pub fn serialize_messages_openai_format(
 
     let mut messages = Vec::with_capacity(request.messages.len());
 
-    for message in &request.messages {
+    for message in request.messages.iter() {
         message
             .validate_for_provider(provider_key)
             .map_err(|e| LLMError::InvalidRequest {
@@ -968,7 +968,7 @@ pub fn validate_request_common(
         });
     }
 
-    for message in &request.messages {
+    for message in request.messages.iter() {
         if let Err(err) = message.validate_for_provider(validation_provider) {
             let formatted = error_display::format_llm_error(provider_name, &err);
             return Err(LLMError::InvalidRequest {
@@ -1068,7 +1068,7 @@ where
     }
 
     Some(LLMRequest {
-        messages,
+        messages: std::sync::Arc::new(messages),
         system_prompt: system_prompt.map(std::sync::Arc::new),
         model: value
             .get("model")

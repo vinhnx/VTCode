@@ -139,7 +139,7 @@ mod tests {
 
     fn base_request() -> LLMRequest {
         LLMRequest {
-            messages: vec![Message::user("hello".to_string())],
+            messages: vec![Message::user("hello".to_string())].into(),
             system_prompt: Some(Arc::new("system guidance".to_string())),
             model: "qwen3-max".to_string(),
             max_tokens: Some(512),
