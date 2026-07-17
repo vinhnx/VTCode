@@ -19,8 +19,8 @@ async-trait = { workspace = true }
 chrono = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-vtcode-commons = { path = "../vtcode-commons", version = "0.135.10" }
-vtcode-exec-events = { path = "../vtcode-exec-events", version = "0.135.10" }
+vtcode-commons = { path = "../vtcode-commons", version = "0.135.11" }
+vtcode-exec-events = { path = "../vtcode-exec-events", version = "0.135.11" }
 thiserror = { workspace = true }
 
 [dev-dependencies]

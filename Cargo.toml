@@ -1,6 +1,6 @@
 [package]
 name = "vtcode"
-version = "0.135.10"
+version = "0.135.11"
 edition = "2024"
 rust-version = "1.88"
 authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
@@ -102,7 +102,7 @@ opentelemetry = { version = "0.32", default-features = false, features = ["trace
 tracing-opentelemetry = "0.33"
 
 [workspace.package]
-version = "0.135.10"
+version = "0.135.11"
 edition = "2024"
 license = "MIT"
 homepage = "https://github.com/vinhnx/vtcode"
@@ -231,14 +231,14 @@ allow_attributes_without_reason = "allow"  # TODO: Phase in after suppression au
 
 
 [dependencies]
-vtcode-acp = { path = "vtcode-acp", version = "0.135.10" }
-vtcode-commons = { path = "vtcode-commons", version = "0.135.10" }
-vtcode-ui = { path = "vtcode-ui", version = "0.135.10" }
-vtcode-config = { path = "vtcode-config", version = "0.135.10" }
-vtcode-auth = { path = "vtcode-auth", version = "0.135.10" }
-vtcode-core = { path = "vtcode-core", version = "0.135.10", default-features = false }
-vtcode-session-store = { path = "vtcode-session-store", version = "0.135.10" }
-vtcode-eval = { path = "vtcode-eval", version = "0.135.10" }
+vtcode-acp = { path = "vtcode-acp", version = "0.135.11" }
+vtcode-commons = { path = "vtcode-commons", version = "0.135.11" }
+vtcode-ui = { path = "vtcode-ui", version = "0.135.11" }
+vtcode-config = { path = "vtcode-config", version = "0.135.11" }
+vtcode-auth = { path = "vtcode-auth", version = "0.135.11" }
+vtcode-core = { path = "vtcode-core", version = "0.135.11", default-features = false }
+vtcode-session-store = { path = "vtcode-session-store", version = "0.135.11" }
+vtcode-eval = { path = "vtcode-eval", version = "0.135.11" }
 anyhow = { workspace = true }
 clap = { workspace = true }
 serde_json = { workspace = true }
