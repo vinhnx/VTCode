@@ -90,14 +90,18 @@ Create a default “subagent” runtime profile that:
 Phase 5 — History and tool-result compaction
 5.1 Enable tool-result clearing by default
 tool_result_clearing.enabled currently defaults to false. Enable it to clear old tool results from context.
+✅ VERIFIED: `tool_result_clearing.enabled` defaults to `true` (`vtcode-config/src/core/agent.rs`). Done.
 5.2 Tighten auto-compaction
 Review the auto-compaction thresholds to ensure long conversations compact aggressively enough.
+✅ VERIFIED — no change needed: `auto_compaction_enabled` defaults to `true`; threshold derives as `round(context_window * 0.90)` when unset (`DEFAULT_COMPACTION_TRIGGER_RATIO = 0.90`). 90% is a sound default — compacting earlier would lose context and incur summarization cost too often; the threshold is user-tunable via `auto_compaction_threshold_tokens`. Guard tests pin the ratio: `resolve_compaction_threshold_uses_context_ratio_when_unset` (200K → 180K), `_clamps_to_context_size`, `_prefers_configured_value` (`src/agent/runloop/unified/turn/compaction/tests.rs`). Retention caps (`retained_user_message_tokens` / `retained_user_messages`) bound the post-compaction size.
 5.3 Suppress redundant reasoning blocks
 If reasoning/thinking blocks are carried in history, strip them during compaction unless the user explicitly opted to keep them.
+✅ VERIFIED — no change needed, guard test added: the local summary prompt (`build_summary_prompt`) serializes only `content.as_text()` — `Message.reasoning`/`reasoning_details` are already excluded from every compaction summary. `is_retainable_message` retains assistant messages only when they carry tool calls, so text-only reasoning messages are not retained. The continuity tail (most recent turn) preserves `reasoning_details` via `clone()` because provider protocols REQUIRE it (Anthropic thinking signatures, OpenAI reasoning summary items) — stripping would break extended thinking, not save meaningful tokens. New guard test: `build_summary_prompt_excludes_reasoning_traces` (`vtcode-core/src/compaction/mod.rs`) pins that reasoning never leaks into the summary.
 5.4 Reduce repeated tool-call loops
 
 - Keep max_tool_loops default at 0 (unlimited) is fine, but ensure max_repeated_tool_calls and max_consecutive_blocked_tool_calls_per_turn prevent churn.
 - Review continuation policy to avoid unnecessary “one more check” turns.
+✅ VERIFIED — no change needed: `max_tool_loops = 0` (unlimited), `max_repeated_tool_calls = 2`, `max_consecutive_blocked_tool_calls_per_turn = 8` (`vtcode-config/src/constants/defaults.rs`). Enforcement: the turn balancer (`guards.rs::handle_turn_balancer`) detects repeated low-signal/identical calls (`effective_repeat_limit = max(2,3) = 3`) and activates a tool-free recovery pass; `should_trigger_turn_balancer` has unit tests pinning the boundary (`turn/utils.rs`); the blocked-tool guard (`blocked_tool_guard.rs`) breaks the turn as `Blocked` at the streak cap with a wider total fuse (`max_streak * 2`), with tests in `tool_outcomes/handlers/tests/runtime.rs`; a `shell_run_guard` catches identical shell calls. The continuation policy forces synthesis rather than looping.
 
 ---
 
@@ -162,69 +166,6 @@ Recommended execution order
 4. Phase 3 (cache stability) — makes 2 and 4 cheaper.
 5. Phases 5–7.
 6. Phase 8.
-
-===
-
-Diagnosis: Does VTCode have the same issue?
-Short answer: VTCode is already designed to avoid most of the overhead the article describes, but the same failure modes still exist under common real-world configurations.
-The article identifies five root causes:
-Article finding VTCode current state
-33k system prompt vs 7k VTCode defaults to 8k max system prompt tokens, with Default mode ~6–7k, Progressive tool docs ~1.2k, and a 15-visible-tool cap.
-Tool schema bloat Tool count capped, descriptions compacted, MCP capped at 512 chars, and deferred loading exists.
-Cache re-writes / instability Anthropic/OpenAI tool-search deferral is enabled by default; prompt cache is keyed; cache-friendly shaping exists.
-Instruction-file multiplier instruction_max_bytes / project_doc_max_bytes default to 16 KiB (~4k tokens).
-Subagent multiplier Subagents inherit parent config and tool catalog; no lightweight default profile.
-So the two concrete areas where VTCode repeats the same pathology are:
-
-1. MCP/tool schema tax is not aggressively deferred — the 100-tool threshold means “small” MCP configs are still loaded eagerly.
-2. Subagent bootstrap cost is not reduced — children inherit the full parent payload.
-
----
-
-Plan to fix
-Phase 1 — Establish baseline and observability
-
-- Add a telemetry/metrics point that records the per-request token breakdown:
-    - system prompt tokens
-    - tool schema tokens
-    - instruction file tokens
-    - message history tokens
-    - cache hit/miss/write counts
-- Wire this into the existing SessionStats / ToolCatalogCacheMetrics so we can validate before/after.
-- Add a small regression test that asserts the first request payload (system prompt + tools) stays under a configurable budget, e.g. 12k tokens in default config with no MCP.
-  Phase 2 — Reduce tool schema tax
-- Lower DIRECT_TOOL_EXPOSURE_THRESHOLD from 100 to something like 15–20 (matching the visible builtin-tool cap), so adding any MCP server immediately triggers deferred loading.
-- Add a token-based fallback: even if tool count is below the threshold, if estimated tool-schema tokens exceed a budget (e.g. 4k), force deferral.
-- Enable client_tool_search by default for providers without hosted tool search (Gemini, etc.), so non-Anthropic/OpenAI runs also benefit from deferred loading.
-- Ensure the deferred-tools summary appended to the system prompt is deterministic and cache-friendly (it already is via BTreeMap grouping, but add a regression test).
-- Add a regression test that with 5 simulated MCP servers, the first request tool schema is reduced vs. eager mode.
-  Phase 3 — Improve cache stability and first-message scaffolding
-- Review session_bootstrap.prompt_addendum (language summary, guideline highlights, workflow hint) and make it trimmable under the system-prompt budget, or move volatile parts out of the cached prefix.
-- Ensure cache_friendly_prompt_shaping puts all volatile runtime context (working directory, temporal context, etc.) at the end of the system prompt so the prefix is byte-stable.
-- Add a regression test that hashes the system prompt and tool prefix across two identical turns and asserts they are byte-identical.
-  Phase 4 — Reduce subagent bootstrap cost
-- Add a lightweight default subagent profile that:
-    - Uses a smaller default model (Haiku/GPT-4-mini) unless explicitly overridden.
-    - Carries only the default core tools plus whatever the agent spec explicitly requests.
-    - Uses a shorter system prompt (e.g. Minimal mode) by default.
-- Update compose_subagent_instructions and build_child_config to apply this lightweight profile when the agent spec does not explicitly request full parent tooling.
-- Add a test that verifies subagent bootstrap token count is materially lower than parent bootstrap.
-  Phase 5 — Documentation and config guidance
-- Update docs/config/CONFIG_FIELD_REFERENCE.md and docs/tools/TOOL_SEARCH.md with the new defaults and guidance.
-- Add a short user-facing doc explaining how to audit first-request token cost.
-- Run the audit-module-agents skill for affected crates (vtcode-core, vtcode-config, vtcode-mcp) to update their local AGENTS.md files if needed.
-  Verification
-- cargo nextest run -p vtcode-core (existing tests)
-- cargo nextest run -p vtcode-core -E 'test(token|prompt|tool|defer|mcp)' (new tests)
-- ./scripts/check-dev.sh --test
-
----
-
-Tradeoffs
-
-- Lower deferral threshold: saves tokens but may add one extra round trip the first time a deferred tool is needed. The net cost is usually positive because deferred schemas are loaded only when needed rather than on every request.
-- Lightweight subagent profile: may reduce capability for agents that truly need the full catalog. Mitigation: explicit opt-in in the agent spec keeps the full catalog.
-- Default client_tool_search = true: changes model behavior for Gemini/etc. users; should be rolled out with clear config docs and a fallback.
 
 ---
 
@@ -312,7 +253,3 @@ reference /Users/vinhnguyenxuan/Developer/learn-by-doing/grok-build
 ===
 
 set thinking mode UI to collapsed by default. also check thinking word wrapping.
-
-Remaining (not done, by design)
-
-- History-growth tuning verify-items (auto-compaction aggressiveness, reasoning-block stripping during compaction, repeated tool-call loop caps) — these are a separate history-growth concern, not first-request overhead; the TODO notes they need current-behavior verification before changing.

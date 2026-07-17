@@ -1634,4 +1634,45 @@ mod tests {
         assert_eq!(tail.len(), 1);
         assert_eq!(tail[0].role, MessageRole::User);
     }
+
+    /// History-growth verify-item: the local summarization prompt must exclude
+    /// `Message.reasoning` / `reasoning_details` and serialize only the visible
+    /// text content (`content.as_text()`). Reasoning traces are large and
+    /// ephemeral; including them in every compaction summary would bloat the
+    /// post-compaction context and re-inject stale chain-of-thought. The
+    /// continuity tail preserves provider-protocol reasoning (Anthropic
+    /// thinking signatures, OpenAI reasoning items) separately and is NOT
+    /// summarized, so stripping reasoning here is safe and correct. This test
+    /// pins that invariant so a change to `build_summary_prompt` cannot
+    /// accidentally start including reasoning.
+    #[test]
+    fn build_summary_prompt_excludes_reasoning_traces() {
+        use super::build_summary_prompt;
+
+        let instructions = "Summarize the conversation.";
+        // Assistant message carrying a reasoning trace alongside its visible
+        // content. If `build_summary_prompt` ever reads `reasoning`, the
+        // summary would contain "SECRET_REASONING" and "raw-only reasoning".
+        let history = vec![
+            Message::user("What is 2+2?".to_string()),
+            Message::assistant("The answer is 4.".to_string())
+                .with_reasoning(Some("SECRET_REASONING: I computed 2+2=4.".to_string())),
+        ];
+
+        let prompt = build_summary_prompt(&history, instructions);
+
+        assert!(
+            prompt.contains("The answer is 4."),
+            "visible assistant text must appear in the summary prompt"
+        );
+        assert!(
+            !prompt.contains("SECRET_REASONING"),
+            "Message.reasoning must NOT be included in the summary prompt -- \
+             it would bloat every compaction pass with ephemeral chain-of-thought"
+        );
+        assert!(
+            prompt.contains("Summarize the conversation."),
+            "instructions must appear in the summary prompt"
+        );
+    }
 }

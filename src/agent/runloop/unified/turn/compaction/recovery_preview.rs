@@ -145,7 +145,11 @@ pub(crate) fn build_recovery_context_previews_with_workspace(
         let guidance = obj.get("error").and_then(Value::as_object).unwrap_or(&obj);
         let mut parts = Vec::new();
         let mut priority = 0u8;
-        if let Some(matches) = obj.get("matches").and_then(Value::as_array) {
+        let matches_array = obj
+            .get("matches")
+            .or_else(|| obj.get("results"))
+            .and_then(Value::as_array);
+        if let Some(matches) = matches_array {
             let path = trimmed_json_str(&obj, "path");
             let summary = if matches.is_empty() {
                 path.map_or_else(
