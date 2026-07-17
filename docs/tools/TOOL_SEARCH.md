@@ -166,6 +166,34 @@ anthropic-beta: advanced-tool-use-2025-11-20
 4. For OpenAI, prefer grouping tools conceptually and keep deferred catalogs focused
 5. Monitor which tools Claude discovers to refine descriptions
 
+## Auditing first-request token cost
+
+VT Code emits per-request telemetry so you can measure the token overhead the deferral mechanisms above remove. There is no separate "instruction file" field — instruction-file content is merged into the system prompt during assembly, so it is included in `system_prompt_tokens`.
+
+### Per-request token breakdown
+
+Each turn emits a `token_budget_breakdown` metric to the `vtcode.turn.metrics` tracing target (and the trajectory log), measured from the real assembled wire request:
+
+| Field | Meaning |
+|---|---|
+| `system_prompt_tokens` | Composed system prompt (~4 chars/token estimate), including instruction-file content. |
+| `tool_schema_tokens` | On-wire tool schema tokens. Under deferral, deferred MCP schemas are omitted, so this stays near the builtin baseline. |
+| `message_history_tokens` | Text portion of the message history (lower-bound; non-text content not counted). |
+| `on_wire_tools` | Number of tool definitions actually sent. |
+| `client_local_deferral` | Whether client-local deferral omitted deferred schemas this request. |
+| `tool_free_recovery` | Whether tools were stripped for a tool-free recovery pass. |
+
+Cache read/write/miss counts are not duplicated here — they are surfaced via `SessionStats` prompt-cache diagnostics.
+
+### Advisory warnings
+
+Two one-time warnings flag token-overhead misconfiguration:
+
+- **System prompt over budget** — when the composed prompt exceeds `agent.max_system_prompt_tokens` (default `8000`) and `agent.system_prompt_budget_warning` is on (default). Advisory unless `agent.trim_system_prompt` is enabled, in which case sections are dropped to fit.
+- **Deferred loading disabled but beneficial** — when `tools.client_tool_search = false` and the catalog is large enough that deferral would engage (any MCP tool, ≥15 deferable tools, or combined schema > ~4k tokens). This warns that the full tool-schema tax is paid on every request and that re-enabling `client_tool_search` would omit the large/MCP schemas from the wire payload. Emitted once per process.
+
+The count/schema-token thresholds *triggering* deferral when enabled are correct behavior, not warning conditions — they only warn when deferral is off and would have helped.
+
 ## Related Documentation
 
 - [Anthropic Tool Search Documentation](https://docs.anthropic.com/claude/reference/tool-search)

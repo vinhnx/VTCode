@@ -797,4 +797,94 @@ mod tests {
         assert_eq!(providers.len(), 1);
         assert_eq!(providers[0].name, "context7");
     }
+
+    /// Phase 4.3 guard-rail: a default subagent's composed system prompt must
+    /// bootstrap materially cheaper than its parent's. The lightweight profile
+    /// (`apply_subagent_lightweight_profile`) forces `Minimal` system-prompt and
+    /// tool-documentation modes; this measures the *actual* composed prompt
+    /// token estimate (the dominant bootstrap cost) rather than just the config
+    /// shape, which `child_config_uses_lightweight_default_profile` already
+    /// covers. Cache prefix-stable conditions (no temporal context, no project
+    /// docs) are used so the ratio reflects only the mode-driven difference.
+    #[tokio::test]
+    async fn default_subagent_bootstrap_tokens_are_materially_below_parent() {
+        use crate::config::constants::tools;
+        use crate::prompts::context::PromptContext;
+        use crate::prompts::system::compose_system_instruction_with_report;
+        use crate::skills::model::{SkillMetadata, SkillScope};
+        use std::path::PathBuf;
+
+        let workspace = tempfile::TempDir::new().expect("workspace");
+
+        let mut parent = VTCodeConfig::default();
+        parent.agent.system_prompt_mode = SystemPromptMode::Default;
+        parent.agent.tool_documentation_mode = ToolDocumentationMode::Progressive;
+        parent.agent.include_temporal_context = false;
+        parent.agent.include_working_directory = true;
+        parent.agent.instruction_max_bytes = 0;
+
+        // A non-trivial tool/skill surface so Progressive tool guidelines and
+        // the base contract are exercised on both sides.
+        let mut ctx = PromptContext::default();
+        ctx.add_tool(tools::CODE_SEARCH.to_string());
+        ctx.add_tool(tools::EXEC_COMMAND.to_string());
+        ctx.add_tool(tools::APPLY_PATCH.to_string());
+        ctx.add_skill_metadata(SkillMetadata {
+            name: "skill-creator".to_string(),
+            description: "Create skills".to_string(),
+            short_description: None,
+            path: PathBuf::from("/tmp/skill-creator/SKILL.md"),
+            scope: SkillScope::System,
+            manifest: None,
+        });
+        ctx.set_current_directory(PathBuf::from("/workspace"));
+
+        let (_parent_text, parent_report) =
+            compose_system_instruction_with_report(workspace.path(), Some(&parent), Some(&ctx))
+                .await;
+
+        let spec = test_subagent_spec();
+        let child = build_child_config(&parent, &spec, models::openai::GPT_5_4, None);
+
+        // The lightweight profile is the contract under test.
+        assert_eq!(child.agent.system_prompt_mode, SystemPromptMode::Minimal);
+        assert_eq!(
+            child.agent.tool_documentation_mode,
+            ToolDocumentationMode::Minimal,
+        );
+        // The deterministic env settings must be inherited so the ratio
+        // reflects only the mode-driven difference, not environmental noise.
+        assert!(!child.agent.include_temporal_context);
+        assert_eq!(child.agent.instruction_max_bytes, 0);
+
+        let (_child_text, child_report) =
+            compose_system_instruction_with_report(workspace.path(), Some(&child), Some(&ctx))
+                .await;
+
+        let parent_tokens = parent_report.token_estimate;
+        let child_tokens = child_report.token_estimate;
+        assert!(
+            parent_tokens > 0,
+            "parent prompt must be non-empty for a meaningful ratio"
+        );
+        // The composed system-prompt reduction from the lightweight profile is
+        // bounded by the Default-vs-Minimal base-contract difference (both share
+        // `SHARED_CONTRACT_LINES`), so it is ~25% in practice (measured 665 vs
+        // 888 here). The dominant subagent bootstrap win is the tool-schema/MCP
+        // drop, guarded by `mcp_deferral_keeps_first_request_wire_payload_near_baseline`
+        // and `child_config_uses_lightweight_default_profile`. This test pins the
+        // system-prompt portion: the child must be materially (and strictly)
+        // cheaper, and a regression that bloats the Minimal profile above 80% of
+        // the Default composed prompt must fail here.
+        assert!(
+            child_tokens < parent_tokens,
+            "default subagent composed prompt ({child_tokens}) must be strictly cheaper \
+             than parent ({parent_tokens})"
+        );
+        assert!(
+            child_tokens * 5 <= parent_tokens * 4,
+            "default subagent composed prompt ({child_tokens}) must be <= 80% of parent \
+             ({parent_tokens}); a bloat of the Minimal profile is a regression"
+        );
+    }
 }

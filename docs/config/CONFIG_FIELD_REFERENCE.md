@@ -75,6 +75,7 @@ python3 scripts/generate_config_field_reference.py
 | `agent.instruction_max_bytes` | `integer` | no | `16384` | Maximum bytes of instruction content to load from AGENTS.md hierarchy |
 | `agent.max_conversation_turns` | `integer` | no | `150` | Maximum number of conversation turns before auto-termination |
 | `agent.max_review_passes` | `integer` | no | `1` | Maximum number of self-review passes |
+| `agent.max_system_prompt_tokens` | `integer` | no | `8000` | Token budget for the composed system prompt. When the composed prompt exceeds this and `system_prompt_budget_warning` is on, a warning is logged; when `trim_system_prompt` is on, whole sections are dropped in trim-priority order until it fits. |
 | `agent.max_task_retries` | `integer` | no | `2` | Maximum number of retries for agent task execution (default: 2) When an agent task fails due to retryable errors (timeout, network, 503, etc.), it will be retried up to this many times with exponential backoff |
 | `agent.onboarding.chat_placeholder` | `null \| string` | no | `null` | Placeholder suggestion for the chat input bar |
 | `agent.onboarding.enabled` | `boolean` | no | `true` | Toggle onboarding message rendering |
@@ -124,6 +125,7 @@ python3 scripts/generate_config_field_reference.py
 | `agent.small_model.use_for_large_reads` | `boolean` | no | `true` | Enable small model for large file reads (>50KB) |
 | `agent.small_model.use_for_memory` | `boolean` | no | `true` | Enable small model for persistent memory classification and summary refresh |
 | `agent.small_model.use_for_web_summary` | `boolean` | no | `true` | Enable small model for web content summarization |
+| `agent.system_prompt_budget_warning` | `boolean` | no | `true` | Log a warning when the composed system prompt exceeds `max_system_prompt_tokens`. Advisory only; does not alter the prompt unless `trim_system_prompt` is also enabled. |
 | `agent.system_prompt_mode` | `string` | no | `"default"` | System prompt mode controlling prompt verbosity and token overhead. Options target lean base prompts: minimal (~150-250 tokens), lightweight/default (~250-350 tokens), specialized (~350-500 tokens) before dynamic runtime addenda. |
 | `agent.shell_prompt_profile` | `string` | no | `"auto"` | Shell syntax profile used in model-facing command examples. Values: auto, unix_like, powershell. This controls prompt wording only; command policy remains in the runtime. |
 | `agent.temperature` | `number` | no | `0.699999988079071` | Temperature for main LLM responses (0.0-1.0) Lower values = more deterministic, higher values = more creative Recommended: 0.7 for balanced creativity and consistency Range: 0.0 (deterministic) to 1.0 (maximum randomness) |
@@ -131,6 +133,7 @@ python3 scripts/generate_config_field_reference.py
 | `agent.theme` | `string` | no | `"ciapre"` | UI theme identifier controlling ANSI styling |
 | `agent.todo_planning_mode` | `boolean` | no | `true` | Enable TODO planning helper mode for structured task management |
 | `agent.tool_documentation_mode` | `string` | no | `"progressive"` | Tool documentation mode controlling token overhead for tool definitions Options: minimal (~800 tokens), progressive (~1.2k), full (~3k current) Progressive: signatures upfront, detailed docs on-demand (recommended) Minimal: signatures only, pi-coding-agent style (power users) Full: all documentation upfront (current behavior, default) |
+| `agent.trim_system_prompt` | `boolean` | no | `false` | When the composed system prompt exceeds `max_system_prompt_tokens`, drop whole sections in trim-priority order (lowest priority first) until it fits, instead of just warning. Off by default to preserve the full prompt. |
 | `agent.ui_surface` | `string` | no | `"auto"` | Preferred rendering surface for the interactive chat UI (auto, alternate, inline) |
 | `agent.user_instructions` | `null \| string` | no | `null` | Custom instructions provided by the user via configuration to guide agent behavior |
 | `agent.verbosity` | `string` | no | `"medium"` | Verbosity level for output text (low, medium, high) Applies to: GPT-5.4-family Responses workflows and other models that support verbosity control |

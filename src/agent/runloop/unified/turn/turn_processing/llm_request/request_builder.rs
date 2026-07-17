@@ -21,7 +21,10 @@ use vtcode_core::core::agent::harness_kernel::{
 use vtcode_core::llm::provider::{self as uni, ParallelToolConfig};
 
 use super::context_management::resolve_context_management;
-use super::metrics::{ToolCatalogCacheMetrics, emit_tool_catalog_cache_metrics};
+use super::metrics::{
+    TokenBudgetBreakdown, ToolCatalogCacheMetrics, emit_token_budget_breakdown,
+    emit_tool_catalog_cache_metrics, estimate_message_history_tokens, estimate_tool_schema_tokens,
+};
 use super::prompt_assembly::{
     PromptAssemblyInput, assemble_prompt, render_primary_agent_runtime_context,
 };
@@ -188,6 +191,36 @@ pub(super) async fn build_turn_request(
         tool_catalog_hash,
         system_prompt_prefix_hash: Some(stable_prefix_hash),
     });
+
+    // Phase 1.2 observability: record how the assembled first-request prefix is
+    // spent across system prompt, tool schemas, and message history, using the
+    // real on-wire request payload. Cache read/write/miss are already surfaced
+    // via `SessionStats` prompt-cache diagnostics, so they are not duplicated.
+    let request = &request_plan.request;
+    let system_prompt_tokens = request
+        .system_prompt
+        .as_ref()
+        .map(|sp| sp.len() / 4)
+        .unwrap_or(0);
+    let (on_wire_tools, tool_schema_tokens) = request
+        .tools
+        .as_ref()
+        .map(|tools| (tools.len(), estimate_tool_schema_tokens(tools.as_slice())))
+        .unwrap_or((0, 0));
+    let message_history_tokens = estimate_message_history_tokens(request.messages.as_slice());
+    emit_token_budget_breakdown(
+        ctx,
+        TokenBudgetBreakdown {
+            step_count,
+            model: request_model,
+            system_prompt_tokens,
+            tool_schema_tokens,
+            message_history_tokens,
+            on_wire_tools,
+            client_local_deferral: turn_snapshot.client_local_tool_deferral,
+            tool_free_recovery: turn_snapshot.tool_free_recovery,
+        },
+    );
 
     Ok(TurnRequestBuildResult {
         request: request_plan.request,
