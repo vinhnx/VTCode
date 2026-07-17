@@ -344,7 +344,7 @@ VT Code builds upon key developments in AI agent technology:
 
 - **OpenAI Codex** (Apache-2.0) — OAuth flow, PTY process handling, MCP client
   architecture, Ollama and LM Studio provider integrations, tool handler
-  patterns. See [NOTICE](NOTICE) for details.
+  patterns. See [THIRD-PARTY-NOTICES](THIRD-PARTY-NOTICES) for details.
   Source: <https://github.com/openai/codex>
 - **Anthropic's Agent Patterns** - Tool design and safety principles
 - **Cognition's Context Engineering** - Long-running agent reliability and Decision Ledger

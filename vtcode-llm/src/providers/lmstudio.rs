@@ -1,7 +1,8 @@
 //! LM Studio provider implementation
 //!
 //! Architecture inspired by [openai/codex] `codex-rs/lmstudio` (Apache-2.0).
-//! Copyright 2025 OpenAI. See the repository `NOTICE` file for full attribution.
+//! Copyright 2025 OpenAI. See the repository `THIRD-PARTY-NOTICES` file for
+//! full attribution.
 //!
 //! [openai/codex]: https://github.com/openai/codex
 

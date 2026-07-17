@@ -4,7 +4,8 @@
 //! regardless of whether they use a PTY or regular pipes.
 //!
 //! Inspired by [codex-rs] PTY process handle patterns (Apache-2.0).
-//! Copyright 2025 OpenAI. See the repository `NOTICE` file for full attribution.
+//! Copyright 2025 OpenAI. See the repository `THIRD-PARTY-NOTICES` file for
+//! full attribution.
 //!
 //! [codex-rs]: https://github.com/openai/codex
 

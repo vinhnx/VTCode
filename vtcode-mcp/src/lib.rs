@@ -5,7 +5,7 @@
 //! This crate adapts reference MCP client, server, and type definitions
 //! from [openai/codex] to integrate them with VT Code's multi-provider
 //! configuration model (Apache-2.0). Copyright 2025 OpenAI. See the
-//! repository [NOTICE](NOTICE) file for the full license text and
+//! repository `THIRD-PARTY-NOTICES` file for the full license text and
 //! attribution.
 //!
 //! The VT Code-specific surface (allow lists, tool indexing, status

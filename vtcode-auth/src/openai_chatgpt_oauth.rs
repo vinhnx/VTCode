@@ -7,7 +7,7 @@
 //! - secure storage in keyring or encrypted file storage
 //!
 //! Based on patterns from [openai/codex] (Apache-2.0). Copyright 2025 OpenAI.
-//! See the repository `NOTICE` file for full attribution.
+//! See the repository `THIRD-PARTY-NOTICES` file for full attribution.
 //!
 //! [openai/codex]: https://github.com/openai/codex
 

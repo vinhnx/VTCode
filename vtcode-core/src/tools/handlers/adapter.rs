@@ -4,7 +4,8 @@
 //! enabling gradual migration while maintaining backward compatibility.
 //!
 //! Based on [openai/codex] handler architecture patterns (Apache-2.0).
-//! Copyright 2025 OpenAI. See the repository `NOTICE` file for full attribution.
+//! Copyright 2025 OpenAI. See the repository `THIRD-PARTY-NOTICES` file for
+//! full attribution.
 //!
 //! [openai/codex]: https://github.com/openai/codex
 
