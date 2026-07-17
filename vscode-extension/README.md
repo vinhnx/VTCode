@@ -106,4 +106,4 @@ If you find VT Code useful, please consider supporting the project by visiting [
 
 ## License
 
-This extension is licensed under the [MIT License](LICENSE).
+This extension is licensed under **MIT OR Apache-2.0**. See [LICENSE](LICENSE) for the full Apache-2.0 text; MIT terms are also granted under the same copyright.

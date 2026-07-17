@@ -17,7 +17,7 @@ Complete navigation guide for the VT Code Zed extension documentation.
 
 ### License
 
--   **[LICENSE](LICENSE)** - MIT License
+-   **[LICENSE](LICENSE)** - MIT OR Apache-2.0
 
 ---
 
