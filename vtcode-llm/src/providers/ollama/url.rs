@@ -1,5 +1,9 @@
-/// URL utilities for Ollama base URL handling.
-/// Adapted from OpenAI Codex's codex-ollama/src/url.rs
+//! URL utilities for Ollama base URL handling.
+//!
+//! Adapted from [openai/codex] `codex-ollama/src/url.rs` (Apache-2.0).
+//! Copyright 2025 OpenAI. See the repository `NOTICE` file for full attribution.
+//!
+//! [openai/codex]: https://github.com/openai/codex
 ///
 /// Identify whether a base_url points at an OpenAI-compatible root (".../v1").
 pub fn is_openai_compatible_base_url(base_url: &str) -> bool {

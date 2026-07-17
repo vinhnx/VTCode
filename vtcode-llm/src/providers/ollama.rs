@@ -1,3 +1,10 @@
+//! Ollama provider implementation
+//!
+//! Adapted from [openai/codex] `codex-ollama` (Apache-2.0).
+//! Copyright 2025 OpenAI. See the repository `NOTICE` file for full attribution.
+//!
+//! [openai/codex]: https://github.com/openai/codex
+
 use crate::client::LLMClient;
 use crate::provider::{
     ContentPart, FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream,

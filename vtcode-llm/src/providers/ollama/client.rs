@@ -1,5 +1,10 @@
-/// High-level Ollama client for server interaction and model management.
-/// Adapted from OpenAI Codex's codex-ollama/src/client.rs
+//! High-level Ollama client for server interaction and model management.
+//!
+//! Adapted from [openai/codex] `codex-ollama/src/client.rs` (Apache-2.0).
+//! Copyright 2025 OpenAI. See the repository `NOTICE` file for full
+//! attribution and change notice.
+//!
+//! [openai/codex]: https://github.com/openai/codex
 use std::io;
 use std::time::Duration;
 

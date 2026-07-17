@@ -168,4 +168,6 @@ VT Code is a labor of love built in my spare time. If it's helped you ship somet
 
 ## License
 
-[MIT License](LICENSE).
+First-party code is licensed under **MIT OR Apache-2.0** — choose whichever works best for you. See [LICENSE](LICENSE) for the full Apache-2.0 text; MIT terms are also granted under the same copyright.
+
+Third-party and inspired-by code remains under its original licenses. See [NOTICE](NOTICE) for attributions.

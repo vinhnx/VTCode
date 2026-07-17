@@ -8,6 +8,11 @@
 //! This module bridges handler-oriented LLM outputs to tool execution.
 //! The canonical public tool resolver is the registry assembly in
 //! `crate::tools::registry`; keep name normalization here compatibility-scoped.
+//!
+//! Follows [openai/codex] handler architecture patterns (Apache-2.0).
+//! Copyright 2025 OpenAI. See the repository `NOTICE` file for full attribution.
+//!
+//! [openai/codex]: https://github.com/openai/codex
 
 use crate::config::constants::tools;
 use crate::types::CompactStr;

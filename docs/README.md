@@ -335,12 +335,17 @@ cargo clippy && cargo fmt
 
 ## License & Attribution
 
-This documentation is part of the VT Code project. See the main [README](../README.md) for license information.
+This documentation is part of the VT Code project, licensed under
+**MIT OR Apache-2.0**. See the main [README](../README.md) for details.
 
-### Attribution
+### Third-Party Attribution
 
 VT Code builds upon key developments in AI agent technology:
 
+- **OpenAI Codex** (Apache-2.0) — OAuth flow, PTY process handling, MCP client
+  architecture, Ollama and LM Studio provider integrations, tool handler
+  patterns. See [NOTICE](NOTICE) for details.
+  Source: <https://github.com/openai/codex>
 - **Anthropic's Agent Patterns** - Tool design and safety principles
 - **Cognition's Context Engineering** - Long-running agent reliability and Decision Ledger
 - **Single-Agent Architecture** - Reliable coordination patterns

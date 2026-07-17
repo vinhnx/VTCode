@@ -492,7 +492,8 @@ For questions or support, open an issue on the VT Code repository.
 
 ## License
 
-Native plugins are subject to the VT Code MIT License. Your plugin code can be licensed under terms of your choice.
+Native plugins are subject to the VT Code license (MIT OR Apache-2.0).
+Your plugin code can be licensed under terms of your choice.
 
 ---
 

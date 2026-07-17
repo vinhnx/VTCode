@@ -3,7 +3,10 @@
 //! This module provides abstractions for interacting with spawned processes
 //! regardless of whether they use a PTY or regular pipes.
 //!
-//! Inspired by codex-rs/utils/pty process handle patterns.
+//! Inspired by [codex-rs] PTY process handle patterns (Apache-2.0).
+//! Copyright 2025 OpenAI. See the repository `NOTICE` file for full attribution.
+//!
+//! [codex-rs]: https://github.com/openai/codex
 
 use std::fmt;
 use std::io;

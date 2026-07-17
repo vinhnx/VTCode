@@ -2,6 +2,11 @@
 //!
 //! This module bridges the new handler architecture with the existing tool system,
 //! enabling gradual migration while maintaining backward compatibility.
+//!
+//! Based on [openai/codex] handler architecture patterns (Apache-2.0).
+//! Copyright 2025 OpenAI. See the repository `NOTICE` file for full attribution.
+//!
+//! [openai/codex]: https://github.com/openai/codex
 
 use std::path::PathBuf;
 use std::sync::Arc;

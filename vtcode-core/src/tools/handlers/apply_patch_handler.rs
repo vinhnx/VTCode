@@ -2,6 +2,11 @@
 //!
 //! Implements the apply_patch tool using the Codex-style handler pattern.
 //! Supports both freeform and JSON function call formats.
+//!
+//! Based on [openai/codex] tool handler patterns (Apache-2.0).
+//! Copyright 2025 OpenAI. See the repository `NOTICE` file for full attribution.
+//!
+//! [openai/codex]: https://github.com/openai/codex
 
 use hashbrown::HashMap;
 use std::path::{Path, PathBuf};

@@ -1,5 +1,9 @@
-/// Parse Ollama pull event JSON responses into structured events.
-/// Adapted from OpenAI Codex's codex-ollama/src/parser.rs
+//! Parse Ollama pull event JSON responses into structured events.
+//!
+//! Adapted from [openai/codex] `codex-ollama/src/parser.rs` (Apache-2.0).
+//! Copyright 2025 OpenAI. See the repository `NOTICE` file for full attribution.
+//!
+//! [openai/codex]: https://github.com/openai/codex
 use serde_json::Value as JsonValue;
 
 use super::pull::OllamaPullEvent;

@@ -1,15 +1,9 @@
 //! LM Studio provider implementation
 //!
-//! LM Studio provides multiple API surfaces:
-//! - OpenAI-compatible endpoints at `/v1/*` (used by this implementation)
-//! - Native REST API at `/api/v0/*` (enhanced stats, model info, model management)
-//! - Tool calling (since 0.3.6), structured output, and reasoning content (since 0.3.9)
+//! Architecture inspired by [openai/codex] `codex-rs/lmstudio` (Apache-2.0).
+//! Copyright 2025 OpenAI. See the repository `NOTICE` file for full attribution.
 //!
-//! This implementation uses OpenAI-compatible endpoints for maximum compatibility.
-//! The native REST API at `/api/v0/*` provides richer model metadata, load/unload
-//! endpoints, and TTL-based auto-evict for JIT-loaded models.
-//!
-//! See: <https://lmstudio.ai/docs/developer>
+//! [openai/codex]: https://github.com/openai/codex
 
 use super::common::resolve_model;
 use super::local_readiness::resolve_local_model;

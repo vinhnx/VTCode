@@ -1,0 +1,25 @@
+NOTICE
+
+This project contains code inspired by or derived from the following
+third-party projects. Their original licenses remain in effect for
+those portions.
+
+OpenAI Codex
+  Source: https://github.com/openai/codex
+  License: Apache License, Version 2.0
+
+  Components used as architectural reference or adapted patterns:
+  - OAuth / login flow (vtcode-auth/src/openai_chatgpt_oauth.rs)
+  - PTY process handling (vtcode-bash-runner/src/process.rs)
+  - MCP client building blocks (vtcode-mcp/)
+  - Ollama provider integration (vtcode-llm/providers/openai/ollama/)
+  - LM Studio provider integration (vtcode-llm/providers/openai/lmstudio/)
+  - Process hardening model (docs/development/PROCESS_HARDENING.md)
+
+  vtcode's implementations are original works that follow Codex
+  architectural patterns; they are not direct copies of Codex source.
+
+Kepano (MIT-licensed network allowlist)
+  Source: https://github.com/kepano
+  License: MIT
+  Component: vtcode-config/data/network_allowlist.toml
