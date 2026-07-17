@@ -113,18 +113,6 @@ impl McpClient {
                 .await
             {
                 Ok(provider) => {
-                    if let Err(err) = provider
-                        .cached_tools_or_refresh(&allowlist_snapshot, tool_timeout)
-                        .await
-                    {
-                        error!(
-                            "Failed to fetch tools for provider '{}': {err}",
-                            provider_config.name
-                        );
-                    } else if let Some(cache) = provider.cached_tools().await {
-                        self.record_tool_provider(&provider.name, &cache);
-                    }
-
                     initialized.insert(provider.name.clone(), Arc::new(provider));
                     info!(
                         "Successfully initialized MCP provider '{}'",

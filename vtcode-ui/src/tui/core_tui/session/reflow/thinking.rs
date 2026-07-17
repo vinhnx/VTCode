@@ -126,7 +126,7 @@ impl Session {
                     && !spans.is_empty()
                     && !combined_spans
                         .last()
-                        .unwrap()
+                        .expect("combined_spans is not empty")
                         .content
                         .ends_with(char::is_whitespace)
                 {

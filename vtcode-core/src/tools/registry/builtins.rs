@@ -1077,8 +1077,140 @@ mod tests {
             .sum();
 
         assert!(
-            total_tokens <= 3_000,
-            "emitted model tool schema tokens in Progressive mode is {total_tokens}; expected <= 3_000"
+            total_tokens <= 1_500,
+            "emitted model tool schema tokens in Progressive mode is {total_tokens}; expected <= 1_500"
+        );
+    }
+
+    /// End-to-end regression for the combined first-request token budget:
+    /// the default system prompt plus Progressive tool schemas, instruction
+    /// appendix, and welcome addendum must stay under 12k tokens with no MCP,
+    /// and under 15k tokens with 5 simulated MCP servers (25% growth ceiling).
+    #[test]
+    fn first_request_total_token_budget_within_limit() {
+        use crate::config::ToolDocumentationMode;
+        use crate::prompts::system::default_system_prompt;
+        use crate::tools::handlers::{
+            SessionSurface, SessionToolCatalog, SessionToolsConfig, ToolModelCapabilities,
+        };
+        use serde::Serialize;
+
+        #[derive(Serialize)]
+        struct ToolSchemaEstimate<'a> {
+            name: &'a str,
+            description: &'a str,
+            parameters: &'a serde_json::Value,
+        }
+
+        let registrations = builtin_tool_registrations(None);
+        let catalog = SessionToolCatalog::rebuild_from_registrations(registrations);
+        let config = SessionToolsConfig::full_public(
+            SessionSurface::Interactive,
+            CapabilityLevel::CodeSearch,
+            ToolDocumentationMode::Progressive,
+            ToolModelCapabilities::default(),
+        );
+
+        let schema_entries = catalog.schema_entries(config);
+        let tool_schema_tokens: usize = schema_entries
+            .iter()
+            .map(|entry| {
+                let estimate = ToolSchemaEstimate {
+                    name: &entry.name,
+                    description: &entry.description,
+                    parameters: &entry.parameters,
+                };
+                serde_json::to_string(&estimate)
+                    .map(|s| s.len() / 4)
+                    .unwrap_or(0)
+            })
+            .sum();
+
+        let system_prompt = default_system_prompt();
+        let system_prompt_tokens = system_prompt.len() / 4;
+
+        let instruction_appendix_tokens = 250;
+        let welcome_addendum_tokens = 200;
+
+        let total_no_mcp = system_prompt_tokens
+            + tool_schema_tokens
+            + instruction_appendix_tokens
+            + welcome_addendum_tokens;
+
+        assert!(
+            total_no_mcp <= 12_000,
+            "first-request token budget exceeded: {total_no_mcp} tokens (system={system_prompt_tokens}, tools={tool_schema_tokens}, instructions={instruction_appendix_tokens}, addendum={welcome_addendum_tokens}); expected <= 12_000"
+        );
+
+        let mcp_tool_count = 5;
+        let estimated_mcp_schema_tokens = mcp_tool_count * 300;
+        let total_with_mcp = total_no_mcp + estimated_mcp_schema_tokens;
+
+        assert!(
+            total_with_mcp <= 15_000,
+            "first-request token budget with MCP exceeded: {total_with_mcp} tokens; expected <= 15_000 (25% growth ceiling)"
+        );
+    }
+
+    /// Cache-stability guard: building the same system prompt + Progressive
+    /// tool schema twice must produce byte-identical output. Any non-determinism
+    /// (random ordering, uninitialized memory, race) invalidates provider
+    /// prompt caches and re-pays full input cost on every turn.
+    #[test]
+    fn system_prompt_and_tools_prefix_is_byte_stable_across_rebuilds() {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        use crate::config::ToolDocumentationMode;
+        use crate::prompts::system::default_system_prompt;
+        use crate::tools::handlers::{
+            SessionSurface, SessionToolCatalog, SessionToolsConfig, ToolModelCapabilities,
+        };
+        use serde::Serialize;
+
+        #[derive(Serialize)]
+        struct ToolSchemaEstimate<'a> {
+            name: &'a str,
+            description: &'a str,
+            parameters: &'a serde_json::Value,
+        }
+
+        fn hash_system_prompt_and_tools() -> u64 {
+            let mut hasher = DefaultHasher::new();
+
+            let system_prompt = default_system_prompt();
+            system_prompt.hash(&mut hasher);
+
+            let registrations = builtin_tool_registrations(None);
+            let catalog = SessionToolCatalog::rebuild_from_registrations(registrations);
+            let config = SessionToolsConfig::full_public(
+                SessionSurface::Interactive,
+                CapabilityLevel::CodeSearch,
+                ToolDocumentationMode::Progressive,
+                ToolModelCapabilities::default(),
+            );
+
+            let schema_entries = catalog.schema_entries(config);
+            for entry in &schema_entries {
+                let estimate = ToolSchemaEstimate {
+                    name: &entry.name,
+                    description: &entry.description,
+                    parameters: &entry.parameters,
+                };
+                if let Ok(json) = serde_json::to_string(&estimate) {
+                    json.hash(&mut hasher);
+                }
+            }
+
+            hasher.finish()
+        }
+
+        let hash1 = hash_system_prompt_and_tools();
+        let hash2 = hash_system_prompt_and_tools();
+
+        assert_eq!(
+            hash1, hash2,
+            "system prompt + tool schema prefix is not byte-stable across rebuilds"
         );
     }
 }

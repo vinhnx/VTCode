@@ -228,6 +228,12 @@ impl SystemPromptContext {
         self.active_instruction_directory.hash(&mut hasher);
         for path in &self.instruction_context_paths {
             path.hash(&mut hasher);
+            if let Ok(meta) = std::fs::metadata(path) {
+                if let Ok(mtime) = meta.modified() {
+                    mtime.hash(&mut hasher);
+                }
+                meta.len().hash(&mut hasher);
+            }
         }
         // Include the lean skill metadata that appears in the prompt.
         for skill in &self.discovered_skills {

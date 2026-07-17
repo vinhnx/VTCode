@@ -149,8 +149,8 @@ impl McpProvider {
         &self,
         params: InitializeRequestParams,
         startup_timeout: Option<Duration>,
-        tool_timeout: Option<Duration>,
-        allowlist: &McpAllowListConfig,
+        _tool_timeout: Option<Duration>,
+        _allowlist: &McpAllowListConfig,
     ) -> Result<()> {
         let client = self.client.load_full();
         let result = client.initialize(params, startup_timeout).await?;
@@ -168,7 +168,6 @@ impl McpProvider {
         }
 
         *self.initialize_result.lock().await = Some(result);
-        let _ = self.refresh_tools(allowlist, tool_timeout).await;
         Ok(())
     }
 

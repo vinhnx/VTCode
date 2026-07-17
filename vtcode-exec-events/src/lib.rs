@@ -19,7 +19,7 @@ pub mod atif;
 pub mod trace;
 
 /// Semantic version of the serialized event schema exported by this crate.
-pub const EVENT_SCHEMA_VERSION: &str = "0.7.0";
+pub const EVENT_SCHEMA_VERSION: &str = "0.8.0";
 
 /// Wraps a [`ThreadEvent`] with schema metadata so downstream consumers can
 /// negotiate compatibility before processing an event stream.
@@ -534,7 +534,36 @@ pub struct ThreadCompactBoundaryEvent {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
-pub struct TurnStartedEvent {}
+pub struct TurnStartedEvent {
+    /// Optional decomposition of the assembled first-request prefix so
+    /// downstream consumers can attribute token overhead without inventing
+    /// parallel event types.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub token_breakdown: Option<TokenBreakdown>,
+}
+
+/// Per-request token-budget breakdown for the assembled first-request prefix.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
+pub struct TokenBreakdown {
+    /// System prompt text tokens.
+    pub system_prompt_tokens: u64,
+    /// On-wire tool schema tokens.
+    pub tool_schema_tokens: u64,
+    /// Instruction file tokens included in the prompt.
+    pub instruction_file_tokens: u64,
+    /// Message history text tokens.
+    pub message_history_tokens: u64,
+    /// Cache read tokens (served from prior turns).
+    pub cache_read_tokens: u64,
+    /// Cache write tokens (new cache entries created this turn).
+    pub cache_write_tokens: u64,
+    /// Tokens that missed cache (neither read nor written).
+    pub cache_miss_tokens: u64,
+    /// Subagent bootstrap tokens, if this turn spawned a child agent.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subagent_bootstrap_tokens: Option<u64>,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]

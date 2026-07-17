@@ -889,6 +889,7 @@ fn cache_key(
             .hash(&mut hasher);
         // Use discriminant since SystemPromptMode doesn't derive Hash
         std::mem::discriminant(&cfg.agent.system_prompt_mode).hash(&mut hasher);
+        std::mem::discriminant(&cfg.agent.tool_documentation_mode).hash(&mut hasher);
         // Token-budget settings affect whether/how sections get trimmed, so
         // toggling any of them must invalidate the cached prompt.
         cfg.agent.max_system_prompt_tokens.hash(&mut hasher);
